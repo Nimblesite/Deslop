@@ -18,17 +18,23 @@ const RENDERS_REPORT = new Set([0, 3]);
  *
  * `--only-changed` reroutes the mechanical gate to `metrics.diff` — duplicated
  * added lines over added lines ([METRICS-DIFF-SCOPE]) — so the breach message
- * must say "added lines" rather than claim the repo-wide figure failed. `--diff`
- * alone never moves the gate, so tagging a run must not rename its scope either.
+ * must say "added lines" rather than claim the repo-wide figure failed. The
+ * report itself records that rerouting: the CLI stamps
+ * `metrics.diff.threshold.source` with the resolved source (`cli`/`config`)
+ * only when the diff gate governed, and leaves `none` otherwise — so a live
+ * source names the diff scope even if the input echo is lost. `--diff` alone
+ * never moves the gate, so tagging a run must not rename its scope either.
  *
- * @param {{duplication_percent?: number, threshold?: {percent?: number}} | undefined} diffMetrics
+ * @param {{duplication_percent?: number, threshold?: {percent?: number, source?: string}} | undefined} diffMetrics
  *   `metrics.diff`, absent without `--diff`
  * @param {boolean} onlyChanged whether the run passed `--only-changed`
  * @param {string} jsonPath the report the metrics were read from, for the error
  * @returns {{scope: string, percent: string, ceiling: string} | undefined}
  */
 function diffGate(diffMetrics, onlyChanged, jsonPath) {
-  if (!onlyChanged) return undefined;
+  const source = diffMetrics?.threshold?.source;
+  const reroutedByReport = typeof source === "string" && source !== "none";
+  if (!onlyChanged && !reroutedByReport) return undefined;
   if (typeof diffMetrics?.duplication_percent !== "number") {
     throw new Error(
       `only-changed gated this run but ${jsonPath} carries no metrics.diff duplication_percent, ` +

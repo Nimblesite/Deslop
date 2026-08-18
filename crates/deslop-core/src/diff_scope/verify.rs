@@ -152,6 +152,8 @@ fn split_lines(source: &[u8]) -> Vec<&[u8]> {
 
 #[cfg(test)]
 mod tests {
+    use anyhow::{Context as _, Result};
+
     use super::{super::parse_unified_diff, *};
 
     fn corpus(entries: &[(&str, &'static [u8])]) -> BTreeMap<PathBuf, &'static [u8]> {
@@ -164,65 +166,70 @@ mod tests {
     // [CLI-ARG-DIFF] verification: matching context + added lines
     // project the added line numbers into the scope.
     #[test]
-    fn matching_diff_projects_added_lines() {
+    fn matching_diff_projects_added_lines() -> Result<()> {
         let text = "--- a/src/x.rs\n\
                     +++ b/src/x.rs\n\
                     @@ -1,1 +1,3 @@\n \
                     fn keep() {}\n\
                     +fn one() {}\n\
                     +fn two() {}\n";
-        let parsed = parse_unified_diff(text).expect("diff parses");
+        let parsed = parse_unified_diff(text).context("diff parses")?;
         let corpus = corpus(&[("src/x.rs", b"fn keep() {}\nfn one() {}\nfn two() {}\n")]);
         let scope = build_diff_scope(&parsed, Path::new("/repo"), Path::new("/repo"), &corpus)
-            .expect("clean diff verifies");
+            .context("clean diff verifies")?;
         assert_eq!(scope.added_line_total(), 2);
         assert!(scope.contains(Path::new("src/x.rs"), 2));
         assert!(scope.contains(Path::new("src/x.rs"), 3));
         assert!(!scope.contains(Path::new("src/x.rs"), 1));
+        Ok(())
     }
 
     // [CLI-ARG-DIFF] verification: a context line that disagrees with
     // the corpus is refused with the file and new-side line.
     #[test]
-    fn stale_context_line_names_file_and_line() {
+    fn stale_context_line_names_file_and_line() -> Result<()> {
         let text = "--- a/src/x.rs\n\
                     +++ b/src/x.rs\n\
                     @@ -1,1 +1,2 @@\n \
                     fn old_shape() {}\n\
                     +fn added() {}\n";
-        let parsed = parse_unified_diff(text).expect("diff parses");
+        let parsed = parse_unified_diff(text).context("diff parses")?;
         let corpus = corpus(&[("src/x.rs", b"fn keep() {}\nfn added() {}\n")]);
         let error = build_diff_scope(&parsed, Path::new("/repo"), Path::new("/repo"), &corpus)
-            .expect_err("stale context must be refused");
+            .err()
+            .context("stale context must be refused")?;
         let CoreError::DiffStale { path, line } = error else {
-            panic!("expected DiffStale, got {error:?}");
+            anyhow::bail!("expected DiffStale, got {error:?}");
         };
         assert_eq!(path, PathBuf::from("src/x.rs"));
         assert_eq!(line, 1);
+        Ok(())
     }
 
     // [CLI-ARG-DIFF] verification: files absent from the corpus are
     // skipped, never verified, never counted.
     #[test]
-    fn out_of_corpus_files_are_ignored() {
+    fn out_of_corpus_files_are_ignored() -> Result<()> {
         let text = "--- /dev/null\n+++ b/docs/notes.md\n@@ -0,0 +1 @@\n+# Notes\n";
-        let parsed = parse_unified_diff(text).expect("diff parses");
+        let parsed = parse_unified_diff(text).context("diff parses")?;
         let corpus = corpus(&[("src/x.rs", b"fn keep() {}\n")]);
         let scope = build_diff_scope(&parsed, Path::new("/repo"), Path::new("/repo/src"), &corpus)
-            .expect("out-of-root file is skipped, not an error");
+            .context("out-of-root file is skipped, not an error")?;
         assert_eq!(scope.added_line_total(), 0);
         assert_eq!(scope.files_with_added_lines(), 0);
+        Ok(())
     }
 
     // [CLI-ARG-DIFF] verification: CRLF sources verify byte-exactly
     // when the diff payload carries the same `\r`.
     #[test]
-    fn crlf_source_verifies_byte_exactly() {
+    fn crlf_source_verifies_byte_exactly() -> Result<()> {
         let text = "--- /dev/null\n+++ b/win.cs\n@@ -0,0 +1 @@\n+var x = 1;\r\n";
-        let parsed = parse_unified_diff(text).expect("diff parses");
+        let parsed = parse_unified_diff(text).context("diff parses")?;
         let corpus = corpus(&[("win.cs", b"var x = 1;\r\n")]);
         let scope = build_diff_scope(&parsed, Path::new("/repo"), Path::new("/repo"), &corpus)
-            .expect("CRLF content matches CRLF source");
+            .context("CRLF content matches CRLF source")?;
         assert_eq!(scope.added_line_total(), 1);
+        Ok(())
     }
 }

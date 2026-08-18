@@ -22,7 +22,7 @@ use crate::{
     pair::PairScore,
     report_boilerplate::build_boilerplate_hints,
     report_metrics::{compute_repo_metrics, AnalysedLines, MetricsInputs},
-    report_render::cluster_to_report,
+    report_render::{cluster_to_report, ReportSources},
     report_weight::reweigh_by_visible_occurrences,
     state::{FileId, FileRegistry},
 };
@@ -164,11 +164,12 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
     // Parse each source file at most once for the whole render, shared
     // across every cluster's noise/role checks ([CLONE-NOISE-REPARSE-CACHE]).
     let parse_cache = ParseCache::new();
+    let report_sources = ReportSources::new(inputs.sources);
     let policy = inputs.exclusion.ranking_policy();
     let materialised: Vec<(ReportCluster, bool)> = inputs
         .clusters
         .iter()
-        .map(|cluster| materialise_cluster(cluster, &inputs, &parse_cache, policy))
+        .map(|cluster| materialise_cluster(cluster, &inputs, &report_sources, &parse_cache, policy))
         .collect();
     let clusters_hidden = materialised.iter().filter(|(_, hidden)| *hidden).count();
     // The metric must count the same clusters the report renders, so it
@@ -191,6 +192,7 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
     let mut metrics = compute_repo_metrics(&MetricsInputs {
         clusters: &visible_internal,
         sources: inputs.sources,
+        line_indices: report_sources.line_indices(),
         file_languages: inputs.file_languages,
         registry: inputs.registry,
         exclusion: inputs.exclusion,
@@ -245,6 +247,7 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
 fn materialise_cluster<S: BuildHasher>(
     cluster: &Cluster,
     inputs: &ReportInputs<'_, S>,
+    report_sources: &ReportSources<'_>,
     parse_cache: &ParseCache,
     policy: RankingPolicy,
 ) -> (ReportCluster, bool) {
@@ -254,7 +257,7 @@ fn materialise_cluster<S: BuildHasher>(
         inputs.file_languages,
         inputs.scan_root,
         inputs.exclusion,
-        inputs.sources,
+        report_sources,
         parse_cache,
     );
     let category = classify_clone_category(

@@ -44,6 +44,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       version: ${{ steps.latest.outputs.version }}
+      diff-flags: ${{ steps.latest.outputs.diff-flags }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -53,6 +54,11 @@ jobs:
       # A pull request cannot install the release for its own tag — that release
       # does not exist yet. Resolve the newest published release instead, so the
       # matrix below never rots against a hard-coded version.
+      #
+      # `diff-flags` gates the diff-gate job below: `--diff`/`--only-changed`
+      # first ship in deslop 0.33.0 ([CLI-ARG-DIFF]), and an older CLI rejects
+      # them as a usage error — so until a release carries them the leg is
+      # skipped, and it switches itself on with the release that does.
       - id: latest
         env:
           GH_TOKEN: ${{ github.token }}
@@ -60,6 +66,11 @@ jobs:
           set -euo pipefail
           tag=$(gh release view --repo ${{ github.repository }} --json tagName --jq .tagName)
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          if [ "$(printf '0.33.0\n%s\n' "${tag#v}" | sort -V | head -n 1)" = "0.33.0" ]; then
+            echo "diff-flags=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "diff-flags=false" >> "$GITHUB_OUTPUT"
+          fi
           echo "Testing the action against deslop ${tag#v}"
 
       # The documented-pin check needs no release to compare against any more.
@@ -193,6 +204,59 @@ jobs:
           '
         env:
           CODE: ${{ steps.warm.outputs.exit-code }}
+
+  # [METRICS-DIFF-SCOPE] + [ACTION-GATE] end to end: under `only-changed` the
+  # gate reads the diff-scoped percentage — duplicated added lines over added
+  # lines — so the same fixture and zero ceiling the gate matrix proves
+  # *breaches* repo-wide must pass when the diff adds nothing. The empty patch
+  # is the valid empty diff [CLI-ARG-DIFF] defines. Skipped until a published
+  # release carries the diff flags (deslop >= 0.33.0): this matrix installs the
+  # newest release, and an older CLI rejects `--diff` as a usage error.
+  diff-gate:
+    name: Diff-scoped gate
+    needs: [contract]
+    if: needs.contract.outputs.diff-flags == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Write the empty diff
+        shell: bash
+        run: printf '' > empty.patch
+
+      - name: Run legacy-heavy under a zero ceiling, scoped to the clean diff
+        id: clean
+        uses: ./
+        with:
+          path: examples/rust
+          version: ${{ needs.contract.outputs.version }}
+          fail-over: "0"
+          diff: empty.patch
+          only-changed: "true"
+          output: diff-gate-report
+          upload-artifact: "false"
+
+      - name: Legacy debt did not fail the gate, and the report stays honest
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${CODE}" = "0"
+          node --input-type=module -e '
+            import assert from "node:assert/strict";
+            import { readFileSync } from "node:fs";
+            const report = JSON.parse(readFileSync("diff-gate-report.json", "utf8"));
+            const { metrics } = report;
+            assert.equal(metrics.threshold.breached, true, "the fixture must stay legacy-heavy — the repo-wide verdict is breached");
+            assert.equal(metrics.diff.added_loc, 0, "an empty diff adds no lines");
+            assert.equal(metrics.diff.duplication_percent, 0, "no added lines means a 0% diff-scoped percentage");
+            assert.equal(metrics.diff.threshold.breached, false, "the diff-scoped gate must pass");
+            assert.equal(metrics.diff.threshold.source, "cli", "the ceiling came from the fail-over input");
+            assert.equal(report.clusters.length, 0, "an empty diff touches no cluster");
+            assert.ok(report.clusters_outside_diff >= 1, "the legacy clusters must be counted, never hidden");
+          '
+        env:
+          CODE: ${{ steps.clean.outputs.exit-code }}
 
   gate:
     name: Gate (${{ matrix.artifact }})

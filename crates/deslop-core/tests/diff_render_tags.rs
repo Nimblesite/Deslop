@@ -121,7 +121,7 @@ fn diff_metrics() -> DiffMetrics {
     DiffMetrics {
         added_loc: 38,
         duplicated_added_loc: 24,
-        duplication_percent: 63.15789473684211,
+        duplication_percent: 63.157_894_736_842_11,
         threshold: ThresholdSummary {
             percent: 0.0,
             breached: true,

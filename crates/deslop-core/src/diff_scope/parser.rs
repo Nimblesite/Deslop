@@ -107,17 +107,37 @@ struct OpenHunk {
 impl Parser {
     /// Consumes one physical line of diff text.
     fn feed(&mut self, line_no: usize, line: &str) -> Result<(), CoreError> {
+        // The no-newline marker annotates the line above it rather than
+        // being a body line of its own, so it is recognised here, before
+        // either branch: `git` emits it *after* the last line of a hunk,
+        // by which point the declared counts are satisfied and the hunk
+        // is already closed, so a check inside the body branch alone
+        // never sees it and the header branch refuses the whole diff.
+        if is_no_newline_marker(line) {
+            return self.consume_no_newline_marker(line_no);
+        }
         if self.open_hunk.is_some() {
             return self.feed_hunk_body(line_no, line);
         }
         self.feed_header(line_no, line)
     }
 
+    /// Accepts the no-newline marker without letting it consume a hunk
+    /// count — it describes the preceding line's terminator, and counting
+    /// it would shift every new-side line number after it. Outside a file
+    /// section it is still junk, and refused like any other stray line.
+    fn consume_no_newline_marker(&mut self, line_no: usize) -> Result<(), CoreError> {
+        if self.current.is_none() {
+            return Err(parse_error(
+                line_no,
+                "no-newline marker before any file header",
+            ));
+        }
+        Ok(())
+    }
+
     /// Consumes a line while a hunk still expects body lines.
     fn feed_hunk_body(&mut self, line_no: usize, line: &str) -> Result<(), CoreError> {
-        if line.strip_suffix('\r').unwrap_or(line) == "\\ No newline at end of file" {
-            return Ok(());
-        }
         let Some(open) = self.open_hunk.as_mut() else {
             return Err(parse_error(line_no, "no open hunk"));
         };
@@ -156,7 +176,8 @@ impl Parser {
             return Ok(());
         }
         if let Some(rest) = line.strip_prefix("+++ ") {
-            return self.set_new_path(line_no, rest);
+            self.set_new_path(rest);
+            return Ok(());
         }
         if let Some(header) = line.strip_prefix("@@ ") {
             return self.begin_hunk(line_no, header);
@@ -183,14 +204,13 @@ impl Parser {
 
     /// Records the `+++ ` new-side path on the current section,
     /// opening one for prefix-less plain diffs that skip `diff --git`.
-    fn set_new_path(&mut self, _line_no: usize, raw: &str) -> Result<(), CoreError> {
+    fn set_new_path(&mut self, raw: &str) {
         if self.current.is_none() {
             self.begin_file();
         }
         if let Some(current) = self.current.as_mut() {
             current.new_path = new_side_path(raw);
         }
-        Ok(())
     }
 
     /// Opens a hunk from the text after `@@ `.
@@ -340,6 +360,12 @@ fn is_metadata_line(line: &str) -> bool {
             .any(|prefix| line.starts_with(prefix))
 }
 
+/// True for `git`'s "\ No newline at end of file" annotation, with or
+/// without a CRLF terminator.
+fn is_no_newline_marker(line: &str) -> bool {
+    line.strip_suffix('\r').unwrap_or(line) == "\\ No newline at end of file"
+}
+
 /// Builds a [`CoreError::DiffParse`] for `line_no`.
 fn parse_error(line_no: usize, message: &str) -> CoreError {
     CoreError::DiffParse {
@@ -350,7 +376,15 @@ fn parse_error(line_no: usize, message: &str) -> CoreError {
 
 #[cfg(test)]
 mod tests {
+    use anyhow::{Context as _, Result};
+
     use super::*;
+
+    /// The single file section every grammar test above parses, or an
+    /// error saying the parse produced none.
+    fn first_file(parsed: &ParsedDiff) -> Result<&FilePatch> {
+        parsed.files.first().context("the parsed file section")
+    }
 
     fn added_lines(patch: &FilePatch) -> Vec<&str> {
         patch
@@ -364,15 +398,16 @@ mod tests {
 
     // [CLI-ARG-DIFF] grammar: the empty diff is valid and empty.
     #[test]
-    fn empty_input_parses_to_no_files() {
-        let parsed = parse_unified_diff("").expect("empty diff must parse");
+    fn empty_input_parses_to_no_files() -> Result<()> {
+        let parsed = parse_unified_diff("").context("empty diff must parse")?;
         assert!(parsed.files.is_empty(), "no file sections expected");
+        Ok(())
     }
 
     // [CLI-ARG-DIFF] grammar: a git-style modification with context,
     // removal, and addition round-trips paths, counts, and content.
     #[test]
-    fn git_modification_parses_paths_counts_and_content() {
+    fn git_modification_parses_paths_counts_and_content() -> Result<()> {
         let text = "diff --git a/src/lib.rs b/src/lib.rs\n\
                     index 1111111..2222222 100644\n\
                     --- a/src/lib.rs\n\
@@ -382,20 +417,22 @@ mod tests {
                     -fn old() {}\n\
                     +fn new() {}\n \
                     fn tail() {}\n";
-        let parsed = parse_unified_diff(text).expect("valid diff must parse");
+        let parsed = parse_unified_diff(text).context("valid diff must parse")?;
         assert_eq!(parsed.files.len(), 1);
-        let file = &parsed.files[0];
+        let file = first_file(&parsed)?;
         assert_eq!(file.new_path.as_deref(), Some("src/lib.rs"));
         assert_eq!(file.hunks.len(), 1);
-        assert_eq!(file.hunks[0].new_start, 1);
-        assert_eq!(file.hunks[0].lines.len(), 4);
+        let hunk = file.hunks.first().context("the only hunk")?;
+        assert_eq!(hunk.new_start, 1);
+        assert_eq!(hunk.lines.len(), 4);
         assert_eq!(added_lines(file), vec!["fn new() {}"]);
+        Ok(())
     }
 
     // [CLI-ARG-DIFF] grammar: renames carry metadata lines and the
     // `+++` path wins as the new-side identity.
     #[test]
-    fn rename_uses_the_new_side_path() {
+    fn rename_uses_the_new_side_path() -> Result<()> {
         let text = "diff --git a/old_name.rs b/new_name.rs\n\
                     similarity index 95%\n\
                     rename from old_name.rs\n\
@@ -405,93 +442,171 @@ mod tests {
                     @@ -1 +1 @@\n\
                     -fn a() {}\n\
                     +fn b() {}\n";
-        let parsed = parse_unified_diff(text).expect("rename diff must parse");
+        let parsed = parse_unified_diff(text).context("rename diff must parse")?;
         assert_eq!(parsed.files.len(), 1);
-        assert_eq!(parsed.files[0].new_path.as_deref(), Some("new_name.rs"));
-        assert_eq!(added_lines(&parsed.files[0]), vec!["fn b() {}"]);
+        let file = first_file(&parsed)?;
+        assert_eq!(file.new_path.as_deref(), Some("new_name.rs"));
+        assert_eq!(added_lines(file), vec!["fn b() {}"]);
+        Ok(())
     }
 
     // [CLI-ARG-DIFF] grammar: CRLF payloads keep their `\r` so the
     // verifier can byte-match CRLF sources.
     #[test]
-    fn crlf_payload_retains_carriage_returns() {
+    fn crlf_payload_retains_carriage_returns() -> Result<()> {
         let text = "--- a/win.cs\r\n+++ b/win.cs\r\n@@ -0,0 +1 @@\r\n+var x = 1;\r\n";
-        let parsed = parse_unified_diff(text).expect("CRLF diff must parse");
-        assert_eq!(added_lines(&parsed.files[0]), vec!["var x = 1;\r"]);
+        let parsed = parse_unified_diff(text).context("CRLF diff must parse")?;
+        assert_eq!(added_lines(first_file(&parsed)?), vec!["var x = 1;\r"]);
+        Ok(())
     }
 
     // [CLI-ARG-DIFF] grammar: the no-trailing-newline annotation is
     // consumed without counting toward either side.
     #[test]
-    fn no_newline_marker_does_not_count_as_a_body_line() {
+    fn no_newline_marker_does_not_count_as_a_body_line() -> Result<()> {
         let text = "--- a/x.rs\n\
                     +++ b/x.rs\n\
                     @@ -1 +1 @@\n\
                     -old\n\
                     +new\n\
                     \\ No newline at end of file\n";
-        let parsed = parse_unified_diff(text).expect("marker diff must parse");
-        assert_eq!(added_lines(&parsed.files[0]), vec!["new"]);
+        let parsed = parse_unified_diff(text).context("marker diff must parse")?;
+        assert_eq!(added_lines(first_file(&parsed)?), vec!["new"]);
+        Ok(())
+    }
+
+    // [CLI-ARG-DIFF] grammar: the marker trails the last body line of a
+    // hunk, so it arrives after the declared counts are satisfied and
+    // the hunk has closed. The file section it belongs to must survive
+    // it, and so must the next one.
+    #[test]
+    fn no_newline_marker_after_a_closed_hunk_does_not_end_the_diff() -> Result<()> {
+        let text = "diff --git a/a.rs b/a.rs\n\
+                    --- a/a.rs\n\
+                    +++ b/a.rs\n\
+                    @@ -1 +1 @@\n\
+                    -old\n\
+                    +new\n\
+                    \\ No newline at end of file\n\
+                    diff --git a/b.rs b/b.rs\n\
+                    --- a/b.rs\n\
+                    +++ b/b.rs\n\
+                    @@ -0,0 +1 @@\n\
+                    +second\n";
+        let parsed = parse_unified_diff(text).context("marker between sections must parse")?;
+        assert_eq!(parsed.files.len(), 2, "the marker ends neither section");
+        assert_eq!(added_lines(first_file(&parsed)?), vec!["new"]);
+        let second = parsed.files.get(1).context("the second file section")?;
+        assert_eq!(second.new_path.as_deref(), Some("b.rs"));
+        assert_eq!(added_lines(second), vec!["second"]);
+        Ok(())
+    }
+
+    // [CLI-ARG-DIFF] grammar: the marker describes the terminator of the
+    // line above it, so it must never consume a hunk count — counting it
+    // would shift every new-side line number after it and mis-tag the
+    // occurrences those numbers address ([OUTPUT-SCHEMA-DIFF-TAGS]).
+    #[test]
+    fn no_newline_marker_does_not_shift_new_side_line_numbers() -> Result<()> {
+        let text = "--- a/x.rs\n\
+                    +++ b/x.rs\n\
+                    @@ -1,2 +1,3 @@\n \
+                    keep\n\
+                    -old\n\
+                    \\ No newline at end of file\n\
+                    +one\n\
+                    +two\n";
+        let parsed = parse_unified_diff(text).context("mid-hunk marker must parse")?;
+        let file = first_file(&parsed)?;
+        let hunk = file.hunks.first().context("the only hunk")?;
+        assert_eq!(
+            hunk.lines.len(),
+            4,
+            "one context, one removal, two additions — the marker is not a body line"
+        );
+        assert_eq!(added_lines(file), vec!["one", "two"]);
+        Ok(())
+    }
+
+    // [CLI-ARG-DIFF] grammar: strictness is preserved — a marker with no
+    // file section above it is junk like any other unrecognised line.
+    #[test]
+    fn stray_no_newline_marker_is_refused() -> Result<()> {
+        let error = parse_unified_diff("\\ No newline at end of file\n")
+            .err()
+            .context("a marker before any file header must be refused")?;
+        assert!(matches!(error, CoreError::DiffParse { line: 1, .. }));
+        Ok(())
     }
 
     // [CLI-ARG-DIFF] grammar: binary entries contribute no hunks.
     #[test]
-    fn binary_entry_parses_with_no_hunks() {
+    fn binary_entry_parses_with_no_hunks() -> Result<()> {
         let text = "diff --git a/logo.png b/logo.png\n\
                     index 1111111..2222222 100644\n\
                     Binary files a/logo.png and b/logo.png differ\n";
-        let parsed = parse_unified_diff(text).expect("binary diff must parse");
+        let parsed = parse_unified_diff(text).context("binary diff must parse")?;
         assert_eq!(parsed.files.len(), 1);
-        assert!(parsed.files[0].hunks.is_empty());
+        assert!(first_file(&parsed)?.hunks.is_empty());
+        Ok(())
     }
 
     // [CLI-ARG-DIFF] grammar: deletions resolve to `new_path == None`.
     #[test]
-    fn deletion_has_no_new_side_path() {
+    fn deletion_has_no_new_side_path() -> Result<()> {
         let text = "diff --git a/gone.rs b/gone.rs\n\
                     deleted file mode 100644\n\
                     --- a/gone.rs\n\
                     +++ /dev/null\n\
                     @@ -1 +0,0 @@\n\
                     -fn gone() {}\n";
-        let parsed = parse_unified_diff(text).expect("deletion diff must parse");
-        assert_eq!(parsed.files[0].new_path, None);
+        let parsed = parse_unified_diff(text).context("deletion diff must parse")?;
+        assert_eq!(first_file(&parsed)?.new_path, None);
+        Ok(())
     }
 
     // [CLI-ARG-DIFF] grammar: an unmarked hunk-body line is refused
     // with the offending diff line number.
     #[test]
-    fn unmarked_hunk_body_line_is_refused_with_its_line_number() {
+    fn unmarked_hunk_body_line_is_refused_with_its_line_number() -> Result<()> {
         let text = "--- a/x.rs\n+++ b/x.rs\n@@ -1,2 +1,2 @@\n context\nxoops\n";
-        let error = parse_unified_diff(text).expect_err("junk body line must be refused");
+        let error = parse_unified_diff(text).err()
+            .context("junk body line must be refused")?;
         let CoreError::DiffParse { line, .. } = error else {
-            panic!("expected DiffParse, got {error:?}");
+            anyhow::bail!("expected DiffParse, got {error:?}");
         };
         assert_eq!(line, 5, "the junk sits on diff line 5");
+        Ok(())
     }
 
     // [CLI-ARG-DIFF] grammar: a body longer than its header counts is
     // refused rather than silently absorbed.
     #[test]
-    fn hunk_body_exceeding_declared_counts_is_refused() {
+    fn hunk_body_exceeding_declared_counts_is_refused() -> Result<()> {
         let text = "--- a/x.rs\n+++ b/x.rs\n@@ -1,1 +1,1 @@\n keep\n+extra\n";
-        let error = parse_unified_diff(text).expect_err("over-long hunk must be refused");
+        let error = parse_unified_diff(text).err()
+            .context("over-long hunk must be refused")?;
         assert!(matches!(error, CoreError::DiffParse { .. }));
+        Ok(())
     }
 
     // [CLI-ARG-DIFF] grammar: a truncated trailing hunk is refused.
     #[test]
-    fn truncated_trailing_hunk_is_refused() {
+    fn truncated_trailing_hunk_is_refused() -> Result<()> {
         let text = "--- a/x.rs\n+++ b/x.rs\n@@ -1,2 +1,2 @@\n only-one\n";
-        let error = parse_unified_diff(text).expect_err("truncated hunk must be refused");
+        let error = parse_unified_diff(text).err()
+            .context("truncated hunk must be refused")?;
         assert!(matches!(error, CoreError::DiffParse { .. }));
+        Ok(())
     }
 
     // [CLI-ARG-DIFF] grammar: arbitrary prose is not a diff.
     #[test]
-    fn arbitrary_text_is_refused_not_silently_emptied() {
+    fn arbitrary_text_is_refused_not_silently_emptied() -> Result<()> {
         let error =
-            parse_unified_diff("hello world\n").expect_err("prose must be refused as a diff");
+            parse_unified_diff("hello world\n").err()
+            .context("prose must be refused as a diff")?;
         assert!(matches!(error, CoreError::DiffParse { line: 1, .. }));
+        Ok(())
     }
 }

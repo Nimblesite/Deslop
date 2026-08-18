@@ -58,6 +58,8 @@ jobs:
 | `no-fail-over` | `false` | 为本次运行清除已配置的阈值 |
 | `min-nodes` | `30` | 克隆候选的最小 AST 子树节点数 |
 | `config` | *(未设置)* | 显式指定 `.deslop.toml` 路径 |
+| `diff` | *(未设置)* | 以其新增行限定报告范围的统一 diff — 补丁文件路径，或 `-` 表示从标准输入读取。仍会分析整棵树；diff 只限定报告内容，绝不限定扫描范围 |
+| `only-changed` | `false` | 只报告 diff 触及的簇，并按 diff 范围的百分比设门禁 — 重复的新增行数除以新增行数 — 使存量债务无法让合并前检查失败。需要 `diff` |
 | `cache` | `true` | 通过 Actions 缓存在运行之间保留解析存储，预热运行只重新解析有变化的文件 |
 | `output` | `deslop-report` | 报告路径前缀；会追加 `.json`、`.txt`、`.html` |
 | `nojson` / `notext` / `nohtml` | `false` | 抑制某种输出格式 |

@@ -156,8 +156,11 @@ fn kgram_bytes(gram: &[&'static str]) -> Vec<u8> {
 mod tests {
     use super::{band_key, Signature, ROWS_PER_BAND, SIGNATURE_LEN};
 
+    /// Low byte of `index`. Total where a fallible conversion is not,
+    /// and exact over this test's domain — the signature is 32 rows of
+    /// 8 bytes, so every index it feeds is below 256.
     fn byte_index(index: usize) -> u8 {
-        u8::try_from(index).expect("test byte index fits in u8")
+        index.to_le_bytes()[0]
     }
 
     #[test]

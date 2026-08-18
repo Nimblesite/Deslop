@@ -192,7 +192,7 @@ fn metrics_banner_text(report: &Report) -> String {
         clusters = metrics.clusters_total,
         files = metrics.duplicated_files,
     );
-    match metrics.threshold.source {
+    let mut sentence = match metrics.threshold.source {
         ThresholdSource::None => head,
         ThresholdSource::Cli | ThresholdSource::Config => {
             let verdict = if metrics.threshold.breached {
@@ -205,7 +205,37 @@ fn metrics_banner_text(report: &Report) -> String {
                 pct = metrics.threshold.percent
             )
         }
+    };
+    sentence.push_str(&diff_banner_text(report));
+    sentence
+}
+
+/// Diff-scoped tail of the metrics banner ([METRICS-DIFF-SCOPE]):
+/// added-line duplication plus, under `--only-changed`, the
+/// newly-introduced delta. Empty on a no-diff run so the banner stays
+/// byte-identical.
+fn diff_banner_text(report: &Report) -> String {
+    let Some(diff) = report.metrics.diff.as_ref() else {
+        return String::new();
+    };
+    let mut tail = format!(
+        " · diff: {pct:.1}% of added lines duplicated ({dup} / {added} added LOC)",
+        pct = diff.duplication_percent,
+        dup = diff.duplicated_added_loc,
+        added = diff.added_loc,
+    );
+    if let Some(outside) = report.clusters_outside_diff {
+        let newly = report
+            .clusters
+            .iter()
+            .filter(|cluster| cluster.is_newly_introduced == Some(true))
+            .count();
+        let _ = write!(
+            tail,
+            " · {newly} newly introduced group(s), {outside} untouched group(s) omitted",
+        );
     }
+    tail
 }
 
 /// Builds the plain-English intro line. Avoids jargon; says what was
@@ -478,11 +508,12 @@ fn write_example(
     };
     let language = language_for_path(&example.path);
     let location = snippets.location(&example.path, example.start_byte);
+    let badge = diff_badge_markup(example.in_diff);
     match snippets.snippet(&example.path, example.start_byte, example.end_byte) {
         Some((source, start_line)) => {
             let _ = write!(
                 out,
-                "<p class=\"cluster-card__example\">Example — {location}</p>",
+                "<p class=\"cluster-card__example\">Example — {location}{badge}</p>",
                 location = escape(&location),
             );
             out.push_str(&render_snippet_body(&source, start_line, language));
@@ -490,7 +521,7 @@ fn write_example(
         None => {
             let _ = write!(
                 out,
-                "<p class=\"cluster-card__example\">Example — {location}</p>\
+                "<p class=\"cluster-card__example\">Example — {location}{badge}</p>\
                  <p class=\"snippet-missing\">Source unavailable on disk.</p>",
                 location = escape(&location),
             );
@@ -541,8 +572,9 @@ fn write_also_item(out: &mut String, occ: &ReportOccurrence, snippets: &mut Snip
     let location = snippets.location(&occ.path, occ.start_byte);
     let _ = write!(
         out,
-        "<li class=\"{class}\">{location}<span class=\"also-loc\">{suffix}</span></li>",
+        "<li class=\"{class}\">{location}{badge}<span class=\"also-loc\">{suffix}</span></li>",
         location = escape(&location),
+        badge = diff_badge_markup(occ.in_diff),
     );
 }
 

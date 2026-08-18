@@ -33,6 +33,8 @@ fn sample_cluster(
         occurrences,
         summary: "summary".into(),
         interpretation: "interp".into(),
+        intersects_diff: None,
+        is_newly_introduced: None,
     }
 }
 
@@ -44,6 +46,7 @@ fn occurrence(path: &str, start: usize, end: usize) -> ReportOccurrence {
         start_line: 1,
         end_line: 1,
         hidden: false,
+        in_diff: None,
     }
 }
 

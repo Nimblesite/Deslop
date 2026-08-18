@@ -104,6 +104,8 @@ pub(crate) fn synthetic_report_cluster(
         occurrences_truncated: false,
         summary: String::new(),
         interpretation: String::new(),
+        intersects_diff: None,
+        is_newly_introduced: None,
     }
 }
 
@@ -120,6 +122,7 @@ pub(crate) fn report_occurrence(
         start_line: 0,
         end_line: 0,
         hidden,
+        in_diff: None,
     }
 }
 

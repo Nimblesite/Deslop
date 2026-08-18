@@ -154,6 +154,26 @@ struct Cli {
     #[arg(long = "rerun-remove", value_name = "PATH", num_args = 1.., action = clap::ArgAction::Append)]
     rerun_remove: Vec<PathBuf>,
 
+    /// Diff-scoped reporting flags (`--diff`, `--only-changed`).
+    #[command(flatten)]
+    diff_scope: DiffFlags,
+
+    /// Copy `SRC` to `DST` between the initial analysis and the rerun,
+    /// then replay `DST` through [`PipelineSession::update_files`].
+    /// Simulates a new file appearing mid-session: the initial corpus
+    /// does not see `DST`; the rerun does and the delta surfaces the
+    /// new clusters it joins ([LIVE-DELTA] `clusters_added`). Spec is
+    /// `SRC=DST`; both paths must be absolute or resolvable against
+    /// the current working directory.
+    #[arg(long = "rerun-add", value_name = "SRC=DST", num_args = 1.., action = clap::ArgAction::Append)]
+    rerun_add: Vec<String>,
+}
+
+/// Diff-scoped reporting flags ([CLI-ARG-DIFF],
+/// [CLI-ARG-ONLY-CHANGED]). Same packing rationale as
+/// [`SuppressFlags`].
+#[derive(Debug, clap::Args)]
+struct DiffFlags {
     /// Unified diff whose new-side added lines scope the report
     /// ([CLI-ARG-DIFF]). `-` reads the diff from stdin. The scan still
     /// covers the whole tree; the diff only tags and scopes the report.
@@ -174,16 +194,6 @@ struct Cli {
     /// cannot fail a pre-merge check. Requires `--diff`.
     #[arg(long, requires = "diff")]
     only_changed: bool,
-
-    /// Copy `SRC` to `DST` between the initial analysis and the rerun,
-    /// then replay `DST` through [`PipelineSession::update_files`].
-    /// Simulates a new file appearing mid-session: the initial corpus
-    /// does not see `DST`; the rerun does and the delta surfaces the
-    /// new clusters it joins ([LIVE-DELTA] `clusters_added`). Spec is
-    /// `SRC=DST`; both paths must be absolute or resolvable against
-    /// the current working directory.
-    #[arg(long = "rerun-add", value_name = "SRC=DST", num_args = 1.., action = clap::ArgAction::Append)]
-    rerun_add: Vec<String>,
 }
 
 /// Suppression flags for each output format. Packed into their own
@@ -314,7 +324,7 @@ fn run_cli() -> Result<()> {
     };
     let mut report = outcome.report;
     apply_threshold(&args, &mut report)?;
-    if args.only_changed {
+    if args.diff_scope.only_changed {
         apply_only_changed(&mut report);
     }
     // The static schema_doc is served on demand (schema-doc / deslop://schema,

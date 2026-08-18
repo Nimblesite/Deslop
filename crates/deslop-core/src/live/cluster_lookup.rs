@@ -93,6 +93,8 @@ mod tests {
             occurrences_truncated: false,
             summary: String::new(),
             interpretation: String::new(),
+            intersects_diff: None,
+            is_newly_introduced: None,
         }
     }
 

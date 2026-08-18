@@ -26,7 +26,7 @@ const STDIN_SENTINEL: &str = "-";
 /// not given. Both an unreadable file and malformed diff text are
 /// usage errors ([CLI-ARG-DIFF]).
 pub(crate) fn load_diff(args: &Cli) -> Result<Option<ParsedDiff>> {
-    let Some(source) = args.diff.as_deref() else {
+    let Some(source) = args.diff_scope.diff.as_deref() else {
         return Ok(None);
     };
     let text = read_diff_text(source)?;
@@ -81,7 +81,7 @@ pub(crate) fn pipeline_error(err: CoreError) -> anyhow::Error {
 /// lie about the repository.
 pub(crate) fn apply_threshold(args: &Cli, report: &mut Report) -> Result<()> {
     report.metrics.threshold = resolve_threshold(args, report.metrics.duplication_percent)?;
-    if !args.only_changed {
+    if !args.diff_scope.only_changed {
         return Ok(());
     }
     let Some(measured) = report.metrics.diff.as_ref().map(|diff| diff.duplication_percent) else {
@@ -115,7 +115,7 @@ fn resolve_threshold(args: &Cli, measured: f64) -> Result<ThresholdSummary> {
 /// otherwise. A missing `metrics.diff` block cannot gate — there is no
 /// measurement to gate on — so it reads as unbreached.
 pub(crate) fn gate_breached(args: &Cli, report: &Report) -> bool {
-    if args.only_changed {
+    if args.diff_scope.only_changed {
         return report
             .metrics
             .diff

@@ -31,6 +31,100 @@ use crate::{
     state::{FileId, FileRegistry},
 };
 
+/// Per-file byte offsets of newline characters for constant-time-size line lookup.
+#[derive(Debug)]
+pub struct LineIndex {
+    /// Length of the indexed source in bytes.
+    source_len: usize,
+    /// Sorted byte offsets at which newline characters occur.
+    newline_offsets: Vec<usize>,
+}
+
+/// Line indexes keyed by the same [`FileId`] as the source map.
+pub type LineIndices = HashMap<FileId, LineIndex>;
+
+/// Source bytes and the line indexes built from those exact bytes.
+///
+/// One type owns both halves because a report occurrence needs them
+/// together: the bytes decide whether a file is generated (and so
+/// hidden), the index projects its byte range onto lines. Taking the two
+/// as separate arguments would let a caller pair a source map with
+/// indexes built from a different one, and a file carried by only one of
+/// them would silently stop being hidden — a generated file surfacing as
+/// a cluster. The indexes are therefore built here, from the map this
+/// borrows, and cannot disagree with it.
+pub(crate) struct ReportSources<'a> {
+    /// Source bytes keyed by file identity.
+    sources: &'a HashMap<FileId, Vec<u8>>,
+    /// Line indexes built from `sources`, keyed identically.
+    line_indices: LineIndices,
+}
+
+/// One source and its matching line index.
+#[derive(Clone, Copy)]
+struct ReportSource<'a> {
+    /// Source bytes used for generated-file detection.
+    bytes: &'a [u8],
+    /// Line index used to project byte ranges.
+    line_index: &'a LineIndex,
+}
+
+impl<'a> ReportSources<'a> {
+    /// Indexes every source once for the whole render.
+    pub(crate) fn new(sources: &'a HashMap<FileId, Vec<u8>>) -> Self {
+        let line_indices = sources
+            .iter()
+            .map(|(file_id, source)| (*file_id, LineIndex::new(source)))
+            .collect();
+        Self {
+            sources,
+            line_indices,
+        }
+    }
+
+    /// The same indexes, for the metrics pass that projects the same
+    /// byte ranges onto the same lines.
+    pub(crate) const fn line_indices(&self) -> &LineIndices {
+        &self.line_indices
+    }
+
+    /// Returns one source with its corresponding line index.
+    fn source(&self, file_id: FileId) -> Option<ReportSource<'_>> {
+        Some(ReportSource {
+            bytes: self.sources.get(&file_id)?.as_slice(),
+            line_index: self.line_indices.get(&file_id)?,
+        })
+    }
+}
+
+impl LineIndex {
+    /// Builds one index with a single pass over the source bytes.
+    fn new(source: &[u8]) -> Self {
+        let newline_offsets = source
+            .iter()
+            .enumerate()
+            .filter_map(|(offset, byte)| (*byte == b'\n').then_some(offset))
+            .collect();
+        Self {
+            source_len: source.len(),
+            newline_offsets,
+        }
+    }
+
+    /// Returns the 1-indexed line containing `offset`.
+    pub(crate) fn line_for_offset(&self, offset: usize) -> usize {
+        let safe_offset = offset.min(self.source_len);
+        self.newline_offsets
+            .partition_point(|newline| *newline < safe_offset)
+            .saturating_add(1)
+    }
+
+    /// Source byte length used to preserve range-clamping semantics.
+    pub(crate) const fn source_len(&self) -> usize {
+        self.source_len
+    }
+}
+
 /// Converts one internal [`Cluster`] to a [`ReportCluster`].
 pub(crate) fn cluster_to_report<S: BuildHasher>(
     cluster: &Cluster,
@@ -38,7 +132,7 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
     file_languages: &HashMap<FileId, &'static str, S>,
     scan_root: &Path,
     exclusion: &ExclusionConfig,
-    sources: &HashMap<FileId, Vec<u8>>,
+    sources: &ReportSources<'_>,
     parse_cache: &ParseCache,
 ) -> ReportCluster {
     let canonical_node_count = cluster
@@ -57,7 +151,7 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
                 file_languages,
                 scan_root,
                 exclusion,
-                sources.get(&member.file_id).map(Vec::as_slice),
+                sources.source(member.file_id),
             )
         })
         .collect();
@@ -66,7 +160,7 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         raw_signals,
         cluster.content,
         &cluster.members,
-        sources,
+        sources.sources,
         file_languages,
         parse_cache,
     );
@@ -80,7 +174,7 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         canonical_node_count,
         &cluster.members,
         &occurrences,
-        sources,
+        sources.sources,
         signals,
     );
     let interpretation = interpret(kind);
@@ -117,23 +211,23 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
 }
 
 /// Builds a [`ReportOccurrence`] for a single fingerprint member.
-pub(crate) fn occurrence<S: BuildHasher>(
+fn occurrence<S: BuildHasher>(
     file_id: FileId,
     byte_range: ByteRange,
     registry: &FileRegistry,
     file_languages: &HashMap<FileId, &'static str, S>,
     scan_root: &Path,
     exclusion: &ExclusionConfig,
-    source: Option<&[u8]>,
+    source: Option<ReportSource<'_>>,
 ) -> ReportOccurrence {
     let absolute = registry.path(file_id).map(Path::to_path_buf);
     let language = file_languages.get(&file_id).copied().unwrap_or("");
     let hidden = absolute
         .as_deref()
         .is_some_and(|abs| exclusion.is_report_hidden(abs, language))
-        || source.is_some_and(crate::config::has_generated_header);
-    let (start_line, end_line) = source.map_or((0, 0), |bytes| {
-        byte_range_to_line_range(bytes, byte_range.start, byte_range.end)
+        || source.is_some_and(|item| crate::config::has_generated_header(item.bytes));
+    let (start_line, end_line) = source.map_or((0, 0), |item| {
+        byte_range_to_line_range(item.line_index, byte_range.start, byte_range.end)
     });
     let path = absolute.map_or_else(PathBuf::new, |abs| relative_to_scan_root(&abs, scan_root));
     ReportOccurrence {
@@ -173,30 +267,11 @@ pub(crate) fn display_path(file_id: FileId, registry: &FileRegistry, scan_root: 
 }
 
 /// Converts a byte range into an inclusive 1-indexed line range.
-fn byte_range_to_line_range(source: &[u8], start: usize, end: usize) -> (i64, i64) {
-    let safe_start = start.min(source.len());
-    let end_offset = end.saturating_sub(1).min(source.len());
+fn byte_range_to_line_range(index: &LineIndex, start: usize, end: usize) -> (i64, i64) {
     (
-        line_for_offset(source, safe_start),
-        line_for_offset(source, end_offset),
+        i64::try_from(index.line_for_offset(start)).unwrap_or(i64::MAX),
+        i64::try_from(index.line_for_offset(end.saturating_sub(1))).unwrap_or(i64::MAX),
     )
-}
-
-/// Returns the 1-indexed line containing `offset`.
-fn line_for_offset(source: &[u8], offset: usize) -> i64 {
-    let safe_offset = offset.min(source.len());
-    let line = source
-        .get(..safe_offset)
-        .map_or(1, |prefix| count_newlines(prefix).saturating_add(1));
-    i64::try_from(line).unwrap_or(i64::MAX)
-}
-
-/// Counts newline bytes in `source`.
-fn count_newlines(source: &[u8]) -> usize {
-    source
-        .split(|byte| *byte == b'\n')
-        .count()
-        .saturating_sub(1)
 }
 
 /// Produces a short, agent-readable one-line summary for the cluster.

@@ -220,11 +220,11 @@ Everything downstream of signatures — band enumeration, pairing, clustering, r
 | [PIPELINE-INCREMENTAL-ANALYSIS] | What an incremental pass may reuse, and the equivalence it owes | ⏳ signature reuse implemented and pinned; downstream stages open |
 | [CONFIG-INCREMENTAL-OPTOUT] | `[analysis] incremental = false` escape hatch | ✅ implemented, pinned by `signature_reuse.rs` |
 | [PIPELINE-DETERMINISM] | The property every reuse rests on | ✅ implemented |
-| [ACTION-CACHE] | The store restored and saved around the action's run step | ⏳ specified ([release.md](../specs/release.md)), not shipped |
-| [CLI-ARG-DIFF] + [CLI-ARG-ONLY-CHANGED] | The two flags and their conflicts | ⏳ specified ([cli.md](../specs/cli.md)), not shipped |
-| [PIPELINE-DIFF-INGEST] | Strict unified-diff parser and tree verification | ⏳ specified, not shipped |
-| [OUTPUT-SCHEMA-DIFF-TAGS] | The five `Option` wire fields | ⏳ specified, not shipped |
-| [METRICS-DIFF-SCOPE] | `metrics.diff` and the `--only-changed` gate | ⏳ specified, not shipped |
+| [ACTION-CACHE] | The store restored and saved around the action's run step | ✅ implemented (`action.yml` restore/save around the run step), pinned by two contract checks + the two-runner `cache-seed`/`cache-warm` self-test |
+| [CLI-ARG-DIFF] + [CLI-ARG-ONLY-CHANGED] | The two flags and their conflicts | ✅ implemented (`deslop/src/diff_input.rs`), pinned by `diff_scoped_reporting.rs` 7/7 |
+| [PIPELINE-DIFF-INGEST] | Strict unified-diff parser and tree verification | ✅ implemented (`diff_scope/parser.rs` + `verify.rs`), refusals pinned E2E |
+| [OUTPUT-SCHEMA-DIFF-TAGS] | The five `Option` wire fields | ✅ implemented, four populations + field absence pinned E2E |
+| [METRICS-DIFF-SCOPE] | `metrics.diff` and the `--only-changed` gate | ✅ implemented, added-line recomputation + gate rerouting pinned E2E |
 
 ## Checklist
 
@@ -268,13 +268,14 @@ The live TODO for this plan. Every work session updates this list in the same ch
 - [x] Retention safe across concurrently running tool versions: `OtherVersion` partitions never deleted under budget, evicted first under pressure — pinned at unit and E2E level
 - [x] Stale `RED PIN` prose replaced with the row's recall + precision contract, and `LSH_ONLY_NEARMISS_MIN_JACCARD` **is** `pair::LSH_ONLY_MIN_JACCARD` rather than a copy of its value — one number, two named uses
 - [x] Full `make ci` gate run on the final snapshot; the two accuracy defects it caught (#331 row-4 false positive, #108 unproven anchor-free promotion) are fixed at the root, not suppressed — see the audit's "Accuracy defects this audit uncovered"
+- [x] `band_key` identity concatenation landed (the Phase 2 follow-up): band enumeration ~1,276 ms (~44%) → ~359 ms (~12.5–14.2% across three warm tokio passes). Red→green identity test on the old hash; `incremental_equivalence` 6/6, `signature_reuse` 4/4, `lsh_only_nearmiss_recall` 2/2, `report_golden` 2/2 byte-for-byte
 
 **Phases 5–10 — CI cache and diff scoping**
 - [x] Decisions recorded; specs updated in the same change ([ACTION-CACHE], [CLI-ARG-DIFF], [CLI-ARG-ONLY-CHANGED], [PIPELINE-DIFF-INGEST], [OUTPUT-SCHEMA-DIFF-TAGS], [METRICS-DIFF-SCOPE])
-- [ ] Phase 5 — action cache restore/save + two-pass self-test, closes gh #381
-- [ ] Phase 6 — parser + refusal, unit + E2E red→green
-- [ ] Phase 7 — wire fields + tagging E2E
-- [ ] Phase 8 — `--only-changed`, `diff_metrics`, gate
-- [ ] Phase 9 — text summary, badges, HTML toggle
-- [ ] Phase 10 — `diff:` / `only-changed:` action inputs
-- [ ] Close #364 with a worked `git diff | deslop` example in the issue
+- [x] Phase 5 — action cache restore/save + two-pass self-test, closes gh #381 (`action.yml`: restore before / save after the run step under the per-run key with version+OS prefix fallback, `cache: "false"` opt-out, storeless-run save skip; contract checks pin ordering, key sharing, scan-root path, and opt-out; `action-selftest.yml` `cache-seed`→`cache-warm` runs on two runners and asserts `hits > 0`, `misses == 0`, and seed/warm reports `deepStrictEqual` modulo `cache_stats`)
+- [x] Phase 6 — parser + refusal, unit + E2E red→green (`diff_scope/parser.rs` + `verify.rs`; `stale_diff_is_refused_with_file_and_line` names file and new-side line, exit 2; malformed and missing diffs exit 2; `--diff -` reads stdin)
+- [x] Phase 7 — wire fields + tagging E2E (`diff_tags_the_four_populations_and_metrics_add_up` pins all four populations; `no_diff_run_omits_every_diff_field` pins field absence; mechanical metrics and cluster ids byte-identical across `--diff` on/off)
+- [x] Phase 8 — `--only-changed`, `diff_metrics`, gate (`only_changed_gate_reads_the_diff_percentage`: legacy debt passes a clean diff at `--fail-over 0`, new duplication exits 3, repo-wide verdict stays honest; `clusters_outside_diff` counted)
+- [x] Phase 9 — text summary, badges, HTML toggle (`diff_badge` in `report_location.rs` is the one shared badge source; text delta + badged occurrence rows; HTML `in-diff` card class, banner tail, CSS-only diff facet chips; `only_changed_filters_untouched_clusters_and_renders_the_delta` green; no-diff output byte-identical)
+- [x] Phase 10 — `diff:` / `only-changed:` action inputs (`action.yml` declares both, forwards each only when set, and fails `only-changed` without `diff` before any CLI download with the CLI's exit 2; `action-read-outputs.mjs` reroutes `gate-scope`/`gate-percent`/`gate-threshold-percent` to `metrics.diff` when the diff gate governed; breach message names the added-lines population; contract suite now 39 checks with six diff-input checks split into `action-contract-{harness,scripts-checks,shape-checks}.mjs`; `action-selftest.yml` gains a `diff-gate` leg, version-gated at `>= 0.33.0`, proving legacy debt passes a zero ceiling under a clean diff while the repo-wide verdict stays breached; en + zh action docs carry both input rows)
+- [x] Post the worked `git diff | deslop` example on #364 — [comment](https://github.com/Nimblesite/Deslop/issues/364#issuecomment-5327619707): the fixture patch piped on stdin under `--only-changed --fail-over 5` (exit 3, `diff: 97.4% of added lines duplicated (37 / 38 added LOC)`, one newly introduced group, one untouched group omitted), plus the flip side — a clean diff passes at `--fail-over 0` where the repo-wide gate exits 3. **The issue stays open**; closing it is the user's call, not the agent's

@@ -16,7 +16,7 @@ use crate::{
     cluster::Cluster,
     config::ExclusionConfig,
     diff_scope::DiffScope,
-    report_render::relative_to_scan_root,
+    report_render::{relative_to_scan_root, LineIndex, LineIndices},
     state::{FileId, FileRegistry},
 };
 
@@ -106,6 +106,8 @@ pub struct MetricsInputs<'a, S: BuildHasher> {
     /// Per-file source bytes keyed by [`FileId`]. Used to convert
     /// `byte_range` to line numbers; only read, never mutated.
     pub sources: &'a HashMap<FileId, Vec<u8>>,
+    /// Shared per-file line indexes built once for report rendering and metrics.
+    pub line_indices: &'a LineIndices,
     /// Per-file language id. Required to evaluate per-language
     /// `report_hide` patterns.
     pub file_languages: &'a HashMap<FileId, &'static str, S>,
@@ -268,12 +270,12 @@ fn add_member_lines<S: BuildHasher>(
     if occurrence_is_hidden(member.file_id, inputs) {
         return false;
     }
-    let Some(source) = inputs.sources.get(&member.file_id) else {
+    let Some(line_index) = inputs.line_indices.get(&member.file_id) else {
         return false;
     };
     let entry = per_file_lines.entry(member.file_id).or_default();
     let (start_line, end_line) =
-        byte_range_to_line_range(source, member.byte_range.start, member.byte_range.end);
+        byte_range_to_line_range(line_index, member.byte_range.start, member.byte_range.end);
     for line in start_line..=end_line {
         let _inserted = entry.insert(line);
     }
@@ -299,20 +301,13 @@ fn occurrence_is_hidden<S: BuildHasher>(file_id: FileId, inputs: &MetricsInputs<
 /// Converts a half-open `[start, end)` byte range into a closed
 /// 1-indexed line range. Empty ranges yield `(line, line)` for the
 /// starting line so they still occupy one row in the set.
-fn byte_range_to_line_range(source: &[u8], start: usize, end: usize) -> (u64, u64) {
-    let safe_end = end.min(source.len());
+fn byte_range_to_line_range(index: &LineIndex, start: usize, end: usize) -> (u64, u64) {
+    let safe_end = end.min(index.source_len());
     let safe_start = start.min(safe_end);
-    let start_line = line_for_offset(source, safe_start);
+    let start_line = u64::try_from(index.line_for_offset(safe_start)).unwrap_or(u64::MAX);
     let end_offset = safe_end.saturating_sub(1).max(safe_start);
-    let end_line = line_for_offset(source, end_offset);
+    let end_line = u64::try_from(index.line_for_offset(end_offset)).unwrap_or(u64::MAX);
     (start_line, end_line)
-}
-
-/// 1-indexed line number containing byte `offset` in `source`.
-fn line_for_offset(source: &[u8], offset: usize) -> u64 {
-    let safe = offset.min(source.len());
-    let prefix = source.get(..safe).unwrap_or(&[]);
-    count_newlines(prefix).saturating_add(1)
 }
 
 /// Counts physical lines in `source`: one per `\n` plus one for a

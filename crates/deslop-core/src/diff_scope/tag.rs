@@ -55,7 +55,18 @@ pub fn apply_only_changed(report: &mut Report) {
 mod tests {
     use std::path::PathBuf;
 
+    use anyhow::{Context as _, Result};
+
     use super::*;
+
+    /// The `index`-th occurrence of `cluster`, or an error naming the
+    /// position the assertion expected to find.
+    fn occurrence_at(cluster: &ReportCluster, index: usize) -> Result<&ReportOccurrence> {
+        cluster
+            .occurrences
+            .get(index)
+            .with_context(|| format!("occurrence {index} of {}", cluster.id))
+    }
 
     fn occurrence(path: &str, start_line: i64, end_line: i64, hidden: bool) -> ReportOccurrence {
         ReportOccurrence {
@@ -102,37 +113,41 @@ mod tests {
     // [OUTPUT-SCHEMA-DIFF-TAGS]: a mixed cluster intersects but is not
     // newly introduced; every occurrence carries an explicit verdict.
     #[test]
-    fn mixed_cluster_intersects_without_being_newly_introduced() {
+    fn mixed_cluster_intersects_without_being_newly_introduced() -> Result<()> {
         let mut clusters = vec![cluster(vec![
             occurrence("src/new.rs", 1, 10, false),
             occurrence("src/old.rs", 1, 10, false),
         ])];
         tag_clusters(&mut clusters, &scope_with("src/new.rs", [2, 3]));
-        assert_eq!(clusters[0].intersects_diff, Some(true));
-        assert_eq!(clusters[0].is_newly_introduced, Some(false));
-        assert_eq!(clusters[0].occurrences[0].in_diff, Some(true));
-        assert_eq!(clusters[0].occurrences[1].in_diff, Some(false));
+        let tagged = clusters.first().context("the tagged cluster")?;
+        assert_eq!(tagged.intersects_diff, Some(true));
+        assert_eq!(tagged.is_newly_introduced, Some(false));
+        assert_eq!(occurrence_at(tagged, 0)?.in_diff, Some(true));
+        assert_eq!(occurrence_at(tagged, 1)?.in_diff, Some(false));
+        Ok(())
     }
 
     // [OUTPUT-SCHEMA-DIFF-TAGS]: hidden occurrences never decide the
     // cluster verdicts — a hidden out-of-diff copy cannot veto
     // `is_newly_introduced`.
     #[test]
-    fn hidden_occurrences_do_not_veto_newly_introduced() {
+    fn hidden_occurrences_do_not_veto_newly_introduced() -> Result<()> {
         let mut clusters = vec![cluster(vec![
             occurrence("src/new.rs", 1, 5, false),
             occurrence("src/new.rs", 6, 9, false),
             occurrence("generated/gen.rs", 1, 5, true),
         ])];
         tag_clusters(&mut clusters, &scope_with("src/new.rs", [1, 9]));
-        assert_eq!(clusters[0].is_newly_introduced, Some(true));
-        assert_eq!(clusters[0].occurrences[2].in_diff, Some(false));
+        let tagged = clusters.first().context("the tagged cluster")?;
+        assert_eq!(tagged.is_newly_introduced, Some(true));
+        assert_eq!(occurrence_at(tagged, 2)?.in_diff, Some(false));
+        Ok(())
     }
 
     // [CLI-ARG-ONLY-CHANGED]: untouched clusters are dropped and
     // counted; intersecting clusters and metrics-bearing fields stay.
     #[test]
-    fn only_changed_drops_and_counts_untouched_clusters() {
+    fn only_changed_drops_and_counts_untouched_clusters() -> Result<()> {
         let scope = scope_with("src/new.rs", [1, 5]);
         let mut touched = cluster(vec![occurrence("src/new.rs", 1, 5, false)]);
         let mut untouched = cluster(vec![occurrence("src/old.rs", 1, 5, false)]);
@@ -155,6 +170,14 @@ mod tests {
         apply_only_changed(&mut report);
         assert_eq!(report.clusters.len(), 1);
         assert_eq!(report.clusters_outside_diff, Some(1));
-        assert_eq!(report.clusters[0].intersects_diff, Some(true));
+        assert_eq!(
+            report
+                .clusters
+                .first()
+                .context("the surviving cluster")?
+                .intersects_diff,
+            Some(true)
+        );
+        Ok(())
     }
 }

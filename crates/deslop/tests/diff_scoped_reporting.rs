@@ -16,6 +16,7 @@ mod common;
 
 use std::{fs, path::PathBuf};
 
+use anyhow::Context as _;
 use assert_cmd::Command;
 use serde_json::Value;
 
@@ -61,8 +62,8 @@ fn run_ok(extra: &[&str]) -> Result<(Value, PathBuf, tempfile::TempDir)> {
 }
 
 /// Finds the cluster whose occurrence paths exactly match `paths`
-/// (order-insensitive), panicking with the full cluster list otherwise.
-fn cluster_with_paths<'a>(report: &'a Value, paths: &[&str]) -> &'a Value {
+/// (order-insensitive), reporting the full cluster list otherwise.
+fn cluster_with_paths<'a>(report: &'a Value, paths: &[&str]) -> Result<&'a Value> {
     let want: std::collections::BTreeSet<&str> = paths.iter().copied().collect();
     clusters(report)
         .iter()
@@ -73,15 +74,15 @@ fn cluster_with_paths<'a>(report: &'a Value, paths: &[&str]) -> &'a Value {
                 .collect();
             got == want
         })
-        .unwrap_or_else(|| panic!("no cluster with paths {paths:?} in {report:#}"))
+        .with_context(|| format!("no cluster with paths {paths:?} in {report:#}"))
 }
 
 /// The occurrence in `cluster` whose path is `path`.
-fn occurrence_at<'a>(cluster: &'a Value, path: &str) -> &'a Value {
+fn occurrence_at<'a>(cluster: &'a Value, path: &str) -> Result<&'a Value> {
     occurrences(cluster)
         .iter()
         .find(|occ| occ.get("path").and_then(Value::as_str) == Some(path))
-        .unwrap_or_else(|| panic!("no occurrence at {path} in {cluster:#}"))
+        .with_context(|| format!("no occurrence at {path} in {cluster:#}"))
 }
 
 /// `metrics` with the `diff` block removed, for mechanical-field
@@ -115,7 +116,7 @@ fn in_added_span(path: &str, line: u64) -> bool {
 /// per file, of non-hidden occurrence line ranges intersected with the
 /// added spans, over clusters with >= 2 non-hidden occurrences — the
 /// same projection as `duplicated_loc` ([METRICS-DIFF-SCOPE]).
-fn rederive_duplicated_added(report: &Value) -> u64 {
+fn rederive_duplicated_added(report: &Value) -> Result<u64> {
     let mut per_file: std::collections::BTreeMap<&str, std::collections::BTreeSet<u64>> =
         std::collections::BTreeMap::new();
     for cluster in clusters(report) {
@@ -130,15 +131,15 @@ fn rederive_duplicated_added(report: &Value) -> u64 {
             let path = occ
                 .get("path")
                 .and_then(Value::as_str)
-                .expect("occurrence path");
+                .context("occurrence path")?;
             let start = occ
                 .get("start_line")
                 .and_then(Value::as_u64)
-                .expect("start_line");
+                .context("start_line")?;
             let end = occ
                 .get("end_line")
                 .and_then(Value::as_u64)
-                .expect("end_line");
+                .context("end_line")?;
             for line in start..=end {
                 if in_added_span(path, line) {
                     let _ = per_file.entry(path).or_default().insert(line);
@@ -148,7 +149,7 @@ fn rederive_duplicated_added(report: &Value) -> u64 {
     }
     per_file
         .values()
-        .map(|lines| u64::try_from(lines.len()).expect("line count fits u64"))
+        .map(|lines| u64::try_from(lines.len()).context("line count fits u64"))
         .sum()
 }
 
@@ -187,34 +188,34 @@ fn diff_tags_the_four_populations_and_metrics_add_up() -> Result<()> {
     let (report, _output, _tmp_b) = run_ok(&["--diff", "patches/change.patch"])?;
     assert_eq!(clusters(&report).len(), 3, "tagging never drops clusters");
 
-    let fresh = cluster_with_paths(&report, &["src/fresh_a.rs", "src/fresh_b.rs"]);
+    let fresh = cluster_with_paths(&report, &["src/fresh_a.rs", "src/fresh_b.rs"])?;
     assert_eq!(field(fresh, "intersects_diff"), true);
     assert_eq!(field(fresh, "is_newly_introduced"), true);
     assert_eq!(field(fresh, "bucket"), "identical");
     for path in ["src/fresh_a.rs", "src/fresh_b.rs"] {
         assert_eq!(
-            field(occurrence_at(fresh, path), "in_diff"),
+            field(occurrence_at(fresh, path)?, "in_diff"),
             true,
             "{path} is wholly added"
         );
     }
 
-    let mixed = cluster_with_paths(&report, &["src/helper.rs", "src/caller.rs"]);
+    let mixed = cluster_with_paths(&report, &["src/helper.rs", "src/caller.rs"])?;
     assert_eq!(field(mixed, "intersects_diff"), true);
     assert_eq!(
         field(mixed, "is_newly_introduced"),
         false,
         "one occurrence predates the diff, so the cluster is not newly introduced"
     );
-    assert_eq!(field(occurrence_at(mixed, "src/caller.rs"), "in_diff"), true);
-    assert_eq!(field(occurrence_at(mixed, "src/helper.rs"), "in_diff"), false);
+    assert_eq!(field(occurrence_at(mixed, "src/caller.rs")?, "in_diff"), true);
+    assert_eq!(field(occurrence_at(mixed, "src/helper.rs")?, "in_diff"), false);
 
-    let legacy = cluster_with_paths(&report, &["src/legacy_a.rs", "src/legacy_b.rs"]);
+    let legacy = cluster_with_paths(&report, &["src/legacy_a.rs", "src/legacy_b.rs"])?;
     assert_eq!(field(legacy, "intersects_diff"), false);
     assert_eq!(field(legacy, "is_newly_introduced"), false);
     assert_eq!(field(legacy, "bucket"), "identical");
     for path in ["src/legacy_a.rs", "src/legacy_b.rs"] {
-        assert_eq!(field(occurrence_at(legacy, path), "in_diff"), false);
+        assert_eq!(field(occurrence_at(legacy, path)?, "in_diff"), false);
     }
 
     let diff_metrics = field(field(&report, "metrics"), "diff");
@@ -225,10 +226,10 @@ fn diff_tags_the_four_populations_and_metrics_add_up() -> Result<()> {
     );
     let duplicated_added = field(diff_metrics, "duplicated_added_loc")
         .as_u64()
-        .expect("duplicated_added_loc");
+        .context("duplicated_added_loc")?;
     assert_eq!(
         duplicated_added,
-        rederive_duplicated_added(&report),
+        rederive_duplicated_added(&report)?,
         "duplicated_added_loc must equal the occurrence-evidence recomputation"
     );
     assert!(
@@ -237,10 +238,9 @@ fn diff_tags_the_four_populations_and_metrics_add_up() -> Result<()> {
     );
     let percent = field(diff_metrics, "duplication_percent")
         .as_f64()
-        .expect("duplication_percent");
-    let expected = 100.0
-        * f64::from(u32::try_from(duplicated_added).expect("added lines fit u32"))
-        / f64::from(u32::try_from(ADDED_LOC).expect("added lines fit u32"));
+        .context("duplication_percent")?;
+    let expected = 100.0 * f64::from(u32::try_from(duplicated_added)?)
+        / f64::from(u32::try_from(ADDED_LOC)?);
     assert!(
         (percent - expected).abs() < 1e-9,
         "diff percent {percent} must be 100*{duplicated_added}/{ADDED_LOC}"
@@ -292,7 +292,7 @@ fn only_changed_filters_untouched_clusters_and_renders_the_delta() -> Result<()>
     }
     let all_paths: Vec<&str> = clusters(&report)
         .iter()
-        .flat_map(|cluster| occurrences(cluster))
+        .flat_map(occurrences)
         .filter_map(|occ| occ.get("path").and_then(Value::as_str))
         .collect();
     assert!(
@@ -456,7 +456,7 @@ fn diff_from_stdin_tags_identically() -> Result<()> {
     let mut cmd = diff_cmd(&output, &["--diff", "-"])?;
     let _assert = cmd.write_stdin(patch).assert().success();
     let report = load_json(&output.with_extension("json"))?;
-    let fresh = cluster_with_paths(&report, &["src/fresh_a.rs", "src/fresh_b.rs"]);
+    let fresh = cluster_with_paths(&report, &["src/fresh_a.rs", "src/fresh_b.rs"])?;
     assert_eq!(field(fresh, "is_newly_introduced"), true);
     assert_eq!(
         field(field(field(&report, "metrics"), "diff"), "added_loc"),
