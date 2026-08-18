@@ -58,8 +58,7 @@ complete report. `--output` cannot redirect the cache; it stays at the scan root
 
 ### [CLI-ARG-DIFF] `--diff` unified-diff scope
 
-> **Status: specified, not shipped.** Lands with gh #364 per
-> [incremental-analysis-plan.md](../plans/incremental-analysis-plan.md).
+> **Status: shipped.** Pinned by `crates/deslop/tests/diff_scoped_reporting.rs`.
 
 `--diff <FILE|->` supplies a unified diff (`-` reads stdin) whose new-side added
 lines scope the report. The scan itself is unchanged — the whole tree is analysed
@@ -71,7 +70,7 @@ diff are owned by [pipeline.md §PIPELINE-DIFF-INGEST](pipeline.md). Conflicts w
 
 ### [CLI-ARG-ONLY-CHANGED] `--only-changed` filter
 
-> **Status: specified, not shipped.** Lands with gh #364.
+> **Status: shipped.** Pinned by `crates/deslop/tests/diff_scoped_reporting.rs`.
 
 `--only-changed` (requires `--diff`, exit `2` without it) omits clusters that do
 not intersect the diff from every rendered format, counts them in

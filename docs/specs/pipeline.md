@@ -124,9 +124,11 @@ An **incremental pass** is one that is given the set of files whose content chan
 
 ### [PIPELINE-DIFF-INGEST] Unified-diff ingestion and verification
 
-> **Status: specified, not shipped.** Lands with gh #364 per [incremental-analysis-plan.md](../plans/incremental-analysis-plan.md).
+> **Status: shipped.** Pinned by `crates/deslop-core/src/diff_scope/` unit tests and `crates/deslop/tests/diff_scoped_reporting.rs`.
 
 `--diff` ([cli.md §CLI-ARG-DIFF](cli.md)) is consumed by a strict line-oriented parser — exact structural prefixes and integer parsing, never pattern matching; an unrecognised construct rejects the whole diff (exit `2`) rather than guessing at spans. Recognised grammar: `diff --git` headers, `---`/`+++` file targets with `a/`/`b/` prefixes and C-quoted paths, rename/copy/similarity and `Binary files` lines, `@@ -l[,n] +l[,n] @@` hunks, and ` `/`+`/`-`/`\` body lines. Only new-side **added** lines produce spans — context and deletions scope nothing, so a pure rename or a deletion-only hunk tags nothing. Spans are merged and sorted per file. Paths resolve against the working directory, then re-relativise to the scan root — the same form `ReportOccurrence.path` carries; diff files outside the corpus are ignored for tagging and counted on the `diff ingested` tracing event, since a repo-root diff legitimately touches files the scan never sees.
+
+`\ No newline at end of file` annotates the terminator of the line above it rather than being a body line of its own. It is recognised wherever it appears inside a file section — `git` emits it after the last line of a hunk, by which point the hunk's declared counts are already satisfied — and it consumes no count on either side, because counting it would shift every new-side line number after it and mis-tag the occurrences those numbers address. With no file section above it, it is junk like any other unrecognised line and rejects the diff.
 
 **The diff must describe the scanned tree.** Every context and added line of every hunk must byte-match the scanned file at the claimed new-side line number (line terminator excluded). The first mismatch aborts with exit `2` naming the file and line: a stale diff would tag the wrong occurrences, and under `--only-changed` a mis-tag is a silent false negative in a merge gate.
 
@@ -313,7 +315,7 @@ Default output paths, the format suppressors, and `--from-report` re-rendering a
 
 #### [OUTPUT-SCHEMA-DIFF-TAGS] Diff-scope tags
 
-> **Status: specified, not shipped.** Lands with gh #364 per [incremental-analysis-plan.md](../plans/incremental-analysis-plan.md).
+> **Status: shipped.** Field presence and absence are both pinned by `crates/deslop/tests/diff_scoped_reporting.rs`.
 
 Under `--diff` ([cli.md §CLI-ARG-DIFF](cli.md)) the report carries the diff verdicts; without it every field below is **absent**, never defaulted `false` — a run given no diff asserts nothing about one. Intersection is closed-interval over the 1-indexed `start_line`/`end_line` the occurrence already carries; one added line inside an occurrence tags it, because touching a clone counts as touching the clone. Cluster rollups ignore `hidden` occurrences, matching the [METRICS-REPO] projection.
 
@@ -413,7 +415,7 @@ The text renderer prints a one-line header: `repo: 12.4% duplicated (1 843 / 14 
 
 #### [METRICS-DIFF-SCOPE] Diff-scoped duplication percentage
 
-> **Status: specified, not shipped.** Lands with gh #364.
+> **Status: shipped.** Pinned by `crates/deslop/tests/diff_scoped_reporting.rs`.
 
 Under `--diff`, `RepoMetrics` gains `diff: DiffMetrics { added_loc: u64, duplicated_added_loc: u64, duplication_percent: f64, threshold: ThresholdSummary }` — absent without the flag. Numerator: added lines covered by the same non-hidden, non-literal-family occurrence projection as `duplicated_loc`. Denominator: added lines in analysed files. Same clamp, rounding, and zero-denominator rules as the mechanical percentage. The mechanical fields are byte-identical with and without `--diff` — the [METRICS-REPO-WEIGHTED] invariant applies: no knob may ever change `duplication_percent`.
 

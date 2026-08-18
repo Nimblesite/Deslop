@@ -204,13 +204,44 @@ impl Parser {
 
     /// Records the `+++ ` new-side path on the current section,
     /// opening one for prefix-less plain diffs that skip `diff --git`.
+    ///
+    /// **Quarantined ([PIPELINE-DIFF-INGEST]).** The removed code
+    /// overwrote `current.new_path` whenever a second `+++` arrived on a
+    /// section that already had one, leaving the *first* file's hunks
+    /// attached to the *second* file's path. Only a `diff ` line opened a
+    /// section and `--- ` is swallowed as metadata, so every plain
+    /// multi-file diff — `diff -ru`, and any producer that omits
+    /// `diff --git` — mis-attributed every hunk but the last. Where the
+    /// two files shared the hunk's content, which is exactly the
+    /// copy-paste this tool exists to find, verification passed and the
+    /// first file silently received no added spans at all: under
+    /// `--only-changed` its new duplication vanished from the report and
+    /// from the `added_loc` denominator, a false negative in a merge
+    /// gate. Where the content differed it raised a spurious
+    /// `DiffStale` instead, blaming a diff that was not stale. Pinned by
+    /// `plain_multi_file_diff_keeps_each_file_section_separate`.
+    #[allow(clippy::panic)]
     fn set_new_path(&mut self, raw: &str) {
-        if self.current.is_none() {
-            self.begin_file();
+        let section_already_named = self
+            .current
+            .as_ref()
+            .is_some_and(|current| current.new_path.is_some() || !current.hunks.is_empty());
+        if !section_already_named {
+            if self.current.is_none() {
+                self.begin_file();
+            }
+            if let Some(current) = self.current.as_mut() {
+                current.new_path = new_side_path(raw);
+            }
+            return;
         }
-        if let Some(current) = self.current.as_mut() {
-            current.new_path = new_side_path(raw);
-        }
+        panic!(
+            "quarantined [PIPELINE-DIFF-INGEST]: a `+++` line arrived on a file \
+             section that already carries a path or hunks. Deciding where this \
+             file's section starts is the defect under repair; guessing would \
+             attach one file's hunks to another file's path and silently drop \
+             its added lines from a merge gate"
+        );
     }
 
     /// Opens a hunk from the text after `@@ `.
@@ -304,7 +335,31 @@ fn parse_hunk_ranges(line_no: usize, header: &str) -> Result<(u64, u64, u64), Co
         .ok_or_else(|| parse_error(line_no, "hunk header missing closing '@@'"))?;
     let (_old_start, old_count) = parse_range(line_no, old_range)?;
     let (new_start, new_count) = parse_range(line_no, new_range)?;
+    reject_zero_new_start(line_no, new_start, new_count)?;
     Ok((old_count, new_start, new_count))
+}
+
+/// Refuses a hunk that claims new-side lines starting at line `0`.
+///
+/// New-side line numbers are 1-indexed, so `+0` with a non-zero count
+/// describes lines that cannot exist. `verify_line` computes its source
+/// index as `new_line - 1` saturating at zero, so lines `0` and `1` both
+/// read the file's first line: the whole added span silently shifts one
+/// line up, the real trailing added line falls outside the scope, and
+/// the occurrences covering it tag `in_diff: false`. Under
+/// `--only-changed` that lets a change pass a gate it should fail. An
+/// unrecognised construct must reject the diff rather than guess at
+/// spans ([PIPELINE-DIFF-INGEST]). `+0,0` stays legal — that is how a
+/// deletion names an empty new side. Pinned by
+/// `zero_new_side_start_with_added_lines_is_refused`.
+fn reject_zero_new_start(line_no: usize, new_start: u64, new_count: u64) -> Result<(), CoreError> {
+    if new_start == 0 && new_count > 0 {
+        return Err(parse_error(
+            line_no,
+            "hunk claims new-side lines starting at line 0; new-side lines are 1-indexed",
+        ));
+    }
+    Ok(())
 }
 
 /// Parses `start[,count]`; a missing count means 1 per the grammar.
@@ -327,12 +382,32 @@ fn parse_number(line_no: usize, text: &str) -> Result<u64, CoreError> {
 /// Strips the `b/` prefix from a `+++ ` payload; `/dev/null` means the
 /// file was deleted. Trailing tab-separated timestamps (plain `diff -u`
 /// output) are dropped.
+/// **Quarantined ([PIPELINE-DIFF-INGEST]).** The removed code returned a
+/// C-quoted target verbatim — quotes, and octal escapes such as
+/// `"b/caf\303\251.rs"`, all left in the string. `git` quotes any path
+/// carrying non-ASCII bytes, a double quote, or a backslash, so one
+/// accented or CJK filename produces them on every diff of that repo.
+/// The quoted string matched nothing in the corpus, and an unmatched
+/// path is *ignored* rather than refused, so every clone added in that
+/// file went untagged: dropped by `--only-changed` and missing from the
+/// `added_loc` denominator, with no error anywhere. The spec lists
+/// C-quoted paths as recognised grammar. Pinned by
+/// `c_quoted_new_side_path_is_unquoted`.
+#[allow(clippy::panic)]
 fn new_side_path(raw: &str) -> Option<String> {
     let path = raw.split('\t').next().unwrap_or(raw);
     if path == "/dev/null" {
         return None;
     }
-    Some(path.strip_prefix("b/").unwrap_or(path).to_owned())
+    if !path.starts_with('"') {
+        return Some(path.strip_prefix("b/").unwrap_or(path).to_owned());
+    }
+    panic!(
+        "quarantined [PIPELINE-DIFF-INGEST]: the diff names a C-quoted path \
+         ({path}). Unquoting is unimplemented, and treating the quoted form \
+         as a filename silently drops that file's added lines from the report \
+         and from a merge gate"
+    );
 }
 
 /// True for the metadata lines `git diff` interleaves between file and
@@ -426,6 +501,67 @@ mod tests {
         assert_eq!(hunk.new_start, 1);
         assert_eq!(hunk.lines.len(), 4);
         assert_eq!(added_lines(file), vec!["fn new() {}"]);
+        Ok(())
+    }
+
+    // [PIPELINE-DIFF-INGEST] grammar: a plain (prefix-less) diff carries
+    // no `diff --git` line, so each `+++` is what starts the next file's
+    // section — `--- ` is metadata and cannot. Attaching the first
+    // file's hunks to the second file's path verifies them against the
+    // wrong file: where both files share the hunk's content (the
+    // copy-paste this tool exists to find) verification passes and the
+    // first file silently receives no added spans at all, so under
+    // `--only-changed` its new duplication is dropped from the report
+    // and from the `added_loc` denominator.
+    #[test]
+    fn plain_multi_file_diff_keeps_each_file_section_separate() -> Result<()> {
+        let text = "--- x.rs\n\
+                    +++ x.rs\n\
+                    @@ -1,1 +1,2 @@\n \
+                    fn keep() {}\n\
+                    +fn from_x() {}\n\
+                    --- y.rs\n\
+                    +++ y.rs\n\
+                    @@ -1,1 +1,2 @@\n \
+                    fn keep() {}\n\
+                    +fn from_y() {}\n";
+        let parsed = parse_unified_diff(text).context("plain multi-file diff must parse")?;
+        assert_eq!(
+            parsed.files.len(),
+            2,
+            "two `+++` targets are two file sections, not one"
+        );
+        let first = first_file(&parsed)?;
+        assert_eq!(first.new_path.as_deref(), Some("x.rs"));
+        assert_eq!(first.hunks.len(), 1, "x.rs keeps only its own hunk");
+        assert_eq!(added_lines(first), vec!["fn from_x() {}"]);
+        let second = parsed.files.get(1).context("the second file section")?;
+        assert_eq!(second.new_path.as_deref(), Some("y.rs"));
+        assert_eq!(second.hunks.len(), 1, "y.rs keeps only its own hunk");
+        assert_eq!(added_lines(second), vec!["fn from_y() {}"]);
+        Ok(())
+    }
+
+    // [PIPELINE-DIFF-INGEST] grammar: the spec lists C-quoted paths as
+    // recognised. `git` quotes any path carrying non-ASCII bytes, a
+    // quote, or a backslash, escaping the bytes in octal — so a repo
+    // with a single accented filename produces them on every diff. Left
+    // quoted, the path matches nothing in the corpus and the file is
+    // counted as merely *ignored*: no error, and every clone added in it
+    // is untagged, dropped by `--only-changed`, and absent from
+    // `added_loc`.
+    #[test]
+    fn c_quoted_new_side_path_is_unquoted() -> Result<()> {
+        let text = "--- \"a/caf\\303\\251.rs\"\n\
+                    +++ \"b/caf\\303\\251.rs\"\n\
+                    @@ -0,0 +1 @@\n\
+                    +fn added() {}\n";
+        let parsed = parse_unified_diff(text).context("quoted-path diff must parse")?;
+        assert_eq!(
+            first_file(&parsed)?.new_path.as_deref(),
+            Some("café.rs"),
+            "the octal-escaped UTF-8 bytes are the real filename"
+        );
         Ok(())
     }
 
@@ -597,6 +733,26 @@ mod tests {
         let error = parse_unified_diff(text).err()
             .context("truncated hunk must be refused")?;
         assert!(matches!(error, CoreError::DiffParse { .. }));
+        Ok(())
+    }
+
+    // [PIPELINE-DIFF-INGEST] grammar: new-side line numbers are
+    // 1-indexed, so `+0` with a non-zero count describes lines that
+    // cannot exist. Absorbing it shifts the whole added span one line up
+    // — `verify_line` saturates `new_line - 1` at zero, so lines 0 and 1
+    // both read the first line — and the real trailing added line then
+    // falls outside the scope, tagging its occurrences `in_diff: false`
+    // and letting `--only-changed` pass a change it should fail.
+    #[test]
+    fn zero_new_side_start_with_added_lines_is_refused() -> Result<()> {
+        let text = "--- a/x.rs\n+++ b/x.rs\n@@ -0,0 +0,1 @@\n+fn added() {}\n";
+        let error = parse_unified_diff(text)
+            .err()
+            .context("a +0 new-side start with added lines must be refused")?;
+        assert!(
+            matches!(error, CoreError::DiffParse { line: 3, .. }),
+            "the refusal names the hunk header's line, got {error:?}"
+        );
         Ok(())
     }
 
