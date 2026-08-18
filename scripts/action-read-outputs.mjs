@@ -1,7 +1,7 @@
 // Publishes the action's result outputs from the rendered JSON report.
 // [ACTION-GATE].
 //
-// Usage: node scripts/action-read-outputs.mjs <reportPrefix> <exitCode>
+// Usage: node scripts/action-read-outputs.mjs <reportPrefix> <exitCode> [onlyChanged]
 
 import { existsSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -14,13 +14,42 @@ import { writeOutputs } from "./action-github-output.mjs";
 const RENDERS_REPORT = new Set([0, 3]);
 
 /**
+ * Names the population the gated percentage is measured over.
+ *
+ * `--only-changed` reroutes the mechanical gate to `metrics.diff` — duplicated
+ * added lines over added lines ([METRICS-DIFF-SCOPE]) — so the breach message
+ * must say "added lines" rather than claim the repo-wide figure failed. `--diff`
+ * alone never moves the gate, so tagging a run must not rename its scope either.
+ *
+ * @param {Record<string, unknown> | undefined} diffMetrics `metrics.diff`, absent without `--diff`
+ * @param {boolean} onlyChanged whether the run passed `--only-changed`
+ * @param {string} jsonPath the report the metrics were read from, for the error
+ * @returns {{scope: string, percent: unknown, ceiling: unknown}}
+ */
+function gateScope(diffMetrics, onlyChanged, jsonPath) {
+  if (!onlyChanged) return { scope: "repository", percent: undefined, ceiling: undefined };
+  if (!diffMetrics) {
+    throw new Error(
+      `only-changed gated this run but ${jsonPath} carries no metrics.diff block, so the ` +
+        "percentage the gate measured cannot be named",
+    );
+  }
+  return {
+    scope: "added-lines",
+    percent: diffMetrics.duplication_percent,
+    ceiling: diffMetrics.threshold?.percent,
+  };
+}
+
+/**
  * Reads the JSON report and returns the outputs to publish.
  *
  * @param {string} reportPrefix the `--output` prefix, without extension
  * @param {number} exitCode the CLI's exit status
+ * @param {boolean} [onlyChanged] whether the run passed `--only-changed`
  * @returns {Record<string, string>}
  */
-export function readOutputs(reportPrefix, exitCode) {
+export function readOutputs(reportPrefix, exitCode, onlyChanged = false) {
   const jsonPath = `${reportPrefix}.json`;
   if (!existsSync(jsonPath)) {
     if (RENDERS_REPORT.has(exitCode)) {
@@ -29,11 +58,17 @@ export function readOutputs(reportPrefix, exitCode) {
     return { "exit-code": String(exitCode) };
   }
   const metrics = JSON.parse(readFileSync(jsonPath, "utf8")).metrics ?? {};
+  const duplicationPercent = String(metrics.duplication_percent ?? 0);
+  const thresholdPercent = String(metrics.threshold?.percent ?? 0);
+  const gate = gateScope(metrics.diff, onlyChanged, jsonPath);
   return {
     "exit-code": String(exitCode),
-    "duplication-percent": String(metrics.duplication_percent ?? 0),
+    "duplication-percent": duplicationPercent,
     "cluster-count": String(metrics.clusters_total ?? 0),
-    "threshold-percent": String(metrics.threshold?.percent ?? 0),
+    "threshold-percent": thresholdPercent,
+    "gate-scope": gate.scope,
+    "gate-percent": String(gate.percent ?? duplicationPercent),
+    "gate-threshold-percent": String(gate.ceiling ?? thresholdPercent),
     "report-json": jsonPath,
     "report-text": `${reportPrefix}.txt`,
     "report-html": `${reportPrefix}.html`,

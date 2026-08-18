@@ -47,6 +47,8 @@ Group issues sharing a root cause, pipeline stage (parse → normalize → finge
 2. **Mark every dependency.** Any issue that depends on another MUST be recorded as blocked by it (sub-issue via `gh api graphql` `addSubIssue`, or the blocked-by relationship where available) — this directionality is how the backlog gets attacked in order. Loose thematic relations with no blocking edge get comment cross-links only.
 3. Post **one identical comment on every member**: `**Cluster: <name>** — #a #b #c. Root cause: #a — fix it first; the rest may collapse or shrink once it lands. Fix order: #a → #b → #c.` Always steer work toward the root, not the symptoms.
 
+4. **Retire edges the root outgrew.** Before recording anything, walk the *existing* blocked-by edges: any edge whose blocking issue is `fixed-on-main` (or closed) is stale — the work it gated has landed. Remove it (`gh api graphql` `removeBlockedBy`) and comment on the unblocked issue saying which edge went, that the blocker is fixed on `main`, and what remains. Where the dependent still needs the fix to *ship*, say so and keep a cross-link in place of the edge — a release-verification wait is not a blocked backlog item.
+
 ## Step 5: Enrich thin tickets
 
 A ticket is thin if a dev could not start work from it alone. For each, investigate the codebase (Grep/Read the named stage, check spec IDs, run the referenced test if cheap) and comment with facts only — no speculation:
