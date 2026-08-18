@@ -178,7 +178,11 @@ fn mixed_cluster_is_counted_in_clusters_total() -> Result<()> {
     let (_tmp, scan_root) = trio_and_mixed_summer_root()?;
     let report = run_report(&scan_root, 8)?;
     let clusters = clusters(&report);
-    assert_eq!(clusters.len(), 2, "body: the trio and the mixed Summer cluster");
+    assert_eq!(
+        clusters.len(),
+        2,
+        "body: the trio and the mixed Summer cluster"
+    );
     let mixed = clusters
         .iter()
         .find(|cluster| {
@@ -188,7 +192,10 @@ fn mixed_cluster_is_counted_in_clusters_total() -> Result<()> {
         })
         .ok_or_else(|| anyhow::anyhow!("the mixed Summer cluster must stay reported"))?;
     let occurrences_carried = occurrence_paths(mixed).len();
-    assert_eq!(occurrences_carried, 6, "the mixed cluster keeps all six copies");
+    assert_eq!(
+        occurrences_carried, 6,
+        "the mixed cluster keeps all six copies"
+    );
     assert_eq!(visible_count(mixed), 1, "exactly one of the six is visible");
     let banner = metric_field(&report, "clusters_total")
         .as_u64()

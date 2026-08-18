@@ -243,7 +243,11 @@ fn diff_banner_text(report: &Report) -> String {
         added = diff.added_loc,
     );
     if !matches!(diff.threshold.source, ThresholdSource::None) {
-        let verdict = if diff.threshold.breached { "breached" } else { "ok" };
+        let verdict = if diff.threshold.breached {
+            "breached"
+        } else {
+            "ok"
+        };
         let _ = write!(
             tail,
             " · diff threshold {pct:.2}% ({verdict})",

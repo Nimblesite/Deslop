@@ -1,13 +1,18 @@
 //! Byte-verification of a parsed diff against the scanned corpus
-//! ([CLI-ARG-DIFF]).
+//! ([CLI-ARG-DIFF], [PIPELINE-DIFF-INGEST]).
 //!
 //! Every context and added line the diff claims must byte-match the
 //! analysed file content at its new-side line number — otherwise the
 //! diff describes a different revision than the one on disk, and
 //! tagging with it would mislabel every population. Verified files
-//! project their added-line numbers into the [`DiffScope`]; files
-//! outside the scan root or absent from the corpus are ignored and
-//! counted on the `diff ingested` tracing event.
+//! project their added-line numbers into the [`DiffScope`]; git copy
+//! sections project their whole target ([`copy`]). Files outside the
+//! scan root, with unsupported extensions, or excluded-but-present on
+//! disk are ignored and counted on the `diff ingested` tracing event;
+//! a supported in-root target missing from the tree is a stale diff,
+//! refused rather than silently zeroing the scope a merge gate reads.
+
+mod copy;
 
 use std::{
     collections::BTreeMap,
@@ -33,7 +38,9 @@ use super::{
 ///
 /// Returns [`CoreError::DiffStale`] naming the file and new-side line
 /// of the first context or added line that does not byte-match the
-/// corpus.
+/// corpus; of a supported in-root target the tree no longer holds; or
+/// of a copy section whose source, target, or byte-equality claim the
+/// tree contradicts.
 pub fn build_diff_scope(
     parsed: &ParsedDiff,
     cwd: &Path,
@@ -59,7 +66,9 @@ pub fn build_diff_scope(
 
 /// Verifies one file section and inserts its added lines. Returns
 /// `false` when the file is out of scope (deleted, outside the scan
-/// root, or not part of the analysed corpus) and was skipped.
+/// root, or ignorably absent from the analysed corpus) and was
+/// skipped. Copy sections take the [`copy`] path: their target is
+/// wholly new content whatever the hunks say.
 fn ingest_file(
     patch: &FilePatch,
     cwd: &Path,
@@ -67,6 +76,9 @@ fn ingest_file(
     corpus: &BTreeMap<PathBuf, &[u8]>,
     scope: &mut DiffScope,
 ) -> Result<bool, CoreError> {
+    if let Some(file_copy) = patch.copy.as_ref() {
+        return copy::ingest_copy(patch, file_copy, cwd, scan_root, corpus, scope);
+    }
     let Some(new_path) = patch.new_path.as_deref() else {
         return Ok(false);
     };
@@ -74,7 +86,7 @@ fn ingest_file(
         return Ok(false);
     };
     let Some(source) = corpus.get(&relative) else {
-        return Ok(false);
+        return refuse_or_ignore_missing(patch, scan_root, &relative);
     };
     let lines = split_lines(source);
     let mut added: Vec<u64> = Vec::new();
@@ -83,6 +95,56 @@ fn ingest_file(
     }
     scope.insert_lines(relative, added);
     Ok(true)
+}
+
+/// Decides the fate of a diff target absent from the analysed corpus
+/// ([PIPELINE-DIFF-INGEST]). Three misses stay ignorable: a path whose
+/// extension no registered language parser claims (the tool could
+/// never analyse it), a file present on disk that discovery
+/// deliberately excluded (gitignore / config exclusion), and a section
+/// claiming no new-side lines (nothing verifiable, nothing added).
+/// A *supported* in-root file the diff fills that is nowhere on disk
+/// is a stale diff: the tree has moved past it, and ignoring it would
+/// silently zero the scope a merge gate reads. Pinned by
+/// `missing_supported_target_in_root_is_refused_as_stale` and the
+/// ignorable-direction tests beside it.
+fn refuse_or_ignore_missing(
+    patch: &FilePatch,
+    scan_root: &Path,
+    relative: &Path,
+) -> Result<bool, CoreError> {
+    if corpus_miss_is_ignorable(scan_root, relative) {
+        return Ok(false);
+    }
+    let Some(line) = first_new_side_line(patch) else {
+        return Ok(false);
+    };
+    Err(CoreError::DiffStale {
+        path: relative.to_path_buf(),
+        line,
+    })
+}
+
+/// True when a corpus miss carries no accuracy risk: the extension is
+/// outside the language registry, or the file exists on disk and was
+/// therefore excluded from the corpus on purpose.
+fn corpus_miss_is_ignorable(scan_root: &Path, relative: &Path) -> bool {
+    crate::pipeline::language_for_path(relative) == "unknown"
+        || scan_root.join(relative).is_file()
+}
+
+/// First new-side line number a patch claims (context or added), or
+/// `None` when every hunk only removes.
+fn first_new_side_line(patch: &FilePatch) -> Option<u64> {
+    patch
+        .hunks
+        .iter()
+        .find(|hunk| {
+            hunk.lines
+                .iter()
+                .any(|line| line.kind != HunkLineKind::Removed)
+        })
+        .map(|hunk| hunk.new_start)
 }
 
 /// Verifies one hunk's context and added lines against `lines` and
@@ -151,85 +213,4 @@ fn split_lines(source: &[u8]) -> Vec<&[u8]> {
 }
 
 #[cfg(test)]
-mod tests {
-    use anyhow::{Context as _, Result};
-
-    use super::{super::parse_unified_diff, *};
-
-    fn corpus(entries: &[(&str, &'static [u8])]) -> BTreeMap<PathBuf, &'static [u8]> {
-        entries
-            .iter()
-            .map(|(path, bytes)| (PathBuf::from(path), *bytes))
-            .collect()
-    }
-
-    // [CLI-ARG-DIFF] verification: matching context + added lines
-    // project the added line numbers into the scope.
-    #[test]
-    fn matching_diff_projects_added_lines() -> Result<()> {
-        let text = "--- a/src/x.rs\n\
-                    +++ b/src/x.rs\n\
-                    @@ -1,1 +1,3 @@\n \
-                    fn keep() {}\n\
-                    +fn one() {}\n\
-                    +fn two() {}\n";
-        let parsed = parse_unified_diff(text).context("diff parses")?;
-        let corpus = corpus(&[("src/x.rs", b"fn keep() {}\nfn one() {}\nfn two() {}\n")]);
-        let scope = build_diff_scope(&parsed, Path::new("/repo"), Path::new("/repo"), &corpus)
-            .context("clean diff verifies")?;
-        assert_eq!(scope.added_line_total(), 2);
-        assert!(scope.contains(Path::new("src/x.rs"), 2));
-        assert!(scope.contains(Path::new("src/x.rs"), 3));
-        assert!(!scope.contains(Path::new("src/x.rs"), 1));
-        Ok(())
-    }
-
-    // [CLI-ARG-DIFF] verification: a context line that disagrees with
-    // the corpus is refused with the file and new-side line.
-    #[test]
-    fn stale_context_line_names_file_and_line() -> Result<()> {
-        let text = "--- a/src/x.rs\n\
-                    +++ b/src/x.rs\n\
-                    @@ -1,1 +1,2 @@\n \
-                    fn old_shape() {}\n\
-                    +fn added() {}\n";
-        let parsed = parse_unified_diff(text).context("diff parses")?;
-        let corpus = corpus(&[("src/x.rs", b"fn keep() {}\nfn added() {}\n")]);
-        let error = build_diff_scope(&parsed, Path::new("/repo"), Path::new("/repo"), &corpus)
-            .err()
-            .context("stale context must be refused")?;
-        let CoreError::DiffStale { path, line } = error else {
-            anyhow::bail!("expected DiffStale, got {error:?}");
-        };
-        assert_eq!(path, PathBuf::from("src/x.rs"));
-        assert_eq!(line, 1);
-        Ok(())
-    }
-
-    // [CLI-ARG-DIFF] verification: files absent from the corpus are
-    // skipped, never verified, never counted.
-    #[test]
-    fn out_of_corpus_files_are_ignored() -> Result<()> {
-        let text = "--- /dev/null\n+++ b/docs/notes.md\n@@ -0,0 +1 @@\n+# Notes\n";
-        let parsed = parse_unified_diff(text).context("diff parses")?;
-        let corpus = corpus(&[("src/x.rs", b"fn keep() {}\n")]);
-        let scope = build_diff_scope(&parsed, Path::new("/repo"), Path::new("/repo/src"), &corpus)
-            .context("out-of-root file is skipped, not an error")?;
-        assert_eq!(scope.added_line_total(), 0);
-        assert_eq!(scope.files_with_added_lines(), 0);
-        Ok(())
-    }
-
-    // [CLI-ARG-DIFF] verification: CRLF sources verify byte-exactly
-    // when the diff payload carries the same `\r`.
-    #[test]
-    fn crlf_source_verifies_byte_exactly() -> Result<()> {
-        let text = "--- /dev/null\n+++ b/win.cs\n@@ -0,0 +1 @@\n+var x = 1;\r\n";
-        let parsed = parse_unified_diff(text).context("diff parses")?;
-        let corpus = corpus(&[("win.cs", b"var x = 1;\r\n")]);
-        let scope = build_diff_scope(&parsed, Path::new("/repo"), Path::new("/repo"), &corpus)
-            .context("CRLF content matches CRLF source")?;
-        assert_eq!(scope.added_line_total(), 1);
-        Ok(())
-    }
-}
+mod tests;

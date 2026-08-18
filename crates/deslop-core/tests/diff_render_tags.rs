@@ -154,7 +154,11 @@ fn diff_metrics(gated: bool) -> DiffMetrics {
     }
 }
 
-fn report(clusters: Vec<ReportCluster>, diff: Option<DiffMetrics>, outside: Option<usize>) -> Report {
+fn report(
+    clusters: Vec<ReportCluster>,
+    diff: Option<DiffMetrics>,
+    outside: Option<usize>,
+) -> Report {
     Report {
         tool_version: "test".to_owned(),
         min_nodes: 3,
@@ -325,7 +329,11 @@ fn untagged_report_renders_the_exact_pre_diff_bytes() {
     assert_eq!(render_text(&report), UNTAGGED_TEXT);
 
     let html = render_html(&report, None, false);
-    assert_eq!(count(&html, UNTAGGED_BANNER), 1, "banner ends at the repo verdict");
+    assert_eq!(
+        count(&html, UNTAGGED_BANNER),
+        1,
+        "banner ends at the repo verdict"
+    );
     assert_eq!(
         count(&html, "class=\"cluster-card kind-identical cat-logic\""),
         3,
@@ -336,7 +344,11 @@ fn untagged_report_renders_the_exact_pre_diff_bytes() {
         0,
         "no badge element renders without --diff (the CSS rule alone is static)"
     );
-    assert_eq!(count(&html, "facet-diff"), 0, "no diff facet controls without --diff");
+    assert_eq!(
+        count(&html, "facet-diff"),
+        0,
+        "no diff facet controls without --diff"
+    );
 }
 
 #[test]
@@ -348,9 +360,16 @@ fn diff_tagged_text_renders_the_gate_and_one_badged_row_per_occurrence() {
 #[test]
 fn diff_tagged_html_marks_banner_cards_badges_and_facets() {
     let html = render_html(&diff_report(), None, false);
-    assert_eq!(count(&html, DIFF_BANNER), 1, "banner carries the added-lines figure");
     assert_eq!(
-        count(&html, "class=\"cluster-card kind-identical cat-logic in-diff\""),
+        count(&html, DIFF_BANNER),
+        1,
+        "banner carries the added-lines figure"
+    );
+    assert_eq!(
+        count(
+            &html,
+            "class=\"cluster-card kind-identical cat-logic in-diff\""
+        ),
         2,
         "the mixed and fresh cards are marked in-diff"
     );
@@ -359,8 +378,14 @@ fn diff_tagged_html_marks_banner_cards_badges_and_facets() {
         1,
         "the legacy card keeps the plain class list"
     );
-    assert_eq!(count(&html, "<span class=\"diff-badge\">[in diff]</span>"), 3);
-    assert_eq!(count(&html, "<span class=\"diff-badge\">[existing]</span>"), 3);
+    assert_eq!(
+        count(&html, "<span class=\"diff-badge\">[in diff]</span>"),
+        3
+    );
+    assert_eq!(
+        count(&html, "<span class=\"diff-badge\">[existing]</span>"),
+        3
+    );
     assert_eq!(
         count(
             &html,

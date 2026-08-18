@@ -123,6 +123,36 @@ check("the self-test carries the diff-gate leg, version-gated on the release", (
     "the diff-gate leg must run the action under only-changed",
   );
   assert.ok(selftest.includes("diff: empty.patch"), "the diff-gate leg must scope to the empty diff");
+  // Both directions, or the job proves only that the gate can pass —
+  // which a gate that never fires would also satisfy. [ACTION-GATE]
+  assert.ok(
+    selftest.includes("diff: change.patch"),
+    "the diff-gate job must also run a diff that adds duplication",
+  );
+  assert.ok(
+    selftest.includes("SCOPE: ${{ steps.breach.outputs.gate-scope }}"),
+    "the breaching leg must assert the gate scope the action published",
+  );
+});
+
+// The branch-executed counterpart: the workflow leg above installs a
+// published release, so the pre-release action path needs a proof that
+// runs against the freshly built CLI. [ACTION-GATE] [METRICS-DIFF-SCOPE]
+check("the branch-built action diff-gate proof runs in the deployment gate", () => {
+  const proof = readFileSync("scripts/test-action-diff-gate.mjs", "utf8");
+  assert.ok(
+    proof.includes('stepBody(readFileSync("action.yml", "utf8"), "Run deslop")'),
+    "the proof must execute the action's own step body, never a re-implementation of it",
+  );
+  assert.ok(
+    proof.includes('readOutputs(outputPrefix, exitCode, true)'),
+    "the proof must publish outputs through the real action-read-outputs script",
+  );
+  const makefile = readFileSync("Makefile", "utf8");
+  assert.ok(
+    makefile.includes("node scripts/test-action-diff-gate.mjs"),
+    "deployment-verify must run the branch-built action diff-gate proof",
+  );
 });
 
 check("every output is wired to the report step", () => {

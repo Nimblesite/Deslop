@@ -72,7 +72,7 @@ jobs:
 | 输出 | 含义 |
 | --- | --- |
 | `duplication-percent` | 重复行数占已分析行数的百分比 |
-| `cluster-count` | 对重复行数有贡献的簇数量 |
+| `cluster-count` | 报告正文中的簇数量 —— 在 `only-changed` 下为经过筛选后保留的、受 diff 影响的簇 |
 | `threshold-percent` | 本次运行所对照的上限 |
 | `exit-code` | `0` 干净、`1` 运行时错误、`2` 用法错误、`3` 突破阈值 |
 | `report-json` / `report-text` / `report-html` | 渲染出的报告路径 |

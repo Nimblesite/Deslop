@@ -50,11 +50,7 @@ fn read_diff_text(source: &Path) -> Result<String> {
         return Ok(text);
     }
     fs::read_to_string(source).map_err(|err| {
-        UsageError::new(format!(
-            "read --diff file {}: {err}",
-            source.display()
-        ))
-        .into()
+        UsageError::new(format!("read --diff file {}: {err}", source.display())).into()
     })
 }
 
@@ -84,7 +80,12 @@ pub(crate) fn apply_threshold(args: &Cli, report: &mut Report) -> Result<()> {
     if !args.diff_scope.only_changed {
         return Ok(());
     }
-    let Some(measured) = report.metrics.diff.as_ref().map(|diff| diff.duplication_percent) else {
+    let Some(measured) = report
+        .metrics
+        .diff
+        .as_ref()
+        .map(|diff| diff.duplication_percent)
+    else {
         return Ok(());
     };
     let verdict = resolve_threshold(args, measured)?;

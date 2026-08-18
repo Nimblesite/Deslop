@@ -108,7 +108,7 @@ outputs:
     description: Repo-wide duplicated lines as a percentage of analyzed lines.
     value: ${{ steps.report.outputs.duplication-percent }}
   cluster-count:
-    description: Number of clusters contributing to the duplicated line count.
+    description: Number of clusters the report body carries — under only-changed, the diff-affected clusters that survived filtering, not the repo-wide total.
     value: ${{ steps.report.outputs.cluster-count }}
   threshold-percent:
     description: The resolved fail-over ceiling this run was measured against.

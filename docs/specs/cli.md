@@ -77,7 +77,12 @@ not intersect the diff from every rendered format, counts them in
 `clusters_outside_diff`, and reroutes the `--fail-over` gate to the diff-scoped
 percentage ([pipeline.md §METRICS-DIFF-SCOPE](pipeline.md)) so legacy debt cannot
 fail a pre-merge check. The stderr summary switches to the delta form: newly
-introduced clones first, then cross-file matches into existing code.
+introduced clones first, then cross-file matches into existing code, then the
+omitted count — three figures that reconcile, since every surviving cluster
+intersects the diff and is therefore one or the other. A filtered run whose body
+came out empty reports "no diff-affected duplication" with the omitted count; it
+must never claim the codebase is clean, which would contradict the legacy debt it
+just omitted.
 
 ### [CLI-INVOCATION-VERSION] Version output
 `deslop --version` prints the plain line `deslop <version>` followed by a newline

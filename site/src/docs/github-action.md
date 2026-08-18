@@ -71,7 +71,7 @@ If you pin to a commit SHA or a branch, the ref carries no version, so `version`
 | Output | Meaning |
 | --- | --- |
 | `duplication-percent` | Duplicated lines as a percentage of analysed lines |
-| `cluster-count` | Clusters contributing to the duplicated line count |
+| `cluster-count` | Clusters the report body carries — under `only-changed`, the diff-affected ones that survived filtering |
 | `threshold-percent` | The ceiling this run was measured against |
 | `exit-code` | `0` clean, `1` runtime error, `2` usage error, `3` breached |
 | `report-json` / `report-text` / `report-html` | Paths to the rendered reports |

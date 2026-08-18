@@ -38,7 +38,10 @@ impl PipelineSession {
             .iter()
             .filter_map(|(file_id, absolute)| {
                 let bytes = self.sources.get(file_id)?;
-                Some((relative_to_scan_root(absolute, &self.root), bytes.as_slice()))
+                Some((
+                    relative_to_scan_root(absolute, &self.root),
+                    bytes.as_slice(),
+                ))
             })
             .collect();
         self.diff_scope = Some(build_diff_scope(parsed, &cwd, &self.root, &corpus)?);

@@ -207,8 +207,14 @@ fn diff_tags_the_four_populations_and_metrics_add_up() -> Result<()> {
         false,
         "one occurrence predates the diff, so the cluster is not newly introduced"
     );
-    assert_eq!(field(occurrence_at(mixed, "src/caller.rs")?, "in_diff"), true);
-    assert_eq!(field(occurrence_at(mixed, "src/helper.rs")?, "in_diff"), false);
+    assert_eq!(
+        field(occurrence_at(mixed, "src/caller.rs")?, "in_diff"),
+        true
+    );
+    assert_eq!(
+        field(occurrence_at(mixed, "src/helper.rs")?, "in_diff"),
+        false
+    );
 
     let legacy = cluster_with_paths(&report, &["src/legacy_a.rs", "src/legacy_b.rs"])?;
     assert_eq!(field(legacy, "intersects_diff"), false);
@@ -239,8 +245,8 @@ fn diff_tags_the_four_populations_and_metrics_add_up() -> Result<()> {
     let percent = field(diff_metrics, "duplication_percent")
         .as_f64()
         .context("duplication_percent")?;
-    let expected = 100.0 * f64::from(u32::try_from(duplicated_added)?)
-        / f64::from(u32::try_from(ADDED_LOC)?);
+    let expected =
+        100.0 * f64::from(u32::try_from(duplicated_added)?) / f64::from(u32::try_from(ADDED_LOC)?);
     assert!(
         (percent - expected).abs() < 1e-9,
         "diff percent {percent} must be 100*{duplicated_added}/{ADDED_LOC}"
@@ -271,9 +277,12 @@ fn only_changed_filters_untouched_clusters_and_renders_the_delta() -> Result<()>
     let (full, _full_out, _tmp_a) = run_ok(&["--diff", "patches/change.patch"])?;
     let tmp = tempfile::tempdir()?;
     let output = tmp.path().join("report");
-    let assert = diff_cmd(&output, &["--diff", "patches/change.patch", "--only-changed"])?
-        .assert()
-        .success();
+    let assert = diff_cmd(
+        &output,
+        &["--diff", "patches/change.patch", "--only-changed"],
+    )?
+    .assert()
+    .success();
     let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
     let report = load_json(&output.with_extension("json"))?;
 
@@ -322,7 +331,8 @@ fn only_changed_filters_untouched_clusters_and_renders_the_delta() -> Result<()>
         "filtered ids must be a subset of the full run's ids"
     );
     assert!(
-        stderr.contains("1 group(s) newly introduced by this diff, 1 cross-file with untouched code"),
+        stderr
+            .contains("1 group(s) newly introduced by this diff, 1 cross-file with untouched code"),
         "stderr summary must lead with the four-figure delta: {stderr}"
     );
 
@@ -394,8 +404,7 @@ fn only_changed_gate_reads_the_diff_percentage() -> Result<()> {
     // [METRICS-DIFF-SCOPE]: a filtered-empty run must not claim the
     // codebase is clean while naming the legacy debt it omitted.
     assert!(
-        clean_stderr
-            .contains("no diff-affected duplication — 3 untouched group(s) omitted"),
+        clean_stderr.contains("no diff-affected duplication — 3 untouched group(s) omitted"),
         "the clean-diff summary names the diff scope, not the codebase: {clean_stderr}"
     );
     assert!(

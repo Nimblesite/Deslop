@@ -254,9 +254,63 @@ jobs:
             assert.equal(metrics.diff.threshold.source, "cli", "the ceiling came from the fail-over input");
             assert.equal(report.clusters.length, 0, "an empty diff touches no cluster");
             assert.ok(report.clusters_outside_diff >= 1, "the legacy clusters must be counted, never hidden");
+            assert.equal(report.metrics.clusters_total, report.clusters.length, "the banner counts the body it sits above ([METRICS-REPO])");
           '
         env:
           CODE: ${{ steps.clean.outputs.exit-code }}
+
+      # The other direction: the same fixture and the same zero ceiling must
+      # *fail* when the diff itself adds duplication. Without this leg the
+      # diff-gate job only proves the gate can pass, which a gate that never
+      # fires would also satisfy. The patch adds a verbatim copy of a fixture
+      # file, so the added lines are duplicated by construction. [ACTION-GATE]
+      - name: Write a diff that adds duplicated code
+        shell: bash
+        run: |
+          set -euo pipefail
+          source=$(find examples/rust -name '*.rs' -type f | sort | head -n 1)
+          target=examples/rust/action_diff_gate_copy.rs
+          count=$(wc -l < "$source")
+          cp "$source" "$target"
+          {
+            printf 'diff --git a/%s b/%s\n' "$target" "$target"
+            printf 'new file mode 100644\n--- /dev/null\n+++ b/%s\n' "$target"
+            printf '@@ -0,0 +1,%s @@\n' "$count"
+            sed 's/^/+/' "$source"
+          } > change.patch
+
+      - name: The added duplication fails the same zero ceiling
+        id: breach
+        continue-on-error: true
+        uses: ./
+        with:
+          path: examples/rust
+          version: ${{ needs.contract.outputs.version }}
+          fail-over: "0"
+          diff: change.patch
+          only-changed: "true"
+          output: diff-breach-report
+          upload-artifact: "false"
+
+      - name: The gate breached on the added lines, not the repo-wide figure
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${CODE}" = "3"
+          test "${SCOPE}" = "added-lines"
+          node --input-type=module -e '
+            import assert from "node:assert/strict";
+            import { readFileSync } from "node:fs";
+            const report = JSON.parse(readFileSync("diff-breach-report.json", "utf8"));
+            assert.equal(report.metrics.diff.threshold.breached, true, "the diff-scoped gate must fail");
+            assert.equal(report.metrics.diff.threshold.source, "cli", "the report records that the diff gate governed");
+            assert.ok(report.metrics.diff.duplicated_added_loc > 0, "the copied lines must measure as duplicated");
+            assert.ok(report.clusters.length >= 1, "the newly copied clone survives --only-changed");
+            assert.equal(report.metrics.clusters_total, report.clusters.length, "the banner counts the body it sits above ([METRICS-REPO])");
+          '
+        env:
+          CODE: ${{ steps.breach.outputs.exit-code }}
+          SCOPE: ${{ steps.breach.outputs.gate-scope }}
 
   gate:
     name: Gate (${{ matrix.artifact }})
