@@ -209,4 +209,3 @@ fn hash_window(child_hashes: &[[u8; 32]], start: usize, end: usize) -> [u8; 32] 
     }
     hasher.finalize().into()
 }
-

@@ -138,9 +138,7 @@ impl<'tree> Frame<'tree> {
     /// qualifies, and returns its hash and node count for the parent.
     fn finish(self, min_nodes: usize, out: &mut Vec<Fingerprint>) -> ([u8; 32], usize) {
         let hash: [u8; 32] = self.hasher.finalize().into();
-        if self.node_count >= min_nodes
-            && !self.boilerplate
-            && !re_describes_only_child(self.node)
+        if self.node_count >= min_nodes && !self.boilerplate && !re_describes_only_child(self.node)
         {
             out.push(Fingerprint {
                 hash,

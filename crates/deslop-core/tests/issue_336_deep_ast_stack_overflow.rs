@@ -20,7 +20,10 @@ fn test_deep_normalized_node_drop_does_not_overflow_stack() {
         current = NormalizedNode {
             kind: "node",
             children: vec![current],
-            byte_range: ByteRange { start: 0, end: 5000 - i },
+            byte_range: ByteRange {
+                start: 0,
+                end: 5000 - i,
+            },
             file_id,
         };
     }
@@ -33,7 +36,9 @@ fn test_deep_normalized_node_drop_does_not_overflow_stack() {
         })
         .unwrap();
 
-    handle.join().expect("dropping deep NormalizedNode tree overflowed stack");
+    handle
+        .join()
+        .expect("dropping deep NormalizedNode tree overflowed stack");
 }
 
 /// Builds a `depth`-deep chain of single-child nodes.
