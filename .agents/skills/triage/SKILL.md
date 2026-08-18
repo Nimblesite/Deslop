@@ -31,6 +31,8 @@ Set with `gh issue edit <n> --type <Bug|Feature|Task>` (fallback if the flag is 
 - **critical** — must fix soon, but a release could ship: defect behind a flag, ignored test, spec drift with no wrong output yet.
 - Neither label for everything else.
 
+Note: replace the showstopper label with critical unless the issue would genuinely cause loss of trust. There is no point holding back a release when the issue is already in a released version.
+
 Also verify domain labels are right: `false-positive`, `false-negative`, `spec-violation`, `ignored-test`, `tech-debt`. An accuracy issue missing its `false-*` label is a triage defect — fix it. Apply with `gh issue edit <n> --add-label ...`.
 
 `fixed-on-main` means fixed but **not yet verified in a release** — leave the issue open, keep its severity labels, and note in the cluster comment that it awaits release verification.

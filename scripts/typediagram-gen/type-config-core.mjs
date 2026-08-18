@@ -245,7 +245,8 @@ export const CORE_TYPE_CONFIG = {
       analysed_loc: "Physical lines across every analysed file.",
       duplicated_loc: "Lines covered by `>= 2` non-hidden clone occurrences.",
       duplication_percent: "Clamped `100.0 * duplicated_loc / analysed_loc`.",
-      clusters_total: "Count of clusters contributing to `duplicated_loc`.",
+      clusters_total:
+        "Count of non-hidden clusters carried in `clusters` — always equals `clusters.len()`, so the banner figure can never disagree with the body it summarises ([METRICS-REPO]).",
       duplicated_files: "Count of files with at least one non-hidden clone occurrence.",
       threshold: "Resolved fail-over threshold.",
       per_file: "Per-file duplication breakdown, worst-first. Empty on reports produced before this field existed.",

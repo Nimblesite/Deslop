@@ -9,6 +9,8 @@
 //! naming the offending diff line — a silently mis-scoped diff would
 //! mislabel every downstream population.
 
+use std::{iter::Peekable, str::Bytes};
+
 use crate::error::CoreError;
 
 /// A parsed unified diff: one entry per file section.
@@ -176,8 +178,7 @@ impl Parser {
             return Ok(());
         }
         if let Some(rest) = line.strip_prefix("+++ ") {
-            self.set_new_path(rest);
-            return Ok(());
+            return self.set_new_path(line_no, rest);
         }
         if let Some(header) = line.strip_prefix("@@ ") {
             return self.begin_hunk(line_no, header);
@@ -202,46 +203,29 @@ impl Parser {
         });
     }
 
-    /// Records the `+++ ` new-side path on the current section,
-    /// opening one for prefix-less plain diffs that skip `diff --git`.
-    ///
-    /// **Quarantined ([PIPELINE-DIFF-INGEST]).** The removed code
-    /// overwrote `current.new_path` whenever a second `+++` arrived on a
-    /// section that already had one, leaving the *first* file's hunks
-    /// attached to the *second* file's path. Only a `diff ` line opened a
-    /// section and `--- ` is swallowed as metadata, so every plain
-    /// multi-file diff — `diff -ru`, and any producer that omits
-    /// `diff --git` — mis-attributed every hunk but the last. Where the
-    /// two files shared the hunk's content, which is exactly the
-    /// copy-paste this tool exists to find, verification passed and the
-    /// first file silently received no added spans at all: under
-    /// `--only-changed` its new duplication vanished from the report and
-    /// from the `added_loc` denominator, a false negative in a merge
-    /// gate. Where the content differed it raised a spurious
-    /// `DiffStale` instead, blaming a diff that was not stale. Pinned by
+    /// Records the `+++ ` new-side path ([PIPELINE-DIFF-INGEST]). The
+    /// `+++` target also *delimits* file sections: it opens one when
+    /// none is open, and it starts the *next* one when the current
+    /// section already carries a path or hunks — plain (prefix-less)
+    /// diffs have no `diff ` line to do that, and `--- ` is swallowed
+    /// as metadata, so a second `+++` is the only line that can. Letting
+    /// it overwrite the path instead would attach the first file's hunks
+    /// to the second file's path and silently drop the first file's
+    /// added lines from a merge gate. Pinned by
     /// `plain_multi_file_diff_keeps_each_file_section_separate`.
-    #[allow(clippy::panic)]
-    fn set_new_path(&mut self, raw: &str) {
+    fn set_new_path(&mut self, line_no: usize, raw: &str) -> Result<(), CoreError> {
         let section_already_named = self
             .current
             .as_ref()
             .is_some_and(|current| current.new_path.is_some() || !current.hunks.is_empty());
-        if !section_already_named {
-            if self.current.is_none() {
-                self.begin_file();
-            }
-            if let Some(current) = self.current.as_mut() {
-                current.new_path = new_side_path(raw);
-            }
-            return;
+        if self.current.is_none() || section_already_named {
+            self.begin_file();
         }
-        panic!(
-            "quarantined [PIPELINE-DIFF-INGEST]: a `+++` line arrived on a file \
-             section that already carries a path or hunks. Deciding where this \
-             file's section starts is the defect under repair; guessing would \
-             attach one file's hunks to another file's path and silently drop \
-             its added lines from a merge gate"
-        );
+        let path = new_side_path(line_no, raw)?;
+        if let Some(current) = self.current.as_mut() {
+            current.new_path = path;
+        }
+        Ok(())
     }
 
     /// Opens a hunk from the text after `@@ `.
@@ -379,35 +363,116 @@ fn parse_number(line_no: usize, text: &str) -> Result<u64, CoreError> {
         .map_err(|_| parse_error(line_no, &format!("hunk range component {text:?} is not a number")))
 }
 
-/// Strips the `b/` prefix from a `+++ ` payload; `/dev/null` means the
-/// file was deleted. Trailing tab-separated timestamps (plain `diff -u`
-/// output) are dropped.
-/// **Quarantined ([PIPELINE-DIFF-INGEST]).** The removed code returned a
-/// C-quoted target verbatim — quotes, and octal escapes such as
-/// `"b/caf\303\251.rs"`, all left in the string. `git` quotes any path
-/// carrying non-ASCII bytes, a double quote, or a backslash, so one
-/// accented or CJK filename produces them on every diff of that repo.
-/// The quoted string matched nothing in the corpus, and an unmatched
-/// path is *ignored* rather than refused, so every clone added in that
-/// file went untagged: dropped by `--only-changed` and missing from the
-/// `added_loc` denominator, with no error anywhere. The spec lists
-/// C-quoted paths as recognised grammar. Pinned by
+/// Resolves a `+++ ` payload to the new-side path
+/// ([PIPELINE-DIFF-INGEST]): trailing tab-separated timestamps (plain
+/// `diff -u` output) are dropped, C-quoted paths are unquoted, the `b/`
+/// prefix is stripped, and `/dev/null` means the file was deleted.
+/// `git` C-quotes any path carrying non-ASCII bytes, a double quote, or
+/// a backslash, escaping the bytes in octal — so one accented or CJK
+/// filename produces the quoted form on every diff of that repo, and a
+/// path left quoted would match nothing in the corpus and silently drop
+/// that file's added lines. Pinned by
 /// `c_quoted_new_side_path_is_unquoted`.
-#[allow(clippy::panic)]
-fn new_side_path(raw: &str) -> Option<String> {
-    let path = raw.split('\t').next().unwrap_or(raw);
+///
+/// # Errors
+///
+/// Returns [`CoreError::DiffParse`] when a C-quoted path is malformed
+/// or decodes to invalid UTF-8 — guessing at a filename would silently
+/// drop that file from the scope rather than fail loudly.
+fn new_side_path(line_no: usize, raw: &str) -> Result<Option<String>, CoreError> {
+    let target = raw.split('\t').next().unwrap_or(raw);
+    let path = match target.strip_prefix('"') {
+        Some(quoted) => unquote_c_path(line_no, quoted)?,
+        None => target.to_owned(),
+    };
     if path == "/dev/null" {
-        return None;
+        return Ok(None);
     }
-    if !path.starts_with('"') {
-        return Some(path.strip_prefix("b/").unwrap_or(path).to_owned());
+    let unprefixed = path.strip_prefix("b/").unwrap_or(&path);
+    Ok(Some(unprefixed.to_owned()))
+}
+
+/// Decodes the body of a C-quoted path (the leading `"` already
+/// stripped) into the bytes `git` escaped, then validates them as
+/// UTF-8. The closing quote is required — an unterminated quote means
+/// the line is not the grammar this parser accepts.
+fn unquote_c_path(line_no: usize, quoted: &str) -> Result<String, CoreError> {
+    let inner = quoted
+        .strip_suffix('"')
+        .ok_or_else(|| parse_error(line_no, "C-quoted path is missing its closing quote"))?;
+    let mut decoded: Vec<u8> = Vec::with_capacity(inner.len());
+    let mut source = inner.bytes().peekable();
+    while let Some(byte) = source.next() {
+        if byte == b'\\' {
+            decoded.push(unescape(line_no, &mut source)?);
+            continue;
+        }
+        decoded.push(byte);
     }
-    panic!(
-        "quarantined [PIPELINE-DIFF-INGEST]: the diff names a C-quoted path \
-         ({path}). Unquoting is unimplemented, and treating the quoted form \
-         as a filename silently drops that file's added lines from the report \
-         and from a merge gate"
-    );
+    String::from_utf8(decoded)
+        .map_err(|_| parse_error(line_no, "C-quoted path decodes to invalid UTF-8"))
+}
+
+/// Decodes one escape sequence, positioned just after its backslash.
+fn unescape(line_no: usize, source: &mut Peekable<Bytes<'_>>) -> Result<u8, CoreError> {
+    let Some(first) = source.next() else {
+        return Err(parse_error(line_no, "C-quoted path ends inside an escape"));
+    };
+    if is_octal_digit(first) {
+        return octal_escape(line_no, first, source);
+    }
+    simple_escape(first).ok_or_else(|| {
+        parse_error(
+            line_no,
+            &format!(
+                "unrecognised escape '\\{}' in C-quoted path",
+                char::from(first)
+            ),
+        )
+    })
+}
+
+/// Accumulates up to three octal digits into one byte; `git` writes
+/// every non-ASCII byte this way. A value past `0o377` names no byte,
+/// so it is refused rather than truncated into a different filename.
+fn octal_escape(
+    line_no: usize,
+    first: u8,
+    source: &mut Peekable<Bytes<'_>>,
+) -> Result<u8, CoreError> {
+    let mut value = u32::from(first.saturating_sub(b'0'));
+    for _digit_slot in 0..2 {
+        let Some(digit) = source.next_if(|byte| is_octal_digit(*byte)) else {
+            break;
+        };
+        value = value
+            .saturating_mul(8)
+            .saturating_add(u32::from(digit.saturating_sub(b'0')));
+    }
+    u8::try_from(value)
+        .map_err(|_| parse_error(line_no, "octal escape in C-quoted path exceeds one byte"))
+}
+
+/// Maps one non-octal escape character to the byte it denotes, per
+/// `git`'s C-style quoting table.
+fn simple_escape(escape: u8) -> Option<u8> {
+    match escape {
+        b'\\' => Some(b'\\'),
+        b'"' => Some(b'"'),
+        b'a' => Some(0x07),
+        b'b' => Some(0x08),
+        b'f' => Some(0x0C),
+        b'n' => Some(b'\n'),
+        b'r' => Some(b'\r'),
+        b't' => Some(b'\t'),
+        b'v' => Some(0x0B),
+        _ => None,
+    }
+}
+
+/// True for the octal digits `0`–`7`.
+fn is_octal_digit(byte: u8) -> bool {
+    (b'0'..=b'7').contains(&byte)
 }
 
 /// True for the metadata lines `git diff` interleaves between file and
@@ -562,6 +627,54 @@ mod tests {
             Some("café.rs"),
             "the octal-escaped UTF-8 bytes are the real filename"
         );
+        Ok(())
+    }
+
+    // [PIPELINE-DIFF-INGEST] grammar: the non-octal escapes decode to
+    // the bytes they denote — a tab, a quote, or a backslash in a
+    // filename is payload, and `git` escapes it precisely so the path
+    // survives the tab-splitting and quote-stripping around it.
+    #[test]
+    fn c_quoted_simple_escapes_decode_to_their_bytes() -> Result<()> {
+        let tabbed = "+++ \"b/tab\\there.rs\"\n@@ -0,0 +1 @@\n+fn added() {}\n";
+        let parsed = parse_unified_diff(tabbed).context("escaped-tab path must parse")?;
+        assert_eq!(
+            first_file(&parsed)?.new_path.as_deref(),
+            Some("tab\there.rs"),
+            "the escaped tab is a payload byte, not a timestamp separator"
+        );
+        let quoted = "+++ \"b/say \\\"hi\\\"\\\\now.rs\"\n@@ -0,0 +1 @@\n+fn added() {}\n";
+        let parsed = parse_unified_diff(quoted).context("escaped-quote path must parse")?;
+        assert_eq!(
+            first_file(&parsed)?.new_path.as_deref(),
+            Some("say \"hi\"\\now.rs"),
+            "escaped quotes and backslashes are payload, not structure"
+        );
+        Ok(())
+    }
+
+    // [PIPELINE-DIFF-INGEST] grammar: a malformed C-quoted path is
+    // refused with its line number, never guessed into a filename — a
+    // guessed path matches nothing in the corpus and its file is
+    // silently dropped from the scope.
+    #[test]
+    fn malformed_c_quoted_paths_are_refused() -> Result<()> {
+        let cases = [
+            ("+++ \"b/x.rs\n@@ -0,0 +1 @@\n+x\n", "missing closing quote"),
+            ("+++ \"b/x\\q.rs\"\n@@ -0,0 +1 @@\n+x\n", "unknown escape"),
+            ("+++ \"b/x\\777.rs\"\n@@ -0,0 +1 @@\n+x\n", "octal past one byte"),
+            ("+++ \"b/x\\377.rs\"\n@@ -0,0 +1 @@\n+x\n", "invalid UTF-8"),
+            ("+++ \"b/x.rs\\\"\n@@ -0,0 +1 @@\n+x\n", "escape eats the closing quote"),
+        ];
+        for (text, why) in cases {
+            let error = parse_unified_diff(text)
+                .err()
+                .with_context(|| format!("must be refused: {why}"))?;
+            assert!(
+                matches!(error, CoreError::DiffParse { line: 1, .. }),
+                "{why}: the refusal names the +++ line, got {error:?}"
+            );
+        }
         Ok(())
     }
 

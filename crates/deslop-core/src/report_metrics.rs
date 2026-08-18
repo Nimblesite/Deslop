@@ -137,11 +137,8 @@ pub struct MetricsInputs<'a, S: BuildHasher> {
 pub fn compute_repo_metrics<S: BuildHasher>(inputs: &MetricsInputs<'_, S>) -> RepoMetrics {
     let analysed_loc: u64 = inputs.analysed_lines.values().copied().sum();
     let mut per_file_lines: HashMap<FileId, BTreeSet<u64>> = HashMap::new();
-    let mut contributing_clusters: usize = 0;
     for &cluster in inputs.clusters {
-        if fold_cluster_lines(cluster, inputs, &mut per_file_lines) {
-            contributing_clusters = contributing_clusters.saturating_add(1);
-        }
+        fold_cluster_lines(cluster, inputs, &mut per_file_lines);
     }
     let duplicated_loc: u64 = per_file_lines
         .values()
@@ -156,7 +153,13 @@ pub fn compute_repo_metrics<S: BuildHasher>(inputs: &MetricsInputs<'_, S>) -> Re
         analysed_loc,
         duplicated_loc,
         duplication_percent,
-        clusters_total: contributing_clusters,
+        // [METRICS-REPO] The banner equals the body by construction:
+        // `inputs.clusters` is the exact post-hide list the report
+        // carries, and a mixed cluster (one visible occurrence beside
+        // hidden ones) is kept in it per [EXCLUSION-CONFIG], so it must
+        // be counted here too. The old `>= 2 visible members` gate said
+        // "0 clusters" above a body listing one.
+        clusters_total: inputs.clusters.len(),
         duplicated_files,
         threshold: ThresholdSummary::none(),
         per_file: per_file_metrics(&per_file_lines, inputs),
@@ -241,37 +244,31 @@ fn file_metric<S: BuildHasher>(
 }
 
 /// Projects every non-hidden occurrence of `cluster` onto per-file line
-/// sets. Returns `true` when the cluster contributed at least two
-/// non-hidden occurrences and therefore counts toward
-/// `clusters_total`.
+/// sets. Hidden occurrences contribute nothing, so a generated tier
+/// never inflates `duplicated_loc` ([METRICS-REPO]).
 fn fold_cluster_lines<S: BuildHasher>(
     cluster: &Cluster,
     inputs: &MetricsInputs<'_, S>,
     per_file_lines: &mut HashMap<FileId, BTreeSet<u64>>,
-) -> bool {
-    let mut visible_members: usize = 0;
+) {
     for member in &cluster.members {
-        if add_member_lines(member, inputs, per_file_lines) {
-            visible_members = visible_members.saturating_add(1);
-        }
+        add_member_lines(member, inputs, per_file_lines);
     }
-    visible_members >= 2
 }
 
 /// Adds the line range covered by `member` to `per_file_lines` unless
 /// the file is `report_hide`-suppressed or its source bytes are
-/// unavailable. Returns `true` when the occurrence was counted as
-/// non-hidden.
+/// unavailable.
 fn add_member_lines<S: BuildHasher>(
     member: &crate::fingerprint::Fingerprint,
     inputs: &MetricsInputs<'_, S>,
     per_file_lines: &mut HashMap<FileId, BTreeSet<u64>>,
-) -> bool {
+) {
     if occurrence_is_hidden(member.file_id, inputs) {
-        return false;
+        return;
     }
     let Some(line_index) = inputs.line_indices.get(&member.file_id) else {
-        return false;
+        return;
     };
     let entry = per_file_lines.entry(member.file_id).or_default();
     let (start_line, end_line) =
@@ -279,7 +276,6 @@ fn add_member_lines<S: BuildHasher>(
     for line in start_line..=end_line {
         let _inserted = entry.insert(line);
     }
-    true
 }
 
 /// Returns `true` when the occurrence's file is covered by a

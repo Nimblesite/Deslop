@@ -377,14 +377,6 @@ pub(crate) fn per_file_metrics(report: &Value) -> &[Value] {
         .unwrap_or_default()
 }
 
-/// Count of a cluster's non-hidden (live) occurrences.
-pub(crate) fn live_occurrences(cluster: &Value) -> usize {
-    occurrences(cluster)
-        .iter()
-        .filter(|occurrence| !field(occurrence, "hidden").as_bool().unwrap_or(false))
-        .count()
-}
-
 /// Line-set cardinality as the `u64` the wire metric uses.
 pub(crate) fn line_count(lines: &BTreeSet<u64>) -> u64 {
     u64::try_from(lines.len()).unwrap_or(u64::MAX)
