@@ -389,11 +389,20 @@ fn ipc_socket_handles_list_models_request() -> Result<()> {
     Ok(())
 }
 
-/// [LSP-IPC], [MCP-IPC-CLIENT] MCP uses `deslop.lsp.refreshReport` over
-/// IPC to force a full re-analysis after an agent edit. Under the
-/// IPC-truth architecture, freshness is observed via the live
-/// `report/get` IPC reply — the seed cache is only rewritten on
-/// cold-pass install.
+/// [LSP-IPC], [MCP-IPC-CLIENT], [LIVE-RESCAN-FRESHNESS] MCP uses
+/// `deslop.lsp.refreshReport` over IPC to force a full re-analysis after
+/// an agent edit. The spec's contract is end-state freshness: after the
+/// call returns, the live report reflects the on-disk sources and
+/// eliminated clusters are gone.
+///
+/// The assertions are deliberately on the post-refresh state, never on the
+/// refresh pass's own delta. The filesystem watcher ingests the external
+/// `Beta.cs` write concurrently ([DESLOP-LIVE]); whichever pass runs first
+/// legitimately carries the removal, so `clustersRemoved` on the refresh
+/// response is schedule-dependent — asserting it `>= 1` failed on loaded CI
+/// runners whenever the watcher won the race (delta 0/0/0 at generation 3).
+/// The end-state pins hold under both schedules, and the watcher half of
+/// the contract is pinned by `notifications.rs`.
 #[cfg(unix)]
 #[test]
 fn ipc_socket_handles_refresh_report_request() -> Result<()> {
@@ -413,6 +422,11 @@ fn ipc_socket_handles_refresh_report_request() -> Result<()> {
     ensure!(
         initial_count > 0,
         "initial live IPC report must have clusters: {initial}"
+    );
+    ensure!(
+        cluster_spans_files(&initial, "Alpha.cs", "Beta.cs"),
+        "the csharp-small fixture must open with a cluster spanning \
+         Alpha.cs and Beta.cs: {initial}"
     );
 
     fs::write(
@@ -444,14 +458,29 @@ fn ipc_socket_handles_refresh_report_request() -> Result<()> {
             .is_some_and(|generation| generation >= 2),
         "refreshReport result must advance or expose a live generation: {response}"
     );
-    ensure!(
-        response
-            .pointer("/result/clustersRemoved")
-            .and_then(serde_json::Value::as_u64)
-            .is_some_and(|removed| removed >= 1),
-        "refreshReport must report removed clusters after the Beta.cs edit: {response}"
-    );
+    for delta_field in ["clustersAdded", "clustersRemoved", "clustersUpdated"] {
+        ensure!(
+            response
+                .pointer(&format!("/result/{delta_field}"))
+                .and_then(serde_json::Value::as_u64)
+                .is_some(),
+            "refreshReport must expose {delta_field} as a count: {response}"
+        );
+    }
+    // The Beta.cs rewrite only breaks the one clone pair; no schedule can
+    // honestly create or reshape a cluster from it.
+    for untouched_field in ["clustersAdded", "clustersUpdated"] {
+        ensure!(
+            response.pointer(&format!("/result/{untouched_field}")) == Some(&serde_json::json!(0)),
+            "a pure-removal edit must not report {untouched_field}: {response}"
+        );
+    }
 
+    // [LIVE-RESCAN-FRESHNESS] After refreshReport returns, the report must
+    // reflect disk no matter which pass carried the removal: the fixture's
+    // only clone pair is broken, so nothing may remain. A refresh that
+    // skipped the rescan would still show the stale Alpha/Beta cluster and
+    // fail here.
     let updated = ipc_call(
         &socket_path,
         &serde_json::json!({
@@ -463,10 +492,30 @@ fn ipc_socket_handles_refresh_report_request() -> Result<()> {
     )?;
     let updated_count = cluster_count(&updated);
     ensure!(
-        updated_count < initial_count,
-        "refreshReport must rescan edited files and reduce cluster count: {initial_count} -> {updated_count}"
+        updated_count == 0,
+        "breaking the fixture's only clone pair must empty the live report: \
+         {initial_count} -> {updated_count}: {updated}"
     );
     Ok(())
+}
+
+/// True when any cluster in the live IPC report has occurrences in both
+/// `first` and `second` (matched on path suffix).
+fn cluster_spans_files(report: &serde_json::Value, first: &str, second: &str) -> bool {
+    let clusters = report
+        .pointer("/result/clusters")
+        .and_then(serde_json::Value::as_array);
+    clusters.into_iter().flatten().any(|cluster| {
+        let paths: Vec<&str> = cluster
+            .get("occurrences")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|occurrence| occurrence.get("path").and_then(serde_json::Value::as_str))
+            .collect();
+        paths.iter().any(|path| path.ends_with(first))
+            && paths.iter().any(|path| path.ends_with(second))
+    })
 }
 
 /// [LSP-IPC] Unrecognised IPC methods must return a JSON-RPC method-not-found

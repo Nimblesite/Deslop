@@ -17,7 +17,9 @@ use blake3::Hasher;
 use crate::{
     ast::{ByteRange, NormalizedNode},
     boilerplate::{is_boilerplate, is_import_boilerplate_only_subtree},
-    fingerprint::{is_literal_data_item, is_literal_data_subtree, Fingerprint},
+    fingerprint::{
+        is_literal_data_item, is_literal_data_subtree, subtree_hash, Fingerprint, HashScratch,
+    },
 };
 
 /// Synthetic node kind used as the hash prefix for a sibling window. The
@@ -38,7 +40,14 @@ const MAX_WINDOW_WIDTH: usize = 8;
 #[must_use]
 pub fn collect_sibling_fingerprints(root: &NormalizedNode, min_nodes: usize) -> Vec<Fingerprint> {
     let mut out = Vec::new();
-    walk(root, min_nodes, &mut out, None, false);
+    walk(
+        root,
+        min_nodes,
+        &mut out,
+        None,
+        false,
+        &mut HashScratch::default(),
+    );
     out
 }
 
@@ -50,26 +59,43 @@ pub fn collect_non_boilerplate_sibling_fingerprints(
     language: &str,
 ) -> Vec<Fingerprint> {
     let mut out = Vec::new();
-    walk(root, min_nodes, &mut out, Some(language), false);
+    walk(
+        root,
+        min_nodes,
+        &mut out,
+        Some(language),
+        false,
+        &mut HashScratch::default(),
+    );
     out
 }
 
 /// Recursively inspects `node`'s children, emitting sibling-window
-/// fingerprints whose aggregated node count clears `min_nodes`.
-fn walk(
-    node: &NormalizedNode,
+/// fingerprints whose aggregated node count clears `min_nodes`. One
+/// `scratch` is threaded through the whole walk so every
+/// [`subtree_hash`] call reuses the same buffers instead of allocating.
+fn walk<'tree>(
+    node: &'tree NormalizedNode,
     min_nodes: usize,
     out: &mut Vec<Fingerprint>,
     language: Option<&str>,
     inside_boilerplate: bool,
+    scratch: &mut HashScratch<'tree>,
 ) {
     let current_boilerplate =
         inside_boilerplate || is_boilerplate(language, node) || is_literal_data_subtree(node);
     if !current_boilerplate {
-        emit_windows(&node.children, min_nodes, out, language);
+        emit_windows(&node.children, min_nodes, out, language, scratch);
     }
     for child in &node.children {
-        walk(child, min_nodes, out, language, current_boilerplate);
+        walk(
+            child,
+            min_nodes,
+            out,
+            language,
+            current_boilerplate,
+            scratch,
+        );
     }
 }
 
@@ -98,14 +124,18 @@ fn all_hashes_uniform(hashes: &[[u8; 32]]) -> bool {
 /// [`is_literal_data_subtree`]: literal-only containers (dicts, lists) are
 /// treated as boilerplate before `emit_windows` is ever reached, so
 /// their child entries never enter the sibling window fingerprinter.
-fn emit_windows(
-    siblings: &[NormalizedNode],
+fn emit_windows<'tree>(
+    siblings: &'tree [NormalizedNode],
     min_nodes: usize,
     out: &mut Vec<Fingerprint>,
     language: Option<&str>,
+    scratch: &mut HashScratch<'tree>,
 ) {
     let cumulative = cumulative_node_counts(siblings);
-    let child_hashes: Vec<[u8; 32]> = siblings.iter().map(subtree_hash).collect();
+    let child_hashes: Vec<[u8; 32]> = siblings
+        .iter()
+        .map(|sibling| subtree_hash(sibling, scratch))
+        .collect();
     // [PIPELINE-FINGERPRINT-MERKLE] BUG #61: when every sibling hashes
     // identically after normalisation (e.g. a C# repetitive pattern), every
     // same-width window is trivially equal — not a real clone. Individual
@@ -205,21 +235,6 @@ fn hash_window(child_hashes: &[[u8; 32]], start: usize, end: usize) -> [u8; 32] 
     let _ = hasher.update(&width.to_le_bytes());
     for index in start..end {
         let child_hash = child_hashes.get(index).copied().unwrap_or([0_u8; 32]);
-        let _ = hasher.update(&child_hash);
-    }
-    hasher.finalize().into()
-}
-
-/// Re-hashes a subtree using the same bottom-up scheme as
-/// [`crate::fingerprint`]. Kept local to avoid threading more state through
-/// the pipeline; the cost is one additional pass which is `O(n)` in node
-/// count.
-fn subtree_hash(node: &NormalizedNode) -> [u8; 32] {
-    let mut hasher = Hasher::new();
-    let _ = hasher.update(node.kind.as_bytes());
-    let _ = hasher.update(b"\0");
-    for child in &node.children {
-        let child_hash = subtree_hash(child);
         let _ = hasher.update(&child_hash);
     }
     hasher.finalize().into()
