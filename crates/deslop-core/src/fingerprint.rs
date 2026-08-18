@@ -58,28 +58,123 @@ fn hash_and_collect(
     language: Option<&str>,
     inside_boilerplate: bool,
 ) -> ([u8; 32], usize) {
-    let mut hasher = Hasher::new();
-    let _ = hasher.update(node.kind.as_bytes());
-    let _ = hasher.update(b"\0");
-    let mut subtree_node_count: usize = 1;
-    let current_boilerplate =
-        inside_boilerplate || is_boilerplate(language, node) || is_literal_data_subtree(node);
-    for child in &node.children {
-        let (child_hash, child_size) =
-            hash_and_collect(child, min_nodes, out, language, current_boilerplate);
-        let _ = hasher.update(&child_hash);
-        subtree_node_count = subtree_node_count.saturating_add(child_size);
+    let mut stack = vec![Frame::new(node, language, inside_boilerplate)];
+    let mut root_result = ([0_u8; 32], 0_usize);
+    while let Some(step) = next_step(&mut stack) {
+        match step {
+            Step::Descend(child, inherited) => {
+                stack.push(Frame::new(child, language, inherited));
+            }
+            Step::Finish => {
+                let Some(frame) = stack.pop() else { break };
+                let finished = frame.finish(min_nodes, out);
+                match stack.last_mut() {
+                    Some(parent) => parent.absorb(finished),
+                    None => root_result = finished,
+                }
+            }
+        }
     }
-    let hash: [u8; 32] = hasher.finalize().into();
-    if subtree_node_count >= min_nodes && !current_boilerplate && !re_describes_only_child(node) {
-        out.push(Fingerprint {
-            hash,
-            file_id: node.file_id,
-            byte_range: node.byte_range,
-            node_count: subtree_node_count,
-        });
+    root_result
+}
+
+/// One node's in-progress state on [`hash_and_collect`]'s explicit stack.
+///
+/// The walk is iterative rather than recursive because a `blake3::Hasher` is
+/// ~1.9 KB and stays live for the whole of a node's visit. Recursing held one
+/// per stack frame, so a file the [`MAX_AST_DEPTH`] guard *accepted* still
+/// exhausted a 1 MB thread stack (Windows' default) part-way down and aborted
+/// the process with no report at all — every duplicate in every other file
+/// lost. Here the per-node state lives on the heap and stack depth is
+/// constant. Pinned by `deslop::fsharp_deep_match_stack_overflow`.
+///
+/// [`MAX_AST_DEPTH`]: crate::lang::shared::MAX_AST_DEPTH
+struct Frame<'tree> {
+    /// The node being hashed.
+    node: &'tree NormalizedNode,
+    /// Running digest over the node kind and its children's hashes.
+    hasher: Hasher,
+    /// Index of the next child to descend into.
+    next_child: usize,
+    /// Nodes counted in this subtree so far, including the node itself.
+    node_count: usize,
+    /// Whether this node or an ancestor is boilerplate.
+    boilerplate: bool,
+}
+
+/// What the walk does next with the frame on top of the stack.
+enum Step<'tree> {
+    /// Descend into this child, which inherits the boilerplate flag.
+    Descend(&'tree NormalizedNode, bool),
+    /// The top frame has no children left; the caller pops it.
+    Finish,
+}
+
+impl<'tree> Frame<'tree> {
+    /// Opens a frame, seeding the digest with the node kind exactly as the
+    /// recursive walk did so hashes stay byte-compatible.
+    fn new(node: &'tree NormalizedNode, language: Option<&str>, inherited: bool) -> Self {
+        let mut hasher = Hasher::new();
+        let _ = hasher.update(node.kind.as_bytes());
+        let _ = hasher.update(b"\0");
+        Self {
+            node,
+            hasher,
+            next_child: 0,
+            node_count: 1,
+            boilerplate: inherited
+                || is_boilerplate(language, node)
+                || is_literal_data_subtree(node),
+        }
     }
-    (hash, subtree_node_count)
+
+    /// Folds a finished child's hash and node count into this frame.
+    fn absorb(&mut self, (hash, count): ([u8; 32], usize)) {
+        let _ = self.hasher.update(&hash);
+        self.node_count = self.node_count.saturating_add(count);
+    }
+
+    /// Closes the frame, emitting a [`Fingerprint`] when the subtree
+    /// qualifies, and returns its hash and node count for the parent.
+    fn finish(self, min_nodes: usize, out: &mut Vec<Fingerprint>) -> ([u8; 32], usize) {
+        let hash: [u8; 32] = self.hasher.finalize().into();
+        if self.node_count >= min_nodes
+            && !self.boilerplate
+            && !re_describes_only_child(self.node)
+        {
+            out.push(Fingerprint {
+                hash,
+                file_id: self.node.file_id,
+                byte_range: self.node.byte_range,
+                node_count: self.node_count,
+            });
+        }
+        (hash, self.node_count)
+    }
+}
+
+/// Advances the top frame: descend into its next child, or report it done.
+fn next_step<'tree>(stack: &mut [Frame<'tree>]) -> Option<Step<'tree>> {
+    let frame = stack.last_mut()?;
+    match frame.node.children.get(frame.next_child) {
+        Some(child) => {
+            frame.next_child = frame.next_child.saturating_add(1);
+            Some(Step::Descend(child, frame.boilerplate))
+        }
+        None => Some(Step::Finish),
+    }
+}
+
+/// The bottom-up merkle hash of `node`, matching [`collect_fingerprints`].
+///
+/// Iterative for the same reason as [`hash_and_collect`], whose scheme it
+/// shares — one hash definition, so a change to either cannot drift them
+/// apart.
+#[must_use]
+pub(crate) fn subtree_hash(node: &NormalizedNode) -> [u8; 32] {
+    let mut discarded = Vec::new();
+    let (hash, _count) = hash_and_collect(node, usize::MAX, &mut discarded, None, true);
+    hash
 }
 
 /// True when the synthetic `__file__` root adds nothing to its only child.

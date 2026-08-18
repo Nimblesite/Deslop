@@ -17,7 +17,7 @@ use blake3::Hasher;
 use crate::{
     ast::{ByteRange, NormalizedNode},
     boilerplate::{is_boilerplate, is_import_boilerplate_only_subtree},
-    fingerprint::{is_literal_data_item, is_literal_data_subtree, Fingerprint},
+    fingerprint::{is_literal_data_item, is_literal_data_subtree, subtree_hash, Fingerprint},
 };
 
 /// Synthetic node kind used as the hash prefix for a sibling window. The
@@ -210,17 +210,3 @@ fn hash_window(child_hashes: &[[u8; 32]], start: usize, end: usize) -> [u8; 32] 
     hasher.finalize().into()
 }
 
-/// Re-hashes a subtree using the same bottom-up scheme as
-/// [`crate::fingerprint`]. Kept local to avoid threading more state through
-/// the pipeline; the cost is one additional pass which is `O(n)` in node
-/// count.
-fn subtree_hash(node: &NormalizedNode) -> [u8; 32] {
-    let mut hasher = Hasher::new();
-    let _ = hasher.update(node.kind.as_bytes());
-    let _ = hasher.update(b"\0");
-    for child in &node.children {
-        let child_hash = subtree_hash(child);
-        let _ = hasher.update(&child_hash);
-    }
-    hasher.finalize().into()
-}
