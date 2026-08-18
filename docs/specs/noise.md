@@ -39,6 +39,23 @@ members do not all resolve to the same role. It engages exclusively for the
 `same_behavior` bucket, leaving the deterministic Type-1/2/3 buckets untouched,
 and never suppresses when a member's role cannot be resolved.
 
+### [CLONE-NOISE-LITERAL-VARIATION-CALLS] Literal-variation call scaffolding
+Scaffolding repeats one call shape varying only its string-literal arguments —
+`setenv` keys, event names, endpoint paths — so after literal normalisation the
+members collapse to one subtree even though the differing literals are payload,
+not extractable logic. A cluster is suppressed when every member resolves to the
+same callee and arity (one enclosing call per member, or the same ordered call
+sequence contained in each member's range) and at least one argument position
+differs in string-literal bytes. Members whose literals all agree never match,
+so byte-identical copies keep the family's verbatim escape hatch.
+
+The sequence form requires **every** position to vary. A sequence mixing
+varying calls with invariant ones is not payload: the invariant calls are
+shared logic the members genuinely duplicate, so the cluster stays visible.
+Two tests that fetch different URLs and then run the same four assertions —
+one varying call, four invariant — are a Type-2 clone, while scaffolding has
+nothing left once its literals are removed.
+
 ## Python idioms
 
 ### [CLONE-NOISE-PY-ALL-EXPORTS] `__all__` export lists
@@ -91,11 +108,37 @@ visible as genuine duplication.
 Chained-subscript assertions of the form `assert X[k1][k2] == V` are a Python
 idiom for verifying nested response/payload shapes; after identifier and literal
 normalisation every such assertion collapses to
-`assert __var__[__str__][__str__] == __const__`, clustering unrelated tests. A
-cluster is suppressed when it spans at least two files and every member lives
-inside a `test_*` pytest function whose reported range contains only assertions
-whose left-hand side is a subscript chain two or more levels deep. Distinct tests
-verifying distinct contracts are not extractable duplication.
+`assert __var__[__str__][__str__] == __const__`, clustering unrelated tests.
+Fingerprinting offers the idiom at several granularities — the assert run, the
+enclosing `test_*` function, the whole module — so the filter matches every
+`test_*` function the reported range intersects. That reach obliges the proof to
+be closed over everything the range covers:
+
+- Every intersecting function is a pytest `test_*` whose in-range body holds
+  only payload bindings and the chained assertions that consume them. A payload
+  binding is a plain identifier bound to a dictionary that is **static data all
+  the way down** — a call, identifier, splat or comprehension in any key or
+  value position is program logic wearing a dict. Rebinding a payload name
+  fails the proof; when any payload is in range, every assertion root must
+  resolve to one and every payload must be consumed.
+- An assertion is a bare chain or a single `==`/`is` comparison whose right
+  operand is a scalar literal; a computed right operand is logic the idiom
+  never proves.
+- Module scope within the range may hold only the test functions, imports,
+  docstrings and comments. A decorated definition qualifies only when what it
+  decorates is a **function**, and every decorator is a dotted name or a call on
+  a dotted name whose every argument is static data —
+  `@pytest.mark.parametrize("case", [...])` is test payload, while a computed
+  decorator argument is case-generation wiring outside every body the proof
+  walks. A decorated **class** never qualifies: its body executes at import time
+  and no `test_*` walk reaches it, so `session = build_session(...)` beside the
+  test methods would ride along unread. An undecorated class at module scope
+  already fails open, and a decorator may not buy one a pass.
+
+A cluster is suppressed when it spans at least two files, members' raw bytes
+differ (a verbatim copy stays visible), and every member's range passes the
+closed proof. Distinct tests verifying distinct contracts are not extractable
+duplication.
 
 ### [CLONE-NOISE-PY-DICT-FIXTURE] Dict-literal test fixtures
 Dict-literal fixtures inside pytest tests carry the same AST shape and a

@@ -13,7 +13,7 @@ use crate::{
     discover::DiscoveredFile,
     error::CoreError,
     fingerprint::{collect_non_boilerplate_fingerprints, Fingerprint},
-    fpcache::{CachedFile, FingerprintCache},
+    fpcache::{sweep_store, CachedFile, FingerprintCache, LiveBlobs},
     lang::LanguageParser,
     report::CacheStats,
     report_metrics::{count_analysed_lines, AnalysedLines},
@@ -21,24 +21,53 @@ use crate::{
     state::FileId,
 };
 
-use super::config::PipelineConfig;
+use super::{config::PipelineConfig, signatures::signatures_for_file};
+
+#[cfg(test)]
+mod tests;
+
+/// Per-run signature construction/reuse counters surfaced on the
+/// `fingerprint corpus built` event
+/// ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]). Observability only —
+/// deliberately not part of the wire-model [`CacheStats`], which is
+/// generated from the typeDiagram IPC contract.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct SignatureStats {
+    /// Signatures constructed from token streams this pass.
+    pub built: u64,
+    /// Signatures attached from the on-disk parse store this pass.
+    pub reused: u64,
+}
+
+impl SignatureStats {
+    /// Records `count` signatures constructed from token streams.
+    fn add_built(&mut self, count: usize) {
+        self.built = self
+            .built
+            .saturating_add(u64::try_from(count).unwrap_or(u64::MAX));
+    }
+
+    /// Records `count` signatures attached from the parse store.
+    fn add_reused(&mut self, count: usize) {
+        self.reused = self
+            .reused
+            .saturating_add(u64::try_from(count).unwrap_or(u64::MAX));
+    }
+}
 
 /// Output of [`fingerprint_corpus`]. Kept together so the file
 /// sources can be reused by the embedding pass without re-reading
 /// from disk.
 #[derive(Debug, Default)]
 pub struct FingerprintCorpus {
-    /// All structural + sibling fingerprints.
-    pub fingerprints: Vec<Fingerprint>,
-    /// Normalised trees kept for token extraction.
-    pub trees: Vec<NormalizedNode>,
     /// File contents keyed by [`FileId`] so the embedding pass can
     /// read the exact bytes referenced by a fingerprint without
     /// re-reading the file once per subtree.
     pub sources: HashMap<FileId, Vec<u8>>,
     /// Per-file cached parse + fingerprint bundle keyed by
-    /// [`FileId`]. Used by the session to splice in updated entries
-    /// without re-scanning the whole workspace.
+    /// [`FileId`]. The session moves these into its canonical flat
+    /// store in workspace-relative-path order
+    /// ([PIPELINE-DETERMINISM]); nothing re-flattens per render.
     pub per_file: HashMap<FileId, CachedFile>,
     /// Per-run incremental-cache hit/miss counters
     /// ([PIPELINE-INCREMENTAL]).
@@ -67,6 +96,8 @@ pub fn fingerprint_corpus(
 ) -> Result<FingerprintCorpus, CoreError> {
     let min_nodes_usize = usize::try_from(config.min_nodes).unwrap_or(usize::MAX);
     let mut corpus = FingerprintCorpus::default();
+    let mut signature_stats = SignatureStats::default();
+    let mut live_blobs = LiveBlobs::default();
     let cache_base = crate::paths::cache_dir(&config.root);
     let mut caches: HashMap<&'static str, FingerprintCache> = HashMap::new();
     for discovered in files {
@@ -74,6 +105,9 @@ pub fn fingerprint_corpus(
             continue;
         };
         let source = read_source(&discovered.path)?;
+        if config.incremental {
+            live_blobs.record(discovered.language, &source);
+        }
         let cache = if config.incremental {
             fingerprint_cache_for(
                 &mut caches,
@@ -91,11 +125,12 @@ pub fn fingerprint_corpus(
             discovered.file_id,
             min_nodes_usize,
             &mut corpus.cache_stats,
+            &mut signature_stats,
         ) {
             Ok(processed) => processed,
             // A single pathologically deep file is skipped, not fatal: it
             // would otherwise overflow the recursive walks and abort the
-            // whole batch run (#168). Genuine parser errors still propagate.
+            // whole batch run. Genuine parser errors still propagate.
             Err(CoreError::AstTooDeep { language, limit }) => {
                 log_skip_too_deep(language, limit);
                 continue;
@@ -108,20 +143,32 @@ pub fn fingerprint_corpus(
                 &processed.tree,
                 discovered.language,
             ));
-        corpus.fingerprints.extend(processed.fingerprints.clone());
-        corpus.trees.push(processed.tree.clone());
         let lines = count_analysed_lines(&source);
         let _previous_lines = corpus.analysed_lines.insert(discovered.file_id, lines);
         let _previous = corpus.per_file.insert(discovered.file_id, processed);
         let _previous_source = corpus.sources.insert(discovered.file_id, source);
     }
+    let fingerprints_total: usize = corpus
+        .per_file
+        .values()
+        .map(|cached| cached.fingerprints.len())
+        .sum();
     tracing::info!(
         files_processed = files.len(),
-        fingerprints = corpus.fingerprints.len(),
+        fingerprints = fingerprints_total,
         cache_hits = corpus.cache_stats.hits,
         cache_misses = corpus.cache_stats.misses,
+        signatures_built = signature_stats.built,
+        signatures_reused = signature_stats.reused,
         "fingerprint corpus built",
     );
+    // [PIPELINE-INCREMENTAL-RETENTION] A full pass is the one moment
+    // the live blob set is exactly known, so retention runs here —
+    // never on a single-file change pass, and never when the store is
+    // disabled (the opt-out must leave the store untouched).
+    if config.incremental {
+        sweep_store(&cache_base, &live_blobs, config.min_nodes);
+    }
     Ok(corpus)
 }
 
@@ -140,6 +187,7 @@ pub fn parse_one_file(
     parser: &dyn LanguageParser,
     config: &PipelineConfig<'_>,
     stats: &mut CacheStats,
+    signature_stats: &mut SignatureStats,
 ) -> Result<(CachedFile, Vec<u8>, u64), CoreError> {
     let source = read_source(path)?;
     let cache_base = crate::paths::cache_dir(&config.root);
@@ -150,7 +198,15 @@ pub fn parse_one_file(
         None
     };
     let min_nodes = usize::try_from(config.min_nodes).unwrap_or(usize::MAX);
-    let processed = load_or_parse_file(cache, parser, &source, file_id, min_nodes, stats)?;
+    let processed = load_or_parse_file(
+        cache,
+        parser,
+        &source,
+        file_id,
+        min_nodes,
+        stats,
+        signature_stats,
+    )?;
     let lines = count_analysed_lines(&source);
     Ok((processed, source, lines))
 }
@@ -184,9 +240,11 @@ fn fingerprint_cache_for<'a>(
     caches.get(language)
 }
 
-/// Resolves one file's normalised tree + fingerprints, consulting the
-/// cache first when enabled. Cache-miss parses the file, fingerprints
-/// it, and persists the result before returning.
+/// Resolves one file's normalised tree + fingerprints + signatures,
+/// consulting the cache first when enabled
+/// ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]). Cache-miss parses the
+/// file, fingerprints it, builds its signatures, and persists the
+/// bundle before returning.
 fn load_or_parse_file(
     cache: Option<&FingerprintCache>,
     parser: &dyn LanguageParser,
@@ -194,36 +252,75 @@ fn load_or_parse_file(
     file_id: FileId,
     min_nodes: usize,
     stats: &mut CacheStats,
+    signature_stats: &mut SignatureStats,
 ) -> Result<CachedFile, CoreError> {
     if let Some(cache) = cache {
-        if let Some(hit) = cache.get(source, file_id) {
+        if let Some(hit) = validated_cache_hit(cache, parser, source, file_id, min_nodes) {
             stats.hits = stats.hits.saturating_add(1);
-            return Ok(with_filtered_fingerprints(hit, min_nodes, parser.id()));
+            signature_stats.add_reused(hit.signatures.len());
+            return Ok(hit);
         }
         stats.misses = stats.misses.saturating_add(1);
     }
-    let normalised = parser.parse_and_normalize(source, file_id)?;
-    let fingerprints = fingerprints_for(&normalised, min_nodes, parser.id());
-    let cached = CachedFile {
-        tree: normalised,
+    let built = build_cached_file(parser, source, file_id, min_nodes)?;
+    signature_stats.add_built(built.signatures.len());
+    persist_cached_file(cache, source, &built);
+    Ok(built)
+}
+
+/// Serves a cache hit only when the stored fingerprints equal the set
+/// re-derived from the cached tree under today's filters. The stored
+/// signatures are positionally bound to that list, so any disagreement
+/// invalidates them too — the file then falls through to the full
+/// parse path and the store that follows self-heals the blob.
+fn validated_cache_hit(
+    cache: &FingerprintCache,
+    parser: &dyn LanguageParser,
+    source: &[u8],
+    file_id: FileId,
+    min_nodes: usize,
+) -> Option<CachedFile> {
+    let hit = cache.get(source, file_id)?;
+    let rederived = fingerprints_for(&hit.tree, min_nodes, parser.id());
+    if rederived == hit.fingerprints {
+        return Some(hit);
+    }
+    tracing::warn!(
+        language = parser.id(),
+        stored = hit.fingerprints.len(),
+        rederived = rederived.len(),
+        "cached fingerprints disagree with re-derived set — treating as miss",
+    );
+    None
+}
+
+/// Parses `source` and assembles the full cache bundle: normalised
+/// tree, boilerplate-filtered fingerprints, and their `MinHash`
+/// signatures ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
+fn build_cached_file(
+    parser: &dyn LanguageParser,
+    source: &[u8],
+    file_id: FileId,
+    min_nodes: usize,
+) -> Result<CachedFile, CoreError> {
+    let tree = parser.parse_and_normalize(source, file_id)?;
+    let fingerprints = fingerprints_for(&tree, min_nodes, parser.id());
+    let signatures = signatures_for_file(&tree, &fingerprints, Some(parser.id()));
+    Ok(CachedFile {
+        tree,
         fingerprints,
-    };
+        signatures,
+    })
+}
+
+/// Persists a freshly-built bundle; write failures are non-fatal —
+/// the run simply stays uncached for that file.
+fn persist_cached_file(cache: Option<&FingerprintCache>, source: &[u8], built: &CachedFile) {
     if let Some(cache) = cache {
-        if let Err(error) = cache.store(source, &cached) {
+        if let Err(error) = cache.store(source, built) {
             tracing::warn!(%error, "fingerprint cache write failed");
         }
     }
-    Ok(cached)
-}
-
-/// Replaces cached fingerprints with the current boilerplate-filtered set.
-fn with_filtered_fingerprints(
-    mut cached: CachedFile,
-    min_nodes: usize,
-    language: &str,
-) -> CachedFile {
-    cached.fingerprints = fingerprints_for(&cached.tree, min_nodes, language);
-    cached
 }
 
 /// Collects structural and sibling fingerprints after boilerplate filtering.
@@ -239,7 +336,7 @@ fn fingerprints_for(
     fingerprints
 }
 
-/// Logs that a pathologically deep file is being skipped (#168). Shared by
+/// Logs that a pathologically deep file is being skipped. Shared by
 /// the batch corpus loop and the live session ([`super::session`]) so the
 /// "skip, don't crash" decision carries one message. Logs only the language
 /// id and depth limit — never a path, per the project logging rules.
@@ -308,7 +405,7 @@ pub fn language_ids() -> Vec<&'static str> {
 /// registry's declared extensions, or `"unknown"`. The single labeling map
 /// shared by every human/agent surface (the HTML report highlighter, MCP page
 /// summaries) so the detected language can never drift between them — or from
-/// the registry when a language is added ([PIPELINE-LANG-TRAIT], #164).
+/// the registry when a language is added ([PIPELINE-LANG-TRAIT]).
 #[must_use]
 pub fn language_for_path(path: &Path) -> &'static str {
     let Some(extension) = path.extension().and_then(|ext| ext.to_str()) else {

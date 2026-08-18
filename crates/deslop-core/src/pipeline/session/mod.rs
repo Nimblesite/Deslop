@@ -11,18 +11,21 @@
 mod ast_access;
 mod change;
 mod render;
+mod store;
 
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use crate::{
     boilerplate::BoilerplateRange,
     config::{is_config_path, watched_config_paths, ExclusionConfig},
-    discover::{discover_files, is_ignore_rule_path, DiscoveryResult, IgnoreMatcher},
+    discover::{
+        discover_files, is_ignore_rule_path, DiscoveredFile, DiscoveryResult, IgnoreMatcher,
+    },
     error::CoreError,
-    fpcache::CachedFile,
     lang::LanguageParser,
     report::{CacheStats, Report},
     report_metrics::AnalysedLines,
@@ -31,10 +34,11 @@ use crate::{
 
 use super::{
     config::{EmbeddingSettings, PipelineConfig},
-    corpus::{build_extension_map, default_parsers, fingerprint_corpus},
+    corpus::{build_extension_map, default_parsers, fingerprint_corpus, FingerprintCorpus},
 };
 
 use change::CorpusEffect;
+use store::CorpusStore;
 
 /// A long-running analysis context owned by the daemon ([LIVE-LIFECYCLE]).
 ///
@@ -48,7 +52,9 @@ pub struct PipelineSession {
     pub(super) root: PathBuf,
     /// Subtree-size floor used throughout the session.
     pub(super) min_nodes: u32,
-    /// Whether to consult the on-disk fingerprint cache.
+    /// Whether the invocation requested the on-disk fingerprint cache.
+    /// Gated per pass by the config escape hatch through
+    /// [`Self::effective_incremental`] ([CONFIG-INCREMENTAL-OPTOUT]).
     pub(super) incremental: bool,
     /// Optional override pointing at a `.deslop.toml` outside the
     /// workspace root. `None` = discover inside `root`.
@@ -61,22 +67,27 @@ pub struct PipelineSession {
     /// Exclusion config loaded at [`PipelineSession::initialise`] and
     /// re-loaded by [`PipelineSession::reload_exclusion`] when the
     /// daemon detects a config change.
-    pub(super) exclusion: ExclusionConfig,
+    pub(super) exclusion: Arc<ExclusionConfig>,
     /// Ignore rules (`.gitignore`, `.ignore`, `.git/info/exclude`, hidden
     /// components) mirroring the ones [`discover_files`] gets from its
     /// walker. The live ingest path is handed individual paths and never
     /// walks, so it must apply these itself or it admits files discovery
-    /// would have pruned (#287). Rebuilt alongside `exclusion`.
+    /// would have pruned. Rebuilt alongside `exclusion`.
     pub(super) ignore_matcher: IgnoreMatcher,
     /// File registry shared across the whole session. New files
     /// register on their first `update_files` sighting; removed files
     /// keep their [`FileId`] slot (nothing ever gets unregistered) so
     /// old diagnostics retain stable handles.
     pub(super) registry: FileRegistry,
-    /// Per-`FileId` cached tree + fingerprints. Keys here are the
-    /// single source of truth for "which files are currently part of
-    /// the corpus."
-    pub(super) per_file: HashMap<FileId, CachedFile>,
+    /// Canonical flat corpus storage: every fingerprint, signature,
+    /// and normalised tree, in workspace-relative-path order with one
+    /// span per live file. Entry presence is the single source of
+    /// truth for "which files currently contribute fingerprints." A
+    /// render pass borrows it as-is; only a live change copies —
+    /// splicing exactly one file's records
+    /// ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]). Private: session
+    /// submodules reach it as descendants; nothing outside does.
+    store: CorpusStore,
     /// Per-`FileId` source bytes so the embedding pass can read the
     /// exact snippet covered by a fingerprint without re-reading
     /// from disk.
@@ -137,7 +148,18 @@ impl PipelineSession {
             supported_extensions = ?extension_to_language.keys().collect::<Vec<_>>(),
             "pipeline session initialising",
         );
-        let exclusion = load_exclusion(&root, config_path.as_deref())?;
+        let exclusion = Arc::new(load_exclusion(&root, config_path.as_deref())?);
+        // [CONFIG-INCREMENTAL-OPTOUT] The config file is the outermost
+        // escape hatch: `[analysis] incremental = false` disables
+        // persisted processing for every surface that reaches this
+        // point — CLI batch, rerun, LSP, MCP — whatever the invocation
+        // requested.
+        let effective_incremental = incremental && exclusion.incremental_enabled();
+        if incremental && !effective_incremental {
+            tracing::info!(
+                "persisted processing disabled by config (`[analysis] incremental = false`)",
+            );
+        }
         let ignore_matcher = IgnoreMatcher::build(&root);
         let discovery = discover_files(&root, &extension_to_language, &exclusion);
         log_discovery_summary(&discovery, &root);
@@ -146,9 +168,10 @@ impl PipelineSession {
             min_nodes,
             config_path: config_path.clone(),
             embedding,
-            incremental,
+            incremental: effective_incremental,
         };
-        let corpus = fingerprint_corpus(&discovery.files, &parsers, &config)?;
+        let mut corpus = fingerprint_corpus(&discovery.files, &parsers, &config)?;
+        let store = build_store(&mut corpus, &discovery.files, &root);
         let mut live_paths: HashMap<FileId, PathBuf> = HashMap::new();
         let mut file_languages: HashMap<FileId, &'static str> = HashMap::new();
         for discovered in &discovery.files {
@@ -156,7 +179,7 @@ impl PipelineSession {
             let _prev_language = file_languages.insert(discovered.file_id, discovered.language);
         }
         let files_analysed = discovery.files.len();
-        let mut session = Self {
+        let session = Self {
             root,
             min_nodes,
             incremental,
@@ -166,7 +189,7 @@ impl PipelineSession {
             exclusion,
             ignore_matcher,
             registry: discovery.registry,
-            per_file: corpus.per_file,
+            store,
             sources: corpus.sources,
             live_paths,
             file_languages,
@@ -198,7 +221,7 @@ impl PipelineSession {
     /// exclusion, or ignore gate, or named a file the corpus never held.
     /// The corpus is then provably unchanged, so the report is too, and
     /// re-deriving it is pure waste: one production LSP burned 11h17m of
-    /// CPU across 1086 such passes before this early-out existed (#299).
+    /// CPU across 1086 such passes before this early-out existed.
     /// Callers keep the report they already have.
     ///
     /// # Errors
@@ -252,8 +275,22 @@ impl PipelineSession {
     }
 
     /// Updates whether future change passes consult the fingerprint cache.
+    /// The config escape hatch still gates the effective value
+    /// ([CONFIG-INCREMENTAL-OPTOUT]).
     pub fn set_incremental(&mut self, enabled: bool) {
         self.incremental = enabled;
+    }
+
+    /// The requested store mode gated by the live config's escape hatch
+    /// ([CONFIG-INCREMENTAL-OPTOUT]) — re-evaluated per pass, so a
+    /// `.deslop.toml` edit opting out takes effect on the very next
+    /// change pass without a restart. This is the value passes actually
+    /// run with, and therefore the value every status surface must
+    /// report — surfacing the raw request instead leaves the config
+    /// surface claiming a store the passes never consult.
+    #[must_use]
+    pub fn effective_incremental(&self) -> bool {
+        self.incremental && self.exclusion.incremental_enabled()
     }
 
     /// Returns the total fingerprint count across every live file.
@@ -261,10 +298,7 @@ impl PipelineSession {
     /// before re-running the pass.
     #[must_use]
     pub fn fingerprint_count(&self) -> usize {
-        self.per_file
-            .values()
-            .map(|cached| cached.fingerprints.len())
-            .sum()
+        self.store.fingerprint_count()
     }
 
     /// Returns the path associated with `file_id`, if the session has
@@ -310,8 +344,16 @@ impl PipelineSession {
 
     /// Returns the currently-loaded exclusion config.
     #[must_use]
-    pub const fn exclusion(&self) -> &ExclusionConfig {
+    pub fn exclusion(&self) -> &ExclusionConfig {
         &self.exclusion
+    }
+
+    /// Returns a shareable handle to the currently-loaded exclusion
+    /// config, so the live watcher applies the same policy the cold scan
+    /// resolved ([CONFIG-EXCLUDE-DEPENDENCIES]).
+    #[must_use]
+    pub fn exclusion_handle(&self) -> Arc<ExclusionConfig> {
+        Arc::clone(&self.exclusion)
     }
 
     /// Returns the cumulative cache-hit telemetry since session start.
@@ -329,7 +371,7 @@ impl PipelineSession {
 
     /// Reloads the exclusion config from disk. Called from
     /// [`Self::update_files`] when a watched config path is in the
-    /// changed set ([LIVE-CONFIG-LIVE], #189).
+    /// changed set ([LIVE-CONFIG-LIVE]).
     ///
     /// # Errors
     ///
@@ -337,10 +379,32 @@ impl PipelineSession {
     /// when the new config is malformed. The session keeps the old
     /// config on failure so a bad edit does not brick the daemon.
     fn reload_exclusion(&mut self) -> Result<(), CoreError> {
-        self.exclusion = load_exclusion(&self.root, self.config_path.as_deref())?;
+        self.exclusion = Arc::new(load_exclusion(&self.root, self.config_path.as_deref())?);
         self.ignore_matcher = IgnoreMatcher::build(&self.root);
         Ok(())
     }
+}
+
+/// Moves the freshly-parsed per-file bundles into the canonical flat
+/// store, feeding them in ascending `(relative path, id)` order so
+/// every insert is an append ([PIPELINE-DETERMINISM]).
+fn build_store(
+    corpus: &mut FingerprintCorpus,
+    files: &[DiscoveredFile],
+    root: &Path,
+) -> CorpusStore {
+    let mut keys: Vec<(PathBuf, FileId)> = files
+        .iter()
+        .map(|file| (store::relative_path_key(&file.path, root), file.file_id))
+        .collect();
+    keys.sort_unstable();
+    let mut built = CorpusStore::default();
+    for (path_key, file_id) in keys {
+        if let Some(cached) = corpus.per_file.remove(&file_id) {
+            built.upsert(file_id, path_key, cached);
+        }
+    }
+    built
 }
 
 /// True when a change to `path` re-scopes the corpus rather than

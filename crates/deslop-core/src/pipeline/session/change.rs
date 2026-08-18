@@ -17,7 +17,7 @@ use crate::{
 use super::{
     super::{
         config::{EmbeddingSettings, PipelineConfig},
-        corpus::{log_skip_too_deep, parse_one_file, parser_for_language},
+        corpus::{log_skip_too_deep, parse_one_file, parser_for_language, SignatureStats},
     },
     PipelineSession,
 };
@@ -27,7 +27,7 @@ use super::{
 ///
 /// A pass that touches no analysed file cannot change the report, so the
 /// whole LSH → embedding → pair → cluster → rank → render chain downstream
-/// of it is pure waste and is skipped (#299).
+/// of it is pure waste and is skipped.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum CorpusEffect {
     /// At least one analysed file was added, replaced, or dropped.
@@ -58,7 +58,7 @@ impl CorpusEffect {
 impl PipelineSession {
     /// Applies one changed path: delete, update, or add. Reports whether
     /// the corpus actually moved, so a pass made entirely of paths the
-    /// gates below reject can skip the re-render (#299).
+    /// gates below reject can skip the re-render.
     pub(super) fn apply_one_change(
         &mut self,
         path: &Path,
@@ -80,7 +80,7 @@ impl PipelineSession {
         }
         // Discovery's walker prunes these; the live path is handed paths
         // directly and must apply the same rules or it admits files
-        // discovery never would (#287).
+        // discovery never would.
         if self.ignore_matcher.is_ignored(&absolute) {
             return Ok(self.drop_path(&absolute));
         }
@@ -91,18 +91,25 @@ impl PipelineSession {
             .file_id_for(&absolute)
             .unwrap_or_else(|| self.registry.register(absolute.clone()));
         let config = self.pipeline_config_with_mode(embedding);
-        let (cached, source, lines) =
-            match parse_one_file(file_id, &absolute, parser, &config, stats) {
-                Ok(parsed) => parsed,
-                // A pathologically deep file must not crash the long-lived
-                // server (#168): drop it and keep serving, the same way an
-                // excluded path is handled above. Real parser errors propagate.
-                Err(CoreError::AstTooDeep { language, limit }) => {
-                    log_skip_too_deep(language, limit);
-                    return Ok(self.drop_path(&absolute));
-                }
-                Err(other) => return Err(other),
-            };
+        let mut signature_stats = SignatureStats::default();
+        let (cached, source, lines) = match parse_one_file(
+            file_id,
+            &absolute,
+            parser,
+            &config,
+            stats,
+            &mut signature_stats,
+        ) {
+            Ok(parsed) => parsed,
+            // A pathologically deep file must not crash the long-lived
+            // server: drop it and keep serving, the same way an
+            // excluded path is handled above. Real parser errors propagate.
+            Err(CoreError::AstTooDeep { language, limit }) => {
+                log_skip_too_deep(language, limit);
+                return Ok(self.drop_path(&absolute));
+            }
+            Err(other) => return Err(other),
+        };
         if self
             .sources
             .get(&file_id)
@@ -115,10 +122,17 @@ impl PipelineSession {
             );
             return Ok(CorpusEffect::Untouched);
         }
+        tracing::debug!(
+            fingerprints = cached.fingerprints.len(),
+            signatures_built = signature_stats.built,
+            signatures_reused = signature_stats.reused,
+            "live change spliced into corpus",
+        );
         let ranges = collect_import_boilerplate_ranges(&cached.tree, language);
         self.replace_boilerplate_ranges(file_id, ranges);
         let _prev_lines = self.analysed_lines.insert(file_id, lines);
-        let _prev = self.per_file.insert(file_id, cached);
+        let path_key = super::store::relative_path_key(&absolute, &self.root);
+        self.store.upsert(file_id, path_key, cached);
         let _prev_source = self.sources.insert(file_id, source);
         let _prev_path = self.live_paths.insert(file_id, absolute);
         let _prev_lang = self.file_languages.insert(file_id, language);
@@ -129,7 +143,7 @@ impl PipelineSession {
     /// Reloads `.deslop.toml` and re-evaluates the existing corpus
     /// against it: drops files the new `exclude` patterns now match
     /// and re-discovers files a removed pattern re-admits
-    /// ([LIVE-CONFIG-LIVE], #189). A malformed config is logged and
+    /// ([LIVE-CONFIG-LIVE]). A malformed config is logged and
     /// the prior exclusion is kept — a typo never bricks the daemon.
     pub(super) fn refresh_exclusion(
         &mut self,
@@ -196,14 +210,14 @@ impl PipelineSession {
     /// Evicts every live file at or under `prefix`. A directory removal
     /// reports only the directory path (no source extension, matching no
     /// live leaf), so the session must drop each registered descendant
-    /// to keep the report in sync ([LIVE-WATCHER], #223). Component-wise
+    /// to keep the report in sync ([LIVE-WATCHER]). Component-wise
     /// [`Path::starts_with`] means a removed `pkg` never evicts a
     /// sibling `pkg_twin`. The prefix is reflexive, so an exact-leaf
     /// deletion drops just that file. Reuses [`Self::drop_path`] per
     /// match so all maps, boilerplate ranges, and `files_analysed` stay
     /// consistent. Reports whether anything was actually evicted — a
     /// removal event for a path the corpus never held leaves it
-    /// [`CorpusEffect::Untouched`] (#299).
+    /// [`CorpusEffect::Untouched`].
     pub(super) fn drop_subtree(&mut self, prefix: &Path) -> CorpusEffect {
         let doomed: Vec<PathBuf> = self
             .live_paths
@@ -228,7 +242,7 @@ impl PipelineSession {
             return CorpusEffect::Untouched;
         };
         let _removed_path = self.live_paths.remove(&file_id);
-        let _removed_cache = self.per_file.remove(&file_id);
+        let _removed_records = self.store.remove(file_id);
         let _removed_source = self.sources.remove(&file_id);
         let _removed_lang = self.file_languages.remove(&file_id);
         let _removed_lines = self.analysed_lines.remove(&file_id);
@@ -302,7 +316,7 @@ impl PipelineSession {
                 batch_yield: embedding.batch_yield,
                 progress: embedding.progress,
             },
-            incremental: self.incremental,
+            incremental: self.effective_incremental(),
         }
     }
 
@@ -317,7 +331,7 @@ impl PipelineSession {
             min_nodes: self.min_nodes,
             config_path: self.config_path.clone(),
             embedding,
-            incremental: self.incremental,
+            incremental: self.effective_incremental(),
         }
     }
 }

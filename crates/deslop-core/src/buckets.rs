@@ -23,7 +23,10 @@
 //! strings so the four parallel vocabularies we used to ship can never
 //! regrow. The helper carries all three forms; the renderer picks.
 
-use crate::report::{ReportCluster, ReportSignals};
+use crate::{
+    content::ContentEvidence,
+    report::{ReportCluster, ReportSignals},
+};
 
 /// Canonical bucket identity. The enum is the one source of truth;
 /// every human / agent label attaches to one of these variants via
@@ -36,7 +39,7 @@ pub enum ClusterKind {
     /// Type-3 near-miss: same shape with small structural or token
     /// differences that may be semantically meaningful.
     NearlyIdentical,
-    /// Structural-only match ([RANK-STRUCTURAL-ONLY], #134/#154/#197):
+    /// Structural-only match ([RANK-STRUCTURAL-ONLY]):
     /// the normalized AST shape is the only positive evidence — no
     /// token overlap, no semantic support. Usually a sibling
     /// boilerplate family (REST CRUD, settings getters, builders);
@@ -212,7 +215,7 @@ fn kind_from_wire_label(label: &str) -> Option<ClusterKind> {
 pub const STRUCTURAL_ONLY_MAX_SUPPORT: f64 = 0.05;
 
 /// Single source of truth for the structural-only evidence test
-/// ([RANK-STRUCTURAL-ONLY], #134/#197): the structural fingerprint is
+/// ([RANK-STRUCTURAL-ONLY]): the structural fingerprint is
 /// the only positive support. Shared by the bucket routing and the
 /// ranking demotion so a cluster labelled `structural_only` is always
 /// the cluster the `[ranking]` policy demotes — the label and the
@@ -226,7 +229,7 @@ pub fn is_structural_only_signals(signals: ReportSignals) -> bool {
 
 /// Lowest content agreement a shape-identical cluster may show while
 /// still counting as a Type-2/3 clone rather than shape-only
-/// scaffolding ([FUSION-CONTENT-GATE], #331/#336). Genuine renamed
+/// scaffolding ([FUSION-CONTENT-GATE]). Genuine renamed
 /// copies change a handful of collapsed-leaf positions and stay well
 /// above this floor; framework-mandated declarations and data tables
 /// change most positions and fall well below it. The 0.7 operating
@@ -235,7 +238,7 @@ pub const CONTENT_SUPPORT_FLOOR: f64 = 0.7;
 
 /// Content agreement required to *promote* a shape-identical cluster
 /// into the act-now `nearly_identical` bucket when the token layer lost
-/// its signature to the fingerprint-scoped fallback (gh #339). Between
+/// its signature to the fingerprint-scoped fallback. Between
 /// [`CONTENT_SUPPORT_FLOOR`] and this bar the legacy signal routing
 /// stands: real-world sibling families such as the #197 REST
 /// settings surface measure 0.72–0.80 (shared plumbing, differing
@@ -245,7 +248,7 @@ pub const CONTENT_SUPPORT_FLOOR: f64 = 0.7;
 pub const CONTENT_PROMOTE_FLOOR: f64 = 0.85;
 
 /// Literal fraction at which a shape-identical cluster counts as a data
-/// literal ([CLONE-NOISE-LITERAL-TABLE], #336): the canonical member's
+/// literal ([CLONE-NOISE-LITERAL-TABLE]): the canonical member's
 /// collapsed leaves are overwhelmingly literal positions — a numeric
 /// array, a lookup table, generated test data — in any language. Such
 /// clusters are governed by the `[ranking] data_clones` policy
@@ -254,14 +257,16 @@ pub const CONTENT_PROMOTE_FLOOR: f64 = 0.85;
 pub const LITERAL_TABLE_MIN_FRACTION: f64 = 0.8;
 
 /// True when a shape-identical cluster's only real evidence is its
-/// shape: the raw content of its collapsed leaves mostly disagrees and
-/// no semantic signal supports it ([FUSION-CONTENT-GATE]). Such
-/// clusters join the [`is_structural_only_signals`] routing so the
-/// bucket label and the ranking demotion stay in lockstep.
+/// shape: neither content population vouches for it — the pooled raw
+/// bytes mostly disagree, no consistent literal-anchored rename explains
+/// the differences ([`ContentEvidence::support`]), and no semantic
+/// signal supports it ([FUSION-CONTENT-GATE]). Such clusters join the
+/// [`is_structural_only_signals`] routing so the bucket label and the
+/// ranking demotion stay in lockstep.
 #[must_use]
-pub fn lacks_content_support(signals: ReportSignals, content_agreement: f64) -> bool {
+pub fn lacks_content_support(signals: ReportSignals, content: ContentEvidence) -> bool {
     has_saturating_shape_evidence(signals)
-        && content_agreement < CONTENT_SUPPORT_FLOOR
+        && content.support() < CONTENT_SUPPORT_FLOOR
         && signals.embedding_cos < STRUCTURAL_ONLY_MAX_SUPPORT
 }
 
@@ -270,43 +275,79 @@ pub fn lacks_content_support(signals: ReportSignals, content_agreement: f64) -> 
 /// match, or a near-total kind-stream Jaccard — the token LSH pass
 /// hashes the same normalised representation the structural pass does,
 /// so a `token_jaccard` at the [`classify_signals`] near-identical line
-/// is shape evidence too, not content evidence (gh #331's surviving
+/// is shape evidence too, not content evidence ('s surviving
 /// mixed cluster read `structural=0.62, token_jaccard=0.98`).
+///
+/// The anchor-free row-4 route ([`is_lsh_only_nearmiss`]) is
+/// deliberately **not** included. Both of this gate's populations —
+/// positional byte agreement and literal-anchored rename consistency —
+/// assume the members align position for position, which is exactly what
+/// an anchor-free cluster does not do: `structural ≤ 0.01` means the
+/// shapes differ. Measured against a genuine Type-3 clone whose
+/// identifiers are all renamed and whose bodies differ by one statement
+/// (`csharp-type3`), agreement collapses to 0.19 — the literals — and
+/// rename consistency to 0.0, because the extra statement destroys the
+/// alignment the rename proof needs. Gating row 4 here therefore demotes
+/// the renamed near-miss, the most valuable clone class there is. Row 4
+/// is instead routed on cluster *spread* in
+/// `report_render::route_shape_identical`.
 #[must_use]
 pub fn has_saturating_shape_evidence(signals: ReportSignals) -> bool {
-    signals.structural >= 0.99 || signals.token_jaccard >= 0.95
+    signals.structural >= 0.99 || signals.token_jaccard >= SATURATING_TOKEN_FLOOR
 }
 
+/// Token overlap at or above which the token layer is echoing shape
+/// rather than reporting content ([FUSION-CONTENT-GATE]). Named because
+/// the assertion surface has to distinguish the two routes into
+/// `structural_only` — evidence-free below
+/// [`STRUCTURAL_ONLY_MAX_SUPPORT`], content-gated at or above this — and
+/// a test carrying its own copy of the number drifts from the router.
+pub const SATURATING_TOKEN_FLOOR: f64 = 0.95;
+
+/// Confidence discount applied to rename-consistency evidence when the
+/// gate fuses it ([FUSION-CONTENT-GATE]). A literal-anchored bijective
+/// rename is proven duplication, but its identifier positions matched
+/// through a mapping rather than byte equality — strictly weaker
+/// evidence than a verbatim copy. The discount keeps a proven Type-2
+/// rename above the [FUSED-THRESHOLD] act-now line while reserving
+/// saturation (`fused == 1.0`) for byte-proven duplication, so the
+/// rendered score still orders copy-paste above rename.
+pub const RENAME_CONSISTENCY_DISCOUNT: f64 = 0.9;
+
 /// Corrects the rendered fused confidence for shape-identical clusters
-/// ([FUSION-CONTENT-GATE], #331/#336). `structural` and `token_jaccard`
+/// ([FUSION-CONTENT-GATE]). `structural` and `token_jaccard`
 /// are two views of one normalised representation, so summing them says
 /// nothing beyond "the shapes matched" — every shape match used to
 /// render `fused = 1.0`, which made the agent-facing act-now threshold
 /// unreachable from below. The honest confidence for a shape match is
-/// its structural certainty scaled by measured raw-content agreement,
-/// or the semantic signal when that is stronger. Byte-equivalence-proven
-/// [`ClusterKind::Identical`] clusters keep their saturated confidence,
-/// and clusters discovered without an exact shape match (LSH / embedding
-/// paths) keep the existing fusion.
+/// its structural certainty scaled by measured content evidence — pooled
+/// byte agreement or discounted rename consistency, whichever is the
+/// stronger proof — or the semantic signal when that beats both.
+/// Byte-equivalence-proven [`ClusterKind::Identical`] clusters keep
+/// their saturated confidence, and clusters discovered without an exact
+/// shape match (LSH / embedding paths) keep the existing fusion.
 #[must_use]
 pub fn content_gated_signals(
     signals: ReportSignals,
-    content_agreement: f64,
+    content: ContentEvidence,
     kind: ClusterKind,
 ) -> ReportSignals {
     if kind == ClusterKind::Identical || !has_saturating_shape_evidence(signals) {
         return signals;
     }
+    let content_confidence = content
+        .agreement
+        .max(RENAME_CONSISTENCY_DISCOUNT * content.rename_consistency);
     let fused = signals
         .embedding_cos
-        .max(signals.structural.max(signals.token_jaccard) * content_agreement)
+        .max(signals.structural.max(signals.token_jaccard) * content_confidence)
         .clamp(0.0, 1.0);
     // A shape-identical cluster routed `NearlyIdentical` shares one
     // Merkle hash, so the members' normalised kind streams are equal by
-    // construction and the true token Jaccard is 1.0 — the same GH #232
+    // construction and the true token Jaccard is 1.0 — the same
     // argument the byte-equivalence upgrade applies to `Identical`. A
     // lower rendered value is a fingerprint-scoped fallback-signature
-    // artifact (gh #339), not evidence, so it is corrected here. The
+    // artifact, not evidence, so it is corrected here. The
     // `structural` guard scopes the correction to clusters the Merkle
     // argument actually covers — a mixed LSH-glued cluster keeps its
     // estimated value. `StructuralOnly` keeps its unscored signal:
@@ -333,11 +374,53 @@ pub fn classify_signals(signals: ReportSignals) -> ClusterKind {
         ClusterKind::SameBehavior
     } else if is_structural_only_signals(signals) {
         ClusterKind::StructuralOnly
-    } else if signals.structural >= 0.99
+    } else if is_lsh_only_nearmiss(signals)
+        || signals.structural >= 0.99
         || (signals.structural >= 0.20 && signals.token_jaccard >= 0.95)
     {
+        // [CLONE-BUCKETS-ROUTING] rows 4 and 5 share this destination:
+        // the anchor-free LSH-only near-miss ([`is_lsh_only_nearmiss`])
+        // and the structurally-anchored near-miss. Kept as one arm
+        // because both routes produce the identical bucket — the named
+        // predicate is what keeps row 4 legible and greppable.
         ClusterKind::NearlyIdentical
     } else {
         ClusterKind::LooselySimilar
     }
 }
+
+/// [CLONE-BUCKETS-ROUTING] row 4: a cluster with no structural anchor
+/// whose token overlap clears [`LSH_ONLY_NEARMISS_MIN_JACCARD`] is a
+/// genuine Type-3 near-miss, in **every** language.
+///
+/// A cluster only reaches the renderer with this triple by surviving
+/// `pair::survival_decision`, which admits a structurally-unanchored
+/// pair only above the same Jaccard floor and above the endpoint
+/// node-count floor — the pipeline has already ruled out low-information
+/// token noise, which is why this row is a signal test and needs no
+/// language, size, or spread condition. Routing it anywhere else means
+/// the pipeline admitted a pair as real duplication and the renderer
+/// then discarded it: previously it fell to
+/// [`ClusterKind::LooselySimilar`], which the renderer hides, so a fully
+/// duplicated pair reported zero duplication in every language except
+/// the one a report-render carve-out special-cased (gh #390). Pinned by
+/// `crates/deslop/tests/lsh_only_nearmiss_recall.rs`.
+#[must_use]
+pub fn is_lsh_only_nearmiss(signals: ReportSignals) -> bool {
+    signals.structural <= STRUCTURAL_ABSENT_CEILING
+        && signals.token_jaccard >= LSH_ONLY_NEARMISS_MIN_JACCARD
+}
+
+/// Highest `structural` a cluster may show while counting as having no
+/// structural anchor ([CLONE-BUCKETS-ROUTING] row 4). Mirrors the
+/// spec's `structural ≤ 0.01`.
+pub const STRUCTURAL_ABSENT_CEILING: f64 = 0.01;
+
+/// Token overlap an anchor-free cluster must clear to count as a
+/// Type-3 near-miss ([CLONE-BUCKETS-ROUTING] row 4). **Is**
+/// [`crate::pair::LSH_ONLY_MIN_JACCARD`], not a copy of its value: the
+/// pair layer admits an LSH-only candidate at exactly this floor, so a
+/// lower value here would hide clusters the pipeline admitted and a
+/// higher one would reject them after admission. Naming it separately
+/// keeps the routing row greppable while leaving one number to change.
+pub const LSH_ONLY_NEARMISS_MIN_JACCARD: f64 = crate::pair::LSH_ONLY_MIN_JACCARD;

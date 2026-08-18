@@ -12,7 +12,7 @@
 //! declaration rewritten, which waits for the full resolver
 //! ([AUTOFIX-CONSOLIDATE-EDIT] `DeleteFile` follow-up).
 //!
-//! v1.1 (issues #277/#279): an occurrence may cover a contiguous run
+//! v1.1: an occurrence may cover a contiguous run
 //! of whole definitions (each consolidated per symbol), and the
 //! [`binding_drift`] gate refuses definitions whose free references
 //! would re-bind after the move.
@@ -279,7 +279,7 @@ fn duplicate_file_edits(
 
 /// Insertion offset for the `use` item: after leading inner attributes
 /// and inner doc comments, which must stay first in the file
-/// (#279 review).
+///.
 fn import_offset(root: Node<'_>, source: &[u8]) -> usize {
     let mut offset = 0;
     for child in named_children(root) {

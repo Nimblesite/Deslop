@@ -45,6 +45,7 @@ pub mod report_hints;
 pub mod report_location;
 pub mod report_metrics;
 mod report_render;
+mod report_weight;
 pub mod sibling;
 pub mod state;
 pub mod tokens;

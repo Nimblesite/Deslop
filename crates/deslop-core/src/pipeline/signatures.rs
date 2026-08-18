@@ -1,5 +1,13 @@
-//! `MinHash` signature construction shared by [`super::run`] and
-//! [`super::session`]. Feeds the token-LSH pass in [`crate::lsh`].
+//! `MinHash` signature construction. Feeds the token-LSH pass in
+//! [`crate::lsh`].
+//!
+//! Per-language signatures are built once per file at parse/load time
+//! by [`signatures_for_file`] and persisted in the parse store beside
+//! the fingerprints they were built from
+//! ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]); the render pass consumes
+//! the flattened per-file lists instead of reconstructing them.
+//! Cross-language signatures stay render-time — they exist only for
+//! the opt-in audit mode ([CONFIG-CROSS-LANGUAGE]).
 
 use std::{collections::HashMap, hash::BuildHasher};
 
@@ -18,47 +26,55 @@ use crate::{
 };
 
 /// Builds a `FileId → &NormalizedNode` index to avoid O(files) linear scans
-/// for every fingerprint in [`build_signatures_with_languages`].
+/// for every fingerprint in [`build_cross_language_signatures`].
 fn build_tree_index(trees: &[NormalizedNode]) -> HashMap<FileId, &NormalizedNode> {
     trees.iter().map(|tree| (tree.file_id, tree)).collect()
 }
 
-/// Language-aware signature builder. When the fingerprint's file has
-/// a known language in `file_languages`, import/prologue boilerplate
-/// is stripped from the token stream so shared import patterns stop
-/// feeding the LSH false-positive path described in
+/// Language-aware signature for one fingerprint against its file's
+/// normalised tree. When the language is known, import/prologue
+/// boilerplate is stripped from the token stream so shared import
+/// patterns stop feeding the LSH false-positive path described in
 /// [PIPELINE-BOILERPLATE-FILTER] — the structural pass already applies
-/// the same filter, so the two signals now share the same corpus.
+/// the same filter, so the two signals share the same corpus.
+///
+/// A pure function of the tree content, the fingerprint's range and
+/// hash, and the language — never of [`FileId`] — which is what
+/// licenses persisting the result in the content-addressed parse
+/// store ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
+fn signature_for_fingerprint(
+    root: &NormalizedNode,
+    fingerprint: &Fingerprint,
+    language: Option<&str>,
+) -> Signature {
+    let tokens = match language {
+        Some("python") => token_stream_for_fingerprint_with_language(root, fingerprint, "python"),
+        Some(language) if exact_range_contains_boilerplate(root, fingerprint, language) => {
+            token_stream_for_fingerprint_with_language(root, fingerprint, language)
+        }
+        _ => token_stream_for_fingerprint(root, fingerprint),
+    };
+    tokens.map_or_else(
+        || empty_signature(fingerprint, language),
+        |tokens| signature_for_tokens(&tokens, fingerprint, language),
+    )
+}
+
+/// Builds one file's `MinHash` signatures, positionally 1:1 with
+/// `fingerprints`. Called at parse/load time so the result is
+/// persisted in the parse store beside the fingerprints it was built
+/// from and reattached on later cache hits
+/// ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
 #[must_use]
-pub fn build_signatures_with_languages<S: BuildHasher>(
+pub fn signatures_for_file(
+    tree: &NormalizedNode,
     fingerprints: &[Fingerprint],
-    trees: &[NormalizedNode],
-    file_languages: &HashMap<FileId, &'static str, S>,
+    language: Option<&str>,
 ) -> Vec<Signature> {
-    let tree_index = build_tree_index(trees);
-    let mut signatures: Vec<Signature> = Vec::with_capacity(fingerprints.len());
-    for fingerprint in fingerprints {
-        let language = file_languages.get(&fingerprint.file_id).copied();
-        let Some(root) = tree_index.get(&fingerprint.file_id).copied() else {
-            signatures.push(empty_signature(fingerprint, language));
-            continue;
-        };
-        let tokens = match language {
-            Some("python") => {
-                token_stream_for_fingerprint_with_language(root, fingerprint, "python")
-            }
-            Some(language) if exact_range_contains_boilerplate(root, fingerprint, language) => {
-                token_stream_for_fingerprint_with_language(root, fingerprint, language)
-            }
-            _ => token_stream_for_fingerprint(root, fingerprint),
-        };
-        let signature = tokens.map_or_else(
-            || empty_signature(fingerprint, language),
-            |tokens| signature_for_tokens(&tokens, fingerprint, language),
-        );
-        signatures.push(signature);
-    }
-    signatures
+    fingerprints
+        .iter()
+        .map(|fingerprint| signature_for_fingerprint(tree, fingerprint, language))
+        .collect()
 }
 
 /// Builds aliases-only signatures for explicit cross-language audits.
@@ -147,7 +163,7 @@ fn signature_for_tokens(
 
 /// Empty-token signatures are scoped to the exact fingerprint instead of a
 /// shared legacy default so unrelated empty token streams do not LSH-cluster
-/// through compatibility behavior (issue #86).
+/// through compatibility behavior.
 fn empty_signature(fingerprint: &Fingerprint, language: Option<&str>) -> Signature {
     let _ = language;
     fallback_signature(fingerprint)
@@ -156,11 +172,18 @@ fn empty_signature(fingerprint: &Fingerprint, language: Option<&str>) -> Signatu
 /// Fingerprint-scoped signature used when no k-grams are available. This
 /// avoids treating unrelated empty token sets as perfect LSH matches.
 /// Uses blake3 XOF to derive all 128 slot values from a single hash call.
+/// The byte offsets are widened to `u64` before hashing so the input is
+/// always eight little-endian bytes per offset — `usize::to_le_bytes()`
+/// is four bytes on a 32-bit build, and these values persist in the
+/// parse store, where an architecture-dependent signature would defeat
+/// content addressing ([PIPELINE-INCREMENTAL-INTEGRITY]).
 fn fallback_signature(fingerprint: &Fingerprint) -> Signature {
+    let start = u64::try_from(fingerprint.byte_range.start).unwrap_or(u64::MAX);
+    let end = u64::try_from(fingerprint.byte_range.end).unwrap_or(u64::MAX);
     let mut hasher = Hasher::new();
     let _ = hasher.update(&fingerprint.hash);
-    let _ = hasher.update(&fingerprint.byte_range.start.to_le_bytes());
-    let _ = hasher.update(&fingerprint.byte_range.end.to_le_bytes());
+    let _ = hasher.update(&start.to_le_bytes());
+    let _ = hasher.update(&end.to_le_bytes());
     let mut expanded = [0u8; SIGNATURE_LEN * 8];
     hasher.finalize_xof().fill(&mut expanded);
     let mut signature = [0_u64; SIGNATURE_LEN];
@@ -212,6 +235,31 @@ mod tests {
             first_rust,
             empty_signature(&first, Some("rust")),
             "fingerprint-scoped fallback must stay deterministic for the same fingerprint"
+        );
+    }
+
+    // [PIPELINE-INCREMENTAL-INTEGRITY] The fallback signature persists
+    // in the parse store, so its slots must be a pure, fixed function
+    // of the fingerprint — identical on every architecture and across
+    // releases. A 32-bit build hashing 4-byte offsets, or any semantic
+    // drift in the derivation, changes every slot and fails this pin.
+    #[test]
+    fn fallback_signature_slots_are_architecture_independent() {
+        let signature = fallback_signature(&fingerprint(7, 3, 9));
+        assert_eq!(
+            signature.get(..4),
+            Some(
+                &[
+                    13_181_474_024_201_563_239_u64,
+                    1_576_249_985_012_619_851,
+                    14_983_257_718_629_721_174,
+                    4_485_375_611_891_913_186,
+                ][..]
+            ),
+            "the fallback signature's leading slots moved — either the \
+             derivation changed semantics (bump the parse store's \
+             SEMANTIC_EPOCH) or the input encoding became \
+             architecture-dependent"
         );
     }
 }

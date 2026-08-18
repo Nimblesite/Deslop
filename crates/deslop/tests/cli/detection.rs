@@ -627,7 +627,7 @@ fn handles_mixed_language_fixture() -> Result<()> {
     Ok(())
 }
 
-// Implements [DECISION-TYPE3-TWO-PASS] + [FUSION-STRATEGY-MAX-SUM]:
+// Implements [DECISION-TYPE3-TWO-PASS] + [FUSION-STRATEGY-BOUNDED-MAX]:
 // Type-3 near-miss cross-file cluster with `structural=0.0`.
 #[test]
 fn detects_type3_clone_in_csharp_fixture() -> Result<()> {

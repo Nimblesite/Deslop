@@ -368,7 +368,7 @@ fn resolve_split_by_language(args: &Cli) -> Result<bool> {
 /// names or VSIX panel labels. When a user types `deslop top-offenders`
 /// (as some agent recipes wrongly suggest), clap parses the word as
 /// the positional `PATH`, the path resolves to a non-existent directory,
-/// and the pipeline cheerfully reports zero clones ([Deslop#132]).
+/// and the pipeline cheerfully reports zero clones.
 const KNOWN_NON_CLI_TOOL_NAMES: &[&str] = &[
     "top-offenders",
     "find-similar",
@@ -387,7 +387,7 @@ const KNOWN_NON_CLI_TOOL_NAMES: &[&str] = &[
 /// Refuses to scan a path that does not exist or matches a known MCP
 /// tool name. Without this guard, `deslop top-offenders` silently
 /// "succeeds" with a clean-looking report against a non-existent
-/// directory ([Deslop#132]).
+/// directory.
 // [CLI-SUBCOMMAND-LOOKALIKE] rejects a positional path that is actually
 // an MCP tool name / UI label with a named error (cli.md).
 fn validate_scan_path(path: &std::path::Path) -> Result<()> {
@@ -483,7 +483,7 @@ fn produce_report(
         "rerun: replaying paths through PipelineSession::update_files",
     );
     // `None` means the replayed paths touched no analysed file, so the
-    // initial report still stands and re-rendering it would be waste (#299).
+    // initial report still stands and re-rendering it would be waste.
     let updated = session
         .update_files(&touched, embedding())
         .context("incremental rerun failed")?;

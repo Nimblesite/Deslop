@@ -1,23 +1,23 @@
 # VSIX — the VS Code extension
 
-The VSIX is the **polished reference client** for the Deslop daemon. Every other editor can wire up the LSP ([lsp.md](lsp.md)) and get a competent experience; the VSIX is where we prove what a genuinely beautiful duplication-surfacing UI looks like.
+The VSIX is the reference client for the Deslop daemon. Other editors can integrate through the LSP ([lsp.md](lsp.md)).
 
 Distribution: one platform-specific `.vsix` per VS Code target attached to each GitHub Release — see [.github/workflows/release.yml](../../.github/workflows/release.yml). Extension id: `nimblesite.deslop-live`. Install via `code --install-extension deslop-live-X.Y.Z-<target>.vsix`, or from the Marketplace/OpenVSX once we set up publisher accounts.
 
 ### [VSIX-PRINCIPLES] UX principles
 
-1. **In your face the moment you duplicate.** When the user types code that matches an existing cluster, the editor tells them **immediately** via the live-bubble ([VSIX-LIVE-BUBBLE]) — not on save, not on CI, not in a panel they have to open. This is the product's defining moment. Every other UX decision is subordinate to making it land cleanly.
+1. **Immediate duplicate feedback.** When typed code matches an existing cluster, [VSIX-LIVE-BUBBLE] appears without waiting for save, CI, or an opened panel.
 2. **Silent when the code is clean.** If there are no clusters overlapping the current file, no UI elements appear on that file. The activity bar badge disappears. The editor is untouched. Loudness is reserved for real duplication.
 3. **The worst offender is always one click away.** The activity bar icon always jumps to cluster `#1` of the live report. The user never navigates through menus to find duplication hotspots.
 4. **Every surface speaks the same schema.** Tree view, hover, code lens, status bar, bubble, webview — all render the same `Report` the JSON file carries. Humans and agents read the same truth.
 5. **Never block an edit.** The daemon is a sidecar; analysis runs asynchronously; UI updates ride notifications. A typing pause of 250 ms triggers re-analysis, not every keystroke.
-6. **Legible, not decorative.** No animated icons, no gradient flourishes that obscure content. Density is high but scannable — the user is hunting for duplication, not admiring chrome. Severity is communicated by colour ramp + glyph, nothing else.
+6. **Legible, not decorative.** No animated icons or gradients that obscure content. Severity uses a colour ramp and glyph.
 7. **Human-readable before machine-readable.** The VSIX is for developers working in an editor, so ordinary UI labels use friendly file names, line numbers, and columns. Byte offsets are valid in the JSON/AI report and wire schema, but the tree, webviews, bubbles, hovers, status bar, and command titles must not expose raw byte markers as the primary location text.
 8. **Reactive end-to-end.** Every surface — tree, decorations, bubble, code lens, status bar, hovers, webviews, badges — derives from `@preact/signals` over the single [VSIX-STATE] store. `deslop/reportChanged` updates settle in one microtask across every surface. Stale UI is a correctness bug per [VSIX-REACTIVITY-INVARIANT], not a polish issue.
 
 ### [VSIX-LIVE-BUBBLE] Live duplication bubble — the flagship UX
 
-This is the feature. The VSIX is the first tool that tells a developer **"you are duplicating code right now"** while the code is still under their cursor. Every other surface (tree view, webview, code lens, status bar) is supporting cast; the bubble is the lead.
+The bubble reports duplication while the edited code remains under the cursor.
 
 **When it fires.**
 After every coalesced buffer edit ([LIVE-WATCHER] debounce = 250 ms), the VSIX issues `duplicates/findSimilar` on the range the user most recently touched. If a cluster comes back with fused score ≥ `FUSED_THRESHOLD` (0.85, same as the offline report), the bubble appears anchored to the bottom-right of the duplicated range. If nothing matches, no bubble — silence is the signal that the code is novel.
@@ -161,7 +161,7 @@ Folder rows, their child folders, and the files within them sort per [VSIX-TOP-O
 
 The bold label on every cluster row leads with the cluster slug — the first 7 hex chars of `cluster.id`. The slug is stable across runs, deltas, snapshots, and grouping modes; it is the single identifier humans and AI agents can quote between sessions. The same slug is used by the LSP hover bubble ([VSIX-HOVER-SHARED]), via the shared `clusterSlug()` helper, so the UI never shows two different short forms of the same id.
 
-The volatile rank (`#N`) is never the leading element of the label. Rendering rank as if it were an id has shipped two incidents (the LSP hover regression tracked in `docs/plans/cluster-slug-vs-rank.md`, and the Top Offenders tree regression that produced this section). Both humans and — critically — AI agents reading the rendered tree treat the leading element as the row's identity; using rank there means the "identity" changes on every snapshot, which silently breaks cross-message references in agent transcripts.
+The volatile rank (`#N`) is never the leading element of the label. Rendering rank as if it were an id has shipped two incidents (the LSP hover regression tracked in Deslop#149, and the Top Offenders tree regression that produced this section). Both humans and — critically — AI agents reading the rendered tree treat the leading element as the row's identity; using rank there means the "identity" changes on every snapshot, which silently breaks cross-message references in agent transcripts.
 
 Rules:
 

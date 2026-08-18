@@ -37,7 +37,7 @@ pub fn candidate_pairs(
     let mut cosines: HashMap<(usize, usize), f64> = HashMap::new();
     collect_structural_pairs(fingerprints, &mut scores);
     add_lsh_pairs(lsh_pairs, &mut scores);
-    add_embedding_pairs(embedding_pairs, fingerprints, &mut scores, &mut cosines);
+    add_embedding_pairs(embedding_pairs, &mut scores, &mut cosines);
     finalise_pairs(fingerprints, signatures, scores, &cosines)
 }
 
@@ -81,7 +81,7 @@ fn cross_language_opt_in_pair<S: BuildHasher>(
     file_languages: &HashMap<FileId, &'static str, S>,
 ) -> CandidatePair {
     if pair.score.structural <= 0.0 && !same_language_pair(&pair, fingerprints, file_languages) {
-        pair.min_node_count = pair.min_node_count.max(LSH_ONLY_MIN_NODE_COUNT);
+        pair.lsh_only_node_floor = pair.lsh_only_node_floor.max(LSH_ONLY_MIN_NODE_COUNT);
         pair.lsh_only_min_jaccard = CROSS_LANGUAGE_MIN_JACCARD;
         pair.fused_min_score = CROSS_LANGUAGE_MIN_JACCARD;
     }
@@ -173,10 +173,12 @@ fn cross_language_signature_pair(
     right: usize,
     token_jaccard: f64,
 ) -> CandidatePair {
+    let endpoint_node_counts = endpoint_node_counts(fingerprints, left, right);
     CandidatePair {
         left,
         right,
-        min_node_count: min_node_count(fingerprints, left, right).max(LSH_ONLY_MIN_NODE_COUNT),
+        endpoint_node_counts,
+        lsh_only_node_floor: endpoint_node_counts.0.max(LSH_ONLY_MIN_NODE_COUNT),
         lsh_only_min_jaccard: CROSS_LANGUAGE_MIN_JACCARD,
         fused_min_score: CROSS_LANGUAGE_MIN_JACCARD,
         score: PairScore {
@@ -267,52 +269,34 @@ fn add_lsh_pairs(lsh_pairs: &[(usize, usize)], scores: &mut HashMap<(usize, usiz
     }
 }
 
-/// Adds embedding ANN pairs. Structural pairs keep their exact-clone
-/// classification. Cross-file LSH-visible pairs keep unique-recall
-/// accounting, while same-file non-structural pairs retain the embedding
-/// cosine so incidental local token overlap cannot erase semantic signal.
+/// Adds embedding ANN pairs, merging the measured cosine into every pair
+/// whether or not the structural or LSH passes already surfaced it.
+///
+/// A cosine the ANN pass measured is evidence about the *pair*; the pass
+/// that happened to reach it first is telemetry. Discarding it on overlap
+/// made discovery order decide what the user saw: a structurally-found
+/// byte-identical pair rendered `embedding_cos = 0.0` — indistinguishable
+/// from "measured and found unrelated" — and a cross-file pair LSH also
+/// surfaced lost the cosine that keeps it out of `lsh_only`, hiding a
+/// cluster that the very same pair, discovered by ANN alone, showed.
+///
+/// Pairs new to the map enter at structural `0.0`; existing structural
+/// scores are never overwritten, since structural evidence dominates when
+/// both fire. [`record_cosine`] keeps the maximum, so re-entry is
+/// idempotent and order-independent.
 fn add_embedding_pairs(
     embedding_pairs: &[EmbeddingPair],
-    fingerprints: &[Fingerprint],
     scores: &mut HashMap<(usize, usize), f64>,
     cosines: &mut HashMap<(usize, usize), f64>,
 ) {
     for pair in embedding_pairs {
-        add_embedding_pair(pair, fingerprints, scores, cosines);
+        let key = order(pair.left, pair.right);
+        let _structural = scores.entry(key).or_insert(0.0_f64);
+        record_cosine(key, pair.cosine, cosines);
     }
 }
 
-/// Merges one embedding pair into the candidate-score maps.
-fn add_embedding_pair(
-    pair: &EmbeddingPair,
-    fingerprints: &[Fingerprint],
-    scores: &mut HashMap<(usize, usize), f64>,
-    cosines: &mut HashMap<(usize, usize), f64>,
-) {
-    let key = order(pair.left, pair.right);
-    match scores.get(&key).copied() {
-        Some(structural) if structural > 0.0 => {}
-        Some(_) if same_file_pair(key, fingerprints) => record_cosine(key, pair.cosine, cosines),
-        Some(_) => {}
-        None => {
-            let _previous = scores.insert(key, 0.0_f64);
-            record_cosine(key, pair.cosine, cosines);
-        }
-    }
-}
-
-/// Returns true when both endpoints belong to the same source file.
-fn same_file_pair(key: (usize, usize), fingerprints: &[Fingerprint]) -> bool {
-    let Some(left) = fingerprints.get(key.0) else {
-        return false;
-    };
-    let Some(right) = fingerprints.get(key.1) else {
-        return false;
-    };
-    left.file_id == right.file_id
-}
-
-/// Keeps the highest cosine seen for a non-structural pair.
+/// Keeps the highest cosine seen for a pair.
 fn record_cosine(key: (usize, usize), cosine: f64, cosines: &mut HashMap<(usize, usize), f64>) {
     let _entry = cosines
         .entry(key)
@@ -331,17 +315,21 @@ fn finalise_pairs(
 ) -> Vec<CandidatePair> {
     let mut pairs: Vec<CandidatePair> = scores
         .into_iter()
-        .map(|((left, right), structural)| CandidatePair {
-            left,
-            right,
-            min_node_count: min_node_count(fingerprints, left, right),
-            lsh_only_min_jaccard: LSH_ONLY_MIN_JACCARD,
-            fused_min_score: FUSED_THRESHOLD,
-            score: PairScore {
-                structural,
-                token_jaccard: jaccard_for(signatures, left, right),
-                embedding_cos: cosines.get(&(left, right)).copied().unwrap_or(0.0),
-            },
+        .map(|((left, right), structural)| {
+            let endpoint_node_counts = endpoint_node_counts(fingerprints, left, right);
+            CandidatePair {
+                left,
+                right,
+                endpoint_node_counts,
+                lsh_only_node_floor: endpoint_node_counts.0,
+                lsh_only_min_jaccard: LSH_ONLY_MIN_JACCARD,
+                fused_min_score: FUSED_THRESHOLD,
+                score: PairScore {
+                    structural,
+                    token_jaccard: jaccard_for(signatures, left, right),
+                    embedding_cos: cosines.get(&(left, right)).copied().unwrap_or(0.0),
+                },
+            }
         })
         .filter(|pair| candidate_ranges_are_valid(pair, fingerprints))
         .collect();
@@ -363,17 +351,17 @@ fn candidate_ranges_are_valid(pair: &CandidatePair, fingerprints: &[Fingerprint]
     left.file_id != right.file_id || !ranges_overlap(left, right)
 }
 
-/// Returns the smaller endpoint node count. Defaults to 0 when either
-/// index is out of bounds — an impossible state in the current pipeline,
+/// Returns both endpoint node counts as `(smaller, larger)`. Defaults a
+/// missing endpoint to 0 — an impossible state in the current pipeline,
 /// but keeps the helper total.
-fn min_node_count(fingerprints: &[Fingerprint], left: usize, right: usize) -> usize {
+fn endpoint_node_counts(fingerprints: &[Fingerprint], left: usize, right: usize) -> (usize, usize) {
     let left_count = fingerprints
         .get(left)
         .map_or(0, |fingerprint| fingerprint.node_count);
     let right_count = fingerprints
         .get(right)
         .map_or(0, |fingerprint| fingerprint.node_count);
-    left_count.min(right_count)
+    (left_count.min(right_count), left_count.max(right_count))
 }
 
 /// Looks up both signatures and returns their estimated Jaccard. Returns

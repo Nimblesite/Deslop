@@ -11,7 +11,9 @@
 
 #![allow(dead_code)]
 
+pub(crate) mod census;
 pub(crate) mod clusters;
+pub(crate) mod merge;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
@@ -344,8 +346,7 @@ impl ReportFixture {
             members,
             weight: 10_000.0,
             signals,
-            content_agreement: 1.0,
-            literal_fraction: 0.0,
+            content: deslop_core::content::ContentEvidence::unmeasured(),
         }
     }
 

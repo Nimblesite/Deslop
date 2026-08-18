@@ -4,7 +4,7 @@
 //! this module adds B (single-entry/single-exit; its
 //! declared-inside-read-after dataflow half is the shared
 //! [`read_after_check`] in `read_after`, which extract rule 6 also
-//! runs — issue #278), the Baker rename lifting (gate step 3), C's
+//! runs —), the Baker rename lifting (gate step 3), C's
 //! shadow-free naming inputs, and D's value-parameter typing. Any
 //! undecidable check refuses — a false "unsafe" beats a false "safe"
 //! (Opdyke bias, [AUTOFIX-ZERO-RISK]).
@@ -130,7 +130,7 @@ fn transfer_is_contained(node: Node<'_>, span: ByteRange, containers: &[&str]) -
     false
 }
 
-/// Extract rule 7's merge counterpart (issue #280): no *context* free
+/// Extract rule 7's merge counterpart: no *context* free
 /// variable — identical at every site, so never a hole — may be
 /// written inside its site's span. Check D covers written holes; this
 /// covers the parameters `free_value_parameters` would create.

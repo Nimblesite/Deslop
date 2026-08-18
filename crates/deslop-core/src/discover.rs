@@ -37,7 +37,7 @@ const IGNORE_FILE_NAMES: [&str; 2] = [".gitignore", ".ignore"];
 ///
 /// Without this, discovery's file set was a strict *subset* of what the live
 /// path admitted, and every ignored file touched by a build was ingested into
-/// the corpus permanently (#287).
+/// the corpus permanently.
 #[derive(Debug)]
 pub struct IgnoreMatcher {
     /// Workspace root; hidden-component checks are relative to it so a
@@ -143,7 +143,7 @@ fn has_ignore_file_name(path: &Path) -> bool {
 /// compiles: `.gitignore` / `.ignore` anywhere in the tree, or the
 /// repository's `.git/info/exclude`. An edit to any of them re-scopes
 /// what the live gate admits, so the watcher and the session treat them
-/// like watched config paths ([LIVE-WATCHER], #287).
+/// like watched config paths ([LIVE-WATCHER]).
 #[must_use]
 pub fn is_ignore_rule_path(path: &Path) -> bool {
     has_ignore_file_name(path) || path.ends_with(Path::new(".git/info/exclude"))

@@ -6,7 +6,7 @@
 //     **{slug}** × count  /  Canonical: `path`  /  links + Copy for AI
 //   The compact form omits the category label — the diagnostic already shows it.
 // Slug is the first 7 hex chars of cluster.id — stable across runs.
-// See docs/plans/cluster-slug-vs-rank.md.
+// Rank must never take the id slot: Deslop#149, Deslop#349.
 
 import * as vscode from "vscode";
 

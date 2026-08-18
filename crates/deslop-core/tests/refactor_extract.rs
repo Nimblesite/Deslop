@@ -20,8 +20,10 @@ use deslop_core::{
 };
 
 use crate::common::{
-    analyse_refactor_fixture as analyse, clusters::needle_cluster_plan, fixture,
-    refactor_golden as golden,
+    analyse_refactor_fixture as analyse,
+    census::{assert_body_deduplicated, statement_count},
+    clusters::{assert_planned_from_enclosing_view, needle_cluster_plan},
+    fixture, refactor_golden as golden,
 };
 
 /// Returns the best-ranked cluster for which the verbatim extract plan
@@ -56,6 +58,12 @@ struct ExtractCase {
     name_prefix: &'static str,
     /// Golden post-apply buffer shared with the LSP E2E suite.
     golden: &'static str,
+    /// Every statement of the duplicated body, as whole syntax nodes.
+    /// Twice in the source, exactly once after the refactor — the check
+    /// that proves the plan covered the whole duplication and not a
+    /// nested slice of it, which is what the golden's embedded cluster
+    /// id records.
+    duplicated_statements: &'static [&'static str],
 }
 
 /// Runs one language's end-to-end scenario: pipeline → plan →
@@ -66,6 +74,7 @@ fn assert_extract_case(case: &ExtractCase) -> Result<()> {
     let report = analyse(&root)?;
     let (cluster, plan) = first_extract_plan(&report, &source, case.file)?;
 
+    assert_planned_from_enclosing_view(&report, &cluster)?;
     ensure!(
         ["identical", "nearly_identical", "structural_only"].contains(&cluster.bucket.as_str()),
         "extract plans must come from exact-structural buckets \
@@ -102,6 +111,12 @@ fn assert_extract_case(case: &ExtractCase) -> Result<()> {
     );
 
     let applied = String::from_utf8(plan.apply_to(&source)).context("applied buffer utf8")?;
+    assert_body_deduplicated(
+        std::str::from_utf8(&source).context("fixture source utf8")?,
+        &applied,
+        case.duplicated_statements,
+        case.file,
+    )?;
     let golden_path = golden(case.golden);
     if std::env::var_os("DESLOP_BLESS").is_some() {
         fs::write(&golden_path, &applied).context("blessing golden")?;
@@ -116,6 +131,18 @@ fn assert_extract_case(case: &ExtractCase) -> Result<()> {
     Ok(())
 }
 
+/// Every statement of the body duplicated across `TotalWithTax` and
+/// `SubtotalWithTax` — shared with the nested-view control below.
+const INVOICE_MATH_BODY: &[&str] = &[
+    "var total = 0;",
+    "foreach (var amount in amounts) { var taxed = amount * taxRate / 100; \
+     total += amount + taxed; }",
+    "var taxed = amount * taxRate / 100;",
+    "total += amount + taxed;",
+    "if (total < 0) { total = 0; }",
+    "return total;",
+];
+
 /// [AUTOFIX-EXTRACT-EMITTER-CSHARP]: `private static` helper at the top
 /// of the enclosing class, `object` placeholders, both bodies rewritten.
 #[test]
@@ -126,7 +153,78 @@ fn csharp_type1_cluster_extracts_to_golden() -> Result<()> {
         free_variables: &["amounts", "taxRate"],
         name_prefix: "ExtractedFromCluster_",
         golden: "InvoiceMath.applied.cs",
+        duplicated_statements: INVOICE_MATH_BODY,
     })
+}
+
+/// Every statement of the loop duplicated across `TAX_TABLE`'s two
+/// methods — the census for the enclosure control below.
+const TAX_TABLE_BODY: &[&str] = &[
+    "foreach (var amount in amounts) { var taxed = amount * taxRate / 100; \
+     lines.Add(amount + taxed); }",
+    "var taxed = amount * taxRate / 100;",
+    "lines.Add(amount + taxed);",
+];
+
+/// Applies the plan computed over `needle` in `TAX_TABLE` and returns
+/// the resulting buffer.
+fn tax_table_applied(needle: &str) -> Result<String> {
+    let plan = needle_cluster_plan(TAX_TABLE, needle, "TaxTable.cs")?
+        .context("the needle must produce an applicable plan")?;
+    ensure!(
+        plan.edits.len() == 3,
+        "one insertion plus two call-site rewrites expected, got {}",
+        plan.edits.len()
+    );
+    String::from_utf8(plan.apply_to(TAX_TABLE.as_bytes())).context("applied buffer utf8")
+}
+
+/// Control for [PIPELINE-CLUSTER-EXACT]: the whole-body census has to
+/// discriminate, or every golden above is self-certifying.
+///
+/// `TAX_TABLE` carries both views of one duplication — the whole
+/// duplicated `foreach` loop, and the two-statement window nested
+/// inside it. Both compute a plan, both apply cleanly, both name their
+/// helper after their own cluster id, and both produce a buffer that is
+/// internally consistent in every way the other assertions can see.
+/// Only the statement census separates them, so this test watches it
+/// accept the enclosing view and reject the nested one.
+#[test]
+fn the_whole_body_census_separates_the_enclosing_view_from_a_nested_one() -> Result<()> {
+    let nested = tax_table_applied(
+        "var taxed = amount * taxRate / 100;\n            lines.Add(amount + taxed);",
+    )?;
+    ensure!(
+        statement_count(
+            &nested,
+            "var taxed = amount * taxRate / 100;",
+            "TaxTable.cs"
+        )? == 1,
+        "the nested window itself is deduplicated — that is what makes this \
+         plan look correct to every other assertion"
+    );
+    ensure!(
+        statement_count(
+            &nested,
+            "foreach (var amount in amounts) { \
+             ExtractedFromCluster_abcdef(amount, taxRate, lines); }",
+            "TaxTable.cs",
+        )? == 2,
+        "the loop enclosing the window survives duplicated, now calling the \
+         helper the nested plan extracted"
+    );
+    ensure!(
+        assert_body_deduplicated(TAX_TABLE, &nested, TAX_TABLE_BODY, "TaxTable.cs").is_err(),
+        "the census must reject a plan computed from a nested view"
+    );
+
+    let enclosing = tax_table_applied(
+        "foreach (var amount in amounts)\n        {\n            \
+         var taxed = amount * taxRate / 100;\n            \
+         lines.Add(amount + taxed);\n        }",
+    )?;
+    assert_body_deduplicated(TAX_TABLE, &enclosing, TAX_TABLE_BODY, "TaxTable.cs")?;
+    Ok(())
 }
 
 /// [AUTOFIX-EXTRACT-EMITTER-RUST]: module-scope free function above the
@@ -139,6 +237,14 @@ fn rust_type1_cluster_extracts_to_golden() -> Result<()> {
         free_variables: &["amounts", "tax_rate"],
         name_prefix: "extracted_from_cluster_",
         golden: "metrics.applied.rs",
+        duplicated_statements: &[
+            "let mut total = 0;",
+            "for amount in amounts { let taxed = amount * tax_rate / 100; \
+             total += amount + taxed; }",
+            "let taxed = amount * tax_rate / 100;",
+            "total += amount + taxed;",
+            "if total > 10_000 { total = 10_000; }",
+        ],
     })
 }
 
@@ -152,6 +258,15 @@ fn python_type1_cluster_extracts_to_golden() -> Result<()> {
         free_variables: &["amounts", "tax_rate"],
         name_prefix: "extracted_from_cluster_",
         golden: "metrics.applied.py",
+        duplicated_statements: &[
+            "total = 0",
+            "for amount in amounts: taxed = amount * tax_rate // 100 \
+             total = total + amount + taxed",
+            "taxed = amount * tax_rate // 100",
+            "total = total + amount + taxed",
+            "if total > 10000: total = 10000",
+            "return total",
+        ],
     })
 }
 
@@ -167,6 +282,13 @@ fn csharp_lambda_and_member_access_free_vars() -> Result<()> {
         free_variables: &["orders", "prefix", "Console"],
         name_prefix: "ExtractedFromCluster_",
         golden: "OrderFormatter.applied.cs",
+        duplicated_statements: &[
+            "var lines = orders.Select(order => { return prefix + order.Name; }).ToList();",
+            "foreach (var line in lines) { Console.WriteLine(line); }",
+            "Console.WriteLine(line);",
+            "if (int.TryParse(prefix, out var code)) { Console.WriteLine(code); }",
+            "Console.WriteLine(code);",
+        ],
     })
 }
 
@@ -182,6 +304,13 @@ fn rust_closure_match_and_attribute_free_vars() -> Result<()> {
         free_variables: &["items", "label"],
         name_prefix: "extracted_from_cluster_",
         golden: "recorder.applied.rs",
+        duplicated_statements: &[
+            "let mapped: Vec<String> = items.iter().map(|item| format!(\"{label}: {item}\")).collect();",
+            "match mapped.first() { Some(first) => log_line(first), None => log_line(label), }",
+            "Some(first) => log_line(first),",
+            "None => log_line(label),",
+            "log_line(label);",
+        ],
     })
 }
 
@@ -197,6 +326,11 @@ fn python_module_level_run_extracts_to_golden() -> Result<()> {
         free_variables: &["values", "BASELINE", "sum", "math", "len", "print"],
         name_prefix: "extracted_from_cluster_",
         golden: "pipeline.applied.py",
+        duplicated_statements: &[
+            "scaled = [value * BASELINE for value in values]",
+            "report = {\"total\": sum(scaled), \"sqrt\": math.sqrt(len(scaled)), \"count\": len(values)}",
+            "print(report)",
+        ],
     })
 }
 

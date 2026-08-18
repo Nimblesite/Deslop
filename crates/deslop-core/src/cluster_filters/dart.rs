@@ -8,7 +8,7 @@ use super::{
 };
 
 /// Superclass markers of Flutter's mandated widget-declaration scaffold
-/// ([CLONE-NOISE-DART-WIDGET-SCAFFOLD], #331). Every `StatefulWidget`
+/// ([CLONE-NOISE-DART-WIDGET-SCAFFOLD]). Every `StatefulWidget`
 /// must declare its own `createState`, every `StatelessWidget` its own
 /// `build`, and every state class extends `State<T>` — none of it can
 /// be extracted or merged, so a cluster of such declarations must never
@@ -89,9 +89,9 @@ fn is_contained_widget_scaffold_class(node: Node<'_>, snippet: &Snippet<'_>) -> 
 /// const data registries such as icon tables, colour palettes, and design
 /// tokens (`static const Foo NAME = Foo(<distinct values>);` repeated for
 /// hundreds of entries) cluster via sibling-window fingerprints spanning
-/// several consecutive declarations, which are un-refactorable data (#169).
+/// several consecutive declarations, which are un-refactorable data.
 ///
-/// Guarded the same way as the Python module-preamble filter (#104): only
+/// Guarded the same way as the Python module-preamble filter: only
 /// suppressed when at least two members differ in raw bytes, so a *verbatim*
 /// copy-pasted field block still surfaces as genuine duplication rather than
 /// being mistaken for a registry of distinct entries.
@@ -133,7 +133,7 @@ fn covers_only_field_declarations(snippet: &Snippet<'_>) -> bool {
 /// nest a `function_body`; a field initialised by a closure/lambda nests a
 /// `function_expression` (Dart emits no `function_body` for `=> expr` or
 /// `(x) { ... }` initialisers). Excluding both keeps logic-bearing fields
-/// clustering instead of being mistaken for data (#169 precision).
+/// clustering instead of being mistaken for data.
 ///
 /// Deliberate boundary: a field initialised by a *call* —
 /// `IconData(0x...)`, `Color(0xFF...)`, `compute(a, b)` — is treated as

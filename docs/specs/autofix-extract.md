@@ -179,8 +179,6 @@ The user is told upfront on the action title's caveat line and in this spec sect
 - Call-target identifiers (`Log(x)`) are assumed to resolve from the helper's destination in C# and Rust — same class / same module by the preconditions — so they are not parameterised; a local delegate or closure in call position needs a manual parameter. Python keeps call targets as parameters (no compiler backstop, so behaviour preservation wins over cosmetics).
 - Rust implicit format-args (`format!("{x}")`) capture locals invisibly to the syntactic walk — a variable used *only* inside a format string is missed as a parameter and surfaces as a compile error.
 
-The action is **never the only suggested fix** for a duplicate. The diagnostic, the hover, and the existing manual workflow remain. This is a power-user shortcut, not a replacement for review.
-
 ## [AUTOFIX-EXTRACT-TESTING] E2E coverage
 
 Coarse end-to-end only, per CLAUDE.md. `crates/deslop-lsp/tests/code_action.rs` spawns the real LSP binary and:

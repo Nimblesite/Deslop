@@ -29,7 +29,7 @@ fn low_structure_token_and_embedding_noise_stays_out_of_ranked_report() -> Resul
     assert!(
         clusters
             .iter()
-            .all(|cluster| cluster.signals.fused() >= 0.85),
+            .all(|cluster| cluster.signals.bounded_fused() >= 0.85),
         "each fixture cluster models a pair that clears the current fused gate"
     );
     assert_eq!(

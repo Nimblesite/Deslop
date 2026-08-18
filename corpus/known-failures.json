@@ -21,18 +21,10 @@
     ],
     "fsharp": [
       "memory"
-    ],
-    "nest": [
-      "determinism"
-    ],
-    "jellyfin": [
-      "determinism"
     ]
   },
   "_issues": {
     "flutter/memory": 166,
-    "fsharp/memory": 166,
-    "nest/determinism": 301,
-    "jellyfin/determinism": 301
+    "fsharp/memory": 166
   }
 }

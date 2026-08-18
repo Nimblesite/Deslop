@@ -1,5 +1,5 @@
 //! Rule 6's read-after-span dataflow ([AUTOFIX-EXTRACT-PRECONDITIONS],
-//! issue #278) — also [AUTOFIX-MERGE-SAFETY] check B's dataflow half.
+//!) — also [AUTOFIX-MERGE-SAFETY] check B's dataflow half.
 //!
 //! No name bound inside an occurrence's effective span may be read
 //! after that span at *runtime*: positionally within the enclosing
@@ -22,7 +22,7 @@ use crate::{
     },
 };
 
-/// Rule 6 ([AUTOFIX-EXTRACT-PRECONDITIONS], issue #278) — also
+/// Rule 6 ([AUTOFIX-EXTRACT-PRECONDITIONS]) — also
 /// [AUTOFIX-MERGE-SAFETY] check B's dataflow half: no name bound
 /// inside any occurrence's span may be read after that span within its
 /// enclosing function (or, for module-top-level occurrences, the rest
@@ -56,7 +56,7 @@ pub(crate) fn read_after_check(
     Ok(())
 }
 
-/// Rule 7 ([AUTOFIX-EXTRACT-PRECONDITIONS], issue #280): no free
+/// Rule 7 ([AUTOFIX-EXTRACT-PRECONDITIONS]): no free
 /// variable of the span may be a write target inside it — the helper
 /// would mutate its own parameter copy and the caller's variable would
 /// silently keep its old value, the mutation loss the type-safety

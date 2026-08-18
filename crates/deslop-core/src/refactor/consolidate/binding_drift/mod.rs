@@ -1,4 +1,4 @@
-//! Binding-drift gate ([AUTOFIX-CONSOLIDATE-GATE] v1.1, issue #279).
+//! Binding-drift gate ([AUTOFIX-CONSOLIDATE-GATE] v1.1).
 //!
 //! Byte-equivalence of the moved definitions is not sufficient: a free
 //! name inside a definition may resolve to a module-local item that
@@ -8,7 +8,7 @@
 //! `lookup(ref)_after == lookup(ref)_before`.
 //!
 //! The gate **proves stability or refuses** — it never assumes it
-//! ([AUTOFIX-ZERO-RISK], hardened after the issue #279 review):
+//! ([AUTOFIX-ZERO-RISK], hardened after the review):
 //!
 //! - free value names and type names must be top-level items defined
 //!   byte-equivalently in every occurrence file (checked

@@ -92,8 +92,20 @@ impl EmbeddingCache {
 /// Stable BLAKE3 digest of `content` rendered as lowercase hex.
 #[must_use]
 pub fn content_hash(content: &str) -> String {
+    bytes_hash(content.as_bytes())
+}
+
+/// Stable BLAKE3 digest of `bytes` rendered as lowercase hex.
+///
+/// The injective form of [`content_hash`], for callers holding raw
+/// bytes rather than a decoded `&str`. Decoding to reach `content_hash`
+/// is never correct for a cache key: `String::from_utf8_lossy` collapses
+/// every maximal invalid subsequence to one U+FFFD, so byte-distinct
+/// inputs would collide on one entry (see `fpcache.rs`).
+#[must_use]
+pub fn bytes_hash(bytes: &[u8]) -> String {
     let mut hasher = Hasher::new();
-    let _ = hasher.update(content.as_bytes());
+    let _ = hasher.update(bytes);
     let digest = hasher.finalize();
     hex(digest.as_bytes())
 }

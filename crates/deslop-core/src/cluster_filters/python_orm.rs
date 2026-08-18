@@ -2,9 +2,9 @@
 //! every file under the 500-LOC budget.
 //!
 //! Issues addressed (see parent `mod.rs` header):
-//! - **#100** [CLONE-NOISE-PY-KWARGS-CTOR] — ORM/dataclass/Pydantic
+//! - [CLONE-NOISE-PY-KWARGS-CTOR] — ORM/dataclass/Pydantic
 //!   kwargs-only constructor calls.
-//! - **#105** [CLONE-NOISE-PY-MAPPED-COLUMN] — `SQLAlchemy`
+//! - [CLONE-NOISE-PY-MAPPED-COLUMN] — `SQLAlchemy`
 //!   `Mapped[T] = mapped_column(...)` declarations.
 
 use std::collections::BTreeSet;
@@ -17,7 +17,7 @@ use super::{
 };
 use crate::{ast::ByteRange, state::FileId};
 
-/// Detects **issue #100**: ORM / dataclass / Pydantic constructor calls
+/// Detects ****: ORM / dataclass / Pydantic constructor calls
 /// of the shape `ModelName(field1=val, field2=val, ...)`. Two members
 /// from the same cluster passing different field-name sets cannot share
 /// a refactor: each model declares its own required columns. The filter
@@ -138,7 +138,7 @@ fn kwargs_ctor_shapes_differ(shapes: &[KwargsCtorShape]) -> bool {
     shapes.iter().any(|shape| shape.keywords != first.keywords)
 }
 
-/// Detects **issue #105**: `SQLAlchemy` `name: Mapped[T] = mapped_column(...)`
+/// Detects ****: `SQLAlchemy` `name: Mapped[T] = mapped_column(...)`
 /// declarations. Each ORM model declares its own columns, so members
 /// sharing the same token alphabet (`Mapped`, `mapped_column`,
 /// `ForeignKey`, `UUID`, ...) cluster lexically even though their

@@ -59,12 +59,12 @@ Deslop 遵循代码克隆文献中通用的标准克隆分类法：
 | In Defense of MinHash Over SimHash (Shrivastava & Li 2014) | 对二值化特征使用 MinHash 而非 SimHash。 | ✅ 选用 MinHash；未使用 SimHash 和 Winnowing |
 | 神经语义克隆检测 (CodeBERT、GraphCodeBERT、UniXCoder) | 将嵌入用作 Type-4 克隆的召回层。 | ✅ `crates/deslop-core/src/embedding/provider.rs` 中的 `EmbeddingProvider` trait；`embedding/ollama.rs` 中的 Ollama provider；默认模型 `nomic-embed-text` |
 | [SSCD (Ahmed et al., Wiley 2024) — 规模化的 BERT + ANN](https://onlinelibrary.wiley.com/doi/full/10.1002/spe.3355) | 将基于 BERT 式嵌入的 HNSW ANN 作为 Type-3/4 召回路径。 | ✅ 带确定性种子的 `instant-distance` HNSW、top-k 检索、余弦阈值 0.80：`crates/deslop-core/src/embedding/pairs.rs` |
-| [Ensemble-LLM 2025 (arXiv 2510.15480) — max/sum 融合](https://arxiv.org/abs/2510.15480) | 平均会有害；融合信号时 max 与 sum 有帮助。 | ✅ `crates/deslop-core/src/pair.rs::PairScore::fused` 中三信号的 max 归一化求和，钳制到 `[0,1]`。多模型嵌入集成**尚未**实现（当前为单一嵌入模型；provider trait 保留了扩展可能） |
+| [Ensemble-LLM 2025 (arXiv 2510.15480) — max/sum 融合](https://arxiv.org/abs/2510.15480) | 平均会有害；融合信号时 max 与 sum 有帮助。 | ✅ `crates/deslop-core/src/pair.rs::PairScore::bounded_fused` 中三信号的有界最大值——取最强的单一维度，位于 `[0,1]`。论文的求和分支假定各成员相互独立；结构与词法两个维度是同一棵归一化语法树的两种视图，因此求和分支已被移除（[FUSION-STRATEGY-BOUNDED-MAX]）。多模型嵌入集成**尚未**实现（当前为单一嵌入模型；provider trait 保留了扩展可能） |
 | 混合克隆检测（没有纯 RAG 论文推荐使用纯嵌入） | 对结构、token 与嵌入配对取并集，融合，聚簇。 | ✅ `crates/deslop-core/src/pair.rs::candidate_pairs`，`crates/deslop-core/src/cluster.rs` 中的传递闭包 |
 | 样板过滤（成熟工具的惯例） | 在指纹化前丢弃 import / namespace / decorator 克隆；以低噪声提示的形式重新呈现。 | ✅ `crates/deslop-core/src/boilerplate.rs` 与 `report_boilerplate.rs` |
 | HyClone 2025 (arXiv 2508.01357) — 执行验证的 Type-4 | 生成测试输入并验证语义等价的配对。 | 🚫 未实现；原论文中针对 Python |
 | Rator 2025 (Springer) — 节点自由度编码 | 通过节点自由度编码子树；细粒度 Top-2/Top-3 定位。 | 🚫 未实现；LSH 已覆盖我们当前的召回预算 |
-| Autofix `refactor.extract`（LSP 代码动作） | 将 Type-1 簇重写为单一的共享方法。 | ⏳ 在 [`docs/plans/autofix-extract-method-plan.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/plans/autofix-extract-method-plan.md) 中跟踪；受阻于 Type-1/Type-2 分桶拆分 (gh #42) |
+| Autofix `refactor.extract`（LSP 代码动作） | 将 Type-1 簇重写为单一的共享方法。 | ✅ 已交付 — 规范见 [`docs/specs/autofix-extract.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/autofix-extract.md) |
 | AI 辅助抽取（MCP `extract-method-plan` / `-apply`） | 在智能体协助下进行 Type-2/3 抽取。 | ⏳ 在 [`docs/plans/autofix-extract-ai-plan.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/plans/autofix-extract-ai-plan.md) 中跟踪；受阻于 Type-1 路径的落地 |
 
 ## 已实现的流水线
@@ -153,7 +153,7 @@ import 及类前导结构会在发出克隆指纹之前被抑制。该过滤器�
 - `embedding_cos`，
 - `fused`。
 
-`PairScore::fused` 对这三个信号求和并将结果钳制到 `[0.0, 1.0]`。`FUSED_THRESHOLD` 为 `0.85`。仅 LSH 配对有额外的守卫：`token_jaccard >= 0.90` 且两个端点都必须至少有 40 个 AST 节点。
+`PairScore::bounded_fused` 取这三个信号中最强的单一维度，位于 `[0.0, 1.0]`；它从不求和，也不取平均。`FUSED_THRESHOLD` 为 `0.85`。仅 LSH 配对有额外的守卫：`token_jaccard >= 0.90` 且两个端点都必须至少有 40 个 AST 节点。
 
 跨语言比较默认关闭。`crates/deslop-core/src/config.rs` 将 `allow_cross_language_comparison` 初始化为 `false`，且 `crates/deslop-core/src/pair.rs::candidate_pairs_for_language_policy` 会丢弃跨语言配对，除非配置启用它们。
 
@@ -206,7 +206,7 @@ JSON 报告是规范输出。文本和 HTML 渲染器是基于该报告的派生
 | Type-3 召回使用兄弟窗口和 MinHash LSH。 | `crates/deslop-core/src/sibling.rs`、`crates/deslop-core/src/tokens.rs`、`crates/deslop-core/src/lsh.rs` | `cargo test -p deslop --test sibling_ranking` |
 | 嵌入是可选的，且在 CLI 中默认关闭。 | `crates/deslop/src/main.rs`、`crates/deslop-core/src/pipeline/embedding_pass.rs` | `cargo test -p deslop --test cli default_run_records_embeddings_off_provenance` |
 | 嵌入邻居按 HNSW 余弦阈值过滤。 | `crates/deslop-core/src/embedding/pairs.rs` | `cargo test -p deslop-core --test embedding_pairs` |
-| 融合评分是有界的。 | `crates/deslop-core/src/pair.rs::PairScore::fused` | `cargo test -p deslop --test fused_score_bounds` |
+| 融合评分是有界的最强维度。 | `crates/deslop-core/src/pair.rs::PairScore::bounded_fused` | `cargo test -p deslop --test fused_score_bounds` |
 | 除非配置，否则跨语言比较被禁用。 | `crates/deslop-core/src/config.rs`、`crates/deslop-core/src/pair.rs::candidate_pairs_for_language_policy` | `cargo test -p deslop --test cross_language` |
 | 实时/LSP 路径在 `PipelineSession` 之上使用 `LiveService`。 | `crates/deslop-core/src/live/`、`crates/deslop-lsp/src/backend.rs` | `cargo test -p deslop-lsp --test notifications` |
 | MCP 工具是带根目录安全检查的 stdio JSON-RPC 包装器。 | `crates/deslop-mcp/src/server.rs`、`crates/deslop-mcp/src/tools/mod.rs`、`crates/deslop-mcp/src/safety.rs` | `cargo test -p deslop-mcp --test cli` |

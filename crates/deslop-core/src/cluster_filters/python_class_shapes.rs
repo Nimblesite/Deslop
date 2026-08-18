@@ -20,7 +20,7 @@ use super::{
 };
 use crate::ast::ByteRange;
 
-/// Detects **issue #115a**: every cluster occurrence is a Python
+/// Detects **a**: every cluster occurrence is a Python
 /// `class X(StrEnum)` (or `class X(str, Enum)`) declaration whose body
 /// consists only of a docstring and member assignments. Returning true
 /// drops the cluster — distinct enum vocabularies are not duplication.
@@ -142,7 +142,7 @@ fn expression_statement_inner_kind(node: Node<'_>) -> Option<&'static str> {
     Some(inner.kind())
 }
 
-/// Detects **issue #115b**: a cluster of Pydantic `BaseModel` subclasses
+/// Detects **b**: a cluster of Pydantic `BaseModel` subclasses
 /// where every member is a class whose every field is annotated `T | None`
 /// (or `Optional[T]`) with a `None` default. Returns true to drop the
 /// cluster — the `XUpdate` mirror is mandated by Pydantic's PATCH

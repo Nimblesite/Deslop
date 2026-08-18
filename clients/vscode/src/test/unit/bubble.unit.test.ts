@@ -199,7 +199,7 @@ suite("bubble rendering helpers", () => {
     assert.match(parts.hover.value, /^\*\*abcdef0 /);
   });
 
-  // Issue #46 follow-up; tracked in docs/plans/cluster-slug-vs-rank.md.
+  // Issue #46 follow-up; same defect class as Deslop#149 / Deslop#349.
   // The compact hover (squiggle, alongside diagnostic) was rendering
   // `**#103 **× 3` — rank used as stable id, and a trailing space inside
   // the bold delimiters made markdown leak literal asterisks. Headlines

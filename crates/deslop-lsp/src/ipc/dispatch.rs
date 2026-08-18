@@ -123,7 +123,7 @@ fn dispatch_list_models(service: &Arc<LiveService>, handle: &Handle) -> Result<V
 ///
 /// The VSIX reaches this swap through the LSP custom method; MCP clients
 /// reach it here. Without this arm the MCP backend can only ever be told
-/// "method not found" ([Deslop#286]).
+/// "method not found".
 fn dispatch_set_model(
     params: &Value,
     service: &Arc<LiveService>,

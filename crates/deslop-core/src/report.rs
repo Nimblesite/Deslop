@@ -23,6 +23,7 @@ use crate::{
     report_boilerplate::build_boilerplate_hints,
     report_metrics::{compute_repo_metrics, AnalysedLines, MetricsInputs},
     report_render::cluster_to_report,
+    report_weight::reweigh_by_visible_occurrences,
     state::{FileId, FileRegistry},
 };
 
@@ -106,7 +107,7 @@ impl From<PairScore> for ReportSignals {
             structural: score.structural,
             token_jaccard: score.token_jaccard,
             embedding_cos: score.embedding_cos,
-            fused: score.fused(),
+            fused: score.bounded_fused(),
         }
     }
 }
@@ -243,7 +244,7 @@ fn materialise_cluster<S: BuildHasher>(
     );
     let category = classify_clone_category(
         &cluster.members,
-        cluster.literal_fraction,
+        cluster.content.literal_fraction,
         inputs.sources,
         inputs.file_languages,
         parse_cache,
@@ -258,8 +259,43 @@ fn materialise_cluster<S: BuildHasher>(
         policy.drops_structural_only() && classify(&report_cluster) == ClusterKind::StructuralOnly;
     let hidden = dropped_as_data
         || dropped_as_structural_only
-        || cluster_is_hidden(cluster, &report_cluster, inputs, parse_cache);
+        || cluster_is_hidden(cluster, &report_cluster, inputs, parse_cache, category);
+    if hidden {
+        log_hidden_cluster(
+            &report_cluster,
+            cluster.content,
+            dropped_as_data,
+            dropped_as_structural_only,
+        );
+    }
     (report_cluster, hidden)
+}
+
+/// Records why a cluster left the visible report. A duplicate that
+/// silently disappears is the hardest defect class to notice, so the
+/// routing decision — signals and measured content evidence included —
+/// is traceable without re-running the pipeline.
+fn log_hidden_cluster(
+    cluster: &ReportCluster,
+    content: crate::content::ContentEvidence,
+    as_data: bool,
+    as_structural_only: bool,
+) {
+    tracing::debug!(
+        cluster = cluster.id.as_str(),
+        bucket = cluster.bucket.as_str(),
+        category = cluster.category.as_str(),
+        occurrences = cluster.occurrences.len(),
+        structural = cluster.signals.structural,
+        token_jaccard = cluster.signals.token_jaccard,
+        embedding_cos = cluster.signals.embedding_cos,
+        content_agreement = content.agreement,
+        content_rename_consistency = content.rename_consistency,
+        content_substance_varies = content.substance_varies,
+        dropped_as_data = as_data,
+        dropped_as_structural_only = as_structural_only,
+        "cluster hidden from report",
+    );
 }
 
 /// Decides whether a cluster must be dropped from the ranked report.
@@ -283,6 +319,7 @@ fn cluster_is_hidden<S: BuildHasher>(
     report_cluster: &ReportCluster,
     inputs: &ReportInputs<'_, S>,
     parse_cache: &ParseCache,
+    category: CloneCategory,
 ) -> bool {
     let occurrences_all_hidden = !report_cluster.occurrences.is_empty()
         && report_cluster.occurrences.iter().all(|occ| occ.hidden);
@@ -309,110 +346,22 @@ fn cluster_is_hidden<S: BuildHasher>(
             inputs.file_languages,
             parse_cache,
         );
-    // Issue #197: a single-file `structural_only` family of sibling
-    // declarations (REST CRUD / settings / builder methods) is the same
-    // evidence-free noise as the cross-file #134 scaffolding. The AST
-    // check confines this to declaration families, so worth-extracting
-    // statement-window clones stay visible (demoted, not hidden, per
-    // [RANK-STRUCTURAL-ONLY]).
+    // [RANK-STRUCTURAL-ONLY] A single-file `structural_only` family of
+    // sibling declarations (REST CRUD / settings / builder methods) is the
+    // same evidence-free noise as the cross-file scaffolding in
+    // [CLONE-NOISE-SCAFFOLDING]. The content check confines this to members
+    // that provably differ in substance, so worth-extracting clones — a
+    // consistent rename over preserved literals — stay visible (demoted,
+    // not hidden).
     let single_file_declaration_family = kind == ClusterKind::StructuralOnly
         && is_single_file_declaration_family(
-            &cluster.members,
+            cluster,
+            category,
             inputs.sources,
             inputs.file_languages,
             parse_cache,
         );
     token_only_or_mega || noise || role_mismatch || single_file_declaration_family
-}
-
-/// Re-ranks visible clusters by non-hidden occurrence count so mixed
-/// clusters dominated by `report_hide` paths cannot push fully-visible
-/// clusters down the ranking ([#140 EXCLUSION-CONFIG],
-/// [PIPELINE-RANK-WORST-FIRST]). The clone-category multiplier from
-/// [RANK-CATEGORY] and the structural-only multiplier from
-/// [RANK-STRUCTURAL-ONLY] are folded in here so a `data`-category or
-/// shape-only-evidence cluster sinks below comparable full-evidence
-/// clones; both multipliers are `1.0` in `keep`/`ignore` modes and for
-/// non-matching clusters, which therefore keep their prior weight.
-/// Hidden occurrences still travel on each cluster for downstream context.
-fn reweigh_by_visible_occurrences(clusters: &mut [ReportCluster], policy: RankingPolicy) {
-    for cluster in &mut *clusters {
-        let visible = visible_occurrence_count(cluster);
-        let base = visible_rank_weight(cluster.canonical_node_count, visible);
-        cluster.weight = base
-            * category_multiplier(cluster, policy)
-            * structural_only_multiplier(cluster, policy);
-    }
-    clusters.sort_by(|left, right| {
-        right
-            .weight
-            .partial_cmp(&left.weight)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| left.id.cmp(&right.id))
-    });
-}
-
-/// Returns the ranking-weight multiplier for `cluster` under `policy`
-/// ([RANK-CATEGORY]). `data`-category clusters get the policy's demote
-/// multiplier; everything else stays at `1.0`.
-fn category_multiplier(cluster: &ReportCluster, policy: RankingPolicy) -> f64 {
-    match CloneCategory::from_wire_label(&cluster.category) {
-        CloneCategory::DataTable => policy.data_weight_multiplier(),
-        CloneCategory::Logic => 1.0,
-    }
-}
-
-/// Returns the ranking-weight multiplier for structural-only clusters
-/// under `policy` ([RANK-STRUCTURAL-ONLY]). Keyed off the same
-/// [`ClusterKind::StructuralOnly`] routing that assigns the wire label,
-/// so a labelled cluster is always the cluster the policy demotes
-/// (issue #197 inconsistency #1). `data`-category clusters are exempt:
-/// their weight belongs to the more specific, user-configurable
-/// `[ranking] data_clones` policy ([RANK-CATEGORY]), and stacking both
-/// demotions would make `data_clone_weight = 1.0` unable to restore a
-/// table that the content gate ([FUSION-CONTENT-GATE]) also routed to
-/// the structural-only bucket.
-fn structural_only_multiplier(cluster: &ReportCluster, policy: RankingPolicy) -> f64 {
-    if classify(cluster) == ClusterKind::StructuralOnly
-        && CloneCategory::from_wire_label(&cluster.category) != CloneCategory::DataTable
-    {
-        policy.structural_only_weight_multiplier()
-    } else {
-        1.0
-    }
-}
-
-/// Counts non-hidden occurrences on a rendered cluster. Hidden
-/// occurrences still travel with the cluster so consumers retain the
-/// "regular code duplicates generated code" context, but ranking
-/// ignores them.
-fn visible_occurrence_count(cluster: &ReportCluster) -> usize {
-    cluster
-        .occurrences
-        .iter()
-        .filter(|occurrence| !occurrence.hidden)
-        .count()
-}
-
-/// Mirrors [PIPELINE-RANK-WORST-FIRST] but feeds it the visible
-/// occurrence count. Empty visible sets score zero so a cluster that
-/// is technically not all-hidden but has only one actionable copy
-/// sinks below cleaner clusters with more refactorable duplication.
-fn visible_rank_weight(canonical_node_count: usize, visible_size: usize) -> f64 {
-    if visible_size < 2 {
-        return 0.0;
-    }
-    let nodes = lossless_u32_to_f64(canonical_node_count.max(1));
-    let size_minus_one = lossless_u32_to_f64(visible_size.saturating_sub(1));
-    nodes * size_minus_one
-}
-
-/// Converts a `usize` to `f64` losslessly. Values past `u32::MAX` are
-/// clamped — cluster cardinalities never reach that range in
-/// practice but the clamp keeps the math precision-safe under the
-/// workspace's `cast_precision_loss` lint.
-fn lossless_u32_to_f64(value: usize) -> f64 {
-    u32::try_from(value).map_or(f64::from(u32::MAX), f64::from)
 }
 
 /// Returns true for embedding-dominant mega-clusters that are too broad

@@ -16,6 +16,15 @@
 //! must instead be counted in `clusters_hidden`. The fixture vendors the real
 //! meilisearch-dart settings region, so the cluster ids `be951a686525` and
 //! `7f363063109f` from the issue reproduce verbatim.
+//!
+//! Suppression is earned by [RANK-STRUCTURAL-ONLY-FORWARDING], not by any
+//! count. These wrappers are one statement each, so every fingerprint window
+//! covers exactly one declaration and a plurality-only test can never reach
+//! them; what convicts them is that each body makes one client call and
+//! returns it, with nothing computed on the way through. The same proof
+//! acquits `csharp-merge-drift` and `csharp-merge-rename`, whose bodies bind
+//! locals, loop, and branch — see the `code_action` and `refactor_merge`
+//! suites, which must stay green alongside this one.
 
 use std::{fs, path::Path};
 
@@ -23,7 +32,7 @@ use anyhow::Result;
 use serde_json::Value;
 
 mod common;
-use crate::common::*;
+use crate::common::{verdict::*, *};
 
 fn run_report(scan_root: &Path) -> Result<Value> {
     let tmp = tempfile::tempdir()?;
@@ -47,32 +56,10 @@ fn single_file_structural_only_method_families_do_not_top_the_report() -> Result
     // duplication even though the families were detected (asserted via
     // `clusters_hidden` below) — proving a structural-only shape match
     // cannot inflate the percentage.
-    let visible_contributing = report
-        .pointer("/metrics/clusters_total")
-        .and_then(Value::as_u64)
-        .unwrap_or_default();
-    assert_eq!(
-        visible_contributing, 0,
-        "every family here is hidden structural-only, so none may count as a \
-         visible contributing cluster: {report:#}"
-    );
-    let duplicated_loc = report
-        .pointer("/metrics/duplicated_loc")
-        .and_then(Value::as_u64)
-        .unwrap_or(u64::MAX);
-    assert_eq!(
-        duplicated_loc, 0,
-        "structural-only sibling families must add zero duplicated lines: {report:#}"
-    );
-    let duplication_percent = report
-        .pointer("/metrics/duplication_percent")
-        .and_then(Value::as_f64)
-        .unwrap_or(-1.0);
-    assert!(
-        (0.0..=0.0001).contains(&duplication_percent),
-        "duplication_percent must be 0 when every cluster is hidden — the metric \
-         is not influenced by structural-only shape matches: got {duplication_percent}"
-    );
+    // The fixture reproduces the issue's two #1/#2 families (be951a686525
+    // size=7, 7f363063109f size=8); both must be suppressed via the
+    // hidden-cluster path so they still count toward visibility telemetry.
+    assert_fully_suppressed(&report, 2);
 
     let clusters = report
         .get("clusters")
@@ -103,18 +90,6 @@ fn single_file_structural_only_method_families_do_not_top_the_report() -> Result
          (token_jaccard < 0.1, size >= 3) has no real evidence and must not \
          surface in the ranked report regardless of file spread. Offending \
          clusters: {offenders:#?}"
-    );
-
-    let hidden = report
-        .get("clusters_hidden")
-        .and_then(Value::as_u64)
-        .unwrap_or_default();
-    assert!(
-        hidden >= 2,
-        "the fixture reproduces the issue's two #1/#2 families (be951a686525 \
-         size=7, 7f363063109f size=8); both must be suppressed via the \
-         hidden-cluster path so they still count toward visibility telemetry: \
-         clusters_hidden={hidden}, report={report:#}"
     );
     Ok(())
 }

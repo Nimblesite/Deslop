@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "figures": [
+    {
+      "id": "cover",
+      "kind": "cover",
+      "status": "ready",
+      "master": "assets/cover/cover.svg",
+      "publication": "assets/cover/cover.png",
+      "width": 1600,
+      "height": 2560,
+      "alt": "Repeated manuscript fragments stop at a crimson audit plane and resolve into one canonical fragment below it."
+    },
+    {
+      "id": "reading-journey",
+      "kind": "concept-diagram",
+      "status": "ready",
+      "master": "assets/diagrams/00-reading-journey.svg",
+      "publication": "assets/diagrams/00-reading-journey.png",
+      "width": 1600,
+      "height": 1000,
+      "alt": "The book explains how to check proposed code, reuse existing code, inspect the largest existing duplicate groups, and verify each cleanup."
+    },
+    {
+      "id": "prevent-then-clean",
+      "kind": "generated-editorial-illustration",
+      "status": "ready",
+      "publication": "assets/illustrations/prevent-then-clean.png",
+      "alt": "An incoming repeated manuscript sheet is intercepted before a layered repository, while existing repeated sheets converge into one retained sheet.",
+      "provenance": "OpenAI built-in image generation; prompt recorded in assets/illustrations/README.md"
+    },
+    {
+      "id": "dry-vs-deslop",
+      "kind": "concept-diagram",
+      "status": "ready",
+      "master": "assets/diagrams/01-dry-vs-deslop.svg",
+      "publication": "assets/diagrams/01-dry-vs-deslop.png",
+      "width": 1600,
+      "height": 1000,
+      "alt": "DRY is a design principle about the authoritative representation of knowledge; Deslop is an evidence system that finds source already repeated and prompts an explicit response."
+    },
+    {
+      "id": "identical-code-needs-a-verdict",
+      "kind": "concept-diagram",
+      "status": "ready",
+      "master": "assets/diagrams/01-identical-code-needs-a-verdict.svg",
+      "publication": "assets/diagrams/01-identical-code-needs-a-verdict.png",
+      "width": 1600,
+      "height": 1000,
+      "alt": "Three identical sections of source code lead to five possible decisions: reuse an existing implementation, move the code, delete redundant code, generate required output, or retain the copies with a recorded reason."
+    },
+    {
+      "id": "three-jobs-one-analysis",
+      "kind": "concept-diagram",
+      "status": "ready",
+      "master": "assets/diagrams/02-three-jobs-one-analysis.svg",
+      "publication": "assets/diagrams/02-three-jobs-one-analysis.png",
+      "width": 1600,
+      "height": 1000,
+      "alt": "A coding agent, a developer's editor, and CI use different Deslop entry points for prevention, live feedback, and standalone scans."
+    },
+    {
+      "id": "live-update-loop",
+      "kind": "concept-diagram",
+      "status": "ready",
+      "master": "assets/diagrams/02-live-update-loop.svg",
+      "publication": "assets/diagrams/02-live-update-loop.png",
+      "width": 1600,
+      "height": 1000,
+      "alt": "A source edit is analysed once, producing a new report that updates the editor and the coding agent's next focused query."
+    },
+    {
+      "id": "root-and-version-check",
+      "kind": "concept-diagram",
+      "status": "ready",
+      "master": "assets/diagrams/02-root-and-version-check.svg",
+      "publication": "assets/diagrams/02-root-and-version-check.png",
+      "width": 1600,
+      "height": 1000,
+      "alt": "Matching the repository root and Deslop version keeps the editor, agent, and CLI on the same code and report format."
+    }
+  ]
+}

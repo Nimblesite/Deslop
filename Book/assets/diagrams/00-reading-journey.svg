@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">The order of The Deslop Book</title>
+  <desc id="description">The book explains how to check proposed code, reuse existing code, inspect the largest existing duplicate groups, and verify each cleanup.</desc>
+  <rect width="1600" height="1000" fill="#0b0d10"/>
+  <text x="88" y="108" fill="#9aa3ad" font-family="JetBrains Mono, monospace" font-size="24" font-weight="600" letter-spacing="5">HOW THE BOOK IS ORGANIZED</text>
+  <text x="88" y="178" fill="#e8eaed" font-family="Inter, sans-serif" font-size="58" font-weight="780" letter-spacing="-2">Check proposed code first.</text>
+  <text x="88" y="240" fill="#e8eaed" font-family="Inter, sans-serif" font-size="58" font-weight="780" letter-spacing="-2">Then remove duplication that already exists.</text>
+
+  <g transform="translate(88 330)">
+    <rect width="322" height="420" fill="#191e25"/>
+    <text x="28" y="52" fill="#ff8c85" font-family="JetBrains Mono, monospace" font-size="22" font-weight="700">01 · BEFORE WRITING</text>
+    <text x="28" y="104" fill="#e8eaed" font-family="Inter, sans-serif" font-size="32" font-weight="700">Propose code</text>
+    <rect x="28" y="150" width="266" height="142" fill="#fafaf7"/>
+    <rect x="54" y="178" width="88" height="12" fill="#14161a"/>
+    <rect x="54" y="210" width="194" height="10" fill="#55606b"/>
+    <rect x="54" y="238" width="152" height="10" fill="#55606b"/>
+    <rect x="54" y="266" width="202" height="10" fill="#55606b"/>
+    <rect x="28" y="326" width="266" height="56" fill="#b3261e"/>
+    <text x="50" y="363" fill="#ffffff" font-family="JetBrains Mono, monospace" font-size="20" font-weight="700">find-similar</text>
+    <text x="28" y="402" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="19">Check before adding</text>
+    <text x="28" y="428" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="19">the code to a file.</text>
+  </g>
+
+  <path d="M426 540H474" stroke="#6aa8ff" stroke-width="6"/>
+  <path d="M454 520L476 540L454 560" fill="none" stroke="#6aa8ff" stroke-width="6"/>
+
+  <g transform="translate(490 330)">
+    <rect width="322" height="420" fill="#13171c"/>
+    <text x="28" y="52" fill="#6aa8ff" font-family="JetBrains Mono, monospace" font-size="22" font-weight="700">02 · USE THE RESULT</text>
+    <text x="28" y="104" fill="#e8eaed" font-family="Inter, sans-serif" font-size="32" font-weight="700">Reuse existing code</text>
+    <g transform="translate(28 148)">
+      <rect width="266" height="62" fill="#242a31"/>
+      <text x="18" y="39" fill="#e8eaed" font-family="JetBrains Mono, monospace" font-size="18">READ REFERENCE COPY</text>
+      <rect y="78" width="266" height="62" fill="#242a31"/>
+      <text x="18" y="117" fill="#e8eaed" font-family="JetBrains Mono, monospace" font-size="18">REUSE / MOVE CODE</text>
+      <rect y="156" width="266" height="62" fill="#242a31"/>
+      <text x="18" y="195" fill="#e8eaed" font-family="JetBrains Mono, monospace" font-size="18">RECHECK FILE</text>
+    </g>
+    <rect x="28" y="378" width="88" height="10" fill="#0b5fff"/>
+    <text x="28" y="420" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="19">Do not add a second copy.</text>
+  </g>
+
+  <path d="M828 540H876" stroke="#6aa8ff" stroke-width="6"/>
+  <path d="M856 520L878 540L856 560" fill="none" stroke="#6aa8ff" stroke-width="6"/>
+
+  <g transform="translate(892 330)">
+    <rect width="322" height="420" fill="#191e25"/>
+    <text x="28" y="52" fill="#d4a72c" font-family="JetBrains Mono, monospace" font-size="22" font-weight="700">03 · EXISTING CODE</text>
+    <text x="28" y="104" fill="#e8eaed" font-family="Inter, sans-serif" font-size="30" font-weight="700">Inspect largest groups</text>
+    <g transform="translate(28 148)">
+      <rect width="266" height="54" fill="#242a31"/>
+      <text x="18" y="34" fill="#e8eaed" font-family="JetBrains Mono, monospace" font-size="16">SAVE STARTING REPORT</text>
+      <rect y="68" width="266" height="54" fill="#242a31"/>
+      <text x="18" y="102" fill="#e8eaed" font-family="JetBrains Mono, monospace" font-size="16">TOP OFFENDERS</text>
+      <rect y="136" width="266" height="54" fill="#242a31"/>
+      <text x="18" y="170" fill="#e8eaed" font-family="JetBrains Mono, monospace" font-size="16">INSPECT GROUP</text>
+      <rect y="204" width="266" height="54" fill="#9a6700"/>
+      <text x="18" y="238" fill="#ffffff" font-family="JetBrains Mono, monospace" font-size="16">RECORD DECISION</text>
+    </g>
+    <text x="28" y="420" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="18">Developer decides whether to merge.</text>
+  </g>
+
+  <path d="M1230 540H1278" stroke="#6aa8ff" stroke-width="6"/>
+  <path d="M1258 520L1280 540L1258 560" fill="none" stroke="#6aa8ff" stroke-width="6"/>
+
+  <g transform="translate(1294 330)">
+    <rect width="218" height="420" fill="#13171c"/>
+    <text x="24" y="52" fill="#4ac26b" font-family="JetBrains Mono, monospace" font-size="22" font-weight="700">04 · VERIFY</text>
+    <text x="24" y="104" fill="#e8eaed" font-family="Inter, sans-serif" font-size="28" font-weight="700">Run checks again</text>
+    <path d="M38 170H180M38 226H160M38 282H140" stroke="#4ac26b" stroke-width="10"/>
+    <path d="M38 334H112" stroke="#b3261e" stroke-width="10"/>
+    <path d="M116 326L132 334L116 342" fill="#b3261e"/>
+    <text x="24" y="388" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="18">Tests pass.</text>
+    <text x="24" y="414" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="18">Group removed.</text>
+    <text x="24" y="440" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="18">Limit lowered.</text>
+  </g>
+
+  <path d="M1402 790V856H250V790" fill="none" stroke="#b3261e" stroke-width="5" stroke-dasharray="16 14"/>
+  <text x="440" y="900" fill="#ff8c85" font-family="JetBrains Mono, monospace" font-size="22" font-weight="700" letter-spacing="2">UPDATE AGENT INSTRUCTIONS WITH THE SHARED IMPLEMENTATION</text>
+</svg>

@@ -18,21 +18,38 @@ const nodeProjects = [
 // `--pre-release` flag at publish time. Spec: [DEPLOY-VSCE-MARKETPLACE].
 const marketplaceProjects = new Set(["clients/vscode"]);
 const stagedDeploymentManifests = ["clients/vscode/shipwright.json"];
-// GitHub renders README.md as the body of the Marketplace listing, and the
-// action derives the CLI version from the ref it is pinned to — so an unstamped
-// `uses:` pin hands every listing visitor a workflow that installs an older
-// release, or fails outright against a tag predating action.yml. The pin is a
-// project-owned version reference like any other. Every published surface that
-// shows a copy-pasteable pin is listed here, in both locales — a doc page that
-// drifts is the same defect as a README that drifts. [ACTION-VERSION]
+// Documented `uses:` pins are deliberately NOT stamped, and deliberately hold no
+// version at all. Stamping rewrites the runner's checkout, never the commit, so
+// whatever version a doc committed was the version the tag carried — and the
+// tag's README is the body of the Marketplace listing. v0.30.0 shipped a listing
+// advertising `@v0.27.0` because the committed literal had gone stale between
+// releases, and the one gate that catches it runs only on push to main, which a
+// tag push is not. A version that is never committed cannot rot: the site pages
+// resolve it when they are built (after the release exists), and the README —
+// which GitHub serves raw, with no build step — names the substitute-your-own
+// placeholder instead. `readActionPins` below is what holds that line.
+// [ACTION-VERSION]
 const actionPinPrefix = "uses: Nimblesite/Deslop@v";
 // Every character SemVer permits in a version. A pin is closed by the first
 // character outside this set — a space in a YAML snippet, but a backtick where
 // the Action doc page quotes a pin inline in prose. Reading to the first space
-// instead swallowed the backtick into the version token and dropped it on
-// stamping, unterminating the code span. [ACTION-VERSION]
+// instead swallowed the backtick into the version token. [ACTION-VERSION]
 const semverCharacters = new Set("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-+");
-/** Published surfaces carrying a copy-pasteable `uses:` pin, in stamp order. */
+// A build-time template expression — `{{ releases.pin }}` — is one pin token, not
+// a version terminated at its first brace. Scanning it as SemVer would read an
+// empty version and let a truncated `@v` pass for a resolved pin.
+const expressionOpen = "{{";
+const expressionClose = "}}";
+/**
+ * The substitute-your-own version token a documented pin names when nothing can
+ * resolve a real one — the README, which GitHub serves raw, and a site build
+ * whose release lookup failed. Owned here beside the pin list rather than in
+ * `site/src/_data/releases.js`, because Eleventy hands templates the module
+ * namespace of a `_data` file that exports anything but `default`, which would
+ * silently blank every `{{ releases.* }}` on the site.
+ */
+export const PIN_PLACEHOLDER = "X.Y.Z";
+/** Published surfaces carrying a copy-pasteable `uses:` pin. */
 export const actionPinDocs = [
   "README.md",
   "site/src/docs/github-action.md",
@@ -40,8 +57,8 @@ export const actionPinDocs = [
 ];
 
 // Importable by the contract test without stamping anything: the pin list and
-// its parser are the checkable half of [ACTION-VERSION], and a second copy of
-// either would drift from the copy that actually rewrites the files.
+// its parser are the enforceable half of [ACTION-VERSION], and a second copy of
+// either would drift from the definition the check is written against.
 if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
   const { root, version } = parseArgs(process.argv.slice(2));
   stampReleaseVersion(root, version);
@@ -57,7 +74,6 @@ export function stampReleaseVersion(rootPath, versionValue) {
     const manifestPath = join(rootPath, manifest);
     if (existsSync(manifestPath)) stampDeploymentManifest(manifestPath, versionValue);
   }
-  for (const doc of actionPinDocs) stampActionPin(join(rootPath, doc), versionValue);
   for (const project of nodeProjects) {
     const projectVersion = marketplaceProjects.has(project)
       ? marketplaceVersion(versionValue)
@@ -135,50 +151,39 @@ function replaceLockVersions(text, versionValue) {
   return out.join("[[package]]");
 }
 
-function stampActionPin(filePath, versionValue) {
-  writeFileSync(filePath, replaceActionPins(readFileSync(filePath, "utf8"), versionValue));
-}
-
-// Rewrites only the version token, preserving anything trailing it on the line
-// (a comment, a `with:` continuation), so a documented pin can never be
-// truncated by the stamp. Prose that *states* a version alongside its pin —
-// action.yml's own `version` doc, release.md [ACTION-VERSION] — is deliberately
-// not listed here: stamping those would leave the sentence contradicting itself.
-function replaceActionPins(text, versionValue) {
-  let stamped = 0;
-  const lines = text.split("\n").map((line) => {
-    const pin = splitActionPin(line);
-    if (pin === undefined) return line;
-    stamped++;
-    return `${pin.head}${actionPinPrefix}${versionValue}${pin.rest}`;
-  });
-  if (stamped === 0) throw new Error(`no ${actionPinPrefix} pin to stamp`);
-  return lines.join("\n");
-}
-
 /**
- * Splits a documented `uses:` line around its pinned version.
+ * The token a documented `uses:` line pins to, whole.
  * @param {string} line
- * @returns {{ head: string, version: string, rest: string } | undefined} undefined when the line carries no pin
+ * @returns {string | undefined} undefined when the line carries no pin
  */
 function splitActionPin(line) {
   const marker = line.indexOf(actionPinPrefix);
   if (marker < 0) return undefined;
   const tail = line.slice(marker + actionPinPrefix.length);
+  return tail.startsWith(expressionOpen) ? readExpression(tail) : readSemver(tail);
+}
+
+// An unterminated `{{` is returned whole so it reads as neither a resolved
+// expression nor a version, and the contract check rejects it.
+function readExpression(tail) {
+  const closed = tail.indexOf(expressionClose);
+  return closed < 0 ? tail : tail.slice(0, closed + expressionClose.length);
+}
+
+function readSemver(tail) {
   // `split("")` cuts on UTF-16 code units, so the index addresses `tail`
   // directly even on the localised pages.
   const closed = tail.split("").findIndex((character) => !semverCharacters.has(character));
-  const stop = closed < 0 ? tail.length : closed;
-  return { head: line.slice(0, marker), version: tail.slice(0, stop), rest: tail.slice(stop) };
+  return closed < 0 ? tail : tail.slice(0, closed);
 }
 
 /**
- * Every version pinned by a `uses:` line in one documented surface.
+ * Every token pinned by a `uses:` line in one documented surface.
  * @param {string} text
  * @returns {string[]}
  */
 export function readActionPins(text) {
-  return text.split("\n").flatMap((line) => splitActionPin(line)?.version ?? []);
+  return text.split("\n").flatMap((line) => splitActionPin(line) ?? []);
 }
 
 function parseArgs(args) {

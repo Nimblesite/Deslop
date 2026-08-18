@@ -1,28 +1,29 @@
-//! Rendering and corpus-snapshot methods for [`super::PipelineSession`].
+//! Rendering methods for [`super::PipelineSession`].
 //!
-//! [`PipelineSession::render`] drives the full LSH → embedding → clustering
-//! → ranking → report pipeline over the in-memory corpus.
-//! [`PipelineSession::snapshot_corpus`] flattens the per-file state into
-//! the [`super::super::corpus::FingerprintCorpus`] consumed by those stages.
-
-use std::collections::HashMap;
+//! [`PipelineSession::render`] drives the full LSH → embedding →
+//! clustering → ranking → report pipeline over the session's canonical
+//! corpus store, borrowing every input in place
+//! ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]): the flat fingerprint,
+//! signature, and tree slices come straight from
+//! [`super::store::CorpusStore`], already in workspace-relative-path
+//! order ([PIPELINE-DETERMINISM]). A render pass owns no copy of any
+//! corpus state — the audited flatten-per-render copy duplicated
+//! ~157 MiB of signature bytes alone on the benchmark corpus.
 
 use crate::{
-    ast::NormalizedNode,
     cluster::build_ranked_fused_clusters,
-    content::attach_content_agreement,
+    content::attach_content_evidence,
     error::CoreError,
-    fingerprint::Fingerprint,
     lsh::band_collisions,
     pair::{candidate_pairs_for_language_policy, cluster_by_transitive_closure},
     report::{render_report, CacheStats, Report, ReportInputs},
-    report_metrics::AnalysedLines,
 };
 
 use super::{
     super::{
-        config::PipelineConfig, corpus::FingerprintCorpus, embedding_pass::run_embedding_pass,
-        signatures::build_cross_language_signatures, signatures::build_signatures_with_languages,
+        config::PipelineConfig,
+        embedding_pass::{run_embedding_pass, CorpusView},
+        signatures::build_cross_language_signatures,
     },
     PipelineSession,
 };
@@ -31,39 +32,39 @@ impl PipelineSession {
     /// Runs clustering + ranking + rendering over the current
     /// in-memory corpus. Returns a freshly rendered [`Report`].
     pub(super) fn render(
-        &mut self,
+        &self,
         config: &PipelineConfig<'_>,
         last_pass_stats: CacheStats,
     ) -> Result<Report, CoreError> {
-        let corpus = self.snapshot_corpus();
-        tracing::debug!(
-            fingerprints = corpus.fingerprints.len(),
-            "building signatures"
-        );
-        let signatures = build_signatures_with_languages(
-            &corpus.fingerprints,
-            &corpus.trees,
-            &self.file_languages,
-        );
+        // [PIPELINE-INCREMENTAL-ANALYSIS-REUSE] Per-language signatures
+        // arrive with the store — built at parse/load time, or attached
+        // from the parse store on a cache hit — so the render pass
+        // constructs none of them, and borrows rather than copies.
+        let fingerprints = self.store.fingerprints();
+        let signatures = self.store.signatures();
         tracing::debug!(signatures = signatures.len(), "running LSH band collisions");
-        let lsh_pairs = band_collisions(&signatures);
+        let lsh_pairs = band_collisions(signatures);
         let cross_language_signatures =
             self.exclusion.allows_cross_language_comparison().then(|| {
                 build_cross_language_signatures(
-                    &corpus.fingerprints,
-                    &corpus.trees,
+                    fingerprints,
+                    self.store.trees(),
                     &self.file_languages,
                 )
             });
         tracing::debug!(lsh_pairs = lsh_pairs.len(), "running embedding pass");
-        let embedding_outcome = run_embedding_pass(config, &corpus)?;
+        let view = CorpusView {
+            fingerprints,
+            sources: &self.sources,
+        };
+        let embedding_outcome = run_embedding_pass(config, &view)?;
         tracing::debug!(
             embedding_pairs = embedding_outcome.pairs.len(),
             "collecting candidate pairs"
         );
         let pairs = candidate_pairs_for_language_policy(
-            &corpus.fingerprints,
-            &signatures,
+            fingerprints,
+            signatures,
             &lsh_pairs,
             &embedding_outcome.pairs,
             cross_language_signatures.as_deref(),
@@ -76,11 +77,21 @@ impl PipelineSession {
         );
         let fused_clusters = cluster_by_transitive_closure(&pairs);
         tracing::debug!(clusters = fused_clusters.len(), "building ranked clusters");
-        let mut clusters = build_ranked_fused_clusters(&corpus.fingerprints, &fused_clusters);
-        attach_content_agreement(&mut clusters, &corpus.trees, &corpus.sources);
+        // [FUSION-CLUSTER-SIGNALS] One signature space per run: the
+        // cross-language space compares any pair when the audit mode is
+        // on; the per-language space is exact otherwise. Mixing spaces
+        // inside one cluster mean would average incomparable values.
+        let measurement_signatures = cross_language_signatures.as_deref().unwrap_or(signatures);
+        let mut clusters = build_ranked_fused_clusters(
+            fingerprints,
+            measurement_signatures,
+            &embedding_outcome.vectors,
+            &fused_clusters,
+        );
+        attach_content_evidence(&mut clusters, self.store.trees(), &self.sources);
         tracing::info!(
             ranked_clusters = clusters.len(),
-            fingerprints = corpus.fingerprints.len(),
+            fingerprints = fingerprints.len(),
             "render complete"
         );
         Ok(render_report(ReportInputs {
@@ -93,31 +104,9 @@ impl PipelineSession {
             exclusion: &self.exclusion,
             embedding_provenance: embedding_outcome.provenance,
             cache_stats: last_pass_stats,
-            sources: &corpus.sources,
+            sources: &self.sources,
             analysed_lines: &self.analysed_lines,
-            boilerplate_ranges: &corpus.boilerplate_ranges,
+            boilerplate_ranges: &self.boilerplate_ranges,
         }))
-    }
-
-    /// Flattens the per-file state into a [`FingerprintCorpus`]
-    /// suitable for the downstream LSH / embedding / clustering stages.
-    /// `per_file` is left empty because the session already owns the
-    /// authoritative map — the snapshot is consumed transiently.
-    pub(super) fn snapshot_corpus(&self) -> FingerprintCorpus {
-        let mut fingerprints: Vec<Fingerprint> = Vec::new();
-        let mut trees: Vec<NormalizedNode> = Vec::with_capacity(self.per_file.len());
-        for cached in self.per_file.values() {
-            fingerprints.extend(cached.fingerprints.clone());
-            trees.push(cached.tree.clone());
-        }
-        FingerprintCorpus {
-            fingerprints,
-            trees,
-            sources: self.sources.clone(),
-            per_file: HashMap::new(),
-            cache_stats: CacheStats::default(),
-            analysed_lines: AnalysedLines::new(),
-            boilerplate_ranges: self.boilerplate_ranges.clone(),
-        }
     }
 }

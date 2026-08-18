@@ -49,7 +49,7 @@ impl OccurrenceScope<'_> {
 /// byte-equivalence proof on the effective spans
 /// ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 1), because the nested-cluster
 /// collapse keeps the outer Type-2 view of the renamed-methods case
-/// ([PIPELINE-CLUSTER-EXACT] #50).
+/// ([PIPELINE-CLUSTER-EXACT]).
 const EXACT_BUCKETS: [ClusterKind; 3] = [
     ClusterKind::Identical,
     ClusterKind::NearlyIdentical,
@@ -86,7 +86,7 @@ pub fn eligible_ranges(cluster: &ReportCluster) -> Option<Vec<ByteRange>> {
 /// visible, untruncated occurrences spanning ≥2 files. The
 /// consolidation engine's gates decide the rest at resolve time, so a
 /// candidate that ultimately refuses surfaces its reason instead of
-/// silently offering nothing (issue #277).
+/// silently offering nothing.
 #[must_use]
 pub fn consolidation_candidate(cluster: &ReportCluster) -> bool {
     visible_exact_occurrences(cluster).is_some()

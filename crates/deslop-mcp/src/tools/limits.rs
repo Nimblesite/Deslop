@@ -1,6 +1,6 @@
 //! Defensive size cap for `tools/call` responses.
 //!
-//! Background ([issue #136](https://github.com/Nimblesite/Deslop/issues/136)):
+//! Background ([](https://github.com/Nimblesite/Deslop/issues/136)):
 //! Codex's `rmcp_client` crashes its `app-server` when fed a
 //! multi-hundred-KB tool result. The exact ceiling isn't documented,
 //! but most JSON-RPC clients tolerate well under 512 KB per frame.
@@ -26,7 +26,7 @@ use serde_json::{json, Value};
 use tracing::warn;
 
 /// Maximum size, in serialised JSON bytes, of any single MCP
-/// `tools/call` result envelope ([MCP-RESULT-SIZE-CAP], issue #136).
+/// `tools/call` result envelope ([MCP-RESULT-SIZE-CAP]).
 ///
 /// Picked conservatively: most JSON-RPC clients tolerate <512 KB per
 /// frame, Codex's `rmcp_client` is known to choke earlier. At 200 KB
@@ -91,7 +91,7 @@ fn shrink_clusters_in_place(payload: &mut Value) -> bool {
         // The cluster array is empty and the payload still breaches the
         // cap: the non-cluster content alone is oversized. Reporting
         // success here would stamp `truncated: true` on a payload that
-        // still blows the agent's wire budget ([Deslop#286]).
+        // still blows the agent's wire budget.
         if !pop_one_cluster(payload) {
             return false;
         }

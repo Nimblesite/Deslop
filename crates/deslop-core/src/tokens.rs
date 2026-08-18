@@ -215,7 +215,7 @@ fn resolve_range_nodes(
 /// Normalisation-collapsed leaves (identifier and literal nodes) covered
 /// by `fingerprint`, in pre-order, as `(kind, byte range)` pairs. `None`
 /// when the range resolves to no node or sibling window. Feeds the
-/// content-agreement signal ([FUSION-CONTENT-GATE], #331/#336) — the
+/// content-agreement signal ([FUSION-CONTENT-GATE]) — the
 /// collapsed leaves are exactly the positions where two shape-identical
 /// subtrees can still disagree in raw source content — and the
 /// literal-dominance measurement behind the language-agnostic data-table
