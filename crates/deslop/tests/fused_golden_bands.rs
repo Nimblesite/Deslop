@@ -29,8 +29,9 @@
 //! identifier substitutions — with a single `0` literal contributing
 //! almost nothing. Pinning both pairs keeps the band contract stated
 //! across the anchor axis, not only at its comfortable end
-//! (`docs/plans/fused-score-followups.md` §0 records the false negative
-//! this scenario used to render).
+//! (`[REPAIR-RENAME-ANCHOR-MASS]` in
+//! `docs/plans/fused-score-followups.md` records the false negative this
+//! scenario used to render).
 //!
 //! Every scenario carries a distinct AST shape so transitive closure
 //! cannot merge the three of them into one cluster.
@@ -51,8 +52,7 @@ const MIN_NODES: u32 = 12;
 /// branch) and the lean maximal rename (`rename_lean`, one ubiquitous
 /// literal). A contract asserted for only one of them is a contract
 /// stated only above the anchor floor — the exact gap
-/// `docs/plans/fused-score-followups.md` §0 records as a shipped false
-/// negative.
+/// `[REPAIR-RENAME-ANCHOR-MASS]` records as a shipped false negative.
 const RENAME_STEMS: [&str; 2] = ["rename", "rename_lean"];
 
 /// One per-language golden corpus staged under `tests/fixtures`.

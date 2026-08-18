@@ -67,14 +67,19 @@ erased:
      positions unchanged; vacuously 1.0 with none) and rename-mapping
      coverage, scaled by the smooth anchor-mass weight `anchors / (anchors
      + content_gate.rename_evidence_half_mass)`, where anchors are the
-     preserved literal positions plus the corroborated substituted
-     positions. Coverage classifies each identifier position exactly as
-     Baker's prev-encoding constrains it: bidirectionally-modal raw-byte
-     identity and substitutions corroborated by at least
-     `content_gate.rename_corroboration_min` occurrences are explained;
-     positions the bijection cannot explain are constrained-but-unexplained
-     and count against coverage; a *consistent substitution seen once* is
-     an unconstrained first occurrence (`prev = 0` matches any other first
+     preserved literal positions plus the explained identifier positions.
+     Coverage classifies each identifier position exactly as Baker's
+     prev-encoding constrains it: raw-byte identity is a fixed-symbol
+     match, explained by the position itself; a substitution is explained
+     when it is bidirectionally modal *among the substituted pairs* —
+     fixed symbols and parameters are disjoint alphabets, and collapsed
+     leaves carry no role, so a homonym byte-string (a preserved property
+     name that also names a renamed local) must not let one role veto the
+     other in a single modal election — and corroborated by at least
+     `content_gate.rename_corroboration_min` occurrences; positions the
+     bijection cannot explain are constrained-but-unexplained and count
+     against coverage; a *consistent substitution seen once* is an
+     unconstrained first occurrence (`prev = 0` matches any other first
      occurrence) and belongs to neither numerator nor denominator — a
      renamed one-shot declaration name is not evidence against the clone.
      Zero without positional alignment. Consistency alone cannot tell a

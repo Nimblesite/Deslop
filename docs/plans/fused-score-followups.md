@@ -32,7 +32,8 @@ sits on top of.
 | Rendered signals are measured between the occurrences the report shows, never averaged over discovery edges | `cluster::signals::measured_signals`, `[FUSION-CLUSTER-SIGNALS]` |
 | Shape-saturating clusters are re-scored against measured content evidence | `buckets::content_gated_signals`, `[FUSION-CONTENT-GATE]` |
 | All three agent bands are reachable and mean the same thing in six languages, with the rename band pinned on **both** sides of the old literal-anchor line | `fused_golden_bands.rs` — verbatim / maximal rename / lean maximal rename / shape-only, with band separation and rank order per language |
-| Rename evidence is Baker-corroborated anchor mass (`[TECH-PMATCH-BAKER]`: preserved literals + repeated consistent substitutions, smoothly weighted), never a literal-count cliff | `type2_rename_anchor_floor.rs`, the `rename_lean` scenarios, `cli::logging::technical_mode_uses_type_taxonomy_in_breakdown_row`; the convicted side held by `issue_134_structural_only_not_nearly_identical.rs` (divergent literals) and `dart_issue_197_single_file_structural_only` |
+| Rename evidence is Baker-corroborated anchor mass (`[TECH-PMATCH-BAKER]`: preserved literals + explained identifier positions, smoothly weighted), never a literal-count cliff; the parameter bijection is elected over substituted pairs alone, so a homonym byte-string cannot veto its own rename | `type2_rename_anchor_floor.rs`, the `rename_lean` scenarios, `cli::logging::technical_mode_uses_type_taxonomy_in_breakdown_row`; the convicted side held by `issue_134_structural_only_not_nearly_identical.rs` (divergent literals) and `dart_issue_197_single_file_structural_only` |
+| Content evidence tests each byte position once — the collapsed *frontier*, never a collapsed node plus the collapsed descendants it spans | `tokens::collapsed_leaves`, `js_language_features.rs` template-literal and optional-chaining clones |
 | No report renders a constant confidence; every component stays in `[0,1]`; only byte-proven duplication saturates | `fused_golden_invariants.rs`, swept over 21 corpora |
 | One cosine definition, `f64` accumulation, byte-identical snippets render exactly `1.0` | `issue_372_identical_snippet_cosine.rs` |
 
@@ -69,7 +70,8 @@ Nothing is deleted or weakened: each carries an `#[ignore = "…"]` naming its i
 workspace is currently switched off**, which is why gap 3 above cannot be measured, let alone closed.
 Measured 18 Aug: `cargo test --workspace --all-targets --features deslop-core/live -- --skip ollama_
 --skip corpus_` exits 0 across 170 test binaries with exactly these 8 ignored — the tree is otherwise
-green, section 0 excepted.
+green. Work them #370 first — its hang poisons any embeddings-on run with a quarter-hour stall — then
+#356, #369, #357, #358.
 
 - [ ] **[#369](https://github.com/Nimblesite/Deslop/issues/369)** — three ignores.
       `issue_343_sum_clamp_saturation::mid_band_cluster_confidence_never_exceeds_its_strongest_axis` renders
@@ -81,7 +83,8 @@ green, section 0 excepted.
 - [ ] **[#370](https://github.com/Nimblesite/Deslop/issues/370)** — `embedding_failure_progress` hangs
       indefinitely (14m41s locally, two whole CI Test budgets). The stall is in the unbounded
       `recv_response` read, upstream of the file's own 20s timeout: the server appears never to emit a
-      terminal progress frame on the rejection path.
+      terminal progress frame on the rejection path. The fix is the protocol — a terminal frame on
+      every path, including rejection — never the test's timeout.
 - [ ] **[#356](https://github.com/Nimblesite/Deslop/issues/356)** — two ignores in
       `embedding_route_invariance`, the blast-radius pins for `[REPAIR-COSINE-MERGE]`. `csharp-type3`
       publishes two `structural_only` clusters at `structural 1.0` with embeddings off and **one**
@@ -117,9 +120,9 @@ Closes gap 2. Until it lands, no black-box test can assert the gate's input.
       `HelpBubble`.
 - [ ] Add them to `render/text.rs`, `deslop-lsp` and `refactor/preconditions.rs`, which carry no confidence
       at all today.
-- [ ] Restore the 17 rename-showcase fixtures #341 softened from maximal to partial renames — **blocked on
-      section 0**. Restoring them before the anchor floor is fixed converts 17 passing fixtures into 17
-      false negatives.
+- [ ] Restore the 17 rename-showcase fixtures #341 softened from maximal to partial renames. Unblocked:
+      `[REPAIR-RENAME-ANCHOR-MASS]` deleted the anchor floor that would have converted them into 17 false
+      negatives.
 - [ ] `metrics.duplication_percent` / exit-code gate — **delegated** to
       [weighted-metrics-plan.md](weighted-metrics-plan.md) under `[METRICS-REPO-WEIGHTED]`.
 
@@ -251,6 +254,8 @@ reasoning lives in [`fusion.md`](../specs/fusion.md) and in each pinning test.
 | `[REPAIR-DECLARATION-FAMILY]` | The sibling-boilerplate filter could not tell scaffolding from real duplication in **either** configuration | `dart_issue_197_single_file_structural_only.rs` + `declaration_family_plurality.rs` + `declaration_family_mixed_component.rs` + `refactor_merge` + `issue_190_data_table_demote.rs`, required together |
 | `[REPAIR-PY-DICT-ASSERT-DEPTH]` | The pytest dict-assert idiom was recognised at one AST depth only, so the module-wide view survived subsumption | `python_issue_107_chained_dict_assert.rs` |
 | `[REPAIR-DOC-TRUTH]` (#345) | Public docs still taught the deleted sum-and-clamp fusion | `[FUSION-STRATEGY-BOUNDED-MAX]` |
+| `[REPAIR-RENAME-ANCHOR-MASS]` (#405) | A four-literal cliff zeroed rename evidence below it, rendering a maximal one-literal Type-2 clone at `fused = 0.0588`; replaced by Baker corroborated anchor mass (`[TECH-PMATCH-BAKER]`), elected over the substituted pairs alone so a homonym byte-string cannot make one role veto the other | `type2_rename_anchor_floor.rs`, the `rename_lean` scenarios in `fused_golden_bands.rs`, `js_language_features.rs`, `js_ts_clone_buckets.rs` |
+| `[REPAIR-CONTENT-FRONTIER]` | Collapsed *non-leaf* nodes were emitted alongside the collapsed descendants they span, so an interpolated string re-tested the same bytes as a whole-node literal and manufactured an unpreserved literal at every interpolation a rename touched | `js_language_features.rs` (template literals), `fused_golden_invariants.rs` |
 
 The branch regression audit (RA-01…RA-09, REG-01…REG-11) is fully discharged: RA-06/#393 closed, RA-07/#394
 and RA-08/#395 carried above, everything else fixed and pinned. The six once-skipped VSIX tests are restored

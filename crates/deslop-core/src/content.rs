@@ -325,15 +325,17 @@ fn pair_rename_consistency(canonical: Option<&[LeafKey]>, member: Option<&[LeafK
 /// ([TECH-PMATCH-BAKER]), produced by [`rename_mapping`].
 struct RenameMapping {
     /// Fraction of *constrained* identifier positions explained by
-    /// admissible evidence: bidirectionally-modal raw-byte identity, or
-    /// a bidirectionally-modal substitution corroborated by repetition.
-    /// A consistent substitution seen once is Baker's unconstrained
-    /// first occurrence — `prev = 0` matches any other first occurrence
-    /// — so it belongs to neither the numerator nor the denominator: a
-    /// renamed one-shot declaration name is not evidence against the
-    /// clone, and an inconsistent position still is. Vacuously 1.0 when
-    /// nothing is constrained — an all-literal or all-wildcard subtree
-    /// leaves the anchor weight to carry the verdict.
+    /// admissible evidence: raw-byte identity (a fixed-symbol match,
+    /// witnessed by the position itself), or a substitution that is
+    /// bidirectionally modal *among the substituted pairs* and
+    /// corroborated by repetition. A consistent substitution seen once
+    /// is Baker's unconstrained first occurrence — `prev = 0` matches
+    /// any other first occurrence — so it belongs to neither the
+    /// numerator nor the denominator: a renamed one-shot declaration
+    /// name is not evidence against the clone, and an inconsistent
+    /// position still is. Vacuously 1.0 when nothing is constrained —
+    /// an all-literal or all-wildcard subtree leaves the anchor weight
+    /// to carry the verdict.
     coverage: f64,
     /// Explained positions — the identifier anchors [`anchor_weight`]
     /// prices. Identity positions are backed by byte equality at the
@@ -348,26 +350,43 @@ struct RenameMapping {
 /// are explained, inconsistent positions are constrained-but-unexplained,
 /// and consistent one-shot substitutions are wildcards outside the
 /// population.
+///
+/// The parameter bijection is elected over the *substituted* pairs
+/// alone — Baker's fixed symbols and parameters are disjoint alphabets,
+/// and collapsed leaves carry no role, so a homonym byte-string (a
+/// preserved property name that also names a renamed local) must not
+/// let its identity occurrences and its substitution occurrences veto
+/// each other in one modal election. Identity needs no election at all:
+/// byte equality at the position is its own witness.
 fn rename_mapping(identifiers: &[(u64, u64)]) -> RenameMapping {
-    let bijection = ModalBijection::over(identifiers);
-    let counts = pair_counts(identifiers.iter().copied());
+    let substitutions = substituted_pairs(identifiers);
+    let bijection = ModalBijection::over(&substitutions);
+    let counts = pair_counts(substitutions.iter().copied());
     let (mut constrained, mut explained) = (0_usize, 0_usize);
     for pair in identifiers {
         let substituted = pair.0 != pair.1;
-        let repeats = counts.get(pair).copied().unwrap_or_default()
+        let corroborated = counts.get(pair).copied().unwrap_or_default()
             >= RENAME_CORROBORATION_MIN_OCCURRENCES;
-        if bijection.explains(pair) && substituted && !repeats {
+        if substituted && bijection.explains(pair) && !corroborated {
             continue;
         }
         constrained = constrained.saturating_add(1);
-        if bijection.explains(pair) {
+        if !substituted || bijection.explains(pair) {
             explained = explained.saturating_add(1);
         }
     }
-    RenameMapping {
-        coverage: vacuous_share(explained, constrained),
-        explained,
-    }
+    RenameMapping { coverage: vacuous_share(explained, constrained), explained }
+}
+
+/// The aligned positions whose raw bytes differ — [TECH-PMATCH-BAKER]'s
+/// parameter alphabet, the population [`rename_mapping`] elects its
+/// bijection over.
+fn substituted_pairs(identifiers: &[(u64, u64)]) -> Vec<(u64, u64)> {
+    identifiers
+        .iter()
+        .filter(|(left, right)| left != right)
+        .copied()
+        .collect()
 }
 
 /// Smooth evidence-mass weight for rename proof:
@@ -430,8 +449,10 @@ fn mapping_consistency(identifiers: &[(u64, u64)]) -> f64 {
 /// The bidirectionally-modal substitution test shared by the substance
 /// and rename measures: a position is explained when its pair is the
 /// modal partner in both directions. A genuine rename maps every
-/// occurrence of a name to one new name (identity included); scattergun
-/// similarity does not.
+/// occurrence of a name to one new name; scattergun similarity does
+/// not. The caller chooses the electorate: [`mapping_consistency`]
+/// elects over every identifier position (identity included), while
+/// [`rename_mapping`] elects over the substituted pairs alone.
 struct ModalBijection {
     /// Modal partner of each left key.
     forward: BTreeMap<u64, u64>,

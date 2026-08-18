@@ -7,6 +7,7 @@
 //! `crates/deslop/tests/cache_blob_integrity.rs`.
 
 use std::path::PathBuf;
+use std::time::Instant;
 
 use super::{
     blob::{
@@ -433,5 +434,47 @@ fn the_cache_serves_its_own_address_and_refuses_a_copied_one() -> io::Result<()>
         cache.get(other_source, file_id).is_none(),
         "a blob copied under another source's address must be refused"
     );
+    Ok(())
+}
+
+#[test]
+#[ignore = "manual fpcache decode benchmark"]
+fn benchmark_digest_verified_signature_decode() -> io::Result<()> {
+    const RECORDS: usize = 50_000;
+    const ROUNDS: u32 = 20;
+    let file_id = registered_file_id();
+    let hash = bytes_hash(SOURCE);
+    let binding = source_binding(&hash);
+    let mut cached = sample(file_id);
+    cached.fingerprints = (0..RECORDS)
+        .map(|index| Fingerprint {
+            hash: [u8::try_from(index % 251).unwrap_or_default(); 32],
+            file_id,
+            byte_range: ByteRange {
+                start: index,
+                end: index.saturating_add(1),
+            },
+            node_count: 1,
+        })
+        .collect();
+    cached.signatures = vec![[7_u64; SIGNATURE_LEN]; RECORDS];
+    let blob = encode(&cached, &binding);
+    let started = Instant::now();
+    for _ in 0..ROUNDS {
+        let decoded = std::hint::black_box(decode(&blob, &binding, file_id)?);
+        assert_eq!(decoded.signatures.len(), RECORDS);
+    }
+    let elapsed = started.elapsed();
+    let output =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/fpcache-bench/decode-ms.txt");
+    fs::write(
+        output,
+        format!(
+            "total_ms={:.3}\nper_round_ms={:.3}\nblob_bytes={}\nrecords={RECORDS}\n",
+            elapsed.as_secs_f64() * 1_000.0,
+            elapsed.as_secs_f64() * 1_000.0 / f64::from(ROUNDS),
+            blob.len(),
+        ),
+    )?;
     Ok(())
 }

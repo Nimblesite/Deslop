@@ -304,9 +304,13 @@ fn invalid_data(message: &'static str) -> io::Error {
 /// Reads one `MinHash` signature — [`SIGNATURE_LEN`] little-endian
 /// `u64` slots — from `cursor`.
 fn decode_signature(cursor: &mut Cursor<&[u8]>) -> io::Result<Signature> {
+    let bytes = read_slice(cursor, SIGNATURE_RECORD_LEN)?;
     let mut signature: Signature = [0_u64; SIGNATURE_LEN];
-    for slot in &mut signature {
-        *slot = read_u64(&mut *cursor)?;
+    for (slot, encoded) in signature.iter_mut().zip(bytes.chunks_exact(8)) {
+        let encoded = encoded
+            .try_into()
+            .map_err(|_| invalid_data("cached signature slot has the wrong width"))?;
+        *slot = u64::from_le_bytes(encoded);
     }
     Ok(signature)
 }
@@ -372,9 +376,8 @@ struct NodeHeader {
 fn decode_node_header(cursor: &mut Cursor<&[u8]>) -> io::Result<NodeHeader> {
     let kind_len = u32_to_usize(read_u32(&mut *cursor)?);
     ensure_remaining(cursor, kind_len, 1)?;
-    let mut kind_bytes = vec![0_u8; kind_len];
-    cursor.read_exact(&mut kind_bytes)?;
-    let kind_str = std::str::from_utf8(&kind_bytes)
+    let kind_bytes = read_slice(cursor, kind_len)?;
+    let kind_str = std::str::from_utf8(kind_bytes)
         .map_err(|source| io::Error::new(io::ErrorKind::InvalidData, source))?;
     let kind = intern_kind(kind_str);
     let start = u64_to_usize(read_u64(&mut *cursor)?)?;
@@ -422,9 +425,23 @@ fn u32_to_usize(value: u32) -> usize {
 
 /// Reads exactly `N` bytes out of the cursor.
 fn read_array<const N: usize>(cursor: &mut Cursor<&[u8]>) -> io::Result<[u8; N]> {
-    let mut buf = [0_u8; N];
-    cursor.read_exact(&mut buf)?;
-    Ok(buf)
+    read_slice(cursor, N)?
+        .try_into()
+        .map_err(|_| invalid_data("cache record has the wrong fixed width"))
+}
+
+/// Borrows exactly `len` bytes from the cursor and advances it once.
+fn read_slice<'a>(cursor: &mut Cursor<&'a [u8]>, len: usize) -> io::Result<&'a [u8]> {
+    let start = usize::try_from(cursor.position())
+        .map_err(|_| invalid_data("cache cursor position exceeds this platform"))?;
+    let end = start
+        .checked_add(len)
+        .ok_or_else(|| invalid_data("cache record length overflows"))?;
+    let bytes = (*cursor.get_ref())
+        .get(start..end)
+        .ok_or_else(|| invalid_data("cache record exceeds the bytes remaining"))?;
+    cursor.set_position(u64::try_from(end).unwrap_or(u64::MAX));
+    Ok(bytes)
 }
 
 /// Reads a little-endian `u32` out of the cursor.
