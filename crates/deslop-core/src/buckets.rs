@@ -263,6 +263,20 @@ pub const LITERAL_TABLE_MIN_FRACTION: f64 = 0.8;
 /// so a `token_jaccard` at the [`classify_signals`] near-identical line
 /// is shape evidence too, not content evidence ('s surviving
 /// mixed cluster read `structural=0.62, token_jaccard=0.98`).
+///
+/// The anchor-free row-4 route ([`is_lsh_only_nearmiss`]) is
+/// deliberately **not** included. Both of this gate's populations —
+/// positional byte agreement and literal-anchored rename consistency —
+/// assume the members align position for position, which is exactly what
+/// an anchor-free cluster does not do: `structural ≤ 0.01` means the
+/// shapes differ. Measured against a genuine Type-3 clone whose
+/// identifiers are all renamed and whose bodies differ by one statement
+/// (`csharp-type3`), agreement collapses to 0.19 — the literals — and
+/// rename consistency to 0.0, because the extra statement destroys the
+/// alignment the rename proof needs. Gating row 4 here therefore demotes
+/// the renamed near-miss, the most valuable clone class there is. Row 4
+/// is instead routed on cluster *spread* in
+/// `report_render::route_shape_identical`.
 #[must_use]
 pub fn has_saturating_shape_evidence(signals: ReportSignals) -> bool {
     signals.structural >= 0.99 || signals.token_jaccard >= SATURATING_TOKEN_FLOOR
@@ -346,11 +360,53 @@ pub fn classify_signals(signals: ReportSignals) -> ClusterKind {
         ClusterKind::SameBehavior
     } else if is_structural_only_signals(signals) {
         ClusterKind::StructuralOnly
-    } else if signals.structural >= 0.99
+    } else if is_lsh_only_nearmiss(signals)
+        || signals.structural >= 0.99
         || (signals.structural >= 0.20 && signals.token_jaccard >= 0.95)
     {
+        // [CLONE-BUCKETS-ROUTING] rows 4 and 5 share this destination:
+        // the anchor-free LSH-only near-miss ([`is_lsh_only_nearmiss`])
+        // and the structurally-anchored near-miss. Kept as one arm
+        // because both routes produce the identical bucket — the named
+        // predicate is what keeps row 4 legible and greppable.
         ClusterKind::NearlyIdentical
     } else {
         ClusterKind::LooselySimilar
     }
 }
+
+/// [CLONE-BUCKETS-ROUTING] row 4: a cluster with no structural anchor
+/// whose token overlap clears [`LSH_ONLY_NEARMISS_MIN_JACCARD`] is a
+/// genuine Type-3 near-miss, in **every** language.
+///
+/// A cluster only reaches the renderer with this triple by surviving
+/// `pair::survival_decision`, which admits a structurally-unanchored
+/// pair only above the same Jaccard floor and above the endpoint
+/// node-count floor — the pipeline has already ruled out low-information
+/// token noise, which is why this row is a signal test and needs no
+/// language, size, or spread condition. Routing it anywhere else means
+/// the pipeline admitted a pair as real duplication and the renderer
+/// then discarded it: previously it fell to
+/// [`ClusterKind::LooselySimilar`], which the renderer hides, so a fully
+/// duplicated pair reported zero duplication in every language except
+/// the one a report-render carve-out special-cased (gh #390). Pinned by
+/// `crates/deslop/tests/lsh_only_nearmiss_recall.rs`.
+#[must_use]
+pub fn is_lsh_only_nearmiss(signals: ReportSignals) -> bool {
+    signals.structural <= STRUCTURAL_ABSENT_CEILING
+        && signals.token_jaccard >= LSH_ONLY_NEARMISS_MIN_JACCARD
+}
+
+/// Highest `structural` a cluster may show while counting as having no
+/// structural anchor ([CLONE-BUCKETS-ROUTING] row 4). Mirrors the
+/// spec's `structural ≤ 0.01`.
+pub const STRUCTURAL_ABSENT_CEILING: f64 = 0.01;
+
+/// Token overlap an anchor-free cluster must clear to count as a
+/// Type-3 near-miss ([CLONE-BUCKETS-ROUTING] row 4). **Is**
+/// [`crate::pair::LSH_ONLY_MIN_JACCARD`], not a copy of its value: the
+/// pair layer admits an LSH-only candidate at exactly this floor, so a
+/// lower value here would hide clusters the pipeline admitted and a
+/// higher one would reject them after admission. Naming it separately
+/// keeps the routing row greppable while leaving one number to change.
+pub const LSH_ONLY_NEARMISS_MIN_JACCARD: f64 = crate::pair::LSH_ONLY_MIN_JACCARD;

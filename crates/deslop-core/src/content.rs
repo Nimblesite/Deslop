@@ -85,6 +85,14 @@ pub struct ContentEvidence {
     /// reports full agreement for such a cluster rather than the
     /// positional score the odd-one-out members would dilute.
     pub verbatim_dominated: bool,
+    /// True when the pass actually compared two members' raw content.
+    /// `false` for [`Self::unmeasured`] and for a cluster whose members
+    /// could not be resolved to source bytes. The other fields carry
+    /// deliberately generous defaults so a missing measurement never
+    /// demotes a cluster some *other* signal proves; this flag is how a
+    /// route with no other signal tells "measured full agreement" apart
+    /// from "nothing was measured" ([FUSION-CONTENT-GATE]).
+    pub measured: bool,
 }
 
 impl ContentEvidence {
@@ -108,6 +116,7 @@ impl ContentEvidence {
             literal_fraction: 0.0,
             substance_varies: false,
             verbatim_dominated: false,
+            measured: false,
         }
     }
 }
@@ -168,6 +177,11 @@ fn measure_cluster<S: BuildHasher>(
         literal_fraction: canonical_literal_fraction(canonical),
         substance_varies: cluster_substance_varies(canonical, &member_keys),
         verbatim_dominated,
+        // A comparison needs a canonical member *and* something to
+        // compare it against: one resolvable member alone measures
+        // nothing, and every field above then carries its degenerate
+        // default rather than evidence.
+        measured: canonical.is_some() && member_keys.iter().skip(1).any(Option::is_some),
     }
 }
 

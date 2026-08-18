@@ -1,41 +1,44 @@
-//! On-disk fingerprint + normalised-tree cache ([PIPELINE-INCREMENTAL]).
+//! On-disk fingerprint + normalised-tree cache ([PIPELINE-INCREMENTAL],
+//! [PIPELINE-INCREMENTAL-INTEGRITY]).
 //!
-//! Keyed by `(language_id, tool_version, min_nodes, content_hash)`. A
-//! cache hit rehydrates both the structural fingerprints and the
-//! normalised AST (kept because downstream token extraction walks it),
-//! skipping tree-sitter entirely for unchanged files. Any mismatch on
-//! the cache key — or a blob whose tree nests past [`MAX_AST_DEPTH`] —
-//! degrades gracefully to a miss, so a stale or corrupt blob cannot
-//! corrupt or crash a run, at worst it wastes disk.
+//! Keyed by `(language_id, tool_version, min_nodes, source_byte_hash)`.
+//! A cache hit rehydrates the structural fingerprints, the normalised
+//! AST (kept because downstream token extraction walks it), and the
+//! per-fingerprint `MinHash` signatures
+//! ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]), skipping tree-sitter and
+//! signature construction entirely for unchanged files.
 //!
-//! The on-disk format is a single little-endian binary blob. Nothing
-//! from `serde` — the shape is tight, versioned by a magic header, and
-//! easily auditable byte-by-byte.
+//! Every blob carries a BLAKE3 **binding digest** over its payload and
+//! the full address that wrote it; a lookup recomputes the digest from
+//! its *own* address before decoding, so corruption, misplacement,
+//! trailing bytes, and stale semantic revisions all degrade identically
+//! to a plain miss that re-parses from source and overwrites the blob.
+//! The wire format, the digest, and the bounded decode live in
+//! [`blob`]; this module owns the on-disk layout and the cache API.
 
 use std::{
-    fs,
-    io::{self, Cursor, Read},
+    fs, io,
     path::{Path, PathBuf},
 };
 
 use crate::{
-    ast::{ByteRange, NormalizedNode},
-    embedding::content_hash,
-    fingerprint::Fingerprint,
-    lang::shared::{intern_kind, MAX_AST_DEPTH},
+    ast::NormalizedNode, embedding::bytes_hash, fingerprint::Fingerprint, lsh::Signature,
     state::FileId,
 };
 
-/// Magic number at the top of every cache blob. Any mismatch is
-/// treated as a miss; lets us detect corruption and truncated
-/// writes without a separate integrity check.
-const MAGIC: u32 = 0xC0DE_D17E;
+use blob::{decode, encode, read_bounded, BlobBinding, MAX_BLOB_BYTES};
+pub use retention::{sweep_store, LiveBlobs};
+
+mod blob;
+mod retention;
+#[cfg(test)]
+mod tests;
 
 /// Tool version pinned into the cache key so a `deslop-core` bump
 /// (grammar pins, normalisation rules, hashing changes) invalidates
-/// every previously-cached blob. The blob itself carries only MAGIC
-/// — the tool version is expressed via the cache directory path so
-/// blobs from different versions can coexist without collision.
+/// every previously-cached blob. Expressed via the cache directory path
+/// so blobs from different versions can coexist without collision;
+/// [`blob::SEMANTIC_EPOCH`] covers the revisions this string cannot.
 const TOOL_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Fingerprint cache directory relative to the analysis root. Shares
@@ -54,15 +57,28 @@ pub struct CachedFile {
     pub tree: NormalizedNode,
     /// Structural + sibling fingerprints extracted from `tree`.
     pub fingerprints: Vec<Fingerprint>,
+    /// One `MinHash` signature per entry of `fingerprints`,
+    /// positionally 1:1 ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
+    /// Persisted so a warm pass attaches them instead of rebuilding
+    /// every signature from token streams — the dominant cost of the
+    /// LSH stage. The decode enforces the count invariant.
+    pub signatures: Vec<Signature>,
 }
 
 /// On-disk fingerprint cache scoped to a `(language, min_nodes)`
 /// partition. One instance per language per run, opened lazily through
-/// [`FingerprintCache::open`].
+/// [`FingerprintCache::open`]. Carries its partition identity so every
+/// read and write is verified against the address that reached it
+/// ([PIPELINE-INCREMENTAL-INTEGRITY]).
 #[derive(Debug)]
 pub struct FingerprintCache {
-    /// Fully-qualified directory `<base>/fingerprints/<lang>/<ver>/<min>`.
+    /// Fully-qualified cache directory for the current partition —
+    /// `<base>/fingerprints/<lang>/<ver>/<min>`.
     root: PathBuf,
+    /// Parser language id of this partition.
+    language_id: String,
+    /// Subtree-size floor of this partition.
+    min_nodes: u32,
 }
 
 impl FingerprintCache {
@@ -80,219 +96,85 @@ impl FingerprintCache {
             .join(TOOL_VERSION)
             .join(min_nodes.to_string());
         fs::create_dir_all(&root)?;
-        Ok(Self { root })
+        Ok(Self {
+            root,
+            language_id: language_id.to_owned(),
+            min_nodes,
+        })
     }
 
     /// Returns the cached pre-analysis for `source` under `file_id`,
-    /// if present and loadable. Any decode failure is logged at
-    /// `tracing::warn!` and treated as a miss.
+    /// if present, size-admissible, and bound to exactly this lookup's
+    /// address. Any rejection is logged at `tracing::warn!` and treated
+    /// as a miss.
     #[must_use]
     pub fn get(&self, source: &[u8], file_id: FileId) -> Option<CachedFile> {
-        let path = self.path_for(source);
-        let bytes = fs::read(&path).ok()?;
-        match decode(&bytes, file_id) {
+        let source_hash = bytes_hash(source);
+        let path = self.blob_path(&source_hash);
+        let bytes = read_bounded(&path)?;
+        match decode(&bytes, &self.binding(&source_hash), file_id) {
             Ok(cached) => Some(cached),
             Err(error) => {
                 tracing::warn!(
                     path = %path.display(),
                     %error,
-                    "fingerprint cache entry unreadable — treating as miss",
+                    "fingerprint cache entry rejected — treating as miss",
                 );
                 None
             }
         }
     }
 
-    /// Writes `cached` to disk keyed by the hash of `source`. Errors
-    /// are non-fatal — the caller retries the full analysis path.
+    /// Writes `cached` to disk keyed by the hash of `source`, bound to
+    /// this partition's address. Errors are non-fatal — the caller
+    /// retries the full analysis path.
     ///
     /// # Errors
     ///
     /// Returns the underlying I/O error when the blob cannot be
     /// written.
     pub fn store(&self, source: &[u8], cached: &CachedFile) -> io::Result<()> {
-        let path = self.path_for(source);
-        let encoded = encode(cached);
-        fs::write(path, encoded)
+        let source_hash = bytes_hash(source);
+        let encoded = encode(cached, &self.binding(&source_hash));
+        if u64::try_from(encoded.len()).unwrap_or(u64::MAX) > MAX_BLOB_BYTES {
+            tracing::warn!(
+                len = encoded.len(),
+                "fingerprint cache blob exceeds the size bound — not persisted",
+            );
+            return Ok(());
+        }
+        fs::write(self.blob_path(&source_hash), encoded)
     }
 
-    /// Resolves the on-disk path for a given source blob.
-    fn path_for(&self, source: &[u8]) -> PathBuf {
-        let hash = content_hash(&String::from_utf8_lossy(source));
-        self.root.join(format!("{hash}.bin"))
+    /// Resolves the on-disk path for a source hash.
+    ///
+    /// Hashing bytes — never a decoded string — is load-bearing: a
+    /// lossy decode collapses every maximal invalid UTF-8 subsequence
+    /// to one U+FFFD, so byte-distinct files would share one entry and
+    /// the second file read in a run would be served the first file's
+    /// tree and fingerprints. Pinned by
+    /// `lossy_utf8_cache_key_must_not_collide_across_distinct_files`
+    /// in `crates/deslop/tests/cache_key_lossy_utf8_collision.rs`.
+    fn blob_path(&self, source_hash: &str) -> PathBuf {
+        self.root.join(blob_file_name(source_hash))
     }
-}
 
-/// Serialises `cached` into the little-endian blob format.
-fn encode(cached: &CachedFile) -> Vec<u8> {
-    let mut out = Vec::with_capacity(1024);
-    out.extend_from_slice(&MAGIC.to_le_bytes());
-    encode_tree(&cached.tree, &mut out);
-    let fp_len = u64::try_from(cached.fingerprints.len()).unwrap_or(u64::MAX);
-    out.extend_from_slice(&fp_len.to_le_bytes());
-    for fp in &cached.fingerprints {
-        encode_fingerprint(fp, &mut out);
-    }
-    out
-}
-
-/// Appends one normalised node (and its subtree) to `out`.
-fn encode_tree(node: &NormalizedNode, out: &mut Vec<u8>) {
-    let kind_bytes = node.kind.as_bytes();
-    let kind_len = u32::try_from(kind_bytes.len()).unwrap_or(u32::MAX);
-    out.extend_from_slice(&kind_len.to_le_bytes());
-    out.extend_from_slice(kind_bytes);
-    let start = u64::try_from(node.byte_range.start).unwrap_or(u64::MAX);
-    let end = u64::try_from(node.byte_range.end).unwrap_or(u64::MAX);
-    out.extend_from_slice(&start.to_le_bytes());
-    out.extend_from_slice(&end.to_le_bytes());
-    let child_count = u32::try_from(node.children.len()).unwrap_or(u32::MAX);
-    out.extend_from_slice(&child_count.to_le_bytes());
-    for child in &node.children {
-        encode_tree(child, out);
+    /// The full address a blob under `source_hash` must be bound to —
+    /// every component of the documented store key
+    /// `(language_id, tool_version, min_nodes, source_byte_hash)`.
+    fn binding<'a>(&'a self, source_hash: &'a str) -> BlobBinding<'a> {
+        BlobBinding {
+            language_id: &self.language_id,
+            tool_version: TOOL_VERSION,
+            min_nodes: self.min_nodes,
+            source_hash,
+        }
     }
 }
 
-/// Appends one [`Fingerprint`] record to `out`.
-fn encode_fingerprint(fp: &Fingerprint, out: &mut Vec<u8>) {
-    out.extend_from_slice(&fp.hash);
-    let start = u64::try_from(fp.byte_range.start).unwrap_or(u64::MAX);
-    let end = u64::try_from(fp.byte_range.end).unwrap_or(u64::MAX);
-    let nodes = u64::try_from(fp.node_count).unwrap_or(u64::MAX);
-    out.extend_from_slice(&start.to_le_bytes());
-    out.extend_from_slice(&end.to_le_bytes());
-    out.extend_from_slice(&nodes.to_le_bytes());
-}
-
-/// Parses the blob at `bytes` into a [`CachedFile`], reassigning every
-/// node and fingerprint to `file_id` (the registry handle issued for
-/// *this* run).
-fn decode(bytes: &[u8], file_id: FileId) -> io::Result<CachedFile> {
-    let mut cursor = Cursor::new(bytes);
-    let magic = read_u32(&mut cursor)?;
-    if magic != MAGIC {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "fingerprint cache magic mismatch",
-        ));
-    }
-    let tree = decode_tree(&mut cursor, file_id, 1)?;
-    let fp_count = u64_to_usize(read_u64(&mut cursor)?)?;
-    let mut fingerprints = Vec::with_capacity(fp_count);
-    for _ in 0..fp_count {
-        fingerprints.push(decode_fingerprint(&mut cursor, file_id)?);
-    }
-    Ok(CachedFile { tree, fingerprints })
-}
-
-/// Reconstructs one [`NormalizedNode`] subtree and all of its
-/// descendants from the cursor at nesting `depth`. Bounds recursion at
-/// [`MAX_AST_DEPTH`] so a corrupt or pre-cap blob cannot overflow the
-/// stack here — `decode_tree` is the only `NormalizedNode` producer
-/// besides `normalise_node`, so the depth invariant must hold at both
-///. Over-deep blobs fail decode and are treated as a cache miss,
-/// which re-parses and re-rejects through the normaliser.
-fn decode_tree(
-    cursor: &mut Cursor<&[u8]>,
-    file_id: FileId,
-    depth: usize,
-) -> io::Result<NormalizedNode> {
-    if depth > MAX_AST_DEPTH {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "cached AST nests deeper than the depth limit",
-        ));
-    }
-    let header = decode_node_header(cursor)?;
-    let mut children = Vec::with_capacity(header.child_count);
-    for _ in 0..header.child_count {
-        children.push(decode_tree(&mut *cursor, file_id, depth.saturating_add(1))?);
-    }
-    Ok(NormalizedNode {
-        kind: header.kind,
-        children,
-        byte_range: ByteRange {
-            start: header.start,
-            end: header.end,
-        },
-        file_id,
-    })
-}
-
-/// One node's decoded header: interned kind, byte range, and child count,
-/// read in the encoder's order. Split out of [`decode_tree`] so the
-/// recursive walk stays small after the depth guard was added.
-struct NodeHeader {
-    /// Interned normalised node kind.
-    kind: &'static str,
-    /// Inclusive start byte offset into the source file.
-    start: usize,
-    /// Exclusive end byte offset into the source file.
-    end: usize,
-    /// Number of direct children that follow in the blob.
-    child_count: usize,
-}
-
-/// Reads one node's kind / byte-range / child-count prefix from `cursor`.
-fn decode_node_header(cursor: &mut Cursor<&[u8]>) -> io::Result<NodeHeader> {
-    let kind_len = u32_to_usize(read_u32(&mut *cursor)?);
-    let mut kind_bytes = vec![0_u8; kind_len];
-    cursor.read_exact(&mut kind_bytes)?;
-    let kind_str = std::str::from_utf8(&kind_bytes)
-        .map_err(|source| io::Error::new(io::ErrorKind::InvalidData, source))?;
-    let kind = intern_kind(kind_str);
-    let start = u64_to_usize(read_u64(&mut *cursor)?)?;
-    let end = u64_to_usize(read_u64(&mut *cursor)?)?;
-    let child_count = u32_to_usize(read_u32(&mut *cursor)?);
-    Ok(NodeHeader {
-        kind,
-        start,
-        end,
-        child_count,
-    })
-}
-
-/// Reads one [`Fingerprint`] record from `cursor`, rebinding it to
-/// `file_id`.
-fn decode_fingerprint(cursor: &mut Cursor<&[u8]>, file_id: FileId) -> io::Result<Fingerprint> {
-    let mut hash = [0_u8; 32];
-    cursor.read_exact(&mut hash)?;
-    let start = u64_to_usize(read_u64(&mut *cursor)?)?;
-    let end = u64_to_usize(read_u64(&mut *cursor)?)?;
-    let node_count = u64_to_usize(read_u64(&mut *cursor)?)?;
-    Ok(Fingerprint {
-        hash,
-        file_id,
-        byte_range: ByteRange { start, end },
-        node_count,
-    })
-}
-
-/// Converts a `u64` read from the cache blob into a `usize`, wrapping
-/// a single out-of-range error variant so the decoder is legible.
-/// Only fires on 32-bit targets with absurdly large blobs — but the
-/// `Result` stays so those targets still fail cleanly rather than
-/// silently truncating.
-fn u64_to_usize(value: u64) -> io::Result<usize> {
-    usize::try_from(value).map_err(|source| io::Error::new(io::ErrorKind::InvalidData, source))
-}
-
-/// `u32 → usize` always fits — `usize` is at least 32 bits on every
-/// platform Rust supports — so this is a pure-widening helper.
-fn u32_to_usize(value: u32) -> usize {
-    value as usize
-}
-
-/// Reads a little-endian `u32` out of the cursor.
-fn read_u32(cursor: &mut Cursor<&[u8]>) -> io::Result<u32> {
-    let mut buf = [0_u8; 4];
-    cursor.read_exact(&mut buf)?;
-    Ok(u32::from_le_bytes(buf))
-}
-
-/// Reads a little-endian `u64` out of the cursor.
-fn read_u64(cursor: &mut Cursor<&[u8]>) -> io::Result<u64> {
-    let mut buf = [0_u8; 8];
-    cursor.read_exact(&mut buf)?;
-    Ok(u64::from_le_bytes(buf))
+/// On-disk file name of the blob for `source_hash` — the single
+/// definition of the `.bin` convention, shared by the lookup path and
+/// retention ([PIPELINE-INCREMENTAL-RETENTION]).
+fn blob_file_name(source_hash: &str) -> String {
+    format!("{source_hash}.bin")
 }

@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// A hashed subtree ready for clustering.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fingerprint {
     /// `blake3` digest of the normalised subtree.
     pub hash: [u8; 32],

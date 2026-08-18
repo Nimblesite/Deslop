@@ -11,12 +11,13 @@ use crate::{
         EmbeddingSpec, ProviderError,
     },
     error::CoreError,
+    fingerprint::Fingerprint,
     report::EmbeddingProvenance,
+    state::FileId,
 };
 
 use super::{
     config::PipelineConfig,
-    corpus::FingerprintCorpus,
     embedding_batch::{
         pairs_from_successful_embeddings, provenance_from, snippet_for, vectors_by_fingerprint,
         EmbeddingBatch, PendingEmbedding,
@@ -41,6 +42,17 @@ pub struct EmbeddingOutcome {
     pub provenance: Option<EmbeddingProvenance>,
 }
 
+/// Borrowed view of the corpus consumed by the embedding pass: the
+/// flat fingerprint slice plus the per-file source bytes behind it.
+/// Borrowed straight from the session's canonical storage so the pass
+/// copies no corpus state ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
+pub struct CorpusView<'a> {
+    /// Every live fingerprint, flat, in corpus order.
+    pub fingerprints: &'a [Fingerprint],
+    /// Source bytes keyed by the file id each fingerprint references.
+    pub sources: &'a HashMap<FileId, Vec<u8>>,
+}
+
 /// Runs the embedding pass honouring `config.embedding.mode`:
 ///
 /// - `Off` → skip entirely.
@@ -56,7 +68,7 @@ pub struct EmbeddingOutcome {
 /// return an empty outcome.
 pub fn run_embedding_pass(
     config: &PipelineConfig<'_>,
-    corpus: &FingerprintCorpus,
+    corpus: &CorpusView<'_>,
 ) -> Result<EmbeddingOutcome, CoreError> {
     if matches!(config.embedding.mode, EmbeddingMode::Off) {
         return Ok(EmbeddingOutcome::default());
@@ -76,7 +88,7 @@ pub fn run_embedding_pass(
 /// and produces an empty outcome defensively.
 fn embed_corpus(
     config: &PipelineConfig<'_>,
-    corpus: &FingerprintCorpus,
+    corpus: &CorpusView<'_>,
 ) -> Result<EmbeddingOutcome, CoreError> {
     let Some(provider) = config.embedding.provider else {
         return Ok(EmbeddingOutcome::default());
@@ -104,7 +116,7 @@ fn embed_corpus(
         config.embedding.progress,
         &mut observer,
     );
-    let pairs = pairs_from_successful_embeddings(&corpus.fingerprints, &batch.vectors);
+    let pairs = pairs_from_successful_embeddings(corpus.fingerprints, &batch.vectors);
     observer.log_final(pairs.len(), batch.vectors.len(), batch.failures);
     let provenance = provenance_from(
         spec,
@@ -133,7 +145,7 @@ fn open_cache(scan_root: &Path, spec: &EmbeddingSpec) -> Result<EmbeddingCache, 
 fn compute_embeddings(
     provider: &dyn EmbeddingProvider,
     cache: &EmbeddingCache,
-    corpus: &FingerprintCorpus,
+    corpus: &CorpusView<'_>,
     dimensions: usize,
     batch_yield: Option<Duration>,
     progress: Option<&dyn Fn(usize)>,
@@ -183,7 +195,7 @@ fn compute_embeddings(
 /// the pairs this tool exists to find, rendering `embedding_cos = 0.0` —
 /// a measured-and-absent claim the pass never measured.
 fn lookup_phase(
-    corpus: &FingerprintCorpus,
+    corpus: &CorpusView<'_>,
     cache: &EmbeddingCache,
     batch: &mut EmbeddingBatch,
     observer: &mut EmbeddingObserver,
@@ -209,11 +221,11 @@ struct SnippetGroup {
 
 /// Groups corpus fingerprints by snippet content hash, preserving
 /// first-seen corpus order so downstream dispatch is deterministic.
-fn group_snippets_by_content(corpus: &FingerprintCorpus) -> Vec<SnippetGroup> {
+fn group_snippets_by_content(corpus: &CorpusView<'_>) -> Vec<SnippetGroup> {
     let mut positions: HashMap<String, usize> = HashMap::new();
     let mut groups: Vec<SnippetGroup> = Vec::new();
     for (index, fingerprint) in corpus.fingerprints.iter().enumerate() {
-        let snippet = snippet_for(fingerprint, &corpus.sources);
+        let snippet = snippet_for(fingerprint, corpus.sources);
         let snippet_hash = content_hash(&snippet);
         if let Some(&position) = positions.get(&snippet_hash) {
             extend_group(&mut groups, position, index);
