@@ -75,7 +75,7 @@ Command `deslop.openReport` opens a second webview with the full ranked list —
 
 ## [VSIX-METRICS-REPORT] Duplication report webview
 
-Activating the headline opens a webview (`deslop.openDuplicationReport`) styled like the existing report webview ([VSIX-REPORT-WEBVIEW]). It presents the same data with more room: the headline totals and threshold verdict, then a sortable per-folder / per-file table of duplication percentages. It renders from the `report/snapshot` the panel host already pushes — now carrying `metrics.per_file` — so the webview stays dumb and the extension host owns all data shaping ([vsix.md §VSIX-PRINCIPLES](vsix.md#vsix-principles) principle 4).
+Activating the headline opens a webview (`deslop.openDuplicationReport`) styled like the existing report webview ([VSIX-REPORT-WEBVIEW]). It presents the same data with more room: the headline totals and threshold verdict, then a sortable per-folder / per-file table of duplication percentages. It renders from the `report/snapshot` the panel host already pushes — carrying `metrics.per_file` and the engine-computed `metrics.folders` rollup ([METRICS-REPO]), which the webview nests and renders verbatim, never recomputing a figure — so the webview stays dumb and the extension host owns all data shaping ([vsix.md §VSIX-PRINCIPLES](vsix.md#vsix-principles) principle 4).
 
 ## [VSIX-WEBVIEW-COVERAGE] Webview coverage gate
 

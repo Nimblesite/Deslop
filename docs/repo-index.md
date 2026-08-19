@@ -13,7 +13,7 @@ Reference material for agents. Read it when you need to locate something — it 
 | `clients/vscode` | VSIX; bundles the LSP + MCP binaries. |
 | `site/` | Eleventy static site. Zero duplicate CSS, hard budget 1.8k LOC. |
 | `docs/specs/SPEC.md` | Full research + design spec. |
-| `docs/plans/` | Remaining work, one file per work stream. The fused-confidence root cause, its open accuracy debt and the resolved ledger all live in [fused-score-followups.md](plans/fused-score-followups.md). |
+| `docs/plans/` | Remaining work, one file per work stream. The fused-confidence root cause, its open accuracy debt, the resolved ledger and the current branch-readiness checklist all live in [fused-score-followups.md](plans/fused-score-followups.md). |
 | `docs/snippets/agents-md-recipe.md` | Paste-ready Rule-zero recipe for other repos. |
 | `.claude/skills/` | ci-prep, code-dedup, fix-bug, submit-pr. |
 | `coverage-thresholds.json` | Single source of truth for coverage. |

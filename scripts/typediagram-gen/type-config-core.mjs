@@ -147,12 +147,15 @@ export const CORE_TYPE_CONFIG = {
     docs: "Wire payload for the `deslop/embeddingProgress` notification.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
     fieldOverrides: { done: "u64", total: "u64" },
+    fieldSerdeAttrs: { percent: ["default"] },
     fieldDocs: {
       phase: "Lifecycle phase.",
       provider_id: "Provider id the swap targets (`ollama`).",
       model_id: "Model id the swap targets.",
       done: "Subtrees embedded so far.",
       total: "Total subtrees in the current corpus.",
+      percent:
+        "Completion percentage, computed by the engine's single `percent` function ([METRICS-REPO]) over `done / total` (`0` when `total` is zero). Clients render it verbatim — computing a progress percentage client-side is prohibited.",
       message: "Diagnostic message populated only when `phase == Failed`.",
     },
   },

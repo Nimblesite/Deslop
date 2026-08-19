@@ -69,6 +69,15 @@ on drift. Coverage floors are owned by `coverage-thresholds.json`
   ([pipeline.md §EXIT-CODES](pipeline.md)) the moment repo-wide weighted
   duplication climbs past it. The same threshold surfaces as a single LSP startup
   warning ([CI-DESLOP] is a CLI-only *gate*; the live LSP surface only *warns*).
+  Provenance is contract-tested by `scripts/dup-gate-source.test.mjs`, which
+  `make lint` runs: `dup-gate` must depend on `build` and invoke
+  `./target/release/deslop`, `make build` must compile the workspace rather than
+  download a release archive, `ci.yml` must run `make build` before `make
+  dup-gate`, and no workflow may reach for the Marketplace action — which
+  installs a *published* release — to check this repository. The single
+  exemption is `action-selftest.yml`, whose whole purpose is proving the
+  published action works and which scans the `examples/` fixtures, never this
+  tree. A gate running last month's binary would report last month's percentage.
 - **[GITHUB-CODE-SCANNING] CodeQL** — `codeql.yml` runs CodeQL
   `security-extended` to feed GitHub code-scanning alerts (PRs to `main`, `v*`
   tags, weekly), across the `rust` / `javascript-typescript` / `actions` matrix

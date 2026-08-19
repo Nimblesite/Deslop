@@ -93,6 +93,7 @@ type EmbeddingProgress {
   model_id: String
   done: Int
   total: Int
+  percent: Float
   message: Option<String>
 }
 
@@ -184,6 +185,7 @@ type EmbeddingProvenance {
 type ReportSignals {
   structural: Float
   token_jaccard: Float
+  shape: Float
   embedding_cos: Float
   fused: Float
   agreement: Float
@@ -203,14 +205,20 @@ type ReportOccurrence {
 
 type ReportCluster {
   id: String
+  rank: Int
+  rank_band: String
   weight: Float
   size: Int
   canonical_node_count: Int
   signals: ReportSignals
   bucket: String
   category: String
+  language: String
+  meets_fused_gate: Bool
+  evidence_verdict: String
   occurrences: List<ReportOccurrence>
   occurrences_total: Int
+  occurrence_count: Int
   occurrences_truncated: Bool
   summary: String
   interpretation: String

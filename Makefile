@@ -148,6 +148,8 @@ lint: typediagram-gen
 	@node scripts/verify-env-path-writes.mjs
 	@echo "==> Docs installer snippet fail-closed gate ([DEPLOY-DOCS-INSTALLER-FAILCLOSED])..."
 	@node --test scripts/installer-snippet.test.mjs
+	@echo "==> Duplication-gate provenance gate ([CI-DESLOP])..."
+	@node --test scripts/dup-gate-source.test.mjs
 
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
 ##      Depends on typediagram-gen because rustfmt walks the module tree

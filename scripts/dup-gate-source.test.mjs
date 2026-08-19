@@ -23,6 +23,14 @@ const ciWorkflow = readFileSync(resolve(repoRoot, ".github/workflows/ci.yml"), "
 // pins. It scans the examples/ fixtures, never this repository's own tree.
 const PUBLISHED_CLI_EXEMPT = "action-selftest.yml";
 
+// The `uses:` value a workflow line carries, normalised so a step written as
+// a list item (`- uses: ./`) and one written as a plain mapping key read the
+// same. Line-exact string work, never a pattern match over the YAML.
+function stepValue(line) {
+  const trimmed = line.trim();
+  return trimmed.startsWith("- ") ? trimmed.slice(2).trim() : trimmed;
+}
+
 // Recipe lines of a make target: everything from the target line up to the
 // next line that starts in column 0. Line-exact, no pattern matching.
 function recipe(target) {
