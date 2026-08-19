@@ -63,11 +63,20 @@ erased:
      lightly-edited copies stay high; framework-mandated scaffolding (every
      name differs) and data tables (every literal differs) fall low.
    - `rename_consistency` — the Type-2 discriminator, [TECH-PMATCH-BAKER]
-     quantified: the lesser of literal preservation (fraction of literal
-     positions unchanged; vacuously 1.0 with none) and rename-mapping
-     coverage, scaled by the smooth anchor-mass weight `anchors / (anchors
-     + content_gate.rename_evidence_half_mass)`, where anchors are the
-     preserved literal positions plus the explained identifier positions.
+     quantified: the lesser of literal consistency (fraction of literal
+     positions unchanged **or echoing an elected substitution**; vacuously
+     1.0 with none) and rename-mapping coverage, scaled by the smooth
+     anchor-mass weight `anchors / (anchors +
+     content_gate.rename_evidence_half_mass)`, where anchors are the
+     consistent literal positions plus the explained identifier positions.
+     A literal *echo* (#409) is a substituted literal position whose raw
+     bytes transform into the partner's bytes exactly by one
+     bijection-explained identifier substitution — `"OrderService"` →
+     `"UserService"` renamed alongside its symbol is the rename done
+     thoroughly, not evidence against it — and the echo corroborates that
+     substitution the way a repeated identifier occurrence would, so
+     completing a rename can never score below leaving it half-finished
+     (`rename_literal_monotonicity.rs`).
      Coverage classifies each identifier position exactly as Baker's
      prev-encoding constrains it: raw-byte identity is a fixed-symbol
      match, explained by the position itself; a substitution is explained

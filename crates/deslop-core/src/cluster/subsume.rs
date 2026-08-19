@@ -33,15 +33,17 @@
 //! one-line statement family nested inside them, which also reaches a
 //! file the functions never mention.
 //!
-//! *Which view survives?* Physical enclosure, not ranking weight. A
-//! whole-method clone and the run of single-statement clones inside it
-//! cover the same bytes in both directions, and the fine-grained view
-//! always ranks heavier because it contributes one occurrence per
-//! statement. Choosing by weight therefore rendered a duplicated
-//! 60-statement method as 120 one-line occurrences and dropped the
-//! method itself — the only extractable duplicate in the corpus,
-//! reported as unactionable line noise. The enclosing view is the
-//! duplication; the nested view re-describes it.
+//! *Which view survives?* Measured content credibility first
+//! ([`precision_preference`], #367/#408), then physical enclosure —
+//! never ranking weight. A whole-method clone and the run of
+//! single-statement clones inside it cover the same bytes in both
+//! directions, and the fine-grained view always ranks heavier because
+//! it contributes one occurrence per statement. Choosing by weight
+//! therefore rendered a duplicated 60-statement method as 120 one-line
+//! occurrences and dropped the method itself — the only extractable
+//! duplicate in the corpus, reported as unactionable line noise. Within
+//! one credibility tier the enclosing view is the duplication; the
+//! nested view re-describes it.
 //!
 //! *Before either question, file coverage.* A view that names a file
 //! the survivor does not name is never dropped, however deeply it nests
@@ -212,13 +214,34 @@ fn preferred_view(proposed: &Cluster, other: &Cluster) -> Preference {
 /// actionable. The deleted view is the only place the reader would ever
 /// see the duplication; replacing a credible whole-method Type-3 clone
 /// with a saturated 13-node fragment nested inside it erased the only
-/// actionable finding in five languages. Where the tiers do not
-/// distinguish the views, the structurally more precise view wins as
-/// before ([`structural_precision`]).
+/// actionable finding in five languages.
+///
+/// The reverse arm carries a byte-proof bar: a demoted view yields only
+/// to *verbatim-proven* duplication
+/// ([`crate::content::ContentEvidence::verbatim_dominated`]). Any
+/// sub-window of a demoted surface measures higher agreement than the
+/// surface itself — the divergent positions are what the window
+/// excludes — so without the bar, the #197 in-file sibling-method
+/// family resurfaced as a credible six-line window family the moment
+/// its demoted umbrella died (`dart_issue_197_single_file_structural_only`).
+/// Narrowing a demoted surface must not launder it into a finding;
+/// byte-equal copies are proof of duplication in their own right and
+/// still overturn the umbrella that would bury them. Where the tiers do
+/// not distinguish the views, the structurally more precise view wins
+/// as before ([`structural_precision`]) — so between two credible
+/// views, physical enclosure stands. Two sharper within-credible
+/// comparisons were built, measured, and removed: raw support (1.0
+/// against 0.89 shattered the `csharp-fact-cross-cluster` method pair
+/// into fragments) and an act-now grade over measured support (0.85
+/// elected a verbatim core over the credible 0.8 window enclosing it
+/// and orphaned that window's other absorbed views —
+/// `issue_343_sum_clamp_saturation` counted the orphan). Content
+/// overturns enclosure only across the demoted/credible boundary,
+/// never inside it.
 fn precision_preference(proposed: &Cluster, other: &Cluster) -> Preference {
     match (demoted(proposed), demoted(other)) {
         (false, true) => Preference::First,
-        (true, false) => Preference::Second,
+        (true, false) if other.content.verbatim_dominated => Preference::Second,
         _ => structural_precision(proposed, other),
     }
 }

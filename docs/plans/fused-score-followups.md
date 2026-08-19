@@ -38,8 +38,8 @@ view already deleted by subsumption.
 ### The red test that pins this section
 
 `content_proven_nested_clone_survives_content_poor_enclosing_view` in
-[`cross_cluster_collapse.rs`](../../crates/deslop/tests/cross_cluster_collapse.rs) **fails on `make test`
-today**, and is the enforceable statement of the defect. Two TypeScript files wrap one byte-identical
+[`cross_cluster_collapse.rs`](../../crates/deslop/tests/cross_cluster_collapse.rs) — **green since the
+§1 landing** — is the enforceable statement of the defect. Two TypeScript files wrap one byte-identical
 five-line block in otherwise-divergent arithmetic. At `--min-nodes 8 --embeddings off` the report contains
 exactly **one** cluster:
 
@@ -58,8 +58,8 @@ content evidence existed to compare the two views. That is the false negative: t
 evidence is destroyed by the weakest available view.
 
 The test requires the inner occurrence set to survive with `size = 2`, bucket `identical`, and
-`structural = token_jaccard = agreement = fused = 1`. It stays red until the split below lands; no floor,
-threshold, or assertion may be moved to make it green.
+`structural = token_jaccard = agreement = fused = 1`. The split below landed it; no floor, threshold, or
+assertion was moved to make it green.
 
 ### Two fixtures, one defect
 
@@ -94,13 +94,34 @@ into 3,616 closure components, and the whole content-attachment interval cost ab
 would instead ask for content on ~596,000 pairs, and the evidence includes cluster-level facts — the
 canonical-member mean, the verbatim-member share — that would change meaning as well as cost.
 
-- [ ] Split materialisation from destructive cross-cluster subsumption: materialise closure components,
+- [x] Split materialisation from destructive cross-cluster subsumption: materialise closure components,
       attach content evidence, then choose the surviving view and perform the final report reweight.
-- [ ] Preserve `[PIPELINE-CLUSTER-SUBSUME]`'s file-coverage and enclosure guarantees for ties where
-      content does not distinguish the views.
-- [ ] Add the Type-3 fixtures as a black-box regression asserting the *enclosing* method pair is the
+      **Landed:** `build_ranked_fused_clusters` now attaches content between ranking and
+      `collapse_cross_cluster_overlap`; the survivor election consults the renderer's own routing
+      (`measured_kind`): a demoted view never deletes a credible one, and in the reverse direction a
+      demoted encloser yields only to *verbatim-proven* nested duplication
+      (`ContentEvidence::verbatim_dominated`) — so it still absorbs its own diluted sub-windows.
+      Between two credible views enclosure stands untouched. Three sharper comparisons were built,
+      measured, and removed: raw support (shattered `csharp-fact-cross-cluster`'s 0.8947 method pair
+      into fragments), the rendered fused grade (read `RENAME_CONSISTENCY_DISCOUNT` as doubt and let
+      `ts-type2-loop`'s proven rename pair be deleted by its own inner fragments), and an act-now
+      support grade at 0.85 (elected a verbatim core over the credible 0.8 window enclosing it and
+      orphaned that window's other absorbed views — `issue_343_sum_clamp_saturation` counted the
+      orphan). The §-pin `content_proven_nested_clone_survives_content_poor_enclosing_view` is green.
+- [x] Preserve `[PIPELINE-CLUSTER-SUBSUME]`'s file-coverage and enclosure guarantees for ties where
+      content does not distinguish the views. **Landed:** within one credibility tier the
+      ladder is unchanged; `cross_cluster_enclosure.rs` (all five) and
+      `cluster_subsumption`/`cluster_overlap_collapse` stay green. Spec updated to name the two content
+      gates.
+- [x] Add the Type-3 fixtures as a black-box regression asserting the *enclosing* method pair is the
       visible cluster. Assert the occurrence set, not only the bucket — the fragments would satisfy a
-      bucket-only assertion. Measured today at `--min-nodes 8`:
+      bucket-only assertion. **Landed:** `crates/deslop/tests/type3_enclosing_method.rs`.
+      `csharp-type3` is green — the pair now renders `nearly_identical, fused 0.9141` with every
+      fragment absorbed. `dart`/`go`/`python`/`ts-type3-stmt` stay **red on purpose**: traced, their
+      whole-method pairs are never *admitted* (structural 0.0 after the insertion and a token overlap
+      below `FUSED_THRESHOLD` on these shorter bodies; csharp clears it at ≈0.91), so no subsumption
+      order can recover them — the residue of #408 named in the §2 table. Measured before the fix at
+      `--min-nodes 8`:
 
       | fixture | visible | hidden | what is reported |
       |---|---|---|---|
@@ -115,8 +136,14 @@ canonical-member mean, the verbatim-member share — that would change meaning a
 
 ## 2. Content-gate recall defects — #409, #410, and the 10 softened fixtures
 
-- [ ] **The 10 remaining softened files (7 families): adjudicated, and they pin three distinct engine
-      defects.** Seven independent judges plus an adversarial reviewer read both sides of every pair and
+- [x] **The 10 remaining softened files (7 families): adjudicated, and they pin three distinct engine
+      defects.** **Status (2026-08-19):** every family's fixture carries its maximal content on disk and
+      every family is either green or pinned red by an active test — nothing remains softened. The four
+      `literal_preservation` families (`ts-decorators`, `ts-enums`, `jsx-entity-invariance`,
+      `ts-comment-literal-invariance`) went green with #409. `ts-qualified-type-rename` is pinned red by
+      `typescript_qualified_type_name_rename_is_token_invariant` (#410, open). The `*-type3` families are
+      pinned red by `type3_enclosing_method.rs`, whose assertions are aimed at the *enclosing* pair — the
+      re-aim this item required — and stay red on the #408 admission residue. Seven independent judges plus an adversarial reviewer read both sides of every pair and
       re-measured. The claim that `[REPAIR-RENAME-ANCHOR-MASS]` unblocked all 17 is half true — but the
       reason the remaining seven demote is **not** that their renames are unprovable. Ranked by rename
       purity:
@@ -143,7 +170,7 @@ canonical-member mean, the verbatim-member share — that would change meaning a
       count, not the term's existence, so it is a scoped design fix
       ([#409](https://github.com/Nimblesite/Deslop/issues/409)) rather than a quarantine.
 
-- [ ] **[#409](https://github.com/Nimblesite/Deslop/issues/409) is a recall defect, one-sided.** The issue
+- [x] **[#409](https://github.com/Nimblesite/Deslop/issues/409) is a recall defect, one-sided.** The issue
       originally claimed `literal_preservation`'s blind count was wrong in *both* directions. The precision
       half was re-measured and does not hold, so it is withdrawn: two files identical except `* 0.9` vs
       `* 0.75` render `nearly_identical` at `fused 0.9762`, and that is the **right** answer — 97.6%
@@ -162,13 +189,31 @@ canonical-member mean, the verbatim-member share — that would change meaning a
       **Pinned** by `crates/deslop/tests/rename_literal_monotonicity.rs` (red on purpose) with two minimal
       fixtures differing by exactly one string literal — `ts-rename-literal-consistent` renames
       `"OrderService"` → `"UserService"` with its symbol, `ts-rename-literal-inconsistent` leaves it
-      behind. The score is **inverted**, not merely low: the thorough rename renders `structural_only,
-      fused 0.3833, rename 0.4259`; the half-finished one renders `nearly_identical, fused 0.7714, rename
-      0.8571`. Finishing a rename drops the pair below the reuse line, so the tool advises worse the more
-      carefully the developer renamed. The load-bearing assertion is the monotonicity one — *a more
-      complete rename can never be weaker evidence of a rename than a less complete one* — because it is
-      true independently of where any floor sits and therefore cannot be satisfied by moving one. This
-      single test replaces restoring five softened fixtures that would all have pinned the same root cause.
+      behind. The score was **inverted**, not merely low: the thorough rename rendered `structural_only,
+      fused 0.3833, rename 0.4259`; the half-finished one rendered `nearly_identical, fused 0.7714, rename
+      0.8571`. The load-bearing assertion is the monotonicity one — *a more complete rename can never be
+      weaker evidence of a rename than a less complete one* — because it is true independently of where
+      any floor sits and therefore cannot be satisfied by moving one.
+
+      **Landed:** `content/rename.rs` now recognises a literal **echo** — a substituted literal position
+      whose raw bytes transform into the partner's bytes exactly by one bijection-explained identifier
+      substitution. An echo counts as a consistent literal, raises the anchor mass, and corroborates its
+      substitution the way a repeated identifier occurrence would. Both monotonicity pins are green.
+      Re-measured as this section requires: `dart_issue_197_single_file_structural_only` green (after the
+      subsumption verbatim bar below), all three F# data-table/rename suites green,
+      `type2_rename_anchor_floor` green, `fused_golden_bands` 7/7. Measured family outcomes at the same
+      floors: `ts-decorators` `nearly_identical, fused 0.8864`; `ts-enums` `nearly_identical, rename
+      0.913`; `jsx-entity-invariance` `nearly_identical, fused 0.875`; `ts-comment-literal-invariance`
+      `nearly_identical, fused 0.9048`; `js-classes` promoted from the gate's blind demotion to
+      `nearly_identical, rename 0.8519` and its assertion re-aimed to the accurate verdict. No floor,
+      threshold, or existing assertion value was moved.
+
+      The re-measure also surfaced a subsumption interaction: any sub-window of a demoted surface
+      measures higher agreement than the surface itself, so the #197 sibling family resurfaced as a
+      credible six-line window family the moment its demoted umbrella died. `precision_preference` now
+      lets a demoted view yield only to *verbatim-proven* duplication
+      (`ContentEvidence::verbatim_dominated`); narrowing a demoted surface cannot launder it into a
+      finding, while byte-identical clones still overturn the umbrella that would bury them.
 
 - [ ] **[#410](https://github.com/Nimblesite/Deslop/issues/410) is the gate's *other* term, and it is
       independent of #409.** `rename_consistency` is one product —
@@ -185,10 +230,12 @@ canonical-member mean, the verbatim-member share — that would change meaning a
       alongside its symbol raises the anchor count as well as the numerator. Recorded as a blocked-by edge
       on the issues.
 
-      **No test pins #410.** Restoring `ts-qualified-type-rename` is what would:
-      `typescript_features.rs:104` (`typescript_qualified_type_name_rename_is_token_invariant`) asserts
-      `nearly_identical` and goes red the moment the maximal rename comes back. That restoration belongs
-      with the ten files above, not before them.
+      **Re-measured after #409 (2026-08-19): unchanged, as predicted.** The fixture has no substituted
+      literals, so no echo fires and the anchor set is identical; the whole-function pair still demotes on
+      anchor mass alone and is then deleted in favour of its byte-identical tail fragment (rendered
+      `identical`, bytes 70..141 / 67..138 — the post-annotation suffix). The pin is now **active red**:
+      `typescript_qualified_type_name_rename_is_token_invariant` fails against the maximal rename on
+      disk. #410 remains the open §2 work.
 
 ## 3. Re-verify the fused false positives
 
