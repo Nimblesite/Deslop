@@ -45,6 +45,16 @@ pub(crate) enum MockBehavior {
     OverflowingEmbeddings,
 }
 
+/// Everything one mock instance needs to answer `/api/embed`: the
+/// failure behaviour plus the declared semantic ground truth.
+#[derive(Clone, Debug)]
+struct MockConfig {
+    /// How embed requests succeed or fail.
+    behavior: MockBehavior,
+    /// Declared behaviour-equivalence groups ([`MockOllama::spawn_semantic`]).
+    semantic_groups: Arc<Vec<Vec<String>>>,
+}
+
 /// In-process mock Ollama HTTP server that returns deterministic
 /// embedding vectors. Keep the helper tiny — production tests should
 /// only depend on the loopback endpoint, the served model name, and
@@ -78,6 +88,35 @@ impl MockOllama {
 
     /// Spawns a mock that answers `/api/embed` according to `behavior`.
     pub(crate) fn spawn_with(behavior: MockBehavior) -> Result<Self> {
+        Self::spawn_configured(MockConfig {
+            behavior,
+            semantic_groups: Arc::new(Vec::new()),
+        })
+    }
+
+    /// Spawns a happy-path mock that additionally embeds a declared
+    /// semantic verdict: every snippet containing any marker of one
+    /// group receives a shared dominant component, so same-group
+    /// snippets measure a high cosine regardless of how differently
+    /// they are written. This is how a test states the ground truth a
+    /// real semantic model would report for behaviour-equivalent
+    /// implementations — content shingles cannot express "same
+    /// behaviour, different text", which is the entire Type-4 category
+    /// (`dart_issue_119_embedding_role_mismatch`). Unmarked snippets
+    /// keep the honest shingle vector (#369).
+    pub(crate) fn spawn_semantic(groups: &[&[&str]]) -> Result<Self> {
+        let owned = groups
+            .iter()
+            .map(|group| group.iter().map(ToString::to_string).collect())
+            .collect();
+        Self::spawn_configured(MockConfig {
+            behavior: MockBehavior::Happy,
+            semantic_groups: Arc::new(owned),
+        })
+    }
+
+    /// Spawns the HTTP acceptor thread for one mock configuration.
+    fn spawn_configured(config: MockConfig) -> Result<Self> {
         let listener = TcpListener::bind("127.0.0.1:0")?;
         listener.set_nonblocking(true)?;
         let addr = listener.local_addr()?;
@@ -96,7 +135,7 @@ impl MockOllama {
                 server_max.as_ref(),
                 server_max_input.as_ref(),
                 server_truncation.as_ref(),
-                behavior,
+                &config,
             );
         });
         Ok(Self {
@@ -148,7 +187,7 @@ fn serve(
     max_embed_batch_len: &AtomicUsize,
     max_embed_input_chars: &AtomicUsize,
     embed_truncation_enabled: &AtomicBool,
-    behavior: MockBehavior,
+    config: &MockConfig,
 ) {
     while !stop.load(Ordering::SeqCst) {
         match listener.accept() {
@@ -161,7 +200,7 @@ fn serve(
                     max_embed_batch_len,
                     max_embed_input_chars,
                     embed_truncation_enabled,
-                    behavior,
+                    config,
                 );
             }
             Err(error) if error.kind() == ErrorKind::WouldBlock => {
@@ -177,7 +216,7 @@ fn handle_stream(
     max_embed_batch_len: &AtomicUsize,
     max_embed_input_chars: &AtomicUsize,
     embed_truncation_enabled: &AtomicBool,
-    behavior: MockBehavior,
+    config: &MockConfig,
 ) {
     let Ok(request) = read_request(&mut stream) else {
         return;
@@ -187,7 +226,7 @@ fn handle_stream(
         max_embed_batch_len,
         max_embed_input_chars,
         embed_truncation_enabled,
-        behavior,
+        config,
     );
     let _ = stream.write_all(response.as_bytes());
 }
@@ -268,7 +307,7 @@ fn response_for(
     max_embed_batch_len: &AtomicUsize,
     max_embed_input_chars: &AtomicUsize,
     embed_truncation_enabled: &AtomicBool,
-    behavior: MockBehavior,
+    config: &MockConfig,
 ) -> String {
     match request.path.as_str() {
         "/api/tags" => json_response("200 OK", &tags_body()),
@@ -277,7 +316,10 @@ fn response_for(
         // vector width even while real embeds are being rejected.
         "/api/embed" if is_dimension_probe(&request.body) => {
             let inputs = request_inputs(&request.body).unwrap_or_default();
-            let embeddings: Vec<Vec<f32>> = inputs.iter().map(|text| embed_vector(text)).collect();
+            let embeddings: Vec<Vec<f32>> = inputs
+                .iter()
+                .map(|text| embed_vector(text, &config.semantic_groups))
+                .collect();
             json_response("200 OK", &json!({ "embeddings": embeddings }))
         }
         "/api/embed" => {
@@ -287,20 +329,23 @@ fn response_for(
                 max_embed_input_chars,
                 embed_truncation_enabled,
             );
-            embed_response(&request.body, behavior)
+            embed_response(&request.body, config)
         }
         _ => json_response("404 Not Found", &json!({ "error": "not found" })),
     }
 }
 
-fn embed_response(body: &str, behavior: MockBehavior) -> String {
+fn embed_response(body: &str, config: &MockConfig) -> String {
     let inputs = request_inputs(body).unwrap_or_default();
-    match behavior {
+    match config.behavior {
         MockBehavior::RejectAllEmbeds => context_length_error(),
         MockBehavior::RejectMultiInputEmbeds if inputs.len() > 1 => context_length_error(),
         MockBehavior::OverflowingEmbeddings => overflowing_response(inputs.len()),
         MockBehavior::Happy | MockBehavior::RejectMultiInputEmbeds => {
-            let embeddings: Vec<Vec<f32>> = inputs.iter().map(|text| embed_vector(text)).collect();
+            let embeddings: Vec<Vec<f32>> = inputs
+                .iter()
+                .map(|text| embed_vector(text, &config.semantic_groups))
+                .collect();
             json_response("200 OK", &json!({ "embeddings": embeddings }))
         }
     }
@@ -329,11 +374,24 @@ const FNV_OFFSET_BASIS: u64 = 14_695_981_039_346_656_037;
 /// Stable FNV-1a prime for shingle hashing.
 const FNV_PRIME: u64 = 1_099_511_628_211;
 
+/// Weight of one declared semantic-group component, sized to dominate
+/// the shingle mass of any fixture-scale snippet: a whole test function
+/// carries a few hundred distinct shingles (norm ≈ 25), so two
+/// same-group snippets measure ≥ 0.9 while unmarked snippets keep the
+/// pure shingle cosine.
+const SEMANTIC_GROUP_WEIGHT: f32 = 100.0;
+
 /// Returns a deterministic signed feature hash of the snippet's distinct
-/// five-byte shingles. Content overlap now drives cosine: renamed clones
+/// five-byte shingles. Content overlap drives cosine: renamed clones
 /// stay close while unrelated snippets of coincidentally similar length do
 /// not inherit the near-unit floor of the deleted four-lane vector (#369).
-fn embed_vector(text: &str) -> Vec<f32> {
+///
+/// A snippet containing any marker of a declared semantic group
+/// ([`MockOllama::spawn_semantic`]) additionally receives that group's
+/// dominant shared component — the mock reporting the behaviour-level
+/// verdict a real model would, which no content statistic can reach for
+/// a genuine Type-4 pair.
+fn embed_vector(text: &str, semantic_groups: &[Vec<String>]) -> Vec<f32> {
     let mut vector = vec![0.0_f32; MOCK_EMBEDDING_DIMENSIONS];
     for shingle in distinct_shingles(text) {
         let hash = shingle_hash(shingle);
@@ -343,7 +401,24 @@ fn embed_vector(text: &str) -> Vec<f32> {
             *slot += sign;
         }
     }
+    apply_semantic_groups(&mut vector, text, semantic_groups);
     vector
+}
+
+/// Adds the dominant shared component for every declared semantic group
+/// whose marker the snippet contains, one reserved lane per group from
+/// the top of the vector down.
+fn apply_semantic_groups(vector: &mut [f32], text: &str, semantic_groups: &[Vec<String>]) {
+    for (group_index, group) in semantic_groups.iter().enumerate() {
+        if group.iter().any(|marker| text.contains(marker)) {
+            let lane = MOCK_EMBEDDING_DIMENSIONS
+                .saturating_sub(1)
+                .saturating_sub(group_index);
+            if let Some(slot) = vector.get_mut(lane) {
+                *slot += SEMANTIC_GROUP_WEIGHT;
+            }
+        }
+    }
 }
 
 /// Distinct byte shingles, with one whole-text feature for short inputs.
