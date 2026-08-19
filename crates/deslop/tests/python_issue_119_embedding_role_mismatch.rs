@@ -111,18 +111,6 @@ fn class_function_role_mismatch_does_not_surface() -> Result<()> {
 // pass pairs share one top-level role, so the role gate must NOT hide
 // them. They must still surface as "Same behavior, different code".
 #[test]
-#[ignore = "GH #358: MEASURED — the role gate is NOT at fault and never executes here. \
-            The ANN pass logs `pair_count=0`, the report logs `hidden=0`, so nothing is \
-            suppressed; no cluster is formed at all. Root cause is fixture calibration \
-            against the deleted GH #366 mock vector (two constant lanes floored every \
-            pair near cosine 1.0). Under the honest GH #369 shingle mock this fixture \
-            measures cosine 0.27, and the real nomic-embed-text measures 0.78 — both \
-            below MIN_COSINE = 0.80. A same-role probe fixture that DOES clear 0.80 \
-            surfaces correctly as `same_behavior` (visible=1, hidden=0), proving the gate \
-            keeps matching pairs. GH #356 is ruled out: an ANN bridge cannot relabel a \
-            component when zero ANN pairs exist. Fixing this needs a fixture the *real* \
-            embedder pairs, which the lexical mock cannot also pair — a GH #366 harness \
-            follow-up, not a production change. Assertions are intact — `-- --ignored`."]
 fn same_role_function_pair_still_surfaces() -> Result<()> {
     let scan_root = fixture("python-issue-119-same-role");
     let report = run_report(&scan_root)?;
