@@ -9,7 +9,8 @@
 //! bucket asserted for each follows [FUSION-CONTENT-GATE]: measured
 //! content evidence decides. A rename whose surviving content corroborates
 //! its identifier mapping reaches the act-now `nearly_identical` bucket.
-//! `js-classes` is the maximal case (#409): a total, repeated bijection
+//! `js-classes` is the maximal case ([REPAIR-RENAME-LITERAL-ECHO], #409):
+//! a total, repeated bijection
 //! (`balance -> funds`, `amount -> value`, `deposit -> credit`) whose
 //! literals *echo* the same substitutions byte for byte — the rename done
 //! thoroughly is proof of copying, not disagreement, so the pair renders

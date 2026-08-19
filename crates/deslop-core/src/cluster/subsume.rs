@@ -34,7 +34,8 @@
 //! file the functions never mention.
 //!
 //! *Which view survives?* Measured content credibility first
-//! ([`precision_preference`], #367/#408), then physical enclosure —
+//! ([`precision_preference`], [REPAIR-SUBSUME-CONTENT-FIRST], #367/#408),
+//! then physical enclosure —
 //! never ranking weight. A whole-method clone and the run of
 //! single-statement clones inside it cover the same bytes in both
 //! directions, and the fine-grained view always ranks heavier because

@@ -1,4 +1,5 @@
-//! Type-2 rename evidence ([TECH-PMATCH-BAKER], [FUSION-CONTENT-GATE]).
+//! Type-2 rename evidence ([TECH-PMATCH-BAKER], [FUSION-CONTENT-GATE],
+//! [REPAIR-RENAME-LITERAL-ECHO]).
 //!
 //! One product per member pair:
 //! `min(literal_consistency, mapping_coverage) * anchor_weight`, where

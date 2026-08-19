@@ -69,7 +69,7 @@ erased:
      anchor-mass weight `anchors / (anchors +
      content_gate.rename_evidence_half_mass)`, where anchors are the
      consistent literal positions plus the explained identifier positions.
-     A literal *echo* (#409) is a substituted literal position whose raw
+     A literal *echo* ([REPAIR-RENAME-LITERAL-ECHO], #409) is a substituted literal position whose raw
      bytes transform into the partner's bytes exactly by one
      bijection-explained identifier substitution — `"OrderService"` →
      `"UserService"` renamed alongside its symbol is the rename done

@@ -1,6 +1,7 @@
 //! Black-box regression for the five-language Type-3 recall hole
-//! (#408, [PIPELINE-CLUSTER-SUBSUME]): one inserted statement must not
-//! hide a whole-method clone behind its own fragments.
+//! (#408, [PIPELINE-CLUSTER-SUBSUME], [REPAIR-SUBSUME-CONTENT-FIRST]): one
+//! inserted statement must not hide a whole-method clone behind its own
+//! fragments.
 //!
 //! Each fixture pairs two methods that are identical except for a
 //! single inserted statement. The insertion rehashes every ancestor

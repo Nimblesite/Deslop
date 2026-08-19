@@ -1,16 +1,16 @@
 //! Renaming a literal *alongside the symbol it names* is part of the
 //! rename, not evidence against it ([FUSION-CONTENT-GATE],
-//! [TECH-PMATCH-BAKER], gh #409).
+//! [TECH-PMATCH-BAKER], [REPAIR-RENAME-LITERAL-ECHO], gh #409).
 //!
-//! `content::pair_rename_consistency` scores rename evidence as
-//! `min(literal_preservation, coverage) * anchor_weight(anchors)`.
-//! `literal_preservation` is a bare count of byte-identical literal
-//! positions: it never asks *why* a literal differs. A string that
-//! spells the name of a renamed class therefore reads as a contradiction
+//! `content::rename` scores rename evidence as
+//! `min(literal_consistency, coverage) * anchor_weight(anchors)`. That
+//! first factor used to be a bare count of byte-identical literal
+//! positions: it never asked *why* a literal differed. A string that
+//! spells the name of a renamed class therefore read as a contradiction
 //! of the rename, even though renaming it is what makes the rename
 //! complete.
 //!
-//! The consequence is not merely a lower score, it is an inverted one.
+//! The consequence was not merely a lower score, it was an inverted one.
 //! These two fixtures are the same rename of the same class pair and
 //! differ by a single string literal:
 //!
@@ -20,18 +20,21 @@
 //! - `ts-rename-literal-inconsistent` leaves `"OrderService"` behind —
 //!   the same rename, done sloppily and left half-finished.
 //!
-//! Measured today, the sloppy one wins: `nearly_identical` at
+//! Before the fix the sloppy one won: `nearly_identical` at
 //! `fused 0.7714` / `rename_consistency 0.8571`, against
 //! `structural_only` at `fused 0.3833` / `rename_consistency 0.4259`.
-//! The thorough rename lands below the `< 0.6` band in which `CLAUDE.md`
+//! The thorough rename landed below the `< 0.6` band in which `CLAUDE.md`
 //! instructs an agent to **write the copy anyway**, so the tool's advice
-//! gets worse the more consistently the developer renamed. That is a
-//! false negative, and it is the whole of gh #409 in one variable.
+//! got worse the more consistently the developer renamed — a false
+//! negative, and the whole of gh #409 in one variable.
 //!
-//! **This suite is red on purpose.** Do not weaken it, and do not raise
-//! or lower a threshold to make it pass — the defect is that
-//! `literal_preservation` is blind to the reason a literal changed, and
-//! the fix has to be re-measured against
+//! Green since [REPAIR-RENAME-LITERAL-ECHO]: a substituted literal whose
+//! bytes transform into the partner's by an elected identifier
+//! substitution counts as consistent, and corroborates that
+//! substitution. Do not weaken this suite, and never raise or lower a
+//! threshold to keep it passing — the monotonicity assertion is true
+//! independently of where any floor sits. Changes to the literal term
+//! must be re-measured against
 //! `dart_issue_197_single_file_structural_only.rs` and the F# data-table
 //! corpus, which that same term is what protects.
 
