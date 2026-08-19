@@ -192,8 +192,14 @@ fn the_strongest_cross_file_edge_outranks_width_in_a_run() {
         members: vec![0, 1, 2],
         edges: vec![edge(0, 2, 0.93), edge(1, 2, 1.0)],
     }];
-    let clusters =
-        build_ranked_fused_clusters(&members, &signatures, &vectors, &window_wins, &[], &HashMap::new());
+    let clusters = build_ranked_fused_clusters(
+        &members,
+        &signatures,
+        &vectors,
+        &window_wins,
+        &[],
+        &HashMap::new(),
+    );
     let ranges: Vec<Vec<(usize, usize)>> = clusters.iter().map(member_ranges).collect();
     assert_eq!(
         ranges,
@@ -205,8 +211,14 @@ fn the_strongest_cross_file_edge_outranks_width_in_a_run() {
         members: vec![0, 1, 2],
         edges: vec![edge(0, 2, 1.0), edge(1, 2, 0.93)],
     }];
-    let clusters =
-        build_ranked_fused_clusters(&members, &signatures, &vectors, &root_wins, &[], &HashMap::new());
+    let clusters = build_ranked_fused_clusters(
+        &members,
+        &signatures,
+        &vectors,
+        &root_wins,
+        &[],
+        &HashMap::new(),
+    );
     let published: Vec<(usize, usize)> = clusters.iter().flat_map(member_ranges).collect();
     assert_eq!(
         published,

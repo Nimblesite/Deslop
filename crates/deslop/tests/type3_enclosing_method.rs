@@ -52,7 +52,8 @@ fn enclosing_pair_cluster<'a>(
     right: &MethodSpan,
 ) -> Option<&'a Value> {
     clusters(report).iter().find(|cluster| {
-        covering_occurrence(cluster, left).is_some() && covering_occurrence(cluster, right).is_some()
+        covering_occurrence(cluster, left).is_some()
+            && covering_occurrence(cluster, right).is_some()
     })
 }
 
@@ -65,7 +66,9 @@ fn assert_fragments_absorbed(report: &Value, survivor: &Value, files: [&str; 2])
         }
         let named = occurrence_paths(other);
         assert!(
-            !files.iter().any(|file| named.iter().any(|path| path == file)),
+            !files
+                .iter()
+                .any(|file| named.iter().any(|path| path == file)),
             "a fragment view is still visible beside the enclosing method pair: {other:#}"
         );
     }
@@ -116,7 +119,11 @@ const fn span(path: &'static str, first_line: u64, last_line: u64) -> MethodSpan
 
 #[test]
 fn csharp_type3_reports_the_enclosing_method_pair() -> Result<()> {
-    assert_enclosing_pair_visible("csharp-type3", &span("Delta.cs", 5, 18), &span("Epsilon.cs", 5, 17))
+    assert_enclosing_pair_visible(
+        "csharp-type3",
+        &span("Delta.cs", 5, 18),
+        &span("Epsilon.cs", 5, 17),
+    )
 }
 
 #[test]
@@ -130,12 +137,20 @@ fn dart_type3_reports_the_enclosing_method_pair() -> Result<()> {
 
 #[test]
 fn go_type3_reports_the_enclosing_method_pair() -> Result<()> {
-    assert_enclosing_pair_visible("go-type3", &span("delta.go", 3, 13), &span("epsilon.go", 3, 12))
+    assert_enclosing_pair_visible(
+        "go-type3",
+        &span("delta.go", 3, 13),
+        &span("epsilon.go", 3, 12),
+    )
 }
 
 #[test]
 fn python_type3_reports_the_enclosing_method_pair() -> Result<()> {
-    assert_enclosing_pair_visible("python-type3", &span("alpha.py", 1, 8), &span("beta.py", 1, 7))
+    assert_enclosing_pair_visible(
+        "python-type3",
+        &span("alpha.py", 1, 8),
+        &span("beta.py", 1, 7),
+    )
 }
 
 #[test]
