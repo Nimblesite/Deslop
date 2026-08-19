@@ -1,47 +1,16 @@
 int totalRecursive(int limit) {
-  var running = 0;
-  var scaled = 0;
-  var doubled = 0;
-  var tallied = 0;
-  var banked = 0;
-  var carried = 0;
-  var pooled = 0;
-  var stacked = 0;
-  var index = limit;
-  if (index <= 0) {
-    running = running + index;
-    scaled = scaled + index * 2;
-    doubled = doubled + running;
-    tallied = tallied + scaled;
-    banked = banked + doubled;
-    carried = carried + tallied;
-    pooled = pooled + banked;
-    stacked = stacked + carried;
-    return totalRecursive(index - 1);
+  if (limit <= 0) {
+    return 0;
   }
-  return running + scaled + doubled + tallied + banked + carried + pooled + stacked;
+  return limit + totalRecursive(limit - 1);
 }
 
 int totalIterative(int limit) {
   var running = 0;
-  var scaled = 0;
-  var doubled = 0;
-  var tallied = 0;
-  var banked = 0;
-  var carried = 0;
-  var pooled = 0;
-  var stacked = 0;
   var index = 1;
   while (index <= limit) {
     running = running + index;
-    scaled = scaled + index * 2;
-    doubled = doubled + running;
-    tallied = tallied + scaled;
-    banked = banked + doubled;
-    carried = carried + tallied;
-    pooled = pooled + banked;
-    stacked = stacked + carried;
     index = index + 1;
   }
-  return running + scaled + doubled + tallied + banked + carried + pooled + stacked;
+  return running;
 }
