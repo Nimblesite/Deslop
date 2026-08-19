@@ -6,14 +6,15 @@
 //! leave the last good report untouched — never commit an embeddings-off
 //! snapshot and call it `complete`.
 //!
-//! This assertion is **red on purpose**. It exposed a live false negative
-//! the moment GH #370's stderr deadlock stopped hiding it: the refresh
-//! announced `phase = "complete", done = 851` after the provider rejected
-//! all 851 subtrees. The code that did so is quarantined under
-//! `[QUARANTINE-EMBED-REFRESH-COMPLETE]` in
-//! `deslop-core/src/live/api.rs`, which now panics rather than announce a
-//! refresh that produced no embeddings as a success. Do not weaken this
-//! test to make the tree green.
+//! This assertion exposed a live false negative the moment GH #370's
+//! stderr deadlock stopped hiding it: the refresh announced
+//! `phase = "complete", done = 851` after the provider rejected all 851
+//! subtrees. `run_embedding_refresh`
+//! (`deslop-core/src/live/embedding_refresh.rs`) now converts a
+//! zero-embedding pass into a typed `FailedEmbeddingRefresh` before any
+//! commit, so the failure path emits the terminal `failed` event and the
+//! last good report survives. Do not weaken this test to make the tree
+//! green.
 
 #[path = "../../deslop/tests/cli/mock_ollama.rs"]
 mod mock_ollama;

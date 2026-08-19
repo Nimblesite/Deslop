@@ -157,7 +157,8 @@ fused-scoring defects.
   reads it to EOF on a background thread — 14m41s to 9.5s, and every LSP test loses the same latent
   deadlock. Un-ignoring it then exposed a live false negative: a refresh in which the provider rejected all
   851 subtrees was committed over the last good report and announced `phase = "complete", done = 851`. That
-  code is quarantined under `[QUARANTINE-EMBED-REFRESH-COMPLETE]` in `live/api.rs` and the test is
-  deliberately red. The terminal-phase rule is now stated in `[LIVE-EMBEDDING-CONSENT]`.
+  code was quarantined, then replaced: `run_embedding_refresh` now returns a typed
+  `FailedEmbeddingRefresh` for a zero-embedding pass, so the failure path emits terminal `failed`
+  progress and never commits. The terminal-phase rule is stated in `[LIVE-EMBEDDING-CONSENT]`.
 - Hidden clusters are absent from the JSON wire entirely (`clusters: [], clusters_hidden: 1`) — an AI consumer cannot reconstruct the human view or audit the hide reasons; consider putting hidden clusters with their drop reason on the wire (#344 adjacent).
 - `report.rs::log_hidden_cluster` now logs the signal triple and content evidence for every hidden cluster (landed on `fused`) — keep using it to audit hides.
