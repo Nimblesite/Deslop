@@ -54,12 +54,12 @@
 //! narrower one.
 
 use crate::{
-    buckets::{is_demoted_tier, measured_kind, spans_multiple_files},
+    buckets::{is_demoted_tier, measured_kind, spans_multiple_files, ClusterKind},
     fingerprint::Fingerprint,
     report::ReportSignals,
 };
 
-use super::{Cluster, LOW_STRUCTURAL_TYPE4_CEILING, TYPE4_EMBEDDING_FLOOR};
+use super::Cluster;
 
 /// Collapses redundant clusters that cover the same physical bytes.
 ///
@@ -275,19 +275,27 @@ fn demoted(cluster: &Cluster) -> bool {
 /// rival: it carries semantic evidence over the same bytes that a
 /// structural view cannot express.
 fn structural_precision(proposed: &Cluster, other: &Cluster) -> Preference {
-    if other.signals.structural > proposed.signals.structural
-        && !is_embedding_dominant(proposed.signals)
-    {
+    if other.signals.structural > proposed.signals.structural && !is_embedding_dominant(proposed) {
         Preference::Second
     } else {
         Preference::First
     }
 }
 
-/// Returns true for low-structural clusters created by the embedding pass.
-fn is_embedding_dominant(signals: crate::pair::PairScore) -> bool {
-    signals.structural < LOW_STRUCTURAL_TYPE4_CEILING
-        && signals.embedding_cos >= TYPE4_EMBEDDING_FLOOR
+/// Returns true for a view whose measured verdict is the semantic
+/// bucket — [`ClusterKind::SameBehavior`] under [`measured_kind`], the
+/// same vocabulary [`demoted`] reads, so the elected view and the
+/// rendered label cannot drift. The previous predicate was a private
+/// copy (`structural < 0.10 && embedding_cos >= 0.90`) whose floor sat
+/// above both the ANN admission gate and the renderer's
+/// `same_behavior` route: an honestly-scored Type-4 function pair at
+/// cosine 0.88 *rendered* as a semantic clone yet lost its nomination
+/// to the byte-identical block nested inside it, deleting the only
+/// declaration-level semantic finding
+/// (`dart_issue_119_embedding_role_mismatch`).
+fn is_embedding_dominant(cluster: &Cluster) -> bool {
+    let signals: ReportSignals = cluster.signals.into();
+    measured_kind(signals, cluster.content, &cluster.members) == ClusterKind::SameBehavior
 }
 
 /// Returns `true` when two occurrences describe one location: same

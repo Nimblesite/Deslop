@@ -65,7 +65,7 @@ fn report_without_embeddings(fixture_root: &Path) -> Result<Value> {
 }
 
 /// Visible clusters carrying the `same_behavior` bucket.
-fn same_behavior<'a>(report: &'a Value) -> Vec<&'a Value> {
+fn same_behavior(report: &Value) -> Vec<&Value> {
     clusters(report)
         .iter()
         .filter(|cluster| cluster_bucket(cluster) == "same_behavior")
@@ -232,11 +232,11 @@ fn same_behavior_is_reachable_when_a_pair_clears_the_embedding_floor() -> Result
             "`same_behavior` means DIFFERENT code: byte-identical occurrences \
              belong in an identical bucket, not this one: {texts:#?}"
         );
-        assert_eq!(
-            signal(cluster, "structural"),
-            0.0,
+        assert!(
+            approx(signal(cluster, "structural"), 0.0),
             "the `while` and `for` bodies share no normalised subtree, so the \
-             bucket must rest on embedding evidence alone"
+             bucket must rest on embedding evidence alone, got structural={}",
+            signal(cluster, "structural")
         );
     }
     assert_embedding_support(&surviving, "Dart");
