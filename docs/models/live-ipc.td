@@ -132,6 +132,13 @@ type FileMetric {
   duplication_percent: Float
 }
 
+type DiffMetrics {
+  added_loc: Int
+  duplicated_added_loc: Int
+  duplication_percent: Float
+  threshold: ThresholdSummary
+}
+
 type RepoMetrics {
   analysed_loc: Int
   duplicated_loc: Int
@@ -140,6 +147,7 @@ type RepoMetrics {
   duplicated_files: Int
   threshold: ThresholdSummary
   per_file: List<FileMetric>
+  diff: Option<DiffMetrics>
 }
 
 type ReportBoilerplateOccurrence {
@@ -189,6 +197,7 @@ type ReportOccurrence {
   start_line: Int
   end_line: Int
   hidden: Bool
+  in_diff: Option<Bool>
 }
 
 type ReportCluster {
@@ -204,6 +213,8 @@ type ReportCluster {
   occurrences_truncated: Bool
   summary: String
   interpretation: String
+  intersects_diff: Option<Bool>
+  is_newly_introduced: Option<Bool>
 }
 
 type Report {
@@ -218,6 +229,7 @@ type Report {
   boilerplate_hints: List<ReportBoilerplateHint>
   embedding_provenance: Option<EmbeddingProvenance>
   clusters: List<ReportCluster>
+  clusters_outside_diff: Option<Int>
 }
 
 type ReportDelta {

@@ -10,6 +10,7 @@
 
 mod ast_access;
 mod change;
+mod diff;
 mod render;
 mod store;
 
@@ -109,6 +110,9 @@ pub struct PipelineSession {
     pub(super) boilerplate_ranges: Vec<BoilerplateRange>,
     /// Files analysed in the most recent generation.
     pub(super) files_analysed: usize,
+    /// Verified diff scope when the session was initialised with a
+    /// diff ([CLI-ARG-DIFF]). Every render tags against it.
+    pub(super) diff_scope: Option<crate::diff_scope::DiffScope>,
 }
 
 impl PipelineSession {
@@ -129,6 +133,27 @@ impl PipelineSession {
         incremental: bool,
         config_path: Option<PathBuf>,
         embedding: EmbeddingSettings<'_>,
+    ) -> Result<(Self, Report), CoreError> {
+        Self::initialise_with_diff(root, min_nodes, incremental, config_path, embedding, None)
+    }
+
+    /// [`Self::initialise`] with an optional parsed unified diff
+    /// ([CLI-ARG-DIFF]): the diff is byte-verified against the freshly
+    /// analysed corpus and, when clean, tags the initial report and
+    /// every later render ([OUTPUT-SCHEMA-DIFF-TAGS]).
+    ///
+    /// # Errors
+    ///
+    /// Everything [`Self::initialise`] produces, plus
+    /// [`CoreError::DiffStale`] when the diff does not match the
+    /// scanned tree.
+    pub fn initialise_with_diff(
+        root: PathBuf,
+        min_nodes: u32,
+        incremental: bool,
+        config_path: Option<PathBuf>,
+        embedding: EmbeddingSettings<'_>,
+        diff: Option<&crate::diff_scope::ParsedDiff>,
     ) -> Result<(Self, Report), CoreError> {
         let parsers = default_parsers();
         let extension_to_language = build_extension_map(&parsers);
@@ -179,7 +204,7 @@ impl PipelineSession {
             let _prev_language = file_languages.insert(discovered.file_id, discovered.language);
         }
         let files_analysed = discovery.files.len();
-        let session = Self {
+        let mut session = Self {
             root,
             min_nodes,
             incremental,
@@ -197,7 +222,11 @@ impl PipelineSession {
             analysed_lines: corpus.analysed_lines,
             boilerplate_ranges: corpus.boilerplate_ranges,
             files_analysed,
+            diff_scope: None,
         };
+        if let Some(parsed) = diff {
+            session.attach_diff(parsed)?;
+        }
         let report = session.render(&config, corpus.cache_stats)?;
         Ok((session, report))
     }

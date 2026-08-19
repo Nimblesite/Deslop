@@ -57,6 +57,9 @@ If you pin to a commit SHA or a branch, the ref carries no version, so `version`
 | `no-fail-over` | `false` | Clear any configured threshold for this run |
 | `min-nodes` | `30` | Minimum AST subtree node count for a clone candidate |
 | `config` | *(unset)* | Explicit `.deslop.toml` path |
+| `diff` | *(unset)* | Unified diff whose added lines scope the report — a patch file path, or `-` for stdin. The whole tree is still analysed; the diff scopes what is reported, never what is scanned |
+| `only-changed` | `false` | Report only the clusters the diff touches and gate on the diff-scoped percentage — duplicated added lines over added lines — so legacy debt cannot fail a pre-merge check. Requires `diff` |
+| `cache` | `true` | Carry the parse store between runs through the Actions cache, so a warm run re-parses only what changed |
 | `output` | `deslop-report` | Report path prefix; `.json`, `.txt`, `.html` are appended |
 | `nojson` / `notext` / `nohtml` | `false` | Suppress an output format |
 | `log-level` | `info` | `error`, `warn`, `info`, `debug` or `trace` |
@@ -68,7 +71,7 @@ If you pin to a commit SHA or a branch, the ref carries no version, so `version`
 | Output | Meaning |
 | --- | --- |
 | `duplication-percent` | Duplicated lines as a percentage of analysed lines |
-| `cluster-count` | Clusters contributing to the duplicated line count |
+| `cluster-count` | Clusters the report body carries — under `only-changed`, the diff-affected ones that survived filtering |
 | `threshold-percent` | The ceiling this run was measured against |
 | `exit-code` | `0` clean, `1` runtime error, `2` usage error, `3` breached |
 | `report-json` / `report-text` / `report-html` | Paths to the rendered reports |

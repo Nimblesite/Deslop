@@ -115,6 +115,8 @@ mod tests {
             occurrences,
             summary: "s".into(),
             interpretation: "i".into(),
+            intersects_diff: None,
+            is_newly_introduced: None,
         }
     }
 
@@ -126,6 +128,7 @@ mod tests {
             start_line: 1,
             end_line: 1,
             hidden: false,
+            in_diff: None,
         }
     }
 

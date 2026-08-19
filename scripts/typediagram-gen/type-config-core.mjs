@@ -213,6 +213,20 @@ export const CORE_TYPE_CONFIG = {
       duplication_percent: "Clamped `100.0 * duplicated_loc / analysed_loc` for this file.",
     },
   },
+  DiffMetrics: {
+    docs: "Added-line duplication metrics for a `--diff`-scoped run ([METRICS-DIFF-SCOPE]). Present on `RepoMetrics.diff` only when a verified diff was ingested; the mechanical repo-wide fields are unaffected by its presence.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      added_loc: "u64",
+      duplicated_added_loc: "u64",
+    },
+    fieldDocs: {
+      added_loc: "Added lines (new-side) across every analysed file the diff touches. Diff files outside the scan root or absent from the corpus contribute nothing.",
+      duplicated_added_loc: "Added lines covered by the same non-hidden, non-literal-family occurrence projection as `duplicated_loc`.",
+      duplication_percent: "Clamped `100.0 * duplicated_added_loc / added_loc`; `0.0` when the diff adds nothing.",
+      threshold: "Diff-scoped gate verdict. Resolved only under `--only-changed`; source `none` otherwise.",
+    },
+  },
   RepoMetrics: {
     docs: "Repo-wide duplication metrics, embedded at `Report.metrics`.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
@@ -224,15 +238,19 @@ export const CORE_TYPE_CONFIG = {
     },
     fieldSerdeAttrs: {
       per_file: ["default"],
+      diff: ["default", 'skip_serializing_if = "Option::is_none"'],
     },
+    tsOptional: ["diff"],
     fieldDocs: {
       analysed_loc: "Physical lines across every analysed file.",
       duplicated_loc: "Lines covered by `>= 2` non-hidden clone occurrences.",
       duplication_percent: "Clamped `100.0 * duplicated_loc / analysed_loc`.",
-      clusters_total: "Count of clusters contributing to `duplicated_loc`.",
+      clusters_total:
+        "Count of non-hidden clusters carried in `clusters` — always equals `clusters.len()`, so the banner figure can never disagree with the body it summarises ([METRICS-REPO]).",
       duplicated_files: "Count of files with at least one non-hidden clone occurrence.",
       threshold: "Resolved fail-over threshold.",
       per_file: "Per-file duplication breakdown, worst-first. Empty on reports produced before this field existed.",
+      diff: "Added-line metrics for the ingested diff ([METRICS-DIFF-SCOPE]). Absent unless the run carried `--diff`.",
     },
   },
   ReportBoilerplateOccurrence: {

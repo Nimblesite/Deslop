@@ -15,15 +15,19 @@ use std::{
 use crate::{
     cluster::Cluster,
     config::ExclusionConfig,
-    report_render::relative_to_scan_root,
+    diff_scope::DiffScope,
+    report_render::{relative_to_scan_root, LineIndex, LineIndices},
     state::{FileId, FileRegistry},
 };
 
-// `RepoMetrics`, `ThresholdSummary`, and `ThresholdSource` are generated
-// from `docs/models/live-ipc.td` by `scripts/typediagram-gen.mjs`. The
-// data shapes live in `crate::wire_generated`; the constructors and
-// `Default` impl below stay here.
-pub use crate::wire_generated::{FileMetric, RepoMetrics, ThresholdSource, ThresholdSummary};
+// `RepoMetrics`, `DiffMetrics`, `ThresholdSummary`, and
+// `ThresholdSource` are generated from `docs/models/live-ipc.td` by
+// `scripts/typediagram-gen.mjs`. The data shapes live in
+// `crate::wire_generated`; the constructors and `Default` impl below
+// stay here.
+pub use crate::wire_generated::{
+    DiffMetrics, FileMetric, RepoMetrics, ThresholdSource, ThresholdSummary,
+};
 
 impl RepoMetrics {
     /// Returns an empty metrics block (all counters zero, threshold
@@ -39,6 +43,7 @@ impl RepoMetrics {
             duplicated_files: 0,
             threshold: ThresholdSummary::none(),
             per_file: Vec::new(),
+            diff: None,
         }
     }
 
@@ -101,6 +106,8 @@ pub struct MetricsInputs<'a, S: BuildHasher> {
     /// Per-file source bytes keyed by [`FileId`]. Used to convert
     /// `byte_range` to line numbers; only read, never mutated.
     pub sources: &'a HashMap<FileId, Vec<u8>>,
+    /// Shared per-file line indexes built once for report rendering and metrics.
+    pub line_indices: &'a LineIndices,
     /// Per-file language id. Required to evaluate per-language
     /// `report_hide` patterns.
     pub file_languages: &'a HashMap<FileId, &'static str, S>,
@@ -116,6 +123,10 @@ pub struct MetricsInputs<'a, S: BuildHasher> {
     /// metrics rows carry the same path form as occurrence rows
     ///.
     pub scan_root: &'a Path,
+    /// Verified diff scope when the run carried `--diff`. Drives the
+    /// [METRICS-DIFF-SCOPE] added-line block; `None` leaves
+    /// `RepoMetrics.diff` absent and every mechanical field untouched.
+    pub diff: Option<&'a DiffScope>,
 }
 
 /// Computes [`RepoMetrics`] for a finished analysis pass. The returned
@@ -126,11 +137,8 @@ pub struct MetricsInputs<'a, S: BuildHasher> {
 pub fn compute_repo_metrics<S: BuildHasher>(inputs: &MetricsInputs<'_, S>) -> RepoMetrics {
     let analysed_loc: u64 = inputs.analysed_lines.values().copied().sum();
     let mut per_file_lines: HashMap<FileId, BTreeSet<u64>> = HashMap::new();
-    let mut contributing_clusters: usize = 0;
     for &cluster in inputs.clusters {
-        if fold_cluster_lines(cluster, inputs, &mut per_file_lines) {
-            contributing_clusters = contributing_clusters.saturating_add(1);
-        }
+        fold_cluster_lines(cluster, inputs, &mut per_file_lines);
     }
     let duplicated_loc: u64 = per_file_lines
         .values()
@@ -145,10 +153,47 @@ pub fn compute_repo_metrics<S: BuildHasher>(inputs: &MetricsInputs<'_, S>) -> Re
         analysed_loc,
         duplicated_loc,
         duplication_percent,
-        clusters_total: contributing_clusters,
+        // [METRICS-REPO] The banner equals the body by construction:
+        // `inputs.clusters` is the exact post-hide list the report
+        // carries, and a mixed cluster (one visible occurrence beside
+        // hidden ones) is kept in it per [EXCLUSION-CONFIG], so it must
+        // be counted here too. The old `>= 2 visible members` gate said
+        // "0 clusters" above a body listing one.
+        clusters_total: inputs.clusters.len(),
         duplicated_files,
         threshold: ThresholdSummary::none(),
         per_file: per_file_metrics(&per_file_lines, inputs),
+        diff: inputs
+            .diff
+            .map(|scope| diff_metrics(&per_file_lines, inputs, scope)),
+    }
+}
+
+/// Builds the [METRICS-DIFF-SCOPE] added-line block. The numerator is
+/// the intersection of the *same* per-file duplicated-line projection
+/// `duplicated_loc` counts with the diff's added spans — computed here,
+/// beside it, from the same `per_file_lines` sets, so the two figures
+/// can never diverge in projection. Threshold stays `none()`; the CLI
+/// resolves it only under `--only-changed`.
+fn diff_metrics<S: BuildHasher>(
+    per_file_lines: &HashMap<FileId, BTreeSet<u64>>,
+    inputs: &MetricsInputs<'_, S>,
+    scope: &DiffScope,
+) -> DiffMetrics {
+    let added_loc = scope.added_line_total();
+    let duplicated_added_loc: u64 = per_file_lines
+        .iter()
+        .filter_map(|(file_id, lines)| {
+            let path = relative_to_scan_root(inputs.registry.path(*file_id)?, inputs.scan_root);
+            let inside = lines.iter().filter(|line| scope.contains(&path, **line));
+            u64::try_from(inside.count()).ok()
+        })
+        .sum();
+    DiffMetrics {
+        added_loc,
+        duplicated_added_loc,
+        duplication_percent: percent(duplicated_added_loc, added_loc),
+        threshold: ThresholdSummary::none(),
     }
 }
 
@@ -199,45 +244,38 @@ fn file_metric<S: BuildHasher>(
 }
 
 /// Projects every non-hidden occurrence of `cluster` onto per-file line
-/// sets. Returns `true` when the cluster contributed at least two
-/// non-hidden occurrences and therefore counts toward
-/// `clusters_total`.
+/// sets. Hidden occurrences contribute nothing, so a generated tier
+/// never inflates `duplicated_loc` ([METRICS-REPO]).
 fn fold_cluster_lines<S: BuildHasher>(
     cluster: &Cluster,
     inputs: &MetricsInputs<'_, S>,
     per_file_lines: &mut HashMap<FileId, BTreeSet<u64>>,
-) -> bool {
-    let mut visible_members: usize = 0;
+) {
     for member in &cluster.members {
-        if add_member_lines(member, inputs, per_file_lines) {
-            visible_members = visible_members.saturating_add(1);
-        }
+        add_member_lines(member, inputs, per_file_lines);
     }
-    visible_members >= 2
 }
 
 /// Adds the line range covered by `member` to `per_file_lines` unless
 /// the file is `report_hide`-suppressed or its source bytes are
-/// unavailable. Returns `true` when the occurrence was counted as
-/// non-hidden.
+/// unavailable.
 fn add_member_lines<S: BuildHasher>(
     member: &crate::fingerprint::Fingerprint,
     inputs: &MetricsInputs<'_, S>,
     per_file_lines: &mut HashMap<FileId, BTreeSet<u64>>,
-) -> bool {
+) {
     if occurrence_is_hidden(member.file_id, inputs) {
-        return false;
+        return;
     }
-    let Some(source) = inputs.sources.get(&member.file_id) else {
-        return false;
+    let Some(line_index) = inputs.line_indices.get(&member.file_id) else {
+        return;
     };
     let entry = per_file_lines.entry(member.file_id).or_default();
     let (start_line, end_line) =
-        byte_range_to_line_range(source, member.byte_range.start, member.byte_range.end);
+        byte_range_to_line_range(line_index, member.byte_range.start, member.byte_range.end);
     for line in start_line..=end_line {
         let _inserted = entry.insert(line);
     }
-    true
 }
 
 /// Returns `true` when the occurrence's file is covered by a
@@ -259,20 +297,13 @@ fn occurrence_is_hidden<S: BuildHasher>(file_id: FileId, inputs: &MetricsInputs<
 /// Converts a half-open `[start, end)` byte range into a closed
 /// 1-indexed line range. Empty ranges yield `(line, line)` for the
 /// starting line so they still occupy one row in the set.
-fn byte_range_to_line_range(source: &[u8], start: usize, end: usize) -> (u64, u64) {
-    let safe_end = end.min(source.len());
+fn byte_range_to_line_range(index: &LineIndex, start: usize, end: usize) -> (u64, u64) {
+    let safe_end = end.min(index.source_len());
     let safe_start = start.min(safe_end);
-    let start_line = line_for_offset(source, safe_start);
+    let start_line = u64::try_from(index.line_for_offset(safe_start)).unwrap_or(u64::MAX);
     let end_offset = safe_end.saturating_sub(1).max(safe_start);
-    let end_line = line_for_offset(source, end_offset);
+    let end_line = u64::try_from(index.line_for_offset(end_offset)).unwrap_or(u64::MAX);
     (start_line, end_line)
-}
-
-/// 1-indexed line number containing byte `offset` in `source`.
-fn line_for_offset(source: &[u8], offset: usize) -> u64 {
-    let safe = offset.min(source.len());
-    let prefix = source.get(..safe).unwrap_or(&[]);
-    count_newlines(prefix).saturating_add(1)
 }
 
 /// Counts physical lines in `source`: one per `\n` plus one for a

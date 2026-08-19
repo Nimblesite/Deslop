@@ -24,6 +24,7 @@ mod cluster_filters;
 pub mod config;
 pub mod content;
 pub mod delta;
+pub mod diff_scope;
 pub mod discover;
 pub mod embedding;
 pub mod error;
@@ -62,6 +63,7 @@ pub use config::{
     BoilerplateImportsMode, ClonePolicy, ExclusionConfig, RankingPolicy, DEFAULT_CONFIG_FILENAME,
 };
 pub use delta::ReportDelta;
+pub use diff_scope::{apply_only_changed, parse_unified_diff, DiffScope, ParsedDiff};
 pub use embedding::{
     list_ollama_models, EmbeddingMode, EmbeddingProvider, EmbeddingSpec, NoopProvider,
     OllamaModelInfo, OllamaProvider, ParseModeError, ProviderError, ProviderRegistry,

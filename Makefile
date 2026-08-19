@@ -270,7 +270,10 @@ dup-gate: build
 ##                    binaries and plugin zips violating each Shipwright
 ##                    contract rule and asserts every verifier rejects them.
 ##                    Without this, a silently-broken verifier could let a
-##                    drifted binary ship.
+##                    drifted binary ship. The action diff-gate proof runs the
+##                    action's own step body against the freshly built CLI in
+##                    both gate directions — the self-test's runner leg cannot,
+##                    since it installs a published release ([ACTION-GATE]).
 deployment-verify: build
 	node scripts/verify-deployment-manifest.mjs shipwright.json
 	node scripts/verify-deployment-binaries.mjs shipwright.json target/release
@@ -280,6 +283,7 @@ deployment-verify: build
 	node scripts/test-release-version-stamping.mjs
 	node scripts/test-verifiers.mjs
 	node scripts/test-action-contract.mjs
+	node scripts/test-action-diff-gate.mjs
 
 # _kill-deslop-processes: SIGTERM (then SIGKILL on holdouts) every running
 #   `deslop-lsp` and `deslop-mcp` process so a stale child from a previous

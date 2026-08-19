@@ -295,8 +295,27 @@ jobs:
       # xvfb gives Electron a display; dbus gives it a session bus so
       # ubuntu-latest stops flooding "Failed to connect to the bus" from the
       # Electron subprocesses.
+      # A stalled Ubuntu mirror hangs `apt-get` indefinitely, and with the whole
+      # job on one 20-minute budget that silently consumed every minute the E2E
+      # needed: the job reported `cancelled` with all six test steps `skipped`,
+      # which reads exactly like a test failure but proves nothing either way.
+      # Bounding each call turns an 18-minute stall into a 150-second one plus a
+      # retry, so a transient mirror fault costs a few minutes instead of the run.
       - name: Install xvfb + dbus (headless VS Code)
-        run: sudo apt-get update && sudo apt-get install -y xvfb dbus dbus-x11
+        timeout-minutes: 10
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3; do
+            if sudo timeout 150 apt-get update \
+              && sudo timeout 150 apt-get install -y xvfb dbus dbus-x11; then
+              echo "xvfb + dbus installed on attempt ${attempt}"
+              exit 0
+            fi
+            echo "::warning::apt-get attempt ${attempt} stalled or failed; retrying"
+            sleep 10
+          done
+          echo "::error::apt-get could not install xvfb/dbus after 3 bounded attempts"
+          exit 1
 
       # Builds the real deslop-lsp + deslop-mcp from the workspace
       # and installs Node deps for the extension + webview-ui.

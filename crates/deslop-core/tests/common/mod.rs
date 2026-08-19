@@ -395,6 +395,7 @@ impl ReportFixture {
             sources: &self.sources,
             analysed_lines: &self.analysed_lines,
             boilerplate_ranges: &[],
+            diff: None,
         })
     }
 }
