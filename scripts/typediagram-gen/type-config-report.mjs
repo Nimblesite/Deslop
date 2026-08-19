@@ -61,7 +61,7 @@ export const REPORT_TYPE_CONFIG = {
       summary: "Agent-oriented synthesis (blanked on the live wire).",
       interpretation: "Derived one-line interpretation (blanked on the live wire).",
       intersects_diff: "True when any non-hidden occurrence has `in_diff == true` ([OUTPUT-SCHEMA-DIFF-TAGS]). Absent unless the run carried `--diff`.",
-      is_newly_introduced: "True when every non-hidden occurrence has `in_diff == true` — the whole clone family arrived with the diff. Absent unless the run carried `--diff`.",
+      is_newly_introduced: "True when `intersects_diff` holds **and** every occurrence — hidden ones included — has `in_diff == true`, so the whole clone family arrived with the diff ([OUTPUT-SCHEMA-DIFF-TAGS]). A hidden pre-existing copy vetoes the flag: content that already existed anywhere in the tree did not arrive with this change. Absent unless the run carried `--diff`.",
     },
   },
   PathParams: {

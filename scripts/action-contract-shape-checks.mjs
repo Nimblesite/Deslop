@@ -133,6 +133,21 @@ check("the self-test carries the diff-gate leg, version-gated on the release", (
     selftest.includes("SCOPE: ${{ steps.breach.outputs.gate-scope }}"),
     "the breaching leg must assert the gate scope the action published",
   );
+  // Both legs must build the breaching patch with the same script. A shell
+  // twin of it here counted lines with `wc -l`, which counts terminators —
+  // on a fixture with no trailing newline the hunk header declared one line
+  // fewer than the body carried and the parser refused the patch outright,
+  // failing the gate proof for a reason unrelated to the gate. [ACTION-GATE]
+  assert.ok(
+    selftest.includes("node scripts/action-copy-patch.mjs"),
+    "the breaching leg must build its patch with the shared copy-patch script, never a shell twin",
+  );
+  assert.ok(
+    readFileSync("scripts/test-action-diff-gate.mjs", "utf8").includes(
+      'from "./action-copy-patch.mjs"',
+    ),
+    "the branch-built proof must gate on the same patch the runner leg does",
+  );
 });
 
 // The branch-executed counterpart: the workflow leg above installs a

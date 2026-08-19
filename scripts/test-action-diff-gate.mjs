@@ -21,6 +21,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 import { check, total } from "./action-contract-harness.mjs";
+import { firstRustFile, writeCopyPatch } from "./action-copy-patch.mjs";
 import { readOutputs } from "./action-read-outputs.mjs";
 
 /** The legacy-heavy fixture the self-test's gate matrix scans. */
@@ -40,15 +41,28 @@ function stepBody(action, stepName) {
   const lines = action.split("\n");
   const start = lines.findIndex((line) => line.trim() === `- name: ${stepName}`);
   assert.ok(start >= 0, `action.yml lost its "${stepName}" step`);
-  const runAt = lines.findIndex((line, index) => index > start && line.trim() === "run: |");
-  assert.ok(runAt > start, `action.yml step "${stepName}" no longer carries a run block`);
-  const indent = (lines[runAt].match(/^ */) ?? [""])[0].length + 2;
+  // Bounded to this step: an unbounded search would silently walk into the
+  // *next* step's run block the moment this one stops matching `run: |`
+  // verbatim — `run: |-` alone would swap the script under test.
+  const nextStep = lines.findIndex(
+    (line, index) =>
+      index > start && line.trimStart().startsWith("- ") && leadingSpaces(line) <= leadingSpaces(lines[start]),
+  );
+  const end = nextStep === -1 ? lines.length : nextStep;
+  const runAt = lines.findIndex((line, index) => index > start && index < end && line.trim() === "run: |");
+  assert.ok(runAt > start, `action.yml step "${stepName}" no longer carries a "run: |" block`);
+  const indent = leadingSpaces(lines[runAt]) + 2;
   const body = [];
   for (const line of lines.slice(runAt + 1)) {
-    if (line.trim() !== "" && (line.match(/^ */) ?? [""])[0].length < indent) break;
+    if (line.trim() !== "" && leadingSpaces(line) < indent) break;
     body.push(line.slice(indent));
   }
   return body.join("\n");
+}
+
+/** Column the first non-space character of `line` sits at. */
+function leadingSpaces(line) {
+  return line.length - line.trimStart().length;
 }
 
 /**
@@ -89,34 +103,6 @@ function runActionStep(cli, inputs) {
   const match = published.match(/exit-code=(\d+)/);
   assert.ok(match, `the step published no exit-code: ${published}`);
   return { exitCode: Number.parseInt(match[1], 10), outputPrefix };
-}
-
-/**
- * Writes a patch that adds a verbatim copy of an existing fixture file,
- * so the diff introduces duplication the scan is guaranteed to find.
- *
- * @param {string} sourceRelative fixture file to copy, relative to the repo root
- * @param {string} targetRelative the new file the patch adds
- * @returns {string} path to the written patch
- */
-function writeCopyPatch(sourceRelative, targetRelative) {
-  const lines = readFileSync(sourceRelative, "utf8").split("\n");
-  const trailingNewline = lines.at(-1) === "";
-  const body = trailingNewline ? lines.slice(0, -1) : lines;
-  const hunk = [
-    `diff --git a/${targetRelative} b/${targetRelative}`,
-    "new file mode 100644",
-    "--- /dev/null",
-    `+++ b/${targetRelative}`,
-    `@@ -0,0 +1,${body.length} @@`,
-    ...body.map((line) => `+${line}`),
-    ...(trailingNewline ? [] : ["\\ No newline at end of file"]),
-    "",
-  ].join("\n");
-  const patch = join(mkdtempSync(join(tmpdir(), "deslop-action-patch-")), "change.patch");
-  writeFileSync(patch, hunk);
-  writeFileSync(targetRelative, readFileSync(sourceRelative));
-  return patch;
 }
 
 /**
@@ -166,9 +152,13 @@ check("legacy debt passes a zero ceiling when the diff adds nothing", () => {
 });
 
 check("a changed-code diff that adds duplication breaches the same ceiling", () => {
-  const source = firstRustFile();
+  const source = firstRustFile(SCAN_PATH);
   const copied = join(dirname(source), "action_diff_gate_copy.rs");
-  const patch = writeCopyPatch(source, copied);
+  const patch = writeCopyPatch(
+    source,
+    copied,
+    join(mkdtempSync(join(tmpdir(), "deslop-action-patch-")), "change.patch"),
+  );
   try {
     const { exitCode, outputPrefix } = runActionStep(cli, {
       failOver: "0",
@@ -204,20 +194,5 @@ check("a changed-code diff that adds duplication breaches the same ceiling", () 
     execFileSync("rm", ["-f", copied]);
   }
 });
-
-/**
- * First Rust source under the fixture tree, for the copy patch — keeps
- * the proof working if the fixture layout is reorganised.
- *
- * @returns {string}
- */
-function firstRustFile() {
-  const found = execFileSync("find", [SCAN_PATH, "-name", "*.rs", "-type", "f"], { encoding: "utf8" })
-    .split("\n")
-    .filter(Boolean)
-    .sort();
-  assert.ok(found[0], `no Rust source under ${SCAN_PATH} to build a copy patch from`);
-  return found[0];
-}
 
 console.log(`action diff-gate black-box: ${total()} checks passed`);

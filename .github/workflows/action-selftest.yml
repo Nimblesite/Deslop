@@ -264,20 +264,11 @@ jobs:
       # diff-gate job only proves the gate can pass, which a gate that never
       # fires would also satisfy. The patch adds a verbatim copy of a fixture
       # file, so the added lines are duplicated by construction. [ACTION-GATE]
+      # Built by the same script the branch-built proof calls, so the two
+      # legs cannot disagree about the patch they gate on. [ACTION-GATE]
       - name: Write a diff that adds duplicated code
         shell: bash
-        run: |
-          set -euo pipefail
-          source=$(find examples/rust -name '*.rs' -type f | sort | head -n 1)
-          target=examples/rust/action_diff_gate_copy.rs
-          count=$(wc -l < "$source")
-          cp "$source" "$target"
-          {
-            printf 'diff --git a/%s b/%s\n' "$target" "$target"
-            printf 'new file mode 100644\n--- /dev/null\n+++ b/%s\n' "$target"
-            printf '@@ -0,0 +1,%s @@\n' "$count"
-            sed 's/^/+/' "$source"
-          } > change.patch
+        run: node scripts/action-copy-patch.mjs examples/rust examples/rust/action_diff_gate_copy.rs change.patch
 
       - name: The added duplication fails the same zero ceiling
         id: breach
