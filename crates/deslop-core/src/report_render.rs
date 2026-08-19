@@ -183,8 +183,12 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
     // interpretation, and the ranking demotion can no longer diverge.
     let bucket = kind.wire_label().to_owned();
     let occurrences_total = occurrences.len();
-    ReportCluster {
+    let mut report_cluster = ReportCluster {
         id: cluster.id.clone(),
+        // Stamped by `report_weight::stamp_ranks` once the final ranking
+        // sort has run ([VSIX-TOP-OFFENDERS-RANK-GLOBAL], [SEVERITY-BAND]).
+        rank: 0,
+        rank_band: String::new(),
         weight: cluster.weight,
         size: cluster.members.len(),
         canonical_node_count,
@@ -196,8 +200,12 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         category: crate::clone_category::CloneCategory::Logic
             .wire_label()
             .to_owned(),
+        language: cluster_language(cluster, file_languages),
+        meets_fused_gate: signals.fused >= crate::pair::FUSED_THRESHOLD,
+        evidence_verdict: crate::render::signals::content_evidence_verdict(signals),
         occurrences,
         occurrences_total,
+        occurrence_count: 0,
         occurrences_truncated: false,
         summary,
         interpretation,
@@ -205,7 +213,28 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         // verified diff is in scope; absent otherwise.
         intersects_diff: None,
         is_newly_introduced: None,
-    }
+    };
+    // The one counting formula ([`crate::report::occurrence_count`])
+    // stamps the wire field every display surface reads verbatim.
+    report_cluster.occurrence_count = crate::report::occurrence_count(&report_cluster);
+    report_cluster
+}
+
+/// Detected language id of the cluster's first member, from the same
+/// parser-registry map every occurrence resolves
+/// ([PIPELINE-LANG-TRAIT]); `unknown` when the cluster is empty or the
+/// file never registered. Carried on the wire so no client re-derives
+/// a language from a file extension.
+fn cluster_language<S: BuildHasher>(
+    cluster: &Cluster,
+    file_languages: &HashMap<FileId, &'static str, S>,
+) -> String {
+    cluster
+        .members
+        .first()
+        .and_then(|member| file_languages.get(&member.file_id).copied())
+        .unwrap_or("unknown")
+        .to_owned()
 }
 
 /// Builds a [`ReportOccurrence`] for a single fingerprint member.

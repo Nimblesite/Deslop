@@ -66,6 +66,11 @@ impl Report {
     /// the original occurrence count per cluster so clients can surface
     /// "N of M" and page via `cluster/byId`.
     ///
+    /// `evidence_verdict` deliberately survives: it is engine-authored
+    /// and not client-derivable, so blanking it would force clients to
+    /// grow their own verdict engine — the exact duplicate-calculation
+    /// defect the field exists to remove.
+    ///
     /// Idempotent: running it twice yields the same shape. Leaves the
     /// CLI / `render_report` path untouched — only transports that ship
     /// reports over a JSON-RPC socket should call this.
@@ -73,7 +78,9 @@ impl Report {
     pub fn truncate_for_wire(mut self, cap: usize) -> Self {
         self.schema_doc.clear();
         for cluster in &mut self.clusters {
-            cluster.occurrences_total = occurrence_count(cluster);
+            let count = occurrence_count(cluster);
+            cluster.occurrences_total = count;
+            cluster.occurrence_count = count;
             if cluster.occurrences.len() > cap {
                 cluster.occurrences.truncate(cap);
                 cluster.occurrences_truncated = true;
@@ -120,15 +127,34 @@ impl From<PairScore> for ReportSignals {
     /// in those fields — every rendered cluster passes through the gate,
     /// which does.
     fn from(score: PairScore) -> Self {
-        Self {
+        let mut signals = Self {
             structural: score.structural,
             token_jaccard: score.token_jaccard,
+            // Stamped below through the one [`ReportSignals::shape_score`]
+            // definition once the source fields exist.
+            shape: 0.0,
             embedding_cos: score.embedding_cos,
             fused: score.bounded_fused(),
             agreement: 0.0,
             rename_consistency: 0.0,
             literal_fraction: 0.0,
-        }
+        };
+        signals.shape = signals.shape_score();
+        signals
+    }
+}
+
+impl ReportSignals {
+    /// The shape reading — the stronger of `structural` and
+    /// `token_jaccard`, two views of one normalised representation, so
+    /// the max is what "the shape matched" means
+    /// ([FUSION-CONTENT-GATE]). The single definition behind the wire
+    /// `shape` field, the content gate's fused reduction, and the
+    /// evidence verdict; consumers render the stamped field verbatim
+    /// and never re-derive the max.
+    #[must_use]
+    pub fn shape_score(&self) -> f64 {
+        self.structural.max(self.token_jaccard)
     }
 }
 
