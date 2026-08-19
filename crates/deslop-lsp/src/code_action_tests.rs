@@ -77,7 +77,10 @@ fn report_with_cluster(path: &std::path::Path, spans: ((usize, usize), (usize, u
             occurrences_truncated: false,
             summary: String::new(),
             interpretation: String::new(),
+            intersects_diff: None,
+            is_newly_introduced: None,
         }],
+        clusters_outside_diff: None,
     }
 }
 
@@ -89,6 +92,7 @@ fn occurrence(path: &std::path::Path, span: (usize, usize)) -> ReportOccurrence 
         start_line: 0,
         end_line: 0,
         hidden: false,
+        in_diff: None,
     }
 }
 

@@ -91,6 +91,7 @@ fn sample_report() -> Report {
             failed_subtrees: 0,
         }),
         clusters: vec![sample_cluster()],
+        clusters_outside_diff: None,
     }
 }
 
@@ -113,6 +114,8 @@ fn sample_cluster() -> ReportCluster {
         occurrences_truncated: false,
         summary: "summary".to_owned(),
         interpretation: "interpretation".to_owned(),
+        intersects_diff: None,
+        is_newly_introduced: None,
     }
 }
 
@@ -127,6 +130,7 @@ fn sample_occurrences() -> Vec<ReportOccurrence> {
                 start_line: i64::try_from(index.saturating_add(1)).unwrap_or(i64::MAX),
                 end_line: i64::try_from(index.saturating_add(1)).unwrap_or(i64::MAX),
                 hidden: false,
+                in_diff: None,
             }
         })
         .collect()

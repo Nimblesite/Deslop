@@ -137,6 +137,7 @@ mod tests {
             start_line: 0_i64,
             end_line: 0_i64,
             hidden: false,
+            in_diff: None,
         }
     }
 
@@ -159,6 +160,8 @@ mod tests {
             occurrences_truncated: false,
             summary: "Summary line.".to_owned(),
             interpretation: "Interpretation line.".to_owned(),
+            intersects_diff: None,
+            is_newly_introduced: None,
         }
     }
 

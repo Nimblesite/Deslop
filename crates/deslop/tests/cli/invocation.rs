@@ -56,7 +56,49 @@ fn prints_help_and_mentions_min_nodes_flag() -> Result<()> {
         .stdout(contains("--log-to-console"))
         .stdout(contains("--log-level"))
         .stdout(contains("--no-color"))
-        .stdout(contains("--technical"));
+        .stdout(contains("--technical"))
+        .stdout(contains("--diff"))
+        .stdout(contains("--only-changed"));
+    Ok(())
+}
+
+// [CLI-ARG-ONLY-CHANGED] scopes by a diff, so it demands one.
+#[test]
+fn only_changed_without_diff_is_a_usage_error() -> Result<()> {
+    let output = Command::cargo_bin("deslop")?
+        .args([".", "--only-changed"])
+        .output()?;
+    assert_eq!(output.status.code(), Some(2), "clap rejections exit 2");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("--diff"),
+        "rejection must point at the missing --diff: {stderr}"
+    );
+    Ok(())
+}
+
+// [CLI-ARG-DIFF] conflicts: `--from-report` skips analysis (nothing to
+// verify a diff against) and the `--rerun-*` flags are the live-loop
+// surface, which carries no diff tags — combining them would silently
+// emit a second, untagged report over the tagged one.
+#[test]
+fn diff_conflicts_with_from_report_and_rerun_flags() -> Result<()> {
+    for conflicting in [
+        vec!["--from-report", "report.json"],
+        vec!["--rerun-touch", "some.rs"],
+        vec!["--rerun-remove", "some.rs"],
+        vec!["--rerun-add", "a.rs=b.rs"],
+    ] {
+        let output = Command::cargo_bin("deslop")?
+            .args([".", "--diff", "change.patch"])
+            .args(&conflicting)
+            .output()?;
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "--diff with {conflicting:?} must be rejected as a usage error"
+        );
+    }
     Ok(())
 }
 

@@ -10,6 +10,7 @@ use std::fmt::Write as _;
 use crate::{
     clone_category::CloneCategory,
     report::{Report, ReportCluster},
+    report_location::diff_badge,
     report_metrics::ThresholdSource,
 };
 
@@ -19,6 +20,7 @@ pub fn render_text(report: &Report) -> String {
     let mut out = String::new();
     write_header(&mut out, report);
     write_metrics(&mut out, report);
+    write_diff_metrics(&mut out, report);
     write_provenance(&mut out, report);
     write_cache_stats(&mut out, report);
     write_action_hints(&mut out, report);
@@ -35,13 +37,19 @@ pub fn render_text(report: &Report) -> String {
 /// keep local runs terse.
 fn write_metrics(out: &mut String, report: &Report) {
     let metrics = &report.metrics;
+    // The repo line is repo-scoped: under `--only-changed`,
+    // `clusters_total` follows the filtered body ([METRICS-REPO]), so
+    // the repo-wide count is body + omitted ([METRICS-DIFF-SCOPE]).
+    let repo_clusters = metrics
+        .clusters_total
+        .saturating_add(report.clusters_outside_diff.unwrap_or(0));
     let _ = writeln!(
         out,
         "repo: {percent:.1}% duplicated ({dup} / {total} LOC, {clusters} clusters across {files} files)",
         percent = metrics.duplication_percent,
         dup = metrics.duplicated_loc,
         total = metrics.analysed_loc,
-        clusters = metrics.clusters_total,
+        clusters = repo_clusters,
         files = metrics.duplicated_files,
     );
     let verdict = match metrics.threshold.source {
@@ -58,6 +66,59 @@ fn write_metrics(out: &mut String, report: &Report) {
         out,
         "threshold: {pct:.2}% ({verdict})",
         pct = metrics.threshold.percent,
+    );
+}
+
+/// Writes the diff-scoped metrics block ([METRICS-DIFF-SCOPE]):
+/// added-line duplication, the diff gate verdict when one governs, and
+/// the newly-introduced delta when `--only-changed` filtered the list.
+/// Absent entirely on a run without `--diff`, so no-diff output stays
+/// byte-identical.
+fn write_diff_metrics(out: &mut String, report: &Report) {
+    let Some(diff) = report.metrics.diff.as_ref() else {
+        return;
+    };
+    let _ = writeln!(
+        out,
+        "diff: {percent:.1}% of added lines duplicated ({dup} / {added} added LOC)",
+        percent = diff.duplication_percent,
+        dup = diff.duplicated_added_loc,
+        added = diff.added_loc,
+    );
+    if !matches!(diff.threshold.source, ThresholdSource::None) {
+        let verdict = if diff.threshold.breached {
+            "breached"
+        } else {
+            "ok"
+        };
+        let _ = writeln!(
+            out,
+            "diff threshold: {pct:.2}% ({verdict})",
+            pct = diff.threshold.percent,
+        );
+    }
+    write_diff_delta(out, report);
+}
+
+/// Writes the `--only-changed` delta line ([CLI-ARG-ONLY-CHANGED],
+/// [METRICS-DIFF-SCOPE]): every surviving cluster intersects the diff
+/// by construction, split into newly introduced and cross-file with
+/// untouched code (#364's requested classification), with the omitted
+/// count beside them so all four figures reconcile.
+fn write_diff_delta(out: &mut String, report: &Report) {
+    let Some(outside) = report.clusters_outside_diff else {
+        return;
+    };
+    let newly = report
+        .clusters
+        .iter()
+        .filter(|cluster| cluster.is_newly_introduced == Some(true))
+        .count();
+    let cross_file = report.clusters.len().saturating_sub(newly);
+    let _ = writeln!(
+        out,
+        "delta: {touched} cluster(s) intersect the diff — {newly} newly introduced, {cross_file} cross-file with untouched code; {outside} untouched cluster(s) omitted",
+        touched = report.clusters.len(),
     );
 }
 
@@ -159,4 +220,23 @@ fn write_cluster(out: &mut String, idx: usize, cluster: &ReportCluster) {
         nodes = cluster.canonical_node_count,
         summary = cluster.summary,
     );
+    write_cluster_occurrences(out, cluster);
+}
+
+/// Writes one badged row per occurrence on a `--diff` run, through the
+/// shared [`diff_badge`] source ([OUTPUT-SCHEMA-DIFF-TAGS]). Silent on
+/// a run without `--diff` — the cluster block stays byte-identical.
+fn write_cluster_occurrences(out: &mut String, cluster: &ReportCluster) {
+    for occurrence in &cluster.occurrences {
+        let Some(badge) = diff_badge(occurrence.in_diff) else {
+            continue;
+        };
+        let _ = writeln!(
+            out,
+            "  - {path}:{start}-{end} {badge}",
+            path = occurrence.path.display(),
+            start = occurrence.start_line,
+            end = occurrence.end_line,
+        );
+    }
 }

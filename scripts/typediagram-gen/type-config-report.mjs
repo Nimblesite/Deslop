@@ -20,8 +20,9 @@ export const REPORT_TYPE_CONFIG = {
     fieldSerdeAttrs: {
       start_line: ["default"],
       end_line: ["default"],
+      in_diff: ["default", 'skip_serializing_if = "Option::is_none"'],
     },
-    tsOptional: ["start_line", "end_line"],
+    tsOptional: ["start_line", "end_line", "in_diff"],
     fieldDocs: {
       path: "Source path, relative to the scan root when possible.",
       start_byte: "Inclusive byte offset of the clone within the file.",
@@ -29,6 +30,7 @@ export const REPORT_TYPE_CONFIG = {
       start_line: "One-based line number containing `start_byte`.",
       end_line: "One-based line number containing the final byte of the clone.",
       hidden: "True when the file matches a `report_hide` pattern.",
+      in_diff: "True when the occurrence's line range intersects the ingested diff's added lines ([OUTPUT-SCHEMA-DIFF-TAGS]). Absent unless the run carried `--diff`.",
     },
   },
   ReportCluster: {
@@ -41,8 +43,10 @@ export const REPORT_TYPE_CONFIG = {
     },
     fieldSerdeAttrs: {
       category: ["default"],
+      intersects_diff: ["default", 'skip_serializing_if = "Option::is_none"'],
+      is_newly_introduced: ["default", 'skip_serializing_if = "Option::is_none"'],
     },
-    tsOptional: ["category"],
+    tsOptional: ["category", "intersects_diff", "is_newly_introduced"],
     fieldDocs: {
       id: "Stable short id for cross-referencing.",
       weight: "Ranking weight (higher = worse).",
@@ -56,6 +60,8 @@ export const REPORT_TYPE_CONFIG = {
       occurrences_truncated: "True when `occurrences` was truncated for the wire.",
       summary: "Agent-oriented synthesis (blanked on the live wire).",
       interpretation: "Derived one-line interpretation (blanked on the live wire).",
+      intersects_diff: "True when any non-hidden occurrence has `in_diff == true` ([OUTPUT-SCHEMA-DIFF-TAGS]). Absent unless the run carried `--diff`.",
+      is_newly_introduced: "True when `intersects_diff` holds **and** every occurrence — hidden ones included — has `in_diff == true`, so the whole clone family arrived with the diff ([OUTPUT-SCHEMA-DIFF-TAGS]). A hidden pre-existing copy vetoes the flag: content that already existed anywhere in the tree did not arrive with this change. Absent unless the run carried `--diff`.",
     },
   },
   PathParams: {
@@ -308,7 +314,12 @@ export const REPORT_TYPE_CONFIG = {
       min_nodes: "u32",
       files_analysed: "usize",
       clusters_hidden: "usize",
+      clusters_outside_diff: "Option<usize>",
     },
+    fieldSerdeAttrs: {
+      clusters_outside_diff: ["default", 'skip_serializing_if = "Option::is_none"'],
+    },
+    tsOptional: ["clusters_outside_diff"],
     fieldDocs: {
       tool_version: "Binary / library version that produced the report.",
       min_nodes: "Minimum subtree node count used for clustering.",
@@ -321,6 +332,7 @@ export const REPORT_TYPE_CONFIG = {
       boilerplate_hints: "Optional import/prologue hygiene hints.",
       embedding_provenance: "Provider/model/version that produced the embedding signals, if any.",
       clusters: "Ordered clusters, worst offenders first.",
+      clusters_outside_diff: "Count of clusters `--only-changed` omitted because they never intersect the diff ([CLI-ARG-ONLY-CHANGED]). Absent unless that flag filtered this report.",
     },
   },
   MergeVerdict: {

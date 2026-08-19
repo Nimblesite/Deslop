@@ -22,7 +22,7 @@ use crate::{
     pair::PairScore,
     report_boilerplate::build_boilerplate_hints,
     report_metrics::{compute_repo_metrics, AnalysedLines, MetricsInputs},
-    report_render::cluster_to_report,
+    report_render::{cluster_to_report, ReportSources},
     report_weight::reweigh_by_visible_occurrences,
     state::{FileId, FileRegistry},
 };
@@ -147,6 +147,11 @@ pub struct ReportInputs<'a, S: BuildHasher> {
     pub analysed_lines: &'a AnalysedLines,
     /// Import/prologue ranges suppressed before clustering.
     pub boilerplate_ranges: &'a [BoilerplateRange],
+    /// Verified diff scope when the run carried `--diff`
+    /// ([CLI-ARG-DIFF]). Drives occurrence/cluster tagging
+    /// ([OUTPUT-SCHEMA-DIFF-TAGS]) and `metrics.diff`
+    /// ([METRICS-DIFF-SCOPE]); `None` leaves every diff field absent.
+    pub diff: Option<&'a crate::diff_scope::DiffScope>,
 }
 
 /// Converts the internal representation into a report ready for
@@ -159,11 +164,12 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
     // Parse each source file at most once for the whole render, shared
     // across every cluster's noise/role checks ([CLONE-NOISE-REPARSE-CACHE]).
     let parse_cache = ParseCache::new();
+    let report_sources = ReportSources::new(inputs.sources);
     let policy = inputs.exclusion.ranking_policy();
     let materialised: Vec<(ReportCluster, bool)> = inputs
         .clusters
         .iter()
-        .map(|cluster| materialise_cluster(cluster, &inputs, &parse_cache, policy))
+        .map(|cluster| materialise_cluster(cluster, &inputs, &report_sources, &parse_cache, policy))
         .collect();
     let clusters_hidden = materialised.iter().filter(|(_, hidden)| *hidden).count();
     // The metric must count the same clusters the report renders, so it
@@ -186,12 +192,20 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
     let mut metrics = compute_repo_metrics(&MetricsInputs {
         clusters: &visible_internal,
         sources: inputs.sources,
+        line_indices: report_sources.line_indices(),
         file_languages: inputs.file_languages,
         registry: inputs.registry,
         exclusion: inputs.exclusion,
         analysed_lines: inputs.analysed_lines,
         scan_root: inputs.scan_root,
+        diff: inputs.diff,
     });
+    // [OUTPUT-SCHEMA-DIFF-TAGS] Tags are stamped on the exact cluster
+    // list the report carries — after hiding and reweighing — so a
+    // tagged report and an untagged one always list identical clusters.
+    if let Some(scope) = inputs.diff {
+        crate::diff_scope::tag_clusters(&mut visible_clusters, scope);
+    }
     // Resolve the [EXIT-CODES] duplication gate here so every surface that
     // renders through this path carries the breach verdict — the live
     // LSP/MCP servers, not just the CLI. `compute_repo_metrics` leaves it
@@ -217,6 +231,9 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         boilerplate_hints,
         embedding_provenance: inputs.embedding_provenance,
         clusters: visible_clusters,
+        // Set by `diff_scope::apply_only_changed` when the CLI filters;
+        // absent otherwise ([CLI-ARG-ONLY-CHANGED]).
+        clusters_outside_diff: None,
     }
 }
 
@@ -230,6 +247,7 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
 fn materialise_cluster<S: BuildHasher>(
     cluster: &Cluster,
     inputs: &ReportInputs<'_, S>,
+    report_sources: &ReportSources<'_>,
     parse_cache: &ParseCache,
     policy: RankingPolicy,
 ) -> (ReportCluster, bool) {
@@ -239,7 +257,7 @@ fn materialise_cluster<S: BuildHasher>(
         inputs.file_languages,
         inputs.scan_root,
         inputs.exclusion,
-        inputs.sources,
+        report_sources,
         parse_cache,
     );
     let category = classify_clone_category(

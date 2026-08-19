@@ -15,6 +15,13 @@ use crate::Cli;
 #[derive(Debug)]
 pub(crate) struct UsageError(String);
 
+impl UsageError {
+    /// Builds a usage error carrying `message` verbatim.
+    pub(crate) fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
+    }
+}
+
 impl std::fmt::Display for UsageError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(&self.0)
@@ -43,8 +50,8 @@ impl FormatSelection {
             html: !args.suppress.nohtml,
         };
         if !selection.json && !selection.text && !selection.html {
-            return Err(UsageError(
-                "at least one of --nojson/--notext/--nohtml must remain enabled".to_owned(),
+            return Err(UsageError::new(
+                "at least one of --nojson/--notext/--nohtml must remain enabled",
             )
             .into());
         }
