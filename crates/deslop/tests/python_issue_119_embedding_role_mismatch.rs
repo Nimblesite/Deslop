@@ -16,17 +16,13 @@
 //! Determinism: the in-process [`MockOllama`] embeds each snippet to a
 //! signed feature hash of its distinct 5-byte shingles, so cosine
 //! tracks *lexical* overlap (GH #369, replacing the length-residue
-//! vector of GH #366).
-//!
-//! 🛑 BOTH FIXTURES BELOW ARE MISCALIBRATED AGAINST THAT MOCK — see the
-//! `#[ignore]` note on [`same_role_function_pair_still_surfaces`]. They
-//! were tuned against the deleted GH #366 vector, whose two constant
-//! lanes floored *every* pair near cosine 1.0. Neither fixture now
-//! reaches `MIN_COSINE = 0.80`
-//! (`crates/deslop-core/src/embedding/pairs.rs`), so the ANN pass emits
-//! zero pairs, no cluster forms, and the role gate under test never
-//! executes. Recalibrating them is a GH #366 follow-up, not a
-//! production fix.
+//! vector of GH #366). The near-identical role-mismatch pair clears the
+//! embedding floor on that lexical overlap alone. The same-role pair is
+//! genuinely Type-4 — same behaviour, different text — which no content
+//! statistic can measure, so the test declares the ground truth with
+//! [`MockOllama::spawn_semantic`]: snippets naming either function are
+//! behaviour-equivalent, which lifts their cosine above the floor while
+//! unrelated snippets keep their honest shingle cosine.
 
 #[path = "cli/mock_ollama.rs"]
 mod mock_ollama;
@@ -40,11 +36,10 @@ use serde_json::Value;
 mod common;
 use crate::common::{embeddings::run_mock_embedding_report, *};
 
-/// Runs the CLI against a private copy of `fixture_root` with the
-/// deterministic mock Ollama
-/// wired in via `--embeddings required`, returning the parsed JSON.
-fn run_report(fixture_root: &Path) -> Result<Value> {
-    let server = MockOllama::spawn()?;
+/// Runs the CLI against a private copy of `fixture_root` with the given
+/// mock Ollama wired in via `--embeddings required`, returning the
+/// parsed JSON.
+fn run_report(fixture_root: &Path, server: &MockOllama) -> Result<Value> {
     let tmp = tempfile::tempdir()?;
     let output = tmp.path().join("report");
     // `--embeddings required` writes `.deslop/cache/embeddings/` into the
@@ -81,7 +76,8 @@ fn class_function_role_pairs(report: &Value, scan_root: &Path) -> Result<Vec<Vec
 #[test]
 fn class_function_role_mismatch_does_not_surface() -> Result<()> {
     let scan_root = fixture("python-issue-119-role-mismatch");
-    let report = run_report(&scan_root)?;
+    let server = MockOllama::spawn()?;
+    let report = run_report(&scan_root, &server)?;
     let offenders = class_function_role_pairs(&report, &scan_root)?;
     assert!(
         offenders.is_empty(),
@@ -113,7 +109,8 @@ fn class_function_role_mismatch_does_not_surface() -> Result<()> {
 #[test]
 fn same_role_function_pair_still_surfaces() -> Result<()> {
     let scan_root = fixture("python-issue-119-same-role");
-    let report = run_report(&scan_root)?;
+    let server = MockOllama::spawn_semantic(&[&["total_recursive", "total_iterative"]])?;
+    let report = run_report(&scan_root, &server)?;
     let same_behavior: Vec<&Value> = clusters(&report)
         .iter()
         .filter(|cluster| bucket(cluster) == "same_behavior")

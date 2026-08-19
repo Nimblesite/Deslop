@@ -17,9 +17,14 @@
 //! Dart functions (same role) still surface.
 //!
 //! Determinism: the in-process [`MockOllama`] embeds each snippet to a
-//! 4-lane vector seeded by its byte length and first byte, so the
-//! cross-role and same-role pairs both clear the embedding gate while
-//! structural overlap stays at zero.
+//! signed feature hash of its distinct 5-byte shingles (GH #369), so the
+//! near-identical role-mismatch pair clears the embedding floor on its
+//! own lexical overlap. The same-role pair is genuinely Type-4 — same
+//! behaviour, different text — which no content statistic can measure,
+//! so the test declares the ground truth with
+//! [`MockOllama::spawn_semantic`]: snippets naming either function are
+//! behaviour-equivalent, which lifts their cosine above the floor while
+//! unrelated snippets keep their honest shingle cosine.
 
 #[path = "cli/mock_ollama.rs"]
 mod mock_ollama;
@@ -33,11 +38,10 @@ use serde_json::Value;
 mod common;
 use crate::common::{embeddings::run_mock_embedding_report, *};
 
-/// Runs the CLI against a private copy of `fixture_root` with the
-/// deterministic mock Ollama
-/// wired in via `--embeddings required`, returning the parsed JSON.
-fn run_report(fixture_root: &Path) -> Result<Value> {
-    let server = MockOllama::spawn()?;
+/// Runs the CLI against a private copy of `fixture_root` with the given
+/// mock Ollama wired in via `--embeddings required`, returning the
+/// parsed JSON.
+fn run_report(fixture_root: &Path, server: &MockOllama) -> Result<Value> {
     let tmp = tempfile::tempdir()?;
     let output = tmp.path().join("report");
     // `--embeddings required` writes `.deslop/cache/embeddings/` into the
@@ -76,7 +80,8 @@ fn class_function_role_pairs(report: &Value, scan_root: &Path) -> Result<Vec<Vec
 #[test]
 fn dart_class_function_role_mismatch_does_not_surface() -> Result<()> {
     let scan_root = fixture("dart-issue-119-role-mismatch");
-    let report = run_report(&scan_root)?;
+    let server = MockOllama::spawn()?;
+    let report = run_report(&scan_root, &server)?;
     let offenders = class_function_role_pairs(&report, &scan_root)?;
     assert!(
         offenders.is_empty(),
@@ -109,7 +114,8 @@ fn dart_class_function_role_mismatch_does_not_surface() -> Result<()> {
 #[test]
 fn dart_same_role_function_pair_still_surfaces() -> Result<()> {
     let scan_root = fixture("dart-issue-119-same-role");
-    let report = run_report(&scan_root)?;
+    let server = MockOllama::spawn_semantic(&[&["totalRecursive", "totalIterative"]])?;
+    let report = run_report(&scan_root, &server)?;
     let same_behavior: Vec<&Value> = clusters(&report)
         .iter()
         .filter(|cluster| bucket(cluster) == "same_behavior")

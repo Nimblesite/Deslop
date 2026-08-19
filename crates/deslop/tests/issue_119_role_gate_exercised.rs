@@ -16,17 +16,16 @@
 //! 2. the embedding pass never paired them at all, so no cluster ever
 //!    existed to suppress and the assertion is vacuous.
 //!
-//! Reason 2 is the live state. The #119 fixtures were calibrated against
-//! the GH #366 mock vector, whose two constant lanes floored *every* pair
-//! near cosine 1.0; under the honest GH #369 shingle mock they measure
-//! 0.29 (Dart same-role), 0.10 (Dart role-mismatch) and 0.27 (Python
-//! same-role) — all below `MIN_COSINE = 0.80`
-//! (`crates/deslop-core/src/embedding/pairs.rs`). The ANN pass emits zero
-//! pairs, so the gate under test never executes.
-//!
 //! This binary pins the difference between the two reasons so it cannot
-//! be mistaken for a passing gate again. Every test here fails while the
-//! #119 fixtures cannot reach the embedding floor.
+//! be mistaken for a passing gate again. The role-mismatch fixtures are
+//! near-identical byte-for-byte (a class and a function sharing locals),
+//! so the honest GH #369 shingle mock scores them above the floor and the
+//! pair genuinely reaches the gate. The same-role fixtures are genuinely
+//! Type-4 — same behaviour, different text — which no content statistic
+//! can measure, so those tests declare the ground truth with
+//! [`MockOllama::spawn_semantic`]: the two function names form one
+//! behaviour-equivalence group, lifting their cosine above the floor
+//! while every other pair keeps its honest shingle cosine.
 
 #[path = "cli/mock_ollama.rs"]
 mod mock_ollama;
@@ -44,10 +43,9 @@ use crate::common::{embeddings::run_mock_embedding_report, *};
 /// cosine at which embedding evidence may support a bucket at all.
 const EMBEDDING_SUPPORT_FLOOR: f64 = 0.80;
 
-/// Scans a private copy of `fixture_root` with the deterministic mock
-/// embedder wired in ([FUSION-EMBED-PROVIDER]).
-fn report_with_embeddings(fixture_root: &Path) -> Result<Value> {
-    let server = MockOllama::spawn()?;
+/// Scans a private copy of `fixture_root` with the given deterministic
+/// mock embedder wired in ([FUSION-EMBED-PROVIDER]).
+fn report_with_embeddings(fixture_root: &Path, server: &MockOllama) -> Result<Value> {
     let tmp = tempfile::tempdir()?;
     let output = tmp.path().join("report");
     let scan_root = &tmp.path().join("src");
@@ -78,7 +76,8 @@ fn same_behavior(report: &Value) -> Vec<&Value> {
 fn assert_gate_was_reached(fixture_name: &str, language: &str) -> Result<()> {
     let root = fixture(fixture_name);
     let without = report_without_embeddings(&root)?;
-    let with = report_with_embeddings(&root)?;
+    let server = MockOllama::spawn()?;
+    let with = report_with_embeddings(&root, &server)?;
     let hidden_without = clusters_hidden(&without);
     let hidden_with = clusters_hidden(&with);
     assert!(
@@ -104,7 +103,8 @@ fn assert_same_role_pair_surfaces(
     right: &str,
 ) -> Result<()> {
     let root = fixture(fixture_name);
-    let report = report_with_embeddings(&root)?;
+    let server = MockOllama::spawn_semantic(&[&[left, right]])?;
+    let report = report_with_embeddings(&root, &server)?;
     let surviving = same_behavior(&report);
     assert!(
         !surviving.is_empty(),
@@ -204,7 +204,8 @@ fn python_same_role_pair_surfaces_with_measured_embedding_support() -> Result<()
 #[test]
 fn same_behavior_is_reachable_when_a_pair_clears_the_embedding_floor() -> Result<()> {
     let root = fixture("dart-issue-119-same-behavior-reachable");
-    let report = report_with_embeddings(&root)?;
+    let server = MockOllama::spawn()?;
+    let report = report_with_embeddings(&root, &server)?;
     let surviving = same_behavior(&report);
     assert!(
         !surviving.is_empty(),
