@@ -132,6 +132,7 @@ fn metrics(diff: Option<DiffMetrics>) -> RepoMetrics {
             source: ThresholdSource::Cli,
         },
         per_file: Vec::new(),
+        folders: Vec::new(),
         diff,
     }
 }

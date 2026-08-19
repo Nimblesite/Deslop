@@ -15,6 +15,7 @@ export function metrics(overrides: Partial<RepoMetrics> = {}): RepoMetrics {
     duplicated_files: 0,
     threshold: { percent: 0, breached: false, source: "none" },
     per_file: [],
+    folders: [],
     ...overrides,
   };
 }

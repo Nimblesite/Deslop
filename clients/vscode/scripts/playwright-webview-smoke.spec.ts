@@ -263,6 +263,13 @@ const sampleReport = {
       { path: "src/dart/parser_beta.dart", analysed_loc: 180, duplicated_loc: 38, duplication_percent: 21.1 },
       { path: "src/models/models.g.dart", analysed_loc: 220, duplicated_loc: 16, duplication_percent: 7.3 },
     ],
+    // Engine-computed folder rows ([METRICS-REPO]) — the webview renders
+    // these verbatim and performs no arithmetic of its own.
+    folders: [
+      { path: "src/dart", analysed_loc: 300, duplicated_loc: 80, duplication_percent: 26.7 },
+      { path: "src", analysed_loc: 520, duplicated_loc: 96, duplication_percent: 18.5 },
+      { path: "src/models", analysed_loc: 220, duplicated_loc: 16, duplication_percent: 7.3 },
+    ],
   },
   schema_doc: "playwright smoke schema",
   action_hints: [],

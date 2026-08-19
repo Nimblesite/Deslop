@@ -85,11 +85,14 @@ pub fn build_page(
 /// thousand files — or a few hundred deeply nested ones — that block
 /// outweighs the entire 200 KB tool-result budget before a single
 /// cluster is added, which made every `report-query` overflow. It is
-/// opt-in; the headline totals are always present.
+/// opt-in; the headline totals are always present. `folders` is the
+/// engine-computed rollup of the same block ([METRICS-REPO]) and rides
+/// the same switch.
 fn page_metrics(report: &Report, include_per_file: bool) -> RepoMetrics {
     let mut metrics = report.metrics.clone();
     if !include_per_file {
         metrics.per_file = Vec::new();
+        metrics.folders = Vec::new();
     }
     metrics
 }

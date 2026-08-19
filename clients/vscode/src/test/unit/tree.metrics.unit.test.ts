@@ -12,17 +12,22 @@ import { ReportStore } from "../../reportStore";
 import { fileMetric, labelText, report } from "./tree.helpers";
 
 /** Builds a Duplication panel over a report describing exactly one file, so
- * the path-resolution cases below differ only in the path they feed in. */
+ * the path-resolution cases below differ only in the path they feed in.
+ * `percent` and `folders` are wire literals — exactly what the engine's
+ * single calculation would emit for this corpus. */
 function panelForOneFile(
   metricPath: string,
   analysedLoc: number,
   duplicatedLoc: number,
+  percent: number,
+  folders: ReturnType<typeof fileMetric>[],
 ): MetricsProvider {
   const store = new ReportStore();
   store.setSnapshot(
     report([], {
       duplicated_loc: duplicatedLoc,
-      per_file: [fileMetric(metricPath, analysedLoc, duplicatedLoc)],
+      per_file: [fileMetric(metricPath, analysedLoc, duplicatedLoc, percent)],
+      folders,
     }),
     0,
   );
@@ -74,7 +79,8 @@ suite("MetricsProvider", () => {
         analysed_loc: 12400,
         clusters_total: 37,
         duplicated_files: 9,
-        per_file: [fileMetric("/src/a/Alpha.cs", 100, 60)],
+        per_file: [fileMetric("/src/a/Alpha.cs", 100, 60, 60)],
+        folders: [fileMetric("src/a", 100, 60, 60), fileMetric("src", 100, 60, 60)],
       }),
       0,
     );
@@ -94,7 +100,8 @@ suite("MetricsProvider", () => {
         duplication_percent: 18.4,
         duplicated_loc: 2280,
         threshold: { percent: 10, breached: true, source: "config" },
-        per_file: [fileMetric("/src/a/Alpha.cs", 100, 60)],
+        per_file: [fileMetric("/src/a/Alpha.cs", 100, 60, 60)],
+        folders: [fileMetric("src/a", 100, 60, 60), fileMetric("src", 100, 60, 60)],
       }),
       0,
     );
@@ -110,7 +117,8 @@ suite("MetricsProvider", () => {
         duplication_percent: 8.0,
         duplicated_loc: 800,
         threshold: { percent: 20, breached: false, source: "config" },
-        per_file: [fileMetric("/src/a/Alpha.cs", 100, 8)],
+        per_file: [fileMetric("/src/a/Alpha.cs", 100, 8, 8)],
+        folders: [fileMetric("src/a", 100, 8, 8), fileMetric("src", 100, 8, 8)],
       }),
       0,
     );
@@ -125,9 +133,14 @@ suite("MetricsProvider", () => {
       report([], {
         duplicated_loc: 90,
         per_file: [
-          fileMetric("/src/a/Alpha.cs", 100, 60),
-          fileMetric("/src/a/Beta.cs", 100, 20),
-          fileMetric("/src/b/Gamma.cs", 100, 10),
+          fileMetric("/src/a/Alpha.cs", 100, 60, 60),
+          fileMetric("/src/a/Beta.cs", 100, 20, 20),
+          fileMetric("/src/b/Gamma.cs", 100, 10, 10),
+        ],
+        folders: [
+          fileMetric("src/a", 200, 80, 40),
+          fileMetric("src", 300, 90, 30),
+          fileMetric("src/b", 100, 10, 10),
         ],
       }),
       0,
@@ -152,8 +165,12 @@ suite("MetricsProvider", () => {
       report([], {
         duplicated_loc: 60,
         per_file: [
-          fileMetric("/src/a/Alpha.cs", 100, 60),
-          fileMetric("/src/a/Clean.cs", 100, 0),
+          fileMetric("/src/a/Alpha.cs", 100, 60, 60),
+          fileMetric("/src/a/Clean.cs", 100, 0, 0),
+        ],
+        folders: [
+          fileMetric("src/a", 200, 60, 30),
+          fileMetric("src", 200, 60, 30),
         ],
       }),
       0,
@@ -177,7 +194,7 @@ suite("MetricsProvider", () => {
   // filesystem root and VS Code offers to create the file.
   test("opens the workspace file when the metric path is scan-root-relative", async () => {
     const root = fixtureRoot();
-    const provider = panelForOneFile("Alpha.cs", 100, 60);
+    const provider = panelForOneFile("Alpha.cs", 100, 60, 60, []);
     const fileNode = provider.getChildren().find((node) => node instanceof FileMetricNode);
     assert.ok(fileNode instanceof FileMetricNode, "the relative-path metric renders a file row");
 
@@ -205,7 +222,12 @@ suite("MetricsProvider", () => {
   test("resolves a deeply nested scan-root-relative metric path against the workspace", () => {
     const root = fixtureRoot();
     const relative = "admin/src/components/ui/avatar.tsx";
-    const provider = panelForOneFile(relative, 110, 110);
+    const provider = panelForOneFile(relative, 110, 110, 100, [
+      fileMetric("admin/src/components/ui", 110, 110, 100),
+      fileMetric("admin/src/components", 110, 110, 100),
+      fileMetric("admin/src", 110, 110, 100),
+      fileMetric("admin", 110, 110, 100),
+    ]);
     const folder = provider.getChildren().find((node) => node instanceof FolderMetricNode);
     assert.ok(folder instanceof FolderMetricNode, "nested files roll up into a folder row");
     const [fileNode] = provider.getChildren(folder);
@@ -222,7 +244,7 @@ suite("MetricsProvider", () => {
   // resolver may not prefix the workspace onto a path that already has a root.
   test("leaves an absolute metric path untouched", () => {
     const absolute = path.join(path.sep, "elsewhere", "Alpha.cs");
-    const provider = panelForOneFile(absolute, 100, 60);
+    const provider = panelForOneFile(absolute, 100, 60, 60, [fileMetric("elsewhere", 100, 60, 60)]);
     const folder = provider.getChildren().find((node) => node instanceof FolderMetricNode);
     assert.ok(folder instanceof FolderMetricNode);
     const [fileNode] = provider.getChildren(folder);

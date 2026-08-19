@@ -57,13 +57,21 @@ export function tooltipText(item: vscode.TreeItem): string {
   return String(item.tooltip ?? "");
 }
 
-/** Builds a `FileMetric` with the percentage derived from the counts. */
-export function fileMetric(path: string, analysedLoc: number, duplicatedLoc: number): FileMetric {
+/** Builds a `FileMetric` (a file or folder wire row). The percentage is
+ * a literal, exactly as the engine's single `percent` function would
+ * emit it — deriving it here would be a second calculation, which
+ * [METRICS-REPO] prohibits outside the Rust core. */
+export function fileMetric(
+  path: string,
+  analysedLoc: number,
+  duplicatedLoc: number,
+  duplicationPercent: number,
+): FileMetric {
   return {
     path,
     analysed_loc: analysedLoc,
     duplicated_loc: duplicatedLoc,
-    duplication_percent: analysedLoc === 0 ? 0 : (duplicatedLoc / analysedLoc) * 100,
+    duplication_percent: duplicationPercent,
   };
 }
 

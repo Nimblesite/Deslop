@@ -62,6 +62,7 @@ function report(clusterId: string, path: string): Report {
       duplicated_files: 1,
       threshold: { percent: 0, breached: false, source: "none" },
       per_file: [],
+      folders: [],
     },
     clusters: [cluster(clusterId, path)],
   });
