@@ -308,6 +308,14 @@ export const CORE_TYPE_CONFIG = {
   EmbeddingProvenance: {
     docs: "Provenance of the `(provider, model, version)` triple used by the embedding pass.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    // Reports written before per-occurrence coverage counting lack
+    // `succeeded_subtrees`; `--from-report` reconstructs it from the
+    // `attempted = succeeded + failed` invariant at load
+    // (`load_report`), so the serde default only has to keep
+    // deserialization alive.
+    fieldSerdeAttrs: {
+      succeeded_subtrees: ["default"],
+    },
     fieldOverrides: {
       dimensions: "usize",
       attempted_subtrees: "usize",

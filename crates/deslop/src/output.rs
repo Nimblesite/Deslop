@@ -225,6 +225,25 @@ pub(crate) fn write_file(path: &std::path::Path, payload: &[u8]) -> Result<()> {
 pub(crate) fn load_report(path: &std::path::Path) -> Result<Report> {
     let source =
         fs::read_to_string(path).with_context(|| format!("read report {}", path.display()))?;
-    serde_json::from_str::<Report>(&source)
-        .with_context(|| format!("parse report {}", path.display()))
+    let mut report = serde_json::from_str::<Report>(&source)
+        .with_context(|| format!("parse report {}", path.display()))?;
+    migrate_legacy_embedding_coverage(&mut report);
+    Ok(report)
+}
+
+/// Reconstructs `succeeded_subtrees` for reports written before
+/// per-occurrence coverage counting existed. The field deserializes to
+/// zero when absent, and every writer honours
+/// `attempted = succeeded + failed`, so a zero alongside a non-zero
+/// `attempted - failed` can only be a legacy report; the reconstruction
+/// is the invariant solved for the missing term, and a no-op on every
+/// report that already honours it.
+fn migrate_legacy_embedding_coverage(report: &mut Report) {
+    if let Some(provenance) = report.embedding_provenance.as_mut() {
+        if provenance.succeeded_subtrees == 0 {
+            provenance.succeeded_subtrees = provenance
+                .attempted_subtrees
+                .saturating_sub(provenance.failed_subtrees);
+        }
+    }
 }

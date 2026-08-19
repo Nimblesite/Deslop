@@ -36,6 +36,17 @@ pub use crate::wire_generated::{
     CacheStats, EmbeddingProvenance, Report, ReportCluster, ReportOccurrence, ReportSignals,
 };
 
+/// Serde default for [`ReportSignals::agreement`] when replaying a
+/// report written before the content gate existed: an absent field
+/// means nothing was measured, and the unmeasured convention is full
+/// agreement so a missing measurement never demotes a cluster the
+/// original run vouched for ([FUSION-CONTENT-GATE],
+/// [`crate::content::ContentEvidence::unmeasured`]).
+#[must_use]
+pub fn unmeasured_agreement() -> f64 {
+    1.0
+}
+
 /// Default occurrence cap applied by [`Report::truncate_for_wire`].
 /// Chosen so a pathological 26k-occurrence cluster (real-world alembic
 /// migration case) drops from ~2.7 MB to ~10 KB while still giving the

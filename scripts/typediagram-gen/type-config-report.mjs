@@ -2,6 +2,17 @@ export const REPORT_TYPE_CONFIG = {
   ReportSignals: {
     docs: "Per-cluster signal breakdown so consumers can tell why the cluster was flagged.",
     derives: ["Debug", "Clone", "Copy", "Serialize", "Deserialize"],
+    // Reports written before the content gate carry only the four
+    // fused-confidence fields. `--from-report` must replay them, and an
+    // absent measurement must never demote a cluster the original run
+    // vouched for — so the defaults mirror
+    // `ContentEvidence::unmeasured()`: full agreement, no rename proof,
+    // no literal dominance.
+    fieldSerdeAttrs: {
+      agreement: ['default = "crate::report::unmeasured_agreement"'],
+      rename_consistency: ["default"],
+      literal_fraction: ["default"],
+    },
     fieldDocs: {
       structural: "Mean structural signal across cluster pairs.",
       token_jaccard: "Mean token Jaccard estimate across cluster pairs.",

@@ -213,7 +213,32 @@ fn same_behavior_is_reachable_when_a_pair_clears_the_embedding_floor() -> Result
          input, not just the #119 fixtures. Visible clusters: {:#?}",
         clusters(&report)
     );
-    assert_pairs_both_members(&root, &surviving, "accumulateWhile", "accumulateFor")?;
+    for cluster in &surviving {
+        let texts = occurrence_texts(&root, cluster)?;
+        assert_eq!(
+            texts.len(),
+            2,
+            "the accumulator clone pairs exactly the two loop bodies: {texts:#?}"
+        );
+        assert!(
+            texts
+                .iter()
+                .all(|text| text.contains("stacked = stacked + carried;")),
+            "both occurrences must carry the shared accumulator chain — that \
+             is the behaviour they have in common: {texts:#?}"
+        );
+        assert!(
+            texts.first() != texts.get(1),
+            "`same_behavior` means DIFFERENT code: byte-identical occurrences \
+             belong in an identical bucket, not this one: {texts:#?}"
+        );
+        assert_eq!(
+            signal(cluster, "structural"),
+            0.0,
+            "the `while` and `for` bodies share no normalised subtree, so the \
+             bucket must rest on embedding evidence alone"
+        );
+    }
     assert_embedding_support(&surviving, "Dart");
     Ok(())
 }
