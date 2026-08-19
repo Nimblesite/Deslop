@@ -199,7 +199,7 @@ export const CORE_TYPE_CONFIG = {
     },
   },
   FileMetric: {
-    docs: "Per-file duplication breakdown carried on `RepoMetrics.per_file`. One entry per analysed file; clean files appear with `duplicated_loc == 0` so percentage denominators stay exact. Consumers roll up per-folder totals by summing entries under a path prefix.",
+    docs: "One duplication-breakdown row, carried on `RepoMetrics.per_file` (one per analysed file; clean files appear with `duplicated_loc == 0` so percentage denominators stay exact) and on `RepoMetrics.folders` (one per folder prefix with duplicated lines). Every figure — file, folder, repo — is computed by the engine's single `percent` function ([METRICS-REPO]); consumers only read these rows, never recompute.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
     fieldOverrides: {
       path: "PathBuf",
@@ -238,6 +238,7 @@ export const CORE_TYPE_CONFIG = {
     },
     fieldSerdeAttrs: {
       per_file: ["default"],
+      folders: ["default"],
       diff: ["default", 'skip_serializing_if = "Option::is_none"'],
     },
     tsOptional: ["diff"],
@@ -250,6 +251,8 @@ export const CORE_TYPE_CONFIG = {
       duplicated_files: "Count of files with at least one non-hidden clone occurrence.",
       threshold: "Resolved fail-over threshold.",
       per_file: "Per-file duplication breakdown, worst-first. Empty on reports produced before this field existed.",
+      folders:
+        "Per-folder duplication breakdown, worst-first: one row per folder prefix containing duplicated lines, summed over every file beneath it (clean files included in the denominator) and divided by the engine's single `percent` function. Consumers render these rows verbatim — recomputing them anywhere else is prohibited ([METRICS-REPO]). Empty on reports produced before this field existed.",
       diff: "Added-line metrics for the ingested diff ([METRICS-DIFF-SCOPE]). Absent unless the run carried `--diff`.",
     },
   },

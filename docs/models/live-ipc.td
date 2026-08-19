@@ -147,6 +147,7 @@ type RepoMetrics {
   duplicated_files: Int
   threshold: ThresholdSummary
   per_file: List<FileMetric>
+  folders: List<FileMetric>
   diff: Option<DiffMetrics>
 }
 
