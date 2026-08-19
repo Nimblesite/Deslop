@@ -27,69 +27,28 @@
 //!     arguments are suppressed (#70) — each paired with a genuine clone
 //!     that must still surface, proving the suppression stays targeted.
 
-use std::{fs, path::Path};
-
 use anyhow::Result;
 
 mod common;
 use crate::common::*;
 
+/// Drives the `deslop` binary over the named fixture at `min_nodes` and
+/// returns the parsed JSON report, asserting the process exited cleanly.
 fn run_cli(fixture_name: &str, min_nodes: u32) -> Result<serde_json::Value> {
     let tmp = tempfile::tempdir()?;
-    let out = tmp.path().join("report.json");
-    let _assertion = deslop_cmd(&fixture(fixture_name), &tmp.path().join("report"))?
-        .arg("--min-nodes")
-        .arg(min_nodes.to_string())
+    let output = tmp.path().join("report");
+    let min_nodes = min_nodes.to_string();
+    let _assertion = deslop_cmd(&fixture(fixture_name), &output)?
+        .args(["--min-nodes", min_nodes.as_str()])
         .assert()
         .success();
-    let json = fs::read_to_string(&out)?;
-    Ok(serde_json::from_str(&json)?)
+    load_json(&output.with_extension("json"))
 }
 
-fn clusters(report: &serde_json::Value) -> Vec<&serde_json::Value> {
-    report
-        .pointer("/clusters")
-        .and_then(serde_json::Value::as_array)
-        .map(|values| values.iter().collect())
-        .unwrap_or_default()
-}
-
-fn signal(cluster: &serde_json::Value, key: &str) -> f64 {
-    cluster
-        .pointer(&format!("/signals/{key}"))
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or(f64::NAN)
-}
-
-fn occurrence_files(cluster: &serde_json::Value) -> Vec<String> {
-    cluster
-        .pointer("/occurrences")
-        .and_then(serde_json::Value::as_array)
-        .map(|occ| {
-            occ.iter()
-                .filter_map(|occurrence| {
-                    occurrence
-                        .get("path")
-                        .and_then(serde_json::Value::as_str)
-                        .map(|path| {
-                            Path::new(path).file_name().map_or_else(
-                                || path.to_owned(),
-                                |name| name.to_string_lossy().into_owned(),
-                            )
-                        })
-                })
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
+/// True only within one float ulp of `1.0` — a saturated signal, never a
+/// merely high one.
 fn is_exact_one(value: f64) -> bool {
     (value - 1.0).abs() <= f64::EPSILON
-}
-
-fn spans_both(cluster: &serde_json::Value, left: &str, right: &str) -> bool {
-    let files: std::collections::BTreeSet<String> = occurrence_files(cluster).into_iter().collect();
-    files.contains(left) && files.contains(right)
 }
 
 // [FUSION-SIGNALS-THREE-LAYER] Type-2 Dart clones (identical after
@@ -107,7 +66,6 @@ fn dart_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
     );
     let top = clusters
         .first()
-        .copied()
         .ok_or_else(|| anyhow::anyhow!("dart-small must produce at least one cluster"))?;
     let structural = signal(top, "structural");
     let token_jaccard = signal(top, "token_jaccard");
@@ -120,9 +78,10 @@ fn dart_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
         "Type-2 Dart clone must have token_jaccard = 1.0 (identical k-gram sets), \
          got {token_jaccard}",
     );
+    let files = cluster_file_set(top);
     assert!(
-        spans_both(top, "alpha.dart", "beta.dart"),
-        "the Type-2 cluster must span both alpha.dart and beta.dart",
+        files.contains("alpha.dart") && files.contains("beta.dart"),
+        "the Type-2 cluster must span both alpha.dart and beta.dart, got {files:?}",
     );
     Ok(())
 }
@@ -143,29 +102,17 @@ fn dart_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
 #[test]
 fn dart_near_miss_produces_genuine_cross_file_structural_cluster() -> Result<()> {
     let report = run_cli("dart-type3", 8)?;
-    let clusters = clusters(&report);
-    let cross_file = clusters
-        .iter()
-        .find(|cluster| spans_both(cluster, "delta.dart", "epsilon.dart"));
-    let Some(cluster) = cross_file else {
-        anyhow::bail!(
-            "dart-type3 must produce a cross-file cluster spanning delta.dart and \
-             epsilon.dart; got clusters: {clusters:#?}"
-        );
-    };
+    let cluster = expect_cluster_spanning(&report, &["delta.dart", "epsilon.dart"])?;
     let structural = signal(cluster, "structural");
     assert!(
         is_exact_one(structural),
         "the cross-file Dart near-miss cluster must reach structural = 1.0 on the shared \
          subtree (genuine Type-3 detection via the structural path), got {structural}",
     );
-    let occurrences = cluster
-        .pointer("/occurrences")
-        .and_then(serde_json::Value::as_array)
-        .map_or(0, Vec::len);
+    let occurrence_count = occurrences(cluster).len();
     assert!(
-        occurrences >= 2,
-        "a clone cluster must have at least two occurrences, got {occurrences}",
+        occurrence_count >= 2,
+        "a clone cluster must have at least two occurrences, got {occurrence_count}",
     );
     Ok(())
 }
@@ -178,8 +125,7 @@ fn dart_near_miss_produces_genuine_cross_file_structural_cluster() -> Result<()>
 fn dissimilar_dart_functions_never_form_a_cross_file_cluster() -> Result<()> {
     let report = run_cli("dart-dissimilar-functions", 8)?;
     for cluster in clusters(&report) {
-        let files: std::collections::BTreeSet<String> =
-            occurrence_files(cluster).into_iter().collect();
+        let files = cluster_file_set(cluster);
         assert!(
             files.len() <= 1,
             "dissimilar Dart functions must not cluster across files; got files {files:?}",
@@ -218,17 +164,7 @@ fn dart_token_jaccard_is_deterministic_across_runs() -> Result<()> {
 /// clusters are dropped before serialisation, so every cluster here is
 /// one a human is actually shown.
 fn any_cluster_spans(report: &serde_json::Value, left: &str, right: &str) -> bool {
-    clusters(report)
-        .iter()
-        .any(|cluster| spans_both(cluster, left, right))
-}
-
-/// Count of clusters the renderer analysed but hid from the ranked report.
-fn clusters_hidden(report: &serde_json::Value) -> u64 {
-    report
-        .pointer("/clusters_hidden")
-        .and_then(serde_json::Value::as_u64)
-        .unwrap_or(0)
+    cluster_spanning(report, &[left, right]).is_some()
 }
 
 // [EXCLUSION-CONFIG] #95 — Dart code generators (`*.g.dart`,

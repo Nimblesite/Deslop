@@ -6,41 +6,60 @@ use anyhow::{Context as _, Result};
 
 use super::{super::parse_unified_diff, *};
 
+/// The analysed population a test verifies its diff against:
+/// `(scan-root-relative path, exact analysed bytes)` pairs.
+type Tree = [(&'static str, &'static [u8])];
+
+/// The tree every test about a target the analysis never saw verifies
+/// against: one unrelated analysed file.
+const KEEP_ONLY: &Tree = &[("src/x.rs", b"fn keep() {}\n")];
+
 /// Builds an in-memory corpus from `(relative path, bytes)` pairs.
-fn corpus(entries: &[(&str, &'static [u8])]) -> BTreeMap<PathBuf, &'static [u8]> {
+fn corpus(entries: &Tree) -> BTreeMap<PathBuf, &'static [u8]> {
     entries
         .iter()
         .map(|(path, bytes)| (PathBuf::from(path), *bytes))
         .collect()
 }
 
-/// Parses `text` and builds the scope over `corpus` with `/repo` as the
-/// working directory and `scan_root` as the analysis root — the two
-/// differ only where a test needs diff paths that fall outside the root.
-fn scope_rooted(
-    text: &str,
-    scan_root: &str,
-    corpus: &BTreeMap<PathBuf, &[u8]>,
-) -> Result<DiffScope, CoreError> {
+/// Parses `text` and builds the scope over a corpus of `entries` with
+/// `/repo` as the working directory and `scan_root` as the analysis
+/// root — the two differ only where a test needs diff paths that fall
+/// outside the root.
+fn scope_rooted(text: &str, scan_root: &str, entries: &Tree) -> Result<DiffScope, CoreError> {
     let parsed = parse_unified_diff(text)?;
-    build_diff_scope(&parsed, Path::new("/repo"), Path::new(scan_root), corpus)
+    let corpus = corpus(entries);
+    build_diff_scope(&parsed, Path::new("/repo"), Path::new(scan_root), &corpus)
 }
 
-/// Parses `text` and builds the scope over `corpus` with `/repo` as
-/// both working directory and scan root.
-fn scope_at_repo(text: &str, corpus: &BTreeMap<PathBuf, &[u8]>) -> Result<DiffScope, CoreError> {
-    scope_rooted(text, "/repo", corpus)
+/// Builds the scope rooted at `scan_root`, expecting verification to
+/// succeed; `why` names what that success proves.
+fn verified_rooted(text: &str, scan_root: &str, entries: &Tree, why: &str) -> Result<DiffScope> {
+    scope_rooted(text, scan_root, entries).with_context(|| why.to_owned())
 }
 
-/// Unwraps a refusal into its `DiffStale` path and line.
-fn stale(result: Result<DiffScope, CoreError>, why: &str) -> Result<(PathBuf, u64)> {
-    let error = result
+/// Builds the scope with `/repo` as both working directory and scan
+/// root, expecting verification to succeed.
+fn verified(text: &str, entries: &Tree, why: &str) -> Result<DiffScope> {
+    verified_rooted(text, "/repo", entries, why)
+}
+
+/// Builds the scope expecting a refusal, and unwraps it into the
+/// `DiffStale` path and line that refusal names.
+fn refused(text: &str, entries: &Tree, why: &str) -> Result<(PathBuf, u64)> {
+    let error = scope_rooted(text, "/repo", entries)
         .err()
         .with_context(|| format!("must be refused: {why}"))?;
     let CoreError::DiffStale { path, line } = error else {
         anyhow::bail!("{why}: expected DiffStale, got {error:?}");
     };
     Ok((path, line))
+}
+
+/// True when the diff marked 1-indexed `line` of the scan-root-relative
+/// `path` as added.
+fn marks_added(scope: &DiffScope, path: &str, line: u64) -> bool {
+    scope.contains(Path::new(path), line)
 }
 
 // [CLI-ARG-DIFF] verification: matching context + added lines
@@ -53,12 +72,12 @@ fn matching_diff_projects_added_lines() -> Result<()> {
                 fn keep() {}\n\
                 +fn one() {}\n\
                 +fn two() {}\n";
-    let corpus = corpus(&[("src/x.rs", b"fn keep() {}\nfn one() {}\nfn two() {}\n")]);
-    let scope = scope_at_repo(text, &corpus).context("clean diff verifies")?;
+    let tree: &Tree = &[("src/x.rs", b"fn keep() {}\nfn one() {}\nfn two() {}\n")];
+    let scope = verified(text, tree, "clean diff verifies")?;
     assert_eq!(scope.added_line_total(), 2);
-    assert!(scope.contains(Path::new("src/x.rs"), 2));
-    assert!(scope.contains(Path::new("src/x.rs"), 3));
-    assert!(!scope.contains(Path::new("src/x.rs"), 1));
+    assert!(marks_added(&scope, "src/x.rs", 2));
+    assert!(marks_added(&scope, "src/x.rs", 3));
+    assert!(!marks_added(&scope, "src/x.rs", 1));
     Ok(())
 }
 
@@ -71,8 +90,8 @@ fn stale_context_line_names_file_and_line() -> Result<()> {
                 @@ -1,1 +1,2 @@\n \
                 fn old_shape() {}\n\
                 +fn added() {}\n";
-    let corpus = corpus(&[("src/x.rs", b"fn keep() {}\nfn added() {}\n")]);
-    let (path, line) = stale(scope_at_repo(text, &corpus), "stale context")?;
+    let tree: &Tree = &[("src/x.rs", b"fn keep() {}\nfn added() {}\n")];
+    let (path, line) = refused(text, tree, "stale context")?;
     assert_eq!(path, PathBuf::from("src/x.rs"));
     assert_eq!(line, 1);
     Ok(())
@@ -83,9 +102,8 @@ fn stale_context_line_names_file_and_line() -> Result<()> {
 #[test]
 fn out_of_corpus_files_are_ignored() -> Result<()> {
     let text = "--- /dev/null\n+++ b/docs/notes.md\n@@ -0,0 +1 @@\n+# Notes\n";
-    let corpus = corpus(&[("src/x.rs", b"fn keep() {}\n")]);
-    let scope = scope_rooted(text, "/repo/src", &corpus)
-        .context("out-of-root file is skipped, not an error")?;
+    let why = "out-of-root file is skipped, not an error";
+    let scope = verified_rooted(text, "/repo/src", KEEP_ONLY, why)?;
     assert_eq!(scope.added_line_total(), 0);
     assert_eq!(scope.files_with_added_lines(), 0);
     Ok(())
@@ -96,8 +114,8 @@ fn out_of_corpus_files_are_ignored() -> Result<()> {
 #[test]
 fn crlf_source_verifies_byte_exactly() -> Result<()> {
     let text = "--- /dev/null\n+++ b/win.cs\n@@ -0,0 +1 @@\n+var x = 1;\r\n";
-    let corpus = corpus(&[("win.cs", b"var x = 1;\r\n")]);
-    let scope = scope_at_repo(text, &corpus).context("CRLF content matches CRLF source")?;
+    let tree: &Tree = &[("win.cs", b"var x = 1;\r\n")];
+    let scope = verified(text, tree, "CRLF content matches CRLF source")?;
     assert_eq!(scope.added_line_total(), 1);
     Ok(())
 }
@@ -115,8 +133,7 @@ fn missing_supported_target_in_root_is_refused_as_stale() -> Result<()> {
                 +++ b/src/missing.rs\n\
                 @@ -0,0 +1 @@\n\
                 +pub fn ghost() {}\n";
-    let corpus = corpus(&[("src/x.rs", b"fn keep() {}\n")]);
-    let (path, line) = stale(scope_at_repo(text, &corpus), "missing supported target")?;
+    let (path, line) = refused(text, KEEP_ONLY, "missing supported target")?;
     assert_eq!(path, PathBuf::from("src/missing.rs"));
     assert_eq!(line, 1, "the first claimed new-side line");
     Ok(())
@@ -128,8 +145,7 @@ fn missing_supported_target_in_root_is_refused_as_stale() -> Result<()> {
 #[test]
 fn missing_unsupported_target_in_root_stays_ignored() -> Result<()> {
     let text = "--- /dev/null\n+++ b/notes.md\n@@ -0,0 +1 @@\n+# Notes\n";
-    let corpus = corpus(&[("src/x.rs", b"fn keep() {}\n")]);
-    let scope = scope_at_repo(text, &corpus).context("unsupported extension is skipped")?;
+    let scope = verified(text, KEEP_ONLY, "unsupported extension is skipped")?;
     assert_eq!(scope.added_line_total(), 0);
     assert_eq!(scope.files_with_added_lines(), 0);
     Ok(())
@@ -162,8 +178,7 @@ fn corpus_miss_present_on_disk_is_ignored_as_deliberately_excluded() -> Result<(
 #[test]
 fn removal_only_hunk_for_a_missing_file_stays_ignored() -> Result<()> {
     let text = "--- a/src/missing.rs\n+++ b/src/missing.rs\n@@ -1,2 +1,0 @@\n-a\n-b\n";
-    let corpus = corpus(&[("src/x.rs", b"fn keep() {}\n")]);
-    let scope = scope_at_repo(text, &corpus).context("removal-only section is skipped")?;
+    let scope = verified(text, KEEP_ONLY, "removal-only section is skipped")?;
     assert_eq!(scope.added_line_total(), 0);
     Ok(())
 }
@@ -180,24 +195,18 @@ const METADATA_ONLY_COPY: &str = "diff --git a/src/a.rs b/src/b.rs\n\
 // file stays untouched and out of the scope.
 #[test]
 fn metadata_only_copy_marks_every_target_line_added() -> Result<()> {
-    let corpus = corpus(&[
+    let tree: &Tree = &[
         ("src/a.rs", b"alpha\nbeta\ngamma\n"),
         ("src/b.rs", b"alpha\nbeta\ngamma\n"),
-    ]);
-    let scope = scope_at_repo(METADATA_ONLY_COPY, &corpus).context("clean copy verifies")?;
+    ];
+    let scope = verified(METADATA_ONLY_COPY, tree, "clean copy verifies")?;
     assert_eq!(scope.added_line_total(), 3, "every target line is added");
     assert_eq!(scope.files_with_added_lines(), 1, "only the copy target");
     for line in 1..=3 {
-        assert!(scope.contains(Path::new("src/b.rs"), line), "line {line}");
+        assert!(marks_added(&scope, "src/b.rs", line), "line {line}");
     }
-    assert!(
-        !scope.contains(Path::new("src/a.rs"), 1),
-        "source stays existing"
-    );
-    assert!(
-        !scope.contains(Path::new("src/b.rs"), 4),
-        "no phantom lines"
-    );
+    assert!(!marks_added(&scope, "src/a.rs", 1), "source stays existing");
+    assert!(!marks_added(&scope, "src/b.rs", 4), "no phantom lines");
     Ok(())
 }
 
@@ -207,11 +216,11 @@ fn metadata_only_copy_marks_every_target_line_added() -> Result<()> {
 // divergent line, never trusted.
 #[test]
 fn metadata_only_copy_divergence_is_refused_at_first_divergent_line() -> Result<()> {
-    let corpus = corpus(&[
+    let tree: &Tree = &[
         ("src/a.rs", b"alpha\nbeta\ngamma\n"),
         ("src/b.rs", b"alpha\nCHANGED\ngamma\n"),
-    ]);
-    let (path, line) = stale(scope_at_repo(METADATA_ONLY_COPY, &corpus), "divergent copy")?;
+    ];
+    let (path, line) = refused(METADATA_ONLY_COPY, tree, "divergent copy")?;
     assert_eq!(path, PathBuf::from("src/b.rs"));
     assert_eq!(line, 2, "the first divergent line");
     Ok(())
@@ -227,8 +236,8 @@ fn copy_target_missing_from_tree_is_refused() -> Result<()> {
                 similarity index 100%\n\
                 copy from src/a.rs\n\
                 copy to src/missing.rs\n";
-    let corpus = corpus(&[("src/a.rs", b"alpha\n")]);
-    let (path, line) = stale(scope_at_repo(text, &corpus), "missing copy target")?;
+    let tree: &Tree = &[("src/a.rs", b"alpha\n")];
+    let (path, line) = refused(text, tree, "missing copy target")?;
     assert_eq!(path, PathBuf::from("src/missing.rs"));
     assert_eq!(line, 1);
     Ok(())
@@ -239,20 +248,20 @@ fn copy_target_missing_from_tree_is_refused() -> Result<()> {
 // either way — both stay ignorable, like every other such target.
 #[test]
 fn copy_target_out_of_root_or_unsupported_stays_ignored() -> Result<()> {
+    let tree: &Tree = &[("x.rs", b"fn keep() {}\n")];
     let out_of_root = "diff --git a/docs/a.md b/docs/b.md\n\
                        similarity index 100%\n\
                        copy from docs/a.md\n\
                        copy to docs/b.md\n";
-    let corpus = corpus(&[("x.rs", b"fn keep() {}\n")]);
-    let scope = scope_rooted(out_of_root, "/repo/src", &corpus)
-        .context("out-of-root copy target is skipped")?;
+    let out_of_root_why = "out-of-root copy target is skipped";
+    let scope = verified_rooted(out_of_root, "/repo/src", tree, out_of_root_why)?;
     assert_eq!(scope.added_line_total(), 0);
     let unsupported = "diff --git a/a.md b/b.md\n\
                        similarity index 100%\n\
                        copy from a.md\n\
                        copy to b.md\n";
-    let scope = scope_at_repo(unsupported, &corpus)
-        .context("unsupported-extension copy target is skipped")?;
+    let unsupported_why = "unsupported-extension copy target is skipped";
+    let scope = verified(unsupported, tree, unsupported_why)?;
     assert_eq!(scope.added_line_total(), 0);
     Ok(())
 }
@@ -266,8 +275,8 @@ fn copy_source_missing_everywhere_is_refused() -> Result<()> {
                 similarity index 100%\n\
                 copy from src/ghost.rs\n\
                 copy to src/b.rs\n";
-    let corpus = corpus(&[("src/b.rs", b"alpha\n")]);
-    let (path, _line) = stale(scope_at_repo(text, &corpus), "missing copy source")?;
+    let tree: &Tree = &[("src/b.rs", b"alpha\n")];
+    let (path, _line) = refused(text, tree, "missing copy source")?;
     assert_eq!(path, PathBuf::from("src/ghost.rs"));
     Ok(())
 }
@@ -293,24 +302,15 @@ const COPY_WITH_HUNKS: &str = "diff --git a/src/a.rs b/src/b.rs\n\
 // both.
 #[test]
 fn copy_with_hunks_counts_every_target_line_once() -> Result<()> {
-    let corpus = corpus(&[
+    let tree: &Tree = &[
         ("src/a.rs", b"one\nold\nthree\nfour\n"),
         ("src/b.rs", b"one\nnew\nthree\nfour\n"),
-    ]);
-    let scope = scope_at_repo(COPY_WITH_HUNKS, &corpus).context("copy with hunks verifies")?;
+    ];
+    let scope = verified(COPY_WITH_HUNKS, tree, "copy with hunks verifies")?;
     assert_eq!(scope.added_line_total(), 4, "whole target, counted once");
-    assert!(
-        scope.contains(Path::new("src/b.rs"), 1),
-        "line before the hunk"
-    );
-    assert!(
-        scope.contains(Path::new("src/b.rs"), 4),
-        "line after the hunk"
-    );
-    assert!(
-        !scope.contains(Path::new("src/a.rs"), 2),
-        "source stays existing"
-    );
+    assert!(marks_added(&scope, "src/b.rs", 1), "line before the hunk");
+    assert!(marks_added(&scope, "src/b.rs", 4), "line after the hunk");
+    assert!(!marks_added(&scope, "src/a.rs", 2), "source stays existing");
     Ok(())
 }
 
@@ -318,11 +318,11 @@ fn copy_with_hunks_counts_every_target_line_once() -> Result<()> {
 // analysed target bytes is a stale diff like any other hunk.
 #[test]
 fn copy_with_stale_hunk_is_refused() -> Result<()> {
-    let corpus = corpus(&[
+    let tree: &Tree = &[
         ("src/a.rs", b"one\nold\nthree\nfour\n"),
         ("src/b.rs", b"one\nDIFFERENT\nthree\nfour\n"),
-    ]);
-    let (path, line) = stale(scope_at_repo(COPY_WITH_HUNKS, &corpus), "stale copy hunk")?;
+    ];
+    let (path, line) = refused(COPY_WITH_HUNKS, tree, "stale copy hunk")?;
     assert_eq!(path, PathBuf::from("src/b.rs"));
     assert_eq!(line, 2);
     Ok(())
@@ -338,13 +338,13 @@ fn pure_rename_metadata_projects_nothing() -> Result<()> {
                 similarity index 100%\n\
                 rename from src/a.rs\n\
                 rename to src/renamed.rs\n";
-    let corpus = corpus(&[
+    let tree: &Tree = &[
         ("src/a.rs", b"alpha\nbeta\n"),
         ("src/renamed.rs", b"alpha\nbeta\n"),
-    ]);
-    let scope = scope_at_repo(text, &corpus).context("pure rename is skipped")?;
+    ];
+    let scope = verified(text, tree, "pure rename is skipped")?;
     assert_eq!(scope.added_line_total(), 0, "a rename adds no lines");
     assert_eq!(scope.files_with_added_lines(), 0);
-    assert!(!scope.contains(Path::new("src/renamed.rs"), 1));
+    assert!(!marks_added(&scope, "src/renamed.rs", 1));
     Ok(())
 }

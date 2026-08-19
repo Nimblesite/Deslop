@@ -244,12 +244,15 @@ embeddings: off
 #1 [aaaa1111] weight=4.50 size=2 nodes=12
   two identical copies
   :: extract a shared helper
+  content evidence: agreement=`1.00` rename=`0.00` literal=`0.00`
 #2 [bbbb2222] weight=4.50 size=2 nodes=12
   two identical copies
   :: extract a shared helper
+  content evidence: agreement=`1.00` rename=`0.00` literal=`0.00`
 #3 [cccc3333] weight=4.50 size=2 nodes=12
   two identical copies
   :: extract a shared helper
+  content evidence: agreement=`1.00` rename=`0.00` literal=`0.00`
 ";
 
 /// A `--diff` run: the added-lines figure and one badged row per
@@ -265,16 +268,19 @@ embeddings: off
 #1 [aaaa1111] weight=4.50 size=2 nodes=12
   two identical copies
   :: extract a shared helper
+  content evidence: agreement=`1.00` rename=`0.00` literal=`0.00`
   - src/caller.rs:8-17 [in diff]
   - src/helper.rs:30-39 [existing]
 #2 [bbbb2222] weight=4.50 size=2 nodes=12
   two identical copies
   :: extract a shared helper
+  content evidence: agreement=`1.00` rename=`0.00` literal=`0.00`
   - src/fresh_a.rs:8-17 [in diff]
   - src/fresh_b.rs:30-39 [in diff]
 #3 [cccc3333] weight=4.50 size=2 nodes=12
   two identical copies
   :: extract a shared helper
+  content evidence: agreement=`1.00` rename=`0.00` literal=`0.00`
   - src/legacy_a.rs:8-17 [existing]
   - src/legacy_b.rs:30-39 [existing]
 ";
@@ -296,11 +302,13 @@ embeddings: off
 #1 [aaaa1111] weight=4.50 size=2 nodes=12
   two identical copies
   :: extract a shared helper
+  content evidence: agreement=`1.00` rename=`0.00` literal=`0.00`
   - src/caller.rs:8-17 [in diff]
   - src/helper.rs:30-39 [existing]
 #2 [bbbb2222] weight=4.50 size=2 nodes=12
   two identical copies
   :: extract a shared helper
+  content evidence: agreement=`1.00` rename=`0.00` literal=`0.00`
   - src/fresh_a.rs:8-17 [in diff]
   - src/fresh_b.rs:30-39 [in diff]
 ";

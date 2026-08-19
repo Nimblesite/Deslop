@@ -162,11 +162,15 @@ the renamed near-miss, the most valuable clone class there is. Row 4 is routed
 on cluster *spread* instead — see the taxonomy row. Shape-mismatched members have no positional
 alignment, so their agreement is the key-set Jaccard of their content keys — a
 genuine Type-3 near-miss shares nearly all of them; renamed scaffolding shares
-few. The verbatim guard is proportional
-(`content_gate.verbatim_member_share_floor` of the members must participate
-in byte-identical duplicates): a verbatim pair among a couple of lookalikes
-(#104) still vouches for its cluster, but two copied example widgets inside a
-453-member framework family (0.4%) do not. `data`-category
+few. The verbatim guard is proportional and
+exclusive: one *token-identical family* — members sharing both the same
+normalised-subtree digest and the same collapsed-leaf keys — must hold a
+strict majority of the cluster (above `content_gate.verbatim_member_share_floor`).
+A verbatim pair among a couple of lookalikes (#104, share 2/3) still vouches
+for its cluster; two copied example widgets inside a 453-member framework
+family (0.4%) do not; and two *disjoint* identical pairs, each at exactly one
+half, vouch for nothing, because neither is a majority and the members they
+disagree with are the whole rest of the cluster. `data`-category
 clusters are exempt from the structural-only ranking demotion — their weight
 belongs to the `[ranking] data_clones` policy ([RANK-CATEGORY]) so
 `data_clone_weight = 1.0` can still restore a table the gate routed to the
@@ -198,7 +202,7 @@ A number is a **lever** when changing it changes which clusters are reported, wh
 | `content_gate.rename_consistency_discount` | `buckets.rs:301` | 0.9 | **Derived** (#346). Keeps a proven Type-2 rename above `fused_threshold` while reserving `fused = 1.0` for byte-proven duplication. |
 | `content_gate.rename_corroboration_min` | `content.rs` | 2 | **Literature.** [TECH-PMATCH-BAKER] prev-encoding: a parameter symbol's first occurrence matches anything and constrains nothing; only repetition carries binding proof. |
 | `content_gate.rename_evidence_half_mass` | `content.rs` | 4 | **Defect.** Replaces the `rename_evidence_min_literals = 4` cliff (#346), which zeroed sub-floor rename evidence and rendered a maximal one-literal Type-2 rename at `fused = 0.0588` (`type2_rename_anchor_floor.rs`). Same operating point, now a half-saturation mass: a forwarding echo's single substitution (mass 2, weight 1/3) stays below every routing floor while a 16-anchor maximal rename clears the reuse line. |
-| `content_gate.verbatim_member_share_floor` | `content.rs:54` | 0.5 | **Defect** (#341, tightened #346). #104's verbatim pair among lookalikes (share ≥ 2/3) must stay visible; two byte-identical widgets inside 453 framework declarations (≈ 0.004) must not vouch for the family. |
+| `content_gate.verbatim_member_share_floor` | `content.rs:54` | 0.5 | **Defect** (#341, tightened #346). A strict majority — the share must *exceed* it. #104's verbatim pair among lookalikes (share ≥ 2/3) must stay visible; two byte-identical widgets inside 453 framework declarations (≈ 0.004) must not vouch for the family; and two disjoint identical pairs at exactly 0.5 must not certify each other. |
 | `content_gate.literal_table_min_fraction` | `buckets.rs:257` | 0.8 | **Derived** (#341), value unswept. "Overwhelmingly literal" is the stated criterion for [CLONE-NOISE-LITERAL-TABLE]; 0.8 is where it was set, not where it was measured. |
 | `content_gate.literal_table_min_literals` | `content.rs:36` | 8 | **Derived** (#341), value unswept. A data table is a run of values, so a two-element tuple return must not reach the classifier — the argument fixes the direction, not the number. |
 | `ranking.type4_embedding_floor` | `cluster.rs:397` | 0.90 | **Unrecorded.** |

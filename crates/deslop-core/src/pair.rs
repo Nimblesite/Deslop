@@ -219,7 +219,6 @@ pub struct FusedEdge {
 }
 
 /// Reason one candidate pair did or did not enter transitive closure.
-#[derive(Debug)]
 enum PairSurvival {
     /// Pair entered the fused cluster graph.
     Survived,
@@ -262,19 +261,7 @@ impl SurvivalStats {
 
     /// Records one pair's outcome.
     fn push<'a>(&mut self, pair: &'a CandidatePair, surviving: &mut Vec<&'a CandidatePair>) {
-        let decision = survival_decision(pair);
-        tracing::debug!(
-            left = pair.left,
-            right = pair.right,
-            smaller_nodes = pair.endpoint_node_counts.0,
-            larger_nodes = pair.endpoint_node_counts.1,
-            structural = pair.score.structural,
-            token_jaccard = pair.score.token_jaccard,
-            embedding_cos = pair.score.embedding_cos,
-            outcome = ?decision,
-            "pair survival decision",
-        );
-        match decision {
+        match survival_decision(pair) {
             PairSurvival::Survived => {
                 self.survived = self.survived.saturating_add(1);
                 surviving.push(pair);

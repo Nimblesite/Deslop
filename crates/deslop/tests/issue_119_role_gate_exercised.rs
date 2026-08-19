@@ -37,21 +37,7 @@ use mock_ollama::MockOllama;
 use serde_json::Value;
 
 mod common;
-use crate::common::{embeddings::run_mock_embedding_report, *};
-
-/// `EMBEDDING_SUPPORT_FLOOR` (`crates/deslop-core/src/pair.rs`) — the
-/// cosine at which embedding evidence may support a bucket at all.
-const EMBEDDING_SUPPORT_FLOOR: f64 = 0.80;
-
-/// Scans a private copy of `fixture_root` with the given deterministic
-/// mock embedder wired in ([FUSION-EMBED-PROVIDER]).
-fn report_with_embeddings(fixture_root: &Path, server: &MockOllama) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let scan_root = &tmp.path().join("src");
-    seed(fixture_root, scan_root)?;
-    run_mock_embedding_report(scan_root, &output, "5", server.endpoint())
-}
+use crate::common::{embeddings::scan_fixture_copy_with_mock, role_gate::*, *};
 
 /// Scans a private copy of `fixture_root` with `--embeddings off`, the
 /// baseline the embedding pass must measurably move.
@@ -62,14 +48,6 @@ fn report_without_embeddings(fixture_root: &Path) -> Result<Value> {
     run_report(scan_root, 5)
 }
 
-/// Visible clusters carrying the `same_behavior` bucket.
-fn same_behavior(report: &Value) -> Vec<&Value> {
-    clusters(report)
-        .iter()
-        .filter(|cluster| cluster_bucket(cluster) == "same_behavior")
-        .collect()
-}
-
 /// Asserts the embedding pass measurably changed what the scan
 /// suppressed — the only black-box proof that a pair reached the role
 /// gate rather than never forming.
@@ -77,7 +55,7 @@ fn assert_gate_was_reached(fixture_name: &str, language: &str) -> Result<()> {
     let root = fixture(fixture_name);
     let without = report_without_embeddings(&root)?;
     let server = MockOllama::spawn()?;
-    let with = report_with_embeddings(&root, &server)?;
+    let with = scan_fixture_copy_with_mock(&root, "5", server.endpoint())?;
     let hidden_without = clusters_hidden(&without);
     let hidden_with = clusters_hidden(&with);
     assert!(
@@ -92,67 +70,6 @@ fn assert_gate_was_reached(fixture_name: &str, language: &str) -> Result<()> {
          with the role gate deleted."
     );
     Ok(())
-}
-
-/// Asserts a same-role, behaviour-equivalent pair surfaces with real
-/// measured embedding support behind it.
-fn assert_same_role_pair_surfaces(
-    fixture_name: &str,
-    language: &str,
-    left: &str,
-    right: &str,
-) -> Result<()> {
-    let root = fixture(fixture_name);
-    let server = MockOllama::spawn_semantic(&[&[left, right]])?;
-    let report = report_with_embeddings(&root, &server)?;
-    let surviving = same_behavior(&report);
-    assert!(
-        !surviving.is_empty(),
-        "[CLONE-NOISE-EMBEDDING-ROLE-MISMATCH] two same-role behaviour-equivalent \
-         {language} functions must surface as same_behavior — the role gate must \
-         not over-suppress. Visible clusters: {:#?}",
-        clusters(&report)
-    );
-    assert_pairs_both_members(&root, &surviving, left, right)?;
-    assert_embedding_support(&surviving, language);
-    Ok(())
-}
-
-/// Asserts one surviving cluster covers both named members.
-fn assert_pairs_both_members(
-    scan_root: &Path,
-    surviving: &[&Value],
-    left: &str,
-    right: &str,
-) -> Result<()> {
-    let paired = surviving.iter().try_fold(false, |found, cluster| {
-        let texts = occurrence_texts(scan_root, cluster)?;
-        let touches_left = texts.iter().any(|text| text.contains(left));
-        let touches_right = texts.iter().any(|text| text.contains(right));
-        Ok::<bool, anyhow::Error>(found || (touches_left && touches_right))
-    })?;
-    assert!(
-        paired,
-        "the surviving same_behavior cluster must pair `{left}` with `{right}`: \
-         {surviving:#?}"
-    );
-    Ok(())
-}
-
-/// Asserts every surviving `same_behavior` cluster carries the embedding
-/// evidence its bucket claims.
-fn assert_embedding_support(surviving: &[&Value], language: &str) {
-    for cluster in surviving {
-        let cos = signal(cluster, "embedding_cos");
-        assert!(
-            cos >= EMBEDDING_SUPPORT_FLOOR,
-            "a visible {language} same_behavior cluster must carry embedding \
-             support at or above {EMBEDDING_SUPPORT_FLOOR}, got {cos} on \
-             {}. A same_behavior bucket without measured cosine is a bucket \
-             asserted from nothing.",
-            cluster_id(cluster)
-        );
-    }
 }
 
 // The Dart role-mismatch fixture must actually build the class/function
@@ -173,9 +90,11 @@ fn python_role_mismatch_pair_must_reach_the_role_gate() -> Result<()> {
 // must survive the gate with measured embedding support.
 #[test]
 fn dart_same_role_pair_surfaces_with_measured_embedding_support() -> Result<()> {
+    let server = MockOllama::spawn_semantic(&[&["totalRecursive", "totalIterative"]])?;
     assert_same_role_pair_surfaces(
         "dart-issue-119-same-role",
         "Dart",
+        server.endpoint(),
         "totalRecursive",
         "while (index",
     )
@@ -185,9 +104,11 @@ fn dart_same_role_pair_surfaces_with_measured_embedding_support() -> Result<()> 
 // functions must survive the gate with measured embedding support.
 #[test]
 fn python_same_role_pair_surfaces_with_measured_embedding_support() -> Result<()> {
+    let server = MockOllama::spawn_semantic(&[&["total_recursive", "total_iterative"]])?;
     assert_same_role_pair_surfaces(
         "python-issue-119-same-role",
         "Python",
+        server.endpoint(),
         "total_recursive",
         "while index",
     )
@@ -205,7 +126,7 @@ fn python_same_role_pair_surfaces_with_measured_embedding_support() -> Result<()
 fn same_behavior_is_reachable_when_a_pair_clears_the_embedding_floor() -> Result<()> {
     let root = fixture("dart-issue-119-same-behavior-reachable");
     let server = MockOllama::spawn()?;
-    let report = report_with_embeddings(&root, &server)?;
+    let report = scan_fixture_copy_with_mock(&root, "5", server.endpoint())?;
     let surviving = same_behavior(&report);
     assert!(
         !surviving.is_empty(),

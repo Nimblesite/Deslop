@@ -34,66 +34,58 @@ use anyhow::Result;
 mod common;
 use crate::common::{verdict::*, *};
 
-#[test]
-fn a_call_inside_a_consumed_payload_value_is_not_excused() -> Result<()> {
-    let scan_root = fixture("python-dict-assert-call-in-payload");
+/// Asserts the fixture's cross-file copy stayed visible across `files`
+/// and that every reported occurrence text carries `smuggled` — the
+/// executable logic the idiom proof must read rather than excuse. `why`
+/// states what missing coverage would mean, so a failure names the hole
+/// instead of the needle.
+fn expect_smuggled_logic_reported(
+    fixture_name: &str,
+    files: &[&str],
+    smuggled: &str,
+    why: &str,
+) -> Result<()> {
+    let scan_root = fixture(fixture_name);
     let report = run_report(&scan_root, 8)?;
-
-    let texts = expect_cross_file_duplicate(
-        &scan_root,
-        &report,
-        &["test_billing_period.py", "test_revenue_window.py"],
-        2,
-        2,
-    )?;
+    let texts = expect_cross_file_duplicate(&scan_root, &report, files, 2, 2)?;
     assert!(
-        texts.iter().all(|text| text.contains("reconcile_amount")),
-        "the duplicated reconciliation call is the executable logic the \
-         payload dictionary smuggled past the proof; the report must cover \
-         it: {texts:#?}"
+        texts.iter().all(|text| text.contains(smuggled)),
+        "{why}; the report must cover it: {texts:#?}"
     );
     Ok(())
+}
+
+#[test]
+fn a_call_inside_a_consumed_payload_value_is_not_excused() -> Result<()> {
+    expect_smuggled_logic_reported(
+        "python-dict-assert-call-in-payload",
+        &["test_billing_period.py", "test_revenue_window.py"],
+        "reconcile_amount",
+        "the duplicated reconciliation call is the executable logic the \
+         payload dictionary smuggled past the proof",
+    )
 }
 
 #[test]
 fn executable_decorator_arguments_are_not_excused() -> Result<()> {
-    let scan_root = fixture("python-dict-assert-decorator-logic");
-    let report = run_report(&scan_root, 8)?;
-
-    let texts = expect_cross_file_duplicate(
-        &scan_root,
-        &report,
+    expect_smuggled_logic_reported(
+        "python-dict-assert-decorator-logic",
         &["test_billing_cases.py", "test_invoice_cases.py"],
-        2,
-        2,
-    )?;
-    assert!(
-        texts.iter().all(|text| text.contains("build_cases")),
+        "build_cases",
         "the duplicated case-generation call lives in the decorator, outside \
-         every test body the proof walks; the report must cover it: {texts:#?}"
-    );
-    Ok(())
+         every test body the proof walks",
+    )
 }
 
 #[test]
 fn class_body_logic_under_a_static_decorator_is_not_excused() -> Result<()> {
-    let scan_root = fixture("python-dict-assert-decorated-class");
-    let report = run_report(&scan_root, 8)?;
-
-    let texts = expect_cross_file_duplicate(
-        &scan_root,
-        &report,
+    expect_smuggled_logic_reported(
+        "python-dict-assert-decorated-class",
         &["test_billing_contract.py", "test_shipping_contract.py"],
-        2,
-        2,
-    )?;
-    assert!(
-        texts.iter().all(|text| text.contains("build_session")),
+        "build_session",
         "the duplicated session wiring executes in the class body at import \
-         time, outside every test method the proof walks; the report must \
-         cover it: {texts:#?}"
-    );
-    Ok(())
+         time, outside every test method the proof walks",
+    )
 }
 
 #[test]

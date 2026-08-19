@@ -257,29 +257,14 @@ mod tests {
     fn open_session_reports_cache_seed_status() -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::tempdir()?;
         write_fixture(temp.path())?;
-        let provider: Arc<dyn EmbeddingProvider> = Arc::new(StubProvider::new());
 
-        let (_fresh, seeded) = open_session(
-            temp.path().to_path_buf(),
-            30,
-            true,
-            None,
-            Arc::clone(&provider),
-            EmbeddingMode::Off,
-        )?;
+        let (_fresh, _provider, seeded) = open_fixture_session(temp.path())?;
         assert!(
             !seeded,
             "first open must run a fresh analysis when no state file exists"
         );
 
-        let (_cached, seeded) = open_session(
-            temp.path().to_path_buf(),
-            30,
-            true,
-            None,
-            provider,
-            EmbeddingMode::Off,
-        )?;
+        let (_cached, _provider, seeded) = open_fixture_session(temp.path())?;
         assert!(
             seeded,
             "second open must load the valid state file written by the first session"
@@ -304,40 +289,17 @@ mod tests {
     async fn background_initialise_and_commit_pushes_report_and_idle_state(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::tempdir()?;
-        write_fixture(temp.path())?;
-        let provider: Arc<dyn EmbeddingProvider> = Arc::new(StubProvider::new());
-        let (session, seeded) = open_session(
-            temp.path().to_path_buf(),
-            30,
-            true,
-            None,
-            Arc::clone(&provider),
-            EmbeddingMode::Off,
-        )?;
-        assert!(!seeded, "test setup should start with a fresh session");
+        let mut fixture = refresh_fixture(temp.path(), Arc::new(AtomicBool::new(true))).await?;
+        assert!(
+            !fixture.seeded,
+            "test setup should start with a fresh session"
+        );
 
-        let session = Arc::new(Mutex::new(session));
-        let service = Arc::new(LiveService::new(Arc::clone(&session)));
-        let (client, mut socket) = initialized_loopback_client().await?;
-        let (report_changed, _rx) = tokio::sync::broadcast::channel(8);
-        let task = RefreshTask {
-            session,
-            service,
-            client,
-            root: temp.path().to_path_buf(),
-            min_nodes: 30,
-            incremental: true,
-            config_path: None,
-            provider,
-            mode: EmbeddingMode::Off,
-            report_changed,
-            cold_pass_active: Arc::new(AtomicBool::new(true)),
-        };
-        let (pipeline, report) = initialise_in_background(&task).await?;
+        let (pipeline, report) = initialise_in_background(&fixture.task).await?;
 
-        let join = tokio::spawn(commit_refresh(task, pipeline, report));
-        let first = next_client_frame(&mut socket).await?;
-        let second = next_client_frame(&mut socket).await?;
+        let join = tokio::spawn(commit_refresh(fixture.task, pipeline, report));
+        let first = next_client_frame(&mut fixture.socket).await?;
+        let second = next_client_frame(&mut fixture.socket).await?;
         join.await?;
 
         assert_eq!(
@@ -378,50 +340,24 @@ mod tests {
         // running → reportChanged → idle sequence the editor relies on
         // and that the cold-pass flag clears once the pass commits.
         let temp = tempfile::tempdir()?;
-        write_fixture(temp.path())?;
-        let provider: Arc<dyn EmbeddingProvider> = Arc::new(StubProvider::new());
-        let (session, _seeded) = open_session(
-            temp.path().to_path_buf(),
-            30,
-            true,
-            None,
-            Arc::clone(&provider),
-            EmbeddingMode::Off,
-        )?;
-        let session = Arc::new(Mutex::new(session));
-        let service = Arc::new(LiveService::new(Arc::clone(&session)));
-        let (client, mut socket) = initialized_loopback_client().await?;
-        let (report_changed, _rx) = tokio::sync::broadcast::channel(8);
         let cold_pass_active = Arc::new(AtomicBool::new(true));
-        let task = RefreshTask {
-            session,
-            service,
-            client,
-            root: temp.path().to_path_buf(),
-            min_nodes: 30,
-            incremental: true,
-            config_path: None,
-            provider,
-            mode: EmbeddingMode::Off,
-            report_changed,
-            cold_pass_active: Arc::clone(&cold_pass_active),
-        };
+        let mut fixture = refresh_fixture(temp.path(), Arc::clone(&cold_pass_active)).await?;
 
-        spawn_refresh(task);
+        spawn_refresh(fixture.task);
 
-        let running = next_client_frame(&mut socket).await?;
+        let running = next_client_frame(&mut fixture.socket).await?;
         assert_eq!(
             running.pointer("/params/state").and_then(Value::as_str),
             Some("running"),
             "spawn_refresh must push the Running state first: {running}"
         );
-        let changed = next_client_frame(&mut socket).await?;
+        let changed = next_client_frame(&mut fixture.socket).await?;
         assert_eq!(
             changed.pointer("/method").and_then(Value::as_str),
             Some(REPORT_CHANGED),
             "the committed cold pass must publish reportChanged: {changed}"
         );
-        let idle = next_client_frame(&mut socket).await?;
+        let idle = next_client_frame(&mut fixture.socket).await?;
         assert_eq!(
             idle.pointer("/params/state").and_then(Value::as_str),
             Some("idle"),
@@ -499,6 +435,70 @@ mod tests {
             "a settled (fresh or committed) session must report Idle so the panel can reach ready: {frame}"
         );
         Ok(())
+    }
+
+    /// Minimum subtree size every cache-seed test analyses the fixture with.
+    const FIXTURE_MIN_NODES: u32 = 30;
+
+    /// A deferred-refresh task wired to a loopback LSP client, plus the socket
+    /// its push notifications land on. Every cold-pass input the refresh tests
+    /// share is fixed here; only `cold_pass_active` varies between them.
+    struct RefreshFixture {
+        task: RefreshTask,
+        socket: ClientSocket,
+        seeded: bool,
+        /// Held so the broadcast channel keeps a subscriber for the test.
+        _report_changed_rx: tokio::sync::broadcast::Receiver<ReportChangedNotification>,
+    }
+
+    /// Writes the two-duplicate fixture under `root`, opens a live session over
+    /// it, and assembles the cold-pass task against a loopback LSP client.
+    async fn refresh_fixture(
+        root: &Path,
+        cold_pass_active: Arc<AtomicBool>,
+    ) -> Result<RefreshFixture, Box<dyn std::error::Error>> {
+        write_fixture(root)?;
+        let (session, provider, seeded) = open_fixture_session(root)?;
+        let session = Arc::new(Mutex::new(session));
+        let (client, socket) = initialized_loopback_client().await?;
+        let (report_changed, report_changed_rx) = tokio::sync::broadcast::channel(8);
+        let task = RefreshTask {
+            service: Arc::new(LiveService::new(Arc::clone(&session))),
+            session,
+            client,
+            root: root.to_path_buf(),
+            min_nodes: FIXTURE_MIN_NODES,
+            incremental: true,
+            config_path: None,
+            provider,
+            mode: EmbeddingMode::Off,
+            report_changed,
+            cold_pass_active,
+        };
+        Ok(RefreshFixture {
+            task,
+            socket,
+            seeded,
+            _report_changed_rx: report_changed_rx,
+        })
+    }
+
+    /// Opens a live session over the fixture repo at `root` with the settings
+    /// every cache-seed test shares — min-nodes 30, fingerprint cache on, no
+    /// explicit config, embeddings off — plus its provider and seeded flag.
+    fn open_fixture_session(
+        root: &Path,
+    ) -> Result<(AnalysisSession, Arc<dyn EmbeddingProvider>, bool), LiveError> {
+        let provider: Arc<dyn EmbeddingProvider> = Arc::new(StubProvider::new());
+        let (session, seeded) = open_session(
+            root.to_path_buf(),
+            FIXTURE_MIN_NODES,
+            true,
+            None,
+            Arc::clone(&provider),
+            EmbeddingMode::Off,
+        )?;
+        Ok((session, provider, seeded))
     }
 
     fn write_fixture(root: &Path) -> std::io::Result<()> {

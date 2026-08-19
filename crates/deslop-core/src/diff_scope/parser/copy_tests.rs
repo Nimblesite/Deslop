@@ -8,11 +8,13 @@ use anyhow::{Context as _, Result};
 
 use super::*;
 
-/// The single file section a test parses, or an error saying the
-/// parse produced none.
-fn only_file(parsed: &ParsedDiff) -> Result<&FilePatch> {
-    assert_eq!(parsed.files.len(), 1, "exactly one file section expected");
-    parsed.files.first().context("the parsed file section")
+/// Parses `text` and returns the single file section it must hold, or
+/// an error saying the parse failed or produced no section.
+fn parse_only_file(text: &str, why: &str) -> Result<FilePatch> {
+    let parsed = parse_unified_diff(text).with_context(|| format!("{why} must parse"))?;
+    assert_eq!(parsed.files.len(), 1, "exactly one file section: {why}");
+    let only = parsed.files.into_iter().next();
+    only.context("the parsed file section")
 }
 
 /// Asserts the section's copy payload names the `from` → `to` pair.
@@ -38,6 +40,51 @@ fn refusal(text: &str, why: &str) -> Result<(usize, String)> {
     Ok((line, message))
 }
 
+/// One diff the parser must refuse, and where it must say so.
+#[derive(Debug)]
+struct RefusalCase {
+    /// The diff text handed to the parser.
+    text: &'static str,
+    /// What the case is, carried into the failure context.
+    why: &'static str,
+    /// The diff line number the refusal must name.
+    line: usize,
+    /// A fragment the refusal message must contain; `None` when the
+    /// case pins only the line number.
+    fragment: Option<&'static str>,
+}
+
+/// Asserts every case is refused at the diff line it names, with a
+/// message carrying its fragment when the case pins one.
+fn assert_all_refused(cases: &[RefusalCase]) -> Result<()> {
+    for case in cases {
+        let why = case.why;
+        let (line, message) = refusal(case.text, why)?;
+        assert_eq!(line, case.line, "{why}: the refusal names the diff line");
+        if let Some(fragment) = case.fragment {
+            let named = message.contains(fragment);
+            assert!(named, "{why}: the refusal names '{fragment}': {message}");
+        }
+    }
+    Ok(())
+}
+
+/// A hunk after junk, and a hunk in a section that skipped both paths.
+const NO_TARGET_LINE_CASES: &[RefusalCase] = &[
+    RefusalCase {
+        text: "diff nonsense\n@@ -0,0 +1 @@\n+x\n",
+        why: "hunk after a junk diff line",
+        line: 2,
+        fragment: Some("+++"),
+    },
+    RefusalCase {
+        text: "diff --git a/x.rs b/x.rs\nindex 1111111..2222222 100644\n@@ -1 +1 @@\n-a\n+b\n",
+        why: "hunk in a git section that skipped its '---'/'+++' lines",
+        line: 3,
+        fragment: None,
+    },
+];
+
 // [PIPELINE-DIFF-INGEST] P0-1: any `diff ` line opens a section, so
 // junk like `diff nonsense` followed by a hunk used to assemble a
 // pathless section the verifier ignores — the added lines silently
@@ -46,21 +93,7 @@ fn refusal(text: &str, why: &str) -> Result<(usize, String)> {
 // seen a `+++` target line must be refused at its own line number.
 #[test]
 fn hunk_in_a_section_without_a_target_line_is_refused() -> Result<()> {
-    let (line, message) = refusal(
-        "diff nonsense\n@@ -0,0 +1 @@\n+x\n",
-        "hunk after a junk diff line",
-    )?;
-    assert_eq!(line, 2, "the refusal names the hunk header's diff line");
-    assert!(
-        message.contains("+++"),
-        "the refusal names the missing '+++' target: {message}"
-    );
-    let (line, _message) = refusal(
-        "diff --git a/x.rs b/x.rs\nindex 1111111..2222222 100644\n@@ -1 +1 @@\n-a\n+b\n",
-        "hunk in a git section that skipped its '---'/'+++' lines",
-    )?;
-    assert_eq!(line, 3, "the refusal names the hunk header's diff line");
-    Ok(())
+    assert_all_refused(NO_TARGET_LINE_CASES)
 }
 
 // [PIPELINE-DIFF-INGEST] P0-1 contrast: `+++ /dev/null` is a SEEN
@@ -75,8 +108,7 @@ fn dev_null_target_counts_as_seen_for_the_following_hunk() -> Result<()> {
                 +++ /dev/null\n\
                 @@ -1 +0,0 @@\n\
                 -fn gone() {}\n";
-    let parsed = parse_unified_diff(text).context("deletion diff must parse")?;
-    let file = only_file(&parsed)?;
+    let file = parse_only_file(text, "deletion diff")?;
     assert_eq!(file.new_path, None, "a deletion has no new-side path");
     assert_eq!(file.hunks.len(), 1, "the deletion hunk is kept");
     Ok(())
@@ -115,10 +147,9 @@ fn metadata_only_copy_parses_into_the_file_patch() -> Result<()> {
                 similarity index 100%\n\
                 copy from src/legacy_a.rs\n\
                 copy to src/legacy_b.rs\n";
-    let parsed = parse_unified_diff(text).context("copy diff must parse")?;
-    let file = only_file(&parsed)?;
+    let file = parse_only_file(text, "metadata-only copy diff")?;
     assert_copy(
-        file,
+        &file,
         "src/legacy_a.rs",
         "src/legacy_b.rs",
         "the copy pair is the section's payload",
@@ -143,10 +174,9 @@ fn copy_with_hunks_keeps_metadata_and_hunks() -> Result<()> {
                 @@ -1 +1 @@\n\
                 -fn a() {}\n\
                 +fn b() {}\n";
-    let parsed = parse_unified_diff(text).context("copy-with-hunks diff must parse")?;
-    let file = only_file(&parsed)?;
+    let file = parse_only_file(text, "copy-with-hunks diff")?;
     assert_copy(
-        file,
+        &file,
         "src/a.rs",
         "src/b.rs",
         "both halves survive the hunks",
@@ -165,16 +195,37 @@ fn c_quoted_copy_paths_are_unquoted() -> Result<()> {
                 similarity index 100%\n\
                 copy from \"caf\\303\\251.rs\"\n\
                 copy to \"caf\\303\\251_copy.rs\"\n";
-    let parsed = parse_unified_diff(text).context("quoted copy diff must parse")?;
-    let file = only_file(&parsed)?;
+    let file = parse_only_file(text, "quoted copy diff")?;
     assert_copy(
-        file,
+        &file,
         "café.rs",
         "café_copy.rs",
         "the octal-escaped UTF-8 bytes are the real filenames",
     );
     Ok(())
 }
+
+/// Both dangling halves, closed by EOF and by the next `diff ` line.
+const DANGLING_COPY_CASES: &[RefusalCase] = &[
+    RefusalCase {
+        text: "diff --git a/a.rs b/b.rs\nsimilarity index 100%\ncopy from a.rs\n",
+        why: "copy from without copy to, closed by EOF",
+        line: 3,
+        fragment: Some("copy to"),
+    },
+    RefusalCase {
+        text: "diff --git a/a.rs b/b.rs\ncopy to b.rs\n",
+        why: "copy to without copy from, closed by EOF",
+        line: 2,
+        fragment: Some("copy from"),
+    },
+    RefusalCase {
+        text: "diff --git a/a.rs b/b.rs\ncopy from a.rs\ndiff --git a/c.rs b/c.rs\nindex 1..2 100644\n",
+        why: "copy from without copy to, closed by the next section",
+        line: 2,
+        fragment: None,
+    },
+];
 
 // [PIPELINE-DIFF-INGEST] P0-3: half a copy pair names either no source
 // or no destination — ingesting it would either drop the copy target
@@ -183,63 +234,44 @@ fn c_quoted_copy_paths_are_unquoted() -> Result<()> {
 // next `diff ` line or by end of input.
 #[test]
 fn dangling_copy_metadata_is_refused() -> Result<()> {
-    let (line, message) = refusal(
-        "diff --git a/a.rs b/b.rs\nsimilarity index 100%\ncopy from a.rs\n",
-        "copy from without copy to, closed by EOF",
-    )?;
-    assert_eq!(line, 3, "the refusal names the dangling 'copy from' line");
-    assert!(
-        message.contains("copy to"),
-        "names the missing half: {message}"
-    );
-    let (line, message) = refusal(
-        "diff --git a/a.rs b/b.rs\ncopy to b.rs\n",
-        "copy to without copy from, closed by EOF",
-    )?;
-    assert_eq!(line, 2, "the refusal names the dangling 'copy to' line");
-    assert!(
-        message.contains("copy from"),
-        "names the missing half: {message}"
-    );
-    let (line, _message) = refusal(
-        "diff --git a/a.rs b/b.rs\ncopy from a.rs\ndiff --git a/c.rs b/c.rs\nindex 1..2 100644\n",
-        "copy from without copy to, closed by the next section",
-    )?;
-    assert_eq!(
-        line, 2,
-        "the refusal names the dangling line, not the closer"
-    );
-    Ok(())
+    assert_all_refused(DANGLING_COPY_CASES)
 }
+
+/// Two `copy from` lines in one section.
+const DUPLICATE_COPY_CASES: &[RefusalCase] = &[RefusalCase {
+    text: "diff --git a/a.rs b/b.rs\ncopy from a.rs\ncopy from other.rs\ncopy to b.rs\n",
+    why: "two copy from lines in one section",
+    line: 3,
+    fragment: Some("duplicate"),
+}];
 
 // [PIPELINE-DIFF-INGEST] P0-3: duplicated copy metadata in one section
 // is not git grammar; guessing which pair wins could ingest the wrong
 // file wholesale.
 #[test]
 fn duplicate_copy_metadata_is_refused() -> Result<()> {
-    let (line, message) = refusal(
-        "diff --git a/a.rs b/b.rs\ncopy from a.rs\ncopy from other.rs\ncopy to b.rs\n",
-        "two copy from lines in one section",
-    )?;
-    assert_eq!(line, 3, "the refusal names the second 'copy from'");
-    assert!(
-        message.contains("duplicate"),
-        "says what is wrong: {message}"
-    );
-    Ok(())
+    assert_all_refused(DUPLICATE_COPY_CASES)
 }
+
+/// Copy metadata before any file header, and naming an empty path.
+const STRAY_OR_EMPTY_COPY_CASES: &[RefusalCase] = &[
+    RefusalCase {
+        text: "copy from a.rs\n",
+        why: "copy metadata before any file header",
+        line: 1,
+        fragment: None,
+    },
+    RefusalCase {
+        text: "diff --git a/a.rs b/b.rs\ncopy from \"\"\ncopy to b.rs\n",
+        why: "copy metadata naming no path",
+        line: 2,
+        fragment: Some("no path"),
+    },
+];
 
 // [PIPELINE-DIFF-INGEST] P0-3 strictness: copy metadata outside any
 // file section, or naming no path, is junk like any other stray line.
 #[test]
 fn stray_or_empty_copy_metadata_is_refused() -> Result<()> {
-    let (line, _message) = refusal("copy from a.rs\n", "copy metadata before any file header")?;
-    assert_eq!(line, 1);
-    let (line, message) = refusal(
-        "diff --git a/a.rs b/b.rs\ncopy from \"\"\ncopy to b.rs\n",
-        "copy metadata naming no path",
-    )?;
-    assert_eq!(line, 2);
-    assert!(message.contains("no path"), "says what is wrong: {message}");
-    Ok(())
+    assert_all_refused(STRAY_OR_EMPTY_COPY_CASES)
 }

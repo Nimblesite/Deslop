@@ -22,16 +22,31 @@ const MIN_NODES: u32 = 8;
 /// binary writes.
 const OTHER_VERSION: &str = "0.0.0-superseded";
 
-/// Creates `<base>/fingerprints/<language>/<version>/<min>` and
+/// Source bytes the corpus still holds, so their blob is addressable.
+const LIVE_SOURCE: &[u8] = b"fn live() {}";
+
+/// Source bytes owned by the partition another running binary writes.
+const CONCURRENT_SOURCE: &[u8] = b"fn concurrent() {}";
+
+/// Creates `<base>/fingerprints/<LANGUAGE>/<version>/<min_nodes>` and
 /// returns it.
-fn partition(base: &Path, language: &str, version: &str, min_nodes: u32) -> io::Result<PathBuf> {
+fn partition(base: &Path, version: &str, min_nodes: u32) -> io::Result<PathBuf> {
     let dir = base
         .join(FINGERPRINT_DIR)
-        .join(language)
+        .join(LANGUAGE)
         .join(version)
         .join(min_nodes.to_string());
     fs::create_dir_all(&dir)?;
     Ok(dir)
+}
+
+/// A fresh cache base whose current-version [`MIN_NODES`] partition —
+/// the only one a pass can prove orphans in — already exists, returned
+/// beside that partition.
+fn store_with_current_partition() -> io::Result<(tempfile::TempDir, PathBuf)> {
+    let base = tempfile::tempdir()?;
+    let current = partition(base.path(), TOOL_VERSION, MIN_NODES)?;
+    Ok((base, current))
 }
 
 /// Writes a `len`-byte blob for `source` into `dir`, its mtime pinned
@@ -49,6 +64,13 @@ fn write_blob(dir: &Path, source: &[u8], len: usize, age_seconds: u64) -> io::Re
     Ok(path)
 }
 
+/// Writes [`LIVE_SOURCE`]'s blob into `dir`, returned beside the
+/// [`LiveBlobs`] set that addresses exactly it.
+fn write_live_blob(dir: &Path, len: usize, age_seconds: u64) -> io::Result<(PathBuf, LiveBlobs)> {
+    let path = write_blob(dir, LIVE_SOURCE, len, age_seconds)?;
+    Ok((path, live_with(&[LIVE_SOURCE])))
+}
+
 /// A [`LiveBlobs`] holding exactly the given sources under [`LANGUAGE`].
 fn live_with(sources: &[&[u8]]) -> LiveBlobs {
     let mut live = LiveBlobs::default();
@@ -56,6 +78,27 @@ fn live_with(sources: &[&[u8]]) -> LiveBlobs {
         live.record(LANGUAGE, source);
     }
     live
+}
+
+/// The eviction inventory a pass holding `live` builds over `base`,
+/// always at the [`MIN_NODES`] floor that pass addressed.
+fn inventory_of(base: &Path, live: &LiveBlobs) -> Vec<BlobRecord> {
+    blob_inventory(&base.join(FINGERPRINT_DIR), live, MIN_NODES)
+}
+
+/// Inventories `base` before sweeping it, returning that inventory —
+/// the sweep consumes its own, so a test capturing classes must take
+/// the snapshot first.
+fn inventory_then_sweep(base: &Path, live: &LiveBlobs) -> Vec<BlobRecord> {
+    let inventory = inventory_of(base, live);
+    sweep_store(base, live, MIN_NODES);
+    inventory
+}
+
+/// Re-inventories `base`, then evicts from `store_bytes` down to
+/// `budget`, returning the number of blobs evicted.
+fn evict_to(base: &Path, live: &LiveBlobs, store_bytes: u64, budget: u64) -> usize {
+    enforce_budget(inventory_of(base, live), store_bytes, budget)
 }
 
 /// The eviction class the inventory assigned to `path`, if it was
@@ -75,16 +118,12 @@ fn class_of(inventory: &[BlobRecord], path: &Path) -> Option<EvictionClass> {
 // gain.
 #[test]
 fn another_tool_versions_partition_is_classified_but_never_swept_under_budget() -> io::Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let other = partition(tmp.path(), LANGUAGE, OTHER_VERSION, MIN_NODES)?;
-    let other_blob = write_blob(&other, b"fn concurrent() {}", 64, 1_000)?;
-    let current = partition(tmp.path(), LANGUAGE, TOOL_VERSION, MIN_NODES)?;
-    let live_source: &[u8] = b"fn live() {}";
-    let live_blob = write_blob(&current, live_source, 64, 1_000)?;
-    let live = live_with(&[live_source]);
+    let (base, current) = store_with_current_partition()?;
+    let other = partition(base.path(), OTHER_VERSION, MIN_NODES)?;
+    let other_blob = write_blob(&other, CONCURRENT_SOURCE, 64, 1_000)?;
+    let (live_blob, live) = write_live_blob(&current, 64, 1_000)?;
 
-    let inventory = blob_inventory(&tmp.path().join(FINGERPRINT_DIR), &live, MIN_NODES);
-    sweep_store(tmp.path(), &live, MIN_NODES);
+    let inventory = inventory_then_sweep(base.path(), &live);
 
     assert_eq!(
         class_of(&inventory, &other_blob),
@@ -113,15 +152,11 @@ fn another_tool_versions_partition_is_classified_but_never_swept_under_budget() 
 // full-hits), so the sweep must keep it.
 #[test]
 fn orphans_survive_a_sweep_while_the_store_is_under_budget() -> io::Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let current = partition(tmp.path(), LANGUAGE, TOOL_VERSION, MIN_NODES)?;
-    let live_source: &[u8] = b"fn live() {}";
-    let live_blob = write_blob(&current, live_source, 64, 2_000)?;
+    let (base, current) = store_with_current_partition()?;
+    let (live_blob, live) = write_live_blob(&current, 64, 2_000)?;
     let orphan_blob = write_blob(&current, b"fn old() {}", 64, 1_000)?;
-    let live = live_with(&[live_source]);
 
-    let inventory = blob_inventory(&tmp.path().join(FINGERPRINT_DIR), &live, MIN_NODES);
-    sweep_store(tmp.path(), &live, MIN_NODES);
+    let inventory = inventory_then_sweep(base.path(), &live);
 
     assert_eq!(
         class_of(&inventory, &orphan_blob),
@@ -139,17 +174,11 @@ fn orphans_survive_a_sweep_while_the_store_is_under_budget() -> io::Result<()> {
 // to manage — foreign files are never inventoried and never touched.
 #[test]
 fn foreign_files_are_never_touched_by_the_sweep_or_the_budget() -> io::Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let current = partition(tmp.path(), LANGUAGE, TOOL_VERSION, MIN_NODES)?;
+    let (base, current) = store_with_current_partition()?;
     let foreign = current.join("README.txt");
     fs::write(&foreign, b"not a blob")?;
-    let inventory = blob_inventory(
-        &tmp.path().join(FINGERPRINT_DIR),
-        &live_with(&[]),
-        MIN_NODES,
-    );
 
-    sweep_store(tmp.path(), &live_with(&[]), MIN_NODES);
+    let inventory = inventory_then_sweep(base.path(), &live_with(&[]));
 
     assert!(
         inventory.is_empty(),
@@ -165,17 +194,13 @@ fn foreign_files_are_never_touched_by_the_sweep_or_the_budget() -> io::Result<()
 // survives both because it is the only one this corpus can address.
 #[test]
 fn budget_pressure_evicts_by_class_before_age_across_every_class() -> io::Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let other = partition(tmp.path(), LANGUAGE, OTHER_VERSION, MIN_NODES)?;
-    let other_blob = write_blob(&other, b"fn concurrent() {}", 100, 9_000)?;
-    let current = partition(tmp.path(), LANGUAGE, TOOL_VERSION, MIN_NODES)?;
-    let live_source: &[u8] = b"fn live() {}";
-    let live_oldest = write_blob(&current, live_source, 100, 100)?;
+    let (base, current) = store_with_current_partition()?;
+    let other = partition(base.path(), OTHER_VERSION, MIN_NODES)?;
+    let other_blob = write_blob(&other, CONCURRENT_SOURCE, 100, 9_000)?;
+    let (live_oldest, live) = write_live_blob(&current, 100, 100)?;
     let orphan_newer = write_blob(&current, b"fn gone() {}", 100, 5_000)?;
-    let root = tmp.path().join(FINGERPRINT_DIR);
-    let live = live_with(&[live_source]);
 
-    let first = enforce_budget(blob_inventory(&root, &live, MIN_NODES), 300, 250);
+    let first = evict_to(base.path(), &live, 300, 250);
 
     assert_eq!(first, 1, "shedding one blob reaches the 250-byte budget");
     assert!(
@@ -187,7 +212,7 @@ fn budget_pressure_evicts_by_class_before_age_across_every_class() -> io::Result
         "orphan and live blobs must survive while an unaddressable blob remains"
     );
 
-    let second = enforce_budget(blob_inventory(&root, &live, MIN_NODES), 200, 100);
+    let second = evict_to(base.path(), &live, 200, 100);
 
     assert_eq!(
         second, 1,
@@ -210,16 +235,12 @@ fn budget_pressure_evicts_by_class_before_age_across_every_class() -> io::Result
 // moment the store fits.
 #[test]
 fn budget_pressure_evicts_orphans_first_then_oldest_and_stops_at_the_budget() -> io::Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let current = partition(tmp.path(), LANGUAGE, TOOL_VERSION, MIN_NODES)?;
-    let live_source: &[u8] = b"fn live() {}";
-    let live_old = write_blob(&current, live_source, 100, 100)?;
+    let (base, current) = store_with_current_partition()?;
+    let (live_old, live) = write_live_blob(&current, 100, 100)?;
     let orphan_new = write_blob(&current, b"fn a() {}", 100, 9_000)?;
     let orphan_old = write_blob(&current, b"fn b() {}", 100, 200)?;
-    let root = tmp.path().join(FINGERPRINT_DIR);
-    let live = live_with(&[live_source]);
 
-    let evicted = enforce_budget(blob_inventory(&root, &live, MIN_NODES), 300, 200);
+    let evicted = evict_to(base.path(), &live, 300, 200);
 
     assert_eq!(evicted, 1, "shedding exactly one blob reaches the budget");
     assert!(
@@ -240,16 +261,14 @@ fn budget_pressure_evicts_orphans_first_then_oldest_and_stops_at_the_budget() ->
 // is a hard bound.
 #[test]
 fn budget_pressure_falls_back_to_the_oldest_live_blob_once_orphans_are_gone() -> io::Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let current = partition(tmp.path(), LANGUAGE, TOOL_VERSION, MIN_NODES)?;
+    let (base, current) = store_with_current_partition()?;
     let old_source: &[u8] = b"fn old_live() {}";
     let new_source: &[u8] = b"fn new_live() {}";
     let live_old = write_blob(&current, old_source, 100, 100)?;
     let live_new = write_blob(&current, new_source, 100, 9_000)?;
-    let root = tmp.path().join(FINGERPRINT_DIR);
     let live = live_with(&[old_source, new_source]);
 
-    let evicted = enforce_budget(blob_inventory(&root, &live, MIN_NODES), 200, 100);
+    let evicted = evict_to(base.path(), &live, 200, 100);
 
     assert_eq!(evicted, 1, "shedding exactly one blob reaches the budget");
     assert!(
@@ -264,14 +283,12 @@ fn budget_pressure_falls_back_to_the_oldest_live_blob_once_orphans_are_gone() ->
 // never a provable orphan — only age-ranked under pressure.
 #[test]
 fn another_min_nodes_partition_is_age_ranked_never_provably_orphaned() -> io::Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let other = partition(tmp.path(), LANGUAGE, TOOL_VERSION, 20)?;
+    let base = tempfile::tempdir()?;
+    let other = partition(base.path(), TOOL_VERSION, 20)?;
     let other_blob = write_blob(&other, b"fn other() {}", 64, 500)?;
-    let root = tmp.path().join(FINGERPRINT_DIR);
     let live = live_with(&[]);
 
-    let inventory = blob_inventory(&root, &live, MIN_NODES);
-    sweep_store(tmp.path(), &live, MIN_NODES);
+    let inventory = inventory_then_sweep(base.path(), &live);
 
     assert_eq!(
         inventory

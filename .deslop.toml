@@ -139,5 +139,34 @@ exclude = [
 #   pre-existing clusters in the coarse E2E suites — a flat tail, largest
 #   single cluster 94 LOC of 16177 across ~1130 clusters — tracked in gh #397.
 #   Ratchet down as that work lands.
+#
+# RE-MEASURED 2026-08-19 against the release-audit base f92300e5e, one binary
+#   per row so the code and the detector are separated:
+#     f92300e5e tree, f92300e5e binary   12.42%   <- passes its own 12.5 ceiling
+#     f92300e5e tree, HEAD binary        15.69%
+#     HEAD tree,      HEAD binary        14.36%   16681 redundant LOC / 116145
+#   Like for like on one binary, this branch removed 1.33 points of real
+#   duplication against the audit base. The 12.5 -> 14.5 history tracked a
+#   +3.27-point shift in what the engine counts (the fused-score and
+#   content-gate work), not new debt.
+#
+#   The value below is 3.1 points under what the engine reports for a tree
+#   that is genuinely less duplicated than the base, so `make dup-gate` exits
+#   3 and `make ci` fails on it. Closing that gap means removing ~3,700
+#   duplicated LOC. Where that duplication lives, over the 1,172 head clusters:
+#     inline fixture literals in tests   293 clusters   3,306 redundant LOC
+#     test scaffolding and test code     647 clusters   7,158 redundant LOC
+#     production src/                    232 clusters   2,181 redundant LOC
+#   The fixture literals — CSHARP_ALPHA/CSHARP_BETA in tests/boilerplate.rs,
+#   the generated-DTO pairs in tests/defaults.rs — exist *because* they are
+#   duplicates and cannot be deduped without deleting what the tests assert on.
+#   `exclude` above drops **/tests/fixtures/**, but a fixture written as a
+#   `const … &str` has no path to exclude.
+#
+#   So 11.3 IS reachable without touching a fixture: the DRY-able scaffolding
+#   is about twice the needed mass. It is not reachable quickly — a flat tail
+#   of 647 clusters averaging ~11 redundant lines, largest 96, spread over
+#   several hundred test files. Left unchanged pending that work rather than
+#   moved to fit the measurement.
 [threshold]
 max_duplication_percent = 11.3

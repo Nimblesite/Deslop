@@ -38,6 +38,23 @@ pub(crate) mod incremental;
 /// reason as `signals`.
 pub(crate) mod multilang;
 
+/// Warm-store scenarios over that fixture — the baseline, the targeted
+/// mutation, and the reuse accounting each mutation must produce.
+/// Imported explicitly with `use crate::common::multilang_warm::*;`, for
+/// the same reason as `signals`.
+pub(crate) mod multilang_warm;
+
+/// The GH #119 role-gate contract, asserted once for every language
+/// ([CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]). Imported explicitly with
+/// `use crate::common::role_gate::*;`, for the same reason as `signals`.
+pub(crate) mod role_gate;
+
+/// The committed `diff-scope` fixture's vocabulary — what the patch
+/// adds, and how to drive the CLI over it. Imported explicitly with
+/// `use crate::common::diff_scope::*;`, for the same reason as
+/// `signals`.
+pub(crate) mod diff_scope;
+
 /// The committed-golden comparison and its `DESLOP_BLESS` regeneration
 /// path ([PIPELINE-DETERMINISM]). Imported explicitly with
 /// `use crate::common::golden::*;`, for the same reason as `signals`.

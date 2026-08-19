@@ -121,10 +121,6 @@ fn run_two_ledger_report(server: &MockOllama, scan_root: &Path) -> Result<Value>
 // 19-node parameter list and an 865-byte arithmetic chain as copies of
 // each other.
 #[test]
-#[ignore = "GH #369: the size guard removed the incoherent member, but the \
-            scan still renders two families instead of one — the surviving \
-            extra is an embedding-only false positive over the same fixture. \
-            Assertions are intact — run with `-- --ignored`."]
 fn an_embedding_only_pair_does_not_join_occurrences_of_different_size() -> Result<()> {
     let server = MockOllama::spawn()?;
     let tmp = tempfile::tempdir()?;

@@ -34,9 +34,11 @@ The only open engine defect in this plan, and unblocked.
 `coverage 1.0` — the engine's own terms certify the bijection as **total** — and demotes anyway, purely on
 `anchor_weight(8) = 8/(8+4) = 0.6667` against `CONTENT_SUPPORT_FLOOR = 0.7`. It misses by 0.033.
 
-Pinned red by `typescript_qualified_type_name_rename_is_token_invariant` against the maximal rename on
-disk. The whole-function pair demotes on mass alone and is then deleted in favour of its byte-identical
-tail fragment (rendered `identical`, bytes 70..141 / 67..138 — the post-annotation suffix).
+Pinned by `typescript_qualified_type_name_rename_is_token_invariant` against the maximal rename on disk.
+**Green as of 2026-08-19** (`typescript_features` 7/7): the whole-function pair survives instead of being
+deleted in favour of its byte-identical tail fragment, because content evidence is now attached before
+cross-cluster subsumption elects a survivor ([REPAIR-SUBSUME-CONTENT-FIRST]). The mass question below is
+therefore open on its own terms, not on a red pin.
 
 #410 was blocked by #409 because #409 changes its only input
 (`anchors = preserved_literal_count(literals) + mapping.explained`). That edge is discharged: re-measured
@@ -76,21 +78,20 @@ These reports predate `[FUSION-CONTENT-GATE]`; measure before changing code. Non
 corpus can express *"these two things are not duplicates"* — section A of
 [`corpus-assertion.md`](corpus-assertion.md), the same gap #401 reports.
 
-**Baseline measured 2026-08-19.** Three pins are red on `main` as well as on this branch — confirmed
-against a pristine `HEAD` checkout of the engine files, so they are standing defects, not regressions from
-the subsumption or rename work:
-`python_issue_72_monkeypatch::monkeypatch_setenv_setup_pattern_is_not_duplicate_code`,
-`python_dict_assert_payload_proof::a_call_inside_a_consumed_payload_value_is_not_excused`, and
-`python_literal_variation_calls::rest_endpoint_family_with_fstring_paths_is_suppressed`. Each asserts a
-*suppression*, so a red one means the false positive is **live today**.
+**Re-measured 2026-08-19, after the `verbatim_dominated` repair.** The three suppression pins that were
+red are now green: `python_issue_72_monkeypatch` (1), `python_dict_assert_payload_proof` (4) and
+`python_literal_variation_calls` (2). Each asserts a *suppression*, so green means those false positives
+are no longer live. They were red because `verbatim_dominated` certified non-verbatim members as verbatim
+and forced `agreement` to 1.0; the fix requires one token-identical family — equal shape digest *and*
+equal collapsed-leaf keys — to hold a strict majority.
 
 - **Assertion idioms** (#71, #103, #285) — `python_issue_72_monkeypatch.rs` and the `python_dict_assert_*`
-  suites are both red at baseline, so the idiom families are still reported as duplicates.
+  suites are green; the idiom families are suppressed.
 - **Data-table / object-literal families** (#283, #284) — recheck the language-agnostic data category
   shipped for #336 before treating these as open detector defects. `python_issue_133_constant_table` and
   `fsharp_issue_336_data_table_category` are green, so the category itself is intact.
-- **Helper call sites** (#79) — `python_literal_variation_calls.rs` is red at baseline; the f-string
-  endpoint family is not being suppressed.
+- **Helper call sites** (#79) — `python_literal_variation_calls.rs` is green; the f-string endpoint family
+  is suppressed.
 - **#362 / `[RANK-STRUCTURAL-ONLY]`** — two unrelated const-declaration files must not become the
   repository's largest ranked finding.
 
@@ -119,7 +120,7 @@ and named**; a human performs the close.
 
 - [ ] **#410** — decide `RENAME_EVIDENCE_HALF_MASS`'s shape vs. a certified-total bypass; re-measure against
       `dart_issue_197`, the F# data-table corpus, `type2_rename_anchor_floor`, `fused_golden_bands`; do not
-      lower `CONTENT_SUPPORT_FLOOR`.
+      lower `CONTENT_SUPPORT_FLOOR`. No longer pinned red — the reported pin is green as of 2026-08-19.
 
 ## Engine defects — owned elsewhere
 

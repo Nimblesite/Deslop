@@ -320,7 +320,7 @@ async fn run_background_refresh(
         Ok(Ok((job, report))) => {
             commit_background_refresh(inner, previous_reports, job, report).await;
         }
-        Ok(Err(failure)) => report_background_error(&failure),
+        Ok(Err(failure)) => report_background_error(inner, &failure).await,
         Err(error) => tracing::error!(%error, "embedding refresh task failed"),
     }
 }
@@ -351,10 +351,32 @@ async fn commit_background_refresh(
     }
 }
 
-/// Emits progress and logs for a failed background refresh.
-fn report_background_error(failure: &super::embedding_refresh::FailedEmbeddingRefresh) {
-    failure.job.report_failed(failure.message.clone());
-    tracing::warn!(error = %failure.message, "embedding refresh failed");
+/// Emits progress and logs for a failed background refresh, when that
+/// refresh is still the one the user is waiting on.
+///
+/// The currency check mirrors the success path's
+/// ([`AnalysisSession::commit_embedding_refresh`]): a job the user has
+/// already superseded announces nothing. Without it a slow failing job
+/// could land its terminal `failed` *after* a newer job announced
+/// `complete`, and clients hold one embedding-progress signal rather
+/// than one per revision, so the stale failure would be the verdict on
+/// screen for a refresh that actually succeeded.
+async fn report_background_error(
+    inner: Arc<Mutex<AnalysisSession>>,
+    failure: &super::embedding_refresh::FailedEmbeddingRefresh,
+) {
+    let current = {
+        let guard = inner.lock().await;
+        guard.embedding_refresh_is_current(&failure.job)
+    };
+    if current {
+        failure.job.report_failed(failure.message.clone());
+    }
+    tracing::warn!(
+        error = %failure.message,
+        superseded = !current,
+        "embedding refresh failed",
+    );
 }
 
 /// Constructs an [`EmbeddingProvider`] from a `(provider_id, model_id,

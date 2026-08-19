@@ -23,28 +23,58 @@
 //! same signal triple.
 
 use anyhow::Result;
+use serde_json::Value;
 
 mod common;
 use crate::common::{signals::assert_proven_rename_contract, *};
 
+/// Drives `deslop` over `fixture_dir` and holds the renamed-loop clone
+/// spanning `files` to the proven-rename contract plus the pair size the
+/// fixture was built with — the JavaScript and TypeScript grammars are
+/// separate but share one normalisation, so both sides must reach the
+/// same verdict.
+fn assert_renamed_loop_pair(fixture_dir: &str, min_nodes: u32, files: &[&str]) -> Result<()> {
+    let root = fixture(fixture_dir);
+    let report = run_report(&root, min_nodes)?;
+    let clone = expect_cluster_spanning(&report, files)?;
+    assert_proven_rename_contract(&root, clone, fixture_dir)?;
+    assert_eq!(
+        cluster_size(clone),
+        2,
+        "the renamed loop has exactly two occurrences: {report:#}"
+    );
+    Ok(())
+}
+
+/// Asserts `unrelated` joins no cluster at all: a near-miss family that
+/// swallows a file sharing nothing with it is a false positive.
+fn assert_never_clustered(report: &Value, unrelated: &str, why: &str) {
+    assert!(
+        clusters(report)
+            .iter()
+            .all(|cluster| !cluster_file_set(cluster).contains(unrelated)),
+        "{why}: {report:#}"
+    );
+}
+
 #[test]
 fn javascript_byte_identical_pair_is_identical_bucket() -> Result<()> {
-    let report = run_report(&fixture("js-type1-identical"), 10)?;
-    let clone = expect_cluster_spanning(&report, &["tax_alpha.js", "tax_beta.js"])?;
-    assert_eq!(cluster_bucket(clone), "identical");
-    assert!(approx(signal(clone, "structural"), 1.0));
-    assert!(approx(signal(clone, "token_jaccard"), 1.0));
-    Ok(())
+    assert_bucketed_clone(
+        "js-type1-identical",
+        10,
+        &["tax_alpha.js", "tax_beta.js"],
+        "identical",
+    )
 }
 
 #[test]
 fn typescript_byte_identical_pair_is_identical_bucket() -> Result<()> {
-    let report = run_report(&fixture("ts-type1-identical"), 12)?;
-    let clone = expect_cluster_spanning(&report, &["tax_alpha.ts", "tax_beta.ts"])?;
-    assert_eq!(cluster_bucket(clone), "identical");
-    assert!(approx(signal(clone, "structural"), 1.0));
-    assert!(approx(signal(clone, "token_jaccard"), 1.0));
-    Ok(())
+    assert_bucketed_clone(
+        "ts-type1-identical",
+        12,
+        &["tax_alpha.ts", "tax_beta.ts"],
+        "identical",
+    )
 }
 
 #[test]
@@ -55,16 +85,7 @@ fn javascript_renamed_loop_clone_is_a_proven_rename() -> Result<()> {
     // each other across the pair and three literals survive in position,
     // so the identifier mapping is proven and the pair is duplication a
     // developer must act on — not shape-only evidence.
-    let root = fixture("js-type2-loop");
-    let report = run_report(&root, 10)?;
-    let clone = expect_cluster_spanning(&report, &["inventory_gamma.js", "tax_alpha.js"])?;
-    assert_proven_rename_contract(&root, clone, "js-type2-loop")?;
-    assert_eq!(
-        cluster_size(clone),
-        2,
-        "the renamed loop has exactly two occurrences: {report:#}"
-    );
-    Ok(())
+    assert_renamed_loop_pair("js-type2-loop", 10, &["inventory_gamma.js", "tax_alpha.js"])
 }
 
 #[test]
@@ -72,21 +93,11 @@ fn typescript_renamed_loop_clone_is_a_proven_rename() -> Result<()> {
     // The TypeScript side of the same rename, annotations included. The
     // two grammars are separate but share one normalisation, so the
     // verdict must not depend on which one parsed the clone.
-    let root = fixture("ts-type2-loop");
-    let report = run_report(&root, 12)?;
-    let clone = expect_cluster_spanning(&report, &["inventory_gamma.ts", "tax_alpha.ts"])?;
-    assert_proven_rename_contract(&root, clone, "ts-type2-loop")?;
-    assert_eq!(
-        cluster_size(clone),
-        2,
-        "the renamed loop has exactly two occurrences: {report:#}"
-    );
-    Ok(())
+    assert_renamed_loop_pair("ts-type2-loop", 12, &["inventory_gamma.ts", "tax_alpha.ts"])
 }
 
 #[test]
 fn javascript_renamed_map_reduce_arrow_is_nearly_identical() -> Result<()> {
-    let report = run_report(&fixture("js-type2-pipeline"), 8)?;
     // A deeply-nested map/reduce/arrow pipeline, maximally renamed
     // (invoice→order, rate→price, hours→quantity, deduction→discount) with
     // all five numeric literals preserved in position. The anchors prove
@@ -94,11 +105,12 @@ fn javascript_renamed_map_reduce_arrow_is_nearly_identical() -> Result<()> {
     // the pair to the act-now `nearly_identical` bucket, and the
     // shape-identical Merkle match corrects the placeholder-dominated token
     // fallback to its true value of 1.0 (#232).
-    let clone = expect_cluster_spanning(&report, &["invoices.js", "orders.js"])?;
-    assert_eq!(cluster_bucket(clone), "nearly_identical");
-    assert!(approx(signal(clone, "structural"), 1.0));
-    assert!(approx(signal(clone, "token_jaccard"), 1.0));
-    Ok(())
+    assert_bucketed_clone(
+        "js-type2-pipeline",
+        8,
+        &["invoices.js", "orders.js"],
+        "nearly_identical",
+    )
 }
 
 #[test]
@@ -114,11 +126,10 @@ fn javascript_near_miss_extra_guard_is_a_proven_rename() -> Result<()> {
     let report = run_report(&root, 10)?;
     let clone = expect_cluster_spanning(&report, &["inventoryScan.js", "stockScan.js"])?;
     assert_proven_rename_contract(&root, clone, "js-type3-guard")?;
-    assert!(
-        clusters(&report)
-            .iter()
-            .all(|cluster| !cluster_file_set(cluster).contains("formatLabel.js")),
-        "the unrelated label formatter must never join the near-miss cluster: {report:#}"
+    assert_never_clustered(
+        &report,
+        "formatLabel.js",
+        "the unrelated label formatter must never join the near-miss cluster",
     );
     Ok(())
 }
@@ -133,29 +144,28 @@ fn javascript_near_miss_extra_statement_keeps_shared_subtree_and_excludes_unrela
     assert!(approx(signal(clone, "structural"), 1.0));
     // The unrelated random-token generator in the same directory must never
     // be pulled into a clone cluster.
-    assert!(
-        clusters(&report)
-            .iter()
-            .all(|cluster| !cluster_file_set(cluster).contains("randomToken.js")),
-        "an unrelated function must not join the near-miss cluster: {report:#}"
+    assert_never_clustered(
+        &report,
+        "randomToken.js",
+        "an unrelated function must not join the near-miss cluster",
     );
     Ok(())
 }
 
 #[test]
 fn typescript_near_miss_reordered_statements_cluster_nearly_identical() -> Result<()> {
-    let report = run_report(&fixture("ts-type3-reorder"), 10)?;
     // Two normalizers, byte-identical except two independent statements
     // swapped and the function renamed — the canonical Type-3 near miss.
     // Positional content agreement stays high across the swap, so
     // [FUSION-CONTENT-GATE] keeps the pair in the act-now
     // `nearly_identical` bucket instead of demoting identical-content,
     // reordered code to "same shape, different content".
-    let clone = expect_cluster_spanning(&report, &["normalizeContact.ts", "normalizeUser.ts"])?;
-    assert_eq!(cluster_bucket(clone), "nearly_identical");
-    assert!(approx(signal(clone, "structural"), 1.0));
-    assert!(approx(signal(clone, "token_jaccard"), 1.0));
-    Ok(())
+    assert_bucketed_clone(
+        "ts-type3-reorder",
+        10,
+        &["normalizeContact.ts", "normalizeUser.ts"],
+        "nearly_identical",
+    )
 }
 
 #[test]
