@@ -146,10 +146,16 @@ impl Section {
             (None, None) => None,
             (Some((from, _)), Some((to, _))) => Some(FileCopy { from, to }),
             (Some((_, line)), None) => {
-                return Err(parse_error(line, "'copy from' without a matching 'copy to'"));
+                return Err(parse_error(
+                    line,
+                    "'copy from' without a matching 'copy to'",
+                ));
             }
             (None, Some((_, line))) => {
-                return Err(parse_error(line, "'copy to' without a matching 'copy from'"));
+                return Err(parse_error(
+                    line,
+                    "'copy to' without a matching 'copy from'",
+                ));
             }
         };
         Ok(patch)
@@ -290,7 +296,10 @@ impl Parser {
             metadata::CopySide::To => &mut section.copy_to,
         };
         if slot.is_some() {
-            return Err(parse_error(line_no, "duplicate copy metadata in one file section"));
+            return Err(parse_error(
+                line_no,
+                "duplicate copy metadata in one file section",
+            ));
         }
         *slot = Some((path, line_no));
         Ok(())
@@ -471,8 +480,12 @@ fn parse_range(line_no: usize, range: &str) -> Result<(u64, u64), CoreError> {
 
 /// Parses one decimal number from a hunk range.
 fn parse_number(line_no: usize, text: &str) -> Result<u64, CoreError> {
-    text.parse::<u64>()
-        .map_err(|_| parse_error(line_no, &format!("hunk range component {text:?} is not a number")))
+    text.parse::<u64>().map_err(|_| {
+        parse_error(
+            line_no,
+            &format!("hunk range component {text:?} is not a number"),
+        )
+    })
 }
 
 /// Builds a [`CoreError::DiffParse`] for `line_no`.

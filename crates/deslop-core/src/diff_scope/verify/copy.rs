@@ -7,7 +7,7 @@
 //! in both of its copy shapes: a metadata-only copy (`similarity
 //! index 100%`, no hunks) asserts the target byte-equals the source,
 //! and a copy *with* hunks describes the target as the source plus a
-//! delta — either way the target's full 1..=line_count range is added.
+//! delta — either way the target's full `1..=line_count` range is added.
 //! The source file is untouched by the copy and stays out of the
 //! scope (`[existing]`). Hunks, when present, are verified against
 //! the target like any other hunk but project nothing of their own:
@@ -72,11 +72,7 @@ pub(super) fn ingest_copy(
 /// bytes. The collected added lines are discarded: the full-range
 /// projection in [`ingest_copy`] already covers them, so the hunks
 /// serve purely as a staleness check here.
-fn verify_copy_hunks(
-    patch: &FilePatch,
-    target: &Path,
-    lines: &[&[u8]],
-) -> Result<(), CoreError> {
+fn verify_copy_hunks(patch: &FilePatch, target: &Path, lines: &[&[u8]]) -> Result<(), CoreError> {
     let mut added: Vec<u64> = Vec::new();
     for hunk in &patch.hunks {
         verify_hunk(hunk, target, lines, &mut added)?;
@@ -139,11 +135,7 @@ fn read_disk_source<'src>(
 /// target and its first divergent line, because tagging the whole
 /// target as added on the strength of a claim the tree contradicts
 /// would mislabel every line after the divergence.
-fn require_byte_equal(
-    source: &[u8],
-    target_path: &Path,
-    target: &[u8],
-) -> Result<(), CoreError> {
+fn require_byte_equal(source: &[u8], target_path: &Path, target: &[u8]) -> Result<(), CoreError> {
     if source == target {
         return Ok(());
     }
@@ -164,7 +156,9 @@ fn first_divergent_line(source: &[u8], target: &[u8]) -> u64 {
         .zip(target_lines.iter())
         .position(|(source_line, target_line)| source_line != target_line)
         .unwrap_or_else(|| source_lines.len().min(target_lines.len()));
-    u64::try_from(divergent).unwrap_or(u64::MAX).saturating_add(1)
+    u64::try_from(divergent)
+        .unwrap_or(u64::MAX)
+        .saturating_add(1)
 }
 
 /// Number of lines as the `u64` the span projection iterates.

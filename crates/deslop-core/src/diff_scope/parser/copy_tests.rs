@@ -15,6 +15,18 @@ fn only_file(parsed: &ParsedDiff) -> Result<&FilePatch> {
     parsed.files.first().context("the parsed file section")
 }
 
+/// Asserts the section's copy payload names the `from` → `to` pair.
+fn assert_copy(file: &FilePatch, from: &str, to: &str, why: &str) {
+    assert_eq!(
+        file.copy,
+        Some(FileCopy {
+            from: from.to_owned(),
+            to: to.to_owned(),
+        }),
+        "{why}"
+    );
+}
+
 /// Unwraps a refusal into its `DiffParse` line and message.
 fn refusal(text: &str, why: &str) -> Result<(usize, String)> {
     let error = parse_unified_diff(text)
@@ -105,13 +117,11 @@ fn metadata_only_copy_parses_into_the_file_patch() -> Result<()> {
                 copy to src/legacy_b.rs\n";
     let parsed = parse_unified_diff(text).context("copy diff must parse")?;
     let file = only_file(&parsed)?;
-    assert_eq!(
-        file.copy,
-        Some(FileCopy {
-            from: "src/legacy_a.rs".to_owned(),
-            to: "src/legacy_b.rs".to_owned(),
-        }),
-        "the copy pair is the section's payload"
+    assert_copy(
+        file,
+        "src/legacy_a.rs",
+        "src/legacy_b.rs",
+        "the copy pair is the section's payload",
     );
     assert!(file.hunks.is_empty(), "a 100% copy carries no hunks");
     assert_eq!(file.new_path, None, "no '+++' line in a metadata-only copy");
@@ -135,12 +145,11 @@ fn copy_with_hunks_keeps_metadata_and_hunks() -> Result<()> {
                 +fn b() {}\n";
     let parsed = parse_unified_diff(text).context("copy-with-hunks diff must parse")?;
     let file = only_file(&parsed)?;
-    assert_eq!(
-        file.copy,
-        Some(FileCopy {
-            from: "src/a.rs".to_owned(),
-            to: "src/b.rs".to_owned(),
-        })
+    assert_copy(
+        file,
+        "src/a.rs",
+        "src/b.rs",
+        "both halves survive the hunks",
     );
     assert_eq!(file.hunks.len(), 1, "the delta hunk is kept");
     assert_eq!(file.new_path.as_deref(), Some("src/b.rs"));
@@ -158,13 +167,11 @@ fn c_quoted_copy_paths_are_unquoted() -> Result<()> {
                 copy to \"caf\\303\\251_copy.rs\"\n";
     let parsed = parse_unified_diff(text).context("quoted copy diff must parse")?;
     let file = only_file(&parsed)?;
-    assert_eq!(
-        file.copy,
-        Some(FileCopy {
-            from: "café.rs".to_owned(),
-            to: "café_copy.rs".to_owned(),
-        }),
-        "the octal-escaped UTF-8 bytes are the real filenames"
+    assert_copy(
+        file,
+        "café.rs",
+        "café_copy.rs",
+        "the octal-escaped UTF-8 bytes are the real filenames",
     );
     Ok(())
 }
@@ -181,18 +188,27 @@ fn dangling_copy_metadata_is_refused() -> Result<()> {
         "copy from without copy to, closed by EOF",
     )?;
     assert_eq!(line, 3, "the refusal names the dangling 'copy from' line");
-    assert!(message.contains("copy to"), "names the missing half: {message}");
+    assert!(
+        message.contains("copy to"),
+        "names the missing half: {message}"
+    );
     let (line, message) = refusal(
         "diff --git a/a.rs b/b.rs\ncopy to b.rs\n",
         "copy to without copy from, closed by EOF",
     )?;
     assert_eq!(line, 2, "the refusal names the dangling 'copy to' line");
-    assert!(message.contains("copy from"), "names the missing half: {message}");
+    assert!(
+        message.contains("copy from"),
+        "names the missing half: {message}"
+    );
     let (line, _message) = refusal(
         "diff --git a/a.rs b/b.rs\ncopy from a.rs\ndiff --git a/c.rs b/c.rs\nindex 1..2 100644\n",
         "copy from without copy to, closed by the next section",
     )?;
-    assert_eq!(line, 2, "the refusal names the dangling line, not the closer");
+    assert_eq!(
+        line, 2,
+        "the refusal names the dangling line, not the closer"
+    );
     Ok(())
 }
 
@@ -206,7 +222,10 @@ fn duplicate_copy_metadata_is_refused() -> Result<()> {
         "two copy from lines in one section",
     )?;
     assert_eq!(line, 3, "the refusal names the second 'copy from'");
-    assert!(message.contains("duplicate"), "says what is wrong: {message}");
+    assert!(
+        message.contains("duplicate"),
+        "says what is wrong: {message}"
+    );
     Ok(())
 }
 
@@ -214,10 +233,7 @@ fn duplicate_copy_metadata_is_refused() -> Result<()> {
 // file section, or naming no path, is junk like any other stray line.
 #[test]
 fn stray_or_empty_copy_metadata_is_refused() -> Result<()> {
-    let (line, _message) = refusal(
-        "copy from a.rs\n",
-        "copy metadata before any file header",
-    )?;
+    let (line, _message) = refusal("copy from a.rs\n", "copy metadata before any file header")?;
     assert_eq!(line, 1);
     let (line, message) = refusal(
         "diff --git a/a.rs b/b.rs\ncopy from \"\"\ncopy to b.rs\n",

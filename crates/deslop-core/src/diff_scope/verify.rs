@@ -129,8 +129,7 @@ fn refuse_or_ignore_missing(
 /// outside the language registry, or the file exists on disk and was
 /// therefore excluded from the corpus on purpose.
 fn corpus_miss_is_ignorable(scan_root: &Path, relative: &Path) -> bool {
-    crate::pipeline::language_for_path(relative) == "unknown"
-        || scan_root.join(relative).is_file()
+    crate::pipeline::language_for_path(relative) == "unknown" || scan_root.join(relative).is_file()
 }
 
 /// First new-side line number a patch claims (context or added), or
@@ -196,10 +195,7 @@ fn verify_line(
 fn resolve_to_scan_root(new_path: &str, cwd: &Path, scan_root: &Path) -> Option<PathBuf> {
     let joined = cwd.join(new_path);
     let absolute = std::fs::canonicalize(&joined).unwrap_or(joined);
-    absolute
-        .strip_prefix(scan_root)
-        .ok()
-        .map(Path::to_path_buf)
+    absolute.strip_prefix(scan_root).ok().map(Path::to_path_buf)
 }
 
 /// Splits source bytes into lines on `\n`, excluding the terminator.

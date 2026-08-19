@@ -58,7 +58,8 @@ complete report. `--output` cannot redirect the cache; it stays at the scan root
 
 ### [CLI-ARG-DIFF] `--diff` unified-diff scope
 
-> **Status: shipped.** Pinned by `crates/deslop/tests/diff_scoped_reporting.rs`.
+> **Status: shipped.** Pinned by `crates/deslop/tests/diff_scoped_reporting.rs` and
+> `crates/deslop/tests/diff_ingest_refusals.rs`.
 
 `--diff <FILE|->` supplies a unified diff (`-` reads stdin) whose new-side added
 lines scope the report. The scan itself is unchanged — the whole tree is analysed

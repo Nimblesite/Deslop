@@ -51,12 +51,22 @@ fn diff_cmd(output_prefix: &std::path::Path, extra: &[&str]) -> Result<Command> 
     Ok(cmd)
 }
 
+/// Runs the CLI with `extra` flags into a fresh report prefix, asserts
+/// the exit `code`, and returns the prefix (for `.json` / `.txt` /
+/// `.html`), the stderr the run wrote, and the tempdir keeping both
+/// alive.
+fn run_code(extra: &[&str], code: i32) -> Result<(PathBuf, String, tempfile::TempDir)> {
+    let tmp = tempfile::tempdir()?;
+    let output = tmp.path().join("report");
+    let assert = diff_cmd(&output, extra)?.assert().code(code);
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    Ok((output, stderr, tmp))
+}
+
 /// Runs the CLI with `extra` flags, asserts success, and returns the
 /// parsed JSON report plus the output prefix (for `.txt` / `.html`).
 fn run_ok(extra: &[&str]) -> Result<(Value, PathBuf, tempfile::TempDir)> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let _assert = diff_cmd(&output, extra)?.assert().success();
+    let (output, _stderr, tmp) = run_code(extra, 0)?;
     let report = load_json(&output.with_extension("json"))?;
     Ok((report, output, tmp))
 }
@@ -275,15 +285,8 @@ fn diff_tags_the_four_populations_and_metrics_add_up() -> Result<()> {
 #[test]
 fn only_changed_filters_untouched_clusters_and_renders_the_delta() -> Result<()> {
     let (full, _full_out, _tmp_a) = run_ok(&["--diff", "patches/change.patch"])?;
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let assert = diff_cmd(
-        &output,
-        &["--diff", "patches/change.patch", "--only-changed"],
-    )?
-    .assert()
-    .success();
-    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    let (output, stderr, _tmp) =
+        run_code(&["--diff", "patches/change.patch", "--only-changed"], 0)?;
     let report = load_json(&output.with_extension("json"))?;
 
     assert_eq!(
@@ -366,10 +369,7 @@ fn only_changed_filters_untouched_clusters_and_renders_the_delta() -> Result<()>
 #[test]
 fn only_changed_gate_reads_the_diff_percentage() -> Result<()> {
     // Clean diff over a legacy-heavy repo: repo gate breached, run passes.
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let assert = diff_cmd(
-        &output,
+    let (output, clean_stderr, _tmp) = run_code(
         &[
             "--diff",
             "patches/empty.patch",
@@ -377,10 +377,8 @@ fn only_changed_gate_reads_the_diff_percentage() -> Result<()> {
             "--fail-over",
             "0",
         ],
-    )?
-    .assert()
-    .code(0);
-    let clean_stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        0,
+    )?;
     let report = load_json(&output.with_extension("json"))?;
     let metrics = field(&report, "metrics");
     assert_eq!(
@@ -424,10 +422,7 @@ fn only_changed_gate_reads_the_diff_percentage() -> Result<()> {
     );
 
     // A diff that introduces duplication trips the same gate.
-    let tmp2 = tempfile::tempdir()?;
-    let output2 = tmp2.path().join("report");
-    let _assert = diff_cmd(
-        &output2,
+    let (output2, _breach_stderr, _tmp2) = run_code(
         &[
             "--diff",
             "patches/change.patch",
@@ -435,9 +430,8 @@ fn only_changed_gate_reads_the_diff_percentage() -> Result<()> {
             "--fail-over",
             "0",
         ],
-    )?
-    .assert()
-    .code(3);
+        3,
+    )?;
     let breached = load_json(&output2.with_extension("json"))?;
     let verdict = field(field(field(&breached, "metrics"), "diff"), "threshold");
     assert_eq!(field(verdict, "breached"), true);
@@ -455,14 +449,7 @@ fn only_changed_gate_reads_the_diff_percentage() -> Result<()> {
     );
 
     // Without --only-changed the repo-wide gate governs, diff or not.
-    let tmp3 = tempfile::tempdir()?;
-    let output3 = tmp3.path().join("report");
-    let _assert = diff_cmd(
-        &output3,
-        &["--diff", "patches/empty.patch", "--fail-over", "0"],
-    )?
-    .assert()
-    .code(3);
+    let _repo_gated = run_code(&["--diff", "patches/empty.patch", "--fail-over", "0"], 3)?;
     Ok(())
 }
 
@@ -470,12 +457,7 @@ fn only_changed_gate_reads_the_diff_percentage() -> Result<()> {
 // scanned tree is refused as a usage error naming file and line.
 #[test]
 fn stale_diff_is_refused_with_file_and_line() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let assert = diff_cmd(&output, &["--diff", "patches/stale.patch"])?
-        .assert()
-        .code(2);
-    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    let (_output, stderr, _tmp) = run_code(&["--diff", "patches/stale.patch"], 2)?;
     assert!(
         stderr.contains("caller.rs"),
         "refusal must name the mismatching file: {stderr}"
@@ -491,21 +473,12 @@ fn stale_diff_is_refused_with_file_and_line() -> Result<()> {
 // are usage errors (exit 2), never analysis failures.
 #[test]
 fn malformed_or_missing_diff_is_a_usage_error() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let assert = diff_cmd(&output, &["--diff", "patches/malformed.patch"])?
-        .assert()
-        .code(2);
-    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    let (_output, stderr, _tmp) = run_code(&["--diff", "patches/malformed.patch"], 2)?;
     assert!(
         stderr.contains("diff"),
         "malformed refusal must say what failed: {stderr}"
     );
-    let tmp2 = tempfile::tempdir()?;
-    let output2 = tmp2.path().join("report");
-    let _assert = diff_cmd(&output2, &["--diff", "patches/does-not-exist.patch"])?
-        .assert()
-        .code(2);
+    let _missing = run_code(&["--diff", "patches/does-not-exist.patch"], 2)?;
     Ok(())
 }
 

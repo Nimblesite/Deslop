@@ -149,9 +149,15 @@ fn malformed_c_quoted_paths_are_refused() -> Result<()> {
     let cases = [
         ("+++ \"b/x.rs\n@@ -0,0 +1 @@\n+x\n", "missing closing quote"),
         ("+++ \"b/x\\q.rs\"\n@@ -0,0 +1 @@\n+x\n", "unknown escape"),
-        ("+++ \"b/x\\777.rs\"\n@@ -0,0 +1 @@\n+x\n", "octal past one byte"),
+        (
+            "+++ \"b/x\\777.rs\"\n@@ -0,0 +1 @@\n+x\n",
+            "octal past one byte",
+        ),
         ("+++ \"b/x\\377.rs\"\n@@ -0,0 +1 @@\n+x\n", "invalid UTF-8"),
-        ("+++ \"b/x.rs\\\"\n@@ -0,0 +1 @@\n+x\n", "escape eats the closing quote"),
+        (
+            "+++ \"b/x.rs\\\"\n@@ -0,0 +1 @@\n+x\n",
+            "escape eats the closing quote",
+        ),
     ];
     for (text, why) in cases {
         let error = parse_unified_diff(text)
@@ -306,7 +312,8 @@ fn deletion_has_no_new_side_path() -> Result<()> {
 #[test]
 fn unmarked_hunk_body_line_is_refused_with_its_line_number() -> Result<()> {
     let text = "--- a/x.rs\n+++ b/x.rs\n@@ -1,2 +1,2 @@\n context\nxoops\n";
-    let error = parse_unified_diff(text).err()
+    let error = parse_unified_diff(text)
+        .err()
         .context("junk body line must be refused")?;
     let CoreError::DiffParse { line, .. } = error else {
         anyhow::bail!("expected DiffParse, got {error:?}");
@@ -320,7 +327,8 @@ fn unmarked_hunk_body_line_is_refused_with_its_line_number() -> Result<()> {
 #[test]
 fn hunk_body_exceeding_declared_counts_is_refused() -> Result<()> {
     let text = "--- a/x.rs\n+++ b/x.rs\n@@ -1,1 +1,1 @@\n keep\n+extra\n";
-    let error = parse_unified_diff(text).err()
+    let error = parse_unified_diff(text)
+        .err()
         .context("over-long hunk must be refused")?;
     assert!(matches!(error, CoreError::DiffParse { .. }));
     Ok(())
@@ -330,7 +338,8 @@ fn hunk_body_exceeding_declared_counts_is_refused() -> Result<()> {
 #[test]
 fn truncated_trailing_hunk_is_refused() -> Result<()> {
     let text = "--- a/x.rs\n+++ b/x.rs\n@@ -1,2 +1,2 @@\n only-one\n";
-    let error = parse_unified_diff(text).err()
+    let error = parse_unified_diff(text)
+        .err()
         .context("truncated hunk must be refused")?;
     assert!(matches!(error, CoreError::DiffParse { .. }));
     Ok(())
@@ -359,8 +368,8 @@ fn zero_new_side_start_with_added_lines_is_refused() -> Result<()> {
 // [CLI-ARG-DIFF] grammar: arbitrary prose is not a diff.
 #[test]
 fn arbitrary_text_is_refused_not_silently_emptied() -> Result<()> {
-    let error =
-        parse_unified_diff("hello world\n").err()
+    let error = parse_unified_diff("hello world\n")
+        .err()
         .context("prose must be refused as a diff")?;
     assert!(matches!(error, CoreError::DiffParse { line: 1, .. }));
     Ok(())

@@ -14,10 +14,7 @@
 
 mod common;
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::PathBuf};
 
 use anyhow::Context as _;
 use assert_cmd::{assert::Assert, Command};
@@ -44,76 +41,107 @@ const DUP_SOURCE: &str = concat!(
 /// copy of one file must contribute.
 const DUP_LINES: u64 = 10;
 
-/// Writes `files` (as `repo/`-relative path → content) under
-/// `<root>/repo` and returns the tempdir holding them.
-fn build_repo(files: &[(&str, &str)]) -> Result<tempfile::TempDir> {
-    let tmp = tempfile::tempdir()?;
-    for (path, content) in files {
-        let absolute = tmp.path().join("repo").join(path);
-        let parent = absolute.parent().context("file path has a parent")?;
-        fs::create_dir_all(parent)?;
-        fs::write(absolute, content)?;
+/// The strictest gate there is, under diff scope: any duplicated added
+/// line fails the run.
+const ZERO_GATE: &[&str] = &["--only-changed", "--fail-over", "0"];
+
+/// One scenario's live tempdirs and the report prefix inside them. The
+/// working directory is the corpus tempdir and the scan root its
+/// `repo/` subdirectory; the reports land in a second tempdir so no
+/// rendered report is ever discovered by the scan.
+struct Scenario {
+    /// Working directory: holds the `repo/` scan root.
+    root: tempfile::TempDir,
+    /// Kept alive so [`Self::output`] stays on disk for the whole test.
+    _reports: tempfile::TempDir,
+    /// Report path prefix; `.json` / `.txt` / `.html` are appended.
+    output: PathBuf,
+}
+
+impl Scenario {
+    /// A scenario over `files`, given as `repo/`-relative path/content
+    /// pairs written under `<root>/repo`.
+    fn with_files(files: &[(&str, &str)]) -> Result<Self> {
+        let root = tempfile::tempdir()?;
+        for (path, content) in files {
+            let absolute = root.path().join("repo").join(path);
+            let parent = absolute.parent().context("file path has a parent")?;
+            fs::create_dir_all(parent)?;
+            fs::write(absolute, content)?;
+        }
+        let reports = tempfile::tempdir()?;
+        let output = reports.path().join("report");
+        Ok(Self {
+            root,
+            _reports: reports,
+            output,
+        })
     }
-    Ok(tmp)
-}
 
-/// The byte-identical `dup_a.rs` / `dup_b.rs` pair every scenario
-/// starts from.
-fn dup_pair_repo() -> Result<tempfile::TempDir> {
-    build_repo(&[("src/dup_a.rs", DUP_SOURCE), ("src/dup_b.rs", DUP_SOURCE)])
-}
+    /// The byte-identical `dup_a.rs` / `dup_b.rs` pair every scenario
+    /// starts from.
+    fn dup_pair() -> Result<Self> {
+        Self::with_files(&[("src/dup_a.rs", DUP_SOURCE), ("src/dup_b.rs", DUP_SOURCE)])
+    }
 
-/// Runs `deslop repo --output <output> --no-incremental --embeddings
-/// off --diff - <extra...>` from `cwd`, feeding `diff` on stdin.
-fn run_diff(cwd: &Path, output: &Path, diff: &str, extra: &[&str]) -> Result<Assert> {
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _configured = cmd
-        .current_dir(cwd)
-        .arg("repo")
-        .arg("--output")
-        .arg(output)
-        .arg("--no-incremental")
-        .args(["--embeddings", "off", "--diff", "-"])
-        .args(extra)
-        .write_stdin(diff);
-    Ok(cmd.assert())
-}
+    /// Runs `deslop repo --output <prefix> --no-incremental --embeddings
+    /// off --diff - <extra...>` from the scenario root, feeding `diff`
+    /// on stdin.
+    fn run(&self, diff: &str, extra: &[&str]) -> Result<Assert> {
+        let mut cmd = Command::cargo_bin("deslop")?;
+        let _configured = cmd
+            .current_dir(self.root.path())
+            .arg("repo")
+            .arg("--output")
+            .arg(&self.output)
+            .arg("--no-incremental")
+            .args(["--embeddings", "off", "--diff", "-"])
+            .args(extra)
+            .write_stdin(diff);
+        Ok(cmd.assert())
+    }
 
-/// A fresh output prefix inside its own tempdir.
-fn output_prefix() -> Result<(tempfile::TempDir, PathBuf)> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    Ok((tmp, output))
-}
+    /// Runs a diff that must be refused and returns the stderr the
+    /// refusal wrote, having asserted the usage-error exit code.
+    fn refusal_stderr(&self, diff: &str, extra: &[&str]) -> Result<String> {
+        let assert = self.run(diff, extra)?.code(2);
+        Ok(String::from_utf8_lossy(&assert.get_output().stderr).into_owned())
+    }
 
-/// The process stderr of a finished assertion.
-fn stderr_of(assert: &Assert) -> String {
-    String::from_utf8_lossy(&assert.get_output().stderr).into_owned()
+    /// The JSON report the last run wrote.
+    fn report(&self) -> Result<Value> {
+        load_json(&self.output.with_extension("json"))
+    }
+
+    /// Runs one "stays ignorable" scenario end to end and asserts the
+    /// whole shape they share: the diff clears a zero ceiling under
+    /// `--only-changed` (exit 0) with no added lines, no surviving
+    /// cluster, and the untouched legacy cluster omitted-but-counted.
+    fn assert_ignorable(&self, diff: &str) -> Result<()> {
+        let _assert = self.run(diff, ZERO_GATE)?.code(0);
+        let report = self.report()?;
+        let scope = diff_metrics(&report);
+        assert_eq!(
+            field(&scope, "added_loc"),
+            0,
+            "no in-scope lines: {report:#}"
+        );
+        assert_eq!(field(&scope, "duplicated_added_loc"), 0);
+        assert_eq!(field(&scope, "duplication_percent"), 0.0);
+        assert_eq!(field(field(&scope, "threshold"), "breached"), false);
+        assert_eq!(clusters(&report).len(), 0, "nothing intersects the diff");
+        assert_eq!(
+            field(&report, "clusters_outside_diff"),
+            1,
+            "the untouched dup pair is omitted, not lost: {report:#}"
+        );
+        Ok(())
+    }
 }
 
 /// The `metrics.diff` block of a report.
 fn diff_metrics(report: &Value) -> Value {
     field(field(report, "metrics"), "diff").clone()
-}
-
-/// Asserts the zero-scope report shape shared by every "stays
-/// ignorable" scenario (exit 0 is asserted by the caller's `.code(0)`):
-/// no added lines, no surviving clusters, and the untouched legacy
-/// cluster omitted-but-counted.
-fn assert_zero_scope_pass(output: &Path) -> Result<()> {
-    let report = load_json(&output.with_extension("json"))?;
-    let diff = diff_metrics(&report);
-    assert_eq!(field(&diff, "added_loc"), 0, "no in-scope lines: {report:#}");
-    assert_eq!(field(&diff, "duplicated_added_loc"), 0);
-    assert_eq!(field(&diff, "duplication_percent"), 0.0);
-    assert_eq!(field(field(&diff, "threshold"), "breached"), false);
-    assert_eq!(clusters(&report).len(), 0, "nothing intersects the diff");
-    assert_eq!(
-        field(&report, "clusters_outside_diff"),
-        1,
-        "the untouched dup pair is omitted, not lost: {report:#}"
-    );
-    Ok(())
 }
 
 // [PIPELINE-DIFF-INGEST] P0-1: `diff nonsense` + a hunk used to parse
@@ -123,16 +151,8 @@ fn assert_zero_scope_pass(output: &Path) -> Result<()> {
 // (usage error, exit 2) naming the offending diff line.
 #[test]
 fn hunk_without_a_target_line_is_refused_naming_the_line() -> Result<()> {
-    let repo = dup_pair_repo()?;
-    let (_out_tmp, output) = output_prefix()?;
-    let assert = run_diff(
-        repo.path(),
-        &output,
-        "diff nonsense\n@@ -0,0 +1 @@\n+x\n",
-        &["--only-changed", "--fail-over", "0"],
-    )?
-    .code(2);
-    let stderr = stderr_of(&assert);
+    let scenario = Scenario::dup_pair()?;
+    let stderr = scenario.refusal_stderr("diff nonsense\n@@ -0,0 +1 @@\n+x\n", ZERO_GATE)?;
     assert!(
         stderr.contains("invalid unified diff"),
         "the refusal is a parse error: {stderr}"
@@ -146,7 +166,7 @@ fn hunk_without_a_target_line_is_refused_naming_the_line() -> Result<()> {
         "the refusal names the missing target line: {stderr}"
     );
     assert!(
-        !output.with_extension("json").exists(),
+        !scenario.output.with_extension("json").exists(),
         "a refused diff must not produce a report"
     );
     Ok(())
@@ -158,8 +178,7 @@ fn hunk_without_a_target_line_is_refused_naming_the_line() -> Result<()> {
 // and ingesting as an empty scope, not become refusals.
 #[test]
 fn legitimate_targetless_sections_stay_ingestible() -> Result<()> {
-    let repo = dup_pair_repo()?;
-    let (_out_tmp, output) = output_prefix()?;
+    let scenario = Scenario::dup_pair()?;
     let diff = concat!(
         "diff --git a/repo/logo.png b/repo/logo.png\n",
         "index 1111111..2222222 100644\n",
@@ -175,14 +194,7 @@ fn legitimate_targetless_sections_stay_ingestible() -> Result<()> {
         "@@ -1 +0,0 @@\n",
         "-fn gone() {}\n",
     );
-    let _assert = run_diff(
-        repo.path(),
-        &output,
-        diff,
-        &["--only-changed", "--fail-over", "0"],
-    )?
-    .code(0);
-    assert_zero_scope_pass(&output)?;
+    scenario.assert_ignorable(diff)?;
     Ok(())
 }
 
@@ -192,8 +204,7 @@ fn legitimate_targetless_sections_stay_ingestible() -> Result<()> {
 // be refused as a stale-diff usage error naming path and line.
 #[test]
 fn missing_supported_target_in_root_is_refused_as_stale() -> Result<()> {
-    let repo = dup_pair_repo()?;
-    let (_out_tmp, output) = output_prefix()?;
+    let scenario = Scenario::dup_pair()?;
     let diff = concat!(
         "diff --git a/repo/src/missing.rs b/repo/src/missing.rs\n",
         "new file mode 100644\n",
@@ -202,14 +213,7 @@ fn missing_supported_target_in_root_is_refused_as_stale() -> Result<()> {
         "@@ -0,0 +1 @@\n",
         "+pub fn ghost() {}\n",
     );
-    let assert = run_diff(
-        repo.path(),
-        &output,
-        diff,
-        &["--only-changed", "--fail-over", "0"],
-    )?
-    .code(2);
-    let stderr = stderr_of(&assert);
+    let stderr = scenario.refusal_stderr(diff, ZERO_GATE)?;
     assert!(
         stderr.contains("does not match the scanned tree"),
         "the refusal is a stale-diff usage error: {stderr}"
@@ -231,12 +235,11 @@ fn missing_supported_target_in_root_is_refused_as_stale() -> Result<()> {
 // exclusion) all stay ignorable — the run passes with a zero scope.
 #[test]
 fn out_of_root_unsupported_and_excluded_targets_stay_ignored() -> Result<()> {
-    let repo = build_repo(&[
+    let scenario = Scenario::with_files(&[
         ("src/dup_a.rs", DUP_SOURCE),
         ("src/dup_b.rs", DUP_SOURCE),
         ("vendor/lib.rs", "pub fn vendored() {}\n"),
     ])?;
-    let (_out_tmp, output) = output_prefix()?;
     let diff = concat!(
         "diff --git a/docs/notes.md b/docs/notes.md\n",
         "new file mode 100644\n",
@@ -257,14 +260,7 @@ fn out_of_root_unsupported_and_excluded_targets_stay_ignored() -> Result<()> {
         "@@ -0,0 +1 @@\n",
         "+pub fn vendored() {}\n",
     );
-    let _assert = run_diff(
-        repo.path(),
-        &output,
-        diff,
-        &["--only-changed", "--fail-over", "0"],
-    )?
-    .code(0);
-    assert_zero_scope_pass(&output)?;
+    scenario.assert_ignorable(diff)?;
     Ok(())
 }
 
@@ -284,16 +280,9 @@ const METADATA_ONLY_COPY: &str = concat!(
 // and must breach `--fail-over 0` with exit 3.
 #[test]
 fn metadata_only_copy_counts_every_line_and_breaches_the_gate() -> Result<()> {
-    let repo = dup_pair_repo()?;
-    let (_out_tmp, output) = output_prefix()?;
-    let _assert = run_diff(
-        repo.path(),
-        &output,
-        METADATA_ONLY_COPY,
-        &["--only-changed", "--fail-over", "0"],
-    )?
-    .code(3);
-    let report = load_json(&output.with_extension("json"))?;
+    let scenario = Scenario::dup_pair()?;
+    let _assert = scenario.run(METADATA_ONLY_COPY, ZERO_GATE)?.code(3);
+    let report = scenario.report()?;
     let diff = diff_metrics(&report);
     assert_eq!(
         field(&diff, "added_loc"),
@@ -309,7 +298,11 @@ fn metadata_only_copy_counts_every_line_and_breaches_the_gate() -> Result<()> {
     assert_eq!(field(field(&diff, "threshold"), "breached"), true);
     assert_eq!(field(field(&diff, "threshold"), "source"), "cli");
 
-    assert_eq!(clusters(&report).len(), 1, "the copy pair survives the filter");
+    assert_eq!(
+        clusters(&report).len(),
+        1,
+        "the copy pair survives the filter"
+    );
     assert_eq!(field(&report, "clusters_outside_diff"), 0);
     let cluster = clusters(&report).first().context("the copy cluster")?;
     assert_eq!(field(cluster, "bucket"), "identical");
@@ -320,7 +313,9 @@ fn metadata_only_copy_counts_every_line_and_breaches_the_gate() -> Result<()> {
         "the copy source predates the diff: {cluster:#}"
     );
     for occurrence in occurrences(cluster) {
-        let path = field(occurrence, "path").as_str().context("occurrence path")?;
+        let path = field(occurrence, "path")
+            .as_str()
+            .context("occurrence path")?;
         let expected_in_diff = path == "src/dup_b.rs";
         assert_eq!(
             field(occurrence, "in_diff"),
@@ -328,7 +323,7 @@ fn metadata_only_copy_counts_every_line_and_breaches_the_gate() -> Result<()> {
             "{path}: only the copy target is in the diff"
         );
     }
-    let text = fs::read_to_string(output.with_extension("txt"))?;
+    let text = fs::read_to_string(scenario.output.with_extension("txt"))?;
     assert!(
         text.contains("[in diff]") && text.contains("[existing]"),
         "the copy target is badged in-diff, the source existing: {text}"
@@ -341,22 +336,14 @@ fn metadata_only_copy_counts_every_line_and_breaches_the_gate() -> Result<()> {
 // lines, tags nothing, and passes the same gate the copy breaches.
 #[test]
 fn pure_rename_adds_nothing_in_contrast_to_a_copy() -> Result<()> {
-    let repo = dup_pair_repo()?;
-    let (_out_tmp, output) = output_prefix()?;
+    let scenario = Scenario::dup_pair()?;
     let diff = concat!(
         "diff --git a/repo/src/dup_a.rs b/repo/src/renamed.rs\n",
         "similarity index 100%\n",
         "rename from repo/src/dup_a.rs\n",
         "rename to repo/src/renamed.rs\n",
     );
-    let _assert = run_diff(
-        repo.path(),
-        &output,
-        diff,
-        &["--only-changed", "--fail-over", "0"],
-    )?
-    .code(0);
-    assert_zero_scope_pass(&output)?;
+    scenario.assert_ignorable(diff)?;
     Ok(())
 }
 
@@ -366,16 +353,14 @@ fn pure_rename_adds_nothing_in_contrast_to_a_copy() -> Result<()> {
 // and a missing source each exit 2 naming the offending file.
 #[test]
 fn copy_sections_that_disagree_with_the_tree_are_refused() -> Result<()> {
-    let repo = dup_pair_repo()?;
-    let (_out_tmp, output) = output_prefix()?;
+    let scenario = Scenario::dup_pair()?;
     let missing_target = concat!(
         "diff --git a/repo/src/dup_a.rs b/repo/src/copied.rs\n",
         "similarity index 100%\n",
         "copy from repo/src/dup_a.rs\n",
         "copy to repo/src/copied.rs\n",
     );
-    let assert = run_diff(repo.path(), &output, missing_target, &[])?.code(2);
-    let stderr = stderr_of(&assert);
+    let stderr = scenario.refusal_stderr(missing_target, &[])?;
     assert!(
         stderr.contains("src/copied.rs") && stderr.contains("does not match the scanned tree"),
         "missing copy target must be a stale refusal naming the path: {stderr}"
@@ -387,19 +372,17 @@ fn copy_sections_that_disagree_with_the_tree_are_refused() -> Result<()> {
         "copy from repo/src/ghost.rs\n",
         "copy to repo/src/dup_b.rs\n",
     );
-    let assert = run_diff(repo.path(), &output, missing_source, &[])?.code(2);
-    let stderr = stderr_of(&assert);
+    let stderr = scenario.refusal_stderr(missing_source, &[])?;
     assert!(
         stderr.contains("src/ghost.rs"),
         "missing copy source must be a stale refusal naming the path: {stderr}"
     );
 
-    let divergent = build_repo(&[
+    let divergent = Scenario::with_files(&[
         ("src/dup_a.rs", DUP_SOURCE),
         ("src/dup_b.rs", &DUP_SOURCE.replace("0x2f2f", "0x3e3e")),
     ])?;
-    let assert = run_diff(divergent.path(), &output, METADATA_ONLY_COPY, &[])?.code(2);
-    let stderr = stderr_of(&assert);
+    let stderr = divergent.refusal_stderr(METADATA_ONLY_COPY, &[])?;
     assert!(
         stderr.contains("src/dup_b.rs") && stderr.contains("line 9"),
         "a divergent 100% copy must name the target and first divergent line: {stderr}"
@@ -414,11 +397,10 @@ fn copy_sections_that_disagree_with_the_tree_are_refused() -> Result<()> {
 #[test]
 fn copy_with_hunks_counts_the_whole_target_once() -> Result<()> {
     let target_source = DUP_SOURCE.replace("0x2f2f", "0x3e3e");
-    let repo = build_repo(&[
+    let scenario = Scenario::with_files(&[
         ("src/dup_a.rs", DUP_SOURCE),
         ("src/dup_b.rs", &target_source),
     ])?;
-    let (_out_tmp, output) = output_prefix()?;
     let diff = concat!(
         "diff --git a/repo/src/dup_a.rs b/repo/src/dup_b.rs\n",
         "similarity index 90%\n",
@@ -431,8 +413,8 @@ fn copy_with_hunks_counts_the_whole_target_once() -> Result<()> {
         "-    acc ^ 0x2f2f\n",
         "+    acc ^ 0x3e3e\n",
     );
-    let _assert = run_diff(repo.path(), &output, diff, &["--only-changed"])?.code(0);
-    let report = load_json(&output.with_extension("json"))?;
+    let _assert = scenario.run(diff, &["--only-changed"])?.code(0);
+    let report = scenario.report()?;
     let diff_block = diff_metrics(&report);
     assert_eq!(
         field(&diff_block, "added_loc"),
@@ -445,8 +427,8 @@ fn copy_with_hunks_counts_the_whole_target_once() -> Result<()> {
     let percent = field(&diff_block, "duplication_percent")
         .as_f64()
         .context("duplication_percent")?;
-    let expected = 100.0 * f64::from(u32::try_from(duplicated)?)
-        / f64::from(u32::try_from(DUP_LINES)?);
+    let expected =
+        100.0 * f64::from(u32::try_from(duplicated)?) / f64::from(u32::try_from(DUP_LINES)?);
     assert!(
         (percent - expected).abs() < 1e-9,
         "percent {percent} must be 100*{duplicated}/{DUP_LINES}"

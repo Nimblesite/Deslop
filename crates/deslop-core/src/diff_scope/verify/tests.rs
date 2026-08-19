@@ -14,19 +14,29 @@ fn corpus(entries: &[(&str, &'static [u8])]) -> BTreeMap<PathBuf, &'static [u8]>
         .collect()
 }
 
-/// Parses `text` and builds the scope over `corpus` with `/repo` as
-/// both working directory and scan root.
-fn scope_at_repo(
+/// Parses `text` and builds the scope over `corpus` with `/repo` as the
+/// working directory and `scan_root` as the analysis root — the two
+/// differ only where a test needs diff paths that fall outside the root.
+fn scope_rooted(
     text: &str,
+    scan_root: &str,
     corpus: &BTreeMap<PathBuf, &[u8]>,
 ) -> Result<DiffScope, CoreError> {
     let parsed = parse_unified_diff(text)?;
-    build_diff_scope(&parsed, Path::new("/repo"), Path::new("/repo"), corpus)
+    build_diff_scope(&parsed, Path::new("/repo"), Path::new(scan_root), corpus)
+}
+
+/// Parses `text` and builds the scope over `corpus` with `/repo` as
+/// both working directory and scan root.
+fn scope_at_repo(text: &str, corpus: &BTreeMap<PathBuf, &[u8]>) -> Result<DiffScope, CoreError> {
+    scope_rooted(text, "/repo", corpus)
 }
 
 /// Unwraps a refusal into its `DiffStale` path and line.
 fn stale(result: Result<DiffScope, CoreError>, why: &str) -> Result<(PathBuf, u64)> {
-    let error = result.err().with_context(|| format!("must be refused: {why}"))?;
+    let error = result
+        .err()
+        .with_context(|| format!("must be refused: {why}"))?;
     let CoreError::DiffStale { path, line } = error else {
         anyhow::bail!("{why}: expected DiffStale, got {error:?}");
     };
@@ -73,9 +83,8 @@ fn stale_context_line_names_file_and_line() -> Result<()> {
 #[test]
 fn out_of_corpus_files_are_ignored() -> Result<()> {
     let text = "--- /dev/null\n+++ b/docs/notes.md\n@@ -0,0 +1 @@\n+# Notes\n";
-    let parsed = parse_unified_diff(text).context("diff parses")?;
     let corpus = corpus(&[("src/x.rs", b"fn keep() {}\n")]);
-    let scope = build_diff_scope(&parsed, Path::new("/repo"), Path::new("/repo/src"), &corpus)
+    let scope = scope_rooted(text, "/repo/src", &corpus)
         .context("out-of-root file is skipped, not an error")?;
     assert_eq!(scope.added_line_total(), 0);
     assert_eq!(scope.files_with_added_lines(), 0);
@@ -181,8 +190,14 @@ fn metadata_only_copy_marks_every_target_line_added() -> Result<()> {
     for line in 1..=3 {
         assert!(scope.contains(Path::new("src/b.rs"), line), "line {line}");
     }
-    assert!(!scope.contains(Path::new("src/a.rs"), 1), "source stays existing");
-    assert!(!scope.contains(Path::new("src/b.rs"), 4), "no phantom lines");
+    assert!(
+        !scope.contains(Path::new("src/a.rs"), 1),
+        "source stays existing"
+    );
+    assert!(
+        !scope.contains(Path::new("src/b.rs"), 4),
+        "no phantom lines"
+    );
     Ok(())
 }
 
@@ -228,9 +243,8 @@ fn copy_target_out_of_root_or_unsupported_stays_ignored() -> Result<()> {
                        similarity index 100%\n\
                        copy from docs/a.md\n\
                        copy to docs/b.md\n";
-    let parsed = parse_unified_diff(out_of_root).context("copy diff parses")?;
     let corpus = corpus(&[("x.rs", b"fn keep() {}\n")]);
-    let scope = build_diff_scope(&parsed, Path::new("/repo"), Path::new("/repo/src"), &corpus)
+    let scope = scope_rooted(out_of_root, "/repo/src", &corpus)
         .context("out-of-root copy target is skipped")?;
     assert_eq!(scope.added_line_total(), 0);
     let unsupported = "diff --git a/a.md b/b.md\n\
@@ -285,9 +299,18 @@ fn copy_with_hunks_counts_every_target_line_once() -> Result<()> {
     ]);
     let scope = scope_at_repo(COPY_WITH_HUNKS, &corpus).context("copy with hunks verifies")?;
     assert_eq!(scope.added_line_total(), 4, "whole target, counted once");
-    assert!(scope.contains(Path::new("src/b.rs"), 1), "line before the hunk");
-    assert!(scope.contains(Path::new("src/b.rs"), 4), "line after the hunk");
-    assert!(!scope.contains(Path::new("src/a.rs"), 2), "source stays existing");
+    assert!(
+        scope.contains(Path::new("src/b.rs"), 1),
+        "line before the hunk"
+    );
+    assert!(
+        scope.contains(Path::new("src/b.rs"), 4),
+        "line after the hunk"
+    );
+    assert!(
+        !scope.contains(Path::new("src/a.rs"), 2),
+        "source stays existing"
+    );
     Ok(())
 }
 

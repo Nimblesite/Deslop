@@ -217,8 +217,16 @@ fn only_changed_clean_report() -> Report {
     clean
 }
 
-fn count(haystack: &str, needle: &str) -> usize {
-    haystack.matches(needle).count()
+/// One rendered-page expectation: the markup to look for, how many
+/// times it must appear, and why that count is the contract.
+type Expectation = (&'static str, usize, &'static str);
+
+/// Asserts every expectation against one rendered page, naming the
+/// offending needle and reason on the first that misses.
+fn assert_page(html: &str, expectations: &[Expectation]) {
+    for (needle, times, why) in expectations {
+        assert_eq!(html.matches(needle).count(), *times, "{why}: {needle}");
+    }
 }
 
 /// The pre-diff text output, byte for byte. Cluster blocks carry no
@@ -328,26 +336,22 @@ fn untagged_report_renders_the_exact_pre_diff_bytes() {
     let report = untagged_report();
     assert_eq!(render_text(&report), UNTAGGED_TEXT);
 
-    let html = render_html(&report, None, false);
-    assert_eq!(
-        count(&html, UNTAGGED_BANNER),
-        1,
-        "banner ends at the repo verdict"
-    );
-    assert_eq!(
-        count(&html, "class=\"cluster-card kind-identical cat-logic\""),
-        3,
-        "all three cards carry the plain class list"
-    );
-    assert_eq!(
-        count(&html, "<span class=\"diff-badge\">"),
-        0,
-        "no badge element renders without --diff (the CSS rule alone is static)"
-    );
-    assert_eq!(
-        count(&html, "facet-diff"),
-        0,
-        "no diff facet controls without --diff"
+    assert_page(
+        &render_html(&report, None, false),
+        &[
+            (UNTAGGED_BANNER, 1, "banner ends at the repo verdict"),
+            (
+                "class=\"cluster-card kind-identical cat-logic\"",
+                3,
+                "all three cards carry the plain class list",
+            ),
+            (
+                "<span class=\"diff-badge\">",
+                0,
+                "no badge element renders without --diff (the CSS rule alone is static)",
+            ),
+            ("facet-diff", 0, "no diff facet controls without --diff"),
+        ],
     );
 }
 
@@ -359,62 +363,60 @@ fn diff_tagged_text_renders_the_gate_and_one_badged_row_per_occurrence() {
 
 #[test]
 fn diff_tagged_html_marks_banner_cards_badges_and_facets() {
-    let html = render_html(&diff_report(), None, false);
-    assert_eq!(
-        count(&html, DIFF_BANNER),
-        1,
-        "banner carries the added-lines figure"
+    assert_page(
+        &render_html(&diff_report(), None, false),
+        &[
+            (DIFF_BANNER, 1, "banner carries the added-lines figure"),
+            (
+                "class=\"cluster-card kind-identical cat-logic in-diff\"",
+                2,
+                "the mixed and fresh cards are marked in-diff",
+            ),
+            (
+                "class=\"cluster-card kind-identical cat-logic\"",
+                1,
+                "the legacy card keeps the plain class list",
+            ),
+            (
+                "<span class=\"diff-badge\">[in diff]</span>",
+                3,
+                "one in-diff badge per in-diff occurrence",
+            ),
+            (
+                "<span class=\"diff-badge\">[existing]</span>",
+                3,
+                "one existing badge per untouched occurrence",
+            ),
+            (
+                "<input type=\"checkbox\" id=\"facet-diff-touched\" \
+                 class=\"facet-input facet-diff-touched\" checked>",
+                1,
+                "the touched facet renders checked",
+            ),
+            (
+                "<input type=\"checkbox\" id=\"facet-diff-untouched\" \
+                 class=\"facet-input facet-diff-untouched\" checked>",
+                1,
+                "the untouched facet renders checked",
+            ),
+            (">Touched by diff", 1, "facet chip label"),
+            (">Untouched by diff", 1, "facet chip label"),
+        ],
     );
-    assert_eq!(
-        count(
-            &html,
-            "class=\"cluster-card kind-identical cat-logic in-diff\""
-        ),
-        2,
-        "the mixed and fresh cards are marked in-diff"
+    assert_page(
+        &render_html(&only_changed_report(), None, false),
+        &[(
+            ONLY_CHANGED_BANNER,
+            1,
+            "breached diff gate governs the banner although the repo gate is ok",
+        )],
     );
-    assert_eq!(
-        count(&html, "class=\"cluster-card kind-identical cat-logic\""),
-        1,
-        "the legacy card keeps the plain class list"
-    );
-    assert_eq!(
-        count(&html, "<span class=\"diff-badge\">[in diff]</span>"),
-        3
-    );
-    assert_eq!(
-        count(&html, "<span class=\"diff-badge\">[existing]</span>"),
-        3
-    );
-    assert_eq!(
-        count(
-            &html,
-            "<input type=\"checkbox\" id=\"facet-diff-touched\" \
-             class=\"facet-input facet-diff-touched\" checked>",
-        ),
-        1,
-    );
-    assert_eq!(
-        count(
-            &html,
-            "<input type=\"checkbox\" id=\"facet-diff-untouched\" \
-             class=\"facet-input facet-diff-untouched\" checked>",
-        ),
-        1,
-    );
-    assert_eq!(count(&html, ">Touched by diff"), 1, "facet chip label");
-    assert_eq!(count(&html, ">Untouched by diff"), 1, "facet chip label");
-
-    let filtered = render_html(&only_changed_report(), None, false);
-    assert_eq!(
-        count(&filtered, ONLY_CHANGED_BANNER),
-        1,
-        "breached diff gate governs the banner although the repo gate is ok"
-    );
-    let clean = render_html(&only_changed_clean_report(), None, false);
-    assert_eq!(
-        count(&clean, ONLY_CHANGED_CLEAN_BANNER),
-        1,
-        "clean diff gate governs the banner although the repo gate is breached"
+    assert_page(
+        &render_html(&only_changed_clean_report(), None, false),
+        &[(
+            ONLY_CHANGED_CLEAN_BANNER,
+            1,
+            "clean diff gate governs the banner although the repo gate is breached",
+        )],
     );
 }

@@ -13,7 +13,9 @@ mod verify;
 
 use std::{collections::BTreeMap, path::PathBuf};
 
-pub use parser::{parse_unified_diff, FileCopy, FilePatch, Hunk, HunkLine, HunkLineKind, ParsedDiff};
+pub use parser::{
+    parse_unified_diff, FileCopy, FilePatch, Hunk, HunkLine, HunkLineKind, ParsedDiff,
+};
 pub use tag::{apply_only_changed, tag_clusters};
 pub use verify::build_diff_scope;
 
