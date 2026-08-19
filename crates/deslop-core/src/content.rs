@@ -48,11 +48,14 @@ use crate::{
 /// must not reach the data-category classifier.
 const LITERAL_TABLE_MIN_LITERALS: usize = 8;
 
-/// Minimum share of members that must participate in verbatim
-/// duplicates before the guard vouches for the whole cluster. The #104
-/// mixed cluster is a verbatim pair among a couple of lookalikes
-/// (share ≥ 2/3) and must stay visible; the real-corpus failure mode is
-/// the opposite — two byte-identical example widgets hiding inside 453
+/// Exclusive share a single token-identical family must exceed — a
+/// strict majority of the members — before the guard vouches for the
+/// whole cluster. The #104 mixed cluster is a verbatim pair among a
+/// couple of lookalikes (share ≥ 2/3) and must stay visible; two
+/// disjoint verbatim pairs splitting a four-member cluster (share
+/// exactly 1/2 each, `python-dict-assert-call-in-payload`) are two
+/// separate duplications and dominate nothing; and the real-corpus
+/// failure mode is two byte-identical example widgets hiding inside 453
 /// framework-mandated declarations (share ≈ 0.004), where full
 /// agreement would resurrect the exact #331 mega-cluster the content
 /// gate exists to demote.
@@ -87,12 +90,14 @@ pub struct ContentEvidence {
     /// measured — a finding of scaffolding is positive evidence, never an
     /// absent measurement.
     pub substance_varies: bool,
-    /// True when at least [`VERBATIM_MEMBER_SHARE_FLOOR`] of the members
-    /// participate in byte-equivalent leaf-content duplicates. Byte
-    /// equality between whole members is proof of copying in its own
-    /// right (the #190 verbatim escape hatch), so [`Self::agreement`]
-    /// reports full agreement for such a cluster rather than the
-    /// positional score the odd-one-out members would dilute.
+    /// True when one token-identical family — members equal in both
+    /// normalised subtree shape and every collapsed leaf's raw bytes —
+    /// holds a strict majority of the members (more than
+    /// [`VERBATIM_MEMBER_SHARE_FLOOR`]). Token equality between whole
+    /// members is proof of copying in its own right (the #190 verbatim
+    /// escape hatch), so [`Self::agreement`] reports full agreement for
+    /// such a cluster rather than the positional score the odd-one-out
+    /// members would dilute.
     pub verbatim_dominated: bool,
     /// True when the pass actually compared two members' raw content.
     /// `false` for [`Self::unmeasured`] and for a cluster whose members
@@ -150,6 +155,10 @@ struct LeafKey {
 struct MemberContent {
     /// File every range below indexes into.
     file: FileId,
+    /// Normalised-subtree digest of the member ([`Fingerprint::hash`])
+    /// — the shape half of token identity in
+    /// [`dominant_verbatim_share`].
+    shape: [u8; 32],
     /// One key per collapsed leaf, in frontier order.
     keys: Vec<LeafKey>,
     /// The source byte range each key was hashed from, 1:1 with `keys`.
@@ -211,10 +220,14 @@ fn measure_cluster<S: BuildHasher>(
     let canonical = member_contents.first().and_then(Option::as_ref);
     let canonical_keys = keys_of(canonical);
     let verbatim_dominated = member_contents.len() >= 2
-        && duplicated_member_share(&member_contents) >= VERBATIM_MEMBER_SHARE_FLOOR;
+        && dominant_verbatim_share(&member_contents) > VERBATIM_MEMBER_SHARE_FLOOR;
     ContentEvidence {
         agreement: cluster_agreement(&member_contents, verbatim_dominated),
-        rename_consistency: rename::cluster_rename_consistency(canonical, &member_contents, sources),
+        rename_consistency: rename::cluster_rename_consistency(
+            canonical,
+            &member_contents,
+            sources,
+        ),
         literal_fraction: canonical_literal_fraction(canonical_keys),
         substance_varies: cluster_substance_varies(canonical_keys, &member_contents),
         verbatim_dominated,
@@ -355,27 +368,37 @@ fn vacuous_share(numerator: usize, denominator: usize) -> f64 {
     member_count(numerator) / member_count(denominator)
 }
 
-/// Share of members whose non-empty content-key vector also appears on
-/// another member — verbatim copies hiding among same-shape lookalikes,
-/// the population the renderer's body-equivalence guard relies on.
-/// Transitive closure can merge a
-/// genuine byte-identical pair into a cluster of same-shape neighbours;
-/// the mean against one canonical member would average the proven copy
-/// below the support floor, so a cluster *dominated* by verbatim copies
-/// short-circuits to full agreement instead.
-fn duplicated_member_share(member_contents: &[Option<MemberContent>]) -> f64 {
-    let mut counts: HashMap<&[LeafKey], usize> = HashMap::new();
+/// Share of members inside the single largest token-identical family —
+/// members equal in both normalised subtree shape and every collapsed
+/// leaf's raw bytes, i.e. copies of one another up to whitespace.
+/// Transitive closure can merge such a family into a cluster of
+/// same-shape neighbours; the mean against one canonical member would
+/// average the proven copies below the support floor, so a cluster
+/// *dominated* by one verbatim family short-circuits to full agreement
+/// instead.
+///
+/// One family, not a pool: two disjoint verbatim pairs are two separate
+/// duplications, and summing them certified a four-member cluster whose
+/// halves disagree as verbatim (`python-dict-assert-call-in-payload`).
+/// Shape is half the identity: an assignment and an assert over the
+/// same identifier and literal carry equal leaf keys while being
+/// different statements, so leaf keys alone pair non-copies
+/// (`python-issue-72-monkeypatch-setenv`).
+fn dominant_verbatim_share(member_contents: &[Option<MemberContent>]) -> f64 {
+    let mut counts: HashMap<([u8; 32], &[LeafKey]), usize> = HashMap::new();
     for content in member_contents.iter().flatten() {
         if !content.keys.is_empty() {
-            let entry = counts.entry(content.keys.as_slice()).or_insert(0_usize);
+            let entry = counts
+                .entry((content.shape, content.keys.as_slice()))
+                .or_insert(0_usize);
             *entry = entry.saturating_add(1);
         }
     }
-    let duplicated: usize = counts.values().filter(|count| **count >= 2).copied().sum();
-    if member_contents.is_empty() {
+    let dominant = counts.values().copied().max().unwrap_or(0);
+    if dominant < 2 || member_contents.is_empty() {
         return 0.0;
     }
-    member_count(duplicated) / member_count(member_contents.len())
+    member_count(dominant) / member_count(member_contents.len())
 }
 
 /// Agreement between two members' collapsed-leaf content keys.
@@ -439,6 +462,7 @@ fn member_content<S: BuildHasher>(
     let ranges = leaves.iter().map(|(_, range)| *range).collect();
     Some(MemberContent {
         file: member.file_id,
+        shape: member.hash,
         keys,
         ranges,
     })

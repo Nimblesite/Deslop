@@ -54,7 +54,7 @@
 //! narrower one.
 
 use crate::{
-    buckets::{is_demoted_tier, measured_kind},
+    buckets::{is_demoted_tier, measured_kind, spans_multiple_files},
     fingerprint::Fingerprint,
     report::ReportSignals,
 };
@@ -219,15 +219,23 @@ fn preferred_view(proposed: &Cluster, other: &Cluster) -> Preference {
 ///
 /// The reverse arm carries a byte-proof bar: a demoted view yields only
 /// to *verbatim-proven* duplication
-/// ([`crate::content::ContentEvidence::verbatim_dominated`]). Any
+/// ([`crate::content::ContentEvidence::verbatim_dominated`]) that
+/// crosses files. Any
 /// sub-window of a demoted surface measures higher agreement than the
 /// surface itself — the divergent positions are what the window
 /// excludes — so without the bar, the #197 in-file sibling-method
 /// family resurfaced as a credible six-line window family the moment
 /// its demoted umbrella died (`dart_issue_197_single_file_structural_only`).
 /// Narrowing a demoted surface must not launder it into a finding;
-/// byte-equal copies are proof of duplication in their own right and
-/// still overturn the umbrella that would bury them. Where the tiers do
+/// byte-equal copies crossing files are a copy event the umbrella's
+/// in-file judgment does not speak to, and still overturn the umbrella
+/// that would bury them. A verbatim family confined to one file is that
+/// in-file judgment's own subject — sibling scaffolding repeating a
+/// mandatory line — and four byte-equal `assert` statements once
+/// deleted their demoted umbrella and surfaced as an act-now finding
+/// (`python-issue-71-rest-endpoint-shape`,
+/// `rest_endpoint_family_with_fstring_paths_is_suppressed`).
+/// Where the tiers do
 /// not distinguish the views, the structurally more precise view wins
 /// as before ([`structural_precision`]) — so between two credible
 /// views, physical enclosure stands. Two sharper within-credible
@@ -242,7 +250,11 @@ fn preferred_view(proposed: &Cluster, other: &Cluster) -> Preference {
 fn precision_preference(proposed: &Cluster, other: &Cluster) -> Preference {
     match (demoted(proposed), demoted(other)) {
         (false, true) => Preference::First,
-        (true, false) if other.content.verbatim_dominated => Preference::Second,
+        (true, false)
+            if other.content.verbatim_dominated && spans_multiple_files(&other.members) =>
+        {
+            Preference::Second
+        }
         _ => structural_precision(proposed, other),
     }
 }

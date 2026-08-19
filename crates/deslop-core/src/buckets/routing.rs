@@ -95,8 +95,9 @@ pub(crate) fn route_shape_identical(
 
 /// Returns true when a cluster's occurrences reach at least two files —
 /// the spread that separates a duplicated copy from an in-file sibling
-/// family in [`route_shape_identical`]'s promotion bar.
-fn spans_multiple_files(members: &[Fingerprint]) -> bool {
+/// family, both in [`route_shape_identical`]'s promotion bar and in
+/// [PIPELINE-CLUSTER-SUBSUME]'s verbatim overturn.
+pub(crate) fn spans_multiple_files(members: &[Fingerprint]) -> bool {
     members
         .first()
         .is_some_and(|first| members.iter().any(|member| member.file_id != first.file_id))

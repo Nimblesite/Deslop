@@ -140,4 +140,4 @@ exclude = [
 #   single cluster 94 LOC of 16177 across ~1130 clusters — tracked in gh #397.
 #   Ratchet down as that work lands.
 [threshold]
-max_duplication_percent = 14.5
+max_duplication_percent = 11.3

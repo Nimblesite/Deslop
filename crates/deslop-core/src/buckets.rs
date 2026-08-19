@@ -31,11 +31,13 @@ mod gate;
 mod routing;
 
 pub use gate::{
-    content_gated_signals, content_support, has_saturating_shape_evidence,
-    lacks_content_support, CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR,
-    LITERAL_TABLE_MIN_FRACTION, RENAME_CONSISTENCY_DISCOUNT, SATURATING_TOKEN_FLOOR,
+    content_gated_signals, content_support, has_saturating_shape_evidence, lacks_content_support,
+    CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR, LITERAL_TABLE_MIN_FRACTION,
+    RENAME_CONSISTENCY_DISCOUNT, SATURATING_TOKEN_FLOOR,
 };
-pub(crate) use routing::{is_demoted_tier, measured_kind, route_shape_identical};
+pub(crate) use routing::{
+    is_demoted_tier, measured_kind, route_shape_identical, spans_multiple_files,
+};
 
 /// Canonical bucket identity. The enum is the one source of truth;
 /// every human / agent label attaches to one of these variants via
