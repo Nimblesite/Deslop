@@ -14,6 +14,7 @@ use crate::{
     cluster::build_ranked_fused_clusters,
     error::CoreError,
     lsh::band_collisions,
+    overlap::apply_shared_subtree_rescue,
     pair::{candidate_pairs_for_language_policy, cluster_by_transitive_closure},
     report::{render_report, CacheStats, Report, ReportInputs},
 };
@@ -61,7 +62,7 @@ impl PipelineSession {
             embedding_pairs = embedding_outcome.pairs.len(),
             "collecting candidate pairs"
         );
-        let pairs = candidate_pairs_for_language_policy(
+        let mut pairs = candidate_pairs_for_language_policy(
             fingerprints,
             signatures,
             &lsh_pairs,
@@ -70,6 +71,10 @@ impl PipelineSession {
             &self.file_languages,
             self.exclusion.allows_cross_language_comparison(),
         );
+        // [FUSION-SHARED-SUBTREE] (gh #408): measure the structural
+        // overlap the anchor axis discards before survival drops the
+        // enclosing Type-3 pair and leaves only its fragment views.
+        apply_shared_subtree_rescue(&mut pairs, fingerprints, self.store.trees());
         tracing::debug!(
             candidate_pairs = pairs.len(),
             "clustering by transitive closure"

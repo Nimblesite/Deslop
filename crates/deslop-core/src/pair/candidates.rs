@@ -181,6 +181,7 @@ fn cross_language_signature_pair(
         lsh_only_node_floor: endpoint_node_counts.0.max(LSH_ONLY_MIN_NODE_COUNT),
         lsh_only_min_jaccard: CROSS_LANGUAGE_MIN_JACCARD,
         fused_min_score: CROSS_LANGUAGE_MIN_JACCARD,
+        shared_subtree_overlap: 0.0,
         score: PairScore {
             structural: 0.0,
             token_jaccard,
@@ -324,6 +325,7 @@ fn finalise_pairs(
                 lsh_only_node_floor: endpoint_node_counts.0,
                 lsh_only_min_jaccard: LSH_ONLY_MIN_JACCARD,
                 fused_min_score: FUSED_THRESHOLD,
+                shared_subtree_overlap: 0.0,
                 score: PairScore {
                     structural,
                     token_jaccard: jaccard_for(signatures, left, right),

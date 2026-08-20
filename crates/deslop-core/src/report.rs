@@ -11,7 +11,7 @@ use std::{collections::HashMap, hash::BuildHasher, path::Path};
 
 use crate::{
     boilerplate::BoilerplateRange,
-    buckets::{classify, is_lsh_only_nearmiss, ClusterKind},
+    buckets::{classify, is_shape_corroborated_nearmiss, is_token_carried_nearmiss, ClusterKind},
     clone_category::CloneCategory,
     cluster::Cluster,
     cluster_filters::{
@@ -430,8 +430,9 @@ fn cluster_is_hidden<S: BuildHasher>(
     // discriminator: a genuine in-file Type-3 copy whose body binds
     // locals, loops or branches fails `forwarding_body` and stays
     // visible, so recall pays nothing.
-    let family_evidence_kind =
-        kind == ClusterKind::StructuralOnly || is_lsh_only_nearmiss(cluster.signals.into());
+    let family_evidence_kind = kind == ClusterKind::StructuralOnly
+        || is_token_carried_nearmiss(cluster.signals.into())
+        || is_shape_corroborated_nearmiss(cluster.signals.into());
     let single_file_declaration_family = family_evidence_kind
         && is_single_file_declaration_family(
             cluster,

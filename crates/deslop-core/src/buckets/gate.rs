@@ -10,7 +10,7 @@
 
 use crate::{content::ContentEvidence, report::ReportSignals};
 
-use super::{is_lsh_only_nearmiss, ClusterKind};
+use super::{is_shape_corroborated_nearmiss, is_token_carried_nearmiss, ClusterKind};
 
 /// Content agreement at which a *cross-file* shape-identical cluster
 /// holds an act-now `nearly_identical` verdict ([FUSION-CONTENT-GATE]).
@@ -49,7 +49,8 @@ pub const LITERAL_TABLE_MIN_FRACTION: f64 = 0.8;
 /// is shape evidence too, not content evidence ('s surviving
 /// mixed cluster read `structural=0.62, token_jaccard=0.98`).
 ///
-/// The anchor-free row-4 route ([`is_lsh_only_nearmiss`]) is
+/// The near-miss row-4 routes ([`is_token_carried_nearmiss`],
+/// [`is_shape_corroborated_nearmiss`]) are
 /// deliberately **not** included. Both of this gate's populations —
 /// positional byte agreement and literal-anchored rename consistency —
 /// assume the members align position for position, which is exactly what
@@ -95,17 +96,22 @@ pub fn content_support(agreement: f64, rename_consistency: f64) -> f64 {
 /// ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 1), which would otherwise fold
 /// two unrelated methods into one shared helper.
 ///
-/// The anchor-free row-4 near-miss is excluded for the reason
-/// [`has_saturating_shape_evidence`] documents at length: its members do
-/// not align position for position, so *both* content populations are
-/// structurally unable to vouch for a genuine renamed Type-3 clone
+/// The row-4 near-miss routes are excluded for the reason
+/// [`has_saturating_shape_evidence`] documents at length: their members
+/// do not align position for position, so *both* content populations
+/// are structurally unable to vouch for a genuine renamed Type-3 clone
 /// (`csharp-type3` measures agreement 0.19, rename consistency 0.00).
-/// Convicting it here would manufacture the exact false negative
-/// `report_render::route_anchor_free` exists to avoid.
+/// Convicting one here would manufacture the exact false negative
+/// `report_render::route_anchor_free` exists to avoid. The exclusion is
+/// route membership *without a Merkle-saturated shape*: once
+/// `structural >= 0.99` the members align by construction and the
+/// conviction stands exactly as before ([FUSION-SHARED-SUBTREE]).
 #[must_use]
 pub fn lacks_content_support(signals: ReportSignals) -> bool {
+    let misaligned_nearmiss = signals.structural < 0.99
+        && (is_token_carried_nearmiss(signals) || is_shape_corroborated_nearmiss(signals));
     has_saturating_shape_evidence(signals)
-        && !is_lsh_only_nearmiss(signals)
+        && !misaligned_nearmiss
         && content_support(signals.agreement, signals.rename_consistency) < CONTENT_SUPPORT_FLOOR
 }
 

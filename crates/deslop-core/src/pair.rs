@@ -64,6 +64,32 @@ pub const MAX_ENDPOINT_NODE_RATIO: usize = 4;
 /// vocabularies differ, and the mode is opt-in for ports/generated
 /// clients rather than normal same-language refactoring.
 pub const CROSS_LANGUAGE_MIN_JACCARD: f64 = 0.10;
+/// Shared-subtree overlap at or above which a below-threshold pair is
+/// admitted as a Type-3 near-miss ([FUSION-SHARED-SUBTREE], gh #408).
+///
+/// A one-statement insertion rehashes every ancestor Merkle node, so
+/// the enclosing method pair of a textbook Type-3 clone carries
+/// `structural = 0.0` on the anchor axis while the unchanged statements
+/// inside it stay Merkle-identical. Measured on the five `*-type3`
+/// fixtures, the genuine near-miss pairs cover 0.81–0.88 of the larger
+/// method with shared subtrees; the demanding floor plus the token
+/// corroboration below keeps accidental shape-vocabulary overlap out.
+pub const SHARED_SUBTREE_MIN_OVERLAP: f64 = 0.75;
+/// Token-Jaccard corroboration a shared-subtree near-miss must also
+/// carry ([FUSION-SHARED-SUBTREE]). Shared subtrees alone cannot admit
+/// a pair: normalisation makes boilerplate scaffolding Merkle-identical
+/// across unrelated files, so the overlap must be corroborated by the
+/// independent token axis. "Moderate" by design — the exact whole-method
+/// Jaccard of a one-statement Type-3 insertion measures 0.74–0.85
+/// across the five fixture languages, below the 0.90 LSH-only floor
+/// precisely because the near-miss statements dilute the k-gram set.
+pub const SHARED_SUBTREE_MIN_JACCARD: f64 = 0.65;
+/// Minimum smaller-endpoint node count for the shared-subtree route.
+/// Lower than [`LSH_ONLY_MIN_NODE_COUNT`] because this route carries
+/// structural corroboration LSH-only pairs lack; still high enough that
+/// grammar scaffolding alone cannot reach it (the smallest genuine
+/// fixture method, `python-type3`'s `aggregate`, is 31 nodes).
+pub const SHARED_SUBTREE_MIN_NODE_COUNT: usize = 30;
 /// Cosine at or above which a measured `embedding_cos` counts as the
 /// embedding pass *vouching for* a cluster rather than merely having
 /// measured it ([FUSION-CLUSTER-SIGNALS]).
@@ -184,6 +210,13 @@ pub struct CandidatePair {
     /// explicit cross-language audit pairs lower it to
     /// [`CROSS_LANGUAGE_MIN_JACCARD`] so lower-overlap ports can surface.
     pub fused_min_score: f64,
+    /// Measured shared-subtree overlap ([FUSION-SHARED-SUBTREE]).
+    /// `0.0` until the rescue pass measures it — it is only measured
+    /// for pairs that are otherwise dropped below the fused threshold
+    /// yet carry the corroborating token evidence, because walking two
+    /// subtrees per pair across every candidate would repeat the
+    /// admission-cost mistake [FUSION-CONTENT-GATE] deliberately avoids.
+    pub shared_subtree_overlap: f64,
     /// Computed signal breakdown.
     pub score: PairScore,
 }
@@ -222,6 +255,9 @@ pub struct FusedEdge {
 enum PairSurvival {
     /// Pair entered the fused cluster graph.
     Survived,
+    /// Pair was below the fused threshold but carried shared-subtree
+    /// overlap and token corroboration ([FUSION-SHARED-SUBTREE]).
+    SurvivedSharedSubtree,
     /// Pair failed the global fused-confidence threshold.
     DroppedBelowFused,
     /// LSH-only pair failed the token-Jaccard floor.
@@ -238,6 +274,8 @@ enum PairSurvival {
 struct SurvivalStats {
     /// Candidate pairs admitted to transitive closure.
     survived: usize,
+    /// Pairs admitted via the shared-subtree route ([FUSION-SHARED-SUBTREE]).
+    survived_shared_subtree: usize,
     /// Candidate pairs dropped below [`FUSED_THRESHOLD`].
     dropped_below_fused: usize,
     /// LSH-only pairs dropped below [`LSH_ONLY_MIN_JACCARD`].
@@ -266,6 +304,11 @@ impl SurvivalStats {
                 self.survived = self.survived.saturating_add(1);
                 surviving.push(pair);
             }
+            PairSurvival::SurvivedSharedSubtree => {
+                self.survived = self.survived.saturating_add(1);
+                self.survived_shared_subtree = self.survived_shared_subtree.saturating_add(1);
+                surviving.push(pair);
+            }
             PairSurvival::DroppedBelowFused => {
                 self.dropped_below_fused = self.dropped_below_fused.saturating_add(1);
             }
@@ -287,6 +330,7 @@ impl SurvivalStats {
         tracing::info!(
             total,
             survived = self.survived,
+            survived_shared_subtree = self.survived_shared_subtree,
             dropped_below_fused = self.dropped_below_fused,
             dropped_lsh_only_jaccard = self.dropped_lsh_only_jaccard,
             dropped_lsh_only_node_count = self.dropped_lsh_only_node_count,
@@ -299,20 +343,38 @@ impl SurvivalStats {
 /// Applies the compound "survives clustering?" decision to a single pair.
 fn survival_decision(pair: &CandidatePair) -> PairSurvival {
     let score = pair.score.finite();
-    if score.bounded_fused() < pair.fused_min_score {
+    let rescued = shared_subtree_rescued(pair, score);
+    if score.bounded_fused() < pair.fused_min_score && !rescued {
         return PairSurvival::DroppedBelowFused;
     }
     if score.structural <= 0.0 && !endpoints_are_size_coherent(pair.endpoint_node_counts) {
         return PairSurvival::DroppedSizeMismatch;
     }
-    let lsh_only = score.structural <= 0.0 && score.embedding_cos <= 0.0;
+    let lsh_only = score.structural <= 0.0 && score.embedding_cos <= 0.0 && !rescued;
     if lsh_only && score.token_jaccard < pair.lsh_only_min_jaccard {
         return PairSurvival::DroppedLshOnlyJaccard;
     }
     if lsh_only && pair.lsh_only_node_floor < LSH_ONLY_MIN_NODE_COUNT {
         return PairSurvival::DroppedLshOnlyNodeCount;
     }
+    if rescued && score.bounded_fused() < pair.fused_min_score {
+        return PairSurvival::SurvivedSharedSubtree;
+    }
     PairSurvival::Survived
+}
+
+/// [FUSION-SHARED-SUBTREE] admission: a pair below the fused threshold
+/// still enters clustering when its measured shared-subtree overlap
+/// clears [`SHARED_SUBTREE_MIN_OVERLAP`], the independent token axis
+/// corroborates at [`SHARED_SUBTREE_MIN_JACCARD`], and both endpoints
+/// are substantive ([`SHARED_SUBTREE_MIN_NODE_COUNT`]). This is a
+/// compound gate over two *independently measured* axes, not sum
+/// fusion — neither axis alone admits, and the rendered fused
+/// confidence stays the bounded max ([FUSION-STRATEGY-BOUNDED-MAX]).
+fn shared_subtree_rescued(pair: &CandidatePair, score: PairScore) -> bool {
+    pair.shared_subtree_overlap >= SHARED_SUBTREE_MIN_OVERLAP
+        && score.token_jaccard >= SHARED_SUBTREE_MIN_JACCARD
+        && pair.endpoint_node_counts.0 >= SHARED_SUBTREE_MIN_NODE_COUNT
 }
 
 /// True when two endpoints are close enough in size to describe the same
@@ -358,7 +420,20 @@ fn build_clusters(
         edges.entry(root).or_default().push(FusedEdge {
             left: pair.left,
             right: pair.right,
-            strength: pair.score.finite().bounded_fused(),
+            // The overlap is admission evidence for the pair it was
+            // measured on ([FUSION-SHARED-SUBTREE]), so the edge
+            // carries it. This is what lets the same-file collapse
+            // elect the *enclosing* method of a Type-3 near-miss over
+            // the windows nested inside it: the same insertion costs
+            // proportionally less over the wider context, so the
+            // enclosing pair's overlap outranks every sub-window's —
+            // and outranks their token estimates, which reward the
+            // window precisely for excluding the difference.
+            strength: pair
+                .score
+                .finite()
+                .bounded_fused()
+                .max(pair.shared_subtree_overlap),
         });
     }
     groups

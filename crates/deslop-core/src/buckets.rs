@@ -249,47 +249,68 @@ pub fn classify_signals(signals: ReportSignals) -> ClusterKind {
         ClusterKind::SameBehavior
     } else if is_structural_only_signals(signals) {
         ClusterKind::StructuralOnly
-    } else if is_lsh_only_nearmiss(signals)
+    } else if is_token_carried_nearmiss(signals)
+        || is_shape_corroborated_nearmiss(signals)
         || signals.structural >= 0.99
-        || (signals.structural >= 0.20 && signals.token_jaccard >= 0.95)
     {
-        // [CLONE-BUCKETS-ROUTING] rows 4 and 5 share this destination:
-        // the anchor-free LSH-only near-miss ([`is_lsh_only_nearmiss`])
-        // and the structurally-anchored near-miss. Kept as one arm
-        // because both routes produce the identical bucket — the named
-        // predicate is what keeps row 4 legible and greppable.
+        // [CLONE-BUCKETS-ROUTING] rows 4, 4b and 5 share this
+        // destination: the token-carried near-miss
+        // ([`is_token_carried_nearmiss`]), the shared-subtree
+        // near-miss ([`is_shape_corroborated_nearmiss`],
+        // [FUSION-SHARED-SUBTREE]) and the shape-saturating
+        // near-miss. Kept as one arm because all three routes produce
+        // the identical bucket — the named predicates are what keep
+        // the rows legible and greppable.
         ClusterKind::NearlyIdentical
     } else {
         ClusterKind::LooselySimilar
     }
 }
 
-/// [CLONE-BUCKETS-ROUTING] row 4: a cluster with no structural anchor
-/// whose token overlap clears [`LSH_ONLY_NEARMISS_MIN_JACCARD`] is a
+/// [CLONE-BUCKETS-ROUTING] row 4: a cluster whose token overlap clears
+/// [`LSH_ONLY_NEARMISS_MIN_JACCARD`] without a saturating shape is a
 /// genuine Type-3 near-miss, in **every** language.
 ///
-/// A cluster only reaches the renderer with this triple by surviving
-/// `pair::survival_decision`, which admits a structurally-unanchored
-/// pair only above the same Jaccard floor and above the endpoint
-/// node-count floor — the pipeline has already ruled out low-information
-/// token noise, which is why this row is a signal test and needs no
-/// language, size, or spread condition. Routing it anywhere else means
-/// the pipeline admitted a pair as real duplication and the renderer
-/// then discarded it: previously it fell to
+/// A cluster only reaches the renderer with this token evidence by
+/// surviving `pair::survival_decision`, which admits a
+/// structurally-unanchored pair only above the same Jaccard floor and
+/// above the endpoint node-count floor — the pipeline has already ruled
+/// out low-information token noise, which is why this row is a signal
+/// test and needs no language, size, or spread condition. Routing it
+/// anywhere else means the pipeline admitted a pair as real duplication
+/// and the renderer then discarded it: previously it fell to
 /// [`ClusterKind::LooselySimilar`], which the renderer hides, so a fully
 /// duplicated pair reported zero duplication in every language except
 /// the one a report-render carve-out special-cased (gh #390). Pinned by
 /// `crates/deslop/tests/lsh_only_nearmiss_recall.rs`.
+///
+/// There is deliberately no upper `structural` condition: `structural`
+/// is now the measured shared-subtree overlap
+/// ([FUSION-SHARED-SUBTREE]), and additional shape evidence must never
+/// *hide* a cluster the token axis already carries. The old
+/// `structural <= 0.01` leg predates the overlap measurement, when any
+/// non-zero value meant a Merkle anchor; clusters below
+/// [`crate::pair::SHARED_SUBTREE_MIN_OVERLAP`] keep the anchor-free
+/// demotion guard (`routing::route_anchor_free`) exactly as before.
 #[must_use]
-pub fn is_lsh_only_nearmiss(signals: ReportSignals) -> bool {
-    signals.structural <= STRUCTURAL_ABSENT_CEILING
-        && signals.token_jaccard >= LSH_ONLY_NEARMISS_MIN_JACCARD
+pub fn is_token_carried_nearmiss(signals: ReportSignals) -> bool {
+    signals.token_jaccard >= LSH_ONLY_NEARMISS_MIN_JACCARD
 }
 
-/// Highest `structural` a cluster may show while counting as having no
-/// structural anchor ([CLONE-BUCKETS-ROUTING] row 4). Mirrors the
-/// spec's `structural ≤ 0.01`.
-pub const STRUCTURAL_ABSENT_CEILING: f64 = 0.01;
+/// [CLONE-BUCKETS-ROUTING] row 4b ([FUSION-SHARED-SUBTREE], gh #408): a
+/// cluster whose measured shared-subtree overlap clears the admission
+/// floor **and** whose token axis independently corroborates it is a
+/// Type-3 near-miss even below the LSH-only token floor. This is the
+/// render-side twin of `pair::shared_subtree_rescued` — the same two
+/// floors that admit the pair route the cluster, so the pipeline can
+/// never admit a shared-subtree near-miss the renderer then hides.
+/// Pinned by `crates/deslop/tests/type3_enclosing_method.rs` in all
+/// five fixture languages.
+#[must_use]
+pub fn is_shape_corroborated_nearmiss(signals: ReportSignals) -> bool {
+    signals.structural >= crate::pair::SHARED_SUBTREE_MIN_OVERLAP
+        && signals.token_jaccard >= crate::pair::SHARED_SUBTREE_MIN_JACCARD
+}
 
 /// Token overlap an anchor-free cluster must clear to count as a
 /// Type-3 near-miss ([CLONE-BUCKETS-ROUTING] row 4). **Is**

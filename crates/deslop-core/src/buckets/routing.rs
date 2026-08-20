@@ -11,7 +11,7 @@ use crate::{
 };
 
 use super::{
-    classify_signals, has_saturating_shape_evidence, is_lsh_only_nearmiss, ClusterKind,
+    classify_signals, has_saturating_shape_evidence, is_token_carried_nearmiss, ClusterKind,
     CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR, LITERAL_TABLE_MIN_FRACTION,
 };
 
@@ -104,8 +104,9 @@ pub(crate) fn spans_multiple_files(members: &[Fingerprint]) -> bool {
 }
 
 /// Demotion for [CLONE-BUCKETS-ROUTING] **row 4** — the anchor-free
-/// near-miss — or `None` to leave the routing alone. `structural ≤ 0.01`
-/// means no shape matched at all, so a normalised-token estimate is the
+/// near-miss — or `None` to leave the routing alone. A shared-subtree
+/// overlap below [`crate::pair::SHARED_SUBTREE_MIN_OVERLAP`] means no
+/// meaningful shape matched, so a normalised-token estimate is the
 /// cluster's only evidence, and two shapes of cluster carry that estimate
 /// without earning an act-now verdict:
 ///
@@ -145,7 +146,19 @@ fn route_anchor_free(
     members: &[Fingerprint],
 ) -> Option<ClusterKind> {
     let unearned = !content.measured || is_cross_file_scaffolding(members);
-    (is_lsh_only_nearmiss(signals) && unearned).then_some(ClusterKind::LooselySimilar)
+    (is_anchor_free_token_cluster(signals) && unearned).then_some(ClusterKind::LooselySimilar)
+}
+
+/// The row-4 population this guard governs: token-carried clusters
+/// whose measured shared-subtree overlap stays below the
+/// [FUSION-SHARED-SUBTREE] corroboration floor. A cluster at or above
+/// that floor carries Merkle-subtree proof of its own — the same kind
+/// of evidence the anchored routes take on trust — so the "nothing but
+/// a token estimate" rationale no longer describes it, exactly as it
+/// never described a Merkle-anchored cluster.
+fn is_anchor_free_token_cluster(signals: ReportSignals) -> bool {
+    is_token_carried_nearmiss(signals)
+        && signals.structural < crate::pair::SHARED_SUBTREE_MIN_OVERLAP
 }
 
 /// Returns true when a structural-only cluster spans enough distinct
