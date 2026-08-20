@@ -143,6 +143,18 @@ fn rank_where(report: &Value, predicate: impl Fn(&Value) -> bool) -> usize {
         .unwrap_or(usize::MAX)
 }
 
+/// Occurrence count of the cluster at `rank`, or `0` when absent.
+/// The family is seven sibling methods; a whole-class view that swallows
+/// them reports two, so this is what separates the family from an
+/// enclosing view that merely touches the same files.
+fn occurrence_count_at(report: &Value, rank: usize) -> usize {
+    clusters(report)
+        .get(rank)
+        .and_then(|cluster| cluster.get("occurrences"))
+        .and_then(Value::as_array)
+        .map_or(0, Vec::len)
+}
+
 fn family_rank(report: &Value) -> usize {
     rank_where(report, |cluster| {
         bucket_of(cluster) == "structural_only" && cluster_touches(cluster, "inventory_api.dart")
@@ -175,6 +187,18 @@ fn structural_only_family_is_demoted_below_genuine_clone_by_default() -> Result<
         "the verbatim copy-paste pair must classify as `identical` — its raw \
          bytes are equal, so the unscored token signal must not drag it into \
          structural_only: {report:#}"
+    );
+
+    // [PIPELINE-CLUSTER-SUBSUME]: the family IS seven duplicated methods.
+    // A whole-class view encloses all seven and reports two occurrences
+    // spanning each entire class — losing five findings and counting the
+    // constructors, fields and imports between the methods as duplicated.
+    assert_eq!(
+        occurrence_count_at(&report, family),
+        7,
+        "the shape-only family must report all seven sibling methods, not a \
+         whole-class view that encloses them: a class-level view drops five \
+         occurrences and counts non-duplicated members as duplicated: {report:#}"
     );
     assert!(
         pair < family,

@@ -129,7 +129,8 @@ fn precision_preference(proposed: &Cluster, other: &Cluster, nesting: Nesting) -
         // the same shape as the two comparisons this function's history
         // already removed for shattering method pairs into fragments.
         _ if nesting == Nesting::ProposedEncloses
-            && !nested_view_is_the_duplication(other, proposed) =>
+            && !nested_view_is_the_duplication(other, proposed)
+            && !nested_view_outnumbers(other, proposed) =>
         {
             Preference::First
         }
@@ -179,6 +180,37 @@ fn nested_view_is_the_duplication(nested: &Cluster, enclosing: &Cluster) -> bool
         && spans_multiple_files(&nested.members)
         && byte_span(nested).saturating_mul(SHARE_DENOMINATOR)
             >= byte_span(enclosing).saturating_mul(SHARE_NUMERATOR)
+}
+
+/// The second exception to "the encloser wins": a nested view with
+/// strictly **more occurrences** than the view enclosing it is not
+/// re-describing that view — it is a family the encloser cannot
+/// express, and electing the encloser deletes the surplus findings
+/// outright.
+///
+/// [`nested_view_is_the_duplication`] cannot cover this case: it asks
+/// for a *byte proof*, and a shape-only family has none by
+/// construction — normalisation strips the identifiers that differ
+/// between siblings, which is the only reason they cluster at all.
+///
+/// The three fixtures bracketing the byte-proof rule all pit **two**
+/// occurrences against **two** (`ts-type3-stmt` parameter list vs
+/// method, `javascript-type3` `for` body vs function,
+/// `incremental-multilang` method vs class), so this test cannot fire
+/// on them and their survivors are unchanged. It fires where the counts
+/// genuinely disagree: seven shape-identical Dart API methods across two
+/// files, enclosed by a two-occurrence whole-class view measuring
+/// `structural` 0.75 against the family's Merkle-saturated 1.00. Electing
+/// the class dropped five of the seven occurrences and counted each
+/// class's constructor, fields and imports as duplicated — reporting
+/// `inventory_api.dart` 100% duplicated when only its method bodies
+/// repeat (`rank_structural_only_policy`, [RANK-STRUCTURAL-ONLY]).
+///
+/// Counting occurrences is safe where comparing `structural` grades is
+/// not: a nested window scores higher merely by excluding what differs,
+/// but it cannot *invent* occurrences the enclosing view lacks.
+fn nested_view_outnumbers(nested: &Cluster, enclosing: &Cluster) -> bool {
+    nested.members.len() > enclosing.members.len()
 }
 
 /// Numerator of the share of an enclosing view a proven nested view
