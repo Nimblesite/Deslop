@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 use deslop_core::{
     render::{render_html, render_text},
-    report::{ActionHint, CacheStats, Report, ReportCluster, ReportOccurrence, ReportSignals},
+    report::{ActionHint, CacheStats, Report, ReportCluster, ReportOccurrence},
     report_metrics::{DiffMetrics, RepoMetrics, ThresholdSource, ThresholdSummary},
 };
 
@@ -75,33 +75,21 @@ fn occurrence(name: &str, line: i64, in_diff: Option<bool>) -> ReportOccurrence 
 }
 
 fn cluster(id: &str, first: &str, second: &str, tags: Tags) -> ReportCluster {
-    ReportCluster {
-        id: id.to_owned(),
-        weight: 4.5,
-        size: 2,
-        canonical_node_count: 12,
-        signals: ReportSignals {
-            structural: 1.0,
-            token_jaccard: 1.0,
-            embedding_cos: 0.0,
-            fused: 1.0,
-            agreement: 1.0,
-            rename_consistency: 0.0,
-            literal_fraction: 0.0,
-        },
-        bucket: "identical".to_owned(),
-        category: "logic".to_owned(),
-        occurrences: vec![
+    let mut cluster = deslop_core::report_fixtures::fixture_cluster(
+        id,
+        vec![
             occurrence(first, 8, tags.first),
             occurrence(second, 30, tags.second),
         ],
-        occurrences_total: 2,
-        occurrences_truncated: false,
-        summary: "two identical copies".to_owned(),
-        interpretation: "extract a shared helper".to_owned(),
-        intersects_diff: tags.intersects,
-        is_newly_introduced: tags.newly,
-    }
+    );
+    cluster.weight = 4.5;
+    cluster.canonical_node_count = 12;
+    "csharp".clone_into(&mut cluster.language);
+    "two identical copies".clone_into(&mut cluster.summary);
+    "extract a shared helper".clone_into(&mut cluster.interpretation);
+    cluster.intersects_diff = tags.intersects;
+    cluster.is_newly_introduced = tags.newly;
+    cluster
 }
 
 /// The three populations, tagged as `--diff` stamps them or fully

@@ -48,8 +48,15 @@ sits on top of. Cited by `live-bubble-fused.unit.test.ts`, `live-bubble.unit.tes
 
 # Part 1 — Branch readiness
 
-**Verdict: one hard blocker — the duplication gate. Everything else is either closed with measured
-evidence, or is a pre-existing defect this branch improved rather than caused.**
+**Verdict: two hard blockers — the duplication gate, and the four deliberately red
+`type3_enclosing_method` cases. Everything else is either closed with measured evidence, or is a
+pre-existing defect this branch improved rather than caused.**
+
+The second blocker was previously recorded here as a tolerated red pin. It is not tolerable at the
+gate: `make test` is fail-fast, CI runs it, and `type3_enclosing_method.rs` does not exist at
+`f92300e` — this branch introduced four failing tests, so CI on this branch cannot go green while
+they stand. See § "#408 residue" for what closing them costs; the decision between closing them and
+tracking them differently is the release owner's, not an agent's.
 
 Base `f92300e5e`, head `8751e8bfb`. The duplication figures below were measured on 2026-08-20 against this
 tree with the binary this tree builds. Every other figure is carried forward from the runs the two merged
@@ -344,6 +351,20 @@ re-run against the exact release candidate.
       assertion removed or weakened.
 - [x] **(code-verified)** The two 501-line Rust test files split — 336/185 and 312/62/159 lines.
 - [x] `make lint` and `cargo fmt --all -- --check` clean.
+- [x] **The one-calculation cleanse.** Every figure a surface renders is now computed once, in the
+      engine, and carried on the wire: `rank` and `rank_band` ([SEVERITY-BAND]), `shape`,
+      `meets_fused_gate`, `evidence_verdict`, `occurrence_count`, `language`, and
+      `EmbeddingProgress.percent`. The client copies were deleted — the two rank-percentile engines,
+      the severity cut points, the shape-score reduction, the verdict engine, the fused-threshold
+      constant, the duplicate occurrence-count formula, and the progress percentage. The boundary
+      that says what a client may still do is written down as
+      [PRINCIPLES-ONE-CALCULATION](../specs/principles.md#principles-one-calculation). Held by
+      `report_weight::rank_band_cut_points`, `report_weight::stamp_ranks_numbers_the_whole_report`,
+      `report_weight::rank_band_never_brightens_down_the_report`,
+      `render::signals::verdict_reads_each_family`,
+      `render::signals::shape_score_is_the_stronger_axis`,
+      `report_golden::committed_golden_satisfies_report_contract`, and the VS Code suites
+      `severity.unit.test.ts`, `signal-evidence.unit.test.ts` and `report-schema.unit.test.ts`.
 - [x] **(code-verified)** Stale checked-in release claims reconciled — including this merge, which replaces
       `DIFF_RELEASE_READINESS_REPORT.md` and `docs/worktree-fused-score-followups-pr-readiness.md`, and the
       restored § “Where fused stands against it” that three VS Code unit-test files cite by name.
@@ -353,6 +374,10 @@ re-run against the exact release candidate.
 - [ ] **Duplication gate.** Bring the tree from **12.787%** to the **9.9%** ceiling — about 3,350 duplicated
       LOC, all of it reachable in test scaffolding and `src/` without touching a fixture literal. Do not
       raise the ceiling.
+- [ ] **The four red `type3_enclosing_method` cases.** `make test` is fail-fast and CI runs it, so the
+      branch cannot go green while `dart`, `go`, `python` and `ts-type3-stmt` fail. The file is new on
+      this branch, so this is a blocker this range introduced. Closing it is the #408-residue work
+      below; weakening or deleting the assertions is prohibited.
 
 ## Remaining — engine accuracy
 

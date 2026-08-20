@@ -5,6 +5,7 @@
 import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster, ReportDelta, RepoMetrics } from "../../types/report";
 import { bucketSignals } from "../signals.helpers";
+import { wireCluster } from "../cluster.helpers";
 
 export function metrics(overrides: Partial<RepoMetrics> = {}): RepoMetrics {
   return {
@@ -37,17 +38,17 @@ export function emptyReport(overrides: Partial<Report> = {}): Report {
   };
 }
 
-export function occurrence(path: string, startByte = 0, endByte = 10) {
-  return { path, start_byte: startByte, end_byte: endByte, hidden: false };
-}
+export { occurrence } from "../cluster.helpers";
 
 export function cluster(
   id: string,
   weight: number,
   occurrences: ReportCluster["occurrences"] = [],
+  rank = 1,
 ): ReportCluster {
-  return {
+  return wireCluster({
     id,
+    rank,
     weight,
     size: Math.max(1, occurrences.length),
     canonical_node_count: 0,
@@ -55,10 +56,7 @@ export function cluster(
     signals: bucketSignals("identical"),
     occurrences,
     occurrences_total: occurrences.length,
-    occurrences_truncated: false,
-    summary: "",
-    interpretation: "",
-  };
+  });
 }
 
 /**

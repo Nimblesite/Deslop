@@ -38,3 +38,50 @@ Deslop v1 is a batch CLI, but the architecture must not foreclose a future daemo
 - **File-watcher-driven incremental updates are a v2 feature — not v1.** v1 produces correct reports cheaply *because* the cache keys already support "this file didn't change, skip it." v2 wires a `notify`-based watcher to `deslop-core` and calls the existing incremental update path. v1 must ship with the cache keys and the incremental update function in place, even if the only caller is `main`.
 - **Byte ranges, not line numbers, are the source of truth** everywhere in the core. Line numbers are derived at render time. LSPs need byte offsets; computing them retroactively would be a rewrite.
 - **No process-global mutable state outside `src/state.rs`.** A daemon keeps multiple analyses live in one process — anything that assumes "one run, then exit" will bite later.
+
+### [PRINCIPLES-ONE-CALCULATION] Every figure is computed once, in the engine
+
+A *figure* is any number, label, verdict or ordering the product asserts about
+duplication: a percentage, a confidence, a severity band, an occurrence count, a
+rank, a threshold comparison, a classification, a plain-English reading of any of
+those. Every figure is computed exactly once, in `deslop-core`, and carried on the
+wire. No client — VS Code extension host, webview, JetBrains plugin, website, or
+future editor integration — may derive one.
+
+The reason is the accuracy contract, not tidiness. A client-side copy of a formula
+is a second engine that ships on its own release cadence: it drifts, and when it
+drifts the user is shown a figure the report never made. The failure is silent by
+construction — nothing crashes, the number is simply wrong. Two shipped instances of
+exactly this: the rank percentile, re-derived from array position so any filtered or
+projected list silently rebanded every cluster in it; and the folder duplication
+percentage, summed and divided in TypeScript beside an engine that had already
+computed it.
+
+What a client may do:
+
+- **Render one wire value.** Choosing decimal places, truncating a percentage to a
+  whole number for a narrow row, quantising one value to a glyph or a CSS width,
+  thousands separators. One value in, one presentation out.
+- **Look up a static label.** Bucket to colour token, language id to display name,
+  severity band to glyph. A lookup table is not a calculation.
+- **Run view mechanics.** Loop indices, spinner frames, path-segment splitting for a
+  tree, byte offsets to editor coordinates, and comparators or aggregates over a
+  *client-filtered* subset — the engine cannot see the user's active facet filter, so
+  ordering that subset is the client's job. Such keys must be built from engine values
+  and must never surface as a displayed figure: a displayed group figure is the
+  engine's value on the group's worst member, selected by the engine's rank, never a
+  maximum or a sum recomputed here.
+
+One named exception, so it cannot grow quietly: the Duplication webview tints a
+per-file / per-folder percentage on a three-step heat scale (`percentColor` in
+`webview-ui/src/duplication/main.tsx`). It classifies a wire value against UI-owned
+cut points, which the rule above otherwise forbids. It is allowed because it produces
+a colour and no figure, the engine has no duplication heat band to carry, and the row
+prints the exact percentage beside the tint. It is the only such site; a second one is
+a defect, and if the engine ever gains a heat band this moves onto it.
+
+What a client may never do: apply any other threshold constant, classify a value into
+bands, combine two wire values into a third that a user sees, or word a verdict about
+the evidence. Those arrive stamped — `rank`, `rank_band`, `shape`, `meets_fused_gate`,
+`evidence_verdict`, `occurrence_count`, `language`, `percent` — and are rendered
+verbatim.

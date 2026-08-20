@@ -1,5 +1,6 @@
 import { Report, ReportCluster, RepoMetrics } from "../../types/report";
 import { emptyReport, metrics } from "./report-store.helpers";
+import { stampRanks } from "../cluster.helpers";
 
 /** Re-exported so a suite needs one helper module, not two. */
 export { emptyReport };
@@ -21,7 +22,9 @@ export function reportWithClusters(
     tool_version: "v",
     files_analysed: 1,
     metrics: repoMetrics({ clusters_total: clusters.length, ...metricsOverrides }),
-    clusters,
+    // The engine stamps the ranking onto the report it publishes, so a
+    // fixture report carries it too ([SEVERITY-BAND]).
+    clusters: stampRanks(clusters),
     ...reportOverrides,
   });
 }

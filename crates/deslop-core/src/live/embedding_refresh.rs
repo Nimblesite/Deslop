@@ -103,6 +103,9 @@ impl EmbeddingRefreshJob {
                 model_id: self.spec.model_id.clone(),
                 done,
                 total: self.total,
+                // One percentage engine ([METRICS-REPO]) — clients render
+                // this value and never divide `done` by `total`.
+                percent: crate::report_metrics::percent(done, self.total),
                 message,
             });
         }

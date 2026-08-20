@@ -9,6 +9,7 @@ import { BudgetScheduler, LiveBubble } from "../../bubble/live";
 import { ReportStore } from "../../reportStore";
 import { Bucket, Report, ReportCluster } from "../../types/report";
 import { repoMetrics, reportWithClusters } from "./report.helpers";
+import { occurrence, wireCluster } from "../cluster.helpers";
 import { signalsWith } from "../signals.helpers";
 
 export interface ClusterSignalOptions {
@@ -17,9 +18,26 @@ export interface ClusterSignalOptions {
   bucket?: Bucket;
   structural?: number;
   token?: number;
+  /** The engine's shape reading. Defaults to the stronger shape axis,
+   * which is what the engine stamps, but a suite pinning the bubble's
+   * shape bar sets it outright. */
+  shape?: number;
   embedding?: number;
+  /** The engine's fused-gate verdict. Set when a suite stages a cluster
+   * on a specific side of the reportable line. */
+  meetsFusedGate?: boolean;
+  /** The engine's global worst-first rank, when the suite stages more
+   * than one candidate and pins which wins. */
+  rank?: number;
   occurrenceTotal?: number;
 }
+
+/** The confidence the engine's reportable cutoff sits at today
+ * (`deslop-core::pair::FUSED_THRESHOLD`). Restated here so these
+ * fixtures can stage clusters on either side of it — production code
+ * reads the engine's own `meets_fused_gate` verdict and owns no copy of
+ * this number ([FUSION-CONTENT-GATE]). */
+export const ENGINE_FUSED_CUTOFF = 0.85;
 
 // Builds a two-occurrence cluster whose fused confidence is explicit, so
 // a test can stage the exact [FUSION-CONTENT-GATE] band it is asserting.
@@ -30,27 +48,31 @@ export function bubbleCluster(
   options: ClusterSignalOptions = {},
 ): ReportCluster {
   const total = options.occurrenceTotal ?? 2;
-  return {
+  const bucket = options.bucket ?? "identical";
+  const structural = options.structural ?? 1;
+  const token = options.token ?? 1;
+  return wireCluster({
     id,
+    rank: options.rank ?? 1,
     weight,
     size: total,
-    canonical_node_count: 4,
-    bucket: options.bucket ?? "identical",
-    signals: signalsWith(options.bucket ?? "identical", {
-      structural: options.structural ?? 1,
-      token_jaccard: options.token ?? 1,
+    bucket,
+    signals: signalsWith(bucket, {
+      structural,
+      token_jaccard: token,
+      shape: options.shape ?? Math.max(structural, token),
       embedding_cos: options.embedding ?? 0,
       fused,
     }),
+    meets_fused_gate: options.meetsFusedGate ?? fused >= ENGINE_FUSED_CUTOFF,
     occurrences: [
-      { path: "/tmp/A.cs", start_byte: 0, end_byte: 10, hidden: false },
-      { path: "/tmp/B.cs", start_byte: 0, end_byte: 10, hidden: false },
+      occurrence("/tmp/A.cs", 0, 10),
+      occurrence("/tmp/B.cs", 0, 10),
     ],
     occurrences_total: total,
-    occurrences_truncated: false,
-    summary: "",
+    occurrence_count: total,
     interpretation: "interp",
-  };
+  });
 }
 
 // The probe-shaped cluster the live-surface suites drive renders with:

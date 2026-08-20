@@ -8,7 +8,6 @@ import { effect } from "@preact/signals-core";
 import type { LanguageClient } from "vscode-languageclient/node";
 
 import { ReportStore, LifecyclePhase } from "../reportStore";
-import { indexedSeverity } from "../severity";
 import {
   applyFacetFilter,
   bucketLabels,
@@ -34,13 +33,13 @@ import {
 import {
   buildClusterMode,
   buildFileMode,
-  buildRankIndex,
   buildTypeMode,
   getFileNodeChildren,
   getGroupNodeChildren,
   GroupBy,
   normalizeGroupBy,
   orderedOccurrences,
+  worstCluster,
 } from "./grouping";
 import { buildFolderMode } from "./folder";
 import { buildMetricRows } from "./metrics";
@@ -290,29 +289,37 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
 // before the facet slice, so a filtered view shows stable rank gaps
 // ([FACET-TOP-OFFENDERS-FILTER] extends [VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
 function buildRoots(clusters: ReportCluster[]): Node[] {
-  const rankIndex = buildRankIndex(clusters);
-  const severities = indexedSeverity(clusters);
   const groupBy = readGroupBy();
   const sortBy = readSortBy();
   const filter = readTopOffendersFilter();
   const visible = applyFacetFilter(clusters, filter);
   const build = (subset: ReportCluster[]): Node[] => {
-    if (groupBy === "file") return buildFileMode(subset, severities, rankIndex, sortBy);
-    if (groupBy === "folder") return buildFolderMode(subset, severities, rankIndex, sortBy);
-    if (groupBy === "type") return buildTypeMode(subset, severities, rankIndex, sortBy);
-    return buildClusterMode(subset, severities, rankIndex, sortBy);
+    if (groupBy === "file") return buildFileMode(subset, sortBy);
+    if (groupBy === "folder") return buildFolderMode(subset, sortBy);
+    if (groupBy === "type") return buildTypeMode(subset, sortBy);
+    return buildClusterMode(subset, sortBy);
   };
   const roots = readSplitByLanguage()
-    ? groupByLanguage(visible).map(({ language, clusters: members }) =>
-        new LanguageGroupNode(
-          language,
-          build(members),
-          members.reduce((max, cluster) => Math.max(max, cluster.weight), 0),
-          members.length,
-        ),
+    ? groupByLanguage(visible).flatMap(({ language, clusters: members }) =>
+        languageGroup(language, members, build(members)),
       )
     : build(visible);
   return [...filterStatusRow(filter), ...roots];
+}
+
+// One per-language root. Its headline weight is the weight of the
+// language's worst cluster, read off the engine's lowest-ranked member
+// rather than recomputed as a maximum here
+// ([VSIX-TOP-OFFENDERS-LANGUAGE-GROUP]).
+function languageGroup(
+  language: string,
+  members: ReportCluster[],
+  children: Node[],
+): Node[] {
+  const worst = worstCluster(members);
+  return worst
+    ? [new LanguageGroupNode(language, children, worst.weight, members.length)]
+    : [];
 }
 
 // [FACET-TOP-OFFENDERS-FILTER-EMPTY] A non-collapsible status row leads
@@ -418,18 +425,22 @@ export class SessionProvider extends LifecycleAwareProvider {
   }
 }
 
+// The percentage is the engine's ([METRICS-REPO]) — the same `percent`
+// function every report figure goes through, carried on the progress
+// payload. This row only truncates it to whole percent for the width it
+// has; dividing `done` by `total` here would be a second percentage
+// engine.
 function formatProgress(progress: {
   phase: string;
   done: number;
   total: number;
+  percent: number;
   model_id: string;
   message: string | undefined;
 }): string {
   const done = progress.done.toLocaleString();
   const total = progress.total.toLocaleString();
-  const percent = progress.total > 0
-    ? Math.floor((progress.done / progress.total) * 100)
-    : 0;
+  const percent = Math.floor(progress.percent);
   const phase = progress.phase.replace(/_/g, " ");
   const detail = progress.message ? ` · ${progress.message}` : "";
   return `${phase} · ${progress.model_id} · ${done} / ${total} (${percent}%)${detail}`;

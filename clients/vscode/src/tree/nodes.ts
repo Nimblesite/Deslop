@@ -9,6 +9,7 @@ import * as vscode from "vscode";
 import { clusterSlug } from "../clusterHover";
 import { occurrenceDisplayLocation } from "../locations";
 import { resolveWorkspacePath } from "../pathUtils";
+import { formatPercent, formatScore } from "../types/format";
 import { SEVERITY_DOT } from "../severity";
 import {
   Bucket,
@@ -80,9 +81,13 @@ export interface ClusterNodeOptions {
 }
 
 export class ClusterNode extends vscode.TreeItem {
+  /** The engine's global worst-first rank for this cluster
+   * ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]). Read off the wire, never
+   * re-numbered from this row's position in the tree. */
+  readonly rank: number;
+
   constructor(
     readonly cluster: ReportCluster,
-    readonly rank: number,
     severity: Severity,
     options: ClusterNodeOptions = {},
   ) {
@@ -96,6 +101,8 @@ export class ClusterNode extends vscode.TreeItem {
       ? { slug, severity, bucket, file: fileLabel }
       : { slug, severity, bucket };
     super(clusterRowLabel(labelArgs), vscode.TreeItemCollapsibleState.Collapsed);
+    const rank = cluster.rank;
+    this.rank = rank;
     this.description = `rank #${rank} · ${occurrenceCount(cluster)} copies`;
     this.contextValue =
       occurrenceCount(cluster) > 1 ? "deslop.clusterComparable" : "deslop.clusterSingle";
@@ -109,7 +116,7 @@ export class ClusterNode extends vscode.TreeItem {
     this.tooltip = new vscode.MarkdownString(
       `**${labels.hybridTitle}** — ${labels.actionSentence}\n\n` +
         `file: \`${filePath}\`\n\n` +
-        `rank #${rank} · weight: \`${cluster.weight.toFixed(2)}\` · size: \`${cluster.size}\` · copies: \`${occurrenceCount(cluster)}\`\n\n` +
+        `rank #${rank} · weight: \`${formatScore(cluster.weight)}\` · size: \`${cluster.size}\` · copies: \`${occurrenceCount(cluster)}\`\n\n` +
         `cluster id: \`${cluster.id}\``,
     );
     this.command = {
@@ -151,25 +158,26 @@ export class OccurrenceNode extends vscode.TreeItem {
   }
 }
 
-// [VSIX-TOP-OFFENDERS-FILE-MODE] Top-level row in file mode. The
-// caller passes the worst (max) and aggregate (sum) weights so a file's
-// "impact at a glance" matches the sort key — without recomputing.
+// [VSIX-TOP-OFFENDERS-FILE-MODE] Top-level row in file mode. The caller
+// passes the weight of the file's worst cluster — the engine's figure,
+// read off the lowest-ranked member — so "impact at a glance" matches
+// the sort key without any weight being recomputed here.
 export class FileNode extends vscode.TreeItem {
   constructor(
     readonly filePath: string,
     readonly clusters: ReportCluster[],
-    maxWeight: number,
+    worstWeight: number,
   ) {
     const label = displayPath(filePath);
     const clusterCount = clusters.length;
     const noun = clusterCount === 1 ? "cluster" : "clusters";
     super(`${label} · ${clusterCount} ${noun}`, vscode.TreeItemCollapsibleState.Collapsed);
-    this.description = `worst weight ${maxWeight.toFixed(2)}`;
+    this.description = `worst weight ${formatScore(worstWeight)}`;
     this.contextValue = "deslop.fileGroup";
     this.iconPath = new vscode.ThemeIcon("file");
     this.tooltip = new vscode.MarkdownString(
       `\`${filePath}\`\n\n` +
-        `${clusterCount} duplicate ${noun} · worst weight \`${maxWeight.toFixed(2)}\``,
+        `${clusterCount} duplicate ${noun} · worst weight \`${formatScore(worstWeight)}\``,
     );
     this.accessibilityInformation = {
       label: `${label}, ${clusterCount} duplicate ${noun}`,
@@ -232,17 +240,17 @@ export class FolderNode extends vscode.TreeItem {
     readonly folderPath: string,
     label: string,
     readonly children: Node[],
-    maxWeight: number,
+    worstWeight: number,
     fileCount: number,
   ) {
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
     const noun = fileCount === 1 ? "file" : "files";
-    this.description = `worst weight ${maxWeight.toFixed(2)} · ${fileCount} ${noun}`;
+    this.description = `worst weight ${formatScore(worstWeight)} · ${fileCount} ${noun}`;
     this.contextValue = "deslop.folderGroup";
     this.iconPath = vscode.ThemeIcon.Folder;
     this.tooltip = new vscode.MarkdownString(
       `\`${folderPath}\`\n\n` +
-        `${fileCount} ${noun} with duplication · worst weight \`${maxWeight.toFixed(2)}\``,
+        `${fileCount} ${noun} with duplication · worst weight \`${formatScore(worstWeight)}\``,
     );
     this.accessibilityInformation = {
       label: `${label}, ${fileCount} duplicated ${noun}`,
@@ -257,12 +265,12 @@ export class LanguageGroupNode extends vscode.TreeItem {
   constructor(
     readonly language: string,
     readonly children: Node[],
-    maxWeight: number,
+    worstWeight: number,
     clusterCount: number,
   ) {
     super(languageDisplayName(language), vscode.TreeItemCollapsibleState.Expanded);
     const noun = clusterCount === 1 ? "cluster" : "clusters";
-    this.description = `worst weight ${maxWeight.toFixed(2)} · ${clusterCount} ${noun}`;
+    this.description = `worst weight ${formatScore(worstWeight)} · ${clusterCount} ${noun}`;
     this.contextValue = "deslop.languageGroup";
     this.iconPath = new vscode.ThemeIcon("symbol-namespace");
     this.accessibilityInformation = {
@@ -272,10 +280,10 @@ export class LanguageGroupNode extends vscode.TreeItem {
   }
 }
 
-/** Formats a duplication percentage for display, one decimal place. */
-export function formatPercent(percent: number): string {
-  return `${percent.toFixed(1)}%`;
-}
+// The one percentage formatter lives in the vscode-free `types` layer so
+// the webviews share it ([METRICS-REPO]). Re-exported here because every
+// existing tree-side import reads it from this module.
+export { formatPercent };
 
 // [VSIX-METRICS-PANEL] Headline row of the Duplication panel: the
 // repo-wide duplication percentage plus the configured duplication gate

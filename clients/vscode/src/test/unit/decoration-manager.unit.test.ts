@@ -11,6 +11,7 @@ import { ScheduleFn } from "../../util/debounce";
 import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
 import { bucketSignals } from "../signals.helpers";
+import { occurrence, wireCluster } from "../cluster.helpers";
 
 // Runs the debounced flush synchronously so each redraw path executes inline.
 const immediate: ScheduleFn = (callback) => {
@@ -49,19 +50,14 @@ function capturingScheduler(): {
 }
 
 function cluster(path: string): ReportCluster {
-  return {
+  return wireCluster({
     id: "dm-1",
     weight: 10,
     size: 3,
-    canonical_node_count: 4,
     bucket: "identical",
     signals: bucketSignals("identical"),
-    occurrences: [{ path, start_byte: 0, end_byte: 3, hidden: false }],
-    occurrences_total: 0,
-    occurrences_truncated: false,
-    summary: "",
-    interpretation: "",
-  };
+    occurrences: [occurrence(path, 0, 3)],
+  });
 }
 
 function report(clusters: ReportCluster[]): Report {

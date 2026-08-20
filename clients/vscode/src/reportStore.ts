@@ -234,7 +234,11 @@ export class ReportStore implements vscode.Disposable {
     for (const id of delta.clusters_removed) byId.delete(id);
     for (const cluster of delta.clusters_updated) byId.set(cluster.id, cluster);
     for (const cluster of delta.clusters_added) byId.set(cluster.id, cluster);
-    const clusters = Array.from(byId.values()).sort((a, b) => b.weight - a.weight);
+    // Worst-first is the engine's ranking, restamped on every render and
+    // carried on each updated cluster, so the merged list is re-ordered
+    // by `rank` rather than by a weight comparison that would have to
+    // guess the engine's tie-break ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
+    const clusters = Array.from(byId.values()).sort((a, b) => a.rank - b.rank);
     const retracted = new Set(this._retractedClusters.value);
     for (const id of delta.clusters_removed) retracted.add(id);
     // A later generation that re-states a cluster un-retracts it: the
@@ -354,13 +358,18 @@ function projectVisible(canonical: Report | null, dirty: ReadonlySet<string>): R
     }
     changed = true;
     if (kept.length < 2) continue;
-    const oldTotal = occurrenceTotal(cluster);
-    const nextTotal = Math.max(kept.length, oldTotal - removed);
+    // The projection is a view, not a measurement: it hides occurrences
+    // that live in an unsaved buffer, so the counts it carries are counts
+    // of that view. Derived once here and written to every count field
+    // together, so no surface can show the engine's total beside the
+    // projection's shorter list ([VSIX-REACTIVITY-DIRTY]).
+    const projectedCount = Math.max(kept.length, cluster.occurrence_count - removed);
     clusters.push({
       ...cluster,
-      size: nextTotal,
+      size: projectedCount,
       occurrences: kept,
-      ...(cluster.occurrences_total !== undefined && { occurrences_total: nextTotal }),
+      occurrence_count: projectedCount,
+      occurrences_total: projectedCount,
     });
   }
   if (!changed) return canonical;
@@ -380,14 +389,6 @@ function occurrenceIsDirty(occurrencePath: string, dirty: ReadonlySet<string>): 
     if (samePathOrSuffix(left, dirtyPath) || samePathOrSuffix(dirtyPath, left)) return true;
   }
   return false;
-}
-
-function occurrenceTotal(cluster: ReportCluster): number {
-  const total =
-    cluster.occurrences_total && cluster.occurrences_total > 0
-      ? cluster.occurrences_total
-      : cluster.size;
-  return Math.max(total, cluster.occurrences.length);
 }
 
 function samePathOrSuffix(left: string, right: string): boolean {

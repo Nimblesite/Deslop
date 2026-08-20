@@ -6,18 +6,23 @@
 // extracting. These tests drive the real formatter and assert the real
 // rendered strings for both families, then parse the two webview components to
 // prove they render through that formatter instead of a second copy.
+//
+// The *reading* of those numbers — the shape score and the plain-English
+// verdict — is the engine's and arrives on the wire. Its wording is pinned
+// where it is written, in `deslop-core::render::signals`
+// (`verdict_reads_each_family`, `shape_score_is_the_stronger_axis`); what is
+// asserted here is that no VS Code surface manufactures a second one.
 
 import * as assert from "node:assert/strict";
 import * as ts from "typescript";
 import type { ReportSignals } from "../../types/report";
+import * as signalsModule from "../../types/signals";
 import {
   SIGNAL_HELP,
   confidenceRows,
-  contentEvidenceVerdict,
   evidenceRows,
   formatSignal,
   helpValueTitle,
-  shapeScore,
   signalTitle,
   type SignalRow,
 } from "../../types/signals";
@@ -29,6 +34,7 @@ import { parseWebviewSource } from "./webview-source.helpers";
 const SCAFFOLDING: ReportSignals = {
   structural: 1,
   token_jaccard: 1,
+  shape: 1,
   embedding_cos: 0,
   fused: 0.16,
   agreement: 0.08,
@@ -41,6 +47,7 @@ const SCAFFOLDING: ReportSignals = {
 const PROVEN_RENAME: ReportSignals = {
   structural: 1,
   token_jaccard: 1,
+  shape: 1,
   embedding_cos: 0,
   fused: 0.9,
   agreement: 0.1,
@@ -51,6 +58,7 @@ const PROVEN_RENAME: ReportSignals = {
 const VERBATIM: ReportSignals = {
   structural: 1,
   token_jaccard: 1,
+  shape: 1,
   embedding_cos: 0,
   fused: 1,
   agreement: 1,
@@ -61,12 +69,30 @@ const VERBATIM: ReportSignals = {
 const SEMANTIC: ReportSignals = {
   structural: 0.2,
   token_jaccard: 0.3,
+  shape: 0.3,
   embedding_cos: 0.9,
   fused: 0.9,
   agreement: 0.05,
   rename_consistency: 0,
   literal_fraction: 0,
 };
+
+// The sentences the engine stamps on these two fixtures and ships as
+// `cluster.evidence_verdict`. Quoted, not computed: their wording is
+// pinned in `deslop-core::render::signals`, and the point here is that
+// the panel is handed two different readings of one identical triple.
+const SCAFFOLDING_VERDICT =
+  "The shapes match at 1.00 but the content behind them does not agree: " +
+  "the locations share only 0.08 of their content and consistent renaming " +
+  "explains 0.00 of what differs, so confidence fell to 0.16. A matching " +
+  "shape over content that does not agree is what sibling boilerplate " +
+  "looks like — read both locations before extracting anything.";
+
+const PROVEN_RENAME_VERDICT =
+  "The shapes match at 1.00 but the locations are not byte for byte the " +
+  "same: they share 0.10 of their content and one consistent identifier " +
+  "renaming explains 1.00 of what differs. That measured evidence is what " +
+  "holds confidence at 0.90 instead of the full shape match.";
 
 function rendered(rows: SignalRow[]): [string, string][] {
   return rows.map((row) => [row.label, formatSignal(row.value)]);
@@ -105,6 +131,13 @@ suite("signal evidence rendering", () => {
       ["rename", "1.00"],
       ["literal", "0.00"],
     ]);
+    assert.deepEqual(rendered(confidenceRows(VERBATIM)), [
+      ["structural", "1.00"],
+      ["jaccard", "1.00"],
+      ["embedding", "0.00"],
+      ["fused", "1.00"],
+    ]);
+    assert.equal(VERBATIM.shape, 1, "a byte-proven cluster carries a saturated shape reading");
   });
 
   test("the two families that render one triple get two different readings", () => {
@@ -124,54 +157,62 @@ suite("signal evidence rendering", () => {
       "the content evidence is the only thing separating the two families",
     );
     assert.notEqual(
-      contentEvidenceVerdict(SCAFFOLDING),
-      contentEvidenceVerdict(PROVEN_RENAME),
+      SCAFFOLDING_VERDICT,
+      PROVEN_RENAME_VERDICT,
       "one shape reading must not produce one explanation",
     );
-  });
-
-  test("a shape match with no content behind it reads as sibling boilerplate", () => {
-    assert.equal(
-      contentEvidenceVerdict(SCAFFOLDING),
-      "The shapes match at 1.00 but the content behind them does not agree: " +
-        "the locations share only 0.08 of their content and consistent renaming " +
-        "explains 0.00 of what differs, so confidence fell to 0.16. A matching " +
-        "shape over content that does not agree is what sibling boilerplate " +
-        "looks like — read both locations before extracting anything.",
-    );
-  });
-
-  test("a corroborated rename explains the discount instead of warning about it", () => {
-    const verdict = contentEvidenceVerdict(PROVEN_RENAME);
-    assert.equal(
-      verdict,
-      "The shapes match at 1.00 but the locations are not byte for byte the " +
-        "same: they share 0.10 of their content and one consistent identifier " +
-        "renaming explains 1.00 of what differs. That measured evidence is what " +
-        "holds confidence at 0.90 instead of the full shape match.",
+    assert.ok(
+      SCAFFOLDING_VERDICT.includes("sibling boilerplate"),
+      "the demoted family is named as boilerplate",
     );
     assert.ok(
-      !verdict.includes("boilerplate"),
+      !PROVEN_RENAME_VERDICT.includes("boilerplate"),
       "a corroborated rename must never be described as boilerplate",
     );
   });
 
-  test("an undiscounted match and an embedding-led match each say why", () => {
-    assert.equal(
-      contentEvidenceVerdict(VERBATIM),
-      "The shapes match at 1.00 and the content evidence did not discount that: " +
-        "the locations share 1.00 of their content and consistent renaming " +
-        "explains 1.00 of what differs, so confidence stayed at 1.00.",
+  test("no VS Code surface owns a second reading of the signal numbers", () => {
+    // The shape score and the verdict are engine calculations carried on
+    // the wire as `signals.shape` and `cluster.evidence_verdict`. A client
+    // copy of either could disagree with the report it sits beside, which
+    // is the whole defect this module was cleansed of.
+    assert.ok(
+      !("contentEvidenceVerdict" in signalsModule),
+      "the client must not carry a verdict engine",
+    );
+    assert.ok(
+      !("shapeScore" in signalsModule),
+      "the client must not re-derive the shape score",
+    );
+    assert.ok(
+      !("FUSED_THRESHOLD" in signalsModule),
+      "the reportable-confidence cutoff is the engine's constant, not a client copy",
     );
     assert.equal(
-      contentEvidenceVerdict(SEMANTIC),
-      "The shapes barely match (0.30) — the 0.90 confidence comes from the " +
-        "embedding model, which read these as the same behavior written two " +
-        "ways. The content evidence measures the code itself, not the " +
-        "behavior: shared content 0.05, renaming 0.00.",
+      SCAFFOLDING.shape,
+      1,
+      "the engine's shape reading rides on the signals the panel renders",
     );
-    assert.equal(shapeScore(SEMANTIC), 0.3);
-    assert.equal(shapeScore(SCAFFOLDING), 1);
+    assert.equal(SEMANTIC.shape, 0.3);
+  });
+
+  test("the strip renders the engine's verdict verbatim", () => {
+    const strip = parseWebviewSource("components/SignalStrip.tsx");
+    const source = strip.getFullText();
+    assert.ok(
+      source.includes("{verdict}"),
+      "the panel must print the engine's sentence, not compose one",
+    );
+    assert.ok(
+      !source.includes("contentEvidenceVerdict"),
+      "the panel must not call a client-side verdict builder",
+    );
+    for (const word of ["boilerplate", "The shapes match at"]) {
+      assert.ok(
+        !source.includes(word),
+        `the panel must not restate the verdict wording: ${word}`,
+      );
+    }
   });
 
   test("every evidence tooltip carries its explanation and its measured value", () => {
@@ -213,7 +254,7 @@ suite("signal evidence rendering", () => {
   test("the strip renders through the shared formatter, not a second copy", () => {
     const strip = parseWebviewSource("components/SignalStrip.tsx");
     const called = calledFunctions(strip);
-    for (const fn of ["confidenceRows", "evidenceRows", "contentEvidenceVerdict", "signalTitle"]) {
+    for (const fn of ["confidenceRows", "evidenceRows", "signalTitle"]) {
       assert.ok(called.has(fn), `SignalStrip must render through ${fn}()`);
     }
     assert.deepEqual(
@@ -255,6 +296,7 @@ function calledFunctions(root: ts.SourceFile): Set<string> {
 const SIGNAL_FIELDS = new Set([
   "structural",
   "token_jaccard",
+  "shape",
   "embedding_cos",
   "fused",
   "agreement",

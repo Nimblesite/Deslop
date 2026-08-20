@@ -12,6 +12,7 @@ import { COLOR, FONT, GLOBAL_CSS } from "../theme";
 import { MetricHeading } from "../components/MetricHeading";
 import { buildFolderRollup, type RollupChild } from "../../../src/tree/rollup";
 import { thresholdStatus } from "../../../src/tree/threshold";
+import { formatPercent } from "../../../src/types/format";
 
 function percentColor(percent: number): string {
   if (percent >= 30) return "#e5534b";
@@ -69,7 +70,7 @@ function Row({ child, depth }: { child: RollupChild; depth: number }) {
             minWidth: "62px",
           }}
         >
-          {child.percent.toFixed(1)}%
+          {formatPercent(child.percent)}
         </span>
       </li>
       {isFolder

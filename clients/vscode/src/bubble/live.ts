@@ -3,7 +3,7 @@
 // on the most-recently-touched range; admission is `bubbleAdmits`: an
 // act-now bucket always renders (the engine's own verdict — its content
 // gate can push a proven rename's fused *below* the cutoff), and anything
-// below those bands renders only at fused >= FUSED_THRESHOLD. Surfaces:
+// below those bands renders only when the engine's fused gate is met. Surfaces:
 //   primary: after-text decoration (severity dot + bucket label + count + canonical)
 //   secondary: inlay hint with a 3-bar signal strip
 // Ghost-line mode renders a whole-line after-text decoration instead.
@@ -14,11 +14,11 @@ import type { LanguageClient } from "vscode-languageclient/node";
 
 import { COLOR, DESLOP_SEVERITY_COLOR } from "../design";
 import { ReportStore } from "../reportStore";
-import { clusterSeverity, indexedSeverity } from "../severity";
+import { clusterSeverity } from "../severity";
 import { ANALYSED_LANGUAGE_IDS } from "../types/languages";
 import {
-  FUSED_THRESHOLD,
   ReportCluster,
+  clusterBand,
   isActNow,
   resolveBucket,
 } from "../types/report";
@@ -307,8 +307,7 @@ export class LiveBubble implements vscode.Disposable {
     if (this.active?.clusterId === best.id && this.active.range.isEqual(range))
       return;
 
-    const severities = indexedSeverity(report.clusters);
-    const severity = severities.get(best.id) ?? "faint";
+    const severity = clusterBand(best);
     const mode = vscode.workspace
       .getConfiguration("deslop")
       .get<string>("liveBubble.mode", "inline");
@@ -386,7 +385,8 @@ function bestBubbleCluster(
     .map((cluster) => byId.get(cluster.id) ?? cluster)
     .filter(bubbleAdmits)
     .filter((cluster) => !dismissedClusters.has(cluster.id))
-    .sort((a, b) => b.weight - a.weight)[0];
+    // Worst first is the engine's ranking, tie-break included.
+    .sort((a, b) => a.rank - b.rank)[0];
 }
 
 // Two gates, because the two populations carry different evidence
@@ -394,15 +394,15 @@ function bestBubbleCluster(
 // engine's own verdict that the user should act, reached with content
 // evidence and byte proof this client never sees; the same gate
 // deliberately pushes a proven rename's confidence *below*
-// `FUSED_THRESHOLD`, so re-testing an act-now cluster against a UI-local
+// fused threshold, so re-testing an act-now cluster against a UI-local
 // cutoff withholds precisely the findings this surface exists to show.
 // Below the act-now bands no such verdict stands behind the cluster and
 // the fused cutoff is the right gate — a weak LSH hint is worth the
-// user's attention only once it clears the line.
+// user's attention only once it clears the line. Whether it clears is
+// the engine's call too: `meets_fused_gate` rides on the cluster, so the
+// threshold constant exists once, in Rust.
 function bubbleAdmits(cluster: ReportCluster): boolean {
-  return (
-    isActNow(resolveBucket(cluster)) || cluster.signals.fused >= FUSED_THRESHOLD
-  );
+  return isActNow(resolveBucket(cluster)) || cluster.meets_fused_gate;
 }
 
 class BubbleInlayProvider implements vscode.InlayHintsProvider {

@@ -122,7 +122,11 @@ fn folder_rollup_rows_are_engine_computed() -> Result<()> {
     // The corpus produces exactly one cluster: the identical pair. A
     // second cluster would mean a "clean" fixture file actually
     // duplicates something, which would corrupt every figure below.
-    assert_eq!(cluster_count(&report), 1, "the clone pair is the only duplication");
+    assert_eq!(
+        cluster_count(&report),
+        1,
+        "the clone pair is the only duplication"
+    );
     let clone = expect_cluster_spanning(&report, &["alpha.rs", "beta.rs"])?;
     assert_eq!(cluster_bucket(clone), "identical");
 

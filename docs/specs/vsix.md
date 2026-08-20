@@ -20,7 +20,7 @@ Distribution: one platform-specific `.vsix` per VS Code target attached to each 
 The bubble reports duplication while the edited code remains under the cursor.
 
 **When it fires.**
-After every coalesced buffer edit ([LIVE-WATCHER] debounce = 250 ms), the VSIX issues `duplicates/findSimilar` on the range the user most recently touched. The bubble appears, anchored to the bottom-right of the duplicated range, when a returned cluster passes **either** gate: its bucket is act-now ([CLONE-BUCKETS]), or its rendered confidence reaches `FUSED_THRESHOLD` (0.85, same as the offline report). Two gates, because the two populations carry different evidence — an act-now bucket is the engine's own verdict, reached with content evidence and byte proof this client never sees, and [FUSION-CONTENT-GATE] deliberately pushes a proven rename's rendered confidence *below* 0.85, so re-testing an act-now cluster against the cutoff withholds precisely the findings this surface exists to show ([REPORTING-CONTEXT] "filter on `bucket`, not on `fused`"). Below the act-now bands no such verdict stands behind the cluster and the confidence cutoff is the right gate. If nothing matches, no bubble — silence is the signal that the code is novel.
+After every coalesced buffer edit ([LIVE-WATCHER] debounce = 250 ms), the VSIX issues `duplicates/findSimilar` on the range the user most recently touched. The bubble appears, anchored to the bottom-right of the duplicated range, when a returned cluster passes **either** gate: its bucket is act-now ([CLONE-BUCKETS]), or the engine's own `meets_fused_gate` flag says its rendered confidence reached `FUSED_THRESHOLD` (0.85, same as the offline report). The client reads the flag rather than carrying the constant ([PRINCIPLES-ONE-CALCULATION](principles.md#principles-one-calculation)). Two gates, because the two populations carry different evidence — an act-now bucket is the engine's own verdict, reached with content evidence and byte proof this client never sees, and [FUSION-CONTENT-GATE] deliberately pushes a proven rename's rendered confidence *below* 0.85, so re-testing an act-now cluster against the cutoff withholds precisely the findings this surface exists to show ([REPORTING-CONTEXT] "filter on `bucket`, not on `fused`"). Below the act-now bands no such verdict stands behind the cluster and the confidence cutoff is the right gate. If nothing matches, no bubble — silence is the signal that the code is novel.
 
 **What it looks like.**
 A compact floating widget (VS Code `InlayHint` + `Webview`-backed overlay, rendered by a single `DecorationType` whose `after.contentText` is an HTML-safe Unicode glyph, with a hover-triggered richer webview for detail). Anatomy, from left to right:
@@ -155,7 +155,7 @@ Root rows are the top-level folders of the workspace; each folder is a real tree
 
 Because each cluster is single-language ([CONFIG-CROSS-LANGUAGE]) and languages overwhelmingly live in separate directory trees, folder mode already separates most languages without an explicit language split. Each folder row's grey description carries its rolled-up worst weight and the count of files beneath it that contain duplication.
 
-Folder rows, their child folders, and the files within them sort per [VSIX-TOP-OFFENDERS-SORT]. The default — impact — sorts by max cluster weight desc (a folder's worst cluster), sum-of-weights desc tiebreaker, then path `localeCompare`. Global rank ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]) is unchanged: rank #1 is still the repo's worst cluster, wherever it sits in the tree.
+Folder rows, their child folders, and the files within them sort per [VSIX-TOP-OFFENDERS-SORT]. The default — impact — sorts by the weight of the row's worst cluster desc, sum-of-weights desc tiebreaker, then path `localeCompare`. The row's worst cluster is the one with the lowest engine `rank` beneath it, and the weight shown is that cluster's own `weight`: a group figure is a selection of an engine value, never a maximum recomputed in the client ([PRINCIPLES-ONE-CALCULATION](principles.md#principles-one-calculation)). The summed weight is an ordering tiebreak only and is never displayed. Global rank ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]) is unchanged: rank #1 is still the repo's worst cluster, wherever it sits in the tree.
 
 #### [VSIX-TOP-OFFENDERS-CLUSTER-ID] Cluster slug leads the row, rank never does
 
@@ -172,7 +172,9 @@ Rules:
 
 #### [VSIX-TOP-OFFENDERS-RANK-GLOBAL] Global rank #N
 
-The rank #N attached to a cluster row is the cluster's position in the report's worst-first list. It does **not** change between modes, and it is **not** re-numbered within a file or within a bucket group. This keeps cross-file impact comparable at a glance — rank #1 is always the worst cluster in the repo, regardless of which lens the user picked.
+The rank #N attached to a cluster row is the `rank` the engine stamped on the cluster ([SEVERITY-BAND](severity.md#severity-band)) — its position in the report's worst-first list. It does **not** change between modes, and it is **not** re-numbered within a file or within a bucket group. This keeps cross-file impact comparable at a glance — rank #1 is always the worst cluster in the repo, regardless of which lens the user picked.
+
+The tree reads the field; it never numbers rows from their array position. Numbering locally is only correct while the list the client holds is the whole report, and it is not: facet filters and the dirty-file projection both shorten it ([PRINCIPLES-ONE-CALCULATION](principles.md#principles-one-calculation)).
 
 Rank lives in the grey description, not the bold label. The bold label leads with the stable cluster slug ([VSIX-TOP-OFFENDERS-CLUSTER-ID]).
 

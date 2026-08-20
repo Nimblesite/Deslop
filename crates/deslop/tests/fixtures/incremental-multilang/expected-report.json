@@ -91,7 +91,8 @@
         "duplicated_loc": 8,
         "duplication_percent": 53.333333333333336
       }
-    ]
+    ],
+    "folders": []
   },
   "schema_doc": "",
   "action_hints": [
@@ -125,12 +126,15 @@
   "clusters": [
     {
       "id": "7e9099352ffa58f5",
+      "rank": 1,
+      "rank_band": "worst",
       "weight": 52.0,
       "size": 2,
       "canonical_node_count": 52,
       "signals": {
         "structural": 1.0,
         "token_jaccard": 1.0,
+        "shape": 1.0,
         "embedding_cos": 0.0,
         "fused": 1.0,
         "agreement": 1.0,
@@ -139,6 +143,9 @@
       },
       "bucket": "identical",
       "category": "logic",
+      "language": "go",
+      "meets_fused_gate": true,
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 0.84 of what differs, so confidence stayed at 1.00.",
       "occurrences": [
         {
           "path": "ledger_alpha.go",
@@ -158,18 +165,22 @@
         }
       ],
       "occurrences_total": 2,
+      "occurrence_count": 2,
       "occurrences_truncated": false,
       "summary": "2 copies of a 52-node subtree at ledger_alpha.go:7:1, ledger_beta.go:9:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
       "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
     },
     {
       "id": "75331bdf6bb59eea",
+      "rank": 2,
+      "rank_band": "mid",
       "weight": 51.0,
       "size": 2,
       "canonical_node_count": 51,
       "signals": {
         "structural": 1.0,
         "token_jaccard": 1.0,
+        "shape": 1.0,
         "embedding_cos": 0.0,
         "fused": 1.0,
         "agreement": 1.0,
@@ -178,6 +189,9 @@
       },
       "bucket": "identical",
       "category": "logic",
+      "language": "typescript",
+      "meets_fused_gate": true,
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 0.82 of what differs, so confidence stayed at 1.00.",
       "occurrences": [
         {
           "path": "ledger_alpha.ts",
@@ -197,18 +211,22 @@
         }
       ],
       "occurrences_total": 2,
+      "occurrence_count": 2,
       "occurrences_truncated": false,
       "summary": "2 copies of a 51-node subtree at ledger_alpha.ts:5:1, ledger_beta.ts:7:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
       "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
     },
     {
       "id": "09ec87de54dfeffb",
+      "rank": 3,
+      "rank_band": "mid",
       "weight": 50.0,
       "size": 2,
       "canonical_node_count": 50,
       "signals": {
         "structural": 1.0,
         "token_jaccard": 1.0,
+        "shape": 1.0,
         "embedding_cos": 0.0,
         "fused": 1.0,
         "agreement": 1.0,
@@ -217,6 +235,9 @@
       },
       "bucket": "identical",
       "category": "logic",
+      "language": "dart",
+      "meets_fused_gate": true,
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 0.83 of what differs, so confidence stayed at 1.00.",
       "occurrences": [
         {
           "path": "ledger_alpha.dart",
@@ -236,18 +257,22 @@
         }
       ],
       "occurrences_total": 2,
+      "occurrence_count": 2,
       "occurrences_truncated": false,
       "summary": "2 copies of a 50-node subtree at ledger_alpha.dart:5:1, ledger_beta.dart:7:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
       "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
     },
     {
       "id": "f887f991dc1f4969",
+      "rank": 4,
+      "rank_band": "faint",
       "weight": 46.0,
       "size": 2,
       "canonical_node_count": 46,
       "signals": {
         "structural": 1.0,
         "token_jaccard": 1.0,
+        "shape": 1.0,
         "embedding_cos": 0.0,
         "fused": 1.0,
         "agreement": 1.0,
@@ -256,6 +281,9 @@
       },
       "bucket": "identical",
       "category": "logic",
+      "language": "csharp",
+      "meets_fused_gate": true,
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 0.83 of what differs, so confidence stayed at 1.00.",
       "occurrences": [
         {
           "path": "LedgerAlpha.cs",
@@ -275,18 +303,22 @@
         }
       ],
       "occurrences_total": 2,
+      "occurrence_count": 2,
       "occurrences_truncated": false,
       "summary": "2 copies of a 46-node subtree at LedgerAlpha.cs:9:5, LedgerBeta.cs:9:5 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
       "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
     },
     {
       "id": "d8a38df1507e6efd",
+      "rank": 5,
+      "rank_band": "faint",
       "weight": 45.0,
       "size": 2,
       "canonical_node_count": 45,
       "signals": {
         "structural": 1.0,
         "token_jaccard": 1.0,
+        "shape": 1.0,
         "embedding_cos": 0.0,
         "fused": 1.0,
         "agreement": 1.0,
@@ -295,6 +327,9 @@
       },
       "bucket": "identical",
       "category": "logic",
+      "language": "rust",
+      "meets_fused_gate": true,
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 0.83 of what differs, so confidence stayed at 1.00.",
       "occurrences": [
         {
           "path": "ledger_alpha.rs",
@@ -314,18 +349,22 @@
         }
       ],
       "occurrences_total": 2,
+      "occurrence_count": 2,
       "occurrences_truncated": false,
       "summary": "2 copies of a 45-node subtree at ledger_alpha.rs:5:1, ledger_beta.rs:7:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
       "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
     },
     {
       "id": "3b08286c43ec5193",
+      "rank": 6,
+      "rank_band": "faint",
       "weight": 35.0,
       "size": 2,
       "canonical_node_count": 35,
       "signals": {
         "structural": 1.0,
         "token_jaccard": 1.0,
+        "shape": 1.0,
         "embedding_cos": 0.0,
         "fused": 1.0,
         "agreement": 1.0,
@@ -334,6 +373,9 @@
       },
       "bucket": "identical",
       "category": "logic",
+      "language": "python",
+      "meets_fused_gate": true,
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 0.80 of what differs, so confidence stayed at 1.00.",
       "occurrences": [
         {
           "path": "ledger_alpha.py",
@@ -353,6 +395,7 @@
         }
       ],
       "occurrences_total": 2,
+      "occurrence_count": 2,
       "occurrences_truncated": false,
       "summary": "2 copies of a 35-node subtree at ledger_alpha.py:6:1, ledger_beta.py:8:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
       "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"

@@ -325,12 +325,61 @@ pub(crate) fn assert_other_languages_unchanged(
             "{label}: language walk desynced"
         );
         assert_eq!(
-            actual, expected,
+            analysis_fields(actual),
+            analysis_fields(expected),
             "{label}: editing {} changed the {language} cluster — one \
              language's cache invalidation must never disturb another's \
              ([PIPELINE-INCREMENTAL-INVALIDATION])\nafter: {actual:#}\nbefore: {expected:#}",
             excluded.language
         );
+        assert_rank_states_report_position(report, actual, label, language);
     }
     Ok(())
+}
+
+/// The analysis half of a rendered cluster: everything except the two
+/// fields that state a position in the *report* rather than a fact about
+/// the code. Deleting another language's file legitimately renumbers the
+/// report ([SEVERITY-BAND]), so `rank` and `rank_band` are asserted
+/// separately — against the report the cluster is actually published in,
+/// which is a stronger claim than "unchanged".
+fn analysis_fields(cluster: &Value) -> Value {
+    let mut copy = cluster.clone();
+    if let Some(object) = copy.as_object_mut() {
+        let _rank = object.remove("rank");
+        let _band = object.remove("rank_band");
+    }
+    copy
+}
+
+/// A cluster's stated rank must be its actual position in the report it
+/// is published in, and it must carry a band. A rank carried over from a
+/// previous generation — the failure mode a client re-numbering locally
+/// would hide — shows up here as an off-by-N.
+fn assert_rank_states_report_position(
+    report: &Value,
+    cluster: &Value,
+    label: &str,
+    language: &str,
+) {
+    let id = field(cluster, "id").as_str().unwrap_or_default();
+    let position = clusters(report)
+        .iter()
+        .position(|entry| field(entry, "id").as_str() == Some(id));
+    let expected = position
+        .map(|index| index.saturating_add(1))
+        .and_then(|rank| u64::try_from(rank).ok());
+    assert_eq!(
+        field(cluster, "rank").as_u64(),
+        expected,
+        "{label}: the {language} cluster's rank must be its position in the \
+         report it is published in, not one carried from an earlier generation"
+    );
+    assert!(
+        !field(cluster, "rank_band")
+            .as_str()
+            .unwrap_or_default()
+            .is_empty(),
+        "{label}: every published cluster carries a severity band ([SEVERITY-BAND])"
+    );
 }

@@ -75,30 +75,21 @@ mod tests {
     /// is wire-generated (no `Default` derive) so we spell out each
     /// field explicitly.
     fn cluster_with_id(id: &str) -> ReportCluster {
-        ReportCluster {
-            id: id.to_owned(),
-            weight: 0.0,
-            size: 0,
-            canonical_node_count: 0,
-            signals: ReportSignals {
-                structural: 0.0,
-                token_jaccard: 0.0,
-                embedding_cos: 0.0,
-                fused: 0.0,
-                agreement: 0.0,
-                rename_consistency: 0.0,
-                literal_fraction: 0.0,
-            },
-            bucket: String::new(),
-            category: String::new(),
-            occurrences: Vec::new(),
-            occurrences_total: 0,
-            occurrences_truncated: false,
-            summary: String::new(),
-            interpretation: String::new(),
-            intersects_diff: None,
-            is_newly_introduced: None,
-        }
+        let mut cluster = crate::report_fixtures::fixture_cluster(id, Vec::new());
+        cluster.weight = 0.0;
+        cluster.canonical_node_count = 0;
+        cluster.signals = ReportSignals {
+            structural: 0.0,
+            token_jaccard: 0.0,
+            shape: 0.0,
+            embedding_cos: 0.0,
+            fused: 0.0,
+            agreement: 0.0,
+            rename_consistency: 0.0,
+            literal_fraction: 0.0,
+        };
+        crate::report_fixtures::restamp_fixture(&mut cluster);
+        cluster
     }
 
     /// The 7-hex slug from the VSIX hover bubble must

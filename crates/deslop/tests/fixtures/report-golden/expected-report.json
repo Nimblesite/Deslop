@@ -49,7 +49,8 @@
         "duplicated_loc": 6,
         "duplication_percent": 54.54545454545454
       }
-    ]
+    ],
+    "folders": []
   },
   "schema_doc": "",
   "action_hints": [
@@ -83,12 +84,15 @@
   "clusters": [
     {
       "id": "43d86a84310253d5",
+      "rank": 1,
+      "rank_band": "worst",
       "weight": 120.0,
       "size": 3,
       "canonical_node_count": 60,
       "signals": {
         "structural": 1.0,
         "token_jaccard": 1.0,
+        "shape": 1.0,
         "embedding_cos": 0.0,
         "fused": 1.0,
         "agreement": 1.0,
@@ -97,6 +101,9 @@
       },
       "bucket": "identical",
       "category": "logic",
+      "language": "rust",
+      "meets_fused_gate": true,
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 0.87 of what differs, so confidence stayed at 1.00.",
       "occurrences": [
         {
           "path": "alpha.rs",
@@ -124,18 +131,22 @@
         }
       ],
       "occurrences_total": 3,
+      "occurrence_count": 3,
       "occurrences_truncated": false,
       "summary": "3 copies of a 60-node subtree at alpha.rs:6:1, beta.rs:6:1, gamma.rs:9:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
       "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
     },
     {
       "id": "652583a45f9df196",
+      "rank": 2,
+      "rank_band": "faint",
       "weight": 38.0,
       "size": 2,
       "canonical_node_count": 38,
       "signals": {
         "structural": 1.0,
         "token_jaccard": 1.0,
+        "shape": 1.0,
         "embedding_cos": 0.0,
         "fused": 1.0,
         "agreement": 1.0,
@@ -144,6 +155,9 @@
       },
       "bucket": "identical",
       "category": "logic",
+      "language": "rust",
+      "meets_fused_gate": true,
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 0.81 of what differs, so confidence stayed at 1.00.",
       "occurrences": [
         {
           "path": "delta.rs",
@@ -163,6 +177,7 @@
         }
       ],
       "occurrences_total": 2,
+      "occurrence_count": 2,
       "occurrences_truncated": false,
       "summary": "2 copies of a 38-node subtree at delta.rs:6:1, epsilon.rs:6:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
       "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"

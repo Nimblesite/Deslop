@@ -201,8 +201,11 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
             .wire_label()
             .to_owned(),
         language: cluster_language(cluster, file_languages),
-        meets_fused_gate: signals.fused >= crate::pair::FUSED_THRESHOLD,
-        evidence_verdict: crate::render::signals::content_evidence_verdict(signals),
+        // Stamped below by the one derived-field pass
+        // ([`crate::report_restamp`]) so the render path and the
+        // `--from-report` replay path can never compute them differently.
+        meets_fused_gate: false,
+        evidence_verdict: String::new(),
         occurrences,
         occurrences_total,
         occurrence_count: 0,
@@ -214,9 +217,7 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         intersects_diff: None,
         is_newly_introduced: None,
     };
-    // The one counting formula ([`crate::report::occurrence_count`])
-    // stamps the wire field every display surface reads verbatim.
-    report_cluster.occurrence_count = crate::report::occurrence_count(&report_cluster);
+    crate::report_restamp::restamp_cluster(&mut report_cluster);
     report_cluster
 }
 
@@ -668,6 +669,7 @@ mod tests {
         ReportSignals {
             structural: 1.0,
             token_jaccard: 1.0,
+            shape: 1.0,
             embedding_cos: 0.0,
             fused: 1.0,
             agreement: 0.0,

@@ -4,6 +4,7 @@
 import * as vscode from "vscode";
 import { Bucket, FileMetric, RepoMetrics, Report, ReportCluster } from "../../types/report";
 import { emptyReport, metrics as zeroMetrics } from "./report-store.helpers";
+import { occurrence, stampRanks, wireCluster } from "../cluster.helpers";
 import { bucketSignals } from "../signals.helpers";
 
 /** Re-exported so a tree suite needs one helper module, not two. */
@@ -17,29 +18,45 @@ export function cluster(
   endByte = 20,
   bucket: Bucket = "identical",
   category?: string,
+  rank = 1,
 ): ReportCluster {
-  return {
+  return wireCluster({
     id,
+    rank,
     weight,
     size: 2,
-    canonical_node_count: 4,
     signals: bucketSignals(bucket),
     bucket,
     ...(category === undefined ? {} : { category }),
+    language: languageOfPath(occurrencePath),
     occurrences: [
-      { path: occurrencePath, start_byte: startByte, end_byte: endByte, hidden: false },
-      {
-        path: `${occurrencePath}.other`,
-        start_byte: startByte,
-        end_byte: endByte,
-        hidden: false,
-      },
+      occurrence(occurrencePath, startByte, endByte),
+      occurrence(`${occurrencePath}.other`, startByte, endByte),
     ],
-    occurrences_total: 0,
-    occurrences_truncated: false,
-    summary: "",
     interpretation: `dup in ${occurrencePath}`,
-  };
+  });
+}
+
+// The language id the engine would have stamped for a fixture path. A
+// literal table, not a derivation: production code reads the id off the
+// cluster, and the real extension mapping is the parser registry's
+// ([PIPELINE-LANG-TRAIT]). Unlisted extensions read as the engine's own
+// unresolvable label.
+const FIXTURE_LANGUAGES: ReadonlyArray<readonly [string, string]> = [
+  [".cs", "csharp"],
+  [".rs", "rust"],
+  [".py", "python"],
+  [".dart", "dart"],
+  [".js", "javascript"],
+  [".ts", "typescript"],
+  [".tsx", "tsx"],
+  [".go", "go"],
+  [".php", "php"],
+  [".fs", "fsharp"],
+];
+
+function languageOfPath(path: string): string {
+  return FIXTURE_LANGUAGES.find(([extension]) => path.endsWith(extension))?.[1] ?? "unknown";
 }
 
 export function labelText(item: vscode.TreeItem): string {
@@ -106,7 +123,9 @@ export function report(
       indexed_subtrees: 0,
       failed_subtrees: 0,
     },
-    clusters,
+    // The engine stamps the ranking onto the report it publishes, so a
+    // fixture report carries it too ([SEVERITY-BAND]).
+    clusters: stampRanks(clusters),
   });
 }
 

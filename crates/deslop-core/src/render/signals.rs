@@ -145,3 +145,195 @@ pub fn table_row(id: &str, signals: ReportSignals) -> String {
         l = signals.literal_fraction,
     )
 }
+
+/// Half of the last digit a surface prints ([FUSION-CONTENT-GATE]).
+/// Two values that render as the same string must never be described
+/// as different, so every comparison the verdict makes is taken at the
+/// precision the reader actually sees.
+const RENDERED_EPSILON: f64 = 0.005;
+
+/// One signal value at the two-decimal precision every surface renders.
+fn format_signal(value: f64) -> String {
+    format!("{value:.2}")
+}
+
+/// Plain-English reading of the shape score against the measured
+/// content evidence ([FUSION-CONTENT-GATE], #344), for readers who have
+/// the numbers in front of them and no way to tell a renamed copy from
+/// boilerplate.
+///
+/// Grounded only in the figures a surface already renders: it explains
+/// the gap between the shape match and the fused confidence, and never
+/// re-derives the engine's bucket ([CLONE-BUCKETS-ROUTING] — a consumer
+/// reads the engine's label and never manufactures one). Computed once,
+/// here, and carried on the wire as `evidence_verdict`, so the VS Code
+/// panel, the `JetBrains` panel and any future surface quote the same
+/// sentence rather than each growing its own verdict engine.
+#[must_use]
+pub fn content_evidence_verdict(signals: ReportSignals) -> String {
+    let shape = signals.shape_score();
+    if signals.embedding_cos > shape && signals.embedding_cos + RENDERED_EPSILON >= signals.fused {
+        return semantic_verdict(signals, shape);
+    }
+    if signals.fused + RENDERED_EPSILON >= shape {
+        return corroborated_verdict(signals, shape);
+    }
+    if signals.fused >= crate::pair::FUSED_THRESHOLD {
+        discounted_verdict(signals, shape)
+    } else {
+        boilerplate_verdict(signals, shape)
+    }
+}
+
+/// The embedding pass, not the shape, is what produced this confidence.
+fn semantic_verdict(signals: ReportSignals, shape: f64) -> String {
+    format!(
+        "The shapes barely match ({shape}) — the {fused} confidence comes from the \
+         embedding model, which read these as the same behavior written two ways. The \
+         content evidence measures the code itself, not the behavior: shared content \
+         {agreement}, renaming {rename}.",
+        shape = format_signal(shape),
+        fused = format_signal(signals.fused),
+        agreement = format_signal(signals.agreement),
+        rename = format_signal(signals.rename_consistency),
+    )
+}
+
+/// The evidence did not pull the confidence below the shape match.
+/// Stated as the measurement, never as a recommendation: the engine
+/// owns the verdict.
+fn corroborated_verdict(signals: ReportSignals, shape: f64) -> String {
+    format!(
+        "The shapes match at {shape} and the content evidence did not discount that: the \
+         locations share {agreement} of their content and consistent renaming explains \
+         {rename} of what differs, so confidence stayed at {fused}.",
+        shape = format_signal(shape),
+        agreement = format_signal(signals.agreement),
+        rename = format_signal(signals.rename_consistency),
+        fused = format_signal(signals.fused),
+    )
+}
+
+/// Discounted, but still above the reportable bar: the evidence carried
+/// it.
+fn discounted_verdict(signals: ReportSignals, shape: f64) -> String {
+    format!(
+        "The shapes match at {shape} but the locations are not byte for byte the same: they \
+         share {agreement} of their content and one consistent identifier renaming explains \
+         {rename} of what differs. That measured evidence is what holds confidence at \
+         {fused} instead of the full shape match.",
+        shape = format_signal(shape),
+        agreement = format_signal(signals.agreement),
+        rename = format_signal(signals.rename_consistency),
+        fused = format_signal(signals.fused),
+    )
+}
+
+/// Discounted below the reportable bar — the anchor-poor scaffolding
+/// family.
+fn boilerplate_verdict(signals: ReportSignals, shape: f64) -> String {
+    format!(
+        "The shapes match at {shape} but the content behind them does not agree: the \
+         locations share only {agreement} of their content and consistent renaming explains \
+         {rename} of what differs, so confidence fell to {fused}. A matching shape over \
+         content that does not agree is what sibling boilerplate looks like — read both \
+         locations before extracting anything.",
+        shape = format_signal(shape),
+        agreement = format_signal(signals.agreement),
+        rename = format_signal(signals.rename_consistency),
+        fused = format_signal(signals.fused),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A rendered signal triple with the content evidence behind it.
+    fn signals(
+        structural: f64,
+        token_jaccard: f64,
+        embedding_cos: f64,
+        fused: f64,
+        agreement: f64,
+        rename_consistency: f64,
+        literal_fraction: f64,
+    ) -> ReportSignals {
+        let mut built = ReportSignals {
+            structural,
+            token_jaccard,
+            shape: 0.0,
+            embedding_cos,
+            fused,
+            agreement,
+            rename_consistency,
+            literal_fraction,
+        };
+        built.shape = built.shape_score();
+        built
+    }
+
+    /// [FUSION-CONTENT-GATE] The shape reading is the stronger of the two
+    /// views of one normalised representation — the single reduction the
+    /// wire `shape` field carries.
+    #[test]
+    fn shape_score_is_the_stronger_axis() {
+        assert!((signals(1.0, 0.3, 0.0, 0.31, 0.08, 0.0, 0.91).shape - 1.0).abs() < f64::EPSILON);
+        assert!((signals(0.2, 0.3, 0.9, 0.9, 0.05, 0.0, 0.0).shape - 0.3).abs() < f64::EPSILON);
+    }
+
+    /// [FUSION-CONTENT-GATE] The four readings a rendered cluster can
+    /// carry, verbatim. Every surface quotes `evidence_verdict`, so this
+    /// wording is the wording users and agents read: a corroborated
+    /// rename and an anchor-poor scaffolding family render the identical
+    /// triple, and only these sentences separate them.
+    #[test]
+    fn verdict_reads_each_family() {
+        let scaffolding = signals(1.0, 1.0, 0.0, 0.16, 0.08, 0.0, 0.91);
+        assert_eq!(
+            content_evidence_verdict(scaffolding),
+            "The shapes match at 1.00 but the content behind them does not agree: the \
+             locations share only 0.08 of their content and consistent renaming explains \
+             0.00 of what differs, so confidence fell to 0.16. A matching shape over \
+             content that does not agree is what sibling boilerplate looks like — read both \
+             locations before extracting anything."
+        );
+
+        let proven_rename = signals(1.0, 1.0, 0.0, 0.9, 0.1, 1.0, 0.0);
+        let rename_verdict = content_evidence_verdict(proven_rename);
+        assert_eq!(
+            rename_verdict,
+            "The shapes match at 1.00 but the locations are not byte for byte the same: they \
+             share 0.10 of their content and one consistent identifier renaming explains \
+             1.00 of what differs. That measured evidence is what holds confidence at 0.90 \
+             instead of the full shape match."
+        );
+        assert!(
+            !rename_verdict.contains("boilerplate"),
+            "a corroborated rename must never be described as boilerplate"
+        );
+
+        let verbatim = signals(1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0);
+        assert_eq!(
+            content_evidence_verdict(verbatim),
+            "The shapes match at 1.00 and the content evidence did not discount that: the \
+             locations share 1.00 of their content and consistent renaming explains 1.00 of \
+             what differs, so confidence stayed at 1.00."
+        );
+
+        let semantic = signals(0.2, 0.3, 0.9, 0.9, 0.05, 0.0, 0.0);
+        assert_eq!(
+            content_evidence_verdict(semantic),
+            "The shapes barely match (0.30) — the 0.90 confidence comes from the embedding \
+             model, which read these as the same behavior written two ways. The content \
+             evidence measures the code itself, not the behavior: shared content 0.05, \
+             renaming 0.00."
+        );
+
+        assert_ne!(
+            content_evidence_verdict(scaffolding),
+            content_evidence_verdict(proven_rename),
+            "one shape reading must not produce one explanation"
+        );
+    }
+}

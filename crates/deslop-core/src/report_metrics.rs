@@ -409,7 +409,7 @@ fn count_newlines(bytes: &[u8]) -> u64 {
 /// both inputs are physical line counts — real repos never reach
 /// 2^32 lines, and we clamp before casting so the `as f64` step never
 /// loses precision in the reachable range.
-fn percent(num: u64, denom: u64) -> f64 {
+pub(crate) fn percent(num: u64, denom: u64) -> f64 {
     if denom == 0 {
         return 0.0;
     }

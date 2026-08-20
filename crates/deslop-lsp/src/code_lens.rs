@@ -94,30 +94,26 @@ mod tests {
     use std::path::PathBuf;
 
     fn make_cluster(id: &str, size: usize, occurrences: Vec<ReportOccurrence>) -> ReportCluster {
-        ReportCluster {
-            id: id.to_owned(),
-            weight: 10.0,
-            size,
-            canonical_node_count: 20,
-            signals: ReportSignals {
-                structural: 0.87,
-                token_jaccard: 0.72,
-                embedding_cos: 0.55,
-                fused: 0.88,
-                agreement: 0.63,
-                rename_consistency: 0.94,
-                literal_fraction: 0.11,
-            },
-            bucket: "nearly_identical".into(),
-            category: "logic".into(),
-            occurrences_total: occurrences.len(),
-            occurrences_truncated: false,
-            occurrences,
-            summary: "s".into(),
-            interpretation: "i".into(),
-            intersects_diff: None,
-            is_newly_introduced: None,
-        }
+        let signals = ReportSignals {
+            structural: 0.87,
+            token_jaccard: 0.72,
+            shape: 0.87,
+            embedding_cos: 0.55,
+            fused: 0.88,
+            agreement: 0.63,
+            rename_consistency: 0.94,
+            literal_fraction: 0.11,
+        };
+        let mut cluster = deslop_core::report_fixtures::fixture_cluster(id, occurrences);
+        cluster.weight = 10.0;
+        cluster.size = size;
+        cluster.canonical_node_count = 20;
+        cluster.signals = signals;
+        "nearly_identical".clone_into(&mut cluster.bucket);
+        "s".clone_into(&mut cluster.summary);
+        "i".clone_into(&mut cluster.interpretation);
+        deslop_core::report_fixtures::restamp_fixture(&mut cluster);
+        cluster
     }
 
     fn occurrence(path: &str, start: usize, end: usize) -> ReportOccurrence {
@@ -321,6 +317,7 @@ mod tests {
         anchor_poor.signals = ReportSignals {
             structural: 1.0,
             token_jaccard: 1.0,
+            shape: 1.0,
             embedding_cos: 0.99,
             fused: 0.42,
             agreement: 0.07,

@@ -3,7 +3,6 @@ import { COLOR, FONT } from "../theme";
 import { HelpedText } from "./HelpBubble";
 import {
   confidenceRows,
-  contentEvidenceVerdict,
   evidenceRows,
   formatSignal,
   signalTitle,
@@ -13,6 +12,11 @@ import type { ReportSignals } from "../../../src/types/report";
 
 interface Props {
   signals: ReportSignals;
+  /** The engine's plain-English reading of these numbers, carried on the
+   * cluster as `evidence_verdict`. Rendered verbatim — a panel that
+   * manufactured its own verdict from the same numbers would be a second
+   * interpretation of the engine's evidence. */
+  verdict: string;
 }
 
 // [FUSION-CONTENT-GATE] Four confidence scores, the three pieces of measured
@@ -20,7 +24,7 @@ interface Props {
 // together. Drawing the confidence alone is what made a corroborated rename
 // and an anchor-poor scaffolding family look identical here: both render
 // structural 1.00 / jaccard 1.00, and only the evidence tells them apart.
-export function SignalStrip({ signals }: Props) {
+export function SignalStrip({ signals, verdict }: Props) {
   return (
     <div>
       <SignalGrid rows={confidenceRows(signals)} />
@@ -28,7 +32,7 @@ export function SignalStrip({ signals }: Props) {
         <HelpedText topic="content-evidence">CONTENT EVIDENCE</HelpedText>
       </div>
       <SignalGrid rows={evidenceRows(signals)} />
-      <p style={VERDICT}>{contentEvidenceVerdict(signals)}</p>
+      <p style={VERDICT}>{verdict}</p>
     </div>
   );
 }

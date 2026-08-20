@@ -67,12 +67,12 @@ export function ghostText(
 // separating a verbatim copy from a proven rename: after the #232
 // correction both render `structural 1.0 / token_jaccard 1.0`, so a strip
 // without `fused` collapses "safe to extract" and "identifiers differ"
-// onto the same three glyphs. The shape bar takes the stronger of the two
-// shape views; the third bar draws `fused`.
+// onto the same three glyphs. The shape bar draws the engine's `shape`
+// reading — the stronger of the two shape views, reduced once in
+// `deslop-core` and carried on the wire; the third bar draws `fused`.
 export function signalStrip(cluster: ReportCluster): string {
   const signals = cluster.signals;
-  const shape = Math.max(signals.structural, signals.token_jaccard);
-  return `${bar(shape)}${bar(signals.embedding_cos)}${bar(signals.fused)}`;
+  return `${bar(signals.shape)}${bar(signals.embedding_cos)}${bar(signals.fused)}`;
 }
 
 // The full block is reserved for an exact 1.0 and nothing else. Rounding

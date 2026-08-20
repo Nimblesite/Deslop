@@ -23,6 +23,7 @@ import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
 import { ResolvedBinary } from "../../binary";
 import { bucketSignals } from "../signals.helpers";
+import { occurrence, wireCluster } from "../cluster.helpers";
 
 function resolvedLsp(): ResolvedBinary {
   return {
@@ -35,22 +36,14 @@ function resolvedLsp(): ResolvedBinary {
 }
 
 function clusterAcross(dirtyPath: string, otherPath: string): ReportCluster {
-  return {
+  return wireCluster({
     id: "c1",
     weight: 5,
-    size: 2,
     canonical_node_count: 3,
     bucket: "identical",
     signals: bucketSignals("identical"),
-    occurrences: [
-      { path: dirtyPath, start_byte: 0, end_byte: 4, hidden: false },
-      { path: otherPath, start_byte: 0, end_byte: 4, hidden: false },
-    ],
-    occurrences_total: 2,
-    occurrences_truncated: false,
-    summary: "",
-    interpretation: "",
-  };
+    occurrences: [occurrence(dirtyPath, 0, 4), occurrence(otherPath, 0, 4)],
+  });
 }
 
 function reportWith(clusters: ReportCluster[]): Report {

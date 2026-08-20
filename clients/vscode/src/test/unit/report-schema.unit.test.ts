@@ -5,17 +5,17 @@
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import * as reportModule from "../../types/report";
 import {
   ACT_NOW_BUCKETS,
-  FUSED_THRESHOLD,
   bucketLabels,
   isActNow,
   occurrenceCount,
   resolveBucket,
-  severityOf,
   type ReportCluster,
   type ReportSignals,
 } from "../../types/report";
+import { wireCluster, type ClusterFixture } from "../cluster.helpers";
 import { signalsWith } from "../signals.helpers";
 
 // `fused` is a confidence in [0,1], never a raw sum — the engine's gate
@@ -26,31 +26,43 @@ const signals = (
   j: number,
   e: number,
   fused = Math.min(1, Math.max(s, j, e)),
+  // What the engine would have stamped as this triple's shape reading.
+  // Staged here, never derived by the client ([FUSION-CONTENT-GATE]).
+  shape = Math.max(s, j),
 ): ReportSignals =>
   signalsWith("identical", {
     structural: s,
     token_jaccard: j,
+    shape,
     embedding_cos: e,
     fused,
   });
 
-const cluster = (overrides: Partial<ReportCluster> = {}): ReportCluster => ({
-  id: "x",
-  weight: 1,
-  size: 4,
-  canonical_node_count: 10,
-  bucket: "identical",
-  signals: signals(0, 0, 0),
-  occurrences: [
-    { path: "A.cs", start_byte: 0, end_byte: 10, hidden: false },
-    { path: "B.cs", start_byte: 0, end_byte: 10, hidden: false },
-  ],
-  occurrences_total: 0,
-  occurrences_truncated: false,
-  summary: "",
-  interpretation: "",
-  ...overrides,
-});
+// Some rows here deliberately stage a bucket label the wire type
+// forbids — the empty label a v3 report carries, and an unknown one —
+// because `resolveBucket` must refuse to manufacture a verdict from
+// either. The engine-derived fields still come from the known bucket
+// when there is one.
+type ClusterOverrides = Partial<Omit<ClusterFixture, "bucket">> & { bucket?: string };
+
+const cluster = (overrides: ClusterOverrides = {}): ReportCluster => {
+  const { bucket, ...rest } = overrides;
+  const known = reportModule.BUCKETS.find((candidate) => candidate === bucket);
+  const base = wireCluster({
+    id: "x",
+    weight: 1,
+    size: 4,
+    canonical_node_count: 10,
+    bucket: known ?? "identical",
+    signals: signals(0, 0, 0),
+    occurrences: [
+      { path: "A.cs", start_byte: 0, end_byte: 10, hidden: false },
+      { path: "B.cs", start_byte: 0, end_byte: 10, hidden: false },
+    ],
+    ...rest,
+  });
+  return bucket === undefined ? base : { ...base, bucket };
+};
 
 function reportTypesPath(): string {
   const compiledRun = path.resolve(__dirname, "../../../src/types/report.ts");
@@ -85,28 +97,36 @@ function assertCarriesBucket(
 }
 
 suite("report schema helpers", () => {
-  test("FUSED_THRESHOLD is 0.85", () => {
-    assert.equal(FUSED_THRESHOLD, 0.85);
-  });
-
-  test("severityOf worst boundary", () => {
-    assert.equal(severityOf(0.995), "worst");
-    assert.equal(severityOf(1.0), "worst");
-  });
-
-  test("severityOf top10 boundary", () => {
-    assert.equal(severityOf(0.95), "top10");
-    assert.equal(severityOf(0.9), "top10");
-  });
-
-  test("severityOf mid boundary", () => {
-    assert.equal(severityOf(0.75), "mid");
-    assert.equal(severityOf(0.5), "mid");
-  });
-
-  test("severityOf faint boundary", () => {
-    assert.equal(severityOf(0.49), "faint");
-    assert.equal(severityOf(0), "faint");
+  // The reportable-confidence cutoff and the severity cut points were
+  // both client constants. They are the engine's, and the assertions that
+  // pinned their values moved with them: the cutoff to
+  // `deslop-core::pair::FUSED_THRESHOLD` (read here through the wire flag
+  // `meets_fused_gate`), the four band cut points to
+  // `deslop-core::report_weight::rank_band` and its `rank_band_cut_points`
+  // test. What is pinned here is that no copy of either survived.
+  test("the client owns neither the fused cutoff nor the severity cut points", () => {
+    assert.ok(
+      !("FUSED_THRESHOLD" in reportModule),
+      "the reportable-confidence cutoff must exist only in the engine",
+    );
+    assert.ok(
+      !("severityOf" in reportModule),
+      "the severity cut points must exist only in the engine",
+    );
+    assert.ok(
+      !("rankPercentile" in reportModule),
+      "the rank percentile must exist only in the engine",
+    );
+    assert.equal(
+      cluster({ bucket: "identical" }).meets_fused_gate,
+      true,
+      "a byte-proven cluster arrives already judged against the cutoff",
+    );
+    assert.equal(
+      cluster({ bucket: "structural_only" }).meets_fused_gate,
+      false,
+      "and a demoted one arrives judged the other way",
+    );
   });
 
   // [CLONE-BUCKETS-ROUTING] These five rows were assertions about a
@@ -265,12 +285,17 @@ suite("report schema helpers", () => {
     // Sibling boilerplate: shape saturates, content evidence is absent,
     // so the engine demotes it to `structural_only` at fused 0.31.
     const shapeOnly = signals(1.0, 0.3, 0, 0.31);
-    assert.ok(shapeOnly.fused < FUSED_THRESHOLD, "fixture: demoted, well under the cutoff");
+    const demoted = cluster({ bucket: "structural_only", signals: shapeOnly });
+    assert.equal(
+      demoted.meets_fused_gate,
+      false,
+      "fixture: the engine judged it under its own reportable cutoff",
+    );
     assert.ok(
       shapeOnly.structural >= 0.99,
       "fixture: its shape signal is exactly what used to promote it",
     );
-    const routed = resolveBucket(cluster({ bucket: "structural_only", signals: shapeOnly }));
+    const routed = resolveBucket(demoted);
     assert.equal(
       routed,
       "structural_only",
@@ -402,13 +427,27 @@ suite("report schema helpers", () => {
     );
   });
 
-  test("occurrenceCount prefers the authoritative total over the loaded subset", () => {
-    assert.equal(occurrenceCount(cluster({ occurrences_total: 35 })), 35);
+  test("occurrenceCount reports the engine's count, not the loaded subset", () => {
+    // The live wire truncates `occurrences`, so the carried list is not
+    // the cluster. The count is computed once by
+    // `deslop-core::report::occurrence_count` and read verbatim here.
+    assert.equal(occurrenceCount(cluster({ occurrence_count: 35 })), 35);
+    const truncated = cluster({ occurrence_count: 35, occurrences_truncated: true });
+    assert.equal(truncated.occurrences.length, 2, "fixture: only two occurrences travelled");
+    assert.equal(
+      occurrenceCount(truncated),
+      35,
+      "a truncated wire list must never shrink the reported count",
+    );
   });
 
-  test("occurrenceCount falls back to size when total is missing or zero", () => {
-    assert.equal(occurrenceCount(cluster()), 4);
-    assert.equal(occurrenceCount(cluster({ occurrences_total: 0 })), 4);
+  test("occurrenceCount never falls back to a client-derived number", () => {
+    assert.equal(occurrenceCount(cluster()), 4, "the fixture's own count, stamped as the engine would");
+    assert.equal(
+      occurrenceCount(cluster({ occurrence_count: 2 })),
+      2,
+      "a smaller engine count is still the engine's answer",
+    );
   });
 
   test("bucketLabels hybrid_title carries bracketed Type-N on every bucket", () => {

@@ -60,6 +60,10 @@ pub fn apply_only_changed(report: &mut Report) {
         .retain(|cluster| cluster.intersects_diff == Some(true));
     report.clusters_outside_diff = Some(before.saturating_sub(report.clusters.len()));
     report.metrics.clusters_total = report.clusters.len();
+    // Ranks are 1..n of the list the report actually carries, so the
+    // engine restamps them here rather than letting a client renumber
+    // from array position ([PIPELINE-RANK-WORST-FIRST], [SEVERITY-BAND]).
+    crate::report_weight::stamp_ranks(&mut report.clusters);
 }
 
 #[cfg(test)]
@@ -92,30 +96,10 @@ mod tests {
     }
 
     fn cluster(occurrences: Vec<ReportOccurrence>) -> ReportCluster {
-        ReportCluster {
-            id: "cluster".to_owned(),
-            weight: 1.0,
-            size: occurrences.len(),
-            canonical_node_count: 10,
-            signals: crate::wire_generated::ReportSignals {
-                structural: 1.0,
-                token_jaccard: 1.0,
-                embedding_cos: 0.0,
-                fused: 1.0,
-                agreement: 1.0,
-                rename_consistency: 0.0,
-                literal_fraction: 0.0,
-            },
-            bucket: "identical".to_owned(),
-            category: "logic".to_owned(),
-            occurrences_total: occurrences.len(),
-            occurrences,
-            occurrences_truncated: false,
-            summary: String::new(),
-            interpretation: String::new(),
-            intersects_diff: None,
-            is_newly_introduced: None,
-        }
+        let mut cluster = crate::report_fixtures::fixture_cluster("cluster", occurrences);
+        cluster.canonical_node_count = 10;
+        "csharp".clone_into(&mut cluster.language);
+        cluster
     }
 
     fn scope_with(path: &str, lines: [u64; 2]) -> DiffScope {

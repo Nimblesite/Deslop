@@ -8,6 +8,7 @@ import * as fs from "node:fs";
 import * as vscode from "vscode";
 
 import { occurrenceDisplayLocation } from "../locations";
+import { formatScorePrecise } from "../types/format";
 import { languageForPath } from "../types/languages";
 import { ReportStore } from "../reportStore";
 import {
@@ -153,7 +154,7 @@ export function aiPayloadForCluster(
     `cluster_id: ${cluster.id}`,
     `rank: ${rank}`,
     `bucket: ${bucket} (${labels.taxonomyLabel})`,
-    `weight: ${cluster.weight.toFixed(4)}`,
+    `weight: ${formatScorePrecise(cluster.weight)}`,
     `size: ${cluster.size}`,
     `canonical_node_count: ${cluster.canonical_node_count}`,
     `occurrences: ${occurrenceCount(cluster)}`,
@@ -211,7 +212,12 @@ function humanLocation(occurrence: ReportOccurrence): string {
 
 function signalsLine(cluster: ReportCluster): string {
   const s = cluster.signals;
-  return `signals: structural=${s.structural.toFixed(4)} token=${s.token_jaccard.toFixed(4)} embed=${s.embedding_cos.toFixed(4)} fused=${s.fused.toFixed(4)}`;
+  return (
+    `signals: structural=${formatScorePrecise(s.structural)} ` +
+    `token=${formatScorePrecise(s.token_jaccard)} ` +
+    `embed=${formatScorePrecise(s.embedding_cos)} ` +
+    `fused=${formatScorePrecise(s.fused)}`
+  );
 }
 
 function parentClusterLines(
@@ -226,7 +232,7 @@ function parentClusterLines(
     `cluster_id: ${parent.id}`,
     `rank: ${rankIndex >= 0 ? rankIndex + 1 : "?"}`,
     `bucket: ${bucket} (${labels.taxonomyLabel})`,
-    `weight: ${parent.weight.toFixed(4)}`,
+    `weight: ${formatScorePrecise(parent.weight)}`,
     `size: ${parent.size}`,
     signalsLine(parent),
     `sibling_occurrences: ${Math.max(parent.occurrences.length - 1, 0)}`,

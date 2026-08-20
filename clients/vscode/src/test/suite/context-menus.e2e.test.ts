@@ -11,37 +11,34 @@ import * as vscode from "vscode";
 import { Bucket, ReportCluster, ReportOccurrence } from "../../types/report";
 import { ClusterNode, OccurrenceNode } from "../../tree/providers";
 import { activateExtension } from "./helpers";
+import { wireCluster } from "../cluster.helpers";
 import { signalsWith } from "../signals.helpers";
 
 function cluster(
   id: string,
   bucket: Bucket,
   occurrences: { path: string; start_byte: number; end_byte: number }[],
+  rank = 1,
 ): ReportCluster {
-  const c: ReportCluster = {
+  return wireCluster({
     id,
+    rank,
     weight: 42,
-    size: occurrences.length,
     canonical_node_count: 12,
-    bucket: "identical",
+    bucket,
     signals: signalsWith(bucket, {
       structural: 0.5,
       token_jaccard: 0.6,
+      shape: 0.6,
       embedding_cos: 0.7,
       fused: 0.8,
     }),
     occurrences: occurrences.map((o) => ({ ...o, hidden: false })),
-    occurrences_total: 0,
-    occurrences_truncated: false,
-    summary: "",
-    interpretation: "",
-  };
-  c.bucket = bucket;
-  return c;
+  });
 }
 
-function clusterNode(c: ReportCluster, rank = 1): ClusterNode {
-  return new ClusterNode(c, rank, "mid");
+function clusterNode(c: ReportCluster): ClusterNode {
+  return new ClusterNode(c, "mid");
 }
 
 function occurrenceNode(o: ReportOccurrence): OccurrenceNode {
@@ -88,10 +85,13 @@ suite("tree context menu commands", () => {
   });
 
   test("deslop.copyContextForAI on a cluster embeds byte ranges for tool consumption", async () => {
-    const c = cluster("c-e2e-ai", "same_behavior", [
-      { path: "src/foo.cs", start_byte: 0, end_byte: 123 },
-    ]);
-    await vscode.commands.executeCommand("deslop.copyContextForAI", clusterNode(c, 9));
+    const c = cluster(
+      "c-e2e-ai",
+      "same_behavior",
+      [{ path: "src/foo.cs", start_byte: 0, end_byte: 123 }],
+      9,
+    );
+    await vscode.commands.executeCommand("deslop.copyContextForAI", clusterNode(c));
     const text = await vscode.env.clipboard.readText();
     assert.match(text, /cluster_id: c-e2e-ai/);
     assert.match(text, /rank: 9/);

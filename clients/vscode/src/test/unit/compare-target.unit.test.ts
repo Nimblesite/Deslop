@@ -13,6 +13,7 @@ import { OccurrenceNode } from "../../tree/providers";
 import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
 import { bucketSignals } from "../signals.helpers";
+import { wireCluster } from "../cluster.helpers";
 
 async function findDiffTab(): Promise<vscode.TabInputTextDiff> {
   for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -40,19 +41,13 @@ function cluster(
   id: string,
   occurrences: { path: string; start_byte: number; end_byte: number }[],
 ): ReportCluster {
-  return {
+  return wireCluster({
     id,
     weight: 10,
-    size: occurrences.length,
-    canonical_node_count: 4,
     bucket: "identical",
     signals: bucketSignals("identical"),
-    occurrences: occurrences.map((occurrence) => ({ ...occurrence, hidden: false })),
-    occurrences_total: 0,
-    occurrences_truncated: false,
-    summary: "",
-    interpretation: "",
-  };
+    occurrences: occurrences.map((entry) => ({ ...entry, hidden: false })),
+  });
 }
 
 suite("compare command targets", () => {

@@ -20,6 +20,7 @@ import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster } from "../../types/report";
 import { emptyReport, repoMetrics } from "./report.helpers";
 import { bucketSignals } from "../signals.helpers";
+import { occurrence, wireCluster } from "../cluster.helpers";
 
 function fakeCtx(): vscode.ExtensionContext {
   return {
@@ -30,22 +31,14 @@ function fakeCtx(): vscode.ExtensionContext {
 }
 
 function cluster(id: string): ReportCluster {
-  return {
+  return wireCluster({
     id,
     weight: 7,
-    size: 2,
     canonical_node_count: 3,
     bucket: "identical",
     signals: bucketSignals("identical"),
-    occurrences: [
-      { path: "/a.cs", start_byte: 0, end_byte: 10, hidden: false },
-      { path: "/b.cs", start_byte: 0, end_byte: 10, hidden: false },
-    ],
-    occurrences_total: 2,
-    occurrences_truncated: false,
-    summary: "",
-    interpretation: "",
-  };
+    occurrences: [occurrence("/a.cs", 0, 10), occurrence("/b.cs", 0, 10)],
+  });
 }
 
 function storeWith(clusters: ReportCluster[]): ReportStore {
@@ -257,7 +250,7 @@ suite("register command handlers", () => {
   test("openClusterDetails opens the cluster panel for a resolvable node", () => {
     const store = storeWith([cluster("details-target")]);
     const tabsBefore = vscode.window.tabGroups.all.flatMap((g) => g.tabs).length;
-    openClusterDetails(fakeCtx(), store, new ClusterNode(cluster("details-target"), 1, "mid"));
+    openClusterDetails(fakeCtx(), store, new ClusterNode(cluster("details-target"), "mid"));
     const tabsAfter = vscode.window.tabGroups.all.flatMap((g) => g.tabs).length;
     assert.ok(tabsAfter >= tabsBefore, "a resolvable node opens (or reveals) the cluster panel");
   });

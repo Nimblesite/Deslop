@@ -52,30 +52,26 @@ fn sample_cluster(
     occurrences: Vec<ReportOccurrence>,
     bucket: &str,
 ) -> ReportCluster {
-    ReportCluster {
-        id: id.to_owned(),
-        weight,
-        size: occurrences.len(),
-        canonical_node_count: 25,
-        signals: ReportSignals {
-            structural: 1.0,
-            token_jaccard: 0.9,
-            embedding_cos: 0.4,
-            fused: 0.91,
-            agreement: 0.58,
-            rename_consistency: 0.72,
-            literal_fraction: 0.24,
-        },
-        bucket: bucket.into(),
-        category: "logic".into(),
-        occurrences_total: occurrences.len(),
-        occurrences_truncated: false,
-        occurrences,
-        summary: "summary".into(),
-        interpretation: "interp".into(),
-        intersects_diff: None,
-        is_newly_introduced: None,
-    }
+    let signals = ReportSignals {
+        structural: 1.0,
+        token_jaccard: 0.9,
+        shape: 1.0,
+        embedding_cos: 0.4,
+        fused: 0.91,
+        agreement: 0.58,
+        rename_consistency: 0.72,
+        literal_fraction: 0.24,
+    };
+    let mut cluster = deslop_core::report_fixtures::fixture_cluster(id, occurrences);
+    cluster.weight = weight;
+    cluster.canonical_node_count = 25;
+    cluster.signals = signals;
+    bucket.clone_into(&mut cluster.bucket);
+    "csharp".clone_into(&mut cluster.language);
+    "summary".clone_into(&mut cluster.summary);
+    "interp".clone_into(&mut cluster.interpretation);
+    deslop_core::report_fixtures::restamp_fixture(&mut cluster);
+    cluster
 }
 
 fn occurrence(path: &str, start: usize, end: usize) -> ReportOccurrence {
@@ -276,6 +272,7 @@ fn diagnostic_message_tracks_each_clusters_own_evidence() {
     anchor_poor.signals = ReportSignals {
         structural: 1.0,
         token_jaccard: 0.0,
+        shape: 1.0,
         embedding_cos: 0.0,
         fused: 0.33,
         agreement: 0.04,

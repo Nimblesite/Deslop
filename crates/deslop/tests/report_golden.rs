@@ -112,6 +112,7 @@ fn committed_golden_satisfies_report_contract() -> Result<()> {
     assert_cold_scan_header(&golden);
     assert_occurrences_are_real_type1_clones(&golden)?;
     assert_ranking_and_cluster_shape(&golden)?;
+    assert_engine_derived_fields(&golden);
     assert_metrics_arithmetic(&golden)?;
     Ok(())
 }
@@ -351,6 +352,74 @@ fn assert_authored_cluster(cluster_list: &[Value], rank: usize, copies: u64) -> 
         "--embeddings off must zero the embedding signal: {cluster}"
     );
     Ok(())
+}
+
+/// Every figure the report states about a cluster that a consumer would
+/// otherwise have to derive: the worst-first rank and its severity band
+/// ([SEVERITY-BAND]), the language ([PIPELINE-LANG-TRAIT]), the display
+/// occurrence count, the shape reading, the fused-gate verdict and the
+/// evidence sentence ([FUSION-CONTENT-GATE]).
+///
+/// Every one of these is carried precisely so no client recomputes it,
+/// so a report that omits one — or states one the rest of the report
+/// contradicts — is a defect here, not in the client that renders it.
+fn assert_engine_derived_fields(golden: &Value) {
+    let cluster_list = clusters(golden);
+    let total = cluster_list.len();
+    for (index, cluster) in cluster_list.iter().enumerate() {
+        let expected_rank = u64::try_from(index.saturating_add(1)).ok();
+        assert_eq!(
+            field(cluster, "rank").as_u64(),
+            expected_rank,
+            "clusters must carry their one-based worst-first rank: {cluster}"
+        );
+        assert_eq!(
+            field(cluster, "language").as_str(),
+            Some("rust"),
+            "the golden corpus is Rust, and the engine stamps the language it parsed: {cluster}"
+        );
+        assert_eq!(
+            field(cluster, "occurrence_count").as_u64(),
+            Some(cluster_size(cluster)),
+            "the stated occurrence count must equal the occurrences the report carries: {cluster}"
+        );
+        assert_eq!(
+            field(cluster, "meets_fused_gate").as_bool(),
+            Some(true),
+            "byte-proven clones clear the reportable fused line: {cluster}"
+        );
+        assert!(
+            approx(signal(cluster, "shape"), 1.0),
+            "byte-identical clones saturate the shape reading: {cluster}"
+        );
+        let verdict = field(cluster, "evidence_verdict")
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
+        assert!(
+            verdict.contains("The shapes match at 1.00"),
+            "every cluster must carry the engine's reading of its own signals: {verdict}"
+        );
+        assert!(
+            !verdict.contains("boilerplate"),
+            "a byte-proven clone must never be described as boilerplate: {verdict}"
+        );
+    }
+    // Two clusters: the worse of them tops the percentile, the other
+    // closes it ([SEVERITY-BAND]).
+    assert_eq!(
+        total, 2,
+        "the corpus authors exactly two clusters: {golden}"
+    );
+    let bands: Vec<&str> = cluster_list
+        .iter()
+        .map(|cluster| field(cluster, "rank_band").as_str().unwrap_or_default())
+        .collect();
+    assert_eq!(
+        bands,
+        vec!["worst", "faint"],
+        "the engine bands the ranking; a client never re-derives it: {golden}"
+    );
 }
 
 /// Zero-based rank of the cluster whose occurrences span exactly

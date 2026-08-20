@@ -319,7 +319,7 @@ The LSP pushes three notification types to LSP clients (VSIX, other editors):
 
 - `report/changed` — fires after every pass with a non-empty delta. Payload: `{ generation: u64, summary: ChangeSummary }`. Must fire for pure removals — suppressing it is a bug.
 - `analysis/state` — fires on `idle → running`, `running → idle`, and on scheduler errors.
-- `embedding/progress` — fires around embedding refreshes. Payload: `{ phase, provider_id, model_id, done, total, message? }`.
+- `embedding/progress` — fires around embedding refreshes. Payload: `{ phase, provider_id, model_id, done, total, percent, message? }`. `percent` is `done / total` as a percentage, computed by the engine's single `percent` function ([METRICS-REPO](pipeline.md#metrics-repo)) so a progress readout is derived exactly where every other Deslop percentage is ([PRINCIPLES-ONE-CALCULATION](principles.md#principles-one-calculation)).
 
 The MCP **is** an IPC subscriber. It opens one long-lived `report/subscribe` connection over the socket and re-emits each `report/changed` notification to its own client as `notifications/deslop/reportChanged` ([MCP-NOTIFICATIONS]). It never reads `.deslop/cache/live-report.json` and never watches the workspace.
 

@@ -36,6 +36,10 @@ function reportOccurrence(occurrencePath: string, startByte = 0, endByte = 20): 
   return { path: occurrencePath, start_byte: startByte, end_byte: endByte, hidden: false };
 }
 
+// Re-shapes a fixture cluster around an explicit occurrence list. Every
+// count moves together — `occurrence_count` is the number every surface
+// displays, so a fixture that changed the list and left the engine's
+// count behind would describe a cluster the engine could never publish.
 function withOccurrences(
   base: ReportCluster,
   occurrences: ReportOccurrence[],
@@ -44,6 +48,7 @@ function withOccurrences(
     ...base,
     size: occurrences.length,
     occurrences_total: occurrences.length,
+    occurrence_count: occurrences.length,
     occurrences,
   };
 }
@@ -850,10 +855,16 @@ suite("TopOffendersProvider", () => {
       assert.doesNotMatch(labels.join("\n"), /Dirty\.cs/, "stale dirty-file offsets must be hidden");
       assert.doesNotMatch(labels.join("\n"), /Clean\.cs/, "one-copy mixed cluster must be hidden");
       assert.ok(mixedNode, "mixed cluster must remain via its clean peer occurrences");
+      // Inverted deliberately. This row used to read `rank #1` because the
+      // tree numbered its own array, so hiding two stale rows promoted the
+      // third cluster to "the repository's worst" — a figure the engine
+      // never published. Rank is the engine's ([SEVERITY-BAND],
+      // [PRINCIPLES-ONE-CALCULATION]); the dirty projection hides rows, it
+      // does not re-rank the repository.
       assert.match(
         String(mixedNode.description ?? ""),
-        /\brank\s+#1\b/,
-        "surviving cluster is re-ranked after pruning — rank #1 surfaces in the grey description",
+        /\brank\s+#3\b/,
+        "the survivor keeps the global rank the engine gave it — pruning never renumbers",
       );
       assert.equal(provider.getChildren(mixedNode).length, 2, "only clean peer occurrences remain expandable");
     } finally {

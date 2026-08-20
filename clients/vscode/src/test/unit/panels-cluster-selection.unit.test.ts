@@ -14,6 +14,7 @@ import { anchorForClusterId, clusterPanelFeed, resolveAnchoredCluster } from "..
 import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
 import { bucketSignals } from "../signals.helpers";
+import { wireCluster } from "../cluster.helpers";
 
 interface PostedMessage {
   kind?: string;
@@ -80,19 +81,14 @@ function occ(filePath: string, startByte: number, endByte: number): ReportOccurr
 }
 
 function clusterOf(id: string, weight: number, occurrences: ReportOccurrence[]): ReportCluster {
-  return {
+  return wireCluster({
     id,
     weight,
-    size: occurrences.length,
     canonical_node_count: 0,
     bucket: "identical",
     signals: bucketSignals("identical"),
     occurrences,
-    occurrences_total: occurrences.length,
-    occurrences_truncated: false,
-    summary: "",
-    interpretation: "",
-  };
+  });
 }
 
 function reportOf(clusters: ReportCluster[]): Report {
@@ -234,6 +230,7 @@ suite("cluster detail panel selection (#173)", () => {
         model_id: "nomic-embed-text",
         done: 0,
         total: 10,
+        percent: 0,
         message: undefined,
       });
       store.setLifecycle({ kind: "analysing" });

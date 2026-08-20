@@ -155,14 +155,25 @@ pub fn content_gated_signals(
     // nothing" rather than "measured, and found this".
     let signals = with_content_evidence(signals, content);
     if kind == ClusterKind::Identical || !has_saturating_shape_evidence(signals) {
-        return signals;
+        return stamp_shape(signals);
     }
+    stamp_shape(apply_content_gate(signals, content, kind))
+}
+
+/// Scales a saturated shape match by the measured content evidence —
+/// the arithmetic half of [`content_gated_signals`], split out so both
+/// stay inside the function budget ([FUSION-CONTENT-GATE]).
+fn apply_content_gate(
+    signals: ReportSignals,
+    content: ContentEvidence,
+    kind: ClusterKind,
+) -> ReportSignals {
     let content_confidence = content
         .agreement
         .max(RENAME_CONSISTENCY_DISCOUNT * content.rename_consistency);
     let fused = signals
         .embedding_cos
-        .max(signals.structural.max(signals.token_jaccard) * content_confidence)
+        .max(signals.shape_score() * content_confidence)
         .clamp(0.0, 1.0);
     // A shape-identical cluster routed `NearlyIdentical` shares one
     // Merkle hash, so the members' normalised kind streams are equal by
@@ -185,6 +196,16 @@ pub fn content_gated_signals(
         fused,
         ..signals
     }
+}
+
+/// Stamps the rendered shape reading onto the signals every surface
+/// receives ([FUSION-CONTENT-GATE]). This gate is the last transform a
+/// rendered cluster's signals pass through, so stamping here — on both
+/// exit paths — is what lets every consumer read `shape` verbatim
+/// instead of re-deriving `max(structural, token_jaccard)` locally.
+fn stamp_shape(mut signals: ReportSignals) -> ReportSignals {
+    signals.shape = signals.shape_score();
+    signals
 }
 
 /// Stamps the measured content evidence onto a rendered signal triple

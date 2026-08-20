@@ -130,16 +130,21 @@ suite("ReportStore", () => {
     assert.equal(fired, 0);
   });
 
-  test("applyDelta adds, updates, removes, and re-sorts by weight", () => {
+  test("applyDelta adds, updates, removes, and orders by the engine's rank", () => {
+    // The engine restamps the whole ranking on every generation, so the
+    // delta's clusters arrive carrying their new ranks and the merge
+    // orders on those — never on a weight comparison of its own, which
+    // would have to guess the engine's tie-break
+    // ([VSIX-TOP-OFFENDERS-RANK-GLOBAL], [PRINCIPLES-ONE-CALCULATION]).
     const store = new ReportStore();
-    const a = cluster("a", 1);
-    const b = cluster("b", 2);
+    const a = cluster("a", 2, [], 1);
+    const b = cluster("b", 1, [], 2);
     store.setSnapshot(emptyReport({ clusters: [a, b] }), 1);
     store.applyDelta(
       delta({
-        clusters_added: [cluster("c", 10)],
+        clusters_added: [cluster("c", 10, [], 1)],
         clusters_removed: ["a"],
-        clusters_updated: [cluster("b", 5)],
+        clusters_updated: [cluster("b", 5, [], 2)],
         cache_stats: { hits: 3, misses: 4 },
         tool_version: "v2",
       }),
@@ -149,6 +154,12 @@ suite("ReportStore", () => {
     assert.deepEqual(
       out.clusters.map((c) => c.id),
       ["c", "b"],
+      "the merged list follows the ranks the engine published, worst first",
+    );
+    assert.deepEqual(
+      out.clusters.map((c) => c.rank),
+      [1, 2],
+      "and each cluster keeps the rank it arrived with",
     );
     assert.equal(out.cache_stats.hits, 3);
     assert.equal(out.tool_version, "v2");
@@ -236,6 +247,7 @@ suite("ReportStore", () => {
       model_id: "nomic-embed-text",
       done: 0,
       total: 200,
+      percent: 0,
       message: undefined,
     });
     assert.equal(fired, 1);
@@ -245,6 +257,7 @@ suite("ReportStore", () => {
       model_id: "nomic-embed-text",
       done: 0,
       total: 200,
+      percent: 0,
       message: undefined,
     });
   });
@@ -303,6 +316,7 @@ suite("ReportStore", () => {
       model_id: "nomic-embed-text",
       done: 64,
       total: 64,
+      percent: 100,
       message: undefined,
     });
     store.setEmbeddingProgress(null);

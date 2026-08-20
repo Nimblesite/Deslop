@@ -95,30 +95,15 @@ pub(crate) fn synthetic_report_cluster(
     occurrences: Vec<deslop_core::report::ReportOccurrence>,
     bucket: &str,
 ) -> deslop_core::report::ReportCluster {
-    deslop_core::report::ReportCluster {
-        id: "abcdef0123456789".to_owned(),
-        weight: 1.0,
-        size: occurrences.len(),
-        canonical_node_count: 40,
-        signals: deslop_core::report::ReportSignals {
-            structural: 1.0,
-            token_jaccard: 1.0,
-            embedding_cos: 0.0,
-            fused: 1.0,
-            agreement: 1.0,
-            rename_consistency: 0.0,
-            literal_fraction: 0.0,
-        },
-        bucket: bucket.to_owned(),
-        category: "logic".to_owned(),
-        occurrences_total: occurrences.len(),
-        occurrences,
-        occurrences_truncated: false,
-        summary: String::new(),
-        interpretation: String::new(),
-        intersects_diff: None,
-        is_newly_introduced: None,
-    }
+    let mut cluster =
+        deslop_core::report_fixtures::fixture_cluster("abcdef0123456789", occurrences);
+    cluster.canonical_node_count = 40;
+    bucket.clone_into(&mut cluster.bucket);
+    // No parse pass ran over a hand-built cluster, so its language is
+    // the engine's own unresolvable label rather than a re-derivation
+    // from the fixture's file names.
+    "unknown".clone_into(&mut cluster.language);
+    cluster
 }
 
 /// One report occurrence over `[start, end)` of `file_name`.

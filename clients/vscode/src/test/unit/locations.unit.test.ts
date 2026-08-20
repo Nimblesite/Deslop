@@ -13,6 +13,7 @@ import {
 import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
 import { bucketSignals } from "../signals.helpers";
+import { occurrence, wireCluster } from "../cluster.helpers";
 
 suite("occurrence display locations", () => {
   test("projects a byte offset to one-indexed line and column", () => {
@@ -121,19 +122,15 @@ function writeFixture(): { dir: string; file: string; source: string } {
 }
 
 function cluster(file: string, startByte: number): ReportCluster {
-  return {
+  return wireCluster({
     id: "issue-8",
     weight: 1,
     size: 1,
     canonical_node_count: 1,
     bucket: "identical",
     signals: bucketSignals("identical"),
-    occurrences: [{ path: file, start_byte: startByte, end_byte: startByte + 9, hidden: false }],
-    occurrences_total: 0,
-    occurrences_truncated: false,
-    summary: "",
-    interpretation: "",
-  };
+    occurrences: [occurrence(file, startByte, startByte + 9)],
+  });
 }
 
 function report(clusters: ReportCluster[]): Report {

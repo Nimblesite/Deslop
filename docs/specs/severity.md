@@ -69,9 +69,22 @@ Two visual channels carry two orthogonal facts on every cluster row and bubble:
 - **Colour** = the cluster's Deslop severity ([SEVERITY-DESLOP-MAP]). Answers *how alarming is this kind of duplicate*: red / amber / blue / grey.
 - **Glyph density** = the cluster's weight percentile ([lsp.md §LSP-SEVERITY-PERCENTILE](lsp.md#lsp-severity-percentile)). Answers *how big an offender is this specific cluster*: `●●` (worst) · `●` (top 10%) · `◐` (top 50%) · `○` (rest).
 
-A faint identical clone therefore renders as a red `○`, while a high-impact loosely-similar cluster renders as a blue `●●`. `resolveSeverity(bucket, percentile)` in `clients/vscode/src/severity.ts` is the single resolver for every visual surface ([VSIX-PRINCIPLES] principle 6). It returns **both** channels together — `{ level, band }` — precisely so a caller cannot reach for one and silently render the other fact.
+A faint identical clone therefore renders as a red `○`, while a high-impact loosely-similar cluster renders as a blue `●●`. `resolveSeverity(cluster)` in `clients/vscode/src/severity.ts` is the single resolver for every visual surface ([VSIX-PRINCIPLES] principle 6). It returns **both** channels together — `{ level, band }` — precisely so a caller cannot reach for one and silently render the other fact. Both channels are *read*, never derived: the level maps the engine's bucket label, the band is the engine's `rank_band` ([SEVERITY-BAND]).
 
-**Neither channel may answer for the other, and the percentile channel structurally cannot.** The band is monotonic down the ranking by construction, so any answer it gives for one demoted cluster it must give for every cluster below it too; asking it to also encode the bucket is unsatisfiable, not merely unimplemented. That is why the demotion evidence lives in colour. A content-gated family topping the report renders as a muted `●●`: loud about *impact*, quiet about *kind*. Pinned by `severity.unit.test.ts` — `severity never brightens as rank worsens, at any confidence` (band) and `the colour channel is a pure function of the bucket, at every rank` (level) hold simultaneously only because the channels are separate.
+**Neither channel may answer for the other, and the percentile channel structurally cannot.** The band is monotonic down the ranking by construction, so any answer it gives for one demoted cluster it must give for every cluster below it too; asking it to also encode the bucket is unsatisfiable, not merely unimplemented. That is why the demotion evidence lives in colour. A content-gated family topping the report renders as a muted `●●`: loud about *impact*, quiet about *kind*. Pinned across the two languages that own the two channels: `report_weight::rank_band_never_brightens_down_the_report` (band) and `severity.unit.test.ts::the colour channel is a pure function of the bucket, at every band` (level) hold simultaneously only because the channels are separate.
+
+### [SEVERITY-BAND] The band is the engine's, computed once
+
+Glyph density is a *classification of a rank percentile*, which makes it a calculation and therefore the engine's ([PRINCIPLES-ONE-CALCULATION](principles.md#principles-one-calculation)). `report_weight::stamp_ranks` runs at the end of the worst-first sort and writes two fields onto every rendered cluster:
+
+| Field | Value |
+|---|---|
+| `rank` | one-based position in the report's worst-first list ([PIPELINE-RANK-WORST-FIRST](pipeline.md#pipeline-rank-worst-first)) |
+| `rank_band` | `worst` · `top10` · `mid` · `faint` |
+
+The percentile is `1 - (rank - 1) / (total - 1)`, and `0` for a single-cluster report — one cluster has no spread to express. The cut points are `≥ 0.99 → worst`, `≥ 0.9 → top10`, `≥ 0.5 → mid`, otherwise `faint`. All of it is held by `report_weight::rank_band_cut_points`.
+
+Both fields are restamped wherever the carried list changes: after a diff-scoped filter (`diff_scope::tag::apply_only_changed`) and when a report is replayed from disk (`report_restamp::restamp_derived_fields`). Consumers render `rank` and `rank_band` verbatim. Re-numbering from array position is prohibited and was a shipped defect: any client that filtered or projected the list before numbering rebanded every cluster in it, so a `faint` cluster in a two-item filtered view rendered as the repository's worst. An empty `rank_band` — a report written before the field existed — reads as `faint`.
 
 ### [SEVERITY-CONFIG] Configuration surface
 
