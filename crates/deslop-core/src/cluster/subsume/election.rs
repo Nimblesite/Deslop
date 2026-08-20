@@ -9,7 +9,10 @@
 //! carries the fixture that would break without it.
 
 use crate::{
-    buckets::{is_demoted_tier, measured_kind, spans_multiple_files, ClusterKind},
+    buckets::{
+        is_demoted_tier, measured_kind, spans_multiple_files, ClusterKind,
+        STRUCTURAL_SATURATION_FLOOR,
+    },
     report::ReportSignals,
 };
 
@@ -109,6 +112,13 @@ pub(super) fn preferred_view(proposed: &Cluster, other: &Cluster, nesting: Nesti
 /// `issue_343_sum_clamp_saturation` counted the orphan). Content
 /// overturns enclosure only across the demoted/credible boundary,
 /// never inside it.
+#[expect(
+    clippy::panic,
+    reason = "CLAUDE.md accuracy quarantine: the routing this panic replaces \
+              deleted a byte-proven single-file clone, which is silently-wrong \
+              output; pinned by \
+              byte_identical_clone_survives_a_demoted_enclosing_view_in_one_file"
+)]
 fn precision_preference(proposed: &Cluster, other: &Cluster, nesting: Nesting) -> Preference {
     match (demoted(proposed), demoted(other)) {
         (false, true) => Preference::First,
@@ -116,6 +126,48 @@ fn precision_preference(proposed: &Cluster, other: &Cluster, nesting: Nesting) -
             if other.content.verbatim_dominated && spans_multiple_files(&other.members) =>
         {
             Preference::Second
+        }
+        // QUARANTINE — CLAUDE.md STRICT NO INACCURATE CODE RULE.
+        //
+        // What the removed routing did: a demoted proposed view whose own
+        // occurrences disagree in shape (`structural` below
+        // [`STRUCTURAL_SATURATION_FLOOR`]) faced a *byte-proven* credible
+        // view confined to one file and fell through to the enclosure arm
+        // below, where the demoted encloser won and the byte-identical
+        // clone was deleted from the report. On `csharp-merge-readafter` a
+        // `structural_only` straddle at `structural` 0.85 (235 B vs 189 B —
+        // its own occurrences are not the same code) deleted the verbatim
+        // 158-byte five-statement run at `Prefix.cs` L6-10/L17-21: a
+        // Type-1 false negative, plus a metric false positive (nine lines
+        // claimed duplicated where five are).
+        //
+        // Why it was deleted: the arm above bars the byte-proof escape to
+        // clones that cross files, so a single-file byte-proven clone had
+        // no route past a demoted encloser, however incoherent that
+        // encloser's own scope. The bar itself is load-bearing only for
+        // *saturated* umbrellas: at `--min-nodes 4` the
+        // `python-issue-71-rest-endpoint-shape` umbrella (`structural`
+        // 1.0) correctly absorbs a byte-proven in-file assert family
+        // (`rest_endpoint_family_with_fstring_paths_is_suppressed`), so
+        // the saturation guard on this arm keeps that absorption intact
+        // and quarantines only the non-saturated straddle case.
+        //
+        // Pinned by
+        // `byte_identical_clone_survives_a_demoted_enclosing_view_in_one_file`
+        // (`crates/deslop/tests/cross_cluster_collapse.rs`) and
+        // `declared_inside_read_after_refuses`
+        // (`crates/deslop-core/tests/refactor_merge_refusals.rs`).
+        (true, false)
+            if other.content.verbatim_dominated
+                && proposed.signals.structural < STRUCTURAL_SATURATION_FLOOR =>
+        {
+            panic!(
+                "quarantined: a demoted view whose occurrences disagree in \
+                 shape must not delete a byte-proven clone (proposed {} vs \
+                 other {})",
+                proposed.id.as_str(),
+                other.id.as_str()
+            )
         }
         // Within one credibility tier the enclosing view is normally
         // the duplication and the nested view re-describes it, so

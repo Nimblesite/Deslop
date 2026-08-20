@@ -33,7 +33,7 @@ mod routing;
 pub use gate::{
     content_gated_signals, content_support, has_saturating_shape_evidence, lacks_content_support,
     CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR, LITERAL_TABLE_MIN_FRACTION,
-    RENAME_CONSISTENCY_DISCOUNT, SATURATING_TOKEN_FLOOR,
+    RENAME_CONSISTENCY_DISCOUNT, SATURATING_TOKEN_FLOOR, STRUCTURAL_SATURATION_FLOOR,
 };
 pub(crate) use routing::{
     is_demoted_tier, measured_kind, route_shape_identical, spans_multiple_files,

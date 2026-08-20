@@ -65,8 +65,18 @@ pub const LITERAL_TABLE_MIN_FRACTION: f64 = 0.8;
 /// `report_render::route_shape_identical`.
 #[must_use]
 pub fn has_saturating_shape_evidence(signals: ReportSignals) -> bool {
-    signals.structural >= 0.99 || signals.token_jaccard >= SATURATING_TOKEN_FLOOR
+    signals.structural >= STRUCTURAL_SATURATION_FLOOR
+        || signals.token_jaccard >= SATURATING_TOKEN_FLOOR
 }
+
+/// Structural grade at or above which a view's occurrences are the same
+/// normalised tree: [FUSION-SHARED-SUBTREE] grades `1 - TED/max(nodes)`,
+/// so saturation means the members align node for node and the view is a
+/// faithful description of one repeated shape. Named because three
+/// routing sites and the subsumption election all turn on this single
+/// boundary — a view *below* it is measuring occurrences that disagree,
+/// and nothing downstream may treat its scope as trustworthy.
+pub const STRUCTURAL_SATURATION_FLOOR: f64 = 0.99;
 
 /// Content support carried by the two independent measured
 /// populations: either may vouch for a shape-identical cluster — pooled
@@ -108,7 +118,7 @@ pub fn content_support(agreement: f64, rename_consistency: f64) -> f64 {
 /// conviction stands exactly as before ([FUSION-SHARED-SUBTREE]).
 #[must_use]
 pub fn lacks_content_support(signals: ReportSignals) -> bool {
-    let misaligned_nearmiss = signals.structural < 0.99
+    let misaligned_nearmiss = signals.structural < STRUCTURAL_SATURATION_FLOOR
         && (is_token_carried_nearmiss(signals) || is_shape_corroborated_nearmiss(signals));
     has_saturating_shape_evidence(signals)
         && !misaligned_nearmiss
@@ -192,7 +202,9 @@ fn apply_content_gate(
     // estimated value. `StructuralOnly` keeps its unscored signal:
     // absent token support is that bucket's defining signature
     // ([RANK-STRUCTURAL-ONLY]).
-    let token_jaccard = if kind == ClusterKind::NearlyIdentical && signals.structural >= 0.99 {
+    let token_jaccard = if kind == ClusterKind::NearlyIdentical
+        && signals.structural >= STRUCTURAL_SATURATION_FLOOR
+    {
         1.0
     } else {
         signals.token_jaccard

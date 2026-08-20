@@ -257,3 +257,106 @@ fn no_two_clusters_cover_the_same_physical_bytes() -> Result<()> {
     );
     Ok(())
 }
+
+/// The default-settings report for a fixture directory, with embeddings
+/// off so the assertion turns on deterministic signals only.
+fn default_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value> {
+    let mut cmd = deslop_cmd(scan_root, &tmp.join("report"))?;
+    let _assertion = cmd.args(["--embeddings", "off"]).assert().success();
+    let body = fs::read_to_string(report_path(tmp))?;
+    Ok(serde_json::from_str(&body)?)
+}
+
+/// One line per published cluster covering `needle`, for failure output.
+fn rendered_clusters(report: &serde_json::Value, needle: &str) -> Vec<String> {
+    clusters_for_file(report, needle)
+        .iter()
+        .map(|cluster| {
+            let spans: Vec<String> = cluster_occurrences(cluster)
+                .iter()
+                .map(|occurrence| format!("{}..{}", occurrence.start, occurrence.end))
+                .collect();
+            format!(
+                "{} [{}] {}",
+                cluster_id(cluster),
+                cluster_bucket(cluster),
+                spans.join(",")
+            )
+        })
+        .collect()
+}
+
+/// [REPAIR-SUBSUME-CONTENT-FIRST] / [PIPELINE-CLUSTER-SUBSUME]: the
+/// single-file half of the contract
+/// `content_proven_nested_clone_survives_content_poor_enclosing_view`
+/// holds across files.
+///
+/// `csharp-merge-readafter` holds one byte-identical five-statement run
+/// duplicated between two methods of the same class — `Prefix.cs` L6-10
+/// and L17-21, 158 bytes each, byte-for-byte equal. Enclosing it is a
+/// mis-scoped near-miss pairing the *whole* `ApplyStandard` body (L4-12,
+/// 235 bytes) against only the prefix of `ApplyPremium` (L16-21, 189
+/// bytes): two occurrences that are not the same code, routed
+/// `structural_only` at `structural` 0.85 and demoted by the renderer.
+///
+/// The demoted encloser must not delete the byte-identical clone. Both
+/// exceptions that let a nested view overturn its encloser require
+/// `spans_multiple_files`, so a byte-proven clone confined to one file
+/// has no route to survive: the report loses a Type-1 duplicate and
+/// claims nine lines of `ApplyStandard` are duplicated where five are.
+#[test]
+fn byte_identical_clone_survives_a_demoted_enclosing_view_in_one_file() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = fixture("csharp-merge-readafter");
+    let report = default_report(tmp.path(), &scan_root)?;
+    let candidates = clusters_for_file(&report, "Prefix.cs");
+    assert!(
+        !candidates.is_empty(),
+        "the fixture must report the duplicated prefix at all: {report:#}"
+    );
+
+    let mut byte_identical = Vec::new();
+    for cluster in &candidates {
+        let texts = occurrence_texts(&scan_root, cluster)?;
+        if let [first, rest @ ..] = texts.as_slice() {
+            if !rest.is_empty() && rest.iter().all(|text| text == first) {
+                byte_identical.push(cluster.clone());
+            }
+        }
+    }
+
+    let rendered = rendered_clusters(&report, "Prefix.cs");
+    assert_eq!(
+        byte_identical.len(),
+        1,
+        "exactly one published cluster must be the byte-identical \
+         five-statement run duplicated between ApplyStandard and \
+         ApplyPremium; a demoted `structural_only` view enclosing it must \
+         not delete it. Published: {rendered:#?}"
+    );
+
+    let clone = byte_identical
+        .first()
+        .expect("length asserted to be exactly one above");
+    let occurrences = cluster_occurrences(clone);
+    assert_eq!(
+        occurrences.len(),
+        2,
+        "the byte-identical run occurs exactly twice: {clone:#}"
+    );
+    for occurrence in &occurrences {
+        assert_eq!(
+            occurrence.end.saturating_sub(occurrence.start),
+            158,
+            "each occurrence is the same 158-byte run; a differently-sized \
+             occurrence means a mis-scoped view was elected: {clone:#}"
+        );
+    }
+    assert_eq!(
+        cluster_bucket(clone),
+        "identical",
+        "a byte-for-byte equal duplicate is Type-1 `identical`, never a \
+         demoted near-miss: {clone:#}"
+    );
+    Ok(())
+}
