@@ -130,8 +130,25 @@ fn log_subsumption(survivor: &Cluster, discarded: &Cluster, decision: &'static s
         discarded = discarded.id.as_str(),
         discarded_size = discarded.members.len(),
         discarded_structural = discarded.signals.structural,
+        survivor_spans = span_summary(&survivor.members).as_str(),
+        discarded_spans = span_summary(&discarded.members).as_str(),
         "cross-cluster subsumption",
     );
+}
+
+/// Compact `file:start..end` list for the subsumption trace. Byte
+/// offsets only — never source text ([PRINCIPLES-LOGGING]).
+fn span_summary(members: &[Fingerprint]) -> String {
+    members
+        .iter()
+        .map(|member| {
+            format!(
+                "{:?}:{}..{}",
+                member.file_id, member.byte_range.start, member.byte_range.end
+            )
+        })
+        .collect::<Vec<String>>()
+        .join(",")
 }
 
 /// Decides which cluster survives when their occurrences cover the same
@@ -140,18 +157,43 @@ fn evaluate_pair(outer: &Cluster, inner: &Cluster) -> PairDecision {
     if !covers_same_region(outer, inner) {
         return PairDecision::Keep;
     }
+    // Enclosure is nominated in **both** directions. `outer`/`inner`
+    // are scan positions ordered by weight, not by nesting, so testing
+    // only one direction left the case where the enclosing view is
+    // also the heavier one — which is exactly the whole-method Type-3
+    // near-miss now that its `structural` is a measured overlap
+    // ([FUSION-SHARED-SUBTREE]). There, the untested direction fell
+    // through to `structural_precision`, and a byte-identical fragment
+    // nested inside the method deleted it on `structural 1.00 > 0.88`
+    // — a comparison across two different scopes, where the fragment
+    // scores 1.00 *because* it excludes the inserted statement. Whole
+    // methods vanished from `ts-type3-stmt` entirely (gh #408).
     if strictly_encloses(&inner.members, &outer.members) {
-        return match preferred_view(inner, outer) {
+        return match preferred_view(inner, outer, Nesting::ProposedEncloses) {
             Preference::First => PairDecision::DropOuter,
             Preference::Second => PairDecision::DropInner,
             Preference::Neither => PairDecision::Keep,
         };
     }
-    match preferred_view(outer, inner) {
+    let nesting = if strictly_encloses(&outer.members, &inner.members) {
+        Nesting::ProposedEncloses
+    } else {
+        Nesting::Neither
+    };
+    match preferred_view(outer, inner, nesting) {
         Preference::First => PairDecision::DropInner,
         Preference::Second => PairDecision::DropOuter,
         Preference::Neither => PairDecision::Keep,
     }
+}
+
+/// Whether the nominated view physically encloses its rival.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Nesting {
+    /// The nominated view strictly encloses the other.
+    ProposedEncloses,
+    /// Neither occurrence set strictly encloses the other.
+    Neither,
 }
 
 /// Which of two clusters covering one region reaches the report.
@@ -196,7 +238,7 @@ fn covers_same_region(outer: &Cluster, inner: &Cluster) -> bool {
 /// view against a `cs`-only rival.
 ///
 /// Only between two views over one file set does precision decide.
-fn preferred_view(proposed: &Cluster, other: &Cluster) -> Preference {
+fn preferred_view(proposed: &Cluster, other: &Cluster, nesting: Nesting) -> Preference {
     match (
         covers_every_file(&proposed.members, &other.members),
         covers_every_file(&other.members, &proposed.members),
@@ -204,7 +246,7 @@ fn preferred_view(proposed: &Cluster, other: &Cluster) -> Preference {
         (false, false) => Preference::Neither,
         (false, true) => Preference::Second,
         (true, false) => Preference::First,
-        (true, true) => precision_preference(proposed, other),
+        (true, true) => precision_preference(proposed, other, nesting),
     }
 }
 
@@ -247,7 +289,7 @@ fn preferred_view(proposed: &Cluster, other: &Cluster) -> Preference {
 /// `issue_343_sum_clamp_saturation` counted the orphan). Content
 /// overturns enclosure only across the demoted/credible boundary,
 /// never inside it.
-fn precision_preference(proposed: &Cluster, other: &Cluster) -> Preference {
+fn precision_preference(proposed: &Cluster, other: &Cluster, nesting: Nesting) -> Preference {
     match (demoted(proposed), demoted(other)) {
         (false, true) => Preference::First,
         (true, false)
@@ -255,6 +297,18 @@ fn precision_preference(proposed: &Cluster, other: &Cluster) -> Preference {
         {
             Preference::Second
         }
+        // Within one credibility tier the enclosing view **is** the
+        // duplication and the nested view re-describes it, so enclosure
+        // decides and the signal grades are not compared at all. They
+        // are not comparable: `structural` is a measured overlap
+        // ([FUSION-SHARED-SUBTREE]) and a nested window scores higher
+        // exactly to the extent that it excludes what differs. A
+        // byte-identical 28-byte parameter list scored 1.00 against the
+        // enclosing method's 0.88 and deleted the only whole-method
+        // Type-3 clone in `ts-type3-stmt`, emptying the report (#408) —
+        // the same shape as the two comparisons this function's history
+        // already removed for shattering method pairs into fragments.
+        _ if nesting == Nesting::ProposedEncloses => Preference::First,
         _ => structural_precision(proposed, other),
     }
 }
@@ -270,10 +324,22 @@ fn demoted(cluster: &Cluster) -> bool {
     is_demoted_tier(measured_kind(signals, cluster.content, &cluster.members))
 }
 
-/// The pre-content tie-break: the structurally more precise view wins.
-/// An embedding-dominant nomination stands even against a more precise
-/// rival: it carries semantic evidence over the same bytes that a
-/// structural view cannot express.
+/// The pre-content tie-break for two views that do **not** nest: the
+/// structurally more precise view wins. An embedding-dominant
+/// nomination stands even against a more precise rival: it carries
+/// semantic evidence over the same bytes that a structural view cannot
+/// express.
+///
+/// Reached only when neither occurrence set strictly encloses the
+/// other — [`evaluate_pair`] nominates the enclosing view first, in
+/// both directions. That ordering matters now that `structural` is a
+/// graded overlap ([FUSION-SHARED-SUBTREE]) rather than binary Merkle
+/// equality: comparing the grade across two views of *different scope*
+/// systematically favours the narrower one, because a window scores
+/// higher exactly to the extent that it excludes what differs. Between
+/// nesting views the comparison is not meaningful and enclosure
+/// decides; between non-nesting views the two grades describe
+/// comparable spans and the more precise one is the better view.
 fn structural_precision(proposed: &Cluster, other: &Cluster) -> Preference {
     if other.signals.structural > proposed.signals.structural && !is_embedding_dominant(proposed) {
         Preference::Second

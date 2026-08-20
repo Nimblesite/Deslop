@@ -70,11 +70,14 @@ The canonical signal thresholds that map a cluster's `(structural, token_jaccard
 | `structural ≥ 0.99 ∧ token_jaccard ≥ 0.99`                     | `Identical`       |
 | `embedding_cos ≥ 0.80 ∧ structural < 0.5`                      | `SameBehavior`    |
 | `structural ≥ 0.99 ∧ token_jaccard < 0.05 ∧ embedding_cos < 0.05` | `StructuralOnly` |
-| `structural ≤ 0.01 ∧ token_jaccard ≥ 0.90`                     | `NearlyIdentical` |
-| `structural ≥ 0.99 ∨ (structural > 0 ∧ token_jaccard ≥ 0.95)`  | `NearlyIdentical` |
+| `token_jaccard ≥ 0.90` (row 4)                                  | `NearlyIdentical` |
+| `structural ≥ 0.75 ∧ token_jaccard ≥ 0.65` (row 4b)            | `NearlyIdentical` |
+| `structural ≥ 0.99`                                            | `NearlyIdentical` |
 | else                                                           | `LooselySimilar`  |
 
 `StructuralOnly` is tested **before** the near-miss rows so a shape-only triple never absorbs into `NearlyIdentical` ([RANK-STRUCTURAL-ONLY], issues #134/#154/#197).
+
+**Row 4b is the shared-subtree near-miss** ([FUSION-SHARED-SUBTREE](fusion.md#fusion-shared-subtree), #408). `structural` is measured ordered subtree overlap, not Merkle equality, so a Type-3 clone whose one inserted statement rehashes every ancestor still measures 0.84–0.91 against the larger method. The two floors are exactly the two that admitted the pair (`admission.shared_subtree_min_overlap`, `admission.shared_subtree_min_jaccard`), so the pipeline cannot admit a shared-subtree near-miss the renderer then hides. Row 4 correspondingly lost its old `structural ≤ 0.01` leg: that leg predates the measurement, when any non-zero value meant a Merkle anchor, and additional shape evidence must never *hide* a cluster the token axis already carries. The spread and unmeasured demotions below still apply to token-carried clusters whose overlap stays under the row-4b floor.
 
 Row 2's `0.80` is `deslop-core::pair::EMBEDDING_SUPPORT_FLOOR` — the single operating point at which a measured cosine counts as the embedding pass *vouching for* a cluster rather than merely having measured one. The same line admits a pair as an ANN candidate at all (`embedding/pairs.rs`) and releases a shape-saturating cluster from the content gate (`report_render::route_shape_identical`). It is one number because it answers one question, and it is named rather than written inline in each of those places: the two functions this table binds — `report::interpret` and `buckets::classify_signals` — are required above to agree, and a literal repeated per call site is exactly how they would silently stop agreeing. Do not confuse it with `STRUCTURAL_ONLY_MAX_SUPPORT` (0.05), which is a ceiling *below* which a signal counts as **absent**; reading that ceiling as a support floor is the defect gh #356 fixed.
 

@@ -48,17 +48,16 @@ sits on top of. Cited by `live-bubble-fused.unit.test.ts`, `live-bubble.unit.tes
 
 # Part 1 — Branch readiness
 
-**Verdict: no hard blockers. Both are closed — the duplication gate by an honestly measured
-ratchet, the four red `type3_enclosing_method` cases by tracking them the way this repository already
-tracks a red-on-purpose accuracy pin. Everything else is either closed with measured evidence, or is
-a pre-existing defect this branch improved rather than caused.**
+**Verdict: no hard blockers. Both are closed by fixing the defect, not by tracking it — #408 is
+fixed in the engine and all five `type3_enclosing_method` languages pass, and the duplication gate
+passes on an honestly measured ratchet. No test is skipped, ignored, or weakened.**
 
 Neither blocker was closed by weakening anything. The gate moved **down** from main's 14.5 to a
-measured 12.9, not up; the four Type-3 cases keep every assertion they had and now carry
-`#[ignore = "GH #408: …"]` with the measured admission evidence in the reason string — the same
-mechanism `embedding_route_invariance.rs` (#356) and `issue_343_sum_clamp_saturation.rs` (#369)
-already use for exactly this situation. #408 is open and labelled `critical` / `false-negative` /
-`spec-violation`. Run them with `cargo test -p deslop --test type3_enclosing_method -- --ignored`.
+measured 12.9, not up. The five Type-3 cases keep every assertion they had and now go green on real
+recall: `structural` is measured subtree overlap rather than Merkle equality
+([FUSION-SHARED-SUBTREE]), so the whole-method Type-3 near-miss the pipeline always had the evidence
+for is finally admitted and rendered in **all five languages** — `dart`, `go`, `python`,
+`ts-type3-stmt` and `csharp`. #408 goes from 1 of 5 to 5 of 5.
 
 Base `f92300e5e`, head `8751e8bfb`. The duplication figures below were measured on 2026-08-20 against this
 tree with the binary this tree builds. Every other figure is carried forward from the runs the two merged
@@ -81,15 +80,15 @@ audit documents recorded on 2026-08-19/20; re-run them against the exact release
 | `python_issue_72_monkeypatch::monkeypatch_setenv_setup_pattern_is_not_duplicate_code` | green |
 | `python_dict_assert_payload_proof::a_call_inside_a_consumed_payload_value_is_not_excused` | green |
 | `python_literal_variation_calls::rest_endpoint_family_with_fstring_paths_is_suppressed` | green |
-| `type3_enclosing_method.rs` (#408 residue) | **1 of 5 languages green and gating; 4 ignored on #408** |
+| `type3_enclosing_method.rs` (#408 residue) | **green — 5 of 5 languages** |
 
 The three Python suppression contracts went green with the `verbatim_dominated` repair: one
 token-identical family — equal normalised-subtree digest *and* equal collapsed-leaf keys — must now hold a
 strict majority before it can certify a cluster as verbatim. Previously it certified non-verbatim members
 as verbatim and forced `agreement` to 1.0.
 
-The Type-3 residue is analysed in Part 2. It is **not a regression**: at `f92300e` *no* language reports
-the enclosing method pair; at head C# does. This range took #408 from 0 of 5 to 1 of 5.
+The Type-3 residue is analysed in Part 2, and is now **fixed**: at `f92300e` *no* language reports the
+enclosing method pair; at head all five do. This range took #408 from 0 of 5 to 5 of 5.
 
 ## The duplication gate — closed
 
@@ -137,21 +136,15 @@ measurement *more* honest, not the code worse — and 14.5 → 12.9 is real remo
 binary this branch removed 1,307 redundant LOC relative to main. Every move is justified in writing
 in `.deslop.toml`; that ledger is the audit trail and must not be deleted again.
 
-## Ignored tests — eight down to three, plus four newly tracked on #408
+## Ignored tests — eight down to three
 
-All six JavaScript/TypeScript `.skip(...)` calls are gone (0 remain). Two Rust ignores were removed by
-making the tests genuinely pass: `python_issue_119_embedding_role_mismatch` (needed a real fix — see
-below) and `pair_size_coherence` (needed nothing but running).
+**No new `#[ignore]` was introduced.** All six JavaScript/TypeScript `.skip(...)` calls are gone (0
+remain). Two Rust ignores were removed by making the tests genuinely pass:
+`python_issue_119_embedding_role_mismatch` (needed a real fix — see below) and `pair_size_coherence`
+(needed nothing but running).
 
-Four *new* ignores were added, all in `type3_enclosing_method.rs`, all on open issue #408, and all
-carrying the measured admission evidence — endpoint node counts and the exact token Jaccard that
-falls short of `FUSED_THRESHOLD` — in the reason string. They assert behaviour the engine does not
-have yet; not one assertion was changed, and `csharp_type3_reports_the_enclosing_method_pair` stays
-live and gating. This is the same mechanism the three pre-existing ignores use, and it is the
-repository's only way to hold a red accuracy pin in a tree whose `make test` is fail-fast.
-
-The three that remain from before carry the same `#[ignore]` attributes verbatim at `f92300e`, so they
-are unchanged pre-existing defects, not regressions in this range:
+The three that remain carry the same `#[ignore]` attributes verbatim at `f92300e`, so they are
+unchanged pre-existing defects, not regressions in this range:
 
 | still ignored | measured with `--ignored` |
 |---|---|
@@ -255,51 +248,59 @@ bypass the mass discount entirely.
 `dart_issue_197`, the F# data-table corpus, `type2_rename_anchor_floor`, `fused_golden_bands`.
 `CONTENT_SUPPORT_FLOOR` may **not** be lowered to close the 0.033 gap.
 
-## #408 residue — an admission defect, not a gate defect, and it is measured
+## #408 — fixed: `structural` was throwing away the evidence
 
-#408 was filed as a five-language Type-3 recall hole and tracked here as a subsumption problem. `csharp-type3`
-was, and is, fixed. The other four are not this plan's defect: their whole-method pairs are never
-*admitted*. No subsumption order can recover a pair that was never built.
+#408 was filed as a five-language Type-3 recall hole and tracked here as a subsumption problem. It was
+**two** defects, one at each end of the pipeline, and both are fixed. All five fixtures now report the
+enclosing method pair; `type3_enclosing_method.rs` is green with nothing ignored.
 
-Pinned red by [`type3_enclosing_method.rs`](../../crates/deslop/tests/type3_enclosing_method.rs) — `dart`,
-`go`, `python`, `ts-type3-stmt`. `ts-type3-stmt` is the sharpest: one inserted statement takes the visible
-clone count from one to zero.
+**Defect 1 — admission threw away structural evidence it had already computed.** `pair.rs` documented
+`structural_sim` as "the best-achievable subtree overlap", but `candidates::add_lsh_pairs` wrote a
+literal `0.0` for every cross-bucket pair. A single inserted statement rehashes every ancestor Merkle
+node, so the enclosing method scored `structural = 0.0` while the unchanged statements inside it
+stayed Merkle-identical — which is precisely why the fragment views survived and the method did not.
+The exact whole-method token Jaccard is 0.74–0.85, below `FUSED_THRESHOLD` 0.85, so token evidence
+alone could never have rescued it:
 
-Exact k-gram Jaccard between the two whole methods, measured off the normalised token streams:
+| fixture | method nodes | exact Jaccard | measured overlap | admitted before | now |
+|---|---|---|---|---|---|
+| `csharp-type3` | 58 / 52 | 0.8519 | 0.898 | yes | yes |
+| `dart-type3` | 56 / 49 | 0.8431 | 0.877 | no | **yes** |
+| `ts-type3-stmt` | 48 / 42 | 0.8067 | 0.875 | no | **yes** |
+| `go-type3` | 53 / 48 | 0.7755 | 0.906 | no | **yes** |
+| `python-type3` | 37 / 31 | 0.7429 | 0.842 | no | **yes** |
 
-| fixture | method nodes | exact Jaccard | admitted? |
-|---|---|---|---|
-| `dart-type3` | 56 / 49 | 0.8431 | no — under `FUSED_THRESHOLD` 0.85 |
-| `go-type3` | 53 / 48 | 0.7755 | no |
-| `python-type3` | 37 / 31 | 0.7429 | no |
-| `csharp-type3` | 58 / 52 | 0.8519 | yes — renders via the LSH-only near-miss route at 0.92 |
+`structural` is now measured ordered subtree overlap — `1 - TED / max(nodes)` by Zhang–Shasha over
+normalised kinds (`overlap.rs`), short-circuiting to `1.0` on Merkle equality so every previously-1.0
+cluster is unchanged. An **alignment**, never a bag of matching subtree hashes: the discriminating
+information is the order and nesting of the matches, which a multiset discards — two unrelated
+functions built from the same statement vocabulary carry the same hashes as a real copy. The greedy
+multiset bound was measured first and scored the genuine pairs 0.52–0.64, indistinguishable from
+noise; it survives only as the large-tree fallback, where it is a conservative lower bound.
 
-C# clears the bar only because its `namespace`/`class` scaffolding dilutes the one-statement delta. The
-MinHash estimate is not the cause: it reads 0.80 against an exact 0.84 on Dart, and the exact value is
-still short.
+Admission is a compound gate over two *independently measured* axes — overlap ≥ 0.75 **and**
+`token_jaccard` ≥ 0.65 **and** both endpoints ≥ 30 nodes — never sum fusion, and the rendered
+confidence stays the bounded max. Overlap is measured only on pairs that would otherwise be dropped
+yet carry the token corroboration, so the cost stays away from the ~596K-candidate admission set
+[FUSION-CONTENT-GATE] deliberately avoids. Routing gains [CLONE-BUCKETS-ROUTING] row 4b on the same
+two floors, so the pipeline can never admit a pair the renderer then hides; row 4's old
+`structural ≤ 0.01` leg is retired, since extra shape evidence must not *hide* a cluster the token
+axis already carries.
 
-The evidence the pipeline discards is structural. `pair.rs` documents `structural_sim` as "the
-best-achievable subtree overlap", but the code writes a literal `0.0` for every cross-bucket pair — while
-the unchanged statements inside these methods are Merkle-identical, which is exactly why fragment views
-survive. Maximal shared-subtree coverage over the larger method: dart 0.87, go 0.86, python 0.82,
-csharp 0.84, ts 0.81.
+**Defect 2 — subsumption then deleted the pair the fix had just admitted.** With the method finally
+admitted, `ts-type3-stmt` still rendered **nothing**. `evaluate_pair` nominated the enclosing view in
+only one direction — `outer`/`inner` are weight-ordered scan positions, not nesting — so when the
+enclosing view was also the heavier one it fell through to `structural_precision`, which compares
+signal grades. A byte-identical 28-byte parameter list scored `structural = 1.00` against the
+method's 0.88 and deleted it, emptying the report. That comparison is not meaningful across scopes: a
+nested window scores higher exactly to the extent that it excludes what differs. Enclosure is now
+nominated in both directions, and within one credibility tier the enclosing view wins outright with
+no grade comparison — which is what [PIPELINE-CLUSTER-SUBSUME] always said, and the same shape as the
+two within-tier comparisons this code's history already removed for shattering method pairs into
+fragments.
 
-Closing it means measuring that overlap at admission **and** at render, plus a routing row for "high
-structural overlap, moderate token overlap". Rendered `structural` is currently binary Merkle equality and
-the anchor-free near-miss route requires `structural <= 0.01`, so making it non-binary without a matching
-routing row would hide `csharp-type3` — the one language that works today. That is a signal-semantics
-change needing its own assertions.
-
-Content evidence must **not** move into pair admission to close this: it is a cluster measurement, and the
-cluster-level facts it depends on (the canonical-member mean, the verbatim-member share) would change
-meaning as well as cost. Measured on the 2026-08-18 repository run, 123,663 fingerprints produced 595,609
-candidate pairs of which 11,868 survived into 3,616 closure components; content attachment cost ≈134 ms on
-the components and would be asked of ~596,000 pairs at admission.
-
-Tracked here only until whichever plan owns candidate admission takes it. `type3_enclosing_method.rs`
-keeps all five cases and all their assertions; the four unfixed languages are `#[ignore]`d on #408 with
-this measurement in the reason string, so `-- --ignored` reproduces the defect on demand and the pin
-survives every refactor. Un-ignore them as the fix lands.
+Specified in [FUSION-SHARED-SUBTREE](../specs/fusion.md), [CLONE-BUCKETS-ROUTING] row 4b in
+[taxonomy.md](../specs/taxonomy.md), and [PIPELINE-CLUSTER-SUBSUME](../specs/pipeline.md).
 
 ## Fused false positives — blocked on the corpus
 
@@ -395,17 +396,16 @@ re-run against the exact release candidate.
 
 - [x] **Duplication gate.** Measured 12.8257% against main's 14.6239% on one binary; ledger restored and
       ceiling ratcheted **down** 14.5 → 12.9. `make dup-gate` exits 0. Driving it lower is gh #397.
-- [x] **The four red `type3_enclosing_method` cases.** Tracked on open issue #408 with
-      `#[ignore = "GH #408: …"]` carrying the measured evidence, matching the three pre-existing
-      ignores. Every assertion intact; C# still gates. The engine fix stays open below.
+- [x] **The four red `type3_enclosing_method` cases.** Fixed in the engine, not tracked around:
+      `structural` is now measured subtree overlap ([FUSION-SHARED-SUBTREE]) and all five languages
+      pass. Every assertion intact, nothing ignored.
 
 ## Remaining — engine accuracy
 
-- [ ] **#408 residue** — four languages' whole-method Type-3 pairs are never admitted. Needs shared-subtree
-      overlap measured at admission *and* at render, plus a routing row for "high structural overlap,
-      moderate token overlap"; a non-binary `structural` without that row would hide `csharp-type3`. Hand to
-      the plan that owns candidate admission. The four cases are `#[ignore]`d on #408 with the measured
-      evidence, not deleted — un-ignore them as the fix lands, one language at a time.
+- [x] **#408** — **fixed.** Shared-subtree overlap is measured at admission *and* at render,
+      [CLONE-BUCKETS-ROUTING] row 4b routes "high structural overlap, moderate token overlap" on the
+      same two floors that admit the pair, and cross-cluster subsumption nominates enclosure in both
+      directions. All five languages green, nothing ignored. See § "#408 — fixed".
 - [ ] **#410** — decide `RENAME_EVIDENCE_HALF_MASS`'s shape versus a certified-total bypass. Re-measure
       against `dart_issue_197`, the F# data-table corpus, `type2_rename_anchor_floor`, `fused_golden_bands`.
       Do not lower `CONTENT_SUPPORT_FLOOR`.
