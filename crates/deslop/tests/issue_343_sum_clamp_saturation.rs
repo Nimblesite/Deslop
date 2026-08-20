@@ -86,11 +86,17 @@ fn assert_mid_band_evidence(scan_root: &Path, cluster: &Value) -> Result<()> {
 // rendered confidence. Today `fused()` clamps 0.00 + 0.30 + 0.95 to a
 // flat 1.000 — indistinguishable from a byte-proven verbatim copy.
 #[test]
-#[ignore = "GH #369: the two-ledger scan renders two embedding-only false \
-            positives and hides the real clone, so this reports \
-            cluster_count 2. Both false pairs carry structural = 0 and \
-            token_jaccard = 0 and survive on MockOllama's length-residue \
-            cosine alone. Assertions are intact — run with `-- --ignored`."]
+#[ignore = "GH #369: RED ON PURPOSE, and materially closer than it was. \
+            The two embedding-only false positives are gone and the real \
+            clone is found — `cluster_count` is now the expected 1, where \
+            it used to be 2 with the genuine pair hidden. Two expectations \
+            remain unmet, both downstream of `structural` becoming a \
+            measurement ([FUSION-SHARED-SUBTREE]): one cluster still routes \
+            to hidden where this wants none, and the pair is asserted to be \
+            `same_behavior` when ledger_a/ledger_c differ only by a rename \
+            and one redundant paren — measured `structural = 0.997`, which \
+            is a near-identical clone, not a Type-4. Settling that is #369's \
+            own work. Assertions are intact — run with `-- --ignored`."]
 fn mid_band_cluster_confidence_never_exceeds_its_strongest_axis() -> Result<()> {
     let server = MockOllama::spawn()?;
     let tmp = tempfile::tempdir()?;
@@ -210,13 +216,27 @@ fn byte_identical_pair_still_earns_full_confidence_under_the_bound() -> Result<(
     Ok(())
 }
 
-// The same two ledgers with the embedding pass off: the pair survives on
-// token evidence alone, routes `loosely_similar` (structural ~ 0), and is
-// hidden per the #58 policy. The bounded fusion must not promote it — a
-// max that read the mid-band token axis as act-now evidence would resurrect
-// exactly the class of unproven cluster #343 quarantined the sum for.
+// The same two ledgers with the embedding pass off. They differ by a
+// function rename and one redundant pair of parentheses across a
+// ninety-term arithmetic expression: `structural = 0.997`,
+// `token_jaccard = 1.000`. That is a Type-2 clone by any reading, and it
+// must be visible.
+//
+// This asserted the opposite — zero visible, one hidden, "no embedding
+// evidence, no structural anchor". The anchor was reported as absent
+// because `structural` was Merkle equality and the stray paren rehashed
+// the root, so a pair sharing 99.7% of its AST measured exactly zero
+// ([FUSION-SHARED-SUBTREE], gh #408). Asserting invisibility asserted
+// that false negative.
+//
+// What #343 actually quarantined is *manufactured* confidence: a sum
+// that clamped mid-band evidence to a flat 1.0 no single axis earned.
+// That contract is unchanged and is asserted here directly, which is
+// stronger than asserting the cluster away — `fused` must stay at or
+// below the strongest axis, and must stay short of the 1.0 reserved for
+// byte proof, even now that the pair is reported.
 #[test]
-fn without_embeddings_the_mid_band_pair_stays_hidden() -> Result<()> {
+fn without_embeddings_the_mid_band_pair_is_visible_without_saturating() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let fixtures = fixture("ts-mixed-band");
     for name in ["ledger_a.ts", "ledger_c.ts"] {
@@ -231,21 +251,35 @@ fn without_embeddings_the_mid_band_pair_stays_hidden() -> Result<()> {
     );
     assert_eq!(
         cluster_count(&report),
-        0,
-        "no embedding evidence, no structural anchor: nothing is visible"
-    );
-    assert_eq!(
-        clusters_hidden(&report),
         1,
-        "the LSH-only pair is hidden, not deleted — the report stays honest \
-         about having seen it"
+        "a rename plus one redundant paren over a ninety-term expression is a \
+         Type-2 clone; the report must show it: {report:#}"
+    );
+    let visible = clusters(&report);
+    let cluster = visible
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("the visible clone must be present: {report:#}"))?;
+    let strongest = signal(cluster, "structural")
+        .max(signal(cluster, "token_jaccard"))
+        .max(signal(cluster, "embedding_cos"));
+    let fused = signal(cluster, "fused");
+    assert!(
+        fused <= strongest + f64::EPSILON,
+        "[FUSION-STRATEGY-BOUNDED-MAX] fused must never exceed the strongest axis: \
+         fused={fused}, strongest={strongest}"
+    );
+    assert!(
+        fused < 1.0,
+        "full confidence is reserved for byte proof, and these two files are not \
+         byte-identical — a sum would have clamped this to 1.0, which is the \
+         saturation #343 quarantined: fused={fused}"
     );
     let duplication = metric_field(&report, "duplication_percent")
         .as_f64()
         .ok_or_else(|| anyhow::anyhow!("duplication_percent is not a number: {report:#}"))?;
     assert!(
-        approx(duplication, 0.0),
-        "hidden clusters must not count as duplication, got {duplication}"
+        duplication > 0.0,
+        "a visible clone is real duplication and must be counted, got {duplication}"
     );
     Ok(())
 }

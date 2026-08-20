@@ -114,28 +114,46 @@ fn python_same_role_pair_surfaces_with_measured_embedding_support() -> Result<()
     )
 }
 
-// Control: the `same_behavior` bucket IS reachable end-to-end when a
-// same-role pair genuinely clears the embedding floor. A `while` loop and
-// a `for` loop accumulating the same eight running totals share no
-// normalised subtree yet measure cosine 0.91 under the shingle mock.
+// Control: a same-role pair that genuinely clears the embedding floor
+// must stay VISIBLE. A `while` loop and a `for` loop accumulating the
+// same eight running totals are duplicated code by any reading, and the
+// report must say so.
 //
-// This test passing while the four above fail localises the defect
-// precisely: the pipeline and the role gate are sound, and it is the #119
-// fixtures that can no longer reach the gate.
+// This asserted the `same_behavior` bucket specifically, and that is no
+// longer the honest label for this pair. Measured: `structural = 0.912`,
+// `embedding_cos = 0.911`, `token_jaccard = 0.555`. The shape carries
+// this match at least as strongly as the model does, so
+// [CLONE-BUCKETS-ROUTING] row 2 — semantic evidence *without* shape —
+// does not describe it. The old expectation only held because
+// `structural` was Merkle equality: the differing loop keyword rehashed
+// the root, so a pair sharing 91% of its AST measured exactly 0.0 and
+// fell into row 2 by default ([FUSION-SHARED-SUBTREE], gh #408).
+//
+// `same_behavior` reachability is still asserted end-to-end, on the two
+// fixtures that are genuinely Type-4 — recursion against iteration —
+// by `dart_same_role_pair_surfaces_with_measured_embedding_support` and
+// its Python twin above. Both call `assert_same_role_pair_surfaces`,
+// which requires a surviving `same_behavior` cluster. No coverage of
+// that property is lost here.
+//
+// What this test guards is the false negative, and it guards it harder
+// than before: the pair must be visible at all. It was not — until row
+// 4b learned to accept embedding corroboration, two independent signals
+// agreeing at 0.91 routed `loosely_similar`, which the renderer hides,
+// on the strength of a 0.55 token score.
 #[test]
-fn same_behavior_is_reachable_when_a_pair_clears_the_embedding_floor() -> Result<()> {
+fn same_role_pair_clearing_the_embedding_floor_stays_visible() -> Result<()> {
     let root = fixture("dart-issue-119-same-behavior-reachable");
     let server = MockOllama::spawn()?;
     let report = scan_fixture_copy_with_mock(&root, "5", server.endpoint())?;
-    let surviving = same_behavior(&report);
+    let surviving = clusters(&report);
     assert!(
         !surviving.is_empty(),
-        "a same-role Dart pair measuring cosine 0.91 must surface as \
-         same_behavior; if this fails the bucket is unreachable for every \
-         input, not just the #119 fixtures. Visible clusters: {:#?}",
-        clusters(&report)
+        "a same-role Dart pair measuring cosine 0.91 against structural 0.91 must \
+         surface: two independent signals agree that these accumulate identically, \
+         and hiding it is a false negative. Report: {report:#}"
     );
-    for cluster in &surviving {
+    for cluster in surviving {
         let texts = occurrence_texts(&root, cluster)?;
         assert_eq!(
             texts.len(),
@@ -151,16 +169,21 @@ fn same_behavior_is_reachable_when_a_pair_clears_the_embedding_floor() -> Result
         );
         assert!(
             texts.first() != texts.get(1),
-            "`same_behavior` means DIFFERENT code: byte-identical occurrences \
-             belong in an identical bucket, not this one: {texts:#?}"
+            "the occurrences must be DIFFERENT code: byte-identical occurrences \
+             belong in an identical bucket, not a near-miss one: {texts:#?}"
+        );
+        let structural = signal(cluster, "structural");
+        let embedding = signal(cluster, "embedding_cos");
+        assert!(
+            structural >= deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
+            "the shared accumulator chain must register as real shape evidence, \
+             got structural={structural}"
         );
         assert!(
-            approx(signal(cluster, "structural"), 0.0),
-            "the `while` and `for` bodies share no normalised subtree, so the \
-             bucket must rest on embedding evidence alone, got structural={}",
-            signal(cluster, "structural")
+            embedding >= deslop_core::pair::EMBEDDING_SUPPORT_FLOOR,
+            "the pair must carry the embedding support that admitted it, \
+             got embedding_cos={embedding}"
         );
     }
-    assert_embedding_support(&surviving, "Dart");
     Ok(())
 }

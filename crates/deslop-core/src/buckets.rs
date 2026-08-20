@@ -308,8 +308,28 @@ pub fn is_token_carried_nearmiss(signals: ReportSignals) -> bool {
 /// five fixture languages.
 #[must_use]
 pub fn is_shape_corroborated_nearmiss(signals: ReportSignals) -> bool {
-    signals.structural >= crate::pair::SHARED_SUBTREE_MIN_OVERLAP
-        && signals.token_jaccard >= crate::pair::SHARED_SUBTREE_MIN_JACCARD
+    signals.structural >= crate::pair::SHARED_SUBTREE_MIN_OVERLAP && corroborates_shape(signals)
+}
+
+/// The independent evidence a shared-subtree near-miss must carry
+/// besides its shape ([FUSION-SHARED-SUBTREE]).
+///
+/// Either measured axis will do, and requiring the token one
+/// specifically was a hole. Normalisation makes scaffolding
+/// Merkle-identical across unrelated files, so shape alone must never
+/// admit — but the *point* is corroboration by an axis that does not
+/// read the normalised tree, and the embedding axis qualifies exactly
+/// as the token axis does. Requiring tokens specifically dropped a pair
+/// measuring `structural = 0.91` **and** `embedding_cos = 0.91` to
+/// `loosely_similar`, which the renderer hides, purely because its
+/// `token_jaccard` was 0.55 — two strong independent signals agreeing,
+/// and the report showed nothing (`issue_119_role_gate_exercised`).
+/// A `while` loop and a `for` loop over one accumulator chain are the
+/// case: identical statements, different loop keyword, so the k-gram
+/// set diverges far more than either the shape or the meaning does.
+fn corroborates_shape(signals: ReportSignals) -> bool {
+    signals.token_jaccard >= crate::pair::SHARED_SUBTREE_MIN_JACCARD
+        || signals.embedding_cos >= crate::pair::EMBEDDING_SUPPORT_FLOOR
 }
 
 /// Token overlap an anchor-free cluster must clear to count as a

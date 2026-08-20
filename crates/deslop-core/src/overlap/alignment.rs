@@ -21,7 +21,10 @@ pub(super) struct PostNode {
 /// `max(total) - TED`, floored at zero. With unit costs the distance
 /// is the node mass the alignment could not match, so this is the
 /// aligned analogue of the fallback's credited mass.
-pub(super) fn aligned_shared_nodes(left: &super::EndpointView, right: &super::EndpointView) -> usize {
+pub(super) fn aligned_shared_nodes(
+    left: &super::EndpointView,
+    right: &super::EndpointView,
+) -> usize {
     let distance = tree_edit_distance(left.postorder(), right.postorder());
     left.total().max(right.total()).saturating_sub(distance)
 }
@@ -80,11 +83,7 @@ fn forest_distance(
         left_leaf: leftmost(left, left_root),
         right_leaf: leftmost(right, right_root),
     };
-    let mut forest = Grid::new(
-        left_root.saturating_sub(span.left_leaf).saturating_add(2),
-        right_root.saturating_sub(span.right_leaf).saturating_add(2),
-    );
-    seed_edit_borders(&mut forest);
+    let mut forest = seeded_grid(span, left_root, right_root);
     for left_index in span.left_leaf..=left_root {
         for right_index in span.right_leaf..=right_root {
             fill_cell(span, left_index, right_index, &mut forest, tree_dist);
@@ -92,14 +91,20 @@ fn forest_distance(
     }
 }
 
-/// Seeds the first row and column with pure insert/delete costs.
-fn seed_edit_borders(forest: &mut Grid) {
+/// The keyroot pair's forest grid, sized to the two subtrees and seeded
+/// with the pure insert/delete borders.
+fn seeded_grid(span: ForestSpan<'_>, left_root: usize, right_root: usize) -> Grid {
+    let mut forest = Grid::new(
+        left_root.saturating_sub(span.left_leaf).saturating_add(2),
+        right_root.saturating_sub(span.right_leaf).saturating_add(2),
+    );
     for row in 1..forest.rows() {
         forest.set(row, 0, row);
     }
     for column in 1..forest.columns() {
         forest.set(0, column, column);
     }
+    forest
 }
 
 /// Computes one forest-distance cell, recording a tree distance when
@@ -111,32 +116,54 @@ fn fill_cell(
     forest: &mut Grid,
     tree_dist: &mut Grid,
 ) {
-    let row = left_index.saturating_sub(span.left_leaf).saturating_add(1);
-    let column = right_index
-        .saturating_sub(span.right_leaf)
-        .saturating_add(1);
-    let delete = forest.get(row.saturating_sub(1), column).saturating_add(1);
-    let insert = forest.get(row, column.saturating_sub(1)).saturating_add(1);
+    let (row, column) = (
+        left_index.saturating_sub(span.left_leaf).saturating_add(1),
+        right_index
+            .saturating_sub(span.right_leaf)
+            .saturating_add(1),
+    );
     let whole_trees = leftmost(span.left, left_index) == span.left_leaf
         && leftmost(span.right, right_index) == span.right_leaf;
-    let substitute = if whole_trees {
-        let relabel =
-            usize::from(kind_at(span.left, left_index) != kind_at(span.right, right_index));
-        forest
-            .get(row.saturating_sub(1), column.saturating_sub(1))
-            .saturating_add(relabel)
-    } else {
-        let left_prefix = leftmost(span.left, left_index).saturating_sub(span.left_leaf);
-        let right_prefix = leftmost(span.right, right_index).saturating_sub(span.right_leaf);
-        forest
-            .get(left_prefix, right_prefix)
-            .saturating_add(tree_dist.get(left_index, right_index))
-    };
-    let best = delete.min(insert).min(substitute);
+    let best = forest
+        .get(row.saturating_sub(1), column)
+        .saturating_add(1)
+        .min(forest.get(row, column.saturating_sub(1)).saturating_add(1))
+        .min(substitute_cost(
+            span,
+            (left_index, right_index),
+            (row, column),
+            whole_trees,
+            forest,
+            tree_dist,
+        ));
     forest.set(row, column, best);
     if whole_trees {
         tree_dist.set(left_index, right_index, best);
     }
+}
+
+/// The third Zhang–Shasha option: relabel two whole subtrees against
+/// each other, or splice in an already-computed tree distance.
+fn substitute_cost(
+    span: ForestSpan<'_>,
+    (left_index, right_index): (usize, usize),
+    (row, column): (usize, usize),
+    whole_trees: bool,
+    forest: &Grid,
+    tree_dist: &Grid,
+) -> usize {
+    if whole_trees {
+        let relabel =
+            usize::from(kind_at(span.left, left_index) != kind_at(span.right, right_index));
+        return forest
+            .get(row.saturating_sub(1), column.saturating_sub(1))
+            .saturating_add(relabel);
+    }
+    let left_prefix = leftmost(span.left, left_index).saturating_sub(span.left_leaf);
+    let right_prefix = leftmost(span.right, right_index).saturating_sub(span.right_leaf);
+    forest
+        .get(left_prefix, right_prefix)
+        .saturating_add(tree_dist.get(left_index, right_index))
 }
 
 /// Leftmost-leaf index of the 1-based post-order position.
@@ -200,4 +227,3 @@ impl Grid {
         }
     }
 }
-

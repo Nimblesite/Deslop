@@ -58,7 +58,7 @@ jobs:
 | `no-fail-over` | `false` | 为本次运行清除已配置的阈值 |
 | `min-nodes` | `30` | 克隆候选的最小 AST 子树节点数 |
 | `config` | *(未设置)* | 显式指定 `.deslop.toml` 路径 |
-| `diff` | *(未设置)* | 以其新增行限定报告范围的统一 diff — 补丁文件路径，或 `-` 表示从标准输入读取。仍会分析整棵树；diff 只限定报告内容，绝不限定扫描范围 |
+| `diff` | *(未设置)* | 以其新增行限定报告范围的统一 diff — 补丁文件路径。仍会分析整棵树；diff 只限定报告内容，绝不限定扫描范围。`-`（标准输入）仅适用于 CLI：复合 action 无法提供标准输入，因此 Action 会拒绝该值，而不是悄悄地度量一个空 diff |
 | `only-changed` | `false` | 只报告 diff 触及的簇，并按 diff 范围的百分比设门禁 — 重复的新增行数除以新增行数 — 使存量债务无法让合并前检查失败。需要 `diff` |
 | `cache` | `true` | 通过 Actions 缓存在运行之间保留解析存储，预热运行只重新解析有变化的文件 |
 | `output` | `deslop-report` | 报告路径前缀；会追加 `.json`、`.txt`、`.html` |
@@ -76,6 +76,9 @@ jobs:
 | `threshold-percent` | 本次运行所对照的上限 |
 | `exit-code` | `0` 干净、`1` 运行时错误、`2` 用法错误、`3` 突破阈值 |
 | `report-json` / `report-text` / `report-html` | 渲染出的报告路径 |
+| `gate-scope` | 门禁所度量的总体 —— 在 `only-changed` 下为 `added-lines`，否则为 `repository` |
+| `gate-percent` | 门禁与其上限相比较的百分比，覆盖 `gate-scope` 所指的总体 |
+| `gate-threshold-percent` | `gate-percent` 所对照的上限 |
 
 **即使门禁被触发，输出仍会发布**，因此后续步骤可以评论该数字或逐步收紧预算。设置 `nojson: true` 会让它们为空 — 它们是从 JSON 报告中读取的。
 

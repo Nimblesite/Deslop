@@ -18,50 +18,47 @@
 //! because the nested fragments span the same two files and would
 //! satisfy a bucket-only or file-set-only assertion.
 //!
-//! # Four of the five languages are red on purpose (GH #408)
+//! # How all five came to pass (GH #408)
 //!
-//! `csharp-type3` passes and gates the release. The other four do not,
-//! and the reason is **admission, not subsumption**: no subsumption
-//! order can elect a pair that was never built. Every one of the four
-//! is dropped by `pair::survival_decision` at `DroppedBelowFused` —
-//! `bounded_fused()` is `max(structural, token_jaccard, embedding_cos)`,
-//! the LSH path writes a literal `structural = 0.0`, embeddings are off,
-//! and the exact k-gram Jaccard between the two whole methods is short
-//! of [`FUSED_THRESHOLD`] 0.85:
+//! Four of the five once failed here, and the cause was **admission,
+//! not subsumption**: no election order can elect a pair that was never
+//! built. `bounded_fused()` is `max(structural, token_jaccard,
+//! embedding_cos)`, the LSH path wrote a literal `structural = 0.0`,
+//! embeddings are off, and the exact whole-method k-gram Jaccard falls
+//! short of `FUSED_THRESHOLD` 0.85 in every language but C#:
 //!
-//! | fixture | method nodes | exact Jaccard | admitted? |
+//! | fixture | method nodes | exact Jaccard | measured overlap |
 //! |---|---|---|---|
-//! | `csharp-type3` | 58 / 52 | 0.8519 | yes — renders at 0.92 |
-//! | `dart-type3` | 56 / 49 | 0.8431 | no |
-//! | `ts-type3-stmt` | 50 / 44 | 0.8067 | no |
-//! | `go-type3` | 53 / 48 | 0.7755 | no |
-//! | `python-type3` | 37 / 31 | 0.7429 | no |
+//! | `csharp-type3` | 58 / 52 | 0.8519 | 0.898 |
+//! | `dart-type3` | 56 / 49 | 0.8431 | 0.877 |
+//! | `ts-type3-stmt` | 48 / 42 | 0.8067 | 0.875 |
+//! | `go-type3` | 53 / 48 | 0.7755 | 0.906 |
+//! | `python-type3` | 37 / 31 | 0.7429 | 0.842 |
 //!
-//! C# clears the bar only because its `namespace`/`class` scaffolding
-//! dilutes the one-statement delta. The `MinHash` estimate is not the
-//! cause: it reads 0.80 against an exact 0.8431 on Dart, and the exact
-//! value is still short.
+//! C# cleared the bar on tokens alone only because its
+//! `namespace`/`class` scaffolding dilutes the one-statement delta. The
+//! `MinHash` estimate was never the cause: it reads 0.80 against an
+//! exact 0.8431 on Dart, and the exact value is still short.
 //!
-//! The evidence the pipeline discards is structural. `pair.rs` documents
-//! `structural_sim` as "the best-achievable subtree overlap", but
-//! `candidates::add_lsh_pairs` writes a literal `0.0` for every
-//! cross-bucket pair — while the unchanged statements inside these
-//! methods are Merkle-identical, which is exactly why the fragment views
-//! survive. Maximal shared-subtree coverage over the larger method:
-//! dart 0.87, go 0.86, csharp 0.84, python 0.82, ts 0.81.
+//! The discarded evidence was structural. `pair.rs` documented
+//! `structural_sim` as "the best-achievable subtree overlap" while
+//! writing `0.0` for every cross-bucket pair — even though the
+//! unchanged statements inside these methods stay Merkle-identical,
+//! which is exactly why the fragment views survived. `structural` is
+//! now that overlap, measured by ordered tree alignment
+//! ([FUSION-SHARED-SUBTREE]); [CLONE-BUCKETS-ROUTING] row 4b routes it
+//! on the same two floors that admit the pair.
 //!
-//! Closing it means measuring that overlap at admission **and** at
-//! render, plus a [CLONE-BUCKETS-ROUTING] row for "high structural
-//! overlap, moderate token overlap". Rendered `structural` is binary
-//! Merkle equality today and `buckets::is_lsh_only_nearmiss` requires
-//! `structural <= 0.01`, so making it non-binary *without* that matching
-//! row would demote `csharp-type3` to `loosely_similar` — which the
-//! renderer hides — and take the one working language with it. That is a
-//! signal-semantics change needing its own assertions and a corpus
-//! re-measure, tracked on #408.
+//! A second defect sat behind the first and only became visible once
+//! the pairs were admitted: [PIPELINE-CLUSTER-SUBSUME] nominated the
+//! enclosing view in one direction only, so when the enclosing view was
+//! also the heavier one a byte-identical fragment nested inside it
+//! deleted it on a higher `structural`. `ts_type3_one_inserted_statement`
+//! is the case that catches it — with only the admission fix, that
+//! fixture's report is empty.
 //!
-//! Every assertion below is intact for all five languages. Run the four
-//! with `cargo test -p deslop --test type3_enclosing_method -- --ignored`.
+//! Both halves are load-bearing. Reverting either takes the whole
+//! enclosing pair out of the report in at least one language.
 
 use anyhow::Result;
 use serde_json::Value;

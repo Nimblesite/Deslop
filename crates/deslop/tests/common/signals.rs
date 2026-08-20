@@ -220,6 +220,48 @@ pub(crate) fn assert_proven_rename_contract(
     assert_rename_is_not_a_copy(scan_root, cluster, label)
 }
 
+/// The proven-rename contract for a fixture that is a rename **plus an
+/// inserted statement**. Verdict and not-a-copy are identical; only the
+/// shape half differs, because the reported view spans the whole
+/// declaration and therefore includes the insertion
+/// ([FUSION-SHARED-SUBTREE], gh #408). Demanding Merkle exactness there
+/// demands the fragment view — the shared sub-range either side of the
+/// insertion — which is the recall hole #408 is filed against.
+pub(crate) fn assert_near_miss_rename_contract(
+    scan_root: &Path,
+    cluster: &Value,
+    label: &str,
+) -> Result<()> {
+    assert_near_miss_rename_shape(cluster, label);
+    assert_rename_verdict(cluster, label);
+    assert_rename_is_not_a_copy(scan_root, cluster, label)
+}
+
+/// Shape half for a rename carrying an inserted statement: real shape
+/// evidence, bounded away from the Merkle exactness a near-miss cannot
+/// have, with the rename-invariant token stream still corroborating.
+fn assert_near_miss_rename_shape(cluster: &Value, label: &str) {
+    let dump = signal_dump(cluster);
+    let structural = signal(cluster, "structural");
+    assert!(
+        structural >= deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
+        "{label}: identifier normalisation makes the shared body structurally \
+         identical, so the enclosing view must clear the shared-subtree floor \
+         — {dump}"
+    );
+    assert!(
+        structural < 1.0,
+        "{label}: the inserted statement is inside the reported view, so the \
+         pair cannot be Merkle-exact; exactness here means the report fell back \
+         to the fragment view (gh #408) — {dump}"
+    );
+    assert!(
+        signal(cluster, "token_jaccard") >= deslop_core::pair::SHARED_SUBTREE_MIN_JACCARD,
+        "{label}: the normalised k-gram stream is rename-invariant, so tokens \
+         must still corroborate — {dump}"
+    );
+}
+
 /// Shape half of the proven-rename contract: identifier normalisation
 /// makes a rename structurally identical, and the normalised k-gram
 /// stream is rename-invariant by construction.

@@ -35,9 +35,19 @@ shared extraction across a type definition and a function, so the cluster is
 suppressed. The role gate re-parses each member, resolves its innermost
 enclosing construct to one of two roles (type definition or function/method,
 descending through decorator wrappers), and hides the cluster only when the
-members do not all resolve to the same role. It engages exclusively for the
-`same_behavior` bucket, leaving the deterministic Type-1/2/3 buckets untouched,
-and never suppresses when a member's role cannot be resolved.
+members do not all resolve to the same role. It never suppresses when a
+member's role cannot be resolved.
+
+It engages wherever **embedding evidence is what carried the cluster into an
+act-now bucket**, leaving the deterministic Type-1/2/3 buckets untouched. That
+is the `same_behavior` bucket, and — since [FUSION-SHARED-SUBTREE](fusion.md#fusion-shared-subtree)
+— also a [CLONE-BUCKETS-ROUTING](taxonomy.md#clone-buckets-routing) row-4b
+near-miss whose shape was corroborated by the embedding axis rather than the
+token axis (`structural < 0.99`, `token_jaccard` below the corroboration floor,
+`embedding_cos` at or above the support floor). The condition is the *evidence*,
+not the bucket label: keyed on `same_behavior` alone, the Python
+role-mismatch pair reached an act-now bucket through the new door and walked
+straight past the gate written to catch it.
 
 ### [CLONE-NOISE-LITERAL-VARIATION-CALLS] Literal-variation call scaffolding
 Scaffolding repeats one call shape varying only its string-literal arguments —

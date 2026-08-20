@@ -27,6 +27,7 @@ fn candidate(structural: f64, token_jaccard: f64, embedding_cos: f64) -> Candida
         lsh_only_node_floor: LSH_ONLY_MIN_NODE_COUNT,
         lsh_only_min_jaccard: LSH_ONLY_MIN_JACCARD,
         fused_min_score: FUSED_THRESHOLD,
+        shared_subtree_overlap: 0.0,
         score: PairScore {
             structural,
             token_jaccard,

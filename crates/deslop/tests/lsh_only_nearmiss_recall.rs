@@ -224,9 +224,22 @@ const ACT_NOW_FUSED: f64 = 0.85;
 fn assert_signal_triple(cluster: &serde_json::Value) {
     let structural = signal(cluster, "structural");
     assert!(
-        structural <= 0.01,
-        "a pure statement reorder has no exact structural anchor, got \
-         {structural}: {cluster:#}"
+        structural < 0.99,
+        "a pure statement reorder has no *exact* structural anchor — reordering \
+         rehashes the enclosing Merkle node, so an exact match here would mean \
+         the reported view is not the reordered pair at all, got {structural}: \
+         {cluster:#}"
+    );
+    // The bound is two-sided. `<= 0.01` was the old form, and it read as
+    // "no structural evidence" — which was only ever true because
+    // `structural` was Merkle equality. A statement reorder shares every
+    // statement subtree; only their order differs, so it measures real
+    // overlap ([FUSION-SHARED-SUBTREE]). Asserting the zero asserted that
+    // the shared statements did not exist.
+    assert!(
+        structural >= deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
+        "the reordered statements are shared subtrees and must register as \
+         shape evidence, got {structural}: {cluster:#}"
     );
     let jaccard = signal(cluster, "token_jaccard");
     assert!(

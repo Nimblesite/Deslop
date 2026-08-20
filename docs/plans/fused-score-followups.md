@@ -299,8 +299,125 @@ no grade comparison — which is what [PIPELINE-CLUSTER-SUBSUME] always said, an
 two within-tier comparisons this code's history already removed for shattering method pairs into
 fragments.
 
+**Defect 3 — a view overturned after absorbing others orphaned them.** Found by the regression sweep,
+not by the fixtures: `javascript-type3` reported a byte-equal loop body in place of the near-identical
+*function* enclosing it. A view absorbs its nested rivals as the scan walks past them and only later
+meets the rival that overturns it; those absorbed views were dying with their absorber, so nothing
+reported their bytes. This module's own history already recorded the hazard — "orphaned that window's
+other absorbed views, `issue_343_sum_clamp_saturation` counted the orphan" — as a reason two earlier
+comparisons were removed rather than as a defect to fix. Honest `structural` made it routine rather
+than rare, because a whole-file view is now admitted and sits above the method-level view in weight
+order. Absorbed views are now released and re-judged against whatever survived. With this fixed,
+`javascript-type3` and `typescript-type3` return to exactly their pre-change output: `nearly_identical`
+over lines 2–9 of both files.
+
+**Defect 4 — enclosure must not delete a byte-proven view that *is* the duplication.** The
+`incremental-multilang` C# pair is a class containing one byte-identical method plus members that
+differ. Electing the class relabelled a byte-proven Type-1 clone as a Type-3 near-miss and counted the
+non-duplicated scaffolding as duplicated. A nested view that is verbatim-proven across files and
+covers at least two thirds of its encloser's bytes now wins. Measured shares: 0.82 (C# class,
+nested wins), 0.49 (`javascript-type3` function, encloser wins), 0.10 (`ts-type3-stmt` parameter list,
+encloser wins). Byte span rather than node count, because node mass compresses those to 0.76 against
+0.63 where no threshold separates them safely.
+
+**Defect 5 — shape corroborated by the model, not by tokens, was hidden.** Found by the regression
+sweep. A Dart pair measuring `structural = 0.912` **and** `embedding_cos = 0.911` — two independent
+signals agreeing that the two functions accumulate identically — rendered *nothing*: row 4b accepted
+only token corroboration, its `token_jaccard` was 0.555, and the cluster fell to `loosely_similar`,
+which the renderer hides. The `while`/`for` accumulator pair is the shape of it: identical statements,
+different loop keyword, so the k-gram set diverges far more than either the shape or the meaning
+does. Row 4b now accepts corroboration from **either** independent axis. The requirement was always
+"an axis that does not read the normalised tree"; naming the token axis specifically was arbitrary.
+
+**Defect 6 — the role gate was keyed on a bucket label, and the new route bypassed it.** Immediately
+exposed by defect 5's fix, and the more serious of the pair:
+`python_role_mismatch_pair_must_reach_the_role_gate` caught a role-incompatible pair — the
+[CLONE-NOISE-EMBEDDING-ROLE-MISMATCH] class, a reader against a writer the model scores alike —
+walking straight through the guard written to catch it. The gate fired only for `same_behavior`,
+because that had been the only route embedding evidence could take into an act-now bucket. Row 4b
+opened a second door. The gate now keys on the *evidence* — shape short of Merkle equality, tokens
+below the corroboration floor, embedding at or above the support floor — rather than on the label,
+so it covers both routes. A false positive introduced and removed inside the same change; the
+suppression suite is what made it a five-minute defect rather than a shipped one.
+
+### Four contracts were inverted, deliberately
+
+Making `structural` honest put it in direct conflict with tests that had encoded the *literal zero* as
+ground truth. Each is listed because each is a real change of contract, not a stale assertion tidied
+away, and every replacement is harder to satisfy than what it replaced.
+
+| Test | Asserted | Measured reality |
+|---|---|---|
+| `detection::detects_type3_clone_in_csharp_fixture` | the raw JSON contains `"structural": 0.0` | the two methods share ~90% of their AST |
+| `detection::assert_partial_near_miss` (go) | the reported range must **exclude** the divergent statement | that is the fragment view #408 is filed against |
+| `issue_343::without_embeddings_the_mid_band_pair_stays_hidden` | a rename plus one redundant paren over a ninety-term expression must be **invisible** | `structural = 0.997`, `token_jaccard = 1.000` |
+| `js_ts::typescript_signature_anchored_near_miss_is_conservatively_suppressed` | the `ts-type3-stmt` pair must **not** surface | `structural = 0.875`; #408 names this fixture as its sharpest case |
+
+The last is the sharpest conflict in the repository: it asserted the pointBoard/scoreBoard pair must be
+invisible on the *same fixture* where `type3_enclosing_method.rs` asserts it must be visible. Its
+premise — the bodies "diverge", so only the shared typed signature anchors them — was an artifact of
+Merkle equality: the inserted no-op line rehashed every ancestor, so bodies differing by one statement
+scored zero and read as unrelated.
+
+**No precision guarantee was dropped with it.** The #154 signature-only suppression is held on
+fixtures whose bodies genuinely are unrelated by
+`typescript_signature_only_match_with_divergent_bodies_is_suppressed`,
+`dart_signature_only_match_with_differing_bodies_is_suppressed` and
+`go_closure_signature_only_match_is_suppressed` — all three green. That test now asserts the precision
+half its fixture can still prove: the unrelated `formatDuration.ts` must never be pulled in.
+
+The replacements are two-sided where the old ones were one-sided. `structural == 1.0` becomes
+"clears the admission floor **and** stays below Merkle exactness", which fails both if recall
+regresses to the fragment view and if the fixture ever stops being a near-miss at all. `#343`'s real
+contract — no manufactured confidence — is now asserted directly (`fused ≤ strongest axis`,
+`fused < 1.0` reserved for byte proof) instead of via the cluster's absence.
+
+A fifth, narrower case: `js-type3-guard` is a rename **plus** an inserted guard, and was calling the
+pure-rename contract. Pure renames still demand Merkle exactness — `javascript_renamed_loop_clone_is_a_proven_rename`
+and the TypeScript twin are unchanged and green. Only the near-miss fixture moved, to a sibling
+helper that shares the verdict and not-a-copy halves verbatim.
+
 Specified in [FUSION-SHARED-SUBTREE](../specs/fusion.md), [CLONE-BUCKETS-ROUTING] row 4b in
 [taxonomy.md](../specs/taxonomy.md), and [PIPELINE-CLUSTER-SUBSUME](../specs/pipeline.md).
+
+## Diff-aware duplication audit (#418, main `8fb1b15c9`) — three findings, all fixed here
+
+An independent audit of the merged diff-aware gate found two fail-open paths and a broken public
+output contract. All three are inherited by this branch and are fixed in it, each with a test that
+fails on the unfixed code.
+
+**Critical — an empty `+++` target erased the entire changed-code population.** `new_side_path`
+returned `Some("")`, which marked the section as having *seen* its target; the verifier then
+discarded the empty path as resolving outside the scan root. A truncated target header therefore
+dropped every added line in the diff, so `--only-changed` measured `0 / 0 = 0%` and a repository
+already breaching its ceiling passed the changed-code gate — a false negative at the exact merge gate
+the feature exists to be. An empty payload is now a usage error (exit 2) naming the offending line,
+matching `copy_path`, which already refused a pathless copy for the same reason. Pinned by
+`diff_ingest_refusals::empty_new_side_target_is_refused_naming_the_line`, with
+`dev_null_target_is_not_an_empty_target` as the positive control — `+++ /dev/null` is a *seen* target
+meaning "deleted", and the obvious over-correction would turn every deletion section into a refusal.
+
+**Critical — the Action advertised a stdin diff it cannot supply.** `action.yml` and both locale doc
+pages documented `diff: "-"`, and the composite step forwarded `--diff -`. A `uses:` step has no
+caller-controlled stdin, so the CLI read an empty patch — which it accepts as valid — and
+`--only-changed` then passed any ceiling while omitting every cluster in the tree. The Action now
+fails closed on `diff: "-"` before a CLI is downloaded, exiting `2` with the patch-file form spelled
+out; the EN and ZH docs no longer advertise the form. Pinned by
+`action-contract-shape-checks::the action rejects the stdin diff form before downloading a CLI`,
+which also asserts the guard runs *before* the resolve step and that the docs stop advertising it.
+
+**High — the three gate outputs were computed but never exported.** `action-read-outputs.mjs` wrote
+`gate-scope`, `gate-percent` and `gate-threshold-percent`, the Action's own gate step consumed them
+step-locally, and the public `outputs:` block declared only the older seven — so
+`steps.<id>.outputs.gate-scope` read empty for every caller, and the hosted self-test's assertion on
+it could only have failed *after* a release. The contract test missed it because its "every output"
+list was hand-maintained beside the declaration and carried the same seven names. All three are now
+declared, wired and documented in both locales, and **the contract check derives the list from the
+helper** and fails in both directions — an output the helper emits that is undeclared, and an output
+no check covers.
+
+The audit's sixth-file 500-line finding is a pre-existing repository-standard gap, unchanged by this
+branch and tracked separately; `overlap.rs` was split at 517 lines rather than added to it.
 
 ## Fused false positives — blocked on the corpus
 

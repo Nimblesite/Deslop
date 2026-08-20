@@ -140,18 +140,37 @@ fn require_cluster_spanning<'a>(
         })
 }
 
-/// Asserts the Type-3 near-miss contract on a cross-file cluster:
-/// structural = 1.0 on the shared body subtree, at least two
-/// occurrences, and a `token_jaccard` signal present.
+/// Asserts the Type-3 near-miss contract on a cross-file cluster: the
+/// reported view is the *near-miss itself* — shape evidence above the
+/// admission floor but short of Merkle equality — with at least two
+/// occurrences and a `token_jaccard` signal present.
+///
+/// The bound is two-sided on purpose, and the upper half is the half
+/// that matters. This assertion used to demand `structural == 1.0`,
+/// which is satisfiable only by a byte-identical *fragment* nested
+/// inside the near-miss — the run of statements the inserted line did
+/// not disturb. That is precisely the finding gh #408 declares wrong:
+/// the enclosing method is the duplication, the fragment re-describes a
+/// piece of it, and a Type-3 near-miss can never be Merkle-exact by
+/// construction. Asserting exactness therefore asserted that the
+/// detector had missed the clone. Measured on the fixtures this guards:
+/// `go-type3` 0.906, `csharp-type3` 0.898, `fsharp-type3` 0.851.
 fn assert_type3_signals(cluster: &serde_json::Value) {
     let structural = cluster
         .pointer("/signals/structural")
-        .and_then(serde_json::Value::as_f64);
-    assert_eq!(
-        structural,
-        Some(1.0),
-        "the near-miss cluster must reach structural = 1.0 on the shared body subtree, \
-         got {structural:?}",
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(f64::NAN);
+    assert!(
+        structural >= deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
+        "the near-miss cluster must clear the shared-subtree admission floor {floor}, \
+         got {structural}",
+        floor = deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
+    );
+    assert!(
+        structural < 1.0,
+        "the reported view must be the near-miss itself, not a byte-identical \
+         fragment nested inside it: structural = 1.0 means a Merkle-exact match, \
+         which a one-statement Type-3 near-miss cannot be (gh #408), got {structural}",
     );
     let occurrences = cluster
         .pointer("/occurrences")
@@ -289,32 +308,51 @@ fn require_occurrence_text(scan_root: &Path, occurrence: &serde_json::Value) -> 
     Ok(String::from_utf8(bytes)?)
 }
 
-/// Asserts a cross-file cluster is a *partial* match: no occurrence
-/// covers a whole `func` declaration, and no occurrence carries a
-/// statement that exists in only one of the two files.
+/// Asserts a cross-file cluster is a genuine Type-3 near-miss: the
+/// reported view spans the whole enclosing declaration in both files,
+/// and the statement that exists in only one of them appears in exactly
+/// one occurrence — which is precisely what makes the pair a near-miss
+/// rather than a Type-1/2 whole-unit copy ([CLONE-TYPE-TAXONOMY]).
 ///
-/// This is what separates a Type-3 near-miss from a Type-1/2 whole-unit
-/// copy ([CLONE-TYPE-TAXONOMY]). Asserting only "a cross-file cluster
-/// exists at structural = 1.0" is satisfied by either, so it cannot fail
-/// when the near-miss path regresses.
-fn assert_partial_near_miss(
+/// **This contract was inverted, deliberately, by gh #408.** It used to
+/// require the opposite: a strict *sub*-range of each function, with
+/// the divergent statement excluded from every occurrence. That is the
+/// fragment view — the shared statements either side of the insertion,
+/// reported as separate findings — and #408 is the issue filed because
+/// it leaves the actual duplicated method invisible in every language,
+/// "reported as unactionable line noise". The old rationale ("a
+/// statement in only one file can never be part of a cross-file clone")
+/// holds for an exact clone and fails for a near-miss, where divergence
+/// inside the reported range is the defining property of the bucket.
+///
+/// Asserting exactly one occurrence carries the divergence is stronger
+/// than asserting none does: it fails both if the pair regresses to a
+/// fragment view (nobody carries it) and if the fixture ever stops
+/// being a near-miss at all (both carry it, i.e. an exact copy).
+fn assert_enclosing_near_miss(
     scan_root: &Path,
     cluster: &serde_json::Value,
     divergent_statement: &str,
 ) -> Result<()> {
-    for occurrence in require_array(cluster, "/occurrences", "cluster")? {
+    let occurrences = require_array(cluster, "/occurrences", "cluster")?;
+    let mut carrying = 0_usize;
+    for occurrence in occurrences {
         let text = require_occurrence_text(scan_root, occurrence)?;
         assert!(
-            !text.trim_start().starts_with("func "),
-            "a near-miss cluster must span a strict sub-range of each function, not the \
-             whole declaration; got:\n{text}",
+            text.contains("func "),
+            "the near-miss view must span the whole enclosing declaration, not a \
+             fragment of it (gh #408); got:\n{text}",
         );
-        assert!(
-            !text.contains(divergent_statement),
-            "`{divergent_statement}` exists in only one of the two files, so it can never \
-             be part of a cross-file clone; the reported range is:\n{text}",
-        );
+        if text.contains(divergent_statement) {
+            carrying = carrying.saturating_add(1);
+        }
     }
+    assert_eq!(
+        carrying, 1,
+        "`{divergent_statement}` must appear in exactly one occurrence: zero means the \
+         report regressed to the fragment view #408 removed, and two would mean the \
+         fixture is an exact copy rather than a near-miss",
+    );
     Ok(())
 }
 
@@ -349,7 +387,7 @@ fn detects_type3_clone_in_go_fixture() -> Result<()> {
     for cluster in &clusters {
         let files = cluster_file_basenames(cluster);
         if files.len() > 1 {
-            assert_partial_near_miss(&scan_root, cluster, "running += 2")?;
+            assert_enclosing_near_miss(&scan_root, cluster, "running += 2")?;
         }
     }
     Ok(())
@@ -629,8 +667,16 @@ fn detects_type3_clone_in_csharp_fixture() -> Result<()> {
     let json = run_min_nodes("csharp-type3", "15")?;
     assert!(json.contains("Delta.cs"));
     assert!(json.contains("Epsilon.cs"));
-    assert!(json.contains("\"structural\": 0.0"));
-    assert!(json.contains("\"token_jaccard\""));
+    // This asserted the raw literal `"structural": 0.0`, which gh #408
+    // is the issue filed against: the two methods share ~90% of their
+    // AST, and the zero was the candidate layer writing a literal for
+    // every cross-bucket pair rather than a measurement
+    // ([FUSION-SHARED-SUBTREE]). Asserting the zero asserted the defect.
+    // The honest contract is the two-sided one — real shape evidence,
+    // short of the Merkle equality a near-miss cannot have.
+    let clusters = report_clusters(&json)?;
+    let cluster = require_cluster_spanning(&clusters, "Delta.cs", "Epsilon.cs")?;
+    assert_type3_signals(cluster);
     Ok(())
 }
 

@@ -125,16 +125,26 @@ pub(crate) fn assert_single_file_cluster(cluster: &Value, size: u64, file: &str)
 }
 
 /// Asserts the report publishes a cross-file duplicate spanning
-/// `files` with `size` occurrences, a saturated structural signal and
-/// at least `minimum_loc` duplicated lines — the shared spine of every
-/// "this cross-file copy stayed visible" control. Returns the reported
-/// texts so each control can still pin *what* the duplication is.
+/// `files` with `size` occurrences, shape evidence at or above
+/// `min_structural`, and at least `minimum_loc` duplicated lines — the
+/// shared spine of every "this cross-file copy stayed visible" control.
+/// Returns the reported texts so each control can still pin *what* the
+/// duplication is.
+///
+/// `min_structural` is a parameter rather than a fixed `0.99` because
+/// the two controls hold different bars honestly. A byte-identical copy
+/// still saturates and its caller still demands it. A near-copy's
+/// reported view spans the divergence, so it measures real but
+/// non-exact overlap ([FUSION-SHARED-SUBTREE]) — demanding saturation
+/// there demands the fragment view. Passing the bar in keeps the strong
+/// assertion strong where it is true, instead of lowering it for both.
 pub(crate) fn expect_cross_file_duplicate(
     scan_root: &Path,
     report: &Value,
     files: &[&str],
     size: u64,
     minimum_loc: u64,
+    min_structural: f64,
 ) -> Result<Vec<String>> {
     let cluster = expect_cluster_spanning(report, files)?;
     assert_eq!(
@@ -142,9 +152,11 @@ pub(crate) fn expect_cross_file_duplicate(
         size,
         "one occurrence per copied file: {cluster:#}"
     );
+    let structural = signal(cluster, "structural");
     assert!(
-        signal(cluster, "structural") >= 0.99,
-        "the copies share a shape, so the structural signal saturates: {cluster:#}"
+        structural >= min_structural,
+        "the copies share a shape, so the structural signal must reach \
+         {min_structural}, got {structural}: {cluster:#}"
     );
     assert_duplicated_loc_at_least(report, minimum_loc);
     occurrence_texts(scan_root, cluster)

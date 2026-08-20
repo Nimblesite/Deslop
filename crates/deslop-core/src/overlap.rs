@@ -28,6 +28,10 @@ use std::{collections::HashMap, rc::Rc};
 
 /// Zhang–Shasha ordered tree alignment ([FUSION-SHARED-SUBTREE]).
 mod alignment;
+
+/// Measurement unit tests ([FUSION-SHARED-SUBTREE]).
+#[cfg(test)]
+mod tests;
 use alignment::{aligned_shared_nodes, PostNode};
 
 use crate::{
@@ -62,24 +66,58 @@ pub fn apply_shared_subtree_rescue(
     trees: &[NormalizedNode],
 ) {
     let mut measurer = OverlapMeasurer::new(trees);
-    let mut measured = 0_usize;
-    for pair in pairs.iter_mut().filter(|pair| rescue_eligible(pair)) {
-        let (Some(left), Some(right)) =
-            (fingerprints.get(pair.left), fingerprints.get(pair.right))
-        else {
+    let mut rescued_pairs = 0_usize;
+    for pair in pairs.iter_mut() {
+        if !rescue_eligible(pair) || !crosses_files(pair, fingerprints) {
             continue;
-        };
-        pair.shared_subtree_overlap = measurer.overlap(left, right);
-        tracing::debug!(
-            left_nodes = left.node_count,
-            right_nodes = right.node_count,
-            token_jaccard = pair.score.token_jaccard,
-            overlap = pair.shared_subtree_overlap,
-            "shared-subtree overlap measured"
-        );
-        measured = measured.saturating_add(1);
+        }
+        if measure_onto(pair, fingerprints, &mut measurer) {
+            rescued_pairs = rescued_pairs.saturating_add(1);
+        }
     }
-    tracing::debug!(measured, "shared-subtree rescue overlaps measured");
+    tracing::debug!(rescued_pairs, "shared-subtree rescue overlaps measured");
+}
+
+/// Measures one eligible pair, returning whether both endpoints
+/// resolved.
+fn measure_onto(
+    pair: &mut CandidatePair,
+    fingerprints: &[Fingerprint],
+    measurer: &mut OverlapMeasurer<'_>,
+) -> bool {
+    let (Some(left), Some(right)) = (fingerprints.get(pair.left), fingerprints.get(pair.right))
+    else {
+        return false;
+    };
+    pair.shared_subtree_overlap = measurer.overlap(left, right);
+    tracing::debug!(
+        left_nodes = left.node_count,
+        right_nodes = right.node_count,
+        token_jaccard = pair.score.token_jaccard,
+        overlap = pair.shared_subtree_overlap,
+        "shared-subtree overlap measured"
+    );
+    true
+}
+
+/// True when the pair's endpoints live in different files.
+///
+/// The rescue is deliberately cross-file only. Every clone this route
+/// exists to recover is a copy *between* files ([FUSION-SHARED-SUBTREE],
+/// gh #408), and admitting same-file pairs on shape overlap is the
+/// #197 in-file sibling-family shape, which the report already spends a
+/// dedicated proof suppressing. It is also what keeps a single-file
+/// corpus intact: same-file rescues union that file's subtrees into one
+/// transitive component, and the same-file overlap collapse then
+/// reduces it to a single logical location, which is dropped below
+/// `MIN_REPORTABLE_MEMBERS` — so the file's real duplication
+/// disappeared entirely rather than being reported
+/// (`issue_119_role_gate_exercised`).
+fn crosses_files(pair: &CandidatePair, fingerprints: &[Fingerprint]) -> bool {
+    match (fingerprints.get(pair.left), fingerprints.get(pair.right)) {
+        (Some(left), Some(right)) => left.file_id != right.file_id,
+        _ => false,
+    }
 }
 
 /// True for a pair worth measuring: dropped below its fused floor on a
@@ -125,6 +163,32 @@ struct EndpointView {
 }
 
 impl EndpointView {
+    /// Builds a view over a flat run of leaves under the synthetic
+    /// window root — the minimal shape for asserting the alignment's
+    /// arithmetic directly, without a parser in the way.
+    #[cfg(test)]
+    fn from_flat_leaves(kinds: &[&'static str]) -> Self {
+        let mut postorder: Vec<PostNode> = kinds
+            .iter()
+            .enumerate()
+            .map(|(index, kind)| PostNode {
+                kind,
+                leftmost: index.saturating_add(1),
+            })
+            .collect();
+        let total = postorder.len();
+        postorder.push(PostNode {
+            kind: "__window__",
+            leftmost: 1,
+        });
+        Self {
+            postorder,
+            total,
+            entries: Vec::new(),
+            counts: HashMap::new(),
+        }
+    }
+
     /// Post-order sequence, including the synthetic window root.
     fn postorder(&self) -> &[PostNode] {
         &self.postorder
@@ -229,7 +293,10 @@ fn build_view(
     let mut entries: Vec<Fingerprint> = Vec::new();
     for member in &members {
         push_postorder(member, &mut postorder);
-        entries.extend(collect_fingerprints(member, SHARED_SUBTREE_MIN_CREDIT_NODES));
+        entries.extend(collect_fingerprints(
+            member,
+            SHARED_SUBTREE_MIN_CREDIT_NODES,
+        ));
     }
     let total = postorder.len();
     // Synthetic window root: aligns the members as ordered siblings so
@@ -269,36 +336,48 @@ struct WalkFrame<'tree> {
     leftmost: Option<usize>,
 }
 
+impl<'tree> WalkFrame<'tree> {
+    /// Opens a frame over `node` with no children walked yet.
+    const fn new(node: &'tree NormalizedNode) -> Self {
+        Self {
+            node,
+            next_child: 0,
+            leftmost: None,
+        }
+    }
+}
+
 /// Appends `node`'s subtree to `out` in post-order, recording each
 /// node's leftmost-leaf index. Iterative so a deep tree cannot
 /// overflow the stack (matching `fingerprint::hash_and_collect`).
 fn push_postorder(node: &NormalizedNode, out: &mut Vec<PostNode>) {
-    let mut stack = vec![WalkFrame {
-        node,
-        next_child: 0,
-        leftmost: None,
-    }];
+    let mut stack = vec![WalkFrame::new(node)];
     while let Some(frame) = stack.last_mut() {
         if let Some(child) = frame.node.children.get(frame.next_child) {
             frame.next_child = frame.next_child.saturating_add(1);
-            stack.push(WalkFrame {
-                node: child,
-                next_child: 0,
-                leftmost: None,
-            });
+            stack.push(WalkFrame::new(child));
             continue;
         }
-        let position = out.len().saturating_add(1);
-        let leftmost = frame.leftmost.unwrap_or(position);
-        out.push(PostNode {
-            kind: frame.node.kind,
-            leftmost,
-        });
-        let _finished = stack.pop();
-        if let Some(parent) = stack.last_mut() {
-            if parent.leftmost.is_none() {
-                parent.leftmost = Some(leftmost);
-            }
+        close_frame(&mut stack, out);
+    }
+}
+
+/// Emits the top frame's node and folds its leftmost leaf into its
+/// parent, which inherits it from its first child.
+fn close_frame(stack: &mut Vec<WalkFrame<'_>>, out: &mut Vec<PostNode>) {
+    let Some(frame) = stack.pop() else {
+        return;
+    };
+    let leftmost = frame
+        .leftmost
+        .unwrap_or_else(|| out.len().saturating_add(1));
+    out.push(PostNode {
+        kind: frame.node.kind,
+        leftmost,
+    });
+    if let Some(parent) = stack.last_mut() {
+        if parent.leftmost.is_none() {
+            parent.leftmost = Some(leftmost);
         }
     }
 }
@@ -313,25 +392,37 @@ fn credit_shared_nodes(left: &EndpointView, right: &EndpointView) -> usize {
     let mut taken: Vec<(usize, usize)> = Vec::new();
     let mut credit = 0_usize;
     for entry in &left.entries {
-        let start = entry.byte_range.start;
-        let end = entry.byte_range.end;
-        if taken
-            .iter()
-            .any(|(taken_start, taken_end)| *taken_start <= start && end <= *taken_end)
-        {
+        if !claims_a_match(entry, &mut remaining, &taken) {
             continue;
         }
-        let Some(count) = remaining.get_mut(&entry.hash) else {
-            continue;
-        };
-        if *count == 0 {
-            continue;
-        }
-        *count = count.saturating_sub(1);
         credit = credit.saturating_add(entry.node_count);
-        taken.push((start, end));
+        taken.push((entry.byte_range.start, entry.byte_range.end));
     }
     credit
+}
+
+/// True when `entry` is not nested inside an already-credited span and
+/// consumes one matching hash from the right endpoint's multiset.
+fn claims_a_match(
+    entry: &Fingerprint,
+    remaining: &mut HashMap<[u8; 32], usize>,
+    taken: &[(usize, usize)],
+) -> bool {
+    let (start, end) = (entry.byte_range.start, entry.byte_range.end);
+    if taken
+        .iter()
+        .any(|(taken_start, taken_end)| *taken_start <= start && end <= *taken_end)
+    {
+        return false;
+    }
+    let Some(count) = remaining.get_mut(&entry.hash) else {
+        return false;
+    };
+    if *count == 0 {
+        return false;
+    }
+    *count = count.saturating_sub(1);
+    true
 }
 
 /// Lossless small-count conversion for the coverage divisor.

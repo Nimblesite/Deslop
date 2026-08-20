@@ -26,7 +26,10 @@ use anyhow::Result;
 use serde_json::Value;
 
 mod common;
-use crate::common::{signals::assert_proven_rename_contract, *};
+use crate::common::{
+    signals::{assert_near_miss_rename_contract, assert_proven_rename_contract},
+    *,
+};
 
 /// Drives `deslop` over `fixture_dir` and holds the renamed-loop clone
 /// spanning `files` to the proven-rename contract plus the pair size the
@@ -125,7 +128,7 @@ fn javascript_near_miss_extra_guard_is_a_proven_rename() -> Result<()> {
     let root = fixture("js-type3-guard");
     let report = run_report(&root, 10)?;
     let clone = expect_cluster_spanning(&report, &["inventoryScan.js", "stockScan.js"])?;
-    assert_proven_rename_contract(&root, clone, "js-type3-guard")?;
+    assert_near_miss_rename_contract(&root, clone, "js-type3-guard")?;
     assert_never_clustered(
         &report,
         "formatLabel.js",
@@ -141,7 +144,20 @@ fn javascript_near_miss_extra_statement_keeps_shared_subtree_and_excludes_unrela
     // The two URL-decode loops share an inner subtree that still clusters
     // even though one copy writes two extra map entries.
     let clone = expect_cluster_spanning(&report, &["parseHeaders.js", "parseQuery.js"])?;
-    assert!(approx(signal(clone, "structural"), 1.0));
+    // The reported view is the enclosing function, which contains the
+    // extra map writes — so it clears the shared-subtree floor without
+    // being Merkle-exact. Demanding 1.0 demands the fragment view
+    // ([FUSION-SHARED-SUBTREE], gh #408).
+    let structural = signal(clone, "structural");
+    assert!(
+        structural >= deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
+        "the shared inner subtree must register as real shape evidence, got {structural}"
+    );
+    assert!(
+        structural < 1.0,
+        "the reported view spans the divergence, so it cannot be Merkle-exact, \
+         got {structural}"
+    );
     // The unrelated random-token generator in the same directory must never
     // be pulled into a clone cluster.
     assert_never_clustered(
@@ -169,28 +185,44 @@ fn typescript_near_miss_reordered_statements_cluster_nearly_identical() -> Resul
 }
 
 #[test]
-fn typescript_signature_anchored_near_miss_is_conservatively_suppressed() -> Result<()> {
-    // `tallyPoints` and `tallyScores` share an identical typed signature
-    // (`(rounds: number[][]): number`) but their bodies diverge by an extra
-    // statement, so the only *exact* structural anchor is the signature. The
-    // signature-only filter (#154) suppresses this as scaffolding rather than
-    // letting an unrelated-body coincidence reach top-offenders — the same
-    // conservative routing the other languages get. (Body-anchored near
-    // misses still cluster: see the `*_near_miss_*` tests above and the
-    // `typescript-type3` fixture.)
+fn typescript_near_miss_surfaces_without_dragging_in_the_unrelated_file() -> Result<()> {
+    // `tallyPoints` and `tallyScores` are identical bar one no-op line
+    // (`subtotal = subtotal * 1;`). This asserted they must **not** be
+    // visible, on the reading that their "bodies diverge" so the only
+    // exact anchor is the shared typed signature — the #154 signature-only
+    // scaffolding filter. That reading was an artifact of Merkle equality:
+    // the inserted line rehashed every ancestor, so the bodies scored 0.0
+    // and looked unrelated. They measure 0.875 shared-subtree overlap
+    // ([FUSION-SHARED-SUBTREE]), and gh #408 names this exact fixture as
+    // its sharpest case — "one inserted statement takes the visible clone
+    // count from one to zero".
+    //
+    // The #154 guarantee is not weakened by dropping that assertion: it is
+    // held, on fixtures whose bodies genuinely are unrelated, by
+    // `typescript_signature_only_match_with_divergent_bodies_is_suppressed`,
+    // `dart_signature_only_match_with_differing_bodies_is_suppressed` and
+    // `go_closure_signature_only_match_is_suppressed`. What this fixture
+    // can still prove — and now does — is the precision half on the same
+    // report: `formatDuration.ts` computes something else entirely and
+    // must never be pulled in.
     let report = run_report(&fixture("ts-type3-stmt"), 10)?;
     assert_eq!(
         field(&report, "files_analysed").as_u64(),
         Some(3),
         "all three files must be analysed: {report:#}"
     );
-    assert!(
-        cluster_spanning(&report, &["pointBoard.ts", "scoreBoard.ts"]).is_none(),
-        "a signature-anchored near miss must not surface as a visible clone: {report:#}"
+    let clone = cluster_spanning(&report, &["pointBoard.ts", "scoreBoard.ts"])
+        .ok_or_else(|| anyhow::anyhow!("the near-miss pair must surface: {report:#}"))?;
+    assert_eq!(
+        cluster_bucket(clone),
+        "nearly_identical",
+        "one no-op line apart is a credible near-miss, not a demoted shape match: \
+         {clone:#}"
     );
-    assert!(
-        clusters_hidden(&report) >= 1,
-        "the signature-only family must be detected and hidden: {report:#}"
+    assert_never_clustered(
+        &report,
+        "formatDuration.ts",
+        "the unrelated duration formatter must never join the near-miss cluster",
     );
     Ok(())
 }

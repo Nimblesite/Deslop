@@ -98,16 +98,32 @@ fn dart_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
 // The signature-only sibling match — the two `int f(int)` headers, whose
 // bodies differ — is a known false positive ([CLONE-NOISE-SIGNATURE-ONLY],
 // #154) and is correctly suppressed; it must NOT be what carries the
-// cluster, so we require a genuine `structural = 1.0` body match.
+// cluster, so we require substantive shape evidence, not a header match.
+//
+// The bound is two-sided ([FUSION-SHARED-SUBTREE], gh #408). It once
+// required `structural == 1.0`, which only a byte-identical *fragment*
+// nested inside the near-miss can satisfy — and reporting that fragment
+// instead of the enclosing method is the recall hole #408 describes. A
+// one-statement Type-3 near-miss cannot be Merkle-exact by
+// construction, so exactness would mean the whole-method clone was
+// missed. `dart-type3`'s enclosing pair measures 0.877; the
+// signature-only header match it must not be measures far below the
+// admission floor.
 #[test]
 fn dart_near_miss_produces_genuine_cross_file_structural_cluster() -> Result<()> {
     let report = run_cli("dart-type3", 8)?;
     let cluster = expect_cluster_spanning(&report, &["delta.dart", "epsilon.dart"])?;
     let structural = signal(cluster, "structural");
     assert!(
-        is_exact_one(structural),
-        "the cross-file Dart near-miss cluster must reach structural = 1.0 on the shared \
-         subtree (genuine Type-3 detection via the structural path), got {structural}",
+        structural >= deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
+        "the cross-file Dart near-miss cluster must clear the shared-subtree admission \
+         floor {floor} (genuine Type-3 detection via the structural path), got {structural}",
+        floor = deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
+    );
+    assert!(
+        structural < 1.0,
+        "the reported view must be the enclosing near-miss, not a Merkle-exact fragment \
+         nested inside it (gh #408), got {structural}",
     );
     let occurrence_count = occurrences(cluster).len();
     assert!(

@@ -39,7 +39,14 @@ fn expect_ride_along_reported(
 ) -> Result<()> {
     let scan_root = fixture(fixture_name);
     let report = run_report(&scan_root, 8)?;
-    let texts = expect_cross_file_duplicate(&scan_root, &report, files, 2, minimum_loc)?;
+    let texts = expect_cross_file_duplicate(
+        &scan_root,
+        &report,
+        files,
+        2,
+        minimum_loc,
+        deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
+    )?;
     assert!(covers(&texts), "{why}: {texts:#?}");
     Ok(())
 }

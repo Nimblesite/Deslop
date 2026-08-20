@@ -11,8 +11,9 @@ use crate::{
 };
 
 use super::{
-    classify_signals, has_saturating_shape_evidence, is_token_carried_nearmiss, ClusterKind,
-    CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR, LITERAL_TABLE_MIN_FRACTION,
+    classify_signals, has_saturating_shape_evidence, is_shape_corroborated_nearmiss,
+    is_token_carried_nearmiss, ClusterKind, CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR,
+    LITERAL_TABLE_MIN_FRACTION,
 };
 
 /// [FUSION-CONTENT-GATE] routing tail: for shape-identical clusters the
@@ -103,12 +104,11 @@ pub(crate) fn spans_multiple_files(members: &[Fingerprint]) -> bool {
         .is_some_and(|first| members.iter().any(|member| member.file_id != first.file_id))
 }
 
-/// Demotion for [CLONE-BUCKETS-ROUTING] **row 4** — the anchor-free
-/// near-miss — or `None` to leave the routing alone. A shared-subtree
-/// overlap below [`crate::pair::SHARED_SUBTREE_MIN_OVERLAP`] means no
-/// meaningful shape matched, so a normalised-token estimate is the
-/// cluster's only evidence, and two shapes of cluster carry that estimate
-/// without earning an act-now verdict:
+/// Demotion for [CLONE-BUCKETS-ROUTING] **rows 4 and 4b** — the
+/// unanchored near-misses — or `None` to leave the routing alone.
+/// Without a saturated Merkle shape the cluster has no anchor its
+/// evidence can be taken on trust from, and two shapes of cluster reach
+/// those rows without earning an act-now verdict:
 ///
 /// - **A cross-file spread** (3+ members over 3+ files) is the #134
 ///   scaffolding pattern arriving through the token door instead of the
@@ -146,19 +146,31 @@ fn route_anchor_free(
     members: &[Fingerprint],
 ) -> Option<ClusterKind> {
     let unearned = !content.measured || is_cross_file_scaffolding(members);
-    (is_anchor_free_token_cluster(signals) && unearned).then_some(ClusterKind::LooselySimilar)
+    (reaches_an_unanchored_nearmiss_row(signals) && unearned).then_some(ClusterKind::LooselySimilar)
 }
 
-/// The row-4 population this guard governs: token-carried clusters
-/// whose measured shared-subtree overlap stays below the
-/// [FUSION-SHARED-SUBTREE] corroboration floor. A cluster at or above
-/// that floor carries Merkle-subtree proof of its own — the same kind
-/// of evidence the anchored routes take on trust — so the "nothing but
-/// a token estimate" rationale no longer describes it, exactly as it
-/// never described a Merkle-anchored cluster.
-fn is_anchor_free_token_cluster(signals: ReportSignals) -> bool {
-    is_token_carried_nearmiss(signals)
-        && signals.structural < crate::pair::SHARED_SUBTREE_MIN_OVERLAP
+/// The rows this guard governs: **both** unanchored near-miss routes.
+///
+/// Row 4b ([FUSION-SHARED-SUBTREE]) is included deliberately. A high
+/// shared-subtree overlap is not immunity from the #134/#331
+/// scaffolding pattern — it is the pattern's own signature. Six
+/// distinct Flutter widgets whose `build` bodies share nothing measure
+/// a *high* overlap precisely because the framework-mandated
+/// declaration is most of each file, so a guard that exempted
+/// high-overlap clusters would have re-admitted the exact false
+/// positives #331 removed, through a new door. The evidence that
+/// separates a genuine near-miss from scaffolding is spread and
+/// measured content, which is what this guard reads — never the
+/// magnitude of the shape signal.
+///
+/// Both rows are covered rather than only the token one for the same
+/// reason: a 3-file, 3-member family reaching an act-now bucket on
+/// shape-plus-moderate-tokens is the same trade at a different
+/// operating point, and leaving row 4b unguarded would have made the
+/// #408 fix a recall win paid for with a precision loss.
+fn reaches_an_unanchored_nearmiss_row(signals: ReportSignals) -> bool {
+    signals.structural < 0.99
+        && (is_token_carried_nearmiss(signals) || is_shape_corroborated_nearmiss(signals))
 }
 
 /// Returns true when a structural-only cluster spans enough distinct
