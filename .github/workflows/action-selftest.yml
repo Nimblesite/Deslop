@@ -34,13 +34,13 @@ permissions:
 jobs:
   contract:
     name: Action contract
-    # Dependabot PRs are swept into `dependabot-upgrades`, never merged to main
-    # directly. A github-actions SECURITY bump is force-opened against `main` and
-    # edits .github/workflows/**, matching the paths filter above, so without
-    # this gate it would run the whole hosted-runner matrix on a discarded bump.
-    # Every other job needs this one, so skipping here skips them all.
-    # ([GITHUB-DEPENDABOT])
-    if: github.actor != 'dependabot[bot]'
+    # Runs for every author. A github-actions SECURITY bump is force-opened
+    # against `main`, edits .github/workflows/**, matches the paths filter above
+    # — and is NOT swept, because the sweep's base filter is the staging branch.
+    # It is therefore the only Dependabot PR that reaches here, and the only one
+    # that rewrites the very files this suite exists to prove still work. Every
+    # other job needs this one, so an actor skip here skipped them all.
+    # ([GITHUB-DEPENDABOT-SECURITY-GATES], #388)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:

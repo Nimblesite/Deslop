@@ -36,24 +36,16 @@ jobs:
       - name: Classify changed paths
         id: classify
         env:
-          ACTOR: ${{ github.actor }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          # Dependabot PRs are swept into `dependabot-upgrades` by
-          # dependabot-automerge.yml and never merge into main directly, so the
-          # heavy matrix would only burn minutes on a bump we discard. CI runs
-          # once, on the `dependabot-upgrades -> main` consolidation PR.
-          # ([GITHUB-DEPENDABOT])
-          if [ "$ACTOR" = "dependabot[bot]" ]; then
-            {
-              echo "code=false"
-              echo "site=false"
-            } >> "$GITHUB_OUTPUT"
-            echo "Dependabot PR — skipping the code matrix and site build."
-            exit 0
-          fi
+          # Classification is by PATH ONLY — never by author. Routine Dependabot
+          # bumps target `dependabot-upgrades` and never trigger this workflow at
+          # all, so an actor short-circuit here could only ever fire on the one
+          # Dependabot PR that does reach `main`: a SECURITY bump, which no sweep
+          # carries away. Skipping that one is skipping the build and test of a
+          # CVE fix. ([GITHUB-DEPENDABOT-SECURITY-GATES], #388)
           changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
           echo "Changed files in this PR:"
           printf '%s\n' "$changed"
@@ -126,6 +118,7 @@ jobs:
           # behaviour), a hit skips re-downloading the tarballs.
           cache: npm
           cache-dependency-path: |
+            package-lock.json
             clients/vscode/package-lock.json
             clients/vscode/webview-ui/package-lock.json
 
@@ -184,6 +177,12 @@ jobs:
       # threshold is the single source of truth — never hardcoded here.
       - name: Duplication gate (deslop)
         run: ./target/release/deslop . --no-color
+
+      # The repo-root package.json exists only for the Node contract suites
+      # under scripts/ — `yaml`, so the workflow gates are asserted against a
+      # real parse instead of a text match. Nothing here ships.
+      - name: Install repo-script dependencies
+        run: npm ci
 
       - name: Deployment manifest and binary gates
         run: make deployment-verify
@@ -434,13 +433,17 @@ jobs:
   # it only runs on pull_request events (this workflow's trigger).
   security:
     name: security
-    # Skipped for Dependabot, like every other job here: the bump is swept into
-    # `dependabot-upgrades` and reviewed once at the consolidation PR, where this
-    # gate does run. Reviewing a vuln-fix bump for vulnerabilities it is fixing
-    # is pure noise. ([GITHUB-DEPENDABOT])
-    if: github.actor != 'dependabot[bot]'
+    # Runs for EVERY author, Dependabot included. A security bump is the one
+    # Dependabot PR that reaches `main`, and a CVE fix routinely drags in
+    # transitive dependencies the advisory said nothing about — so this is the
+    # PR that most needs the repo's only dependency vuln-gate, not the one to
+    # excuse from it. ([GITHUB-DEPENDABOT-SECURITY-GATES], #388)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # LOAD-BEARING on Dependabot runs: a Dependabot-triggered event hands the
+    # workflow a READ-ONLY GITHUB_TOKEN unless an explicit `permissions:` block
+    # raises it. Delete this and dependency review loses its PR summary on
+    # Dependabot PRs only — silently. Pinned by test-dependabot-gate-matrix.mjs.
     permissions:
       contents: read
       pull-requests: write  # dependency-review posts its PR summary

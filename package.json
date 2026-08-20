@@ -1,0 +1,10 @@
+{
+  "name": "deslop-repo-scripts",
+  "version": "0.0.0-dev",
+  "type": "module",
+  "private": true,
+  "description": "Dependency root for the repo-level Node contract tests under scripts/. Not shipped: the VSIX is the only distribution.",
+  "devDependencies": {
+    "yaml": "^2.8.1"
+  }
+}

@@ -10,11 +10,15 @@
 #     codeql.yml only trigger on `pull_request: [main]` (the filter matches the
 #     PR *base*), so these staging PRs run NO build/test/CodeQL.
 #   * SECURITY updates -> GitHub IGNORES `target-branch` for these and always
-#     opens them against the repo's default branch (`main`). The auto-merge
-#     workflow therefore also fires on `main` and folds the security bump into
-#     the SAME staging branch, then retires the PR — so a CVE bump never sits on
-#     main waiting for a human either. (ci.yml/codeql.yml skip Dependabot PRs, so
-#     the matrix never burns on a bump we immediately sweep away.)
+#     opens them against the repo's default branch (`main`). The sweep does NOT
+#     collect them: dependabot-automerge.yml filters its base to
+#     `dependabot-upgrades` only, deliberately, so a CVE bump stays on `main` and
+#     is merged or retargeted by a human. It is therefore the one Dependabot PR
+#     that merges to main on its own checks, and it runs the FULL set — CI,
+#     dependency review, CodeQL, Action self-test — exactly like a human PR.
+#     None of those workflows may gate on the author; #388 was the hole where
+#     they did, and scripts/test-dependabot-gate-matrix.mjs now pins it shut.
+#     ([GITHUB-DEPENDABOT-SECURITY-GATES])
 #   * groups -> each ecosystem collapses ALL version bumps (patch, minor AND
 #     major) into ONE PR, and a parallel `*-security` group (`applies-to:
 #     security-updates`) collapses CVE bumps the same way. Majors no longer need
@@ -65,9 +69,11 @@ updates:
         applies-to: security-updates
         patterns: ["*"]
 
-  # npm / Node — the three package.json roots (no root-level package.json).
+  # npm / Node — the repo root (devDependencies for the scripts/ contract
+  # suites, ships nothing) plus the three product package.json roots.
   - package-ecosystem: npm
     directories:
+      - /
       - /site
       - /clients/vscode
       - /clients/vscode/webview-ui

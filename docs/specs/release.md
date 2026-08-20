@@ -76,9 +76,10 @@ on drift. Coverage floors are owned by `coverage-thresholds.json`
   of vulnerable-code detection; `java-kotlin` (JetBrains) is deferred until a
   `build-mode: manual` Gradle step exists.
 - **[GITHUB-DEP-REVIEW] Dependency review** — the `security` job in `ci.yml` runs
-  `actions/dependency-review-action` on every `pull_request`, blocking merges that
-  add a dependency with a known vulnerability at `fail-on-severity: high`. It is
-  the repo's only dependency vulnerability gate.
+  `actions/dependency-review-action` on every `pull_request` against `main`,
+  whoever opened it, blocking merges that add a dependency with a known
+  vulnerability at `fail-on-severity: high`. It is the repo's only dependency
+  vulnerability gate, so it is never conditioned on the author.
 - **[GITHUB-DEPENDABOT] Dependabot** — `.github/dependabot.yml` raises weekly
   grouped updates for every ecosystem (github-actions, cargo, npm ×3, gradle).
   Routine version bumps target the long-lived `dependabot-upgrades` staging branch
@@ -91,8 +92,21 @@ on drift. Coverage floors are owned by `coverage-thresholds.json`
   `main` hangs a dead check on every human PR — one that by construction can
   never run. Security updates are the cost of that filter: GitHub ignores
   `target-branch` for them and always opens them against `main`, where they are
-  merged or retargeted by a human rather than swept, still gated by the
-  `security` dependency-review job in `ci.yml`.
+  merged or retargeted by a human rather than swept.
+- **[GITHUB-DEPENDABOT-SECURITY-GATES] No author-conditioned gate** — a security
+  bump is the only Dependabot pull request that reaches `main`, and no sweep
+  removes it, so `ci.yml` (classifier included), `codeql.yml` and
+  `action-selftest.yml` must gate it exactly as they gate a human PR. None of
+  those workflows may branch on `github.actor`: routine bumps never trigger them
+  (the base filter already does that work), so such a check can only ever fire on
+  the CVE fix, and a job skipped by `if:` reports `skipped`, which branch
+  protection counts as passing — the hole is invisible on a green board (#388).
+  `dependabot-automerge.yml` is the one workflow that stays actor-gated, because
+  identifying the bumper is its actual job. The two write scopes that survive
+  Dependabot's read-only token — `pull-requests: write` on `security`,
+  `security-events: write` on `analyze` — must stay declared at job level, or the
+  gates fail on Dependabot PRs alone. `scripts/test-dependabot-gate-matrix.mjs`
+  asserts the whole matrix from a YAML parse (#394).
 - **[SWR-SEC-ACTION-PINNING] Action SHA pinning** — security-critical workflows
   pin third-party GitHub Actions to a full 40-character commit SHA with a trailing
   `# vX.Y.Z` comment, because a floating tag can be re-pointed at malicious code

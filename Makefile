@@ -9,7 +9,7 @@
 # human entry points and are the only ones `make help` lists.
 # =============================================================================
 
-.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
+.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _repo-script-deps _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
 
 _JETBRAINS_DIR := clients/jetbrains
 
@@ -253,18 +253,35 @@ CORPUS_TESTS ?= corpus_tokio_rust corpus_nest_typescript corpus_determinism_nest
 ## deployment-verify: Validate deployment manifest and built binary contracts.
 ##                    Also runs the verifier proof suite which builds fake
 ##                    binaries and plugin zips violating each Shipwright
-##                    contract rule and asserts every verifier rejects them.
+##                    contract rule and asserts every verifier rejects them,
+##                    and the Dependabot event-matrix gate contract
+##                    ([GITHUB-DEPENDABOT-SECURITY-GATES]) which proves a
+##                    security bump against main still clears every gate.
 ##                    Without this, a silently-broken verifier could let a
 ##                    drifted binary ship.
-deployment-verify: build
+deployment-verify: build _repo-script-deps
 	node scripts/verify-deployment-manifest.mjs shipwright.json
 	node scripts/verify-deployment-binaries.mjs shipwright.json target/release
 	node scripts/verify-release-workflow-gates.mjs .github/workflows/release.yml
 	node scripts/test-release-workflow-contract.mjs
+	node scripts/test-dependabot-gate-matrix.mjs
 	node scripts/test-deployment-docs-contract.mjs
 	node scripts/test-release-version-stamping.mjs
 	node scripts/test-verifiers.mjs
 	node scripts/test-action-contract.mjs
+
+# _repo-script-deps: Install the repo-root devDependencies the Node contract
+#   suites under scripts/ import (`yaml`, so workflow gates are asserted against
+#   a real parse, never a text match). Root package.json is private and ships
+#   nothing — the VSIX remains the only distribution.
+#   Keyed on npm's own `node_modules/.package-lock.json`, which it rewrites on
+#   every install: a mere `-d node_modules` test would skip the install after a
+#   lockfile bump and run the suite against the stale parser.
+_repo-script-deps:
+	@if [ ! -f node_modules/.package-lock.json ] \
+	   || [ package-lock.json -nt node_modules/.package-lock.json ]; then \
+	  echo "==> Installing repo-root script dependencies..."; npm ci; \
+	fi
 
 # _kill-deslop-processes: SIGTERM (then SIGKILL on holdouts) every running
 #   `deslop-lsp` and `deslop-mcp` process so a stale child from a previous

@@ -8,10 +8,12 @@ name: Dependabot auto-merge
 #     directly (.github/dependabot.yml `target-branch`), and every ecosystem in
 #     that file sets it. These are what this workflow sweeps.
 #   * SECURITY updates -> GitHub IGNORES `target-branch` for these and ALWAYS
-#     opens them against the default branch (`main`). They are handled by a
-#     human, deliberately — see the trigger note below. A CVE bump getting eyes
-#     on it is not a bad outcome, and `security` (dependency-review) in ci.yml
-#     still gates it.
+#     opens them against the default branch (`main`). They are NOT swept — the
+#     base filter below is staging-only — and are handled by a human,
+#     deliberately. A CVE bump getting eyes on it is not a bad outcome, and it
+#     is gated like any other PR to main: CI, `security` (dependency-review),
+#     CodeQL and the Action self-test all run for it, none of them keyed on the
+#     author. ([GITHUB-DEPENDABOT-SECURITY-GATES])
 #
 # Sweep strategy: PATH-RESTRICTED, not a branch merge. Only the files the PR
 # itself changed (diff against its merge-base with the PR base) are copied from
@@ -36,9 +38,10 @@ name: Dependabot auto-merge
 #
 # Nothing reaches `main` this way — the full build/test (ci.yml) + CodeQL
 # (codeql.yml) gate the single `dependabot-upgrades -> main` consolidation PR,
-# which is where review and the expensive matrix actually run. ci.yml/codeql.yml
-# deliberately SKIP Dependabot PRs (they would only burn the matrix on a bump we
-# immediately sweep away).
+# which is where review and the expensive matrix actually run. Those workflows
+# subscribe to `pull_request: [main]` only, so a staging-targeted bump never
+# triggers them; that branch filter is the whole saving, and no actor check is
+# needed or permitted to achieve it. ([GITHUB-DEPENDABOT-SECURITY-GATES])
 #
 # Lives at the repo root so it is present on `dependabot-upgrades` (cut from
 # main): for `pull_request` the workflow is read from the PR's base branch, so

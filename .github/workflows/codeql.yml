@@ -53,11 +53,16 @@ jobs:
     # private ones. Gating on public visibility lets a private fork skip cleanly
     # (no red X) and self-enable the moment it is made public.
     #
-    # Dependabot PRs are excluded: they are swept into `dependabot-upgrades` by
-    # dependabot-automerge.yml and never merge to main directly, so scanning them
-    # burns 20 minutes per language on a bump we discard. The consolidation PR is
-    # scanned. ([GITHUB-DEPENDABOT])
-    if: github.event.repository.visibility == 'public' && github.actor != 'dependabot[bot]'
+    # Visibility is the ONLY gate. Author is not: routine Dependabot bumps target
+    # `dependabot-upgrades` and never trigger this workflow, so an actor skip
+    # could only fire on a SECURITY bump — which lands on `main` unswept, and
+    # whose `actions` leg is the one scan that reads the workflow files the bump
+    # itself edits. ([GITHUB-DEPENDABOT-SECURITY-GATES], #388)
+    if: github.event.repository.visibility == 'public'
+    # LOAD-BEARING on Dependabot runs: a Dependabot-triggered event hands the
+    # workflow a READ-ONLY GITHUB_TOKEN unless an explicit `permissions:` block
+    # raises it, and without `security-events: write` the SARIF upload fails on
+    # Dependabot PRs only. Pinned by test-dependabot-gate-matrix.mjs.
     permissions:
       security-events: write
       actions: read
