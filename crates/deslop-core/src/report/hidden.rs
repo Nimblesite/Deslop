@@ -222,8 +222,18 @@ impl BucketDistribution {
     }
 
     /// Emits the structured classification distribution.
+    ///
+    /// The target is pinned to the *stage* rather than this module: the
+    /// [issue #45] observability contract names one target per pipeline
+    /// stage (`deslop_core::pair`, `::cluster`, `::report`), and this
+    /// event is the report stage's. Splitting `report.rs` for the
+    /// file-length rule moved the call site into `report::hidden` and
+    /// silently renamed the target with it — a file-organisation change
+    /// must not move an observable contract
+    /// (`issue_45_observability::issue_45_pipeline_emits_stage_observability_events`).
     pub(super) fn log(self, visible: usize, hidden: usize) {
         tracing::info!(
+            target: "deslop_core::report",
             visible,
             hidden,
             identical = self.identical,
