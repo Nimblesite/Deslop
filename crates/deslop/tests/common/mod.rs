@@ -15,6 +15,10 @@
 /// Suites that assert on `signals.fused` import it explicitly with
 /// `use crate::common::signals::*;` — a glob re-export here would be an
 /// unused import in every binary that never touches the vocabulary.
+/// The two-sided contract every noise-family pin is judged by: the
+/// family stays hidden while a real clone in the same run stays visible.
+pub(crate) mod negative_pin;
+
 pub(crate) mod signals;
 
 /// The deterministic mock-embedder runner. Imported explicitly with

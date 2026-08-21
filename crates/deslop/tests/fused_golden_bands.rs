@@ -205,6 +205,7 @@ fn assert_rename_band(report: &Value, corpus: &Corpus, root: &Path, stem: &str) 
          textbook `nearly_identical` clone — {dump}"
     );
     assert_rename_components(cluster, corpus, stem);
+    assert_certified_rename_reaches_act_now(cluster, corpus, stem);
     assert_eq!(
         distinct_texts(root, cluster)?.len(),
         2,
@@ -245,6 +246,45 @@ fn assert_rename_components(cluster: &Value, corpus: &Corpus, stem: &str) {
         cluster_size(cluster),
         2,
         "{language}/{stem}: the rename scenario has exactly two occurrences — {dump}"
+    );
+}
+
+/// Band 2's ceiling clause (gh #410, § The contract in
+/// `docs/plans/fused-score-followups.md`). Both golden rename stems are
+/// a **certified** Type-2 proof: identical logic, every identifier
+/// substituted consistently and corroborated by repetition, every
+/// aligned literal preserved, and anchor mass well past the point where
+/// the mass term alone vouches for the pair. That is duplication an
+/// agent must not re-author, so it has to reach the act-now line.
+///
+/// While `rename_consistency` was the bare product
+/// `anchors / (anchors + RENAME_EVIDENCE_HALF_MASS)`, no rename could
+/// reach `0.85` in any language at any body length a human writes — the
+/// golden fixtures rendered `0.729` and `0.720` on 17 and 16 anchors —
+/// so the top agent band silently meant "byte-identical" rather than
+/// "do not write this copy". [FUSION-CONTENT-GATE] states the rule this
+/// pins: a contradiction-free rename whose own mass already clears
+/// [`CONTENT_SUPPORT_FLOOR`](deslop_core::buckets::CONTENT_SUPPORT_FLOOR)
+/// is priced by the rename discount alone.
+fn assert_certified_rename_reaches_act_now(cluster: &Value, corpus: &Corpus, stem: &str) {
+    let dump = signal_dump(cluster);
+    let language = corpus.language;
+    assert!(
+        approx(signal(cluster, "rename_consistency"), 1.0),
+        "{language}/{stem}: every literal is preserved and every constrained \
+         identifier position is explained, so the rename proof carries no \
+         contradiction left to discount — {dump}"
+    );
+    assert!(
+        signal(cluster, "fused") >= ACT_NOW_FUSED,
+        "{language}/{stem}: a certified Type-2 rename is duplication an agent must \
+         not re-author, so it must reach the act-now line ({ACT_NOW_FUSED}); a top \
+         band only copy-paste can enter means \"byte-identical\", not \"do not write \
+         this copy\" — {dump}"
+    );
+    assert!(
+        ACT_NOW_BUCKETS.contains(&cluster_bucket(cluster)),
+        "{language}/{stem}: an act-now confidence must carry an act-now bucket — {dump}"
     );
 }
 
@@ -444,10 +484,12 @@ fn fused_bands_mean_the_same_thing_in_every_language() -> Result<()> {
         ));
         assert!(
             approx(verbatim, 1.0)
-                && (REUSE_FUSED..1.0).contains(&rename)
-                && (REUSE_FUSED..1.0).contains(&lean),
+                && (ACT_NOW_FUSED..1.0).contains(&rename)
+                && (ACT_NOW_FUSED..1.0).contains(&lean),
             "band contract broken — every language must report verbatim at 1.0 and \
-             both Type-2 renames inside [{REUSE_FUSED}, 1.0): {verdicts:#?}"
+             both certified Type-2 renames inside [{ACT_NOW_FUSED}, 1.0): a rename \
+             that cannot reach the act-now line in one language cannot mean the same \
+             thing in all six (gh #410): {verdicts:#?}"
         );
     }
     assert_eq!(

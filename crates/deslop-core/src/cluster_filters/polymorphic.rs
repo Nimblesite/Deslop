@@ -8,15 +8,19 @@
 
 use tree_sitter::Node;
 
-use super::{enclosing_kind, function_kinds, parse_for, spans_multiple_files, Snippet};
+use super::{
+    body_shape::body_kind_stream, enclosing_kind, function_kinds, parse_for,
+    spans_multiple_files, Snippet,
+};
 use crate::ast::ByteRange;
 
 /// Detects the polymorphic-signature pattern: every cluster member
 /// resolves to a function definition ([`polymorphic_subject`]) with one
 /// shared declared name, the members span at least two distinct files,
-/// and the bodies are not byte-equivalent — so a genuine copy-pasted
+/// and the bodies differ as normalised trees — so a genuine copy-pasted
 /// helper that happens to share a name (e.g. a private `_helper` reused
-/// in two modules) still fires as a cluster.
+/// in two modules), byte-identical or consistently renamed, still fires
+/// as a cluster (gh #373).
 pub(super) fn is_polymorphic_signature_cluster(snippets: &[Snippet<'_>]) -> bool {
     let names: Option<Vec<&[u8]>> = snippets.iter().map(subject_name).collect();
     let Some(names) = names else { return false };
@@ -33,27 +37,30 @@ pub(super) fn is_polymorphic_signature_cluster(snippets: &[Snippet<'_>]) -> bool
 }
 
 /// Returns true when at least two members' subject-function bodies
-/// differ in raw source bytes — distinguishes polymorphism (different
-/// implementations of one signature) from genuinely duplicated helper
-/// functions that share a name.
+/// differ as normalised trees — the shared
+/// [`body_kind_stream`] the signature-only filter also compares with —
+/// distinguishing polymorphism (different implementations of one
+/// signature) from genuinely duplicated helper functions that share a
+/// name. Identifier and literal text never enters the stream, so a
+/// consistently renamed copy is the *same* implementation, not a
+/// different one: deciding this on raw source bytes classified every
+/// Type-2 rename as polymorphism and deleted the finding (gh #373,
+/// `polymorphic_gate_hides_rename_clone.rs`).
 fn subject_bodies_differ(snippets: &[Snippet<'_>]) -> bool {
-    let bodies: Option<Vec<Vec<u8>>> = snippets
+    let streams: Option<Vec<Vec<i32>>> = snippets
         .iter()
         .map(|snippet| {
             let tree = parse_for(snippet)?;
             let function = polymorphic_subject(tree.root_node(), snippet)?;
             let body = function.child_by_field_name("body")?;
-            snippet
-                .source
-                .get(body.start_byte()..body.end_byte())
-                .map(<[u8]>::to_vec)
+            Some(body_kind_stream(body))
         })
         .collect();
-    let Some(bodies) = bodies else { return false };
-    let Some(first) = bodies.first() else {
+    let Some(streams) = streams else { return false };
+    let Some(first) = streams.first() else {
         return false;
     };
-    bodies.iter().any(|body| body != first)
+    streams.iter().any(|stream| stream != first)
 }
 
 /// Returns the declared name of the member's subject function, when one

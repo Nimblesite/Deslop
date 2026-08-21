@@ -18,7 +18,7 @@
 
 use std::{collections::BTreeMap, collections::HashMap, hash::BuildHasher};
 
-use crate::state::FileId;
+use crate::{buckets::CONTENT_SUPPORT_FLOOR, state::FileId};
 
 use super::{
     leaf_bytes, member_count, population, preserved_literal_count, vacuous_share, MemberContent,
@@ -103,8 +103,8 @@ fn pair_rename_consistency<S: BuildHasher>(
     let mapping = rename_mapping(&population(&canonical.keys, &member.keys, false), &echoes);
     let consistent_literals = preserved_literal_count(&literals).saturating_add(echo_count);
     let anchors = consistent_literals.saturating_add(mapping.explained);
-    vacuous_share(consistent_literals, literals.len()).min(mapping.coverage)
-        * anchor_weight(anchors)
+    let consistency = vacuous_share(consistent_literals, literals.len()).min(mapping.coverage);
+    consistency * evidence_weight(consistency, anchors)
 }
 
 /// Rename-mapping evidence over one pair's aligned identifier positions
@@ -195,6 +195,52 @@ fn substituted_pairs(identifiers: &[(u64, u64)]) -> Vec<(u64, u64)> {
 fn anchor_weight(anchors: usize) -> f64 {
     let mass = member_count(anchors);
     mass / (mass + RENAME_EVIDENCE_HALF_MASS)
+}
+
+/// The mass discount actually applied to one pair's rename proof, and
+/// gh #410's answer: **a rename the measurement has certified carries
+/// no doubt for the mass term to price.**
+///
+/// [`anchor_weight`] is an asymptote — it reaches `1.0` only in the
+/// limit — so multiplying it into the proof put a ceiling on the whole
+/// rename axis. With [`crate::buckets::RENAME_CONSISTENCY_DISCOUNT`]
+/// stacked on top, `fused >= 0.85` needed 68 affirming positions:
+/// unreachable at any body length a human writes, so the top agent band
+/// meant "byte-identical" instead of "do not write this copy", and a
+/// maximal Type-2 rename of real logic rendered `0.729`
+/// (`deslop/tests/fused_golden_bands.rs`). Two discounts were stacked
+/// to produce that, and only one of them was designed to.
+///
+/// `consistency` is `min(literal_consistency, coverage)`. At exactly
+/// `1.0` every aligned literal is preserved or echoes an elected
+/// substitution, and every *constrained* identifier position is either
+/// byte-identical or a bijection-explained substitution corroborated by
+/// repetition: the bijection is total, contradiction-free and
+/// literal-preserving, and nothing in the pair disputes it. The
+/// remaining doubt the mass term prices is coincidence — and that doubt
+/// is discharged by mass, which is the same quantity. So the
+/// certification is granted only where the mass term **already vouches
+/// for the pair on its own**, at [`CONTENT_SUPPORT_FLOOR`]: certifying
+/// never promotes a cluster the mass discount would have demoted, it
+/// only stops charging a proven rename for evidence it is not missing.
+/// Below that bar — and for every pair carrying a single contradiction
+/// — the smooth discount applies unchanged, so an anchor-poor
+/// forwarding scaffold (its subject name twice plus one collaborator,
+/// mass 3, weight 3/7) stays exactly where
+/// `[REPAIR-RENAME-ANCHOR-MASS]` left it.
+///
+/// The result is monotone: completing a rename can only raise
+/// `consistency` and add anchors, so certification can only switch on
+/// (`rename_literal_monotonicity.rs`). `RENAME_CONSISTENCY_DISCOUNT`
+/// still separates a certified rename from byte proof, so proven
+/// copy-paste keeps `fused == 1.0` and a certified rename tops out
+/// below it ([FUSION-CONTENT-GATE]).
+fn evidence_weight(consistency: f64, anchors: usize) -> f64 {
+    let weight = anchor_weight(anchors);
+    if consistency >= 1.0 && weight >= CONTENT_SUPPORT_FLOOR {
+        return 1.0;
+    }
+    weight
 }
 
 /// Literal echoes of the elected identifier substitutions (#409), as a

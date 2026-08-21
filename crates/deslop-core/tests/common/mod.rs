@@ -274,10 +274,47 @@ impl Visit for FieldCollector {
 /// [`render_report`] path. Consolidated here from the byte-identical
 /// copies previously duplicated per test file (Deslop cluster
 /// `a59932844b88648e`).
+/// Groups member snippets into one source per distinct path — the
+/// member texts concatenated in order — and returns each member's
+/// `(path index, byte slice)` within its assembled file. This is what
+/// makes a same-file cluster representable at all: a path cannot carry
+/// two different whole-file contents (gh #398).
+/// One assembled file: its fixture-relative path and full source.
+type AssembledFile<'p> = (&'p str, String);
+/// One member's location: its file's path plus its slice of that file.
+type MemberSpan<'p> = (&'p str, ByteRange);
+
+fn assemble_member_files<'p>(
+    snippets: Vec<(&'p str, &str)>,
+) -> (Vec<AssembledFile<'p>>, Vec<MemberSpan<'p>>) {
+    let mut assembled: Vec<AssembledFile<'p>> = Vec::new();
+    let mut spans: Vec<MemberSpan<'p>> = Vec::new();
+    for (path, text) in snippets {
+        if !assembled.iter().any(|(seen, _)| *seen == path) {
+            assembled.push((path, String::new()));
+        }
+        for (seen, source) in &mut assembled {
+            if *seen == path {
+                let start = source.len();
+                source.push_str(text);
+                spans.push((
+                    path,
+                    ByteRange {
+                        start,
+                        end: source.len(),
+                    },
+                ));
+            }
+        }
+    }
+    (assembled, spans)
+}
+
 pub(crate) struct ReportFixture {
     scan_root: PathBuf,
     language: &'static str,
     registry: FileRegistry,
+    paths: HashMap<String, FileId>,
     file_languages: HashMap<FileId, &'static str>,
     sources: HashMap<FileId, Vec<u8>>,
     analysed_lines: AnalysedLines,
@@ -290,6 +327,7 @@ impl ReportFixture {
             scan_root: scan_root.to_owned(),
             language,
             registry: FileRegistry::new(),
+            paths: HashMap::new(),
             file_languages: HashMap::new(),
             sources: HashMap::new(),
             analysed_lines: HashMap::new(),
@@ -297,12 +335,23 @@ impl ReportFixture {
     }
 
     /// Registers `path` with `source` bytes exactly once and returns its
-    /// [`FileId`]. Use with [`ReportFixture::fingerprint_at`] when one
-    /// file must carry several cluster members at distinct byte ranges —
-    /// `FileRegistry::register` appends unconditionally, so registering
-    /// per member would fork the same path into divergent ids.
+    /// [`FileId`] — the same id on every call for one path, because one
+    /// path is one file (gh #398): `FileRegistry::register` appends
+    /// unconditionally, and a fixture registering per member forked the
+    /// same path into divergent ids, so every same-file cluster reached
+    /// the router as cross-file. Re-registering a path with different
+    /// bytes is a fixture bug and fails loudly.
     pub(crate) fn file(&mut self, path: &str, source: &str) -> FileId {
+        if let Some(existing) = self.paths.get(path) {
+            assert_eq!(
+                self.sources.get(existing).map(Vec::as_slice),
+                Some(source.as_bytes()),
+                "fixture path {path} re-registered with different source                  — one path has one content; pass members of one file                  through one `cluster` call or `fingerprint_at` ranges"
+            );
+            return *existing;
+        }
         let file_id = self.registry.register(self.scan_root.join(path));
+        let _old = self.paths.insert(path.to_owned(), file_id);
         let _old = self.sources.insert(file_id, source.as_bytes().to_vec());
         let _old = self.file_languages.insert(file_id, self.language);
         let _old = self.analysed_lines.insert(
@@ -328,7 +377,9 @@ impl ReportFixture {
         }
     }
 
-    /// Registers one whole-file source per snippet and clusters them.
+    /// Registers each snippet and clusters them with no content
+    /// measurement — the common case for suites that pin routing on the
+    /// shape and token axes alone.
     pub(crate) fn cluster(
         &mut self,
         id: &str,
@@ -336,38 +387,45 @@ impl ReportFixture {
         node_count: usize,
         signals: PairScore,
     ) -> Cluster {
-        let members = snippets
-            .into_iter()
-            .enumerate()
-            .map(|(index, (path, source))| self.member(path, source, node_count, index))
-            .collect::<Vec<_>>();
+        let content = deslop_core::content::ContentEvidence::unmeasured();
+        self.cluster_with_content(id, snippets, node_count, signals, content)
+    }
+
+    /// Registers each distinct path exactly once — assembling its
+    /// source from the member texts it carries, in order — and clusters
+    /// one member per snippet over that member's own byte slice. One
+    /// path is one file with one [`FileId`], so a same-file cluster
+    /// reaches [CLONE-BUCKETS-ROUTING] as same-file and the metrics
+    /// count each path once (gh #398,
+    /// `report_fixture_file_identity.rs`).
+    pub(crate) fn cluster_with_content(
+        &mut self,
+        id: &str,
+        snippets: Vec<(&str, &str)>,
+        node_count: usize,
+        signals: PairScore,
+        content: deslop_core::content::ContentEvidence,
+    ) -> Cluster {
+        let (assembled, spans) = assemble_member_files(snippets);
+        let registered: Vec<(&str, FileId)> = assembled
+            .iter()
+            .map(|(path, source)| (*path, self.file(path, source)))
+            .collect();
+        let mut members = Vec::new();
+        for (seed, (path, range)) in spans.iter().enumerate() {
+            for (registered_path, file_id) in &registered {
+                if registered_path == path {
+                    members.push(Self::fingerprint_at(*file_id, *range, node_count, seed));
+                }
+            }
+        }
         Cluster {
             id: id.to_owned(),
             members,
             weight: 10_000.0,
             signals,
-            content: deslop_core::content::ContentEvidence::unmeasured(),
+            content,
         }
-    }
-
-    /// Registers `source` at `path` and returns a whole-file member.
-    fn member(
-        &mut self,
-        path: &str,
-        source: &str,
-        node_count: usize,
-        hash_seed: usize,
-    ) -> Fingerprint {
-        let file_id = self.file(path, source);
-        Self::fingerprint_at(
-            file_id,
-            ByteRange {
-                start: 0,
-                end: source.len(),
-            },
-            node_count,
-            hash_seed,
-        )
     }
 
     /// Renders `clusters` through the production report pipeline.

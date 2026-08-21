@@ -33,6 +33,13 @@ fn different_backend_implementations_never_pair_across_files() -> Result<()> {
              {visible:#?}"
         );
     }
+    assert_eq!(
+        cluster_count(&report),
+        0,
+        "two sibling entries of one request-body dict are cells of one \
+         record, not duplication (gh #421) — this fixture's whole \
+         visible surface must be empty at any threshold: {visible:#?}"
+    );
     let docker_and_fly = clusters(&report).iter().any(|cluster| {
         let files = occurrence_files(cluster);
         files.iter().any(|file| file.contains("docker_host"))

@@ -30,9 +30,14 @@ pub fn summary(color: ColorChoice, report: &Report, technical: bool) {
     eprintln!();
     write_headline(&theme, report);
     write_diff_delta_line(&theme, report);
+    // `clusters_hidden` counts every suppressed cluster regardless of
+    // cause — built-in noise filters and report policy alike — so the
+    // line must not attribute them to the user's `.deslop.toml`, which
+    // may not even exist (gh #373,
+    // `hidden_group_summary_names_the_hider_not_the_users_config`).
     if report.clusters_hidden > 0 {
         eprintln!(
-            "  {dim}({hidden} more groups hidden by your .deslop.toml config){reset}",
+            "  {dim}({hidden} more groups hidden by built-in noise filters or report policy){reset}",
             dim = theme.dim,
             reset = theme.reset,
             hidden = report.clusters_hidden,

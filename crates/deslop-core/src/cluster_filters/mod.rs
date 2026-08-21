@@ -44,6 +44,11 @@
 //! - [CLONE-NOISE-PY-DICT-FIXTURE] — small nested dict literals
 //!   inside pytest test functions share AST shape across files but
 //!   encode unrelated request/response payloads.
+//! - [CLONE-NOISE-PY-COLLECTION-SIBLING-CELLS] — two entries of one
+//!   collection literal instance admit as a structural pair at a
+//!   permissive `--min-nodes`. Cells of one record are its fields, not
+//!   extractable duplication; a byte-identical repeated entry still
+//!   surfaces.
 //! - async `SQLAlchemy` row-building pytest fixtures repeat the
 //!   same add/commit/refresh/return setup idiom by design.
 //! - `mod e0001;` / `use foo::Bar;` top-level declarations
@@ -92,21 +97,25 @@
 //!   They are un-refactorable data, not logic. Suppressed only when the
 //!   members differ in raw bytes (a verbatim copy survives) and none holds
 //!   a closure/lambda initialiser (logic-bearing fields keep clustering).
-//! - [CLONE-NOISE-PY-MODULE-CONSTANT-TABLE] — a Python module that
-//!   is just a run of module-level `NAME = <literal>` constant assignments
-//!   (SQL query strings, registry/config values) normalises to the same
-//!   subtree as any other such table after identifier/literal/comment
+//! - [CLONE-NOISE-CONSTANT-TABLE] — a range that is just a run of
+//!   module-level `NAME = <literal>` declarations (SQL query strings,
+//!   registry/config values, a test suite's data blobs) normalises to the
+//!   same subtree as any other such table after identifier/literal/comment
 //!   stripping, so two unrelated tables cluster at `structural=1.00`. A
 //!   table of distinct named constants is data, not extractable logic.
-//!   Suppressed only when the members differ in raw bytes (a verbatim copy
-//!   survives).
+//!   One rule, per-language only in the grammar of "a top-level constant
+//!   declaration": Python `NAME = <literal>` (#133) and Rust `const` /
+//!   `static` items (#362). Suppressed only when the members differ in raw
+//!   bytes (a verbatim copy survives).
 //!
 //! The filter is purely additive: it never re-routes a `nearly_identical`
 //! cluster as `identical`, only suppresses noise. Any cluster whose
 //! member sources cannot be parsed (missing language plug-in, partial
 //! source bytes) falls through unchanged.
 
+mod body_shape;
 mod calls;
+mod constant_table;
 mod dart;
 mod dart_data_table;
 mod declaration_family;
@@ -115,7 +124,7 @@ mod forwarding;
 mod polymorphic;
 mod python;
 mod python_class_shapes;
-mod python_constants;
+mod python_collection_cells;
 mod python_dict_assert;
 mod python_idioms;
 mod python_module_preamble;
@@ -163,6 +172,7 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
     polymorphic::is_polymorphic_signature_cluster(&snippets)
         || is_signature_only_cluster(&snippets)
         || calls::is_literal_variation_call_cluster(&snippets)
+        || constant_table::is_constant_table_cluster(&snippets)
         || language_specific_noise(language, &snippets)
 }
 
@@ -254,11 +264,11 @@ fn python_noise(snippets: &[Snippet<'_>]) -> bool {
         || python_orm::is_sqlalchemy_mapped_column_cluster(snippets)
         || python::is_test_dict_literal_cluster(snippets)
         || python::is_pytest_fixture_boilerplate_cluster(snippets)
+        || python_collection_cells::is_collection_sibling_cell_cluster(snippets)
         || python_class_shapes::is_strenum_class_shape_cluster(snippets)
         || python_class_shapes::is_pydantic_partial_update_cluster(snippets)
         || python::is_parametric_invariant_test_cluster(snippets)
         || python_module_preamble::is_module_preamble_sequence_cluster(snippets)
-        || python_constants::is_module_constant_table_cluster(snippets)
 }
 
 /// All Rust idiom noise filters.
@@ -386,14 +396,16 @@ pub(super) fn trim_ascii_start(bytes: &[u8]) -> &[u8] {
 /// erases the distinguishing tokens too.
 ///
 /// We suppress these clusters only when at least two of the enclosing
-/// function bodies differ in raw source bytes. A real Type-2 clone
-/// where two functions share the same signature and body would have
-/// identical body bytes, so this check keeps genuine duplication.
+/// function bodies differ as normalised trees
+/// ([`body_shape::body_kind_stream`]). A real Type-1/Type-2 clone
+/// where two functions share the same signature and body — byte for
+/// byte or under a consistent rename — has equal streams, so genuine
+/// duplication keeps clustering.
 fn is_signature_only_cluster(snippets: &[Snippet<'_>]) -> bool {
     if snippets.len() < 2 {
         return false;
     }
-    let shapes: Option<Vec<Vec<String>>> = snippets
+    let shapes: Option<Vec<Vec<i32>>> = snippets
         .iter()
         .map(snippet_body_shape_when_signature_only)
         .collect();
@@ -404,17 +416,16 @@ fn is_signature_only_cluster(snippets: &[Snippet<'_>]) -> bool {
     shapes.iter().any(|shape| shape != first)
 }
 
-/// Returns the enclosing function body's AST node-kind sequence when
-/// `snippet.range` lies entirely inside that function's signature
-/// (before the body) — the signature-only match condition for
-/// [CLONE-NOISE-SIGNATURE-ONLY]. The node-kind sequence is the
-/// flattened, ordered list of every named descendant's kind so two
-/// bodies that share AST shape (and differ only by literals/identifiers)
-/// compare equal — i.e. a legitimate near-miss cluster keeps clustering.
-/// Returns `None` when the snippet is not contained in a function, when
-/// the function has no `body` field, or when the range intersects the
-/// body in any way.
-fn snippet_body_shape_when_signature_only(snippet: &Snippet<'_>) -> Option<Vec<String>> {
+/// Returns the enclosing function body's normalised kind stream
+/// ([`body_shape::body_kind_stream`]) when `snippet.range` lies
+/// entirely inside that function's signature (before the body) — the
+/// signature-only match condition for [CLONE-NOISE-SIGNATURE-ONLY].
+/// Two bodies that share AST shape (and differ only by literals,
+/// identifiers, or comments) compare equal — i.e. a legitimate
+/// near-miss cluster keeps clustering. Returns `None` when the snippet
+/// is not contained in a function, when the function has no `body`
+/// field, or when the range intersects the body in any way.
+fn snippet_body_shape_when_signature_only(snippet: &Snippet<'_>) -> Option<Vec<i32>> {
     let tree = parse_for(snippet)?;
     let function = enclosing_kind(
         tree.root_node(),
@@ -425,21 +436,7 @@ fn snippet_body_shape_when_signature_only(snippet: &Snippet<'_>) -> Option<Vec<S
     if snippet.range.end > body.start_byte() {
         return None;
     }
-    let mut kinds: Vec<String> = Vec::new();
-    collect_named_kinds(body, &mut kinds);
-    Some(kinds)
-}
-
-/// Pushes every named descendant's `kind` into `kinds` in source order.
-/// Used by [`snippet_body_shape_when_signature_only`] so cluster members
-/// whose bodies share AST shape compare equal regardless of literal or
-/// identifier divergence.
-fn collect_named_kinds(node: Node<'_>, kinds: &mut Vec<String>) {
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
-        kinds.push(child.kind().to_owned());
-        collect_named_kinds(child, kinds);
-    }
+    Some(body_shape::body_kind_stream(body))
 }
 
 /// Returns the set of tree-sitter node kinds that count as function

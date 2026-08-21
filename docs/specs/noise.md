@@ -23,16 +23,19 @@ reach `structural=1.0`, and token Jaccard cannot refute the match because the
 distinguishing identifiers normalise away too. A cluster is suppressed (for any
 language) when every member's matched range lies entirely before its enclosing
 function's body and at least two of those bodies differ in AST node-kind shape.
-Comparing bodies by node-kind sequence rather than raw bytes preserves genuine
-near-miss clusters whose bodies share shape but differ only in literals or
-identifiers.
+Comparing bodies by normalised node-kind stream rather than raw bytes preserves
+genuine near-miss clusters whose bodies share shape but differ only in literals,
+identifiers, or comments. The stream is shared with
+[CLONE-NOISE-POLYMORPHIC-SIGNATURE] — one definition of "same body shape",
+`cluster_filters/body_shape.rs`.
 
 ### [CLONE-NOISE-POLYMORPHIC-SIGNATURE] Interface implementations sharing one name
 Every member resolves to one subject function — the innermost function enclosing
 the member's range or, when the range is wider than any single function, the
 sole function the range contains with nothing but declaration scaffolding
 (imports, docstrings, the class shell) around it — all declaring the same name
-across at least two files, with bodies that are not byte-equivalent. That is the
+across at least two files, with bodies that differ in normalised node-kind shape
+(the shared `body_shape` stream above). That is the
 abstract/interface implementation pattern: the contract forces the signatures to
 agree, and what differs is each implementation's behaviour, so nothing can share
 a refactor. The widened resolution direction exists because
@@ -42,8 +45,29 @@ near-identical pair on the strength of the bytes the contract forces to agree,
 reporting two different backends 100% duplicated
 (`python-issue-69-abstract-method`,
 `different_backend_implementations_never_pair_across_files`). A copy-pasted
-helper that happens to share a name still fires as a cluster, because its
-bodies are byte-equivalent.
+helper that happens to share a name still fires as a cluster, because its bodies
+share one normalised shape — byte-identical and consistently-renamed copies
+alike. Deciding this on raw source bytes classified every same-named Type-2
+rename as polymorphism and deleted the finding — the tool reported `0.0%` and
+exited clean (gh #373, `polymorphic_gate_hides_rename_clone.rs` pins both
+directions).
+
+### [CLONE-NOISE-PY-COLLECTION-SIBLING-CELLS] Sibling cells of one collection literal
+At a permissive `--min-nodes`, two entries of a single collection literal —
+`"name": name` and `"arguments": arguments` inside one request-body dict —
+admit as a structural pair: the entry shape saturates while the distinguishing
+vocabulary normalises away, and the pair renders `structural_only` over two
+byte ranges of one line (gh #421). A cluster is suppressed when every member's
+smallest enclosing collection literal (dict/list/set/tuple) is the *same
+instance* — same file, same literal node — no member carries a lambda
+(logic inside an element is extractable and keeps clustering), and at least two
+members differ in raw bytes (the standard verbatim escape hatch: a
+byte-identical repeated entry is a real copy and still surfaces). Members of
+*different* literals fall through to the data-table family
+([CLONE-NOISE-LITERAL-TABLE]). Python is the one language measured; other
+languages fall through unchanged. Pinned by
+`different_backend_implementations_never_pair_across_files`, which asserts the
+gh #69 fixture's whole visible surface is empty.
 
 ### [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH] Embedding role mismatch (type vs function)
 An embedding-dominant `same_behavior` cluster may pair snippets that share topic
@@ -253,18 +277,40 @@ share identical concatenated definition bodies. Keying on body divergence rather
 than name divergence keeps a verbatim or renamed copy (whose bodies stay
 byte-identical) visible as real duplication.
 
-### [CLONE-NOISE-PY-MODULE-CONSTANT-TABLE] Module-level constant tables
-A Python module that is just a run of module-level `NAME = <literal>` constant
-assignments — a table of SQL query strings, registry values, or config
-defaults — normalises to the same structural subtree as any other such table once
-identifiers, literals, and comments are stripped, so two unrelated tables reach
-`structural=1.00, token_jaccard=1.00`. A cluster is suppressed when every
-member's reported range, at module top level, covers only comments, docstrings,
-and bare-name constant assignments to plain literal values (with at least one
-constant present), and the members differ in raw bytes. Interpolated f-strings or
-any call/name/attribute right-hand side disqualify a member, and the
-byte-divergence requirement keeps a constants module copied verbatim across files
-visible.
+### [CLONE-NOISE-CONSTANT-TABLE] Module-level constant tables
+A range that is just a run of module-level `NAME = <literal>` declarations — a
+table of SQL query strings, registry values, config defaults, or the data blobs a
+test suite feeds its subject — normalises to the same structural subtree as any
+other such table once identifiers, literals, and comments are stripped, so two
+unrelated tables reach `structural=1.00`. A cluster is suppressed when every
+member's reported range, at module top level, covers only trivia (comments,
+docstrings, attributes) and constant declarations bound to plain literal values,
+with at least one constant present, and the members differ in raw bytes. Any
+call, name, attribute or interpolated-string right-hand side disqualifies a
+member, and the byte-divergence requirement keeps a constants module copied
+verbatim across files visible.
+
+The rule is one rule; only the grammar of "a top-level constant declaration" is
+per-language, so a language absent from that map can never match:
+
+- **Python** (#133) — `NAME = <literal>` assignments to a bare name.
+- **Rust** (#362) — `const` / `static` items whose initialiser is a literal.
+  A `function_item`, `use_declaration`, `struct_item`, `impl_item` or `mod_item`
+  inside the range classifies as *other* and takes the whole range out of the
+  shape, which is what stops the filter reaching a run of copy-pasted top-level
+  functions.
+
+gh #362 is the Rust case: two test files whose `const NAME: &str = r"…";` runs
+share nothing but their shape were reported as the largest single finding in the
+repository hosting them, and — because a demoted cluster is still counted in
+`duplicated_loc` — moved that repository's own CI duplication budget by 344 LOC.
+Neither the ≥3-file `[CLONE-NOISE-SCAFFOLDING]` hide nor the single-file
+[RANK-STRUCTURAL-ONLY] declaration-family hide covers a **two**-file spread.
+Widening either of those would let it eat a real two-file clone; recognising the
+table for what it is does not. Pinned with its false-negative control in the same
+run by `issue_362_two_file_const_tables.rs` — the fixture's byte-identical
+`apply_discount_schedule` must stay visible, stay `identical`, rank first, and
+keep counting its own lines in the metric.
 
 ### [CLONE-NOISE-PY-WORKSPACE-LOCAL-MIRROR] Workspace-local schema mirror (out of scope)
 When a sandboxed workspace cannot import from the backend, it must keep a local
