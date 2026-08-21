@@ -7,6 +7,10 @@ import * as path from "node:path";
 import * as ts from "typescript";
 import { SIGNAL_HELP, signalTitle } from "../../types/signals";
 
+const DOC_TEXT_LINK_COMPONENT = "DocTextLink";
+const CLUSTER_ID_TOPIC_CONSTANT = "CLUSTER_ID_TOPIC";
+const CLUSTER_ID_TOPIC_VALUE = "cluster-id";
+
 function clusterWebviewSourcePath(): string {
   return path.resolve(__dirname, "../../../webview-ui/src/cluster/main.tsx");
 }
@@ -291,9 +295,30 @@ suite("cluster webview occurrence locations", () => {
   });
 
   test("cluster id is rendered as a docs link", () => {
-    const sourceText = parseClusterWebview().getFullText();
-    assert.match(sourceText, /DocTextLink/, "cluster panel must render docs links");
-    assert.match(sourceText, /topic="cluster-id"/, "cluster id must link to its docs section");
+    const root = parseClusterWebview();
+    const topicConstant = descendants(root, (node) => {
+      if (!ts.isVariableDeclaration(node) || !ts.isIdentifier(node.name)) return false;
+      const initializer = node.initializer;
+      return node.name.text === CLUSTER_ID_TOPIC_CONSTANT &&
+        initializer !== undefined &&
+        ts.isStringLiteral(initializer) &&
+        initializer.text === CLUSTER_ID_TOPIC_VALUE;
+    });
+    const linkedTopics = descendants(root, (node) => {
+      if (!ts.isJsxOpeningElement(node)) return false;
+      if (node.tagName.getText(root) !== DOC_TEXT_LINK_COMPONENT) return false;
+      const topic = node.attributes.properties.find(
+        (property): property is ts.JsxAttribute =>
+          ts.isJsxAttribute(property) && property.name.getText(root) === "topic",
+      );
+      if (topic?.initializer === undefined || !ts.isJsxExpression(topic.initializer)) return false;
+      const expression = topic.initializer.expression;
+      return expression !== undefined &&
+        ts.isIdentifier(expression) &&
+        expression.text === CLUSTER_ID_TOPIC_CONSTANT;
+    });
+    assert.equal(topicConstant.length, 1, "cluster-id docs topic must have one named constant");
+    assert.ok(linkedTopics.length > 0, "cluster id must link to its docs section");
   });
 
   test("severity badge label leads with the stable slug, not the volatile #N rank (#146)", () => {

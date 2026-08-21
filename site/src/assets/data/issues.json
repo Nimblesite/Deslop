@@ -7,12 +7,12 @@
     "planning_note": "Indicative only — not a schedule. Relative sequencing uses two parallel tracks per workstream and default effort units: verify 2, showstopper 3, critical 4, bug 5, task 4, feature 8."
   },
   "summary": {
-    "open": 103,
+    "open": 104,
     "verify": 16,
     "release_blockers": 3,
     "accuracy_critical": 22,
-    "linked": 82,
-    "relationships": 122
+    "linked": 83,
+    "relationships": 124
   },
   "workstreams": [
     {
@@ -162,7 +162,7 @@
         "ignored",
         "tech debt"
       ],
-      "count": 12,
+      "count": 13,
       "urgent": 10,
       "verify": 0
     }
@@ -201,7 +201,7 @@
       "rank": 4,
       "name": "Restore assurance",
       "description": "A spec or ignored-test gap weakens confidence in the system.",
-      "count": 2
+      "count": 3
     },
     {
       "id": "defect",
@@ -1593,109 +1593,9 @@
       "priority_name": "Critical path",
       "priority_reason": "Serious user or delivery impact; tackle soon.",
       "workstream": "performance",
-      "inbound_links": 1,
+      "inbound_links": 2,
       "plan": {
         "offset": 0,
-        "effort_units": 4,
-        "track": 0
-      }
-    },
-    {
-      "number": 228,
-      "title": "VSIX DUPLICATION panel out of sync with live engine: stale cluster 31b089e ranked #1, absent from CLI + MCP",
-      "url": "https://github.com/Nimblesite/Deslop/issues/228",
-      "excerpt": "Defect: reactive UI shows a stale cluster ranking that diverges from the authoritative engine The VS Code **DUPLICATION** tree-view (LSP-broadcast) is displaying a cluster set / worst-first ranking that does **not** match the live engine. The reactive loop (watcher → scheduler…",
-      "type": "Bug",
-      "labels": [
-        {
-          "name": "critical",
-          "color": "ee501d",
-          "description": "serious issue affecting users that needs to be fixed soon"
-        }
-      ],
-      "assignees": [],
-      "milestone": null,
-      "created_at": "2026-06-17T21:44:17Z",
-      "updated_at": "2026-08-18T10:43:36Z",
-      "lifecycle": "active",
-      "priority": "critical",
-      "priority_rank": 3,
-      "priority_name": "Critical path",
-      "priority_reason": "Serious user or delivery impact; tackle soon.",
-      "workstream": "integrations",
-      "inbound_links": 1,
-      "plan": {
-        "offset": 2,
-        "effort_units": 4,
-        "track": 0
-      }
-    },
-    {
-      "number": 370,
-      "title": "CRITICAL: deslop-lsp hangs indefinitely after a rejected embedding refresh (test ignored, ate the whole CI budget)",
-      "url": "https://github.com/Nimblesite/Deslop/issues/370",
-      "excerpt": "deslop-lsp::embedding_failure_progress::rejected_embedding_refresh_reports_failure_and_preserves_last_good_report **hangs indefinitely**. Measured on fused: 14m41s locally before it was killed, and it consumed CI's entire Test budget twice — the job was cancelled at 10m16s und…",
-      "type": "Bug",
-      "labels": [
-        {
-          "name": "critical",
-          "color": "ee501d",
-          "description": "serious issue affecting users that needs to be fixed soon"
-        },
-        {
-          "name": "ignored-test",
-          "color": "FBCA04",
-          "description": "Assertion is intact but #[ignore]d — not running in CI"
-        }
-      ],
-      "assignees": [],
-      "milestone": null,
-      "created_at": "2026-08-14T23:33:13Z",
-      "updated_at": "2026-08-21T07:38:44Z",
-      "lifecycle": "active",
-      "priority": "critical",
-      "priority_rank": 3,
-      "priority_name": "Critical path",
-      "priority_reason": "Serious user or delivery impact; tackle soon.",
-      "workstream": "quality",
-      "inbound_links": 1,
-      "plan": {
-        "offset": 0,
-        "effort_units": 4,
-        "track": 1
-      }
-    },
-    {
-      "number": 383,
-      "title": "[PIPELINE-INCREMENTAL] Analysis is not incremental: 78% of every run is LSH + pair evaluation, recomputed in full however little changed",
-      "url": "https://github.com/Nimblesite/Deslop/issues/383",
-      "excerpt": "deslop re-does the overwhelming majority of its work on every invocation regardless of how much of the corpus changed. The incremental cache ([PIPELINE-INCREMENTAL]) covers the parse stage only, and the parse stage is under a tenth of a run. The spec frames incremental analysi…",
-      "type": "Feature",
-      "labels": [
-        {
-          "name": "critical",
-          "color": "ee501d",
-          "description": "serious issue affecting users that needs to be fixed soon"
-        }
-      ],
-      "assignees": [
-        {
-          "login": "MelbourneDeveloper",
-          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
-        }
-      ],
-      "milestone": null,
-      "created_at": "2026-08-16T11:52:41Z",
-      "updated_at": "2026-08-18T10:42:17Z",
-      "lifecycle": "active",
-      "priority": "critical",
-      "priority_rank": 3,
-      "priority_name": "Critical path",
-      "priority_reason": "Serious user or delivery impact; tackle soon.",
-      "workstream": "detection",
-      "inbound_links": 1,
-      "plan": {
-        "offset": 4,
         "effort_units": 4,
         "track": 0
       }
@@ -1728,11 +1628,11 @@
       "priority_name": "Critical path",
       "priority_reason": "Serious user or delivery impact; tackle soon.",
       "workstream": "quality",
-      "inbound_links": 1,
+      "inbound_links": 2,
       "plan": {
-        "offset": 4,
+        "offset": 0,
         "effort_units": 4,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -2138,6 +2038,106 @@
         "offset": 0,
         "effort_units": 4,
         "track": 1
+      }
+    },
+    {
+      "number": 228,
+      "title": "VSIX DUPLICATION panel out of sync with live engine: stale cluster 31b089e ranked #1, absent from CLI + MCP",
+      "url": "https://github.com/Nimblesite/Deslop/issues/228",
+      "excerpt": "Defect: reactive UI shows a stale cluster ranking that diverges from the authoritative engine The VS Code **DUPLICATION** tree-view (LSP-broadcast) is displaying a cluster set / worst-first ranking that does **not** match the live engine. The reactive loop (watcher → scheduler…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "critical",
+          "color": "ee501d",
+          "description": "serious issue affecting users that needs to be fixed soon"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-06-17T21:44:17Z",
+      "updated_at": "2026-08-18T10:43:36Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "priority_rank": 3,
+      "priority_name": "Critical path",
+      "priority_reason": "Serious user or delivery impact; tackle soon.",
+      "workstream": "integrations",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 2,
+        "effort_units": 4,
+        "track": 0
+      }
+    },
+    {
+      "number": 370,
+      "title": "CRITICAL: deslop-lsp hangs indefinitely after a rejected embedding refresh (test ignored, ate the whole CI budget)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/370",
+      "excerpt": "deslop-lsp::embedding_failure_progress::rejected_embedding_refresh_reports_failure_and_preserves_last_good_report **hangs indefinitely**. Measured on fused: 14m41s locally before it was killed, and it consumed CI's entire Test budget twice — the job was cancelled at 10m16s und…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "critical",
+          "color": "ee501d",
+          "description": "serious issue affecting users that needs to be fixed soon"
+        },
+        {
+          "name": "ignored-test",
+          "color": "FBCA04",
+          "description": "Assertion is intact but #[ignore]d — not running in CI"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-14T23:33:13Z",
+      "updated_at": "2026-08-21T07:38:44Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "priority_rank": 3,
+      "priority_name": "Critical path",
+      "priority_reason": "Serious user or delivery impact; tackle soon.",
+      "workstream": "quality",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 4,
+        "effort_units": 4,
+        "track": 0
+      }
+    },
+    {
+      "number": 383,
+      "title": "[PIPELINE-INCREMENTAL] Analysis is not incremental: 78% of every run is LSH + pair evaluation, recomputed in full however little changed",
+      "url": "https://github.com/Nimblesite/Deslop/issues/383",
+      "excerpt": "deslop re-does the overwhelming majority of its work on every invocation regardless of how much of the corpus changed. The incremental cache ([PIPELINE-INCREMENTAL]) covers the parse stage only, and the parse stage is under a tenth of a run. The spec frames incremental analysi…",
+      "type": "Feature",
+      "labels": [
+        {
+          "name": "critical",
+          "color": "ee501d",
+          "description": "serious issue affecting users that needs to be fixed soon"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-16T11:52:41Z",
+      "updated_at": "2026-08-18T10:42:17Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "priority_rank": 3,
+      "priority_name": "Critical path",
+      "priority_reason": "Serious user or delivery impact; tackle soon.",
+      "workstream": "detection",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 4,
+        "effort_units": 4,
+        "track": 0
       }
     },
     {
@@ -2911,6 +2911,41 @@
       }
     },
     {
+      "number": 422,
+      "title": "Corpus suite cannot run in the PR gate: minutes of wall time and >13 GB peak per repository (blocked on #166)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/422",
+      "excerpt": "Why this exists make test no longer selects any test by name (gh #412). The one suite that still must not run in the release gate is the real-repository corpus gate, and it needs a **stated, tracked reason** rather than a silent filter. This issue is that reason. Every #[ignor…",
+      "type": "Unclassified",
+      "labels": [
+        {
+          "name": "ignored-test",
+          "color": "FBCA04",
+          "description": "Assertion is intact but #[ignore]d — not running in CI"
+        },
+        {
+          "name": "tech-debt",
+          "color": "C5DEF5",
+          "description": "Cleanup or debt repayment, no user-visible defect"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-21T09:47:03Z",
+      "updated_at": "2026-08-21T09:47:03Z",
+      "lifecycle": "active",
+      "priority": "assurance",
+      "priority_rank": 4,
+      "priority_name": "Restore assurance",
+      "priority_reason": "A spec or ignored-test gap weakens confidence in the system.",
+      "workstream": "quality",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 20,
+        "effort_units": 4,
+        "track": 1
+      }
+    },
+    {
       "number": 171,
       "title": "VSIX: duplicate hover card (Compare / View cluster / Copy for AI) missing while a file is being edited — only the LSP diagnostic remains",
       "url": "https://github.com/Nimblesite/Deslop/issues/171",
@@ -3310,7 +3345,7 @@
       "workstream": "quality",
       "inbound_links": 1,
       "plan": {
-        "offset": 20,
+        "offset": 24,
         "effort_units": 4,
         "track": 1
       }
@@ -4273,6 +4308,16 @@
     {
       "source": 416,
       "target": 364,
+      "kind": "reference"
+    },
+    {
+      "source": 422,
+      "target": 166,
+      "kind": "reference"
+    },
+    {
+      "source": 422,
+      "target": 412,
       "kind": "reference"
     }
   ]

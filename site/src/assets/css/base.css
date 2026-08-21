@@ -61,7 +61,7 @@
   --max-width: 80rem;
   --content-width: 72ch;
   --sidebar-width: 15rem;
-  --header-height: 4.25rem;
+  --header-height: 4.5rem;
 
   /* Spacing — 4px grid */
   --space-1: 0.25rem;
@@ -90,7 +90,10 @@
   --type-label-sm: 0.75rem;
   --type-label-md: 0.875rem;
   --type-body-md: 0.9375rem;
-  --type-nav: var(--type-body-md);
+  /* Navigation scale — primary bar, then secondary nav surfaces, then group labels. */
+  --type-nav: 1rem;
+  --type-nav-secondary: var(--type-body-md);
+  --type-nav-label: 0.8125rem;
 
   /* Motion */
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -335,7 +338,7 @@ pre {
 .language-switcher { display: flex; align-items: center; }
 .lang-link {
   font-family: var(--font-mono);
-  font-size: var(--type-label-md);
+  font-size: var(--type-nav-secondary);
   color: color-mix(in srgb, var(--on-surface) 60%, transparent);
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--outline-variant);
@@ -472,7 +475,7 @@ body.menu-open .drawer-scrim { opacity: 1; visibility: visible; }
 .footer-section ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .footer-section a {
   font-family: var(--font-mono);
-  font-size: var(--type-label-md);
+  font-size: var(--type-nav-secondary);
   color: color-mix(in srgb, var(--on-surface) 45%, transparent);
   text-decoration: none;
   transition: color var(--dur) var(--ease);

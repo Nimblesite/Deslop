@@ -27,6 +27,8 @@ pub const SCHEMA_URI: &str = "deslop://schema";
 const REPORT_MIME: &str = "application/json";
 /// MIME type for the schema doc (markdown).
 const SCHEMA_MIME: &str = "text/markdown";
+const RESOURCE_URI_FIELD: &str = "uri";
+const MIME_TYPE_FIELD: &str = "mimeType";
 
 /// Renders the `resources/list` response payload per MCP spec.
 #[must_use]
@@ -34,16 +36,16 @@ pub fn resources_list_payload() -> Value {
     json!({
         "resources": [
             {
-                "uri": REPORT_URI,
+                (RESOURCE_URI_FIELD): REPORT_URI,
                 "name": "Deslop live report",
                 "description": "Current duplication report, canonical JSON. Refreshed on every analysis pass.",
-                "mimeType": REPORT_MIME,
+                (MIME_TYPE_FIELD): REPORT_MIME,
             },
             {
-                "uri": SCHEMA_URI,
+                (RESOURCE_URI_FIELD): SCHEMA_URI,
                 "name": "Deslop report schema",
                 "description": "Markdown describing the report schema — field definitions, signal semantics, clone taxonomy.",
-                "mimeType": SCHEMA_MIME,
+                (MIME_TYPE_FIELD): SCHEMA_MIME,
             }
         ]
     })
@@ -63,8 +65,8 @@ pub fn read_resource(backend: &dyn McpBackend, uri: &str) -> Result<Value, JsonR
             let text = serde_json::to_string_pretty(&*report).unwrap_or_else(|_| "{}".to_owned());
             Ok(json!({
                 "contents": [{
-                    "uri": REPORT_URI,
-                    "mimeType": REPORT_MIME,
+                    (RESOURCE_URI_FIELD): REPORT_URI,
+                    (MIME_TYPE_FIELD): REPORT_MIME,
                     "text": text,
                 }]
             }))
@@ -73,8 +75,8 @@ pub fn read_resource(backend: &dyn McpBackend, uri: &str) -> Result<Value, JsonR
             let report = backend.report_get().map_err(backend_to_rpc)?;
             Ok(json!({
                 "contents": [{
-                    "uri": SCHEMA_URI,
-                    "mimeType": SCHEMA_MIME,
+                    (RESOURCE_URI_FIELD): SCHEMA_URI,
+                    (MIME_TYPE_FIELD): SCHEMA_MIME,
                     "text": report.schema_doc.clone(),
                 }]
             }))

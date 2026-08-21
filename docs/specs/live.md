@@ -139,6 +139,16 @@ After the **initial** full pipeline pass and after every **cold-pass install** (
 
 **Use:** the file is an **LSP-private startup cache**, not an IPC channel. On the next LSP startup, [LIVE-CACHE-SEED] (`AnalysisSession::try_seeded_from_cache`) loads it so the editor sees clusters within milliseconds while the cold full pass runs in the background.
 
+### [LIVE-CACHE-SEED-KEY] A seed must have been produced by this run's settings
+
+A cache seed is served to the editor **as an answer**, and an answer computed under different settings is a wrong answer, not a slightly old one. The seed was accepted on one condition — that the bytes deserialise as a `Report`. Nothing else was compared: not the tool version that produced it, not the `min_nodes` it was clustered at, not the configuration that scoped it, not the embedding provider that scored it. A report analysed at `--min-nodes 4` with embeddings on was therefore served verbatim to a session running at `--min-nodes 40` with embeddings off, and [LIVE-CLUSTER-OFFSET-FRESHNESS] then stamped current mtimes over those clusters, so the answer read as **fresh** rather than as a placeholder: byte offsets from a different analysis, pointing into files the editor has since changed, under a duplication figure the user is no longer asking for.
+
+The run that writes the state file therefore records its own identity in `{workspace_root}/.deslop/cache/live-report.key`, one component per line: tool version, canonicalised workspace root, `min_nodes`, the incremental flag, the resolved config path **and a digest of its bytes**, and the embedding mode plus provider/model/version/dimensions. The loader refuses a seed whose key is absent, unreadable, or different, and deletes the report so the next start is a cold pass. An absent key is a refusal, not a pass: a seed with no recorded provenance is a seed of unknown provenance, which is also how every cache written before the key existed is retired.
+
+The config **digest** is what makes an edited `.deslop.toml` invalidate the seed — the path alone never changes when the user edits it.
+
+Ordering is deliberate: the report is written first and the key second. A crash between them leaves the previous key, which either still describes the run — in which case the seed is an ordinary earlier generation, which is all a seed ever is — or does not, in which case it is refused. No interleaving produces an accepted incompatible seed. Implemented in `live/cache_seed_key.rs`.
+
 **Not written on:** per-keystroke incremental updates ([LIVE-SCHEDULER]) and embedding refresh commits — those used to spam the disk and contributed nothing to startup latency. The MCP no longer reads this file ([MCP-IPC-CLIENT]); it gets live state via the IPC socket. Stale-cache reads cannot leak hidden clusters because no one reads the cache except the LSP itself, post-restart, before its first cold pass overwrites it.
 
 ### [LIVE-STATE-FILE] State file (alias)
@@ -277,6 +287,10 @@ pub struct ReportDelta {
 ```
 
 Cluster ids are stable across runs ([REPORTING-CONTEXT §"How to read the report format"]). Clients that miss generations ask for a full snapshot via `report/get`, then resume delta consumption at the snapshot's generation.
+
+**A cluster whose id survived is *updated* when any field of it changed.** The comparison used to be a hand-written list of "the fields a subscriber actually observes", and the list had drifted out of date: `bucket`, `category`, `occurrences_total`, `occurrences_truncated`, `intersects_diff` and `is_newly_introduced` were absent from it, as were the content axes of `ReportSignals` (`agreement`, `rename_consistency`, `literal_fraction`) and each occurrence's `start_line`, `end_line` and `in_diff`. A cluster could change bucket, be re-categorised as data, gain or lose a diff tag, or move to different lines, and the delta said nothing — so every live subscriber kept rendering the previous generation's answer, and a second identical generation produced no delta either, so the stale view never healed.
+
+`ReportCluster` therefore derives `PartialEq` in the generated wire module and the delta compares whole values. A field added to `docs/models/live-ipc.td` is covered the day it lands. `is_empty` — which gates the `report/changed` notification ([LIVE-NOTIFICATIONS]) — reads the same verdict. Pinned by `crates/deslop-core/tests/live_delta_field_coverage.rs`, which walks the rendered cluster's own JSON and mutates one scalar leaf at a time rather than naming the fields, so the test cannot drift either.
 
 ### [LIVE-QUERY-API] Query API (LSP-internal)
 

@@ -3,24 +3,38 @@
 
 .hero {
   position: relative;
-  padding: var(--space-32) var(--space-6) var(--space-24);
+  padding: var(--space-24) var(--space-6);
   max-width: var(--max-width);
   margin-inline: auto;
   width: 100%;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: var(--space-16);
   align-items: flex-start;
 }
 
+/* The hero owns the first screen, so the copy and the product shot are centred
+   on one line inside it rather than stacked against the top edge. */
 @media (min-width: 1024px) {
   .hero {
     flex-direction: row;
+    align-items: center;
     min-height: calc(100dvh - var(--header-height));
   }
 }
 
-.hero__left { flex: 1; z-index: 10; }
+/* One gap governs the whole column — the elements carry no margins of their
+   own, so chip, headline, lede, CTA and sublede sit on a single rhythm. */
+.hero__left {
+  flex: 1;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-8);
+}
+.hero .hero__left > * { margin: 0; }
 @media (min-width: 1024px) { .hero__left { max-width: 42rem; } }
 
 .hero__right { flex: 1; width: 100%; position: relative; }
@@ -45,7 +59,6 @@
   font-size: clamp(2.5rem, 6vw, 4.5rem);
   letter-spacing: -0.04em;
   line-height: 1.05;
-  margin-bottom: var(--space-8);
 }
 .hero h1 em {
   font-style: normal;
@@ -59,7 +72,6 @@
   color: var(--on-surface-variant);
   font-size: clamp(1rem, 1.5vw, 1.25rem);
   line-height: 1.6;
-  margin-bottom: var(--space-10);
   max-width: 36rem;
 }
 
@@ -68,7 +80,6 @@
   color: var(--on-surface-muted, var(--on-surface-variant));
   font-size: var(--type-label-md);
   line-height: 1.5;
-  margin-top: var(--space-4);
   max-width: 40rem;
 }
 

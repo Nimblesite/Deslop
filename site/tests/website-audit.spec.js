@@ -15,6 +15,12 @@ const representativeRoutes = [
 
 const isInScope = (pathname) => !pathname.startsWith("/issues/") && pathname !== "/issues/";
 
+test("declares the social image with its actual MIME type", async ({ page }) => {
+  await page.goto("/blog/towards-100-percent-accuracy/");
+  const socialImageType = await page.locator('meta[property="og:image:type"]').getAttribute("content");
+  expect(socialImageType).toBe("image/jpeg");
+});
+
 test("publishes complete, parseable metadata on every ordinary page", async ({ page }) => {
   const sitemapResponse = await page.request.get("/sitemap.xml");
   expect(sitemapResponse.ok()).toBeTruthy();

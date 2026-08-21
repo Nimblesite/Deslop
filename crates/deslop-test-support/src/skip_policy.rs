@@ -107,7 +107,7 @@ pub fn ignored_tests_in(source: &str, file: &str) -> Result<Vec<IgnoredTest>> {
 }
 
 /// Walks every named node, recording the skips each `attribute_item` implies.
-fn visit(node: Node, source: &str, file: &str, found: &mut Vec<IgnoredTest>) -> Result<()> {
+fn visit(node: Node<'_>, source: &str, file: &str, found: &mut Vec<IgnoredTest>) -> Result<()> {
     if node.kind() == ATTRIBUTE_ITEM {
         record(node, source, file, found)?;
     }
@@ -120,7 +120,7 @@ fn visit(node: Node, source: &str, file: &str, found: &mut Vec<IgnoredTest>) -> 
 
 /// Records one attribute when it is an `#[ignore]`, rejecting the
 /// conditional form outright.
-fn record(item: Node, source: &str, file: &str, found: &mut Vec<IgnoredTest>) -> Result<()> {
+fn record(item: Node<'_>, source: &str, file: &str, found: &mut Vec<IgnoredTest>) -> Result<()> {
     let Some(attribute) = child_of_kind(item, ATTRIBUTE) else {
         return Ok(());
     };
@@ -142,7 +142,12 @@ fn record(item: Node, source: &str, file: &str, found: &mut Vec<IgnoredTest>) ->
 }
 
 /// Builds the record for one confirmed `#[ignore]`.
-fn ignored_test(item: Node, attribute: Node, source: &str, file: &str) -> Result<IgnoredTest> {
+fn ignored_test(
+    item: Node<'_>,
+    attribute: Node<'_>,
+    source: &str,
+    file: &str,
+) -> Result<IgnoredTest> {
     Ok(IgnoredTest {
         file: file.to_owned(),
         test: decorated_function(item, source, file)?,
@@ -154,9 +159,9 @@ fn ignored_test(item: Node, attribute: Node, source: &str, file: &str) -> Result
 }
 
 /// True when any identifier under `attribute` is `ignore`.
-fn mentions_ignore(attribute: Node, source: &str) -> bool {
+fn mentions_ignore(attribute: Node<'_>, source: &str) -> bool {
     let mut cursor = attribute.walk();
-    let named: Vec<Node> = attribute.named_children(&mut cursor).collect();
+    let named: Vec<Node<'_>> = attribute.named_children(&mut cursor).collect();
     named.iter().any(|child| {
         (child.kind() == IDENTIFIER && text(*child, source) == IGNORE_ATTRIBUTE)
             || mentions_ignore(*child, source)
@@ -166,7 +171,7 @@ fn mentions_ignore(attribute: Node, source: &str) -> bool {
 /// The name of the function `item` decorates. Outer attributes are siblings,
 /// so the owner is the next item once further attributes and the doc comments
 /// interleaved with them are stepped over.
-fn decorated_function(item: Node, source: &str, file: &str) -> Result<String> {
+fn decorated_function(item: Node<'_>, source: &str, file: &str) -> Result<String> {
     let mut sibling = item.next_named_sibling();
     while let Some(node) = sibling {
         match node.kind() {
@@ -181,7 +186,7 @@ fn decorated_function(item: Node, source: &str, file: &str) -> Result<String> {
 }
 
 /// The `name` field of a `function_item`.
-fn named_child_text(function: Node, source: &str, file: &str) -> Result<String> {
+fn named_child_text(function: Node<'_>, source: &str, file: &str) -> Result<String> {
     function
         .child_by_field_name(NAME_FIELD)
         .map(|name| text(name, source))
@@ -189,14 +194,16 @@ fn named_child_text(function: Node, source: &str, file: &str) -> Result<String> 
 }
 
 /// The first child of `node` with the given kind.
-fn child_of_kind(node: Node, kind: &str) -> Option<Node> {
+fn child_of_kind<'tree>(node: Node<'tree>, kind: &str) -> Option<Node<'tree>> {
     let mut cursor = node.walk();
-    node.named_children(&mut cursor)
-        .find(|child| child.kind() == kind)
+    let found = node
+        .named_children(&mut cursor)
+        .find(|child| child.kind() == kind);
+    found
 }
 
 /// The source text a node spans.
-fn text(node: Node, source: &str) -> String {
+fn text(node: Node<'_>, source: &str) -> String {
     source
         .get(node.start_byte()..node.end_byte())
         .unwrap_or_default()
@@ -231,15 +238,15 @@ fn unescape(body: &str) -> String {
 }
 
 /// Consumes the escaped character and pushes what it stands for.
-fn push_escaped(out: &mut String, chars: &mut Peekable<Chars>, resolved: char) {
-    chars.next();
+fn push_escaped(out: &mut String, chars: &mut Peekable<Chars<'_>>, resolved: char) {
+    let _escaped = chars.next();
     out.push(resolved);
 }
 
 /// Consumes a line continuation: the newline and all whitespace after it.
-fn skip_continuation(chars: &mut Peekable<Chars>) {
+fn skip_continuation(chars: &mut Peekable<Chars<'_>>) {
     while chars.peek().is_some_and(|next| next.is_whitespace()) {
-        chars.next();
+        let _whitespace = chars.next();
     }
 }
 

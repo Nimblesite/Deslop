@@ -229,7 +229,7 @@ fn startup_dispatch_propagates_async_server_error() -> Result<()> {
     )
     .err()
     .ok_or_else(|| anyhow!("startup dispatch should have returned an error"))?;
-    assert!(format!("{error:#}").contains("async server failed"));
+    assert!(render_error(&error).contains("async server failed"));
     Ok(())
 }
 
@@ -413,7 +413,7 @@ fn issue_201_transport_flag_is_never_the_workspace_root() -> Result<()> {
     let error = action_from_args([PROGRAM_NAME, STDIO_FLAG])
         .err()
         .ok_or_else(|| anyhow!("`deslop-lsp --stdio` must fail, not serve a bogus root"))?;
-    let rendered = format!("{error:#}");
+    let rendered = render_error(&error);
     assert!(
         rendered.contains(USAGE_ERROR_PREFIX),
         "no positional root ⇒ usage error, got {rendered:?}",
@@ -484,10 +484,15 @@ fn assert_error_contains<const N: usize>(args: [&str; N], expected: &str) -> Res
     let error = action_from_args(args).err().ok_or_else(|| {
         anyhow!("expected argument parsing to fail with text containing {expected:?}")
     })?;
-    let rendered = format!("{error:#}");
+    let rendered = render_error(&error);
     assert!(
         rendered.contains(expected),
         "error {rendered:?} did not contain {expected:?}"
     );
     Ok(())
+}
+
+/// Renders the complete anyhow error chain with the one supported format.
+fn render_error(error: &anyhow::Error) -> String {
+    format!("{error:#}")
 }

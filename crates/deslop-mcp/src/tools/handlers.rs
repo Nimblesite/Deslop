@@ -30,6 +30,10 @@ use super::backend_to_rpc;
 /// filtered. Default chosen so a `top-offenders` n=5 response on a
 /// monorepo stays well under any plausible MCP client buffer limit.
 pub(super) const DEFAULT_MAX_OCCURRENCES: usize = 15;
+const PATH_FIELD: &str = "path";
+const START_BYTE_FIELD: &str = "start_byte";
+const END_BYTE_FIELD: &str = "end_byte";
+const LANGUAGE_FIELD: &str = "language";
 
 /// Serialises a typed wire payload, falling back to JSON `null` only if
 /// serde fails (which it cannot for the wire types here — they all derive
@@ -205,7 +209,7 @@ pub(super) fn call_report_for_file(
     backend: &dyn McpBackend,
     args: &Value,
 ) -> Result<Value, JsonRpcError> {
-    let path = extract_string(args, "path")?;
+    let path = extract_string(args, PATH_FIELD)?;
     let max_occurrences = extract_max_occurrences(args);
     let clusters = backend
         .report_for_file(Path::new(&path))
@@ -225,9 +229,9 @@ pub(super) fn call_report_for_range(
     backend: &dyn McpBackend,
     args: &Value,
 ) -> Result<Value, JsonRpcError> {
-    let path = extract_string(args, "path")?;
-    let start_byte = extract_u64(args, "start_byte")?;
-    let end_byte = extract_u64(args, "end_byte")?;
+    let path = extract_string(args, PATH_FIELD)?;
+    let start_byte = extract_u64(args, START_BYTE_FIELD)?;
+    let end_byte = extract_u64(args, END_BYTE_FIELD)?;
     let max_occurrences = extract_max_occurrences(args);
     reject_inverted_range(start_byte, end_byte)?;
     let start_byte_usize = usize::try_from(start_byte).unwrap_or(usize::MAX);
@@ -253,10 +257,10 @@ pub(super) fn call_find_similar(
     backend: &dyn McpBackend,
     args: &Value,
 ) -> Result<Value, JsonRpcError> {
-    let has_range = args.get("path").is_some()
-        && args.get("start_byte").is_some()
-        && args.get("end_byte").is_some();
-    let has_snippet = args.get("snippet").is_some() && args.get("language").is_some();
+    let has_range = args.get(PATH_FIELD).is_some()
+        && args.get(START_BYTE_FIELD).is_some()
+        && args.get(END_BYTE_FIELD).is_some();
+    let has_snippet = args.get("snippet").is_some() && args.get(LANGUAGE_FIELD).is_some();
     if has_range == has_snippet {
         return Err(jsonrpc_error(
             ErrorCode::InvalidParams,
@@ -295,9 +299,9 @@ fn call_find_similar_range(
     args: &Value,
     top_n: usize,
 ) -> Result<crate::backend::FindSimilarOutput, JsonRpcError> {
-    let path = extract_string(args, "path")?;
-    let start_byte = extract_u64(args, "start_byte")?;
-    let end_byte = extract_u64(args, "end_byte")?;
+    let path = extract_string(args, PATH_FIELD)?;
+    let start_byte = extract_u64(args, START_BYTE_FIELD)?;
+    let end_byte = extract_u64(args, END_BYTE_FIELD)?;
     reject_inverted_range(start_byte, end_byte)?;
     let path_buf = PathBuf::from(&path);
     backend
@@ -319,7 +323,7 @@ fn call_find_similar_snippet(
     top_n: usize,
 ) -> Result<crate::backend::FindSimilarOutput, JsonRpcError> {
     let snippet = extract_string(args, "snippet")?;
-    let language = extract_string(args, "language")?;
+    let language = extract_string(args, LANGUAGE_FIELD)?;
     backend
         .find_similar(
             FindSimilarInput::Snippet {
@@ -438,7 +442,7 @@ pub(super) fn extract_pagination(args: &Value) -> Result<Pagination, JsonRpcErro
 pub(super) fn extract_filters(args: &Value) -> ReportPageFilters {
     ReportPageFilters {
         language: args
-            .get("language")
+            .get(LANGUAGE_FIELD)
             .and_then(Value::as_str)
             .map(str::to_owned),
         bucket: args

@@ -4,7 +4,6 @@ title: "Towards 100% Accuracy: Transparent Duplicate Code Detection"
 date: 2026-08-21
 updated: 2026-08-21
 author: Christian Findlay
-noTranslation: true
 tags:
   - posts
   - duplicate-code-detection
@@ -37,7 +36,7 @@ The honest path toward 100% is to expose the distance still left to travel.
 
 ## Why publish an open issue graph?
 
-The image above is a snapshot of Deslop's [public issue graph](/issues/) on 21 August 2026. It contains 103 open issues grouped into eight workstreams. Thirty-three sit in Accuracy, the largest group. The source [issue data](/assets/data/issues.json) records 22 accuracy-critical issues, three release blockers, 16 fixes awaiting release verification, 82 connected issues, and 122 explicit relationships.
+The image above is a snapshot of Deslop's [public issue graph](/issues/) on 21 August 2026. At capture time, it contained 103 open issues grouped into eight workstreams. Thirty-three sat in Accuracy, the largest group. The captured dataset recorded 22 accuracy-critical issues, three release blockers, 16 fixes awaiting release verification, 82 connected issues, and 122 explicit relationships. The [live issue data](/assets/data/issues.json) is regenerated from GitHub and may already show a newer count.
 
 Those numbers are not a roadmap performance. They are the open work.
 
@@ -49,7 +48,7 @@ This graph exists because a flat issue list hides systems. A false negative in s
 
 ## Code quality needs a public failure ledger
 
-Radical transparency is easy when the list is short. It becomes useful when the list is uncomfortable.
+Radical transparency is easy when the list is short. It becomes useful when the list is uncomfortable. Hidden duplicate-code technical debt is still debt; a public failure ledger makes it inspectable.
 
 Deslop publishes known false positives, false negatives, misleading metrics, skipped tests, performance limits, and documentation drift in the same place as features. The [issue planner](/issues/planner/) presents the same source data as priority lanes, a recommended queue, statistics, and an indicative runway. Its effort units express relative sequencing, not dates, deadlines, or promises.
 
@@ -107,7 +106,7 @@ This is also why AI coding agents matter to the accuracy goal. Agents can produc
 
 ## What “towards” means
 
-No finite test suite can prove that a clone detector will classify every possible program correctly. “Towards 100%” therefore describes a direction and an operating rule:
+[Research on AST-based clone detection](https://leodemoura.github.io/files/ICSM98.pdf) notes that semantic equivalence between arbitrary program fragments cannot be decided in general. “Towards 100%” therefore describes a direction and an operating rule, not a universal proof:
 
 1. Publish the goal without claiming it has been reached.
 2. Publish the known counterexamples.
