@@ -262,7 +262,7 @@ fn the_large_tree_fallback_never_exceeds_the_alignment() -> Result<(), String> {
 #[test]
 fn the_alignment_cap_is_the_documented_operating_point() {
     assert_eq!(
-        ALIGNMENT_MAX_NODES, 512,
+        ALIGNMENT_MAX_NODES, 768,
         "changing the alignment cap changes which pairs get the exact measure \
          and which get the conservative bound — move the spec with it"
     );
@@ -438,6 +438,52 @@ fn the_fallback_never_credits_a_nested_right_subtree_twice() -> Result<(), Strin
         "the greedy bound ({credited}) must never exceed the aligned shared \
          mass ({aligned}): the right-hand boost block sits inside the credited \
          `alpha` subtree, so a second credit for it counts those nodes twice"
+    );
+    Ok(())
+}
+
+/// Terms in the arithmetic expression `ts-mixed-band` is built from. The
+/// fixture that pins the rescue
+/// (`without_embeddings_the_mid_band_pair_is_visible_without_saturating`)
+/// is ninety terms wide.
+const RESCUED_EXPRESSION_TERMS: usize = 90;
+
+/// A function whose body is one `terms`-wide arithmetic expression —
+/// `ts-mixed-band`'s shape, in the language these tests parse.
+fn wide_expression(name: &str, terms: usize) -> String {
+    let sum = (1..=terms).fold(String::from("seed"), |mut expression, index| {
+        use std::fmt::Write as _;
+        let _written = write!(expression, " + seed * {index}");
+        expression
+    });
+    format!("fn {name}(seed: u32) -> u32 {{\n    {sum}\n}}\n")
+}
+
+// [FUSION-SHARED-SUBTREE] The cap is measured in nodes of the
+// *normalised* tree, so a normalisation change moves what it reaches
+// without the number changing. [PIPELINE-NORMALIZE-AST-OPERATOR] did
+// exactly that: operator tokens became leaves, an operator-dense
+// expression counts around half as many nodes again, and at 512 the
+// ninety-term pair fell onto the conservative bound, scored under the
+// admission floor and was reported as nothing at all. Measuring the
+// expression here — rather than restating a number — is what makes this
+// fail again the next time normalisation grows the tree.
+#[test]
+fn the_cap_still_reaches_the_expression_the_rescue_is_pinned_on() -> Result<(), String> {
+    let mut registry = FileRegistry::new();
+    let file_id = registry.register(PathBuf::from("ledger.rs"));
+    let parsed = parse(
+        &wide_expression("settle", RESCUED_EXPRESSION_TERMS),
+        file_id,
+    )?;
+
+    assert!(
+        parsed.whole.node_count <= ALIGNMENT_MAX_NODES,
+        "a {RESCUED_EXPRESSION_TERMS}-term expression must still get the exact \
+         alignment: it normalises to {} nodes against a cap of \
+         {ALIGNMENT_MAX_NODES}, and past the cap the conservative bound scores \
+         a consistent rename under the admission floor and reports nothing",
+        parsed.whole.node_count
     );
     Ok(())
 }

@@ -46,7 +46,20 @@ use crate::{
 /// Zhang–Shasha DP is quadratic in nodes; past this size the greedy
 /// coverage bound takes over, where its spine error is already
 /// negligible.
-pub const ALIGNMENT_MAX_NODES: usize = 512;
+///
+/// The unit is nodes of the *normalised* tree, so
+/// [PIPELINE-NORMALIZE-AST-OPERATOR] moved what the number reaches
+/// without anyone changing it: operator tokens now survive as leaves, and
+/// an operator-dense expression counts around half as many nodes again.
+/// At 512 that silently pulled `ts-mixed-band`'s ninety-term expression —
+/// 558 nodes, a consistent rename plus one redundant paren, the case
+/// [FUSION-SHARED-SUBTREE] exists to rescue — onto the conservative bound,
+/// which scored it under the admission floor and reported nothing
+/// (`without_embeddings_the_mid_band_pair_is_visible_without_saturating`).
+/// The cap must reach the largest endpoint the admission path is expected
+/// to rescue, so it is set above the largest such pinned case with room to
+/// spare rather than trimmed to it.
+pub const ALIGNMENT_MAX_NODES: usize = 768;
 
 /// Smallest shared subtree creditable by the large-tree coverage
 /// fallback. Normalisation interns single leaves down to their kind
