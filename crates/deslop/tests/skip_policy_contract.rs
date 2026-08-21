@@ -50,13 +50,20 @@ const CORPUS_SUITE: &str = "crates/deslop/tests/corpus_repos.rs";
 ///
 /// Ordered by file then test name, matching `ignored_tests()`. The eleven
 /// `corpus_repos` entries are the real-repository gate (gh #422, blocked on
-/// the memory work in #166); the three others are assertions that are red on
-/// purpose against unfinished fusion and embedding behaviour.
-const CURATED_SKIPS: [(&str, &str, u32); 14] = [
+/// the memory work in #166); `corpus_manifest_contract` is the curation those
+/// same two oversized repositories block (gh #426); the three others are
+/// assertions that are red on purpose against unfinished fusion and embedding
+/// behaviour.
+const CURATED_SKIPS: [(&str, &str, u32); 15] = [
     (
         "crates/deslop-lsp/tests/lsp_embedding_determinism.rs",
         "lsp_embedding_refresh_is_bounded_and_reproducible",
         369,
+    ),
+    (
+        "crates/deslop/tests/corpus_manifest_contract.rs",
+        "every_manifest_curates_a_non_vacuous_scan_scope",
+        426,
     ),
     (
         "crates/deslop/tests/corpus_repos.rs",
