@@ -4,9 +4,9 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
-import { OUT_RUST, OUT_TS, TD_PATH } from "./typediagram-gen/paths.mjs";
-import { postprocess } from "./typediagram-gen/rust-postprocess.mjs";
-import { postprocessTs, TS_HEADER, tsImports } from "./typediagram-gen/ts-postprocess.mjs";
+import { OUT_RUST, OUT_TS, TD_PATH } from "./paths.mjs";
+import { postprocess } from "./rust-postprocess.mjs";
+import { postprocessTs, TS_HEADER, tsImports } from "./ts-postprocess.mjs";
 
 function runTypediagram(target) {
   // On Windows the global npm install exposes `typediagram` as a `.cmd`

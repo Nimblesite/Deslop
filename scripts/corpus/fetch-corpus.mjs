@@ -20,7 +20,7 @@ const cacheDir = resolve(".corpus");
 const force = process.argv.includes("--force");
 
 // Bare arguments select which repositories to fetch, e.g.
-// `node scripts/fetch-corpus.mjs tokio nest`. With none, every manifest is
+// `node scripts/corpus/fetch-corpus.mjs tokio nest`. With none, every manifest is
 // fetched. CI passes a short list so it clones tens of megabytes rather than
 // the ~600 MB the full corpus costs.
 const selected = new Set(process.argv.slice(2).filter((arg) => !arg.startsWith("--")));

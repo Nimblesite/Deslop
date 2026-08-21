@@ -8,12 +8,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = fileURLToPath(new URL("..", import.meta.url));
-const verifyManifest = join(repoRoot, "scripts/verify-deployment-manifest.mjs");
-const verifyBinaries = join(repoRoot, "scripts/verify-deployment-binaries.mjs");
-const verifyJetBrains = join(repoRoot, "scripts/verify-jetbrains-package.mjs");
+const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+const verifyManifest = join(repoRoot, "scripts/deployment/verify-deployment-manifest.mjs");
+const verifyBinaries = join(repoRoot, "scripts/deployment/verify-deployment-binaries.mjs");
+const verifyJetBrains = join(repoRoot, "scripts/deployment/verify-jetbrains-package.mjs");
 const verifyVsix = join(repoRoot, "clients/vscode/scripts/verify-vsix-package.mjs");
-const verifyReleaseWorkflow = join(repoRoot, "scripts/verify-release-workflow-gates.mjs");
+const verifyReleaseWorkflow = join(repoRoot, "scripts/release/verify-release-workflow-gates.mjs");
 const platform = "darwin-arm64";
 const validVersion = "0.0.0-dev";
 const hostPlatform = detectHostPlatform();
@@ -475,13 +475,13 @@ function writeReleaseWorkflow(work, options) {
     "      - run: cargo build --release",
   ];
   if (!options.skipVersionStamper) {
-    lines.push("      - run: node scripts/stamp-release-version.mjs 0.1.0");
+    lines.push("      - run: node scripts/release/stamp-release-version.mjs 0.1.0");
   }
   if (!options.skipManifestGate) {
-    lines.push("      - run: node scripts/verify-deployment-manifest.mjs shipwright.json");
+    lines.push("      - run: node scripts/deployment/verify-deployment-manifest.mjs shipwright.json");
   }
   if (!options.skipBinaryGate) {
-    lines.push("      - run: node scripts/verify-deployment-binaries.mjs shipwright.json target/release linux-x64");
+    lines.push("      - run: node scripts/deployment/verify-deployment-binaries.mjs shipwright.json target/release linux-x64");
   }
   lines.push("  package-vsix:");
   lines.push("    runs-on: ubuntu-latest");

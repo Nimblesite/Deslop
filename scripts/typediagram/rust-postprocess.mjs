@@ -208,7 +208,7 @@ export function postprocess(rust) {
     if (!config) {
       throw new Error(
         `typediagram-gen: missing TYPE_CONFIG entry for \`${name}\`. ` +
-          "Add an entry in scripts/typediagram-gen.mjs or remove the type from docs/models/live-ipc.td.",
+          "Add an entry in scripts/typediagram/generate.mjs or remove the type from docs/models/live-ipc.td.",
       );
     }
     seen.add(name);

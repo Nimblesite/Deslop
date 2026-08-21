@@ -1,7 +1,7 @@
 // Publishes the action's result outputs from the rendered JSON report.
 // [ACTION-GATE].
 //
-// Usage: node scripts/action-read-outputs.mjs <reportPrefix> <exitCode> [onlyChanged]
+// Usage: node scripts/actions/action-read-outputs.mjs <reportPrefix> <exitCode> [onlyChanged]
 
 import { existsSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";

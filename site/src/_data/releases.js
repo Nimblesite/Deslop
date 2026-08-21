@@ -9,7 +9,7 @@
 // module namespace of a `_data` file that exports anything else, never calling
 // the function, which blanks every `{{ releases.* }}` on the site silently and
 // at exit 0. Pinned by `test-action-contract.mjs`. [ACTION-VERSION-DOCS]
-import { PIN_PLACEHOLDER } from "../../../scripts/stamp-release-version.mjs";
+import { PIN_PLACEHOLDER } from "../../../scripts/release/stamp-release-version.mjs";
 
 const RELEASES_URL = "https://github.com/Nimblesite/Deslop/releases";
 const LATEST_RELEASE_URL = `${RELEASES_URL}/latest`;

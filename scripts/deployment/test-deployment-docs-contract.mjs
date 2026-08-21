@@ -11,7 +11,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = fileURLToPath(new URL("..", import.meta.url));
+const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const workflow = readFileSync(resolve(repoRoot, ".github/workflows/release.yml"), "utf8");
 
 // VS Code appends the target triple to the extension directory for any VSIX
@@ -80,7 +80,7 @@ function documentedExtensionDirectoryCarriesItsPlatformTarget() {
 function installerSnippetContractRunsWhereverTheSnippetCanChange() {
   const ciWorkflow = readFileSync(resolve(repoRoot, ".github/workflows/ci.yml"), "utf8");
   const makefile = readFileSync(resolve(repoRoot, "Makefile"), "utf8");
-  const runner = "node --test scripts/installer-snippet.test.mjs";
+  const runner = "node --test scripts/deployment/installer-snippet.test.mjs";
   if (!makefile.includes(runner)) {
     throw new Error("make lint no longer runs the installer snippet contract; code PRs would stop covering it");
   }

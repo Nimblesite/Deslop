@@ -54,7 +54,7 @@ build:
 ##                  .td spec or the generator script itself.
 typediagram-gen:
 	@echo "==> typediagram-gen: regenerating IPC models from docs/models/live-ipc.td"
-	node scripts/typediagram-gen.mjs
+	node scripts/typediagram/generate.mjs
 
 ## test: Fail-fast tests + coverage + per-crate threshold enforcement.
 ##       See REPO-STANDARDS-SPEC [TEST-RULES] and [COVERAGE-THRESHOLDS-JSON].
@@ -140,16 +140,16 @@ _coverage_check:
 lint: typediagram-gen
 	@echo "==> Linting..."
 	cargo clippy --release --all-targets --workspace -- -D warnings
-	@bash scripts/taxonomy-gate.sh
+	@bash scripts/repository/taxonomy-gate.sh
 	@echo "==> VSIX harness + packaging script gates (unit)..."
 	@node --test clients/vscode/scripts/*.test.mjs
 	@echo "==> PATH/env injection gate ([ACTION-ENVPATH])..."
-	@node --test scripts/verify-env-path-writes.test.mjs
-	@node scripts/verify-env-path-writes.mjs
+	@node --test scripts/actions/verify-env-path-writes.test.mjs
+	@node scripts/actions/verify-env-path-writes.mjs
 	@echo "==> Docs installer snippet fail-closed gate ([DEPLOY-DOCS-INSTALLER-FAILCLOSED])..."
-	@node --test scripts/installer-snippet.test.mjs
+	@node --test scripts/deployment/installer-snippet.test.mjs
 	@echo "==> Duplication-gate provenance gate ([CI-DESLOP])..."
-	@node --test scripts/dup-gate-source.test.mjs
+	@node --test scripts/repository/dup-gate-source.test.mjs
 
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
 ##      Depends on typediagram-gen because rustfmt walks the module tree
@@ -222,7 +222,7 @@ ci-ollama: ci test-ollama
 ##              the network and measures wall time and peak memory, which are
 ##              runner-dependent. Run it when touching the pipeline.
 test-corpus:
-	node scripts/fetch-corpus.mjs
+	node scripts/corpus/fetch-corpus.mjs
 	cargo build --release --bin deslop
 	cargo test --release -p deslop --test corpus_repos -- --nocapture --test-threads=1
 
@@ -234,7 +234,7 @@ test-corpus:
 ##                 baseline and stays strictly red.
 test-corpus-ci: export DESLOP_CORPUS_BASELINE = 1
 test-corpus-ci:
-	node scripts/fetch-corpus.mjs $(CORPUS_REPOS)
+	node scripts/corpus/fetch-corpus.mjs $(CORPUS_REPOS)
 	cargo build --release --bin deslop
 	@fail=0; for t in $(CORPUS_TESTS); do \
 	   cargo test --release -p deslop --test corpus_repos $$t -- --nocapture --test-threads=1 || fail=1; \
@@ -277,15 +277,15 @@ dup-gate: build
 ##                    both gate directions — the self-test's runner leg cannot,
 ##                    since it installs a published release ([ACTION-GATE]).
 deployment-verify: build
-	node scripts/verify-deployment-manifest.mjs shipwright.json
-	node scripts/verify-deployment-binaries.mjs shipwright.json target/release
-	node scripts/verify-release-workflow-gates.mjs .github/workflows/release.yml
-	node scripts/test-release-workflow-contract.mjs
-	node scripts/test-deployment-docs-contract.mjs
-	node scripts/test-release-version-stamping.mjs
-	node scripts/test-verifiers.mjs
-	node scripts/test-action-contract.mjs
-	node scripts/test-action-diff-gate.mjs
+	node scripts/deployment/verify-deployment-manifest.mjs shipwright.json
+	node scripts/deployment/verify-deployment-binaries.mjs shipwright.json target/release
+	node scripts/release/verify-release-workflow-gates.mjs .github/workflows/release.yml
+	node scripts/release/test-release-workflow-contract.mjs
+	node scripts/deployment/test-deployment-docs-contract.mjs
+	node scripts/release/test-release-version-stamping.mjs
+	node scripts/deployment/test-verifiers.mjs
+	node scripts/actions/test-action-contract.mjs
+	node scripts/actions/test-action-diff-gate.mjs
 
 # _kill-deslop-processes: SIGTERM (then SIGKILL on holdouts) every running
 #   `deslop-lsp` and `deslop-mcp` process so a stale child from a previous
@@ -512,12 +512,12 @@ _jetbrains-verify:
 
 # _jetbrains-package: CI/release packaging gate — build the JetBrains plugin zip
 #   (single LSP4IJ artifact), verify project/structure, and assert the packaged
-#   artifact via scripts/verify-jetbrains-package.mjs. Headless (no IDE install);
+#   artifact via scripts/deployment/verify-jetbrains-package.mjs. Headless (no IDE install);
 #   invoked by .github/workflows/ci.yml. Local devs use android-studio-rebuild or
 #   android-studio-rebuild-reinstall to actually load the plugin into the IDE.
 _jetbrains-package: _jetbrains-build
 	@$(MAKE) _jetbrains-verify
-	node scripts/verify-jetbrains-package.mjs
+	node scripts/deployment/verify-jetbrains-package.mjs
 
 # _jetbrains-test: Run the JetBrains tests via the wrapper — the shared-module
 #   resolver/descriptor/panel tests plus the LSP4IJ surface's reactive-wiring tests.

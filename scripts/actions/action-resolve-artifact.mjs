@@ -2,7 +2,7 @@
 // and which CLI version the action installs. [ACTION-RESOLVE], [ACTION-VERSION].
 //
 // Usage:
-//   node scripts/action-resolve-artifact.mjs <runnerOs> <runnerArch> [version] [actionRef]
+//   node scripts/actions/action-resolve-artifact.mjs <runnerOs> <runnerArch> [version] [actionRef]
 //
 // Writes `version`, `artifact`, `archive`, `stage`, `url` and `checksum-url` to
 // $GITHUB_OUTPUT.

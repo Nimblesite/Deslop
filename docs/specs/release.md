@@ -8,7 +8,7 @@ Source-controlled project versions intentionally stay at the placeholder
 tree with:
 
 ```bash
-node scripts/stamp-release-version.mjs 1.2.3
+node scripts/release/stamp-release-version.mjs 1.2.3
 ```
 
 The release workflow must never commit that stamped tree back to Deslop. The
@@ -33,7 +33,7 @@ VSIX release artifacts are platform-specific and must be packaged with
 
 `make jetbrains-package` builds the JetBrains plugin zip, runs Gradle project
 configuration and plugin structure verification, then runs
-`scripts/verify-jetbrains-package.mjs` against the generated archive. The
+`scripts/deployment/verify-jetbrains-package.mjs` against the generated archive. The
 archive verifier checks the root `shipwright.json`, the manifest-listed
 host `deslop-lsp` binary, executable mode on Unix platforms, `--version`
 identity, and undeclared native files under the shipped `bin/<platform>/`
@@ -69,7 +69,7 @@ on drift. Coverage floors are owned by `coverage-thresholds.json`
   ([pipeline.md §EXIT-CODES](pipeline.md)) the moment repo-wide weighted
   duplication climbs past it. The same threshold surfaces as a single LSP startup
   warning ([CI-DESLOP] is a CLI-only *gate*; the live LSP surface only *warns*).
-  Provenance is contract-tested by `scripts/dup-gate-source.test.mjs`, which
+  Provenance is contract-tested by `scripts/repository/dup-gate-source.test.mjs`, which
   `make lint` runs: `dup-gate` must depend on `build` and invoke
   `./target/release/deslop`, `make build` must compile the workspace rather than
   download a release archive, `ci.yml` must run `make build` before `make
@@ -236,7 +236,7 @@ resolve their executables — CodeQL's `actions/envpath-injection`. The install
 step therefore moves the extracted `deslop-<version>-<artifact>` directory to a
 fixed `bin` name and exports `${RUNNER_TEMP}/deslop/bin`, a constant; the `mv`
 doubles as the layout assertion, failing loudly if a release is ever repackaged
-without that top-level directory. `scripts/verify-env-path-writes.mjs` enforces
+without that top-level directory. `scripts/actions/verify-env-path-writes.mjs` enforces
 this with an error across `action.yml` and every workflow, in `make lint` so it
 runs on every CI job rather than behind a path filter, and
 `verify-env-path-writes.test.mjs` proves the gate rejects the tainted form.
@@ -256,7 +256,7 @@ interpolated into a `run` body, so a crafted input cannot inject shell.
 
 **[ACTION-CACHE] The parse store survives between runs.**
 
-> **Status: shipped.** Pinned by the action contract suite (`scripts/test-action-contract.mjs`) and the two-runner `cache-seed`/`cache-warm` self-test.
+> **Status: shipped.** Pinned by the action contract suite (`scripts/actions/test-action-contract.mjs`) and the two-runner `cache-seed`/`cache-warm` self-test.
 
 The action restores `.deslop/cache` under the scan root before the run step and saves it afterwards with the SHA-pinned `actions/cache/restore` and `actions/cache/save` steps ([SWR-SEC-ACTION-PINNING]). The path derives from the `path` input, never the repository root — the store lives beside the scan root by contract ([pipeline.md §PIPELINE-INCREMENTAL]). The key is `deslop-<resolved version>-<runner os>-<run id>` with a `restore-keys` prefix that drops the run id: the store mutates every pass and an exact-key hit is never re-saved, so the per-run key plus prefix fallback is what lets each run restore the newest same-version store and save its own successor. Keying on the resolved CLI version keeps superseded partitions from riding between runs, and the post-pass retention sweep bounds every save at 2 GiB ([pipeline.md §PIPELINE-INCREMENTAL-RETENTION]), well under the 10 GiB repository ceiling Actions evicts against. Correctness never rests on the restore: every blob is digest-verified against its full address before a payload byte is decoded, and anything stale, foreign, or tampered is refused into a plain miss and rebuilt from source ([pipeline.md §PIPELINE-INCREMENTAL-INTEGRITY]) — the worst a bad cache entry can cost is a re-parse. A `cache: "false"` input skips both steps and changes nothing else.
 
@@ -267,7 +267,7 @@ Marketplace Developer Agreement accepted on the `Nimblesite` org and a unique
 `name`. The listing resolves metadata from the tag, not from `main`, so the
 first listed version must be a tag whose commit already contains `action.yml`.
 
-**[ACTION-TESTS] Two layers.** `scripts/test-action-contract.mjs` runs in
+**[ACTION-TESTS] Two layers.** `scripts/actions/test-action-contract.mjs` runs in
 `make deployment-verify` and proves what a runner cannot cheaply re-prove per
 PR: the asset mapping against the real `release.yml` matrix, version derivation,
 checksum rejection, output extraction, and the static shape of `action.yml`

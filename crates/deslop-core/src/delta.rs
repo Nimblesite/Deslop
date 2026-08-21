@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::report::{Report, ReportCluster};
 
 // `ReportDelta` is generated from `docs/models/live-ipc.td` by
-// `scripts/typediagram-gen.mjs`. The data shape lives in
+// `scripts/typediagram/generate.mjs`. The data shape lives in
 // `crate::wire_generated`; the `between`/`is_empty` impls stay here.
 pub use crate::wire_generated::ReportDelta;
 

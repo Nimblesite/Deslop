@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 
 import { check } from "./action-contract-harness.mjs";
 import { resolveVersion } from "./action-resolve-artifact.mjs";
-import { actionPinDocs, readActionPins, PIN_PLACEHOLDER } from "./stamp-release-version.mjs";
+import { actionPinDocs, readActionPins, PIN_PLACEHOLDER } from "../release/stamp-release-version.mjs";
 import * as releasesData from "../site/src/_data/releases.js";
 
 const action = readFileSync("action.yml", "utf8");
@@ -139,11 +139,11 @@ check("the self-test carries the diff-gate leg, version-gated on the release", (
   // fewer than the body carried and the parser refused the patch outright,
   // failing the gate proof for a reason unrelated to the gate. [ACTION-GATE]
   assert.ok(
-    selftest.includes("node scripts/action-copy-patch.mjs"),
+    selftest.includes("node scripts/actions/action-copy-patch.mjs"),
     "the breaching leg must build its patch with the shared copy-patch script, never a shell twin",
   );
   assert.ok(
-    readFileSync("scripts/test-action-diff-gate.mjs", "utf8").includes(
+    readFileSync("scripts/actions/test-action-diff-gate.mjs", "utf8").includes(
       'from "./action-copy-patch.mjs"',
     ),
     "the branch-built proof must gate on the same patch the runner leg does",
@@ -154,7 +154,7 @@ check("the self-test carries the diff-gate leg, version-gated on the release", (
 // published release, so the pre-release action path needs a proof that
 // runs against the freshly built CLI. [ACTION-GATE] [METRICS-DIFF-SCOPE]
 check("the branch-built action diff-gate proof runs in the deployment gate", () => {
-  const proof = readFileSync("scripts/test-action-diff-gate.mjs", "utf8");
+  const proof = readFileSync("scripts/actions/test-action-diff-gate.mjs", "utf8");
   assert.ok(
     proof.includes('stepBody(readFileSync("action.yml", "utf8"), "Run deslop")'),
     "the proof must execute the action's own step body, never a re-implementation of it",
@@ -165,7 +165,7 @@ check("the branch-built action diff-gate proof runs in the deployment gate", () 
   );
   const makefile = readFileSync("Makefile", "utf8");
   assert.ok(
-    makefile.includes("node scripts/test-action-diff-gate.mjs"),
+    makefile.includes("node scripts/actions/test-action-diff-gate.mjs"),
     "deployment-verify must run the branch-built action diff-gate proof",
   );
 });

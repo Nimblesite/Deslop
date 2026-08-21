@@ -39,7 +39,7 @@ make jetbrains-package
 
 That composes `_jetbrains-build` (builds the zip), `_jetbrains-verify`
 (Gradle project + archive-structure checks), and
-`scripts/verify-jetbrains-package.mjs`. To build, install, and wire up the
+`scripts/deployment/verify-jetbrains-package.mjs`. To build, install, and wire up the
 plugin (plus its LSP4IJ dependency) in one step on macOS, use:
 
 ```bash

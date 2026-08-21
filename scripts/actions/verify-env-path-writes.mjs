@@ -35,7 +35,7 @@ const TRUSTED = new Set([
   "RUNNER_WORKSPACE",
 ]);
 
-const repoRoot = fileURLToPath(new URL("..", import.meta.url));
+const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const WORKFLOW_DIR = resolve(repoRoot, ".github/workflows");
 
 /**

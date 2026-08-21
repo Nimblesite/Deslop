@@ -7,7 +7,7 @@
 //! scan of a real codebase stays inside a wall-clock and memory budget.
 //!
 //! Clones live in git-ignored `.corpus/`, populated by
-//! `scripts/fetch-corpus.mjs` (which `make test-corpus` runs first). Nothing
+//! `scripts/corpus/fetch-corpus.mjs` (which `make test-corpus` runs first). Nothing
 //! here touches the network: a missing clone is a hard error naming the
 //! target to run, never a silent skip.
 

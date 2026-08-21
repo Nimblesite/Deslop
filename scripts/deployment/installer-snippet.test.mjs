@@ -16,7 +16,7 @@ import { arch, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const repoRoot = fileURLToPath(new URL("..", import.meta.url));
+const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const TAG = "v9.9.9";
 const VERSION = "9.9.9";
 const BINARIES = ["deslop", "deslop-lsp", "deslop-mcp"];

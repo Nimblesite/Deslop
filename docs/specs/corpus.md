@@ -4,7 +4,7 @@ Fixture repos prove the pipeline runs. They cannot prove it is *right*: a fixtur
 
 ### [CORPUS-PIN] Pinned repositories
 
-Each repository is one `corpus/<name>.json` manifest naming a `url`, a `tag`, **and** the commit `sha` that tag pointed at when the duplicates were curated. `scripts/fetch-corpus.mjs` clones through the tag (shallow, cheap) and then verifies `HEAD` against the pinned `sha`.
+Each repository is one `corpus/<name>.json` manifest naming a `url`, a `tag`, **and** the commit `sha` that tag pointed at when the duplicates were curated. `scripts/corpus/fetch-corpus.mjs` clones through the tag (shallow, cheap) and then verifies `HEAD` against the pinned `sha`.
 
 A moved or re-cut upstream tag is a **hard error that deletes the clone**, never a silent re-baseline. Curated line ranges and `must_find` paths are only meaningful against the commit they were verified on; accepting a drifted tag would silently convert a recall assertion into a coin flip.
 

@@ -12,7 +12,7 @@
 // argument forwarding or gate rerouting fails here the same way it would on a
 // runner.
 //
-// Usage: node scripts/test-action-diff-gate.mjs [path/to/deslop]
+// Usage: node scripts/actions/test-action-diff-gate.mjs [path/to/deslop]
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";

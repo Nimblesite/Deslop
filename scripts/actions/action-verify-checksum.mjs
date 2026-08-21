@@ -4,7 +4,7 @@
 // Node computes the digest so the action needs no per-OS branch between
 // `sha256sum`, `shasum -a 256`, and whatever Windows offers.
 //
-// Usage: node scripts/action-verify-checksum.mjs <archivePath> <checksumPath>
+// Usage: node scripts/actions/action-verify-checksum.mjs <archivePath> <checksumPath>
 
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";

@@ -2,7 +2,7 @@
 //! MCP transports ([LIVE-QUERY-API], [LIVE-NOTIFICATIONS]).
 //!
 //! Every wire type is generated from `docs/models/live-ipc.td` by
-//! `scripts/typediagram-gen.mjs` and re-exported from
+//! `scripts/typediagram/generate.mjs` and re-exported from
 //! [`crate::wire_generated`]. This module re-exports them at the
 //! historical `crate::live::wire` path and hosts the [`ChangeSummary`]
 //! `from_delta` constructor (the only logic kept hand-written; the

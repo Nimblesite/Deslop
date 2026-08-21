@@ -18,17 +18,17 @@ const workflow = readFileSync(workflowPath, "utf8");
 
 const requiredReferences = [
   {
-    needle: "scripts/verify-deployment-manifest.mjs",
+    needle: "scripts/deployment/verify-deployment-manifest.mjs",
     label: "manifest validator",
     rationale: "Release must fail if shipwright.json is invalid",
   },
   {
-    needle: "scripts/stamp-release-version.mjs",
+    needle: "scripts/release/stamp-release-version.mjs",
     label: "build-time release version stamper",
     rationale: "Release must stamp the tag version without committing source changes",
   },
   {
-    needle: "scripts/verify-deployment-binaries.mjs",
+    needle: "scripts/deployment/verify-deployment-binaries.mjs",
     label: "binary version contract verifier",
     rationale: "Release must fail if a built binary reports a version or component id that differs from the manifest",
   },

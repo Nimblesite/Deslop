@@ -63,7 +63,7 @@ export function occurrenceCount(cluster: ReportCluster): number {
 }
 
 // Wire-format models generated from `docs/models/live-ipc.td` by
-// `scripts/typediagram-gen.mjs`. Re-exported here so the historical
+// `scripts/typediagram/generate.mjs`. Re-exported here so the historical
 // `clients/vscode/src/types/report` import path keeps resolving for
 // every consumer. The generated source is gitignored; `make
 // typediagram-gen` (chained into `make vsix-build`) regenerates it.
@@ -358,4 +358,3 @@ export function clusterInterpretation(cluster: ReportCluster): string {
     ? cluster.interpretation
     : bucketLabels(resolveBucket(cluster)).actionSentence;
 }
-

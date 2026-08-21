@@ -30,7 +30,7 @@ use crate::{
 
 // `Report`, `CacheStats`, `EmbeddingProvenance`, `ReportCluster`,
 // `ReportSignals`, and `ReportOccurrence` are generated from
-// `docs/models/live-ipc.td` by `scripts/typediagram-gen.mjs`. The data
+// `docs/models/live-ipc.td` by `scripts/typediagram/generate.mjs`. The data
 // shapes live in `crate::wire_generated`; the impls below stay here.
 pub use crate::report_hints::{default_action_hints, ActionHint};
 pub use crate::wire_generated::{

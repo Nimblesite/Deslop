@@ -4,7 +4,7 @@
 // The gate's breaching leg needs a diff whose added lines are duplicated
 // by construction: a verbatim copy of an existing fixture file. Both the
 // hosted-runner leg in .github/workflows/action-selftest.yml and the
-// branch-built proof in scripts/test-action-diff-gate.mjs need exactly
+// branch-built proof in scripts/actions/test-action-diff-gate.mjs need exactly
 // that patch, so it is built here once. A shell twin of this that counted
 // lines with `wc -l` would disagree with this one on a source file with no
 // trailing newline — `wc -l` counts terminators, so the hunk header would
@@ -13,7 +13,7 @@
 // header"), failing the proof for a reason that has nothing to do with the
 // gate.
 //
-// Usage: node scripts/action-copy-patch.mjs <scanPath> <targetRelative> <patchPath>
+// Usage: node scripts/actions/action-copy-patch.mjs <scanPath> <targetRelative> <patchPath>
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -70,7 +70,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const [scanPath, targetRelative, patchPath] = process.argv.slice(2);
   assert.ok(
     scanPath && targetRelative && patchPath,
-    "usage: node scripts/action-copy-patch.mjs <scanPath> <targetRelative> <patchPath>",
+    "usage: node scripts/actions/action-copy-patch.mjs <scanPath> <targetRelative> <patchPath>",
   );
   writeCopyPatch(firstRustFile(scanPath), targetRelative, patchPath);
 }

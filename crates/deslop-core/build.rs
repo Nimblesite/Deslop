@@ -1,5 +1,5 @@
 //! Cargo build script: regenerates `src/wire_generated.rs` from
-//! `docs/models/live-ipc.td` via `scripts/typediagram-gen.mjs` before
+//! `docs/models/live-ipc.td` via `scripts/typediagram/generate.mjs` before
 //! rustc runs. Per CLAUDE.md the generated file is gitignored, so this
 //! build script is the only path that produces it on a fresh checkout.
 
@@ -10,7 +10,7 @@ use std::{
 
 fn main() -> Result<(), String> {
     let workspace_root = workspace_root()?;
-    let script = workspace_root.join("scripts/typediagram-gen.mjs");
+    let script = workspace_root.join("scripts/typediagram/generate.mjs");
     let td_source = workspace_root.join("docs/models/live-ipc.td");
     let generated = workspace_root.join("crates/deslop-core/src/wire_generated.rs");
 

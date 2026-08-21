@@ -6,8 +6,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = fileURLToPath(new URL("..", import.meta.url));
-const stamper = join(repoRoot, "scripts/stamp-release-version.mjs");
+const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+const stamper = join(repoRoot, "scripts/release/stamp-release-version.mjs");
 const version = "9.8.7-test.1";
 // Mirrors stamp-release-version.mjs. The doc pages come after README.md so the
 // SHA-example assertion can address them as `slice(1)` — only they carry it.
