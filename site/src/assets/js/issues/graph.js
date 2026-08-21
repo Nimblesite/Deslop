@@ -78,11 +78,47 @@ function nodeClass(issue) {
   return classes.join(" ");
 }
 
+function fixedStatusBadge(radius) {
+  const y = radius + 5;
+  const badge = svgElement("g", { class: "graph-node__status", "aria-hidden": "true" });
+  badge.append(
+    svgElement("rect", { class: "graph-node__status-bg", x: -25, y, width: 50, height: 9, rx: 4.5 }),
+    textNode("fixed-on-main", 0, y + 4.8, "graph-node__status-label"),
+  );
+  return badge;
+}
+
+function assigneeAvatar(issue, radius) {
+  const assignee = issue.assignees.find((candidate) => candidate.avatar);
+  if (!assignee) return null;
+  const size = 11;
+  const center = radius * 0.72;
+  return [
+    svgElement("circle", { class: "graph-node__assignee-frame", cx: center, cy: -center, r: size / 2 + 1 }),
+    svgElement("image", {
+      class: "graph-node__assignee",
+      href: assignee.avatar,
+      x: center - size / 2,
+      y: -center - size / 2,
+      width: size,
+      height: size,
+      preserveAspectRatio: "xMidYMid slice",
+      "aria-hidden": "true",
+    }),
+  ];
+}
+
 function createNode(position, stream, onSelect, tooltip) {
   const issue = position.issue;
   const radius = nodeRadius(issue);
-  const group = svgElement("g", { class: nodeClass(issue), role: "button", tabindex: "0", "aria-label": `Issue ${issue.number}: ${issue.title}` });
   const fixedOnMain = issue.labels.find((label) => label.name === "fixed-on-main");
+  const assignee = issue.assignees.find((candidate) => candidate.avatar);
+  const accessibleState = [
+    `Issue ${issue.number}: ${issue.title}`,
+    fixedOnMain ? "fixed-on-main" : "",
+    assignee ? `assigned to @${assignee.login}` : "",
+  ].filter(Boolean).join(", ");
+  const group = svgElement("g", { class: nodeClass(issue), role: "button", tabindex: "0", "aria-label": accessibleState });
   if (fixedOnMain) {
     const color = fixedOnMain.color.startsWith("#") ? fixedOnMain.color : `#${fixedOnMain.color}`;
     group.style.setProperty("--fixed-on-main-color", color);
@@ -96,6 +132,9 @@ function createNode(position, stream, onSelect, tooltip) {
   if (!fixedOnMain && issue.priority !== "release_blocker") ring.style.display = "none";
   if (issue.priority === "release_blocker") ring.style.stroke = priorityColor(issue);
   group.append(hitTarget, ring, dot, label);
+  if (fixedOnMain) group.append(fixedStatusBadge(radius));
+  const avatar = assigneeAvatar(issue, radius);
+  if (avatar) group.append(...avatar);
   bindNodeEvents(group, issue, onSelect, tooltip);
   return group;
 }

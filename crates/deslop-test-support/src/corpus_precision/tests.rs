@@ -277,28 +277,30 @@ const GENERIC_BASE_CASES: [(&str, &str, &str, &str); 3] = [
 ];
 
 #[test]
-fn a_type_argument_is_not_a_base_type_in_any_curated_grammar() {
+fn a_type_argument_is_not_a_base_type_in_any_curated_grammar() -> Result<()> {
     for (language, source, base, argument) in GENERIC_BASE_CASES {
         assert!(
-            declares(language, source, base),
+            declares(language, source, base)?,
             "{language}: `{base}` is the declared base type"
         );
         assert!(
-            !declares(language, source, argument),
+            !declares(language, source, argument)?,
             "{language}: `{argument}` is a type argument, not a base type"
         );
     }
+    Ok(())
 }
 
 #[test]
-fn a_qualified_base_type_is_named_by_its_last_segment() {
+fn a_qualified_base_type_is_named_by_its_last_segment() -> Result<()> {
     assert!(
         declares(
             "javascript",
             "class LedgerView extends React.Component {}\n",
             "Component"
-        ),
+        )?,
         "`extends React.Component` extends `Component`; a rule naming the \
          type must not be defeated by the namespace it was reached through"
     );
+    Ok(())
 }

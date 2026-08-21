@@ -4,7 +4,7 @@
       "back": "← Back to Blog",
       "title": "Blog",
       "subtitle": "Notes on duplicate detection, AI-era codebases, and the decisions behind Deslop.",
-      "eyebrow": "The Manuscript · Field Notes",
+      "eyebrow": "Field notes",
       "readMore": "Read Article",
       "tags": "Tags",
       "categories": "Categories",
@@ -21,8 +21,6 @@
     "docs": {
       "title": "Documentation",
       "gettingStarted": "Getting Started",
-      "brand": "The Manuscript",
-      "versionTag": "Live duplicate-code analysis · preview",
       "communitySupport": "Community support",
       "previous": "Previous"
     },
@@ -89,7 +87,7 @@
       "back": "← 返回博客",
       "title": "博客",
       "subtitle": "关于重复检测、AI 时代代码库，以及 Deslop 背后设计决策的现场札记。",
-      "eyebrow": "手稿 · 现场札记",
+      "eyebrow": "现场札记",
       "readMore": "阅读全文",
       "tags": "标签",
       "categories": "分类",
@@ -106,8 +104,6 @@
     "docs": {
       "title": "文档",
       "gettingStarted": "快速开始",
-      "brand": "手稿",
-      "versionTag": "实时重复代码分析 · 预览",
       "communitySupport": "社区支持",
       "previous": "上一页"
     },

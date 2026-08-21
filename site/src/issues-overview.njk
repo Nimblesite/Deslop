@@ -1,33 +1,25 @@
 ---
-layout: layouts/base.njk
-title: "Deslop Issue Overview | Priorities and Delivery Runway"
-description: "Review Deslop's open-issue statistics, release verification queue, priorities, and delivery runway."
-permalink: /issues/overview/
+layout: layouts/docs-workspace.njk
+title: "Deslop Issue Statistics | Backlog Health"
+description: "Read Deslop's current open-issue statistics, release-verification state, accuracy risks, and relationship coverage."
+permalink: /issues/statistics/
 noTranslation: true
+docsShell: true
+docsGroup: trust
+hideFooter: true
+bodyClass: "is-issue-workspace is-issue-statistics"
+issueScript: /assets/js/issues/summary.js
 ---
 
-{% block head %}
-<link rel="stylesheet" href="/assets/css/issues.css">
-{% endblock %}
-
-<div class="issue-atlas issue-atlas--overview" data-issue-atlas data-default-view="runway">
-  <header class="atlas-hero">
-    <div class="atlas-hero__copy">
-      <div class="eyebrow-chip"><span>Public engineering overview · GitHub source</span></div>
-      <h1>The work,<br><em>made legible.</em></h1>
-      <p class="atlas-hero__lede">See where risk concentrates and what should happen next. Every signal comes from public GitHub metadata and documented rules—no AI enrichment.</p>
-      <div class="atlas-hero__meta">
-        <a href="/issues/">Open graph visualizer</a>
-        <a href="https://github.com/Nimblesite/Deslop/issues" target="_blank" rel="noopener noreferrer">Open GitHub issues <span aria-hidden="true">↗</span></a>
-      </div>
-    </div>
-    <div class="atlas-hero__signal" aria-label="Issue snapshot summary">
-      <div class="signal-orbit" aria-hidden="true"><span></span><span></span><span></span></div>
-      <div class="signal-core"><strong data-summary="open">—</strong><span>open issues</span></div>
-    </div>
+<article class="issue-atlas issue-statistics" data-issue-statistics>
+  <header class="issue-statistics__hero">
+    <span class="atlas-map-eyebrow">Public GitHub issue data</span>
+    <h1>Issue statistics</h1>
+    <p>Current open-issue counts derived from GitHub metadata and documented rules.</p>
   </header>
 
-  <section class="atlas-summary" aria-label="Backlog summary">
+  <section class="atlas-summary atlas-summary--statistics" aria-label="Backlog summary">
+    <article class="summary-card"><span>Open backlog</span><strong data-summary="open">—</strong><p>open issues</p></article>
     <article class="summary-card summary-card--verify"><span>Release verification</span><strong data-summary="verify">—</strong><p>fixed on main</p></article>
     <article class="summary-card summary-card--blocker"><span>Stop the line</span><strong data-summary="release_blockers">—</strong><p>showstoppers</p></article>
     <article class="summary-card"><span>Accuracy critical</span><strong data-summary="accuracy_critical">—</strong><p>correctness risks</p></article>
@@ -36,19 +28,6 @@ noTranslation: true
 
   <aside class="verification-note">
     <span class="verification-note__mark" aria-hidden="true">✓</span>
-    <div><strong>“fixed-on-main” is a verification state, not done.</strong><p>To the best of our knowledge the bug is fixed on main. It stays open until someone tests it in the next real release.</p></div>
+    <div><strong>“fixed-on-main” is a verification state, not done.</strong><p>It stays open until someone verifies the fix in a real release.</p></div>
   </aside>
-
-  {% set issueDefaultView = "runway" %}
-  {% include "partials/issues-explorer.njk" %}
-
-  <section class="atlas-method">
-    <div><span class="method-index">01</span><h2>Relationships</h2><p>Solid links are GitHub sub-issues or blockers. Fine links are explicit issue references.</p></div>
-    <div><span class="method-index">02</span><h2>Recommended order</h2><p>Verification and release safety lead; accuracy, critical defects, assurance, and planned work follow.</p></div>
-    <div><span class="method-index">03</span><h2>Runway defaults</h2><p data-planning-note>Relative sequencing uses transparent default effort, not team estimates or promised dates.</p></div>
-  </section>
-</div>
-
-{% block scripts %}
-<script type="module" src="/assets/js/issues/app.js"></script>
-{% endblock %}
+</article>

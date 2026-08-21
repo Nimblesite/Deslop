@@ -31,15 +31,6 @@ function populateFilters() {
   fillSelect("label", allLabels(report).map((name) => ({ id: name, name })));
 }
 
-function renderSummary() {
-  for (const [name, value] of Object.entries(report.summary)) {
-    const target = root.querySelector(`[data-summary="${name}"]`);
-    if (target) target.textContent = String(value);
-  }
-  const planningNote = root.querySelector("[data-planning-note]");
-  if (planningNote) planningNote.textContent = report.meta.planning_note;
-}
-
 function filtersFromForm() {
   const values = new FormData(filters);
   state.search = String(values.get("search") || "").trim();
@@ -120,7 +111,7 @@ function drawerFacts(issue, streams) {
     drawerFact("Issue type", issue.type),
     drawerFact("Assignee", assignees || "Unassigned"),
     drawerFact("Inbound links", String(issue.inbound_links)),
-    drawerFact("Default effort", `${issue.plan.effort_units} units`),
+    drawerFact("Relative effort", `${issue.plan.effort_units} units`),
     drawerFact("Milestone", issue.milestone || "None"),
   ]);
 }
@@ -203,7 +194,6 @@ async function initialise() {
     const response = await fetch("/assets/data/issues.json");
     if (!response.ok) throw new Error(`Issue data request failed (${response.status}).`);
     report = await response.json();
-    renderSummary();
     populateFilters();
     bindEvents();
     const selected = restoreUrlState();

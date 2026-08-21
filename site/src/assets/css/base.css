@@ -441,66 +441,6 @@ body.menu-open .drawer-scrim { opacity: 1; visibility: visible; }
   .logo-badge { display: none; }
 }
 
-/* ─────────── Grouped documentation navigation ─────────── */
-.docs-nav-group {
-  margin: var(--space-1) 0;
-}
-
-.docs-nav-group__summary {
-  min-height: 2.75rem;
-  padding: var(--space-2) var(--space-3);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  cursor: pointer;
-  list-style: none;
-  color: var(--outline);
-  font: 600 0.65rem/1.2 var(--font-mono);
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  user-select: none;
-}
-
-.docs-nav-group__summary::-webkit-details-marker { display: none; }
-.docs-nav-group__summary::after {
-  content: "";
-  width: 0.45rem;
-  height: 0.45rem;
-  flex: 0 0 auto;
-  border-right: 1px solid currentColor;
-  border-bottom: 1px solid currentColor;
-  transform: rotate(45deg) translateY(-0.1rem);
-  transition: transform var(--dur-fast) var(--ease);
-}
-
-.docs-nav-group[open] > .docs-nav-group__summary {
-  color: var(--on-surface-variant);
-}
-
-.docs-nav-group[open] > .docs-nav-group__summary::after {
-  transform: rotate(225deg) translate(-0.1rem, -0.1rem);
-}
-
-.docs-nav-group__items {
-  display: grid;
-  gap: var(--space-1);
-  padding-bottom: var(--space-2);
-}
-
-.docs-nav-group__items .docs-sidebar__link {
-  min-height: 2.75rem;
-  margin: 0;
-  padding-block: var(--space-2);
-}
-
-@media (max-width: 767.98px) {
-  .docs-nav-group__summary,
-  .docs-nav-group__items .docs-sidebar__link {
-    min-height: 3rem;
-  }
-}
-
 /* ─────────── Footer (global chrome) ─────────── */
 .site-footer {
   background: var(--surface-container-lowest);

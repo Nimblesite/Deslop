@@ -69,17 +69,36 @@
 .verification-note p { margin: 0.25rem 0 0; color: var(--on-surface-variant); }
 
 .atlas-app { max-width: var(--atlas-width); margin: 0 auto; background: var(--surface-container-lowest); box-shadow: var(--shadow-lg); }
-.is-issue-graph { height: 100dvh; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); }
-.is-issue-graph #main-content,
+.is-issue-graph, .is-issue-planner { height: 100dvh; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.is-issue-graph #main-content, .is-issue-planner #main-content,
+.is-issue-graph .issue-docs-shell, .is-issue-planner .issue-docs-shell,
+.docs-workspace--graph, .docs-workspace--planner,
 .issue-atlas--graph,
 .atlas-app--graph,
 .issue-atlas--graph .atlas-stage,
 .issue-atlas--graph .network-view { width: 100%; height: 100%; min-height: 0; }
+.docs-workspace--graph, .docs-workspace--planner { overflow: hidden; }
 .atlas-app--graph { max-width: none; position: relative; box-shadow: none; }
 .issue-atlas--graph .network-view { grid-template-rows: auto minmax(0, 1fr) auto; }
 .issue-atlas--graph .network-tools { padding-left: 23rem; }
 .issue-atlas--graph .network-canvas,
 .issue-atlas--graph .network-svg { width: 100%; height: 100%; min-height: 0; }
+
+.issue-atlas--planner, .atlas-app--planner { width: 100%; height: 100%; min-height: 0; }
+.atlas-app--planner { max-width: none; display: grid; grid-template-rows: auto auto minmax(0, 1fr); box-shadow: none; }
+.atlas-app--planner .atlas-stage, .atlas-app--planner [data-view-panel] { width: 100%; height: 100%; min-height: 0; }
+.atlas-app--planner .runway-view, .atlas-app--planner .priority-board, .atlas-app--planner .queue-wrap { min-height: 0; height: 100%; overflow: auto; }
+
+.docs-workspace--statistics { min-width: 0; overflow: clip; background: var(--background); }
+.issue-statistics { min-height: 100%; padding-bottom: 4rem; }
+.issue-statistics__hero { max-width: var(--atlas-width); margin: 0 auto; padding: clamp(3rem, 7vw, 7rem) clamp(1.25rem, 4vw, 4rem) 2.5rem; position: relative; }
+.issue-statistics__hero::after { content: ""; position: absolute; inset: 1rem 0 0; opacity: 0.22; pointer-events: none; background-image: linear-gradient(var(--outline-variant) 1px, transparent 1px), linear-gradient(90deg, var(--outline-variant) 1px, transparent 1px); background-size: 4rem 4rem; mask-image: linear-gradient(to right, transparent, black 45%, transparent); }
+.issue-statistics__hero > * { position: relative; z-index: 1; }
+.issue-statistics__hero h1 { margin: 0.8rem 0 1rem; font-size: clamp(3.5rem, 8vw, 7.5rem); letter-spacing: -0.075em; line-height: 0.9; }
+.issue-statistics__hero p { max-width: 48rem; color: var(--on-surface-variant); font-size: clamp(1rem, 1.8vw, 1.25rem); line-height: 1.6; }
+.atlas-summary--statistics { grid-template-columns: repeat(5, 1fr); }
+.issue-statistics .verification-note { margin-bottom: 3rem; }
+.issue-statistics .atlas-method { margin-top: 0; }
 
 .graph-filter-panel { position: absolute; z-index: 6; top: 0.75rem; left: 1rem; width: min(72rem, calc(100% - 2rem)); pointer-events: none; }
 .graph-filter-panel summary { width: fit-content; min-height: 2.75rem; padding: 0.75rem 1rem; display: flex; align-items: center; gap: 1rem; cursor: pointer; pointer-events: auto; list-style: none; background: color-mix(in srgb, var(--surface-container-high) 92%, transparent); box-shadow: var(--shadow-sm); color: var(--on-surface); font: 700 0.68rem/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; }
@@ -130,6 +149,11 @@
 .graph-node--fixed-on-main .graph-node__dot { filter: drop-shadow(0 0 7px var(--fixed-on-main-color)); stroke: var(--fixed-on-main-color); stroke-width: 2.5; }
 .graph-node--fixed-on-main:hover .graph-node__dot, .graph-node--fixed-on-main:focus .graph-node__dot, .graph-node--fixed-on-main.is-selected .graph-node__dot { filter: brightness(1.3) drop-shadow(0 0 11px var(--fixed-on-main-color)); }
 .graph-node__label { fill: #0e0e0e; font: 700 7px var(--font-mono); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.graph-node__status { pointer-events: none; }
+.graph-node__status-bg { fill: var(--fixed-on-main-color); filter: drop-shadow(0 0 4px var(--fixed-on-main-color)); }
+.graph-node__status-label { fill: #0e0e0e; font: 700 4.5px var(--font-mono); text-anchor: middle; dominant-baseline: central; }
+.graph-node__assignee-frame { fill: var(--surface-container-lowest); stroke: var(--on-surface); stroke-width: 1; pointer-events: none; }
+.graph-node__assignee { clip-path: circle(50% at 50% 50%); pointer-events: none; }
 .graph-tooltip { position: absolute; z-index: 4; max-width: 19rem; pointer-events: none; padding: 0.8rem; background: var(--surface-bright); color: var(--on-surface); box-shadow: var(--shadow-lg); font-size: 0.78rem; opacity: 0; transform: translateY(0.4rem); transition: opacity var(--dur), transform var(--dur); }
 .graph-tooltip.is-visible { opacity: 1; transform: none; }
 .graph-tooltip span { display: block; margin-bottom: 0.35rem; color: var(--outline); font: 0.65rem/1 var(--font-mono); }
@@ -219,6 +243,7 @@
   .atlas-hero { grid-template-columns: 1fr; padding-top: 5rem; }
   .atlas-hero__signal { display: none; }
   .atlas-summary { grid-template-columns: 1fr 1fr; }
+  .atlas-summary--statistics { grid-template-columns: 1fr 1fr; }
   .verification-note { margin-inline: 1.25rem; }
   .atlas-filters { grid-template-columns: 1fr 1fr; }
   .search-field { grid-column: 1 / -1; }
@@ -228,6 +253,8 @@
 }
 
 @media (max-width: 600px) {
+  .issue-statistics__hero { padding-top: 3rem; }
+  .issue-statistics__hero h1 { font-size: clamp(3rem, 16vw, 4.5rem); }
   .atlas-hero { min-height: auto; padding: 4rem 1.25rem 3rem; }
   .atlas-hero h1 { font-size: clamp(3.4rem, 18vw, 5.5rem); }
   .atlas-summary { padding: 0; gap: 1px; }

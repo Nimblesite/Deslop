@@ -40,7 +40,7 @@ ${frontmatter}
 ---
 <div class="blog-container">
   <header class="blog-header">
-    <p class="blog-eyebrow">{{ "blog.eyebrow" | t(lang) | default("The Manuscript · Field Notes") }}</p>
+    <p class="blog-eyebrow">{{ "blog.eyebrow" | t(lang) | default("Field notes") }}</p>
     <h1>{{ "blog.title" | t(lang) | default("Blog") }}</h1>
     <p class="blog-subtitle">{{ "blog.subtitle" | t(lang) | default(site.description) }}</p>
   </header>

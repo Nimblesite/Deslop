@@ -44,6 +44,12 @@ pub(crate) mod incremental;
 /// `signals`.
 pub(crate) mod clone_corpus;
 
+/// The `--rerun-add SRC=DST` spec vocabulary shared by every suite that
+/// mutates a tree between the initial analysis and the rerun. Imported
+/// explicitly with `use crate::common::rerun_ops::*;`, for the same
+/// reason as `signals`.
+pub(crate) mod rerun_ops;
+
 /// The six-language `incremental-multilang` fixture vocabulary. Imported
 /// explicitly with `use crate::common::multilang::*;`, for the same
 /// reason as `signals`.

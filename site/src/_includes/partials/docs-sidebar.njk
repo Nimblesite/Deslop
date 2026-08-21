@@ -1,5 +1,9 @@
+{% set currentLang = lang | default('en') %}
+{% set langPrefix = "/" + currentLang if currentLang != defaultLanguage else "" %}
+{% set navPages = collections.all | eleventyNavigation %}
+
 <aside class="docs-sidebar" id="docs-sidebar">
-  <button type="button" class="docs-sidebar__collapse" data-docs-sidebar-collapse aria-label="Collapse documentation sidebar" aria-expanded="true">
+  <button type="button" class="docs-sidebar__collapse" data-docs-sidebar-collapse aria-controls="docs-sidebar" aria-label="Collapse documentation sidebar" aria-expanded="true">
     <span aria-hidden="true">‹</span>
   </button>
   <nav class="docs-sidebar__site-nav" aria-label="Site">
@@ -12,7 +16,7 @@
   </nav>
   <nav class="docs-sidebar__nav" aria-label="Documentation">
     {% for group in navigation.docsGroups %}
-    <details class="docs-nav-group" data-docs-group="{{ group.id }}"{% if docsGroup == group.id %} open{% endif %}>
+    <details class="docs-nav-group" data-docs-group="{{ group.id }}"{% if docsGroup == group.id %} data-current open{% endif %}>
       <summary class="docs-nav-group__summary">{{ group.i18nKey | t(currentLang) | default(group.id) }}</summary>
       <div class="docs-nav-group__items">
       {% for entry in navPages %}

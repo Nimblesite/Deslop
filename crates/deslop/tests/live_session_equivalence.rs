@@ -31,12 +31,12 @@
 //! store and the splice compose, and pinning them apart would leave the
 //! composition untested.
 
-use std::{ffi::OsString, fs, path::Path};
+use std::{ffi::OsString, path::Path};
 
 use serde_json::Value;
 
 mod common;
-use crate::common::{clone_corpus::*, incremental::*, *};
+use crate::common::{clone_corpus::*, incremental::*, rerun_ops::*, *};
 
 /// Runs one CLI invocation that initialises a session over `scan_root`,
 /// applies `ops` between the two generations, and replays the changed
@@ -58,18 +58,6 @@ fn spliced_session(scan_root: &Path, ops: &[(&str, OsString)]) -> Result<Value> 
         .collect();
     let (report, _events) = run_store_on(scan_root, out.path(), MIN_NODES, &extra)?;
     Ok(report)
-}
-
-/// Writes `contents` to `<guard>/<stem>` — outside the scan root, so
-/// `initialise` cannot see it — and returns the `SRC=DST` spec that
-/// lands it at `dst` between generation 0 and generation 1.
-fn staged(guard: &Path, stem: &str, contents: &str, dst: &Path) -> Result<OsString> {
-    let staged = guard.join(stem);
-    fs::write(&staged, contents)?;
-    let mut spec = OsString::from(staged);
-    spec.push("=");
-    spec.push(dst);
-    Ok(spec)
 }
 
 /// Asserts the spliced report is not the baseline it started from. Every
@@ -97,7 +85,7 @@ fn assert_added_carrier_matches_cold(
     expected_files: &[&str],
 ) -> Result<()> {
     let (file_name, banner) = carrier;
-    let spec = staged(
+    let spec = staged_spec(
         guard,
         &format!("staged_{file_name}"),
         &dup_source(banner),
@@ -157,7 +145,7 @@ fn an_early_sorting_add_splices_into_path_order_not_arrival_order() -> Result<()
 fn a_file_edited_mid_session_matches_the_cold_report_of_the_edited_tree() -> Result<()> {
     let (guard, root) = seeded_scan_root(&corpus())?;
     let carrier = root.join("dup_c.rs");
-    let spec = staged(guard.path(), "staged_c.rs", REPLACEMENT_FN, &carrier)?;
+    let spec = staged_spec(guard.path(), "staged_c.rs", REPLACEMENT_FN, &carrier)?;
     let baseline = run(&root, true)?;
     let spliced = spliced_session(&root, &[("--rerun-add", spec)])?;
     assert_splice_moved_the_report(&spliced, &baseline, "live session: file edit");
@@ -209,7 +197,7 @@ fn add_edit_and_remove_in_one_pass_match_the_cold_report_of_the_result() -> Resu
         &[
             (
                 "--rerun-add",
-                staged(
+                staged_spec(
                     guard.path(),
                     "staged_d.rs",
                     &dup_source(DELTA_BANNER),
@@ -218,7 +206,7 @@ fn add_edit_and_remove_in_one_pass_match_the_cold_report_of_the_result() -> Resu
             ),
             (
                 "--rerun-add",
-                staged(guard.path(), "staged_c.rs", REPLACEMENT_FN, &carrier)?,
+                staged_spec(guard.path(), "staged_c.rs", REPLACEMENT_FN, &carrier)?,
             ),
             ("--rerun-remove", OsString::from(&removed)),
         ],
@@ -256,11 +244,11 @@ fn editing_and_reverting_inside_one_session_lands_on_the_baseline_report() -> Re
         &[
             (
                 "--rerun-add",
-                staged(guard.path(), "staged_edit.rs", REPLACEMENT_FN, &carrier)?,
+                staged_spec(guard.path(), "staged_edit.rs", REPLACEMENT_FN, &carrier)?,
             ),
             (
                 "--rerun-add",
-                staged(guard.path(), "staged_revert.rs", &original, &carrier)?,
+                staged_spec(guard.path(), "staged_revert.rs", &original, &carrier)?,
             ),
         ],
     )?;

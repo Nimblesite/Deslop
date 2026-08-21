@@ -9,7 +9,7 @@
 {% endmacro %}
 
 {% if issueDefaultView == "network" %}
-<main class="atlas-app atlas-app--graph">
+<section class="atlas-app atlas-app--graph">
   <h1 class="sr-only">Issue relationship graph</h1>
   <details class="graph-filter-panel">
     <summary><span>Filters</span><span class="atlas-count" aria-live="polite" data-visible-count>Loading issues…</span></summary>
@@ -18,9 +18,9 @@
   <div class="atlas-stage" data-stage aria-live="polite">
     <div class="atlas-loading"><span></span><p>Mapping the backlog…</p></div>
   </div>
-</main>
+</section>
 {% else %}
-<main class="atlas-app atlas-app--overview">
+<section class="atlas-app atlas-app--planner">
   <div class="atlas-toolbar">
     <div class="view-tabs" role="tablist" aria-label="Report view">
       <button type="button" class="view-tab is-active" data-view="runway" role="tab" aria-selected="true">Runway</button>
@@ -33,7 +33,7 @@
   <div class="atlas-stage" data-stage aria-live="polite">
     <div class="atlas-loading"><span></span><p>Loading the backlog…</p></div>
   </div>
-</main>
+</section>
 {% endif %}
 
 <div class="issue-drawer-scrim" data-drawer-scrim></div>

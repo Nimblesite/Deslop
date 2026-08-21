@@ -13,6 +13,12 @@
   min-height: calc(100vh - var(--header-height));
 }
 
+.docs-shell--workspace {
+  height: 100%;
+  min-height: 0;
+  position: relative;
+}
+
 /* Sidebar — off-canvas drawer on mobile, sticky column on desktop. */
 .docs-sidebar {
   display: flex;
@@ -46,6 +52,11 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
   .docs-shell.is-sidebar-collapsed .docs-sidebar__site-nav,
   .docs-shell.is-sidebar-collapsed .docs-sidebar__nav,
   .docs-shell.is-sidebar-collapsed .docs-sidebar__foot { display: none; }
+  .docs-shell--workspace .docs-sidebar {
+    position: relative;
+    top: 0;
+    height: 100%;
+  }
 }
 
 .docs-sidebar__collapse { display: none; }
@@ -54,7 +65,7 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
   .docs-shell.is-sidebar-collapsed .docs-sidebar__collapse { margin-inline: auto; }
 }
 
-.docs-workspace { min-width: 0; flex: 1; }
+.docs-workspace { min-width: 0; min-height: 0; flex: 1; overflow: hidden; }
 
 /* Site-level links surfaced inside the docs drawer (mobile only — the top bar
    carries them on desktop). */
@@ -89,7 +100,18 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
   text-transform: uppercase;
 }
 .docs-nav-group__summary::-webkit-details-marker { display: none; }
-.docs-nav-group__summary::after { content: "+"; color: var(--outline); font-size: 1rem; }
+.docs-nav-group__summary::after {
+  content: "+";
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 0;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: var(--outline);
+  font-size: 1rem;
+  transform: none;
+}
 .docs-nav-group[open] > .docs-nav-group__summary::after { content: "−"; }
 .docs-nav-group__summary:hover { color: var(--on-surface); }
 .docs-nav-group__items { padding: 0 0 var(--space-2); display: grid; gap: var(--space-1); }
@@ -139,6 +161,11 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 }
 .docs-sidebar__cta:hover { background: var(--surface-container-high); color: var(--on-surface); }
 .docs-sidebar__cta .material-symbols-outlined { font-size: 1rem; }
+
+@media (max-width: 767.98px) {
+  .docs-nav-group__summary,
+  .docs-nav-group__items .docs-sidebar__link { min-height: 3rem; }
+}
 
 /* ─────────── Reading column (docs main + blog) ─────────── */
 .docs-main {

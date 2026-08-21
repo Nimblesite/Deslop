@@ -44,7 +44,7 @@ export function renderBoard(container, report, issues, onSelect) {
   container.append(board);
 }
 
-function timelineBounds(issues) {
+function sequenceBounds(issues) {
   const starts = issues.map((issue) => issue.plan.offset);
   const ends = issues.map((issue) => issue.plan.offset + issue.plan.effort_units);
   const start = Math.min(...starts);
@@ -52,7 +52,7 @@ function timelineBounds(issues) {
   return { start, end, span: Math.max(end - start, 1) };
 }
 
-function weekCount(bounds) {
+function stepCount(bounds) {
   return Math.max(1, Math.ceil(bounds.span / 7));
 }
 
@@ -62,7 +62,7 @@ function stepHeaders(steps) {
     cells.push(element("span", { className: "runway-step", text: `Step ${String(index + 1).padStart(2, "0")}` }));
   }
   const row = element("div", { className: "runway-steps" }, cells);
-  row.style.setProperty("--weeks", steps);
+  row.style.setProperty("--steps", steps);
   return row;
 }
 
@@ -73,14 +73,14 @@ function runwayHead(steps) {
   ]);
 }
 
-function streamHeader(stream, count, weeks) {
+function streamHeader(stream, count, steps) {
   const label = element("div", { className: "runway-stream" }, [
     document.createTextNode(stream.name),
     element("span", { text: ` · ${count}` }),
   ]);
   label.style.setProperty("--stream-color", stream.color);
   const track = element("div", { className: "runway-track" });
-  track.style.setProperty("--weeks", weeks);
+  track.style.setProperty("--steps", steps);
   return element("div", { className: "runway-row" }, [label, track]);
 }
 
@@ -90,11 +90,11 @@ function barPosition(issue, bounds) {
   return { start: `${start}%`, duration: `${duration}%` };
 }
 
-function runwayIssue(issue, bounds, weeks, onSelect) {
+function runwayIssue(issue, bounds, steps, onSelect) {
   const track = element("div", { className: "runway-track" });
   const bar = element("button", { className: "runway-bar", text: `#${issue.number} · ${issue.title}`, attrs: { type: "button", title: `${issue.plan.effort_units} default effort units · ${issue.priority_name}` } });
   const position = barPosition(issue, bounds);
-  track.style.setProperty("--weeks", weeks);
+  track.style.setProperty("--steps", steps);
   bar.style.setProperty("--start", position.start);
   bar.style.setProperty("--duration", position.duration);
   bar.style.setProperty("--bar-color", priorityColor(issue));
@@ -106,29 +106,30 @@ function runwayIssue(issue, bounds, weeks, onSelect) {
   ]);
 }
 
-function appendStreamRows(grid, report, issues, bounds, weeks, onSelect) {
+function appendStreamRows(grid, report, issues, bounds, steps, onSelect) {
   for (const stream of report.workstreams) {
     const streamIssues = issues.filter((issue) => issue.workstream === stream.id);
     if (!streamIssues.length) continue;
-    grid.append(streamHeader(stream, streamIssues.length, weeks));
-    for (const issue of streamIssues) grid.append(runwayIssue(issue, bounds, weeks, onSelect));
+    grid.append(streamHeader(stream, streamIssues.length, steps));
+    for (const issue of streamIssues) grid.append(runwayIssue(issue, bounds, steps, onSelect));
   }
 }
 
 export function renderRunway(container, report, issues, onSelect) {
   clear(container);
   if (!issues.length) return container.append(emptyState());
-  const bounds = timelineBounds(issues);
-  const weeks = weekCount(bounds);
+  const bounds = sequenceBounds(issues);
+  const steps = stepCount(bounds);
   const grid = element("div", { className: "runway-grid" });
-  grid.style.setProperty("--weeks", weeks);
-  grid.append(runwayHead(weeks));
-  appendStreamRows(grid, report, issues, bounds, weeks, onSelect);
+  grid.style.setProperty("--steps", steps);
+  grid.append(runwayHead(steps));
+  appendStreamRows(grid, report, issues, bounds, steps, onSelect);
   const notice = element("div", { className: "runway-notice" }, [
     element("strong", { text: "Indicative only — not a schedule" }),
-    element("span", { text: "Relative sequence and default effort help compare the backlog; they are not delivery commitments." }),
+    element("span", { text: "Sequence and bar length show relative order and default effort—not dates, deadlines, estimates, or commitments." }),
   ]);
-  container.append(element("div", { className: "runway-view", attrs: { "data-view-panel": "runway" } }, [notice, grid]));
+  const scroll = element("div", { className: "runway-scroll" }, [grid]);
+  container.append(element("div", { className: "runway-view", attrs: { "data-view-panel": "runway" } }, [notice, scroll]));
 }
 
 function labelCell(issue) {

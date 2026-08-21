@@ -395,7 +395,7 @@ def effort_for(issue: IssueData) -> int:
     return {"Feature": 8, "Task": 4, "Bug": 5}.get(issue["type"], 4)
 
 
-def schedule_issues(issues: list[IssueData]) -> None:
+def sequence_issues(issues: list[IssueData]) -> None:
     availability: defaultdict[str, list[int]] = defaultdict(lambda: [0, 0])
     for issue in issues:
         track = min(range(2), key=lambda index: availability[issue["workstream"]][index])
@@ -436,7 +436,7 @@ def build_report(raw_issues: list[RawIssue], repo: str, generated_date: date) ->
     relationships = relationship_edges(raw_issues)
     inbound = Counter(edge["target"] for edge in relationships)
     issues = sort_issues([compact_issue(item, inbound[item["number"]]) for item in raw_issues])
-    schedule_issues(issues)
+    sequence_issues(issues)
     return {
         "meta": {
             "repo": repo, "generated_at": generated_date.isoformat(),
