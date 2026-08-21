@@ -9,9 +9,10 @@
 
 import * as assert from "node:assert/strict";
 import { signalStrip } from "../../bubble/live";
-import { FUSED_THRESHOLD, bucketLabels } from "../../types/report";
+import { bucketLabels } from "../../types/report";
 import {
   BubbleCapture,
+  ENGINE_FUSED_CUTOFF,
   assertBubbleShows,
   bubbleCluster,
   bubbleFixture,
@@ -43,11 +44,11 @@ function assertShowing(
 
 suite("LiveBubble fused confidence", () => {
   // DEFECT A — restored. `bestBubbleCluster` gated on a UI-local
-  // `fused >= FUSED_THRESHOLD` instead of the engine's bucket, so act-now
+  // `fused >= ENGINE_FUSED_CUTOFF` instead of the engine's bucket, so act-now
   // clusters below 0.85 were silently withheld from the flagship live
   // surface. `bubbleAdmits` now takes the engine's verdict for an act-now
   // bucket and keeps the fused cutoff for everything below it.
-  // → docs/plans/fused-score-followups.md § "Skipped VSIX tests to restore"
+  // → docs/plans/fused-score-followups.md § "Where fused stands against it"
   test("an act-now near miss below the fused cutoff still reaches the bubble", async () => {
     // A genuine Type-3 near miss: identical shape, real edits, so
     // positional agreement is ~0.8 and the gate renders fused = 0.80
@@ -71,10 +72,10 @@ suite("LiveBubble fused confidence", () => {
       assert.ok(
         visible !== undefined,
         `an act-now ${near.bucket} cluster must bubble at fused ${near.signals.fused}, ` +
-          `below FUSED_THRESHOLD ${FUSED_THRESHOLD}: ${JSON.stringify(capture.calls)}`,
+          `below ENGINE_FUSED_CUTOFF ${ENGINE_FUSED_CUTOFF}: ${JSON.stringify(capture.calls)}`,
       );
       assert.ok(
-        near.signals.fused < FUSED_THRESHOLD,
+        near.signals.fused < ENGINE_FUSED_CUTOFF,
         "fixture must sit below the cutoff or it proves nothing",
       );
       assert.ok(
@@ -243,7 +244,7 @@ suite("LiveBubble fused confidence", () => {
   // could not tell "safe to extract" from "identifiers differ". The strip
   // is still three bars — shape, semantic, confidence — because the two
   // shape views are one piece of evidence and only `fused` separates them.
-  // → docs/plans/fused-score-followups.md § "Skipped VSIX tests to restore"
+  // → docs/plans/fused-score-followups.md § "Where fused stands against it"
   test("the signal strip distinguishes a proven rename from a verbatim copy", () => {
     // Both render structural 1.0 and token 1.0 — the rename's token
     // signal is corrected upward by the Merkle argument (#232) — so the
@@ -329,13 +330,13 @@ suite("LiveBubble fused confidence", () => {
 
   test("a sub-threshold hint bucket stays off the live surface at the exact cutoff", async () => {
     // Below the act-now bands the fused cutoff is the right gate: a weak
-    // LSH hint is worth showing only once it clears FUSED_THRESHOLD.
-    const atCutoff = bubbleCluster("c-at", 20, FUSED_THRESHOLD, {
+    // LSH hint is worth showing only once it clears ENGINE_FUSED_CUTOFF.
+    const atCutoff = bubbleCluster("c-at", 20, ENGINE_FUSED_CUTOFF, {
       bucket: "loosely_similar",
       structural: 0.4,
       token: 0.9,
     });
-    const underCutoff = bubbleCluster("c-under", 20, FUSED_THRESHOLD - 0.01, {
+    const underCutoff = bubbleCluster("c-under", 20, ENGINE_FUSED_CUTOFF - 0.01, {
       bucket: "loosely_similar",
       structural: 0.4,
       token: 0.9,

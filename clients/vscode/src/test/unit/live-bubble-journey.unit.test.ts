@@ -8,8 +8,9 @@
 // and the sequence does not.
 
 import * as assert from "node:assert/strict";
-import { FUSED_THRESHOLD, bucketLabels } from "../../types/report";
+import { bucketLabels } from "../../types/report";
 import {
+  ENGINE_FUSED_CUTOFF,
   assertBubbleShows,
   bubbleCluster,
   bubbleFixture,
@@ -59,7 +60,7 @@ suite("LiveBubble journeys", () => {
       bubble.render(capture.editor, span(6), [family]);
       assert.equal(capture.visible(), undefined, "step 2: a demoted family offers nothing");
       assert.ok(
-        family.signals.fused < FUSED_THRESHOLD,
+        family.signals.fused < ENGINE_FUSED_CUTOFF,
         "step 2: fixture is genuinely demoted",
       );
       assert.ok(

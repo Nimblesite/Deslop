@@ -195,6 +195,10 @@ fn rendered_signals(cluster: &Value) -> ReportSignals {
         token_jaccard: signal(cluster, "token_jaccard"),
         embedding_cos: signal(cluster, "embedding_cos"),
         fused: signal(cluster, "fused"),
+        shape: signal(cluster, "shape"),
+        agreement: signal(cluster, "agreement"),
+        rename_consistency: signal(cluster, "rename_consistency"),
+        literal_fraction: signal(cluster, "literal_fraction"),
     }
 }
 

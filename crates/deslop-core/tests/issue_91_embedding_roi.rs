@@ -61,7 +61,14 @@ fn issue_91_embedding_only_pair_survives_when_lsh_misses_match() -> Result<()> {
     // between the two rendered occurrences, not an average over the
     // discovery edges that assembled the component.
     let vectors = HashMap::from([(0, vec![1.0, 0.0]), (1, vec![0.99, 0.141_067_36])]);
-    let rendered = build_ranked_fused_clusters(&fingerprints, &signatures, &vectors, &clusters);
+    let rendered = build_ranked_fused_clusters(
+        &fingerprints,
+        &signatures,
+        &vectors,
+        &clusters,
+        &[],
+        &HashMap::new(),
+    );
     assert_eq!(
         rendered.len(),
         1,

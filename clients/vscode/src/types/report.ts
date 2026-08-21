@@ -53,21 +53,13 @@ export function clusterSlug(cluster: ReportCluster): string {
   return cluster.id.slice(0, SLUG_LENGTH);
 }
 
+/** The cluster's occurrence count, exactly as the engine computed it
+ * (`deslop_core::report::occurrence_count`). There is one counting
+ * formula and it lives in Rust: the live wire truncates the carried
+ * occurrence list, so a count re-derived here would silently disagree
+ * with the report on every large cluster. */
 export function occurrenceCount(cluster: ReportCluster): number {
-  const total =
-    cluster.occurrences_total && cluster.occurrences_total > 0
-      ? cluster.occurrences_total
-      : cluster.size;
-  return Math.max(total, cluster.occurrences.length);
-}
-
-/** Count to display in compact surfaces (hover, decoration). Uses the
- * authoritative total when present; falls back to the visible slice length
- * so we never show a count higher than the occurrences the caller can act on. */
-export function visibleOccurrenceCount(cluster: ReportCluster): number {
-  return cluster.occurrences_total && cluster.occurrences_total > 0
-    ? cluster.occurrences_total
-    : cluster.occurrences.length;
+  return cluster.occurrence_count;
 }
 
 // Wire-format models generated from `docs/models/live-ipc.td` by
@@ -121,11 +113,14 @@ export function severityLabel(severity: Severity): string {
   return SEVERITY_LABELS[severity];
 }
 
-export function severityOf(weightPercentile: number): Severity {
-  if (weightPercentile >= 0.99) return "worst";
-  if (weightPercentile >= 0.9) return "top10";
-  if (weightPercentile >= 0.5) return "mid";
-  return "faint";
+/** The cluster's severity band as the engine stamped it
+ * ([SEVERITY-BAND]). The band classifies the cluster's rank percentile,
+ * which is a calculation, so it is computed once in
+ * `report_weight::rank_band` and carried on the wire. A report written
+ * before the field existed carries an empty string and reads as the
+ * tail band. */
+export function clusterBand(cluster: ReportCluster): Severity {
+  return SEVERITIES.find((band) => band === cluster.rank_band) ?? "faint";
 }
 
 // [SEVERITY-DESLOP-MAP] The Deslop severity level — the *other* visual
@@ -364,4 +359,3 @@ export function clusterInterpretation(cluster: ReportCluster): string {
     : bucketLabels(resolveBucket(cluster)).actionSentence;
 }
 
-export const FUSED_THRESHOLD = 0.85;

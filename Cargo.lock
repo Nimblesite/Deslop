@@ -407,6 +407,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "blake3",
+ "deslop-core",
  "deslop-test-support",
  "futures",
  "getrandom 0.4.3",

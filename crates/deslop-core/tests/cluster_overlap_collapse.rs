@@ -40,15 +40,25 @@ fn member(file_id: FileId, start: usize, end: usize) -> Fingerprint {
 }
 
 /// Runs the production clustering stage over `members` as a single fused
-/// cluster and returns the ranked result.
-fn ranked(members: &[Fingerprint]) -> Vec<Cluster> {
+/// cluster carrying `edges`, and returns the ranked result. Every case in
+/// this file feeds the pipeline through here: the signature stand-ins,
+/// the empty embedding map and the fused-group shape are scaffolding
+/// rather than the thing under test, and a divergent respelling would
+/// mean two tests disagreeing about what the stage was actually fed.
+fn ranked_with_edges(members: &[Fingerprint], edges: Vec<FusedEdge>) -> Vec<Cluster> {
     let signatures: Vec<Signature> = members.iter().map(|_| [11_u64; 128]).collect();
     let fused = [FusedCluster {
         members: (0..members.len()).collect(),
-        edges: Vec::new(),
+        edges,
     }];
     let vectors: HashMap<usize, Vec<f32>> = HashMap::new();
-    build_ranked_fused_clusters(members, &signatures, &vectors, &fused)
+    build_ranked_fused_clusters(members, &signatures, &vectors, &fused, &[], &HashMap::new())
+}
+
+/// Runs the clustering stage with no surviving discovery edge, which is
+/// what a purely structural hash-identical bucket looks like.
+fn ranked(members: &[Fingerprint]) -> Vec<Cluster> {
+    ranked_with_edges(members, Vec::new())
 }
 
 /// One cluster's member byte ranges, in published order. Four call sites
@@ -186,26 +196,16 @@ fn the_strongest_cross_file_edge_outranks_width_in_a_run() {
         member(alpha, 10, 150),
         member(beta, 10, 150),
     ];
-    let signatures: Vec<Signature> = members.iter().map(|_| [11_u64; 128]).collect();
-    let vectors: HashMap<usize, Vec<f32>> = HashMap::new();
-    let window_wins = [FusedCluster {
-        members: vec![0, 1, 2],
-        edges: vec![edge(0, 2, 0.93), edge(1, 2, 1.0)],
-    }];
-    let clusters = build_ranked_fused_clusters(&members, &signatures, &vectors, &window_wins);
-    let ranges: Vec<Vec<(usize, usize)>> = clusters.iter().map(member_ranges).collect();
+    let window_wins = ranked_with_edges(&members, vec![edge(0, 2, 0.93), edge(1, 2, 1.0)]);
+    let ranges: Vec<Vec<(usize, usize)>> = window_wins.iter().map(member_ranges).collect();
     assert_eq!(
         ranges,
         vec![vec![(10, 150), (10, 150)]],
         "the exactly-matched window must represent the alpha run, got {ranges:?}"
     );
 
-    let root_wins = [FusedCluster {
-        members: vec![0, 1, 2],
-        edges: vec![edge(0, 2, 1.0), edge(1, 2, 0.93)],
-    }];
-    let clusters = build_ranked_fused_clusters(&members, &signatures, &vectors, &root_wins);
-    let published: Vec<(usize, usize)> = clusters.iter().flat_map(member_ranges).collect();
+    let root_wins = ranked_with_edges(&members, vec![edge(0, 2, 1.0), edge(1, 2, 0.93)]);
+    let published: Vec<(usize, usize)> = root_wins.iter().flat_map(member_ranges).collect();
     assert_eq!(
         published,
         vec![(0, 200), (10, 150)],

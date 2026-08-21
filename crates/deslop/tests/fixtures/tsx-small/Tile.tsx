@@ -1,14 +1,14 @@
 type TileProps = {
-  title: string;
-  count: number;
-  active: boolean;
+  label: string;
+  total: number;
+  enabled: boolean;
 };
 
-export function Tile({ title, count, active }: TileProps) {
+export function Tile({ label, total, enabled }: TileProps) {
   return (
-    <section className={active ? "active" : "idle"}>
-      <h2>{title}</h2>
-      <span>{count + 1}</span>
+    <section className={enabled ? "active" : "idle"}>
+      <h2>{label}</h2>
+      <span>{total + 1}</span>
     </section>
   );
 }

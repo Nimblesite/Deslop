@@ -19,7 +19,9 @@ use std::{path::Path, thread, time::Duration};
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
-use crate::common::{call, handshake, spawn_lsp_on_fixture};
+use crate::common::{call, handshake, spawn_lsp_on_fixture_guarded, LspGuard};
+use deslop_core::render::signals::plain_explanation;
+use deslop_core::report::ReportSignals;
 
 const DEFINITION: &str = "textDocument/definition";
 const HOVER: &str = "textDocument/hover";
@@ -49,8 +51,7 @@ const FORBIDDEN_CAPABILITIES: &[&str] = &[
 
 #[test]
 fn initialize_advertises_no_standard_language_providers() -> Result<()> {
-    let (_workspace, mut child, mut stdin, mut stdout, _stderr) =
-        spawn_lsp_on_fixture("csharp-small")?;
+    let (_workspace, _guard, mut stdin, mut stdout) = spawn_lsp_on_fixture_guarded("csharp-small")?;
     let init = handshake(&mut stdin, &mut stdout)?;
     let caps = init
         .pointer("/result/capabilities")
@@ -78,7 +79,6 @@ fn initialize_advertises_no_standard_language_providers() -> Result<()> {
         caps.get("diagnosticProvider").is_some(),
         "the additive clone diagnostics must still be advertised: {caps}"
     );
-    let _ = child.kill();
     Ok(())
 }
 
@@ -86,7 +86,7 @@ fn initialize_advertises_no_standard_language_providers() -> Result<()> {
 fn go_to_definition_is_never_answered_by_deslop() -> Result<()> {
     // F12 anywhere — including inside a clone range — must yield no Deslop
     // result, so the editor's own Go To Definition is the sole responder.
-    let (_workspace, mut child, mut stdin, mut stdout, _stderr, alpha) = lsp_alpha_session()?;
+    let (_workspace, _guard, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
 
     let response = call(
         &mut stdin,
@@ -101,7 +101,6 @@ fn go_to_definition_is_never_answered_by_deslop() -> Result<()> {
         definition_location(&response).is_none(),
         "Deslop must contribute no Go To Definition location — F12 belongs to the language server: {response}"
     );
-    let _ = child.kill();
     Ok(())
 }
 
@@ -110,7 +109,7 @@ fn go_to_definition_is_never_answered_by_deslop() -> Result<()> {
 fn hover_is_never_answered_by_deslop() -> Result<()> {
     // Hover belongs to the editor's language server. The clone card is an
     // additive client-side provider in the VSIX, not an LSP hover.
-    let (_workspace, mut child, mut stdin, mut stdout, _stderr, alpha) = lsp_alpha_session()?;
+    let (_workspace, _guard, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
 
     let response = call(
         &mut stdin,
@@ -130,7 +129,6 @@ fn hover_is_never_answered_by_deslop() -> Result<()> {
         !has_contents,
         "Deslop must contribute no hover contents — hover belongs to the language server: {response}"
     );
-    let _ = child.kill();
     Ok(())
 }
 
@@ -139,8 +137,8 @@ fn canonical_navigation_survives_via_additive_clone_diagnostics() -> Result<()> 
     // Removing the F12 overload must not cost the user canonical-occurrence
     // navigation: the additive clone diagnostic still links to the
     // canonical occurrence in the sibling file via `relatedInformation`.
-    let (_workspace, mut child, mut stdin, mut stdout, _stderr, alpha) = lsp_alpha_session()?;
-    wait_for_clusters(&mut stdin, &mut stdout)?;
+    let (_workspace, _guard, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
+    let report = wait_for_clusters(&mut stdin, &mut stdout)?;
 
     let response = call(
         &mut stdin,
@@ -168,7 +166,28 @@ fn canonical_navigation_survives_via_additive_clone_diagnostics() -> Result<()> 
         "the clone diagnostic must link to the canonical occurrence in Beta.cs so navigation \
          survives without overloading F12: {response}"
     );
-    let _ = child.kill();
+
+    // [FUSION-CONTENT-GATE] #344: the Problems panel is a decision surface.
+    // The bucket title alone is unfalsifiable — a corroborated Type-2 rename
+    // and an anchor-poor scaffolding family both render structural 1.00 — so
+    // the message must also state the fused score and the measured evidence.
+    let deslop_item = items
+        .iter()
+        .find(|item| item.get("source").and_then(Value::as_str) == Some("deslop"))
+        .ok_or_else(|| anyhow!("a deslop-sourced diagnostic: {response}"))?;
+    let cluster_id = deslop_item
+        .pointer("/data/cluster_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("diagnostic data carries the cluster id: {deslop_item}"))?;
+    let message = deslop_item
+        .get("message")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("diagnostic carries a message: {deslop_item}"))?;
+    assert!(
+        message.contains(" × ") && message.contains("code"),
+        "the pre-existing bucket title and occurrence count survive the addition: {message}"
+    );
+    assert_explains_confidence(message, cluster_signals(&report, cluster_id)?, "diagnostic");
     Ok(())
 }
 
@@ -176,8 +195,8 @@ fn canonical_navigation_survives_via_additive_clone_diagnostics() -> Result<()> 
 fn additive_code_lens_carries_deslops_own_jump_command_not_definition() -> Result<()> {
     // The additive clone code lens is how Deslop offers occurrence
     // navigation — via its own command, never by overloading F12.
-    let (_workspace, mut child, mut stdin, mut stdout, _stderr, alpha) = lsp_alpha_session()?;
-    wait_for_clusters(&mut stdin, &mut stdout)?;
+    let (_workspace, _guard, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
+    let report = wait_for_clusters(&mut stdin, &mut stdout)?;
 
     let response = call(
         &mut stdin,
@@ -202,7 +221,27 @@ fn additive_code_lens_carries_deslops_own_jump_command_not_definition() -> Resul
         command, "deslop.jumpToNextOccurrence",
         "the lens must navigate via Deslop's own command, never textDocument/definition: {response}"
     );
-    let _ = child.kill();
+
+    // [FUSION-CONTENT-GATE] #344: the lens is the inline decision surface, so
+    // it carries the same explanation the Problems panel does.
+    let cluster_id = first_lens
+        .pointer("/command/arguments/0")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("lens command names its cluster: {first_lens}"))?;
+    let title = first_lens
+        .pointer("/command/title")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("lens carries a title: {first_lens}"))?;
+    assert!(
+        title.starts_with("●● ") && title.ends_with(" — jump to next"),
+        "the pre-existing glyph, count and action survive the addition: {title}"
+    );
+    assert!(
+        !title.contains('`'),
+        "a lens title is rendered verbatim — Markdown code spans would show as \
+         literal backticks: {title}"
+    );
+    assert_explains_confidence(title, cluster_signals(&report, cluster_id)?, "code lens");
     Ok(())
 }
 
@@ -212,8 +251,8 @@ fn refresh_command_re_evaluates_the_corpus_after_an_edit() -> Result<()> {
     // editing Alpha.cs away from its Beta.cs twin drops the clone, and the
     // refresh reports the removal. Exercises Deslop's own command surface,
     // which is wholly separate from any standard editor request.
-    let (_workspace, mut child, mut stdin, mut stdout, _stderr, alpha) = lsp_alpha_session()?;
-    wait_for_clusters(&mut stdin, &mut stdout)?;
+    let (_workspace, _guard, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
+    let _report = wait_for_clusters(&mut stdin, &mut stdout)?;
 
     std::fs::write(
         &alpha,
@@ -233,28 +272,25 @@ fn refresh_command_re_evaluates_the_corpus_after_an_edit() -> Result<()> {
         removed >= 1,
         "editing Alpha.cs away from Beta.cs must drop the clone on refresh: {response}"
     );
-    let _ = child.kill();
     Ok(())
 }
 
-/// Copies the `csharp-small` fixture, spawns the LSP, completes the
-/// handshake, and returns the workspace (keep it bound — dropping it
-/// deletes the workspace), the child, its stdin/stdout, the child's
-/// stderr (keep it bound — dropping the read end early stalls the
-/// heavily-logging LSP on a full stderr pipe so it never answers), and
-/// the path to `Alpha.cs`.
+/// Copies the `csharp-small` fixture, spawns the LSP under an armed
+/// [`LspGuard`], completes the handshake, and returns the workspace (keep it
+/// bound — dropping it deletes the workspace), the guard (keep it bound — it
+/// reaps the child and drains its stderr for the whole test, GH #370), the
+/// child's stdin/stdout, and the path to `Alpha.cs`.
 fn lsp_alpha_session() -> Result<(
     tempfile::TempDir,
-    std::process::Child,
+    LspGuard,
     std::process::ChildStdin,
     std::io::BufReader<std::process::ChildStdout>,
-    std::process::ChildStderr,
     std::path::PathBuf,
 )> {
-    let (workspace, child, mut stdin, mut stdout, stderr) = spawn_lsp_on_fixture("csharp-small")?;
+    let (workspace, guard, mut stdin, mut stdout) = spawn_lsp_on_fixture_guarded("csharp-small")?;
     let alpha = workspace.path().join("Alpha.cs");
     let _init = handshake(&mut stdin, &mut stdout)?;
-    Ok((workspace, child, stdin, stdout, stderr, alpha))
+    Ok((workspace, guard, stdin, stdout, alpha))
 }
 
 /// Extracts a definition target URI from any of the shapes the LSP allows
@@ -270,11 +306,13 @@ fn definition_location(response: &Value) -> Option<&Value> {
 }
 
 /// Polls `deslop/reportGet` until the analysis has produced at least one
-/// cluster, so the diagnostic pull has clone data to project.
+/// cluster, so the diagnostic pull has clone data to project. Returns the
+/// settled report so a caller can pin a rendered surface against the exact
+/// signal numbers the wire published.
 fn wait_for_clusters(
     stdin: &mut std::process::ChildStdin,
     stdout: &mut std::io::BufReader<std::process::ChildStdout>,
-) -> Result<()> {
+) -> Result<Value> {
     for _ in 0..60 {
         let response = call(stdin, stdout, REPORT_GET, &json!({}))?;
         let has_clusters = response
@@ -282,11 +320,66 @@ fn wait_for_clusters(
             .and_then(Value::as_array)
             .is_some_and(|clusters| !clusters.is_empty());
         if has_clusters {
-            return Ok(());
+            return Ok(response);
         }
         thread::sleep(Duration::from_millis(500));
     }
     Err(anyhow!("no clusters produced within 30s"))
+}
+
+/// Reads the wire signals of `cluster_id` out of a `deslop/reportGet`
+/// response.
+fn cluster_signals(report: &Value, cluster_id: &str) -> Result<ReportSignals> {
+    let clusters = report
+        .pointer("/result/clusters")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("report carries no clusters: {report}"))?;
+    let signals = clusters
+        .iter()
+        .find(|cluster| cluster.get("id").and_then(Value::as_str) == Some(cluster_id))
+        .and_then(|cluster| cluster.get("signals"))
+        .ok_or_else(|| anyhow!("cluster {cluster_id} missing from report: {report}"))?;
+    Ok(serde_json::from_value(signals.clone())?)
+}
+
+/// The confidence explanation [FUSION-CONTENT-GATE] every plain-text Deslop
+/// surface must carry. Spelled out here rather than borrowed from the
+/// renderer, so a surface that quietly drops the fused score or the measured
+/// content evidence fails this test instead of agreeing with itself.
+fn expected_explanation(signals: ReportSignals) -> String {
+    format!(
+        "structural {structural:.2} · jaccard {jaccard:.2} · embedding {embedding:.2} · \
+         fused {fused:.2} · agreement {agreement:.2} · rename {rename:.2} · \
+         literal {literal:.2}",
+        structural = signals.structural,
+        jaccard = signals.token_jaccard,
+        embedding = signals.embedding_cos,
+        fused = signals.fused,
+        agreement = signals.agreement,
+        rename = signals.rename_consistency,
+        literal = signals.literal_fraction,
+    )
+}
+
+/// Asserts the shared renderer and this test agree on the explanation, then
+/// that `rendered` carries it verbatim.
+fn assert_explains_confidence(rendered: &str, signals: ReportSignals, surface: &str) {
+    let expected = expected_explanation(signals);
+    assert_eq!(
+        plain_explanation(signals),
+        expected,
+        "the {surface} must use the shared render::signals rendering, never a second format"
+    );
+    assert!(
+        rendered.contains(&expected),
+        "the {surface} must state the fused confidence and the measured content evidence \
+         [FUSION-CONTENT-GATE]: expected `{expected}` inside `{rendered}`"
+    );
+    assert!(
+        signals.fused > 0.0 && signals.structural > 0.0,
+        "a published clone must carry positive support, else the {surface} pins nothing: \
+         {signals:?}"
+    );
 }
 
 fn file_uri(path: &Path) -> Result<String> {

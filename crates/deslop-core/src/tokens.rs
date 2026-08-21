@@ -190,10 +190,11 @@ fn collect_tokens_in_range(
 
 /// Resolves a fingerprint byte range to the nodes it spans: the exact
 /// node when one exists, else the contiguous child window a synthetic
-/// sibling range covers. Shared by the token stream extraction and the
-/// content-agreement walk ([FUSION-CONTENT-GATE]) so the two signals
-/// always see the same code.
-fn resolve_range_nodes(
+/// sibling range covers. Shared by the token stream extraction, the
+/// content-agreement walk ([FUSION-CONTENT-GATE]) and the shared-subtree
+/// overlap ([FUSION-SHARED-SUBTREE]) so all three signals always see
+/// the same code.
+pub(crate) fn resolve_range_nodes(
     node: &NormalizedNode,
     start: usize,
     end: usize,
@@ -212,14 +213,13 @@ fn resolve_range_nodes(
         .find_map(|child| resolve_range_nodes(child, start, end))
 }
 
-/// Normalisation-collapsed leaves (identifier and literal nodes) covered
-/// by `fingerprint`, in pre-order, as `(kind, byte range)` pairs. `None`
-/// when the range resolves to no node or sibling window. Feeds the
-/// content-agreement signal ([FUSION-CONTENT-GATE]) — the
-/// collapsed leaves are exactly the positions where two shape-identical
-/// subtrees can still disagree in raw source content — and the
-/// literal-dominance measurement behind the language-agnostic data-table
-/// category ([CLONE-NOISE-LITERAL-TABLE]).
+/// Normalisation-collapsed content frontier covered by `fingerprint`,
+/// in pre-order, as `(kind, byte range)` pairs. `None` when the range
+/// resolves to no node or sibling window. Feeds the content-agreement
+/// signal ([FUSION-CONTENT-GATE]) — the frontier positions are exactly
+/// where two shape-identical subtrees can still disagree in raw source
+/// content — and the literal-dominance measurement behind the
+/// language-agnostic data-table category ([CLONE-NOISE-LITERAL-TABLE]).
 #[must_use]
 pub(crate) fn collapsed_leaves(
     root: &NormalizedNode,
@@ -237,18 +237,25 @@ pub(crate) fn collapsed_leaves(
     Some(out)
 }
 
-/// Pre-order walk collecting collapsed leaves as `(kind, range)` pairs.
+/// Pre-order walk collecting the content frontier as `(kind, range)`
+/// pairs: a collapsed node counts only when no collapsed descendant
+/// already carries its bytes. A collapsed non-leaf — a template string
+/// whose fragments and interpolated identifiers are collapsed children —
+/// spans those descendants, so emitting it too would re-test the same
+/// bytes a second time and manufacture a disagreeing "literal" at every
+/// interpolation whose identifier a Type-2 rename touched.
 fn collect_collapsed_leaves(
     node: &NormalizedNode,
     out: &mut Vec<(&'static str, crate::ast::ByteRange)>,
 ) {
-    if node.kind == crate::lang::shared::IDENTIFIER_KIND
-        || node.kind == crate::lang::shared::LITERAL_KIND
-    {
-        out.push((node.kind, node.byte_range));
-    }
+    let frontier = out.len();
     for child in &node.children {
         collect_collapsed_leaves(child, out);
+    }
+    let collapsed = node.kind == crate::lang::shared::IDENTIFIER_KIND
+        || node.kind == crate::lang::shared::LITERAL_KIND;
+    if collapsed && out.len() == frontier {
+        out.push((node.kind, node.byte_range));
     }
 }
 

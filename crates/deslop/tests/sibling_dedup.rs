@@ -23,7 +23,7 @@
 //! same file. Each assertion maps to a specific claim in NAP's bug
 //! report.
 
-use std::{fs, path::Path, path::PathBuf};
+use std::{collections::BTreeMap, fs, path::Path, path::PathBuf};
 
 use anyhow::Result;
 use assert_cmd::Command;
@@ -167,14 +167,53 @@ fn prepared_report(
     Ok((tmp, scan_root, report))
 }
 
+/// Returns `value`'s `key` array, or an empty slice when the field is
+/// absent or not an array.
+fn array_field<'a>(value: &'a serde_json::Value, key: &str) -> &'a [serde_json::Value] {
+    value
+        .get(key)
+        .and_then(serde_json::Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+}
+
 /// Returns the report's `clusters` array as an owned `Vec`, or an empty
 /// `Vec` when the field is absent or not an array.
 fn clusters_array(report: &serde_json::Value) -> Vec<serde_json::Value> {
-    report
-        .get("clusters")
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default()
+    array_field(report, "clusters").to_vec()
+}
+
+/// Returns a cluster's short id, or `"?"` when the field is absent, so
+/// every failure message names the cluster the same way.
+fn cluster_id(cluster: &serde_json::Value) -> &str {
+    cluster
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("?")
+}
+
+/// Returns a cluster's `occurrences` array, or an empty slice when the
+/// field is absent or not an array.
+fn occurrences_of(cluster: &serde_json::Value) -> &[serde_json::Value] {
+    array_field(cluster, "occurrences")
+}
+
+/// Reads an unsigned integer field, defaulting to `0` when it is absent
+/// or not a number.
+fn u64_field(value: &serde_json::Value, key: &str) -> u64 {
+    value
+        .get(key)
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0)
+}
+
+/// Applies `probe` to every cluster in `report` and returns the first
+/// failure description it produces. `None` means every cluster is clean.
+fn first_cluster_finding(
+    report: &serde_json::Value,
+    probe: impl Fn(&serde_json::Value) -> Option<String>,
+) -> Option<String> {
+    array_field(report, "clusters").iter().find_map(probe)
 }
 
 /// Returns `true` when the half-open ranges `[a_start, a_end)` and
@@ -187,32 +226,21 @@ fn ranges_overlap(a_start: u64, a_end: u64, b_start: u64, b_end: u64) -> bool {
 /// occurrences inside the same cluster and file whose byte ranges
 /// overlap. Returns `None` when every cluster is clean.
 fn first_overlap(report: &serde_json::Value) -> Option<String> {
-    let clusters = report.get("clusters")?.as_array()?;
-    for cluster in clusters {
-        if let Some(pair) = first_overlap_in_cluster(cluster) {
-            return Some(pair);
-        }
-    }
-    None
+    first_cluster_finding(report, first_overlap_in_cluster)
 }
 
 /// Inner loop of [`first_overlap`]: reports the first overlapping pair
 /// inside a single cluster, annotated with the cluster id for the
 /// failure message.
 fn first_overlap_in_cluster(cluster: &serde_json::Value) -> Option<String> {
-    let occurrences = cluster.get("occurrences")?.as_array()?;
-    let id = cluster
-        .get("id")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("?");
-    for (index, left) in occurrences.iter().enumerate() {
-        for right in occurrences.iter().skip(index.saturating_add(1)) {
-            if let Some(pair) = overlap_pair(id, left, right) {
-                return Some(pair);
-            }
-        }
-    }
-    None
+    let occurrences = occurrences_of(cluster);
+    let id = cluster_id(cluster);
+    occurrences.iter().enumerate().find_map(|(index, left)| {
+        occurrences
+            .iter()
+            .skip(index.saturating_add(1))
+            .find_map(|right| overlap_pair(id, left, right))
+    })
 }
 
 /// Returns a human-readable description when `left` and `right` refer
@@ -244,28 +272,12 @@ fn overlap_pair(
 /// `end_byte` exceeds the length of the file it names. Returns `None`
 /// when every occurrence is inside its source file's bounds.
 fn first_out_of_bounds(report: &serde_json::Value, scan_root: &Path) -> Option<String> {
-    let clusters = report.get("clusters")?.as_array()?;
-    for cluster in clusters {
-        if let Some(pair) = first_out_of_bounds_in_cluster(cluster, scan_root) {
-            return Some(pair);
-        }
-    }
-    None
-}
-
-/// Per-cluster walker for [`first_out_of_bounds`].
-fn first_out_of_bounds_in_cluster(cluster: &serde_json::Value, scan_root: &Path) -> Option<String> {
-    let occurrences = cluster.get("occurrences")?.as_array()?;
-    let id = cluster
-        .get("id")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("?");
-    for occurrence in occurrences {
-        if let Some(report_line) = out_of_bounds_line(id, occurrence, scan_root) {
-            return Some(report_line);
-        }
-    }
-    None
+    first_cluster_finding(report, |cluster| {
+        let id = cluster_id(cluster);
+        occurrences_of(cluster)
+            .iter()
+            .find_map(|occurrence| out_of_bounds_line(id, occurrence, scan_root))
+    })
 }
 
 /// Produces a failure description when `occurrence.end_byte` exceeds
@@ -293,58 +305,41 @@ fn out_of_bounds_line(
 /// `path` (returns a sorted `(path, count)` list so assertions have a
 /// deterministic message).
 fn per_file_counts(cluster: &serde_json::Value) -> Vec<(String, usize)> {
-    let mut counts: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
-    if let Some(occurrences) = cluster
-        .get("occurrences")
-        .and_then(serde_json::Value::as_array)
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    for path in occurrences_of(cluster)
+        .iter()
+        .filter_map(|occurrence| occurrence.get("path").and_then(serde_json::Value::as_str))
     {
-        for occurrence in occurrences {
-            if let Some(path) = occurrence.get("path").and_then(serde_json::Value::as_str) {
-                let entry = counts.entry(path.to_owned()).or_insert(0_usize);
-                *entry = entry.saturating_add(1);
-            }
-        }
+        let entry = counts.entry(path.to_owned()).or_insert(0_usize);
+        *entry = entry.saturating_add(1);
     }
     counts.into_iter().collect()
 }
 
 fn first_cluster_count_mismatch(report: &serde_json::Value) -> Option<String> {
-    let clusters = report.get("clusters")?.as_array()?;
-    for cluster in clusters {
-        let size = cluster.get("size")?.as_u64()?;
-        let occurrences = cluster.get("occurrences")?.as_array()?;
-        let occurrences_total = cluster.get("occurrences_total")?.as_u64()?;
-        let occurrences_len = u64::try_from(occurrences.len()).ok()?;
-        if size != occurrences_len || occurrences_total != occurrences_len {
-            let id = cluster
-                .get("id")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("?");
-            return Some(format!(
+    first_cluster_finding(report, |cluster| {
+        let size = u64_field(cluster, "size");
+        let occurrences_total = u64_field(cluster, "occurrences_total");
+        let occurrences_len = u64::try_from(occurrences_of(cluster).len()).ok()?;
+        let id = cluster_id(cluster);
+        (size != occurrences_len || occurrences_total != occurrences_len).then(|| {
+            format!(
                 "cluster {id}: size={size}, occurrences_total={occurrences_total}, len={occurrences_len}"
-            ));
-        }
-    }
-    None
+            )
+        })
+    })
 }
 
 fn first_unbounded_signal(report: &serde_json::Value) -> Option<String> {
-    let clusters = report.get("clusters")?.as_array()?;
-    for cluster in clusters {
-        let id = cluster
-            .get("id")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("?");
+    first_cluster_finding(report, |cluster| {
+        let id = cluster_id(cluster);
         let fused = cluster
             .get("signals")?
             .get("fused")?
             .as_f64()
             .unwrap_or(f64::NAN);
-        if !(0.0..=1.0).contains(&fused) {
-            return Some(format!("cluster {id} reports fused={fused}"));
-        }
-    }
-    None
+        (!(0.0..=1.0).contains(&fused)).then(|| format!("cluster {id} reports fused={fused}"))
+    })
 }
 
 fn duplication_percent(report: &serde_json::Value) -> f64 {
@@ -356,32 +351,23 @@ fn duplication_percent(report: &serde_json::Value) -> f64 {
 }
 
 fn max_occurrences_for_path(report: &serde_json::Value, needle: &str) -> usize {
-    let mut max_count = 0_usize;
-    if let Some(clusters) = report.get("clusters").and_then(serde_json::Value::as_array) {
-        for cluster in clusters {
-            let count = occurrences_for_path(cluster, needle);
-            max_count = max_count.max(count);
-        }
-    }
-    max_count
+    array_field(report, "clusters")
+        .iter()
+        .map(|cluster| occurrences_for_path(cluster, needle))
+        .max()
+        .unwrap_or_default()
 }
 
 fn occurrences_for_path(cluster: &serde_json::Value, needle: &str) -> usize {
-    cluster
-        .get("occurrences")
-        .and_then(serde_json::Value::as_array)
-        .map(|occurrences| {
-            occurrences
-                .iter()
-                .filter(|occurrence| {
-                    occurrence
-                        .get("path")
-                        .and_then(serde_json::Value::as_str)
-                        .is_some_and(|path| path == needle)
-                })
-                .count()
+    occurrences_of(cluster)
+        .iter()
+        .filter(|occurrence| {
+            occurrence
+                .get("path")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|path| path == needle)
         })
-        .unwrap_or_default()
+        .count()
 }
 
 fn line_count(path: &Path) -> Result<usize> {
@@ -419,20 +405,9 @@ fn cluster_size_equals_occurrences_length_for_every_cluster() -> Result<()> {
         "fixture must produce at least one clone cluster: {report:#}"
     );
     for cluster in &clusters {
-        let size = cluster
-            .get("size")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(0);
-        let occurrences_len: u64 = cluster
-            .get("occurrences")
-            .and_then(serde_json::Value::as_array)
-            .map(Vec::len)
-            .and_then(|len| u64::try_from(len).ok())
-            .unwrap_or(0);
-        let occurrences_total = cluster
-            .get("occurrences_total")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(0);
+        let size = u64_field(cluster, "size");
+        let occurrences_len = u64::try_from(occurrences_of(cluster).len())?;
+        let occurrences_total = u64_field(cluster, "occurrences_total");
         assert_eq!(
             size, occurrences_len,
             "cluster.size must equal occurrences.len() after overlap dedup: {cluster:#}"
@@ -488,10 +463,7 @@ fn sibling_window_cluster_has_one_occurrence_per_file() -> Result<()> {
             1,
             "sibling-window cluster {:?} reports {count} occurrences in {path}; \
              overlapping windows must collapse to one per file",
-            sibling_cluster
-                .get("id")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("?"),
+            cluster_id(&sibling_cluster),
         );
     }
     Ok(())
@@ -550,26 +522,11 @@ fn phantom_occurrence_fixture_respects_report_invariants() -> Result<()> {
 /// subtree matches in the fixture span <100 bytes each, sibling
 /// windows over 2–3 contiguous loops span ≥100.
 fn max_span_bytes(cluster: &serde_json::Value) -> u64 {
-    let Some(occurrences) = cluster
-        .get("occurrences")
-        .and_then(serde_json::Value::as_array)
-    else {
-        return 0;
-    };
-    let mut best: u64 = 0;
-    for occurrence in occurrences {
-        let start = occurrence
-            .get("start_byte")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(0);
-        let end = occurrence
-            .get("end_byte")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(0);
-        let span = end.saturating_sub(start);
-        if span > best {
-            best = span;
-        }
-    }
-    best
+    occurrences_of(cluster)
+        .iter()
+        .map(|occurrence| {
+            u64_field(occurrence, "end_byte").saturating_sub(u64_field(occurrence, "start_byte"))
+        })
+        .max()
+        .unwrap_or_default()
 }

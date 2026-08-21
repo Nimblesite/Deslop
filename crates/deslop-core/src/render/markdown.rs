@@ -56,8 +56,13 @@ fn write_signals(out: &mut String, cluster: &ReportCluster) {
     let signals = cluster.signals;
     let _ = writeln!(
         out,
-        "- signals: structural=`{:.2}` jaccard=`{:.2}` embedding=`{:.2}` fused=`{:.2}`",
-        signals.structural, signals.token_jaccard, signals.embedding_cos, signals.fused,
+        "- signals: {}",
+        crate::render::signals::confidence_summary(signals),
+    );
+    let _ = writeln!(
+        out,
+        "- content evidence: {}",
+        crate::render::signals::evidence_summary(signals),
     );
     let _ = writeln!(out);
 }
@@ -142,27 +147,28 @@ mod tests {
     }
 
     fn cluster() -> ReportCluster {
-        ReportCluster {
-            id: "c-md".to_owned(),
-            weight: 1.25,
-            size: 40,
-            canonical_node_count: 10,
-            signals: ReportSignals {
-                structural: 0.99,
-                token_jaccard: 0.98,
-                embedding_cos: 0.0,
-                fused: 0.98,
-            },
-            bucket: String::new(),
-            category: String::new(),
-            occurrences: vec![occurrence("/tmp/A.cs", 0, 5)],
-            occurrences_total: 1,
-            occurrences_truncated: false,
-            summary: "Summary line.".to_owned(),
-            interpretation: "Interpretation line.".to_owned(),
-            intersects_diff: None,
-            is_newly_introduced: None,
-        }
+        let mut cluster =
+            crate::report_fixtures::fixture_cluster("c-md", vec![occurrence("/tmp/A.cs", 0, 5)]);
+        cluster.weight = 1.25;
+        cluster.size = 40;
+        cluster.canonical_node_count = 10;
+        cluster.signals = ReportSignals {
+            structural: 0.99,
+            token_jaccard: 0.98,
+            shape: 0.99,
+            embedding_cos: 0.0,
+            fused: 0.98,
+            agreement: 0.0,
+            rename_consistency: 0.0,
+            literal_fraction: 0.0,
+        };
+        cluster.bucket.clear();
+        cluster.category.clear();
+        "csharp".clone_into(&mut cluster.language);
+        "Summary line.".clone_into(&mut cluster.summary);
+        "Interpretation line.".clone_into(&mut cluster.interpretation);
+        crate::report_fixtures::restamp_fixture(&mut cluster);
+        cluster
     }
 
     #[test]

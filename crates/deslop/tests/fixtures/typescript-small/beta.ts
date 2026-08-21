@@ -1,16 +1,16 @@
 export interface Invoice {
-  items: Array<{ price: number; quantity: number }>;
+  lines: Array<{ cost: number; count: number }>;
 }
 
-export async function collectInvoices(orders: Invoice[]): Promise<number[]> {
-  const totals = await Promise.all(
-    orders.map(async (order) => {
-      const subtotal = order.items.reduce(
-        (sum, item) => sum + item.price * item.quantity,
+export async function collectInvoices(invoices: Invoice[]): Promise<number[]> {
+  const amounts = await Promise.all(
+    invoices.map(async (invoice) => {
+      const gross = invoice.lines.reduce(
+        (sum, line) => sum + line.cost * line.count,
         0,
       );
-      return subtotal > 100 ? subtotal * 0.9 : subtotal;
+      return gross > 100 ? gross * 0.9 : gross;
     }),
   );
-  return totals.filter((total) => total > 0);
+  return amounts.filter((amount) => amount > 0);
 }

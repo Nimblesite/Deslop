@@ -68,7 +68,14 @@ fn published(left: [(usize, usize); 2], right: [(usize, usize); 2]) -> Vec<Clust
         },
     ];
     let vectors: HashMap<usize, Vec<f32>> = HashMap::new();
-    build_ranked_fused_clusters(&members, &signatures, &vectors, &fused)
+    build_ranked_fused_clusters(
+        &members,
+        &signatures,
+        &vectors,
+        &fused,
+        &[],
+        &HashMap::new(),
+    )
 }
 
 /// The published clusters' occurrence spans, in rank order.

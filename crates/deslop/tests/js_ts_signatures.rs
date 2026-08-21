@@ -4,9 +4,11 @@
 //! The parsers use separate tree-sitter grammars but share the same
 //! normalisation function. These black-box CLI tests pin that contract:
 //! renamed Type-2 clones reach identical structural and token signals and,
-//! because their preserved literal anchors prove the identifier mapping
-//! ([FUSION-CONTENT-GATE]), route to the act-now `nearly_identical`
-//! bucket; Type-3 near misses still surface through shared subtrees.
+//! because measured content evidence — preserved anchors plus
+//! Baker-corroborated substitutions ([TECH-PMATCH-BAKER]) — proves the
+//! identifier mapping ([FUSION-CONTENT-GATE]), route to the act-now
+//! `nearly_identical` bucket; Type-3 near misses still surface through
+//! shared subtrees.
 
 use std::{collections::BTreeSet, path::Path};
 

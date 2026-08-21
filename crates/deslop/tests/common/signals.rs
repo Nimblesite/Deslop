@@ -9,12 +9,18 @@
 use std::{collections::BTreeSet, path::Path};
 
 use anyhow::anyhow;
-use deslop_core::buckets::{SATURATING_TOKEN_FLOOR, STRUCTURAL_ONLY_MAX_SUPPORT};
+use deslop_core::{
+    buckets::{
+        CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR, SATURATING_TOKEN_FLOOR,
+        STRUCTURAL_ONLY_MAX_SUPPORT,
+    },
+    pair::EMBEDDING_SUPPORT_FLOOR,
+};
 use serde_json::Value;
 
 use super::{
-    cluster_bucket, cluster_file_set, cluster_size, clusters, field, occurrence_texts, signal,
-    Result,
+    approx, cluster_bucket, cluster_file_set, cluster_size, clusters, field, occurrence_texts,
+    occurrences, signal, Result,
 };
 
 /// The agent-facing act-now line ([FUSED-THRESHOLD]): at or above this a
@@ -61,9 +67,12 @@ pub(crate) const ACT_NOW_BUCKETS: [&str; 3] = ["identical", "nearly_identical", 
 /// An earlier revision asserted that `token_jaccard` could not land
 /// between the two constants. Production emits exactly that: a
 /// `structural = 1.00`, mid-token, low-content cluster is demoted by
-/// `route_shape_identical` and routes here. Content evidence is not on
-/// the report wire, so no helper reading three signals can reconstruct
-/// which route ran — scenario tests pin the bucket and metrics instead.
+/// `route_shape_identical` and routes here.
+///
+/// Since #344 the measured content evidence *is* on the report wire, so
+/// this helper no longer has to guess which door a cluster came through
+/// — [`assert_reached_a_real_route`] checks each door by its own entry
+/// condition.
 pub(crate) fn assert_structural_only_contract(cluster: &Value, label: &str) {
     let structural = signal(cluster, "structural");
     let token = signal(cluster, "token_jaccard");
@@ -76,15 +85,61 @@ pub(crate) fn assert_structural_only_contract(cluster: &Value, label: &str) {
         dump = signal_dump(cluster)
     );
     assert!(
-        signal(cluster, "embedding_cos") < STRUCTURAL_ONLY_MAX_SUPPORT,
-        "{label}: semantic support disqualifies structural_only on both \
-         routes: {dump}",
+        signal(cluster, "embedding_cos") < EMBEDDING_SUPPORT_FLOOR,
+        "{label}: a cosine that *vouches* for the cluster escapes the \
+         content gate entirely (`route_shape_identical`), so it can never \
+         co-exist with this bucket: {dump}",
         dump = signal_dump(cluster)
     );
+    assert_reached_a_real_route(cluster, label);
     assert!(
         signal(cluster, "fused") < ACT_NOW_FUSED,
         "{label}: structural_only is a demoted verdict and must stay below \
          the act-now line: {dump}",
+        dump = signal_dump(cluster)
+    );
+}
+
+/// Asserts the cluster satisfies the entry condition of **one of the two
+/// real doors** into `structural_only`, rather than merely wearing the
+/// label ([CLONE-BUCKETS-ROUTING]).
+///
+/// This is the assertion the helper could not make until #344. Its doc
+/// used to record that "content evidence is not on the report wire, so
+/// no helper reading three signals can reconstruct which route ran", and
+/// it stood in a single blanket bound — `embedding_cos <
+/// STRUCTURAL_ONLY_MAX_SUPPORT` — for both. That bound is only route
+/// 1's. Route 2 demotes on *content*, and `route_shape_identical` lets
+/// it hold any cosine short of [`EMBEDDING_SUPPORT_FLOOR`], so the
+/// blanket bound asserted a property the engine never promised: a
+/// content-gated cluster at cosine 0.61 is a correct `structural_only`
+/// and the old assertion called it a defect. It never fired only because
+/// its one caller runs with embeddings off. `agreement` and
+/// `rename_consistency` are now on the wire, so each door is checked by
+/// its own entry condition instead.
+fn assert_reached_a_real_route(cluster: &Value, label: &str) {
+    let evidence_free = signal(cluster, "token_jaccard") < STRUCTURAL_ONLY_MAX_SUPPORT
+        && signal(cluster, "embedding_cos") < STRUCTURAL_ONLY_MAX_SUPPORT;
+    // `route_shape_identical` promotes back out of the demoted tier at
+    // the Type-3 overlap cutoff when the cluster spans files, and at the
+    // near-total-agreement bar when it does not — the #197 in-file
+    // sibling families measure 0.72–0.80 and are API surface, not
+    // extractable duplication.
+    let promote_floor = if cluster_file_set(cluster).len() > 1 {
+        CONTENT_SUPPORT_FLOOR
+    } else {
+        CONTENT_PROMOTE_FLOOR
+    };
+    let support = signal(cluster, "agreement").max(signal(cluster, "rename_consistency"));
+    assert!(
+        evidence_free || support < promote_floor,
+        "{label}: structural_only requires one of the two documented \
+         routes — evidence-free (token and embedding both below \
+         {STRUCTURAL_ONLY_MAX_SUPPORT}), or content-gated (measured \
+         support below {promote_floor}). This cluster satisfies neither, \
+         so the bucket claims a demotion the evidence does not support \
+         — a promoted clone wearing a demoted label is a false negative: \
+         support={support:.4} {dump}",
         dump = signal_dump(cluster)
     );
 }
@@ -132,4 +187,145 @@ pub(crate) fn distinct_texts(scan_root: &Path, cluster: &Value) -> Result<BTreeS
 pub(crate) fn has_verbatim_pair(scan_root: &Path, cluster: &Value) -> Result<bool> {
     let texts = occurrence_texts(scan_root, cluster)?;
     Ok(distinct_texts(scan_root, cluster)?.len() < texts.len())
+}
+
+/// Asserts the full **proven-rename** contract ([FUSION-CONTENT-GATE],
+/// [TECH-PMATCH-BAKER], `[REPAIR-RENAME-ANCHOR-MASS]`) — the mirror of
+/// [`assert_structural_only_contract`], and the reason both live here.
+///
+/// The two contracts describe the same signal triple. A maximal Type-2
+/// rename and an anchor-poor scaffolding family both render
+/// `structural = 1.00, token_jaccard = 1.00`: the token LSH pass hashes
+/// the normalised representation the structural pass already collapsed,
+/// so neither deterministic axis can tell them apart. Only the measured
+/// content evidence separates them, and it is not on the report wire
+/// (#344) — so a suite asserting one verdict is really asserting *which
+/// side of the content gate* the fixture falls on. Stating both
+/// contracts once, here, is what stops two suites drifting into
+/// asserting opposite verdicts about the same evidence, which is exactly
+/// what the pre-`[REPAIR-RENAME-ANCHOR-MASS]` literal-anchor cliff
+/// produced.
+///
+/// Demotion is the failure mode this guards: a renamed copy of real
+/// logic that lands in `HONEST_SHAPE_ONLY_BUCKETS`, or below
+/// [`REUSE_FUSED`], is a false negative at the agent surface — the
+/// recipe tells the agent to write the copy anyway.
+pub(crate) fn assert_proven_rename_contract(
+    scan_root: &Path,
+    cluster: &Value,
+    label: &str,
+) -> Result<()> {
+    assert_rename_shape(cluster, label);
+    assert_rename_verdict(cluster, label);
+    assert_rename_is_not_a_copy(scan_root, cluster, label)
+}
+
+/// The proven-rename contract for a fixture that is a rename **plus an
+/// inserted statement**. Verdict and not-a-copy are identical; only the
+/// shape half differs, because the reported view spans the whole
+/// declaration and therefore includes the insertion
+/// ([FUSION-SHARED-SUBTREE], gh #408). Demanding Merkle exactness there
+/// demands the fragment view — the shared sub-range either side of the
+/// insertion — which is the recall hole #408 is filed against.
+pub(crate) fn assert_near_miss_rename_contract(
+    scan_root: &Path,
+    cluster: &Value,
+    label: &str,
+) -> Result<()> {
+    assert_near_miss_rename_shape(cluster, label);
+    assert_rename_verdict(cluster, label);
+    assert_rename_is_not_a_copy(scan_root, cluster, label)
+}
+
+/// Shape half for a rename carrying an inserted statement: real shape
+/// evidence, bounded away from the Merkle exactness a near-miss cannot
+/// have, with the rename-invariant token stream still corroborating.
+fn assert_near_miss_rename_shape(cluster: &Value, label: &str) {
+    let dump = signal_dump(cluster);
+    let structural = signal(cluster, "structural");
+    assert!(
+        structural >= deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
+        "{label}: identifier normalisation makes the shared body structurally \
+         identical, so the enclosing view must clear the shared-subtree floor \
+         — {dump}"
+    );
+    assert!(
+        structural < 1.0,
+        "{label}: the inserted statement is inside the reported view, so the \
+         pair cannot be Merkle-exact; exactness here means the report fell back \
+         to the fragment view (gh #408) — {dump}"
+    );
+    assert!(
+        signal(cluster, "token_jaccard") >= deslop_core::pair::SHARED_SUBTREE_MIN_JACCARD,
+        "{label}: the normalised k-gram stream is rename-invariant, so tokens \
+         must still corroborate — {dump}"
+    );
+}
+
+/// Shape half of the proven-rename contract: identifier normalisation
+/// makes a rename structurally identical, and the normalised k-gram
+/// stream is rename-invariant by construction.
+fn assert_rename_shape(cluster: &Value, label: &str) {
+    let dump = signal_dump(cluster);
+    assert!(
+        approx(signal(cluster, "structural"), 1.0),
+        "{label}: identifier normalisation makes a rename structurally \
+         identical — {dump}"
+    );
+    assert!(
+        approx(signal(cluster, "token_jaccard"), 1.0),
+        "{label}: the normalised k-gram stream is rename-invariant by \
+         construction — {dump}"
+    );
+}
+
+/// Verdict half: the bucket and the fused confidence a rename whose
+/// identifier mapping is proven must carry.
+fn assert_rename_verdict(cluster: &Value, label: &str) {
+    let dump = signal_dump(cluster);
+    assert!(
+        !HONEST_SHAPE_ONLY_BUCKETS.contains(&cluster_bucket(cluster)),
+        "{label}: a Type-2 rename of real logic is duplication, not \
+         shape-only evidence — demoting it is a false negative — {dump}"
+    );
+    assert_eq!(
+        cluster_bucket(cluster),
+        "nearly_identical",
+        "{label}: same shape, same logic, renamed identifiers is the \
+         textbook `nearly_identical` clone — {dump}"
+    );
+    let fused = signal(cluster, "fused");
+    assert!(
+        fused >= REUSE_FUSED,
+        "{label}: a renamed copy of real logic must stay at or above the \
+         reuse-bias line ({REUSE_FUSED}) — below it the agent recipe tells \
+         the agent to write the copy anyway — {dump}"
+    );
+    assert!(
+        fused < 1.0,
+        "{label}: only a byte-identical copy may saturate the confidence \
+         — {dump}"
+    );
+}
+
+/// Occurrence half: every occurrence must differ in raw bytes, or the
+/// promotion proves nothing about renames, and none may be hidden — a
+/// clone the report will not show is a false negative whatever its
+/// bucket says.
+fn assert_rename_is_not_a_copy(scan_root: &Path, cluster: &Value, label: &str) -> Result<()> {
+    let dump = signal_dump(cluster);
+    assert_eq!(
+        distinct_texts(scan_root, cluster)?.len(),
+        occurrences(cluster).len(),
+        "{label}: every occurrence must differ in raw bytes, or this is a \
+         Type-1 copy proving nothing about rename evidence — {dump}"
+    );
+    assert!(
+        occurrences(cluster)
+            .iter()
+            .all(|occurrence| occurrence.get("hidden") != Some(&Value::Bool(true))),
+        "{label}: a proven Type-2 clone may not have a hidden occurrence \
+         — {dump}"
+    );
+    Ok(())
 }

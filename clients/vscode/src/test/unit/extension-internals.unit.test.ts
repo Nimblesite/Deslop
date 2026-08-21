@@ -245,6 +245,7 @@ suite("extension internals", () => {
             model_version: "test",
             dimensions: 768,
             attempted_subtrees: 1,
+            succeeded_subtrees: 1,
             indexed_subtrees: 1,
             failed_subtrees: 0,
           },

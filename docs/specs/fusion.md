@@ -37,9 +37,23 @@ The ID records the strategy this section originally specified; the **sum arm was
 
 This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on structural+embedding and ~high on LSH, a Type-3 may score high on LSH+embedding and medium on structural, and a Type-4 scores primarily on embedding. Every type lands in the report; scores explain *why*, and the fused confidence never exceeds the best of them. Rendered confidence is defined by [FUSION-CONTENT-GATE]: for shape-saturating clusters the gate substitutes measured content evidence for this function's implicit 1.0 content factor; everywhere else the bounded max **is** the rendered value.
 
+### [FUSION-SHARED-SUBTREE] `structural` is measured subtree overlap, not Merkle equality
+
+`structural` is the **best-achievable ordered subtree overlap** between two occurrences: `1 - TED / max(nodes)`, where `TED` is the Zhang–Shasha tree edit distance over normalised node kinds with unit insert/delete/relabel costs (`overlap.rs`). Merkle-equal occurrences short-circuit to `1.0`, so every previously-`1.0` cluster is unchanged; what changes is the other end, which used to be a literal `0.0`.
+
+That literal was a false negative by construction (gh #408). A single inserted statement rehashes every ancestor Merkle node, so a textbook Type-3 near-miss — full identifier rename plus one extra statement — scored `structural = 0.0` on the enclosing method while the unchanged statements *inside* it stayed Merkle-identical. The fragments were reported and the method was not, in **every** language: the pipeline held the evidence and discarded it. Measured on the five `*-type3` fixtures the enclosing pairs score 0.84–0.91, while their exact whole-method token Jaccard is only 0.74–0.85 — below `admission.fused_threshold`, which is why token evidence alone could never rescue them.
+
+Overlap is an alignment, never a bag of matching subtree hashes. The discriminating information is the *order and nesting* of the matches, which is exactly what a multiset discards: two unrelated functions built from the same statement vocabulary share the same hashes as a genuine copy. Endpoints above `overlap.rs::ALIGNMENT_MAX_NODES` fall back to greedy maximal shared-subtree coverage — largest left subtrees first, each credit consuming one concrete occurrence on each endpoint, span-tracked on both sides. Both sides, because consuming bare hash counts on the right let a disjoint left copy re-claim nodes nested inside an already-credited right subtree, counting them twice and overshooting the alignment the bound stands in for (`the_fallback_never_credits_a_nested_right_subtree_twice`). So tracked, it is a conservative lower bound whose error is the root-to-edit spine — vanishing at the sizes where it applies. A lower bound can suppress a rescue; it cannot manufacture one.
+
+**Admission is a compound gate over two independently measured axes, not sum fusion.** A pair below `admission.fused_threshold` is admitted only when overlap ≥ `admission.shared_subtree_min_overlap` **and** `token_jaccard` ≥ `admission.shared_subtree_min_jaccard` **and** both endpoints clear `admission.shared_subtree_min_node_count`. Neither axis admits alone — normalisation makes scaffolding Merkle-identical across unrelated files, so shape must be corroborated by tokens. The rendered fused confidence remains the bounded max ([FUSION-STRATEGY-BOUNDED-MAX]); this gate changes what is *measured*, never how confidence is combined. Overlap is measured only on pairs that would otherwise be dropped yet carry the token corroboration, so the cost is bounded away from the ~596K-candidate admission set that [FUSION-CONTENT-GATE] deliberately avoids.
+
+**Routing gains one row, and one comparison is retired.** [CLONE-BUCKETS-ROUTING] row 4b routes high overlap corroborated by an independent axis — the token axis at `admission.shared_subtree_min_jaccard`, **or** the embedding axis at `candidates.embedding_support_floor` — to `nearly_identical`, using the same floors that admitted the pair — so the pipeline can never admit a shared-subtree near-miss the renderer then hides. Row 4's old `structural ≤ 0.01` leg is gone: it predates the measurement, when any non-zero value meant a Merkle anchor, and additional shape evidence must never *hide* a cluster the token axis already carries. Clusters below the overlap floor keep the anchor-free demotion guard unchanged.
+
+Because the value is now graded, **it is no longer comparable across two views of different scope**. A window nested inside a near-miss scores higher exactly to the extent that it excludes what differs, so [PIPELINE-CLUSTER-SUBSUME] compares grades only between views that do not nest; where one encloses the other, enclosure decides within a credibility tier. Pinned by `type3_enclosing_method.rs` in all five languages.
+
 ### [FUSION-CLUSTER-SIGNALS] Rendered cluster signals are measured, never aggregated from discovery edges
 
-A rendered cluster's signal triple is **measured between the occurrences the report shows**: the per-signal mean over every unordered pair of rendered occurrences. Per pair: `structural` is Merkle-hash equality (1.0 or 0.0), `token_jaccard` is the MinHash Jaccard estimate between the two signatures, and `embedding_cos` is the cosine of the two vectors, computed by the crate's single cosine definition ([FUSION-EMBED-PROVIDER]): dot product and norms accumulated in `f64` over the raw `f32` components, clamped to [0,1], so byte-identical occurrences — which share one vector — render exactly `1.0` (gh #372). A pair where either signal input is missing (no vector: embeddings off, oversized input, provider failure) contributes to neither that signal's numerator nor its denominator; a signal with no measurable pair reports 0.0, matching the embeddings-off convention, with the absence explained by the report's embedding provenance.
+A rendered cluster's signal triple is **measured between the occurrences the report shows**: the per-signal mean over every unordered pair of rendered occurrences. Per pair: `structural` is the measured subtree overlap ([FUSION-SHARED-SUBTREE]) — `1.0` for Merkle-equal occurrences, the graded alignment otherwise — `token_jaccard` is the MinHash Jaccard estimate between the two signatures, and `embedding_cos` is the cosine of the two vectors, computed by the crate's single cosine definition ([FUSION-EMBED-PROVIDER]): dot product and norms accumulated in `f64` over the raw `f32` components, clamped to [0,1], so byte-identical occurrences — which share one vector — render exactly `1.0` (gh #372). A pair where either signal input is missing (no vector: embeddings off, oversized input, provider failure) contributes to neither that signal's numerator nor its denominator; a signal with no measurable pair reports 0.0, matching the embeddings-off convention, with the absence explained by the report's embedding provenance.
 
 Averaging the surviving pair scores of the transitive-closure component is prohibited. Closure admits every edge above threshold, so the edge mix is an artifact of discovery topology — structural star buckets, ANN top-k fan-out, LSH band width — not of the rendered occurrences. Under that mean, restored embedding evidence diluted a byte-identical file pair to `structural = 0.36` and routed it `same_behavior` instead of `identical` (gh #343 corpus, pinned by `issue_343_sum_clamp_saturation.rs`). The measured triple also feeds the cross-cluster subsumption pass, which compares structural values: diluted signals let contained artifact clusters escape collapse.
 
@@ -62,17 +76,47 @@ erased:
      identifiers and literals pooled. Byte-identical members score 1.0;
      lightly-edited copies stay high; framework-mandated scaffolding (every
      name differs) and data tables (every literal differs) fall low.
-   - `rename_consistency` — the Type-2 discriminator: the lesser of literal
-     preservation (fraction of literal positions unchanged) and bijective
-     identifier-mapping coverage (fraction of identifier positions explained
-     by one consistent 1:1 substitution, modal in both directions). Zero
-     without positional alignment or with fewer than
-     `content_gate.rename_evidence_min_literals` literal anchors —
-     without anchors, a consistent mapping cannot tell a rename from sibling
-     scaffolding that also substitutes names consistently.
+   - `rename_consistency` — the Type-2 discriminator, [TECH-PMATCH-BAKER]
+     quantified: the lesser of literal consistency (fraction of literal
+     positions unchanged **or echoing an elected substitution**; vacuously
+     1.0 with none) and rename-mapping coverage, scaled by the smooth
+     anchor-mass weight `anchors / (anchors +
+     content_gate.rename_evidence_half_mass)`, where anchors are the
+     consistent literal positions plus the explained identifier positions.
+     A literal *echo* ([REPAIR-RENAME-LITERAL-ECHO], #409) is a substituted literal position whose raw
+     bytes transform into the partner's bytes exactly by one
+     bijection-explained identifier substitution — `"OrderService"` →
+     `"UserService"` renamed alongside its symbol is the rename done
+     thoroughly, not evidence against it — and the echo corroborates that
+     substitution the way a repeated identifier occurrence would, so
+     completing a rename can never score below leaving it half-finished
+     (`rename_literal_monotonicity.rs`).
+     Coverage classifies each identifier position exactly as Baker's
+     prev-encoding constrains it: raw-byte identity is a fixed-symbol
+     match, explained by the position itself; a substitution is explained
+     when it is bidirectionally modal *among the substituted pairs* —
+     fixed symbols and parameters are disjoint alphabets, and collapsed
+     leaves carry no role, so a homonym byte-string (a preserved property
+     name that also names a renamed local) must not let one role veto the
+     other in a single modal election — and corroborated by at least
+     `content_gate.rename_corroboration_min` occurrences; positions the
+     bijection cannot explain are constrained-but-unexplained and count
+     against coverage; a *consistent substitution seen once* is an
+     unconstrained first occurrence (`prev = 0` matches any other first
+     occurrence) and belongs to neither numerator nor denominator — a
+     renamed one-shot declaration name is not evidence against the clone.
+     Zero without positional alignment. Consistency alone cannot tell a
+     rename from sibling scaffolding that also substitutes names
+     consistently — the anchors carry that burden, and they must *weigh*
+     the proof, never gate it: the deleted
+     `rename_evidence_min_literals` cliff zeroed every pair below four
+     literal anchors and rendered a maximal one-literal Type-2 rename at
+     `fused = 0.0588`, an agent-surface false negative
+     (`type2_rename_anchor_floor.rs`).
    A maximally renamed clone of real logic scores low pooled `agreement` but
-   `rename_consistency ≈ 1.0`; pooling the populations into one mean is what
-   demoted textbook Type-2 clones to `structural_only`.
+   high `rename_consistency` — every renamed name repeats, so nearly every
+   position is a corroborated anchor; pooling the populations into one mean
+   is what demoted textbook Type-2 clones to `structural_only`.
 3. **Rendered confidence**: for shape-identical clusters not proven
    byte-equivalent, `fused = max(embedding_cos, max(structural, token_jaccard)
    × max(agreement, rename_consistency_discount × rename_consistency))`. The
@@ -84,8 +128,10 @@ erased:
 4. **Routing — three zones over `support = max(agreement,
    rename_consistency)`** (either population may vouch; never their mean).
    Below `content_gate.support_floor` (the [TECH-TOKEN-SOURCERERCC] Type-3
-   overlap cutoff) with no semantic support, the cluster joins the
-   [RANK-STRUCTURAL-ONLY] routing — surfaced honestly or hidden as cross-file
+   overlap cutoff), and with no semantic support (`embedding_cos` below
+   `candidates.embedding_support_floor`, the line at which the embedding pass
+   vouches for a cluster rather than merely having measured it), the cluster
+   joins the [RANK-STRUCTURAL-ONLY] routing — surfaced honestly or hidden as cross-file
    scaffolding, and demoted in ranking. At or above
    `content_gate.promote_floor` (act-now grade) the cluster is a proven
    clone — a byte-agreeing near-miss
@@ -130,11 +176,15 @@ the renamed near-miss, the most valuable clone class there is. Row 4 is routed
 on cluster *spread* instead — see the taxonomy row. Shape-mismatched members have no positional
 alignment, so their agreement is the key-set Jaccard of their content keys — a
 genuine Type-3 near-miss shares nearly all of them; renamed scaffolding shares
-few. The verbatim guard is proportional
-(`content_gate.verbatim_member_share_floor` of the members must participate
-in byte-identical duplicates): a verbatim pair among a couple of lookalikes
-(#104) still vouches for its cluster, but two copied example widgets inside a
-453-member framework family (0.4%) do not. `data`-category
+few. The verbatim guard is proportional and
+exclusive: one *token-identical family* — members sharing both the same
+normalised-subtree digest and the same collapsed-leaf keys — must hold a
+strict majority of the cluster (above `content_gate.verbatim_member_share_floor`).
+A verbatim pair among a couple of lookalikes (#104, share 2/3) still vouches
+for its cluster; two copied example widgets inside a 453-member framework
+family (0.4%) do not; and two *disjoint* identical pairs, each at exactly one
+half, vouch for nothing, because neither is a majority and the members they
+disagree with are the whole rest of the cluster. `data`-category
 clusters are exempt from the structural-only ranking demotion — their weight
 belongs to the `[ranking] data_clones` policy ([RANK-CATEGORY]) so
 `data_clone_weight = 1.0` can still restore a table the gate routed to the
@@ -154,17 +204,22 @@ A number is a **lever** when changing it changes which clusters are reported, wh
 | `admission.lsh_only_min_jaccard` | `pair.rs:36` | 0.90 | **Defect.** Not a similarity threshold — a guard. LSH-only pairs have no structural anchor, and tiny `using`/`namespace` sibling windows hit Jaccard ≈ 1.0 by accident, then merge into a mega-cluster through transitive closure. |
 | `admission.lsh_only_min_node_count` | `pair.rs:43` | 40 | **Defect.** The same defect's other half, applied at both endpoints: an 18-node k-gram set is mostly grammar scaffolding, so tens of thousands of such subtrees agree by accident. |
 | `admission.max_endpoint_node_ratio` | `pair.rs:61` | 4 | **Defect** (#368). [PAIR-SIZE-COHERENCE] — an embedding-only pair scored a 19-node parameter list against a 274-node arithmetic chain at cosine 1.00. Deliberately loose; fires only where the pair is self-contradictory. |
+| `admission.shared_subtree_min_overlap` | `pair.rs` | 0.75 | **Defect** (#408). Measured: the five genuine `*-type3` whole-method near-miss pairs score 0.84–0.91 overlap, so the floor sits below every one of them with margin, while requiring that three quarters of the larger tree align. Never admits alone — `shared_subtree_min_jaccard` must corroborate. |
+| `admission.shared_subtree_min_jaccard` | `pair.rs` | 0.65 | **Defect** (#408). The corroboration floor, deliberately *below* `lsh_only_min_jaccard`: a one-statement Type-3 insertion measures 0.74–0.85 exact whole-method Jaccard precisely because the inserted statement dilutes the k-gram set. Above 0.85 it would re-close the recall hole it exists to open. |
+| `admission.shared_subtree_min_node_count` | `pair.rs` | 30 | **Defect** (#408). Below `lsh_only_min_node_count` because this route carries structural corroboration that LSH-only pairs lack, and above grammar scaffolding: the smallest genuine fixture method (`python-type3`'s `aggregate`) is 31 nodes. |
 | `candidates.cross_language_min_jaccard` | `pair.rs:66` | 0.10 | **Derived.** Cross-language AST vocabularies differ and the mode is opt-in ([CONFIG-CROSS-LANGUAGE]), so the floor sits below the same-language LSH-only floor. |
 | `candidates.embedding_min_cosine` | `embedding/pairs.rs:27` | 0.80 | **Literature.** SSCD's published operating point, and a candidate-set gate only — `fused_threshold` still decides admission downstream. |
 | `candidates.embedding_top_k` | `embedding/pairs.rs:16` | 5 | **Unrecorded.** The stated rationale — recall comes from the union, not the ANN fan-out — argues for *small*, not for *five*. |
 | `candidates.embedding_exact_pair_limit` | `embedding/pairs.rs:22` | 256 | **Unrecorded.** |
 | `content_gate.support_floor` | `buckets.rs:237` | 0.7 | **Literature** (#341). [TECH-TOKEN-SOURCERERCC] Type-3 overlap cutoff. |
 | `content_gate.promote_floor` | `buckets.rs:248` | 0.85 | **Derived** (#341). The act-now grade, matched to `fused_threshold`; bounded below by a defect — the #197 REST settings family measures 0.72–0.80 and must keep its demoted verdict. |
-| `content_gate.structural_only_max_support` | `buckets.rs:215` | 0.05 | **Defect.** #197's acceptance criterion (`token_jaccard = 0.00`, `embedding_cos = 0.00`) plus tolerance for MinHash collision noise. |
+| `content_gate.structural_only_max_support` | `buckets.rs:215` | 0.05 | **Defect.** #197's acceptance criterion (`token_jaccard = 0.00`, `embedding_cos = 0.00`) plus tolerance for MinHash collision noise. It is a ceiling below which a signal counts as *absent*, and is never a support floor — `route_shape_identical` read it as one, so a cosine of 0.05 overruled the measured content evidence and the gate's verdict followed whether the embedding pass ran (#356). |
+| `candidates.embedding_support_floor` | `pair.rs:91` | 0.80 | **Derived** (#356). The cosine at which a measured `embedding_cos` is the embedding pass *vouching for* a cluster rather than merely having measured it — the ANN candidate gate's own operating point, and the line [CLONE-BUCKETS-ROUTING] row 2 lets semantic evidence carry a bucket alone. The [FUSION-CONTENT-GATE] escape is judged against it. |
 | `content_gate.saturating_token_floor` | `buckets.rs:291` | 0.95 | **Defect** (#368). The surviving flutter/flutter #331 cluster read `structural = 0.62, token_jaccard = 0.98` — the token layer echoing shape, not reporting content. |
 | `content_gate.rename_consistency_discount` | `buckets.rs:301` | 0.9 | **Derived** (#346). Keeps a proven Type-2 rename above `fused_threshold` while reserving `fused = 1.0` for byte-proven duplication. |
-| `content_gate.rename_evidence_min_literals` | `content.rs:44` | 4 | **Defect** (#346). Ubiquitous literals (`0`, `1`, `""`) let a couple of positions agree by coincidence; without anchors a consistent mapping cannot separate a rename from sibling scaffolding. |
-| `content_gate.verbatim_member_share_floor` | `content.rs:54` | 0.5 | **Defect** (#341, tightened #346). #104's verbatim pair among lookalikes (share ≥ 2/3) must stay visible; two byte-identical widgets inside 453 framework declarations (≈ 0.004) must not vouch for the family. |
+| `content_gate.rename_corroboration_min` | `content.rs` | 2 | **Literature.** [TECH-PMATCH-BAKER] prev-encoding: a parameter symbol's first occurrence matches anything and constrains nothing; only repetition carries binding proof. |
+| `content_gate.rename_evidence_half_mass` | `content.rs` | 4 | **Defect.** Replaces the `rename_evidence_min_literals = 4` cliff (#346), which zeroed sub-floor rename evidence and rendered a maximal one-literal Type-2 rename at `fused = 0.0588` (`type2_rename_anchor_floor.rs`). Same operating point, now a half-saturation mass: a forwarding echo's single substitution (mass 2, weight 1/3) stays below every routing floor while a 16-anchor maximal rename clears the reuse line. |
+| `content_gate.verbatim_member_share_floor` | `content.rs:54` | 0.5 | **Defect** (#341, tightened #346). A strict majority — the share must *exceed* it. #104's verbatim pair among lookalikes (share ≥ 2/3) must stay visible; two byte-identical widgets inside 453 framework declarations (≈ 0.004) must not vouch for the family; and two disjoint identical pairs at exactly 0.5 must not certify each other. |
 | `content_gate.literal_table_min_fraction` | `buckets.rs:257` | 0.8 | **Derived** (#341), value unswept. "Overwhelmingly literal" is the stated criterion for [CLONE-NOISE-LITERAL-TABLE]; 0.8 is where it was set, not where it was measured. |
 | `content_gate.literal_table_min_literals` | `content.rs:36` | 8 | **Derived** (#341), value unswept. A data table is a run of values, so a two-element tuple return must not reach the classifier — the argument fixes the direction, not the number. |
 | `ranking.type4_embedding_floor` | `cluster.rs:397` | 0.90 | **Unrecorded.** |

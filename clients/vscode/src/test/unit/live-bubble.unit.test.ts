@@ -6,8 +6,8 @@
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { LiveBubble } from "../../bubble/live";
-import { FUSED_THRESHOLD } from "../../types/report";
 import {
+  ENGINE_FUSED_CUTOFF,
   bubbleCluster,
   bubbleFixture,
   openLiveDocument,
@@ -28,7 +28,7 @@ suite("LiveBubble render", () => {
 
       assert.ok(
         visible !== undefined,
-        `fused 0.95 clears FUSED_THRESHOLD ${FUSED_THRESHOLD} and must render`,
+        `fused 0.95 clears ENGINE_FUSED_CUTOFF ${ENGINE_FUSED_CUTOFF} and must render`,
       );
       assert.match(visible ?? "", /Identical code/, "bubble carries the wire bucket title");
       assert.match(visible ?? "", /×\s*5/, "count comes from the authoritative report");
@@ -66,13 +66,13 @@ suite("LiveBubble render", () => {
       assert.equal(
         capture.visible(),
         undefined,
-        `fused 0.2 is under FUSED_THRESHOLD ${FUSED_THRESHOLD} and must clear the bubble`,
+        `fused 0.2 is under ENGINE_FUSED_CUTOFF ${ENGINE_FUSED_CUTOFF} and must clear the bubble`,
       );
       // …and the gate is the confidence, not the bucket: the same hint at
       // the cutoff comes back. Without this the assertion above would also
       // pass if hints were banned from the surface outright.
       bubble.render(capture.editor, span(12), [
-        bubbleCluster("c-hint", 10, FUSED_THRESHOLD, {
+        bubbleCluster("c-hint", 10, ENGINE_FUSED_CUTOFF, {
           bucket: "loosely_similar",
           structural: 0.3,
           token: 0.4,
@@ -80,7 +80,7 @@ suite("LiveBubble render", () => {
       ]);
       assert.ok(
         capture.visible() !== undefined,
-        `a hint at exactly ${FUSED_THRESHOLD} clears the cutoff and must render`,
+        `a hint at exactly ${ENGINE_FUSED_CUTOFF} clears the cutoff and must render`,
       );
     } finally {
       bubble.dispose();
@@ -192,11 +192,11 @@ suite("LiveBubble render", () => {
         token: 0.5,
       });
       bubble.render(capture.editor, span(6), [belowCutoff]);
-      assert.ok(0.5 < FUSED_THRESHOLD, "fixture must sit below the cutoff to prove anything");
+      assert.ok(0.5 < ENGINE_FUSED_CUTOFF, "fixture must sit below the cutoff to prove anything");
       assert.equal(
         capture.visible(),
         undefined,
-        `fused 0.5 under FUSED_THRESHOLD ${FUSED_THRESHOLD} must clear the bubble`,
+        `fused 0.5 under ENGINE_FUSED_CUTOFF ${ENGINE_FUSED_CUTOFF} must clear the bubble`,
       );
 
       // An empty probe keeps the surface clear rather than restoring the
@@ -243,7 +243,7 @@ suite("LiveBubble render", () => {
   // gone. Absence from `report.clusters` cannot separate them, so
   // `ReportStore` now records `clusters_removed` instead of dropping it —
   // the discriminator is retraction, not absence ([VSIX-STATE-DIRTY]).
-  // → docs/plans/fused-score-followups.md § "Skipped VSIX tests to restore"
+  // → docs/plans/fused-score-followups.md § "Where fused stands against it"
   test("a stale probe cannot resurrect a cluster the visible report dropped", async () => {
     const { store, capture, bubble } = await bubbleFixture({ generation: 1 });
 

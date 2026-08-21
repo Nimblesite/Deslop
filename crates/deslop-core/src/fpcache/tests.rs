@@ -49,7 +49,14 @@ fn sample(file_id: FileId) -> CachedFile {
             node_count: 1,
         },
     ];
-    let signatures = vec![[1_u64; SIGNATURE_LEN], [2_u64; SIGNATURE_LEN]];
+    let signatures = vec![
+        std::array::from_fn(|index| u64::try_from(index).unwrap_or(u64::MAX)),
+        std::array::from_fn(|index| {
+            u64::try_from(index)
+                .unwrap_or(u64::MAX)
+                .saturating_add(10_000)
+        }),
+    ];
     CachedFile {
         tree,
         fingerprints,
@@ -94,14 +101,17 @@ fn assert_rejected(blob: &[u8], binding: &BlobBinding<'_>, file_id: FileId, labe
 // signatures positionally 1:1 with fingerprints.
 #[test]
 fn round_trip_preserves_tree_fingerprints_and_signatures() -> io::Result<()> {
-    let file_id = registered_file_id();
+    let mut registry = FileRegistry::new();
+    let stored_file_id = registry.register(PathBuf::from("stored.rs"));
+    let requested_file_id = registry.register(PathBuf::from("requested.rs"));
     let hash = bytes_hash(SOURCE);
     let binding = source_binding(&hash);
-    let original = sample(file_id);
-    let decoded = decode(&encode(&original, &binding), &binding, file_id)?;
+    let original = sample(stored_file_id);
+    let expected = sample(requested_file_id);
+    let decoded = decode(&encode(&original, &binding), &binding, requested_file_id)?;
     assert_eq!(
-        decoded.fingerprints, original.fingerprints,
-        "decoded fingerprints must match the encoded records exactly"
+        decoded.fingerprints, expected.fingerprints,
+        "decoded fingerprints must preserve their records and bind to the requested file"
     );
     assert_eq!(
         decoded.signatures, original.signatures,
@@ -117,14 +127,22 @@ fn round_trip_preserves_tree_fingerprints_and_signatures() -> io::Result<()> {
         "decoded tree root must keep its byte range"
     );
     assert_eq!(
+        decoded.tree.file_id, requested_file_id,
+        "decoded tree nodes must bind to the requested file"
+    );
+    assert_eq!(
         decoded.tree.children.len(),
         1,
         "decoded tree must keep its child structure"
     );
     assert_eq!(
-        decoded.tree.children.first().map(|child| child.kind),
-        Some("identifier"),
-        "decoded child must keep its normalised kind"
+        decoded
+            .tree
+            .children
+            .first()
+            .map(|child| (child.kind, child.file_id)),
+        Some(("identifier", requested_file_id)),
+        "decoded children must preserve their kind and bind to the requested file"
     );
     Ok(())
 }
@@ -292,6 +310,14 @@ fn corrupt_node_lengths_are_rejected_before_any_allocation() {
     child_bomb.extend_from_slice(&u32::MAX.to_le_bytes()); // child count
     let blob = blob_with_valid_digest(&child_bomb, &binding);
     assert_rejected(&blob, &binding, file_id, "child count bomb");
+
+    let mut invalid_kind = 1_u32.to_le_bytes().to_vec();
+    invalid_kind.push(0xFF);
+    invalid_kind.extend_from_slice(&0_u64.to_le_bytes());
+    invalid_kind.extend_from_slice(&12_u64.to_le_bytes());
+    invalid_kind.extend_from_slice(&0_u32.to_le_bytes());
+    let blob = blob_with_valid_digest(&invalid_kind, &binding);
+    assert_rejected(&blob, &binding, file_id, "invalid UTF-8 node kind");
 }
 
 // [PIPELINE-INCREMENTAL-INTEGRITY] A blob file past the size bound is

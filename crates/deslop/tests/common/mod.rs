@@ -38,6 +38,23 @@ pub(crate) mod incremental;
 /// reason as `signals`.
 pub(crate) mod multilang;
 
+/// Warm-store scenarios over that fixture — the baseline, the targeted
+/// mutation, and the reuse accounting each mutation must produce.
+/// Imported explicitly with `use crate::common::multilang_warm::*;`, for
+/// the same reason as `signals`.
+pub(crate) mod multilang_warm;
+
+/// The GH #119 role-gate contract, asserted once for every language
+/// ([CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]). Imported explicitly with
+/// `use crate::common::role_gate::*;`, for the same reason as `signals`.
+pub(crate) mod role_gate;
+
+/// The committed `diff-scope` fixture's vocabulary — what the patch
+/// adds, and how to drive the CLI over it. Imported explicitly with
+/// `use crate::common::diff_scope::*;`, for the same reason as
+/// `signals`.
+pub(crate) mod diff_scope;
+
 /// The committed-golden comparison and its `DESLOP_BLESS` regeneration
 /// path ([PIPELINE-DETERMINISM]). Imported explicitly with
 /// `use crate::common::golden::*;`, for the same reason as `signals`.
@@ -414,4 +431,32 @@ pub(crate) fn visible_duplicated_loc(report: &Value) -> u64 {
         .values()
         .map(line_count)
         .sum()
+}
+
+/// One `id [bucket] path Lstart-end, ...` line per visible cluster — the
+/// complete published surface a full-set regression asserts against, so a
+/// mis-scoped view cannot hide behind a marker-based spot check.
+pub(crate) fn visible_cluster_lines(report: &Value) -> Vec<String> {
+    clusters(report)
+        .iter()
+        .map(|cluster| {
+            let spans: Vec<String> = occurrences(cluster)
+                .iter()
+                .map(|occurrence| {
+                    format!(
+                        "{} L{}-{}",
+                        field(occurrence, "path").as_str().unwrap_or("?"),
+                        field(occurrence, "start_line").as_u64().unwrap_or(0),
+                        field(occurrence, "end_line").as_u64().unwrap_or(0),
+                    )
+                })
+                .collect();
+            format!(
+                "{} [{}] {}",
+                field(cluster, "id").as_str().unwrap_or("?"),
+                field(cluster, "bucket").as_str().unwrap_or("?"),
+                spans.join(", ")
+            )
+        })
+        .collect()
 }

@@ -6,6 +6,9 @@
 //   colour        = Deslop severity, a function of the BUCKET
 //   glyph density = severity band,   a function of the WEIGHT PERCENTILE
 //
+// Both are read off the cluster the engine published — the bucket label
+// and `rank_band` ([SEVERITY-BAND]). Nothing here computes a severity.
+//
 // "A faint identical clone renders as a red ○, while a high-impact
 // loosely-similar cluster renders as a blue ●●" ([SEVERITY-COLOR]). Asking
 // the percentile band to also carry the bucket is unsatisfiable — the band
@@ -17,8 +20,8 @@ import {
   DeslopSeverity,
   ReportCluster,
   Severity,
+  clusterBand,
   resolveBucket,
-  severityOf,
 } from "./types/report";
 
 export { SEVERITY_COLOR, DESLOP_SEVERITY_COLOR, SEVERITY_DOT } from "./design";
@@ -58,23 +61,14 @@ export interface ResolvedSeverity {
  * [SEVERITY-COLOR] The single resolver every visual surface consumes. The two
  * channels are returned together precisely so a caller cannot reach for one
  * and silently render the other fact.
+ *
+ * Both channels are now read, never derived: the level maps the engine's
+ * bucket label, the band is the engine's own `rank_band`
+ * ([SEVERITY-BAND]). The rank-percentile formula that used to live here
+ * was a second severity engine — it re-numbered ranks from array
+ * position, so any filtered or projected list silently rebanded every
+ * cluster in it.
  */
-export function resolveSeverity(bucket: Bucket, percentile: number): ResolvedSeverity {
-  return { level: deslopSeverityOf(bucket), band: severityOf(percentile) };
-}
-
-export function rankPercentile(rank: number, total: number): number {
-  if (total <= 1) return 0;
-  return 1 - (rank - 1) / (total - 1);
-}
-
-export function severityForRank(rank: number, total: number): Severity {
-  return severityOf(rankPercentile(rank, total));
-}
-
-export function indexedSeverity(clusters: ReportCluster[]): Map<string, Severity> {
-  const total = clusters.length;
-  const out = new Map<string, Severity>();
-  clusters.forEach((cluster, i) => out.set(cluster.id, severityForRank(i + 1, total)));
-  return out;
+export function resolveSeverity(cluster: ReportCluster): ResolvedSeverity {
+  return { level: clusterSeverity(cluster), band: clusterBand(cluster) };
 }

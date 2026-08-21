@@ -55,7 +55,9 @@ inputs:
   diff:
     description: >-
       Unified diff whose new-side added lines scope the report — a path to a
-      patch file, or "-" to read the diff from stdin. The whole tree is still
+      patch file. "-" (stdin) is a CLI-only form and is rejected here: a
+      composite action has no stdin to supply, so it would silently measure an
+      empty diff. The whole tree is still
       analyzed, so changed code still matches untouched helpers; the diff scopes
       what is reported, never what is scanned.
     required: false
@@ -125,6 +127,15 @@ outputs:
   report-html:
     description: Path to the rendered HTML report.
     value: ${{ steps.report.outputs.report-html }}
+  gate-scope:
+    description: Which population the gate measured — "added-lines" when only-changed scoped it to the diff, "repository" otherwise.
+    value: ${{ steps.report.outputs.gate-scope }}
+  gate-percent:
+    description: The duplication percentage the gate actually compared against its ceiling, over the population named by gate-scope.
+    value: ${{ steps.report.outputs.gate-percent }}
+  gate-threshold-percent:
+    description: The ceiling gate-percent was compared against.
+    value: ${{ steps.report.outputs.gate-threshold-percent }}
 
 runs:
   using: composite
@@ -141,6 +152,20 @@ runs:
       shell: bash
       run: |
         echo "::error::The only-changed input needs a diff input — pass the unified diff the report should be scoped to. Deslop rejects --only-changed without --diff as a usage error (exit 2)."
+        exit 2
+
+    # A `uses:` step has no caller-controlled stdin channel, so `--diff -`
+    # would read an empty patch — and the CLI accepts an empty diff as valid.
+    # Under `only-changed` that scopes the report to zero lines: `0 / 0 = 0%`
+    # passes any ceiling while every cluster in the tree is omitted. A caller
+    # asking to gate changed code would be told it passed having measured
+    # none of it, so this fails closed with the same status the CLI uses for
+    # a bad argument, before a CLI is downloaded. [ACTION-GATE]
+    - name: Reject the un-suppliable stdin diff
+      if: inputs.diff == '-'
+      shell: bash
+      run: |
+        echo "::error::The diff input cannot be \"-\". A composite action has no stdin to read a patch from, so Deslop would measure an empty diff and report a false pass. Write the patch to a file and pass its path — for example: git diff origin/\${{ github.base_ref }}...HEAD > /tmp/pr.diff"
         exit 2
 
     - name: Resolve the deslop release

@@ -147,12 +147,15 @@ export const CORE_TYPE_CONFIG = {
     docs: "Wire payload for the `deslop/embeddingProgress` notification.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
     fieldOverrides: { done: "u64", total: "u64" },
+    fieldSerdeAttrs: { percent: ["default"] },
     fieldDocs: {
       phase: "Lifecycle phase.",
       provider_id: "Provider id the swap targets (`ollama`).",
       model_id: "Model id the swap targets.",
       done: "Subtrees embedded so far.",
       total: "Total subtrees in the current corpus.",
+      percent:
+        "Completion percentage, computed by the engine's single `percent` function ([METRICS-REPO]) over `done / total` (`0` when `total` is zero). Clients render it verbatim — computing a progress percentage client-side is prohibited.",
       message: "Diagnostic message populated only when `phase == Failed`.",
     },
   },
@@ -199,7 +202,7 @@ export const CORE_TYPE_CONFIG = {
     },
   },
   FileMetric: {
-    docs: "Per-file duplication breakdown carried on `RepoMetrics.per_file`. One entry per analysed file; clean files appear with `duplicated_loc == 0` so percentage denominators stay exact. Consumers roll up per-folder totals by summing entries under a path prefix.",
+    docs: "One duplication-breakdown row, carried on `RepoMetrics.per_file` (one per analysed file; clean files appear with `duplicated_loc == 0` so percentage denominators stay exact) and on `RepoMetrics.folders` (one per folder prefix with duplicated lines). Every figure — file, folder, repo — is computed by the engine's single `percent` function ([METRICS-REPO]); consumers only read these rows, never recompute.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
     fieldOverrides: {
       path: "PathBuf",
@@ -238,6 +241,7 @@ export const CORE_TYPE_CONFIG = {
     },
     fieldSerdeAttrs: {
       per_file: ["default"],
+      folders: ["default"],
       diff: ["default", 'skip_serializing_if = "Option::is_none"'],
     },
     tsOptional: ["diff"],
@@ -250,6 +254,8 @@ export const CORE_TYPE_CONFIG = {
       duplicated_files: "Count of files with at least one non-hidden clone occurrence.",
       threshold: "Resolved fail-over threshold.",
       per_file: "Per-file duplication breakdown, worst-first. Empty on reports produced before this field existed.",
+      folders:
+        "Per-folder duplication breakdown, worst-first: one row per folder prefix containing duplicated lines, summed over every file beneath it (clean files included in the denominator) and divided by the engine's single `percent` function. Consumers render these rows verbatim — recomputing them anywhere else is prohibited ([METRICS-REPO]). Empty on reports produced before this field existed.",
       diff: "Added-line metrics for the ingested diff ([METRICS-DIFF-SCOPE]). Absent unless the run carried `--diff`.",
     },
   },
@@ -308,9 +314,18 @@ export const CORE_TYPE_CONFIG = {
   EmbeddingProvenance: {
     docs: "Provenance of the `(provider, model, version)` triple used by the embedding pass.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    // Reports written before per-occurrence coverage counting lack
+    // `succeeded_subtrees`; `--from-report` reconstructs it from the
+    // `attempted = succeeded + failed` invariant at load
+    // (`load_report`), so the serde default only has to keep
+    // deserialization alive.
+    fieldSerdeAttrs: {
+      succeeded_subtrees: ["default"],
+    },
     fieldOverrides: {
       dimensions: "usize",
       attempted_subtrees: "usize",
+      succeeded_subtrees: "usize",
       indexed_subtrees: "usize",
       failed_subtrees: "usize",
     },
@@ -319,8 +334,9 @@ export const CORE_TYPE_CONFIG = {
       model_id: "Human-readable model identifier.",
       model_version: "Opaque model version / digest reported by the provider.",
       dimensions: "Embedding dimensionality the provider returned.",
-      attempted_subtrees: "Number of subtree embeddings requested or served from cache.",
-      indexed_subtrees: "Number of unique successful subtree embeddings fed into ANN.",
+      attempted_subtrees: "Occurrences whose embedding was requested or served from cache. Counts occurrences, so `attempted = succeeded + failed` always holds.",
+      succeeded_subtrees: "Occurrences that obtained a vector. Duplicate snippets share one vector, so this is normally far larger than `indexed_subtrees` and is the honest coverage figure.",
+      indexed_subtrees: "Distinct points fed into ANN — one per unique snippet, not per occurrence. Lower than `succeeded_subtrees` exactly when duplicate snippets collapsed.",
       failed_subtrees: "Number of subtree embeddings rejected by the provider.",
     },
   },

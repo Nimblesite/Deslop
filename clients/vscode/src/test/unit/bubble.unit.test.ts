@@ -12,16 +12,19 @@ import {
 import * as liveBubble from "../../bubble/live";
 import { clusterHoverMarkdown } from "../../clusterHover";
 import { ReportCluster } from "../../types/report";
+import { occurrence, wireCluster } from "../cluster.helpers";
+import { bucketSignals, signalsWith } from "../signals.helpers";
 
 function cluster(
-  signals = {
+  signals = signalsWith("nearly_identical", {
     structural: 1,
     token_jaccard: 0.9,
+    shape: 1,
     embedding_cos: 0.5,
     fused: 0.95,
-  },
+  }),
 ): ReportCluster {
-  return {
+  return wireCluster({
     id: "abcdef0123456789",
     weight: 3,
     size: 4,
@@ -29,14 +32,12 @@ function cluster(
     bucket: "identical",
     signals,
     occurrences: [
-      { path: "/tmp/a/b/Alpha.cs", start_byte: 0, end_byte: 10, hidden: false },
-      { path: "/tmp/a/b/Beta.cs", start_byte: 0, end_byte: 10, hidden: false },
+      occurrence("/tmp/a/b/Alpha.cs", 0, 10),
+      occurrence("/tmp/a/b/Beta.cs", 0, 10),
     ],
-    occurrences_total: 0,
-    occurrences_truncated: false,
-    summary: "",
+    occurrence_count: 4,
     interpretation: "interp",
-  };
+  });
 }
 
 suite("bubble rendering helpers", () => {
@@ -61,12 +62,14 @@ suite("bubble rendering helpers", () => {
 
   test("signalStrip clamps inputs to the bar range", () => {
     const strip = signalStrip(
-      cluster({
-        structural: 2,
-        token_jaccard: -1,
-        embedding_cos: 0.5,
-        fused: 1,
-      }),
+      cluster(
+        signalsWith("identical", {
+          structural: 2,
+          token_jaccard: -1,
+          embedding_cos: 0.5,
+          fused: 1,
+        }),
+      ),
     );
     assert.equal(strip.length, 3);
   });
@@ -90,7 +93,7 @@ suite("bubble rendering helpers", () => {
   // the first line — never the hybridTitle taxonomy variant.
   test("bubbleHover bucket label in the title is the plain human name (#30)", () => {
     const c = cluster();
-    c.signals = { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 };
+    c.signals = bucketSignals("identical");
     const text = bubbleHover(c).value;
     const firstLine = text.split("\n")[0] ?? "";
     assert.match(

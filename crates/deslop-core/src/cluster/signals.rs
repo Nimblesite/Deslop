@@ -15,30 +15,42 @@ use crate::{
     embedding::cosine_similarity,
     fingerprint::Fingerprint,
     lsh::{estimate_jaccard, Signature},
+    overlap::OverlapMeasurer,
     pair::PairScore,
 };
 
 /// Measures the [FUSION-CLUSTER-SIGNALS] triple over the rendered
 /// occurrence indices.
 ///
-/// Per occurrence pair: `structural` is Merkle-hash equality,
-/// `token_jaccard` is the `MinHash` estimate between the two signatures,
-/// and `embedding_cos` is [`cosine_similarity`] of the two vectors —
-/// the same arithmetic that admitted the ANN pair evidence. A pair
-/// missing an input for a signal (no vector: embeddings off, oversized
-/// input, provider failure) is excluded from that signal's numerator
-/// and denominator both, so absence never masquerades as a measured
-/// 0.0 inside the mean.
+/// Per occurrence pair: `structural` is Merkle-hash equality — `1.0` —
+/// or, for a non-equal pair, the measured shared-subtree overlap
+/// ([FUSION-SHARED-SUBTREE]): the best-achievable subtree overlap the
+/// axis has always claimed to be. `token_jaccard` is the `MinHash`
+/// estimate between the two signatures, and `embedding_cos` is
+/// [`cosine_similarity`] of the two vectors — the same arithmetic that
+/// admitted the ANN pair evidence. A pair missing an input for a
+/// signal (no vector: embeddings off, oversized input, provider
+/// failure) is excluded from that signal's numerator and denominator
+/// both, so absence never masquerades as a measured 0.0 inside the
+/// mean.
 pub(super) fn measured_signals<S: BuildHasher>(
     occurrence_indices: &[usize],
     fingerprints: &[Fingerprint],
     signatures: &[Signature],
     embedding_vectors: &HashMap<usize, Vec<f32>, S>,
+    overlap: &mut OverlapMeasurer<'_>,
 ) -> PairScore {
     let mut totals = SignalTotals::default();
     for (position, &left) in occurrence_indices.iter().enumerate() {
         for &right in occurrence_indices.iter().skip(position.saturating_add(1)) {
-            totals.add_pair(left, right, fingerprints, signatures, embedding_vectors);
+            totals.add_pair(
+                left,
+                right,
+                fingerprints,
+                signatures,
+                embedding_vectors,
+                overlap,
+            );
         }
     }
     totals.means()
@@ -64,13 +76,13 @@ impl SignalTotals {
         fingerprints: &[Fingerprint],
         signatures: &[Signature],
         embedding_vectors: &HashMap<usize, Vec<f32>, S>,
+        overlap: &mut OverlapMeasurer<'_>,
     ) {
         if let (Some(left_fp), Some(right_fp)) = (fingerprints.get(left), fingerprints.get(right)) {
-            self.structural.add(if left_fp.hash == right_fp.hash {
-                1.0
-            } else {
-                0.0
-            });
+            // Merkle equality short-circuits to 1.0 inside
+            // `OverlapMeasurer::overlap`; a non-equal pair measures its
+            // shared-subtree overlap ([FUSION-SHARED-SUBTREE]).
+            self.structural.add(overlap.overlap(left_fp, right_fp));
         }
         if let (Some(left_sig), Some(right_sig)) = (signatures.get(left), signatures.get(right)) {
             self.token_jaccard

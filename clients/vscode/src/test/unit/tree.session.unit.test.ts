@@ -55,6 +55,7 @@ suite("SessionProvider", () => {
       model_id: "nomic-embed-text",
       done: 0,
       total: 23797,
+      percent: 0,
       message: undefined,
     });
     const provider = new SessionProvider(store, new StatusTicker(), () => ({}) as never);

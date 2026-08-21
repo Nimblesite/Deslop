@@ -1,15 +1,15 @@
-export interface Repository<TEntity, TIndex> {
-  fetch(id: TIndex): Promise<TEntity>;
+export interface DataSource<TRecord, TIndex> {
+  fetch(id: TIndex): Promise<TRecord>;
 }
 
-export async function readEvery<TEntity, TIndex>(
-  repository: Repository<TEntity, TIndex>,
-  identifiers: ReadonlyArray<TIndex>,
-): Promise<Map<TIndex, TEntity>> {
-  const resolved = new Map<TIndex, TEntity>();
-  for (const identifier of identifiers) {
-    const entity = await repository.fetch(identifier);
-    resolved.set(identifier, entity);
+export async function readEvery<TRecord, TIndex>(
+  source: DataSource<TRecord, TIndex>,
+  keys: ReadonlyArray<TIndex>,
+): Promise<Map<TIndex, TRecord>> {
+  const collected = new Map<TIndex, TRecord>();
+  for (const key of keys) {
+    const record = await source.fetch(key);
+    collected.set(key, record);
   }
-  return resolved;
+  return collected;
 }

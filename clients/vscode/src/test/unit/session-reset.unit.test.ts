@@ -11,6 +11,8 @@ import { ReportStore } from "../../reportStore";
 import { refreshAfterChange, wireSessionReset } from "../../notifications";
 import { Report, ReportCluster } from "../../types/report";
 import { emptyReport } from "./report.helpers";
+import { bucketSignals } from "../signals.helpers";
+import { occurrence, wireCluster } from "../cluster.helpers";
 
 type StateChange = { oldState: State; newState: State };
 
@@ -30,21 +32,16 @@ function fakeClient(): { client: LanguageClient; fire: (change: StateChange) => 
 }
 
 function cluster(id: string, path: string): ReportCluster {
-  return {
+  return wireCluster({
     id,
     weight: 10,
-    size: 2,
     canonical_node_count: 40,
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+    signals: bucketSignals("identical"),
     bucket: "identical",
-    category: "logic",
-    occurrences: [
-      { path, start_byte: 0, end_byte: 10, hidden: false },
-      { path, start_byte: 20, end_byte: 30, hidden: false },
-    ],
+    occurrences: [occurrence(path, 0, 10), occurrence(path, 20, 30)],
     summary: `cluster ${id}`,
     interpretation: "Identical code.",
-  } as unknown as ReportCluster;
+  });
 }
 
 function report(clusterId: string, path: string): Report {
@@ -59,9 +56,10 @@ function report(clusterId: string, path: string): Report {
       duplicated_files: 1,
       threshold: { percent: 0, breached: false, source: "none" },
       per_file: [],
+      folders: [],
     },
     clusters: [cluster(clusterId, path)],
-  }) as unknown as Report;
+  });
 }
 
 const running: StateChange = { oldState: State.Starting, newState: State.Running };

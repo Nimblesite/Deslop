@@ -5,6 +5,7 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as ts from "typescript";
+import { SIGNAL_HELP, signalTitle } from "../../types/signals";
 
 function clusterWebviewSourcePath(): string {
   return path.resolve(__dirname, "../../../webview-ui/src/cluster/main.tsx");
@@ -263,7 +264,9 @@ suite("cluster webview occurrence locations", () => {
   });
 
   test("cluster webview links visible explanations to website docs", () => {
-    const corpus = stringCorpus(parseClusterWebview());
+    // The panel is the cluster view plus the signal strip it embeds; both
+    // carry docs topics, so both are in scope for this assertion.
+    const corpus = `${stringCorpus(parseClusterWebview())}\n${stringCorpus(parseSignalStrip())}`;
     for (const phrase of [
       "cluster-id",
       "clone-bucket",
@@ -274,6 +277,7 @@ suite("cluster webview occurrence locations", () => {
       "occurrence-count",
       "canonical",
       "signals",
+      "content-evidence",
       "occurrences",
       "occurrence-location",
       "hidden-occurrence",
@@ -325,13 +329,26 @@ suite("cluster webview occurrence locations", () => {
   });
 
   test("signal strip hover copy explains every score", () => {
-    const corpus = `${stringCorpus(parseSignalStrip())}\n${stringCorpus(parseHelpBubble())}`;
+    // The signal copy moved into the shared `types/signals` formatter
+    // ([FUSION-CONTENT-GATE], #344) so the strip, its tooltips and the docs
+    // anchors cannot describe the same number two ways. The corpus follows it
+    // there and now covers the three content-evidence axes too.
+    const corpus = [
+      stringCorpus(parseSignalStrip()),
+      stringCorpus(parseHelpBubble()),
+      Object.values(SIGNAL_HELP).join("\n"),
+      signalTitle({ topic: "agreement", label: "agreement", value: 0.08 }),
+    ].join("\n");
     for (const phrase of [
       "AST-shape similarity",
       "Token-overlap similarity",
       "Semantic similarity",
       "Combined clone score",
       "Current value",
+      "How much of the matched content the locations genuinely share",
+      "one consistent identifier renaming explains every difference",
+      "literal data rather than logic",
+      "sibling boilerplate",
     ]) {
       assert.match(corpus, new RegExp(escapeRegExp(phrase)), `missing signal hover: ${phrase}`);
     }

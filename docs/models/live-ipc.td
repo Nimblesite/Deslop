@@ -93,6 +93,7 @@ type EmbeddingProgress {
   model_id: String
   done: Int
   total: Int
+  percent: Float
   message: Option<String>
 }
 
@@ -147,6 +148,7 @@ type RepoMetrics {
   duplicated_files: Int
   threshold: ThresholdSummary
   per_file: List<FileMetric>
+  folders: List<FileMetric>
   diff: Option<DiffMetrics>
 }
 
@@ -175,6 +177,7 @@ type EmbeddingProvenance {
   model_version: String
   dimensions: Int
   attempted_subtrees: Int
+  succeeded_subtrees: Int
   indexed_subtrees: Int
   failed_subtrees: Int
 }
@@ -182,8 +185,12 @@ type EmbeddingProvenance {
 type ReportSignals {
   structural: Float
   token_jaccard: Float
+  shape: Float
   embedding_cos: Float
   fused: Float
+  agreement: Float
+  rename_consistency: Float
+  literal_fraction: Float
 }
 
 type ReportOccurrence {
@@ -198,14 +205,20 @@ type ReportOccurrence {
 
 type ReportCluster {
   id: String
+  rank: Int
+  rank_band: String
   weight: Float
   size: Int
   canonical_node_count: Int
   signals: ReportSignals
   bucket: String
   category: String
+  language: String
+  meets_fused_gate: Bool
+  evidence_verdict: String
   occurrences: List<ReportOccurrence>
   occurrences_total: Int
+  occurrence_count: Int
   occurrences_truncated: Bool
   summary: String
   interpretation: String

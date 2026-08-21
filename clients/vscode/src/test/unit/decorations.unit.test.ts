@@ -5,33 +5,47 @@ import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { hoverFor, byteRangeToRange } from "../../decorations/manager";
 import { ReportCluster, ReportOccurrence } from "../../types/report";
+import { occurrence, wireCluster } from "../cluster.helpers";
+import { signalsWith } from "../signals.helpers";
 
 function cluster(): ReportCluster {
-  return {
+  return wireCluster({
     id: "cluster-1",
     weight: 10,
     size: 4,
     canonical_node_count: 5,
     bucket: "same_behavior",
-    signals: { structural: 0.1, token_jaccard: 0.2, embedding_cos: 0.9, fused: 0.95 },
+    signals: signalsWith("same_behavior", {
+      structural: 0.1,
+      token_jaccard: 0.2,
+      shape: 0.2,
+      embedding_cos: 0.9,
+      fused: 0.95,
+    }),
     occurrences: [
-      { path: "/a.cs", start_byte: 0, end_byte: 10, hidden: false },
-      { path: "/b.cs", start_byte: 0, end_byte: 10, hidden: false },
+      occurrence("/a.cs", 0, 10),
+      occurrence("/b.cs", 0, 10),
     ],
-    occurrences_total: 0,
-    occurrences_truncated: false,
+    occurrence_count: 4,
     summary: "summary",
     interpretation: "interp",
-  };
+  });
 }
 
 suite("decorations helpers", () => {
   test("hoverFor renders the shared card design without raw AI data", () => {
     const md = hoverFor(cluster());
     const text = md.value;
-    // Category label and count visible.
+    // Category label and count visible. The count is the engine's
+    // `occurrence_count` — the fixture carries four copies and ships two
+    // of them, exactly as the live wire does when it caps the list — so
+    // this also pins that the hover shows the cluster's real size rather
+    // than the length of the slice it happens to hold. The hover and the
+    // hover provider used to answer this question with two different
+    // helpers ([PRINCIPLES-ONE-CALCULATION]).
     assert.match(text, /Same behavior, different code/);
-    assert.match(text, /×\s*2/, "instance count must be visible");
+    assert.equal(cluster().occurrences.length, 2, "fixture: only two occurrences travelled");
+    assert.match(text, /×\s*4/, "instance count must be the engine's, not the carried list's");
     // Canonical section present.
     assert.match(text, /Canonical/, "canonical section must be shown");
     // Action links present.

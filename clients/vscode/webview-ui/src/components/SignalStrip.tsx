@@ -1,70 +1,112 @@
+import type { JSX } from "preact";
 import { COLOR, FONT } from "../theme";
-import { HelpedText, helpCopy, type HelpTopic } from "./HelpBubble";
+import { HelpedText } from "./HelpBubble";
+import {
+  confidenceRows,
+  evidenceRows,
+  formatSignal,
+  signalTitle,
+  type SignalRow,
+} from "../../../src/types/signals";
 import type { ReportSignals } from "../../../src/types/report";
 
 interface Props {
   signals: ReportSignals;
+  /** The engine's plain-English reading of these numbers, carried on the
+   * cluster as `evidence_verdict`. Rendered verbatim — a panel that
+   * manufactured its own verdict from the same numbers would be a second
+   * interpretation of the engine's evidence. */
+  verdict: string;
 }
 
-export function SignalStrip({ signals }: Props) {
-  const values: [HelpTopic, string, number][] = [
-    ["structural", "structural", signals.structural],
-    ["jaccard", "jaccard", signals.token_jaccard],
-    ["embedding", "embedding", signals.embedding_cos],
-    ["fused", "fused", signals.fused],
-  ];
+// [FUSION-CONTENT-GATE] Four confidence scores, the three pieces of measured
+// content evidence behind them, and one plain-English reading of the two
+// together. Drawing the confidence alone is what made a corroborated rename
+// and an anchor-poor scaffolding family look identical here: both render
+// structural 1.00 / jaccard 1.00, and only the evidence tells them apart.
+export function SignalStrip({ signals, verdict }: Props) {
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 120px), 1fr))",
-        gap: "16px",
-        padding: "16px 0",
-      }}
-    >
-      {values.map(([topic, label, value]) => (
-        <div key={label} title={signalTitle(topic, value)}>
-          <div
-            class="label"
-            style={{
-              color: COLOR.onSurfaceMuted,
-              marginBottom: "6px",
-              fontFamily: FONT.mono,
-            }}
-          >
-            <HelpedText topic={topic} title={signalTitle(topic, value)}>{label}</HelpedText>
-          </div>
-          <div
-            style={{
-              height: "6px",
-              background: COLOR.surfaceContainerLowest,
-              overflow: "hidden",
-              borderRadius: "2px",
-            }}
-          >
-            <div
-              style={{
-                width: `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`,
-                height: "100%",
-                background: `linear-gradient(90deg, ${COLOR.primary} 0%, ${COLOR.primaryContainer} 100%)`,
-              }}
-            />
-          </div>
-          <div
-            style={{
-              marginTop: "4px",
-              fontFamily: FONT.mono,
-              fontSize: "12px",
-            }}
-          >
-            {value.toFixed(2)}
-          </div>
-        </div>
+    <div>
+      <SignalGrid rows={confidenceRows(signals)} />
+      <div class="label" style={EVIDENCE_HEADING}>
+        <HelpedText topic="content-evidence">CONTENT EVIDENCE</HelpedText>
+      </div>
+      <SignalGrid rows={evidenceRows(signals)} />
+      <p style={VERDICT}>{verdict}</p>
+    </div>
+  );
+}
+
+function SignalGrid({ rows }: { rows: SignalRow[] }) {
+  return (
+    <div style={GRID}>
+      {rows.map((row) => (
+        <SignalCell key={row.label} row={row} />
       ))}
     </div>
   );
 }
 
-function signalTitle(topic: HelpTopic, value: number): string {
-  return `${helpCopy(topic)} Current value: ${value.toFixed(2)}.`;
+function SignalCell({ row }: { row: SignalRow }) {
+  const title = signalTitle(row);
+  return (
+    <div title={title}>
+      <div class="label" style={CELL_LABEL}>
+        <HelpedText topic={row.topic} title={title}>{row.label}</HelpedText>
+      </div>
+      <div style={BAR_TRACK}>
+        <div style={{ ...BAR_FILL, width: barWidth(row.value) }} />
+      </div>
+      <div style={CELL_VALUE}>{formatSignal(row.value)}</div>
+    </div>
+  );
 }
+
+function barWidth(value: number): string {
+  return `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`;
+}
+
+const GRID: JSX.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 120px), 1fr))",
+  gap: "16px",
+  padding: "16px 0",
+};
+
+const EVIDENCE_HEADING: JSX.CSSProperties = {
+  color: COLOR.onSurfaceMuted,
+  fontFamily: FONT.mono,
+  borderTop: `1px solid ${COLOR.ghostBorder}`,
+  paddingTop: "12px",
+};
+
+const CELL_LABEL: JSX.CSSProperties = {
+  color: COLOR.onSurfaceMuted,
+  marginBottom: "6px",
+  fontFamily: FONT.mono,
+};
+
+const BAR_TRACK: JSX.CSSProperties = {
+  height: "6px",
+  background: COLOR.surfaceContainerLowest,
+  overflow: "hidden",
+  borderRadius: "2px",
+};
+
+const BAR_FILL: JSX.CSSProperties = {
+  height: "100%",
+  background: `linear-gradient(90deg, ${COLOR.primary} 0%, ${COLOR.primaryContainer} 100%)`,
+};
+
+const CELL_VALUE: JSX.CSSProperties = {
+  marginTop: "4px",
+  fontFamily: FONT.mono,
+  fontSize: "12px",
+};
+
+const VERDICT: JSX.CSSProperties = {
+  margin: "4px 0 0",
+  color: COLOR.onSurface,
+  fontSize: "12px",
+  lineHeight: 1.5,
+};

@@ -1,19 +1,20 @@
 //! Golden band coverage for the fused confidence
 //! ([FUSION-STRATEGY-BOUNDED-MAX], [FUSION-CONTENT-GATE], [FUSED-THRESHOLD]).
 //!
-//! `docs/root-cause-fusion.md` states the contract the fused score has to
+//! `docs/plans/fused-score-followups.md` states the contract the fused score has to
 //! satisfy: it must carry information, so that the three documented agent
 //! bands are all reachable and mean what the docs say they mean. Each
-//! `fused-golden-<language>` fixture directory stages the same three
+//! `fused-golden-<language>` fixture directory stages the same four
 //! real-world scenarios side by side so one report exercises all of them:
 //!
-//! | files                       | scenario                                        | required verdict |
-//! |-----------------------------|-------------------------------------------------|------------------|
-//! | `verbatim_a` / `verbatim_b` | byte-identical copy-paste (Type-1)               | `identical`, `fused == 1.0` |
-//! | `rename_a` / `rename_b`     | maximal identifier rename, same logic (Type-2)   | `nearly_identical`, `fused >= 0.6` and `< 1.0` |
-//! | `shape_*` (×4)              | unrelated descriptors sharing only the AST shape | never act-now, ranked last |
+//! | files                             | scenario                                            | required verdict |
+//! |-----------------------------------|-----------------------------------------------------|------------------|
+//! | `verbatim_a` / `verbatim_b`       | byte-identical copy-paste (Type-1)                   | `identical`, `fused == 1.0` |
+//! | `rename_a` / `rename_b`           | maximal identifier rename, same logic (Type-2)       | `nearly_identical`, `fused >= 0.6` and `< 1.0` |
+//! | `rename_lean_a` / `rename_lean_b` | the same Type-2 rename with **one** ubiquitous literal | `nearly_identical`, `fused >= 0.6` and `< 1.0` |
+//! | `shape_*` (×4)                    | unrelated descriptors sharing only the AST shape     | never act-now, ranked last |
 //!
-//! The Type-2 row is the load-bearing one. A rename-only copy is the
+//! The Type-2 rows are the load-bearing ones. A rename-only copy is the
 //! textbook definition of a Type-2 clone and every clone detector must
 //! report it. [FUSION-CONTENT-GATE] measures raw-content agreement over
 //! *all* collapsed leaves — identifiers and literals pooled — so a
@@ -21,6 +22,16 @@
 //! indistinguishable from unrelated scaffolding. These fixtures keep the
 //! maximal rename that the shipped rename-showcase fixtures were softened
 //! away from, so the distinction is pinned rather than avoided.
+//!
+//! The lean pair holds the same band *below* the literal-anchor mass the
+//! anchored pair carries: its rename evidence rests on Baker's
+//! parameterized-match proof — repeated, bijectively consistent
+//! identifier substitutions — with a single `0` literal contributing
+//! almost nothing. Pinning both pairs keeps the band contract stated
+//! across the anchor axis, not only at its comfortable end
+//! (`[REPAIR-RENAME-ANCHOR-MASS]` in
+//! `docs/plans/fused-score-followups.md` records the false negative this
+//! scenario used to render).
 //!
 //! Every scenario carries a distinct AST shape so transitive closure
 //! cannot merge the three of them into one cluster.
@@ -35,6 +46,14 @@ use crate::common::{signals::*, *};
 /// Node floor for the golden corpora — matches the small-fixture value the
 /// TypeScript/JS feature suites use so every scenario subtree qualifies.
 const MIN_NODES: u32 = 12;
+
+/// Both Type-2 scenarios, held to one identical band contract: the
+/// anchored maximal rename (`rename`, literals on both sides of every
+/// branch) and the lean maximal rename (`rename_lean`, one ubiquitous
+/// literal). A contract asserted for only one of them is a contract
+/// stated only above the anchor floor — the exact gap
+/// `[REPAIR-RENAME-ANCHOR-MASS]` records as a shipped false negative.
+const RENAME_STEMS: [&str; 2] = ["rename", "rename_lean"];
 
 /// One per-language golden corpus staged under `tests/fixtures`.
 #[derive(Debug)]
@@ -165,63 +184,67 @@ fn assert_verbatim_components(cluster: &Value, corpus: &Corpus) {
     );
 }
 
-/// Band 2 — a maximal identifier rename over identical logic and
-/// identical literals is a Type-2 clone. It must stay actionable: a real
-/// bucket, a confidence inside the reuse band, and strictly below the
-/// byte-identical band so the score still discriminates.
-fn assert_rename_band(report: &Value, corpus: &Corpus, root: &Path) -> Result<()> {
-    let cluster = scenario_cluster(report, corpus, "rename")?;
+/// Band 2 — a maximal identifier rename over identical logic is a Type-2
+/// clone, with or without literal-anchor mass ([`RENAME_STEMS`]). It must
+/// stay actionable: a real bucket, a confidence inside the reuse band,
+/// and strictly below the byte-identical band so the score still
+/// discriminates.
+fn assert_rename_band(report: &Value, corpus: &Corpus, root: &Path, stem: &str) -> Result<()> {
+    let cluster = scenario_cluster(report, corpus, stem)?;
     let dump = signal_dump(cluster);
     let language = corpus.language;
     assert!(
         !HONEST_SHAPE_ONLY_BUCKETS.contains(&cluster_bucket(cluster)),
-        "{language}: a Type-2 rename of real logic is duplication, not shape-only \
-         evidence — demoting it is a false negative — {dump}"
+        "{language}/{stem}: a Type-2 rename of real logic is duplication, not \
+         shape-only evidence — demoting it is a false negative — {dump}"
     );
     assert_eq!(
         cluster_bucket(cluster),
         "nearly_identical",
-        "{language}: same shape, same literals, renamed identifiers is the textbook \
-         `nearly_identical` clone — {dump}"
+        "{language}/{stem}: same shape, same logic, renamed identifiers is the \
+         textbook `nearly_identical` clone — {dump}"
     );
-    assert_rename_components(cluster, corpus);
+    assert_rename_components(cluster, corpus, stem);
     assert_eq!(
         distinct_texts(root, cluster)?.len(),
         2,
-        "{language}: the rename scenario's two occurrences must differ in raw bytes — {dump}"
+        "{language}/{stem}: the rename scenario's two occurrences must differ in \
+         raw bytes — {dump}"
     );
     Ok(())
 }
 
 /// The per-signal half of band 2: rename-invariant deterministic signals,
 /// a confidence that stays inside the reuse band, and no saturation.
-fn assert_rename_components(cluster: &Value, corpus: &Corpus) {
+fn assert_rename_components(cluster: &Value, corpus: &Corpus, stem: &str) {
     let dump = signal_dump(cluster);
     let language = corpus.language;
     let fused = signal(cluster, "fused");
     assert!(
         approx(signal(cluster, "structural"), 1.0),
-        "{language}: identifier normalisation makes a rename structurally identical — {dump}"
+        "{language}/{stem}: identifier normalisation makes a rename structurally \
+         identical — {dump}"
     );
     assert!(
         approx(signal(cluster, "token_jaccard"), 1.0),
-        "{language}: the normalised k-gram stream is rename-invariant by construction — {dump}"
+        "{language}/{stem}: the normalised k-gram stream is rename-invariant by \
+         construction — {dump}"
     );
     assert!(
         fused >= REUSE_FUSED,
-        "{language}: a renamed copy of real logic must stay at or above the reuse-bias \
-         line ({REUSE_FUSED}) — below it the agent recipe tells the agent to write the \
-         copy anyway — {dump}"
+        "{language}/{stem}: a renamed copy of real logic must stay at or above the \
+         reuse-bias line ({REUSE_FUSED}) — below it the agent recipe tells the agent \
+         to write the copy anyway — {dump}"
     );
     assert!(
         fused < 1.0,
-        "{language}: only a byte-identical copy may saturate the confidence; a rename \
-         has measurably less evidence — {dump}"
+        "{language}/{stem}: only a byte-identical copy may saturate the confidence; \
+         a rename has measurably less evidence — {dump}"
     );
     assert_eq!(
         cluster_size(cluster),
         2,
-        "{language}: the rename scenario has exactly two occurrences — {dump}"
+        "{language}/{stem}: the rename scenario has exactly two occurrences — {dump}"
     );
 }
 
@@ -264,26 +287,30 @@ fn assert_shape_only_cluster(cluster: &Value, language: &str) {
     );
 }
 
-/// The whole point of the metric: the three scenarios must be strictly
+/// The whole point of the metric: the scenarios must be strictly
 /// separated, in both confidence and rank. A score that cannot order
 /// copy-paste above rename above coincidence is not a confidence score.
 fn assert_band_separation(report: &Value, corpus: &Corpus) -> Result<()> {
     let language = corpus.language;
     let verbatim = scenario_cluster(report, corpus, "verbatim")?;
-    let rename = scenario_cluster(report, corpus, "rename")?;
-    assert!(
-        signal(verbatim, "fused") > signal(rename, "fused"),
-        "{language}: a byte-identical copy must be strictly more confident than a \
-         renamed one — verbatim[{verbatim_dump}] rename[{rename_dump}]",
-        verbatim_dump = signal_dump(verbatim),
-        rename_dump = signal_dump(rename),
-    );
-    assert_shape_ranks_below(report, corpus, rename)
+    for stem in RENAME_STEMS {
+        let rename = scenario_cluster(report, corpus, stem)?;
+        assert!(
+            signal(verbatim, "fused") > signal(rename, "fused"),
+            "{language}: a byte-identical copy must be strictly more confident than a \
+             renamed one — verbatim[{verbatim_dump}] {stem}[{rename_dump}]",
+            verbatim_dump = signal_dump(verbatim),
+            rename_dump = signal_dump(rename),
+        );
+        assert_shape_ranks_below(report, corpus, rename)?;
+    }
+    Ok(())
 }
 
-/// Ranking half of the separation contract: every surviving shape-only
-/// family sits below both real clones in confidence and in rank — the
-/// fused confidence must shape the weighting itself, not just the label
+/// Ranking half of the separation contract, applied per rename scenario:
+/// every surviving shape-only family sits below both real clones in
+/// confidence and in rank — the fused confidence must shape the
+/// weighting itself, not just the label
 /// ([RANK-STRUCTURAL-ONLY], [PIPELINE-RANK-WORST-FIRST]).
 fn assert_shape_ranks_below(report: &Value, corpus: &Corpus, rename: &Value) -> Result<()> {
     let verbatim_rank = rank_of(report, scenario_cluster(report, corpus, "verbatim")?)?;
@@ -336,13 +363,15 @@ fn assert_golden_corpus(corpus: &Corpus) -> Result<()> {
     let root = fixture(corpus.dir);
     let report = corpus.report()?;
     assert!(
-        cluster_count(&report) >= 2,
-        "{language}: the corpus stages two real clones — a report with fewer clusters \
-         has lost recall: {report:#}",
+        cluster_count(&report) >= 3,
+        "{language}: the corpus stages three real clones — a report with fewer \
+         clusters has lost recall: {report:#}",
         language = corpus.language,
     );
     assert_verbatim_band(&report, corpus, &root)?;
-    assert_rename_band(&report, corpus, &root)?;
+    for stem in RENAME_STEMS {
+        assert_rename_band(&report, corpus, &root, stem)?;
+    }
     assert_shape_only_band(&report, corpus);
     assert_band_separation(&report, corpus)
 }
@@ -398,9 +427,9 @@ fn php_fused_bands_separate_copy_paste_rename_and_coincidence() -> Result<()> {
     assert_golden_corpus(corpus("php")?)
 }
 
-// [FUSED-THRESHOLD] Cross-language: the same three scenarios must land in
-// the same three bands in *every* language. A metric whose meaning shifts
-// per language cannot back a documented agent contract.
+// [FUSED-THRESHOLD] Cross-language: the same four scenarios must land in
+// the same bands in *every* language. A metric whose meaning shifts per
+// language cannot back a documented agent contract.
 #[test]
 fn fused_bands_mean_the_same_thing_in_every_language() -> Result<()> {
     let mut verdicts: Vec<String> = Vec::new();
@@ -408,14 +437,17 @@ fn fused_bands_mean_the_same_thing_in_every_language() -> Result<()> {
         let report = corpus.report()?;
         let verbatim = signal(scenario_cluster(&report, corpus, "verbatim")?, "fused");
         let rename = signal(scenario_cluster(&report, corpus, "rename")?, "fused");
+        let lean = signal(scenario_cluster(&report, corpus, "rename_lean")?, "fused");
         verdicts.push(format!(
-            "{language}: verbatim={verbatim:.4} rename={rename:.4}",
+            "{language}: verbatim={verbatim:.4} rename={rename:.4} rename_lean={lean:.4}",
             language = corpus.language,
         ));
         assert!(
-            approx(verbatim, 1.0) && (REUSE_FUSED..1.0).contains(&rename),
-            "band contract broken — every language must report verbatim at 1.0 and a \
-             Type-2 rename inside [{REUSE_FUSED}, 1.0): {verdicts:#?}"
+            approx(verbatim, 1.0)
+                && (REUSE_FUSED..1.0).contains(&rename)
+                && (REUSE_FUSED..1.0).contains(&lean),
+            "band contract broken — every language must report verbatim at 1.0 and \
+             both Type-2 renames inside [{REUSE_FUSED}, 1.0): {verdicts:#?}"
         );
     }
     assert_eq!(

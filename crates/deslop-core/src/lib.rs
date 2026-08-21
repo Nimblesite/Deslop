@@ -34,6 +34,7 @@ pub mod lang;
 #[cfg(feature = "live")]
 pub mod live;
 pub mod lsh;
+pub mod overlap;
 pub mod pair;
 pub mod paths;
 pub mod pipeline;
@@ -42,10 +43,13 @@ pub mod refactor;
 pub mod render;
 pub mod report;
 pub mod report_boilerplate;
+#[cfg(any(test, feature = "test-support"))]
+pub mod report_fixtures;
 pub mod report_hints;
 pub mod report_location;
 pub mod report_metrics;
 mod report_render;
+pub mod report_restamp;
 mod report_weight;
 pub mod sibling;
 pub mod state;

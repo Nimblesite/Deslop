@@ -2,11 +2,31 @@ export const REPORT_TYPE_CONFIG = {
   ReportSignals: {
     docs: "Per-cluster signal breakdown so consumers can tell why the cluster was flagged.",
     derives: ["Debug", "Clone", "Copy", "Serialize", "Deserialize"],
+    // Reports written before the content gate carry only the four
+    // fused-confidence fields. `--from-report` must replay them, and an
+    // absent measurement must never demote a cluster the original run
+    // vouched for — so the defaults mirror
+    // `ContentEvidence::unmeasured()`: full agreement, no rename proof,
+    // no literal dominance.
+    fieldSerdeAttrs: {
+      shape: ["default"],
+      agreement: ['default = "crate::report::unmeasured_agreement"'],
+      rename_consistency: ["default"],
+      literal_fraction: ["default"],
+    },
     fieldDocs: {
       structural: "Mean structural signal across cluster pairs.",
       token_jaccard: "Mean token Jaccard estimate across cluster pairs.",
+      shape:
+        "The shape reading: the stronger of `structural` and `token_jaccard` — two views of one normalised representation, so the max is what \"the shape matched\" means. Computed by the engine, the same reduction `buckets` applies; consumers render it verbatim and never re-derive it.",
       embedding_cos: "Mean embedding cosine similarity across cluster pairs.",
       fused: "Unit-bounded fused confidence from the three components.",
+      agreement:
+        "Pooled byte agreement across the collapsed content frontier — how much of the content the members actually share.",
+      rename_consistency:
+        "Baker-corroborated evidence that one consistent identifier renaming explains the members' differences.",
+      literal_fraction:
+        "Share of the matched content that is literal data rather than logic.",
     },
   },
   ReportOccurrence: {
@@ -37,26 +57,44 @@ export const REPORT_TYPE_CONFIG = {
     docs: "One cluster as it appears in the rendered report.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
     fieldOverrides: {
+      rank: "usize",
       size: "usize",
       canonical_node_count: "usize",
       occurrences_total: "usize",
+      occurrence_count: "usize",
     },
     fieldSerdeAttrs: {
+      rank: ["default"],
+      rank_band: ["default"],
       category: ["default"],
+      language: ["default"],
+      meets_fused_gate: ["default"],
+      evidence_verdict: ["default"],
+      occurrence_count: ["default"],
       intersects_diff: ["default", 'skip_serializing_if = "Option::is_none"'],
       is_newly_introduced: ["default", 'skip_serializing_if = "Option::is_none"'],
     },
     tsOptional: ["category", "intersects_diff", "is_newly_introduced"],
     fieldDocs: {
       id: "Stable short id for cross-referencing.",
+      rank: "One-based global worst-first rank in the carried report ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]). Stamped by the engine after the final ranking sort; consumers display it verbatim and never re-number from array position. `0` only on reports written before the field existed.",
+      rank_band:
+        "Weight-percentile band of `rank` ([SEVERITY-BAND]): `worst` (top 1%), `top10`, `mid` (top 50%), `faint`. Computed by the engine from `1 - (rank-1)/(total-1)`; drives glyph density on every visual surface. Consumers never recompute the percentile. Empty only on reports written before the field existed (renders as `faint`).",
       weight: "Ranking weight (higher = worse).",
       size: "Count of cloned occurrences in the cluster.",
       canonical_node_count: "AST node count of one canonical member.",
       signals: "Per-cluster signal breakdown (structural / Jaccard / embedding / fused).",
       bucket: "Canonical bucket label (`identical`, `nearly_identical`, `loosely_similar`, `same_behavior`).",
       category: "Clone category ([RANK-CATEGORY]): `logic` (default) or `data` for a demoted data-structure literal. Orthogonal to `bucket`. Empty/absent on older reports resolves to `logic`.",
+      language: "Detected language id of the cluster's first occurrence, from the engine's parser registry (`language_for_path`, [PIPELINE-LANG-TRAIT]); `unknown` when unresolvable. Consumers group and filter by this value and never re-derive a language from a file extension.",
+      meets_fused_gate:
+        "True when `signals.fused` clears the engine's reportable fused threshold ([FUSION-CONTENT-GATE]). Carried so no client mirrors the threshold constant; UI admission below the act-now buckets reads this verbatim.",
+      evidence_verdict:
+        "Engine-authored plain-English reading of the shape score against the measured content evidence — why confidence stayed, fell, or came from the embedding pass. The engine owns this verdict; clients render it verbatim and never manufacture their own from the signal numbers.",
       occurrences: "Cluster members; live wire caps this list.",
       occurrences_total: "Total occurrences before wire truncation.",
+      occurrence_count:
+        "Authoritative display count of the cluster's occurrences, computed once by the engine (`report::occurrence_count`): the tracked total, never below the carried list length. Every surface shows this number; recomputing it client-side is prohibited.",
       occurrences_truncated: "True when `occurrences` was truncated for the wire.",
       summary: "Agent-oriented synthesis (blanked on the live wire).",
       interpretation: "Derived one-line interpretation (blanked on the live wire).",

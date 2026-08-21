@@ -435,3 +435,64 @@ fn copy_with_hunks_counts_the_whole_target_once() -> Result<()> {
     );
     Ok(())
 }
+
+// [PIPELINE-DIFF-INGEST] An **empty** `+++ ` payload used to parse as a
+// valid target: `new_side_path` returned `Some("")`, the section was
+// marked as having seen its target, and the verifier then discarded the
+// empty path as out-of-root — exit 0, zero added LOC, every repository
+// cluster omitted under `--only-changed`. A truncated target header
+// therefore erased the entire changed-code population and let a breached
+// repository pass the changed-code gate: a false negative at the merge
+// gate, produced by malformed input the fail-closed contract says is a
+// usage error. It must be refused (exit 2) naming the offending line.
+#[test]
+fn empty_new_side_target_is_refused_naming_the_line() -> Result<()> {
+    let scenario = Scenario::dup_pair()?;
+    let stderr = scenario.refusal_stderr(
+        concat!(
+            "diff --git a/repo/src/ghost.rs b/repo/src/ghost.rs\n",
+            "new file mode 100644\n",
+            "--- /dev/null\n",
+            "+++ \n",
+            "@@ -0,0 +1,1 @@\n",
+            "+pub fn duplicated() {}\n",
+        ),
+        ZERO_GATE,
+    )?;
+    assert!(
+        stderr.contains("invalid unified diff"),
+        "the refusal is a parse error: {stderr}"
+    );
+    assert!(
+        stderr.contains("line 4"),
+        "the refusal names the offending `+++` line: {stderr}"
+    );
+    assert!(
+        stderr.contains("names no path"),
+        "the refusal says the target names nothing: {stderr}"
+    );
+    assert!(
+        !scenario.output.with_extension("json").exists(),
+        "a refused diff must not produce a report"
+    );
+    Ok(())
+}
+
+// [PIPELINE-DIFF-INGEST] The positive control for the refusal above:
+// `+++ /dev/null` is a *seen* target meaning "deleted", not an absent
+// one, and must keep ingesting as an empty scope. Without this pin the
+// obvious over-correction — treating every falsy target as missing —
+// would turn every deletion section into a usage error.
+#[test]
+fn dev_null_target_is_not_an_empty_target() -> Result<()> {
+    let scenario = Scenario::dup_pair()?;
+    scenario.assert_ignorable(concat!(
+        "diff --git a/repo/src/gone.rs b/repo/src/gone.rs\n",
+        "deleted file mode 100644\n",
+        "--- a/repo/src/gone.rs\n",
+        "+++ /dev/null\n",
+        "@@ -1 +0,0 @@\n",
+        "-pub fn gone() {}\n",
+    ))?;
+    Ok(())
+}

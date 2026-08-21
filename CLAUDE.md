@@ -59,6 +59,7 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 ## Universal rules
 
 - **Files < 500 lines. Functions < 20 lines.** Refactor when over.
+- **Calcs like percentage calc only exist in ONE PLACE: Rust** ZERO calculations outside the core Rust code. E.g. no calcs in Typescript. Any calcs outside Rust is a HARD VIOLATION.
 - **Act autonomously.** Do not stop for confirmation — except where the strict accuracy rule says STOP. Record assumptions and continue.
 - **Aggressively DRY.** This tool detects duplication; its own codebase must be exemplary. Move code, don't copy. Copying files is prohibited.
 - **Tree-sitter only.** Regex on source code or structured data is prohibited.

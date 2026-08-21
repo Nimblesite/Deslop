@@ -118,12 +118,7 @@ fn embed_corpus(
     );
     let pairs = pairs_from_successful_embeddings(corpus.fingerprints, &batch.vectors);
     observer.log_final(pairs.len(), batch.vectors.len(), batch.failures);
-    let provenance = provenance_from(
-        spec,
-        attempted_subtrees(corpus.fingerprints.len(), &batch),
-        batch.vectors.len(),
-        batch.failures,
-    );
+    let provenance = provenance_from(spec, &batch);
     Ok(EmbeddingOutcome {
         pairs,
         vectors: vectors_by_fingerprint(batch.vectors),
@@ -188,12 +183,12 @@ fn compute_embeddings(
 /// declared for itself ([`EmbeddingProvider::max_input_chars`]) —
 /// never a constant of this pass's own.
 ///
-/// Only the provider *request* is deduplicated by content hash; the
-/// resulting vector is recorded for **every** fingerprint in the group.
-/// Byte-identical clones share one snippet by definition, so collapsing a
-/// group to its first member deletes the embedding evidence for exactly
-/// the pairs this tool exists to find, rendering `embedding_cos = 0.0` —
-/// a measured-and-absent claim the pass never measured.
+/// The group is what the provider request and the ANN index point are
+/// both deduplicated to; its *members* never are, which is why the vector
+/// travels with the whole owner list. Byte-identical clones share one
+/// snippet by definition, so collapsing a group to its first member
+/// deletes the embedding evidence for exactly the pairs this tool exists
+/// to find, rendering `embedding_cos = 0.0` — measured-and-absent.
 fn lookup_phase(
     corpus: &CorpusView<'_>,
     cache: &EmbeddingCache,
@@ -300,14 +295,6 @@ struct PendingDispatch<'a> {
     progress: Option<&'a dyn Fn(usize)>,
     /// Pass-level structured observer.
     observer: &'a mut EmbeddingObserver,
-}
-
-/// Returns the provenance denominator for this embedding pass.
-fn attempted_subtrees(total_fingerprints: usize, batch: &EmbeddingBatch) -> usize {
-    if batch.failures == 0 {
-        return total_fingerprints;
-    }
-    batch.vectors.len().saturating_add(batch.failures)
 }
 
 /// Counts an oversized snippet group as skipped before provider dispatch.

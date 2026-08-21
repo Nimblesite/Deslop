@@ -27,11 +27,13 @@ fn report_path(tmp: &Path) -> PathBuf {
 }
 
 fn run_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value> {
+    report_with(tmp, scan_root, &["--min-nodes", "8", "--embeddings", "off"])
+}
+
+/// One CLI run with `extra_args`, parsed from the JSON report.
+fn report_with(tmp: &Path, scan_root: &Path, extra_args: &[&str]) -> Result<serde_json::Value> {
     let mut cmd = deslop_cmd(scan_root, &tmp.join("report"))?;
-    let _assertion = cmd
-        .args(["--min-nodes", "8", "--embeddings", "off"])
-        .assert()
-        .success();
+    let _assertion = cmd.args(extra_args).assert().success();
     let body = fs::read_to_string(report_path(tmp))?;
     Ok(serde_json::from_str(&body)?)
 }
@@ -113,6 +115,104 @@ fn clusters_for_file(report: &serde_json::Value, needle: &str) -> Vec<serde_json
         .unwrap_or_default()
 }
 
+const SHARED_LOGIC: &str = r"if (sharedGate()) {
+        const sharedValue = 7;
+        emitShared(sharedValue);
+        persistShared(sharedValue);
+        auditShared(sharedValue);
+    }";
+
+const ALPHA_SOURCE: &str = r"export function calculateAlpha(alphaSeed: number): number {
+    const alphaOne = alphaSeed + 11;
+    const alphaTwo = alphaOne * 13;
+    const alphaThree = alphaTwo - 17;
+    const alphaFour = alphaThree / 19;
+    const alphaFive = alphaFour + 23;
+    const alphaSix = alphaFive * 29;
+    if (sharedGate()) {
+        const sharedValue = 7;
+        emitShared(sharedValue);
+        persistShared(sharedValue);
+        auditShared(sharedValue);
+    }
+    const alphaSeven = alphaSix - 31;
+    const alphaEight = alphaSeven + 37;
+    return alphaEight;
+}
+";
+
+const BETA_SOURCE: &str = r"export function calculateBeta(betaSeed: number): number {
+    const betaOne = betaSeed + 41;
+    const betaTwo = betaOne * 43;
+    const betaThree = betaTwo - 47;
+    const betaFour = betaThree / 53;
+    const betaFive = betaFour + 59;
+    const betaSix = betaFive * 61;
+    if (sharedGate()) {
+        const sharedValue = 7;
+        emitShared(sharedValue);
+        persistShared(sharedValue);
+        auditShared(sharedValue);
+    }
+    const betaSeven = betaSix - 67;
+    const betaEight = betaSeven + 71;
+    return betaEight;
+}
+";
+
+/// Writes two content-divergent wrappers around one byte-identical clone.
+fn write_content_subsumption_fixture(root: &Path) -> Result<()> {
+    fs::create_dir_all(root)?;
+    fs::write(root.join("alpha.ts"), ALPHA_SOURCE)?;
+    fs::write(root.join("beta.ts"), BETA_SOURCE)?;
+    Ok(())
+}
+
+/// Finds the exact two-member shared block or reports its disappearance.
+fn expect_shared_logic<'a>(
+    report: &'a serde_json::Value,
+    root: &Path,
+) -> Result<&'a serde_json::Value> {
+    for cluster in clusters(report) {
+        let texts = occurrence_texts(root, cluster)?;
+        if texts.len() == 2 && texts.iter().all(|text| text == SHARED_LOGIC) {
+            return Ok(cluster);
+        }
+    }
+    Err(anyhow::anyhow!(
+        "content-proven nested clone disappeared during cross-cluster subsumption: {report:#}"
+    ))
+}
+
+/// Pins the evidence and verdict of the clone that subsumption must preserve.
+fn assert_content_proven(cluster: &serde_json::Value) {
+    assert_eq!(
+        cluster_size(cluster),
+        2,
+        "the clone must span exactly two files"
+    );
+    assert_eq!(cluster_bucket(cluster), "identical");
+    for name in ["structural", "token_jaccard", "agreement", "fused"] {
+        assert!(
+            approx(signal(cluster, name), 1.0),
+            "content-proven clone must render {name}=1: {cluster:#}"
+        );
+    }
+}
+
+/// A low-content enclosing shape must not delete a byte-proven inner clone
+/// before [FUSION-CONTENT-GATE] can measure either view.
+/// [REPAIR-SUBSUME-CONTENT-FIRST]
+#[test]
+fn content_proven_nested_clone_survives_content_poor_enclosing_view() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("corpus");
+    write_content_subsumption_fixture(&scan_root)?;
+    let report = run_report(tmp.path(), &scan_root)?;
+    assert_content_proven(expect_shared_logic(&report, &scan_root)?);
+    Ok(())
+}
+
 // Issue #50 acceptance: a small C# file with two [Fact]-decorated
 // near-identical test methods must produce exactly one cluster covering
 // the test-method region. Pre-fix, the `attribute_list +
@@ -156,6 +256,106 @@ fn no_two_clusters_cover_the_same_physical_bytes() -> Result<()> {
         first_subsumed_pair(&report).is_none(),
         "cross-cluster overlap collapse missing: {}",
         first_subsumed_pair(&report).unwrap_or_default()
+    );
+    Ok(())
+}
+
+/// The default-settings report for a fixture directory, with embeddings
+/// off so the assertion turns on deterministic signals only.
+fn default_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value> {
+    report_with(tmp, scan_root, &["--embeddings", "off"])
+}
+
+/// One line per published cluster covering `needle`, for failure output.
+fn rendered_clusters(report: &serde_json::Value, needle: &str) -> Vec<String> {
+    clusters_for_file(report, needle)
+        .iter()
+        .map(|cluster| {
+            let spans: Vec<String> = cluster_occurrences(cluster)
+                .iter()
+                .map(|occurrence| format!("{}..{}", occurrence.start, occurrence.end))
+                .collect();
+            format!(
+                "{} [{}] {}",
+                cluster_id(cluster),
+                cluster_bucket(cluster),
+                spans.join(",")
+            )
+        })
+        .collect()
+}
+
+/// [REPAIR-SUBSUME-CONTENT-FIRST] / [PIPELINE-CLUSTER-SUBSUME]: the
+/// single-file half of the contract
+/// `content_proven_nested_clone_survives_content_poor_enclosing_view`
+/// holds across files.
+///
+/// `csharp-merge-readafter` holds one byte-identical five-statement run
+/// duplicated between two methods of the same class — `Prefix.cs` L6-10
+/// and L17-21, 158 bytes each, byte-for-byte equal. Enclosing it is a
+/// mis-scoped near-miss pairing the *whole* `ApplyStandard` body (L4-12,
+/// 235 bytes) against only the prefix of `ApplyPremium` (L16-21, 189
+/// bytes): two occurrences that are not the same code, routed
+/// `structural_only` at `structural` 0.85 and demoted by the renderer.
+///
+/// The demoted encloser must not delete the byte-identical clone. Both
+/// exceptions that let a nested view overturn its encloser require
+/// `spans_multiple_files`, so a byte-proven clone confined to one file
+/// has no route to survive: the report loses a Type-1 duplicate and
+/// claims nine lines of `ApplyStandard` are duplicated where five are.
+#[test]
+fn byte_identical_clone_survives_a_demoted_enclosing_view_in_one_file() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = fixture("csharp-merge-readafter");
+    let report = default_report(tmp.path(), &scan_root)?;
+    let candidates = clusters_for_file(&report, "Prefix.cs");
+    assert!(
+        !candidates.is_empty(),
+        "the fixture must report the duplicated prefix at all: {report:#}"
+    );
+
+    let mut byte_identical = Vec::new();
+    for cluster in &candidates {
+        let texts = occurrence_texts(&scan_root, cluster)?;
+        if let [first, rest @ ..] = texts.as_slice() {
+            if !rest.is_empty() && rest.iter().all(|text| text == first) {
+                byte_identical.push(cluster.clone());
+            }
+        }
+    }
+
+    let rendered = rendered_clusters(&report, "Prefix.cs");
+    assert_eq!(
+        byte_identical.len(),
+        1,
+        "exactly one published cluster must be the byte-identical \
+         five-statement run duplicated between ApplyStandard and \
+         ApplyPremium; a demoted `structural_only` view enclosing it must \
+         not delete it. Published: {rendered:#?}"
+    );
+
+    let clone = byte_identical
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("length asserted to be exactly one above"))?;
+    let occurrences = cluster_occurrences(clone);
+    assert_eq!(
+        occurrences.len(),
+        2,
+        "the byte-identical run occurs exactly twice: {clone:#}"
+    );
+    for occurrence in &occurrences {
+        assert_eq!(
+            occurrence.end.saturating_sub(occurrence.start),
+            158,
+            "each occurrence is the same 158-byte run; a differently-sized \
+             occurrence means a mis-scoped view was elected: {clone:#}"
+        );
+    }
+    assert_eq!(
+        cluster_bucket(clone),
+        "identical",
+        "a byte-for-byte equal duplicate is Type-1 `identical`, never a \
+         demoted near-miss: {clone:#}"
     );
     Ok(())
 }

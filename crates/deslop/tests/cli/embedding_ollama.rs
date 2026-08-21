@@ -112,13 +112,27 @@ fn run_ollama_scan(
     )
 }
 
+/// The behaviour-equivalence ground truth of the `csharp-type4`
+/// fixture, declared to the mock embedder.
+///
+/// `Recursive.cs` and `Iterative.cs` implement the same three functions
+/// two ways — the fixture's own comments say so — which is a Type-4
+/// clone: equal behaviour, different text. No statistic over the text
+/// can measure that, and the GH #369 mock is an honest content
+/// statistic (a feature hash of 5-byte shingles), so it scores the pair
+/// far below `MIN_COSINE`. Declaring the equivalence is what lets a
+/// deterministic mock stand in for a model that has read both files;
+/// the real `nomic-embed-text` measures this pair at cosine 0.97.
+/// Every pair the groups do not name keeps its honest shingle cosine.
+const TYPE4_BEHAVIOUR_GROUPS: &[&[&str]] = &[&["class Recursive", "class Iterative"]];
+
 /// Runs the `deslop` binary over `scan_root` writing to `output_prefix`
 /// with the given trailing `args` against a freshly-spawned happy-path
 /// mock Ollama, asserting the process succeeds. The mock stays alive for
 /// the synchronous run; its deterministic vectors keep the cache
 /// round-trip tests converging across separate invocations.
 fn run_deslop(scan_root: &Path, output_prefix: &Path, args: &[&str]) -> Result<()> {
-    let server = MockOllama::spawn()?;
+    let server = MockOllama::spawn_semantic(TYPE4_BEHAVIOUR_GROUPS)?;
     let mut cmd = deslop_command(scan_root, output_prefix)?;
     let _assertion = cmd
         .args(args)

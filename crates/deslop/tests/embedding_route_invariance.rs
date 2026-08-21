@@ -99,11 +99,19 @@ fn published(report: &serde_json::Value) -> Published {
 /// C# Type-3 near-miss carve-out, and every other cosine-reading
 /// filter.
 #[test]
-#[ignore = "GH #356: ollama-provider suite, excluded from the release gate. `ts-mixed-band` \
-            publishes a four-file clone with embeddings off and nothing with them on — \
-            ANN bridges mutate structural components before measurement \
-            (`session/render.rs`). BRANCH_REVIEW.md requires this stay red rather than be \
-            baselined. Assertions are intact — run with `-- --ignored`."]
+#[ignore = "GH #356: ollama-provider suite, excluded from the release gate. RED ON PURPOSE — \
+            the surviving half of #356, and a measured false negative, not a flake. \
+            `ts-mixed-band`: ledger_a/ledger_b are one Merkle class (fingerprints 93+277, \
+            `structural = 1.00`) and publish `structural_only` with embeddings off. With \
+            them on the ANN pass adds nine cosine-0.98 whole-file-root edges that chain all \
+            five ledgers into ONE 11-member component; the mean over its rendered pairs is \
+            `structural = 0.60, token_jaccard = 0.76, cos = 0.57`, which routes \
+            `loosely_similar`, which `report::cluster_is_hidden` drops. The proven pair is \
+            destroyed by a mean that describes none of its members — Merkle equality is \
+            bimodal (1.0 or 0.0), so 0.60 is 6 proven pairs plus 4 unproven ones, not a \
+            weak match. Fixing it means transitive closure must stop dissolving a proven \
+            equivalence class into a weaker component, which moves assertions across the \
+            suite and is not this change. Assertions are intact — run with `-- --ignored`."]
 fn embeddings_on_reports_every_file_set_embeddings_off_reported() -> Result<()> {
     for (corpus, min_nodes) in CORPORA {
         let cold = without_embeddings(corpus, min_nodes)?;
@@ -132,11 +140,6 @@ fn embeddings_on_reports_every_file_set_embeddings_off_reported() -> Result<()> 
 /// and reads as strictly weaker than the byte-level proof the cold run
 /// already had.
 #[test]
-#[ignore = "GH #356: ollama-provider suite, excluded from the release gate. `csharp-type3` \
-            publishes Delta.cs/Epsilon.cs as two `structural_only` clusters with embeddings \
-            off and one `same_behavior` cluster with them on — the bucket follows the \
-            discovery route, not the code. BRANCH_REVIEW.md requires this stay red rather \
-            than be baselined. Assertions are intact — run with `-- --ignored`."]
 fn embeddings_on_never_moves_a_reported_bucket() -> Result<()> {
     for (corpus, min_nodes) in CORPORA {
         let cold = without_embeddings(corpus, min_nodes)?;

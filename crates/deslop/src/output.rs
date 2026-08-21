@@ -225,6 +225,31 @@ pub(crate) fn write_file(path: &std::path::Path, payload: &[u8]) -> Result<()> {
 pub(crate) fn load_report(path: &std::path::Path) -> Result<Report> {
     let source =
         fs::read_to_string(path).with_context(|| format!("read report {}", path.display()))?;
-    serde_json::from_str::<Report>(&source)
-        .with_context(|| format!("parse report {}", path.display()))
+    let mut report = serde_json::from_str::<Report>(&source)
+        .with_context(|| format!("parse report {}", path.display()))?;
+    migrate_legacy_embedding_coverage(&mut report);
+    // A replayed report carries the figures it was written with, but the
+    // derived fields — rank, band, shape, occurrence count, fused gate,
+    // evidence sentence — are the engine's to state, and a report written
+    // before one of them existed must not render a zero
+    // ([SEVERITY-BAND], [FUSION-CONTENT-GATE]).
+    deslop_core::report_restamp::restamp_derived_fields(&mut report);
+    Ok(report)
+}
+
+/// Reconstructs `succeeded_subtrees` for reports written before
+/// per-occurrence coverage counting existed. The field deserializes to
+/// zero when absent, and every writer honours
+/// `attempted = succeeded + failed`, so a zero alongside a non-zero
+/// `attempted - failed` can only be a legacy report; the reconstruction
+/// is the invariant solved for the missing term, and a no-op on every
+/// report that already honours it.
+fn migrate_legacy_embedding_coverage(report: &mut Report) {
+    if let Some(provenance) = report.embedding_provenance.as_mut() {
+        if provenance.succeeded_subtrees == 0 {
+            provenance.succeeded_subtrees = provenance
+                .attempted_subtrees
+                .saturating_sub(provenance.failed_subtrees);
+        }
+    }
 }

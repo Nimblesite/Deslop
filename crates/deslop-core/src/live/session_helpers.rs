@@ -50,12 +50,17 @@ pub(super) fn report_running_progress(
     total: u64,
 ) {
     if let Some(reporter) = reporter {
+        let done = u64::try_from(done).unwrap_or(u64::MAX).min(total);
         reporter(EmbeddingProgress {
             phase: EmbeddingPhase::Running,
             provider_id: provider_id.to_owned(),
             model_id: model_id.to_owned(),
-            done: u64::try_from(done).unwrap_or(u64::MAX).min(total),
+            done,
             total,
+            // The engine owns every percentage ([METRICS-REPO]); the
+            // progress readout is the same `percent` the report figures
+            // go through, so no client divides `done` by `total`.
+            percent: crate::report_metrics::percent(done, total),
             message: None,
         });
     }

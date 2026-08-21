@@ -18,7 +18,10 @@ const TOP_K: usize = 5;
 /// reliable than ANN recall. Small fixture and edited-file runs can have
 /// many near-tied subtree embeddings; exact scoring prevents top-k
 /// neighbour truncation from dropping the only declaration-level Type-4
-/// pair.
+/// pair. Deleted once (commit `31d5efd18`) and restored:
+/// `embedding_pairs_keeps_an_admissible_pair_that_top_k_neighbours_crowd_out`
+/// and `dart_issue_119_embedding_role_mismatch` pin the recall it
+/// guards.
 const EXACT_PAIR_LIMIT: usize = 256;
 /// Minimum cosine similarity required for a pair to count as an
 /// embedding candidate. The fused threshold in [`crate::pair`] still
@@ -42,6 +45,31 @@ pub struct EmbeddingPair {
     pub cosine: f64,
 }
 
+impl EmbeddingPair {
+    /// Returns the pair with `left < right` so pair equality is
+    /// order-insensitive.
+    ///
+    /// Every producer routes through this one constructor. The ANN loop
+    /// discovers a pair from whichever endpoint it queried, and the
+    /// duplicate-snippet expansion in `pipeline::embedding_batch` emits
+    /// owner pairs in group order; neither knows the other's ordering, and
+    /// an unordered pair reaching [`dedupe`] would survive as a second copy
+    /// of a pair already recorded.
+    #[must_use]
+    pub fn ordered(first: usize, second: usize, cosine: f64) -> Self {
+        let (left, right) = if first <= second {
+            (first, second)
+        } else {
+            (second, first)
+        };
+        Self {
+            left,
+            right,
+            cosine,
+        }
+    }
+}
+
 /// Builds an HNSW over `embeddings` and returns the top-k nearest
 /// neighbour pairs whose cosine clears [`MIN_COSINE`]. Each index in
 /// `embeddings` corresponds one-to-one with the `fingerprints` slice
@@ -62,23 +90,6 @@ pub fn embedding_pairs(
         return dedupe(pairs);
     }
     ann_pairs
-}
-
-/// Retrieves top-k ANN neighbours for every embedding.
-fn ann_embedding_pairs(embeddings: &[Vec<f32>]) -> Vec<EmbeddingPair> {
-    let points: Vec<CosinePoint> = embeddings
-        .iter()
-        .map(|vector| CosinePoint::new(vector))
-        .collect();
-    let indices: Vec<usize> = (0..embeddings.len()).collect();
-    let map = Builder::default().seed(HNSW_SEED).build(points, indices);
-    let mut search = Search::default();
-    let mut pairs: Vec<EmbeddingPair> = Vec::new();
-    for (query_index, query) in embeddings.iter().enumerate() {
-        let probe = CosinePoint::new(query);
-        collect_neighbours(&map, &probe, query_index, &mut search, &mut pairs);
-    }
-    dedupe(pairs)
 }
 
 /// Scores every pair exactly for small corpora where ANN top-k recall is
@@ -120,6 +131,23 @@ fn collect_exact_pairs_from(
             });
         }
     }
+}
+
+/// Retrieves top-k ANN neighbours for every embedding.
+fn ann_embedding_pairs(embeddings: &[Vec<f32>]) -> Vec<EmbeddingPair> {
+    let points: Vec<CosinePoint> = embeddings
+        .iter()
+        .map(|vector| CosinePoint::new(vector))
+        .collect();
+    let indices: Vec<usize> = (0..embeddings.len()).collect();
+    let map = Builder::default().seed(HNSW_SEED).build(points, indices);
+    let mut search = Search::default();
+    let mut pairs: Vec<EmbeddingPair> = Vec::new();
+    for (query_index, query) in embeddings.iter().enumerate() {
+        let probe = CosinePoint::new(query);
+        collect_neighbours(&map, &probe, query_index, &mut search, &mut pairs);
+    }
+    dedupe(pairs)
 }
 
 /// Returns the cosine similarity of two raw vectors in `[0, 1]`.
@@ -183,7 +211,7 @@ fn collect_neighbours(
         if !admits_cosine(cosine) {
             continue;
         }
-        out.push(order_pair(query_index, neighbour, cosine));
+        out.push(EmbeddingPair::ordered(query_index, neighbour, cosine));
     }
 }
 
@@ -207,24 +235,6 @@ fn admits_cosine(cosine: f64) -> bool {
 /// fused sum.
 fn cosine_from_distance(distance: f64) -> f64 {
     (1.0 - distance).clamp(0.0, 1.0)
-}
-
-/// Returns an [`EmbeddingPair`] with `left < right` so pair equality
-/// is order-insensitive.
-fn order_pair(a: usize, b: usize, cosine: f64) -> EmbeddingPair {
-    if a <= b {
-        EmbeddingPair {
-            left: a,
-            right: b,
-            cosine,
-        }
-    } else {
-        EmbeddingPair {
-            left: b,
-            right: a,
-            cosine,
-        }
-    }
 }
 
 /// Keeps the highest cosine for each (left, right) pair. HNSW can

@@ -105,6 +105,10 @@ Embedding refreshes are always low priority with bounded batches and yield state
 
 Progress is observable: `queued`, `starting`, `running`, `complete`, `failed`.
 
+The terminal phase is a function of **the embeddings the pass produced**, never of whether the pipeline returned a report. A refresh that indexed no subtrees while attempting some has produced no semantic axis at all: it terminates `failed`, with `done = 0` and a message naming the provider failure, and `latest_report` keeps the last good generation. Committing that embeddings-off snapshot and announcing `complete` would tell the user the semantic pass ran while every clone that needed it is missing from the report — a false negative with no surface on which to notice it. Pinned by `deslop-lsp/tests/embedding_failure_progress.rs`; `run_embedding_refresh` converts a zero-embedding pass into a typed refresh failure before any commit.
+
+The one-shot CLI is a different contract: it renders whatever the pass measured, and `EmbeddingProvenance` carries `attempted_subtrees` / `indexed_subtrees` / `failed_subtrees` so a wholly failed pass is visible in the report rather than suppressed (`deslop/tests/ollama_failures.rs`).
+
 A user-approved model switch from either live surface writes the shared workspace embedding settings (`.vscode/settings.json` keys `deslop.embedding.*`). The MCP must not hold a successful model change in process memory only — it writes the settings file so LSP picks it up on config reload.
 
 ### [LIVE-STATE] In-process state
@@ -315,7 +319,7 @@ The LSP pushes three notification types to LSP clients (VSIX, other editors):
 
 - `report/changed` — fires after every pass with a non-empty delta. Payload: `{ generation: u64, summary: ChangeSummary }`. Must fire for pure removals — suppressing it is a bug.
 - `analysis/state` — fires on `idle → running`, `running → idle`, and on scheduler errors.
-- `embedding/progress` — fires around embedding refreshes. Payload: `{ phase, provider_id, model_id, done, total, message? }`.
+- `embedding/progress` — fires around embedding refreshes. Payload: `{ phase, provider_id, model_id, done, total, percent, message? }`. `percent` is `done / total` as a percentage, computed by the engine's single `percent` function ([METRICS-REPO](pipeline.md#metrics-repo)) so a progress readout is derived exactly where every other Deslop percentage is ([PRINCIPLES-ONE-CALCULATION](principles.md#principles-one-calculation)).
 
 The MCP **is** an IPC subscriber. It opens one long-lived `report/subscribe` connection over the socket and re-emits each `report/changed` notification to its own client as `notifications/deslop/reportChanged` ([MCP-NOTIFICATIONS]). It never reads `.deslop/cache/live-report.json` and never watches the workspace.
 

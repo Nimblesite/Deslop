@@ -16,9 +16,7 @@ use tree_sitter::Node;
 use crate::{
     ast::ByteRange,
     buckets::{
-        bucket_labels, classify_signals, content_gated_signals, has_saturating_shape_evidence,
-        is_lsh_only_nearmiss, ClusterKind, CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR,
-        LITERAL_TABLE_MIN_FRACTION, STRUCTURAL_ONLY_MAX_SUPPORT,
+        bucket_labels, classify_signals, content_gated_signals, route_shape_identical, ClusterKind,
     },
     cluster::Cluster,
     cluster_filters::ParseCache,
@@ -185,8 +183,12 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
     // interpretation, and the ranking demotion can no longer diverge.
     let bucket = kind.wire_label().to_owned();
     let occurrences_total = occurrences.len();
-    ReportCluster {
+    let mut report_cluster = ReportCluster {
         id: cluster.id.clone(),
+        // Stamped by `report_weight::stamp_ranks` once the final ranking
+        // sort has run ([VSIX-TOP-OFFENDERS-RANK-GLOBAL], [SEVERITY-BAND]).
+        rank: 0,
+        rank_band: String::new(),
         weight: cluster.weight,
         size: cluster.members.len(),
         canonical_node_count,
@@ -198,8 +200,15 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         category: crate::clone_category::CloneCategory::Logic
             .wire_label()
             .to_owned(),
+        language: cluster_language(cluster, file_languages),
+        // Stamped below by the one derived-field pass
+        // ([`crate::report_restamp`]) so the render path and the
+        // `--from-report` replay path can never compute them differently.
+        meets_fused_gate: false,
+        evidence_verdict: String::new(),
         occurrences,
         occurrences_total,
+        occurrence_count: 0,
         occurrences_truncated: false,
         summary,
         interpretation,
@@ -207,7 +216,26 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         // verified diff is in scope; absent otherwise.
         intersects_diff: None,
         is_newly_introduced: None,
-    }
+    };
+    crate::report_restamp::restamp_cluster(&mut report_cluster);
+    report_cluster
+}
+
+/// Detected language id of the cluster's first member, from the same
+/// parser-registry map every occurrence resolves
+/// ([PIPELINE-LANG-TRAIT]); `unknown` when the cluster is empty or the
+/// file never registered. Carried on the wire so no client re-derives
+/// a language from a file extension.
+fn cluster_language<S: BuildHasher>(
+    cluster: &Cluster,
+    file_languages: &HashMap<FileId, &'static str, S>,
+) -> String {
+    cluster
+        .members
+        .first()
+        .and_then(|member| file_languages.get(&member.file_id).copied())
+        .unwrap_or("unknown")
+        .to_owned()
 }
 
 /// Builds a [`ReportOccurrence`] for a single fingerprint member.
@@ -404,144 +432,6 @@ pub(crate) fn report_bucket_kind(
     //   `cluster_is_hidden` AST pass, which needs the CST this
     //   signal-only routing does not have.
     route_shape_identical(kind, signals, content, members)
-}
-
-/// [FUSION-CONTENT-GATE] routing tail: for shape-identical clusters the
-/// measured content evidence decides in both directions. The
-/// deterministic signals cannot: `structural` and `token_jaccard` are
-/// two views of one normalised representation, so once the shape
-/// saturates, the token axis echoes it at 1.0 for every same-shape
-/// family — the honest #339 sibling-window signatures made that echo
-/// universal, and the #197 REST settings family (content 0.72–0.80)
-/// would ride it straight into the act-now tier. So content decides:
-/// support at or above [`CONTENT_PROMOTE_FLOOR`] proves the clone
-/// (pooled raw bytes that mostly agree, or a literal-anchored
-/// consistent rename — [`ContentEvidence::support`]); anything below,
-/// with no semantic backing, routes to the demoted tier —
-/// [`ClusterKind::LooselySimilar`] for the cross-file scaffolding
-/// spread, [`ClusterKind::StructuralOnly`] otherwise.
-///
-/// The anchor-free near-miss ([CLONE-BUCKETS-ROUTING] row 4) is decided
-/// *before* that, by [`route_anchor_free`], and on different evidence —
-/// it has no shape match for this gate's populations to measure against.
-fn route_shape_identical(
-    kind: ClusterKind,
-    signals: ReportSignals,
-    content: ContentEvidence,
-    members: &[Fingerprint],
-) -> ClusterKind {
-    if !matches!(
-        kind,
-        ClusterKind::NearlyIdentical | ClusterKind::StructuralOnly
-    ) {
-        return kind;
-    }
-    if let Some(demoted) = route_anchor_free(signals, content, members) {
-        return demoted;
-    }
-    if !has_saturating_shape_evidence(signals) {
-        return kind;
-    }
-    // Semantic backing is content-independent evidence; the embedding
-    // pass measured behaviour, not shape, so the gate keeps its verdict.
-    if signals.embedding_cos >= STRUCTURAL_ONLY_MAX_SUPPORT {
-        return kind;
-    }
-    // Promotion rescues real clones from the demoted tier: pooled raw
-    // bytes that agree, or a maximal Type-2 rename whose literals and
-    // identifier mapping prove the copy. The bar depends on spread —
-    // a cross-file cluster promotes at the Type-3 overlap cutoff
-    // ([`CONTENT_SUPPORT_FLOOR`]), while a single-file cluster must
-    // share nearly every position ([`CONTENT_PROMOTE_FLOOR`]): the
-    // #197 in-class sibling families live in one file and measure
-    // 0.72–0.80 and are API surface, not extract-worthy duplication.
-    let promote_floor = if spans_multiple_files(members) {
-        CONTENT_SUPPORT_FLOOR
-    } else {
-        CONTENT_PROMOTE_FLOOR
-    };
-    if content.support() >= promote_floor {
-        return ClusterKind::NearlyIdentical;
-    }
-    // Literal-dominated families ([CLONE-NOISE-LITERAL-TABLE])
-    // stay in the surfaced `structural_only` tier instead of the hidden
-    // scaffolding one: the data-category policy ([RANK-CATEGORY]) owns
-    // their visibility, and a policy knob cannot govern a cluster the
-    // renderer already made disappear.
-    if is_cross_file_scaffolding(members) && content.literal_fraction < LITERAL_TABLE_MIN_FRACTION {
-        return ClusterKind::LooselySimilar;
-    }
-    ClusterKind::StructuralOnly
-}
-
-/// Returns true when a cluster's occurrences reach at least two files —
-/// the spread that separates a duplicated copy from an in-file sibling
-/// family in [`route_shape_identical`]'s promotion bar.
-fn spans_multiple_files(members: &[Fingerprint]) -> bool {
-    members
-        .first()
-        .is_some_and(|first| members.iter().any(|member| member.file_id != first.file_id))
-}
-
-/// Demotion for [CLONE-BUCKETS-ROUTING] **row 4** — the anchor-free
-/// near-miss — or `None` to leave the routing alone. `structural ≤ 0.01`
-/// means no shape matched at all, so a normalised-token estimate is the
-/// cluster's only evidence, and two shapes of cluster carry that estimate
-/// without earning an act-now verdict:
-///
-/// - **A cross-file spread** (3+ members over 3+ files) is the #134
-///   scaffolding pattern arriving through the token door instead of the
-///   structural one. Six distinct Flutter widgets read `structural=0.00,
-///   token_jaccard=0.93` over whole-file spans whose `build` bodies share
-///   nothing, because the framework-mandated declaration is most of each
-///   file (#331). **A genuine clone family of that width is demoted to a
-///   hint too** — the same trade [`is_cross_file_scaffolding`] already
-///   makes for shape-identical spreads, for the same reason, and it is a
-///   trade rather than a free win. Two narrower discriminators were
-///   measured and rejected: the content gate (see
-///   [`has_saturating_shape_evidence`]) and
-///   [`ContentEvidence::substance_varies`], both of which demote
-///   `csharp-type3` — a genuine renamed Type-3 pair — because neither can
-///   evaluate a rename across misaligned shapes. Narrowing this rule
-///   needs a discriminator that survives that fixture.
-/// - **An unmeasured cluster**, where the content pass could not compare
-///   two members at all. The anchored routes may take one on trust
-///   because their Merkle equality is itself proof; row 4 has no such
-///   signal, so unmeasured there means *nothing is known*. The #108
-///   JSON-schema pair (`structural=0.00, token_jaccard=0.96`) would
-///   otherwise be routed act-now on no evidence whatsoever.
-///
-/// The destination is [`ClusterKind::LooselySimilar`] — a hint the
-/// renderer hides — and never [`ClusterKind::StructuralOnly`], which
-/// would claim a shape match `structural = 0.00` says does not exist.
-///
-/// A *pair* that the content pass did measure is left alone even when its
-/// agreement is low: that is the renamed Type-3 clone
-/// ([`has_saturating_shape_evidence`] documents the 0.19 measurement),
-/// which this gate's populations are structurally unable to vouch for.
-fn route_anchor_free(
-    signals: ReportSignals,
-    content: ContentEvidence,
-    members: &[Fingerprint],
-) -> Option<ClusterKind> {
-    let unearned = !content.measured || is_cross_file_scaffolding(members);
-    (is_lsh_only_nearmiss(signals) && unearned).then_some(ClusterKind::LooselySimilar)
-}
-
-/// Returns true when a structural-only cluster spans enough distinct
-/// files to mirror the cross-test-file scaffolding pattern from issue
-/// #134. Caller has already established the saturating shape-evidence
-/// signal via [`has_saturating_shape_evidence`]. The 3-member, 3-file
-/// floors preserve small two-occurrence pairs; smaller spreads route
-/// to [`ClusterKind::StructuralOnly`] instead.
-fn is_cross_file_scaffolding(members: &[Fingerprint]) -> bool {
-    if members.len() < 3 {
-        return false;
-    }
-    let mut files: Vec<FileId> = members.iter().map(|member| member.file_id).collect();
-    files.sort_unstable();
-    files.dedup();
-    files.len() >= 3
 }
 
 /// Maps the report bucket onto a one-line interpretation for AI agents.
@@ -779,8 +669,12 @@ mod tests {
         ReportSignals {
             structural: 1.0,
             token_jaccard: 1.0,
+            shape: 1.0,
             embedding_cos: 0.0,
             fused: 1.0,
+            agreement: 0.0,
+            rename_consistency: 0.0,
+            literal_fraction: 0.0,
         }
     }
 }

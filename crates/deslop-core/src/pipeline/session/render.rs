@@ -12,9 +12,9 @@
 
 use crate::{
     cluster::build_ranked_fused_clusters,
-    content::attach_content_evidence,
     error::CoreError,
     lsh::band_collisions,
+    overlap::apply_shared_subtree_rescue,
     pair::{candidate_pairs_for_language_policy, cluster_by_transitive_closure},
     report::{render_report, CacheStats, Report, ReportInputs},
 };
@@ -62,7 +62,7 @@ impl PipelineSession {
             embedding_pairs = embedding_outcome.pairs.len(),
             "collecting candidate pairs"
         );
-        let pairs = candidate_pairs_for_language_policy(
+        let mut pairs = candidate_pairs_for_language_policy(
             fingerprints,
             signatures,
             &lsh_pairs,
@@ -71,6 +71,10 @@ impl PipelineSession {
             &self.file_languages,
             self.exclusion.allows_cross_language_comparison(),
         );
+        // [FUSION-SHARED-SUBTREE] (gh #408): measure the structural
+        // overlap the anchor axis discards before survival drops the
+        // enclosing Type-3 pair and leaves only its fragment views.
+        apply_shared_subtree_rescue(&mut pairs, fingerprints, self.store.trees());
         tracing::debug!(
             candidate_pairs = pairs.len(),
             "clustering by transitive closure"
@@ -82,13 +86,14 @@ impl PipelineSession {
         // on; the per-language space is exact otherwise. Mixing spaces
         // inside one cluster mean would average incomparable values.
         let measurement_signatures = cross_language_signatures.as_deref().unwrap_or(signatures);
-        let mut clusters = build_ranked_fused_clusters(
+        let clusters = build_ranked_fused_clusters(
             fingerprints,
             measurement_signatures,
             &embedding_outcome.vectors,
             &fused_clusters,
+            self.store.trees(),
+            &self.sources,
         );
-        attach_content_evidence(&mut clusters, self.store.trees(), &self.sources);
         tracing::info!(
             ranked_clusters = clusters.len(),
             fingerprints = fingerprints.len(),

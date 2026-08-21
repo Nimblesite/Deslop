@@ -237,6 +237,17 @@ fn mapped_column_walk(
         && node.start_byte() >= range.start
         && node.end_byte() <= range.end
     {
+        // A docstring is not a declaration. It only became reachable
+        // here once an occurrence could span a whole module
+        // ([FUSION-SHARED-SUBTREE] widened which view wins): a bare
+        // string parses as an `expression_statement`, the walk read it
+        // as an alien statement, and the whole ORM filter stopped
+        // firing — so two modules declaring entirely different tables
+        // surfaced as duplicate logic (gh #105). Docstrings say nothing
+        // about whether the code around them is duplicated.
+        if is_docstring_statement(node) {
+            return true;
+        }
         let Some(name) = mapped_column_declaration_name(node, source) else {
             return false;
         };
@@ -250,6 +261,14 @@ fn mapped_column_walk(
         }
     }
     true
+}
+
+/// True for an `expression_statement` that is nothing but a string —
+/// a module, class or function docstring.
+fn is_docstring_statement(node: Node<'_>) -> bool {
+    let mut cursor = node.walk();
+    let children: Vec<Node<'_>> = node.named_children(&mut cursor).collect();
+    matches!(children.as_slice(), [only] if only.kind() == "string")
 }
 
 /// Returns the LHS attribute name for an `attr: Mapped[T] = mapped_column(...)`

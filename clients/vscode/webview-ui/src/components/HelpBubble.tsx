@@ -1,8 +1,10 @@
 import type { ComponentChildren, JSX } from "preact";
+import { SIGNAL_HELP, type SignalTopic } from "../../../src/types/signals";
 
 const DOCS_BASE = "https://deslop.live/docs/vscode-cluster-panel/";
 
-export type HelpTopic =
+/** Every helped element of the cluster panel that is not a signal. */
+export type PanelTopic =
   | "cluster-id"
   | "clone-bucket"
   | "ai-match"
@@ -11,11 +13,6 @@ export type HelpTopic =
   | "size"
   | "occurrence-count"
   | "canonical"
-  | "signals"
-  | "structural"
-  | "jaccard"
-  | "embedding"
-  | "fused"
   | "occurrences"
   | "occurrence-location"
   | "hidden-occurrence"
@@ -24,7 +21,9 @@ export type HelpTopic =
   | "cluster-navigation"
   | "keyboard-shortcuts";
 
-const HELP_COPY: Record<HelpTopic, string> = {
+export type HelpTopic = PanelTopic | SignalTopic;
+
+const PANEL_HELP: Record<PanelTopic, string> = {
   "cluster-id": "Stable identifier for this duplicate-code cluster.",
   "clone-bucket": "Human label for the kind of clone Deslop detected.",
   "ai-match": "The embedding pass found a semantic match, not only a syntactic one.",
@@ -33,11 +32,6 @@ const HELP_COPY: Record<HelpTopic, string> = {
   size: "Number of cloned AST members represented by this cluster.",
   "occurrence-count": "Number of editor locations in this cluster.",
   canonical: "First occurrence used as the comparison anchor.",
-  signals: "Four scores that explain why Deslop grouped these locations.",
-  structural: "AST-shape similarity after identifiers and literals are normalized.",
-  jaccard: "Token-overlap similarity after formatting and trivia are ignored.",
-  embedding: "Semantic similarity from the selected local embedding model.",
-  fused: "Combined clone score used to decide whether a pair is reportable.",
   occurrences: "The concrete locations where this cluster appears.",
   "occurrence-location": "File, line, and column that Open will navigate to.",
   "hidden-occurrence": "This occurrence matched report_hide configuration.",
@@ -46,6 +40,12 @@ const HELP_COPY: Record<HelpTopic, string> = {
   "cluster-navigation": "Move between clusters without leaving this panel.",
   "keyboard-shortcuts": "Keyboard actions available while focus is in the panel.",
 };
+
+// [FUSION-CONTENT-GATE] The signal copy is not restated here. `SIGNAL_HELP`
+// is the one definition the strip, its tooltips and the docs anchors all
+// read, so the confidence scores and the content evidence behind them can
+// never be explained two different ways.
+const HELP_COPY: Record<HelpTopic, string> = { ...PANEL_HELP, ...SIGNAL_HELP };
 
 interface HelpBubbleProps {
   topic: HelpTopic;

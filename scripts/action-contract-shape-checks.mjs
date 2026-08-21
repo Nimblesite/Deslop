@@ -170,17 +170,70 @@ check("the branch-built action diff-gate proof runs in the deployment gate", () 
   );
 });
 
-check("every output is wired to the report step", () => {
+// The list is derived from the helper, never hand-maintained beside it. A
+// hand-written list is how the three gate outputs came to be computed,
+// consumed by the action's own gate step, and never exported: both the
+// declaration and the "every output" check listed the same older seven, so
+// the contract test agreed with the bug. `steps.<id>.outputs.gate-scope` read
+// empty for every caller, and the hosted self-test's assertion on it could
+// only fail after a release, not before one.
+check("every output the helper emits is declared and wired", () => {
+  const helper = readFileSync(
+    new URL("./action-read-outputs.mjs", import.meta.url),
+    "utf8",
+  );
+  const emitted = [...helper.matchAll(/"([a-z][a-z-]*)":/g)].map((match) => match[1]);
   const outputs = [
     "duplication-percent", "cluster-count", "threshold-percent",
     "exit-code", "report-json", "report-text", "report-html",
+    "gate-scope", "gate-percent", "gate-threshold-percent",
   ];
   for (const output of outputs) {
+    assert.ok(
+      emitted.includes(output),
+      `action-read-outputs.mjs no longer emits ${output}`,
+    );
     assert.ok(
       action.includes(`value: \${{ steps.report.outputs.${output} }}`),
       `action.yml output ${output} is not wired to the report step`,
     );
+    assert.ok(
+      new RegExp(`^  ${output}:$`, "m").test(action),
+      `action.yml does not declare ${output} in its public outputs block`,
+    );
   }
+  for (const output of emitted) {
+    assert.ok(
+      outputs.includes(output),
+      `action-read-outputs.mjs emits ${output}, which no contract check covers`,
+    );
+  }
+});
+
+// The advertised-but-unsuppliable stdin diff must fail closed at the
+// composite boundary. A `uses:` step has no stdin, so `--diff -` reads an
+// empty patch, and `--only-changed` then measures 0/0 = 0% and passes any
+// ceiling while omitting every cluster in the tree — a changed-code false
+// negative at the merge gate the feature exists to be.
+check("the action rejects the stdin diff form before downloading a CLI", () => {
+  assert.ok(
+    action.includes("if: inputs.diff == '-'"),
+    "action.yml must guard the diff: \"-\" input",
+  );
+  const guard = action.indexOf("if: inputs.diff == '-'");
+  const resolve = action.indexOf("name: Resolve the deslop release");
+  assert.ok(
+    guard < resolve,
+    "the stdin-diff guard must run before the CLI is resolved and downloaded",
+  );
+  assert.ok(
+    /if: inputs\.diff == '-'[\s\S]{0,600}?exit 2/.test(action),
+    "the stdin-diff guard must exit 2, the CLI's own usage-error status",
+  );
+  assert.ok(
+    !/or "-" to read the diff from stdin/.test(action),
+    "action.yml must not advertise a stdin diff it cannot supply",
+  );
 });
 
 // Every nested third-party action must be pinned to an immutable commit, not a

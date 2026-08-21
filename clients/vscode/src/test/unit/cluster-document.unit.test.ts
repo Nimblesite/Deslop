@@ -3,21 +3,25 @@ import * as vscode from "vscode";
 
 import { clusterDocumentContent } from "../../clusterDocument";
 import type { Report, ReportCluster } from "../../types/report";
+import type { ClusterFixture } from "../cluster.helpers";
 import { emptyReport, repoMetrics } from "./report.helpers";
+import { wireCluster } from "../cluster.helpers";
+import { signalsWith } from "../signals.helpers";
 
-function cluster(overrides: Partial<ReportCluster> = {}): ReportCluster {
-  return {
+function cluster(overrides: Partial<ClusterFixture> = {}): ReportCluster {
+  return wireCluster({
     id: "cluster-for-test",
     weight: 12.345,
     size: 2,
     canonical_node_count: 12,
     bucket: "identical",
-    signals: {
+    signals: signalsWith("nearly_identical", {
       structural: 1,
       token_jaccard: 0.875,
+      shape: 1,
       embedding_cos: 0.25,
       fused: 0.9,
-    },
+    }),
     occurrences: [
       {
         path: "/repo/Alpha.cs",
@@ -40,11 +44,8 @@ function cluster(overrides: Partial<ReportCluster> = {}): ReportCluster {
       },
     ],
     occurrences_total: 4,
-    occurrences_truncated: false,
-    summary: "",
-    interpretation: "",
     ...overrides,
-  };
+  });
 }
 
 function report(clusters: ReportCluster[] = [cluster()]): Report {

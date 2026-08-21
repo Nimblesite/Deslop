@@ -27,7 +27,7 @@ import {
   Report,
   ReportCluster,
   ReportOccurrence,
-  visibleOccurrenceCount,
+  occurrenceCount,
 } from "../types/report";
 
 const REDRAW_DEBOUNCE_MS = 60;
@@ -108,9 +108,10 @@ function createDecoration(severity: DeslopSeverity): vscode.TextEditorDecoration
 }
 
 // Kept for test harness — ClusterHoverProvider uses clusterHoverMarkdown directly.
-// Uses visibleOccurrenceCount so the count reflects what the user can act on.
+// The count is the engine's `occurrence_count`, the same number every
+// other surface shows.
 export function hoverFor(cluster: ReportCluster): vscode.MarkdownString {
-  return clusterHoverMarkdown(cluster, { count: visibleOccurrenceCount(cluster) });
+  return clusterHoverMarkdown(cluster, { count: occurrenceCount(cluster) });
 }
 
 // Maps a UTF-8 byte range to an editor range, allocating the document buffer per

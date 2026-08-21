@@ -90,7 +90,19 @@ pub(super) fn is_no_newline_marker(line: &str) -> bool {
 ///
 /// Returns [`CoreError::DiffParse`] when a C-quoted path is malformed
 /// or decodes to invalid UTF-8 — guessing at a filename would silently
-/// drop that file from the scope rather than fail loudly.
+/// drop that file from the scope rather than fail loudly — or when the
+/// payload names nothing at all.
+///
+/// An empty payload is a refusal, not an ignorable section, and the
+/// distinction is a false negative at the merge gate. `Some("")` marked
+/// the section as having seen its target, and the verifier then
+/// discarded the empty path as resolving outside the scan root: a
+/// truncated `+++ ` header silently erased every added line in the
+/// diff, so `--only-changed` measured `0 / 0` and a breached repository
+/// passed the changed-code gate. `/dev/null` is unaffected — that is a
+/// *seen* target meaning "deleted", handled above. Matches
+/// [`copy_path`], which already refuses a pathless copy for the same
+/// reason. Pinned by `deslop::diff_ingest_refusals`.
 pub(super) fn new_side_path(line_no: usize, raw: &str) -> Result<Option<String>, CoreError> {
     let target = raw.split('\t').next().unwrap_or(raw);
     let path = match target.strip_prefix('"') {
@@ -101,5 +113,8 @@ pub(super) fn new_side_path(line_no: usize, raw: &str) -> Result<Option<String>,
         return Ok(None);
     }
     let unprefixed = path.strip_prefix("b/").unwrap_or(&path);
+    if unprefixed.is_empty() {
+        return Err(parse_error(line_no, "+++ target names no path"));
+    }
     Ok(Some(unprefixed.to_owned()))
 }

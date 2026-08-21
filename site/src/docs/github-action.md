@@ -57,7 +57,7 @@ If you pin to a commit SHA or a branch, the ref carries no version, so `version`
 | `no-fail-over` | `false` | Clear any configured threshold for this run |
 | `min-nodes` | `30` | Minimum AST subtree node count for a clone candidate |
 | `config` | *(unset)* | Explicit `.deslop.toml` path |
-| `diff` | *(unset)* | Unified diff whose added lines scope the report — a patch file path, or `-` for stdin. The whole tree is still analysed; the diff scopes what is reported, never what is scanned |
+| `diff` | *(unset)* | Unified diff whose added lines scope the report — a patch file path. The whole tree is still analysed; the diff scopes what is reported, never what is scanned. `-` (stdin) is a CLI-only form: a composite action has no stdin to supply, so the Action rejects it rather than silently measuring an empty diff |
 | `only-changed` | `false` | Report only the clusters the diff touches and gate on the diff-scoped percentage — duplicated added lines over added lines — so legacy debt cannot fail a pre-merge check. Requires `diff` |
 | `cache` | `true` | Carry the parse store between runs through the Actions cache, so a warm run re-parses only what changed |
 | `output` | `deslop-report` | Report path prefix; `.json`, `.txt`, `.html` are appended |
@@ -75,6 +75,9 @@ If you pin to a commit SHA or a branch, the ref carries no version, so `version`
 | `threshold-percent` | The ceiling this run was measured against |
 | `exit-code` | `0` clean, `1` runtime error, `2` usage error, `3` breached |
 | `report-json` / `report-text` / `report-html` | Paths to the rendered reports |
+| `gate-scope` | Which population the gate measured — `added-lines` under `only-changed`, `repository` otherwise |
+| `gate-percent` | The percentage the gate compared against its ceiling, over `gate-scope`'s population |
+| `gate-threshold-percent` | The ceiling `gate-percent` was compared against |
 
 Outputs are published **even when the gate trips**, so a later step can comment the number or ratchet a budget. Setting `nojson: true` leaves them empty — they are read from the JSON report.
 

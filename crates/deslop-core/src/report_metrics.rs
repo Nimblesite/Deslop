@@ -9,7 +9,7 @@
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
     hash::BuildHasher,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use crate::{
@@ -43,6 +43,7 @@ impl RepoMetrics {
             duplicated_files: 0,
             threshold: ThresholdSummary::none(),
             per_file: Vec::new(),
+            folders: Vec::new(),
             diff: None,
         }
     }
@@ -149,6 +150,8 @@ pub fn compute_repo_metrics<S: BuildHasher>(inputs: &MetricsInputs<'_, S>) -> Re
         .filter(|set| !set.is_empty())
         .count();
     let duplication_percent = percent(duplicated_loc, analysed_loc);
+    let per_file = per_file_metrics(&per_file_lines, inputs);
+    let folders = folder_metrics(&per_file);
     RepoMetrics {
         analysed_loc,
         duplicated_loc,
@@ -162,11 +165,87 @@ pub fn compute_repo_metrics<S: BuildHasher>(inputs: &MetricsInputs<'_, S>) -> Re
         clusters_total: inputs.clusters.len(),
         duplicated_files,
         threshold: ThresholdSummary::none(),
-        per_file: per_file_metrics(&per_file_lines, inputs),
+        per_file,
+        folders,
         diff: inputs
             .diff
             .map(|scope| diff_metrics(&per_file_lines, inputs, scope)),
     }
+}
+
+/// Builds the per-folder breakdown ([METRICS-REPO] `RepoMetrics.folders`)
+/// by summing the already-computed `per_file` rows under every folder
+/// prefix — clean files stay in the denominator exactly as they do per
+/// file — and dividing with the same [`percent`] every other figure uses.
+/// This is the **only** place folder percentages are computed; consumers
+/// render these rows verbatim. Folders with no duplicated lines are
+/// dropped; rows sort worst-first, path tiebreaker, like `per_file`.
+fn folder_metrics(per_file: &[FileMetric]) -> Vec<FileMetric> {
+    let mut rows: Vec<FileMetric> = folder_sums(per_file)
+        .into_iter()
+        .filter(|(_, (_, duplicated_loc))| *duplicated_loc > 0)
+        .map(|(path, (analysed_loc, duplicated_loc))| FileMetric {
+            path: PathBuf::from(path),
+            analysed_loc,
+            duplicated_loc,
+            duplication_percent: percent(duplicated_loc, analysed_loc),
+        })
+        .collect();
+    sort_worst_first(&mut rows);
+    rows
+}
+
+/// Sums `(analysed_loc, duplicated_loc)` for every folder prefix of
+/// every `per_file` row, clean files included.
+fn folder_sums(per_file: &[FileMetric]) -> HashMap<String, (u64, u64)> {
+    let mut sums: HashMap<String, (u64, u64)> = HashMap::new();
+    for row in per_file {
+        for prefix in folder_prefixes(&row.path) {
+            let entry = sums.entry(prefix).or_insert((0, 0));
+            entry.0 = entry.0.saturating_add(row.analysed_loc);
+            entry.1 = entry.1.saturating_add(row.duplicated_loc);
+        }
+    }
+    sums
+}
+
+/// Deterministic wire order shared by `per_file` and `folders`: worst
+/// percentage first, path tiebreaker.
+fn sort_worst_first(rows: &mut [FileMetric]) {
+    rows.sort_by(|left, right| {
+        right
+            .duplication_percent
+            .partial_cmp(&left.duplication_percent)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.path.cmp(&right.path))
+    });
+}
+
+/// Every folder prefix of `path`, shallowest first, joined with `/` on
+/// every platform so folder-row paths group the same segments a client
+/// splits a file-row path into. Root and current-dir markers contribute
+/// nothing; a Windows drive prefix is kept as its own segment.
+fn folder_prefixes(path: &Path) -> Vec<String> {
+    let segments: Vec<String> = path
+        .components()
+        .filter(|component| {
+            !matches!(
+                component,
+                std::path::Component::RootDir | std::path::Component::CurDir
+            )
+        })
+        .map(|component| component.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    let mut prefixes = Vec::new();
+    let mut accumulated = String::new();
+    for segment in segments.iter().take(segments.len().saturating_sub(1)) {
+        if !accumulated.is_empty() {
+            accumulated.push('/');
+        }
+        accumulated.push_str(segment);
+        prefixes.push(accumulated.clone());
+    }
+    prefixes
 }
 
 /// Builds the [METRICS-DIFF-SCOPE] added-line block. The numerator is
@@ -212,13 +291,7 @@ fn per_file_metrics<S: BuildHasher>(
         .into_iter()
         .filter_map(|file_id| file_metric(file_id, per_file_lines, inputs))
         .collect();
-    rows.sort_by(|left, right| {
-        right
-            .duplication_percent
-            .partial_cmp(&left.duplication_percent)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| left.path.cmp(&right.path))
-    });
+    sort_worst_first(&mut rows);
     rows
 }
 
@@ -336,7 +409,7 @@ fn count_newlines(bytes: &[u8]) -> u64 {
 /// both inputs are physical line counts — real repos never reach
 /// 2^32 lines, and we clamp before casting so the `as f64` step never
 /// loses precision in the reachable range.
-fn percent(num: u64, denom: u64) -> f64 {
+pub(crate) fn percent(num: u64, denom: u64) -> f64 {
     if denom == 0 {
         return 0.0;
     }

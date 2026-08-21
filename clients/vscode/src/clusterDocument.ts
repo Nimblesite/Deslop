@@ -5,6 +5,8 @@ import * as vscode from "vscode";
 import { log, logWarn } from "./logging";
 import { occurrenceDisplayLocation } from "./locations";
 import { ReportStore } from "./reportStore";
+import { formatScore } from "./types/format";
+import { formatSignal } from "./types/signals";
 import { occurrenceCount, Report, ReportCluster, ReportOccurrence } from "./types/report";
 
 export const CLUSTER_DOCUMENT_SCHEME = "deslop";
@@ -71,10 +73,10 @@ function renderClusterDocument(cluster: ReportCluster): string {
     `# Deslop cluster ${cluster.id}`,
     "",
     `Occurrences: ${occurrenceCount(cluster)}`,
-    `Weight: ${cluster.weight.toFixed(2)}`,
-    `Signals: structural ${cluster.signals.structural.toFixed(2)}, ` +
-      `jaccard ${cluster.signals.token_jaccard.toFixed(2)}, ` +
-      `embedding ${cluster.signals.embedding_cos.toFixed(2)}`,
+    `Weight: ${formatScore(cluster.weight)}`,
+    `Signals: structural ${formatSignal(cluster.signals.structural)}, ` +
+      `jaccard ${formatSignal(cluster.signals.token_jaccard)}, ` +
+      `embedding ${formatSignal(cluster.signals.embedding_cos)}`,
     "",
     "## Occurrences",
     ...cluster.occurrences.map(renderOccurrence),

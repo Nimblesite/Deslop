@@ -618,6 +618,18 @@ impl AnalysisSession {
         job
     }
 
+    /// Whether `job` is still the latest selected-model request.
+    ///
+    /// Both terminal announcements are gated on this. A superseded job
+    /// must stay silent in **either** direction: announcing its
+    /// `complete` would publish a verdict for a model the user has
+    /// already replaced, and announcing its `failed` would overwrite the
+    /// newer job's verdict with a stale failure, since clients carry one
+    /// embedding-progress signal rather than one per revision.
+    pub(super) fn embedding_refresh_is_current(&self, job: &EmbeddingRefreshJob) -> bool {
+        job.revision == self.embedding_refresh_revision
+    }
+
     /// Commits a completed embedding refresh when it is still the
     /// latest selected-model request.
     pub(super) fn commit_embedding_refresh(
@@ -625,7 +637,7 @@ impl AnalysisSession {
         job: &EmbeddingRefreshJob,
         report: Report,
     ) -> Option<CommittedEmbeddingRefresh> {
-        if job.revision != self.embedding_refresh_revision {
+        if !self.embedding_refresh_is_current(job) {
             return None;
         }
         let previous_generation = self.generation;

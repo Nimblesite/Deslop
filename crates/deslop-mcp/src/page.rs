@@ -9,7 +9,6 @@
 //! (where the unsliced report has hit 4 MB+ in production).
 
 use deslop_core::{
-    pipeline::language_for_path,
     report::{Report, ReportCluster},
     wire_generated::{
         ClusterSummary, OccurrenceSummary, RepoMetrics, ReportPage, ReportPageFilters,
@@ -85,13 +84,29 @@ pub fn build_page(
 /// thousand files — or a few hundred deeply nested ones — that block
 /// outweighs the entire 200 KB tool-result budget before a single
 /// cluster is added, which made every `report-query` overflow. It is
-/// opt-in; the headline totals are always present.
+/// opt-in; the headline totals are always present. `folders` is the
+/// engine-computed rollup of the same block ([METRICS-REPO]) and rides
+/// the same switch.
 fn page_metrics(report: &Report, include_per_file: bool) -> RepoMetrics {
     let mut metrics = report.metrics.clone();
     if !include_per_file {
         metrics.per_file = Vec::new();
+        metrics.folders = Vec::new();
     }
     metrics
+}
+
+/// The cluster's language as the engine stamped it. Re-deriving it from
+/// a path extension here would be a second language decision that can
+/// disagree with the report's own — the wire field is the only source,
+/// and an empty one (a replayed report predating the field) reads as
+/// the engine's own fallback label.
+fn cluster_language(cluster: &ReportCluster) -> &str {
+    if cluster.language.is_empty() {
+        "unknown"
+    } else {
+        &cluster.language
+    }
 }
 
 /// Returns whether `cluster` satisfies every active filter on `filters`.
@@ -112,11 +127,7 @@ fn matches_filters(filters: &ReportPageFilters, cluster: &ReportCluster) -> bool
         }
     }
     if let Some(language) = filters.language.as_deref() {
-        let detected = cluster
-            .occurrences
-            .first()
-            .map_or("unknown", |occ| language_for_path(&occ.path));
-        if detected != language {
+        if cluster_language(cluster) != language {
             return false;
         }
     }
@@ -157,18 +168,13 @@ fn cluster_summary_from(cluster: &ReportCluster) -> ClusterSummary {
         start_line: occ.start_line,
         end_line: occ.end_line,
     });
-    let language = cluster
-        .occurrences
-        .first()
-        .map_or("unknown", |occ| language_for_path(&occ.path));
-    let occurrence_count = cluster.occurrences_total.max(cluster.size);
     ClusterSummary {
         id: cluster.id.clone(),
         bucket: cluster.bucket.clone(),
         score: cluster.weight,
         size_nodes: cluster.canonical_node_count,
-        occurrence_count,
-        language: language.to_owned(),
+        occurrence_count: deslop_core::report::occurrence_count(cluster),
+        language: cluster_language(cluster).to_owned(),
         first_occurrence,
     }
 }

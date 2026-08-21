@@ -7,6 +7,8 @@ import { StatusBar, sameFile, shortPath } from "../../commands/statusBar";
 import { ReportStore } from "../../reportStore";
 import { Report } from "../../types/report";
 import { emptyReport, repoMetrics } from "./report.helpers";
+import { bucketSignals } from "../signals.helpers";
+import { occurrence, wireCluster } from "../cluster.helpers";
 
 function report(): Report {
   return emptyReport({
@@ -21,21 +23,14 @@ function report(): Report {
       duplicated_files: 1,
     }),
     clusters: [
-      {
+      wireCluster({
         id: "a",
         weight: 10,
         size: 3,
-        canonical_node_count: 4,
         bucket: "identical",
-        signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
-        occurrences: [
-          { path: "/tmp/A/Alpha.cs", start_byte: 0, end_byte: 10, hidden: false },
-        ],
-        occurrences_total: 0,
-        occurrences_truncated: false,
-        summary: "",
-        interpretation: "",
-      },
+        signals: bucketSignals("identical"),
+        occurrences: [occurrence("/tmp/A/Alpha.cs", 0, 10)],
+      }),
     ],
   });
 }

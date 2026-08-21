@@ -15,9 +15,11 @@ use std::{
 };
 
 use crate::{
-    content::ContentEvidence,
+    ast::NormalizedNode,
+    content::{attach_content_evidence, ContentEvidence},
     fingerprint::Fingerprint,
     lsh::Signature,
+    overlap::OverlapMeasurer,
     pair::{FusedCluster, PairScore},
     state::FileId,
 };
@@ -53,8 +55,10 @@ pub struct Cluster {
     /// pooled byte agreement, Type-2 rename consistency, and literal
     /// dominance ([CLONE-NOISE-LITERAL-TABLE]). Starts
     /// [`ContentEvidence::unmeasured`];
-    /// `crate::content::attach_content_evidence` measures it during
-    /// render, before bucket routing and the ranking weight read it.
+    /// [`crate::content::attach_content_evidence`] measures it inside
+    /// [`build_ranked_fused_clusters`], before cross-cluster
+    /// subsumption elects the surviving view and before bucket routing
+    /// and the ranking weight read it (#367).
     pub content: ContentEvidence,
 }
 
@@ -70,18 +74,28 @@ const MIN_REPORTABLE_MEMBERS: usize = 2;
 ///
 /// The signal breakdown is measured between each cluster's rendered
 /// occurrences ([FUSION-CLUSTER-SIGNALS]) from `signatures` and
-/// `embedding_vectors`. Cluster ids are derived from the smallest
-/// member's hash so identical fused clusters across runs always report
-/// the same id.
+/// `embedding_vectors`, and each cluster's [`ContentEvidence`] is
+/// measured from `trees` and `sources` **before** cross-cluster
+/// subsumption elects the surviving view ([FUSION-CONTENT-GATE],
+/// [PIPELINE-CLUSTER-SUBSUME]). Cluster ids are derived from the
+/// smallest member's hash so identical fused clusters across runs
+/// always report the same id.
 #[must_use]
-pub fn build_ranked_fused_clusters<S: BuildHasher>(
+pub fn build_ranked_fused_clusters<S: BuildHasher, H: BuildHasher>(
     fingerprints: &[Fingerprint],
     signatures: &[Signature],
     embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     fused_clusters: &[FusedCluster],
+    trees: &[NormalizedNode],
+    sources: &HashMap<FileId, Vec<u8>, H>,
 ) -> Vec<Cluster> {
-    let mut clusters =
-        reportable_clusters(fingerprints, signatures, embedding_vectors, fused_clusters);
+    let mut clusters = reportable_clusters(
+        fingerprints,
+        signatures,
+        embedding_vectors,
+        fused_clusters,
+        trees,
+    );
     let dropped_below_min_members = fused_clusters.len().saturating_sub(clusters.len());
     clusters.sort_by(|left, right| {
         right
@@ -90,21 +104,38 @@ pub fn build_ranked_fused_clusters<S: BuildHasher>(
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| left.id.cmp(&right.id))
     });
+    // [FUSION-CONTENT-GATE] before [PIPELINE-CLUSTER-SUBSUME] (#367,
+    // #408): subsumption deletes whole views, and the choice must see
+    // the same measured content evidence the report will render — a
+    // survivor elected on raw geometry cannot be re-elected later.
+    attach_content_evidence(&mut clusters, trees, sources);
     let collapsed = collapse_cross_cluster_overlap(clusters);
     log_ranked_cluster_distribution(&collapsed, fused_clusters.len(), dropped_below_min_members);
     collapsed
 }
 
-/// Materialises every fused cluster that remains reportable.
+/// Materialises every fused cluster that remains reportable. One
+/// [`OverlapMeasurer`] serves the whole build so an occurrence shared
+/// by several clusters is inventoried once ([FUSION-SHARED-SUBTREE]).
 fn reportable_clusters<S: BuildHasher>(
     fingerprints: &[Fingerprint],
     signatures: &[Signature],
     embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     fused_clusters: &[FusedCluster],
+    trees: &[NormalizedNode],
 ) -> Vec<Cluster> {
+    let mut overlap = OverlapMeasurer::new(trees);
     fused_clusters
         .iter()
-        .filter_map(|fused| build_fused_cluster(fingerprints, signatures, embedding_vectors, fused))
+        .filter_map(|fused| {
+            build_fused_cluster(
+                fingerprints,
+                signatures,
+                embedding_vectors,
+                fused,
+                &mut overlap,
+            )
+        })
         .collect()
 }
 
@@ -144,6 +175,7 @@ fn build_fused_cluster<S: BuildHasher>(
     signatures: &[Signature],
     embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     fused: &FusedCluster,
+    overlap: &mut OverlapMeasurer<'_>,
 ) -> Option<Cluster> {
     let occurrence_indices = collapse_overlapping_per_file(fused, fingerprints);
     if occurrence_indices.len() < MIN_REPORTABLE_MEMBERS {
@@ -154,6 +186,7 @@ fn build_fused_cluster<S: BuildHasher>(
         fingerprints,
         signatures,
         embedding_vectors,
+        overlap,
     );
     let members: Vec<Fingerprint> = occurrence_indices
         .iter()

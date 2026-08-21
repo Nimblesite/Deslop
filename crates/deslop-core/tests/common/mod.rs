@@ -387,6 +387,7 @@ impl ReportFixture {
                 model_version: "test".to_owned(),
                 dimensions: 3,
                 attempted_subtrees: self.sources.len(),
+                succeeded_subtrees: self.sources.len(),
                 indexed_subtrees: self.sources.len(),
                 failed_subtrees: 0,
             }),

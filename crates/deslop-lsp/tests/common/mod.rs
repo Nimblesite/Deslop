@@ -16,6 +16,7 @@ use std::{
     path::{Path, PathBuf},
     process::{Child, ChildStderr, ChildStdin, ChildStdout, Stdio},
     sync::atomic::{AtomicI64, Ordering},
+    thread::JoinHandle,
     time::{Duration, Instant},
 };
 
@@ -214,10 +215,8 @@ impl Drop for KillOnDrop<'_> {
 /// armed — any later failure (handshake, request) still reaps the child.
 pub struct LspGuard {
     child: Child,
-    /// Held for the guard's whole lifetime, never read. Dropping the child's
-    /// piped stderr read end early stalls the heavily-logging LSP on a full
-    /// stderr pipe, so it stops servicing stdout and the test deadlocks.
-    _stderr: ChildStderr,
+    /// Continuously drained for the guard's whole lifetime (GH #370).
+    _stderr: StderrDrain,
 }
 
 impl Drop for LspGuard {
@@ -227,11 +226,48 @@ impl Drop for LspGuard {
     }
 }
 
+/// Reads a spawned LSP's stderr to EOF on a background thread, discarding
+/// it, and joins that thread on drop.
+///
+/// GH #370: the server logs every stage through `tracing` to stderr. A
+/// piped stderr that is merely *held open* still fills its fixed kernel
+/// pipe buffer, and the next `tracing` event then blocks its thread inside
+/// `Stderr::write_all` while holding the subscriber's stderr lock. Every
+/// other thread that logs — including the `tower-lsp` serve loop — queues
+/// behind that lock, so the server stops reading stdin and writing stdout
+/// altogether and the test waits forever on a response the server can no
+/// longer send. It is not a protocol defect: the terminal progress frame
+/// is produced, and the transport that would carry it is wedged.
+///
+/// The rejection paths hit it first because they log per failed subtree
+/// and per bisect retry, so they are the first to exceed the buffer.
+/// Keeping the pipe empty is the fix; keeping the handle open is not
+/// enough.
+pub struct StderrDrain(Option<JoinHandle<()>>);
+
+impl StderrDrain {
+    /// Starts draining `stderr`. The thread ends when the child exits and
+    /// closes the write end.
+    fn spawn(mut stderr: ChildStderr) -> Self {
+        Self(Some(std::thread::spawn(move || {
+            let _drained = std::io::copy(&mut stderr, &mut std::io::sink());
+        })))
+    }
+}
+
+impl Drop for StderrDrain {
+    fn drop(&mut self) {
+        if let Some(handle) = self.0.take() {
+            let _joined = handle.join();
+        }
+    }
+}
+
 /// Spawns the LSP against `workspace`, takes its stdin/stdout, and returns the
 /// process wrapped in an armed [`LspGuard`] alongside those handles. The guard
 /// is live before the caller runs the handshake, matching the spawn-then-guard
-/// ordering of the inline setup it replaces. The guard retains the child's
-/// stderr so the read end stays open for the whole test.
+/// ordering of the inline setup it replaces. The guard drains the child's
+/// stderr for the whole test — see [`StderrDrain`].
 pub fn spawn_lsp_guarded(
     workspace: &Path,
 ) -> Result<(LspGuard, ChildStdin, BufReader<ChildStdout>)> {
@@ -240,7 +276,7 @@ pub fn spawn_lsp_guarded(
     Ok((
         LspGuard {
             child,
-            _stderr: stderr,
+            _stderr: StderrDrain::spawn(stderr),
         },
         stdin,
         stdout,

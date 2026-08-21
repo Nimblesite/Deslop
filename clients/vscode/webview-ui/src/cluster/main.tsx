@@ -23,6 +23,8 @@ import {
   type HelpTopic,
 } from "../components/HelpBubble";
 import { bucketLabels, clusterSlug, occurrenceCount, resolveBucket } from "../../../src/types/report";
+import { formatScore } from "../../../src/types/format";
+import { helpValueTitle } from "../../../src/types/signals";
 import type { ReportCluster, ReportOccurrence } from "../../../src/types/report";
 
 const focusedOccurrenceIndex = signal(0);
@@ -194,7 +196,7 @@ function ClusterApp() {
             }}
             title={clusterStatsTitle(cluster)}
           >
-            <StatItem topic="weight" label="weight" value={cluster.weight.toFixed(2)} />
+            <StatItem topic="weight" label="weight" value={formatScore(cluster.weight)} />
             <StatItem topic="size" label="size" value={String(cluster.size)} />
             <StatItem topic="occurrence-count" label="occurrences" value={`× ${occurrenceCount(cluster)}`} />
           </div>
@@ -220,7 +222,7 @@ function ClusterApp() {
         <div class="label" style={{ marginBottom: "8px", fontFamily: FONT.mono }}>
           <HelpedText topic="signals">SIGNALS</HelpedText>
         </div>
-        <SignalStrip signals={cluster.signals} />
+        <SignalStrip signals={cluster.signals} verdict={cluster.evidence_verdict} />
       </section>
 
       <section style={{ marginTop: "24px" }}>
@@ -394,7 +396,7 @@ function HotkeyHelp({ accent }: { accent: string }) {
 }
 
 function StatItem({ topic, label, value }: { topic: HelpTopic; label: string; value: string }) {
-  const title = `${helpCopy(topic)} Current value: ${value}.`;
+  const title = helpValueTitle(helpCopy(topic), value);
   return (
     <span class="with-help" title={title}>
       <span>
@@ -455,7 +457,7 @@ function rankTitle(rank: number, total: number, severity: string): string {
 }
 
 function clusterStatsTitle(cluster: ReportCluster): string {
-  return `Weight is Deslop's duplication impact score. Size is the number of cloned AST members. Occurrences is the number of editor locations in this cluster: weight ${cluster.weight.toFixed(2)}, size ${cluster.size}, occurrences ${occurrenceCount(cluster)}.`;
+  return `Weight is Deslop's duplication impact score. Size is the number of cloned AST members. Occurrences is the number of editor locations in this cluster: weight ${formatScore(cluster.weight)}, size ${cluster.size}, occurrences ${occurrenceCount(cluster)}.`;
 }
 
 function canonicalTitle(occurrence: ReportOccurrence): string {

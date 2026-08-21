@@ -28,7 +28,7 @@ use crate::{
     ast::ByteRange,
     lang::{shared::parse_source, LanguageParser},
     refactor::{
-        preconditions::{named_children, node_text, raw_slices_equivalent},
+        preconditions::{self, named_children, node_text, raw_slices_equivalent},
         RefactorError,
     },
     report::ReportCluster,
@@ -101,11 +101,8 @@ pub fn compute_consolidation_plan<S: ::std::hash::BuildHasher>(
     sources: &HashMap<PathBuf, Vec<u8>, S>,
     parser: &dyn LanguageParser,
 ) -> Result<ConsolidationOutcome, RefactorError> {
-    if parser.id() != "rust" {
-        return Ok(ConsolidationOutcome::Refused(format!(
-            "{} consolidation is not mechanical yet (v1 covers Rust sibling modules)",
-            parser.id()
-        )));
+    if let Some(reason) = pre_screen(cluster, parser) {
+        return Ok(ConsolidationOutcome::Refused(reason));
     }
     match sites::occurrence_sites(cluster, sources, parser)? {
         Err(reason) => Ok(ConsolidationOutcome::Refused(reason)),
@@ -114,6 +111,26 @@ pub fn compute_consolidation_plan<S: ::std::hash::BuildHasher>(
             ConsolidationOutcome::Mechanical,
         )),
     }
+}
+
+/// The refusals decided before a single file is parsed, in the order a
+/// user should hear them.
+///
+/// The measured content gate comes first
+/// ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 1, [FUSION-CONTENT-GATE], gh
+/// #344): consolidation keeps one copy and deletes the rest, so
+/// "the shapes matched" is the weakest evidence any action here could
+/// act on, and a user told only that their language is unsupported
+/// would never learn the engine measured 17% raw-content agreement.
+fn pre_screen(cluster: &ReportCluster, parser: &dyn LanguageParser) -> Option<String> {
+    preconditions::content_refusal(cluster).or_else(|| {
+        (parser.id() != "rust").then(|| {
+            format!(
+                "{} consolidation is not mechanical yet (v1 covers Rust sibling modules)",
+                parser.id()
+            )
+        })
+    })
 }
 
 /// Applies the remaining gates and assembles the edits. The inner

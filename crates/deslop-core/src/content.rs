@@ -9,23 +9,36 @@
 //! - **agreement** — the fraction of collapsed-leaf positions whose raw
 //!   source bytes still match across members, identifiers and literals
 //!   pooled. High for verbatim and lightly-edited copies.
-//! - **rename consistency** — the Type-2 discriminator: a genuine maximal
-//!   rename preserves every literal and maps identifiers through one
-//!   bijective substitution, while sibling scaffolding changes its
-//!   literals. Pooling the populations averaged this proof away and
-//!   demoted textbook Type-2 clones to `structural_only`; measured
-//!   separately, a renamed clone keeps its act-now verdict.
+//! - **rename consistency** — the Type-2 discriminator
+//!   ([TECH-PMATCH-BAKER]): a genuine maximal rename preserves every
+//!   literal and maps identifiers through one bijective substitution
+//!   whose renamed names *repeat* — Baker's prev-encoding, where a
+//!   symbol's first occurrence constrains nothing and repetition carries
+//!   the binding proof. Sibling scaffolding changes its literals and
+//!   substitutes only its own subject name. Pooling the populations
+//!   averaged this proof away and demoted textbook Type-2 clones to
+//!   `structural_only`; measured separately, a renamed clone keeps its
+//!   act-now verdict.
 //!
 //! The result is stored on each [`Cluster`] so bucket routing, the
 //! rendered fused confidence, and the ranking weight can separate real
 //! clones from shape coincidence.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap};
 use std::hash::BuildHasher;
 
+/// Type-2 rename evidence ([TECH-PMATCH-BAKER], #409).
+mod rename;
+
+use rename::ModalBijection;
+
 use crate::{
-    ast::NormalizedNode, cluster::Cluster, fingerprint::Fingerprint, lang::shared::LITERAL_KIND,
-    state::FileId, tokens::collapsed_leaves,
+    ast::{ByteRange, NormalizedNode},
+    cluster::Cluster,
+    fingerprint::Fingerprint,
+    lang::shared::LITERAL_KIND,
+    state::FileId,
+    tokens::collapsed_leaves,
 };
 
 /// Minimum literal-leaf count before a subtree's literal dominance is
@@ -35,19 +48,14 @@ use crate::{
 /// must not reach the data-category classifier.
 const LITERAL_TABLE_MIN_LITERALS: usize = 8;
 
-/// Minimum literal-anchor positions a member pair needs before rename
-/// evidence exists at all. Ubiquitous literals (`0`, `1`, `""`) let a
-/// couple of positions agree by coincidence, and without anchors a
-/// consistent identifier mapping cannot tell a Type-2 rename from
-/// sibling scaffolding that also substitutes names consistently — the
-/// literals are the discriminator, so they must carry real mass.
-const RENAME_EVIDENCE_MIN_LITERALS: usize = 4;
-
-/// Minimum share of members that must participate in verbatim
-/// duplicates before the guard vouches for the whole cluster. The #104
-/// mixed cluster is a verbatim pair among a couple of lookalikes
-/// (share ≥ 2/3) and must stay visible; the real-corpus failure mode is
-/// the opposite — two byte-identical example widgets hiding inside 453
+/// Exclusive share a single token-identical family must exceed — a
+/// strict majority of the members — before the guard vouches for the
+/// whole cluster. The #104 mixed cluster is a verbatim pair among a
+/// couple of lookalikes (share ≥ 2/3) and must stay visible; two
+/// disjoint verbatim pairs splitting a four-member cluster (share
+/// exactly 1/2 each, `python-dict-assert-call-in-payload`) are two
+/// separate duplications and dominate nothing; and the real-corpus
+/// failure mode is two byte-identical example widgets hiding inside 453
 /// framework-mandated declarations (share ≈ 0.004), where full
 /// agreement would resurrect the exact #331 mega-cluster the content
 /// gate exists to demote.
@@ -62,10 +70,14 @@ pub struct ContentEvidence {
     /// Mean fraction of collapsed-leaf positions whose raw bytes match
     /// the canonical member, identifiers and literals pooled, in `[0, 1]`.
     pub agreement: f64,
-    /// Mean Type-2 rename evidence in `[0, 1]`: the lesser of literal
-    /// preservation and bijective identifier-mapping coverage. `0.0`
-    /// when a member pair lacks positional alignment or the literal
-    /// anchors to prove anything.
+    /// Mean Type-2 rename evidence in `[0, 1]`
+    /// ([TECH-PMATCH-BAKER]): the lesser of literal consistency (a
+    /// literal preserved, or echoing an elected identifier substitution
+    /// — renamed alongside its symbol, #409) and corroborated
+    /// rename-mapping coverage, scaled by the anchor-mass weight, so
+    /// the value carries both how consistent the substitution is and
+    /// how much independent evidence backs it. `0.0` when a member pair
+    /// lacks positional alignment.
     pub rename_consistency: f64,
     /// Fraction of the canonical member's collapsed leaves that are
     /// literal positions ([CLONE-NOISE-LITERAL-TABLE]).
@@ -78,12 +90,14 @@ pub struct ContentEvidence {
     /// measured — a finding of scaffolding is positive evidence, never an
     /// absent measurement.
     pub substance_varies: bool,
-    /// True when at least [`VERBATIM_MEMBER_SHARE_FLOOR`] of the members
-    /// participate in byte-equivalent leaf-content duplicates. Byte
-    /// equality between whole members is proof of copying in its own
-    /// right (the #190 verbatim escape hatch), so [`Self::agreement`]
-    /// reports full agreement for such a cluster rather than the
-    /// positional score the odd-one-out members would dilute.
+    /// True when one token-identical family — members equal in both
+    /// normalised subtree shape and every collapsed leaf's raw bytes —
+    /// holds a strict majority of the members (more than
+    /// [`VERBATIM_MEMBER_SHARE_FLOOR`]). Token equality between whole
+    /// members is proof of copying in its own right (the #190 verbatim
+    /// escape hatch), so [`Self::agreement`] reports full agreement for
+    /// such a cluster rather than the positional score the odd-one-out
+    /// members would dilute.
     pub verbatim_dominated: bool,
     /// True when the pass actually compared two members' raw content.
     /// `false` for [`Self::unmeasured`] and for a cluster whose members
@@ -99,10 +113,13 @@ impl ContentEvidence {
     /// Content support for bucket routing: either population may vouch
     /// for a shape-identical cluster — pooled byte agreement or a proven
     /// consistent rename. [FUSION-CONTENT-GATE] routes on both, never on
-    /// their mean; the mean is what demoted maximal Type-2 renames.
+    /// their mean; the mean is what demoted maximal Type-2 renames. The
+    /// rule itself lives in [`crate::buckets::content_support`], which
+    /// the decision surfaces reading the *rendered* signals share, so
+    /// the measured and rendered views cannot drift apart.
     #[must_use]
     pub fn support(self) -> f64 {
-        self.agreement.max(self.rename_consistency)
+        crate::buckets::content_support(self.agreement, self.rename_consistency)
     }
 
     /// Evidence for a cluster no measurement pass has touched: full
@@ -129,6 +146,38 @@ struct LeafKey {
     literal: bool,
     /// Truncated blake3 hash of the leaf's raw source bytes.
     key: u64,
+}
+
+/// One member's resolved content frontier: the per-leaf keys plus the
+/// byte range each key hashed, so rename measurement can read a leaf's
+/// raw bytes back without re-walking the tree
+/// ([`rename::literal_echoes`], #409).
+struct MemberContent {
+    /// File every range below indexes into.
+    file: FileId,
+    /// Normalised-subtree digest of the member ([`Fingerprint::hash`])
+    /// — the shape half of token identity in
+    /// [`dominant_verbatim_share`].
+    shape: [u8; 32],
+    /// One key per collapsed leaf, in frontier order.
+    keys: Vec<LeafKey>,
+    /// The source byte range each key was hashed from, 1:1 with `keys`.
+    ranges: Vec<ByteRange>,
+}
+
+/// The key slice of a resolved member, `None` when unresolvable.
+fn keys_of(content: Option<&MemberContent>) -> Option<&[LeafKey]> {
+    content.map(|content| content.keys.as_slice())
+}
+
+/// Raw source bytes of one collapsed leaf, by frontier index.
+fn leaf_bytes<'src, S: BuildHasher>(
+    content: &MemberContent,
+    index: usize,
+    sources: &'src HashMap<FileId, Vec<u8>, S>,
+) -> Option<&'src [u8]> {
+    let range = content.ranges.get(index)?;
+    sources.get(&content.file)?.get(range.start..range.end)
 }
 
 /// Measures and attaches [`ContentEvidence`] for every cluster. Runs
@@ -164,24 +213,29 @@ fn measure_cluster<S: BuildHasher>(
     tree_index: &HashMap<FileId, &NormalizedNode>,
     sources: &HashMap<FileId, Vec<u8>, S>,
 ) -> ContentEvidence {
-    let member_keys: Vec<Option<Vec<LeafKey>>> = members
+    let member_contents: Vec<Option<MemberContent>> = members
         .iter()
-        .map(|member| member_content_keys(member, tree_index, sources))
+        .map(|member| member_content(member, tree_index, sources))
         .collect();
-    let canonical = member_keys.first().and_then(Option::as_deref);
-    let verbatim_dominated = member_keys.len() >= 2
-        && duplicated_member_share(&member_keys) >= VERBATIM_MEMBER_SHARE_FLOOR;
+    let canonical = member_contents.first().and_then(Option::as_ref);
+    let canonical_keys = keys_of(canonical);
+    let verbatim_dominated = member_contents.len() >= 2
+        && dominant_verbatim_share(&member_contents) > VERBATIM_MEMBER_SHARE_FLOOR;
     ContentEvidence {
-        agreement: cluster_agreement(&member_keys, verbatim_dominated),
-        rename_consistency: cluster_rename_consistency(canonical, &member_keys),
-        literal_fraction: canonical_literal_fraction(canonical),
-        substance_varies: cluster_substance_varies(canonical, &member_keys),
+        agreement: cluster_agreement(&member_contents, verbatim_dominated),
+        rename_consistency: rename::cluster_rename_consistency(
+            canonical,
+            &member_contents,
+            sources,
+        ),
+        literal_fraction: canonical_literal_fraction(canonical_keys),
+        substance_varies: cluster_substance_varies(canonical_keys, &member_contents),
         verbatim_dominated,
         // A comparison needs a canonical member *and* something to
         // compare it against: one resolvable member alone measures
         // nothing, and every field above then carries its degenerate
         // default rather than evidence.
-        measured: canonical.is_some() && member_keys.iter().skip(1).any(Option::is_some),
+        measured: canonical.is_some() && member_contents.iter().skip(1).any(Option::is_some),
     }
 }
 
@@ -193,12 +247,12 @@ fn measure_cluster<S: BuildHasher>(
 /// measured, so nothing is proven.
 fn cluster_substance_varies(
     canonical: Option<&[LeafKey]>,
-    member_keys: &[Option<Vec<LeafKey>>],
+    member_contents: &[Option<MemberContent>],
 ) -> bool {
-    member_keys
+    member_contents
         .iter()
         .skip(1)
-        .any(|keys| pair_substance_varies(canonical, keys.as_deref()))
+        .any(|content| pair_substance_varies(canonical, keys_of(content.as_ref())))
 }
 
 /// Proof that two members differ in substance: their aligned leaves
@@ -244,54 +298,17 @@ fn canonical_literal_fraction(canonical: Option<&[LeafKey]>) -> f64 {
 /// canonical (first) member. `1.0` for degenerate single-member
 /// clusters; a member whose leaves cannot be resolved contributes `0.0`
 /// — unresolvable content is no evidence of agreement.
-fn cluster_agreement(member_keys: &[Option<Vec<LeafKey>>], verbatim_dominated: bool) -> f64 {
-    if member_keys.len() < 2 || verbatim_dominated {
+fn cluster_agreement(member_contents: &[Option<MemberContent>], verbatim_dominated: bool) -> f64 {
+    if member_contents.len() < 2 || verbatim_dominated {
         return 1.0;
     }
-    let canonical = member_keys.first().and_then(Option::as_deref);
-    let total: f64 = member_keys
+    let canonical = keys_of(member_contents.first().and_then(Option::as_ref));
+    let total: f64 = member_contents
         .iter()
         .skip(1)
-        .map(|keys| pair_agreement(canonical, keys.as_deref()))
+        .map(|content| pair_agreement(canonical, keys_of(content.as_ref())))
         .sum();
-    total / member_count(member_keys.len().saturating_sub(1))
-}
-
-/// Mean Type-2 rename evidence of every non-canonical member against
-/// the canonical member. Degenerate and unresolvable members score
-/// `0.0`: rename evidence is a positive proof, never a default.
-fn cluster_rename_consistency(
-    canonical: Option<&[LeafKey]>,
-    member_keys: &[Option<Vec<LeafKey>>],
-) -> f64 {
-    if member_keys.len() < 2 {
-        return 0.0;
-    }
-    let total: f64 = member_keys
-        .iter()
-        .skip(1)
-        .map(|keys| pair_rename_consistency(canonical, keys.as_deref()))
-        .sum();
-    total / member_count(member_keys.len().saturating_sub(1))
-}
-
-/// Type-2 rename evidence between two members: the lesser of literal
-/// preservation and bijective identifier-mapping coverage
-/// ([FUSION-CONTENT-GATE]). Zero without positional alignment (an
-/// LSH-paired near-miss has no leaf-to-leaf correspondence) and zero
-/// below [`RENAME_EVIDENCE_MIN_LITERALS`] literal anchors.
-fn pair_rename_consistency(canonical: Option<&[LeafKey]>, member: Option<&[LeafKey]>) -> f64 {
-    let (Some(canonical), Some(member)) = (canonical, member) else {
-        return 0.0;
-    };
-    if canonical.len() != member.len() {
-        return 0.0;
-    }
-    let literals = population(canonical, member, true);
-    if literals.len() < RENAME_EVIDENCE_MIN_LITERALS {
-        return 0.0;
-    }
-    literal_preservation(&literals).min(mapping_consistency(&population(canonical, member, false)))
+    total / member_count(member_contents.len().saturating_sub(1))
 }
 
 /// Paired keys at the positions where both members carry the requested
@@ -307,82 +324,81 @@ fn population(canonical: &[LeafKey], member: &[LeafKey], literal: bool) -> Vec<(
         .collect()
 }
 
-/// Fraction of literal positions whose raw bytes match — a Type-2 clone
-/// preserves its literals; a sibling scaffold or a data table does not.
-/// Callers guarantee a non-empty population via the anchor floor.
-fn literal_preservation(literals: &[(u64, u64)]) -> f64 {
-    let matched = literals
+/// Aligned literal positions whose raw bytes match — each one an
+/// independent anchor priced by [`anchor_weight`].
+fn preserved_literal_count(literals: &[(u64, u64)]) -> usize {
+    literals
         .iter()
         .filter(|(left, right)| left == right)
-        .count();
-    member_count(matched) / member_count(literals.len())
+        .count()
+}
+
+/// Fraction of literal positions whose raw bytes match — a Type-2 clone
+/// preserves its literals; a sibling scaffold or a data table does not.
+/// Vacuously `1.0` with no literal positions: absent literals prove
+/// nothing either way, and [`anchor_weight`] already prices the missing
+/// mass, so the mapping term carries the whole proof.
+fn literal_preservation(literals: &[(u64, u64)]) -> f64 {
+    vacuous_share(preserved_literal_count(literals), literals.len())
 }
 
 /// Share of identifier positions explained by one consistent 1:1
-/// substitution: a position counts when its pair is the modal partner in
-/// both directions. A genuine rename maps every occurrence of a name to
-/// one new name (identity included); scattergun similarity does not.
-/// Vacuously `1.0` with no identifier positions — an all-literal subtree
-/// leaves nothing to substitute.
+/// substitution ([`ModalBijection`], identity included). Vacuously
+/// `1.0` with no identifier positions — an all-literal subtree leaves
+/// nothing to substitute. This is the *substance* notion of consistency
+/// ([`pair_substance_varies`]): corroboration is deliberately not
+/// required here, because an uncorroborated-but-consistent substitution
+/// is no proof that the members differ.
 fn mapping_consistency(identifiers: &[(u64, u64)]) -> f64 {
-    if identifiers.is_empty() {
-        return 1.0;
-    }
-    let forward = modal_partners(identifiers.iter().map(|(left, right)| (*left, *right)));
-    let backward = modal_partners(identifiers.iter().map(|(left, right)| (*right, *left)));
+    let bijection = ModalBijection::over(identifiers);
     let explained = identifiers
         .iter()
-        .filter(|(left, right)| {
-            forward.get(left) == Some(right) && backward.get(right) == Some(left)
-        })
+        .filter(|pair| bijection.explains(pair))
         .count();
-    member_count(explained) / member_count(identifiers.len())
+    vacuous_share(explained, identifiers.len())
 }
 
-/// Modal partner per key: the partner seen most often. Counting and
-/// folding run over [`BTreeMap`]s in ascending order and replacement
-/// requires a strictly greater count, so ties resolve to the smallest
-/// partner key and the map is deterministic across runs.
-fn modal_partners(pairs: impl Iterator<Item = (u64, u64)>) -> BTreeMap<u64, u64> {
-    let mut counts: BTreeMap<(u64, u64), usize> = BTreeMap::new();
-    for pair in pairs {
-        let slot = counts.entry(pair).or_insert(0_usize);
-        *slot = slot.saturating_add(1);
+/// `numerator / denominator`, vacuously `1.0` over an empty denominator
+/// — an empty evidence population proves nothing either way, and
+/// [`anchor_weight`] prices the absent mass.
+fn vacuous_share(numerator: usize, denominator: usize) -> f64 {
+    if denominator == 0 {
+        return 1.0;
     }
-    let mut modes: BTreeMap<u64, (u64, usize)> = BTreeMap::new();
-    for ((key, partner), count) in counts {
-        let best = modes.entry(key).or_insert((partner, count));
-        if count > best.1 {
-            *best = (partner, count);
-        }
-    }
-    modes
-        .into_iter()
-        .map(|(key, (partner, _))| (key, partner))
-        .collect()
+    member_count(numerator) / member_count(denominator)
 }
 
-/// Share of members whose non-empty content-key vector also appears on
-/// another member — verbatim copies hiding among same-shape lookalikes,
-/// the population the renderer's body-equivalence guard relies on.
-/// Transitive closure can merge a
-/// genuine byte-identical pair into a cluster of same-shape neighbours;
-/// the mean against one canonical member would average the proven copy
-/// below the support floor, so a cluster *dominated* by verbatim copies
-/// short-circuits to full agreement instead.
-fn duplicated_member_share(member_keys: &[Option<Vec<LeafKey>>]) -> f64 {
-    let mut counts: HashMap<&[LeafKey], usize> = HashMap::new();
-    for keys in member_keys.iter().flatten() {
-        if !keys.is_empty() {
-            let entry = counts.entry(keys.as_slice()).or_insert(0_usize);
+/// Share of members inside the single largest token-identical family —
+/// members equal in both normalised subtree shape and every collapsed
+/// leaf's raw bytes, i.e. copies of one another up to whitespace.
+/// Transitive closure can merge such a family into a cluster of
+/// same-shape neighbours; the mean against one canonical member would
+/// average the proven copies below the support floor, so a cluster
+/// *dominated* by one verbatim family short-circuits to full agreement
+/// instead.
+///
+/// One family, not a pool: two disjoint verbatim pairs are two separate
+/// duplications, and summing them certified a four-member cluster whose
+/// halves disagree as verbatim (`python-dict-assert-call-in-payload`).
+/// Shape is half the identity: an assignment and an assert over the
+/// same identifier and literal carry equal leaf keys while being
+/// different statements, so leaf keys alone pair non-copies
+/// (`python-issue-72-monkeypatch-setenv`).
+fn dominant_verbatim_share(member_contents: &[Option<MemberContent>]) -> f64 {
+    let mut counts: HashMap<([u8; 32], &[LeafKey]), usize> = HashMap::new();
+    for content in member_contents.iter().flatten() {
+        if !content.keys.is_empty() {
+            let entry = counts
+                .entry((content.shape, content.keys.as_slice()))
+                .or_insert(0_usize);
             *entry = entry.saturating_add(1);
         }
     }
-    let duplicated: usize = counts.values().filter(|count| **count >= 2).copied().sum();
-    if member_keys.is_empty() {
+    let dominant = counts.values().copied().max().unwrap_or(0);
+    if dominant < 2 || member_contents.is_empty() {
         return 0.0;
     }
-    member_count(duplicated) / member_count(member_keys.len())
+    member_count(dominant) / member_count(member_contents.len())
 }
 
 /// Agreement between two members' collapsed-leaf content keys.
@@ -423,18 +439,18 @@ fn key_set_jaccard(left: &[LeafKey], right: &[LeafKey]) -> f64 {
     member_count(intersection) / member_count(union)
 }
 
-/// One content key per collapsed leaf: the population flag plus a
-/// truncated blake3 hash of the leaf's raw source bytes. `None` when the
-/// member's tree, source, or byte range cannot be resolved.
-fn member_content_keys<S: BuildHasher>(
+/// One member's resolved content frontier: a key and its source range
+/// per collapsed leaf. `None` when the member's tree, source, or byte
+/// range cannot be resolved.
+fn member_content<S: BuildHasher>(
     member: &Fingerprint,
     tree_index: &HashMap<FileId, &NormalizedNode>,
     sources: &HashMap<FileId, Vec<u8>, S>,
-) -> Option<Vec<LeafKey>> {
+) -> Option<MemberContent> {
     let root = tree_index.get(&member.file_id)?;
     let source = sources.get(&member.file_id)?;
     let leaves = collapsed_leaves(root, member)?;
-    leaves
+    let keys = leaves
         .iter()
         .map(|(kind, range)| {
             source.get(range.start..range.end).map(|bytes| LeafKey {
@@ -442,7 +458,14 @@ fn member_content_keys<S: BuildHasher>(
                 key: truncated_hash(bytes),
             })
         })
-        .collect()
+        .collect::<Option<Vec<LeafKey>>>()?;
+    let ranges = leaves.iter().map(|(_, range)| *range).collect();
+    Some(MemberContent {
+        file: member.file_id,
+        shape: member.hash,
+        keys,
+        ranges,
+    })
 }
 
 /// First eight little-endian bytes of the blake3 hash of `bytes`.

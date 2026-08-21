@@ -135,7 +135,14 @@ fn assert_rendered_signals_are_measured(
         (2, vec![1.0, 0.0]),
         (3, vec![0.98, 0.198_997_49]),
     ]);
-    let rendered = build_ranked_fused_clusters(fingerprints, signatures, &vectors, clusters);
+    let rendered = build_ranked_fused_clusters(
+        fingerprints,
+        signatures,
+        &vectors,
+        clusters,
+        &[],
+        &HashMap::new(),
+    );
     assert_eq!(
         rendered.len(),
         2,

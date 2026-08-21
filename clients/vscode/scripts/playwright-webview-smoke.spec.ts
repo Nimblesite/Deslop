@@ -263,6 +263,13 @@ const sampleReport = {
       { path: "src/dart/parser_beta.dart", analysed_loc: 180, duplicated_loc: 38, duplication_percent: 21.1 },
       { path: "src/models/models.g.dart", analysed_loc: 220, duplicated_loc: 16, duplication_percent: 7.3 },
     ],
+    // Engine-computed folder rows ([METRICS-REPO]) — the webview renders
+    // these verbatim and performs no arithmetic of its own.
+    folders: [
+      { path: "src/dart", analysed_loc: 300, duplicated_loc: 80, duplication_percent: 26.7 },
+      { path: "src", analysed_loc: 520, duplicated_loc: 96, duplication_percent: 18.5 },
+      { path: "src/models", analysed_loc: 220, duplicated_loc: 16, duplication_percent: 7.3 },
+    ],
   },
   schema_doc: "playwright smoke schema",
   action_hints: [],
@@ -273,18 +280,37 @@ const sampleReport = {
     model_version: "smoke",
     dimensions: 768,
     attempted_subtrees: 12,
+    succeeded_subtrees: 12,
     indexed_subtrees: 12,
     failed_subtrees: 0,
   },
   clusters: [
     {
       id: "abcdef1234567890",
+      rank: 1,
+      rank_band: "worst",
       weight: 42.75,
       size: 2,
       canonical_node_count: 18,
-      signals: { structural: 0.22, token_jaccard: 0.34, embedding_cos: 0.91, fused: 0.88 },
+      signals: {
+        structural: 0.22,
+        token_jaccard: 0.34,
+        shape: 0.34,
+        embedding_cos: 0.91,
+        fused: 0.88,
+        agreement: 0.05,
+        rename_consistency: 0,
+        literal_fraction: 0,
+      },
       bucket: "same_behavior",
+      language: "dart",
+      meets_fused_gate: true,
+      evidence_verdict:
+        "The shapes barely match (0.34) — the 0.88 confidence comes from the embedding model, " +
+        "which read these as the same behavior written two ways. The content evidence measures " +
+        "the code itself, not the behavior: shared content 0.05, renaming 0.00.",
       occurrences_total: 2,
+      occurrence_count: 2,
       occurrences_truncated: false,
       summary: "Two Dart classes compute the same geometry values through different implementations.",
       interpretation: "Same behavior, different code.",
@@ -295,12 +321,30 @@ const sampleReport = {
     },
     {
       id: "bcdefa2345678901",
+      rank: 2,
+      rank_band: "mid",
       weight: 26.5,
       size: 3,
       canonical_node_count: 14,
-      signals: { structural: 0.99, token_jaccard: 0.96, embedding_cos: 0.7, fused: 0.86 },
+      signals: {
+        structural: 0.99,
+        token_jaccard: 0.96,
+        shape: 0.99,
+        embedding_cos: 0.7,
+        fused: 0.86,
+        agreement: 0.88,
+        rename_consistency: 0.95,
+        literal_fraction: 0.1,
+      },
       bucket: "nearly_identical",
+      language: "dart",
+      meets_fused_gate: true,
+      evidence_verdict:
+        "The shapes match at 0.99 and the content evidence did not discount that: the locations " +
+        "share 0.88 of their content and consistent renaming explains 0.95 of what differs, so " +
+        "confidence stayed at 0.86.",
       occurrences_total: 3,
+      occurrence_count: 3,
       occurrences_truncated: false,
       summary: "Parser branches differ only by token names.",
       interpretation: "Review the locations; small differences may matter.",
@@ -312,12 +356,30 @@ const sampleReport = {
     },
     {
       id: "cdefab3456789012",
+      rank: 3,
+      rank_band: "faint",
       weight: 11.2,
       size: 2,
       canonical_node_count: 9,
-      signals: { structural: 1, token_jaccard: 1, embedding_cos: 0.82, fused: 0.97 },
+      signals: {
+        structural: 1,
+        token_jaccard: 1,
+        shape: 1,
+        embedding_cos: 0.82,
+        fused: 0.97,
+        agreement: 1,
+        rename_consistency: 1,
+        literal_fraction: 0,
+      },
       bucket: "identical",
+      language: "dart",
+      meets_fused_gate: true,
+      evidence_verdict:
+        "The shapes match at 1.00 and the content evidence did not discount that: the locations " +
+        "share 1.00 of their content and consistent renaming explains 1.00 of what differs, so " +
+        "confidence stayed at 0.97.",
       occurrences_total: 2,
+      occurrence_count: 2,
       occurrences_truncated: false,
       summary: "Generated model serialization helpers match exactly.",
       interpretation: "Safe to extract; every copy is the same.",

@@ -47,7 +47,7 @@ Command `deslop.openCluster` opens a webview tab. The tab renders a single clust
 
 - Header: cluster id, rank, weight, size, severity badge, jump-to-next-cluster / jump-to-prev-cluster arrows.
 - Interpretation and action hints (the same fields the JSON carries).
-- Signal breakdown as four tiny bars: structural, token Jaccard, embedding cosine, fused. Each labelled with its numeric value to two decimals.
+- Signal breakdown as seven tiny bars, each labelled with its numeric value to two decimals: the four confidence axes — structural, token Jaccard, embedding cosine, fused — then, under a `CONTENT EVIDENCE` heading, the three measured fields the gate scored that shape against — agreement, rename consistency, literal fraction ([FUSION-CONTENT-GATE]). The confidence axes alone cannot separate a corroborated Type-2 rename from an anchor-poor scaffolding family: both render `structural 1.00` and `jaccard 1.00`, and only the content evidence tells the reader which one is on screen. The strip closes with one plain-English reading of the shape score against that evidence, derived only from the numbers already rendered — it never re-derives the engine's bucket ([CLONE-BUCKETS-ROUTING]).
 - One collapsible panel per occurrence, each containing:
   - File path plus human position (`line:column`), clickable to open the file at that exact editor position.
   - Line-numbered, syntax-highlighted source snippet (reusing the [OUTPUT-HUMAN-HTML](pipeline.md#output-human-html) rendering path — the daemon returns the snippet as pre-highlighted HTML so the webview stays dumb).
@@ -75,7 +75,7 @@ Command `deslop.openReport` opens a second webview with the full ranked list —
 
 ## [VSIX-METRICS-REPORT] Duplication report webview
 
-Activating the headline opens a webview (`deslop.openDuplicationReport`) styled like the existing report webview ([VSIX-REPORT-WEBVIEW]). It presents the same data with more room: the headline totals and threshold verdict, then a sortable per-folder / per-file table of duplication percentages. It renders from the `report/snapshot` the panel host already pushes — now carrying `metrics.per_file` — so the webview stays dumb and the extension host owns all data shaping ([vsix.md §VSIX-PRINCIPLES](vsix.md#vsix-principles) principle 4).
+Activating the headline opens a webview (`deslop.openDuplicationReport`) styled like the existing report webview ([VSIX-REPORT-WEBVIEW]). It presents the same data with more room: the headline totals and threshold verdict, then a sortable per-folder / per-file table of duplication percentages. It renders from the `report/snapshot` the panel host already pushes — carrying `metrics.per_file` and the engine-computed `metrics.folders` rollup ([METRICS-REPO]), which the webview nests and renders verbatim, never recomputing a figure — so the webview stays dumb and the extension host owns all data shaping ([vsix.md §VSIX-PRINCIPLES](vsix.md#vsix-principles) principle 4).
 
 ## [VSIX-WEBVIEW-COVERAGE] Webview coverage gate
 

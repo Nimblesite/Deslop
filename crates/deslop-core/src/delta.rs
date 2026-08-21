@@ -99,17 +99,24 @@ fn clusters_equal(left: &ReportCluster, right: &ReportCluster) -> bool {
         && left.size == right.size
         && left.canonical_node_count == right.canonical_node_count
         && signals_equal(left.signals, right.signals)
+        && left.rank == right.rank
+        && left.rank_band == right.rank_band
+        && left.language == right.language
+        && left.meets_fused_gate == right.meets_fused_gate
+        && left.evidence_verdict == right.evidence_verdict
+        && left.occurrence_count == right.occurrence_count
         && left.summary == right.summary
         && left.interpretation == right.interpretation
         && occurrences_equal(&left.occurrences, &right.occurrences)
 }
 
-/// Bit-approximate equality for the four signal components.
+/// Bit-approximate equality for the rendered signal components.
 fn signals_equal(left: crate::report::ReportSignals, right: crate::report::ReportSignals) -> bool {
     (left.structural - right.structural).abs() <= f64::EPSILON
         && (left.token_jaccard - right.token_jaccard).abs() <= f64::EPSILON
         && (left.embedding_cos - right.embedding_cos).abs() <= f64::EPSILON
         && (left.fused - right.fused).abs() <= f64::EPSILON
+        && (left.shape - right.shape).abs() <= f64::EPSILON
 }
 
 /// Exact equality across two occurrence lists. Ordered — occurrence
