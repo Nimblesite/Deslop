@@ -23,9 +23,9 @@ ogImageHeight: "630"
 ogImageAlt: "A paper-and-brass decision gate turns duplicate-code evidence into a deliberate workflow."
 ---
 
-[Kevin Moore](https://github.com/kevmoo), product manager for Dart and Flutter at Google, published an agent skill called [`deslop-duplication-audit`](https://github.com/kevmoo/kevmoo_skills/tree/main/skills/deslop-duplication-audit). We did not write it, commission it, or review it before it shipped. He also wrote it up in [Dart, Flutter, Duplicate Code, and the Deslop Skill](https://www.christianfindlay.com/blog/dart-flutter-duplicate-code-deslop-skill).
+[Kevin Moore](https://github.com/kevmoo), product manager for Dart and Flutter at Google, published an agent skill called [`deslop-duplication-audit`](https://github.com/kevmoo/kevmoo_skills/tree/main/skills/deslop-duplication-audit) that uses Deslop to perform deduplication on Dart and Flutter code. This post wirth reading out if you're into developer tools, because it does something we could not have done from inside the detector.
 
-It is worth reading if you build developer tools, because it does something we could not have done from inside the detector.
+Christian Findlay also did a write-up on this in [Dart, Flutter, Duplicate Code, and the Deslop Skill](https://www.christianfindlay.com/blog/dart-flutter-duplicate-code-deslop-skill).
 
 ## A detector produces evidence, not decisions
 

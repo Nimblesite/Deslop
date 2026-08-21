@@ -100,9 +100,14 @@ fn a_reason_claiming_no_category_or_two_categories_breaches() {
 fn an_excuse_that_is_not_an_allowed_category_breaches() {
     assert_eq!(
         mutated("[SKIP-TOO-LARGE-FOR-CI]", "[SKIP-BREAKING-CI]"),
-        vec![Breach::Categories(Vec::new())],
-        "\"it was breaking CI\" must not be expressible: inventing a tag has to fail, or the \
-         two allowed categories are a suggestion"
+        vec![
+            Breach::Categories(Vec::new()),
+            Breach::UndeclaredSpecId("SKIP-BREAKING-CI".to_owned()),
+        ],
+        "\"it was breaking CI\" must not be expressible. An invented tag fails twice over, and \
+         both must fire: it is not one of the two allowed categories, and — because it is \
+         bracketed and upper-case, so it reads as a spec id — no specification declares it \
+         either. If only the category check fired, a tag could masquerade as a cross-reference."
     );
 }
 

@@ -10,11 +10,11 @@ lang: zh
 heroImage: "/assets/img/blog/agent-skill-duplicate-code-detection-header.webp"
 heroImageWidth: "1600"
 heroImageHeight: "900"
-heroImageAlt: "一座实体判定门将重复代码纸条依次送往检查、判断和测试，再分别导向合并或有意保留。"
+heroImageAlt: "左侧是 Deslop 排序后的重复簇报告，右侧是技能的四道关卡：只读扫描、硬性暂停、判定与测试关卡。"
 ogImage: "/assets/img/blog/agent-skill-duplicate-code-detection-og.jpg"
 ogImageWidth: "1200"
 ogImageHeight: "630"
-ogImageAlt: "纸张与黄铜构成的判定门，将重复代码证据转化为审慎的工作流程。"
+ogImageAlt: "Deslop——智能体技能为重复代码检测带来了什么。只读扫描、硬性暂停、判定、测试关卡。"
 ---
 
 [Kevin Moore](https://github.com/kevmoo)（Google 的 Dart 与 Flutter 产品经理）发布了一个名为 [`deslop-duplication-audit`](https://github.com/kevmoo/kevmoo_skills/tree/main/skills/deslop-duplication-audit) 的智能体技能。它不是我们编写、委托或在发布前审阅过的。他还写了一篇介绍文章：[Dart、Flutter、重复代码与 Deslop 技能](https://www.christianfindlay.com/blog/dart-flutter-duplicate-code-deslop-skill)。
