@@ -92,32 +92,41 @@ The target state: **every repository, every run, asserts every row below.** Ids 
 | `cluster_count_band` | cluster count sits inside a curated band | `expect_clusters` | ❌ missing |
 | `wall` / `memory` | resource ceilings | `ceilings` | ✅ |
 
-### A. Curated precision — `[CORPUS-PRECISION-CURATED]`
+### A. Curated precision — `[CORPUS-PRECISION-CURATED]` — LANDED
 
-- [ ] `must_not_cluster` — pairs a human confirmed are **not** duplicates, each carrying `why`, `verified` (how it was checked) and `files`. Fails when any single cluster spans every listed path.
-- [ ] `check_precision_curated` in `corpus_confidence.rs`, wired into `gate()` and `GATE_CHECKS` as `precision`.
-- [ ] Visibility mirrors [CORPUS-RECALL]: a *hidden* occurrence does not clear the entry — precision is what the report **shows**. Same predicate, opposite verdict.
-- [ ] An entry naming fewer than two files fails rather than passing vacuously.
+- [x] `must_not_cluster` — pairs a human confirmed are **not** duplicates, each carrying `why`, `verified` and `files`. Fails when any single **shown** cluster spans every listed path.
+- [x] `check_curated_precision` in `corpus_precision.rs`, wired into `gate()` and `GATE_CHECKS` as `precision`, documented in `known-failures.json` `_checks`.
+- [x] Visibility mirrors [CORPUS-RECALL] through one shared predicate — `corpus::cluster_shows_span`, read forwards by recall and backwards by precision. A hidden occurrence clears neither.
+- [x] An entry naming fewer than two files fails rather than passing vacuously.
+- [x] Four unit tests in `corpus_precision/tests.rs::curated_precision`: unclustered passes, shown-spanning fails, hidden does not breach, under-two-files fails.
+- [ ] **Curated entries themselves** — no manifest carries `must_not_cluster` yet. That is item F.
 
-### B. Strengthen recall to the Type-2 bar — `[CORPUS-RECALL]`
+### B. Strengthen recall to the Type-2 bar — `[CORPUS-RECALL]` — LANDED
 
-- [ ] `check_recall` asserts the bucket is act-now, and `identical` where the entry's `verified` line records an empty diff.
-- [ ] Curated occurrences must be **shown**, not merely present.
-- [ ] Optional `max_rank` per entry: a curated 137-line clone ranking below the scaffolding is a ranking defect the gate should name.
+- [x] `check_curated_recall` replaces the span-only `check_recall` and splits the verdict in two: `recall` (some cluster spans the paths) and `recall_quality` (it is labelled `identical`, every curated occurrence is shown, and it is within `max_rank`).
+- [x] `identical` is the *only* admissible bucket, not merely an act-now one — [CORPUS-RECALL] defines `must_find` as byte-for-byte verified, so anything else is the engine contradicting a verified fact about the source. No prose is parsed to decide it.
+- [x] Curated occurrences must be shown, through the same `cluster_shows_span` predicate as precision and `type2_recall`.
+- [x] Optional `max_rank` per entry, inclusive.
+- [x] Six unit tests in `corpus_confidence/tests/recall.rs`, including all four demotion buckets and the half-hidden pair — each of them a report the old span-only check passed.
+- [ ] **`max_rank` values** — no entry curates one yet. That is item F.
 
-### C. 🛑 #401 — replace the text-matching ranking rule
+### C. 🛑 #401 — replace the text-matching ranking rule — LANDED
 
-- [ ] Failing test pinning both directions — a comment-only mention must not fire, a whitespace variant must.
-- [ ] Quarantine the text-matching arm with the mandated `panic!` per the strict accuracy rule.
-- [ ] Replace with a tree-sitter predicate over the occurrence's AST — a node-kind/supertype match, never a string.
-- [ ] Restate `forbidden_top_shapes` in `corpus/flutter.json` as AST predicates; specify the new form under [CORPUS-PRECISION].
-- [ ] Re-verify #331 against the replacement, and reopen it if the evidence does not survive.
+- [x] Failing tests pinning both directions, watched red against the shipped `text.contains` arm: a comment / doc comment / string-literal mention must not fire, a clause wrapped across three lines must. Four of five went red for the right reason; the fifth (the flat spelling) stayed green, which is what proves the instrument was not simply blind.
+- [x] The text-matching arm is deleted, not worked around. `crates/deslop-test-support/src/corpus_precision.rs` records what it did and which tests pin the replacement.
+- [x] Replaced with a tree-sitter predicate: the declaration overlapping the ranked occurrence, its heritage clause, and a type-name leaf inside it. Both the declaration containing the occurrence and any declaration it contains count, because the ranked occurrence is usually the mandated *member* — Flutter's `createState` — not the class header.
+- [x] `forbidden_top_shapes` is now `forbidden_top_supertypes`, a list of base-type names; `[CORPUS-PRECISION]` specifies the new form.
+- [x] The heritage grammar is curated per language from each grammar's own `node-types.json` and asserted per language — dart, csharp, typescript, tsx, javascript, python, php. A language with no curated grammar **fails the gate** rather than passing it.
+- [x] Type arguments are not base types: `extends State<LedgerView>` names `State`. Dart is the one grammar that flattens type arguments into sibling `type:` fields rather than nesting them, and `BaseTypes::FirstChildOnly` says so explicitly.
+- [ ] Re-verify #331 against the replacement, and reopen it if the evidence does not survive. **Blocked on a flutter scan** — in progress.
 
-### D. Assert the scan happened at all
+### D. Assert the scan happened at all — LANDED, PENDING CURATION
 
-- [ ] `expect_files_min` per manifest, hand-set from the pinned `sha`. Fails when `files_analysed` falls under it.
-- [ ] `expect_clusters` band, likewise — a mass false-positive or mass false-negative swing is a number this gate should refuse, not print.
-- [ ] Both are the #342 class: a total false negative that renders clean and exits 0.
+- [x] `corpus_scope.rs` — `files_analysed` and `cluster_count_band`, wired first in `gate()` because every check after it iterates a set an empty report leaves empty.
+- [x] An absent bound **fails**, so a manifest cannot switch the check off by omission, and `corpus_manifest_contract.rs::every_manifest_curates_a_non_vacuous_scan_scope` refuses it before any scan runs.
+- [x] A missing `files_analysed` field fails rather than defaulting to zero — a defaulted zero and a measured zero are different defects and both are fatal.
+- [x] Five unit tests in `corpus_scope/tests.rs`, both directions on both bounds plus the two uncurated shapes.
+- [ ] **The curated numbers** — measuring all nine repositories against the pinned shas. django is measured (2,835 files / 9,268 clusters / 27.8%); the rest are in flight.
 
 ### E. Determinism everywhere
 

@@ -37,6 +37,7 @@ const ENGINE_OCCURRENCE_COUNT = 35;
 const HINT_ACTION_ASSERTION =
   "the user must not be told to act on a pair the engine ranked as a hint";
 const STRUCTURAL_ONLY_TITLE = "Same shape, different content";
+const LEGACY_WORD_SUFFIX = "ict";
 
 // `fused` is a confidence in [0,1], never a raw sum — the engine's gate
 // multiplies shape evidence by content evidence ([FUSION-CONTENT-GATE]).
@@ -97,7 +98,7 @@ function reportTypesSource(): string {
 }
 
 function legacyName(): string {
-  return ["Verd", "ict"].join("");
+  return ["Verd", LEGACY_WORD_SUFFIX].join("");
 }
 
 /**
@@ -433,7 +434,7 @@ suite("report schema helpers", () => {
   test("report types do not keep legacy clone bucket aliases (#84)", () => {
     const source = reportTypesSource();
     const alias = legacyName();
-    const helper = ["verd", "ict", "Of"].join("");
+    const helper = ["verd", LEGACY_WORD_SUFFIX, "Of"].join("");
     assert.doesNotMatch(source, new RegExp(`export\\s+type\\s+${alias}\\b`));
     assert.doesNotMatch(source, new RegExp(`function\\s+${helper}\\b`));
     assert.doesNotMatch(source, new RegExp(`Legacy\\s+${alias}`));
