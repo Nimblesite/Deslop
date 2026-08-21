@@ -11,8 +11,16 @@ tags:
   - mcp
   - code-quality
 category: engineering
-description: "Kevin Moore wrapped Deslop in an agent skill. Here is what the skill adds that the detector cannot supply on its own, and a checklist for writing a comparable skill around your own tool."
+description: "Kevin Moore wrapped Deslop in an agent skill. What it adds that a detector cannot supply alone, and a checklist for writing one around your own tool."
 excerpt: "A detector produces evidence. A skill supplies procedure — a read-only first pass, a stop, a verdict, a test gate, and a reproducible command in the pull request. Here is why that layer matters and how to build one."
+heroImage: "/assets/img/blog/agent-skill-duplicate-code-detection-header.webp"
+heroImageWidth: "1600"
+heroImageHeight: "900"
+heroImageAlt: "A tactile decision gate routes duplicate code slips through inspection, judgment, testing, and either consolidation or deliberate separation."
+ogImage: "/assets/img/blog/agent-skill-duplicate-code-detection-og.jpg"
+ogImageWidth: "1200"
+ogImageHeight: "630"
+ogImageAlt: "A paper-and-brass decision gate turns duplicate-code evidence into a deliberate workflow."
 ---
 
 [Kevin Moore](https://github.com/kevmoo), product manager for Dart and Flutter at Google, published an agent skill called [`deslop-duplication-audit`](https://github.com/kevmoo/kevmoo_skills/tree/main/skills/deslop-duplication-audit). We did not write it, commission it, or review it before it shipped. He also wrote it up in [Dart, Flutter, Duplicate Code, and the Deslop Skill](https://www.christianfindlay.com/blog/dart-flutter-duplicate-code-deslop-skill).

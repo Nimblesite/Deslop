@@ -66,6 +66,11 @@
       "install": "Install",
       "review": "Rate & review"
     },
+    "testimonials": {
+      "eyebrow": "Field report",
+      "title": "Findings that ship.",
+      "loc": "LOC"
+    },
     "community": {
       "eyebrow": "Community",
       "title": "Built in the open.",
@@ -152,6 +157,11 @@
       "lede": "从 Visual Studio Marketplace 或 Open VSX 安装同一个扩展。",
       "install": "安装",
       "review": "评分与评论"
+    },
+    "testimonials": {
+      "eyebrow": "实地反馈",
+      "title": "可以直接合并的发现。",
+      "loc": "行"
     },
     "community": {
       "eyebrow": "社区",

@@ -13,6 +13,10 @@ const representativeRoutes = [
   "/zh/releases/",
 ];
 
+// Every English blog post appears in the feed; the Chinese translations do not.
+// Bump this when a post is added so the feed cannot silently lose an entry.
+const ENGLISH_BLOG_POST_COUNT = 9;
+
 const isInScope = (pathname) => !pathname.startsWith("/issues/") && pathname !== "/issues/";
 
 // The MIME type each social-card extension actually serves, mirroring
@@ -166,7 +170,7 @@ test("keeps feed, robots, and archive cleanup crawler-safe", async ({ page }) =>
     };
   }, feed);
   expect(parsedFeed.invalid).toBeFalsy();
-  expect(parsedFeed.entries).toBe(8);
+  expect(parsedFeed.entries).toBe(ENGLISH_BLOG_POST_COUNT);
   expect(parsedFeed.summaries.every((summary) => !summary.includes("%3C"))).toBeTruthy();
 
   const robots = await (await page.request.get("/robots.txt")).text();

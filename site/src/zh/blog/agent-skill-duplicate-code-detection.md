@@ -7,6 +7,14 @@ tags: posts
 description: Kevin Moore 用一个智能体技能封装了 Deslop。本文说明该技能补上了检测器本身无法提供的环节，并给出为你自己的工具编写同类技能的清单。
 excerpt: 检测器产出证据，技能提供流程——只读的第一遍扫描、一次硬性暂停、一份判定、一道测试关卡，以及写进 PR 的可复现命令。
 lang: zh
+heroImage: "/assets/img/blog/agent-skill-duplicate-code-detection-header.webp"
+heroImageWidth: "1600"
+heroImageHeight: "900"
+heroImageAlt: "一座实体判定门将重复代码纸条依次送往检查、判断和测试，再分别导向合并或有意保留。"
+ogImage: "/assets/img/blog/agent-skill-duplicate-code-detection-og.jpg"
+ogImageWidth: "1200"
+ogImageHeight: "630"
+ogImageAlt: "纸张与黄铜构成的判定门，将重复代码证据转化为审慎的工作流程。"
 ---
 
 [Kevin Moore](https://github.com/kevmoo)（Google 的 Dart 与 Flutter 产品经理）发布了一个名为 [`deslop-duplication-audit`](https://github.com/kevmoo/kevmoo_skills/tree/main/skills/deslop-duplication-audit) 的智能体技能。它不是我们编写、委托或在发布前审阅过的。他还写了一篇介绍文章：[Dart、Flutter、重复代码与 Deslop 技能](https://www.christianfindlay.com/blog/dart-flutter-duplicate-code-deslop-skill)。
@@ -75,7 +83,7 @@ dart run skills/deslop-duplication-audit/bin/deslop_report.dart \
 
 这里是该技能直接回馈我们的地方。在外部做这种过滤，意味着要解析 unified diff、计算行区间交集，并对我们的 JSON 做后处理。Kevin 提交了 [issue #364](https://github.com/Nimblesite/Deslop/issues/364)，请求在 CLI 中原生支持 `--diff` 和 `--only-changed`，把评审真正关心的两个问题分开：这次改动是否引入了重复，以及被改动的代码是否克隆了别处已有的辅助函数。
 
-这个能力我们没做。一个由真正在用这把工具的人写出来的包装脚本，本身就是一份带可运行参考实现的可用性规格说明，它比我们内部任何路线图讨论都更有说服力。包括这一条在内的所有公开缺陷与需求，都在我们的[议题页面](/zh/issues/)上。
+这个能力我们没做。一个由真正在用这把工具的人写出来的包装脚本，本身就是一份带可运行参考实现的可用性规格说明，它比我们内部任何路线图讨论都更有说服力。包括这一条在内的所有公开缺陷与需求，都在我们的[议题页面](/issues/)上。
 
 ## 把出处写进 Pull Request
 

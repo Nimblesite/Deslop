@@ -1,178 +1,149 @@
-# Pre-merge regression and test-weakening review: `worktree-fused-score-followups`
+# Pre-merge regression and test-weakening reaudit: `worktree-fused-score-followups`
 
 ## Verdict
 
-Do not merge yet. The current branch has three branch-specific regressions:
+Do not merge yet.
 
-1. the composite action interpolates a GitHub context directly into a shell body;
-2. the polymorphic-signature filter aliases same-shaped, unrelated implementations;
-3. literal-echo scoring treats arbitrary identifier substrings inside data as rename proof.
-
-Each defect also has a focused test blind spot that currently permits a green result.
-This report is deliberately limited to defects introduced or materially changed by
-this branch. It supersedes the previous review rather than carrying stale findings
-forward.
+The action injection defect is fixed and pinned. The literal-substring defect is
+fixed in production, but its new fixture is not connected to any test. The
+polymorphic rewrite fixes the demonstrated Python backend pair, but its new
+"declared contract" heuristic is not method-level proof and cannot represent
+implicit interface implementations. That leaves one production regression and two
+test gaps before this branch is merge-ready.
 
 No corpus suite or full CI run was used for this reaudit.
 
-## Merge blockers
+## Remaining production regression
 
-### P0 — The new action guard violates its own shell-injection boundary
-
-Evidence:
-
-- `action.yml:143-145` says inputs and contexts must reach scripts through `env`,
-  never through `${{ }}` inside a `run` body.
-- The new error path at `action.yml:164-169` directly embeds
-  `${{ github.base_ref }}` in a Bash double-quoted string.
-- GitHub's CodeQL review has an open code-injection finding on `action.yml:168`.
-
-The backslash does not protect this expression. GitHub expands `${{ ... }}` before
-Bash parses the step. With an ordinary `main` base, Bash preserves the backslash
-before `m`, so the suggested command contains the invalid ref `origin/\main`.
-With shell-significant text in the context, the backslash protects only the first
-ordinary character and does not prevent later shell expansion.
-
-This is branch-introduced: the vulnerable line was added with the new
-`diff == '-'` rejection step.
-
-Required patch:
-
-- Use a static safe example such as `origin/main`, or pass `github.base_ref`
-  through an environment variable and print it as data with `printf`.
-- Keep every `${{ ... }}` expression outside `run` scalar bodies.
-
-Required regression pin:
-
-- Parse every composite-action `run` body and fail if it contains `${{`.
-- Assert the exact error output contains a usable command and no stray backslash.
-
-Current test weakness:
-
-`scripts/actions/action-contract-shape-checks.mjs:213-237` checks that the guard
-exists, precedes download, and exits with status 2. It never validates the shell
-trust boundary or even the emitted guidance. The targeted action-contract run
-reported all 41 checks passing while this CodeQL finding remained present.
-
-### P1 — The polymorphic comparator aliases unrelated backend implementations
+### P1 — The polymorphic fix mistakes inheritance for method-contract proof
 
 Evidence:
 
-- `crates/deslop-core/src/cluster_filters/body_shape.rs:28-33` explicitly erases
-  identifier and literal text and keeps only framed node kinds.
-- `crates/deslop-core/src/cluster_filters/polymorphic.rs:49-64` uses that stream as
-  the sole test for whether same-named implementations have different bodies.
+- `crates/deslop-core/src/cluster_filters/polymorphic.rs:17-49` recognizes a
+  hard-coded set of containing type/base-list shapes.
+- `polymorphic.rs:62-92` suppresses a same-named cross-file cluster when every
+  subject is merely somewhere under one of those declarations and the new body
+  streams differ.
+- `polymorphic.rs:108-136` proves only that an ancestor names some base, interface,
+  or trait. It never proves that the subject method is declared by that contract.
+- `crates/deslop-core/src/cluster_filters/body_shape.rs:12-34,61-96` now embeds raw
+  collaborator/member/callee names in the body stream.
 
-These bodies produce the same stream:
+Any ordinary subclass now counts as a contract implementation. A copied helper in
+two unrelated subclasses can therefore be hidden solely because the copies renamed
+their collaborators:
 
 ```python
-async def tool_call(self, job):
-    return await self.container.run(job)
+class InvoiceWorker(CommonBase):
+    def synchronise(self, order):
+        return self.order_repo.fetch(order.id)
 
-async def tool_call(self, job):
-    return await self.machine.launch(job)
+class UserWorker(CommonBase):
+    def synchronise(self, user):
+        return self.user_store.load(user.key)
 ```
 
-The collaborator and callee names are the entire behavioral distinction, but both
-are erased. `subject_bodies_differ` therefore returns false, the polymorphic filter
-does not suppress the pair, and mandatory interface implementations can surface as
-an actionable clone.
+`CommonBase` need not declare `synchronise`. The two method bodies are a consistent
+Type-2 rename, but the ancestor-base check returns true and the raw reach symbols
+make the body streams differ, so the polymorphic filter suppresses the clone.
 
-The branch changed this decision from raw body bytes to a normalized kind stream to
-stop consistent Type-2 renames being hidden. That fixed the rename false negative
-by introducing the opposite false positive.
-
-Required patch:
-
-- Make the comparison role-aware: local/parameter renames may normalize, while
-  collaborator, member, and callee substitutions remain substantive.
-- Prefer positive contract evidence, such as a shared base/interface method, over
-  treating every same-named cross-file function as polymorphic.
-
-Required regression pin:
-
-- In one fixture and one scan, include two same-named, same-shaped implementations
-  that call different backends and a consistently renamed helper clone.
-- Assert the backend pair is absent and the renamed helper is present with exact
-  files, ranges, bucket, signals, occurrence count, and positive duplicated LOC.
-
-Current test weakness:
-
-`crates/deslop/tests/python_issue_69_abstract_method.rs:16-54` is an absence-only
-test. Its Docker and Fly bodies already differ structurally, so it never exercises
-same-shaped backend substitutions. It also accepts a completely blind detector:
-an empty report makes every loop assertion vacuous and satisfies
-`cluster_count == 0`.
-
-### P1 — Literal echoes accept arbitrary substring replacement as rename proof
-
-Evidence:
-
-- `crates/deslop-core/src/content/rename.rs:250-279` lets a changed literal
-  corroborate an identifier substitution.
-- `crates/deslop-core/src/content/rename.rs:335-372` replaces every raw byte
-  occurrence with no identifier-boundary or symbol-role check.
-- `crates/deslop-core/src/content/rename.rs:242-247` upgrades contradiction-free
-  evidence to full rename consistency once the anchor mass reaches the support
-  floor.
-
-For an elected `a -> x` identifier substitution, the implementation accepts
-`"banana" -> "bxnxnx"` as a literal echo. The `a` bytes are ordinary data, not a
-symbol reference. Nine repeated identifier positions plus this false echo produce
-ten anchors, clear the `anchors / (anchors + 4) >= 0.7` certification boundary,
-and can render `rename_consistency = 1.0` and an act-now confidence for code whose
-literal data changed.
+The opposite hole remains for implicit contracts. Go methods are declared outside
+their receiver type and interface satisfaction is implicit, so walking lexical
+ancestors can never establish `under_contract`. The new filter therefore cannot
+suppress Go implementations even though
+`crates/deslop-core/src/cluster_filters/mod.rs:478-481` explicitly routes Go
+methods through the shared function-kind surface. The reach-symbol list also lacks
+Go's `selector_expression`, so same-shaped Go backend calls still erase the
+collaborator and callee names.
 
 Required patch:
 
-- Recognize echoes only where the substituted bytes occupy an identifier-like
-  boundary in the decoded literal payload. Do not count a match inside a longer
-  word or arbitrary data token.
-- Preserve intended cases such as `"OrderService" -> "UserService"` and symbol
-  names embedded at real boundaries in paths or messages.
+- Establish that the specific method implements a declared contract; the presence
+  of any superclass is insufficient.
+- Add a language-specific strategy for implicit contracts, or explicitly fail open
+  without claiming the generic filter covers them.
+- Keep collaborator-aware comparison scoped to proven contract implementations;
+  do not apply it as evidence that an ordinary inherited method is polymorphic.
+
+Required regression pins:
+
+- Add a Python fixture with two ordinary subclasses of one base whose same-named
+  methods are consistently renamed copies; assert the clone remains visible.
+- Add a Go interface with two same-signature, different-backend implementations;
+  assert the contract pair is absent.
+- Keep both controls in scans that contain an exact positive clone, with exact
+  paths, ranges, buckets, signals, files analysed, and duplicated LOC assertions.
+
+## Test weakening and missing pins
+
+### P1 — The Python backend test does not test the contract proof it relies on
+
+`crates/deslop/tests/python_same_shape_backends.rs:68-153` is now a useful two-sided
+test for one explicit Python `ABC` hierarchy: the backend pair must disappear and a
+renamed free-function clone must remain. It does not cover the heuristic boundary:
+
+- a subclass whose base does not declare the subject method;
+- a consistently renamed method inside ordinary subclasses;
+- a language with implicit interface satisfaction.
+
+The positive control is a free function, so `under_contract == false` protects it
+before the new collaborator-aware comparison is tested. The suite can pass while
+the false-negative subclass case above remains live.
+
+### P1 — The literal-boundary fix has an orphaned fixture, not a regression test
+
+The production replacement is corrected:
+
+- `crates/deslop-core/src/content/rename.rs:335-392` now replaces an identifier only
+  at symbol boundaries, so `id -> key` no longer turns `"invalid request"` into
+  `"invalkey request"` and counts it as rename proof.
+
+The new fixture exists under
+`crates/deslop/tests/fixtures/ts-rename-literal-substring/`, but no test currently
+scans it. `crates/deslop/tests/rename_literal_monotonicity.rs:104-133` is unchanged
+and still asserts only `thorough >= sloppy`; returning `1.0` for both remains green.
+Deleting the boundary check would therefore leave the focused rename suite passing.
 
 Required regression pin:
 
-- Add a negative `a -> x`, `"banana" -> "bxnxnx"` fixture and assert the literal
-  remains a contradiction, rename consistency stays below certification, and the
-  cluster does not enter an act-now bucket.
-- Keep the existing full-symbol echo as the positive control in the same focused
-  test surface.
+- Scan `ts-rename-literal-substring` and assert the changed data literal remains a
+  contradiction, rename consistency stays below certification, and the cluster
+  does not enter an act-now bucket.
+- In the same test surface, retain the intended full-symbol
+  `"OrderService" -> "UserService"` echo as a positive control.
+- Assert a strict separation between the intended echo and substring collision;
+  `>=` alone is not a regression oracle.
 
-Current test weakness:
+## Fixes verified and retired
 
-`crates/deslop/tests/rename_literal_monotonicity.rs:104-133` asserts only
-`thorough >= sloppy`. An implementation returning `1.0` for both passes. The suite
-contains no negative echo whose matching bytes are merely a substring of ordinary
-literal data.
+### GitHub Action shell injection — fixed
 
-## Findings retired from the previous report
+- `action.yml:168-171` passes `github.base_ref` through `env` and prints it with a
+  `%s` `printf` argument.
+- `scripts/actions/action-contract-shape-checks.mjs:247-269` extracts every `run`
+  body, asserts the expected body count, and rejects `${{` interpolation inside
+  any body.
+- `node scripts/actions/test-action-contract.mjs` passed all 42 checks.
 
-The previous report no longer describes the current branch accurately:
+### Literal substring replacement — production fix present
 
-- behavior-bearing operators now participate in normalized/content evidence;
-- exact duplicate subgroups are split before cluster-wide noise suppression;
-- majority verbatim families no longer force whole-cluster agreement to `1.0`;
-- live cluster equality now compares the full generated payload.
+The symbol-boundary implementation at `content/rename.rs:335-392` addresses the
+reported byte-substring defect. It remains listed above only because the regression
+pin is missing.
 
-Inherited call/cell/cache concerns were excluded from this branch-only review, and
-the corpus-test audit was removed from scope as requested.
+### Same-shaped Python backends — production fix present
 
-## Required order before merge
-
-1. Remove the direct GitHub-context interpolation and add the action trust-boundary
-   contract test.
-2. Fix literal-echo boundary handling and pin both the false echo and intended
-   full-symbol echo.
-3. Replace the polymorphic kind-only decision with a role/contract-aware one and
-   add the same-run positive and negative controls.
-4. Re-run only the focused action, rename-evidence, and polymorphic regression
-   tests needed to prove these fixes before relying on broader CI.
+The new body stream carries Python collaborator/callee identity and the new test
+models the exact Docker/Fly shape. The remaining blocker is the broader contract
+heuristic introduced to apply that decision.
 
 ## Focused verification performed
 
-- `node scripts/actions/test-action-contract.mjs` — passed 41/41, demonstrating
-  the action test blind spot.
-- Static branch-vs-main inspection of the three production paths and their focused
-  regression tests.
+- `node scripts/actions/test-action-contract.mjs` — 42/42 passed.
+- Before the final polymorphic production edit landed, the new
+  `python_same_shape_backends` test correctly failed and reported the exact
+  `docker_host.py L1-15` / `fly_host.py L1-15` `nearly_identical` cluster.
+- The worktree changed during the audit. The post-edit Rust rerun did not complete
+  because other cargo processes held the shared build lock; the current findings
+  above are from the final source inspection.
 - No corpus tests and no full CI run.
