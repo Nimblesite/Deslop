@@ -51,13 +51,7 @@ const DECLARER_ONLY_KINDS: &[&str] = &["trait_item", "mixin_declaration"];
 /// Fields of a declarer naming what it derives from: Python's
 /// `superclasses`, Dart's `superclass`/`interfaces`, C#'s `bases`,
 /// Rust's `trait`.
-const CONTRACT_FIELDS: &[&str] = &[
-    "superclasses",
-    "superclass",
-    "bases",
-    "interfaces",
-    "trait",
-];
+const CONTRACT_FIELDS: &[&str] = &["superclasses", "superclass", "bases", "interfaces", "trait"];
 
 /// Named children that carry a declared base where the grammar exposes
 /// no field for it.

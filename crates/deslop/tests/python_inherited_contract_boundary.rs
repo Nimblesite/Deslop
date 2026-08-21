@@ -51,8 +51,10 @@ const USER_WORKER: &str = "user_worker.py";
 /// The bucket a total consistent rename lands in.
 const NEARLY_IDENTICAL: &str = "nearly_identical";
 
-/// First line of `def synchronise` in both copies.
-const CLONE_FIRST_LINE: u64 = 5;
+/// First line of the matched view in both copies — the whole module,
+/// because the import and the class shell around `synchronise` are
+/// identical too.
+const CLONE_FIRST_LINE: u64 = 1;
 
 /// Last line of `synchronise` in both copies.
 const CLONE_LAST_LINE: u64 = 14;
@@ -120,6 +122,12 @@ fn an_inherited_method_no_base_declares_is_not_a_contract_implementation() -> Re
         "the token layer is rename-invariant by design: {report:#}"
     );
     assert!(
+        approx(signal(clone, "rename_consistency"), 1.0),
+        "every identifier is renamed the same way in every occurrence, \
+         which is what makes this a copy rather than an implementation: \
+         {report:#}"
+    );
+    assert!(
         signal(clone, "fused") >= RENAME_FUSED_FLOOR,
         "`CommonWorker` never declares `synchronise`, so nothing forces \
          these two bodies to agree and the copy must keep its rank: \
@@ -129,7 +137,8 @@ fn an_inherited_method_no_base_declares_is_not_a_contract_implementation() -> Re
         assert_eq!(
             field(occurrence, "start_line").as_u64(),
             Some(CLONE_FIRST_LINE),
-            "the clone begins at `def synchronise` in both files: \
+            "the clone covers the module from its import down in both \
+             files: \
              {visible:#?}"
         );
         assert_eq!(

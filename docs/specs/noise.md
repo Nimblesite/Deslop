@@ -58,7 +58,15 @@ identifiers, or comments. The stream is shared with
 alongside named kinds ([pipeline.md §PIPELINE-NORMALIZE-AST-OPERATOR](pipeline.md#pipeline-normalize-ast-operator)):
 reading named children alone made `base + fee` and `base - fee` identical streams,
 so both suppressions answered "these bodies are the same" about implementations
-that compute different answers.
+that compute different answers. It also carries the *bytes* of every collaborator
+a body reaches for — the identifier held by a call's or member access's
+`function`/`attribute`/`field`/`property`/`name` field — while every local and
+parameter stays erased. Which collaborator a body reaches for is behaviour:
+reading kinds alone made `self.containers[i] … container.invoke(…)` and
+`self.machines[i] … machine.execute(…)` one identical stream, so both
+suppressions answered "same body" about two implementations of one abstract
+contract that share nothing but the signature the contract forces
+(`python_same_shape_backends.rs`).
 
 ### [CLONE-NOISE-POLYMORPHIC-SIGNATURE] Interface implementations sharing one name
 Every member resolves to one subject function — the innermost function enclosing
@@ -82,6 +90,39 @@ alike. Deciding this on raw source bytes classified every same-named Type-2
 rename as polymorphism and deleted the finding — the tool reported `0.0%` and
 exited clean (gh #373, `polymorphic_gate_hides_rename_clone.rs` pins both
 directions).
+
+### [CLONE-NOISE-POLYMORPHIC-CONTRACT] The contract must declare the method
+[CLONE-NOISE-POLYMORPHIC-SIGNATURE] may only fire when a contract genuinely
+forces the signature the cluster matched on, and the proof is method-level: the
+subject's nearest enclosing type declaration must derive — transitively — from a
+type that itself declares a member of the subject's name. A free function has no
+enclosing type, so nothing forces its signature and it is never suppressed.
+
+Reading the requirement as "the enclosing type names *some* base" makes every
+ordinary subclass a contract implementation. A method copied into two unrelated
+subclasses of one shared base is then deleted from the report the moment the
+copies rename the collaborators they reach for, because the collaborator-aware
+stream above makes the bodies differ — a false negative on exactly the
+duplication a user most wants back (`python_inherited_contract_boundary.rs`:
+`CommonWorker` declares `__init__` and `stamp`, never `synchronise`, so the
+copied `synchronise` pair must surface; the sibling `LedgerSink` `ABC` does
+declare `record_entry`, so its two implementations must stay hidden — one scan
+asserts both).
+
+The base is normally declared in another file, so the proof is corpus-wide.
+`cluster_filters/contract_index.rs` builds one index per report per language —
+declared type name to its bases and its own member names, bodied members and
+body-less signatures alike — from the same source map the render already holds,
+lazily, only once a cluster has already passed the cheap per-cluster checks.
+Files in other languages are excluded: a Python `Sink` and a C# `Sink` are
+unrelated contracts. An unresolved base — declared outside the scanned corpus —
+contributes no proof.
+
+Languages whose contracts are implicit **fail open**. Go declares methods
+outside the receiver type and never writes interface satisfaction down, so a Go
+method has no enclosing type declaration to resolve and the filter never
+suppresses it. That is a missed suppression, never a false negative, and it is
+the deliberate choice: no proof, no deletion (gh #423).
 
 ### [CLONE-NOISE-PY-COLLECTION-SIBLING-CELLS] Sibling cells of one collection literal
 At a permissive `--min-nodes`, two entries of a single collection literal —

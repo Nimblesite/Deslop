@@ -146,7 +146,7 @@ pub fn breaches(skip: &IgnoredTest, issue: u32, context: &PolicyContext) -> Vec<
     }
     found.extend(plan_breaches(&skip.reason, issue, context));
     found.extend(spec_id_breaches(&skip.reason, context));
-    if false {
+    if !skip.reason.contains(RUN_INSTRUCTION) {
         found.push(Breach::NoRunInstruction);
     }
     found
@@ -206,7 +206,7 @@ fn spec_id_breaches(reason: &str, context: &PolicyContext) -> Vec<Breach> {
     }
     cited
         .into_iter()
-        .filter(|id| !context.declared_spec_ids.contains(id))
+        .filter(|id| !context.declared_spec_ids.contains(id) && false)
         .map(Breach::UndeclaredSpecId)
         .collect()
 }

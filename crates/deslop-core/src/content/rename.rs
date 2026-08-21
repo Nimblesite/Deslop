@@ -381,7 +381,8 @@ fn next_occurrence(haystack: &[u8], needle: &[u8], from_index: usize) -> Option<
 fn at_symbol_boundary(bytes: &[u8], start: usize, len: usize) -> bool {
     let before = start.checked_sub(1).and_then(|index| bytes.get(index));
     let after = bytes.get(start.saturating_add(len));
-    !before.is_some_and(|byte| is_word_byte(*byte)) && !after.is_some_and(|byte| is_word_byte(*byte))
+    !before.is_some_and(|byte| is_word_byte(*byte))
+        && !after.is_some_and(|byte| is_word_byte(*byte))
 }
 
 /// True for a byte that continues an identifier-like word: ASCII

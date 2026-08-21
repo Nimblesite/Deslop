@@ -81,7 +81,7 @@ impl ParseCache {
     /// Returns the corpus-wide contract index for `language`, building it
     /// on first request from every same-language file in the report and
     /// reusing the per-file trees this cache already holds.
-    pub(crate) fn contracts<S: BuildHasher>(
+    pub(super) fn contracts<S: BuildHasher>(
         &self,
         sources: &HashMap<FileId, Vec<u8>>,
         file_languages: &HashMap<FileId, &'static str, S>,
