@@ -13,6 +13,7 @@
 use std::{collections::BTreeSet, path::Path};
 
 use anyhow::Result;
+use deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP;
 use serde_json::Value;
 
 mod common;
@@ -39,12 +40,29 @@ fn tsx_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
 
 #[test]
 fn javascript_near_miss_produces_cross_file_structural_cluster() -> Result<()> {
-    assert_type3_clone("javascript-type3", 8, "delta.js", "epsilon.js")
+    // GH #427: JavaScript publishes the nested `let running = 0; for (…)`
+    // run rather than the enclosing function pair TypeScript reports off
+    // the same source shape, and a fragment view is Merkle-equal. This
+    // pins what the engine does today; #427 tracks making it agree with
+    // every other language, at which point this becomes `Overlap::Graded`.
+    assert_type3_clone(
+        "javascript-type3",
+        8,
+        "delta.js",
+        "epsilon.js",
+        Overlap::MerkleEqual,
+    )
 }
 
 #[test]
 fn typescript_near_miss_produces_cross_file_structural_cluster() -> Result<()> {
-    assert_type3_clone("typescript-type3", 8, "delta.ts", "epsilon.ts")
+    assert_type3_clone(
+        "typescript-type3",
+        8,
+        "delta.ts",
+        "epsilon.ts",
+        Overlap::Graded,
+    )
 }
 
 /// Asserts that a renamed Type-2 fixture's top-ranked cluster has perfect
@@ -66,18 +84,73 @@ fn assert_type2_clone(fixture_name: &str, min_nodes: u32, left: &str, right: &st
     Ok(())
 }
 
+/// What [FUSION-SHARED-SUBTREE] licenses a cluster's `structural` to be.
+///
+/// `structural` is a graded alignment — `1 - TED / max(nodes)` — and only
+/// Merkle-equal endpoints short-circuit to `1.0`. Which of the two a
+/// fixture lands on is a fact about the view the pipeline elected, so the
+/// caller states it rather than the helper assuming it: asserting `1.0`
+/// everywhere pinned the nested fragment that gh #408 stopped publishing
+/// in place of the method, and no longer holds for the languages that
+/// report the enclosing pair.
+#[derive(Clone, Copy)]
+enum Overlap {
+    /// The elected view is Merkle-equal across files, so the measure
+    /// short-circuits and nothing less than `1.0` is correct.
+    MerkleEqual,
+    /// The elected view differs by a real subtree — a Type-3 near miss —
+    /// so the graded alignment must land strictly below `1.0` and at or
+    /// above [`SHARED_SUBTREE_MIN_OVERLAP`], the floor row 4b admitted the
+    /// pair on.
+    Graded,
+}
+
 /// Asserts that a Type-3 near miss surfaces a token-supported
-/// `nearly_identical` cross-file cluster with full structural and token
-/// signals over the shared subtree.
-fn assert_type3_clone(fixture_name: &str, min_nodes: u32, left: &str, right: &str) -> Result<()> {
+/// `nearly_identical` cross-file cluster whose measured overlap is what
+/// `overlap` says it must be, corroborated by a saturated token axis.
+fn assert_type3_clone(
+    fixture_name: &str,
+    min_nodes: u32,
+    left: &str,
+    right: &str,
+    overlap: Overlap,
+) -> Result<()> {
     let report = run_report(&fixture(fixture_name), min_nodes)?;
     let Some(cluster) = clusters(&report).iter().find(|cluster| {
         spans_both(cluster, left, right) && cluster_bucket(cluster) == "nearly_identical"
     }) else {
         anyhow::bail!("{fixture_name} must report a nearly_identical clone spanning {left} and {right}: {report:#}");
     };
-    assert!(is_exact_one(signal(cluster, "structural")));
-    assert!(is_exact_one(signal(cluster, "token_jaccard")));
+    let structural = signal(cluster, "structural");
+    assert!(
+        structural >= SHARED_SUBTREE_MIN_OVERLAP,
+        "{fixture_name}: a shared-subtree near miss is admitted on \
+         `structural >= {SHARED_SUBTREE_MIN_OVERLAP}` and must still measure \
+         at least that once rendered, or the report is showing a cluster the \
+         pipeline would not admit: got {structural}: {report:#}"
+    );
+    match overlap {
+        Overlap::MerkleEqual => assert!(
+            is_exact_one(structural),
+            "{fixture_name}: the elected view is Merkle-equal across \
+             {left} and {right}, and [FUSION-SHARED-SUBTREE] short-circuits \
+             those to exactly 1.0 — a graded value here means a different, \
+             wider view was elected: got {structural}: {report:#}"
+        ),
+        Overlap::Graded => assert!(
+            structural < 1.0,
+            "{fixture_name}: {left} and {right} differ by a real subtree, so \
+             `1 - TED / max(nodes)` cannot reach 1.0 — measuring exactly one \
+             means the fragment view is being published in place of the \
+             enclosing pair, the gh #408 recall hole: got {structural}: \
+             {report:#}"
+        ),
+    }
+    assert!(
+        is_exact_one(signal(cluster, "token_jaccard")),
+        "{fixture_name}: normalisation is rename-invariant, so the token axis \
+         must saturate across {left} and {right}: {report:#}"
+    );
     Ok(())
 }
 
