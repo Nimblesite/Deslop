@@ -104,7 +104,7 @@
           "url": "/releases/"
         },
         {
-          "text": "Interactive graph",
+          "text": "Issue graph",
           "i18nKey": "docsNav.interactiveGraph",
           "url": "/issues/",
           "noLangPrefix": true

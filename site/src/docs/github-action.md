@@ -102,8 +102,6 @@ Report the number on every PR and let a human decide, rather than blocking the m
       - run: echo "{% raw %}${{ steps.deslop.outputs.duplication-percent }}{% endraw %}% duplicated"
 ```
 
-This is the recommended way to introduce Deslop to an existing codebase: run it ungated for a few weeks, watch where the number settles, then set `fail-over` just below it and ratchet down.
-
 ## Exit codes
 
 The action **surfaces** the CLI's status; it never reinterprets it.
@@ -116,8 +114,6 @@ The action **surfaces** the CLI's status; it never reinterprets it.
 | `3` | **Duplication threshold breached.** The full report is still written so CI can surface the offenders. |
 
 A breach fails the step with a message naming the measured percentage and the ceiling. `1` and `2` fail with distinct messages, so a misconfigured input is never mistaken for a duplication breach.
-
-Crucially, the reports are rendered and the artifact is uploaded **before** the gate re-raises the status — a failing build still gives you the offenders.
 
 ## Reports and artifacts
 
@@ -164,5 +160,3 @@ deslop . --fail-over 5.0
 ```
 
 Exit code `3` fails the step like any other non-zero status. Archives for every platform are on the [Releases page](https://github.com/Nimblesite/Deslop/releases).
-
-Agents driving CI should read the [AI Agents](/docs/ai-integration/) guide for the same gate plus how to parse the JSON report.

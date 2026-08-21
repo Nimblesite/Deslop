@@ -6,10 +6,10 @@
 //! that asserts nothing is indistinguishable from a check that passes. These
 //! tests make that state fail loudly instead.
 //!
-//! They read JSON only, so unlike `corpus_repos` they need no clone on disk
-//! and are not skipped by `--skip corpus_`. The test names deliberately avoid
-//! that prefix: a contract that only runs in `make test-corpus` would have
-//! been absent from exactly the pipeline that let the lists go empty.
+//! [TEST-SELECTION] They read JSON only, so unlike `corpus_repos` they need no
+//! clone on disk and this target carries no `required-features` — it runs in
+//! `make test`. A contract that only ran in `make test-corpus` would have been
+//! absent from exactly the pipeline that let the lists go empty.
 
 use std::{fs, path::Path};
 
@@ -176,6 +176,7 @@ fn every_manifest_curates_a_non_vacuous_scan_scope() -> Result<()> {
     Ok(())
 }
 
+/// Requires a positive lower bound for the number of files reached by a scan.
 fn assert_positive_file_floor(name: &str, manifest: &Value) {
     let minimum = manifest.get("expect_files_min").and_then(Value::as_u64);
     assert!(
@@ -185,6 +186,7 @@ fn assert_positive_file_floor(name: &str, manifest: &Value) {
     );
 }
 
+/// Requires a positive, ordered inclusive band for the report's cluster count.
 fn assert_valid_cluster_band(name: &str, manifest: &Value) {
     let band = manifest.get("expect_clusters");
     let minimum = band.and_then(|value| value.get("min")).and_then(Value::as_u64);

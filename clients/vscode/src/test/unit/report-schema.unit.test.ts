@@ -18,6 +18,26 @@ import {
 import { wireCluster, type ClusterFixture } from "../cluster.helpers";
 import { signalsWith } from "../signals.helpers";
 
+const IDENTICAL_BUCKET = "identical";
+const NEARLY_IDENTICAL_BUCKET = "nearly_identical";
+const STRUCTURAL_ONLY_BUCKET = "structural_only";
+const LOOSELY_SIMILAR_BUCKET = "loosely_similar";
+const SAME_BEHAVIOR_BUCKET = "same_behavior";
+const LOOSE_ACTION_SENTENCE = "Loose textual overlap. Treat as a hint.";
+const UTF8_ENCODING = "utf8";
+const LOW_SCORE = 0.2;
+const SHAPE_SCORE = 0.3;
+const MID_SCORE = 0.4;
+const HIGH_SCORE = 0.9;
+const TOKEN_ANCHOR_SCORE = 0.95;
+const NEAR_TOKEN_SCORE = 0.96;
+const DEMOTED_FUSED_SCORE = 0.31;
+const FIXTURE_TEN = 10;
+const ENGINE_OCCURRENCE_COUNT = 35;
+const HINT_ACTION_ASSERTION =
+  "the user must not be told to act on a pair the engine ranked as a hint";
+const STRUCTURAL_ONLY_TITLE = "Same shape, different content";
+
 // `fused` is a confidence in [0,1], never a raw sum — the engine's gate
 // multiplies shape evidence by content evidence ([FUSION-CONTENT-GATE]).
 // Tests that need a specific band pass it explicitly.
@@ -30,7 +50,7 @@ const signals = (
   // Staged here, never derived by the client ([FUSION-CONTENT-GATE]).
   shape = Math.max(s, j),
 ): ReportSignals =>
-  signalsWith("identical", {
+  signalsWith(IDENTICAL_BUCKET, {
     structural: s,
     token_jaccard: j,
     shape,
@@ -52,12 +72,12 @@ const cluster = (overrides: ClusterOverrides = {}): ReportCluster => {
     id: "x",
     weight: 1,
     size: 4,
-    canonical_node_count: 10,
-    bucket: known ?? "identical",
+    canonical_node_count: FIXTURE_TEN,
+    bucket: known ?? IDENTICAL_BUCKET,
     signals: signals(0, 0, 0),
     occurrences: [
-      { path: "A.cs", start_byte: 0, end_byte: 10, hidden: false },
-      { path: "B.cs", start_byte: 0, end_byte: 10, hidden: false },
+      { path: "A.cs", start_byte: 0, end_byte: FIXTURE_TEN, hidden: false },
+      { path: "B.cs", start_byte: 0, end_byte: FIXTURE_TEN, hidden: false },
     ],
     ...rest,
   });
@@ -73,7 +93,7 @@ function reportTypesPath(): string {
 }
 
 function reportTypesSource(): string {
-  return fs.readFileSync(reportTypesPath(), "utf8");
+  return fs.readFileSync(reportTypesPath(), UTF8_ENCODING);
 }
 
 function legacyName(): string {
@@ -118,12 +138,12 @@ suite("report schema helpers", () => {
       "the rank percentile must exist only in the engine",
     );
     assert.equal(
-      cluster({ bucket: "identical" }).meets_fused_gate,
+      cluster({ bucket: IDENTICAL_BUCKET }).meets_fused_gate,
       true,
       "a byte-proven cluster arrives already judged against the cutoff",
     );
     assert.equal(
-      cluster({ bucket: "structural_only" }).meets_fused_gate,
+      cluster({ bucket: STRUCTURAL_ONLY_BUCKET }).meets_fused_gate,
       false,
       "and a demoted one arrives judged the other way",
     );
@@ -137,11 +157,11 @@ suite("report schema helpers", () => {
   // five previously asserted the *defective* contract and are inverted
   // here; both inversions are called out on the row that carries them.
   test("resolveBucket carries the engine's identical verdict", () => {
-    assertCarriesBucket("identical", 1.0, 1.0, 0);
+    assertCarriesBucket(IDENTICAL_BUCKET, 1.0, 1.0, 0);
   });
 
   test("resolveBucket carries the engine's same_behavior verdict", () => {
-    assertCarriesBucket("same_behavior", 0.2, 0.3, 0.9);
+    assertCarriesBucket(SAME_BEHAVIOR_BUCKET, LOW_SCORE, SHAPE_SCORE, HIGH_SCORE);
   });
 
   // ⚠️ INVERTED. This row used to assert `nearly_identical` for
@@ -153,25 +173,30 @@ suite("report schema helpers", () => {
   // expected value now agrees with the engine instead of contradicting it.
   test("resolveBucket carries a weak-shape verdict as the hint the engine made it", () => {
     const weakShape = cluster({
-      bucket: "loosely_similar",
-      signals: signals(0.0, 0.95, 0),
+      bucket: LOOSELY_SIMILAR_BUCKET,
+      signals: signals(0.0, TOKEN_ANCHOR_SCORE, 0),
     });
-    assert.equal(resolveBucket(weakShape), "loosely_similar");
+    assert.equal(resolveBucket(weakShape), LOOSELY_SIMILAR_BUCKET);
     assert.equal(
       bucketLabels(resolveBucket(weakShape)).actionSentence,
-      "Loose textual overlap. Treat as a hint.",
-      "the user must not be told to act on a pair the engine ranked as a hint",
+      LOOSE_ACTION_SENTENCE,
+      HINT_ACTION_ASSERTION,
     );
   });
 
   test("resolveBucket carries the engine's fused-family near-miss verdict", () => {
-    assertCarriesBucket("nearly_identical", 0.4, 0.96, 0);
+    assertCarriesBucket(NEARLY_IDENTICAL_BUCKET, MID_SCORE, NEAR_TOKEN_SCORE, 0);
   });
 
   test("resolveBucket carries the engine's loosely_similar verdict", () => {
     assert.equal(
-      resolveBucket(cluster({ bucket: "loosely_similar", signals: signals(0.3, 0.4, 0.2) })),
-      "loosely_similar",
+      resolveBucket(
+        cluster({
+          bucket: LOOSELY_SIMILAR_BUCKET,
+          signals: signals(SHAPE_SCORE, MID_SCORE, LOW_SCORE),
+        }),
+      ),
+      LOOSELY_SIMILAR_BUCKET,
     );
   });
 
@@ -180,12 +205,12 @@ suite("report schema helpers", () => {
     // not on the wire — so this row is proof on its own that the label
     // has to come from the engine.
     assert.equal(
-      resolveBucket(cluster({ bucket: "structural_only", signals: signals(1.0, 0.0, 0) })),
-      "structural_only",
+      resolveBucket(cluster({ bucket: STRUCTURAL_ONLY_BUCKET, signals: signals(1.0, 0.0, 0) })),
+      STRUCTURAL_ONLY_BUCKET,
     );
     assert.equal(
-      bucketLabels("structural_only").plainTitle,
-      "Same shape, different content",
+      bucketLabels(STRUCTURAL_ONLY_BUCKET).plainTitle,
+      STRUCTURAL_ONLY_TITLE,
     );
   });
 
@@ -194,8 +219,12 @@ suite("report schema helpers", () => {
     // fixture carrying one silently invalidates every band built on it.
     // The gate is one-directional: content evidence can only discount
     // shape evidence, never inflate it past full confidence.
-    const gated = signals(1.0, 0.3, 0, 0.31);
-    for (const triple of [signals(1.0, 1.0, 0), signals(0.2, 0.3, 0.9), gated]) {
+    const gated = signals(1.0, SHAPE_SCORE, 0, DEMOTED_FUSED_SCORE);
+    for (const triple of [
+      signals(1.0, 1.0, 0),
+      signals(LOW_SCORE, SHAPE_SCORE, HIGH_SCORE),
+      gated,
+    ]) {
       assert.ok(
         triple.fused >= 0 && triple.fused <= 1,
         `fused must be a confidence in [0,1], got ${triple.fused}`,
@@ -221,17 +250,17 @@ suite("report schema helpers", () => {
   // `loosely_similar` in the engine, so a hint was repainted as an
   // act-now "Review the locations" on the flagship surface.
   test("a weak-shape pair the engine called a hint is never promoted to act-now", () => {
-    for (const triple of [signals(0.1, 0.96, 0), signals(0.0, 0.92, 0)]) {
-      const routed = resolveBucket(cluster({ bucket: "loosely_similar", signals: triple }));
+    for (const triple of [signals(0.1, NEAR_TOKEN_SCORE, 0), signals(0.0, 0.92, 0)]) {
+      const routed = resolveBucket(cluster({ bucket: LOOSELY_SIMILAR_BUCKET, signals: triple }));
       assert.equal(
         routed,
-        "loosely_similar",
+        LOOSELY_SIMILAR_BUCKET,
         `the engine's hint verdict must survive the triple ${JSON.stringify(triple)}`,
       );
       assert.equal(
         bucketLabels(routed).actionSentence,
-        "Loose textual overlap. Treat as a hint.",
-        "the user must not be told to act on a pair the engine ranked as a hint",
+        LOOSE_ACTION_SENTENCE,
+        HINT_ACTION_ASSERTION,
       );
       assert.equal(bucketLabels(routed).aiMatch, false);
     }
@@ -251,17 +280,17 @@ suite("report schema helpers", () => {
     // 1.0 because the Merkle match already proves the token multiset
     // (#232). The triple alone therefore reads "identical" — this is the
     // exact shape that produced the false claim.
-    const rename = signals(1.0, 1.0, 0, 0.9);
+    const rename = signals(1.0, 1.0, 0, HIGH_SCORE);
     assert.ok(rename.fused < 1.0, "fixture: a proven rename is not full confidence");
     assert.equal(
       rename.structural,
       signals(1.0, 1.0, 0, 1.0).structural,
       "fixture: its shape evidence is indistinguishable from a verbatim copy",
     );
-    const routed = resolveBucket(cluster({ bucket: "nearly_identical", signals: rename }));
+    const routed = resolveBucket(cluster({ bucket: NEARLY_IDENTICAL_BUCKET, signals: rename }));
     assert.equal(
       routed,
-      "nearly_identical",
+      NEARLY_IDENTICAL_BUCKET,
       "a rename below full confidence must not be labelled byte-identical",
     );
     assert.equal(
@@ -271,7 +300,7 @@ suite("report schema helpers", () => {
     );
     assert.notEqual(
       bucketLabels(routed).actionSentence,
-      bucketLabels("identical").actionSentence,
+      bucketLabels(IDENTICAL_BUCKET).actionSentence,
       "the rename must not borrow the byte-identical action sentence",
     );
   });
@@ -284,8 +313,8 @@ suite("report schema helpers", () => {
   test("a shape-only family the content gate demoted is never promoted", () => {
     // Sibling boilerplate: shape saturates, content evidence is absent,
     // so the engine demotes it to `structural_only` at fused 0.31.
-    const shapeOnly = signals(1.0, 0.3, 0, 0.31);
-    const demoted = cluster({ bucket: "structural_only", signals: shapeOnly });
+    const shapeOnly = signals(1.0, SHAPE_SCORE, 0, DEMOTED_FUSED_SCORE);
+    const demoted = cluster({ bucket: STRUCTURAL_ONLY_BUCKET, signals: shapeOnly });
     assert.equal(
       demoted.meets_fused_gate,
       false,
@@ -298,12 +327,12 @@ suite("report schema helpers", () => {
     const routed = resolveBucket(demoted);
     assert.equal(
       routed,
-      "structural_only",
+      STRUCTURAL_ONLY_BUCKET,
       "shape without content evidence must never reach an act-now bucket",
     );
     assert.equal(
       bucketLabels(routed).plainTitle,
-      "Same shape, different content",
+      STRUCTURAL_ONLY_TITLE,
       "the demoted family must keep its honest title",
     );
     assert.equal(bucketLabels(routed).aiMatch, false);
@@ -318,16 +347,16 @@ suite("report schema helpers", () => {
     const unlabelled = resolveBucket(cluster({ bucket: "", signals: signals(1.0, 1.0, 1.0, 1.0) }));
     assert.equal(
       unlabelled,
-      "loosely_similar",
+      LOOSELY_SIMILAR_BUCKET,
       "a report with no engine verdict carries no verdict to render",
     );
     assert.equal(
       bucketLabels(unlabelled).actionSentence,
-      "Loose textual overlap. Treat as a hint.",
+      LOOSE_ACTION_SENTENCE,
     );
     assert.equal(
       resolveBucket(cluster({ bucket: "not_a_bucket", signals: signals(1.0, 1.0, 1.0, 1.0) })),
-      "loosely_similar",
+      LOOSELY_SIMILAR_BUCKET,
       "an unrecognised label is no more a verdict than a missing one",
     );
   });
@@ -346,11 +375,23 @@ suite("report schema helpers", () => {
     // label must win over the triple, so a row whose two disagree is
     // exactly the row that catches a re-derivation coming back.
     const rows = [
-      { signals: signals(1.0, 1.0, 0, 1.0), bucket: "identical" as const },
-      { signals: signals(0.2, 0.3, 0.9, 0.9), bucket: "same_behavior" as const },
-      { signals: signals(1.0, 0.0, 0.0, 0.31), bucket: "structural_only" as const },
-      { signals: signals(0.0, 0.95, 0, 0.95), bucket: "nearly_identical" as const },
-      { signals: signals(0.3, 0.4, 0.2, 0.4), bucket: "loosely_similar" as const },
+      { signals: signals(1.0, 1.0, 0, 1.0), bucket: IDENTICAL_BUCKET },
+      {
+        signals: signals(LOW_SCORE, SHAPE_SCORE, HIGH_SCORE, HIGH_SCORE),
+        bucket: SAME_BEHAVIOR_BUCKET,
+      },
+      {
+        signals: signals(1.0, 0.0, 0.0, DEMOTED_FUSED_SCORE),
+        bucket: STRUCTURAL_ONLY_BUCKET,
+      },
+      {
+        signals: signals(0.0, TOKEN_ANCHOR_SCORE, 0, TOKEN_ANCHOR_SCORE),
+        bucket: NEARLY_IDENTICAL_BUCKET,
+      },
+      {
+        signals: signals(SHAPE_SCORE, MID_SCORE, LOW_SCORE, MID_SCORE),
+        bucket: LOOSELY_SIMILAR_BUCKET,
+      },
     ];
 
     for (const row of rows) {
@@ -383,7 +424,7 @@ suite("report schema helpers", () => {
       );
       assert.equal(
         labels.aiMatch,
-        routed === "same_behavior",
+        routed === SAME_BEHAVIOR_BUCKET,
         `${routed}: only the embedding-pass bucket is an AI match`,
       );
     }
@@ -404,10 +445,10 @@ suite("report schema helpers", () => {
   test("resolveBucket prefers JSON wire label over recomputation", () => {
     const bucket = resolveBucket(
       cluster({
-        bucket: "same_behavior",
+        bucket: SAME_BEHAVIOR_BUCKET,
       }),
     );
-    assert.equal(bucket, "same_behavior");
+    assert.equal(bucket, SAME_BEHAVIOR_BUCKET);
   });
 
   // ⚠️ INVERTED. This row used to assert that a report with no engine
@@ -419,10 +460,10 @@ suite("report schema helpers", () => {
   // value corrected to the honest one.
   test("resolveBucket never manufactures a verdict for a v3 report with no bucket", () => {
     const bucket = resolveBucket(cluster({ bucket: "", signals: signals(1.0, 1.0, 0) }));
-    assert.equal(bucket, "loosely_similar");
+    assert.equal(bucket, LOOSELY_SIMILAR_BUCKET);
     assert.notEqual(
       bucket,
-      "identical",
+      IDENTICAL_BUCKET,
       "an unproven triple must never be presented as byte-identical",
     );
   });
@@ -431,12 +472,18 @@ suite("report schema helpers", () => {
     // The live wire truncates `occurrences`, so the carried list is not
     // the cluster. The count is computed once by
     // `deslop-core::report::occurrence_count` and read verbatim here.
-    assert.equal(occurrenceCount(cluster({ occurrence_count: 35 })), 35);
-    const truncated = cluster({ occurrence_count: 35, occurrences_truncated: true });
+    assert.equal(
+      occurrenceCount(cluster({ occurrence_count: ENGINE_OCCURRENCE_COUNT })),
+      ENGINE_OCCURRENCE_COUNT,
+    );
+    const truncated = cluster({
+      occurrence_count: ENGINE_OCCURRENCE_COUNT,
+      occurrences_truncated: true,
+    });
     assert.equal(truncated.occurrences.length, 2, "fixture: only two occurrences travelled");
     assert.equal(
       occurrenceCount(truncated),
-      35,
+      ENGINE_OCCURRENCE_COUNT,
       "a truncated wire list must never shrink the reported count",
     );
   });
@@ -451,22 +498,22 @@ suite("report schema helpers", () => {
   });
 
   test("bucketLabels hybrid_title carries bracketed Type-N on every bucket", () => {
-    assert.ok(bucketLabels("identical").hybridTitle.includes("[Type-1/2]"));
+    assert.ok(bucketLabels(IDENTICAL_BUCKET).hybridTitle.includes("[Type-1/2]"));
     assert.ok(
-      bucketLabels("nearly_identical").hybridTitle.includes("[Type-3]"),
+      bucketLabels(NEARLY_IDENTICAL_BUCKET).hybridTitle.includes("[Type-3]"),
     );
     assert.ok(
-      bucketLabels("loosely_similar").hybridTitle.includes("[weak LSH]"),
+      bucketLabels(LOOSELY_SIMILAR_BUCKET).hybridTitle.includes("[weak LSH]"),
     );
-    assert.ok(bucketLabels("same_behavior").hybridTitle.includes("[Type-4"));
+    assert.ok(bucketLabels(SAME_BEHAVIOR_BUCKET).hybridTitle.includes("[Type-4"));
   });
 
   test("bucketLabels plain_title never contains Type-N", () => {
     for (const b of [
-      "identical",
-      "nearly_identical",
-      "loosely_similar",
-      "same_behavior",
+      IDENTICAL_BUCKET,
+      NEARLY_IDENTICAL_BUCKET,
+      LOOSELY_SIMILAR_BUCKET,
+      SAME_BEHAVIOR_BUCKET,
     ] as const) {
       const title = bucketLabels(b).plainTitle;
       assert.ok(
@@ -480,21 +527,21 @@ suite("report schema helpers", () => {
   // without a second opinion, so it must be exactly the buckets whose
   // action sentence tells the user to do something now, and nothing else.
   test("the act-now set is exactly the buckets that tell the user to act", () => {
-    assert.deepEqual([...ACT_NOW_BUCKETS], ["identical", "nearly_identical"]);
-    assert.ok(isActNow("identical"), "a byte-proven copy is act-now");
-    assert.ok(isActNow("nearly_identical"), "a proven near miss is act-now");
+    assert.deepEqual([...ACT_NOW_BUCKETS], [IDENTICAL_BUCKET, NEARLY_IDENTICAL_BUCKET]);
+    assert.ok(isActNow(IDENTICAL_BUCKET), "a byte-proven copy is act-now");
+    assert.ok(isActNow(NEARLY_IDENTICAL_BUCKET), "a proven near miss is act-now");
     assert.equal(
-      isActNow("structural_only"),
+      isActNow(STRUCTURAL_ONLY_BUCKET),
       false,
       "the demoted tier says 'verify before extracting' — that is not act-now",
     );
     assert.equal(
-      isActNow("loosely_similar"),
+      isActNow(LOOSELY_SIMILAR_BUCKET),
       false,
       "a hint is not something to act on",
     );
     assert.equal(
-      isActNow("same_behavior"),
+      isActNow(SAME_BEHAVIOR_BUCKET),
       false,
       "an AI match says 'read both before merging' — it earns its place on confidence, not on a verdict",
     );
@@ -508,9 +555,9 @@ suite("report schema helpers", () => {
   });
 
   test("only same_behavior is flagged as an AI match", () => {
-    assert.equal(bucketLabels("identical").aiMatch, false);
-    assert.equal(bucketLabels("nearly_identical").aiMatch, false);
-    assert.equal(bucketLabels("loosely_similar").aiMatch, false);
-    assert.equal(bucketLabels("same_behavior").aiMatch, true);
+    assert.equal(bucketLabels(IDENTICAL_BUCKET).aiMatch, false);
+    assert.equal(bucketLabels(NEARLY_IDENTICAL_BUCKET).aiMatch, false);
+    assert.equal(bucketLabels(LOOSELY_SIMILAR_BUCKET).aiMatch, false);
+    assert.equal(bucketLabels(SAME_BEHAVIOR_BUCKET).aiMatch, true);
   });
 });

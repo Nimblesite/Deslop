@@ -1,6 +1,6 @@
 {
   "_agent_pmo": "b636503",
-  "_doc": "Single source of truth for coverage thresholds. See REPO-STANDARDS-SPEC [COVERAGE-THRESHOLDS-JSON] and docs/specs/SPEC.md. Ratchet only — never lower. Each Rust crate and the VSIX extension have their own line-coverage floor; every non-Ollama test target (`make ci`) must measure against its entry here.",
+  "_doc": "Single source of truth for coverage thresholds. See REPO-STANDARDS-SPEC [COVERAGE-THRESHOLDS-JSON] and docs/specs/SPEC.md. Ratchet only — never lower. Each Rust crate and the VSIX extension have their own line-coverage floor; every test target `make ci` runs must measure against its entry here ([TEST-SELECTION]: `make test` filters no test by name; only the feature-gated corpus suite is out).",
   "default_threshold": 95,
   "projects": {
     "crates/deslop-core": {

@@ -75,13 +75,13 @@ jobs:
 | `duplication-percent` | 重复行数占已分析行数的百分比 |
 | `cluster-count` | 报告正文中的簇数量 —— 在 `only-changed` 下为经过筛选后保留的、受 diff 影响的簇 |
 | `threshold-percent` | 本次运行所对照的上限 |
-| `exit-code` | `0` 干净、`1` 运行时错误、`2` 用法错误、`3` 突破阈值 |
+| `exit-code` | `0` 成功、`1` 运行时错误、`2` 用法错误、`3` 突破阈值 |
 | `report-json` / `report-text` / `report-html` | 渲染出的报告路径 |
 | `gate-scope` | 门禁所度量的总体 —— 在 `only-changed` 下为 `added-lines`，否则为 `repository` |
 | `gate-percent` | 门禁与其上限相比较的百分比，覆盖 `gate-scope` 所指的总体 |
 | `gate-threshold-percent` | `gate-percent` 所对照的上限 |
 
-**即使门禁被触发，输出仍会发布**，因此后续步骤可以评论该数字或逐步收紧预算。设置 `nojson: true` 会让它们为空 — 它们是从 JSON 报告中读取的。
+**即使门禁被触发，输出仍会发布**，因此后续步骤可以在评论中发布该数值，或逐步收紧预算。设置 `nojson: true` 会让它们为空 — 它们是从 JSON 报告中读取的。
 
 ## 阈值优先级
 
@@ -100,10 +100,8 @@ jobs:
         id: deslop
         with:
           no-fail-over: "true"   # 只度量，不拦截
-      - run: echo "{% raw %}${{ steps.deslop.outputs.duplication-percent }}{% endraw %}% duplicated"
+      - run: echo "{% raw %}${{ steps.deslop.outputs.duplication-percent }}{% endraw %}% 重复"
 ```
-
-这是把 Deslop 引入既有代码库的推荐方式：先无门禁运行几周，观察数字稳定在哪里，然后把 `fail-over` 设在略低于该值的位置并逐步收紧。
 
 ## 退出码
 
@@ -117,8 +115,6 @@ jobs:
 | `3` | **重复率突破阈值。** 报告仍会完整写出，以便 CI 呈现最严重的问题。 |
 
 突破阈值会让步骤失败，并给出指明实测百分比与上限的消息。`1` 与 `2` 会给出各自不同的消息，因此配置错误绝不会被误认为重复率突破。
-
-关键在于：报告的渲染与产物上传发生在门禁重新抛出状态**之前** — 失败的构建仍然会把最严重的问题交到你手上。
 
 ## 报告与产物
 
@@ -165,5 +161,3 @@ deslop . --fail-over 5.0
 ```
 
 退出码 `3` 会像任何非零状态一样让步骤失败。各平台的归档见[发布页](https://github.com/Nimblesite/Deslop/releases)。
-
-在 CI 中驱动 Deslop 的智能体应阅读 [For AI](/zh/docs/ai-integration/) 指南，其中包含同样的门禁以及如何解析 JSON 报告。

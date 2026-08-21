@@ -29,6 +29,8 @@ import type { ThresholdStatus } from "./threshold";
 // after the helpers moved to the cycle-free `./paths` leaf module.
 export { displayPath, representativePath } from "./paths";
 
+const TREE_ITEM_ROLE = "treeitem";
+
 export type Node =
   | ClusterNode
   | OccurrenceNode
@@ -109,7 +111,7 @@ export class ClusterNode extends vscode.TreeItem {
     this.iconPath = categoryIcon(bucket);
     this.accessibilityInformation = {
       label: `${labels.plainTitle} in ${fileLabel}, cluster ${cluster.id}, rank ${rank}`,
-      role: "treeitem",
+      role: TREE_ITEM_ROLE,
     };
     // Tooltip is the AI-scrapable hover surface and stays mode-invariant
     // — always carries the full file path. [VSIX-TOP-OFFENDERS-FILE-MODE]
@@ -181,7 +183,7 @@ export class FileNode extends vscode.TreeItem {
     );
     this.accessibilityInformation = {
       label: `${label}, ${clusterCount} duplicate ${noun}`,
-      role: "treeitem",
+      role: TREE_ITEM_ROLE,
     };
   }
 }
@@ -206,7 +208,7 @@ export abstract class GroupNode extends vscode.TreeItem {
     if (icon) this.iconPath = icon;
     this.accessibilityInformation = {
       label: `${title}, ${clusters.length} clusters`,
-      role: "treeitem",
+      role: TREE_ITEM_ROLE,
     };
   }
 }
@@ -254,7 +256,7 @@ export class FolderNode extends vscode.TreeItem {
     );
     this.accessibilityInformation = {
       label: `${label}, ${fileCount} duplicated ${noun}`,
-      role: "treeitem",
+      role: TREE_ITEM_ROLE,
     };
   }
 }
@@ -275,7 +277,7 @@ export class LanguageGroupNode extends vscode.TreeItem {
     this.iconPath = new vscode.ThemeIcon("symbol-namespace");
     this.accessibilityInformation = {
       label: `${languageDisplayName(language)}, ${clusterCount} ${noun}`,
-      role: "treeitem",
+      role: TREE_ITEM_ROLE,
     };
   }
 }
@@ -331,7 +333,7 @@ export class FolderMetricNode extends vscode.TreeItem {
     );
     this.accessibilityInformation = {
       label: `${label}, ${formatPercent(percent)} duplicated`,
-      role: "treeitem",
+      role: TREE_ITEM_ROLE,
     };
   }
 }

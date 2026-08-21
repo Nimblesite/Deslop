@@ -16,9 +16,25 @@ Every manifest carries `ceilings.max_wall_seconds` and `ceilings.max_peak_rss_mb
 
 The memory ceiling is **7168 MB — the RAM of a standard GitHub Actions runner**, not an invented number. Deslop ships a GitHub Action; a scan that exceeds the runner is a scan the documented product cannot perform. The wall ceiling is deliberately loose: it exists to catch a hang, not to police throughput.
 
+### [CORPUS-SCOPE] The scan happened
+
+Every other check here reads the clusters a report contains, and none of them can see the report that contains *nothing*: a scan that analysed zero files renders cleanly, exits 0, and satisfies recall, precision, confidence and ceilings at once, because each iterates a set that is empty. gh #342 shipped exactly that — a repository under any folder named `dist`, `build` or `target` analysed as zero files.
+
+Every manifest therefore carries two curated bounds, and both are **required**:
+
+- `expect_files_min` — the floor `files_analysed` must clear, hand-set against the pinned `sha`. Under it, discovery lost part of the repository.
+- `expect_clusters` — a `{ min, max }` band the rendered cluster count must sit inside, inclusive at both ends. Below it, detection stopped finding duplicates; above it, something started manufacturing them. Both are repository-wide swings that no per-cluster check can see, because each of those judges only the clusters that *are* there.
+
+An absent bound is not a repository with no opinion about its own size — it is a check that cannot fire, so a manifest that omits one fails the gate rather than passing it, and `corpus_manifest_contract.rs` refuses it before any scan runs.
+
 ### [CORPUS-RECALL] Curated duplicates
 
-`must_find` lists duplicates a human confirmed byte-for-byte, each with the `diff` that proved it. A cluster must span every path in the entry; anything less is a false negative on code known to be duplicated.
+`must_find` lists duplicates a human confirmed byte-for-byte, each with the `diff` that proved it. Two check ids judge it:
+
+- `recall` — some cluster spans every path in the entry. Anything less is a false negative on code known to be duplicated.
+- `recall_quality` — that duplication is reported **as what it is**: a cluster labelled `identical`, with every curated occurrence *shown*, and within the entry's optional `max_rank` ceiling.
+
+`recall` alone used to be the whole assertion. A 137-line byte-identical clone that rendered `loosely_similar`, hid one of its two occurrences and ranked #900 satisfied it completely — while `must_find_type2` next door already demanded span *plus* bucket *plus* visibility for the strictly harder case. The byte-identical case is the easier proof and must not hold the weaker contract. `identical` is the only bucket a byte-identical pair may reach: anything else is the engine contradicting a verified fact about the source. `max_rank` is optional per entry, because only the entries a human ranked get a rank assertion — ranking is the product, and a finding a user never scrolls to is a finding they do not get.
 
 **An empty `must_find` asserts nothing, and the suite says so out loud** — such a run prints `ACCURACY UNASSERTED` and has proven only that the scan fit its budget. A green corpus test is not evidence of accuracy unless the repository has curated entries. An entry that lists no files fails rather than passing vacuously.
 
@@ -36,6 +52,14 @@ Ranking *is* the product, so the head of the report is where a false positive do
 
   It is never matched against source text. The rule shipped as `text.contains("extends StatefulWidget")` and was wrong in both directions (gh #401): it fired on a comment or string literal that merely mentioned the supertype, and it missed a declaration whose clause was wrapped across lines. Type arguments are not base types — `extends State<LedgerView>` names `State` — and a language with no curated heritage grammar fails the gate rather than passing it, so a rule that cannot fire is never mistaken for a rule that found nothing.
 - Language-agnostic: a top-ranked cluster that is overwhelmingly digits and separators is a data table, and must carry `category: data` rather than ranking at full logic weight.
+
+### [CORPUS-PRECISION-CURATED] Curated non-duplicates
+
+`must_not_cluster` lists pairs a human confirmed are **not** duplication, each with `why`, `verified` (how it was checked) and `files`. The `precision` check fails when a single shown cluster spans every path in an entry.
+
+This is [CORPUS-RECALL]'s predicate read backwards — the same "does a shown cluster span every curated path" question, opposite verdict — and visibility works the same way for the same reason: a false positive nobody is shown is not a false positive, so a cluster whose curated side is entirely hidden does not breach the entry. Suppressing it is the fix, not a loophole.
+
+Without this field no manifest could express the thing seven open false-positive issues all say — *these are not duplicates and Deslop clustered them* — so none of them could be pinned on the repository it was reported against. An entry naming fewer than two files fails rather than passing vacuously: one path cannot describe a pair the engine wrongly joined.
 
 ### [CORPUS-BASELINE] The known-failures ratchet
 

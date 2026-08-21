@@ -304,3 +304,100 @@ fn a_qualified_base_type_is_named_by_its_last_segment() -> Result<()> {
     );
     Ok(())
 }
+
+/// [CORPUS-PRECISION-CURATED] `precision` — a curated non-duplicate must
+/// never be shown as one cluster.
+mod curated_precision {
+    use serde_json::{json, Value};
+
+    use super::super::check_curated_precision;
+    use crate::corpus::Failure;
+
+    /// The pair every case below curates as *not* duplication.
+    const PAIR: [&str; 2] = ["tests/test_configs.py", "tests/test_openapi.py"];
+
+    /// A manifest curating one hand-verified non-duplicate over `files`.
+    fn manifest(files: &[&str]) -> Value {
+        json!({
+            "must_not_cluster": [{
+                "files": files,
+                "why": "two unrelated pytest modules sharing only the assertion idiom",
+                "verified": "read both functions; they assert different endpoints",
+            }]
+        })
+    }
+
+    /// One cluster over `files`, each occurrence hidden or not.
+    fn cluster(files: &[&str], hidden: bool) -> Value {
+        json!({
+            "id": "c0ffee",
+            "bucket": "nearly_identical",
+            "size": files.len(),
+            "signals": { "fused": 0.91 },
+            "occurrences": files
+                .iter()
+                .map(|file| json!({ "path": file, "hidden": hidden }))
+                .collect::<Vec<Value>>(),
+        })
+    }
+
+    /// The check ids a run produced.
+    fn checks(manifest: &Value, clusters: &[Value]) -> Vec<String> {
+        let mut failures: Vec<Failure> = Vec::new();
+        check_curated_precision(manifest, &json!({ "clusters": clusters }), &mut failures);
+        failures
+            .into_iter()
+            .map(|failure| failure.check)
+            .collect()
+    }
+
+    #[test]
+    fn a_curated_non_duplicate_left_unclustered_passes() {
+        assert!(
+            checks(&manifest(&PAIR), &[cluster(&["a.py", "b.py"], false)]).is_empty(),
+            "the report clusters other files and leaves the curated pair \
+             alone, which is exactly what the entry asserts"
+        );
+        assert!(
+            checks(&manifest(&PAIR), &[]).is_empty(),
+            "a report with no clusters breaches no precision entry"
+        );
+    }
+
+    #[test]
+    fn a_curated_non_duplicate_shown_as_one_cluster_is_a_false_positive() {
+        assert_eq!(
+            checks(&manifest(&PAIR), &[cluster(&PAIR, false)]),
+            vec!["precision".to_owned()],
+            "a shown cluster spanning both curated paths is the false \
+             positive the entry exists to name — seven open issues say \
+             exactly this and none of them could be pinned before"
+        );
+    }
+
+    #[test]
+    fn a_hidden_cluster_does_not_breach_the_entry() {
+        assert!(
+            checks(&manifest(&PAIR), &[cluster(&PAIR, true)]).is_empty(),
+            "precision is what the report shows. A cluster the user is never \
+             shown makes no claim, so suppressing it is the fix, not a \
+             loophole — the same visibility rule [CORPUS-RECALL] applies, \
+             read in the opposite direction"
+        );
+    }
+
+    #[test]
+    fn an_entry_naming_fewer_than_two_files_fails_rather_than_passing() {
+        assert_eq!(
+            checks(&manifest(&[PAIR[0]]), &[cluster(&PAIR, false)]),
+            vec!["precision".to_owned()],
+            "one path cannot describe a pair the engine wrongly joined. It \
+             must fail as uncurated rather than pass by spanning nothing"
+        );
+        assert_eq!(
+            checks(&manifest(&[]), &[]),
+            vec!["precision".to_owned()],
+            "and an entry naming no files at all is the same defect"
+        );
+    }
+}

@@ -19,7 +19,7 @@
 use deslop_core::{buckets::has_saturating_shape_evidence, wire_generated::ReportSignals};
 use serde_json::Value;
 
-use crate::corpus::{reports_clone_spanning, Failure};
+use crate::corpus::{cluster_shows_span, reports_clone_spanning, visible_clusters, Failure};
 
 /// Minimum demoted clusters before [`check_type2_gate_liveness`] will judge a
 /// report.
@@ -250,7 +250,7 @@ fn check_one_curated_clone(entry: &Value, report: &Value, failures: &mut Vec<Fai
     let ranked: Vec<(usize, &Value)> = visible_clusters(report)
         .into_iter()
         .enumerate()
-        .filter(|(_, cluster)| cluster_spans(cluster, &files))
+        .filter(|(_, cluster)| cluster_shows_span(cluster, &files))
         .collect();
     let Some((rank, cluster)) = ranked
         .iter()
@@ -363,7 +363,7 @@ fn check_one_curated_type2(entry: &Value, report: &Value, failures: &mut Vec<Fai
     }
     let vouched = visible_clusters(report)
         .iter()
-        .any(|cluster| gate_vouched(cluster) && cluster_spans(cluster, &files));
+        .any(|cluster| gate_vouched(cluster) && cluster_shows_span(cluster, &files));
     if !vouched {
         failures.push(Failure::new(
             "type2_recall",
@@ -374,54 +374,6 @@ fn check_one_curated_type2(entry: &Value, report: &Value, failures: &mut Vec<Fai
                  gate. Hand-verified Type-2 rename: {why}"
             ),
         ));
-    }
-}
-
-/// True when every curated file appears among the cluster's *shown*
-/// occurrence paths — the same exact-path predicate as
-/// [`crate::corpus::reports_clone_spanning`], and false for an empty list
-/// for the same reason: an entry naming no files must never pass vacuously.
-///
-/// Hidden occurrences are excluded rather than merely deprioritised.
-/// [`visible_clusters`] only asks that *some* occurrence of a cluster is
-/// shown, so a cluster carrying twenty siblings could satisfy it while the
-/// curated rename's own side is suppressed — the user would never see the
-/// pair, which is the false negative the entry exists to catch.
-fn cluster_spans(cluster: &Value, files: &[String]) -> bool {
-    if files.is_empty() {
-        return false;
-    }
-    let paths: Vec<&str> = cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-        .iter()
-        .filter(|occurrence| occurrence.get("hidden").and_then(Value::as_bool) != Some(true))
-        .filter_map(|occurrence| occurrence.get("path").and_then(Value::as_str))
-        .collect();
-    files.iter().all(|file| paths.contains(&file.as_str()))
-}
-
-/// Clusters the report actually shows a user. A hidden cluster carries no
-/// claim, so it can neither collapse the spread nor rescue recall.
-fn visible_clusters(report: &Value) -> Vec<&Value> {
-    match report.get("clusters").and_then(Value::as_array) {
-        None => Vec::new(),
-        Some(clusters) => clusters
-            .iter()
-            .filter(|cluster| !all_occurrences_hidden(cluster))
-            .collect(),
-    }
-}
-
-/// True when every occurrence of a cluster is hidden, so nothing is rendered.
-fn all_occurrences_hidden(cluster: &Value) -> bool {
-    match cluster.get("occurrences").and_then(Value::as_array) {
-        None => true,
-        Some(occurrences) => occurrences
-            .iter()
-            .all(|occurrence| occurrence.get("hidden").and_then(Value::as_bool) == Some(true)),
     }
 }
 

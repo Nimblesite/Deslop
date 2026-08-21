@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
-title: 准确性透明度 — 重复率与已知问题
-description: Deslop 如何计算重复率、CI 门禁如何使用这些数值，以及哪些未解决的 GitHub 问题可能影响准确性。
+title: 准确性透明度 — 重复率的计算方式
+description: Deslop 如何计算重复率，以及 CI 门禁如何使用测得的数值。
 keywords: deslop, 准确性, 重复率, 重复行, ci 门禁, 误报, 漏报
 eleventyNavigation:
   key: 准确性透明度
@@ -31,10 +31,6 @@ duplication_percent = clamp(100 × duplicated_loc / analysed_loc, 0, 100)
 
 实现完全公开：[`render_report` 选择可见簇集合](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/report.rs)，[`compute_repo_metrics` 对覆盖行求并集](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/report_metrics.rs)，同一文件中的 `percent` 函数负责除法并将结果限制在规定范围内。
 
-## 接下来要构建的功能
-
-计划在原始数值旁增加一项按证据加权的百分比，并配备独立的可选 CI 门禁。已证实的副本将比仅形状相似的匹配占据更高权重，同时不改变现有阈值。设计记录在 [`weighted-metrics-plan.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/plans/weighted-metrics-plan.md) 中，并由 [#344](https://github.com/Nimblesite/Deslop/issues/344) 跟踪。
-
 ## CI 门禁的工作方式
 
 设置 `--fail-over <percent>`，或在 `.deslop.toml` 中设置 `[threshold] max_duplication_percent`。CLI 参数会覆盖配置值；`--no-fail-over` 会为本次运行禁用门禁。
@@ -42,17 +38,5 @@ duplication_percent = clamp(100 × duplicated_loc / analysed_loc, 0, 100)
 只有当完整精度的实测值**大于**上限时，门禁才会失败。等于上限时通过。超过上限后，程序会先写出报告，再以 `3` 退出；未设置阈值时，仅仅存在重复绝不会使运行失败。阈值必须是从 `0` 到 `100` 的有限数值。
 
 确切的比较逻辑位于 [`ThresholdSummary::resolve`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/report_metrics.rs)，CLI 优先级与退出处理位于 [`main.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop/src/main.rs)，而 [GitHub Action 会在重新传递退出码之前保留报告](https://github.com/Nimblesite/Deslop/blob/main/action.yml)。
-
-## 已知的未解决准确性风险
-
-审阅日期：2026 年 8 月 21 日。[问题概览](/issues/overview/)会根据未解决的 GitHub 问题重新构建，是当前完整索引。下表归纳最直接影响结果的活跃风险；标记为 `fixed-on-main` 的问题在发布验证完成前仍会保留在概览中。
-
-| 风险 | 活跃问题 | 可能影响 |
-| --- | --- | --- |
-| 机械重复率 | [#385](https://github.com/Nimblesite/Deslop/issues/385)、[#344](https://github.com/Nimblesite/Deslop/issues/344) | 生成代码可能压低原始百分比，而证据弱与证据强的可见发现仍按同等权重计入。 |
-| 误报与证据夸大 | [#362](https://github.com/Nimblesite/Deslop/issues/362)、[#365](https://github.com/Nimblesite/Deslop/issues/365)、[#359](https://github.com/Nimblesite/Deslop/issues/359)、[#409](https://github.com/Nimblesite/Deslop/issues/409)、[#417](https://github.com/Nimblesite/Deslop/issues/417)、[#421](https://github.com/Nimblesite/Deslop/issues/421)、[#389](https://github.com/Nimblesite/Deslop/issues/389)、[#103](https://github.com/Nimblesite/Deslop/issues/103)、[#79](https://github.com/Nimblesite/Deslop/issues/79)、[#71](https://github.com/Nimblesite/Deslop/issues/71)、[#283](https://github.com/Nimblesite/Deslop/issues/283)、[#284](https://github.com/Nimblesite/Deslop/issues/284)、[#285](https://github.com/Nimblesite/Deslop/issues/285) | 无关的声明、测试、数据表、调用或不足一行的片段可能被提升为簇，或被归入证据更强的分桶。 |
-| 漏报 | [#373](https://github.com/Nimblesite/Deslop/issues/373)、[#367](https://github.com/Nimblesite/Deslop/issues/367)、[#369](https://github.com/Nimblesite/Deslop/issues/369)、[#387](https://github.com/Nimblesite/Deslop/issues/387)、[#407](https://github.com/Nimblesite/Deslop/issues/407)、[#410](https://github.com/Nimblesite/Deslop/issues/410)、[#356](https://github.com/Nimblesite/Deslop/issues/356)、[#264](https://github.com/Nimblesite/Deslop/issues/264)、[#309](https://github.com/Nimblesite/Deslop/issues/309) | 经过重命名的匹配、近似匹配、语义匹配、启用嵌入时的匹配或片段查询匹配可能消失。 |
-| 陈旧或冲突的状态 | [#380](https://github.com/Nimblesite/Deslop/issues/380)、[#276](https://github.com/Nimblesite/Deslop/issues/276)、[#228](https://github.com/Nimblesite/Deslop/issues/228)、[#292](https://github.com/Nimblesite/Deslop/issues/292)、[#262](https://github.com/Nimblesite/Deslop/issues/262) | 缓存分区、捆绑的引擎版本、临时资产或编辑器状态可能使不同界面的结果相互矛盾。 |
-| 语料库与保障缺口 | [#401](https://github.com/Nimblesite/Deslop/issues/401)、[#415](https://github.com/Nimblesite/Deslop/issues/415)、[#412](https://github.com/Nimblesite/Deslop/issues/412)、[#366](https://github.com/Nimblesite/Deslop/issues/366)、[#298](https://github.com/Nimblesite/Deslop/issues/298)、[#167](https://github.com/Nimblesite/Deslop/issues/167) | 不可靠或被跳过的检查、生成资产、解析器错误以及合成的嵌入测试可能掩盖回归。 |
 
 请将该百分比视为对当前报告中可见发现的精确测量，而不是代码库中每一处重复的绝对真值。

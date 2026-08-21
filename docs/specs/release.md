@@ -78,6 +78,29 @@ on drift. Coverage floors are owned by `coverage-thresholds.json`
   exemption is `action-selftest.yml`, whose whole purpose is proving the
   published action works and which scans the `examples/` fixtures, never this
   tree. A gate running last month's binary would report last month's percentage.
+- **[TEST-SELECTION] No test is selected by name** — the release gate
+  (`make test`) runs `cargo llvm-cov --workspace --all-targets` with no test
+  filter at all. `cargo test --skip` matches a *substring of the test name*, so
+  the previous `--skip ollama_ --skip corpus_` dropped every hermetic test whose
+  name merely mentioned a service: the corpus gate's own precision, scope and
+  confidence self-tests in `deslop-test-support`, the mock-Ollama embedding
+  suites, and the tests that assert graceful degradation when Ollama is
+  unreachable — the exact tests that prove the gate works (gh #412). The Rust
+  embedding suites need no daemon; they drive an in-process mock server or a
+  deliberately dead endpoint, so they belong in the gate. `make test-ollama`
+  covers only the VSIX suite, which does need a live daemon. The one suite that
+  must stay out — the clone-and-scan corpus gate ([corpus.md §CORPUS-PIN](corpus.md))
+  — is excluded structurally: `crates/deslop/Cargo.toml` declares its test target
+  with `required-features = ["corpus-repos"]`, so cargo does not build it unless
+  `make test-corpus` asks for the feature. Gating is by cost, never by name:
+  `corpus_manifest_contract` reads the pinned manifests off disk and runs in the
+  gate. Contract-tested by `scripts/repository/test-selection.test.mjs`, which
+  `make lint` runs. Gating costs coverage of the corpus suite's *execution*,
+  never of its *compilation*: `make lint` passes `--features deslop/corpus-repos`
+  to clippy so the target is still built and linted on every run. Without that,
+  a refactor elsewhere can leave the gate uncompilable and nothing notices until
+  someone runs `make test-corpus` — commit `77bcbaed5` deleted two constants the
+  suite still read and did exactly that.
 - **[GITHUB-CODE-SCANNING] CodeQL** — `codeql.yml` runs CodeQL
   `security-extended` to feed GitHub code-scanning alerts (PRs to `main`, `v*`
   tags, weekly), across the `rust` / `javascript-typescript` / `actions` matrix

@@ -39,7 +39,6 @@ Each language ships a grammar via tree-sitter:
 | [PHP](https://www.php.net/) | v1 |
 | [F#](https://fsharp.org/) | v1 |
 | [Go](https://go.dev/) | v1 |
-| Java | roadmap |
 
 A parser produces an AST. No source-level regex touches this pipeline — ever.
 
@@ -63,7 +62,7 @@ Identical Merkle hashes across files or within the same file form an **identical
 
 ## LSH (near-miss)
 
-For **nearly identical code** (Type-3, structurally similar but not identical), Deslop builds a 5-wide k-gram stream of normalized AST kinds per subtree, computes a **128-value MinHash signature** (Broder 1997), and groups them into **32 bands of 4 rows** for [Indyk-Motwani locality-sensitive hashing](https://en.wikipedia.org/wiki/Locality-sensitive_hashing). Candidate pairs are bands that collide; Jaccard is then estimated from full-signature agreement. SourcererCC's bag-of-tokens design is the inspiration, but Deslop runs its k-grams over normalized AST kinds rather than raw source tokens. Implementation lives in [`crates/deslop-core/src/lsh.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/lsh.rs) and [`crates/deslop-core/src/tokens.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/tokens.rs).
+For **nearly identical code** (Type-3, structurally similar but not identical), Deslop builds a 5-wide k-gram stream of normalized AST kinds per subtree, computes a **128-value MinHash signature** (Broder 1997), and groups them into **32 bands of 4 rows** for [Indyk-Motwani locality-sensitive hashing](https://en.wikipedia.org/wiki/Locality-sensitive_hashing). Subtree pairs that collide in a band become candidates; Jaccard is then estimated from full-signature agreement. SourcererCC's bag-of-tokens design is the inspiration, but Deslop runs its k-grams over normalized AST kinds rather than raw source tokens. Implementation lives in [`crates/deslop-core/src/lsh.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/lsh.rs) and [`crates/deslop-core/src/tokens.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/tokens.rs).
 
 ## Embed (semantic)
 
@@ -81,7 +80,11 @@ Each candidate pair gets three independent scores:
 | `token_jaccard` | 0..1 | Nearly identical code [Type-3] — MinHash band collisions | `lsh.rs::band_collisions` + `tokens.rs` |
 | `embedding_cos` | 0..1 | Same behavior, different code [Type-3/4] — HNSW top-k | `embedding/pairs.rs` |
 
-Per the ensemble-LLM 2025 finding (averaging hurts; sum and max help), the fused score is the **bounded max** — `max(structural, token_jaccard, embedding_cos)` in `[0,1]` ([`pair.rs::PairScore::bounded_fused`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/pair.rs)). The paper's sum arm assumes the members are independent; Deslop's structural and token axes are two views of one normalised tree, so summing them manufactured confidence neither carried alone — a pair with no axis above 0.35 could still clear the bar. Pairs survive when the fused score crosses `FUSED_THRESHOLD = 0.85`. LSH-only pairs carry a stricter information-content floor (`token_jaccard ≥ 0.90` and both endpoints ≥ 40 AST nodes) so noisy near-misses can't ride the LSH bus into a cluster. Cross-language pairs are dropped unless `.deslop.toml` opts in — and under that opt-in, a cross-language pair with **no structural anchor** (an LSH or direct-signature match) is admitted at a lowered `0.10` floor so a lower-overlap port can surface at all; a structurally anchored cross-language pair keeps the normal 0.85 bar.
+Candidate admission starts with the **bounded max** — `max(structural, token_jaccard, embedding_cos)` in `[0,1]` ([`pair.rs::PairScore::bounded_fused`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/pair.rs)). Pairs survive when that value crosses `FUSED_THRESHOLD = 0.85`. LSH-only pairs also require `token_jaccard ≥ 0.90` and at least 40 AST nodes at both endpoints.
+
+Before rendering, a non-identical cluster with saturated shape evidence is content-gated as `max(embedding_cos, shape × content_confidence)`, where content confidence is the stronger of raw agreement and discounted rename consistency ([`buckets/gate.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/buckets/gate.rs)). This prevents a perfect normalized shape from rendering as perfect confidence when the underlying code differs. Byte-identical and non-saturating clusters keep their candidate score.
+
+Cross-language pairs are dropped unless `.deslop.toml` opts in. With that option enabled, a cross-language pair with no structural anchor is admitted at a `0.10` floor; structurally anchored pairs keep the `0.85` threshold.
 
 ## Rank
 

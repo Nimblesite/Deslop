@@ -427,6 +427,61 @@ pub fn reports_clone_spanning(report: &Value, files: &[String]) -> bool {
     })
 }
 
+/// Clusters the report actually shows a user. A cluster whose every
+/// occurrence is hidden carries no claim, so it can neither satisfy recall
+/// nor breach precision.
+#[must_use]
+pub fn visible_clusters(report: &Value) -> Vec<&Value> {
+    match report.get("clusters").and_then(Value::as_array) {
+        None => Vec::new(),
+        Some(clusters) => clusters
+            .iter()
+            .filter(|cluster| !all_occurrences_hidden(cluster))
+            .collect(),
+    }
+}
+
+/// True when every occurrence of a cluster is hidden, so nothing is rendered.
+fn all_occurrences_hidden(cluster: &Value) -> bool {
+    match cluster.get("occurrences").and_then(Value::as_array) {
+        None => true,
+        Some(occurrences) => occurrences
+            .iter()
+            .all(|occurrence| occurrence.get("hidden").and_then(Value::as_bool) == Some(true)),
+    }
+}
+
+/// True when every path in `files` appears among the cluster's **shown**
+/// occurrences.
+///
+/// One predicate, read in opposite directions: [CORPUS-RECALL] wants it
+/// true for a curated duplicate, [CORPUS-PRECISION-CURATED] wants it false
+/// for a curated non-duplicate. Both are claims about what the report
+/// *shows*, so a hidden occurrence counts for neither — a suppressed side
+/// is a pair the user never sees, and an unshown coincidence is not a false
+/// positive anyone was told about.
+///
+/// An empty list is false, never true, for the same reason
+/// [`reports_clone_spanning`] refuses one: `all()` over nothing is
+/// vacuously true, and an entry naming no files would then assert nothing
+/// while reading as a satisfied check.
+#[must_use]
+pub fn cluster_shows_span(cluster: &Value, files: &[String]) -> bool {
+    if files.is_empty() {
+        return false;
+    }
+    let paths: Vec<&str> = cluster
+        .get("occurrences")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .filter(|occurrence| occurrence.get("hidden").and_then(Value::as_bool) != Some(true))
+        .filter_map(|occurrence| occurrence.get("path").and_then(Value::as_str))
+        .collect();
+    files.iter().all(|file| paths.contains(&file.as_str()))
+}
+
 /// Reads the source slice a cluster's first occurrence points at.
 ///
 /// # Errors

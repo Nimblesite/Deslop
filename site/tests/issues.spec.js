@@ -6,7 +6,7 @@ test.describe("documentation navigation", () => {
 
     await expect(
       page.locator(".site-header .nav-links").getByRole("link", {
-        name: "Interactive graph",
+        name: "Issue graph",
         exact: true,
       }),
     ).toHaveCount(0);
@@ -20,7 +20,7 @@ test.describe("documentation navigation", () => {
       docsNav.locator('[data-docs-group="guides"]'),
     ).toHaveAttribute("open", "");
     const trustGroup = docsNav.locator('[data-docs-group="trust"]');
-    await expect(trustGroup.locator('a[href="/issues/"]')).toContainText("Interactive graph");
+    await expect(trustGroup.locator('a[href="/issues/"]')).toContainText("Issue graph");
     await expect(trustGroup.locator('a[href="/issues/planner/"]')).toContainText("Issue planner");
     await expect(trustGroup.locator('a[href="/issues/statistics/"]')).toHaveCount(0);
   });
@@ -389,6 +389,22 @@ test.describe("issue planner document", () => {
       return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
     }));
     expect(Math.min(...contrasts)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  test("keeps every priority card inside its own lane", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.reload();
+    const violations = await page.locator(".board-lane").evaluateAll((lanes) =>
+      lanes.flatMap((lane) => {
+        const laneBounds = lane.getBoundingClientRect();
+        return [...lane.querySelectorAll(".issue-card")].flatMap((card) => {
+          const cardBounds = card.getBoundingClientRect();
+          const escapes = cardBounds.left < laneBounds.left || cardBounds.right > laneBounds.right;
+          return escapes ? [`${card.dataset.issue}: ${cardBounds.left}-${cardBounds.right} outside ${laneBounds.left}-${laneBounds.right}`] : [];
+        });
+      }),
+    );
+    expect(violations, violations.join("\n")).toEqual([]);
   });
 
   test("shows compact filter-aware statistics inside the planner", async ({ page }) => {

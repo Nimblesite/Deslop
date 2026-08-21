@@ -20,9 +20,79 @@ use deslop_core::{lang::shared::parse_source, pipeline::default_parsers};
 use serde_json::Value;
 
 use crate::{
-    corpus::{array, field_u64, u64_field, CorpusRun, Failure},
+    corpus::{
+        array, cluster_shows_span, field_u64, u64_field, visible_clusters, CorpusRun, Failure,
+    },
     enclosure::{span_of, Span},
 };
+
+/// [CORPUS-PRECISION-CURATED] `precision` — code a human confirmed is
+/// **not** duplicated must never be reported as one cluster.
+///
+/// Seven of this repository's open false-positive issues say the same
+/// thing: *these are not duplicates and Deslop clustered them*. Until this
+/// check existed no manifest field could express that, so not one of them
+/// could be pinned on the repository it was reported against. `must_find`
+/// is recall-only, and `must_not_rank_first` guards the head of the report
+/// by base type, on one repository.
+///
+/// This is [CORPUS-RECALL]'s predicate read backwards: the same
+/// "does a shown cluster span every curated path" question, with the
+/// opposite verdict. Visibility works the same way and for the same reason
+/// — a false positive nobody is shown is not a false positive — so a
+/// cluster whose curated side is entirely hidden does not breach the entry.
+///
+/// An empty list asserts nothing, and an entry naming fewer than two files
+/// fails rather than passing vacuously: one path cannot describe a pair the
+/// engine wrongly joined.
+pub fn check_curated_precision(manifest: &Value, report: &Value, failures: &mut Vec<Failure>) {
+    for entry in array(manifest, "must_not_cluster") {
+        check_one_curated_non_duplicate(entry, report, failures);
+    }
+}
+
+/// Judges one curated `must_not_cluster` entry against the rendered report.
+fn check_one_curated_non_duplicate(entry: &Value, report: &Value, failures: &mut Vec<Failure>) {
+    let files: Vec<String> = array(entry, "files")
+        .iter()
+        .filter_map(|file| file.as_str().map(ToOwned::to_owned))
+        .collect();
+    let why = entry.get("why").and_then(Value::as_str).unwrap_or("");
+    if files.len() < 2 {
+        failures.push(Failure::new(
+            "precision",
+            format!(
+                "`must_not_cluster` entry names {} file(s); a non-duplication claim needs \
+                 at least two paths or it asserts nothing. Curated: {why}",
+                files.len()
+            ),
+        ));
+        return;
+    }
+    let Some(breach) = visible_clusters(report)
+        .into_iter()
+        .find(|cluster| cluster_shows_span(cluster, &files))
+    else {
+        return;
+    };
+    failures.push(Failure::new(
+        "precision",
+        format!(
+            "cluster {id} ({bucket}, {size} occurrences, fused {fused:.3}) is shown spanning \
+             {files:?}, which a human verified is not duplication. Curated: {why}",
+            id = breach.get("id").and_then(Value::as_str).unwrap_or("<unlabelled>"),
+            bucket = breach
+                .get("bucket")
+                .and_then(Value::as_str)
+                .unwrap_or("<unlabelled>"),
+            size = field_u64(breach, "size"),
+            fused = breach
+                .pointer("/signals/fused")
+                .and_then(Value::as_f64)
+                .unwrap_or_default(),
+        ),
+    ));
+}
 
 /// [CORPUS-PRECISION] Language- or framework-mandated scaffolding must never
 /// outrank genuine copy-paste. Such a cluster is unactionable by

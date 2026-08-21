@@ -58,9 +58,15 @@ typediagram-gen:
 
 ## test: Fail-fast tests + coverage + per-crate threshold enforcement.
 ##       See REPO-STANDARDS-SPEC [TEST-RULES] and [COVERAGE-THRESHOLDS-JSON].
-##       Does NOT require Ollama — tests whose names contain `ollama_`
-##       are filtered out via `--skip ollama_`. `make ci-ollama` runs
-##       the Ollama-gated tests explicitly against a live daemon.
+##       [TEST-SELECTION] Runs every test in the workspace. Nothing is
+##       selected by name: `cargo test --skip` matches a substring of the
+##       *test name*, so `--skip ollama_ --skip corpus_` silently dropped
+##       the corpus gate's own self-tests and the mock-Ollama suites
+##       (gh #412). The Rust embedding tests are hermetic — they drive an
+##       in-process mock server or a deliberately dead endpoint and need no
+##       daemon. The one suite that must not run here, the real-repository
+##       corpus gate, is excluded structurally by `required-features` on its
+##       Cargo test target; `make test-corpus` opts in.
 ##       The `--ignore-filename-regex` list lives in
 ##       `coverage-thresholds.json` under `.rust.ignore_filename_regex`
 ##       (single source of truth). Per-crate thresholds live under
@@ -72,7 +78,7 @@ test: _delete-path-binaries typediagram-gen
 	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
 	 cargo llvm-cov --workspace --all-targets --features deslop-core/live \
 	    --ignore-filename-regex "$$_rust_ignore" \
-	    --lcov --output-path lcov.info -- --skip ollama_ --skip corpus_
+	    --lcov --output-path lcov.info
 	@$(MAKE) _coverage_check RUST_LCOV=lcov.info
 
 _coverage_check:
@@ -134,12 +140,18 @@ _coverage_check:
 ##       Also enforces the taxonomy content gate
 ##       ([CLONE-BUCKETS-DUAL-LABEL]): every product-facing `Type-N`
 ##       mention in site/src and examples must co-locate a canonical
-##       bucket label.
+##       bucket label. [TEST-SELECTION]: the release gate may not select
+##       tests by name substring, and the corpus suite stays feature-gated.
+##       clippy enables `deslop/corpus-repos` so the feature-gated corpus
+##       target is still type-checked and linted on every run — gating it out
+##       of `make test` must cost coverage of its execution, never of its
+##       compilation. Commit 77bcbaed5 left it uncompilable for exactly that
+##       reason.
 ##       Depends on typediagram-gen so the wire-generated module exists
 ##       before clippy parses the workspace on a fresh checkout.
 lint: typediagram-gen
 	@echo "==> Linting..."
-	cargo clippy --release --all-targets --workspace -- -D warnings
+	cargo clippy --release --all-targets --workspace --features deslop/corpus-repos -- -D warnings
 	@bash scripts/repository/taxonomy-gate.sh
 	@echo "==> VSIX harness + packaging script gates (unit)..."
 	@node --test clients/vscode/scripts/*.test.mjs
@@ -150,6 +162,8 @@ lint: typediagram-gen
 	@node --test scripts/deployment/installer-snippet.test.mjs
 	@echo "==> Duplication-gate provenance gate ([CI-DESLOP])..."
 	@node --test scripts/repository/dup-gate-source.test.mjs
+	@echo "==> Test-selection gate ([TEST-SELECTION])..."
+	@node --test scripts/repository/test-selection.test.mjs
 
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
 ##      Depends on typediagram-gen because rustfmt walks the module tree
@@ -205,26 +219,27 @@ setup:
 # Repo-Specific Targets
 # =============================================================================
 
-## test-ollama: Run every Ollama-gated test — Rust `ollama_*` tests and
-##              the VSIX `.vscode-test-ollama.mjs` suite — that
-##              `make test`/`make ci` filter out. Requires a local Ollama
-##              daemon on 127.0.0.1:11434 with `nomic-embed-text` pulled.
+## test-ollama: [TEST-SELECTION] The VSIX `.vscode-test-ollama.mjs` suite —
+##              the only tests that need a real daemon on 127.0.0.1:11434
+##              with `nomic-embed-text` pulled. The Rust embedding suites are
+##              hermetic (mock server / dead endpoint) and run in `make test`;
+##              they were never daemon-gated, only name-filtered (gh #412).
 test-ollama: _vsix-test-ollama
-	cargo test --release --workspace ollama_
 
 ## ci-ollama: `make ci` plus `make test-ollama`.
 ci-ollama: ci test-ollama
 
 ## test-corpus: [CORPUS-*] Accuracy + resource suite against real public repos
 ##              pinned by `corpus/*.json`. Clones into git-ignored `.corpus/`
-##              first (re-runs are free once cloned). Excluded from
-##              `make test`/`make ci` via `--skip corpus_` because it needs
-##              the network and measures wall time and peak memory, which are
+##              first (re-runs are free once cloned). [TEST-SELECTION] Its
+##              Cargo test target carries `required-features = ["corpus-repos"]`
+##              so `make test`/`make ci` never build it: it needs the network
+##              and measures wall time and peak memory, which are
 ##              runner-dependent. Run it when touching the pipeline.
 test-corpus:
 	node scripts/corpus/fetch-corpus.mjs
 	cargo build --release --bin deslop
-	cargo test --release -p deslop --test corpus_repos -- --nocapture --test-threads=1
+	cargo test --release -p deslop --features corpus-repos --test corpus_repos -- --nocapture --test-threads=1
 
 ## test-corpus-ci: `make test-corpus` in baseline mode — failures already
 ##                 recorded in `corpus/known-failures.json` are reported but
@@ -237,7 +252,7 @@ test-corpus-ci:
 	node scripts/corpus/fetch-corpus.mjs $(CORPUS_REPOS)
 	cargo build --release --bin deslop
 	@fail=0; for t in $(CORPUS_TESTS); do \
-	   cargo test --release -p deslop --test corpus_repos $$t -- --nocapture --test-threads=1 || fail=1; \
+	   cargo test --release -p deslop --features corpus-repos --test corpus_repos $$t -- --nocapture --test-threads=1 || fail=1; \
 	 done; \
 	 if [ $$fail -ne 0 ]; then echo "==> corpus: NEW failures (see [NEW] lines above)"; fi; \
 	 exit $$fail

@@ -29,7 +29,7 @@
       "guides": "Guides",
       "reference": "Reference",
       "trust": "Internals & transparency",
-      "interactiveGraph": "Interactive graph",
+      "interactiveGraph": "Issue graph",
       "issuePlanner": "Issue planner"
     },
     "footer": {
@@ -66,18 +66,15 @@
     },
     "releases": {
       "title": "Releases",
-      "eyebrow": "Release Index",
       "subtitle": "Latest Deslop GitHub releases, VSIX artifacts, CLI archives, and checksums.",
       "latestGithub": "Latest on GitHub",
       "allGithub": "All GitHub releases",
       "latestStable": "Latest stable",
       "prerelease": "Prerelease",
-      "cardSummary": "VSIX packages, CLI archives, checksums, and generated release notes are hosted on GitHub.",
       "assetCount": "Artifacts",
       "assets": "Assets",
       "moreAssets": "more",
       "viewRelease": "View release",
-      "generated": "This page is generated from GitHub Releases during the website build.",
       "empty": "Release metadata was unavailable during this build. GitHub remains the source of truth."
     }
   },
@@ -85,8 +82,8 @@
     "blog": {
       "back": "← 返回博客",
       "title": "博客",
-      "subtitle": "关于重复检测、AI 时代代码库，以及 Deslop 背后设计决策的现场札记。",
-      "eyebrow": "现场札记",
+      "subtitle": "关于重复检测、AI 时代的代码库，以及 Deslop 背后设计取舍的技术札记。",
+      "eyebrow": "技术札记",
       "readMore": "阅读全文",
       "tags": "标签",
       "categories": "分类",
@@ -128,39 +125,36 @@
       "releases": "发布",
       "githubReleases": "GitHub 发布",
       "vscodeMarketplace": "VS Code Marketplace",
-      "openVsx": "Open VSX 注册表",
+      "openVsx": "Open VSX 扩展库",
       "discord": "Discord",
       "rss": "RSS",
       "githubAction": "GitHub Action"
     },
     "editors": {
       "eyebrow": "安装",
-      "title": "在你的编辑器中获取 Deslop。",
+      "title": "在你的编辑器中安装 Deslop。",
       "lede": "从 Visual Studio Marketplace 或 Open VSX 安装同一个扩展。",
       "install": "安装",
-      "review": "评分并评价"
+      "review": "评分与评论"
     },
     "community": {
       "eyebrow": "社区",
-      "title": "公开构建。",
-      "lede": "欢迎在 Discord 提问、报告 bug 或提出功能请求。",
+      "title": "公开开发。",
+      "lede": "欢迎在 Discord 提问、报告缺陷或提出功能建议。",
       "cta": "加入 Discord"
     },
     "releases": {
       "title": "发布",
-      "eyebrow": "发布索引",
-      "subtitle": "最新 Deslop GitHub release、VSIX 工件、CLI 归档与校验和。",
+      "subtitle": "最新的 Deslop GitHub 发布版、VSIX 工件、CLI 归档与校验和。",
       "latestGithub": "GitHub 最新发布",
       "allGithub": "全部 GitHub 发布",
       "latestStable": "最新稳定版",
       "prerelease": "预发布",
-      "cardSummary": "VSIX 包、CLI 归档、校验和以及自动生成的发布说明都托管在 GitHub。",
-      "assetCount": "工件",
-      "assets": "工件",
+      "assetCount": "发布文件",
+      "assets": "发布文件",
       "moreAssets": "更多",
       "viewRelease": "查看发布",
-      "generated": "本页在网站构建期间从 GitHub Releases 生成。",
-      "empty": "本次构建无法获取发布元数据。GitHub 仍是发布信息的事实来源。"
+      "empty": "本次构建无法获取发布元数据。GitHub 仍是发布信息的权威来源。"
     }
   }
 }

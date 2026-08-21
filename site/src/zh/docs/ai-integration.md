@@ -40,7 +40,7 @@ lang: zh
 | `session-config` | 检查运行中服务器的生效配置。 |
 | `schema-doc` | 每个响应的权威 JSON schema。每个会话调用**一次**，而非每次响应都调用。 |
 
-每一个响应都针对**实时**工作区状态计算。编辑器服务器在内存中持有实时报告，并在每次变更时刷新（防抖，并设有硬上限）；MCP 服务器则在下一次工具调用时通过本地 IPC 端点读取该实时状态。macOS 与 Linux 使用 `.deslop/cache/deslop.sock`；Windows 使用通过 `.deslop/cache/deslop.port` 发现的 token 门控 TCP 回环端点。没有批处理步骤。
+每一个响应都针对**实时**工作区状态计算。编辑器服务器在内存中持有实时报告，并在每次变更时刷新（防抖，并设有硬上限）；MCP 服务器则在下一次工具调用时通过本地 IPC 端点读取该实时状态。macOS 与 Linux 使用 `.deslop/cache/deslop.sock`；Windows 使用通过 `.deslop/cache/deslop.port` 发现、由令牌保护的 TCP 回环端点。没有批处理步骤。
 
 ## 将 `deslop-mcp` 接入你的客户端——指向 VSIX 捆绑的二进制文件
 
@@ -106,7 +106,7 @@ claude mcp add deslop -s user -- deslop-mcp --root .
 
 同样的 `"command": "deslop-mcp"` 形式适用于 Codex（`~/.codex/config.toml`）、Cursor 和 Continue。它也是签入 `.mcp.json` 或团队共享配置的正确取值——每台机器都通过 `$PATH` 解析它。
 
-需要知道的三点：
+需要知道的两点：
 
 - **不存在 `deslop mcp` 子命令。** `deslop` CLI 只用于一次性运行和 CI 审计；MCP 由**独立的 `deslop-mcp` 二进制文件**提供。
 - **从源码构建不会把任何东西放到 `$PATH` 上。** 只有 `brew` / `scoop` 会这么做。这些包管理器会让二进制文件与发布版本步调一致地版本化；`cargo build` 不会。
@@ -117,42 +117,10 @@ claude mcp add deslop -s user -- deslop-mcp --root .
 
 1. 智能体提出一个改动。在它写出新代码之前，它通过 MCP 对候选片段调用 `find-similar`。
 2. 如果 `find-similar` 返回一个高于所配置相似度下限的簇，智能体就复用规范实现，或重写该调用点。
-3. 当智能体编辑文件时，LSP 文件监视器触发 `deslop/reportChanged`。MCP 服务器通过 IPC 套接字查询 LSP 刚刷新的报告，并在下一次工具调用时提供新状态。
+3. 当智能体编辑文件时，文件监视器会触发，分析随之刷新。下一次工具调用时，MCP 服务器会提供新状态。
 4. 智能体重新查询 `top-offenders` 或 `report-for-file`，确认该簇已消失。无需重新运行、无需标志、无需批处理 CLI 调用。
 
-当 MCP 不可用时 —— CI、冷缓存审计，或没有 MCP 客户端的智能体 —— 循环会降级到 `deslop` CLI，它运行完全相同的流水线，产出完全相同的 JSON。指纹缓存默认开启，因此编辑后的重新运行只会重新解析发生变化的文件。逐步的回退方案见[面向 AI](/zh/docs/for-ai/#cli-fallback)。
-
-## 配置它
-
-为某个仓库配置 Deslop 的智能体需要三样东西，全部记录在[配置与报告参考](/zh/docs/configuration/)中：
-
-- **[`exclude` 与 `report_hide`](/zh/docs/configuration/#exclude-vs-report-hide)** —— `exclude` 在分析前丢弃文件；`report_hide` 会分析它但不让它进入头条，因此「手写代码与生成代码重复」仍会浮现。
-- **[内置规则](/zh/docs/configuration/#built-in-rules)** —— `node_modules`、`target`、`dist`、生成代码后缀以及生成横幅检测均已覆盖。不要重复添加。
-- **[`[threshold]`](/zh/docs/configuration/#threshold)** —— 需要显式启用的 CI 门禁。把上限提交进仓库，让本地运行、CI 与智能体共用同一个数字。
-
-要基于重复拦截构建，请使用 [GitHub Action](/zh/docs/github-action/) —— 它封装了同一套退出码约定。
-
-## 智能体读回什么
-
-`deslop-report.json` 是规范产物；`.txt` 与 `.html` 是其之上的渲染器。每份报告都带有内嵌的 `schema_doc`，因此模型无需另一份参考文档就能解析载荷。逐字段说明 —— `bucket`、`signals.fused` 与 `occurrences[].hidden` 各自的含义以及如何据此行动 —— 见[面向 AI](/zh/docs/for-ai/#read-the-json)。
-
-## 一套引擎，三种接口
-
-`deslop-core` crate 拥有整条流水线。三个外壳消费它：
-
-- **MCP 服务器（`deslop-mcp`）**——智能体接口面。find-similar 加上一组聚焦的只读与配置工具（见上表）。该服务器将每一次读取——`top-offenders`、`report-get`、`report-for-file`、`find-similar` 及其余——通过本地 IPC 端点委托给运行中的 LSP，因此每个响应都针对 LSP 的实时内存语料库计算，而非陈旧的磁盘缓存。Unix 主机使用 `.deslop/cache/deslop.sock`；Windows 使用带 `.deslop/cache/deslop.port` 发现记录的 token 门控 TCP 回环端点。当 LSP 未运行时，MCP 返回一条可操作的错误；CI 与一次性审计则改用 `deslop` CLI。
-- **LSP 服务器（`deslop-lsp`）**——编辑器接口面。诊断、悬停、代码透镜、`textDocument/definition`、虚拟 `deslop://` 文档，以及自定义的 `deslop/*` 方法（`reportGet`、`reportDelta`、`reportForFile`、`reportForRange`、`clusterById`、`duplicatesFindSimilar`、`embeddingListModels`、`embeddingSetModel`、`sessionConfig`、`reportSchemaDoc`、`virtualDocument`、`cpuReport`）。触发 `deslop/reportChanged`、`deslop/analysisState` 与 `deslop/embeddingProgress` 通知。拥有文件监视器、防抖器与分析调度器。
-- **CLI（`deslop`）**——面向 CI 门禁与一次性审计的冷缓存兜底方案。
-
-三者复用相同的缓存布局（`.deslop/cache/fingerprints/`、`.deslop/cache/embeddings/`）与相同的 JSON schema。如今接入 CLI 的智能体只需把 `deslop-mcp` 加入其 MCP 配置即可获得实时通道——无需 schema 变更，无需重写解析器。
-
-### 推送通知
-
-只要一次监视器扫描完成，LSP 就会通过 LSP 线路触发 `deslop/reportChanged`，并通过 MCP 线路触发 `resources/updated` + `deslop/reportChanged`。编辑器接口面、智能体缓存与 webview 都会在该次扫描提交后立即观察到新报告。按照 [LIVE-IS-REACTIVE](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/principles.md#principles-live-is-reactive) 不变式，陈旧的 UI 属于正确性缺陷。
-
-## JetBrains 插件（开发中）
-
-位于 `clients/jetbrains/` 的 JetBrains 插件注册了一个 IntelliJ Platform 的 `lsp.serverSupportProvider`，并为 C#、Rust、Python、Dart、JavaScript、TypeScript、PHP、F# 与 Go 文件启动 `deslop-lsp`。Rider 是第一个产品目标；IntelliJ IDEA、PyCharm、WebStorm、RustRover 与 CLion 将在同一平台 LSP API 上紧随其后。该插件以 Gradle 构建，针对已发布的 `deslop-lsp` 进行真实二进制测试，并随附与 VS Code 扩展相同的二进制解析规则。Zed 与 Neovim 插件已在路线图上——两者均具备 LSP 能力，如今都与 `deslop-lsp` 线路兼容。
+当 MCP 不可用时 —— CI、冷缓存审计，或没有 MCP 客户端的智能体 —— 循环会降级到 `deslop` CLI，它运行完全相同的流水线，产出完全相同的 JSON。增量缓存默认开启，因此编辑后的重新运行只会重新解析发生变化的文件。逐步的回退方案见[面向 AI](/zh/docs/for-ai/#cli-fallback)。
 
 ## Deslop 刻意不做的事
 

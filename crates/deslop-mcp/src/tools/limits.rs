@@ -25,6 +25,14 @@
 use serde_json::{json, Value};
 use tracing::warn;
 
+const CLUSTERS_KEY: &str = "clusters";
+const TRUNCATED_KEY: &str = "truncated";
+const TRUNCATED_REASON_KEY: &str = "truncated_reason";
+const TRUNCATED_AT_BYTES_KEY: &str = "truncated_at_bytes";
+const NEXT_ACTION_KEY: &str = "next_action";
+const WIRE_CAP_REASON_FRAGMENT: &str = "MCP wire cap";
+const REPORT_GET_TOOL_NAME: &str = "report-get";
+
 /// Maximum size, in serialised JSON bytes, of any single MCP
 /// `tools/call` result envelope ([MCP-RESULT-SIZE-CAP]).
 ///
@@ -103,7 +111,7 @@ fn shrink_clusters_in_place(payload: &mut Value) -> bool {
 fn has_cluster_array(payload: &Value) -> bool {
     payload
         .as_object()
-        .and_then(|object| object.get("clusters"))
+        .and_then(|object| object.get(CLUSTERS_KEY))
         .is_some_and(Value::is_array)
 }
 
@@ -114,7 +122,10 @@ fn pop_one_cluster(payload: &mut Value) -> bool {
     let Some(object) = payload.as_object_mut() else {
         return false;
     };
-    let Some(clusters) = object.get_mut("clusters").and_then(Value::as_array_mut) else {
+    let Some(clusters) = object
+        .get_mut(CLUSTERS_KEY)
+        .and_then(Value::as_array_mut)
+    else {
         return false;
     };
     clusters.pop().is_some()
@@ -135,22 +146,22 @@ fn stamp_truncated(payload: &mut Value) {
 /// and the [`fallback_truncated_stub`] stay in sync.
 fn truncation_marker_fields() -> [(String, Value); 4] {
     [
-        ("truncated".to_owned(), Value::Bool(true)),
+        (TRUNCATED_KEY.to_owned(), Value::Bool(true)),
         (
-            "truncated_reason".to_owned(),
+            TRUNCATED_REASON_KEY.to_owned(),
             Value::String(format!(
                 "result exceeded {MAX_TOOL_RESULT_BYTES} byte MCP wire cap; clusters trimmed"
             )),
         ),
         (
-            "truncated_at_bytes".to_owned(),
+            TRUNCATED_AT_BYTES_KEY.to_owned(),
             Value::from(MAX_TOOL_RESULT_BYTES),
         ),
         (
-            "next_action".to_owned(),
-            Value::String(
-                "call report-get with smaller limit, or paginate via offset/limit".to_owned(),
-            ),
+            NEXT_ACTION_KEY.to_owned(),
+            Value::String(format!(
+                "call {REPORT_GET_TOOL_NAME} with smaller limit, or paginate via offset/limit"
+            )),
         ),
     ]
 }
@@ -160,12 +171,12 @@ fn truncation_marker_fields() -> [(String, Value); 4] {
 /// agent at the paginated path.
 fn fallback_truncated_stub() -> Value {
     json!({
-        "truncated": true,
-        "truncated_reason": format!(
+        (TRUNCATED_KEY): true,
+        (TRUNCATED_REASON_KEY): format!(
             "result exceeded {MAX_TOOL_RESULT_BYTES} byte MCP wire cap"
         ),
-        "truncated_at_bytes": MAX_TOOL_RESULT_BYTES,
-        "next_action": "call report-get with smaller limit",
+        (TRUNCATED_AT_BYTES_KEY): MAX_TOOL_RESULT_BYTES,
+        (NEXT_ACTION_KEY): format!("call {REPORT_GET_TOOL_NAME} with smaller limit"),
     })
 }
 
@@ -173,11 +184,14 @@ fn fallback_truncated_stub() -> Value {
 mod tests {
     use super::*;
 
+    const TOP_OFFENDERS_TOOL: &str = "top-offenders";
+    const TEST_CLUSTER_ID: &str = "id";
+
     /// Small payload under the cap passes through unmodified.
     #[test]
     fn cap_tool_result_passthrough_small_payload() {
-        let payload = json!({"clusters": [{"id": "abc"}], "total": 1});
-        let result = cap_tool_result("top-offenders", payload.clone());
+        let payload = json!({(CLUSTERS_KEY): [{(TEST_CLUSTER_ID): "abc"}], "total": 1});
+        let result = cap_tool_result(TOP_OFFENDERS_TOOL, payload.clone());
         assert_eq!(result, payload, "small payload must pass through");
     }
 
@@ -185,10 +199,10 @@ mod tests {
     #[test]
     fn cap_tool_result_trims_oversized_cluster_array() {
         let big_string = "x".repeat(1024);
-        let cluster = json!({"id": "cluster", "blob": big_string});
+        let cluster = json!({(TEST_CLUSTER_ID): "cluster", "blob": big_string});
         let clusters: Vec<Value> = (0..300).map(|_| cluster.clone()).collect();
-        let payload = json!({"clusters": clusters});
-        let result = cap_tool_result("top-offenders", payload);
+        let payload = json!({(CLUSTERS_KEY): clusters});
+        let result = cap_tool_result(TOP_OFFENDERS_TOOL, payload);
         let bytes = serialised_len(&result);
         assert!(
             bytes <= MAX_TOOL_RESULT_BYTES,
@@ -196,24 +210,24 @@ mod tests {
         );
         assert!(result.is_object(), "trimmed payload must be a JSON object");
         assert_eq!(
-            result.get("truncated"),
+            result.get(TRUNCATED_KEY),
             Some(&Value::Bool(true)),
             "truncated marker must be present",
         );
         let reason = result
-            .get("truncated_reason")
+            .get(TRUNCATED_REASON_KEY)
             .and_then(Value::as_str)
             .unwrap_or_default();
         assert!(
-            reason.contains("MCP wire cap"),
+            reason.contains(WIRE_CAP_REASON_FRAGMENT),
             "reason must explain the cap: got {reason:?}",
         );
         let next_action = result
-            .get("next_action")
+            .get(NEXT_ACTION_KEY)
             .and_then(Value::as_str)
             .unwrap_or_default();
         assert!(
-            next_action.contains("report-get"),
+            next_action.contains(REPORT_GET_TOOL_NAME),
             "next_action must point at report-get: got {next_action:?}",
         );
     }
@@ -227,12 +241,12 @@ mod tests {
         let result = cap_tool_result("schema-doc", payload);
         assert!(result.is_object(), "stub must be a JSON object");
         assert_eq!(
-            result.get("truncated"),
+            result.get(TRUNCATED_KEY),
             Some(&Value::Bool(true)),
             "stub must mark truncated",
         );
         assert!(
-            result.get("next_action").is_some(),
+            result.get(NEXT_ACTION_KEY).is_some(),
             "stub fallback must include next_action",
         );
         assert!(
@@ -245,9 +259,11 @@ mod tests {
     /// whose top-level `clusters` field is a JSON array.
     #[test]
     fn has_cluster_array_only_matches_object_with_array_clusters() {
-        assert!(has_cluster_array(&json!({"clusters": []})));
-        assert!(has_cluster_array(&json!({"clusters": [{"id": "a"}]})));
-        assert!(!has_cluster_array(&json!({"clusters": "string"})));
+        assert!(has_cluster_array(&json!({(CLUSTERS_KEY): []})));
+        assert!(has_cluster_array(
+            &json!({(CLUSTERS_KEY): [{(TEST_CLUSTER_ID): "a"}]})
+        ));
+        assert!(!has_cluster_array(&json!({(CLUSTERS_KEY): "string"})));
         assert!(!has_cluster_array(&json!({"other": []})));
         assert!(!has_cluster_array(&json!([1, 2, 3])));
         assert!(!has_cluster_array(&Value::Null));
@@ -256,7 +272,7 @@ mod tests {
     /// Per-cluster pop drains the tail and reports completion.
     #[test]
     fn pop_one_cluster_drains_tail_then_returns_false() {
-        let mut payload = json!({"clusters": [1, 2, 3]});
+        let mut payload = json!({(CLUSTERS_KEY): [1, 2, 3]});
         assert!(pop_one_cluster(&mut payload));
         assert!(pop_one_cluster(&mut payload));
         assert!(pop_one_cluster(&mut payload));

@@ -5,8 +5,10 @@
 //! One `#[test]` per repository, so a language that regresses is named
 //! directly in the failure output rather than hidden behind a sibling.
 //!
-//! Excluded from `make test` / `make ci` via `--skip corpus_`: these need a
-//! clone on disk and they measure wall time and peak memory, which are
+//! [TEST-SELECTION] Excluded from `make test` / `make ci` structurally: this
+//! target carries `required-features = ["corpus-repos"]`, so cargo does not
+//! build it unless `make test-corpus` asks for the feature. These need a clone
+//! on disk and they measure wall time and peak memory, which are
 //! runner-dependent. `make test-corpus` runs them, single-threaded, because
 //! a scan can hold gigabytes and parallel scans would evict each other.
 //!
@@ -47,14 +49,13 @@ use anyhow::{anyhow, Result};
 use deslop_test_support::{
     corpus::{
         array, baseline_mode, classify, clone_dir, cluster_paths, field_u64, first_occurrence_text,
-        manifest, reports_clone_spanning, scan, string_field, u64_field, Baseline, CorpusRun,
-        Failure,
+        manifest, scan, string_field, u64_field, Baseline, CorpusRun, Failure,
     },
     corpus_confidence::{
         check_curated_recall, check_fused_bounded_max, check_type2_curated_recall,
         check_type2_gate_liveness,
     },
-    corpus_precision::check_boilerplate_not_ranked_first,
+    corpus_precision::{check_boilerplate_not_ranked_first, check_curated_precision},
     corpus_scope::check_scan_scope,
 };
 use serde_json::Value;
@@ -184,6 +185,7 @@ const GATE_CHECKS: &[&str] = &[
     "cluster_count_band",
     "recall",
     "recall_quality",
+    "precision",
     "boilerplate_rank",
     "data_table_rank",
     "fused_bounded_max",
@@ -210,6 +212,7 @@ fn gate(name: &str) -> Result<()> {
     // of them at once (gh #342).
     check_scan_scope(&manifest, &run.report, &mut failures);
     check_curated_recall(&manifest, &run.report, &mut failures);
+    check_curated_precision(&manifest, &run.report, &mut failures);
     check_boilerplate_not_ranked_first(&manifest, &root, &run, &mut failures)?;
     check_data_tables_not_ranked_as_logic(&root, &run, &mut failures)?;
     // [CORPUS-BASELINE] The confidence checks. The first two read no
@@ -279,6 +282,16 @@ fn warn_when_accuracy_unasserted(name: &str, manifest: &Value) {
         );
     }
 }
+
+/// Number of top-ranked clusters subjected to the language-agnostic
+/// precision checks. Ranking is the product, so the head of the report is
+/// where a false positive does the most damage.
+const RANKED_HEAD: usize = 10;
+
+/// Fraction of non-whitespace characters that must be digits or data
+/// punctuation before a snippet counts as a data table rather than logic.
+/// Real logic carries identifiers and keywords, so it lands far below this.
+const DATA_TABLE_RATIO: f64 = 0.6;
 
 /// [CORPUS-PRECISION] Language-agnostic: a top-ranked cluster that is essentially a
 /// numeric table must not be classified `logic`. `CloneCategory::data`

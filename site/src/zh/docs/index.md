@@ -62,7 +62,7 @@ Bucket 源：[github.com/Nimblesite/scoop-bucket](https://github.com/Nimblesite/
 
 ### macOS / Linux（curl）
 
-没有 Homebrew？直接从最新的 GitHub release 拉取归档文件。以下脚本会解析最新版本号，选择对应平台，校验官方发布的 SHA-256 校验和，并安装与 Homebrew formula 相同的三个二进制文件（`deslop`、`deslop-lsp`、`deslop-mcp`）。脚本采用失败即终止的方式：下载或校验和验证失败时，不会解压也不会安装任何内容：
+没有 Homebrew？直接从最新的 GitHub 发布版拉取归档文件。以下脚本会解析最新版本号，选择对应平台，校验官方发布的 SHA-256 校验和，并安装与 Homebrew 配方相同的三个二进制文件（`deslop`、`deslop-lsp`、`deslop-mcp`）。脚本采用失败即终止的方式：下载或校验和验证失败时，不会解压也不会安装任何内容：
 
 ```bash
 (
@@ -130,7 +130,7 @@ deslop . --min-nodes 20
 
 ## 启用语义检测 —— 行为相同、代码不同（Type-4）
 
-结构与 token 通道是确定性的，无需联网即可运行。行为相同的匹配（Type-4） —— 行为相同、语法不同 —— 需要嵌入（向量嵌入）。嵌入**默认关闭**：
+结构与词元通道是确定性的，无需联网即可运行。行为相同的匹配（Type-4） —— 行为相同、语法不同 —— 需要嵌入（向量嵌入）。嵌入**默认关闭**：
 
 ```bash
 deslop . --embeddings auto
