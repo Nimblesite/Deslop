@@ -10,6 +10,7 @@
 
 use std::{cell::RefCell, collections::HashMap, hash::BuildHasher, rc::Rc};
 
+use super::contract_index::ContractIndex;
 use crate::{ast::ByteRange, fingerprint::Fingerprint, lang::shared::parse_source, state::FileId};
 
 /// One re-parsed cluster member: language, raw bytes, the byte range
@@ -43,6 +44,11 @@ pub(crate) struct ParseCache {
     /// Lazily-populated map from file id to its parsed CST (or `None`
     /// when the language has no grammar / parsing failed).
     trees: RefCell<HashMap<FileId, Option<Rc<tree_sitter::Tree>>>>,
+    /// Lazily-built corpus-wide contract index per language
+    /// ([CLONE-NOISE-POLYMORPHIC-CONTRACT]). Built only when a cluster
+    /// reaches the contract question, so a report with no same-named
+    /// cross-file candidate never pays for it.
+    contracts: RefCell<HashMap<&'static str, Rc<ContractIndex>>>,
 }
 
 impl ParseCache {
@@ -70,6 +76,32 @@ impl ParseCache {
             .map(Rc::new);
         let _previous = self.trees.borrow_mut().insert(file_id, parsed.clone());
         parsed
+    }
+
+    /// Returns the corpus-wide contract index for `language`, building it
+    /// on first request from every same-language file in the report and
+    /// reusing the per-file trees this cache already holds.
+    pub(crate) fn contracts<S: BuildHasher>(
+        &self,
+        sources: &HashMap<FileId, Vec<u8>>,
+        file_languages: &HashMap<FileId, &'static str, S>,
+        language: &'static str,
+    ) -> Rc<ContractIndex> {
+        let cached = self.contracts.borrow().get(language).map(Rc::clone);
+        if let Some(index) = cached {
+            return index;
+        }
+        let built = Rc::new(ContractIndex::build(
+            sources,
+            file_languages,
+            language,
+            self,
+        ));
+        let _previous = self
+            .contracts
+            .borrow_mut()
+            .insert(language, Rc::clone(&built));
+        built
     }
 }
 

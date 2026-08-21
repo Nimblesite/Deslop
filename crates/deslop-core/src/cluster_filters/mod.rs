@@ -116,6 +116,7 @@
 mod body_shape;
 mod calls;
 mod constant_table;
+mod contract_index;
 mod dart;
 mod dart_data_table;
 mod declaration_family;
@@ -171,7 +172,7 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
     // than walking every Dart/C# cluster's CST through Python/Rust matchers
     // that can never match — that wasted walk dominated analysis time on
     // large codegen-heavy repos ([CLONE-NOISE-REPARSE-CACHE]).
-    polymorphic::is_polymorphic_signature_cluster(&snippets)
+    polymorphic::is_polymorphic_signature_cluster(&snippets, sources, file_languages, cache)
         || is_signature_only_cluster(&snippets)
         || calls::is_literal_variation_call_cluster(&snippets)
         || constant_table::is_constant_table_cluster(&snippets)

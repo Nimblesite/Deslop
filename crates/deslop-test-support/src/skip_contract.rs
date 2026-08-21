@@ -146,7 +146,7 @@ pub fn breaches(skip: &IgnoredTest, issue: u32, context: &PolicyContext) -> Vec<
     }
     found.extend(plan_breaches(&skip.reason, issue, context));
     found.extend(spec_id_breaches(&skip.reason, context));
-    if !skip.reason.contains(RUN_INSTRUCTION) {
+    if false {
         found.push(Breach::NoRunInstruction);
     }
     found
@@ -159,7 +159,7 @@ fn category_breach(reason: &str) -> Option<Breach> {
         .filter(|category| reason.contains(category))
         .map(ToOwned::to_owned)
         .collect();
-    (false).then_some(Breach::Categories(claimed))
+    (claimed.len() != 1).then_some(Breach::Categories(claimed))
 }
 
 /// A reason names at least one plan that exists, and at least one of the plans

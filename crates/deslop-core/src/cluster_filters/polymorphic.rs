@@ -6,73 +6,57 @@
 //! refactor. Split out of `mod.rs` to keep every file under the 500-LOC
 //! budget and to house the widened member resolution.
 
+use std::{collections::HashMap, hash::BuildHasher};
+
 use tree_sitter::Node;
 
 use super::{
     body_shape::{body_kind_stream, ShapeToken},
-    enclosing_kind, function_kinds, parse_for, spans_multiple_files, Snippet,
+    contract_index::{declared_bases, enclosing_container, function_name_node},
+    enclosing_kind, function_kinds, parse_for, spans_multiple_files, ParseCache, Snippet,
 };
-use crate::ast::ByteRange;
-
-/// Node kinds that declare a type whose members can be forced to a
-/// shared signature.
-const CONTAINER_KINDS: &[&str] = &[
-    "class_definition",
-    "class_declaration",
-    "struct_declaration",
-    "record_declaration",
-    "interface_declaration",
-    "impl_item",
-];
-
-/// Fields of a [`CONTAINER_KINDS`] node naming what it derives from:
-/// Python's `superclasses`, Dart's `superclass`/`interfaces`, C#'s
-/// `bases`, Rust's `trait`.
-const CONTRACT_FIELDS: &[&str] = &[
-    "superclasses",
-    "superclass",
-    "bases",
-    "interfaces",
-    "trait",
-];
-
-/// Named children that carry a declared base where the grammar exposes
-/// no field for it.
-const CONTRACT_KINDS: &[&str] = &[
-    "base_list",
-    "class_heritage",
-    "superclass",
-    "interfaces",
-    "mixins",
-    "extends_clause",
-    "implements_clause",
-];
+use crate::{ast::ByteRange, state::FileId};
 
 /// What one cluster member contributes to the polymorphic decision.
 struct Subject<'src> {
     /// The subject function's declared name.
     name: &'src [u8],
-    /// Whether the subject is declared inside a type that names a
-    /// contract — the positive evidence that the signature is forced.
-    under_contract: bool,
+    /// Simple names of the bases the subject's enclosing type declares,
+    /// empty for a free function.
+    bases: Vec<Vec<u8>>,
     /// The subject body's shape, carrying collaborator identity.
     shape: Vec<ShapeToken<'src>>,
 }
 
 /// Detects the polymorphic-signature pattern: every cluster member
 /// resolves to a function definition ([`polymorphic_subject`]) with one
-/// shared declared name, every one of them is declared under a contract
-/// its signature must match, the members span at least two distinct
-/// files, and the bodies differ ([`body_kind_stream`]).
+/// shared declared name, the members span at least two distinct files,
+/// the bodies differ ([`body_kind_stream`]), and every subject method is
+/// *declared by a contract* its enclosing type derives from
+/// ([`ContractIndex::declares`], [CLONE-NOISE-POLYMORPHIC-CONTRACT]).
 ///
 /// The contract requirement is the positive evidence the pattern is
 /// named for. Without it every same-named cross-file function was
 /// treated as polymorphic on the strength of a body difference, so a
 /// copy-pasted helper renamed past the shared collaborators would be
 /// deleted from the report the moment it shared its name (gh #373,
-/// `polymorphic_gate_hides_rename_clone.rs`). A free function is never
-/// an interface implementation; nothing forces its signature.
-pub(super) fn is_polymorphic_signature_cluster(snippets: &[Snippet<'_>]) -> bool {
+/// `polymorphic_gate_hides_rename_clone.rs`). Reading the requirement as
+/// "the enclosing type names *some* base" was the same false negative one
+/// step further out: two ordinary subclasses of one shared base that
+/// happen to copy a method are not implementing anything
+/// (`python_inherited_contract_boundary.rs`). The base must declare the
+/// method. A free function is never an interface implementation; nothing
+/// forces its signature.
+///
+/// The contract index is corpus-wide and therefore built lazily, after
+/// the cheap per-cluster checks have already agreed the cluster looks
+/// polymorphic.
+pub(super) fn is_polymorphic_signature_cluster<S: BuildHasher>(
+    snippets: &[Snippet<'_>],
+    sources: &HashMap<FileId, Vec<u8>>,
+    file_languages: &HashMap<FileId, &'static str, S>,
+    cache: &ParseCache,
+) -> bool {
     let subjects: Option<Vec<Subject<'_>>> = snippets.iter().map(subject_of).collect();
     let Some(subjects) = subjects else {
         return false;
@@ -80,16 +64,22 @@ pub(super) fn is_polymorphic_signature_cluster(snippets: &[Snippet<'_>]) -> bool
     let Some(first) = subjects.first() else {
         return false;
     };
-    if !subjects
-        .iter()
-        .all(|subject| subject.name == first.name && subject.under_contract)
-    {
+    if !subjects.iter().all(|subject| subject.name == first.name) {
         return false;
     }
     if !spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id)) {
         return false;
     }
-    subjects.iter().any(|subject| subject.shape != first.shape)
+    if !subjects.iter().any(|subject| subject.shape != first.shape) {
+        return false;
+    }
+    let Some(language) = snippets.first().map(|snippet| snippet.language) else {
+        return false;
+    };
+    let contracts = cache.contracts(sources, file_languages, language);
+    subjects
+        .iter()
+        .all(|subject| contracts.declares(&subject.bases, subject.name))
 }
 
 /// Resolves one member's subject function and everything the decision
@@ -100,39 +90,11 @@ fn subject_of<'src>(snippet: &Snippet<'src>) -> Option<Subject<'src>> {
     let name_node = function_name_node(function)?;
     Some(Subject {
         name: snippet.source.get(name_node.byte_range())?,
-        under_contract: under_declared_contract(function),
+        bases: enclosing_container(function)
+            .map(|container| declared_bases(container, snippet.source))
+            .unwrap_or_default(),
         shape: body_kind_stream(function.child_by_field_name("body")?, snippet.source),
     })
-}
-
-/// True when `function` is declared inside a type that names a base,
-/// interface or trait — an `ABC` subclass's override, a C# interface
-/// implementation, a Rust `impl Trait for T` method. That declaration
-/// is what forces the signature the cluster matched on.
-fn under_declared_contract(function: Node<'_>) -> bool {
-    let mut container = function.parent();
-    while let Some(node) = container {
-        if CONTAINER_KINDS.contains(&node.kind()) && declares_contract(node) {
-            return true;
-        }
-        container = node.parent();
-    }
-    false
-}
-
-/// True when a type declaration carries a non-empty base list, under
-/// whichever field or child kind its grammar exposes it as. An empty
-/// `class X():` names no contract.
-fn declares_contract(container: Node<'_>) -> bool {
-    let field_base = CONTRACT_FIELDS
-        .iter()
-        .filter_map(|field| container.child_by_field_name(field))
-        .any(|base| base.named_child_count() > 0 || base.kind() != "argument_list");
-    let mut cursor = container.walk();
-    field_base
-        || container
-            .named_children(&mut cursor)
-            .any(|child| CONTRACT_KINDS.contains(&child.kind()))
 }
 
 /// The one function a member view is *about*: the innermost function
@@ -219,27 +181,4 @@ fn is_docstring(node: Node<'_>) -> bool {
         && node
             .named_child(0)
             .is_some_and(|child| child.kind() == "string")
-}
-
-/// Resolves the identifier node that names `function`. Python, C#, and
-/// Rust expose a direct `name` field on the function node. Dart instead
-/// nests it under `signature` — `function_signature.name` for a top-level
-/// `function_declaration`, and `method_signature → function_signature.name`
-/// for a `method_declaration`. Without this descent
-/// [`subject_name`] returns `None` for every Dart member, so
-/// the polymorphic-signature filter could never fire on Dart even
-/// though `function_kinds` lists its node kinds.
-fn function_name_node(function: Node<'_>) -> Option<Node<'_>> {
-    if let Some(name) = function.child_by_field_name("name") {
-        return Some(name);
-    }
-    let signature = function.child_by_field_name("signature")?;
-    if let Some(name) = signature.child_by_field_name("name") {
-        return Some(name);
-    }
-    let mut cursor = signature.walk();
-    let nested = signature
-        .named_children(&mut cursor)
-        .find_map(|child| child.child_by_field_name("name"));
-    nested
 }
