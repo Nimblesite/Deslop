@@ -15,10 +15,70 @@ const representativeRoutes = [
 
 const isInScope = (pathname) => !pathname.startsWith("/issues/") && pathname !== "/issues/";
 
+// The MIME type each social-card extension actually serves, mirroring
+// SOCIAL_IMAGE_MIME_TYPES in eleventy.config.js. Written out here rather than
+// imported so the test states the expected mapping independently of the code
+// that produces it.
+const SOCIAL_IMAGE_MIME_TYPES = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+};
+
+const socialCardExtension = (imageUrl) => new URL(imageUrl).pathname.split(".").pop().toLowerCase();
+
 test("declares the social image with its actual MIME type", async ({ page }) => {
   await page.goto("/blog/towards-100-percent-accuracy/");
+  const socialImage = await page.locator('meta[property="og:image"]').getAttribute("content");
   const socialImageType = await page.locator('meta[property="og:image:type"]').getAttribute("content");
+  expect(socialImage).toMatch(/towards-100-percent-accuracy-og\.png$/);
   expect(socialImageType).toBe("image/png");
+
+  // The declaration used to be the literal "image/png" on every page, so it
+  // was right here and wrong on the seven blog posts whose cards are JPEGs.
+  // One page proves nothing; the pair has to agree everywhere.
+  const response = await page.request.get(socialImage);
+  expect(response.ok(), socialImage).toBeTruthy();
+  expect(response.headers()["content-type"], socialImage).toContain(socialImageType);
+});
+
+test("every page's declared social-image type matches the file it points at", async ({ page }) => {
+  const sitemapResponse = await page.request.get("/sitemap.xml");
+  expect(sitemapResponse.ok()).toBeTruthy();
+  const routes = await page.evaluate((xml) => {
+    const doc = new DOMParser().parseFromString(xml, "application/xml");
+    if (doc.querySelector("parsererror")) throw new Error("Invalid sitemap XML");
+    return [...doc.querySelectorAll("loc")].map((node) => new URL(node.textContent).pathname);
+  }, await sitemapResponse.text());
+
+  const inScope = routes.filter(isInScope);
+  expect(inScope.length, "the sitemap must list pages to audit").toBeGreaterThan(0);
+
+  const seenTypes = new Set();
+  for (const route of inScope) {
+    const response = await page.goto(route);
+    expect(response?.ok(), route).toBeTruthy();
+    const socialImage = await page.locator('meta[property="og:image"]').getAttribute("content");
+    const socialImageType = await page
+      .locator('meta[property="og:image:type"]')
+      .getAttribute("content");
+    expect(socialImage, `${route}: declares no og:image`).toBeTruthy();
+    const extension = socialCardExtension(socialImage);
+    expect(SOCIAL_IMAGE_MIME_TYPES[extension], `${route}: unmapped card extension .${extension}`).toBeTruthy();
+    expect(socialImageType, `${route}: og:image ${socialImage}`).toBe(
+      SOCIAL_IMAGE_MIME_TYPES[extension]
+    );
+    seenTypes.add(socialImageType);
+  }
+
+  // The site ships both JPEG and PNG cards. If every page suddenly agreed on
+  // one type the loop above would still pass while the hardcoded-constant bug
+  // was back, so pin that both are actually represented.
+  expect([...seenTypes].sort(), "both card formats must still be in use").toEqual([
+    "image/jpeg",
+    "image/png",
+  ]);
 });
 
 test("publishes complete, parseable metadata on every ordinary page", async ({ page }) => {

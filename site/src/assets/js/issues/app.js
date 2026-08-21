@@ -1,4 +1,4 @@
-import { clear, element, labelChip } from "./dom.js";
+import { clear, element, labelChip, publicationStamp } from "./dom.js";
 import { allLabels, filteredIssues, priorityColor, relatedIssues, streamMap } from "./model.js";
 import { renderNetwork } from "./graph.js";
 import { renderBoard, renderQueue, renderRunway, renderStatistics } from "./views.js";
@@ -30,6 +30,10 @@ function populateFilters() {
   fillSelect("workstream", report.workstreams);
   fillSelect("priority", report.priorities);
   fillSelect("label", allLabels(report).map((name) => ({ id: name, name })));
+}
+
+function populatePublication() {
+  root.querySelector(".atlas-toolbar")?.append(publicationStamp(report));
 }
 
 function filtersFromForm() {
@@ -236,6 +240,7 @@ async function initialise() {
     if (!response.ok) throw new Error(`Issue data request failed (${response.status}).`);
     report = await response.json();
     populateFilters();
+    populatePublication();
     bindEvents();
     const selected = restoreUrlState();
     render();

@@ -12,9 +12,9 @@ concurrency:
 jobs:
   # Path classifier — decides whether the heavy Rust / VSIX / JetBrains / Windows
   # gates need to run at all. A PR that only touches site/** (the Eleventy
-  # website) cannot affect those suites, so they are skipped; website content is
-  # still validated by the `site` job below. Any changed file outside site/ sets
-  # `code=true` and the full pipeline runs (a mixed PR runs everything).
+  # website) or scripts/issues/** cannot affect those suites, so they are
+  # skipped; the issue experience is still validated by the `site` job below.
+  # Any other changed path sets `code=true` (a mixed PR runs everything).
   #
   # Gating uses job-level `if:` rather than workflow-level paths-ignore on
   # purpose: a workflow skipped by path filtering leaves its required checks
@@ -56,7 +56,8 @@ jobs:
           echo "Changed files in this PR:"
           printf '%s\n' "$changed"
           # site = at least one website or issue-report generator file changed.
-          # code = at least one file OUTSIDE site/ changed, OR a
+          # code = at least one file OUTSIDE site/ and scripts/issues/ changed,
+          #        OR a
           #        design-system stylesheet that deslop-core compiles into
           #        the standalone HTML report via include_str!
           #        (crates/deslop-core/src/render/html_css.rs). Those CSS

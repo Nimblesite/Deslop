@@ -255,7 +255,7 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   {% if pageOgImage %}
   <meta property="og:image" content="{{ site.url }}{{ pageOgImage }}">
   <meta property="og:image:secure_url" content="{{ site.url }}{{ pageOgImage }}">
-  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:type" content="{{ pageOgImage | toImageMimeType }}">
   <meta property="og:image:width" content="{{ pageOgImageWidth }}">
   <meta property="og:image:height" content="{{ pageOgImageHeight }}">
   <meta property="og:image:alt" content="{{ ogImageAlt | default('social.defaultImageAlt' | t(effLang)) | default(site.title) }}">
@@ -652,7 +652,36 @@ function overrideVirtualTemplates(eleventyConfig) {
   }
 }
 
+// The MIME type each social-card extension actually serves. `og:image:type`
+// used to be the literal string "image/png" for every page, so seven of the
+// eight blog posts — whose cards are JPEGs — declared a type their own file
+// does not have. Scrapers that trust the declaration over sniffing render a
+// broken card. The map is the whole vocabulary of image formats this site is
+// allowed to ship a social card in; an extension outside it is a build-time
+// error rather than a guess, because a silently wrong MIME type is exactly
+// the defect this replaced.
+const SOCIAL_IMAGE_MIME_TYPES = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+};
+
 export default function (eleventyConfig) {
+  eleventyConfig.addFilter("toImageMimeType", (imagePath) => {
+    const extension = String(imagePath ?? "")
+      .slice(String(imagePath ?? "").lastIndexOf("."))
+      .toLowerCase();
+    const mimeType = SOCIAL_IMAGE_MIME_TYPES[extension];
+    if (!mimeType) {
+      throw new Error(
+        `og:image "${imagePath}" has extension "${extension}", which has no declared MIME type. ` +
+          `Add it to SOCIAL_IMAGE_MIME_TYPES or ship the card in one of: ${Object.keys(SOCIAL_IMAGE_MIME_TYPES).join(", ")}.`
+      );
+    }
+    return mimeType;
+  });
+
   eleventyConfig.addFilter("jsonValue", (value) =>
     JSON.stringify(value ?? "")
       .replaceAll("<", "\\u003c")

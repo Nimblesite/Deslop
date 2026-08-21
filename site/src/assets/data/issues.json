@@ -1,7 +1,8 @@
 {
   "meta": {
     "repo": "Nimblesite/Deslop",
-    "generated_at": "2026-08-21",
+    "published_at": "2026-08-21T10:41:48Z",
+    "published_at_long": "21st of August 2026, 10am",
     "source_url": "https://github.com/Nimblesite/Deslop/issues",
     "method": "GitHub metadata, explicit relationships, cross-references, and documented keyword rules. No AI enrichment.",
     "planning_note": "Indicative only — not a schedule. Relative sequencing uses two parallel tracks per workstream and default effort units: verify 2, showstopper 3, critical 4, bug 5, task 4, feature 8."

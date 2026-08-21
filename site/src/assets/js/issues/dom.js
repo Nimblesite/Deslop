@@ -36,6 +36,14 @@ export function labelChip(label) {
   return chip;
 }
 
+export function publicationStamp(report) {
+  return element("time", {
+    className: "atlas-publication",
+    text: `Published ${report.meta.published_at_long} UTC`,
+    attrs: { datetime: report.meta.published_at },
+  });
+}
+
 export function emptyState() {
   return element("div", { className: "view-empty" }, [
     element("strong", { text: "Nothing matches these filters." }),

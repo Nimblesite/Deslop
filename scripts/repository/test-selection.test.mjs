@@ -8,11 +8,19 @@
 // A gate whose own self-tests never run rots in silence (gh #412).
 //
 // The intent — "do not clone real repositories during the release gate" — is
-// expressed structurally instead: the expensive suite is its own Cargo test
-// target behind `required-features`, so cargo will not build it unless asked,
-// and nothing anywhere is selected by name. These tests assert that wiring.
-// The Makefile is read line-exactly and the manifest through `cargo metadata`,
-// never by pattern-matching source text. Run with `node --test`.
+// stated at each test instead, as `#[ignore = ".."]` under
+// [TEST-SELECTION-SKIP]. That is deliberately the opposite of a filter: a
+// filter hides a test from the person reading it, an `#[ignore]` shows them,
+// and `skip_policy_contract` holds the stated reason to the policy.
+//
+// It also keeps the target inside `--all-targets`, which `required-features`
+// did not: skipping must cost coverage of a test's *execution*, never of its
+// *compilation*. Commit 77bcbaed5 left the corpus suite uncompilable for weeks
+// because feature-gating had removed it from every default build.
+//
+// These tests assert that wiring. The Makefile is read line-exactly and the
+// manifests through `cargo metadata`, never by pattern-matching source text.
+// Run with `node --test`.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -24,11 +32,16 @@ import { fileURLToPath } from "node:url";
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const makefile = readFileSync(resolve(repoRoot, "Makefile"), "utf8").split("\n");
 
-// The Cargo feature that opts a build in to the real-repository corpus suite,
-// the package that owns it, and the test target it gates.
-const CORPUS_FEATURE = "corpus-repos";
+// The package that owns the real-repository corpus suite, and its test target.
 const CORPUS_PACKAGE = "deslop";
 const CORPUS_TARGET = "corpus_repos";
+
+// The make variable naming the resource-bounded slice the scheduled corpus
+// workflow runs, and how libtest selects the skipped suite: `--ignored`, plus
+// the flag that makes a positional filter an exact match, not a substring one.
+const CORPUS_SLICE_VARIABLE = "CORPUS_TESTS";
+const IGNORED_FLAG = "--ignored";
+const EXACT_FLAG = "--exact";
 
 // The exact substrings the release gate used to filter on. Each names hermetic
 // tests: the Ollama suites drive an in-process mock server or a deliberately
@@ -50,6 +63,17 @@ function recipe(target) {
   });
   assert.ok(blocks.length > 0, `Makefile no longer declares a \`${target}\` target`);
   return blocks.join("\n");
+}
+
+// The right-hand side of a make variable, as words. `?=` and `=` both count;
+// the name is matched at the start of the line, never as a substring.
+function variable(name) {
+  const line = makefile.find(
+    (entry) => entry.startsWith(`${name} `) || entry.startsWith(`${name}=`),
+  );
+  assert.ok(line, `Makefile no longer declares \`${name}\``);
+  const [, value] = line.split("=");
+  return words(value ?? "");
 }
 
 // Whitespace-separated words of a recipe, so `--skip` is matched as an
@@ -118,25 +142,7 @@ test("[TEST-SELECTION] the release gate selects no test by name", () => {
   }
 });
 
-test("[TEST-SELECTION] the corpus suite is gated by a Cargo feature, not a name", () => {
-  const pkg = corpusPackage();
-  assert.deepEqual(
-    pkg.features[CORPUS_FEATURE],
-    [],
-    `\`${CORPUS_PACKAGE}\` must declare the \`${CORPUS_FEATURE}\` feature that opts a build in ` +
-      "to the real-repository corpus suite",
-  );
-  const target = pkg.targets.find((entry) => entry.name === CORPUS_TARGET);
-  assert.ok(target, `\`${CORPUS_PACKAGE}\` must still declare the \`${CORPUS_TARGET}\` test target`);
-  assert.deepEqual(
-    target["required-features"],
-    [CORPUS_FEATURE],
-    `the \`${CORPUS_TARGET}\` target must carry required-features = ["${CORPUS_FEATURE}"] — ` +
-      "without it the expensive clone-and-scan suite runs in the release gate",
-  );
-});
-
-test("[TEST-SELECTION] only the expensive suite is gated, never a cheap namesake", () => {
+test("[TEST-SELECTION-SKIP] no test target is gated out of the default build", () => {
   const gated = corpusPackage()
     .targets.filter((entry) => entry.kind.includes("test"))
     .filter((entry) => (entry["required-features"] ?? []).length > 0)
@@ -144,26 +150,64 @@ test("[TEST-SELECTION] only the expensive suite is gated, never a cheap namesake
     .sort();
   assert.deepEqual(
     gated,
-    [CORPUS_TARGET],
-    `exactly one \`${CORPUS_PACKAGE}\` test target may be feature-gated: the clone-and-scan ` +
-      "corpus suite. Gating is by cost, never by a name that happens to read like it — " +
-      "`corpus_manifest_contract` reads the pinned manifests off disk and must run in the gate.",
+    [],
+    `no \`${CORPUS_PACKAGE}\` test target may carry required-features. A gated target leaves ` +
+      "`--all-targets` entirely, so `make test` and `make lint` stop compiling it and a refactor " +
+      "elsewhere can leave it uncompilable with nothing to notice until someone runs " +
+      "`make test-corpus`. Commit 77bcbaed5 deleted two constants the corpus suite still read " +
+      "and did exactly that. Skipping is `#[ignore]`, which keeps the target built and linted.",
+  );
+  assert.deepEqual(
+    Object.keys(corpusPackage().features).sort(),
+    [],
+    `\`${CORPUS_PACKAGE}\` must declare no features: a feature is how the corpus target left ` +
+      "the default build in the first place",
   );
 });
 
-test("[TEST-SELECTION] the corpus targets ask for the feature they need", () => {
+test("[TEST-SELECTION-SKIP] the corpus target is still declared and still built", () => {
+  const target = corpusPackage().targets.find((entry) => entry.name === CORPUS_TARGET);
+  assert.ok(target, `\`${CORPUS_PACKAGE}\` must still declare the \`${CORPUS_TARGET}\` test target`);
+  assert.ok(
+    target.test,
+    `the \`${CORPUS_TARGET}\` target must keep \`test = true\`, or its skips become invisible ` +
+      "to `skip_policy_contract` and the suite silently stops existing",
+  );
+});
+
+test("[TEST-SELECTION-SKIP] the corpus targets select by --ignored, never by name", () => {
   for (const target of ["test-corpus", "test-corpus-ci"]) {
     const args = words(recipe(target));
     assert.ok(
-      args.includes("--features") && args.includes(CORPUS_FEATURE),
-      `\`make ${target}\` must pass --features ${CORPUS_FEATURE}, or cargo skips the gated ` +
-        "target and the corpus gate passes by running nothing",
+      args.includes(IGNORED_FLAG),
+      `\`make ${target}\` must pass ${IGNORED_FLAG}: the corpus tests are skipped at their ` +
+        "declaration, so nothing else selects them and the target would run zero tests green",
     );
     assert.ok(
       args.includes("--test") && args.includes(CORPUS_TARGET),
       `\`make ${target}\` must select the ${CORPUS_TARGET} target explicitly`,
     );
+    assert.ok(
+      !args.includes("--skip"),
+      `\`make ${target}\` must not pass --skip — substring selection is the defect (gh #412)`,
+    );
   }
+});
+
+test("[TEST-SELECTION-SKIP] the scheduled slice matches test names exactly", () => {
+  const args = words(recipe("test-corpus-ci"));
+  assert.ok(
+    args.includes(EXACT_FLAG),
+    "`make test-corpus-ci` runs a resource-bounded slice named in CORPUS_TESTS, so it must pass " +
+      `${EXACT_FLAG}. Without it libtest matches each name as a substring: renaming a test makes ` +
+      "the filter select nothing, and a run that executes zero tests reports green (gh #412).",
+  );
+  const slice = variable(CORPUS_SLICE_VARIABLE);
+  assert.ok(
+    slice.length > 0,
+    `${CORPUS_SLICE_VARIABLE} must still name the scheduled slice, or the corpus workflow runs ` +
+      "nothing and the summary reports a green run over zero repositories",
+  );
 });
 
 test("[TEST-SELECTION] the gate's own self-tests are inside the gate's workspace", () => {
@@ -186,18 +230,21 @@ test("[TEST-SELECTION] the gate's own self-tests are inside the gate's workspace
   );
 });
 
-test("[TEST-SELECTION] the gated corpus target is still compiled every run", () => {
+test("[TEST-SELECTION-SKIP] an ignored test is still compiled and linted every run", () => {
   const args = words(recipe("lint"));
   assert.ok(
-    args.includes(`--features`) && args.includes(`${CORPUS_PACKAGE}/${CORPUS_FEATURE}`),
-    `\`make lint\` must pass --features ${CORPUS_PACKAGE}/${CORPUS_FEATURE} to clippy. Gating ` +
-      "the corpus suite out of `make test` must cost coverage of its *execution*, never of its " +
-      "*compilation*: once it stops being built by default, a refactor elsewhere can leave it " +
-      "uncompilable and nothing notices until someone runs `make test-corpus`. Commit 77bcbaed5 " +
-      "deleted two constants the suite still read, and the corpus gate could not build at all.",
+    args.includes("--all-targets"),
+    "`make lint` must lint every target. `#[ignore]` costs coverage of a test's *execution*, " +
+      "never of its *compilation*: the target stays in `--all-targets` and clippy still reads it.",
   );
   assert.ok(
-    args.includes("--all-targets"),
-    "`make lint` must lint every target, or a test file's own defects go unlinted",
+    !args.includes("--features"),
+    "`make lint` must not need a feature to reach the corpus target any more — it is no longer " +
+      "gated out of the default build, so asking for one would mean the gate came back",
+  );
+  assert.ok(
+    words(recipe("test")).includes("--all-targets"),
+    "`make test` must build every target, so a skipped suite still fails the gate when it stops " +
+      "compiling — the failure mode of commit 77bcbaed5",
   );
 });

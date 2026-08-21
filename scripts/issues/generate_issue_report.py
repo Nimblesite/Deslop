@@ -7,7 +7,7 @@ import os
 import subprocess
 import sys
 from collections import Counter, defaultdict
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, NotRequired, TypedDict, cast
 
@@ -139,11 +139,11 @@ class PriorityData(TypedDict):
 
 class MetaData(TypedDict):
     repo: str
-    generated_at: str
+    published_at: str
+    published_at_long: str
     source_url: str
     method: str
     planning_note: str
-
 
 class ReportData(TypedDict):
     meta: MetaData
@@ -206,7 +206,7 @@ WORKSTREAMS: dict[str, WorkstreamRule] = {
 }
 
 PRIORITIES: dict[str, tuple[int, str, str]] = {
-    "verify_release": (0, "Verify next release", "Fixed on main; validate in the next release before closing."),
+    "verify_release": (0, "Verify next release", "To the best of our knowledge, fixed on main; verify in the next release before closing."),
     "release_blocker": (1, "Stop the line", "An unresolved showstopper blocks safe delivery."),
     "accuracy_critical": (2, "Protect accuracy", "Critical correctness risk to duplicate detection."),
     "critical": (3, "Critical path", "Serious user or delivery impact; tackle soon."),
@@ -222,7 +222,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", "Nimblesite/Deslop"))
     parser.add_argument("--output", default="site/src/assets/data/issues.json")
     parser.add_argument("--input", help="Read GitHub REST issue JSON from disk instead of calling gh.")
-    parser.add_argument("--generated-at", help="Override the report date (YYYY-MM-DD).")
+    parser.add_argument("--published-at", "--generated-at", dest="published_at", help="Override the publication instant (ISO 8601; defaults to current UTC).")
     return parser.parse_args()
 
 
@@ -447,14 +447,15 @@ def priority_data(issues: list[IssueData]) -> list[PriorityData]:
     return [{"id": key, "rank": value[0], "name": value[1], "description": value[2], "count": counts[key]} for key, value in PRIORITIES.items()]
 
 
-def build_report(raw_issues: list[RawIssue], repo: str, generated_date: date) -> ReportData:
+def build_report(raw_issues: list[RawIssue], repo: str, published_at: datetime) -> ReportData:
     relationships = relationship_edges(raw_issues)
     inbound = Counter(edge["target"] for edge in relationships)
     issues = sort_issues([compact_issue(item, inbound[item["number"]]) for item in raw_issues], relationships)
     sequence_issues(issues)
     return {
         "meta": {
-            "repo": repo, "generated_at": generated_date.isoformat(),
+            "repo": repo, "published_at": published_at.isoformat().replace("+00:00", "Z"),
+            "published_at_long": long_publication_time(published_at),
             "source_url": f"https://github.com/{repo}/issues",
             "method": "GitHub metadata, explicit relationships, cross-references, and documented keyword rules. No AI enrichment.",
             "planning_note": "Indicative only — not a schedule. Relative sequencing uses two parallel tracks per workstream and default effort units: verify 2, showstopper 3, critical 4, bug 5, task 4, feature 8.",
@@ -464,9 +465,14 @@ def build_report(raw_issues: list[RawIssue], repo: str, generated_date: date) ->
     }
 
 
-def report_date(value: str | None) -> date:
-    return date.fromisoformat(value) if value else datetime.now(timezone.utc).date()
+def long_publication_time(value: datetime) -> str:
+    suffix = "th" if value.day % 100 in (11, 12, 13) else {1: "st", 2: "nd", 3: "rd"}.get(value.day % 10, "th")
+    hour = value.strftime("%I%p").lstrip("0").lower()
+    return f"{value.day}{suffix} of {value.strftime('%B %Y')}, {hour}"
 
+def report_time(value: str | None) -> datetime:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00")) if value else datetime.now(timezone.utc)
+    return parsed.replace(tzinfo=parsed.tzinfo or timezone.utc).astimezone(timezone.utc).replace(microsecond=0)
 
 def write_report(report: ReportData, output: str) -> None:
     path = Path(output)
@@ -480,7 +486,7 @@ def main() -> int:
     args = parse_args()
     try:
         issues = load_issues(args.input, args.repo)
-        report = build_report(issues, args.repo, report_date(args.generated_at))
+        report = build_report(issues, args.repo, report_time(args.published_at))
         write_report(report, args.output)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"issue report generation failed: {error}", file=sys.stderr)

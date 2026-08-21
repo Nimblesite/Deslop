@@ -21,8 +21,8 @@ use std::{collections::BTreeMap, collections::HashMap, hash::BuildHasher};
 use crate::{buckets::CONTENT_SUPPORT_FLOOR, state::FileId};
 
 use super::{
-    leaf_bytes, member_count, population, preserved_literal_count, vacuous_share, MemberContent,
-    Population,
+    frontier::{leaf_bytes, member_count, population, MemberContent, Population},
+    preserved_literal_count, vacuous_share,
 };
 
 /// Minimum occurrences of a substituted identifier pair before it counts

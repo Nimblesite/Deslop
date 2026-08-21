@@ -17,6 +17,10 @@ use anyhow::{anyhow, Result};
 use super::declares_forbidden_supertype;
 use crate::enclosure::Span;
 
+const DART_LANGUAGE: &str = "dart";
+const STATEFUL_WIDGET: &str = "StatefulWidget";
+const STATELESS_WIDGET: &str = "StatelessWidget";
+
 /// Judges `source` in full, as `language`, against `supertype`.
 ///
 /// # Errors
@@ -76,19 +80,19 @@ class LedgerController extends State<LedgerView> {
 #[test]
 fn a_supertype_only_mentioned_in_comments_and_literals_is_not_a_declaration() -> Result<()> {
     assert!(
-        !declares("dart", MENTIONS_ONLY, "StatefulWidget")?,
+        !declares(DART_LANGUAGE, MENTIONS_ONLY, STATEFUL_WIDGET)?,
         "a doc comment, a line comment and a string literal all say \
          `extends StatefulWidget`; none of them declares it, and reporting \
          this cluster as framework boilerplate would suppress a real \
          finding on the strength of prose"
     );
     assert!(
-        !declares("dart", MENTIONS_ONLY, "StatelessWidget")?,
+        !declares(DART_LANGUAGE, MENTIONS_ONLY, STATELESS_WIDGET)?,
         "same in the other direction: `debugPrint('extends StatelessWidget')` \
          is an argument, not a base type"
     );
     assert!(
-        declares("dart", MENTIONS_ONLY, "State")?,
+        declares(DART_LANGUAGE, MENTIONS_ONLY, "State")?,
         "the class really does extend `State`, so the predicate must be able \
          to see the one declaration that is actually there — otherwise this \
          fixture would pass by seeing nothing at all"
@@ -113,13 +117,13 @@ class LedgerView
 #[test]
 fn a_wrapped_extends_clause_is_the_same_declaration() -> Result<()> {
     assert!(
-        declares("dart", WRAPPED_DECLARATION, "StatefulWidget")?,
+        declares(DART_LANGUAGE, WRAPPED_DECLARATION, STATEFUL_WIDGET)?,
         "`extends` and `StatefulWidget` are on different lines, so no \
          substring of the source spells `extends StatefulWidget` — the \
          declaration is identical and the gate must still see it"
     );
     assert!(
-        !declares("dart", WRAPPED_DECLARATION, "StatelessWidget")?,
+        !declares(DART_LANGUAGE, WRAPPED_DECLARATION, STATELESS_WIDGET)?,
         "the wrapped clause names one supertype; the other must not be \
          inferred from it"
     );
@@ -140,11 +144,11 @@ class LedgerTile extends StatelessWidget {
 #[test]
 fn the_flat_declaration_still_fires_and_only_for_its_own_supertype() -> Result<()> {
     assert!(
-        declares("dart", FLAT_DECLARATION, "StatelessWidget")?,
+        declares(DART_LANGUAGE, FLAT_DECLARATION, STATELESS_WIDGET)?,
         "the ordinary spelling is what gh #331 is about; it must keep firing"
     );
     assert!(
-        !declares("dart", FLAT_DECLARATION, "StatefulWidget")?,
+        !declares(DART_LANGUAGE, FLAT_DECLARATION, STATEFUL_WIDGET)?,
         "a StatelessWidget is not a StatefulWidget — a predicate that fired \
          on both would make the rule unfalsifiable"
     );
@@ -154,7 +158,12 @@ fn the_flat_declaration_still_fires_and_only_for_its_own_supertype() -> Result<(
 #[test]
 fn a_member_of_the_declaration_is_judged_by_its_enclosing_class() -> Result<()> {
     assert!(
-        declares_from("dart", FLAT_DECLARATION, "  @override", "StatelessWidget")?,
+        declares_from(
+            DART_LANGUAGE,
+            FLAT_DECLARATION,
+            "  @override",
+            STATELESS_WIDGET
+        )?,
         "the ranked occurrence is usually the mandated member — Flutter's \
          `build`, or `createState` — not the class header. Judging only the \
          reported bytes would miss every cluster the rule exists to catch"
@@ -165,7 +174,7 @@ fn a_member_of_the_declaration_is_judged_by_its_enclosing_class() -> Result<()> 
 #[test]
 fn an_unregistered_language_fails_the_gate_rather_than_passing_it() {
     let span = Span::new("Ledger.fs", 0, 0);
-    let verdict = declares_forbidden_supertype("fsharp", "", &span, "StatefulWidget");
+    let verdict = declares_forbidden_supertype("fsharp", "", &span, STATEFUL_WIDGET);
     assert!(
         verdict.is_err(),
         "a manifest naming a language this module has no heritage grammar \
@@ -239,11 +248,11 @@ fn every_curated_heritage_grammar_reads_its_own_base_clause() -> Result<()> {
 fn a_type_argument_is_not_a_base_type() -> Result<()> {
     let source = "class LedgerViewState extends State<LedgerView> {}\n";
     assert!(
-        declares("dart", source, "State")?,
+        declares(DART_LANGUAGE, source, "State")?,
         "`State` is the declared base type"
     );
     assert!(
-        !declares("dart", source, "LedgerView")?,
+        !declares(DART_LANGUAGE, source, "LedgerView")?,
         "`LedgerView` is what `State` was instantiated with, not a base type \
          — matching it would let one manifest entry condemn every widget in \
          the repository"
@@ -345,10 +354,7 @@ mod curated_precision {
     fn checks(manifest: &Value, clusters: &[Value]) -> Vec<String> {
         let mut failures: Vec<Failure> = Vec::new();
         check_curated_precision(manifest, &json!({ "clusters": clusters }), &mut failures);
-        failures
-            .into_iter()
-            .map(|failure| failure.check)
-            .collect()
+        failures.into_iter().map(|failure| failure.check).collect()
     }
 
     #[test]

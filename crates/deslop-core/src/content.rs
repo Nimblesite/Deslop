@@ -24,21 +24,22 @@
 //! rendered fused confidence, and the ranking weight can separate real
 //! clones from shape coincidence.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::hash::BuildHasher;
 
+/// The collapsed-leaf frontier every content measurement reads.
+mod frontier;
 /// Type-2 rename evidence ([TECH-PMATCH-BAKER], #409).
 mod rename;
 
+use frontier::{
+    key_set_jaccard, keys_of, member_content, member_count, population, LeafKey, MemberContent,
+    Population,
+};
 use rename::ModalBijection;
 
 use crate::{
-    ast::{ByteRange, NormalizedNode},
-    cluster::Cluster,
-    fingerprint::Fingerprint,
-    lang::shared::{LITERAL_KIND, OPERATOR_KIND},
-    state::FileId,
-    tokens::collapsed_leaves,
+    ast::NormalizedNode, cluster::Cluster, fingerprint::Fingerprint, state::FileId,
 };
 
 /// Minimum literal-leaf count before a subtree's literal dominance is
@@ -150,80 +151,6 @@ struct DominantFamily {
     anchor: usize,
     /// Number of members in the family.
     size: usize,
-}
-
-/// Which evidence population a collapsed frontier leaf belongs to.
-///
-/// Identifiers and literals are the two populations the rename and
-/// literal-preservation measurements are defined over. Operators are a
-/// third ([PIPELINE-NORMALIZE-AST-OPERATOR]) and deliberately belong to
-/// neither: there is no substitution that turns `+` into `-`, so
-/// counting an operator as an identifier would report a broken rename,
-/// and counting it as a literal would report a data table. It is
-/// evidence of its own kind — positional agreement, and nothing else.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum Population {
-    /// A collapsed identifier position.
-    Identifier,
-    /// A collapsed literal position.
-    Literal,
-    /// A behaviour-bearing operator token.
-    Operator,
-}
-
-impl Population {
-    /// The population a normalised leaf kind belongs to. Anything that
-    /// is neither a literal nor an operator reached the frontier as a
-    /// collapsed identifier.
-    fn of(kind: &str) -> Self {
-        match kind {
-            LITERAL_KIND => Self::Literal,
-            OPERATOR_KIND => Self::Operator,
-            _ => Self::Identifier,
-        }
-    }
-}
-
-/// One collapsed-leaf content key: the population flag plus a truncated
-/// hash of the leaf's raw source bytes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-struct LeafKey {
-    /// Which evidence population the leaf belongs to.
-    population: Population,
-    /// Truncated blake3 hash of the leaf's raw source bytes.
-    key: u64,
-}
-
-/// One member's resolved content frontier: the per-leaf keys plus the
-/// byte range each key hashed, so rename measurement can read a leaf's
-/// raw bytes back without re-walking the tree
-/// ([`rename::literal_echoes`], #409).
-struct MemberContent {
-    /// File every range below indexes into.
-    file: FileId,
-    /// Normalised-subtree digest of the member ([`Fingerprint::hash`])
-    /// — the shape half of token identity in
-    /// [`dominant_verbatim_share`].
-    shape: [u8; 32],
-    /// One key per collapsed leaf, in frontier order.
-    keys: Vec<LeafKey>,
-    /// The source byte range each key was hashed from, 1:1 with `keys`.
-    ranges: Vec<ByteRange>,
-}
-
-/// The key slice of a resolved member, `None` when unresolvable.
-fn keys_of(content: Option<&MemberContent>) -> Option<&[LeafKey]> {
-    content.map(|content| content.keys.as_slice())
-}
-
-/// Raw source bytes of one collapsed leaf, by frontier index.
-fn leaf_bytes<'src, S: BuildHasher>(
-    content: &MemberContent,
-    index: usize,
-    sources: &'src HashMap<FileId, Vec<u8>, S>,
-) -> Option<&'src [u8]> {
-    let range = content.ranges.get(index)?;
-    sources.get(&content.file)?.get(range.start..range.end)
 }
 
 /// Measures and attaches [`ContentEvidence`] for every cluster. Runs
@@ -398,18 +325,6 @@ fn cluster_agreement(
     total / member_count(member_contents.len().saturating_sub(1))
 }
 
-/// Paired keys at the positions where both members carry `wanted`.
-/// Shape-aligned members disagree on a position's population only at
-/// parse-artifact boundaries; such positions belong to no population.
-fn population(canonical: &[LeafKey], member: &[LeafKey], wanted: Population) -> Vec<(u64, u64)> {
-    canonical
-        .iter()
-        .zip(member.iter())
-        .filter(|(left, right)| left.population == wanted && right.population == wanted)
-        .map(|(left, right)| (left.key, right.key))
-        .collect()
-}
-
 /// Aligned literal positions whose raw bytes match — each one an
 /// independent anchor priced by [`anchor_weight`].
 fn preserved_literal_count(literals: &[(u64, u64)]) -> usize {
@@ -527,60 +442,4 @@ fn pair_agreement(canonical: Option<&[LeafKey]>, member: Option<&[LeafKey]>) -> 
         .filter(|(left, right)| left == right)
         .count();
     member_count(equal) / member_count(canonical.len())
-}
-
-/// Jaccard similarity of two members' content-key sets.
-fn key_set_jaccard(left: &[LeafKey], right: &[LeafKey]) -> f64 {
-    let left: BTreeSet<LeafKey> = left.iter().copied().collect();
-    let right: BTreeSet<LeafKey> = right.iter().copied().collect();
-    let intersection = left.intersection(&right).count();
-    let union = left.union(&right).count();
-    if union == 0 {
-        return 1.0;
-    }
-    member_count(intersection) / member_count(union)
-}
-
-/// One member's resolved content frontier: a key and its source range
-/// per collapsed leaf. `None` when the member's tree, source, or byte
-/// range cannot be resolved.
-fn member_content<S: BuildHasher>(
-    member: &Fingerprint,
-    tree_index: &HashMap<FileId, &NormalizedNode>,
-    sources: &HashMap<FileId, Vec<u8>, S>,
-) -> Option<MemberContent> {
-    let root = tree_index.get(&member.file_id)?;
-    let source = sources.get(&member.file_id)?;
-    let leaves = collapsed_leaves(root, member)?;
-    let keys = leaves
-        .iter()
-        .map(|(kind, range)| {
-            source.get(range.start..range.end).map(|bytes| LeafKey {
-                population: Population::of(kind),
-                key: truncated_hash(bytes),
-            })
-        })
-        .collect::<Option<Vec<LeafKey>>>()?;
-    let ranges = leaves.iter().map(|(_, range)| *range).collect();
-    Some(MemberContent {
-        file: member.file_id,
-        shape: member.hash,
-        keys,
-        ranges,
-    })
-}
-
-/// First eight little-endian bytes of the blake3 hash of `bytes`.
-fn truncated_hash(bytes: &[u8]) -> u64 {
-    let digest = blake3::hash(bytes);
-    let mut prefix = [0_u8; 8];
-    for (slot, byte) in prefix.iter_mut().zip(digest.as_bytes().iter()) {
-        *slot = *byte;
-    }
-    u64::from_le_bytes(prefix)
-}
-
-/// Lossless small-count conversion for agreement divisors.
-fn member_count(count: usize) -> f64 {
-    f64::from(u32::try_from(count).unwrap_or(u32::MAX))
 }

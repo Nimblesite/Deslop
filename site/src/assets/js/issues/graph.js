@@ -1,4 +1,4 @@
-import { clear, element, emptyState, labelChip, svgElement } from "./dom.js";
+import { clear, element, emptyState, labelChip, publicationStamp, svgElement } from "./dom.js";
 import { priorityColor, streamMap, visibleRelationships } from "./model.js";
 
 const WIDTH = 1200;
@@ -151,8 +151,8 @@ function showTooltip(tooltip, issue, event) {
 
 function placeTooltip(tooltip, event) {
   const bounds = tooltip.parentElement.getBoundingClientRect();
-  const left = Math.min(event.clientX - bounds.left + 14, bounds.width - 320);
-  const top = Math.min(event.clientY - bounds.top + 14, bounds.height - 120);
+  const left = Math.min(event.clientX - bounds.left + 14, bounds.width - tooltip.offsetWidth - 8);
+  const top = Math.min(event.clientY - bounds.top + 14, bounds.height - tooltip.offsetHeight - 8);
   tooltip.style.left = `${Math.max(8, left)}px`;
   tooltip.style.top = `${Math.max(8, top)}px`;
 }
@@ -236,7 +236,7 @@ function toolButton(label, text) {
   return element("button", { className: "network-tool", text, attrs: { type: "button", "aria-label": label, title: label } });
 }
 
-function networkTools(viewport, state) {
+function networkTools(viewport, state, report) {
   const zoomIn = toolButton("Zoom in", "+");
   const zoomOut = toolButton("Zoom out", "−");
   const reset = toolButton("Reset graph position", "↺");
@@ -245,6 +245,7 @@ function networkTools(viewport, state) {
   reset.addEventListener("click", () => resetTransform(viewport, state));
   return element("div", { className: "network-tools" }, [
     element("span", { className: "network-hint", text: "Scroll to zoom · drag the canvas to move · select a node for context" }),
+    publicationStamp(report),
     element("div", { className: "network-tools__buttons" }, [zoomOut, reset, zoomIn]),
   ]);
 }
@@ -290,6 +291,6 @@ export function renderNetwork(container, report, issues, onSelect) {
   bindWheel(svg, viewport, state);
   bindPan(svg, canvas, viewport, state);
   canvas.append(svg, tooltip);
-  shell.append(networkTools(viewport, state), canvas, legend(report, issues));
+  shell.append(networkTools(viewport, state, report), canvas, legend(report, issues));
   container.append(shell);
 }

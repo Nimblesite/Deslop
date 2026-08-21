@@ -74,9 +74,9 @@ function documentedExtensionDirectoryCarriesItsPlatformTarget() {
 // `ci` job where `make lint` runs the snippet's contract test. The security
 // test must therefore also be a step of the `site` job, or a site-only PR
 // can regress the exact snippet the test was written to protect. The
-// routing half asserts the classifier and the site job's gate still wire an
-// installer-page-only change to that step: `site/**` changes set
-// `site=true`, and the site job runs exactly when they do.
+// routing half asserts the classifier and the site job's gate still wire
+// website and issue-generator changes to that step: `site/**` and
+// `scripts/issues/**` changes set `site=true`.
 function installerSnippetContractRunsWhereverTheSnippetCanChange() {
   const ciWorkflow = readFileSync(resolve(repoRoot, ".github/workflows/ci.yml"), "utf8");
   const makefile = readFileSync(resolve(repoRoot, "Makefile"), "utf8");
@@ -84,8 +84,8 @@ function installerSnippetContractRunsWhereverTheSnippetCanChange() {
   if (!makefile.includes(runner)) {
     throw new Error("make lint no longer runs the installer snippet contract; code PRs would stop covering it");
   }
-  requireInOrder(ciWorkflow, ["grep -qE '^site/'", 'echo "site=true"'],
-    "the classifier no longer maps site/** changes to site=true; an installer-page-only PR would skip the site job entirely");
+  requireInOrder(ciWorkflow, ["grep -qE '^(site/|scripts/issues/)'", 'echo "site=true"'],
+    "the classifier no longer maps site/** and scripts/issues/** changes to site=true; relevant changes would skip the site job");
   const siteJob = ciWorkflow.indexOf("\n  site:");
   const securityJob = ciWorkflow.indexOf("\n  security:");
   if (siteJob < 0 || securityJob < 0) {

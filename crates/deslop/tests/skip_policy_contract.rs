@@ -22,7 +22,7 @@
 
 use std::{collections::BTreeSet, fs, path::Path};
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use deslop_test_support::{
     corpus::repo_root,
     skip_policy::{ignored_tests, IgnoredTest},
@@ -55,6 +55,12 @@ const MARKDOWN_SUFFIX: &str = ".md";
 /// enforces are the categories that document defines.
 const POLICY_SPEC: &str = "docs/specs/release.md";
 const SPEC_DIRECTORY: &str = "docs/specs";
+
+/// The Makefile, the variable naming the resource-bounded slice the scheduled
+/// corpus workflow runs, and the suite those names must resolve inside.
+const MAKEFILE: &str = "Makefile";
+const CORPUS_SLICE_VARIABLE: &str = "CORPUS_TESTS";
+const CORPUS_SUITE: &str = "crates/deslop/tests/corpus_repos.rs";
 
 /// Every test allowed not to run, with the issue that owns its return.
 ///
@@ -362,6 +368,47 @@ fn the_categories_this_gate_enforces_are_the_ones_the_specification_defines() ->
         assert!(
             ids.iter().any(|id| id == bare),
             "{POLICY_SPEC} mentions {category} only in prose, not as a declared id"
+        );
+    }
+    Ok(())
+}
+
+/// The test names `CORPUS_TESTS` hands to the scheduled corpus workflow.
+fn scheduled_slice() -> Result<Vec<String>> {
+    let makefile = read(MAKEFILE)?;
+    let declaration = makefile
+        .lines()
+        .find(|line| line.starts_with(CORPUS_SLICE_VARIABLE))
+        .ok_or_else(|| anyhow!("{MAKEFILE} no longer declares {CORPUS_SLICE_VARIABLE}"))?;
+    Ok(declaration
+        .split('=')
+        .nth(1)
+        .unwrap_or_default()
+        .split_whitespace()
+        .map(ToOwned::to_owned)
+        .collect())
+}
+
+#[test]
+fn the_scheduled_corpus_slice_names_tests_that_still_exist() -> Result<()> {
+    let suite: Vec<String> = ignored_tests()?
+        .into_iter()
+        .filter(|skip| skip.file == CORPUS_SUITE)
+        .map(|skip| skip.test)
+        .collect();
+    let slice = scheduled_slice()?;
+    assert!(
+        !slice.is_empty(),
+        "{MAKEFILE}: {CORPUS_SLICE_VARIABLE} names no test, so the scheduled corpus workflow \
+         runs nothing and reports green over zero repositories"
+    );
+    for name in &slice {
+        assert!(
+            suite.contains(name),
+            "{MAKEFILE}: {CORPUS_SLICE_VARIABLE} selects `{name}`, which is not a test in \
+             {CORPUS_SUITE}. libtest would match nothing and the scheduled run would report \
+             green having executed zero tests — the same failure as gh #412, one rename away. \
+             The suite declares {suite:?}."
         );
     }
     Ok(())

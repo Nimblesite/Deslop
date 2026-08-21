@@ -276,6 +276,24 @@ test.describe("issue atlas", () => {
     await expect(page.locator(".graph-tooltip__assignee img")).toHaveAttribute("src", assigned.avatar);
   });
 
+  test("keeps the hover bubble inside the graph at every edge", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload();
+    const canvas = page.locator(".network-canvas");
+    const bounds = await canvas.boundingBox();
+    await page.locator(".graph-node").first().dispatchEvent("pointerenter", {
+      pointerType: "mouse",
+      clientX: bounds.x + bounds.width - 1,
+      clientY: bounds.y + bounds.height - 1,
+    });
+    const escapes = await page.locator(".graph-tooltip").evaluate((tooltip) => {
+      const tip = tooltip.getBoundingClientRect();
+      const graph = tooltip.parentElement.getBoundingClientRect();
+      return { left: tip.left < graph.left, right: tip.right > graph.right, top: tip.top < graph.top, bottom: tip.bottom > graph.bottom };
+    });
+    expect(escapes).toEqual({ left: false, right: false, top: false, bottom: false });
+  });
+
   test("filters fixed-on-main into the release verification queue", async ({ page }) => {
     await page.locator(".graph-filter-panel summary").click();
     await page.selectOption('select[name="label"]', "fixed-on-main");
@@ -425,6 +443,7 @@ test.describe("issue planner document", () => {
     await expect(page.locator(".summary-card")).toHaveCount(5);
     await expect(page.locator("[data-summary=open]")).toHaveText(String(report.summary.open));
     await expect(page.getByText("“fixed-on-main” is a verification state, not done.")).toBeVisible();
+    await expect(page.locator(".verification-note")).toContainText("best of our knowledge");
     await expect(page.locator(".statistics-source")).toContainText("No AI enrichment");
     for (const card of await page.locator(".summary-card").all()) {
       expect((await card.boundingBox()).height).toBeLessThan(200);
