@@ -407,7 +407,7 @@ fn is_signature_only_cluster(snippets: &[Snippet<'_>]) -> bool {
     if snippets.len() < 2 {
         return false;
     }
-    let shapes: Option<Vec<Vec<i32>>> = snippets
+    let shapes: Option<Vec<Vec<body_shape::ShapeToken<'_>>>> = snippets
         .iter()
         .map(snippet_body_shape_when_signature_only)
         .collect();
@@ -427,7 +427,9 @@ fn is_signature_only_cluster(snippets: &[Snippet<'_>]) -> bool {
 /// near-miss cluster keeps clustering. Returns `None` when the snippet
 /// is not contained in a function, when the function has no `body`
 /// field, or when the range intersects the body in any way.
-fn snippet_body_shape_when_signature_only(snippet: &Snippet<'_>) -> Option<Vec<i32>> {
+fn snippet_body_shape_when_signature_only<'src>(
+    snippet: &Snippet<'src>,
+) -> Option<Vec<body_shape::ShapeToken<'src>>> {
     let tree = parse_for(snippet)?;
     let function = enclosing_kind(
         tree.root_node(),
@@ -438,7 +440,7 @@ fn snippet_body_shape_when_signature_only(snippet: &Snippet<'_>) -> Option<Vec<i
     if snippet.range.end > body.start_byte() {
         return None;
     }
-    Some(body_shape::body_kind_stream(body))
+    Some(body_shape::body_kind_stream(body, snippet.source))
 }
 
 /// Returns the set of tree-sitter node kinds that count as function

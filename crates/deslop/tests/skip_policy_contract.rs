@@ -20,35 +20,19 @@
 //! never a text match, so a comment or string literal mentioning `ignore` is
 //! not a skip and a skip wrapped across five lines still is one.
 
-use std::{collections::BTreeSet, fs, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+};
 
 use anyhow::{anyhow, Context, Result};
 use deslop_test_support::{
     corpus::repo_root,
-    skip_policy::{ignored_tests, IgnoredTest},
+    skip_contract::{
+        bracketed_ids, breaches, registry_diff, Breach, PolicyContext, CATEGORIES, PLAN_PREFIX,
+    },
+    skip_policy::ignored_tests,
 };
-
-/// The unfinished-feature justification: assertions are intact, the feature
-/// behind them is not, and the tracking issue owns the remaining work.
-const SKIP_UNFINISHED: &str = "[SKIP-UNFINISHED]";
-
-/// The resource justification: a corpus or embedding suite whose clone,
-/// wall time, or peak memory does not fit a hosted runner.
-const SKIP_TOO_LARGE_FOR_CI: &str = "[SKIP-TOO-LARGE-FOR-CI]";
-
-/// The only two justifications a skip may claim. "It was breaking CI" is not
-/// on this list and never will be.
-const CATEGORIES: [&str; 2] = [SKIP_UNFINISHED, SKIP_TOO_LARGE_FOR_CI];
-
-/// How a reason names its tracking issue, how prose mentions the same issue,
-/// and how a reason tells the reader to run the test anyway.
-const ISSUE_MARKER: &str = "GH #";
-const ISSUE_HASH: char = '#';
-const RUN_INSTRUCTION: &str = "--ignored";
-
-/// Where plans live, and the extension they carry.
-const PLAN_PREFIX: &str = "docs/plans/";
-const MARKDOWN_SUFFIX: &str = ".md";
 
 /// The specification that documents this policy, and the id it is filed
 /// under. Code, specs, and tests must agree, so the categories this gate
@@ -141,89 +125,60 @@ fn curated() -> Vec<(String, String)> {
         .collect()
 }
 
-/// `(file, test)` of every skip actually present in the tree.
-fn present(found: &[IgnoredTest]) -> Vec<(String, String)> {
-    found
-        .iter()
-        .map(|skip| (skip.file.clone(), skip.test.clone()))
-        .collect()
-}
-
 /// Reads a workspace-relative file.
 fn read(relative: &str) -> Result<String> {
     let path = repo_root().join(relative);
     fs::read_to_string(&path).with_context(|| format!("unreadable: {}", path.display()))
 }
 
-/// Every `[BRACKETED-ID]` in `text`, in order. Split on the delimiters rather
-/// than pattern-matched, and filtered to the shape a spec id has: upper-case,
-/// digits, and hyphens.
-fn bracketed_ids(text: &str) -> Vec<String> {
-    text.split('[')
-        .skip(1)
-        .filter_map(|rest| rest.split(']').next())
-        .filter(|id| !id.is_empty() && id.chars().all(is_spec_id_character))
-        .map(ToOwned::to_owned)
-        .collect()
-}
-
-/// The characters a hierarchical spec id is built from.
-fn is_spec_id_character(character: char) -> bool {
-    character.is_ascii_uppercase() || character.is_ascii_digit() || character == '-'
-}
-
-/// Every issue number `text` mentions as `#<n>`. Loose on purpose: a skip
-/// must cite the strict `GH #<n>` form, but the plan it points at is prose
-/// and writes the same issue as `#<n>`.
-fn issue_mentions(text: &str) -> Vec<u32> {
-    text.split(ISSUE_HASH)
-        .skip(1)
-        .filter_map(|rest| {
-            let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
-            digits.parse().ok()
-        })
-        .collect()
-}
-
-/// Every `docs/plans/<name>.md` path `text` names.
-fn plan_paths(text: &str) -> Vec<String> {
-    text.split(PLAN_PREFIX)
-        .skip(1)
-        .filter_map(|rest| rest.split(MARKDOWN_SUFFIX).next())
-        .map(|stem| format!("{PLAN_PREFIX}{stem}{MARKDOWN_SUFFIX}"))
-        .collect()
-}
-
-/// Every spec id declared anywhere under `docs/specs`, so a skip cannot
-/// cross-reference an id that no specification defines.
-fn declared_spec_ids() -> Result<BTreeSet<String>> {
-    let directory = repo_root().join(SPEC_DIRECTORY);
-    let mut declared = BTreeSet::new();
-    for entry in fs::read_dir(&directory).context("docs/specs must be readable")? {
+/// Every markdown file in a workspace-relative directory, keyed by its own
+/// workspace-relative path.
+fn markdown_in(directory: &str) -> Result<BTreeMap<String, String>> {
+    let absolute = repo_root().join(directory);
+    let mut found = BTreeMap::new();
+    for entry in fs::read_dir(&absolute).with_context(|| format!("{directory} must be readable"))? {
         let path = entry?.path();
-        if path.extension().is_some_and(|ext| ext == "md") {
-            declared.extend(bracketed_ids(&read_path(&path)?));
+        if path.extension().is_some_and(|extension| extension == "md") {
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default();
+            let body = fs::read_to_string(&path)
+                .with_context(|| format!("unreadable: {}", path.display()))?;
+            let previous = found.insert(format!("{directory}{name}"), body);
+            assert!(previous.is_none(), "{directory}{name} listed twice");
         }
     }
-    Ok(declared)
+    Ok(found)
 }
 
-/// Reads an absolute path.
-fn read_path(path: &Path) -> Result<String> {
-    fs::read_to_string(path).with_context(|| format!("unreadable: {}", path.display()))
+/// The policy's view of this tree: the spec ids some specification declares,
+/// and the body of every plan a skip could cite.
+fn policy_context() -> Result<PolicyContext> {
+    let mut declared_spec_ids = BTreeSet::new();
+    for body in markdown_in(&format!("{SPEC_DIRECTORY}/"))?.values() {
+        declared_spec_ids.extend(bracketed_ids(body));
+    }
+    assert!(
+        declared_spec_ids.len() > 50,
+        "only {} spec ids found under {SPEC_DIRECTORY}; the specifications did not load, so \
+         every cross-reference check below would pass or fail for the wrong reason",
+        declared_spec_ids.len()
+    );
+    Ok(PolicyContext {
+        declared_spec_ids,
+        plans: markdown_in(PLAN_PREFIX)?,
+    })
 }
 
 #[test]
 fn the_ignored_tests_in_the_tree_are_exactly_the_curated_set() -> Result<()> {
     let found = ignored_tests()?;
-    assert_eq!(
-        present(&found),
-        curated(),
-        "the set of `#[ignore]`d tests changed. Adding one is a deliberate act: give it a \
-         tracking issue, a plan, and an entry in CURATED_SKIPS. Removing one because its fix \
-         landed means deleting its entry here too — a skip that outlives its defect protects \
-         nothing and reads as coverage."
-    );
+    let present: Vec<(String, String)> = found
+        .iter()
+        .map(|skip| (skip.file.clone(), skip.test.clone()))
+        .collect();
+    assert_registry_matches(&present);
     assert_eq!(
         found.len(),
         CURATED_SKIPS.len(),
@@ -232,153 +187,57 @@ fn the_ignored_tests_in_the_tree_are_exactly_the_curated_set() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn every_skip_states_exactly_one_allowed_justification() -> Result<()> {
-    for skip in ignored_tests()? {
-        assert_single_category(&skip);
-    }
-    Ok(())
-}
-
-/// A skip states its justification, and states exactly one of the two the
-/// specification allows.
-fn assert_single_category(skip: &IgnoredTest) {
+/// Both directions of the registry, which fail for opposite reasons.
+fn assert_registry_matches(present: &[(String, String)]) {
+    let (unregistered, stale) = registry_diff(present, &curated());
     assert!(
-        !skip.reason.is_empty(),
-        "{}::{} is a bare `#[ignore]`. A skip with no stated reason is a test deleted without a \
-         commit message.",
-        skip.file,
-        skip.test
+        unregistered.is_empty(),
+        "{unregistered:?} carry `#[ignore]` and are not in CURATED_SKIPS. Adding a skip is a \
+         deliberate act: give it a tracking issue, a plan, and an entry here."
     );
-    let claimed: Vec<&str> = CATEGORIES
-        .into_iter()
-        .filter(|category| skip.reason.contains(category))
-        .collect();
-    assert_eq!(
-        claimed.len(),
-        1,
-        "{}::{} claims {claimed:?}; a skip states exactly one of {CATEGORIES:?}. \"it was \
-         breaking CI\" is not a category and never will be. Reason: {}",
-        skip.file,
-        skip.test,
-        skip.reason
+    assert!(
+        stale.is_empty(),
+        "{stale:?} are registered as skipped and no longer carry `#[ignore]`. A skip that \
+         outlives its defect reads as coverage nobody has — delete the entry."
     );
 }
 
 #[test]
-fn every_skip_names_the_issue_that_owns_its_return_and_the_curated_set_agrees() -> Result<()> {
-    for (skip, (_, _, expected)) in ignored_tests()?.iter().zip(CURATED_SKIPS) {
-        let named = issue_mentions(&skip.reason);
-        assert!(
-            skip.reason.contains(&format!("{ISSUE_MARKER}{expected}")),
-            "{}::{} must cite `{ISSUE_MARKER}{expected}` — the issue that says why it does not \
-             run and what would let it run again. It cites {named:?}. Reason: {}",
-            skip.file,
-            skip.test,
-            skip.reason
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn every_skip_names_a_plan_that_exists_and_covers_its_issue() -> Result<()> {
+fn every_skip_in_the_tree_satisfies_the_stated_policy() -> Result<()> {
+    let context = policy_context()?;
     for (skip, (_, _, issue)) in ignored_tests()?.iter().zip(CURATED_SKIPS) {
-        let plans = plan_paths(&skip.reason);
+        let breached = breaches(skip, issue, &context);
         assert!(
-            !plans.is_empty(),
-            "{}::{} names no `{PLAN_PREFIX}*{MARKDOWN_SUFFIX}`. A skip without a plan is a \
-             feature abandoned in place. Reason: {}",
+            breached.is_empty(),
+            "{}::{} breaches [TEST-SELECTION-SKIP]:\n{}\nReason: {}",
             skip.file,
             skip.test,
-            skip.reason
-        );
-        assert_plans_cover(&skip.file, &skip.test, &plans, issue)?;
-    }
-    Ok(())
-}
-
-/// Every plan a skip names must exist, and at least one must discuss the
-/// issue the skip hangs on — otherwise the citation is decorative.
-fn assert_plans_cover(file: &str, test: &str, plans: &[String], issue: u32) -> Result<()> {
-    let mut covering = 0_usize;
-    for plan in plans {
-        let body = read(plan)
-            .with_context(|| format!("{file}::{test} cites {plan}, which is not in the tree"))?;
-        covering += usize::from(issue_mentions(&body).contains(&issue));
-    }
-    assert!(
-        covering > 0,
-        "{file}::{test} cites {plans:?}, and not one of them mentions \
-         `{ISSUE_MARKER}{issue}`. The plan has to say how the skip ends."
-    );
-    Ok(())
-}
-
-#[test]
-fn every_skip_cross_references_a_spec_id_that_a_specification_declares() -> Result<()> {
-    let declared = declared_spec_ids()?;
-    for skip in ignored_tests()? {
-        assert_cites_declared_spec_id(&skip, &declared);
-    }
-    Ok(())
-}
-
-/// A skip names at least one spec id besides its own category tag, and every
-/// id it names is one a specification actually declares.
-fn assert_cites_declared_spec_id(skip: &IgnoredTest, declared: &BTreeSet<String>) {
-    let cited: Vec<String> = bracketed_ids(&skip.reason)
-        .into_iter()
-        .filter(|id| !CATEGORIES.contains(&format!("[{id}]").as_str()))
-        .collect();
-    assert!(
-        !cited.is_empty(),
-        "{}::{} cites no spec id, so nothing connects the skipped behaviour to the specification \
-         it is supposed to satisfy. Reason: {}",
-        skip.file,
-        skip.test,
-        skip.reason
-    );
-    let unknown: Vec<&String> = cited.iter().filter(|id| !declared.contains(*id)).collect();
-    assert!(
-        unknown.is_empty(),
-        "{}::{} cites {unknown:?}, which no file under {SPEC_DIRECTORY} declares",
-        skip.file,
-        skip.test
-    );
-}
-
-#[test]
-fn every_skip_tells_the_reader_how_to_run_it_anyway() -> Result<()> {
-    for skip in ignored_tests()? {
-        assert!(
-            skip.reason.contains(RUN_INSTRUCTION),
-            "{}::{} must say how to run it — `{RUN_INSTRUCTION}` — so the assertions stay \
-             reachable to whoever picks the issue up. Reason: {}",
-            skip.file,
-            skip.test,
+            explain(&breached),
             skip.reason
         );
     }
     Ok(())
 }
 
+/// The breaches as a bulleted list, so one run names every missing part.
+fn explain(breached: &[Breach]) -> String {
+    breached
+        .iter()
+        .map(|breach| format!("  - {}", breach.explain()))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 #[test]
-fn the_categories_this_gate_enforces_are_the_ones_the_specification_defines() -> Result<()> {
+fn the_policy_this_gate_enforces_is_the_one_the_specification_writes_down() -> Result<()> {
     let spec = read(POLICY_SPEC)?;
-    for category in CATEGORIES {
-        assert!(
-            spec.contains(category),
-            "{POLICY_SPEC} does not define {category}. Code, specs and tests must agree: this \
-             gate would be rejecting skips on a rule nobody wrote down."
-        );
-    }
     let ids = bracketed_ids(&spec);
     for category in CATEGORIES {
         let bare = category.trim_start_matches('[').trim_end_matches(']');
         assert!(
             ids.iter().any(|id| id == bare),
-            "{POLICY_SPEC} mentions {category} only in prose, not as a declared id"
+            "{POLICY_SPEC} does not declare {category}. Code, specs and tests must agree: this \
+             gate would be rejecting skips on a rule nobody wrote down."
         );
     }
     Ok(())

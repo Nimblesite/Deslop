@@ -332,32 +332,63 @@ fn explained_substitution_bytes<'src, S: BuildHasher>(
     out
 }
 
-/// True when replacing every occurrence of `from` in `left` with `to`
-/// yields exactly `right`, with at least one occurrence replaced. Pure
-/// byte-content equality under one substitution — no pattern language,
-/// no tokenisation; the leaves being compared were already isolated by
-/// the AST.
+/// True when replacing the *symbol-boundary* occurrences of `from` in
+/// `left` with `to` yields exactly `right`, with at least one occurrence
+/// replaced. Pure byte-content equality under one substitution — no
+/// pattern language, no tokenisation; the leaves being compared were
+/// already isolated by the AST.
+///
+/// Replacing every raw byte occurrence instead accepted arbitrary data
+/// as rename proof: under an elected `a -> x` substitution, the literal
+/// `"banana"` transforms into `"bxnxnx"`, so a string whose payload
+/// merely *contains* the substituted bytes corroborated the rename it
+/// contradicts. Repeated across enough identifier positions that cleared
+/// [`CONTENT_SUPPORT_FLOOR`], it certified `rename_consistency = 1.0`
+/// for code whose literal data had changed. An echo is a *symbol* echo:
+/// the bytes have to occupy a place a symbol reference could occupy —
+/// `"OrderService"`, a name inside a path or a message — never the
+/// inside of a longer word ([REPAIR-RENAME-LITERAL-ECHO], gh #409).
 fn replaced_matches(left: &[u8], from: &[u8], to: &[u8], right: &[u8]) -> bool {
     let mut expected: Vec<u8> = Vec::with_capacity(right.len());
-    let mut rest = left;
+    let mut cursor = 0_usize;
     let mut replaced = false;
-    while let Some(offset) = find_bytes(rest, from) {
-        let Some((head, tail)) = split_around(rest, offset, from.len()) else {
+    while let Some(start) = next_occurrence(left, from, cursor) {
+        let Some(head) = left.get(cursor..start) else {
             break;
         };
         expected.extend_from_slice(head);
-        expected.extend_from_slice(to);
-        rest = tail;
-        replaced = true;
+        let boundary = at_symbol_boundary(left, start, from.len());
+        expected.extend_from_slice(if boundary { to } else { from });
+        replaced = replaced || boundary;
+        cursor = start.saturating_add(from.len());
     }
-    expected.extend_from_slice(rest);
+    expected.extend_from_slice(left.get(cursor..).unwrap_or_default());
     replaced && expected == right
 }
 
-/// The bytes before `start` and after `start + len`, `None` only if the
-/// window overruns the slice.
-fn split_around(bytes: &[u8], start: usize, len: usize) -> Option<(&[u8], &[u8])> {
-    Some((bytes.get(..start)?, bytes.get(start.saturating_add(len)..)?))
+/// First offset at or after `from_index` where `needle` occurs in
+/// `haystack`, `None` when there is none left.
+fn next_occurrence(haystack: &[u8], needle: &[u8], from_index: usize) -> Option<usize> {
+    let offset = find_bytes(haystack.get(from_index..)?, needle)?;
+    Some(from_index.saturating_add(offset))
+}
+
+/// True when the window `[start, start + len)` is delimited on both
+/// sides by a byte that cannot continue an identifier — the only place
+/// inside a literal payload where a symbol *reference* can sit. The
+/// quote characters that bound a string leaf count as delimiters, so a
+/// literal that is exactly the renamed symbol still echoes it.
+fn at_symbol_boundary(bytes: &[u8], start: usize, len: usize) -> bool {
+    let before = start.checked_sub(1).and_then(|index| bytes.get(index));
+    let after = bytes.get(start.saturating_add(len));
+    !before.is_some_and(|byte| is_word_byte(*byte)) && !after.is_some_and(|byte| is_word_byte(*byte))
+}
+
+/// True for a byte that continues an identifier-like word: ASCII
+/// alphanumerics and `_`, plus every non-ASCII byte, since a UTF-8 word
+/// continues through its lead and continuation bytes.
+fn is_word_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_' || !byte.is_ascii()
 }
 
 /// First byte offset of `needle` in `haystack`, `None` when absent or

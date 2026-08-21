@@ -9,69 +9,130 @@
 use tree_sitter::Node;
 
 use super::{
-    body_shape::body_kind_stream, enclosing_kind, function_kinds, parse_for, spans_multiple_files,
-    Snippet,
+    body_shape::{body_kind_stream, ShapeToken},
+    enclosing_kind, function_kinds, parse_for, spans_multiple_files, Snippet,
 };
 use crate::ast::ByteRange;
 
+/// Node kinds that declare a type whose members can be forced to a
+/// shared signature.
+const CONTAINER_KINDS: &[&str] = &[
+    "class_definition",
+    "class_declaration",
+    "struct_declaration",
+    "record_declaration",
+    "interface_declaration",
+    "impl_item",
+];
+
+/// Fields of a [`CONTAINER_KINDS`] node naming what it derives from:
+/// Python's `superclasses`, Dart's `superclass`/`interfaces`, C#'s
+/// `bases`, Rust's `trait`.
+const CONTRACT_FIELDS: &[&str] = &[
+    "superclasses",
+    "superclass",
+    "bases",
+    "interfaces",
+    "trait",
+];
+
+/// Named children that carry a declared base where the grammar exposes
+/// no field for it.
+const CONTRACT_KINDS: &[&str] = &[
+    "base_list",
+    "class_heritage",
+    "superclass",
+    "interfaces",
+    "mixins",
+    "extends_clause",
+    "implements_clause",
+];
+
+/// What one cluster member contributes to the polymorphic decision.
+struct Subject<'src> {
+    /// The subject function's declared name.
+    name: &'src [u8],
+    /// Whether the subject is declared inside a type that names a
+    /// contract — the positive evidence that the signature is forced.
+    under_contract: bool,
+    /// The subject body's shape, carrying collaborator identity.
+    shape: Vec<ShapeToken<'src>>,
+}
+
 /// Detects the polymorphic-signature pattern: every cluster member
 /// resolves to a function definition ([`polymorphic_subject`]) with one
-/// shared declared name, the members span at least two distinct files,
-/// and the bodies differ as normalised trees — so a genuine copy-pasted
-/// helper that happens to share a name (e.g. a private `_helper` reused
-/// in two modules), byte-identical or consistently renamed, still fires
-/// as a cluster (gh #373).
+/// shared declared name, every one of them is declared under a contract
+/// its signature must match, the members span at least two distinct
+/// files, and the bodies differ ([`body_kind_stream`]).
+///
+/// The contract requirement is the positive evidence the pattern is
+/// named for. Without it every same-named cross-file function was
+/// treated as polymorphic on the strength of a body difference, so a
+/// copy-pasted helper renamed past the shared collaborators would be
+/// deleted from the report the moment it shared its name (gh #373,
+/// `polymorphic_gate_hides_rename_clone.rs`). A free function is never
+/// an interface implementation; nothing forces its signature.
 pub(super) fn is_polymorphic_signature_cluster(snippets: &[Snippet<'_>]) -> bool {
-    let names: Option<Vec<&[u8]>> = snippets.iter().map(subject_name).collect();
-    let Some(names) = names else { return false };
-    let Some(first_name) = names.first() else {
+    let subjects: Option<Vec<Subject<'_>>> = snippets.iter().map(subject_of).collect();
+    let Some(subjects) = subjects else {
         return false;
     };
-    if !names.iter().all(|name| name == first_name) {
+    let Some(first) = subjects.first() else {
+        return false;
+    };
+    if !subjects
+        .iter()
+        .all(|subject| subject.name == first.name && subject.under_contract)
+    {
         return false;
     }
     if !spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id)) {
         return false;
     }
-    subject_bodies_differ(snippets)
+    subjects.iter().any(|subject| subject.shape != first.shape)
 }
 
-/// Returns true when at least two members' subject-function bodies
-/// differ as normalised trees — the shared
-/// [`body_kind_stream`] the signature-only filter also compares with —
-/// distinguishing polymorphism (different implementations of one
-/// signature) from genuinely duplicated helper functions that share a
-/// name. Identifier and literal text never enters the stream, so a
-/// consistently renamed copy is the *same* implementation, not a
-/// different one: deciding this on raw source bytes classified every
-/// Type-2 rename as polymorphism and deleted the finding (gh #373,
-/// `polymorphic_gate_hides_rename_clone.rs`).
-fn subject_bodies_differ(snippets: &[Snippet<'_>]) -> bool {
-    let streams: Option<Vec<Vec<i32>>> = snippets
-        .iter()
-        .map(|snippet| {
-            let tree = parse_for(snippet)?;
-            let function = polymorphic_subject(tree.root_node(), snippet)?;
-            let body = function.child_by_field_name("body")?;
-            Some(body_kind_stream(body))
-        })
-        .collect();
-    let Some(streams) = streams else { return false };
-    let Some(first) = streams.first() else {
-        return false;
-    };
-    streams.iter().any(|stream| stream != first)
-}
-
-/// Returns the declared name of the member's subject function, when one
-/// resolves.
-fn subject_name<'a>(snippet: &'a Snippet<'_>) -> Option<&'a [u8]> {
+/// Resolves one member's subject function and everything the decision
+/// reads from it, in a single parse.
+fn subject_of<'src>(snippet: &Snippet<'src>) -> Option<Subject<'src>> {
     let tree = parse_for(snippet)?;
     let function = polymorphic_subject(tree.root_node(), snippet)?;
     let name_node = function_name_node(function)?;
-    snippet
-        .source
-        .get(name_node.start_byte()..name_node.end_byte())
+    Some(Subject {
+        name: snippet.source.get(name_node.byte_range())?,
+        under_contract: under_declared_contract(function),
+        shape: body_kind_stream(function.child_by_field_name("body")?, snippet.source),
+    })
+}
+
+/// True when `function` is declared inside a type that names a base,
+/// interface or trait — an `ABC` subclass's override, a C# interface
+/// implementation, a Rust `impl Trait for T` method. That declaration
+/// is what forces the signature the cluster matched on.
+fn under_declared_contract(function: Node<'_>) -> bool {
+    let mut container = function.parent();
+    while let Some(node) = container {
+        if CONTAINER_KINDS.contains(&node.kind()) && declares_contract(node) {
+            return true;
+        }
+        container = node.parent();
+    }
+    false
+}
+
+/// True when a type declaration carries a non-empty base list, under
+/// whichever field or child kind its grammar exposes it as. An empty
+/// `class X():` names no contract.
+fn declares_contract(container: Node<'_>) -> bool {
+    let field_base = CONTRACT_FIELDS
+        .iter()
+        .filter_map(|field| container.child_by_field_name(field))
+        .any(|base| base.named_child_count() > 0 || base.kind() != "argument_list");
+    let mut cursor = container.walk();
+    field_base
+        || container
+            .named_children(&mut cursor)
+            .any(|child| CONTRACT_KINDS.contains(&child.kind()))
 }
 
 /// The one function a member view is *about*: the innermost function

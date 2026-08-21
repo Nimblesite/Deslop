@@ -185,7 +185,7 @@ fn a_changed_files_analysed_fails_determinism() {
 
 #[test]
 fn reordering_the_same_clusters_fails_determinism() {
-    let reordered = with_clusters(<[Value]>::reverse);
+    let reordered = with_clusters(|clusters| clusters.reverse());
     assert_rejected(&reordered, "clusters[0]");
 }
 

@@ -17,6 +17,7 @@ pub mod corpus_determinism;
 pub mod corpus_precision;
 pub mod corpus_scope;
 pub mod enclosure;
+pub mod skip_contract;
 pub mod skip_policy;
 
 use std::{
