@@ -92,6 +92,8 @@ test("uses a consistent, readable navigation type scale", async ({ page }) => {
 
   await page.goto("/blog/");
   expect(await fontSize(".post-card__more")).toBe(SECONDARY_NAV_FONT_SIZE);
+
+  await page.goto("/releases/");
   expect(await fontSize(".blog-nav-link")).toBe(SECONDARY_NAV_FONT_SIZE);
 });
 

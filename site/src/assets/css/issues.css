@@ -124,16 +124,16 @@
 .legend-line--blocks::after, .legend-line--sub-issue::after { content: ""; position: absolute; top: -0.2rem; right: -0.05rem; border-block: 0.22rem solid transparent; border-left: 0.3rem solid var(--on-surface-variant); }
 
 .priority-board { min-height: 46rem; padding: 1rem; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(18rem, 1fr); gap: 0.75rem; overflow-x: auto; align-items: start; }
-.board-lane { min-height: 40rem; background: var(--surface-container-low); }
+.board-lane { min-width: 0; max-width: 100%; min-height: 40rem; background: var(--surface-container-low); }
 .board-lane__head { min-height: 8.5rem; padding: 1.1rem; display: flex; flex-direction: column; box-shadow: inset 0 3px 0 var(--lane-color); }
 .board-lane__order { color: var(--outline); font: 0.6rem/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.1em; }
 .board-lane h3 { margin: 0.8rem 0 0.4rem; font-size: 1.1rem; }
 .board-lane__head p { color: var(--outline); font-size: 0.78rem; line-height: 1.45; }
-.board-list { padding: 0.6rem; display: grid; gap: 0.55rem; }
-.issue-card { width: 100%; border: 0; padding: 0.9rem; text-align: left; cursor: pointer; background: var(--surface-container); color: var(--on-surface); transition: transform var(--dur), background var(--dur); }
+.board-list { min-width: 0; max-width: 100%; padding: 0.6rem; display: grid; gap: 0.55rem; }
+.issue-card { width: 100%; min-width: 0; max-width: 100%; border: 0; padding: 0.9rem; text-align: left; cursor: pointer; background: var(--surface-container); color: var(--on-surface); transition: transform var(--dur), background var(--dur); }
 .issue-card:hover { transform: translateY(-2px); background: var(--surface-container-high); }
 .issue-card__meta { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.55rem; color: var(--outline); font: 0.62rem/1 var(--font-mono); }
-.issue-card strong { display: block; font-size: 0.84rem; line-height: 1.4; }
+.issue-card strong { display: block; min-width: 0; overflow-wrap: anywhere; font-size: 0.84rem; line-height: 1.4; }
 .card-labels { margin-top: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.3rem; }
 
 .label-chip { display: inline-flex; padding: 0.22rem 0.42rem; border-radius: 999px; background: var(--label-color); color: var(--label-ink); font: 700 0.56rem/1 var(--font-mono); }

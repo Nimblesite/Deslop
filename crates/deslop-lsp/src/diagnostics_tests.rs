@@ -3,11 +3,17 @@ use anyhow::{anyhow, Result};
 use deslop_core::report::ReportSignals;
 use tempfile::TempDir;
 
+const ALPHA_FILE: &str = "Alpha.cs";
+const MAIN_FILE: &str = "Main.cs";
+const A_FILE: &str = "a.cs";
+const IDENTICAL_BUCKET: &str = "identical";
+const HELLO_SOURCE: &str = "hello\n";
+
 // [LSP-SEVERITY-BUCKET] Every bucket, the severity it must publish, and the
 // rationale that mapping pins.
 const BUCKET_SEVERITIES: [(&str, DiagnosticSeverity, &str); 4] = [
     (
-        "identical",
+        IDENTICAL_BUCKET,
         DiagnosticSeverity::ERROR,
         "Identical code → Error (no justification for bit-for-bit duplicates)",
     ),
@@ -98,7 +104,7 @@ fn two_file_cluster() -> ReportCluster {
     sample_cluster(
         "c",
         100.0,
-        vec![occurrence("a.cs", 0, 1), occurrence("b.cs", 0, 1)],
+        vec![occurrence(A_FILE, 0, 1), occurrence("b.cs", 0, 1)],
         "nearly_identical",
     )
 }
@@ -147,7 +153,7 @@ fn assert_single_canonical_link(diagnostic: &Diagnostic, context: &str) -> Resul
 #[test]
 fn severity_for_maps_bucket_to_lsp_level() {
     for (bucket, expected_severity, rationale) in BUCKET_SEVERITIES {
-        let cluster = sample_cluster(bucket, 1.0, vec![occurrence("a.cs", 0, 1)], bucket);
+        let cluster = sample_cluster(bucket, 1.0, vec![occurrence(A_FILE, 0, 1)], bucket);
         assert_eq!(severity_for(&cluster), expected_severity, "{rationale}");
     }
 }
@@ -209,8 +215,8 @@ fn diagnostic_data_stores_cluster_id_for_machine_readers() -> Result<()> {
     let cluster = sample_cluster(
         "abc123",
         10.0,
-        vec![occurrence("Alpha.cs", 0, 5)],
-        "identical",
+        vec![occurrence(ALPHA_FILE, 0, 5)],
+        IDENTICAL_BUCKET,
     );
     assert_eq!(cluster_id_of(Some(&diagnostic_data(&cluster)))?, "abc123");
     Ok(())
@@ -266,7 +272,7 @@ fn diagnostic_message_tracks_each_clusters_own_evidence() {
     let mut anchor_poor = sample_cluster(
         "scaffolding",
         100.0,
-        vec![occurrence("a.cs", 0, 1), occurrence("b.cs", 0, 1)],
+        vec![occurrence(A_FILE, 0, 1), occurrence("b.cs", 0, 1)],
         "structural_only",
     );
     anchor_poor.signals = ReportSignals {
@@ -298,11 +304,11 @@ fn diagnostic_message_tracks_each_clusters_own_evidence() {
 #[test]
 fn build_for_file_emits_error_for_identical_cluster_with_canonical_link() -> Result<()> {
     let workspace = TempDir::new()?;
-    let _primary = write_source(workspace.path(), "Alpha.cs", "alpha\nbeta\ngamma\n")?;
+    let _primary = write_source(workspace.path(), ALPHA_FILE, "alpha\nbeta\ngamma\n")?;
     let _secondary = write_source(workspace.path(), "Beta.cs", "a\nbb\nccc\ndddd\n")?;
-    let occurrences = vec![occurrence("Alpha.cs", 0, 5), occurrence("Beta.cs", 2, 5)];
-    let cluster = sample_cluster("cluster-1", 100.0, occurrences, "identical");
-    let diagnostics = diagnostics_for(cluster, "Alpha.cs", workspace.path());
+    let occurrences = vec![occurrence(ALPHA_FILE, 0, 5), occurrence("Beta.cs", 2, 5)];
+    let cluster = sample_cluster("cluster-1", 100.0, occurrences, IDENTICAL_BUCKET);
+    let diagnostics = diagnostics_for(cluster, ALPHA_FILE, workspace.path());
     assert_eq!(
         diagnostics.len(),
         1,
@@ -372,14 +378,14 @@ fn build_for_file_publishes_all_buckets_with_correct_severity() -> Result<()> {
 #[test]
 fn build_for_file_empty_related_info_becomes_none() -> Result<()> {
     let workspace = TempDir::new()?;
-    let _primary = write_source(workspace.path(), "Alpha.cs", "abcdef\n")?;
+    let _primary = write_source(workspace.path(), ALPHA_FILE, "abcdef\n")?;
     let cluster = sample_cluster(
         "solo",
         100.0,
-        vec![occurrence("Alpha.cs", 0, 3)],
-        "identical",
+        vec![occurrence(ALPHA_FILE, 0, 3)],
+        IDENTICAL_BUCKET,
     );
-    let diagnostics = diagnostics_for(cluster, "Alpha.cs", workspace.path());
+    let diagnostics = diagnostics_for(cluster, ALPHA_FILE, workspace.path());
     assert_eq!(diagnostics.len(), 1);
     let diagnostic = diagnostics
         .first()
@@ -396,14 +402,14 @@ fn many_occurrences_produce_exactly_one_canonical_related_item() -> Result<()> {
     // The diagnostic hover must never dump a full occurrence list.
     // 38 occurrences → still exactly 1 "Canonical" related-info link.
     let workspace = TempDir::new()?;
-    let _primary = write_source(workspace.path(), "Main.cs", "fn a() {}\n")?;
+    let _primary = write_source(workspace.path(), MAIN_FILE, "fn a() {}\n")?;
     let _other = write_source(workspace.path(), "Other.cs", "fn b() {}\n")?;
-    let mut occs = vec![occurrence("Main.cs", 0, 5)];
+    let mut occs = vec![occurrence(MAIN_FILE, 0, 5)];
     for _ in 0..37 {
         occs.push(occurrence("Other.cs", 0, 3));
     }
-    let cluster = sample_cluster("big", 100.0, occs, "identical");
-    let diagnostics = diagnostics_for(cluster, "Main.cs", workspace.path());
+    let cluster = sample_cluster("big", 100.0, occs, IDENTICAL_BUCKET);
+    let diagnostics = diagnostics_for(cluster, MAIN_FILE, workspace.path());
     let diagnostic = diagnostics.first().ok_or_else(|| anyhow!("diagnostic"))?;
     assert_single_canonical_link(diagnostic, "38 occurrences")
 }
@@ -411,10 +417,10 @@ fn many_occurrences_produce_exactly_one_canonical_related_item() -> Result<()> {
 #[test]
 fn load_cached_source_reuses_cache_and_survives_missing_files() -> Result<()> {
     let workspace = TempDir::new()?;
-    let real = write_source(workspace.path(), "Real.cs", "hello\n")?;
+    let real = write_source(workspace.path(), "Real.cs", HELLO_SOURCE)?;
     let mut cache: HashMap<PathBuf, String> = HashMap::new();
     let first = load_cached_source(&real, &mut cache);
-    assert_eq!(first, "hello\n");
+    assert_eq!(first, HELLO_SOURCE);
     assert!(cache.contains_key(&real), "entry cached after first read");
     let missing = workspace.path().join("missing.cs");
     let body = load_cached_source(&missing, &mut cache);
@@ -423,6 +429,6 @@ fn load_cached_source_reuses_cache_and_survives_missing_files() -> Result<()> {
         "missing files fall back to empty string, not panic"
     );
     let second = load_cached_source(&real, &mut cache);
-    assert_eq!(second, "hello\n", "cached read returns same content");
+    assert_eq!(second, HELLO_SOURCE, "cached read returns same content");
     Ok(())
 }

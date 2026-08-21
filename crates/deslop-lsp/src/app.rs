@@ -16,6 +16,11 @@ use deslop_core::{config::ClonePolicy, live::transport::IpcMode};
 
 use crate::backend::LspEmbeddingConfig;
 
+const WORKER_THREADS_FLAG: &str = "--worker-threads";
+const NICE_FLAG: &str = "--nice";
+const IPC_TRANSPORT_FLAG: &str = "--ipc-transport";
+const RANKING_STRUCTURAL_ONLY_FLAG: &str = "--ranking-structural-only";
+
 /// Fully parsed startup configuration for the LSP app layer.
 #[derive(Debug, Clone)]
 pub struct LspStartup {
@@ -184,8 +189,8 @@ fn parse_workspace_root(args: &[String]) -> Result<PathBuf> {
 /// Reads the optional `--worker-threads` value, defaulting to Tokio behavior.
 fn parse_worker_threads(args: &[String]) -> Result<usize> {
     for (index, arg) in args.iter().enumerate() {
-        if arg == "--worker-threads" {
-            return parse_required_usize(args, index, "--worker-threads");
+        if arg == WORKER_THREADS_FLAG {
+            return parse_required_usize(args, index, WORKER_THREADS_FLAG);
         }
     }
     Ok(0)
@@ -194,8 +199,8 @@ fn parse_worker_threads(args: &[String]) -> Result<usize> {
 /// Reads the optional `--nice` value, defaulting to no priority change.
 fn parse_nice(args: &[String]) -> Result<i32> {
     for (index, arg) in args.iter().enumerate() {
-        if arg == "--nice" {
-            let nice = parse_required_i32(args, index, "--nice")?;
+        if arg == NICE_FLAG {
+            let nice = parse_required_i32(args, index, NICE_FLAG)?;
             if !(-20..=19).contains(&nice) {
                 return Err(anyhow!("--nice must be in the range -20..=19"));
             }
@@ -210,8 +215,8 @@ fn parse_nice(args: &[String]) -> Result<i32> {
 /// loopback on Windows).
 fn parse_ipc_mode(args: &[String]) -> Result<IpcMode> {
     for (index, arg) in args.iter().enumerate() {
-        if arg == "--ipc-transport" {
-            return match required_flag_value(args, index, "--ipc-transport")? {
+        if arg == IPC_TRANSPORT_FLAG {
+            return match required_flag_value(args, index, IPC_TRANSPORT_FLAG)? {
                 "unix" => Ok(IpcMode::Unix),
                 "tcp" => Ok(IpcMode::Tcp),
                 other => Err(anyhow!(
@@ -228,8 +233,8 @@ fn parse_ipc_mode(args: &[String]) -> Result<IpcMode> {
 /// `.deslop.toml`.
 fn parse_ranking_structural_only(args: &[String]) -> Result<Option<ClonePolicy>> {
     for (index, arg) in args.iter().enumerate() {
-        if arg == "--ranking-structural-only" {
-            let value = required_flag_value(args, index, "--ranking-structural-only")?;
+        if arg == RANKING_STRUCTURAL_ONLY_FLAG {
+            let value = required_flag_value(args, index, RANKING_STRUCTURAL_ONLY_FLAG)?;
             return value
                 .parse::<ClonePolicy>()
                 .map(Some)
@@ -261,7 +266,10 @@ fn reject_unsupported_startup_flags(args: &[String]) -> Result<()> {
     let mut index = 2;
     while let Some(arg) = args.get(index) {
         match arg.as_str() {
-            "--worker-threads" | "--nice" | "--ipc-transport" | "--ranking-structural-only" => {
+            WORKER_THREADS_FLAG
+            | NICE_FLAG
+            | IPC_TRANSPORT_FLAG
+            | RANKING_STRUCTURAL_ONLY_FLAG => {
                 index = index.saturating_add(2);
             }
             "--debug" | "--stdio" => index = index.saturating_add(1),

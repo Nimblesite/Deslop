@@ -93,6 +93,12 @@ mod tests {
     use deslop_core::report::{ReportOccurrence, ReportSignals};
     use std::path::PathBuf;
 
+    const ALPHA_FILE: &str = "Alpha.cs";
+
+    fn assert_title_contains(title: &str, expected: &str) {
+        assert!(title.contains(expected), "{}", title);
+    }
+
     fn make_cluster(id: &str, size: usize, occurrences: Vec<ReportOccurrence>) -> ReportCluster {
         let signals = ReportSignals {
             structural: 0.87,
@@ -134,14 +140,14 @@ mod tests {
             "cluster-alpha",
             3,
             vec![
-                occurrence("Alpha.cs", 0, 10),
-                occurrence("Alpha.cs", 50, 80),
+                occurrence(ALPHA_FILE, 0, 10),
+                occurrence(ALPHA_FILE, 50, 80),
                 occurrence("Other.cs", 10, 20),
             ],
         );
         let total_occurrences = cluster.occurrences.len();
         let report = FileReport {
-            path: PathBuf::from("Alpha.cs"),
+            path: PathBuf::from(ALPHA_FILE),
             clusters: vec![cluster],
             total_occurrences,
         };
@@ -274,11 +280,11 @@ mod tests {
     fn title_for_formats_all_signals_to_two_decimal_places() {
         let cluster = make_cluster("c", 7, vec![]);
         let title = title_for(&cluster);
-        assert!(title.contains("●● 7 copies"), "{title}");
-        assert!(title.contains("structural 0.87"), "{title}");
-        assert!(title.contains("jaccard 0.72"), "{title}");
-        assert!(title.contains("embedding 0.55"), "{title}");
-        assert!(title.ends_with("jump to next"), "{title}");
+        assert_title_contains(&title, "●● 7 copies");
+        assert_title_contains(&title, "structural 0.87");
+        assert_title_contains(&title, "jaccard 0.72");
+        assert_title_contains(&title, "embedding 0.55");
+        assert!(title.ends_with("jump to next"), "{}", title);
     }
 
     // [FUSION-CONTENT-GATE] #344: structural and jaccard alone cannot tell a
