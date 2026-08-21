@@ -83,6 +83,34 @@ fn member_lists(clusters: &[FusedCluster]) -> Vec<Vec<usize>> {
         .collect()
 }
 
+/// Builds one fingerprint per entry of `(hash, file, start, end)`, so a test
+/// can place two families inside one file at overlapping ranges.
+fn placed_corpus(members: &[(u8, usize, usize, usize)]) -> Vec<Fingerprint> {
+    let mut registry = FileRegistry::new();
+    let files: Vec<FileId> = (0..members.len())
+        .map(|position| registry.register(format!("case{position}.cs").into()))
+        .collect();
+    let fallback = registry.register("unplaced.cs".into());
+    members
+        .iter()
+        .map(|(tag, file, start, end)| {
+            let mut hash = [0_u8; 32];
+            if let Some(first) = hash.first_mut() {
+                *first = *tag;
+            }
+            Fingerprint {
+                hash,
+                file_id: *files.get(*file).unwrap_or(&fallback),
+                byte_range: ByteRange {
+                    start: *start,
+                    end: *end,
+                },
+                node_count: NODE_COUNT,
+            }
+        })
+        .collect()
+}
+
 /// Splits one fully connected component over `hashes`.
 fn split(hashes: &[u8]) -> Vec<FusedCluster> {
     let fingerprints = corpus(hashes);
@@ -191,5 +219,82 @@ fn every_component_in_the_batch_is_considered() {
         vec![vec![0, 1], vec![0, 1], vec![2, 3]],
         "the pass maps over the whole batch and keeps input order, so a \
          component needing no split is neither reordered nor lost"
+    );
+}
+
+// [PIPELINE-CLUSTER-SUBSUME] owns the nesting case, and this pass must not
+// pre-empt it. A copied method and the statement run inside it are two
+// structural families over the *same* bytes; publishing both would show one
+// duplicate as two findings and count its lines twice.
+#[test]
+fn families_covering_the_same_bytes_at_different_depths_are_left_whole() {
+    // Two files, each holding an enclosing view (0..200) and the nested run
+    // inside it (40..120).
+    let fingerprints = placed_corpus(&[
+        (SUM_HASH, 0, 0, 200),
+        (SUM_HASH, 1, 0, 200),
+        (PRODUCT_HASH, 0, 40, 120),
+        (PRODUCT_HASH, 1, 40, 120),
+    ]);
+
+    assert_eq!(
+        member_lists(&split_structural_families(
+            vec![component(4)],
+            &fingerprints
+        )),
+        vec![vec![0, 1, 2, 3]],
+        "the nested run lies inside the enclosing view, so these are one \
+         duplication seen at two depths — subsumption elects between them, \
+         and splitting here would publish both"
+    );
+}
+
+#[test]
+fn families_in_one_file_that_do_not_touch_are_still_split() {
+    // One file per family pair, ranges that share no byte.
+    let fingerprints = placed_corpus(&[
+        (SUM_HASH, 0, 0, 100),
+        (SUM_HASH, 1, 0, 100),
+        (PRODUCT_HASH, 0, 200, 300),
+        (PRODUCT_HASH, 1, 200, 300),
+    ]);
+
+    assert_eq!(
+        member_lists(&split_structural_families(
+            vec![component(4)],
+            &fingerprints
+        )),
+        vec![vec![0, 1], vec![2, 3]],
+        "sharing a file is not sharing bytes; two disjoint runs welded by a \
+         token edge are still two clusters"
+    );
+}
+
+// `csharp-mcp` in full: two two-file clones that share no byte, plus a
+// shallow shape duplicated across all four files that encloses each of them
+// in half the corpus. The bridge covers code neither clone reaches, so it is
+// a view of neither and must not glue them together.
+#[test]
+fn a_bridge_family_enclosing_two_disjoint_clones_does_not_merge_them() {
+    let fingerprints = placed_corpus(&[
+        (SUM_HASH, 0, 0, 200),
+        (SUM_HASH, 1, 0, 200),
+        (PRODUCT_HASH, 2, 0, 200),
+        (PRODUCT_HASH, 3, 0, 200),
+        (QUOTIENT_HASH, 0, 50, 100),
+        (QUOTIENT_HASH, 1, 50, 100),
+        (QUOTIENT_HASH, 2, 50, 100),
+        (QUOTIENT_HASH, 3, 50, 100),
+    ]);
+
+    assert_eq!(
+        member_lists(&split_structural_families(
+            vec![component(8)],
+            &fingerprints
+        )),
+        vec![vec![0, 1], vec![2, 3], vec![4, 5, 6, 7]],
+        "one-way enclosure is not a nesting: the summing clone, the \
+         multiplying clone and the four-file shape are three findings, and \
+         reporting their union reports none of them"
     );
 }
