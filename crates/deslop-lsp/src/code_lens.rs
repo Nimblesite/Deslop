@@ -94,6 +94,8 @@ mod tests {
     use std::path::PathBuf;
 
     const ALPHA_FILE: &str = "Alpha.cs";
+    const PAIR_SIZE: usize = 2;
+    const PERFECT_SIGNAL: f64 = 1.0;
 
     fn assert_title_contains(title: &str, expected: &str) {
         assert!(title.contains(expected), "{}", title);
@@ -154,7 +156,7 @@ mod tests {
         let lenses = build_for_file(&report);
         assert_eq!(
             lenses.len(),
-            2,
+            PAIR_SIZE,
             "two matching occurrences → two lenses: {lenses:?}"
         );
         for (expected_index, lens) in lenses.iter().enumerate() {
@@ -170,7 +172,7 @@ mod tests {
                 .arguments
                 .as_ref()
                 .ok_or_else(|| anyhow!("command arguments populated"))?;
-            assert_eq!(arguments.len(), 2, "cluster id + occurrence index");
+            assert_eq!(arguments.len(), PAIR_SIZE, "cluster id + occurrence index");
             let first_arg = arguments.first().ok_or_else(|| anyhow!("first argument"))?;
             let second_arg = arguments.get(1).ok_or_else(|| anyhow!("second argument"))?;
             assert_eq!(*first_arg, serde_json::json!("cluster-alpha"));
@@ -239,7 +241,7 @@ mod tests {
 
     #[test]
     fn build_for_file_with_no_matching_cluster_returns_empty_vec() {
-        let cluster = make_cluster("c", 2, vec![occurrence("Other.cs", 0, 5)]);
+        let cluster = make_cluster("c", PAIR_SIZE, vec![occurrence("Other.cs", 0, 5)]);
         let total_occurrences = cluster.occurrences.len();
         let report = FileReport {
             path: PathBuf::from("Alpha.cs"),
@@ -321,9 +323,9 @@ mod tests {
     fn title_for_tracks_each_clusters_own_evidence() {
         let mut anchor_poor = make_cluster("scaffolding", 4, vec![]);
         anchor_poor.signals = ReportSignals {
-            structural: 1.0,
-            token_jaccard: 1.0,
-            shape: 1.0,
+            structural: PERFECT_SIGNAL,
+            token_jaccard: PERFECT_SIGNAL,
+            shape: PERFECT_SIGNAL,
             embedding_cos: 0.99,
             fused: 0.42,
             agreement: 0.07,

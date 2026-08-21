@@ -266,10 +266,7 @@ fn reject_unsupported_startup_flags(args: &[String]) -> Result<()> {
     let mut index = 2;
     while let Some(arg) = args.get(index) {
         match arg.as_str() {
-            WORKER_THREADS_FLAG
-            | NICE_FLAG
-            | IPC_TRANSPORT_FLAG
-            | RANKING_STRUCTURAL_ONLY_FLAG => {
+            WORKER_THREADS_FLAG | NICE_FLAG | IPC_TRANSPORT_FLAG | RANKING_STRUCTURAL_ONLY_FLAG => {
                 index = index.saturating_add(2);
             }
             "--debug" | "--stdio" => index = index.saturating_add(1),

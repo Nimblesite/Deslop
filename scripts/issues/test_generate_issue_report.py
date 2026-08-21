@@ -54,6 +54,14 @@ class IssueReportTests(unittest.TestCase):
         self.assertIn("GITHUB_TOKEN: ${{ github.token }}", workflow)
         self.assertIn("run: npm run build", workflow)
 
+    def test_site_ci_enforces_issue_report_browser_contract(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        site_job = workflow.split("\n  site:", 1)[1].split("\n  security:", 1)[0]
+
+        self.assertIn("npx playwright install --with-deps chromium", site_job)
+        self.assertIn("run: npm test -- --workers=1", site_job)
+
     @patch("scripts.issues.generate_issue_report.gh_json")
     def test_rest_dependency_summary_fetches_native_open_edges(self, mock_gh_json: MagicMock) -> None:
         item = issue(20, "Dependent work")

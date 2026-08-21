@@ -23,6 +23,7 @@ import {
 } from "./bubble.helpers";
 
 const DISMISSIBLE_CLUSTER_ID = "c-dismiss";
+const SHORT_SPAN_LENGTH = 6;
 
 suite("LiveBubble render", () => {
   test("inline mode renders the bubble decoration", async () => {
@@ -67,7 +68,7 @@ suite("LiveBubble render", () => {
         structural: 0.3,
         token: 0.4,
       });
-      bubble.render(capture.editor, span(6), [weakHint]);
+      bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [weakHint]);
       assert.equal(
         capture.visible(),
         undefined,
@@ -147,7 +148,7 @@ suite("LiveBubble render", () => {
       // Switching mode mid-session must move the same cluster to the
       // other surface rather than leaving both painted.
       await setMode("inline");
-      bubble.render(capture.editor, span(6), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
+      bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
       const inline = capture.visible() ?? "";
       assert.doesNotMatch(inline, /└─/, "inline mode drops the ghost prefix");
       assert.match(inline, /Identical code/, "the bucket title survives the mode switch");
@@ -196,7 +197,7 @@ suite("LiveBubble render", () => {
         structural: 0.4,
         token: 0.5,
       });
-      bubble.render(capture.editor, span(6), [belowCutoff]);
+      bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [belowCutoff]);
       assert.ok(0.5 < ENGINE_FUSED_CUTOFF, "fixture must sit below the cutoff to prove anything");
       assert.equal(
         capture.visible(),
@@ -258,7 +259,7 @@ suite("LiveBubble render", () => {
       retractCluster(store, PRIMARY_BUBBLE_CLUSTER_ID);
       assert.equal(capture.visible(), undefined, "the delta must clear the bubble");
 
-      bubble.render(capture.editor, span(6), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
+      bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
       assert.equal(
         capture.visible(),
         undefined,
@@ -309,7 +310,7 @@ suite("LiveBubble render", () => {
       bubble.dismissCluster(DISMISSIBLE_CLUSTER_ID);
       // The dismissedClusters filter drops it before the sort step, so
       // even at unchanged confidence it must not come back.
-      bubble.render(capture.editor, span(6), [cluster(DISMISSIBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
+      bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [cluster(DISMISSIBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
       assert.equal(
         capture.visible(),
         undefined,
@@ -337,7 +338,7 @@ suite("LiveBubble render", () => {
       );
 
       // Plain dismiss is not sticky — it clears, it does not blacklist.
-      renderFullConfidenceBubble(capture, bubble, 6, "c-clear");
+      renderFullConfidenceBubble(capture, bubble, SHORT_SPAN_LENGTH, "c-clear");
     } finally {
       bubble.dispose();
     }

@@ -96,6 +96,23 @@ const NEARLY_IDENTICAL_BUCKET: &str = "nearly_identical";
 const UNREACHABLE_OLLAMA_ENDPOINT: &str = "http://127.0.0.1:1";
 const SCHEMA_DOC_TOOL: &str = "schema-doc";
 const PARAMS_FIELD: &str = "params";
+const PROCESS_TIMEOUT_SECS: u64 = 30;
+const SHUTDOWN_TIMEOUT_SECS: u64 = 5;
+const POLL_INTERVAL_MILLIS: u64 = 50;
+const QUERY_PAGE_LIMIT: u64 = 50;
+const BROAD_RESULT_LIMIT: u64 = 100;
+const OUT_OF_RANGE_OFFSET_INCREMENT: u64 = 100;
+const DEFAULT_MIN_NODES: u64 = 30;
+const FIXTURE_MIN_NODES: u32 = 15;
+const DEFAULT_MAX_OCCURRENCES: u64 = 15;
+const DEFAULT_TOP_OFFENDERS_COUNT: usize = 5;
+const REQUESTED_TOP_OFFENDERS_COUNT: usize = 3;
+const SMALL_PAGE_LIMIT: u64 = 5;
+const STANDARD_PAGE_LIMIT: u64 = 10;
+const MIN_SIZE_FILTER: u64 = 10;
+const SCHEMA_TEST_PAGE_LIMIT: u64 = 2;
+const PAIR_WINDOW_SIZE: usize = 2;
+const ZERO_SCORE: f64 = 0.0;
 
 fn mcp_binary_path() -> &'static str {
     env!("CARGO_BIN_EXE_deslop-mcp")
@@ -252,7 +269,7 @@ impl McpChild {
         } = self;
         drop(stdin);
         child
-            .wait_timeout(Duration::from_secs(30))
+            .wait_timeout(Duration::from_secs(PROCESS_TIMEOUT_SECS))
             .ok()
             .flatten()
             .unwrap_or_else(|| {
@@ -327,11 +344,11 @@ fn read_lsp_frame(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
 fn wait_for_socket(root: &Path) -> Result<()> {
     let socket = root.join(".deslop/cache").join("deslop.sock");
     let started = std::time::Instant::now();
-    while started.elapsed() < Duration::from_secs(30) {
+    while started.elapsed() < Duration::from_secs(PROCESS_TIMEOUT_SECS) {
         if socket.exists() {
             return Ok(());
         }
-        std::thread::sleep(Duration::from_millis(50));
+        std::thread::sleep(Duration::from_millis(POLL_INTERVAL_MILLIS));
     }
     Err(anyhow!(
         "companion LSP did not bind {} within 30s",
@@ -359,7 +376,7 @@ fn poll_total_clusters_below(
 ) -> Result<Value> {
     let started = std::time::Instant::now();
     let mut latest = Value::Null;
-    while started.elapsed() < Duration::from_secs(30) {
+    while started.elapsed() < Duration::from_secs(PROCESS_TIMEOUT_SECS) {
         latest = structured_tool_result(&call_tool(child, tool, args)?)?;
         if value_get(&latest, TOTAL_CLUSTERS_POINTER)?
             .as_u64()
@@ -368,7 +385,7 @@ fn poll_total_clusters_below(
         {
             return Ok(latest);
         }
-        std::thread::sleep(Duration::from_millis(50));
+        std::thread::sleep(Duration::from_millis(POLL_INTERVAL_MILLIS));
     }
     Ok(latest)
 }
@@ -390,7 +407,7 @@ impl WaitTimeout for Child {
             if let Some(status) = self.try_wait()? {
                 return Ok(Some(status));
             }
-            std::thread::sleep(Duration::from_millis(50));
+            std::thread::sleep(Duration::from_millis(POLL_INTERVAL_MILLIS));
         }
         Ok(None)
     }
@@ -479,7 +496,7 @@ fn two_file_workspace_with_state() -> Result<(TempDir, McpChild)> {
         temp.path().join(SECOND_FILE_NAME),
         include_str!("fixtures/csharp-mcp/Beta.cs"),
     )?;
-    generate_state_file(temp.path(), 15)?;
+    generate_state_file(temp.path(), FIXTURE_MIN_NODES)?;
     let mut child = McpChild::spawn(temp.path(), &[])?;
     let _ = init_session(&mut child)?;
     Ok((temp, child))
@@ -493,7 +510,7 @@ fn mutate_two_and_notify(child: &mut McpChild, temp: &Path) -> Result<()> {
         temp.join(SECOND_FILE_NAME),
         "namespace Solo { class Only { public int Go() => 1; } }\n",
     )?;
-    generate_state_file(temp, 15)?;
+    generate_state_file(temp, FIXTURE_MIN_NODES)?;
     child.notify(
         "notifications/deslop/filesChanged",
         &json!({ (PATHS_FIELD): [temp.join(SECOND_FILE_NAME).to_string_lossy().into_owned()] }),
@@ -681,10 +698,10 @@ fn exits_within_five_seconds_after_stdio_stdin_closes() -> Result<()> {
         "resources capability missing: {response}"
     );
     let started = std::time::Instant::now();
-    let status = child.close_stdin_and_wait(Duration::from_secs(5))?;
+    let status = child.close_stdin_and_wait(Duration::from_secs(SHUTDOWN_TIMEOUT_SECS))?;
     assert!(status.success(), "stdin EOF should exit cleanly: {status}");
     assert!(
-        started.elapsed() < Duration::from_secs(5),
+        started.elapsed() < Duration::from_secs(SHUTDOWN_TIMEOUT_SECS),
         "stdin EOF must stop deslop-mcp within five seconds"
     );
     Ok(())
@@ -724,7 +741,7 @@ fn exits_when_launching_parent_disappears_with_stdio_open() -> Result<()> {
         pid_exists(mcp_pid)?,
         "mcp must still be observable after parent kill"
     );
-    let exited = wait_for_pid_exit(mcp_pid, Duration::from_secs(5))?;
+    let exited = wait_for_pid_exit(mcp_pid, Duration::from_secs(SHUTDOWN_TIMEOUT_SECS))?;
     if !exited {
         terminate_pid(mcp_pid)?;
     }
@@ -793,14 +810,17 @@ fn tools_list_returns_all_tools_with_schemas() -> Result<()> {
 
 #[test]
 fn top_offenders_returns_full_clusters_with_occurrences_and_interpretation() -> Result<()> {
-    let (child, payload) = init_and_tool_payload(TOP_OFFENDERS_TOOL, &json!({ "n": 3 }))?;
+    let (child, payload) = init_and_tool_payload(
+        TOP_OFFENDERS_TOOL,
+        &json!({ "n": REQUESTED_TOP_OFFENDERS_COUNT }),
+    )?;
     let total = value_get(&payload, TOTAL_CLUSTERS_POINTER)?
         .as_u64()
         .ok_or_else(|| anyhow!("total_clusters must be present"))?;
     assert!(total >= 1, "fixture must have at least one cluster");
     assert_eq!(
         value_get(&payload, COUNT_POINTER)?.as_u64(),
-        Some(3),
+        Some(REQUESTED_TOP_OFFENDERS_COUNT as u64),
         "n must echo the requested value"
     );
     let clusters = value_get(&payload, CLUSTERS_POINTER)?;
@@ -808,7 +828,7 @@ fn top_offenders_returns_full_clusters_with_occurrences_and_interpretation() -> 
         .as_array()
         .ok_or_else(|| anyhow!(CLUSTERS_ARRAY_ERROR))?;
     assert!(
-        clusters_arr.len() <= 3,
+        clusters_arr.len() <= REQUESTED_TOP_OFFENDERS_COUNT,
         "returned {} clusters but requested max 3",
         clusters_arr.len()
     );
@@ -837,7 +857,7 @@ fn top_offenders_returns_full_clusters_with_occurrences_and_interpretation() -> 
         first
             .get("weight")
             .and_then(Value::as_f64)
-            .is_some_and(|w| w > 0.0),
+            .is_some_and(|w| w > ZERO_SCORE),
         "top-offenders must return positive weight: {first}"
     );
     let _ = child.finish();
@@ -849,7 +869,7 @@ fn top_offenders_defaults_to_five_and_clusters_are_worst_first() -> Result<()> {
     let (child, payload) = init_and_tool_payload(TOP_OFFENDERS_TOOL, &json!({}))?;
     assert_eq!(
         value_get(&payload, COUNT_POINTER)?.as_u64(),
-        Some(5),
+        Some(DEFAULT_TOP_OFFENDERS_COUNT as u64),
         "omitting n must default to 5"
     );
     let clusters = value_get(&payload, CLUSTERS_POINTER)?;
@@ -857,7 +877,7 @@ fn top_offenders_defaults_to_five_and_clusters_are_worst_first() -> Result<()> {
         .as_array()
         .ok_or_else(|| anyhow!(CLUSTERS_ARRAY_ERROR))?;
     assert!(
-        clusters_arr.len() <= 5,
+        clusters_arr.len() <= DEFAULT_TOP_OFFENDERS_COUNT,
         "default n=5 must not return more than 5 clusters"
     );
     let weights: Vec<f64> = clusters_arr
@@ -869,7 +889,9 @@ fn top_offenders_defaults_to_five_and_clusters_are_worst_first() -> Result<()> {
         clusters_arr.len(),
         "every cluster must have a weight"
     );
-    let sorted = weights.windows(2).all(|w| matches!(w, [a, b] if a >= b));
+    let sorted = weights
+        .windows(PAIR_WINDOW_SIZE)
+        .all(|w| matches!(w, [a, b] if a >= b));
     assert!(
         sorted,
         "clusters must be worst-first by weight: {weights:?}"
@@ -889,7 +911,11 @@ fn issue_136_top_offenders_max_occurrences_caps_response_and_reports_total() -> 
     // occurrence list of any one cluster.
     let mut child = spawn_and_init()?;
 
-    let baseline = call_tool(&mut child, TOP_OFFENDERS_TOOL, &json!({ "n": 5 }))?;
+    let baseline = call_tool(
+        &mut child,
+        TOP_OFFENDERS_TOOL,
+        &json!({ "n": DEFAULT_TOP_OFFENDERS_COUNT }),
+    )?;
     let baseline_payload = structured_tool_result(&baseline)?;
     let baseline_total = value_get(&baseline_payload, "/total_occurrences")?
         .as_u64()
@@ -908,7 +934,7 @@ fn issue_136_top_offenders_max_occurrences_caps_response_and_reports_total() -> 
     let result = call_tool(
         &mut child,
         TOP_OFFENDERS_TOOL,
-        &json!({ "n": 5, "max_occurrences": budget }),
+        &json!({ "n": DEFAULT_TOP_OFFENDERS_COUNT, "max_occurrences": budget }),
     )?;
     let payload = structured_tool_result(&result)?;
     assert_eq!(
@@ -967,7 +993,7 @@ fn issue_136_top_offenders_default_max_occurrences_is_fifteen() -> Result<()> {
     let (child, payload) = init_and_tool_payload(TOP_OFFENDERS_TOOL, &json!({}))?;
     assert_eq!(
         value_get(&payload, "/max_occurrences")?.as_u64(),
-        Some(15),
+        Some(DEFAULT_MAX_OCCURRENCES),
         "omitting max_occurrences must default to 15 ([MCP-OCCURRENCE-BUDGET])"
     );
     let _ = child.finish();
@@ -977,7 +1003,10 @@ fn issue_136_top_offenders_default_max_occurrences_is_fifteen() -> Result<()> {
 #[test]
 fn issue_134_top_offenders_does_not_label_structural_only_matches_as_nearly_identical() -> Result<()>
 {
-    let (child, payload) = init_and_tool_payload(TOP_OFFENDERS_TOOL, &json!({ "n": 5 }))?;
+    let (child, payload) = init_and_tool_payload(
+        TOP_OFFENDERS_TOOL,
+        &json!({ "n": DEFAULT_TOP_OFFENDERS_COUNT }),
+    )?;
     let clusters = value_get(&payload, CLUSTERS_POINTER)?;
     let structural_only_nearly_identical = clusters
         .as_array()
@@ -992,11 +1021,11 @@ fn issue_134_top_offenders_does_not_label_structural_only_matches_as_nearly_iden
                 && cluster
                     .pointer("/signals/token_jaccard")
                     .and_then(Value::as_f64)
-                    == Some(0.0)
+                    == Some(ZERO_SCORE)
                 && cluster
                     .pointer("/signals/embedding_cos")
                     .and_then(Value::as_f64)
-                    == Some(0.0)
+                    == Some(ZERO_SCORE)
         });
     assert!(
         structural_only_nearly_identical.is_none(),
@@ -1109,7 +1138,7 @@ fn issue_113_find_similar_description_leads_with_prevention() -> Result<()> {
 fn report_get_returns_paginated_slim_report_page() -> Result<()> {
     let (child, page) = init_and_tool_payload(
         REPORT_GET_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 10 }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): STANDARD_PAGE_LIMIT }),
     )?;
     assert!(
         page.get("report_schema_version").is_none(),
@@ -1126,9 +1155,9 @@ fn report_get_returns_paginated_slim_report_page() -> Result<()> {
         .as_u64()
         .ok_or_else(|| anyhow!("page.returned missing"))?;
     assert_eq!(value_get(&page, "/page/offset")?, json!(0));
-    assert_eq!(value_get(&page, "/page/limit")?, json!(10));
+    assert_eq!(value_get(&page, "/page/limit")?, json!(STANDARD_PAGE_LIMIT));
     assert!(
-        returned <= 10,
+        returned <= STANDARD_PAGE_LIMIT,
         "returned ({returned}) must respect requested limit"
     );
     assert!(
@@ -1146,7 +1175,7 @@ fn issue_110_report_pages_omit_schema_doc_and_schema_doc_tool_serves_it() -> Res
     let report_get = structured_tool_result(&call_tool(
         &mut child,
         REPORT_GET_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 2 }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): SCHEMA_TEST_PAGE_LIMIT }),
     )?)?;
     assert!(
         report_get.get(SCHEMA_DOC_FIELD).is_none(),
@@ -1159,7 +1188,7 @@ fn issue_110_report_pages_omit_schema_doc_and_schema_doc_tool_serves_it() -> Res
     let report_query = structured_tool_result(&call_tool(
         &mut child,
         REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 2, (BUCKET_FIELD): "identical" }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): SCHEMA_TEST_PAGE_LIMIT, (BUCKET_FIELD): "identical" }),
     )?)?;
     assert!(
         report_query.get(SCHEMA_DOC_FIELD).is_none(),
@@ -1218,7 +1247,7 @@ fn report_query_accepts_dart_language_filter() -> Result<()> {
     // accepted (returning a, possibly empty, page) rather than rejected.
     let (child, response) = init_and_tool_response(
         REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 5, (LANGUAGE_FIELD): "dart" }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): SMALL_PAGE_LIMIT, (LANGUAGE_FIELD): "dart" }),
     )?;
     assert!(
         response.get(ERROR_FIELD).is_none(),
@@ -1242,7 +1271,10 @@ fn report_query_accepts_dart_language_filter() -> Result<()> {
 
 #[test]
 fn report_get_requires_offset_argument() -> Result<()> {
-    let (child, response) = init_and_tool_response(REPORT_GET_TOOL, &json!({ (LIMIT_PARAM): 10 }))?;
+    let (child, response) = init_and_tool_response(
+        REPORT_GET_TOOL,
+        &json!({ (LIMIT_PARAM): STANDARD_PAGE_LIMIT }),
+    )?;
     assert_eq!(
         value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
         Some(-INVALID_PARAMS_CODE_MAGNITUDE),
@@ -1268,7 +1300,7 @@ fn report_get_requires_limit_argument() -> Result<()> {
 fn report_get_clusters_are_slim_summaries_only() -> Result<()> {
     let (child, page) = init_and_tool_payload(
         REPORT_GET_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 10 }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): STANDARD_PAGE_LIMIT }),
     )?;
     let clusters = value_get(&page, CLUSTERS_POINTER)?;
     let array = clusters
@@ -1329,7 +1361,7 @@ fn report_get_clusters_are_slim_summaries_only() -> Result<()> {
 fn report_get_first_occurrence_belongs_to_full_cluster() -> Result<()> {
     let (mut child, page) = init_and_tool_payload(
         REPORT_GET_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 10 }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): STANDARD_PAGE_LIMIT }),
     )?;
     let clusters = value_array(&page, CLUSTERS_POINTER)?;
     assert!(!clusters.is_empty(), "fixture should produce >= 1 cluster");
@@ -1378,11 +1410,11 @@ fn report_get_offset_past_end_returns_empty_page() -> Result<()> {
     let total = value_get(&probe, TOTAL_CLUSTERS_POINTER)?
         .as_u64()
         .ok_or_else(|| anyhow!("total_clusters missing"))?;
-    let past = total.saturating_add(100);
+    let past = total.saturating_add(OUT_OF_RANGE_OFFSET_INCREMENT);
     let page = structured_tool_result(&call_tool(
         &mut child,
         REPORT_GET_TOOL,
-        &json!({ (OFFSET_PARAM): past, (LIMIT_PARAM): 10 }),
+        &json!({ (OFFSET_PARAM): past, (LIMIT_PARAM): STANDARD_PAGE_LIMIT }),
     )?)?;
     assert_eq!(
         value_get(&page, "/page/returned")?,
@@ -1410,7 +1442,7 @@ fn report_get_offset_past_end_returns_empty_page() -> Result<()> {
 fn report_get_response_stays_under_byte_budget() -> Result<()> {
     let (child, page) = init_and_tool_payload(
         REPORT_GET_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50 }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT }),
     )?;
     let serialised = serde_json::to_string(&page)?;
     // 50KB budget. Earlier "fat" report-get on a real workspace was 2.4MB
@@ -1451,7 +1483,7 @@ fn initialize_capabilities_have_no_null_values() -> Result<()> {
 fn report_query_filters_by_language() -> Result<()> {
     let (child, page) = init_and_tool_payload(
         REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50, (LANGUAGE_FIELD): CSHARP_LANGUAGE }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, (LANGUAGE_FIELD): CSHARP_LANGUAGE }),
     )?;
     let clusters = value_get(&page, CLUSTERS_POINTER)?;
     let array = clusters
@@ -1476,7 +1508,7 @@ fn report_query_filters_by_language() -> Result<()> {
 fn report_query_filters_by_unknown_language_returns_empty() -> Result<()> {
     let (child, page) = init_and_tool_payload(
         REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50, (LANGUAGE_FIELD): "cobol" }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, (LANGUAGE_FIELD): "cobol" }),
     )?;
     assert_empty_page(&page)?;
     let _ = child.finish();
@@ -1487,7 +1519,7 @@ fn report_query_filters_by_unknown_language_returns_empty() -> Result<()> {
 fn report_query_filters_by_path_contains() -> Result<()> {
     let (mut child, page) = init_and_tool_payload(
         REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50, "path_contains": "Alpha" }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, "path_contains": "Alpha" }),
     )?;
     let array = value_array(&page, CLUSTERS_POINTER)?;
     assert!(
@@ -1528,7 +1560,7 @@ fn report_query_filters_by_path_contains() -> Result<()> {
 fn report_query_filters_by_min_size() -> Result<()> {
     let (child, page) = init_and_tool_payload(
         REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50, (MIN_SIZE_FIELD): 20 }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, (MIN_SIZE_FIELD): 20 }),
     )?;
     let clusters = value_get(&page, CLUSTERS_POINTER)?;
     for cluster in clusters.as_array().unwrap_or(&Vec::new()) {
@@ -1558,13 +1590,16 @@ fn report_query_filters_by_min_score() -> Result<()> {
     let page = structured_tool_result(&call_tool(
         &mut child,
         REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50, "min_score": floor }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, "min_score": floor }),
     )?)?;
     for cluster in value_get(&page, CLUSTERS_POINTER)?
         .as_array()
         .unwrap_or(&Vec::new())
     {
-        let score = cluster.get("score").and_then(Value::as_f64).unwrap_or(0.0);
+        let score = cluster
+            .get("score")
+            .and_then(Value::as_f64)
+            .unwrap_or(ZERO_SCORE);
         assert!(
             score >= floor,
             "min_score={floor} violated: cluster score={score}"
@@ -1597,7 +1632,7 @@ fn report_query_requires_offset_and_limit() -> Result<()> {
 fn report_query_filters_by_min_score_excludes_above_max() -> Result<()> {
     let (child, page) = init_and_tool_payload(
         REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50, "min_score": 9_999_999.0 }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, "min_score": 9_999_999.0 }),
     )?;
     assert_empty_page(&page)?;
     let _ = child.finish();
@@ -1608,7 +1643,7 @@ fn report_query_filters_by_min_score_excludes_above_max() -> Result<()> {
 fn report_query_filters_by_min_size_excludes_above_max() -> Result<()> {
     let (child, page) = init_and_tool_payload(
         REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50, (MIN_SIZE_FIELD): 99_999 }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, (MIN_SIZE_FIELD): 99_999 }),
     )?;
     assert_empty_page(&page)?;
     let _ = child.finish();
@@ -1619,7 +1654,7 @@ fn report_query_filters_by_min_size_excludes_above_max() -> Result<()> {
 fn report_query_filters_by_unknown_bucket_returns_empty() -> Result<()> {
     let (child, page) = init_and_tool_payload(
         REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50, (BUCKET_FIELD): "loosely_similar" }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, (BUCKET_FIELD): "loosely_similar" }),
     )?;
     assert_empty_page(&page)?;
     let filters = value_get(&page, "/filters")?;
@@ -1634,7 +1669,7 @@ fn report_query_filters_by_nonmatching_path_returns_empty() -> Result<()> {
         REPORT_QUERY_TOOL,
         &json!({
             (OFFSET_PARAM): 0,
-            (LIMIT_PARAM): 50,
+            (LIMIT_PARAM): QUERY_PAGE_LIMIT,
             "path_contains": "ZZZ_NEVER_MATCHES_ANYTHING"
         }),
     )?;
@@ -1647,7 +1682,7 @@ fn report_query_filters_by_nonmatching_path_returns_empty() -> Result<()> {
 fn report_query_filters_by_matching_bucket_includes_clusters() -> Result<()> {
     let (child, page) = init_and_tool_payload(
         REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50, (BUCKET_FIELD): NEARLY_IDENTICAL_BUCKET }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, (BUCKET_FIELD): NEARLY_IDENTICAL_BUCKET }),
     )?;
     let clusters = value_array(&page, CLUSTERS_POINTER)?;
     assert!(
@@ -1670,14 +1705,14 @@ fn report_query_echoes_filters_in_response() -> Result<()> {
         REPORT_QUERY_TOOL,
         &json!({
             (OFFSET_PARAM): 0,
-            (LIMIT_PARAM): 5,
+            (LIMIT_PARAM): SMALL_PAGE_LIMIT,
             (LANGUAGE_FIELD): CSHARP_LANGUAGE,
-            (MIN_SIZE_FIELD): 10,
+            (MIN_SIZE_FIELD): MIN_SIZE_FILTER,
         }),
     )?;
     let filters = value_get(&page, "/filters")?;
     assert_eq!(filters.get(LANGUAGE_FIELD), Some(&json!(CSHARP_LANGUAGE)));
-    assert_eq!(filters.get(MIN_SIZE_FIELD), Some(&json!(10)));
+    assert_eq!(filters.get(MIN_SIZE_FIELD), Some(&json!(MIN_SIZE_FILTER)));
     let _ = child.finish();
     Ok(())
 }
@@ -1718,7 +1753,7 @@ fn report_for_file_returns_only_matching_clusters() -> Result<()> {
 fn report_for_range_rejects_inverted_range() -> Result<()> {
     let (child, response) = init_and_tool_response(
         REPORT_FOR_RANGE_TOOL,
-        &json!({ (PATH_FIELD): ALPHA_FILE_NAME, (START_BYTE_FIELD): 100, (END_BYTE_FIELD): 1 }),
+        &json!({ (PATH_FIELD): ALPHA_FILE_NAME, (START_BYTE_FIELD): BROAD_RESULT_LIMIT, (END_BYTE_FIELD): 1 }),
     )?;
     assert_eq!(
         value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
@@ -1800,7 +1835,7 @@ fn find_similar_range_finds_clone_on_alpha() -> Result<()> {
                 (PATH_FIELD): ALPHA_FILE_NAME,
                 (START_BYTE_FIELD): 0,
                 (END_BYTE_FIELD): source.len(),
-                "top_n": 3,
+                "top_n": REQUESTED_TOP_OFFENDERS_COUNT,
             }
         }),
     )?;
@@ -1966,7 +2001,10 @@ fn session_config_reportsworkspace_root_and_languages() -> Result<()> {
     // LSP, so `min_nodes` is the LSP's default (30) — the fixture's
     // pre-committed value is no longer the wire source.
     let (child, payload) = init_and_tool_payload(SESSION_CONFIG_TOOL, &json!({}))?;
-    assert_eq!(value_get(&payload, "/min_nodes")?.as_u64().unwrap_or(0), 30);
+    assert_eq!(
+        value_get(&payload, "/min_nodes")?.as_u64().unwrap_or(0),
+        DEFAULT_MIN_NODES
+    );
     let languages_value = value_get(&payload, LANGUAGES_POINTER)?;
     let languages: Vec<String> = languages_value
         .as_array()
@@ -2117,7 +2155,7 @@ fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
     let first = structured_tool_result(&call_tool(
         &mut child,
         REPORT_GET_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 100 }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT }),
     )?)?;
     let first_count = value_get(&first, TOTAL_CLUSTERS_POINTER)?
         .as_u64()
@@ -2128,13 +2166,13 @@ fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
         temp.path().join(SECOND_FILE_NAME),
         "namespace Lone { class Only { public int Go() => 1; } }\n",
     )?;
-    generate_state_file(temp.path(), 15)?;
+    generate_state_file(temp.path(), FIXTURE_MIN_NODES)?;
     let mut second = McpChild::spawn(temp.path(), &[])?;
     let _ = init_session(&mut second)?;
     let rerun = structured_tool_result(&call_tool(
         &mut second,
         REPORT_GET_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 100 }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT }),
     )?)?;
     let rerun_count = value_get(&rerun, TOTAL_CLUSTERS_POINTER)?
         .as_u64()
@@ -2585,7 +2623,7 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
     let before = structured_tool_result(&call_tool(
         &mut child,
         REPORT_GET_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 100 }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT }),
     )?)?;
     let before_count = value_get(&before, TOTAL_CLUSTERS_POINTER)?
         .as_u64()
@@ -2599,7 +2637,7 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
     let after = poll_total_clusters_below(
         &mut child,
         REPORT_GET_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 100 }),
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT }),
         before_count,
     )?;
     let after_count = value_get(&after, TOTAL_CLUSTERS_POINTER)?
@@ -2619,7 +2657,7 @@ fn issue_77_session_config_reports_incremental_true_after_mutation_reload() -> R
     let before_top = structured_tool_result(&call_tool(
         &mut child,
         TOP_OFFENDERS_TOOL,
-        &json!({ "n": 100 }),
+        &json!({ "n": BROAD_RESULT_LIMIT }),
     )?)?;
     let before_count = value_get(&before_top, TOTAL_CLUSTERS_POINTER)?
         .as_u64()
@@ -2646,7 +2684,7 @@ fn issue_77_session_config_reports_incremental_true_after_mutation_reload() -> R
     let after_top = poll_total_clusters_below(
         &mut child,
         TOP_OFFENDERS_TOOL,
-        &json!({ "n": 100 }),
+        &json!({ "n": BROAD_RESULT_LIMIT }),
         before_count,
     )?;
     let after_count = value_get(&after_top, TOTAL_CLUSTERS_POINTER)?
@@ -2661,7 +2699,10 @@ fn issue_77_session_config_reports_incremental_true_after_mutation_reload() -> R
     // [MCP-IPC-CLIENT] min_nodes now comes from the live LSP, not
     // the test's `generate_state_file` invocation — LSP defaults
     // to 30.
-    assert_eq!(value_get(&after_config, "/min_nodes")?.as_u64(), Some(30));
+    assert_eq!(
+        value_get(&after_config, "/min_nodes")?.as_u64(),
+        Some(DEFAULT_MIN_NODES)
+    );
     assert!(
         value_get(&after_config, LANGUAGES_POINTER)?.is_array(),
         "session-config should keep languages shaped as an array: {after_config}"
@@ -2698,7 +2739,7 @@ fn issue_89_rescan_tool_reloads_state_file_and_returns_fresh_top_offenders() -> 
     let before = structured_tool_result(&call_tool(
         &mut child,
         TOP_OFFENDERS_TOOL,
-        &json!({ "n": 100 }),
+        &json!({ "n": BROAD_RESULT_LIMIT }),
     )?)?;
     let before_count = value_get(&before, TOTAL_CLUSTERS_POINTER)?
         .as_u64()
@@ -2720,7 +2761,7 @@ fn issue_89_rescan_tool_reloads_state_file_and_returns_fresh_top_offenders() -> 
         RESCAN_TOOL,
         &json!({
             (PATHS_FIELD): [workspace.path().join("Beta.cs").to_string_lossy().into_owned()],
-            "n": 100
+            "n": BROAD_RESULT_LIMIT
         }),
     )?)?;
     let after_count = value_get(&after, TOTAL_CLUSTERS_POINTER)?
@@ -2732,7 +2773,7 @@ fn issue_89_rescan_tool_reloads_state_file_and_returns_fresh_top_offenders() -> 
     );
     assert_eq!(
         value_get(&after, COUNT_POINTER)?.as_u64(),
-        Some(100),
+        Some(BROAD_RESULT_LIMIT),
         "issue #89: rescan must echo the requested top-offenders count"
     );
     assert!(

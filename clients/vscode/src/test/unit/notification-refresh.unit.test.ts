@@ -10,6 +10,9 @@ import { ReportStore } from "../../reportStore";
 import { cluster, report } from "./tree.helpers";
 import { emptyReport, repoMetrics } from "./report.helpers";
 
+const REPORT_DELTA_METHOD = "deslop/reportDelta";
+const LIVE_GENERATION = 3;
+
 suite("reportChanged refresh wiring", () => {
   test("wireNotifications reportChanged applies a delta", async () => {
     let changedCb: ((p: unknown) => void) | undefined;
@@ -20,7 +23,7 @@ suite("reportChanged refresh wiring", () => {
       },
       sendRequest: (name: string) => {
         requests.push(name);
-        if (name === "deslop/reportDelta") {
+        if (name === REPORT_DELTA_METHOD) {
           return Promise.resolve({
             from_generation: 0,
             to_generation: 1,
@@ -46,7 +49,7 @@ suite("reportChanged refresh wiring", () => {
     const schedule = wireNotifications(client, store);
     changedCb?.({ generation: 1, summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0, worst_weight: 0 } });
     await schedule.settled();
-    assert.ok(requests.includes("deslop/reportDelta"));
+    assert.ok(requests.includes(REPORT_DELTA_METHOD));
     assert.equal(store.current.generation, 1, "the queued delta must be applied by settled()");
   });
 
@@ -59,7 +62,7 @@ suite("reportChanged refresh wiring", () => {
       },
       sendRequest: (name: string) => {
         requests.push(name);
-        if (name === "deslop/reportDelta") return Promise.resolve(null);
+        if (name === REPORT_DELTA_METHOD) return Promise.resolve(null);
         return Promise.resolve(emptyReport({
           tool_version: "x",
           metrics: repoMetrics(),
@@ -87,7 +90,7 @@ suite("reportChanged refresh wiring", () => {
         if (name === "deslop/reportChanged") changedCb = cb;
       },
       sendRequest: (name: string) => {
-        if (name === "deslop/reportDelta") return Promise.resolve(null);
+        if (name === REPORT_DELTA_METHOD) return Promise.resolve(null);
         return new Promise((resolve) => {
           pendingGets.push(resolve);
         });
@@ -106,7 +109,7 @@ suite("reportChanged refresh wiring", () => {
     };
 
     notify(2);
-    notify(3);
+    notify(LIVE_GENERATION);
     await drainUntil(() => pendingGets.length >= 1);
     assert.equal(
       pendingGets.length,
@@ -123,7 +126,7 @@ suite("reportChanged refresh wiring", () => {
 
     pendingGets[1]?.(snapshotFor("newer"));
     await schedule.settled();
-    assert.equal(store.current.generation, 3, "the later notification's snapshot lands last");
+    assert.equal(store.current.generation, LIVE_GENERATION, "the later notification's snapshot lands last");
     assert.equal(
       store.current.report?.clusters[0]?.id,
       "newer",
@@ -148,7 +151,7 @@ suite("reportChanged refresh wiring", () => {
     const deltaSinceParams: Array<number | undefined> = [];
     const client = {
       sendRequest: (name: string, params?: { since_generation?: number }) => {
-        if (name === "deslop/reportDelta") {
+        if (name === REPORT_DELTA_METHOD) {
           deltaSinceParams.push(params?.since_generation);
           // The server answers `since -> current(3)`. With the correct baseline
           // (1) it can retract "phantom"; the buggy no-since default (current-1
@@ -157,7 +160,7 @@ suite("reportChanged refresh wiring", () => {
           if (since === 1) {
             return Promise.resolve({
               from_generation: 1,
-              to_generation: 3,
+              to_generation: LIVE_GENERATION,
               clusters_added: [fresh],
               clusters_removed: ["phantom"],
               clusters_updated: [],
@@ -167,7 +170,7 @@ suite("reportChanged refresh wiring", () => {
           }
           return Promise.resolve({
             from_generation: since,
-            to_generation: 3,
+            to_generation: LIVE_GENERATION,
             clusters_added: [fresh],
             clusters_removed: [],
             clusters_updated: [],
@@ -184,7 +187,7 @@ suite("reportChanged refresh wiring", () => {
     store.setSnapshot(report([cluster("phantom", 100, "/repo/Phantom.cs"), keep]), 1);
 
     await refreshAfterChange(client, store, {
-      generation: 3,
+      generation: LIVE_GENERATION,
       summary: { clusters_added: 1, clusters_removed: 1, clusters_updated: 0, worst_weight: 80 },
     });
 
@@ -194,6 +197,6 @@ suite("reportChanged refresh wiring", () => {
       "the stale 'phantom' cluster (rank #1) must not survive a missed generation — " +
         "the store must converge to the live engine report",
     );
-    assert.equal(store.current.generation, 3, "the store must advance to the live generation");
+    assert.equal(store.current.generation, LIVE_GENERATION, "the store must advance to the live generation");
   });
 });

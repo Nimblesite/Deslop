@@ -6,6 +6,7 @@ const SOURCE_FIELD: &str = "source";
 const BREACHED_FIELD: &str = "breached";
 const CLI_SOURCE: &str = "cli";
 const CONFIG_SOURCE: &str = "config";
+const THRESHOLD_BREACH_EXIT_CODE: i32 = 3;
 
 /// Creates a `tempdir` with a `src` scan root seeded with the canonical
 /// clone pair, returning both so the `tempdir` guard stays alive.
@@ -85,7 +86,7 @@ fn fail_over_config_file_loaded_when_flag_absent() -> Result<()> {
     let _assertion = cmd
         .args([MIN_NODES_FLAG, MIN_NODES_VALUE, NO_COLOR_FLAG])
         .assert()
-        .code(3);
+        .code(THRESHOLD_BREACH_EXIT_CODE);
     let json = read_json_report(&out.json)?;
     assert_eq!(
         threshold_field(&json, SOURCE_FIELD).as_str(),
@@ -204,7 +205,7 @@ fn text_renderer_shows_repo_duplication_header() -> Result<()> {
             NO_COLOR_FLAG,
         ])
         .assert()
-        .code(3);
+        .code(THRESHOLD_BREACH_EXIT_CODE);
     let txt = fs::read_to_string(&out.txt)?;
     assert!(
         txt.contains("repo:") && txt.contains("% duplicated"),
@@ -235,7 +236,7 @@ fn html_renderer_colour_codes_threshold_state() -> Result<()> {
             NO_COLOR_FLAG,
         ])
         .assert()
-        .code(3);
+        .code(THRESHOLD_BREACH_EXIT_CODE);
     let html_breached = fs::read_to_string(&out.html)?;
     assert!(
         html_breached.contains("metrics-banner--breached"),

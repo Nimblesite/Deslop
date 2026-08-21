@@ -76,7 +76,7 @@ test.describe("documentation navigation", () => {
     await expect(docsNav.locator('a[href="/zh/releases/"]')).toContainText("发布");
     await expect(docsNav.locator('a[href="/issues/"]')).toContainText("交互式图谱");
     await expect(docsNav.locator('a[href="/issues/planner/"]')).toContainText("问题规划器");
-    await page.getByRole("button", { name: "Toggle menu" }).click();
+    await page.getByRole("button", { name: "切换菜单" }).click();
     await expect(page.locator("body")).toHaveClass(/is-docs/);
     await expect(page.locator(".docs-sidebar")).toHaveClass(/open/);
     await expect(page.locator(".site-header .nav-links")).toBeHidden();

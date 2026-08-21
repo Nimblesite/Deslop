@@ -30,11 +30,16 @@ import {
 import { wireCluster } from "../cluster.helpers";
 import { signalsWith } from "../signals.helpers";
 
+const IDENTICAL_BUCKET: Bucket = "identical";
+const FAINT_BAND: Severity = "faint";
+const HINT_SEVERITY = "hint" as const;
+const ERROR_SEVERITY = "error" as const;
+
 function cluster(
   id: string,
   fused = 0,
-  bucket: Bucket = "identical",
-  band: Severity = "faint",
+  bucket: Bucket = IDENTICAL_BUCKET,
+  band: Severity = FAINT_BAND,
   rank = 1,
 ): ReportCluster {
   return wireCluster({
@@ -45,7 +50,7 @@ function cluster(
     size: 0,
     canonical_node_count: 0,
     bucket,
-    signals: signalsWith("identical", { fused }),
+    signals: signalsWith(IDENTICAL_BUCKET, { fused }),
     occurrences: [],
   });
 }
@@ -54,7 +59,7 @@ suite("severity", () => {
   test("the glyph band is read off the wire, never re-derived", () => {
     for (const band of SEVERITIES) {
       assert.equal(
-        clusterBand(cluster(`c-${band}`, 1, "identical", band)),
+        clusterBand(cluster(`c-${band}`, 1, IDENTICAL_BUCKET, band)),
         band,
         `a cluster the engine banded ${band} must render ${band}`,
       );
@@ -65,13 +70,13 @@ suite("severity", () => {
     const legacy = { ...cluster("legacy"), rank_band: "" };
     assert.equal(
       clusterBand(legacy),
-      "faint",
+      FAINT_BAND,
       "a report predating the band field must render the tail band",
     );
     const nonsense = { ...cluster("nonsense"), rank_band: "catastrophic" };
     assert.equal(
       clusterBand(nonsense),
-      "faint",
+      FAINT_BAND,
       "a band outside the known set must not leak into the glyph table",
     );
   });
@@ -79,7 +84,7 @@ suite("severity", () => {
   test("resolveSeverity returns the engine's two channels, unmixed", () => {
     const demoted = cluster("demoted", 0.31, "structural_only", "worst");
     const resolved = resolveSeverity(demoted);
-    assert.equal(resolved.level, "hint", "colour is the bucket's, not the rank's");
+    assert.equal(resolved.level, HINT_SEVERITY, "colour is the bucket's, not the rank's");
     assert.equal(resolved.band, "worst", "glyph density is the engine's band");
     assert.equal(
       SEVERITY_DOT[resolved.band],
@@ -108,7 +113,7 @@ suite("severity", () => {
       demoted,
       proven,
       ...Array.from({ length: 8 }, (_, i) =>
-        cluster(`filler-${i}`, 0.9, "identical", "faint", i + 3),
+        cluster(`filler-${i}`, 0.9, IDENTICAL_BUCKET, FAINT_BAND, i + 3),
       ),
     ];
 
@@ -125,12 +130,12 @@ suite("severity", () => {
     // The paint. This is the assertion the defect was about.
     assert.equal(
       clusterSeverity(demoted),
-      "hint",
+      HINT_SEVERITY,
       "a cluster the content gate demoted must never be painted the loudest",
     );
     assert.equal(
       clusterSeverity(proven),
-      "error",
+      ERROR_SEVERITY,
       "a byte-proven clone keeps the loudest paint",
     );
     assert.notEqual(
@@ -185,11 +190,11 @@ suite("severity", () => {
         );
       }
     }
-    assert.equal(clusterSeverity(cluster("i", 0, "identical")), "error");
+    assert.equal(clusterSeverity(cluster("i", 0, IDENTICAL_BUCKET)), ERROR_SEVERITY);
     assert.equal(clusterSeverity(cluster("n", 0, "nearly_identical")), "warning");
     assert.equal(clusterSeverity(cluster("l", 0, "loosely_similar")), "information");
-    assert.equal(clusterSeverity(cluster("s", 0, "structural_only")), "hint");
-    assert.equal(clusterSeverity(cluster("b", 0, "same_behavior")), "hint");
+    assert.equal(clusterSeverity(cluster("s", 0, "structural_only")), HINT_SEVERITY);
+    assert.equal(clusterSeverity(cluster("b", 0, "same_behavior")), HINT_SEVERITY);
   });
 
   test("only act-now buckets may wear an act-now colour", () => {
@@ -197,7 +202,7 @@ suite("severity", () => {
     // hand crimson back to a bucket the engine refused to vouch for.
     for (const bucket of BUCKETS) {
       const level = deslopSeverityOf(bucket);
-      if (level === "error") {
+      if (level === ERROR_SEVERITY) {
         assert.ok(
           isActNow(bucket),
           `${bucket} resolves to the loudest paint but the engine does not call it actionable`,
@@ -209,7 +214,7 @@ suite("severity", () => {
       );
     }
     assert.equal(
-      BUCKETS.filter((bucket) => deslopSeverityOf(bucket) === "error").length,
+      BUCKETS.filter((bucket) => deslopSeverityOf(bucket) === ERROR_SEVERITY).length,
       1,
       "exactly one bucket — the byte-proven one — earns crimson",
     );

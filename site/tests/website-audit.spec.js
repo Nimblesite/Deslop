@@ -18,7 +18,7 @@ const isInScope = (pathname) => !pathname.startsWith("/issues/") && pathname !==
 test("declares the social image with its actual MIME type", async ({ page }) => {
   await page.goto("/blog/towards-100-percent-accuracy/");
   const socialImageType = await page.locator('meta[property="og:image:type"]').getAttribute("content");
-  expect(socialImageType).toBe("image/jpeg");
+  expect(socialImageType).toBe("image/png");
 });
 
 test("publishes complete, parseable metadata on every ordinary page", async ({ page }) => {

@@ -16,12 +16,12 @@ description: "了解 Deslop 为何公开问题关系图、已知的误报与漏�
 excerpt: "Deslop 公开迈向 100% 准确率的过程：问题关系图呈现已知缺陷、依赖关系、验证工作，以及每项准确率决策背后的研究。"
 heroImage: "/assets/img/blog/towards-100-percent-accuracy-header.webp"
 heroImageWidth: "1600"
-heroImageHeight: "943"
-heroImageAlt: "Deslop 的公开问题关系图，展示按准确性、检测、性能、编辑器、集成、交付、报告和质量工作流分组的 103 个开放问题。"
-ogImage: "/assets/img/blog/towards-100-percent-accuracy-og.jpg"
+heroImageHeight: "900"
+heroImageAlt: "明亮绘图桌上的实体准确性审计：透明校准板、红色修正圈、放大镜和精密卡尺。"
+ogImage: "/assets/img/blog/towards-100-percent-accuracy-og.png"
 ogImageWidth: "1200"
 ogImageHeight: "630"
-ogImageAlt: "Deslop 的公开问题关系图，展示迈向准确重复代码检测的工作。"
+ogImageAlt: "使用透明校准板进行实体精密审计，其中一处偏差被清晰标记。"
 lang: zh
 ---
 
@@ -37,7 +37,18 @@ lang: zh
 
 ## 为什么公开问题关系图？
 
-上图是 2026 年 8 月 21 日 Deslop [公开问题关系图](/issues/)的快照。截图时，图中有 103 个开放问题，分布在八个工作流中。其中 33 个属于 Accuracy，是最大的分组。截图时的数据还记录了 22 个准确性关键问题、三个发布阻断问题、16 个等待发布验证的修复、82 个相互连接的问题，以及 122 条明确关系。[实时问题数据](/assets/data/issues.json)会从 GitHub 重新生成，因此现在可能已经显示更新的数字。
+<figure>
+  <a href="/issues/" aria-label="打开 Deslop 交互式问题关系图">
+    <img src="/assets/img/blog/issue-graph-1600.webp"
+         srcset="/assets/img/blog/issue-graph-800.webp 800w, /assets/img/blog/issue-graph-1600.webp 1600w"
+         sizes="(max-width: 48rem) calc(100vw - 3rem), 48rem"
+         alt="Deslop 问题关系图：103 个开放问题分为八个不同颜色的工作流，并以阻断、父子问题和交叉引用连线连接。"
+         width="1600" height="943" loading="eager" decoding="async">
+  </a>
+  <figcaption>2026 年 8 月 21 日截取的公开问题关系图。选择图片可打开当前的交互式关系图。</figcaption>
+</figure>
+
+这是 2026 年 8 月 21 日 Deslop [公开问题关系图](/issues/)的快照。截图时，图中有 103 个开放问题，分布在八个工作流中。其中 33 个属于 Accuracy，是最大的分组。截图时的数据还记录了 22 个准确性关键问题、三个发布阻断问题、16 个等待发布验证的修复、82 个相互连接的问题，以及 122 条明确关系。[实时问题数据](/assets/data/issues.json)会从 GitHub 重新生成，因此现在可能已经显示更新的数字。
 
 这些数字不是路线图表演。它们就是尚未完成的工作。
 

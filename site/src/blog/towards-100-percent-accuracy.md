@@ -16,12 +16,12 @@ description: "See why Deslop publishes its issue graph, known false positives, f
 excerpt: "Deslop's push toward 100% accuracy is public: the issue graph exposes known failures, dependencies, verification work, and the research behind every accuracy decision."
 heroImage: "/assets/img/blog/towards-100-percent-accuracy-header.webp"
 heroImageWidth: "1600"
-heroImageHeight: "943"
-heroImageAlt: "Deslop's public issue graph showing 103 open issues grouped into accuracy, detection, performance, editor, integration, delivery, reporting, and quality workstreams."
-ogImage: "/assets/img/blog/towards-100-percent-accuracy-og.jpg"
+heroImageHeight: "900"
+heroImageAlt: "A physical accuracy audit on a bright drafting table, with a transparent calibration plate, a red correction circle, a loupe, and precision calipers."
+ogImage: "/assets/img/blog/towards-100-percent-accuracy-og.png"
 ogImageWidth: "1200"
 ogImageHeight: "630"
-ogImageAlt: "Deslop's public issue graph mapping the work toward accurate duplicate code detection."
+ogImageAlt: "A physical precision audit using a transparent calibration plate and one clearly marked misalignment."
 ---
 
 “100% accuracy” is the goal. It is not the current score, and this post is not a victory lap.
@@ -36,7 +36,18 @@ The honest path toward 100% is to expose the distance still left to travel.
 
 ## Why publish an open issue graph?
 
-The image above is a snapshot of Deslop's [public issue graph](/issues/) on 21 August 2026. At capture time, it contained 103 open issues grouped into eight workstreams. Thirty-three sat in Accuracy, the largest group. The captured dataset recorded 22 accuracy-critical issues, three release blockers, 16 fixes awaiting release verification, 82 connected issues, and 122 explicit relationships. The [live issue data](/assets/data/issues.json) is regenerated from GitHub and may already show a newer count.
+<figure>
+  <a href="/issues/" aria-label="Open the interactive Deslop issue graph">
+    <img src="/assets/img/blog/issue-graph-1600.webp"
+         srcset="/assets/img/blog/issue-graph-800.webp 800w, /assets/img/blog/issue-graph-1600.webp 1600w"
+         sizes="(max-width: 48rem) calc(100vw - 3rem), 48rem"
+         alt="Deslop's issue graph with 103 open issues grouped into eight colour-coded workstreams, connected by blocking, parent–sub-issue, and cross-reference lines."
+         width="1600" height="943" loading="eager" decoding="async">
+  </a>
+  <figcaption>The public issue graph captured on 21 August 2026. Select the image to open the current interactive graph.</figcaption>
+</figure>
+
+This is a snapshot of Deslop's [public issue graph](/issues/) on 21 August 2026. At capture time, it contained 103 open issues grouped into eight workstreams. Thirty-three sat in Accuracy, the largest group. The captured dataset recorded 22 accuracy-critical issues, three release blockers, 16 fixes awaiting release verification, 82 connected issues, and 122 explicit relationships. The [live issue data](/assets/data/issues.json) is regenerated from GitHub and may already show a newer count.
 
 Those numbers are not a roadmap performance. They are the open work.
 
