@@ -32,6 +32,7 @@
 mod common;
 
 use crate::common::*;
+use serde_json::Value;
 
 /// The four-file C# corpus, shared with `deslop-mcp`'s transport suite.
 const FIXTURE: &str = "csharp-mcp";
@@ -87,8 +88,7 @@ const HIDDEN_CLUSTERS: u64 = 1;
 
 #[test]
 fn two_clone_families_in_one_corpus_do_not_erase_each_other() -> Result<()> {
-    let scan_root = fixture(FIXTURE);
-    let report = run_report(&scan_root, MIN_NODES)?;
+    let report = run_report(&fixture(FIXTURE), MIN_NODES)?;
     let visible = visible_cluster_lines(&report);
 
     assert_eq!(
@@ -101,55 +101,73 @@ fn two_clone_families_in_one_corpus_do_not_erase_each_other() -> Result<()> {
 
     let summing = expect_cluster_spanning(&report, &[ALPHA, BETA])?;
     let multiplying = expect_cluster_spanning(&report, &[DELTA, GAMMA])?;
+    assert_families_were_elected_apart(&report, &visible);
+    assert_near_identical_pair(summing, ALPHA, BETA, &report);
+    assert_near_identical_pair(multiplying, DELTA, GAMMA, &report);
+    assert_content_axes_separate_strictly(summing, multiplying, &report);
+    assert_headline_counts_both_families(&report);
+    Ok(())
+}
 
+/// The election itself: two clusters, neither spanning both families.
+fn assert_families_were_elected_apart(report: &Value, visible: &[String]) {
     assert!(
-        cluster_spanning(&report, &[ALPHA, DELTA]).is_none(),
+        cluster_spanning(report, &[ALPHA, DELTA]).is_none(),
         "a summing loop and a multiplying loop are not occurrences of \
          one another; a cluster spanning them is the merge that hides \
          both families: {visible:#?}"
     );
     assert_eq!(
-        cluster_count(&report),
+        cluster_count(report),
         EXPECTED_CLUSTERS,
         "the corpus holds exactly two clone families: {visible:#?}"
     );
+    assert_eq!(
+        clusters_hidden(report),
+        HIDDEN_CLUSTERS,
+        "only the four-occurrence `for`-header view stays hidden; a \
+         second hidden view means a family was suppressed rather than \
+         elected: {visible:#?}"
+    );
+}
 
-    for (family, left, right) in [(summing, ALPHA, BETA), (multiplying, DELTA, GAMMA)] {
-        assert_eq!(
-            cluster_bucket(family),
-            NEARLY_IDENTICAL,
-            "{left}/{right} is the same statement shape with the same \
-             behaviour, which is the definition of nearly-identical: \
-             {report:#}"
-        );
-        assert_eq!(
-            cluster_size(family),
-            FAMILY_OCCURRENCES,
-            "{left}/{right} is a two-occurrence family: {report:#}"
-        );
-        assert!(
-            approx(signal(family, "structural"), 1.0),
-            "{left}/{right} share one normalised subtree — identifier \
-             renames and literal edits are invisible to it: {report:#}"
-        );
-        assert!(
-            approx(signal(family, "token_jaccard"), 1.0),
-            "the token layer is rename-invariant by design, so \
-             {left}/{right} saturate it: {report:#}"
-        );
-        assert!(
-            signal(family, "fused") >= ACT_NOW_FUSED,
-            "{left}/{right} must keep the rank a near-identical clone \
-             earns, not be diluted by an unrelated family sharing the \
-             corpus: {report:#}"
-        );
-    }
+/// What both families must hold regardless of why they are copies.
+fn assert_near_identical_pair(family: &Value, left: &str, right: &str, report: &Value) {
+    assert_eq!(
+        cluster_bucket(family),
+        NEARLY_IDENTICAL,
+        "{left}/{right} is the same statement shape with the same \
+         behaviour, which is the definition of nearly-identical: \
+         {report:#}"
+    );
+    assert_eq!(
+        cluster_size(family),
+        FAMILY_OCCURRENCES,
+        "{left}/{right} is a two-occurrence family: {report:#}"
+    );
+    assert!(
+        approx(signal(family, "structural"), 1.0),
+        "{left}/{right} share one normalised subtree — identifier \
+         renames and literal edits are invisible to it: {report:#}"
+    );
+    assert!(
+        approx(signal(family, "token_jaccard"), 1.0),
+        "the token layer is rename-invariant by design, so \
+         {left}/{right} saturate it: {report:#}"
+    );
+    assert!(
+        signal(family, "fused") >= ACT_NOW_FUSED,
+        "{left}/{right} must keep the rank a near-identical clone \
+         earns, not be diluted by an unrelated family sharing the \
+         corpus: {report:#}"
+    );
+}
 
-    // The two families are copies for opposite reasons, and the report
-    // must say so in opposite directions. Asserting one floor over both
-    // would pass against an engine that had flattened them to a single
-    // undifferentiated score — which is the failure mode that produced
-    // the merged cluster in the first place.
+/// The two families are copies for opposite reasons, and the report must
+/// say so in opposite directions. One floor asserted over both would pass
+/// against an engine that had flattened them to a single undifferentiated
+/// score — the failure mode that produced the merged cluster.
+fn assert_content_axes_separate_strictly(summing: &Value, multiplying: &Value, report: &Value) {
     assert!(
         approx(signal(summing, "rename_consistency"), 1.0),
         "{ALPHA}/{BETA} map every identifier one-to-one — `input` to \
@@ -183,26 +201,21 @@ fn two_clone_families_in_one_corpus_do_not_erase_each_other() -> Result<()> {
          the report cannot tell a renamed copy from an edited one: \
          {report:#}"
     );
-    assert_eq!(
-        clusters_hidden(&report),
-        HIDDEN_CLUSTERS,
-        "only the four-occurrence `for`-header view stays hidden; a \
-         second hidden view means a family was suppressed rather than \
-         elected: {visible:#?}"
-    );
+}
 
+/// The repo-wide figures must count what the election restored.
+fn assert_headline_counts_both_families(report: &Value) {
     assert!(
-        visible_duplicated_loc(&report) > 0,
+        visible_duplicated_loc(report) > 0,
         "four methods forming two copied pairs duplicate real lines: \
          {report:#}"
     );
     assert!(
-        metric_field(&report, "duplication_percent")
+        metric_field(report, "duplication_percent")
             .as_f64()
             .unwrap_or(0.0)
             > 0.0,
         "the headline figure must count both surviving families: \
          {report:#}"
     );
-    Ok(())
 }

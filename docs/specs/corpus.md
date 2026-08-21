@@ -22,8 +22,12 @@ Every other check here reads the clusters a report contains, and none of them ca
 
 Every manifest therefore carries two curated bounds, and both are **required**:
 
-- `expect_files_min` — the floor `files_analysed` must clear, hand-set against the pinned `sha`. Under it, discovery lost part of the repository.
+- `expect_files_min` — the floor `files_analysed` must clear. Under it, discovery lost part of the repository.
 - `expect_clusters` — a `{ min, max }` band the rendered cluster count must sit inside, inclusive at both ends. Below it, detection stopped finding duplicates; above it, something started manufacturing them. Both are repository-wide swings that no per-cluster check can see, because each of those judges only the clusters that *are* there.
+
+**Neither bound is the measured number, and neither is a golden.** Nobody knows how many clusters Flutter *should* have. A measurement is only what this detector reports today, and today's detector has known defects — `[PIPELINE-CLUSTER-ELECT]` moved tokio's count from 2,155 to 2,568 in one commit. Pinning a measurement would convert whatever is currently wrong into the contract, and the corpus gate would then defend the bug.
+
+So both bounds are deliberately loose rails, each sized to the failure it exists to catch. `expect_files_min` sits at roughly three quarters of the measured `files_analysed`, rounded down: enough to catch discovery losing a chunk of the repository — an exclusion pattern, an extension map, the whole tree (gh #342) — while tolerating the handful of files a legitimate new generated-file rule removes. `expect_clusters` runs from half the measured count to double it, because neither a collapse nor an explosion fits inside a factor of two and ordinary tuning does. What that band asserts is what is actually knowable: the number is not zero, not half, and not double. Re-curate when a deliberate change moves a repository outside its rails, and say in the commit which change moved it.
 
 An absent bound is not a repository with no opinion about its own size — it is a check that cannot fire, so a manifest that omits one fails the gate rather than passing it, and `corpus_manifest_contract.rs` refuses it before any scan runs.
 
