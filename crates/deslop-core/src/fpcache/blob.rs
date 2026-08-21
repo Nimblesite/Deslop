@@ -54,7 +54,13 @@ pub(super) const MAGIC: u32 = 0xC0DE_D180;
 /// fingerprinting and signature construction. Each names this constant
 /// in its failure message, so the change that must bump it is also the
 /// change that is told to.
-pub(super) const SEMANTIC_EPOCH: u32 = 1;
+/// Epoch 2: [PIPELINE-NORMALIZE-AST-OPERATOR] keeps behaviour-bearing
+/// anonymous tokens as `__op__` leaves, so the normalised tree of an
+/// unchanged file changed meaning. Without this bump every tree already
+/// in a warm store stays addressable and a warm run serves the
+/// pre-operator normalisation, in which `base + fee` and `base - fee`
+/// are the same subtree.
+pub(super) const SEMANTIC_EPOCH: u32 = 2;
 
 /// Bytes of blob header preceding the payload: the magic plus the
 /// 32-byte binding digest.
