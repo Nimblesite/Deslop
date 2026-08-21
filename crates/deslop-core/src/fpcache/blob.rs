@@ -39,7 +39,21 @@ pub(super) const MAGIC: u32 = 0xC0DE_D180;
 /// [`super::TOOL_VERSION`]: the workspace version is a permanently-
 /// reused development string (`0.0.0-dev`), so the directory partition
 /// alone cannot invalidate blobs across a semantic change
-/// ([PIPELINE-INCREMENTAL-INTEGRITY]).
+/// ([PIPELINE-INCREMENTAL-INTEGRITY]). A release build is stamped with
+/// its own version and therefore partitioned on its own, so a forgotten
+/// bump can only ever mislead a development store.
+///
+/// **This is the one invalidation lever no equivalence test can pull on
+/// its own**, because a stale blob makes the warm *and* cold sides of a
+/// comparison stale together. What catches a forgotten bump is the set
+/// of goldens that pin the pre-change analysis and go red on any change
+/// to its meaning — the per-language `Sample.expected.ast` dumps
+/// ([PIPELINE-NORMALIZE-AST], `deslop/tests/cli/cache_and_debug.rs`) for
+/// parsing and normalisation, and the two committed report goldens
+/// (`report_golden.rs`, `incremental_multilang_golden.rs`) for
+/// fingerprinting and signature construction. Each names this constant
+/// in its failure message, so the change that must bump it is also the
+/// change that is told to.
 pub(super) const SEMANTIC_EPOCH: u32 = 1;
 
 /// Bytes of blob header preceding the payload: the magic plus the

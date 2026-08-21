@@ -126,6 +126,25 @@ struct Heritage {
     declarations: &'static [&'static str],
     /// Kinds of the direct named child holding those base types.
     clauses: &'static [&'static str],
+    /// How the clause's children divide into base types and type arguments.
+    base_types: BaseTypes,
+}
+
+/// Which children of a heritage clause name a base type.
+///
+/// Grammars disagree, and the disagreement is not cosmetic: reading it wrong
+/// makes one manifest entry condemn every generic subclass in a repository.
+enum BaseTypes {
+    /// Every named child names a base type, and the grammar gives type
+    /// arguments their own node — C#'s `type_argument_list`, TypeScript's
+    /// `type_arguments`, Python's `subscript` field.
+    EveryChild,
+    /// Only the *first* named child names a base type, because the grammar
+    /// flattens the type arguments into the siblings that follow it. Dart
+    /// renders `extends State<LedgerView>` as `superclass type: (type
+    /// (type_identifier)) type: (type (type (type_identifier)))` — two
+    /// `type` fields, no `type_arguments` node anywhere.
+    FirstChildOnly,
 }
 
 /// The heritage grammar of every language a `must_not_rank_first` rule may
@@ -136,6 +155,7 @@ const HERITAGE: &[(&str, Heritage)] = &[
         Heritage {
             declarations: &["class_declaration"],
             clauses: &["superclass"],
+            base_types: BaseTypes::FirstChildOnly,
         },
     ),
     (
@@ -148,6 +168,7 @@ const HERITAGE: &[(&str, Heritage)] = &[
                 "interface_declaration",
             ],
             clauses: &["base_list"],
+            base_types: BaseTypes::EveryChild,
         },
     ),
     (
@@ -155,6 +176,7 @@ const HERITAGE: &[(&str, Heritage)] = &[
         Heritage {
             declarations: &["class_declaration", "class"],
             clauses: &["class_heritage"],
+            base_types: BaseTypes::EveryChild,
         },
     ),
     (
@@ -162,6 +184,7 @@ const HERITAGE: &[(&str, Heritage)] = &[
         Heritage {
             declarations: &["class_declaration", "class"],
             clauses: &["class_heritage"],
+            base_types: BaseTypes::EveryChild,
         },
     ),
     (
@@ -169,6 +192,7 @@ const HERITAGE: &[(&str, Heritage)] = &[
         Heritage {
             declarations: &["class_declaration", "class"],
             clauses: &["class_heritage"],
+            base_types: BaseTypes::EveryChild,
         },
     ),
     (
@@ -178,6 +202,7 @@ const HERITAGE: &[(&str, Heritage)] = &[
             // `class_definition`'s `superclasses` field; it is the only
             // `argument_list` a class header can hold.
             clauses: &["argument_list"],
+            base_types: BaseTypes::EveryChild,
         },
     ),
     (
@@ -185,6 +210,7 @@ const HERITAGE: &[(&str, Heritage)] = &[
         Heritage {
             declarations: &["class_declaration", "interface_declaration"],
             clauses: &["base_clause"],
+            base_types: BaseTypes::EveryChild,
         },
     ),
 ];
@@ -193,6 +219,12 @@ const HERITAGE: &[(&str, Heritage)] = &[
 /// types. `extends State<LedgerView>` declares `State`; `LedgerView` is what
 /// it was instantiated with.
 const TYPE_ARGUMENT_KINDS: &[&str] = &["type_arguments", "type_argument_list", "type_parameters"];
+
+/// Fields whose value names a type argument rather than a base type. Python
+/// has no type-argument node kind — it spells `Generic[T]` as a `subscript`
+/// whose `subscript` field is the argument — so the exclusion has to be read
+/// off the field name there.
+const TYPE_ARGUMENT_FIELDS: &[&str] = &["subscript"];
 
 /// True when a type declaration overlapping `span` in `source` names
 /// `supertype` among its base types.
@@ -277,21 +309,30 @@ fn names_supertype(
         .collect();
     clauses
         .into_iter()
-        .any(|clause| clause_names(clause, source, supertype))
+        .flat_map(|clause| base_type_roots(clause, heritage))
+        .any(|root| names_type(root, source, supertype))
 }
 
-/// True when a type-name leaf of `clause` reads exactly `supertype`.
+/// The subtrees of `clause` that name base types, per the language's
+/// [`BaseTypes`] convention.
+fn base_type_roots<'tree>(
+    clause: tree_sitter::Node<'tree>,
+    heritage: &Heritage,
+) -> Vec<tree_sitter::Node<'tree>> {
+    match heritage.base_types {
+        BaseTypes::EveryChild => vec![clause],
+        BaseTypes::FirstChildOnly => base_type_children(clause).into_iter().take(1).collect(),
+    }
+}
+
+/// True when a type-name leaf of `root` reads exactly `supertype`.
 ///
-/// Only leaves count, and only outside type-argument subtrees, so
-/// `extends State<LedgerView>` names `State` and not `LedgerView`.
-fn clause_names(clause: tree_sitter::Node<'_>, source: &[u8], supertype: &str) -> bool {
-    let mut cursor = clause.walk();
-    let mut pending = vec![clause];
+/// Only leaves count, so `extends Framework.Widget` names `Widget`, and
+/// type-argument subtrees are dropped on the way down.
+fn names_type(root: tree_sitter::Node<'_>, source: &[u8], supertype: &str) -> bool {
+    let mut pending = vec![root];
     while let Some(node) = pending.pop() {
-        if TYPE_ARGUMENT_KINDS.contains(&node.kind()) {
-            continue;
-        }
-        let children: Vec<tree_sitter::Node<'_>> = node.named_children(&mut cursor).collect();
+        let children = base_type_children(node);
         if children.is_empty() {
             if node.utf8_text(source).is_ok_and(|text| text == supertype) {
                 return true;
@@ -301,6 +342,29 @@ fn clause_names(clause: tree_sitter::Node<'_>, source: &[u8], supertype: &str) -
         pending.extend(children);
     }
     false
+}
+
+/// Named children of `node` that can carry a base-type name, in document
+/// order. Type-argument nodes and type-argument fields are dropped.
+fn base_type_children(node: tree_sitter::Node<'_>) -> Vec<tree_sitter::Node<'_>> {
+    let mut cursor = node.walk();
+    if !cursor.goto_first_child() {
+        return Vec::new();
+    }
+    let mut children = Vec::new();
+    loop {
+        let child = cursor.node();
+        let is_type_argument = TYPE_ARGUMENT_KINDS.contains(&child.kind())
+            || cursor
+                .field_name()
+                .is_some_and(|field| TYPE_ARGUMENT_FIELDS.contains(&field));
+        if child.is_named() && !is_type_argument {
+            children.push(child);
+        }
+        if !cursor.goto_next_sibling() {
+            return children;
+        }
+    }
 }
 
 /// The tree-sitter grammar registered for `language`.

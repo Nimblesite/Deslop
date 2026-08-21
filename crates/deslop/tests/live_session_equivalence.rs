@@ -60,16 +60,6 @@ fn spliced_session(scan_root: &Path, ops: &[(&str, OsString)]) -> Result<Value> 
     Ok(report)
 }
 
-/// Seeds a fresh scan root with the baseline [`corpus`] and returns it
-/// with the temp-dir guard that keeps it alive. No pass has run yet, so
-/// the session's own `initialise` is the store-filling cold pass.
-fn seeded_root() -> Result<(tempfile::TempDir, std::path::PathBuf)> {
-    let guard = tempfile::tempdir()?;
-    let root = guard.path().join("src");
-    seed_tree(&root, &corpus())?;
-    Ok((guard, root))
-}
-
 /// Writes `contents` to `<guard>/<stem>` — outside the scan root, so
 /// `initialise` cannot see it — and returns the `SRC=DST` spec that
 /// lands it at `dst` between generation 0 and generation 1.
@@ -95,21 +85,66 @@ fn assert_splice_moved_the_report(spliced: &Value, baseline: &Value, scenario: &
     );
 }
 
+/// One mid-session add, judged end to end: stage a byte-distinct clone
+/// copy outside the scan root, land it at `<root>/<file_name>` between
+/// the two generations, and prove the spliced report equals a cold pass
+/// over a fresh tree already holding it — same cluster, same spans, same
+/// signals, same ranking, same metrics.
+fn assert_added_carrier_matches_cold(
+    guard: &Path,
+    root: &Path,
+    carrier: (&str, &str),
+    expected_files: &[&str],
+) -> Result<()> {
+    let (file_name, banner) = carrier;
+    let spec = staged(
+        guard,
+        &format!("staged_{file_name}"),
+        &dup_source(banner),
+        &root.join(file_name),
+    )?;
+    let spliced = spliced_session(root, &[("--rerun-add", spec)])?;
+    let truth = cold_truth(&corpus_with_carrier(file_name, banner))?;
+    let label = format!("live session: {file_name} added mid-session");
+    assert_report_shape(&spliced, 6, expected_files, &label)?;
+    assert_report_shape(&truth, 6, expected_files, &format!("{label} ground truth"))?;
+    assert_reports_equal(&spliced, &truth, &label);
+    Ok(())
+}
+
 // [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE] A file that appears
 // mid-session must join the corpus exactly as a fresh cold pass over the
 // grown tree sees it: the cluster grows from trio to quad, and every
 // span, id, signal, ranking position and metric matches field for field.
 #[test]
 fn a_file_added_mid_session_matches_the_cold_report_of_the_grown_tree() -> Result<()> {
-    let (guard, root) = seeded_root()?;
-    let added = root.join("dup_d.rs");
-    let spec = staged(guard.path(), "staged_d.rs", &dup_source(DELTA_BANNER), &added)?;
-    let spliced = spliced_session(&root, &[("--rerun-add", spec)])?;
-    let truth = cold_truth(&corpus_with_dup_d())?;
-    assert_report_shape(&spliced, 6, &DUPLICATE_QUAD, "spliced add")?;
-    assert_report_shape(&truth, 6, &DUPLICATE_QUAD, "grown ground truth")?;
-    assert_reports_equal(&spliced, &truth, "live session: file add");
-    Ok(())
+    let (guard, root) = seeded_scan_root(&corpus())?;
+    assert_added_carrier_matches_cold(
+        guard.path(),
+        &root,
+        ("dup_d.rs", DELTA_BANNER),
+        &DUPLICATE_QUAD,
+    )
+}
+
+// [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE] + [PIPELINE-DETERMINISM]
+// The same add, with a name that sorts *ahead* of every file already in
+// the corpus. `dup_d.rs` sorts last, so a splice that appends instead of
+// inserting at the file's sort position lands it correctly by luck;
+// `aa_dup.rs` does not. The corpus store holds one span per file in
+// ascending workspace-relative-path order and a render borrows those
+// slices as they are, so an appended span renders its occurrence — and
+// the `summary` line built from it — out of order while every other
+// reading stays identical.
+#[test]
+fn an_early_sorting_add_splices_into_path_order_not_arrival_order() -> Result<()> {
+    let (guard, root) = seeded_scan_root(&corpus())?;
+    assert_added_carrier_matches_cold(
+        guard.path(),
+        &root,
+        (EARLY_CARRIER, EARLY_BANNER),
+        &DUPLICATE_QUAD_EARLY,
+    )
 }
 
 // [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE] Overwriting a live clone
@@ -120,7 +155,7 @@ fn a_file_added_mid_session_matches_the_cold_report_of_the_grown_tree() -> Resul
 // there.
 #[test]
 fn a_file_edited_mid_session_matches_the_cold_report_of_the_edited_tree() -> Result<()> {
-    let (guard, root) = seeded_root()?;
+    let (guard, root) = seeded_scan_root(&corpus())?;
     let carrier = root.join("dup_c.rs");
     let spec = staged(guard.path(), "staged_c.rs", REPLACEMENT_FN, &carrier)?;
     let baseline = run(&root, true)?;
@@ -140,17 +175,17 @@ fn a_file_edited_mid_session_matches_the_cold_report_of_the_edited_tree() -> Res
 // surviving file's signatures and manufacture a cluster from nothing.
 #[test]
 fn a_file_removed_mid_session_matches_the_cold_report_of_the_shrunk_tree() -> Result<()> {
-    let (_guard, root) = seeded_root()?;
+    let (_guard, root) = seeded_scan_root(&corpus())?;
     let removed = root.join("dup_c.rs");
     let spliced = spliced_session(&root, &[("--rerun-remove", OsString::from(&removed))])?;
     let truth = cold_truth(&corpus_without_dup_c())?;
     assert_report_shape(&spliced, 4, &DUPLICATE_PAIR, "spliced remove")?;
     assert_report_shape(&truth, 4, &DUPLICATE_PAIR, "shrunk ground truth")?;
-    let paths = all_report_paths(&spliced);
-    assert_eq!(
-        paths.iter().filter(|path| *path == "dup_c.rs").count(),
+    assert_reported_path_count(
+        &spliced,
+        "dup_c.rs",
         0,
-        "a removed file must vanish from every reported path: {spliced}"
+        "a file removed mid-session must vanish from every reported path",
     );
     assert_reports_equal(&spliced, &truth, "live session: file remove");
     Ok(())
@@ -164,7 +199,7 @@ fn a_file_removed_mid_session_matches_the_cold_report_of_the_shrunk_tree() -> Re
 // `dup_a`, `dup_b`, `dup_d`.
 #[test]
 fn add_edit_and_remove_in_one_pass_match_the_cold_report_of_the_result() -> Result<()> {
-    let (guard, root) = seeded_root()?;
+    let (guard, root) = seeded_scan_root(&corpus())?;
     let added = root.join("dup_d.rs");
     let carrier = root.join("dup_c.rs");
     let removed = root.join("filler_bounds.rs");
@@ -174,7 +209,12 @@ fn add_edit_and_remove_in_one_pass_match_the_cold_report_of_the_result() -> Resu
         &[
             (
                 "--rerun-add",
-                staged(guard.path(), "staged_d.rs", &dup_source(DELTA_BANNER), &added)?,
+                staged(
+                    guard.path(),
+                    "staged_d.rs",
+                    &dup_source(DELTA_BANNER),
+                    &added,
+                )?,
             ),
             (
                 "--rerun-add",
@@ -207,7 +247,7 @@ fn add_edit_and_remove_in_one_pass_match_the_cold_report_of_the_result() -> Resu
 // byte-identical to where it started.
 #[test]
 fn editing_and_reverting_inside_one_session_lands_on_the_baseline_report() -> Result<()> {
-    let (guard, root) = seeded_root()?;
+    let (guard, root) = seeded_scan_root(&corpus())?;
     let carrier = root.join("dup_c.rs");
     let original = dup_source(GAMMA_BANNER);
     let baseline = run(&root, true)?;

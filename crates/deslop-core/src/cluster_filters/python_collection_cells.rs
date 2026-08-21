@@ -26,8 +26,7 @@ pub(super) fn is_collection_sibling_cell_cluster(snippets: &[Snippet<'_>]) -> bo
     if snippets.len() < 2 {
         return false;
     }
-    let homes: Option<Vec<(FileId, usize, usize)>> =
-        snippets.iter().map(collection_home).collect();
+    let homes: Option<Vec<(FileId, usize, usize)>> = snippets.iter().map(collection_home).collect();
     let Some(homes) = homes else { return false };
     let Some(first) = homes.first() else {
         return false;
@@ -56,8 +55,7 @@ fn carries_lambda(snippet: &Snippet<'_>) -> bool {
         return false;
     };
     let root: Node<'_> = tree.root_node();
-    let Some(member) =
-        root.named_descendant_for_byte_range(snippet.range.start, snippet.range.end)
+    let Some(member) = root.named_descendant_for_byte_range(snippet.range.start, snippet.range.end)
     else {
         return false;
     };

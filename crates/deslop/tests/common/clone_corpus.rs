@@ -18,14 +18,18 @@
 //! one-line banners keep the clone copies byte-distinct while the
 //! function they share stays byte-identical.
 
-use std::{collections::BTreeSet, fs, path::Path};
+use std::{
+    collections::BTreeSet,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use serde_json::Value;
 
 use super::{
     approx, cluster_bucket, cluster_count, cluster_file_set, cluster_size, clusters,
-    clusters_hidden, expect_cluster_spanning, field, incremental::*, metric_field, occurrence_paths,
-    occurrences, per_file_metrics, signal, Result,
+    clusters_hidden, expect_cluster_spanning, field, incremental::*, metric_field,
+    occurrence_paths, occurrences, per_file_metrics, signal, Result,
 };
 
 /// `--min-nodes` low enough that the eleven-line clone body fingerprints
@@ -94,6 +98,22 @@ pub(crate) const DUPLICATE_PAIR: [&str; 2] = ["dup_a.rs", "dup_b.rs"];
 /// All four clone carriers once `dup_d.rs` is added.
 pub(crate) const DUPLICATE_QUAD: [&str; 4] = ["dup_a.rs", "dup_b.rs", "dup_c.rs", "dup_d.rs"];
 
+/// A clone carrier whose name sorts **before** every baseline file.
+/// `dup_d.rs` sorts last, so appending it to the flat store lands it in
+/// the right place by luck; this one does not, and a splice that
+/// appends instead of inserting in path order renders its occurrence
+/// out of order ([PIPELINE-DETERMINISM]).
+pub(crate) const EARLY_CARRIER: &str = "aa_dup.rs";
+
+/// Banner for [`EARLY_CARRIER`] — shared by the mutation and the fresh
+/// ground-truth tree so both hold the same bytes.
+pub(crate) const EARLY_BANNER: &str = "early-sorting copy joins mid-session";
+
+/// The four clone carriers once [`EARLY_CARRIER`] is added, in the
+/// ascending path order the report must render them in.
+pub(crate) const DUPLICATE_QUAD_EARLY: [&str; 4] =
+    ["aa_dup.rs", "dup_a.rs", "dup_b.rs", "dup_c.rs"];
+
 /// One clone copy: a distinct one-line banner comment above the shared
 /// function, keeping every copy byte-distinct (see module doc).
 pub(crate) fn dup_source(banner: &str) -> String {
@@ -134,12 +154,18 @@ pub(crate) fn corpus_without_dup_c() -> Vec<(String, String)> {
         .collect()
 }
 
-/// [`corpus`] plus the byte-distinct fourth copy `dup_d.rs` — the
-/// ground-truth tree for every scenario that adds a carrier.
-pub(crate) fn corpus_with_dup_d() -> Vec<(String, String)> {
+/// [`corpus`] plus one more byte-distinct clone carrier — the
+/// ground-truth tree for every scenario that adds a carrier, whatever
+/// the new file sorts next to.
+pub(crate) fn corpus_with_carrier(file_name: &str, banner: &str) -> Vec<(String, String)> {
     let mut grown = corpus();
-    grown.push(("dup_d.rs".to_owned(), dup_source(DELTA_BANNER)));
+    grown.push((file_name.to_owned(), dup_source(banner)));
     grown
+}
+
+/// [`corpus`] plus the byte-distinct fourth copy `dup_d.rs`.
+pub(crate) fn corpus_with_dup_d() -> Vec<(String, String)> {
+    corpus_with_carrier("dup_d.rs", DELTA_BANNER)
 }
 
 /// Writes `(file_name, source)` pairs into a freshly created `root`.
@@ -158,12 +184,22 @@ pub(crate) fn run(scan_root: &Path, incremental: bool) -> Result<Value> {
     run_report_with_store(scan_root, MIN_NODES, Store::incremental(incremental))
 }
 
-/// A store-off (`--no-incremental`) pass over a fresh tree holding
-/// `files` — the cold ground truth every incremental report is owed.
-pub(crate) fn cold_truth(files: &[(String, String)]) -> Result<Value> {
+/// A throwaway scan root at `<guard>/src` seeded with `files`. The
+/// guard comes back because dropping it deletes the tree. Every scenario
+/// starts here — the parse store always lands at
+/// `<scan_root>/.deslop/cache`, so a checked-in fixture is never scanned
+/// with the store on.
+pub(crate) fn seeded_scan_root(files: &[(String, String)]) -> Result<(tempfile::TempDir, PathBuf)> {
     let guard = tempfile::tempdir()?;
     let root = guard.path().join("src");
     seed_tree(&root, files)?;
+    Ok((guard, root))
+}
+
+/// A store-off (`--no-incremental`) pass over a fresh tree holding
+/// `files` — the cold ground truth every incremental report is owed.
+pub(crate) fn cold_truth(files: &[(String, String)]) -> Result<Value> {
+    let (_guard, root) = seeded_scan_root(files)?;
     let truth = run(&root, false)?;
     assert_cache_stats(&truth, 0, 0, "no-incremental ground truth");
     Ok(truth)
@@ -223,7 +259,30 @@ fn assert_identical_cluster(report: &Value, files: &[&str], label: &str) -> Resu
         "{label}: byte-identical copies must saturate the token signal: {report}"
     );
     assert_clone_lines(clone, report, label);
+    assert_occurrences_in_path_order(clone, label);
     Ok(())
+}
+
+/// [PIPELINE-DETERMINISM] Occurrences render in ascending
+/// workspace-relative-path order, because the corpus store holds one
+/// span per file in exactly that order and a render borrows the flat
+/// slices as they are.
+///
+/// This is the assertion a live splice is judged by: appending a
+/// changed file's records instead of inserting them at the file's sort
+/// position leaves every other reading identical — same cluster id,
+/// same spans, same signals, same rank — and moves only this order and
+/// the `summary` line built from it. Without it, a session that renders
+/// its corpus in edit-arrival order passes every other check here.
+fn assert_occurrences_in_path_order(clone: &Value, label: &str) {
+    let paths = occurrence_paths(clone);
+    let mut sorted = paths.clone();
+    sorted.sort();
+    assert_eq!(
+        paths, sorted,
+        "{label}: occurrences must render in ascending path order, not in the \
+         order a session happened to splice them: {clone:#}"
+    );
 }
 
 /// Asserts the report's corpus-level shape — analysed-file count, zero
@@ -258,6 +317,22 @@ pub(crate) fn assert_report_shape(
         "{label}: metrics.duplicated_files: {report}"
     );
     assert_identical_cluster(report, files, label)
+}
+
+/// Asserts `path` is named exactly `expected` times across every
+/// reported path — cluster occurrences and `metrics.per_file` rows
+/// together. A renamed or removed file must vanish from *both*, and a
+/// new one must reach both; checking either alone lets the other keep a
+/// stale row.
+pub(crate) fn assert_reported_path_count(report: &Value, path: &str, expected: usize, why: &str) {
+    let actual = all_report_paths(report)
+        .iter()
+        .filter(|reported| reported.as_str() == path)
+        .count();
+    assert_eq!(
+        actual, expected,
+        "{why}: {path} named {actual} times, expected {expected}: {report}"
+    );
 }
 
 /// Every relative path the report mentions: cluster occurrence paths

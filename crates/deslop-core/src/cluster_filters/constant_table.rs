@@ -340,7 +340,9 @@ fn ecmascript_pair_is_constant(node: Node<'_>) -> bool {
 /// Returns true when any named child of `node` has kind `kind`.
 fn has_child_kind(node: Node<'_>, kind: &str) -> bool {
     let mut cursor = node.walk();
-    let found = node.named_children(&mut cursor).any(|child| child.kind() == kind);
+    let found = node
+        .named_children(&mut cursor)
+        .any(|child| child.kind() == kind);
     found
 }
 

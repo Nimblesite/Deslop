@@ -1,4 +1,4 @@
-import { clear, element, labelChip, shortDate } from "./dom.js";
+import { clear, element, labelChip } from "./dom.js";
 import { allLabels, filteredIssues, priorityColor, relatedIssues, streamMap } from "./model.js";
 import { renderNetwork } from "./graph.js";
 import { renderBoard, renderQueue, renderRunway } from "./views.js";
@@ -36,9 +36,7 @@ function renderSummary() {
     const target = root.querySelector(`[data-summary="${name}"]`);
     if (target) target.textContent = String(value);
   }
-  const generatedDate = root.querySelector("[data-generated-date]");
   const planningNote = root.querySelector("[data-planning-note]");
-  if (generatedDate) generatedDate.textContent = `Snapshot · ${shortDate(report.meta.generated_at)}`;
   if (planningNote) planningNote.textContent = report.meta.planning_note;
 }
 
@@ -121,8 +119,8 @@ function drawerFacts(issue, streams) {
     drawerFact("Workstream", streams.get(issue.workstream).name),
     drawerFact("Issue type", issue.type),
     drawerFact("Assignee", assignees || "Unassigned"),
-    drawerFact("Updated", shortDate(issue.updated_at)),
-    drawerFact("Default effort", `${issue.plan.effort_days} working days`),
+    drawerFact("Inbound links", String(issue.inbound_links)),
+    drawerFact("Default effort", `${issue.plan.effort_units} units`),
     drawerFact("Milestone", issue.milestone || "None"),
   ]);
 }

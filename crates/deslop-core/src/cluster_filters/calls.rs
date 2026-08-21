@@ -197,14 +197,9 @@ fn walk_argument_children(call: Node<'_>, walk: &Walk<'_>, out: &mut Vec<CallSha
 /// Compares call sequence shape, ignoring literal payloads.
 fn same_call_headers(calls: &[CallShape], expected: &[CallShape]) -> bool {
     calls.len() == expected.len()
-        && calls
-            .iter()
-            .zip(expected)
-            .all(|(call, base)| {
-                call.callee == base.callee
-                    && call.arity == base.arity
-                    && call.keywords == base.keywords
-            })
+        && calls.iter().zip(expected).all(|(call, base)| {
+            call.callee == base.callee && call.arity == base.arity && call.keywords == base.keywords
+        })
 }
 
 /// Returns true when `index` has intentional literal variation across
@@ -224,20 +219,23 @@ const fn call_kinds(language: &str) -> &'static [&'static str] {
         b"python" => &["call"],
         b"csharp" => &["invocation_expression"],
         b"rust" => &["call_expression", "macro_invocation"],
-        // Dart `call_expression` exposes a `function` field; the
+        // Dart and ECMAScript both name their call node `call_expression`
+        // and expose the same `function` / `arguments` fields the other
+        // languages do, so they share one arm — for two separate reasons
+        // worth keeping written down.
+        //
+        // Dart: `call_expression` exposes a `function` field; the
         // `constructor_invocation` node does not, so it is intentionally
         // excluded from literal-variation comparison.
-        b"dart" => &["call_expression"],
+        //
         // gh #284/#285: ECMAScript was absent from this map entirely, so
         // the filter could not fire for **any** JavaScript/TypeScript
         // cluster however plainly it was literal-variation scaffolding —
         // seven independent codec diagnostics sharing one
         // `expectErrorMessages` helper rendered `nearly_identical` at
         // `fused 0.86`, and a run of `expect(x).toContain("…")` lines
-        // rendered `identical` at `1.00`. The grammar's call node is
-        // `call_expression` with the same `function` / `arguments` fields
-        // the other languages expose.
-        b"javascript" | b"typescript" | b"tsx" => &["call_expression"],
+        // rendered `identical` at `1.00`.
+        b"dart" | b"javascript" | b"typescript" | b"tsx" => &["call_expression"],
         _ => &[],
     }
 }
@@ -295,7 +293,13 @@ fn arg_shape(node: Node<'_>, source: &[u8], language: &str) -> ArgShape {
 fn literal_collection_bytes(node: Node<'_>, source: &[u8], language: &str) -> Option<Vec<u8>> {
     let is_collection = matches!(
         node.kind(),
-        "list" | "tuple" | "set" | "dictionary" | "array" | "object" | "array_expression"
+        "list"
+            | "tuple"
+            | "set"
+            | "dictionary"
+            | "array"
+            | "object"
+            | "array_expression"
             | "tuple_expression"
     );
     if !is_collection || !is_literal_value(language, node) || !carries_string_leaf(node) {

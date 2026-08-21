@@ -1,15 +1,15 @@
-//! [PIPELINE-DETERMINISM] Cold-run report golden — Phase 0 of
-//! `docs/plans/incremental-analysis-plan.md`.
+//! [PIPELINE-DETERMINISM] Cold-run report golden.
 //!
 //! One fixed corpus (`tests/fixtures/report-golden/src`), one fixed flag
 //! set (`--no-incremental --embeddings off --min-nodes 16 --notext
 //! --nohtml`), one committed rendering
 //! (`tests/fixtures/report-golden/expected-report.json`). The pipeline
 //! must render bit-identical reports over an unchanged corpus, and every
-//! later incremental phase (warm cache, delta re-analysis, live
-//! sessions) must reproduce this exact cold report — so any drift in
-//! ranking, spans, cluster ids, metrics arithmetic, or serialisation
-//! order fails here first.
+//! reuse path owes this exact cold report
+//! ([PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE]) — a warm cache, a
+//! spliced live session, a delta re-analysis — so any drift in ranking,
+//! spans, cluster ids, metrics arithmetic, or serialisation order fails
+//! here first.
 //!
 //! Two halves, mirroring the AST golden guard in
 //! `tests/cli/cache_and_debug.rs`: **unchanged** — the rendered bytes

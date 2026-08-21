@@ -104,11 +104,18 @@ fn assert_published_once(report: &Value, case: &LangCase) -> Result<()> {
         count = over_pair.len(),
         published = over_pair
             .iter()
-            .map(|cluster| (cluster_id(cluster), cluster_bucket(cluster), cluster_size(cluster)))
+            .map(|cluster| (
+                cluster_id(cluster),
+                cluster_bucket(cluster),
+                cluster_size(cluster)
+            ))
             .collect::<Vec<_>>(),
     );
     let [cluster] = over_pair.as_slice() else {
-        anyhow::bail!("{language}: expected exactly one cluster over {:?}", case.files());
+        anyhow::bail!(
+            "{language}: expected exactly one cluster over {:?}",
+            case.files()
+        );
     };
     assert_eq!(
         cluster_bucket(cluster),

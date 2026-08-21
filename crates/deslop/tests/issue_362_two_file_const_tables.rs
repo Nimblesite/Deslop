@@ -69,7 +69,9 @@ fn duplicated_loc_for(report: &Value, file: &str) -> u64 {
                 .as_str()
                 .is_some_and(|path| path.ends_with(file))
         })
-        .map_or(0, |metric| field(metric, "duplicated_loc").as_u64().unwrap_or_default())
+        .map_or(0, |metric| {
+            field(metric, "duplicated_loc").as_u64().unwrap_or_default()
+        })
 }
 
 // [CLONE-NOISE-CONSTANT-TABLE] The suppression itself: two unrelated
@@ -85,7 +87,11 @@ fn unrelated_constant_tables_are_neither_reported_nor_counted() -> Result<()> {
          cluster may span {CONST_TABLES:?} (gh #362): {found:#?}",
         found = clusters(&report)
             .iter()
-            .map(|cluster| (cluster_id(cluster), cluster_bucket(cluster), occurrence_files(cluster)))
+            .map(|cluster| (
+                cluster_id(cluster),
+                cluster_bucket(cluster),
+                occurrence_files(cluster)
+            ))
             .collect::<Vec<_>>(),
     );
     for file in CONST_TABLES {
@@ -132,7 +138,11 @@ fn the_authored_clone_survives_the_suppression_and_ranks_first() -> Result<()> {
          every genuine clone (gh #362): {ranked:#?}",
         ranked = clusters(&report)
             .iter()
-            .map(|entry| (cluster_id(entry), cluster_bucket(entry), signal(entry, "weight")))
+            .map(|entry| (
+                cluster_id(entry),
+                cluster_bucket(entry),
+                signal(entry, "weight")
+            ))
             .collect::<Vec<_>>(),
     );
     for file in REAL_CLONE {
@@ -155,7 +165,9 @@ fn the_authored_clone_survives_the_suppression_and_ranks_first() -> Result<()> {
 fn the_duplication_metric_counts_only_what_the_report_shows() -> Result<()> {
     let report = render()?;
     assert_eq!(
-        metric_field(&report, "duplicated_loc").as_u64().unwrap_or_default(),
+        metric_field(&report, "duplicated_loc")
+            .as_u64()
+            .unwrap_or_default(),
         visible_duplicated_loc(&report),
         "`duplicated_loc` must equal the lines the visible clusters cover: \
          {lines:#?}",

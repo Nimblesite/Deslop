@@ -1,4 +1,4 @@
-import { clear, element, emptyState, labelChip, shortDate } from "./dom.js";
+import { clear, element, emptyState, labelChip } from "./dom.js";
 import { priorityColor, streamMap } from "./model.js";
 
 function cardLabels(issue) {
@@ -44,38 +44,32 @@ export function renderBoard(container, report, issues, onSelect) {
   container.append(board);
 }
 
-function utcDay(value) {
-  const parsed = new Date(`${value}T00:00:00Z`);
-  return parsed.getTime();
-}
-
 function timelineBounds(issues) {
-  const starts = issues.map((issue) => utcDay(issue.plan.start));
-  const ends = issues.map((issue) => utcDay(issue.plan.end));
+  const starts = issues.map((issue) => issue.plan.offset);
+  const ends = issues.map((issue) => issue.plan.offset + issue.plan.effort_units);
   const start = Math.min(...starts);
-  const end = Math.max(...ends) + 86_400_000;
-  return { start, end, span: Math.max(end - start, 86_400_000) };
+  const end = Math.max(...ends);
+  return { start, end, span: Math.max(end - start, 1) };
 }
 
 function weekCount(bounds) {
-  return Math.max(1, Math.ceil(bounds.span / (7 * 86_400_000)));
+  return Math.max(1, Math.ceil(bounds.span / 7));
 }
 
-function weekHeaders(bounds, weeks) {
+function stepHeaders(steps) {
   const cells = [];
-  for (let index = 0; index < weeks; index += 1) {
-    const value = new Date(bounds.start + index * 7 * 86_400_000);
-    cells.push(element("span", { className: "runway-week", text: new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short" }).format(value) }));
+  for (let index = 0; index < steps; index += 1) {
+    cells.push(element("span", { className: "runway-step", text: `Step ${String(index + 1).padStart(2, "0")}` }));
   }
-  const row = element("div", { className: "runway-weeks" }, cells);
-  row.style.setProperty("--weeks", weeks);
+  const row = element("div", { className: "runway-steps" }, cells);
+  row.style.setProperty("--weeks", steps);
   return row;
 }
 
-function runwayHead(bounds, weeks) {
+function runwayHead(steps) {
   return element("div", { className: "runway-head" }, [
-    element("div", { className: "runway-head__label", text: "Recommended sequence · default effort" }),
-    weekHeaders(bounds, weeks),
+    element("div", { className: "runway-head__label", text: "Recommended order · default effort" }),
+    stepHeaders(steps),
   ]);
 }
 
@@ -91,14 +85,14 @@ function streamHeader(stream, count, weeks) {
 }
 
 function barPosition(issue, bounds) {
-  const start = ((utcDay(issue.plan.start) - bounds.start) / bounds.span) * 100;
-  const duration = ((utcDay(issue.plan.end) - utcDay(issue.plan.start) + 86_400_000) / bounds.span) * 100;
+  const start = ((issue.plan.offset - bounds.start) / bounds.span) * 100;
+  const duration = (issue.plan.effort_units / bounds.span) * 100;
   return { start: `${start}%`, duration: `${duration}%` };
 }
 
 function runwayIssue(issue, bounds, weeks, onSelect) {
   const track = element("div", { className: "runway-track" });
-  const bar = element("button", { className: "runway-bar", text: `#${issue.number} · ${issue.title}`, attrs: { type: "button", title: `${issue.plan.effort_days} default working days · ${issue.priority_name}` } });
+  const bar = element("button", { className: "runway-bar", text: `#${issue.number} · ${issue.title}`, attrs: { type: "button", title: `${issue.plan.effort_units} default effort units · ${issue.priority_name}` } });
   const position = barPosition(issue, bounds);
   track.style.setProperty("--weeks", weeks);
   bar.style.setProperty("--start", position.start);
@@ -128,9 +122,13 @@ export function renderRunway(container, report, issues, onSelect) {
   const weeks = weekCount(bounds);
   const grid = element("div", { className: "runway-grid" });
   grid.style.setProperty("--weeks", weeks);
-  grid.append(runwayHead(bounds, weeks));
+  grid.append(runwayHead(weeks));
   appendStreamRows(grid, report, issues, bounds, weeks, onSelect);
-  container.append(element("div", { className: "runway-view", attrs: { "data-view-panel": "runway" } }, [grid]));
+  const notice = element("div", { className: "runway-notice" }, [
+    element("strong", { text: "Indicative only — not a schedule" }),
+    element("span", { text: "Relative sequence and default effort help compare the backlog; they are not delivery commitments." }),
+  ]);
+  container.append(element("div", { className: "runway-view", attrs: { "data-view-panel": "runway" } }, [notice, grid]));
 }
 
 function labelCell(issue) {
@@ -145,7 +143,6 @@ function queueRow(issue, streams, onSelect) {
     element("td", { text: issue.priority_name }),
     element("td", { text: streams.get(issue.workstream).name }),
     element("td", {}, [labelCell(issue)]),
-    element("td", { text: shortDate(issue.updated_at) }),
   ]);
   row.addEventListener("click", () => onSelect(issue));
   row.addEventListener("keydown", (event) => {
@@ -155,7 +152,7 @@ function queueRow(issue, streams, onSelect) {
 }
 
 function tableHead() {
-  const labels = ["Issue", "Title", "Recommended queue", "Workstream", "Labels", "Updated"];
+  const labels = ["Issue", "Title", "Recommended queue", "Workstream", "Labels"];
   return element("thead", {}, [element("tr", {}, labels.map((label) => element("th", { text: label })))]);
 }
 

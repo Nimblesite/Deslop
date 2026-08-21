@@ -54,7 +54,7 @@ class IssueReportTests(unittest.TestCase):
         item = issue(1, "VSIX panel misses a clone", ("false-negative",))
         self.assertEqual(workstream_for(item), "accuracy")
 
-    def test_report_builds_relationships_and_schedule(self) -> None:
+    def test_report_builds_relationships_and_indicative_sequence(self) -> None:
         issues = [
             issue(10, "Parent pipeline work", ("critical",), sub_issues=(11,)),
             issue(11, "Cache implementation", body="Related to #12"),
@@ -69,7 +69,12 @@ class IssueReportTests(unittest.TestCase):
         self.assertEqual(report["issues"][0]["lifecycle"], "verify")
         first_issue = report["issues"][0]
         self.assertIn("plan", first_issue)
-        self.assertEqual(first_issue.get("plan", {})["effort_days"], 2)
+        plan = first_issue.get("plan", {})
+        self.assertEqual(plan["offset"], 0)
+        self.assertEqual(plan["effort_units"], 2)
+        self.assertNotIn("start", plan)
+        self.assertNotIn("end", plan)
+        self.assertIn("not a schedule", report["meta"]["planning_note"].lower())
         self.assertIn(
             {"source": 10, "target": 11, "kind": "sub_issue"},
             report["relationships"],

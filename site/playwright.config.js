@@ -1,9 +1,12 @@
+const testPort = process.env.DESLOP_SITE_TEST_PORT || "8092";
+const testUrl = `http://127.0.0.1:${testPort}`;
+
 export default {
   testDir: "./tests",
-  use: { baseURL: "http://127.0.0.1:8092" },
+  use: { baseURL: testUrl },
   webServer: {
-    command: "npm run dev -- --port=8092",
-    url: "http://127.0.0.1:8092/",
+    command: `npm run dev -- --port=${testPort}`,
+    url: `${testUrl}/`,
     reuseExistingServer: !process.env.CI,
   },
 };

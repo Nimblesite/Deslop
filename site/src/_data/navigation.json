@@ -42,15 +42,21 @@
   "docsExtras": [
     {
       "group": "trust",
-      "i18nKey": "docsNav.issueMap",
+      "i18nKey": "docsNav.interactiveGraph",
       "url": "/issues/",
       "icon": "hub"
     },
     {
       "group": "trust",
-      "i18nKey": "docsNav.issueOverview",
-      "url": "/issues/overview/",
+      "i18nKey": "docsNav.statsDashboard",
+      "url": "/issues/statistics/",
       "icon": "dashboard"
+    },
+    {
+      "group": "trust",
+      "i18nKey": "docsNav.issuePlanner",
+      "url": "/issues/planner/",
+      "icon": "view_timeline"
     }
   ],
   "footer": [
@@ -104,9 +110,21 @@
           "url": "/releases/"
         },
         {
-          "text": "Issue map",
-          "i18nKey": "docsNav.issueMap",
+          "text": "Interactive graph",
+          "i18nKey": "docsNav.interactiveGraph",
           "url": "/issues/",
+          "noLangPrefix": true
+        },
+        {
+          "text": "Stats dashboard",
+          "i18nKey": "docsNav.statsDashboard",
+          "url": "/issues/statistics/",
+          "noLangPrefix": true
+        },
+        {
+          "text": "Issue planner",
+          "i18nKey": "docsNav.issuePlanner",
+          "url": "/issues/planner/",
           "noLangPrefix": true
         }
       ]

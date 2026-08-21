@@ -7,7 +7,7 @@ import os
 import subprocess
 import sys
 from collections import Counter, defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import NotRequired, TypedDict, cast
 
@@ -79,9 +79,8 @@ class AssigneeData(TypedDict):
 
 
 class PlanData(TypedDict):
-    start: str
-    end: str
-    effort_days: int
+    offset: int
+    effort_units: int
     track: int
 
 
@@ -362,7 +361,7 @@ def relationship_edges(issues: list[RawIssue]) -> list[RelationshipData]:
 
 
 def compact_labels(item: RawIssue) -> list[LabelData]:
-    return [{"name": label["name"], "color": f"#{label['color']}", "description": label.get("description") or ""} for label in item.get("labels", [])]
+    return [{"name": label["name"], "color": label["color"], "description": label.get("description") or ""} for label in item.get("labels", [])]
 
 
 def compact_assignees(item: RawIssue) -> list[AssigneeData]:
@@ -396,28 +395,14 @@ def effort_for(issue: IssueData) -> int:
     return {"Feature": 8, "Task": 4, "Bug": 5}.get(issue["type"], 4)
 
 
-def next_workday(day: date) -> date:
-    while day.weekday() >= 5:
-        day += timedelta(days=1)
-    return day
-
-
-def add_workdays(start: date, count: int) -> date:
-    current = next_workday(start)
-    for _ in range(max(count - 1, 0)):
-        current = next_workday(current + timedelta(days=1))
-    return current
-
-
-def schedule_issues(issues: list[IssueData], start: date) -> None:
-    availability: defaultdict[str, list[date]] = defaultdict(lambda: [next_workday(start), next_workday(start)])
+def schedule_issues(issues: list[IssueData]) -> None:
+    availability: defaultdict[str, list[int]] = defaultdict(lambda: [0, 0])
     for issue in issues:
         track = min(range(2), key=lambda index: availability[issue["workstream"]][index])
-        planned_start = availability[issue["workstream"]][track]
+        offset = availability[issue["workstream"]][track]
         effort = effort_for(issue)
-        planned_end = add_workdays(planned_start, effort)
-        availability[issue["workstream"]][track] = next_workday(planned_end + timedelta(days=1))
-        issue["plan"] = {"start": planned_start.isoformat(), "end": planned_end.isoformat(), "effort_days": effort, "track": track}
+        availability[issue["workstream"]][track] = offset + effort
+        issue["plan"] = {"offset": offset, "effort_units": effort, "track": track}
 
 
 def sort_issues(issues: list[IssueData]) -> list[IssueData]:
@@ -451,13 +436,13 @@ def build_report(raw_issues: list[RawIssue], repo: str, generated_date: date) ->
     relationships = relationship_edges(raw_issues)
     inbound = Counter(edge["target"] for edge in relationships)
     issues = sort_issues([compact_issue(item, inbound[item["number"]]) for item in raw_issues])
-    schedule_issues(issues, generated_date)
+    schedule_issues(issues)
     return {
         "meta": {
             "repo": repo, "generated_at": generated_date.isoformat(),
             "source_url": f"https://github.com/{repo}/issues",
             "method": "GitHub metadata, explicit relationships, cross-references, and documented keyword rules. No AI enrichment.",
-            "planning_note": "Dates use two parallel tracks per workstream and default effort: verify 2, showstopper 3, critical 4, bug 5, task 4, feature 8 working days.",
+            "planning_note": "Indicative only — not a schedule. Relative sequencing uses two parallel tracks per workstream and default effort units: verify 2, showstopper 3, critical 4, bug 5, task 4, feature 8.",
         },
         "summary": summarize(issues, relationships), "workstreams": workstream_data(issues),
         "priorities": priority_data(issues), "issues": issues, "relationships": relationships,

@@ -65,14 +65,21 @@ fn same_file_cluster_is_one_file_with_distinct_member_spans() -> Result<()> {
         "one path is one file, however many cluster members it carries"
     );
     let [cluster] = report.clusters.as_slice() else {
-        bail!("exactly one fabricated cluster must render, got {}", report.clusters.len());
+        bail!(
+            "exactly one fabricated cluster must render, got {}",
+            report.clusters.len()
+        );
     };
     let paths: Vec<&str> = cluster
         .occurrences
         .iter()
         .filter_map(|occurrence| occurrence.path.to_str())
         .collect();
-    assert_eq!(paths, ["pair.py", "pair.py"], "both members live in pair.py");
+    assert_eq!(
+        paths,
+        ["pair.py", "pair.py"],
+        "both members live in pair.py"
+    );
     let spans: Vec<(usize, usize)> = cluster
         .occurrences
         .iter()
@@ -117,7 +124,10 @@ fn same_file_cluster_promotes_only_at_the_single_file_floor() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let report = rendered_same_file_report(tmp.path());
     let [cluster] = report.clusters.as_slice() else {
-        bail!("exactly one fabricated cluster must render, got {}", report.clusters.len());
+        bail!(
+            "exactly one fabricated cluster must render, got {}",
+            report.clusters.len()
+        );
     };
     let support = cluster
         .signals

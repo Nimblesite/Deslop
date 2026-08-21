@@ -1,6 +1,6 @@
 # report-golden — the Phase 0 cold-report golden [PIPELINE-DETERMINISM]
 
-`expected-report.json` is the complete rendered JSON report for a cold `--no-incremental` scan of `src/`, pinned byte-for-byte by `crates/deslop/tests/report_golden.rs`. It is the Phase 0 baseline of `docs/plans/incremental-analysis-plan.md`: every later incremental phase (warm cache, delta re-analysis, live sessions) must reproduce this exact report over this unchanged corpus, so any drift in ranking, spans, cluster ids, metrics arithmetic, or serialisation order fails against this file first.
+`expected-report.json` is the complete rendered JSON report for a cold `--no-incremental` scan of `src/`, pinned byte-for-byte by `crates/deslop/tests/report_golden.rs`. It is the baseline every reuse path owes ([PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE]): a warm cache, a spliced live session and a delta re-analysis must all reproduce this exact report over this unchanged corpus, so any drift in ranking, spans, cluster ids, metrics arithmetic, or serialisation order fails against this file first.
 
 ## The corpus
 

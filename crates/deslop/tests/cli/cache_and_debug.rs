@@ -441,7 +441,16 @@ fn assert_ast_golden(fixture_dir: &str, sample_name: &str) -> Result<()> {
         expected,
         "AST dump drifted from {}. Regenerating is NOT the default remedy — \
          prove the new dump satisfies the contract first; the committed file \
-         is only a golden while it is correct.",
+         is only a golden while it is correct.\n\
+         If the new dump IS correct, the normalised tree has changed meaning \
+         while the parse store's blob layout has not, so **bump \
+         `fpcache::blob::SEMANTIC_EPOCH`** in the same change \
+         ([PIPELINE-INCREMENTAL-INTEGRITY]). Blobs are addressed by \
+         `(language, tool_version, min_nodes, source_hash)` and the workspace \
+         version is the permanently-reused `0.0.0-dev`, so without that bump \
+         every already-stored tree stays addressable and a warm run serves \
+         the pre-change normalisation — the one way a warm report can differ \
+         from the cold report of the same tree.",
         expected_path.display(),
     );
     assert_dump_is_correct(&expected, fs::metadata(&source)?.len(), fixture_dir);

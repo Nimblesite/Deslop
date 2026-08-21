@@ -47,7 +47,11 @@ fn same_named_rename_clone_surfaces_while_real_polymorphism_stays_hidden() -> Re
         "a total consistent rename is the definition of nearly-identical: \
          {report:#}"
     );
-    assert_eq!(cluster_size(clone), 2, "one occurrence per file: {report:#}");
+    assert_eq!(
+        cluster_size(clone),
+        2,
+        "one occurrence per file: {report:#}"
+    );
     assert!(
         approx(signal(clone, "structural"), 1.0),
         "identifier renames are invisible to the normalised tree: {report:#}"
@@ -93,8 +97,7 @@ fn same_named_rename_clone_surfaces_while_real_polymorphism_stays_hidden() -> Re
          gate must keep suppressing them in the same run that surfaces \
          the rename clone: {contract_visible:#?}"
     );
-    let contract_duplication =
-        metric_field(&contract_report, "duplication_percent").as_f64();
+    let contract_duplication = metric_field(&contract_report, "duplication_percent").as_f64();
     assert!(
         approx(contract_duplication.unwrap_or(-1.0), 0.0),
         "nothing extractable exists across the four backends, so the \

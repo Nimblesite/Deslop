@@ -39,9 +39,7 @@ use crate::common::{clone_corpus::*, incremental::*, *};
 /// run fills the store ({hits: 0, misses: 5}) and the warm run serves
 /// it in full ({hits: 5, misses: 0}).
 fn seeded_warm_root() -> Result<(tempfile::TempDir, PathBuf, Value, Value)> {
-    let guard = tempfile::tempdir()?;
-    let root = guard.path().join("src");
-    seed_tree(&root, &corpus())?;
+    let (guard, root) = seeded_scan_root(&corpus())?;
     let cold = run(&root, true)?;
     assert_cache_stats(&cold, 0, 5, "baseline cold");
     let warm = run(&root, true)?;
@@ -146,16 +144,17 @@ fn renaming_a_file_hits_the_content_addressed_store_and_matches_cold() -> Result
     let renamed_trio = ["dup_a.rs", "dup_b.rs", "dup_moved.rs"];
     assert_report_shape(&incremental, 5, &renamed_trio, "post-rename incremental")?;
     assert_report_shape(&truth, 5, &renamed_trio, "post-rename ground truth")?;
-    let paths = all_report_paths(&incremental);
-    assert_eq!(
-        paths.iter().filter(|path| *path == "dup_moved.rs").count(),
+    assert_reported_path_count(
+        &incremental,
+        "dup_moved.rs",
         2,
-        "renamed file must appear as one occurrence and one per-file metric row: {incremental}"
+        "the renamed file must appear as one occurrence and one per-file metric row",
     );
-    assert_eq!(
-        paths.iter().filter(|path| *path == "dup_c.rs").count(),
+    assert_reported_path_count(
+        &incremental,
+        "dup_c.rs",
         0,
-        "the old name must vanish from every reported path: {incremental}"
+        "the old name must vanish from every reported path",
     );
     assert_reports_equal(&incremental, &truth, "same-bytes rename");
     Ok(())

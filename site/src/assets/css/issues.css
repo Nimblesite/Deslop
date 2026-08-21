@@ -77,6 +77,7 @@
 .issue-atlas--graph .network-view { width: 100%; height: 100%; min-height: 0; }
 .atlas-app--graph { max-width: none; position: relative; box-shadow: none; }
 .issue-atlas--graph .network-view { grid-template-rows: auto minmax(0, 1fr) auto; }
+.issue-atlas--graph .network-tools { padding-left: 23rem; }
 .issue-atlas--graph .network-canvas,
 .issue-atlas--graph .network-svg { width: 100%; height: 100%; min-height: 0; }
 
@@ -153,12 +154,15 @@
 
 .label-chip { display: inline-flex; padding: 0.22rem 0.42rem; border-radius: 999px; background: var(--label-color); color: #111; font: 700 0.56rem/1 var(--font-mono); }
 .runway-view { min-height: 46rem; overflow: auto; }
+.runway-notice { min-width: 78rem; padding: 0.9rem 1rem; display: flex; align-items: baseline; gap: 0.75rem; background: color-mix(in srgb, var(--verify) 7%, var(--surface-container-low)); box-shadow: inset 3px 0 0 var(--verify); }
+.runway-notice strong { font: 700 0.72rem/1 var(--font-mono); color: var(--on-surface); text-transform: uppercase; letter-spacing: 0.06em; }
+.runway-notice span { color: var(--on-surface-variant); font-size: 0.75rem; }
 .runway-grid { min-width: 78rem; position: relative; background: var(--surface-container-lowest); }
 .runway-head, .runway-row { display: grid; grid-template-columns: 20rem 1fr; }
 .runway-head { position: sticky; top: 0; z-index: 3; background: var(--surface-container-high); }
 .runway-head__label { padding: 1rem; font: 0.65rem/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
-.runway-weeks { display: grid; grid-template-columns: repeat(var(--weeks), 1fr); }
-.runway-week { padding: 1rem 0.6rem; border-left: 1px solid var(--outline-variant); font: 0.6rem/1 var(--font-mono); color: var(--outline); }
+.runway-steps { display: grid; grid-template-columns: repeat(var(--weeks), 1fr); }
+.runway-step { padding: 1rem 0.6rem; border-left: 1px solid var(--outline-variant); font: 0.6rem/1 var(--font-mono); color: var(--outline); }
 .runway-stream { padding: 0.75rem 1rem; position: sticky; left: 0; z-index: 2; background: var(--surface-container-low); box-shadow: inset 3px 0 0 var(--stream-color); font: 700 0.72rem/1 var(--font-mono); color: var(--on-surface); }
 .runway-stream span { color: var(--outline); font-weight: 400; }
 .runway-row__label { padding: 0.65rem 1rem; position: sticky; left: 0; z-index: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; background: var(--surface-container); color: var(--on-surface-variant); font-size: 0.74rem; }
@@ -166,7 +170,7 @@
 .runway-bar { position: absolute; top: 0.45rem; left: var(--start); width: max(var(--duration), 1.2rem); height: 1.75rem; border: 0; overflow: hidden; padding: 0 0.6rem; cursor: pointer; white-space: nowrap; text-overflow: ellipsis; text-align: left; background: var(--bar-color); color: #111; font: 700 0.62rem/1 var(--font-mono); }
 
 .queue-wrap { min-height: 46rem; overflow: auto; }
-.issue-table { width: 100%; min-width: 68rem; border-collapse: collapse; }
+.issue-table { width: 100%; min-width: 60rem; border-collapse: collapse; }
 .issue-table th { position: sticky; top: 0; z-index: 2; padding: 1rem; text-align: left; background: var(--surface-container-high); color: var(--outline); font: 0.6rem/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
 .issue-table td { padding: 0.85rem 1rem; background: var(--surface-container-lowest); box-shadow: inset 0 -1px 0 var(--outline-variant); color: var(--on-surface-variant); font-size: 0.78rem; }
 .issue-table tr { cursor: pointer; }
@@ -210,6 +214,8 @@
 @media (prefers-reduced-motion: reduce) { .signal-orbit, .atlas-loading span { animation: none; } }
 
 @media (max-width: 900px) {
+  .issue-atlas--graph .network-tools { justify-content: flex-end; padding-left: 1rem; }
+  .issue-atlas--graph .network-hint { display: none; }
   .atlas-hero { grid-template-columns: 1fr; padding-top: 5rem; }
   .atlas-hero__signal { display: none; }
   .atlas-summary { grid-template-columns: 1fr 1fr; }

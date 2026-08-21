@@ -100,52 +100,7 @@ layout: layouts/base.njk
 {% set navPages = collections.all | eleventyNavigation %}
 
 <div class="docs-shell">
-  <aside class="docs-sidebar" id="docs-sidebar">
-    <div class="docs-sidebar__brand">
-      <h2>{{ "docs.brand" | t(currentLang) | default("The Manuscript") }}</h2>
-      <p class="docs-sidebar__version">{{ "docs.versionTag" | t(currentLang) | default("Live LSP + MCP · preview") }}</p>
-    </div>
-    <nav class="docs-sidebar__site-nav" aria-label="Site">
-      <a href="{{ langPrefix }}/" class="docs-sidebar__link">{{ "nav.home" | t(currentLang) | default("Home") }}</a>
-      {% for item in navigation.main %}
-      {% set navUrl = item.url %}
-      {% if not item.external and not item.noLangPrefix and currentLang != defaultLanguage %}{% set navUrl = item.url | altLangUrl('en', currentLang) %}{% endif %}
-      <a href="{{ navUrl }}" class="docs-sidebar__link"{% if item.external %} target="_blank" rel="noopener noreferrer"{% endif %}>{% if item.i18nKey and currentLang != defaultLanguage %}{{ item.i18nKey | t(currentLang) | default(item.text) }}{% else %}{{ item.text }}{% endif %}</a>
-      {% endfor %}
-    </nav>
-    <nav class="docs-sidebar__nav" aria-label="Documentation">
-      {% for group in navigation.docsGroups %}
-      <details class="docs-nav-group" data-docs-group="{{ group.id }}"{% if docsGroup == group.id %} open{% endif %}>
-        <summary class="docs-nav-group__summary">{{ group.i18nKey | t(currentLang) | default(group.id) }}</summary>
-        <div class="docs-nav-group__items">
-        {% for entry in navPages %}
-        {% set entryLang = entry.url | extractLangFromUrl(defaultLanguage) %}
-        {% if entryLang == currentLang and entry.data.docsGroup == group.id %}
-        <a href="{{ entry.url }}" class="docs-sidebar__link{% if page.url == entry.url %} is-active{% endif %}">
-          <span class="material-symbols-outlined">{{ entry.data.icon | default("article") }}</span>
-          <span class="docs-sidebar__label">{{ entry.title }}</span>
-        </a>
-        {% endif %}
-        {% endfor %}
-        {% for item in navigation.docsExtras %}
-        {% if item.group == group.id %}
-        <a href="{{ item.url }}" class="docs-sidebar__link">
-          <span class="material-symbols-outlined">{{ item.icon | default("article") }}</span>
-          <span class="docs-sidebar__label">{{ item.i18nKey | t(currentLang) }}</span>
-        </a>
-        {% endif %}
-        {% endfor %}
-        </div>
-      </details>
-      {% endfor %}
-    </nav>
-    <div class="docs-sidebar__foot">
-      <a href="https://github.com/Nimblesite/Deslop" class="docs-sidebar__cta">
-        <span class="material-symbols-outlined">support_agent</span>
-        {{ "docs.communitySupport" | t(currentLang) | default("Community support") }}
-      </a>
-    </div>
-  </aside>
+  {% include "partials/docs-sidebar.njk" %}
 
   <main class="docs-main">
     <article class="docs-article">
@@ -365,7 +320,7 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
         "inLanguage": "{{ lang | default('en') }}"
       },
       {
-        "@type": "{% if page.url.startsWith('/docs/') %}TechArticle{% elif page.url.startsWith('/blog/') and page.url != '/blog/' %}BlogPosting{% else %}WebPage{% endif %}",
+        "@type": "{% if page.url.startsWith('/docs/') or docsShell %}TechArticle{% elif page.url.startsWith('/blog/') and page.url != '/blog/' %}BlogPosting{% else %}WebPage{% endif %}",
         "@id": "{{ site.url }}{{ page.url }}#webpage",
         "url": "{{ site.url }}{{ page.url }}",
         "name": "{{ title | default(site.title) }}",
@@ -413,7 +368,7 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   {% if site.stylesheet %}<link rel="stylesheet" href="{{ site.stylesheet }}">{% endif %}
   {% block head %}{% endblock %}
 </head>
-<body class="{% if basePath.startsWith('/docs/') %}is-docs{% endif %}{% if bodyClass %} {{ bodyClass }}{% endif %}">
+<body class="{% if basePath.startsWith('/docs/') or docsShell %}is-docs{% endif %}{% if bodyClass %} {{ bodyClass }}{% endif %}">
   <a href="#main-content" class="skip-link">Skip to main content</a>
 
   <header class="site-header">

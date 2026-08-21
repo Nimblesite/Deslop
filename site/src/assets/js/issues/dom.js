@@ -19,13 +19,10 @@ export function clear(node) {
   node.replaceChildren();
 }
 
-export function shortDate(value) {
-  return new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
-}
-
 export function labelChip(label) {
   const chip = element("span", { className: "label-chip", text: label.name });
-  chip.style.setProperty("--label-color", label.color);
+  const color = label.color.startsWith("#") ? label.color : `#${label.color}`;
+  chip.style.setProperty("--label-color", color);
   if (label.description) chip.title = label.description;
   return chip;
 }

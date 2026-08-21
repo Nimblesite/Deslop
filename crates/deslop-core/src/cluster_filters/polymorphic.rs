@@ -9,8 +9,8 @@
 use tree_sitter::Node;
 
 use super::{
-    body_shape::body_kind_stream, enclosing_kind, function_kinds, parse_for,
-    spans_multiple_files, Snippet,
+    body_shape::body_kind_stream, enclosing_kind, function_kinds, parse_for, spans_multiple_files,
+    Snippet,
 };
 use crate::ast::ByteRange;
 

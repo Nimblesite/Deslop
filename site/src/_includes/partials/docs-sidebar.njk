@@ -1,0 +1,45 @@
+<aside class="docs-sidebar" id="docs-sidebar">
+  <button type="button" class="docs-sidebar__collapse" data-docs-sidebar-collapse aria-label="Collapse documentation sidebar" aria-expanded="true">
+    <span aria-hidden="true">‹</span>
+  </button>
+  <nav class="docs-sidebar__site-nav" aria-label="Site">
+    <a href="{{ langPrefix }}/" class="docs-sidebar__link">{{ "nav.home" | t(currentLang) | default("Home") }}</a>
+    {% for item in navigation.main %}
+    {% set navUrl = item.url %}
+    {% if not item.external and not item.noLangPrefix and currentLang != defaultLanguage %}{% set navUrl = item.url | altLangUrl('en', currentLang) %}{% endif %}
+    <a href="{{ navUrl }}" class="docs-sidebar__link"{% if item.external %} target="_blank" rel="noopener noreferrer"{% endif %}>{% if item.i18nKey and currentLang != defaultLanguage %}{{ item.i18nKey | t(currentLang) | default(item.text) }}{% else %}{{ item.text }}{% endif %}</a>
+    {% endfor %}
+  </nav>
+  <nav class="docs-sidebar__nav" aria-label="Documentation">
+    {% for group in navigation.docsGroups %}
+    <details class="docs-nav-group" data-docs-group="{{ group.id }}"{% if docsGroup == group.id %} open{% endif %}>
+      <summary class="docs-nav-group__summary">{{ group.i18nKey | t(currentLang) | default(group.id) }}</summary>
+      <div class="docs-nav-group__items">
+      {% for entry in navPages %}
+      {% set entryLang = entry.url | extractLangFromUrl(defaultLanguage) %}
+      {% if entryLang == currentLang and entry.data.docsGroup == group.id %}
+      <a href="{{ entry.url }}" class="docs-sidebar__link{% if page.url == entry.url %} is-active{% endif %}">
+        <span class="material-symbols-outlined" aria-hidden="true">{{ entry.data.icon | default("article") }}</span>
+        <span class="docs-sidebar__label">{{ entry.title }}</span>
+      </a>
+      {% endif %}
+      {% endfor %}
+      {% for item in navigation.docsExtras %}
+      {% if item.group == group.id and (not item.lang or item.lang == currentLang) %}
+      <a href="{{ item.url }}" class="docs-sidebar__link{% if page.url == item.url %} is-active{% endif %}">
+        <span class="material-symbols-outlined" aria-hidden="true">{{ item.icon | default("article") }}</span>
+        <span class="docs-sidebar__label">{{ item.i18nKey | t(currentLang) }}</span>
+      </a>
+      {% endif %}
+      {% endfor %}
+      </div>
+    </details>
+    {% endfor %}
+  </nav>
+  <div class="docs-sidebar__foot">
+    <a href="https://github.com/Nimblesite/Deslop" class="docs-sidebar__cta">
+      <span class="material-symbols-outlined" aria-hidden="true">support_agent</span>
+      {{ "docs.communitySupport" | t(currentLang) | default("Community support") }}
+    </a>
+  </div>
+</aside>
