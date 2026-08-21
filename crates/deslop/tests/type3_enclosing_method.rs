@@ -66,11 +66,23 @@ use serde_json::Value;
 mod common;
 use crate::common::*;
 
-/// The whole-method span the surviving cluster must cover in one file.
+/// The whole-method span the surviving cluster must cover in one file,
+/// and the exact extent the elected occurrence must publish.
 struct MethodSpan {
     path: &'static str,
     first_line: u64,
     last_line: u64,
+    /// First line of the exact published extent. Equal to the method's
+    /// own span for shell-less languages; for C# and Go it additionally
+    /// carries the namespace/class or package shell. Each fixture file
+    /// holds nothing but the one method, so the shell is the method's
+    /// own address — but any *other* extent, wider or narrower, is a
+    /// mis-scoped survivor, and the previous covers-only check accepted
+    /// any class-, module-, or file-sized view that happened to enclose
+    /// the method.
+    published_first: u64,
+    /// Last line of the exact published extent.
+    published_last: u64,
 }
 
 /// Reads a 1-based line field from a report occurrence.
@@ -78,12 +90,15 @@ fn occurrence_line(occurrence: &Value, key: &str) -> u64 {
     occurrence.get(key).and_then(Value::as_u64).unwrap_or(0)
 }
 
-/// Finds the occurrence in `cluster` that covers the whole method span.
+/// Finds the occurrence in `cluster` published at exactly the expected
+/// extent — an occurrence that merely encloses the method (a class,
+/// module, or file-sized survivor lumping unrelated code) does not
+/// qualify.
 fn covering_occurrence<'a>(cluster: &'a Value, span: &MethodSpan) -> Option<&'a Value> {
     occurrences(cluster).iter().find(|occurrence| {
         occurrence.get("path").and_then(Value::as_str) == Some(span.path)
-            && occurrence_line(occurrence, "start_line") <= span.first_line
-            && occurrence_line(occurrence, "end_line") >= span.last_line
+            && occurrence_line(occurrence, "start_line") == span.published_first
+            && occurrence_line(occurrence, "end_line") == span.published_last
     })
 }
 
@@ -118,6 +133,14 @@ fn assert_fragments_absorbed(report: &Value, survivor: &Value, files: [&str; 2])
 
 /// The full #408 contract for one language fixture.
 fn assert_enclosing_pair_visible(name: &str, left: &MethodSpan, right: &MethodSpan) -> Result<()> {
+    for side in [left, right] {
+        assert!(
+            side.published_first <= side.first_line && side.published_last >= side.last_line,
+            "span table self-consistency: the published extent of {} must cover \
+             the method it names",
+            side.path
+        );
+    }
     let report = run_report(&fixture(name), 8)?;
     let Some(cluster) = enclosing_pair_cluster(&report, left, right) else {
         anyhow::bail!(
@@ -151,11 +174,19 @@ fn assert_enclosing_pair_visible(name: &str, left: &MethodSpan, right: &MethodSp
 }
 
 /// Shorthand for the span table below.
-const fn span(path: &'static str, first_line: u64, last_line: u64) -> MethodSpan {
+const fn span(
+    path: &'static str,
+    first_line: u64,
+    last_line: u64,
+    published_first: u64,
+    published_last: u64,
+) -> MethodSpan {
     MethodSpan {
         path,
         first_line,
         last_line,
+        published_first,
+        published_last,
     }
 }
 
@@ -163,8 +194,8 @@ const fn span(path: &'static str, first_line: u64, last_line: u64) -> MethodSpan
 fn csharp_type3_reports_the_enclosing_method_pair() -> Result<()> {
     assert_enclosing_pair_visible(
         "csharp-type3",
-        &span("Delta.cs", 5, 18),
-        &span("Epsilon.cs", 5, 17),
+        &span("Delta.cs", 5, 18, 1, 20),
+        &span("Epsilon.cs", 5, 17, 1, 19),
     )
 }
 
@@ -173,8 +204,8 @@ fn csharp_type3_reports_the_enclosing_method_pair() -> Result<()> {
 fn dart_type3_reports_the_enclosing_method_pair() -> Result<()> {
     assert_enclosing_pair_visible(
         "dart-type3",
-        &span("delta.dart", 1, 11),
-        &span("epsilon.dart", 1, 10),
+        &span("delta.dart", 1, 11, 1, 11),
+        &span("epsilon.dart", 1, 10, 1, 10),
     )
 }
 
@@ -183,8 +214,8 @@ fn dart_type3_reports_the_enclosing_method_pair() -> Result<()> {
 fn go_type3_reports_the_enclosing_method_pair() -> Result<()> {
     assert_enclosing_pair_visible(
         "go-type3",
-        &span("delta.go", 3, 13),
-        &span("epsilon.go", 3, 12),
+        &span("delta.go", 3, 13, 1, 13),
+        &span("epsilon.go", 3, 12, 1, 12),
     )
 }
 
@@ -193,8 +224,8 @@ fn go_type3_reports_the_enclosing_method_pair() -> Result<()> {
 fn python_type3_reports_the_enclosing_method_pair() -> Result<()> {
     assert_enclosing_pair_visible(
         "python-type3",
-        &span("alpha.py", 1, 8),
-        &span("beta.py", 1, 7),
+        &span("alpha.py", 1, 8, 1, 8),
+        &span("beta.py", 1, 7, 1, 7),
     )
 }
 
@@ -203,7 +234,7 @@ fn python_type3_reports_the_enclosing_method_pair() -> Result<()> {
 fn ts_type3_one_inserted_statement_must_not_erase_the_method_pair() -> Result<()> {
     assert_enclosing_pair_visible(
         "ts-type3-stmt",
-        &span("pointBoard.ts", 1, 12),
-        &span("scoreBoard.ts", 1, 11),
+        &span("pointBoard.ts", 1, 12, 1, 12),
+        &span("scoreBoard.ts", 1, 11, 1, 11),
     )
 }
