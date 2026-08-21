@@ -86,8 +86,11 @@ impl PipelineSession {
         // itself nowhere, buckets down, and is hidden — losing both
         // families to the presence of each other. Elect the families
         // back out before anything is measured.
-        let fused_clusters =
-            split_structural_families(cluster_by_transitive_closure(&pairs), fingerprints);
+        let fused_clusters = split_structural_families(
+            cluster_by_transitive_closure(&pairs),
+            fingerprints,
+            &self.file_languages,
+        );
         // [CLONE-NOISE-VERBATIM-SUBGROUP] Partition a noise family off
         // the byte-identical copy it swept up *before* signals are
         // measured, so the surviving cluster is measured, bucketed and

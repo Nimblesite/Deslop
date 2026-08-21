@@ -39,7 +39,9 @@
 //! they cover, and only a component spanning **two or more** regions is
 //! split.
 
-use crate::{fingerprint::Fingerprint, pair::FusedCluster};
+use std::{collections::HashMap, hash::BuildHasher};
+
+use crate::{fingerprint::Fingerprint, pair::FusedCluster, state::FileId};
 
 use super::family::{families_by, restrict};
 
@@ -57,19 +59,29 @@ const MIN_REGIONS_TO_SPLIT: usize = 2;
 ///
 /// Components covering a single region are returned untouched, so an
 /// ordinary Type-3 cluster keeps every occurrence it had.
-pub(crate) fn split_structural_families(
+pub(crate) fn split_structural_families<S: BuildHasher>(
     fused_clusters: Vec<FusedCluster>,
     fingerprints: &[Fingerprint],
+    file_languages: &HashMap<FileId, &'static str, S>,
 ) -> Vec<FusedCluster> {
     fused_clusters
         .into_iter()
-        .flat_map(|fused| split_one(&fused, fingerprints).unwrap_or_else(|| vec![fused]))
+        .flat_map(|fused| {
+            split_one(&fused, fingerprints, file_languages).unwrap_or_else(|| vec![fused])
+        })
         .collect()
 }
 
 /// The replacement components for one cluster, or `None` to keep it as
 /// it is.
-fn split_one(fused: &FusedCluster, fingerprints: &[Fingerprint]) -> Option<Vec<FusedCluster>> {
+fn split_one<S: BuildHasher>(
+    fused: &FusedCluster,
+    fingerprints: &[Fingerprint],
+    file_languages: &HashMap<FileId, &'static str, S>,
+) -> Option<Vec<FusedCluster>> {
+    if !speaks_one_language(&fused.members, fingerprints, file_languages) {
+        return None;
+    }
     let families = families_by(&fused.members, |index| {
         fingerprints.get(index).map(|member| member.hash)
     });
@@ -85,6 +97,32 @@ fn split_one(fused: &FusedCluster, fingerprints: &[Fingerprint]) -> Option<Vec<F
             .map(|region| restrict(fused, region))
             .collect()
     })
+}
+
+/// True when every member of the component was parsed from the same
+/// language.
+///
+/// The digest premise holds inside one language only. Two normalised
+/// subtrees of one grammar differ because the code differs; two subtrees
+/// of *different* grammars differ because the grammars do, and nothing
+/// follows about whether either is a copy of the other. A component
+/// spanning languages exists only because [CONFIG-CROSS-LANGUAGE] was
+/// opted into, and splitting it into one cluster per language deletes
+/// precisely the finding that opt-in asks for. A component whose
+/// languages cannot be resolved is left alone for the same reason.
+fn speaks_one_language<S: BuildHasher>(
+    members: &[usize],
+    fingerprints: &[Fingerprint],
+    file_languages: &HashMap<FileId, &'static str, S>,
+) -> bool {
+    let mut languages = members.iter().filter_map(|index| {
+        fingerprints
+            .get(*index)
+            .and_then(|member| file_languages.get(&member.file_id))
+    });
+    languages
+        .next()
+        .is_some_and(|first| languages.all(|language| language == first))
 }
 
 /// Partitions `families` into the regions of source they cover, merging

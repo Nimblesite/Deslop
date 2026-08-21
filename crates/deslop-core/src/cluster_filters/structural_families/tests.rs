@@ -7,12 +7,22 @@
 //! else, and a corpus would only obscure which input drives which
 //! outcome.
 
+use std::collections::HashMap;
+
 use super::*;
 use crate::{
     ast::ByteRange,
     pair::FusedEdge,
     state::{FileId, FileRegistry},
 };
+
+/// The one language every member is parsed from, unless a test says
+/// otherwise. The pass reads it only to confirm the component does not
+/// span grammars.
+const LANGUAGE: &str = "csharp";
+
+/// A second grammar, so a component can span languages.
+const OTHER_LANGUAGE: &str = "python";
 
 /// The summing loop's normalised subtree.
 const SUM_HASH: u8 = 1;
@@ -111,10 +121,23 @@ fn placed_corpus(members: &[(u8, usize, usize, usize)]) -> Vec<Fingerprint> {
         .collect()
 }
 
+/// Every file behind `fingerprints`, all parsed from [`LANGUAGE`].
+fn one_language(fingerprints: &[Fingerprint]) -> HashMap<FileId, &'static str> {
+    fingerprints
+        .iter()
+        .map(|member| (member.file_id, LANGUAGE))
+        .collect()
+}
+
+/// Splits `fused_clusters` over a corpus that speaks a single language.
+fn elect(fused_clusters: Vec<FusedCluster>, fingerprints: &[Fingerprint]) -> Vec<FusedCluster> {
+    split_structural_families(fused_clusters, fingerprints, &one_language(fingerprints))
+}
+
 /// Splits one fully connected component over `hashes`.
 fn split(hashes: &[u8]) -> Vec<FusedCluster> {
     let fingerprints = corpus(hashes);
-    split_structural_families(vec![component(hashes.len())], &fingerprints)
+    elect(vec![component(hashes.len())], &fingerprints)
 }
 
 // The defect this module exists for: `csharp-mcp` in miniature — a
@@ -212,9 +235,9 @@ fn every_component_in_the_batch_is_considered() {
     };
 
     assert_eq!(
-        member_lists(&split_structural_families(
+        member_lists(&elect(
             vec![untouched, component(fingerprints.len())],
-            &fingerprints,
+            &fingerprints
         )),
         vec![vec![0, 1], vec![0, 1], vec![2, 3]],
         "the pass maps over the whole batch and keeps input order, so a \
@@ -238,10 +261,7 @@ fn families_covering_the_same_bytes_at_different_depths_are_left_whole() {
     ]);
 
     assert_eq!(
-        member_lists(&split_structural_families(
-            vec![component(4)],
-            &fingerprints
-        )),
+        member_lists(&elect(vec![component(4)], &fingerprints)),
         vec![vec![0, 1, 2, 3]],
         "the nested run lies inside the enclosing view, so these are one \
          duplication seen at two depths — subsumption elects between them, \
@@ -260,10 +280,7 @@ fn families_in_one_file_that_do_not_touch_are_still_split() {
     ]);
 
     assert_eq!(
-        member_lists(&split_structural_families(
-            vec![component(4)],
-            &fingerprints
-        )),
+        member_lists(&elect(vec![component(4)], &fingerprints)),
         vec![vec![0, 1], vec![2, 3]],
         "sharing a file is not sharing bytes; two disjoint runs welded by a \
          token edge are still two clusters"
@@ -288,13 +305,42 @@ fn a_bridge_family_enclosing_two_disjoint_clones_does_not_merge_them() {
     ]);
 
     assert_eq!(
-        member_lists(&split_structural_families(
-            vec![component(8)],
-            &fingerprints
-        )),
+        member_lists(&elect(vec![component(8)], &fingerprints)),
         vec![vec![0, 1], vec![2, 3], vec![4, 5, 6, 7]],
         "one-way enclosure is not a nesting: the summing clone, the \
          multiplying clone and the four-file shape are three findings, and \
          reporting their union reports none of them"
+    );
+}
+
+// [CONFIG-CROSS-LANGUAGE]: a port of one algorithm into another language is
+// a different normalised subtree by construction, so the digest says
+// nothing about whether it is a copy. Splitting on it deletes the very
+// finding the opt-in exists to produce.
+#[test]
+fn a_component_spanning_two_languages_is_left_whole() {
+    let fingerprints = corpus(&[SUM_HASH, SUM_HASH, PRODUCT_HASH, PRODUCT_HASH]);
+    let languages: HashMap<FileId, &'static str> = fingerprints
+        .iter()
+        .enumerate()
+        .map(|(position, member)| {
+            let language = if position < MIN_FAMILY_MEMBERS {
+                LANGUAGE
+            } else {
+                OTHER_LANGUAGE
+            };
+            (member.file_id, language)
+        })
+        .collect();
+
+    assert_eq!(
+        member_lists(&split_structural_families(
+            vec![component(fingerprints.len())],
+            &fingerprints,
+            &languages,
+        )),
+        vec![vec![0, 1, 2, 3]],
+        "two grammars produce two digests whatever the code says, so the \
+         cross-language cluster the user opted into must survive intact"
     );
 }
