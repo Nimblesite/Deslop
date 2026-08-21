@@ -27,11 +27,13 @@ fn report_path(tmp: &Path) -> PathBuf {
 }
 
 fn run_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value> {
+    report_with(tmp, scan_root, &["--min-nodes", "8", "--embeddings", "off"])
+}
+
+/// One CLI run with `extra_args`, parsed from the JSON report.
+fn report_with(tmp: &Path, scan_root: &Path, extra_args: &[&str]) -> Result<serde_json::Value> {
     let mut cmd = deslop_cmd(scan_root, &tmp.join("report"))?;
-    let _assertion = cmd
-        .args(["--min-nodes", "8", "--embeddings", "off"])
-        .assert()
-        .success();
+    let _assertion = cmd.args(extra_args).assert().success();
     let body = fs::read_to_string(report_path(tmp))?;
     Ok(serde_json::from_str(&body)?)
 }
@@ -261,10 +263,7 @@ fn no_two_clusters_cover_the_same_physical_bytes() -> Result<()> {
 /// The default-settings report for a fixture directory, with embeddings
 /// off so the assertion turns on deterministic signals only.
 fn default_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value> {
-    let mut cmd = deslop_cmd(scan_root, &tmp.join("report"))?;
-    let _assertion = cmd.args(["--embeddings", "off"]).assert().success();
-    let body = fs::read_to_string(report_path(tmp))?;
-    Ok(serde_json::from_str(&body)?)
+    report_with(tmp, scan_root, &["--embeddings", "off"])
 }
 
 /// One line per published cluster covering `needle`, for failure output.

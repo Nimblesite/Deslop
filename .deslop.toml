@@ -140,7 +140,13 @@ exclude = [
 #   single cluster 94 LOC of 16177 across ~1130 clusters — tracked in gh #397.
 #   Ratchet down as that work lands.
 #
-# 2026-08-20 — ratcheted 14.5 -> 12.9, and this ledger restored.
+# 2026-08-20 — this ledger restored; threshold kept at 14.5.
+#
+#   Correction (2026-08-21): this entry's original headline claimed
+#   "ratcheted 14.5 -> 12.9", but the pin below it was never changed from
+#   14.5 — the prose documented a ratchet that was not applied. The
+#   headline is corrected rather than the pin back-dated; the measured
+#   figures recorded below are unchanged and were accurate when taken.
 #
 #   The ledger above was deleted earlier on this branch and the threshold
 #   replaced with a bare, unmeasured `9.9` — a value no tree in this
@@ -174,5 +180,30 @@ exclude = [
 #   above describe — CLI invocation blocks, the VSIX unit suites,
 #   code_action/code_action_refusal — none introduced here. Tracked in
 #   gh #397. Ratchet down as that work lands.
+#
+# 2026-08-21 — re-measured 16.36 after the subsumption election was fixed;
+#   pinned 16.4.
+#
+#   Measured with this tree's `target/release/deslop` on itself:
+#     16.3602%   19557 redundant LOC / 119540 analysed / 1209 visible + 492
+#     hidden clusters
+#
+#   The rise from 12.83 is a measurement-basis correction, not added
+#   duplication. The 12.83 figure was taken while the election let any
+#   byte-proven sliver — one 8-node mandatory idiom line — overturn the
+#   demoted enclosing view over it ([PIPELINE-CLUSTER-SUBSUME]); the wide
+#   view was deleted and its span dropped out of the redundant-LOC count,
+#   under-reporting exactly the scaffolding families the gate is meant to
+#   count. With the mass floor (`VERBATIM_OVERTURN_MIN_NODES`,
+#   `byte_identical_clone_survives_a_demoted_enclosing_view_in_one_file`)
+#   those views survive at their full extent and their spans count again.
+#   Same doctrine as the 2026-08-17 and #408 entries above: the
+#   measurement got more honest, nothing was duplicated.
+#
+#   Pinned just above the measured value. The tail remains the flat
+#   pre-existing coarse-E2E scaffolding the entries above name — CLI
+#   invocation blocks, the VSIX unit suites, code_action/
+#   code_action_refusal — tracked in gh #397. Ratchet down as that work
+#   lands.
 [threshold]
-max_duplication_percent = 14.5
+max_duplication_percent = 16.4
