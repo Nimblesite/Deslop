@@ -45,7 +45,17 @@ use crate::common::{
 /// Subtree floor at which only the two function roots (and whole-body
 /// windows straddling the reorder) fingerprint — probed so exactly one
 /// candidate cluster exists and no sibling window matches structurally.
-const MIN_NODES: u32 = 35;
+///
+/// It must sit **above** the coincidental window, not merely above the
+/// statements. At 35 the scan published a 38-node three-statement window
+/// instead of the reordered pair: `closing_total = 0, carried_balance = 0,
+/// for …` against `opening_total = 0, closing_total = 0, for …` is
+/// `[assign, assign, for]` on both sides, which normalisation collapses to
+/// one tree, so it rendered a legitimate `structural = 1.0` and the fixture
+/// stopped exercising the LSH-only route it exists for. Kept at the same
+/// value as [`LSH_ONLY_NODE_FLOOR`], which the surviving endpoints must
+/// clear anyway.
+const MIN_NODES: u32 = 40;
 
 /// `pair::LSH_ONLY_MIN_NODE_COUNT`: both endpoints of an LSH-only pair
 /// must carry at least this many nodes to survive clustering.
@@ -69,9 +79,14 @@ const LEFT_SOURCE: &str = "import os\nimport sys\n\n\ndef reconcile(entries, flo
 
 /// The same statements reordered — `carried_balance` moved across the
 /// loop and the settlement tail swapped — so no ≥[`MIN_NODES`]-node
-/// subtree or sibling window survives structurally identical
-/// (`structural = 0.0`) while the token k-gram overlap stays at the
-/// measured `0.9296875`, above the `LSH_ONLY_MIN_JACCARD = 0.90` floor.
+/// subtree or sibling window survives structurally identical, while the
+/// token k-gram overlap stays at the measured [`MEASURED_JACCARD`], above
+/// the `LSH_ONLY_MIN_JACCARD = 0.90` floor.
+///
+/// The reordered pair itself still shares every statement subtree, so it
+/// measures a graded overlap rather than nothing ([FUSION-SHARED-SUBTREE]);
+/// what it does not have is an *exact* anchor, which is what makes the
+/// token axis the only route that admits it.
 const RIGHT_SOURCE: &str = "import os\nimport sys\n\n\ndef settle(entries, floor):\n\
     \x20   opening_total = 0\n\
     \x20   closing_total = 0\n\
@@ -93,7 +108,7 @@ const RIGHT_FILE: &str = "ledger_right.py";
 /// [PIPELINE-DETERMINISM]) — captured from the reproducing run. Above
 /// the 0.90 LSH-only floor, below the 0.95 saturating-shape line, so
 /// the spec's row 4 is the *only* row that admits it.
-const MEASURED_JACCARD: f64 = 0.929_687_5;
+const MEASURED_JACCARD: f64 = 0.945_312_5;
 
 /// Seeds the two-file Python corpus.
 fn seed(scan_root: &Path) -> Result<()> {
