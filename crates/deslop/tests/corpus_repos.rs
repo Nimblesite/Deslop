@@ -5,12 +5,18 @@
 //! One `#[test]` per repository, so a language that regresses is named
 //! directly in the failure output rather than hidden behind a sibling.
 //!
-//! [TEST-SELECTION] Excluded from `make test` / `make ci` structurally: this
-//! target carries `required-features = ["corpus-repos"]`, so cargo does not
-//! build it unless `make test-corpus` asks for the feature. These need a clone
-//! on disk and they measure wall time and peak memory, which are
-//! runner-dependent. `make test-corpus` runs them, single-threaded, because
-//! a scan can hold gigabytes and parallel scans would evict each other.
+//! [TEST-SELECTION-SKIP] Every test here is `#[ignore]`d as
+//! [SKIP-TOO-LARGE-FOR-CI], citing gh #422: they need a clone on disk and they
+//! measure wall time and peak memory, which are runner-dependent. The reason
+//! is stated at each test rather than filtered away in the Makefile, so it is
+//! printed on every run and `skip_policy_contract` holds it to the policy.
+//! `make test-corpus` runs them via `-- --ignored`, single-threaded, because a
+//! scan can hold gigabytes and parallel scans would evict each other.
+//!
+//! `#[ignore]` keeps this target inside `--all-targets`, so `make test` and
+//! `make lint` still compile and lint it. The `required-features` gate that
+//! preceded it did not, and commit `77bcbaed5` left this file uncompilable
+//! with nothing to notice until someone ran `make test-corpus`.
 //!
 //! A repository scan costs minutes, so each test performs **one** scan and
 //! accumulates every failure before asserting. A single run reports every way
@@ -55,6 +61,7 @@ use deslop_test_support::{
         check_curated_recall, check_fused_bounded_max, check_type2_curated_recall,
         check_type2_gate_liveness,
     },
+    corpus_determinism::check_reports_agree,
     corpus_precision::{check_boilerplate_not_ranked_first, check_curated_precision},
     corpus_scope::check_scan_scope,
 };
@@ -62,108 +69,110 @@ use serde_json::Value;
 
 #[test]
 #[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-PRECISION] \
-            docs/plans/corpus-assertion.md — clones flutter/flutter at its pinned commit and scans \
-            the whole Dart tree: the largest in the corpus, roughly 9.5 GB peak and 9m44s on a \
-            laptop (#166). The release gate compiles this target and never runs it. `make \
-            test-corpus` runs it, single-threaded, via `-- --ignored`."]
+            docs/plans/corpus-assertion.md — clones flutter/flutter at its pinned commit and \
+            scans the whole Dart tree: the largest in the corpus, roughly 9.5 GB peak and \
+            9m44s on a laptop (#166). The release gate compiles this target and never runs \
+            it. `make test-corpus` runs it, single-threaded, via `-- --ignored`."]
 fn corpus_flutter_dart() -> Result<()> {
     gate("flutter")
 }
 
 #[test]
 #[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-RECALL] \
-            docs/plans/corpus-assertion.md — clones jellyfin/jellyfin at its pinned commit and \
-            scans the whole C# tree: several thousand files, minutes per scan. The release gate \
-            compiles this target and never runs it. `make test-corpus` runs it, single-threaded, \
-            via `-- --ignored`."]
+            docs/plans/corpus-assertion.md — clones jellyfin/jellyfin at its pinned commit \
+            and scans the whole C# tree: several thousand files, minutes per scan. The \
+            release gate compiles this target and never runs it. `make test-corpus` runs it, \
+            single-threaded, via `-- --ignored`."]
 fn corpus_jellyfin_csharp() -> Result<()> {
     gate("jellyfin")
 }
 
 #[test]
 #[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-RECALL] \
-            docs/plans/corpus-assertion.md — clones tokio-rs/tokio at its pinned commit and scans \
-            the whole Rust tree: the cheapest in the corpus, and still a clone the release gate \
-            must not make. The release gate compiles this target and never runs it. `make \
-            test-corpus` runs it, single-threaded, via `-- --ignored`."]
+            docs/plans/corpus-assertion.md — clones tokio-rs/tokio at its pinned commit and \
+            scans the whole Rust tree: the cheapest in the corpus, and still a clone the \
+            release gate must not make. The release gate compiles this target and never runs \
+            it. `make test-corpus` runs it, single-threaded, via `-- --ignored`."]
 fn corpus_tokio_rust() -> Result<()> {
     gate("tokio")
 }
 
 #[test]
 #[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-SCOPE] \
-            docs/plans/corpus-assertion.md — clones django/django at its pinned commit and scans \
-            the whole Python tree: a clone plus a whole-repository scan. The release gate compiles \
-            this target and never runs it. `make test-corpus` runs it, single-threaded, via `-- \
-            --ignored`."]
+            docs/plans/corpus-assertion.md — clones django/django at its pinned commit and \
+            scans the whole Python tree: a clone plus a whole-repository scan. The release \
+            gate compiles this target and never runs it. `make test-corpus` runs it, \
+            single-threaded, via `-- --ignored`."]
 fn corpus_django_python() -> Result<()> {
     gate("django")
 }
 
 #[test]
 #[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-SCOPE] \
-            docs/plans/corpus-assertion.md — clones facebook/react at its pinned commit and scans \
-            the whole JavaScript tree: a clone plus a whole-repository scan. The release gate \
-            compiles this target and never runs it. `make test-corpus` runs it, single-threaded, \
-            via `-- --ignored`."]
+            docs/plans/corpus-assertion.md — clones facebook/react at its pinned commit and \
+            scans the whole JavaScript tree: a clone plus a whole-repository scan. The \
+            release gate compiles this target and never runs it. `make test-corpus` runs it, \
+            single-threaded, via `-- --ignored`."]
 fn corpus_react_javascript() -> Result<()> {
     gate("react")
 }
 
 #[test]
 #[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-RECALL] \
-            docs/plans/corpus-assertion.md — clones nestjs/nest at its pinned commit and scans the \
-            whole TypeScript tree: a clone plus a whole-repository scan. The release gate compiles \
-            this target and never runs it. `make test-corpus` runs it, single-threaded, via `-- \
-            --ignored`."]
+            docs/plans/corpus-assertion.md — clones nestjs/nest at its pinned commit and \
+            scans the whole TypeScript tree: a clone plus a whole-repository scan. The \
+            release gate compiles this target and never runs it. `make test-corpus` runs it, \
+            single-threaded, via `-- --ignored`."]
 fn corpus_nest_typescript() -> Result<()> {
     gate("nest")
 }
 
 #[test]
 #[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-SCOPE] \
-            docs/plans/corpus-assertion.md — clones laravel/framework at its pinned commit and \
-            scans the whole PHP tree: a clone plus a whole-repository scan. The release gate \
-            compiles this target and never runs it. `make test-corpus` runs it, single-threaded, \
-            via `-- --ignored`."]
+            docs/plans/corpus-assertion.md — clones laravel/framework at its pinned commit \
+            and scans the whole PHP tree: a clone plus a whole-repository scan. The release \
+            gate compiles this target and never runs it. `make test-corpus` runs it, \
+            single-threaded, via `-- --ignored`."]
 fn corpus_laravel_php() -> Result<()> {
     gate("laravel")
 }
 
 #[test]
 #[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-SCOPE] \
-            docs/plans/corpus-assertion.md — clones gohugoio/hugo at its pinned commit and scans \
-            the whole Go tree: a clone plus a whole-repository scan. The release gate compiles \
-            this target and never runs it. `make test-corpus` runs it, single-threaded, via `-- \
-            --ignored`."]
+            docs/plans/corpus-assertion.md — clones gohugoio/hugo at its pinned commit and \
+            scans the whole Go tree: a clone plus a whole-repository scan. The release gate \
+            compiles this target and never runs it. `make test-corpus` runs it, \
+            single-threaded, via `-- --ignored`."]
 fn corpus_hugo_go() -> Result<()> {
     gate("hugo")
 }
 
 #[test]
 #[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-PRECISION] \
-            docs/plans/corpus-assertion.md — clones dotnet/fsharp at its pinned commit and scans \
-            the whole F# tree: peaks above 13 GB, past every hosted-runner tier. The release gate \
-            compiles this target and never runs it. `make test-corpus` runs it, single-threaded, \
-            via `-- --ignored`."]
+            docs/plans/corpus-assertion.md — clones dotnet/fsharp at its pinned commit and \
+            scans the whole F# tree: peaks above 13 GB, past every hosted-runner tier. The \
+            release gate compiles this target and never runs it. `make test-corpus` runs it, \
+            single-threaded, via `-- --ignored`."]
 fn corpus_fsharp() -> Result<()> {
     gate("fsharp")
 }
 
 #[test]
 #[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [PIPELINE-DETERMINISM] \
-            docs/plans/corpus-assertion.md — scans nestjs/nest twice over, so it costs a clone \
-            plus two whole-repository TypeScript scans. The release gate compiles this target and \
-            never runs it. `make test-corpus` runs it, single-threaded, via `-- --ignored`."]
+            docs/plans/corpus-assertion.md — scans nestjs/nest twice over, so it costs a \
+            clone plus two whole-repository TypeScript scans. The release gate compiles this \
+            target and never runs it. `make test-corpus` runs it, single-threaded, via `-- \
+            --ignored`."]
 fn corpus_determinism_nest_typescript() -> Result<()> {
     determinism_gate("nest")
 }
 
 #[test]
 #[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [PIPELINE-DETERMINISM] \
-            docs/plans/corpus-assertion.md — scans jellyfin/jellyfin twice over, so it costs a \
-            clone plus two whole-repository C# scans. The release gate compiles this target and \
-            never runs it. `make test-corpus` runs it, single-threaded, via `-- --ignored`."]
+            docs/plans/corpus-assertion.md — scans jellyfin/jellyfin twice over, so it costs \
+            a clone plus two whole-repository C# scans. The release gate compiles this \
+            target and never runs it. `make test-corpus` runs it, single-threaded, via `-- \
+            --ignored`."]
 fn corpus_determinism_jellyfin_csharp() -> Result<()> {
     determinism_gate("jellyfin")
 }
@@ -180,47 +189,30 @@ fn determinism_gate(name: &str) -> Result<()> {
     let first = scan(&root, &tmp.path().join("first"))?;
     let second = scan(&root, &tmp.path().join("second"))?;
 
-    let (first_ids, second_ids) = (cluster_ids(&first.report), cluster_ids(&second.report));
     println!(
         "{name}: run1 clusters={} dup={:.4}%  run2 clusters={} dup={:.4}%",
-        first_ids.len(),
+        rendered_cluster_count(&first.report),
         duplication_percent(&first.report),
-        second_ids.len(),
+        rendered_cluster_count(&second.report),
         duplication_percent(&second.report),
     );
 
+    // [PIPELINE-DETERMINISM] The whole rendered payload, not the ordered
+    // cluster ids: ids come from the smallest member's hash and survive
+    // moved ranges, changed buckets, changed signals, reordered ranks and
+    // a moved `duplication_percent` alike. `corpus_determinism` states
+    // each of those as its own unit case.
     let mut failures = Vec::new();
-    if first_ids != second_ids {
-        let (left, right) = (
-            duplication_percent(&first.report),
-            duplication_percent(&second.report),
-        );
-        failures.push(Failure::new(
-            "determinism",
-            format!(
-                "two identical scans disagreed — clusters {} vs {}, duplication_percent \
-                 {left:.4}% vs {right:.4}%. No report and no --fail-over gate is reproducible.",
-                first_ids.len(),
-                second_ids.len()
-            ),
-        ));
-    }
+    check_reports_agree(&first.report, &second.report, &mut failures);
     fail_on(name, &["determinism"], &failures)
 }
 
-/// The ordered cluster ids of a report.
-fn cluster_ids(report: &Value) -> Vec<String> {
+/// How many clusters a report rendered.
+fn rendered_cluster_count(report: &Value) -> usize {
     report
         .get("clusters")
         .and_then(Value::as_array)
-        .map(|clusters| {
-            clusters
-                .iter()
-                .filter_map(|cluster| cluster.get("id").and_then(Value::as_str))
-                .map(ToOwned::to_owned)
-                .collect()
-        })
-        .unwrap_or_default()
+        .map_or(0, Vec::len)
 }
 
 /// The report's repo-level duplication percentage.

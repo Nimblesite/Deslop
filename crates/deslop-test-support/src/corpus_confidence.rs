@@ -298,7 +298,10 @@ fn check_rank_ceiling(
                  a user never scrolls to is a finding they do not get. Bucket \
                  {bucket}, size {size}. Verified duplicate: {why}",
                 bucket = bucket_of(cluster),
-                size = cluster.get("size").and_then(Value::as_u64).unwrap_or_default(),
+                size = cluster
+                    .get("size")
+                    .and_then(Value::as_u64)
+                    .unwrap_or_default(),
             ),
         ));
     }

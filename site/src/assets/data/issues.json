@@ -1,7 +1,7 @@
 {
   "meta": {
     "repo": "Nimblesite/Deslop",
-    "published_at": "2026-08-21T10:41:48Z",
+    "published_at": "2026-08-21T10:53:30Z",
     "published_at_long": "21st of August 2026, 10am",
     "source_url": "https://github.com/Nimblesite/Deslop/issues",
     "method": "GitHub metadata, explicit relationships, cross-references, and documented keyword rules. No AI enrichment.",
@@ -173,7 +173,7 @@
       "id": "verify_release",
       "rank": 0,
       "name": "Verify next release",
-      "description": "Fixed on main; validate in the next release before closing.",
+      "description": "To the best of our knowledge, fixed on main; verify in the next release before closing.",
       "count": 16
     },
     {
@@ -253,7 +253,7 @@
       "priority": "verify_release",
       "priority_rank": 0,
       "priority_name": "Verify next release",
-      "priority_reason": "Fixed on main; validate in the next release before closing.",
+      "priority_reason": "To the best of our knowledge, fixed on main; verify in the next release before closing.",
       "workstream": "detection",
       "inbound_links": 4,
       "plan": {
@@ -288,7 +288,7 @@
       "priority": "verify_release",
       "priority_rank": 0,
       "priority_name": "Verify next release",
-      "priority_reason": "Fixed on main; validate in the next release before closing.",
+      "priority_reason": "To the best of our knowledge, fixed on main; verify in the next release before closing.",
       "workstream": "detection",
       "inbound_links": 3,
       "plan": {
@@ -323,7 +323,7 @@
       "priority": "verify_release",
       "priority_rank": 0,
       "priority_name": "Verify next release",
-      "priority_reason": "Fixed on main; validate in the next release before closing.",
+      "priority_reason": "To the best of our knowledge, fixed on main; verify in the next release before closing.",
       "workstream": "integrations",
       "inbound_links": 3,
       "plan": {
@@ -368,7 +368,7 @@
       "priority": "verify_release",
       "priority_rank": 0,
       "priority_name": "Verify next release",
-      "priority_reason": "Fixed on main; validate in the next release before closing.",
+      "priority_reason": "To the best of our knowledge, fixed on main; verify in the next release before closing.",
       "workstream": "accuracy",
       "inbound_links": 3,
       "plan": {
@@ -413,7 +413,7 @@
       "priority": "verify_release",
       "priority_rank": 0,
       "priority_name": "Verify next release",
-      "priority_reason": "Fixed on main; validate in the next release before closing.",
+      "priority_reason": "To the best of our knowledge, fixed on main; verify in the next release before closing.",
       "workstream": "accuracy",
       "inbound_links": 3,
       "plan": {
@@ -458,7 +458,7 @@
       "priority": "verify_release",
       "priority_rank": 0,
       "priority_name": "Verify next release",
-      "priority_reason": "Fixed on main; validate in the next release before closing.",
+      "priority_reason": "To the best of our knowledge, fixed on main; verify in the next release before closing.",
       "workstream": "accuracy",
       "inbound_links": 2,
       "plan": {
@@ -497,7 +497,7 @@
       "priority": "verify_release",
       "priority_rank": 0,
       "priority_name": "Verify next release",
-      "priority_reason": "Fixed on main; validate in the next release before closing.",
+      "priority_reason": "To the best of our knowledge, fixed on main; verify in the next release before closing.",
       "workstream": "accuracy",
       "inbound_links": 2,
       "plan": {
@@ -537,7 +537,7 @@
       "priority": "verify_release",
       "priority_rank": 0,
       "priority_name": "Verify next release",
-      "priority_reason": "Fixed on main; validate in the next release before closing.",
+      "priority_reason": "To the best of our knowledge, fixed on main; verify in the next release before closing.",
       "workstream": "accuracy",
       "inbound_links": 2,
       "plan": {
@@ -572,7 +572,7 @@
       "priority": "verify_release",
       "priority_rank": 0,
       "priority_name": "Verify next release",
-      "priority_reason": "Fixed on main; validate in the next release before closing.",
+      "priority_reason": "To the best of our knowledge, fixed on main; verify in the next release before closing.",
       "workstream": "integrations",
       "inbound_links": 1,
       "plan": {
@@ -602,7 +602,7 @@
       "priority": "verify_release",
       "priority_rank": 0,
       "priority_name": "Verify next release",
-      "priority_reason": "Fixed on main; validate in the next release before closing.",
+      "priority_reason": "To the best of our knowledge, fixed on main; verify in the next release before closing.",
       "workstream": "detection",
       "inbound_links": 1,
       "plan": {
@@ -647,7 +647,7 @@
       "priority": "verify_release",
       "priority_rank": 0,
       "priority_name": "Verify next release",
-      "priority_reason": "Fixed on main; validate in the next release before closing.",
+      "priority_reason": "To the best of our knowledge, fixed on main; verify in the next release before closing.",
       "workstream": "accuracy",
       "inbound_links": 1,
       "plan": {
@@ -697,7 +697,7 @@
       "priority": "verify_release",
       "priority_rank": 0,
       "priority_name": "Verify next release",
-      "priority_reason": "Fixed on main; validate in the next release before closing.",
+      "priority_reason": "To the best of our knowledge, fixed on main; verify in the next release before closing.",
       "workstream": "accuracy",
       "inbound_links": 1,
       "plan": {
@@ -742,7 +742,7 @@
       "priority": "verify_release",
       "priority_rank": 0,
       "priority_name": "Verify next release",
-      "priority_reason": "Fixed on main; validate in the next release before closing.",
+      "priority_reason": "To the best of our knowledge, fixed on main; verify in the next release before closing.",
       "workstream": "accuracy",
       "inbound_links": 0,
       "plan": {
@@ -782,7 +782,7 @@
       "priority": "verify_release",
       "priority_rank": 0,
       "priority_name": "Verify next release",
-      "priority_reason": "Fixed on main; validate in the next release before closing.",
+      "priority_reason": "To the best of our knowledge, fixed on main; verify in the next release before closing.",
       "workstream": "delivery",
       "inbound_links": 0,
       "plan": {
@@ -822,7 +822,7 @@
       "priority": "verify_release",
       "priority_rank": 0,
       "priority_name": "Verify next release",
-      "priority_reason": "Fixed on main; validate in the next release before closing.",
+      "priority_reason": "To the best of our knowledge, fixed on main; verify in the next release before closing.",
       "workstream": "accuracy",
       "inbound_links": 0,
       "plan": {
@@ -857,7 +857,7 @@
       "priority": "verify_release",
       "priority_rank": 0,
       "priority_name": "Verify next release",
-      "priority_reason": "Fixed on main; validate in the next release before closing.",
+      "priority_reason": "To the best of our knowledge, fixed on main; verify in the next release before closing.",
       "workstream": "reporting",
       "inbound_links": 0,
       "plan": {

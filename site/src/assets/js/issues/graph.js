@@ -276,9 +276,16 @@ function initialTransform(viewport, state) {
   zoomAt(viewport, state, 1.45, { x: WIDTH / 2, y: HEIGHT / 2 });
 }
 
+function emptyNetwork(report) {
+  return element("section", { className: "network-view", attrs: { "data-view-panel": "network" } }, [
+    element("div", { className: "network-tools" }, [publicationStamp(report)]),
+    emptyState(),
+  ]);
+}
+
 export function renderNetwork(container, report, issues, onSelect) {
   clear(container);
-  if (!issues.length) return container.append(emptyState());
+  if (!issues.length) return container.append(emptyNetwork(report));
   const shell = element("section", { className: "network-view", attrs: { "data-view-panel": "network" } });
   const canvas = element("div", { className: "network-canvas" });
   const tooltip = element("div", { className: "graph-tooltip", attrs: { role: "tooltip" } });

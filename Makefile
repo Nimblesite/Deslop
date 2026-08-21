@@ -144,8 +144,10 @@ _coverage_check:
 ##       mention in site/src and examples must co-locate a canonical
 ##       bucket label. [TEST-SELECTION]: the release gate may not select
 ##       tests by name substring, and [TEST-SELECTION-SKIP]: every `#[ignore]`
-##       must carry a category, an issue, a spec id and a plan. clippy runs
-##       `--all-targets`, which now covers the corpus suite too: `#[ignore]`
+##       must carry a category, an issue, a spec id and a plan. It also proves
+##       the composite-action step scanner still finds every `run` body, since
+##       the shell-injection gate in `deployment-verify` reads through it.
+##       clippy runs `--all-targets`, which now covers the corpus suite too: `#[ignore]`
 ##       keeps it compiled and linted where `required-features` had removed
 ##       it from the build entirely. Commit 77bcbaed5 left it uncompilable
 ##       for exactly that reason.
@@ -160,6 +162,8 @@ lint: typediagram-gen
 	@echo "==> PATH/env injection gate ([ACTION-ENVPATH])..."
 	@node --test scripts/actions/verify-env-path-writes.test.mjs
 	@node scripts/actions/verify-env-path-writes.mjs
+	@echo "==> Composite-action step scanner proof ([ACTION-TESTS])..."
+	@node --test scripts/actions/action-yaml.test.mjs
 	@echo "==> Docs installer snippet fail-closed gate ([DEPLOY-DOCS-INSTALLER-FAILCLOSED])..."
 	@node --test scripts/deployment/installer-snippet.test.mjs
 	@echo "==> Duplication-gate provenance gate ([CI-DESLOP])..."

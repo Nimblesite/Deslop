@@ -2,7 +2,7 @@
 
 **The reference client for the Deslop live duplicate-code analysis server.** A long-running LSP + MCP process sits in your workspace and feeds duplicate-code signals — live, on every keystroke — to your editor *and* to whichever AI coding agent is driving it (Claude Code, Cursor, Copilot, Continue, Codex).
 
-Every other clone tool — PMD CPD, jscpd, SonarLint, JetBrains inspections — flags duplication on CI, on save, or in a panel you have to remember to open. Deslop surfaces duplicates **inline, next to your cursor, as you type**, and exposes the same live analysis to the agent over MCP so it can check *before* it copy-pastes.
+Clone detectors such as PMD CPD, jscpd, SonarLint, and the JetBrains inspections report duplication on CI, on save, or in a panel you open on purpose. Deslop surfaces duplicates **inline, next to your cursor, as you type**, and exposes the same live analysis to the agent over MCP so it can check *before* it copy-pastes.
 
 ![The Deslop VS Code extension on a live workspace: a worst-first Top Offenders tree and a per-directory Duplication breakdown in the sidebar, a live clone warning in the editor naming the canonical copy with Compare / View cluster / Copy for AI actions, and a side-by-side Compare diff against the canonical occurrence.](https://deslop.live/assets/img/screenshot.webp)
 
@@ -20,7 +20,7 @@ Every panel refreshes as you type, and the same live report backs the MCP tools 
 - **Worst-first activity-bar view.** The **Top Offenders** view always has cluster `#1` — the single highest-impact offender in the whole workspace — one click away. No drilling.
 - **Ollama-powered semantic matches.** Plug in any local embedding model (`nomic-embed-code`, `nomic-embed-text`, `unixcoder`, your own) via the built-in picker. Stays loopback-only.
 - **Live report webview.** Sorted worst-first, filterable by language / severity / path, refreshes as you type via Preact Signals.
-- **Bundled LSP + MCP servers.** Every platform ships the `deslop-lsp` and `deslop-mcp` binaries. No post-install downloads. The MCP server auto-registers with Copilot Chat (and any other VS Code-hosted MCP client) so your AI agents inside VS Code consult the same live analysis you see — the duplicate is visible to the agent *before* it generates the copy-paste.
+- **Bundled servers and CLI.** Every platform ships the `deslop-lsp`, `deslop-mcp`, and `deslop` binaries. No post-install downloads. The MCP server auto-registers with Copilot Chat (and any other VS Code-hosted MCP client) so your AI agents inside VS Code consult the same live analysis you see — the duplicate is visible to the agent *before* it generates the copy-paste.
 - **Uses the installed extension bundle.** The VSIX runs the binaries unpacked under its own `bin/<platform>/` folder. No post-install copying and no PATH lookup are required.
 
 ## Wire `deslop-mcp` into external MCP clients
@@ -51,11 +51,12 @@ command = "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>-darwin
 args    = ["--root", "."]
 ```
 
-The full set of client wiring snippets — including Claude Desktop and the rule against pointing MCP clients at `cargo install` / `target/release` binaries — lives in the [root README](https://github.com/Nimblesite/Deslop#use-deslop-from-an-ai-agent-mcp).
+The full set of client wiring snippets — including Claude Desktop and the rule against pointing MCP clients at `cargo install` / `target/release` binaries — lives in the [AI integration docs](https://deslop.live/docs/ai-integration/).
 
 ## Install
 
-- Download the platform-specific `deslop-live-X.Y.Z-<target>.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest), then run `code --install-extension deslop-live-X.Y.Z-<target>.vsix`.
+- Install [Deslop Live from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live).
+- Or download the platform-specific `deslop-live-X.Y.Z-<target>.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest), then run `code --install-extension deslop-live-X.Y.Z-<target>.vsix`.
 - CLI too: `brew install nimblesite/tap/deslop` or `scoop install deslop`.
 
 ## Settings

@@ -6,10 +6,12 @@
 //! that asserts nothing is indistinguishable from a check that passes. These
 //! tests make that state fail loudly instead.
 //!
-//! [TEST-SELECTION] They read JSON only, so unlike `corpus_repos` they need no
-//! clone on disk and this target carries no `required-features` — it runs in
+//! [TEST-SELECTION-SKIP] They read JSON only, so unlike the `corpus_repos`
+//! gate they need no clone on disk and carry no `#[ignore]` — they run in
 //! `make test`. A contract that only ran in `make test-corpus` would have been
-//! absent from exactly the pipeline that let the lists go empty.
+//! absent from exactly the pipeline that let the lists go empty, and a name
+//! filter would have taken them anyway: `--skip corpus_` matched this file's
+//! whole target by its name alone (gh #412).
 
 use std::{fs, path::Path};
 
@@ -189,8 +191,12 @@ fn assert_positive_file_floor(name: &str, manifest: &Value) {
 /// Requires a positive, ordered inclusive band for the report's cluster count.
 fn assert_valid_cluster_band(name: &str, manifest: &Value) {
     let band = manifest.get("expect_clusters");
-    let minimum = band.and_then(|value| value.get("min")).and_then(Value::as_u64);
-    let maximum = band.and_then(|value| value.get("max")).and_then(Value::as_u64);
+    let minimum = band
+        .and_then(|value| value.get("min"))
+        .and_then(Value::as_u64);
+    let maximum = band
+        .and_then(|value| value.get("max"))
+        .and_then(Value::as_u64);
     assert!(
         matches!((minimum, maximum), (Some(min), Some(max)) if min > 0 && min <= max),
         "{name}: `expect_clusters` must have a positive `min` no greater than `max`; without \

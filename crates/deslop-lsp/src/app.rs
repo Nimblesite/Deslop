@@ -16,9 +16,13 @@ use deslop_core::{config::ClonePolicy, live::transport::IpcMode};
 
 use crate::backend::LspEmbeddingConfig;
 
+/// Startup flag setting the analysis worker-thread count.
 const WORKER_THREADS_FLAG: &str = "--worker-threads";
+/// Startup flag lowering the analysis threads' scheduling priority.
 const NICE_FLAG: &str = "--nice";
+/// Startup flag choosing the IPC transport (stdio or TCP).
 const IPC_TRANSPORT_FLAG: &str = "--ipc-transport";
+/// Startup flag restricting ranking to structural evidence.
 const RANKING_STRUCTURAL_ONLY_FLAG: &str = "--ranking-structural-only";
 
 /// Fully parsed startup configuration for the LSP app layer.

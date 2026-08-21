@@ -15,7 +15,7 @@
 // Usage: node scripts/actions/test-action-diff-gate.mjs [path/to/deslop]
 
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -23,47 +23,18 @@ import { dirname, join, resolve } from "node:path";
 import { check, total } from "./action-contract-harness.mjs";
 import { firstRustFile, writeCopyPatch } from "./action-copy-patch.mjs";
 import { readOutputs } from "./action-read-outputs.mjs";
+import { stepBody } from "./action-yaml.mjs";
 
 /** The legacy-heavy fixture the self-test's gate matrix scans. */
 const SCAN_PATH = "examples/rust";
 /** Where the CLI lands under `make build`. */
 const DEFAULT_CLI = "target/release/deslop";
-
-/**
- * Extracts a composite step's `run:` body from action.yml, dedented to
- * column zero so bash reads it as a script.
- *
- * @param {string} action the action.yml source
- * @param {string} stepName the `- name:` value of the step to extract
- * @returns {string} the step's shell body
- */
-function stepBody(action, stepName) {
-  const lines = action.split("\n");
-  const start = lines.findIndex((line) => line.trim() === `- name: ${stepName}`);
-  assert.ok(start >= 0, `action.yml lost its "${stepName}" step`);
-  // Bounded to this step: an unbounded search would silently walk into the
-  // *next* step's run block the moment this one stops matching `run: |`
-  // verbatim — `run: |-` alone would swap the script under test.
-  const nextStep = lines.findIndex(
-    (line, index) =>
-      index > start && line.trimStart().startsWith("- ") && leadingSpaces(line) <= leadingSpaces(lines[start]),
-  );
-  const end = nextStep === -1 ? lines.length : nextStep;
-  const runAt = lines.findIndex((line, index) => index > start && index < end && line.trim() === "run: |");
-  assert.ok(runAt > start, `action.yml step "${stepName}" no longer carries a "run: |" block`);
-  const indent = leadingSpaces(lines[runAt]) + 2;
-  const body = [];
-  for (const line of lines.slice(runAt + 1)) {
-    if (line.trim() !== "" && leadingSpaces(line) < indent) break;
-    body.push(line.slice(indent));
-  }
-  return body.join("\n");
-}
-
-/** Column the first non-space character of `line` sits at. */
-function leadingSpaces(line) {
-  return line.length - line.trimStart().length;
-}
+/** The guard step whose emitted guidance is executed below. */
+const STDIN_GUARD_STEP = "Reject the un-suppliable stdin diff";
+/** The status the CLI exits on a usage error, and the guard must match. */
+const USAGE_ERROR_STATUS = 2;
+/** The base ref a `pull_request` event supplies. */
+const PULL_REQUEST_BASE_REF = "main";
 
 /**
  * Runs the action's `Run deslop` step body verbatim under the env the
@@ -115,6 +86,25 @@ function runActionStep(cli, inputs) {
 function breachMessage(outputs) {
   const population = outputs["gate-scope"] === "added-lines" ? "added lines" : "analyzed lines";
   return `Deslop gate failed — ${outputs["gate-percent"]}% of ${population} are duplicated, ceiling is ${outputs["gate-threshold-percent"]}%.`;
+}
+
+
+/**
+ * Runs a guard step's body verbatim under bash with `env`, the way the runner
+ * does. Guards exit non-zero by design, so the status is returned rather than
+ * thrown.
+ *
+ * @param {string} stepName the `- name:` value of the step to run
+ * @param {Record<string, string>} env the env block the action composes
+ * @returns {{status: number | null, output: string}}
+ */
+function runGuardStep(stepName, env) {
+  const body = stepBody(readFileSync("action.yml", "utf8"), stepName);
+  const result = spawnSync("bash", ["-eo", "pipefail", "-c", body], {
+    encoding: "utf8",
+    env: { ...process.env, ...env },
+  });
+  return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
 const cli = resolve(process.argv[2] ?? DEFAULT_CLI);
@@ -193,6 +183,43 @@ check("a changed-code diff that adds duplication breaches the same ceiling", () 
   } finally {
     execFileSync("rm", ["-f", copied]);
   }
+});
+
+// [ACTION-GATE] The guard's whole job is to hand back a command that gets the
+// caller unstuck. It used to build that command by interpolating
+// `${{ github.base_ref }}` into the shell body, behind a backslash: GitHub
+// substitutes the expression before bash parses the step, so an ordinary
+// `main` base printed the unusable ref `origin/\main`, and a base carrying
+// shell-significant text was only escaped up to its first character. The ref
+// now arrives through `env` and is printed as a `printf` argument, so these
+// run it and read what a caller would actually see.
+check("the stdin-diff guard prints a runnable command for the event's base ref", () => {
+  const { status, output } = runGuardStep(STDIN_GUARD_STEP, { BASE_REF: PULL_REQUEST_BASE_REF });
+  assert.equal(status, USAGE_ERROR_STATUS, `the guard must exit ${USAGE_ERROR_STATUS}: ${output}`);
+  assert.ok(
+    output.includes(`git diff origin/${PULL_REQUEST_BASE_REF}...HEAD > /tmp/pr.diff`),
+    `the guidance must be a command the caller can paste: ${output}`,
+  );
+  assert.ok(
+    !output.includes("\\"),
+    `a stray escape makes the suggested ref invalid — origin/\\main resolves to nothing: ${output}`,
+  );
+});
+
+check("a push event with no base ref still gets a runnable command", () => {
+  const { output } = runGuardStep(STDIN_GUARD_STEP, { BASE_REF: "" });
+  assert.ok(
+    output.includes(`git diff origin/${PULL_REQUEST_BASE_REF}...HEAD > /tmp/pr.diff`),
+    `an absent base ref must fall back to a real branch, never print an empty ref: ${output}`,
+  );
+});
+
+check("shell-significant text in the base ref is printed as data, never executed", () => {
+  const marker = join(mkdtempSync(join(tmpdir(), "deslop-action-injection-")), "executed");
+  const hostile = `main"; touch ${marker}; echo "`;
+  const { output } = runGuardStep(STDIN_GUARD_STEP, { BASE_REF: hostile });
+  assert.ok(!existsSync(marker), `the base ref reached the shell as code — it wrote ${marker}`);
+  assert.ok(output.includes(hostile), `the ref must survive intact as data in the guidance: ${output}`);
 });
 
 console.log(`action diff-gate black-box: ${total()} checks passed`);

@@ -85,16 +85,18 @@ That distinction has practical consequences. If a false positive survives the de
 
 The accuracy push did not start from a blank page. Deslop combines several established lines of code clone detection research, each aimed at a different part of the precision–recall problem.
 
-- **Type-1 clones** are copied code with layout or comment changes.
-- **Type-2 clones** keep the structure but rename identifiers or change literals.
-- **Type-3 clones** insert, remove, or alter statements.
-- **Type-4 clones** express similar behaviour through different syntax or structure.
+- **Type-1** — copied code with layout or comment changes. Deslop reports it as **Identical code**.
+- **Type-2** — the same structure with identifiers renamed or literals changed. Also **Identical code**.
+- **Type-3** — statements inserted, removed, or altered. Reported as **Nearly identical code**.
+- **Type-4** — similar behaviour expressed through different syntax or structure. Reported as **Same behavior, different code**.
+
+The bold names are what a Deslop report prints; the types are the research vocabulary the rest of this section uses.
 
 [Baxter and colleagues' AST research](https://leodemoura.github.io/files/ICSM98.pdf) showed why parsed program structure can find exact and near-miss clones that line comparison misses. Deslop follows that foundation with tree-sitter syntax trees, identifier and literal normalization, and bottom-up Merkle fingerprints.
 
-[SourcererCC](https://arxiv.org/abs/1512.06448) established a scalable token-based path for near-miss clone detection. Deslop adapts that direction to normalized AST-kind sequences, then uses MinHash locality-sensitive hashing to find Type-3 candidates without comparing every subtree with every other subtree.
+[SourcererCC](https://arxiv.org/abs/1512.06448) established a scalable token-based path for near-miss clone detection. Deslop adapts that direction to normalized AST-kind sequences, then uses MinHash locality-sensitive hashing to find **Nearly identical code** [Type-3] candidates without comparing every subtree with every other subtree.
 
-For semantic similarity, [SSCD](https://onlinelibrary.wiley.com/doi/full/10.1002/spe.3355) provides the relevant BERT-plus-nearest-neighbour precedent. Deslop's optional embedding layer uses an HNSW index to widen recall toward Type-4 clones. Structural, token, and embedding evidence are fused, clustered, ranked, and rendered through one engine. The implementation map and primary sources are collected in [Research Background](/docs/research-background/).
+For semantic similarity, [SSCD](https://onlinelibrary.wiley.com/doi/full/10.1002/spe.3355) provides the relevant BERT-plus-nearest-neighbour precedent. Deslop's optional embedding layer uses an HNSW index to widen recall toward **Same behavior, different code** [Type-4] clones. Structural, token, and embedding evidence are fused, clustered, ranked, and rendered through one engine. The implementation map and primary sources are collected in [Research Background](/docs/research-background/).
 
 Each extra layer can recover real duplicates. Each can also admit convincing nonsense. Normalization can erase a meaningful difference. A threshold can hide a real near-miss. An embedding can place two unrelated functions close together. Transitive clustering can join findings that should remain separate. Ranking can bury a correct cluster so deeply that it might as well be absent.
 

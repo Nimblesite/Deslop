@@ -40,8 +40,11 @@ use deslop_core::live::{
 use serde_json::{json, Value};
 use tokio::{runtime::Handle, sync::broadcast};
 
+/// Envelope field declaring the JSON-RPC protocol version.
 const JSON_RPC_FIELD: &str = "jsonrpc";
+/// The only JSON-RPC protocol version this transport speaks.
 const JSON_RPC_VERSION: &str = "2.0";
+/// Envelope field carrying a request's correlation id.
 const ID_FIELD: &str = "id";
 
 /// IPC server bound under the workspace's `.deslop/cache`.

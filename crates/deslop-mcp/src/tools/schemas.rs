@@ -3,33 +3,61 @@
 use deslop_core::{buckets::ClusterKind, pipeline::language_ids};
 use serde_json::{json, Value};
 
+/// JSON Schema keyword declaring a value's type.
 const TYPE_KEY: &str = "type";
+/// JSON Schema keyword introducing an object's property map.
 const PROPERTIES_KEY: &str = "properties";
+/// JSON Schema keyword controlling undeclared properties.
 const ADDITIONAL_PROPERTIES_KEY: &str = "additionalProperties";
+/// JSON Schema keyword listing an object's mandatory properties.
 const REQUIRED_KEY: &str = "required";
+/// JSON Schema keyword bounding a number from below.
 const MINIMUM_KEY: &str = "minimum";
+/// JSON Schema keyword giving a property's default value.
 const DEFAULT_KEY: &str = "default";
+/// JSON Schema keyword carrying human-readable documentation.
 const DESCRIPTION_KEY: &str = "description";
+/// JSON Schema keyword restricting a value to a fixed set.
 const ENUM_KEY: &str = "enum";
+/// JSON Schema keyword bounding a string's length from below.
 const MIN_LENGTH_KEY: &str = "minLength";
+/// JSON Schema `object` type name.
 const OBJECT_TYPE: &str = "object";
+/// JSON Schema `integer` type name.
 const INTEGER_TYPE: &str = "integer";
+/// JSON Schema `string` type name.
 const STRING_TYPE: &str = "string";
+/// JSON Schema `boolean` type name.
 const BOOLEAN_TYPE: &str = "boolean";
+/// JSON Schema `number` type name.
 const NUMBER_TYPE: &str = "number";
+/// Tool parameter naming the first cluster of a page.
 const OFFSET_PROPERTY: &str = "offset";
+/// Tool parameter naming a page's maximum cluster count.
 const LIMIT_PROPERTY: &str = "limit";
+/// Tool parameter opting into per-file duplication totals.
 const INCLUDE_PER_FILE_PROPERTY: &str = "include_per_file";
+/// Tool parameter naming the file a request is scoped to.
 const PATH_PROPERTY: &str = "path";
+/// Tool parameter carrying a range's inclusive start byte.
 const START_BYTE_PROPERTY: &str = "start_byte";
+/// Tool parameter carrying a range's exclusive end byte.
 const END_BYTE_PROPERTY: &str = "end_byte";
+/// Tool parameter capping the occurrences a response may carry.
 const MAX_OCCURRENCES_PROPERTY: &str = "max_occurrences";
+/// Tool parameter naming the cluster id a request is scoped to.
 const ID_PROPERTY: &str = "id";
+/// Lower bound for parameters where zero is meaningful (an offset).
 const MINIMUM_ZERO: u8 = 0;
+/// Lower bound for parameters where zero is meaningless (a count).
 const MINIMUM_ONE: u8 = 1;
+/// Default number of clusters `top-offenders` returns.
 const DEFAULT_TOP_COUNT: u8 = 5;
+/// Default occurrence budget across a response's clusters.
 const DEFAULT_MAX_OCCURRENCES: u8 = 15;
+/// Shared documentation for every `path` parameter.
 const PATH_DESCRIPTION: &str = "Absolute or workspace-relative path.";
+/// Shared documentation for the compact occurrence budget.
 const COMPACT_MAX_OCCURRENCES_DESCRIPTION: &str =
     "Total occurrence budget across returned clusters. See top-offenders for semantics.";
 

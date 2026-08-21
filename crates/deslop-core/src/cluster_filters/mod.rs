@@ -143,8 +143,8 @@ use tree_sitter::Node;
 
 pub(crate) use declaration_family::is_single_file_declaration_family;
 pub(crate) use snippets::ParseCache;
-pub(crate) use verbatim_subgroup::split_noise_verbatim_families;
 use snippets::{collect_snippets, parse_for, uniform_language, Snippet};
+pub(crate) use verbatim_subgroup::split_noise_verbatim_families;
 
 use crate::{
     ast::ByteRange, clone_category::CloneCategory, fingerprint::Fingerprint, state::FileId,

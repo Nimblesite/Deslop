@@ -12,7 +12,7 @@
 //! Every reason is compared to the value the *compiler* sees, not to the
 //! literal as written, because the policy gate matches tokens inside it.
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use super::{ignored_tests_in, IgnoredTest};
 
@@ -29,17 +29,30 @@ fn scan(source: &str) -> Result<Vec<IgnoredTest>> {
 fn only(source: &str) -> Result<IgnoredTest> {
     let found = scan(source)?;
     assert_eq!(found.len(), 1, "expected exactly one skip in:\n{source}");
-    Ok(found.into_iter().next().expect("length checked above"))
+    found
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow!("no skip found in:\n{source}"))
+}
+
+/// The message of the error `source` must produce. Returns an error of its own
+/// when the scan succeeded, so "it did not fail" fails the test by the same
+/// route as a wrong message rather than by unwrapping.
+fn scan_error(source: &str) -> Result<String> {
+    match scan(source) {
+        Ok(found) => Err(anyhow!("expected an error; the scan returned {found:?}")),
+        Err(error) => Ok(error.to_string()),
+    }
 }
 
 #[test]
 fn an_ignored_test_is_reported_with_its_function_name_file_and_reason() -> Result<()> {
     let found = only(
-        r##"
+        r#"
 #[test]
 #[ignore = "GH #422: too large for the runner."]
 fn corpus_tokio_rust() {}
-"##,
+"#,
     )?;
     assert_eq!(found.test, "corpus_tokio_rust");
     assert_eq!(found.file, FILE);
@@ -50,22 +63,22 @@ fn corpus_tokio_rust() {}
 #[test]
 fn attribute_order_and_interleaved_doc_comments_do_not_lose_the_owning_function() -> Result<()> {
     let ignore_first = only(
-        r##"
+        r#"
 #[ignore = "first"]
 #[test]
 fn skip_declared_before_the_test_attribute() {}
-"##,
+"#,
     )?;
     assert_eq!(ignore_first.test, "skip_declared_before_the_test_attribute");
 
     let commented = only(
-        r##"
+        r#"
 #[test]
 #[ignore = "second"]
 // A note between the attribute and the function it decorates.
 /// A doc comment in the same position.
 fn skip_separated_by_comments() {}
-"##,
+"#,
     )?;
     assert_eq!(commented.test, "skip_separated_by_comments");
     assert_eq!(commented.reason, "second");
@@ -75,13 +88,13 @@ fn skip_separated_by_comments() {}
 #[test]
 fn a_reason_wrapped_across_lines_reads_as_one_sentence_without_its_indentation() -> Result<()> {
     let found = only(
-        r##"
+        r#"
 #[test]
 #[ignore = "[SKIP-UNFINISHED] GH #369 — the fixture loses its second \
             correlated signal, so the refresh has no stable cluster. \
             Run with `-- --ignored`."]
 fn wrapped() {}
-"##,
+"#,
     )?;
     assert_eq!(
         found.reason,
@@ -99,11 +112,11 @@ fn wrapped() {}
 #[test]
 fn quoted_and_newline_escapes_resolve_to_the_characters_they_stand_for() -> Result<()> {
     let found = only(
-        r##"
+        r#"
 #[test]
 #[ignore = "says \"blocked\"\nand then stops"]
 fn escaped() {}
-"##,
+"#,
     )?;
     assert_eq!(found.reason, "says \"blocked\"\nand then stops");
     Ok(())
@@ -112,11 +125,11 @@ fn escaped() {}
 #[test]
 fn a_bare_ignore_is_reported_with_an_empty_reason_rather_than_passing_unseen() -> Result<()> {
     let found = only(
-        r##"
+        r#"
 #[test]
 #[ignore]
 fn undocumented_skip() {}
-"##,
+"#,
     )?;
     assert_eq!(found.test, "undocumented_skip");
     assert_eq!(
@@ -156,7 +169,7 @@ fn ignore(value: u32) -> u32 {
 #[test]
 fn every_skip_in_a_file_is_reported_not_only_the_first() -> Result<()> {
     let found = scan(
-        r##"
+        r#"
 #[test]
 #[ignore = "one"]
 fn first() {}
@@ -167,7 +180,7 @@ fn not_skipped() {}
 #[test]
 #[ignore = "two"]
 fn second() {}
-"##,
+"#,
     )?;
     let named: Vec<(&str, &str)> = found
         .iter()
@@ -178,48 +191,48 @@ fn second() {}
 }
 
 #[test]
-fn a_conditional_ignore_is_an_error_rather_than_a_skip_the_gate_cannot_see() {
-    let error = scan(
-        r##"
+fn a_conditional_ignore_is_an_error_rather_than_a_skip_the_gate_cannot_see() -> Result<()> {
+    let message = scan_error(
+        r#"
 #[test]
 #[cfg_attr(target_os = "windows", ignore)]
 fn conditionally_skipped() {}
-"##,
-    )
-    .expect_err("`#[cfg_attr(.., ignore)]` must be rejected, not silently passed over");
-    let message = error.to_string();
+"#,
+    )?;
     assert!(
         message.contains(FILE) && message.contains("cfg_attr"),
-        "the error must name the file and the attribute: {message}"
+        "`#[cfg_attr(.., ignore)]` must be rejected by name: {message}"
     );
+    Ok(())
 }
 
 #[test]
 fn an_unconditional_cfg_attr_that_never_mentions_ignore_is_left_alone() -> Result<()> {
     let found = scan(
-        r##"
+        r#"
 #[cfg_attr(test, derive(Debug))]
 struct Reported;
 
 #[test]
 fn runs() {}
-"##,
+"#,
     )?;
     assert_eq!(found, Vec::new());
     Ok(())
 }
 
 #[test]
-fn an_ignore_that_decorates_something_other_than_a_function_is_an_error() {
-    let error = scan(
-        r##"
+fn an_ignore_that_decorates_something_other_than_a_function_is_an_error() -> Result<()> {
+    let message = scan_error(
+        r#"
 #[ignore = "on a module"]
 mod grouped {}
-"##,
-    )
-    .expect_err("`#[ignore]` on a non-function must be reported, not attributed to a later test");
+"#,
+    )?;
     assert!(
-        error.to_string().contains("mod_item"),
-        "the error must name what was decorated: {error}"
+        message.contains("mod_item"),
+        "an `#[ignore]` on a non-function must name what it decorated rather than being \
+         attributed to a later test: {message}"
     );
+    Ok(())
 }

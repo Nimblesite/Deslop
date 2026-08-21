@@ -30,9 +30,13 @@ use super::backend_to_rpc;
 /// filtered. Default chosen so a `top-offenders` n=5 response on a
 /// monorepo stays well under any plausible MCP client buffer limit.
 pub(super) const DEFAULT_MAX_OCCURRENCES: usize = 15;
+/// Tool-argument field naming the file a request is scoped to.
 const PATH_FIELD: &str = "path";
+/// Tool-argument field carrying a range's inclusive start byte.
 const START_BYTE_FIELD: &str = "start_byte";
+/// Tool-argument field carrying a range's exclusive end byte.
 const END_BYTE_FIELD: &str = "end_byte";
+/// Tool-argument field naming the language a snippet is parsed as.
 const LANGUAGE_FIELD: &str = "language";
 
 /// Serialises a typed wire payload, falling back to JSON `null` only if

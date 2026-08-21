@@ -69,7 +69,7 @@ export function renderStatistics(container, report, issues) {
   const values = statisticsValues(report, issues);
   const summary = element("section", { className: "atlas-summary", attrs: { "aria-label": "Backlog summary" } }, [
     summaryCard("Open backlog", values.open, "open", "open issues"),
-    summaryCard("Release verification", values.verify, "verify", "fixed on main", "summary-card--verify"),
+    summaryCard("Release verification", values.verify, "verify", "believed fixed on main", "summary-card--verify"),
     summaryCard("Stop the line", values.release_blockers, "release_blockers", "showstoppers", "summary-card--blocker"),
     summaryCard("Accuracy critical", values.accuracy_critical, "accuracy_critical", "correctness risks"),
     summaryCard("Connected work", values.linked, "linked", "linked issues"),
@@ -78,7 +78,7 @@ export function renderStatistics(container, report, issues) {
     element("span", { className: "verification-note__mark", text: "✓", attrs: { "aria-hidden": "true" } }),
     element("div", {}, [
       element("strong", { text: "“fixed-on-main” is a verification state, not done." }),
-      element("p", { text: "It stays open until someone verifies the fix in a real release." }),
+      element("p", { text: "To the best of our knowledge, the bug is fixed on main. It stays open until someone verifies the fix in a real release." }),
     ]),
   ]);
   container.append(element("section", { className: "statistics-view", attrs: { id: "panel-statistics", role: "tabpanel", "aria-labelledby": "tab-statistics", "data-view-panel": "statistics" } }, [

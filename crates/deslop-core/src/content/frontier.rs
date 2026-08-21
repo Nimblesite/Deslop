@@ -98,7 +98,11 @@ pub(super) fn leaf_bytes<'src, S: BuildHasher>(
 /// Paired keys at the positions where both members carry `wanted`.
 /// Shape-aligned members disagree on a position's population only at
 /// parse-artifact boundaries; such positions belong to no population.
-pub(super) fn population(canonical: &[LeafKey], member: &[LeafKey], wanted: Population) -> Vec<(u64, u64)> {
+pub(super) fn population(
+    canonical: &[LeafKey],
+    member: &[LeafKey],
+    wanted: Population,
+) -> Vec<(u64, u64)> {
     canonical
         .iter()
         .zip(member.iter())

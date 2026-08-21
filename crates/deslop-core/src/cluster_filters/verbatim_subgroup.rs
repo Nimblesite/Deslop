@@ -115,16 +115,13 @@ fn verbatim_families(
         let Some(text) = member_text(index, fingerprints, sources) else {
             continue;
         };
-        match order.iter().position(|seen| *seen == text) {
-            Some(slot) => {
-                if let Some(family) = families.get_mut(slot) {
-                    family.push(index);
-                }
+        if let Some(slot) = order.iter().position(|seen| *seen == text) {
+            if let Some(family) = families.get_mut(slot) {
+                family.push(index);
             }
-            None => {
-                order.push(text);
-                families.push(vec![index]);
-            }
+        } else {
+            order.push(text);
+            families.push(vec![index]);
         }
     }
     families

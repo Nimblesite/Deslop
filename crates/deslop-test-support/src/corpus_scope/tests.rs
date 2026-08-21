@@ -30,10 +30,7 @@ fn report(files: u64, clusters: usize) -> Value {
 fn checks(manifest: &Value, report: &Value) -> Vec<String> {
     let mut failures: Vec<Failure> = Vec::new();
     check_scan_scope(manifest, report, &mut failures);
-    failures
-        .into_iter()
-        .map(|failure| failure.check)
-        .collect()
+    failures.into_iter().map(|failure| failure.check).collect()
 }
 
 #[test]

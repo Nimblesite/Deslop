@@ -49,9 +49,9 @@ A useful check does not stop at exact line matches. It should find four levels o
 1. **Exact duplicate code** — the same Dart copied with only formatting or comment changes.
 2. **Renamed duplicate code** — the same structure with different identifiers: a `CustomerCard` widget cloned into `AccountCard`, `customerId` swapped for `accountId`.
 3. **Near-duplicate code** — mostly the same logic with statements inserted, deleted, or reordered: the same form validation with one extra branch.
-4. **Same behaviour, different code** — two widgets or functions that solve the same problem with different syntax (a `for` loop versus a `map().toList()`).
+4. **Same behavior, different code** — two widgets or functions that solve the same problem with different syntax (a `for` loop versus a `map().toList()`).
 
-Classic clone-detection research calls these Type-1 through Type-4. Deslop's implementation and research references are documented in [Research Background](/docs/research-background/).
+Clone-detection research calls these Type-1 through Type-4. A Deslop report names them **Identical code** [Type-1/2], **Nearly identical code** [Type-3], and **Same behavior, different code** [Type-4]. The implementation and research references are documented in [Research Background](/docs/research-background/).
 
 ## Why line matching is not enough for Dart
 

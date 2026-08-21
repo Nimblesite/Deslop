@@ -80,7 +80,10 @@ fn check_one_curated_non_duplicate(entry: &Value, report: &Value, failures: &mut
         format!(
             "cluster {id} ({bucket}, {size} occurrences, fused {fused:.3}) is shown spanning \
              {files:?}, which a human verified is not duplication. Curated: {why}",
-            id = breach.get("id").and_then(Value::as_str).unwrap_or("<unlabelled>"),
+            id = breach
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or("<unlabelled>"),
             bucket = breach
                 .get("bucket")
                 .and_then(Value::as_str)

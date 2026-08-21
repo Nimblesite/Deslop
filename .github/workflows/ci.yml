@@ -444,7 +444,7 @@ jobs:
       - name: Validate typed issue report
         run: |
           python -m pip install --disable-pip-version-check mypy==1.19.1 pyright==1.1.408
-          python -m unittest scripts.issues.test_generate_issue_report
+          python -B -m unittest scripts.issues.test_generate_issue_report
           python -m mypy --strict scripts/issues/generate_issue_report.py scripts/issues/test_generate_issue_report.py
           pyright scripts/issues/generate_issue_report.py scripts/issues/test_generate_issue_report.py
 

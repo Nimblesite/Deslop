@@ -38,9 +38,7 @@ use frontier::{
 };
 use rename::ModalBijection;
 
-use crate::{
-    ast::NormalizedNode, cluster::Cluster, fingerprint::Fingerprint, state::FileId,
-};
+use crate::{ast::NormalizedNode, cluster::Cluster, fingerprint::Fingerprint, state::FileId};
 
 /// Minimum literal-leaf count before a subtree's literal dominance is
 /// reported at all ([CLONE-NOISE-LITERAL-TABLE]). A data table is a run
@@ -141,6 +139,17 @@ impl ContentEvidence {
         }
     }
 }
+
+/// Token identity of one cluster member: its normalised-subtree digest
+/// paired with its collapsed-leaf keys. Shape alone pairs different
+/// statements that share a frontier (an assignment and an assert over
+/// the same name and literal); keys alone pair different shapes over
+/// the same vocabulary. A copy has to agree on both.
+type TokenIdentity<'keys> = ([u8; 32], &'keys [LeafKey]);
+
+/// One token-identical family's running tally: the index of its
+/// earliest member, and how many members have joined it.
+type FamilyTally = (usize, usize);
 
 /// The largest token-identical family inside a cluster: one member of
 /// it, and how many members it holds.
@@ -386,7 +395,7 @@ fn vacuous_share(numerator: usize, denominator: usize) -> f64 {
 /// different statements, so leaf keys alone pair non-copies
 /// (`python-issue-72-monkeypatch-setenv`).
 fn dominant_verbatim_family(member_contents: &[Option<MemberContent>]) -> Option<DominantFamily> {
-    let mut families: HashMap<([u8; 32], &[LeafKey]), (usize, usize)> = HashMap::new();
+    let mut families: HashMap<TokenIdentity<'_>, FamilyTally> = HashMap::new();
     for (index, content) in member_contents.iter().enumerate() {
         let Some(content) = content else { continue };
         if content.keys.is_empty() {

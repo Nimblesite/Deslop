@@ -10,12 +10,19 @@ use deslop_core::live::{LiveApi, LiveService};
 use serde_json::{json, Value};
 use tokio::runtime::Handle;
 
+/// JSON-RPC error-object field carrying the numeric code.
 const RPC_CODE_KEY: &str = "code";
+/// JSON-RPC error-object field carrying the human-readable message.
 const RPC_MESSAGE_KEY: &str = "message";
+/// JSON-RPC `Method not found` error code.
 const METHOD_NOT_FOUND_CODE: i32 = -32_601;
+/// JSON-RPC `Invalid params` error code.
 const INVALID_PARAMS_CODE: i32 = -32_602;
+/// JSON-RPC `Internal error` error code.
 const INTERNAL_ERROR_CODE: i32 = -32_603;
+/// Request parameter naming the file a report is scoped to.
 const PATH_PARAM: &str = "path";
+/// Request parameter naming the cluster id a request is scoped to.
 const ID_PARAM: &str = "id";
 
 /// Routes a JSON-RPC method to the appropriate [`LiveService`] call.

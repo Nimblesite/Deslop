@@ -377,12 +377,12 @@ fn synthetic_corpus_scale_smoke_test() -> Result<()> {
     Ok(())
 }
 
-// Implements the [BUG-FIXTURE] workflow from CLAUDE.md: every bug
-// reproduced into `tests/fixtures/bug-*/` becomes a permanent e2e
-// test. This is the seed example — an empty C# class body used to
-// be silently dropped before the sibling-window fingerprint pass
-// existed; the cluster test below pins that behaviour so the bug
-// cannot regress.
+// Implements the fixture-per-bug workflow from
+// `.claude/skills/fix-bug/SKILL.md`: every bug reproduced into
+// `tests/fixtures/bug-*/` becomes a permanent e2e test. This is the
+// seed example — an empty C# class body used to be silently dropped
+// before the sibling-window fingerprint pass existed; the assertion
+// below pins that behaviour so the bug cannot regress.
 #[test]
 fn bug_fixture_walks_trivial_class_body_without_panicking() -> Result<()> {
     let tmp = tempfile::tempdir()?;

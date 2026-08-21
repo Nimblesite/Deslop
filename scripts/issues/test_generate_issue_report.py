@@ -1,3 +1,4 @@
+import ast
 import json
 import unittest
 from datetime import datetime, timezone
@@ -48,6 +49,17 @@ def issue(
 
 
 class IssueReportTests(unittest.TestCase):
+    def test_generator_has_no_ai_integration(self) -> None:
+        source = (Path(__file__).parent / "generate_issue_report.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        imported = {node.names[0].name.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.Import)}
+        imported |= {node.module.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module}
+        allowed = {"argparse", "collections", "datetime", "json", "os", "pathlib", "subprocess", "sys", "typing"}
+
+        self.assertLessEqual(imported, allowed)
+        for provider in ("openai", "anthropic", "gemini", "ollama"):
+            self.assertNotIn(provider, source.lower())
+
     def test_pages_deploy_always_generates_fresh_issue_data(self) -> None:
         root = Path(__file__).resolve().parents[2]
         package = json.loads((root / "site/package.json").read_text(encoding="utf-8"))

@@ -86,13 +86,11 @@ const BEHAVIOUR_BEARING_TOKENS: &[&str] = &[
     // Membership and identity — Python spells these as bare tokens
     // inside a comparison, and `x in xs` versus `x is xs` is not a
     // rename.
-    "in", "is",
-    // Bitwise and shifts.
+    "in", "is", // Bitwise and shifts.
     "&", "|", "^", "~", "<<", ">>", ">>>",
     // Compound assignment: the operator is the whole behaviour.
     "+=", "-=", "*=", "/=", "%=", "**=", "//=", "&=", "|=", "^=", "<<=", ">>=", ">>>=", "&&=",
-    "||=", "??=",
-    // Null handling.
+    "||=", "??=", // Null handling.
     "??", "?.",
     // Ranges — an inclusive bound is not the same loop as an exclusive
     // one.

@@ -25,13 +25,20 @@
 use serde_json::{json, Value};
 use tracing::warn;
 
+/// Payload field holding the cluster array a wire cap trims.
 const CLUSTERS_KEY: &str = "clusters";
+/// Payload field flagging that the wire cap removed content.
 const TRUNCATED_KEY: &str = "truncated";
+/// Payload field explaining why content was removed.
 const TRUNCATED_REASON_KEY: &str = "truncated_reason";
+/// Payload field recording the byte budget that was hit.
 const TRUNCATED_AT_BYTES_KEY: &str = "truncated_at_bytes";
+/// Payload field telling the caller how to retrieve the remainder.
 const NEXT_ACTION_KEY: &str = "next_action";
 #[cfg(test)]
+/// Reason fragment identifying the MCP wire cap as the trimmer.
 const WIRE_CAP_REASON_FRAGMENT: &str = "MCP wire cap";
+/// Name of the tool a truncated payload points callers at.
 const REPORT_GET_TOOL_NAME: &str = "report-get";
 
 /// Maximum size, in serialised JSON bytes, of any single MCP

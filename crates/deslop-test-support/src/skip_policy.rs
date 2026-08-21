@@ -29,14 +29,22 @@ use crate::corpus::repo_root;
 /// The engine's `'static` id for the grammar this scan parses with.
 const RUST_LANGUAGE_ID: &str = "rust";
 
-/// tree-sitter-rust node kinds this scan walks. Outer attributes are siblings
-/// of the item they decorate, not children of it, so an `#[ignore]` is found
-/// by walking forward from the attribute rather than down from the function.
+/// One outer attribute with its brackets. tree-sitter-rust makes these
+/// siblings of the item they decorate, not children of it, so an `#[ignore]`
+/// is found by walking forward from the attribute rather than down from the
+/// function.
 const ATTRIBUTE_ITEM: &str = "attribute_item";
+/// The attribute inside an `attribute_item`: its path and optional operand.
 const ATTRIBUTE: &str = "attribute";
+/// A function declaration — what an `#[ignore]` is allowed to decorate.
 const FUNCTION_ITEM: &str = "function_item";
+/// A `//` comment, including the `///` doc form, which may sit between an
+/// attribute and the function it belongs to.
 const LINE_COMMENT: &str = "line_comment";
+/// A `/* */` comment, in the same position.
 const BLOCK_COMMENT: &str = "block_comment";
+/// A bare identifier, which is how an attribute's path and a `cfg_attr`'s
+/// operands both appear.
 const IDENTIFIER: &str = "identifier";
 
 /// The tree-sitter field naming an `attribute`'s `= "..."` operand.
@@ -177,9 +185,9 @@ fn decorated_function(item: Node<'_>, source: &str, file: &str) -> Result<String
         match node.kind() {
             ATTRIBUTE_ITEM | LINE_COMMENT | BLOCK_COMMENT => sibling = node.next_named_sibling(),
             FUNCTION_ITEM => return named_child_text(node, source, file),
-            other => bail!(
-                "{file}: `#[{IGNORE_ATTRIBUTE}]` decorates a `{other}`, not a test function"
-            ),
+            other => {
+                bail!("{file}: `#[{IGNORE_ATTRIBUTE}]` decorates a `{other}`, not a test function")
+            }
         }
     }
     bail!("{file}: `#[{IGNORE_ATTRIBUTE}]` decorates nothing")

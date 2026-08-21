@@ -27,7 +27,9 @@ pub const SCHEMA_URI: &str = "deslop://schema";
 const REPORT_MIME: &str = "application/json";
 /// MIME type for the schema doc (markdown).
 const SCHEMA_MIME: &str = "text/markdown";
+/// MCP resource-descriptor field carrying the resource URI.
 const RESOURCE_URI_FIELD: &str = "uri";
+/// MCP resource-descriptor field carrying the resource MIME type.
 const MIME_TYPE_FIELD: &str = "mimeType";
 
 /// Renders the `resources/list` response payload per MCP spec.

@@ -94,8 +94,8 @@ fn a_seed_computed_at_another_node_floor_is_refused() -> Result<(), Box<dyn std:
 // The incremental flag decides whether the fingerprint cache is
 // consulted, which decides what the pass measured.
 #[test]
-fn a_seed_from_the_other_incremental_setting_is_refused(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn a_seed_from_the_other_incremental_setting_is_refused() -> Result<(), Box<dyn std::error::Error>>
+{
     let temp = tempfile::tempdir()?;
     record(temp.path(), &reference(temp.path()))?;
     let other = CacheSeedKey::new(

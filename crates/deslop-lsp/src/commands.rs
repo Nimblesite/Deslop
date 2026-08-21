@@ -15,6 +15,7 @@ use tower_lsp::{
 
 use crate::{backend::LspBackend, notifications::ReportChangedLspNotification};
 
+/// JSON-RPC field naming the command in an `executeCommand` request.
 const COMMAND_FIELD: &str = "command";
 
 /// Forces a full report refresh.

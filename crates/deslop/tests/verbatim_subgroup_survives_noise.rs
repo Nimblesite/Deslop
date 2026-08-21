@@ -163,7 +163,9 @@ fn assert_copy_survives_alone(
         "{label}: the copy's cluster spans exactly its own two files"
     );
     assert!(
-        !occurrence_files(cluster).iter().any(|file| file == stranger),
+        !occurrence_files(cluster)
+            .iter()
+            .any(|file| file == stranger),
         "{label}: {stranger} is not a copy of anything — it shares only the \
          shape normalisation leaves behind, so it must not be an occurrence \
          of the copy's cluster: {files:?}",

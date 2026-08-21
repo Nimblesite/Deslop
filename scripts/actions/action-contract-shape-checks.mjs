@@ -8,11 +8,19 @@ import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 
 import { check } from "./action-contract-harness.mjs";
+import { runBodies } from "./action-yaml.mjs";
 import { resolveVersion } from "./action-resolve-artifact.mjs";
 import { actionPinDocs, readActionPins, PIN_PLACEHOLDER } from "../release/stamp-release-version.mjs";
 import * as releasesData from "../../site/src/_data/releases.js";
 
 const action = readFileSync("action.yml", "utf8");
+
+/**
+ * Steps in action.yml that carry a shell body. Asserted, not derived, so a
+ * scanner that stops seeing steps fails loudly instead of silently declaring
+ * an empty file clean.
+ */
+const RUN_STEPS = 10;
 
 check("action.yml declares the Marketplace-required metadata", () => {
   for (const field of ["name: Deslop.live", "description:", "author: Nimblesite", "using: composite"]) {
@@ -233,6 +241,30 @@ check("the action rejects the stdin diff form before downloading a CLI", () => {
   assert.ok(
     !/or "-" to read the diff from stdin/.test(action),
     "action.yml must not advertise a stdin diff it cannot supply",
+  );
+});
+
+// The trust boundary action.yml states in its own comment, enforced rather
+// than described. GitHub substitutes `${{ ... }}` into the step text *before*
+// bash parses it, so an expression inside a `run` body is textual injection
+// into a shell script — the class CodeQL reports as `actions/code-injection`.
+// Escaping it does not help: a backslash in front of `${{ github.base_ref }}`
+// left an ordinary `main` base printing the unusable ref `origin/\main`, and
+// protected only the first character of a base carrying shell metacharacters.
+// Every input and context must arrive through `env` and be read as a
+// variable. [ACTION-TESTS]
+check("no run body interpolates a GitHub expression", () => {
+  const bodies = runBodies(action);
+  assert.equal(
+    bodies.length,
+    RUN_STEPS,
+    `${bodies.length} run bodies were extracted from action.yml, not ${RUN_STEPS} — ` +
+      "the step scanner drifted, so this gate proves nothing",
+  );
+  assert.deepEqual(
+    bodies.filter((step) => step.body.includes("${{")).map((step) => `${step.name} (line ${step.line})`),
+    [],
+    "a ${{ }} expression inside a run body is shell injection — pass the value through env instead",
   );
 });
 

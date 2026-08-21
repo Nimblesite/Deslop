@@ -1,430 +1,178 @@
-# Regression and test-weakening review: `worktree-fused-score-followups`
+# Pre-merge regression and test-weakening review: `worktree-fused-score-followups`
 
-## Result
+## Verdict
 
-This review found eight concrete regression findings and eight assertion holes.
-No corpus tests were run.
+Do not merge yet. The current branch has three branch-specific regressions:
 
-The most urgent defects are silent false negatives: several noise filters make
-one cluster-wide decision from an existential difference, so a third, different
-member can cause a genuine byte-identical pair in the same cluster to disappear.
-There are also paths that assign perfect confidence to semantically different
-code, serve incompatible cached reports, and omit visible report changes from
-live deltas.
+1. the composite action interpolates a GitHub context directly into a shell body;
+2. the polymorphic-signature filter aliases same-shaped, unrelated implementations;
+3. literal-echo scoring treats arbitrary identifier substrings inside data as rename proof.
 
-## Production regressions
+Each defect also has a focused test blind spot that currently permits a green result.
+This report is deliberately limited to defects introduced or materially changed by
+this branch. It supersedes the previous review rather than carrying stale findings
+forward.
 
-### P0 — Operators are absent from the evidence and semantic changes can score `fused = 1.0`
+No corpus suite or full CI run was used for this reaudit.
+
+## Merge blockers
+
+### P0 — The new action guard violates its own shell-injection boundary
 
 Evidence:
 
-- `crates/deslop-core/src/lang/shared.rs:75-98,131-175` recursively visits only
-  `named_children`. Tree-sitter represents operators such as `+`, `-`, `==`,
-  `!=`, `&&`, and `||` as anonymous tokens in the affected grammars.
-- `crates/deslop-core/src/tokens.rs:216-260` derives content evidence only from
-  the normalized identifier/literal frontier. It has no operator evidence.
-- `crates/deslop-core/src/buckets/gate.rs:181-215` permits a shape-saturated,
-  agreement-saturated non-verbatim match to render `fused = 1.0`.
+- `action.yml:143-145` says inputs and contexts must reach scripts through `env`,
+  never through `${{ }}` inside a `run` body.
+- The new error path at `action.yml:164-169` directly embeds
+  `${{ github.base_ref }}` in a Bash double-quoted string.
+- GitHub's CodeQL review has an open code-injection finding on `action.yml:168`.
 
-Concrete failure:
+The backslash does not protect this expression. GitHub expands `${{ ... }}` before
+Bash parses the step. With an ordinary `main` base, Bash preserves the backslash
+before `m`, so the suggested command contains the invalid ref `origin/\main`.
+With shell-significant text in the context, the backslash protects only the first
+ordinary character and does not prevent later shell expansion.
 
-```rust
-fn adjust(a: i32, b: i32) -> i32 { a + b }
-fn adjust(a: i32, b: i32) -> i32 { a - b }
-```
+This is branch-introduced: the vulnerable line was added with the new
+`diff == '-'` rejection step.
 
-The identifiers and literals are identical. The only behavioral difference is
-the anonymous operator, so structural, token, and content agreement can all be
-`1.0` even though the bytes and behavior differ.
+Required patch:
 
-Required patch and regression pin:
+- Use a static safe example such as `origin/main`, or pass `github.base_ref`
+  through an environment variable and print it as data with `printf`.
+- Keep every `${{ ... }}` expression outside `run` scalar bodies.
 
-- Preserve behavior-bearing anonymous tokens in normalization/content evidence
-  while continuing to discard punctuation-only framing.
-- Add focused parser/evidence cases for `+/-`, `==/!=`, and `&&/||`.
-- Add a two-file fixture asserting an operator-only change never reaches the
-  `identical` bucket or `fused = 1.0`. If operator drift remains reportable as a
-  near clone, assert its exact non-saturated bucket and signal vector.
+Required regression pin:
 
-### P0 — Three suppression filters can erase an exact duplicate subgroup
+- Parse every composite-action `run` body and fail if it contains `${{`.
+- Assert the exact error output contains a usable command and no stray backslash.
 
-All three filters apply a cluster-wide predicate. In each case, one varying
-member is enough to hide every member, including an exact pair.
+Current test weakness:
 
-#### Literal-varying calls
+`scripts/actions/action-contract-shape-checks.mjs:213-237` checks that the guard
+exists, precedes download, and exits with status 2. It never validates the shell
+trust boundary or even the emitted guidance. The targeted action-contract run
+reported all 41 checks passing while this CodeQL finding remained present.
 
-- `crates/deslop-core/src/cluster_filters/calls.rs:25-40,400-423` treats “at
-  least one later literal differs from the baseline” as sufficient variation.
-- `crates/deslop-core/src/cluster_filters/mod.rs:172-176` then hides the entire
-  cluster.
+### P1 — The polymorphic comparator aliases unrelated backend implementations
+
+Evidence:
+
+- `crates/deslop-core/src/cluster_filters/body_shape.rs:28-33` explicitly erases
+  identifier and literal text and keeps only framed node kinds.
+- `crates/deslop-core/src/cluster_filters/polymorphic.rs:49-64` uses that stream as
+  the sole test for whether same-named implementations have different bodies.
+
+These bodies produce the same stream:
 
 ```python
-# a.py and b.py are byte-identical
-def emit():
-    persist("invoice")
+async def tool_call(self, job):
+    return await self.container.run(job)
 
-# c.py has the same normalized shape
-def emit():
-    persist("refund")
+async def tool_call(self, job):
+    return await self.machine.launch(job)
 ```
 
-The third member can cause the A/B copy to vanish.
+The collaborator and callee names are the entire behavioral distinction, but both
+are erased. `subject_bodies_differ` therefore returns false, the polymorphic filter
+does not suppress the pair, and mandatory interface implementations can surface as
+an actionable clone.
 
-#### Python collection cells
+The branch changed this decision from raw body bytes to a normalized kind stream to
+stop consistent Type-2 renames being hidden. That fixed the rename false negative
+by introducing the opposite false positive.
 
-- `crates/deslop-core/src/cluster_filters/python_collection_cells.rs:25-36`
-  requires only one raw-text difference across members sharing a collection
-  home, despite the module contract saying byte-identical repeated entries must
-  surface.
+Required patch:
 
-```python
-values = [
-    normalize(invoice.amount),
-    normalize(invoice.amount),
-    normalize(refund.amount),
-]
-```
+- Make the comparison role-aware: local/parameter renames may normalize, while
+  collaborator, member, and callee substitutions remain substantive.
+- Prefer positive contract evidence, such as a shared base/interface method, over
+  treating every same-named cross-file function as polymorphic.
 
-The third entry can hide the exact first/second pair.
+Required regression pin:
 
-#### Constant tables
+- In one fixture and one scan, include two same-named, same-shaped implementations
+  that call different backends and a consistently renamed helper clone.
+- Assert the backend pair is absent and the renamed helper is present with exact
+  files, ranges, bucket, signals, occurrence count, and positive duplicated LOC.
 
-- `crates/deslop-core/src/cluster_filters/constant_table.rs:37-45` hides a whole
-  constant-only cluster when any raw snippets differ.
+Current test weakness:
 
-```python
-# a.py and b.py are byte-identical
-API_TIMEOUT = 30
-MAX_RETRIES = 5
+`crates/deslop/tests/python_issue_69_abstract_method.rs:16-54` is an absence-only
+test. Its Docker and Fly bodies already differ structurally, so it never exercises
+same-shaped backend substitutions. It also accepts a completely blind detector:
+an empty report makes every loop assertion vacuous and satisfies
+`cluster_count == 0`.
 
-# c.py has the same normalized assignment-run shape
-PRIMARY_COLOR = "blue"
-FONT_SIZE = 12
-```
-
-The unrelated table can erase the proven A/B copy.
-
-Required patch and regression pins:
-
-- Partition candidate members into the actual noise family before suppression;
-  never discard a byte-identical subgroup because another member differs.
-- Add one three-member integration test per filter. Each test must assert that
-  A/B form exactly one visible size-2 `identical` cluster, both exact paths and
-  ranges are present, C is absent from that cluster, signals are saturated for
-  A/B, and duplicated LOC is positive.
-
-### P0 — Cache seeding accepts incompatible reports and then marks them fresh
+### P1 — Literal echoes accept arbitrary substring replacement as rename proof
 
 Evidence:
 
-- `crates/deslop-core/src/live/session_helpers.rs:286-304` accepts any cached
-  JSON that deserializes as `Report`; it validates no tool version, `min_nodes`,
-  configuration, embedding mode/provider, or workspace identity.
-- `crates/deslop-core/src/live/session.rs:184-211` receives those current
-  settings but loads the cache by root alone.
-- `crates/deslop-core/src/live/session.rs:303-328` and
-  `crates/deslop-core/src/live/freshness.rs:59-69` record current mtimes against
-  occurrences from the accepted cached report. Stale offsets and clusters can
-  therefore be treated as fresh until replacement analysis completes.
-- `crates/deslop-lsp/tests/state_file_and_ipc.rs:79-117,656-696` currently
-  requires a synthetic `tool_version: "test-cache"`, `min_nodes: 4` report to be
-  served even though the live session uses different settings. The test blesses
-  the compatibility bug.
-
-Required patch and regression pin:
-
-- Persist a cache compatibility key containing at least schema/tool version,
-  normalized root identity, `min_nodes`, effective config digest, and embedding
-  mode/provider identity. Reject a mismatch before constructing the session.
-- Replace the permissive cache test with table-driven cases that mutate each
-  compatibility component and assert `try_seeded_from_cache` returns `None`.
-  Keep one matching-cache case that asserts immediate service.
-
-### P0 — Live deltas omit user-visible cluster changes
-
-Evidence:
-
-- `crates/deslop-core/src/delta.rs:97-110` omits `bucket`, `category`,
-  `occurrences_total`, `occurrences_truncated`, `intersects_diff`, and
-  `is_newly_introduced` from cluster equality.
-- `crates/deslop-core/src/delta.rs:113-120` omits `agreement`,
-  `rename_consistency`, and `literal_fraction` from signal equality.
-- `crates/deslop-core/src/delta.rs:125-137` omits occurrence `start_line`,
-  `end_line`, and `in_diff`.
-
-A stable cluster ID can change bucket, evidence, displayed lines, diff status,
-or truncation while `ReportDelta::between` emits no `clusters_updated`. Live
-clients then retain stale data.
-
-Required patch and regression pin:
-
-- Compare the complete serialized/user-visible semantic payload, excluding
-  only fields explicitly proven irrelevant to subscribers.
-- Add a table-driven unit test that mutates every `ReportCluster`,
-  `ReportSignals`, and `ReportOccurrence` field one at a time and requires
-  exactly that cluster ID in `clusters_updated`.
-- Add one LSP integration case for a same-ID update. The current notification
-  test at `crates/deslop-lsp/tests/notifications.rs:48-77` covers removal only.
-
-### P1 — A majority verbatim subgroup certifies unrelated cluster members
-
-Evidence:
-
-- `crates/deslop-core/src/content.rs:222-233,387-401` marks an entire cluster
-  `verbatim_dominated` when its largest verbatim family is merely a strict
-  majority.
-- `crates/deslop-core/src/content.rs:297-311` then forces the whole cluster's
-  agreement to `1.0`.
-- `crates/deslop-core/src/buckets/gate.rs:181-215` can use that value to
-  saturate fused confidence for every member.
-
-A five-member cluster containing three identical copies plus two different,
-shape-compatible members can therefore give all five the proof earned only by
-the three-copy subgroup.
-
-Required patch and regression pin:
-
-- Split the verbatim family before scoring, or compute evidence per member/pair
-  so minority members cannot inherit majority proof.
-- Add a five-member 3+2 fixture. Assert either a size-3 saturated cluster for
-  the exact copies plus a separate result, or a mixed cluster whose agreement
-  and fused score are both below `1.0`.
-
-### P1 — Literal-call suppression ignores duplicated non-call logic
-
-Evidence:
-
-- `crates/deslop-core/src/cluster_filters/calls.rs:105-117` decides from the
-  extracted call sequence alone.
-- `crates/deslop-core/src/cluster_filters/calls.rs:122-165` collects calls but
-  never checks the executable AST residue around them.
-
-```python
-def invoice_total(subtotal, tax):
-    total = subtotal + tax
-    record_metric("invoice")
-    return total
-
-def refund_total(amount, fee):
-    result = amount + fee
-    record_metric("refund")
-    return result
-```
-
-The literal-varying call can cause the copied calculation and return flow to be
-hidden.
-
-Required patch and regression pin:
-
-- After removing accepted call expressions, require the remaining AST to match
-  a narrow, explicit inert-scaffolding allowlist.
-- Add a two-function fixture asserting this business-logic clone remains
-  visible with exact paths/ranges and positive duplicated LOC. Keep a pure
-  call-scaffolding fixture that remains hidden.
-
-### P1 — Python sibling-cell suppression protects only lambdas
-
-Evidence:
-
-- `crates/deslop-core/src/cluster_filters/python_collection_cells.rs:25-36`
-  suppresses raw-different siblings in one collection.
-- `crates/deslop-core/src/cluster_filters/python_collection_cells.rs:52-62`
-  exempts only a subtree containing `lambda`. Calls, operators,
-  comprehensions, and conditional expressions remain suppressible.
-
-```python
-payload = [
-    normalize(invoice.amount) + apply_tax(invoice.tax),
-    normalize(refund.amount) + apply_tax(refund.tax),
-]
-```
-
-This is extractable repeated logic, not inert record data, but the current
-predicate hides it.
-
-Required patch and regression pin:
-
-- Replace the lambda blacklist with a positive AST allowlist for inert cells.
-- Add focused call, operator, comprehension, and conditional-expression cases;
-  assert exact visible occurrences for each. Keep a simple identifier/literal
-  record-cell case that remains hidden.
-
-### P1 — The polymorphic comparator aliases different implementations
-
-Evidence:
-
-- `crates/deslop-core/src/cluster_filters/body_shape.rs:26-56` compares named
-  node kinds only. It deliberately erases identifier/literal text and also
-  loses anonymous operators.
-- `crates/deslop-core/src/cluster_filters/polymorphic.rs:49-64` uses that stream
-  as the sole body-difference check.
-- `crates/deslop-core/src/cluster_filters/mod.rs:398-416` uses the same stream
-  for signature-only suppression.
-
-Same-signature implementations that use different backends but share one AST
-shape can compare equal and escape the filter:
-
-```python
-return self.container.run(job)
-return self.machine.launch(job)
-```
-
-Required patch and regression pin:
-
-- Extend the comparator with behavior-bearing operators and a normalized
-  vocabulary relation capable of distinguishing unrelated backend access while
-  retaining consistent-renaming clones.
-- Add same-shaped backend implementations and operator-only implementations to
-  the polymorphic fixture. Assert no cross-file cluster for them and, in the
-  same scan, assert the consistently renamed control remains visible with its
-  exact bucket, size, paths, and signals.
-
-## Test weakening and vacuous assertions
-
-### P0 — Noise-filter tests do not prove the target filter fired
-
-`crates/deslop/tests/common/negative_pin.rs:47-59` asserts that the target files
-do not span a visible cluster and that the report-wide `clusters_hidden` is at
-least one. An unrelated hidden cluster satisfies the counter. The positive
-control at lines 65-87 proves only that some unrelated clone is detectable.
-
-The same pattern appears in `crates/deslop/tests/fused_golden_bands.rs:291`: if
-the target family disappears, any hidden cluster can satisfy the fallback.
-
-Required assertion:
-
-- Record test-visible suppression provenance containing filter reason and exact
-  member paths/ranges. Require the target candidate to exist before filtering
-  and to be hidden by the expected filter. A global hidden count is not an
-  acceptable substitute.
-
-### P0 — The #69/#421 test passes if detection goes blind
-
-`crates/deslop/tests/python_issue_69_abstract_method.rs:16-54` loops over an
-empty result, then asserts `cluster_count == 0`. It has no same-run positive
-control and no `files_analysed` assertion. Parser failure, candidate-generation
-failure, or global suppression all pass.
-
-`crates/deslop/tests/polymorphic_gate_hides_rename_clone.rs:24-106` describes a
-same-run two-sided contract but performs two separate scans; the all-empty
-contract scan is still unguarded by a local positive candidate.
-
-Required assertion:
-
-- Put the noise family and a byte-identical control in one fixture and one
-  scan. Assert exact files analysed, exact control paths/ranges, size, bucket,
-  signals, and duplicated LOC, plus target-specific suppression provenance.
-
-### P0 — The saturation invariant accepts proof belonging to only two members
-
-`crates/deslop/tests/fused_golden_invariants.rs:189-205` accepts a saturated
-non-`identical` cluster if any byte-identical occurrence pair exists. It does
-not require every saturated member to belong to that verbatim family. This test
-therefore passes the 3+2 majority-certification regression described above.
-
-Required assertion:
-
-- For `fused = 1.0`, require all shown occurrences to be byte-equivalent to the
-  canonical occurrence, or require the cluster to have been split to the exact
-  verbatim family.
-
-### P1 — Corpus determinism compares only cluster IDs
-
-`crates/deslop/tests/corpus_repos.rs:119-170` says the reports must agree but
-compares only ordered ID vectors. `duplication_percent` is printed, not
-asserted, and `filter_map` silently drops clusters missing an ID. Stable IDs
-with changed spans, buckets, signals, ranks, hidden flags, or metrics pass.
-
-Required assertion:
-
-- Compare canonical full semantic reports, stripping only genuinely
-  nondeterministic measurements. Treat a missing ID as malformed input.
-- Unit-test equal IDs with changed occurrence ranges, bucket/signals, order,
-  and duplication percentage; every mutation must fail determinism.
-
-### P1 — Curated recall identifies a file pair, not the curated clone
-
-`crates/deslop-test-support/src/corpus_confidence.rs:228-305,342-378` accepts any
-qualifying cluster spanning the listed files. The manifests describe verified
-line ranges only in prose. If the verified 137-line clone disappears but an
-unrelated small clone remains between the same files, recall stays green.
-
-The Type-1 implementation has no direct unit coverage: the tests under
-`crates/deslop-test-support/src/corpus_confidence/tests/curated.rs` exercise the
-Type-2 path. The cheap contract in
-`crates/deslop/tests/corpus_manifest_contract.rs:58-167` protects only
-`must_find_type2`; deleting Flutter's three Type-1 entries is not rejected.
-
-Required assertion:
-
-- Give each curated entry machine-readable start/end lines or a normalized
-  content digest and expected occurrence count. Match that exact clone, not
-  merely its files.
-- Add negative unit cases for an unrelated clone in the same file pair, wrong
-  range/digest, hidden occurrence, wrong bucket, rank beyond the ceiling,
-  duplicate file names, and malformed entries.
-- Add a non-vacuity/shape contract for Type-1 `must_find` ground truth.
-
-### P1 — Missing signal fields are silently converted to passing zeroes
-
-`crates/deslop-test-support/src/corpus_confidence.rs:96-134,436-443` defaults a
-missing or non-numeric signal to `0.0`. Deleting `signals.fused` and the axes can
-make the bounded-max invariant compare zero to zero and pass.
-
-`crates/deslop/tests/common/mod.rs:238-245` has the same default. Assertions
-whose expected value is zero, including parts of the Type-1 signal contract,
-therefore accept a missing field.
-
-Required assertion:
-
-- Parse every required signal as a present, numeric, finite value in `[0, 1]`
-  before checking relationships or expected values.
-- Add missing, `null`, string, `NaN`/non-finite, and out-of-range negative cases.
-
-### P1 — The precision check can disable itself and inspects only one occurrence
-
-`crates/deslop-test-support/src/corpus_precision.rs:43-64` does no work when
-`top_n` is zero or the forbidden-supertype list is empty/malformed; non-string
-entries are silently discarded. Lines 67-113 judge only the first occurrence,
-so a forbidden declaration later in the same cluster passes depending on
-ordering.
-
-Required assertion:
-
-- Reject zero `top_n`, an empty list, and every non-string/blank forbidden
-  supertype as invalid test configuration.
-- Inspect every shown occurrence. Add a case where only the second occurrence
-  declares the forbidden supertype and require a failure.
-
-### P1 — Six expensive corpus scans have no accuracy oracle
-
-The manifests for Django, F#, Hugo, Jellyfin, Laravel, and React each have:
-
-- zero `must_find` entries;
-- zero `must_find_type2` entries; and
-- no `must_not_rank_first` precision assertion.
-
-Their current corpus tests can enforce resource ceilings, but cannot fail for a
-recall or ranking regression—even a report containing zero useful findings.
-
-Required assertion before spending on those scans:
-
-- Curate at least one exact Type-1 or Type-2 clone per repository, with
-  machine-readable location/digest evidence and an expected bucket/rank bound.
-- Where the repository has known framework boilerplate, add a concrete
-  forbidden-top-rank precision oracle.
-- Until a repository has an accuracy oracle, its run must not be cited as
-  regression coverage for detection quality.
-
-## Action order
-
-1. Fix the three mixed-cluster erasures and add the three-member subgroup pins.
-2. Stop operator-only changes and majority verbatim subgroups from earning
-   cluster-wide perfect confidence.
-3. Reject incompatible live cache seeds and make delta equality cover the full
-   visible payload.
-4. Replace global/empty negative assertions with target-specific provenance and
-   same-run positive controls.
-5. Make corpus recall identify exact clones, make required signals fail closed,
-   and add accuracy oracles for the six uncurated repositories before relying
-   on their expensive runs.
+- `crates/deslop-core/src/content/rename.rs:250-279` lets a changed literal
+  corroborate an identifier substitution.
+- `crates/deslop-core/src/content/rename.rs:335-372` replaces every raw byte
+  occurrence with no identifier-boundary or symbol-role check.
+- `crates/deslop-core/src/content/rename.rs:242-247` upgrades contradiction-free
+  evidence to full rename consistency once the anchor mass reaches the support
+  floor.
+
+For an elected `a -> x` identifier substitution, the implementation accepts
+`"banana" -> "bxnxnx"` as a literal echo. The `a` bytes are ordinary data, not a
+symbol reference. Nine repeated identifier positions plus this false echo produce
+ten anchors, clear the `anchors / (anchors + 4) >= 0.7` certification boundary,
+and can render `rename_consistency = 1.0` and an act-now confidence for code whose
+literal data changed.
+
+Required patch:
+
+- Recognize echoes only where the substituted bytes occupy an identifier-like
+  boundary in the decoded literal payload. Do not count a match inside a longer
+  word or arbitrary data token.
+- Preserve intended cases such as `"OrderService" -> "UserService"` and symbol
+  names embedded at real boundaries in paths or messages.
+
+Required regression pin:
+
+- Add a negative `a -> x`, `"banana" -> "bxnxnx"` fixture and assert the literal
+  remains a contradiction, rename consistency stays below certification, and the
+  cluster does not enter an act-now bucket.
+- Keep the existing full-symbol echo as the positive control in the same focused
+  test surface.
+
+Current test weakness:
+
+`crates/deslop/tests/rename_literal_monotonicity.rs:104-133` asserts only
+`thorough >= sloppy`. An implementation returning `1.0` for both passes. The suite
+contains no negative echo whose matching bytes are merely a substring of ordinary
+literal data.
+
+## Findings retired from the previous report
+
+The previous report no longer describes the current branch accurately:
+
+- behavior-bearing operators now participate in normalized/content evidence;
+- exact duplicate subgroups are split before cluster-wide noise suppression;
+- majority verbatim families no longer force whole-cluster agreement to `1.0`;
+- live cluster equality now compares the full generated payload.
+
+Inherited call/cell/cache concerns were excluded from this branch-only review, and
+the corpus-test audit was removed from scope as requested.
+
+## Required order before merge
+
+1. Remove the direct GitHub-context interpolation and add the action trust-boundary
+   contract test.
+2. Fix literal-echo boundary handling and pin both the false echo and intended
+   full-symbol echo.
+3. Replace the polymorphic kind-only decision with a role/contract-aware one and
+   add the same-run positive and negative controls.
+4. Re-run only the focused action, rename-evidence, and polymorphic regression
+   tests needed to prove these fixes before relying on broader CI.
+
+## Focused verification performed
+
+- `node scripts/actions/test-action-contract.mjs` — passed 41/41, demonstrating
+  the action test blind spot.
+- Static branch-vs-main inspection of the three production paths and their focused
+  regression tests.
+- No corpus tests and no full CI run.

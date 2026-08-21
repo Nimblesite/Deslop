@@ -165,8 +165,10 @@ runs:
       if: inputs.diff == '-'
       shell: bash
       run: |
-        echo "::error::The diff input cannot be \"-\". A composite action has no stdin to read a patch from, so Deslop would measure an empty diff and report a false pass. Write the patch to a file and pass its path — for example: git diff origin/\${{ github.base_ref }}...HEAD > /tmp/pr.diff"
+        printf '::error::The diff input cannot be "-". A composite action has no stdin to read a patch from, so Deslop would measure an empty diff and report a false pass. Write the patch to a file and pass its path — for example: git diff origin/%s...HEAD > /tmp/pr.diff\n' "${BASE_REF:-main}"
         exit 2
+      env:
+        BASE_REF: ${{ github.base_ref }}
 
     - name: Resolve the deslop release
       id: resolve

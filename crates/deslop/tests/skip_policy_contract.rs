@@ -235,28 +235,34 @@ fn the_ignored_tests_in_the_tree_are_exactly_the_curated_set() -> Result<()> {
 #[test]
 fn every_skip_states_exactly_one_allowed_justification() -> Result<()> {
     for skip in ignored_tests()? {
-        assert!(
-            !skip.reason.is_empty(),
-            "{}::{} is a bare `#[ignore]`. A skip with no stated reason is a test deleted \
-             without a commit message.",
-            skip.file,
-            skip.test
-        );
-        let claimed: Vec<&str> = CATEGORIES
-            .into_iter()
-            .filter(|category| skip.reason.contains(category))
-            .collect();
-        assert_eq!(
-            claimed.len(),
-            1,
-            "{}::{} claims {claimed:?}; a skip states exactly one of {CATEGORIES:?}. \
-             \"it was breaking CI\" is not a category and never will be. Reason: {}",
-            skip.file,
-            skip.test,
-            skip.reason
-        );
+        assert_single_category(&skip);
     }
     Ok(())
+}
+
+/// A skip states its justification, and states exactly one of the two the
+/// specification allows.
+fn assert_single_category(skip: &IgnoredTest) {
+    assert!(
+        !skip.reason.is_empty(),
+        "{}::{} is a bare `#[ignore]`. A skip with no stated reason is a test deleted without a \
+         commit message.",
+        skip.file,
+        skip.test
+    );
+    let claimed: Vec<&str> = CATEGORIES
+        .into_iter()
+        .filter(|category| skip.reason.contains(category))
+        .collect();
+    assert_eq!(
+        claimed.len(),
+        1,
+        "{}::{} claims {claimed:?}; a skip states exactly one of {CATEGORIES:?}. \"it was \
+         breaking CI\" is not a category and never will be. Reason: {}",
+        skip.file,
+        skip.test,
+        skip.reason
+    );
 }
 
 #[test]
@@ -297,9 +303,8 @@ fn every_skip_names_a_plan_that_exists_and_covers_its_issue() -> Result<()> {
 fn assert_plans_cover(file: &str, test: &str, plans: &[String], issue: u32) -> Result<()> {
     let mut covering = 0_usize;
     for plan in plans {
-        let body = read(plan).with_context(|| {
-            format!("{file}::{test} cites {plan}, which is not in the tree")
-        })?;
+        let body = read(plan)
+            .with_context(|| format!("{file}::{test} cites {plan}, which is not in the tree"))?;
         covering += usize::from(issue_mentions(&body).contains(&issue));
     }
     assert!(
@@ -314,27 +319,33 @@ fn assert_plans_cover(file: &str, test: &str, plans: &[String], issue: u32) -> R
 fn every_skip_cross_references_a_spec_id_that_a_specification_declares() -> Result<()> {
     let declared = declared_spec_ids()?;
     for skip in ignored_tests()? {
-        let cited: Vec<String> = bracketed_ids(&skip.reason)
-            .into_iter()
-            .filter(|id| !CATEGORIES.contains(&format!("[{id}]").as_str()))
-            .collect();
-        assert!(
-            !cited.is_empty(),
-            "{}::{} cites no spec id, so nothing connects the skipped behaviour to the \
-             specification it is supposed to satisfy. Reason: {}",
-            skip.file,
-            skip.test,
-            skip.reason
-        );
-        let unknown: Vec<&String> = cited.iter().filter(|id| !declared.contains(*id)).collect();
-        assert!(
-            unknown.is_empty(),
-            "{}::{} cites {unknown:?}, which no file under {SPEC_DIRECTORY} declares",
-            skip.file,
-            skip.test
-        );
+        assert_cites_declared_spec_id(&skip, &declared);
     }
     Ok(())
+}
+
+/// A skip names at least one spec id besides its own category tag, and every
+/// id it names is one a specification actually declares.
+fn assert_cites_declared_spec_id(skip: &IgnoredTest, declared: &BTreeSet<String>) {
+    let cited: Vec<String> = bracketed_ids(&skip.reason)
+        .into_iter()
+        .filter(|id| !CATEGORIES.contains(&format!("[{id}]").as_str()))
+        .collect();
+    assert!(
+        !cited.is_empty(),
+        "{}::{} cites no spec id, so nothing connects the skipped behaviour to the specification \
+         it is supposed to satisfy. Reason: {}",
+        skip.file,
+        skip.test,
+        skip.reason
+    );
+    let unknown: Vec<&String> = cited.iter().filter(|id| !declared.contains(*id)).collect();
+    assert!(
+        unknown.is_empty(),
+        "{}::{} cites {unknown:?}, which no file under {SPEC_DIRECTORY} declares",
+        skip.file,
+        skip.test
+    );
 }
 
 #[test]
@@ -402,14 +413,20 @@ fn the_scheduled_corpus_slice_names_tests_that_still_exist() -> Result<()> {
         "{MAKEFILE}: {CORPUS_SLICE_VARIABLE} names no test, so the scheduled corpus workflow \
          runs nothing and reports green over zero repositories"
     );
-    for name in &slice {
+    assert_slice_resolves(&slice, &suite);
+    Ok(())
+}
+
+/// Every name the scheduled slice selects must be a test the suite declares.
+/// `--exact` makes a stale name select nothing rather than something adjacent,
+/// and a run that executes zero tests reports green — gh #412, one rename away.
+fn assert_slice_resolves(slice: &[String], suite: &[String]) {
+    for name in slice {
         assert!(
             suite.contains(name),
             "{MAKEFILE}: {CORPUS_SLICE_VARIABLE} selects `{name}`, which is not a test in \
-             {CORPUS_SUITE}. libtest would match nothing and the scheduled run would report \
-             green having executed zero tests — the same failure as gh #412, one rename away. \
+             {CORPUS_SUITE}. The scheduled run would execute zero tests and report green. \
              The suite declares {suite:?}."
         );
     }
-    Ok(())
 }
