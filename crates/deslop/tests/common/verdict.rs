@@ -186,3 +186,48 @@ pub(crate) fn assert_cluster_mentions(
 pub(crate) fn loc_as_f64(value: u64) -> Result<f64> {
     Ok(f64::from(u32::try_from(value)?))
 }
+
+/// The complete signal vector a **byte-identical** Type-1 clone must
+/// render with embeddings off. Every value is determined by the authored
+/// corpus, so there is no band to hide inside ([FUSED-THRESHOLD]) and no
+/// signal is exempt from the pin.
+///
+/// The content triple (`agreement`, `rename_consistency`,
+/// `literal_fraction`) belongs here as much as the shape pair does: it
+/// feeds [FUSION-CONTENT-GATE] through `buckets::content_support`, so a
+/// value that drifts here can promote or demote a cluster. Nothing
+/// differs between two byte-identical copies, so there is nothing for a
+/// rename to fail to explain and `rename_consistency` is exactly `1.0`;
+/// a discounted reading is the engine charging a byte-proven copy for
+/// evidence it is not missing ([REPAIR-RENAME-ANCHOR-MASS]). Pinning
+/// only the four shape/fused signals is how a stale content figure sat
+/// inside a committed golden while the golden's own contract half
+/// declared it correct.
+pub(crate) const TYPE1_IDENTICAL_SIGNALS: &[(&str, f64)] = &[
+    ("structural", 1.0),
+    ("token_jaccard", 1.0),
+    ("shape", 1.0),
+    ("embedding_cos", 0.0),
+    ("fused", 1.0),
+    ("agreement", 1.0),
+    ("rename_consistency", 1.0),
+    ("literal_fraction", 0.0),
+];
+
+/// Asserts `cluster` carries exactly [`TYPE1_IDENTICAL_SIGNALS`].
+/// `label` names the corpus or language under test so a failure says
+/// which byte-identical pair moved.
+pub(crate) fn assert_type1_identical_signals(cluster: &Value, label: &str) {
+    for (name, expected) in TYPE1_IDENTICAL_SIGNALS {
+        let actual = signal(cluster, name);
+        assert!(
+            (actual - expected).abs() <= 1e-9,
+            "{label}: signal `{name}` must be {expected}, got {actual}. Both \
+             copies are byte-identical, so every signal is determined. A \
+             signal that moves while the source does not is either a \
+             corrupted- or misaddressed-blob \
+             ([PIPELINE-INCREMENTAL-INTEGRITY]) or an unblessed engine \
+             change: {cluster:#}"
+        );
+    }
+}

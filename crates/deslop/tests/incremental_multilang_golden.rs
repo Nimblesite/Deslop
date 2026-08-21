@@ -126,7 +126,7 @@ fn assert_every_cluster_is_reported_exactly(golden: &Value) -> Result<()> {
         );
         assert_occurrence_shape(clone, language);
         assert_exact_spans(clone, case)?;
-        assert_pinned_signals(clone, language);
+        assert_type1_identical_signals(clone, language);
     }
     Ok(())
 }
@@ -183,22 +183,6 @@ fn assert_exact_spans(clone: &Value, case: &LangCase) -> Result<()> {
         );
     }
     Ok(())
-}
-
-/// All four signals, exactly. Embeddings are off and both copies are
-/// byte-identical, so every value is determined — there is no band to
-/// hide inside ([FUSED-THRESHOLD]).
-fn assert_pinned_signals(clone: &Value, language: &str) {
-    for (name, expected) in MULTILANG_SIGNALS {
-        let actual = signal(clone, name);
-        assert!(
-            approx(actual, *expected),
-            "{language}: signal `{name}` must be {expected}, got {actual}. A \
-             signal that moves while the source does not is the corrupted- \
-             or misaddressed-blob signature ([PIPELINE-INCREMENTAL-INTEGRITY]): \
-             {clone:#}"
-        );
-    }
 }
 
 /// [METRICS-REPO] The reported figures must be transparent and

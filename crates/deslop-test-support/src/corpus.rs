@@ -462,3 +462,21 @@ fn byte_offset(occurrence: &Value, name: &str) -> Result<usize> {
         .and_then(|value| usize::try_from(value).ok())
         .ok_or_else(|| anyhow!("occurrence is missing {name}"))
 }
+
+/// Array-valued field of `value`, or an empty slice when absent or not an
+/// array. Manifest and report readers share this so an absent curated list
+/// reads as "asserts nothing" in exactly one place.
+#[must_use]
+pub fn array<'a>(value: &'a Value, name: &str) -> &'a [Value] {
+    value
+        .get(name)
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+}
+
+/// Unsigned scalar field of `value`, or `0` when absent.
+#[must_use]
+pub fn field_u64(value: &Value, name: &str) -> u64 {
+    value.get(name).and_then(Value::as_u64).unwrap_or_default()
+}

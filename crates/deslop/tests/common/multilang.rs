@@ -163,18 +163,6 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
     ),
 ];
 
-/// Every authored clone is a byte-identical Type-1 copy with embeddings
-/// off, so all four signals are pinned to exact values — no bands, no
-/// approximation. `token_jaccard` is the load-bearing one: the audit's
-/// corrupted-signature regression surfaced precisely as this value
-/// moving while every other field held ([PIPELINE-INCREMENTAL-INTEGRITY]).
-pub(crate) const MULTILANG_SIGNALS: &[(&str, f64)] = &[
-    ("structural", 1.0),
-    ("token_jaccard", 1.0),
-    ("embedding_cos", 0.0),
-    ("fused", 1.0),
-];
-
 /// `tests/fixtures/incremental-multilang`.
 pub(crate) fn multilang_dir() -> PathBuf {
     fixture("incremental-multilang")

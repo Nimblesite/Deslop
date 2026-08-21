@@ -388,10 +388,7 @@ fn assert_engine_derived_fields(golden: &Value) {
             Some(true),
             "byte-proven clones clear the reportable fused line: {cluster}"
         );
-        assert!(
-            approx(signal(cluster, "shape"), 1.0),
-            "byte-identical clones saturate the shape reading: {cluster}"
-        );
+        assert_type1_identical_signals(cluster, "report-golden");
         let verdict = field(cluster, "evidence_verdict")
             .as_str()
             .unwrap_or_default()

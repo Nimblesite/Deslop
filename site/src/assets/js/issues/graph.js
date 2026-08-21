@@ -8,7 +8,7 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 function streamCenter(index) {
   const column = index % 4;
   const row = Math.floor(index / 4);
-  return { x: 150 + column * 300, y: 190 + row * 340 };
+  return { x: 200 + column * 280, y: 190 + row * 340 };
 }
 
 function streamPositions(items, center) {
@@ -210,7 +210,21 @@ function legend(report, issues) {
     swatch.style.setProperty("--swatch", stream.color);
     return element("span", { className: "legend-item" }, [swatch, document.createTextNode(stream.name)]);
   });
+  items.push(statusLegend("Verification ring", "legend-ring"));
+  items.push(statusLegend("Explicit relationship", "legend-line"));
   return element("div", { className: "graph-legend" }, items);
+}
+
+function statusLegend(text, className) {
+  return element("span", { className: "legend-item" }, [
+    element("span", { className }),
+    document.createTextNode(text),
+  ]);
+}
+
+function initialTransform(viewport, state) {
+  if (window.innerWidth > 600) return;
+  zoomAt(viewport, state, 1.45, { x: WIDTH / 2, y: HEIGHT / 2 });
 }
 
 export function renderNetwork(container, report, issues, onSelect) {
@@ -223,6 +237,7 @@ export function renderNetwork(container, report, issues, onSelect) {
   const positions = layoutIssues(report, issues);
   const viewport = graphLayers(svg, report, issues, positions, onSelect, tooltip);
   const state = { x: 0, y: 0, scale: 1 };
+  initialTransform(viewport, state);
   bindWheel(svg, viewport, state);
   bindPan(svg, canvas, viewport, state);
   canvas.append(svg, tooltip);

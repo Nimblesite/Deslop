@@ -16,11 +16,6 @@
       "url": "/releases/"
     },
     {
-      "text": "Issue map",
-      "url": "/issues/",
-      "noLangPrefix": true
-    },
-    {
       "text": "GitHub",
       "url": "https://github.com/Nimblesite/Deslop",
       "external": true

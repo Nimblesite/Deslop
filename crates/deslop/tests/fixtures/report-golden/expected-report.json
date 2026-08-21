@@ -96,14 +96,14 @@
         "embedding_cos": 0.0,
         "fused": 1.0,
         "agreement": 1.0,
-        "rename_consistency": 0.8666666666666667,
+        "rename_consistency": 1.0,
         "literal_fraction": 0.0
       },
       "bucket": "identical",
       "category": "logic",
       "language": "rust",
       "meets_fused_gate": true,
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 0.87 of what differs, so confidence stayed at 1.00.",
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so confidence stayed at 1.00.",
       "occurrences": [
         {
           "path": "alpha.rs",
@@ -150,14 +150,14 @@
         "embedding_cos": 0.0,
         "fused": 1.0,
         "agreement": 1.0,
-        "rename_consistency": 0.8095238095238095,
+        "rename_consistency": 1.0,
         "literal_fraction": 0.0
       },
       "bucket": "identical",
       "category": "logic",
       "language": "rust",
       "meets_fused_gate": true,
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 0.81 of what differs, so confidence stayed at 1.00.",
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so confidence stayed at 1.00.",
       "occurrences": [
         {
           "path": "delta.rs",

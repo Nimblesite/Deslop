@@ -2,7 +2,7 @@ import { clear, element, emptyState, labelChip, shortDate } from "./dom.js";
 import { priorityColor, streamMap } from "./model.js";
 
 function cardLabels(issue) {
-  return element("div", { className: "card-labels" }, issue.labels.slice(0, 3).map(labelChip));
+  return element("div", { className: "card-labels" }, issue.labels.map(labelChip));
 }
 
 function issueCard(issue, streams, onSelect) {
@@ -134,7 +134,7 @@ export function renderRunway(container, report, issues, onSelect) {
 }
 
 function labelCell(issue) {
-  const labels = issue.labels.slice(0, 3).map(labelChip);
+  const labels = issue.labels.map(labelChip);
   return element("div", { className: "queue-labels" }, labels);
 }
 

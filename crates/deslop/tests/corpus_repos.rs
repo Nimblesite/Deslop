@@ -437,20 +437,6 @@ fn check_ceilings(manifest: &Value, run: &CorpusRun, failures: &mut Vec<Failure>
     Ok(())
 }
 
-/// Array-valued field, or an empty slice when absent.
-fn array<'a>(value: &'a Value, name: &str) -> &'a [Value] {
-    value
-        .get(name)
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-}
-
-/// Unsigned scalar field, or `0` when absent.
-fn field_u64(value: &Value, name: &str) -> u64 {
-    value.get(name).and_then(Value::as_u64).unwrap_or_default()
-}
-
 /// Unsigned scalar at a JSON pointer, or `0` when absent.
 fn pointer_u64(value: &Value, pointer: &str) -> u64 {
     value
