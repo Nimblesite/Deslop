@@ -2,11 +2,13 @@ from common_worker import CommonWorker
 
 
 class InvoiceWorker(CommonWorker):
-    def synchronise(self, order, attempts):
-        repo = self.order_repo[order]
-        record = repo.fetch(order)
-        if record is None:
-            return None
-        record.attempts = attempts
-        repo.save(record)
-        return record.identifier
+    def synchronise(self, orders, attempts):
+        pending = []
+        while orders:
+            order = orders.pop()
+            record = self.order_repo.fetch(order)
+            if record.attempts > attempts:
+                pending.append(record.identifier)
+            else:
+                self.order_repo.retry(record)
+        return pending

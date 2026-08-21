@@ -33,6 +33,8 @@ Deslop parses with tree-sitter, normalizes the AST, fingerprints subtrees, clust
 
 But "this is genuinely duplicated structure" and "you should merge these" are different claims, and only the first one is ours to make. The second depends on type systems, hot loops, module boundaries, release risk, and who owns the file — context a static analyser does not have and should not pretend to have.
 
+So the division of labour is: the tool supplies the evidence, and the agent navigates that evidence and verifies it before relying on it to decide anything. Neither half works alone. Evidence nobody interrogates becomes a work order; an agent with no evidence is guessing.
+
 That gap is exactly where an agent goes wrong. Hand a coding agent a ranked list of duplicate clusters with no procedure attached and it will treat the list as a work order, refactor everything, and hand back a diff nobody asked for. The report was accurate. The outcome was still bad.
 
 The skill closes that gap with procedure.
@@ -89,13 +91,21 @@ It supports Jujutsu too — `--diff-cmd "jj diff"` — which matters inside Goog
 
 This is where the skill paid us back directly. Doing that filtering from outside meant parsing unified diffs, computing line-range intersections, and post-processing our JSON. Kevin filed [issue #364](https://github.com/Nimblesite/Deslop/issues/364) asking for `--diff` and `--only-changed` natively in the CLI, separating the two questions review actually asks: did this change introduce a duplicate, and does the changed code clone a helper that already exists elsewhere?
 
-We had not built that. A wrapper written by someone using the tool in anger is a usability specification with a working reference implementation attached, and it is better evidence than any roadmap conversation we could have had internally. Every open defect and request, including this one, is public on our [issues page](/issues/).
+We had not built that. A wrapper written by someone using the tool in anger is a usability specification with a working reference implementation attached, and it is better evidence than any roadmap conversation we could have had internally.
 
 ## Provenance in the pull request
 
 The last phase appends a reproduction block to the commit or PR body — the Deslop version, resolved at runtime from `deslop --version`, and the exact command line that produced the findings.
 
 Small feature, disproportionate effect. A reviewer looking at a deduplication diff usually has no way to check the claim behind it. A pinned version and a runnable command turns "the tool said so" into something a reviewer can re-execute. Tool output that cannot be reproduced is an assertion; tool output with the command attached is evidence.
+
+## Tell the agent what the tool gets wrong
+
+Every tool has open defects, and an agent that treats tool output as ground truth will eventually act on a finding the maintainers already know is wrong.
+
+So we publish ours. The [issue graph](/issues/) shows every open issue and how they relate to each other. The [planner](/issues/planner/) shows the runway and the ordered queue, using transparent default effort rather than promised dates. The whole set is machine-readable at [`/assets/data/issues.json`](/assets/data/issues.json), which means a skill can point an agent at the live defect list instead of a snapshot that went stale the week the skill was written. #364 is in there. So is anything currently affecting accuracy, alongside the measured numbers on the [accuracy and transparency page](/docs/accuracy-transparency/).
+
+That generalizes past us. If your tool has a public tracker, name it in the skill and say what the agent should do with it: when a result looks wrong or surprising, check it against the known defects before acting on it, and file a new issue when it does not match one. Knowing which evidence is already disputed is part of verifying the evidence.
 
 ## Writing a skill like this for your own tool
 
@@ -114,6 +124,8 @@ An agent skill is a Markdown file with front matter describing when to use it. T
 **Stage, do not commit.** Leave version control to the human. `git add` plus `git diff --cached --stat` gives them everything they need to decide.
 
 **Emit provenance.** Version and command, in the PR body.
+
+**Point at the tool's known defects.** Link the tracker, and tell the agent to check a surprising finding against it before acting, and to file an issue when nothing matches. A skill that treats its tool as infallible will confidently automate that tool's bugs.
 
 **Say when not to use it.** Kevin's front matter ends with "Don't use for non-Dart projects, non-Git checkouts, or simple single-file syntax lints." A skill that claims to apply everywhere gets invoked when it shouldn't and burns trust the first time it misfires.
 

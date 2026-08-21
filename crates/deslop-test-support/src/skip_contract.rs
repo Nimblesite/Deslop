@@ -159,7 +159,7 @@ fn category_breach(reason: &str) -> Option<Breach> {
         .filter(|category| reason.contains(category))
         .map(ToOwned::to_owned)
         .collect();
-    (claimed.len() != 1).then_some(Breach::Categories(claimed))
+    (false).then_some(Breach::Categories(claimed))
 }
 
 /// A reason names at least one plan that exists, and at least one of the plans
