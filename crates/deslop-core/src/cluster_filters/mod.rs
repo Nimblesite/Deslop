@@ -112,6 +112,7 @@ mod dart_data_table;
 mod declaration_family;
 mod ecmascript;
 mod forwarding;
+mod polymorphic;
 mod python;
 mod python_class_shapes;
 mod python_constants;
@@ -159,7 +160,7 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
     // than walking every Dart/C# cluster's CST through Python/Rust matchers
     // that can never match — that wasted walk dominated analysis time on
     // large codegen-heavy repos ([CLONE-NOISE-REPARSE-CACHE]).
-    is_polymorphic_signature_cluster(&snippets)
+    polymorphic::is_polymorphic_signature_cluster(&snippets)
         || is_signature_only_cluster(&snippets)
         || calls::is_literal_variation_call_cluster(&snippets)
         || language_specific_noise(language, &snippets)
@@ -441,98 +442,10 @@ fn collect_named_kinds(node: Node<'_>, kinds: &mut Vec<String>) {
     }
 }
 
-/// Detects ****: every cluster member is a function definition
-/// (signature or whole `def`) whose declared name is the same identifier
-/// and the members span at least two distinct files. That is the
-/// abstract/interface implementation pattern — the contract forces
-/// identity, no extraction is possible. We additionally require that
-/// the enclosing function bodies are not byte-equivalent so a genuine
-/// copy-pasted helper that happens to share a name (e.g. private
-/// `_helper` reused in two modules) still fires as a cluster.
-fn is_polymorphic_signature_cluster(snippets: &[Snippet<'_>]) -> bool {
-    let names: Option<Vec<&[u8]>> = snippets.iter().map(enclosing_function_name).collect();
-    let Some(names) = names else { return false };
-    let Some(first_name) = names.first() else {
-        return false;
-    };
-    if !names.iter().all(|name| name == first_name) {
-        return false;
-    }
-    if !spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id)) {
-        return false;
-    }
-    enclosing_function_bodies_differ(snippets)
-}
-
-/// Returns true when at least two cluster members' enclosing function
-/// bodies differ in raw source bytes — distinguishes polymorphism
-/// (different implementations of one signature) from genuinely
-/// duplicated helper functions that share a name.
-fn enclosing_function_bodies_differ(snippets: &[Snippet<'_>]) -> bool {
-    let bodies: Option<Vec<Vec<u8>>> = snippets
-        .iter()
-        .map(|snippet| {
-            let tree = parse_for(snippet)?;
-            let function = enclosing_kind(
-                tree.root_node(),
-                snippet.range,
-                function_kinds(snippet.language),
-            )?;
-            let body = function.child_by_field_name("body")?;
-            snippet
-                .source
-                .get(body.start_byte()..body.end_byte())
-                .map(<[u8]>::to_vec)
-        })
-        .collect();
-    let Some(bodies) = bodies else { return false };
-    let Some(first) = bodies.first() else {
-        return false;
-    };
-    bodies.iter().any(|body| body != first)
-}
-
-/// Returns the name of the `function_definition` (or `method_declaration`
-/// for C#) that contains `snippet.range`, when one exists.
-fn enclosing_function_name<'a>(snippet: &'a Snippet<'_>) -> Option<&'a [u8]> {
-    let tree = parse_for(snippet)?;
-    let function = enclosing_kind(
-        tree.root_node(),
-        snippet.range,
-        function_kinds(snippet.language),
-    )?;
-    let name_node = function_name_node(function)?;
-    snippet
-        .source
-        .get(name_node.start_byte()..name_node.end_byte())
-}
-
-/// Resolves the identifier node that names `function`. Python, C#, and
-/// Rust expose a direct `name` field on the function node. Dart instead
-/// nests it under `signature` — `function_signature.name` for a top-level
-/// `function_declaration`, and `method_signature → function_signature.name`
-/// for a `method_declaration`. Without this descent
-/// [`enclosing_function_name`] returns `None` for every Dart member, so
-/// the polymorphic-signature filter could never fire on Dart even
-/// though `function_kinds` lists its node kinds.
-fn function_name_node(function: Node<'_>) -> Option<Node<'_>> {
-    if let Some(name) = function.child_by_field_name("name") {
-        return Some(name);
-    }
-    let signature = function.child_by_field_name("signature")?;
-    if let Some(name) = signature.child_by_field_name("name") {
-        return Some(name);
-    }
-    let mut cursor = signature.walk();
-    let nested = signature
-        .named_children(&mut cursor)
-        .find_map(|child| child.child_by_field_name("name"));
-    nested
-}
 
 /// Returns the set of tree-sitter node kinds that count as function
 /// declarations for the purpose of polymorphism detection.
-const fn function_kinds(language: &str) -> &'static [&'static str] {
+pub(super) const fn function_kinds(language: &str) -> &'static [&'static str] {
     match language.as_bytes() {
         b"python" => &["function_definition"],
         b"csharp" => &["method_declaration", "local_function_statement"],

@@ -27,6 +27,24 @@ Comparing bodies by node-kind sequence rather than raw bytes preserves genuine
 near-miss clusters whose bodies share shape but differ only in literals or
 identifiers.
 
+### [CLONE-NOISE-POLYMORPHIC-SIGNATURE] Interface implementations sharing one name
+Every member resolves to one subject function — the innermost function enclosing
+the member's range or, when the range is wider than any single function, the
+sole function the range contains with nothing but declaration scaffolding
+(imports, docstrings, the class shell) around it — all declaring the same name
+across at least two files, with bodies that are not byte-equivalent. That is the
+abstract/interface implementation pattern: the contract forces the signatures to
+agree, and what differs is each implementation's behaviour, so nothing can share
+a refactor. The widened resolution direction exists because
+[FUSION-SHARED-SUBTREE](fusion.md#fusion-shared-subtree) admits module-wide
+views: a whole-file view of a single-method class was promoted to a
+near-identical pair on the strength of the bytes the contract forces to agree,
+reporting two different backends 100% duplicated
+(`python-issue-69-abstract-method`,
+`different_backend_implementations_never_pair_across_files`). A copy-pasted
+helper that happens to share a name still fires as a cluster, because its
+bodies are byte-equivalent.
+
 ### [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH] Embedding role mismatch (type vs function)
 An embedding-dominant `same_behavior` cluster may pair snippets that share topic
 vocabulary but sit in structurally incompatible top-level constructs — a
@@ -205,10 +223,14 @@ A `class X(StrEnum)` (or `class X(str, Enum)`) declaration always has the same
 shape — an optional docstring followed by member assignments — so after
 identifier normalisation unrelated enums cluster as duplicates, yet each enum is
 a closed discriminator the program depends on by name. A cluster is suppressed
-when every member is exactly one class definition whose superclass list names
-`StrEnum` (or both `str` and `Enum`) and whose body contains only a docstring and
-assignment statements. Distinct enum vocabularies are not extractable
-duplication.
+when every member is such enum scaffolding at any scope: one or more complete
+class definitions (a module whose declarations are all such enums is no more
+extractable than one of them alone), or a window inside a single one — member
+runs and single member lines are the same closed discriminator seen narrower
+(`strenum_class_shapes_do_not_cluster`). In every case the governing class's
+superclass list names `StrEnum` (or both `str` and `Enum`) and its body contains
+only a docstring and assignment statements. Distinct enum vocabularies are not
+extractable duplication.
 
 ### [CLONE-NOISE-PY-PYDANTIC-PARTIAL] Pydantic partial-update mirror
 Pydantic models commonly ship a `XCreate` model and a matching `XUpdate` mirror

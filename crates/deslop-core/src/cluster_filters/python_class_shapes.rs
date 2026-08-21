@@ -51,11 +51,33 @@ fn is_strenum_class_snippet(snippet: &Snippet<'_>) -> bool {
     };
     let range = trimmed_snippet_range(snippet).unwrap_or(snippet.range);
     let classes = classes_in_range(tree.root_node(), range);
-    !classes.is_empty()
-        && classes.iter().all(|class| {
-            class_has_strenum_base(*class, snippet.source)
-                && class_body_is_docstring_and_assignments(*class)
-        })
+    if classes.is_empty() {
+        return enclosing_class(tree.root_node(), range).is_some_and(|class| {
+            class_has_strenum_base(class, snippet.source)
+                && class_body_is_docstring_and_assignments(class)
+        });
+    }
+    classes.iter().all(|class| {
+        class_has_strenum_base(*class, snippet.source)
+            && class_body_is_docstring_and_assignments(*class)
+    })
+}
+
+/// The innermost `class_definition` whose span contains `range` — the
+/// inside-out counterpart of [`classes_in_range`]. A member window or a
+/// single member line covers no complete class of its own, yet it is
+/// the same closed discriminator seen narrower: three member-run
+/// families over two `StrEnum` bodies survived the whole-class filter
+/// exactly this way (`strenum_class_shapes_do_not_cluster`).
+fn enclosing_class(node: Node<'_>, range: ByteRange) -> Option<Node<'_>> {
+    if node.start_byte() > range.start || node.end_byte() < range.end {
+        return None;
+    }
+    let mut cursor = node.walk();
+    let inner = node
+        .named_children(&mut cursor)
+        .find_map(|child| enclosing_class(child, range));
+    inner.or_else(|| (node.kind() == "class_definition").then_some(node))
 }
 
 /// Walks `root` collecting every `class_definition` fully enclosed by

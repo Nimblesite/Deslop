@@ -19,5 +19,14 @@ fn strenum_class_shapes_do_not_cluster() -> Result<()> {
         "`class X(StrEnum)` declarations must not surface as duplicate \
          logic — each enum is a closed discriminator: {offenders:#?}"
     );
+    let visible = visible_cluster_lines(&report);
+    assert!(
+        visible.is_empty(),
+        "every line of this fixture is a `StrEnum` declaration, so a \
+         visible cluster over any of it — member blocks and single member \
+         lines included — reports the closed discriminators the filter \
+         must suppress, merely windowed below the `class` keyword the \
+         marker check looks for: {visible:#?}"
+    );
     Ok(())
 }
