@@ -238,7 +238,10 @@ fn an_unregistered_skip_and_a_stale_registry_entry_are_reported_separately() {
          defect reads as coverage nobody has"
     );
     assert_eq!(
-        registry_diff(&[registered.clone()], &[registered]),
+        registry_diff(
+            std::slice::from_ref(&registered),
+            std::slice::from_ref(&registered),
+        ),
         (Vec::new(), Vec::new()),
         "a registry that matches the tree reports neither direction"
     );

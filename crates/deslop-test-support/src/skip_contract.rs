@@ -206,7 +206,7 @@ fn spec_id_breaches(reason: &str, context: &PolicyContext) -> Vec<Breach> {
     }
     cited
         .into_iter()
-        .filter(|id| !context.declared_spec_ids.contains(id) && false)
+        .filter(|id| !context.declared_spec_ids.contains(id))
         .map(Breach::UndeclaredSpecId)
         .collect()
 }
@@ -251,6 +251,14 @@ pub fn plan_paths(text: &str) -> Vec<String> {
         .collect()
 }
 
+/// One stated skip, as the registry names it: the file it lives in and the
+/// name of the test that carries the `#[ignore]`.
+pub type SkipEntry = (String, String);
+
+/// The two directions of a registry comparison: skips present in the tree that
+/// nobody registered, and registry entries whose skip is gone.
+pub type RegistryDiff = (Vec<SkipEntry>, Vec<SkipEntry>);
+
 /// How the set of skips in the tree differs from the curated registry: skips
 /// nobody registered, and registry entries whose skip is gone.
 ///
@@ -260,12 +268,9 @@ pub fn plan_paths(text: &str) -> Vec<String> {
 /// `#[ignore]` came off, and the registry still says the test is allowed not
 /// to run, which reads as coverage nobody has.
 #[must_use]
-pub fn registry_diff(
-    present: &[(String, String)],
-    curated: &[(String, String)],
-) -> (Vec<(String, String)>, Vec<(String, String)>) {
-    let registered: BTreeSet<&(String, String)> = curated.iter().collect();
-    let found: BTreeSet<&(String, String)> = present.iter().collect();
+pub fn registry_diff(present: &[SkipEntry], curated: &[SkipEntry]) -> RegistryDiff {
+    let registered: BTreeSet<&SkipEntry> = curated.iter().collect();
+    let found: BTreeSet<&SkipEntry> = present.iter().collect();
     (
         found
             .difference(&registered)

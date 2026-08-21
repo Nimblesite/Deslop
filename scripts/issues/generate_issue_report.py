@@ -397,13 +397,29 @@ def effort_for(issue: IssueData) -> int:
     return {"Feature": 8, "Task": 4, "Bug": 5}.get(issue["type"], 4)
 
 
-def sequence_issues(issues: list[IssueData]) -> None:
+def sequence_issues(issues: list[IssueData], relationships: list[RelationshipData]) -> None:
+    """Lay issues onto two parallel tracks per workstream.
+
+    `sort_issues` already guarantees a blocker is ordered before the work it
+    blocks, but ordering alone does not sequence it: the blocked issue simply
+    took the other track and started at the same offset, so the runway drew
+    dependent work running alongside its own prerequisite. An issue therefore
+    cannot start before every blocker it is waiting on has finished, whichever
+    track or workstream that blocker landed in.
+    """
     availability: defaultdict[str, list[int]] = defaultdict(lambda: [0, 0])
+    blockers: defaultdict[int, set[int]] = defaultdict(set)
+    for edge in relationships:
+        if edge["kind"] == "blocks":
+            blockers[edge["target"]].add(edge["source"])
+    finish: dict[int, int] = {}
     for issue in issues:
-        track = min(range(2), key=lambda index: availability[issue["workstream"]][index])
-        offset = availability[issue["workstream"]][track]
+        ready = max((finish[number] for number in blockers[issue["number"]] if number in finish), default=0)
+        track = min(range(2), key=lambda index: max(availability[issue["workstream"]][index], ready))
+        offset = max(availability[issue["workstream"]][track], ready)
         effort = effort_for(issue)
         availability[issue["workstream"]][track] = offset + effort
+        finish[issue["number"]] = offset + effort
         issue["plan"] = {"offset": offset, "effort_units": effort, "track": track}
 
 
@@ -451,14 +467,14 @@ def build_report(raw_issues: list[RawIssue], repo: str, published_at: datetime) 
     relationships = relationship_edges(raw_issues)
     inbound = Counter(edge["target"] for edge in relationships)
     issues = sort_issues([compact_issue(item, inbound[item["number"]]) for item in raw_issues], relationships)
-    sequence_issues(issues)
+    sequence_issues(issues, relationships)
     return {
         "meta": {
             "repo": repo, "published_at": published_at.isoformat().replace("+00:00", "Z"),
             "published_at_long": long_publication_time(published_at),
             "source_url": f"https://github.com/{repo}/issues",
             "method": "GitHub metadata, explicit relationships, cross-references, and documented keyword rules. No AI enrichment.",
-            "planning_note": "Indicative only — not a schedule. Relative sequencing uses two parallel tracks per workstream and default effort units: verify 2, showstopper 3, critical 4, bug 5, task 4, feature 8.",
+            "planning_note": "Indicative only — not a schedule. Relative sequencing uses two parallel tracks per workstream, holds blocked work until every blocker finishes, and applies default effort units: verify 2, showstopper 3, critical 4, bug 5, task 4, feature 8.",
         },
         "summary": summarize(issues, relationships), "workstreams": workstream_data(issues),
         "priorities": priority_data(issues), "issues": issues, "relationships": relationships,

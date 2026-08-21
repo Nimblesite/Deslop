@@ -43,13 +43,11 @@ fn baseline_cluster() -> ReportCluster {
         CLUSTER_ID,
         OCCURRENCE_PATHS
             .iter()
-            .enumerate()
-            .map(|(index, path)| {
+            .map(|path| {
                 let mut occurrence = fixture_occurrence(path, 0, 64);
                 occurrence.start_line = 1;
                 occurrence.end_line = 8;
                 occurrence.in_diff = Some(false);
-                let _index = index;
                 occurrence
             })
             .collect(),

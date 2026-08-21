@@ -125,11 +125,11 @@ fn escaped() {}
 #[test]
 fn a_bare_ignore_is_reported_with_an_empty_reason_rather_than_passing_unseen() -> Result<()> {
     let found = only(
-        r#"
+        r"
 #[test]
 #[ignore]
 fn undocumented_skip() {}
-"#,
+",
     )?;
     assert_eq!(found.test, "undocumented_skip");
     assert_eq!(
@@ -209,13 +209,13 @@ fn conditionally_skipped() {}
 #[test]
 fn an_unconditional_cfg_attr_that_never_mentions_ignore_is_left_alone() -> Result<()> {
     let found = scan(
-        r#"
+        r"
 #[cfg_attr(test, derive(Debug))]
 struct Reported;
 
 #[test]
 fn runs() {}
-"#,
+",
     )?;
     assert_eq!(found, Vec::new());
     Ok(())
