@@ -103,11 +103,25 @@ pub(crate) use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
 
-/// Absolute path to the named directory under `tests/fixtures`.
+/// Absolute path to the named directory under `tests/fixtures`, falling
+/// back to the `deslop-mcp` crate's fixture tree.
+///
+/// The fallback is the mirror of `deslop-mcp`'s `copied_fixture_named`,
+/// which resolves the other way. A corpus that proves a detection defect
+/// through the MCP surface proves the same defect through the CLI, and
+/// the two suites must read the *same* bytes: a second copy of the
+/// fixture would let one suite go green while the code it pins is still
+/// broken under the other.
 pub(crate) fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
+    let local = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
+        .join(name);
+    if local.is_dir() {
+        return local;
+    }
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../deslop-mcp/tests/fixtures")
         .join(name)
 }
 

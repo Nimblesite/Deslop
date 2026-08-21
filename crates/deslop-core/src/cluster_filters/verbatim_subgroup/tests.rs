@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use super::*;
-use crate::{ast::ByteRange, state::FileRegistry};
+use crate::{ast::ByteRange, pair::FusedEdge, state::FileRegistry};
 
 /// A constant table. Two files holding this share every byte.
 const RETRY_DEFAULTS: &str = "API_TIMEOUT = 30\nMAX_RETRIES = 5\nRETRY_BACKOFF = 2\n";

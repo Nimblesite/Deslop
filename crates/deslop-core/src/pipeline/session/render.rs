@@ -12,7 +12,7 @@
 
 use crate::{
     cluster::build_ranked_fused_clusters,
-    cluster_filters::split_noise_verbatim_families,
+    cluster_filters::{split_noise_verbatim_families, split_structural_families},
     error::CoreError,
     lsh::band_collisions,
     overlap::apply_shared_subtree_rescue,
@@ -80,13 +80,21 @@ impl PipelineSession {
             candidate_pairs = pairs.len(),
             "clustering by transitive closure"
         );
+        // [PIPELINE-CLUSTER-ELECT] Transitive closure treats a token
+        // band collision like a shared subtree, so one such edge welds
+        // two structural families into a component that agrees with
+        // itself nowhere, buckets down, and is hidden — losing both
+        // families to the presence of each other. Elect the families
+        // back out before anything is measured.
+        let fused_clusters =
+            split_structural_families(cluster_by_transitive_closure(&pairs), fingerprints);
         // [CLONE-NOISE-VERBATIM-SUBGROUP] Partition a noise family off
         // the byte-identical copy it swept up *before* signals are
         // measured, so the surviving cluster is measured, bucketed and
         // ranked from exactly the occurrences it kept. A component the
         // noise filters do not suppress is handed on untouched.
         let fused_clusters = split_noise_verbatim_families(
-            cluster_by_transitive_closure(&pairs),
+            fused_clusters,
             fingerprints,
             &self.sources,
             &self.file_languages,

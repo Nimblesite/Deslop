@@ -121,6 +121,7 @@ mod dart;
 mod dart_data_table;
 mod declaration_family;
 mod ecmascript;
+mod family;
 mod forwarding;
 mod polymorphic;
 mod python;
@@ -133,6 +134,7 @@ mod python_orm;
 mod role_compat;
 mod rust;
 mod snippets;
+mod structural_families;
 mod verbatim_subgroup;
 
 use std::{
@@ -145,6 +147,7 @@ use tree_sitter::Node;
 pub(crate) use declaration_family::is_single_file_declaration_family;
 pub(crate) use snippets::ParseCache;
 use snippets::{collect_snippets, parse_for, uniform_language, Snippet};
+pub(crate) use structural_families::split_structural_families;
 pub(crate) use verbatim_subgroup::split_noise_verbatim_families;
 
 use crate::{

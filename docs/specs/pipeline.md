@@ -42,6 +42,18 @@ Bottom-up Merkle hash over `NormalizedNode`. Each node's hash combines its own `
 ### [PIPELINE-CLUSTER-EXACT] Exact subtree clustering
 Group `NormalizedNode` fingerprints by `hash`. Every bucket with ≥ 2 entries is a candidate clone cluster. Covers Type-1 and normalized Type-2 deterministically in O(n). Candidate pairs are language-scoped by default per [CONFIG-CROSS-LANGUAGE]; the exact same hash may still be compared across languages when `.deslop.toml` opts into cross-language comparison.
 
+### [PIPELINE-CLUSTER-ELECT] A token bridge may not weld two structural families into one cluster
+
+Clusters are the connected components of the candidate-pair graph, and that graph carries two kinds of edge. A **structural** edge joins members whose normalised subtrees hash to the same value — the same code, up to the identifier and literal renames normalisation erases. A **token** edge joins members an LSH band collision found merely similar. Transitive closure treats them alike, so a single token edge is enough to weld two structural families into one component.
+
+The component that results is a clone of nothing. Its members do not agree, so [FUSION-CONTENT-GATE] measures a low `agreement` and a low `rename_consistency` over the union, the cluster buckets down to `loosely_similar`, and report policy hides it. Both real families are then lost *to the presence of each other*, and the loss grows with the corpus: the more code a scan reaches, the more token bridges it finds. This is the direction that matters — a defect that gets worse on real repositories and cannot get worse on a fixture.
+
+A component holding **two or more families of two or more members** is therefore reported as those families, before any signal is measured, dropping the members that belong to none. Splitting is safe in the direction that matters: two distinct hashes mean two distinct normalised subtrees, and no rename and no literal edit can produce that, because normalisation collapses exactly those. Such a component is a merge, not an N-way clone, and reporting the families separately publishes strictly more true duplication than reporting their union — which is published as nothing at all.
+
+A component with **one** structural family and a fringe of near-misses is left whole. That is an ordinary Type-3 cluster and its fringe members are occurrences a reader wants, so the split would delete findings rather than restore them.
+
+The mechanism is [CLONE-NOISE-VERBATIM-SUBGROUP]'s, one layer earlier and keyed on the subtree digest instead of the source bytes; both share `cluster_filters/family.rs`. Pinned by `crates/deslop/tests/csharp_merged_clone_families.rs`, where a summing loop copied across two files and a multiplying loop copied across two more are each reported `nearly_identical` alone and, before this rule, reported **nothing at all** when scanned together, and by the unit tests in `cluster_filters/structural_families/tests.rs`, which hold the whole-component cases the E2E cannot reach.
+
 ### [PIPELINE-CLUSTER-SUBSUME] Cross-cluster subsumption
 One physical duplication is fingerprinted at several AST depths, so it can produce several clusters covering the same bytes — a duplicated method, and the run of single-statement clones inside it. Publishing both shows the user one duplicate twice and double-counts it in `clusters_total` and the duplication metric. Two independent questions decide the outcome.
 

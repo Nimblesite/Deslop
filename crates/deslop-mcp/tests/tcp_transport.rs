@@ -86,12 +86,21 @@ fn mcp_tools_work_over_tcp_transport() -> Result<()> {
         &json!({ "name": "top-offenders", "arguments": { "n": 3 } }),
     )?;
     let offenders = structured_content(&response, "top-offenders")?;
+    let total_clusters = offenders
+        .get("total_clusters")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| {
+            anyhow!("top-offenders over TCP must return the live report shape: {response}")
+        })?;
+    // Not merely "the field is present": the fixture is four C# files
+    // built to duplicate each other, so a live report with nothing in it
+    // is a false negative that the shape check alone waves through — and
+    // it is the state that makes the find-similar assertion below fail
+    // without saying why.
     ensure!(
-        offenders
-            .get("total_clusters")
-            .and_then(Value::as_u64)
-            .is_some(),
-        "top-offenders over TCP must return the live report shape: {response}"
+        total_clusters > 0,
+        "top-offenders over TCP must find the fixture's duplication, not \
+         an empty live report: {offenders}"
     );
 
     let response = mcp.request(
@@ -112,7 +121,10 @@ fn mcp_tools_work_over_tcp_transport() -> Result<()> {
         .ok_or_else(|| anyhow!("clusters must be an array: {response}"))?;
     ensure!(
         !clusters.is_empty(),
-        "find-similar over TCP must return live LSP clusters: {response}"
+        "find-similar over TCP must return live LSP clusters. The live \
+         report holds {total_clusters} cluster(s), so the snippet's \
+         subtree hashes matched none of their ids: {response}\n\
+         live report: {offenders}"
     );
 
     let response = mcp.request("tools/call", &json!({ "name": "rescan", "arguments": {} }))?;

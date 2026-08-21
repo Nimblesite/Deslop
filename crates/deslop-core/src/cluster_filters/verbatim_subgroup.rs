@@ -26,13 +26,12 @@
 
 use std::{collections::HashMap, hash::BuildHasher};
 
-use crate::{
-    fingerprint::Fingerprint,
-    pair::{FusedCluster, FusedEdge},
-    state::FileId,
-};
+use crate::{fingerprint::Fingerprint, pair::FusedCluster, state::FileId};
 
-use super::{is_noise_pattern, ParseCache};
+use super::{
+    family::{families_by, restrict},
+    is_noise_pattern, ParseCache,
+};
 
 /// Smallest byte-identical family worth keeping: one lone occurrence is
 /// not a duplicate of anything.
@@ -101,30 +100,15 @@ fn split_one<S: BuildHasher>(
 }
 
 /// Groups the component's members by the exact source bytes their
-/// fingerprint covers, keeping first-appearance order. A member whose
-/// bytes cannot be read joins no family, so an unreadable source can
-/// only ever make this pass do less.
+/// fingerprint covers.
 fn verbatim_families(
     member_indices: &[usize],
     fingerprints: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
 ) -> Vec<Vec<usize>> {
-    let mut order: Vec<&[u8]> = Vec::new();
-    let mut families: Vec<Vec<usize>> = Vec::new();
-    for index in member_indices.iter().copied() {
-        let Some(text) = member_text(index, fingerprints, sources) else {
-            continue;
-        };
-        if let Some(slot) = order.iter().position(|seen| *seen == text) {
-            if let Some(family) = families.get_mut(slot) {
-                family.push(index);
-            }
-        } else {
-            order.push(text);
-            families.push(vec![index]);
-        }
-    }
-    families
+    families_by(member_indices, |index| {
+        member_text(index, fingerprints, sources)
+    })
 }
 
 /// The raw source bytes one member's fingerprint covers.
@@ -137,21 +121,6 @@ fn member_text<'a>(
     sources
         .get(&member.file_id)?
         .get(member.byte_range.start..member.byte_range.end)
-}
-
-/// The component restricted to `family`: its members, and only the
-/// discovery edges whose both endpoints stayed.
-fn restrict(fused: &FusedCluster, family: &[usize]) -> FusedCluster {
-    let edges: Vec<FusedEdge> = fused
-        .edges
-        .iter()
-        .filter(|edge| family.contains(&edge.left) && family.contains(&edge.right))
-        .copied()
-        .collect();
-    FusedCluster {
-        members: family.to_vec(),
-        edges,
-    }
 }
 
 #[cfg(test)]
