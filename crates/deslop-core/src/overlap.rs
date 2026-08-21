@@ -158,8 +158,6 @@ struct EndpointView {
     total: usize,
     /// Creditable subtrees for the large-tree fallback, largest first.
     entries: Vec<Fingerprint>,
-    /// Hash → multiplicity over `entries`.
-    counts: HashMap<[u8; 32], usize>,
 }
 
 impl EndpointView {
@@ -185,7 +183,6 @@ impl EndpointView {
             postorder,
             total,
             entries: Vec::new(),
-            counts: HashMap::new(),
         }
     }
 
@@ -313,16 +310,10 @@ fn build_view(
             .cmp(&left.node_count)
             .then(left.byte_range.start.cmp(&right.byte_range.start))
     });
-    let mut counts: HashMap<[u8; 32], usize> = HashMap::new();
-    for entry in &entries {
-        let slot = counts.entry(entry.hash).or_insert(0);
-        *slot = slot.saturating_add(1);
-    }
     Some(EndpointView {
         postorder,
         total,
         entries,
-        counts,
     })
 }
 
@@ -383,46 +374,71 @@ fn close_frame(stack: &mut Vec<WalkFrame<'_>>, out: &mut Vec<PostNode>) {
 }
 
 /// Large-tree fallback: greedy-maximal shared-Merkle-subtree node
-/// credit. Largest left subtrees first, one right-multiset consumption
-/// per credit, nested-in-credited skipped. A conservative lower bound
-/// on [`aligned_shared_nodes`] — node mass matched under a bijection
-/// of identical subtrees is achievable by an alignment.
+/// credit. Largest left subtrees first, each credit consuming one
+/// concrete right-side occurrence, nested-in-credited spans skipped on
+/// **both** endpoints. A conservative lower bound on
+/// [`aligned_shared_nodes`] — node mass matched under a bijection of
+/// disjoint identical subtrees is achievable by an alignment. The
+/// bijection needs both sides tracked: consuming bare hash counts on
+/// the right let a disjoint left copy re-claim nodes nested inside an
+/// already-credited right subtree, counting them twice and overshooting
+/// the alignment this bound stands in for
+/// (`the_fallback_never_credits_a_nested_right_subtree_twice`).
+///
+/// Left entries arrive largest-first, so every candidate span is no
+/// larger than the spans already credited on its side; a strict
+/// container has strictly more nodes than its subtree, so a later
+/// candidate can never contain a credited span and the nested-inside
+/// test alone keeps each side's credited spans disjoint.
 fn credit_shared_nodes(left: &EndpointView, right: &EndpointView) -> usize {
-    let mut remaining = right.counts.clone();
-    let mut taken: Vec<(usize, usize)> = Vec::new();
+    let mut open_right: HashMap<[u8; 32], Vec<(usize, usize)>> = HashMap::new();
+    for entry in &right.entries {
+        open_right
+            .entry(entry.hash)
+            .or_default()
+            .push((entry.byte_range.start, entry.byte_range.end));
+    }
+    let mut left_taken: Vec<(usize, usize)> = Vec::new();
+    let mut right_taken: Vec<(usize, usize)> = Vec::new();
     let mut credit = 0_usize;
     for entry in &left.entries {
-        if !claims_a_match(entry, &mut remaining, &taken) {
+        let span = (entry.byte_range.start, entry.byte_range.end);
+        if nested_in_credited(span, &left_taken) {
             continue;
         }
+        let Some(claimed) = claim_right_occurrence(entry.hash, &mut open_right, &right_taken)
+        else {
+            continue;
+        };
         credit = credit.saturating_add(entry.node_count);
-        taken.push((entry.byte_range.start, entry.byte_range.end));
+        left_taken.push(span);
+        right_taken.push(claimed);
     }
     credit
 }
 
-/// True when `entry` is not nested inside an already-credited span and
-/// consumes one matching hash from the right endpoint's multiset.
-fn claims_a_match(
-    entry: &Fingerprint,
-    remaining: &mut HashMap<[u8; 32], usize>,
-    taken: &[(usize, usize)],
-) -> bool {
-    let (start, end) = (entry.byte_range.start, entry.byte_range.end);
-    if taken
+/// True when `span` nests inside any already-credited span.
+fn nested_in_credited(span: (usize, usize), taken: &[(usize, usize)]) -> bool {
+    let (start, end) = span;
+    taken
         .iter()
         .any(|(taken_start, taken_end)| *taken_start <= start && end <= *taken_end)
-    {
-        return false;
-    }
-    let Some(count) = remaining.get_mut(&entry.hash) else {
-        return false;
-    };
-    if *count == 0 {
-        return false;
-    }
-    *count = count.saturating_sub(1);
-    true
+}
+
+/// Consumes and returns one right-side occurrence of `hash` that is not
+/// nested inside an already-credited right span. Identical hashes have
+/// identical node counts, so any open occurrence is an equally-sized
+/// witness and the first open one serves.
+fn claim_right_occurrence(
+    hash: [u8; 32],
+    open_right: &mut HashMap<[u8; 32], Vec<(usize, usize)>>,
+    right_taken: &[(usize, usize)],
+) -> Option<(usize, usize)> {
+    let candidates = open_right.get_mut(&hash)?;
+    let position = candidates
+        .iter()
+        .position(|candidate| !nested_in_credited(*candidate, right_taken))?;
+    Some(candidates.swap_remove(position))
 }
 
 /// Lossless small-count conversion for the coverage divisor.

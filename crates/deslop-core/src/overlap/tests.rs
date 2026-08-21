@@ -366,3 +366,82 @@ fn endpoints_past_the_alignment_cap_still_measure_as_shared() -> Result<(), Stri
     );
     Ok(())
 }
+/// The boost block: a fingerprint-worthy subtree nested inside
+/// [`host_function`]'s tail and duplicated standalone by
+/// [`rider_function`], so the same hash exists both nested and disjoint.
+fn boost_block(statements: usize) -> String {
+    let body = (0..statements).fold(String::new(), |mut body, index| {
+        use std::fmt::Write as _;
+        let _written = writeln!(body, "        inner = inner + {index};");
+        body
+    });
+    format!("    let boost = {{\n        let mut inner = seed;\n{body}        inner\n    }};\n")
+}
+
+/// A function past the alignment cap whose tail nests `block`.
+fn host_function(statements: usize, block: &str) -> String {
+    let body = (0..statements).fold(String::new(), |mut body, index| {
+        use std::fmt::Write as _;
+        let _written = writeln!(body, "    total = total + {index};");
+        body
+    });
+    format!(
+        "fn alpha(seed: u32) -> u32 {{\n    let mut total = seed;\n{body}{block}    total + boost\n}}\n"
+    )
+}
+
+/// A small function whose body is exactly `block` — the disjoint second
+/// copy of the nested subtree.
+fn rider_function(block: &str) -> String {
+    format!("fn beta(seed: u32) -> u32 {{\n{block}    boost\n}}\n")
+}
+
+// [FUSION-SHARED-SUBTREE] The fallback is documented as a conservative
+// lower bound on the alignment. Adversarial shape: the left endpoint is
+// `alpha` (which nests the boost block) plus a disjoint second copy of
+// the block; the right endpoint is `alpha` alone. Tracking credited
+// spans on the left only, with the right side as bare hash counts,
+// credits the right-hand block twice — once inside `alpha`'s subtree,
+// once against the left's disjoint copy — so the bound overshoots the
+// alignment it stands in for and can admit pairs the alignment rejects.
+#[test]
+fn the_fallback_never_credits_a_nested_right_subtree_twice() -> Result<(), String> {
+    let block = boost_block(40);
+    let left_source = format!(
+        "{}\n{}",
+        host_function(260, &block),
+        rider_function(&block)
+    );
+    let right_source = host_function(260, &block);
+    let mut registry = FileRegistry::new();
+    let left_id = registry.register(PathBuf::from("left.rs"));
+    let right_id = registry.register(PathBuf::from("right.rs"));
+    let left = parse(&left_source, left_id)?;
+    let right = parse(&right_source, right_id)?;
+    assert!(
+        right.whole.node_count > ALIGNMENT_MAX_NODES,
+        "the fixture must exceed the alignment cap so the E2E path takes the \
+         fallback for this pair, got {}",
+        right.whole.node_count
+    );
+    let trees = [left.tree, right.tree];
+    let index = trees
+        .iter()
+        .map(|tree| (tree.file_id, tree))
+        .collect::<std::collections::HashMap<FileId, &NormalizedNode>>();
+    let left_view = build_view(&index, &left.whole).ok_or("the left endpoint resolves")?;
+    let right_view = build_view(&index, &right.whole).ok_or("the right endpoint resolves")?;
+    let aligned = aligned_shared_nodes(&left_view, &right_view);
+    let credited = credit_shared_nodes(&left_view, &right_view);
+    assert!(
+        aligned > 0,
+        "the alignment must credit the shared `alpha` mass, got {aligned}"
+    );
+    assert!(
+        credited <= aligned,
+        "the greedy bound ({credited}) must never exceed the aligned shared \
+         mass ({aligned}): the right-hand boost block sits inside the credited \
+         `alpha` subtree, so a second credit for it counts those nodes twice"
+    );
+    Ok(())
+}
