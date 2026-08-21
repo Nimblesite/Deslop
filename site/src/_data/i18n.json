@@ -30,7 +30,6 @@
       "reference": "Reference",
       "trust": "Internals & transparency",
       "interactiveGraph": "Interactive graph",
-      "statsDashboard": "Stats dashboard",
       "issuePlanner": "Issue planner"
     },
     "footer": {
@@ -113,7 +112,6 @@
       "reference": "参考",
       "trust": "原理与透明度",
       "interactiveGraph": "交互式图谱",
-      "statsDashboard": "统计面板",
       "issuePlanner": "问题规划器"
     },
     "footer": {

@@ -1,10 +1,11 @@
-{% macro filters() %}
+{% macro filters(showCount = false) %}
 <form class="atlas-filters" data-filters>
   <label class="search-field"><span class="sr-only">Search issues</span><span aria-hidden="true">⌕</span><input type="search" name="search" placeholder="Search number, title, label…" autocomplete="off"></label>
   <label><span>Workstream</span><select name="workstream"><option value="">All workstreams</option></select></label>
   <label><span>Priority</span><select name="priority"><option value="">All priorities</option></select></label>
   <label><span>Label</span><select name="label"><option value="">All labels</option></select></label>
   <button type="reset" class="filter-reset">Reset</button>
+  {% if showCount %}<output class="atlas-count" aria-live="polite" data-visible-count>Loading issues…</output>{% endif %}
 </form>
 {% endmacro %}
 
@@ -23,13 +24,13 @@
 <section class="atlas-app atlas-app--planner">
   <div class="atlas-toolbar">
     <div class="view-tabs" role="tablist" aria-label="Report view">
-      <button type="button" class="view-tab is-active" data-view="runway" role="tab" aria-selected="true">Runway</button>
-      <button type="button" class="view-tab" data-view="board" role="tab" aria-selected="false">Priority</button>
+      <button type="button" class="view-tab is-active" data-view="board" role="tab" aria-selected="true">Priority</button>
       <button type="button" class="view-tab" data-view="queue" role="tab" aria-selected="false">Queue</button>
+      <button type="button" class="view-tab" data-view="statistics" role="tab" aria-selected="false">Statistics</button>
+      <button type="button" class="view-tab" data-view="runway" role="tab" aria-selected="false">Runway</button>
     </div>
-    <div class="atlas-count" aria-live="polite" data-visible-count>Loading issues…</div>
   </div>
-  {{ filters() }}
+  {{ filters(true) }}
   <div class="atlas-stage" data-stage aria-live="polite">
     <div class="atlas-loading"><span></span><p>Loading the backlog…</p></div>
   </div>

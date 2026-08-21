@@ -30,7 +30,11 @@ The memory ceiling is **7168 MB — the RAM of a standard GitHub Actions runner*
 
 Ranking *is* the product, so the head of the report is where a false positive does the most damage. Two rules apply to the top-ranked clusters:
 
-- `must_not_rank_first` names framework-mandated shapes for that language (Flutter's `extends StatefulWidget`, for example). Such code cannot be extracted or merged, so it must never outrank genuine copy-paste. Compare [CLONE-NOISE-*](noise.md).
+- `must_not_rank_first` names framework-mandated shapes for that language. Such code cannot be extracted or merged, so it must never outrank genuine copy-paste. Compare [CLONE-NOISE-*](noise.md).
+
+  `forbidden_top_supertypes` is a list of **base-type names**, matched as an AST predicate: a ranked cluster fails when the type declaration its first occurrence overlaps names one of them in the language's heritage clause. Both the declaration containing the occurrence and any declaration the occurrence contains count, because the ranked occurrence is usually the mandated *member* — Flutter's `createState` — not the class header that makes it mandated.
+
+  It is never matched against source text. The rule shipped as `text.contains("extends StatefulWidget")` and was wrong in both directions (gh #401): it fired on a comment or string literal that merely mentioned the supertype, and it missed a declaration whose clause was wrapped across lines. Type arguments are not base types — `extends State<LedgerView>` names `State` — and a language with no curated heritage grammar fails the gate rather than passing it, so a rule that cannot fire is never mistaken for a rule that found nothing.
 - Language-agnostic: a top-ranked cluster that is overwhelmingly digits and separators is a data table, and must carry `category: data` rather than ranking at full logic weight.
 
 ### [CORPUS-BASELINE] The known-failures ratchet

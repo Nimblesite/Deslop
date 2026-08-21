@@ -46,12 +46,14 @@ use std::{path::Path, time::Duration};
 use anyhow::{anyhow, Result};
 use deslop_test_support::{
     corpus::{
-        baseline_mode, classify, clone_dir, cluster_paths, first_occurrence_text, manifest,
-        reports_clone_spanning, scan, string_field, u64_field, Baseline, CorpusRun, Failure,
+        array, baseline_mode, classify, clone_dir, cluster_paths, field_u64, first_occurrence_text,
+        manifest, reports_clone_spanning, scan, string_field, u64_field, Baseline, CorpusRun,
+        Failure,
     },
     corpus_confidence::{
         check_fused_bounded_max, check_type2_curated_recall, check_type2_gate_liveness,
     },
+    corpus_precision::check_boilerplate_not_ranked_first,
 };
 use serde_json::Value;
 
@@ -287,50 +289,6 @@ fn check_recall(manifest: &Value, run: &CorpusRun, failures: &mut Vec<Failure>) 
             ));
         }
     }
-}
-
-/// [CORPUS-PRECISION] Language- or framework-mandated scaffolding must never outrank
-/// genuine copy-paste. Such a cluster is unactionable by construction, so it
-/// must not sit at the head of a "worst offenders first" report.
-fn check_boilerplate_not_ranked_first(
-    manifest: &Value,
-    root: &Path,
-    run: &CorpusRun,
-    failures: &mut Vec<Failure>,
-) -> Result<()> {
-    let Some(rule) = manifest.get("must_not_rank_first") else {
-        return Ok(());
-    };
-    // Saturating up, never down: a `top_n` too large for the host widens the
-    // check to every cluster, where narrowing it to zero would silently switch
-    // the precision gate off.
-    let top_n = usize::try_from(u64_field(rule, "top_n")?).unwrap_or(usize::MAX);
-    let forbidden: Vec<&str> = array(rule, "forbidden_top_shapes")
-        .iter()
-        .filter_map(Value::as_str)
-        .collect();
-
-    for (rank, cluster) in array(&run.report, "clusters")
-        .iter()
-        .take(top_n)
-        .enumerate()
-    {
-        let text = first_occurrence_text(root, cluster)?;
-        for shape in &forbidden {
-            if text.contains(shape) {
-                failures.push(Failure::new(
-                    "boilerplate_rank",
-                    format!(
-                        "rank {rank}: cluster of {} occurrences is `{shape}` boilerplate, which \
-                         cannot be deduplicated. First occurrence: {}",
-                        field_u64(cluster, "size"),
-                        text.lines().next().unwrap_or("").trim()
-                    ),
-                ));
-            }
-        }
-    }
-    Ok(())
 }
 
 /// Number of top-ranked clusters subjected to the language-agnostic

@@ -36,8 +36,10 @@ class RawSummary(TypedDict):
 
 
 class RawDependencySummary(TypedDict):
-    blocked_by_total_count: NotRequired[int]
-    blocking_total_count: NotRequired[int]
+    blocked_by: NotRequired[int]
+    blocking: NotRequired[int]
+    total_blocked_by: NotRequired[int]
+    total_blocking: NotRequired[int]
 
 
 class RawIssue(TypedDict):
@@ -239,8 +241,8 @@ def populate_relationships(item: RawIssue, repo: str) -> None:
     sub_count = item.get("sub_issues_summary", {}).get("total", 0)
     dependency = item.get("issue_dependencies_summary", {})
     item["sub_issue_numbers"] = relation_numbers(gh_json(f"repos/{repo}/issues/{number}/sub_issues")) if sub_count else []
-    item["blocked_by_numbers"] = relation_numbers(gh_json(f"repos/{repo}/issues/{number}/dependencies/blocked_by")) if dependency.get("blocked_by_total_count") else []
-    item["blocking_numbers"] = relation_numbers(gh_json(f"repos/{repo}/issues/{number}/dependencies/blocking")) if dependency.get("blocking_total_count") else []
+    item["blocked_by_numbers"] = relation_numbers(gh_json(f"repos/{repo}/issues/{number}/dependencies/blocked_by")) if dependency.get("blocked_by") else []
+    item["blocking_numbers"] = relation_numbers(gh_json(f"repos/{repo}/issues/{number}/dependencies/blocking")) if dependency.get("blocking") else []
 
 
 def fetch_issues(repo: str) -> list[RawIssue]:
@@ -405,8 +407,21 @@ def sequence_issues(issues: list[IssueData]) -> None:
         issue["plan"] = {"offset": offset, "effort_units": effort, "track": track}
 
 
-def sort_issues(issues: list[IssueData]) -> list[IssueData]:
-    return sorted(issues, key=lambda item: (item["priority_rank"], -item["inbound_links"], item["created_at"], item["number"]))
+def sort_issues(issues: list[IssueData], relationships: list[RelationshipData]) -> list[IssueData]:
+    by_number = {item["number"]: item for item in issues}
+    remaining = set(by_number)
+    blockers: defaultdict[int, set[int]] = defaultdict(set)
+    for edge in relationships:
+        if edge["kind"] == "blocks" and edge["source"] in remaining and edge["target"] in remaining:
+            blockers[edge["target"]].add(edge["source"])
+    ordered: list[IssueData] = []
+    key = lambda item: (item["priority_rank"], -item["inbound_links"], item["created_at"], item["number"])
+    while remaining:
+        ready = [by_number[number] for number in remaining if not blockers[number] & remaining]
+        selected = min(ready or [by_number[number] for number in remaining], key=key)
+        ordered.append(selected)
+        remaining.remove(selected["number"])
+    return ordered
 
 
 def summarize(issues: list[IssueData], relationships: list[RelationshipData]) -> SummaryData:
@@ -435,7 +450,7 @@ def priority_data(issues: list[IssueData]) -> list[PriorityData]:
 def build_report(raw_issues: list[RawIssue], repo: str, generated_date: date) -> ReportData:
     relationships = relationship_edges(raw_issues)
     inbound = Counter(edge["target"] for edge in relationships)
-    issues = sort_issues([compact_issue(item, inbound[item["number"]]) for item in raw_issues])
+    issues = sort_issues([compact_issue(item, inbound[item["number"]]) for item in raw_issues], relationships)
     sequence_issues(issues)
     return {
         "meta": {

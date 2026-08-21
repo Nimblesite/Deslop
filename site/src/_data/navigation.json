@@ -48,12 +48,6 @@
     },
     {
       "group": "trust",
-      "i18nKey": "docsNav.statsDashboard",
-      "url": "/issues/statistics/",
-      "icon": "dashboard"
-    },
-    {
-      "group": "trust",
       "i18nKey": "docsNav.issuePlanner",
       "url": "/issues/planner/",
       "icon": "view_timeline"
@@ -113,12 +107,6 @@
           "text": "Interactive graph",
           "i18nKey": "docsNav.interactiveGraph",
           "url": "/issues/",
-          "noLangPrefix": true
-        },
-        {
-          "text": "Stats dashboard",
-          "i18nKey": "docsNav.statsDashboard",
-          "url": "/issues/statistics/",
           "noLangPrefix": true
         },
         {

@@ -1,12 +1,14 @@
 import unittest
 from datetime import date
 from typing import Iterable
+from unittest.mock import MagicMock, patch
 
 from scripts.issues.generate_issue_report import (
     RawIssue,
     build_report,
     extract_references,
     lifecycle_for,
+    populate_relationships,
     priority_for,
     workstream_for,
 )
@@ -41,6 +43,29 @@ def issue(
 
 
 class IssueReportTests(unittest.TestCase):
+    @patch("scripts.issues.generate_issue_report.gh_json")
+    def test_rest_dependency_summary_fetches_native_open_edges(self, mock_gh_json: MagicMock) -> None:
+        item = issue(20, "Dependent work")
+        item["issue_dependencies_summary"] = {
+            "blocked_by": 1,
+            "blocking": 1,
+            "total_blocked_by": 1,
+            "total_blocking": 1,
+        }
+        blocker = issue(10, "Open blocker")
+        blocker["state"] = "open"
+        blocked = issue(30, "Open blocked work")
+        blocked["state"] = "open"
+        mock_gh_json.side_effect = [[blocker], [blocked]]
+
+        populate_relationships(item, "Nimblesite/Deslop")
+
+        self.assertEqual(item.get("blocked_by_numbers"), [10])
+        self.assertEqual(item.get("blocking_numbers"), [30])
+        report = build_report([blocker, item, blocked], "Nimblesite/Deslop", date(2026, 8, 21))
+        self.assertIn({"source": 10, "target": 20, "kind": "blocks"}, report["relationships"])
+        self.assertIn({"source": 20, "target": 30, "kind": "blocks"}, report["relationships"])
+
     def test_references_are_unique_open_issue_numbers(self) -> None:
         body = "Related: #12, #12 and Nimblesite/Deslop#13; not #99."
         self.assertEqual(extract_references(body, {12, 13}, 13), [12])
@@ -81,6 +106,20 @@ class IssueReportTests(unittest.TestCase):
         )
         self.assertIn(
             {"source": 11, "target": 12, "kind": "reference"},
+            report["relationships"],
+        )
+
+    def test_planner_orders_blockers_before_blocked_work_without_discarding_priority(self) -> None:
+        blocker = issue(10, "Prerequisite task", issue_type="Task")
+        blocker["blocking_numbers"] = [20]
+        blocked = issue(20, "Release verification", ("fixed-on-main",))
+        unrelated = issue(30, "Independent showstopper", ("showstopper",))
+
+        report = build_report([blocked, blocker, unrelated], "Nimblesite/Deslop", date(2026, 8, 21))
+
+        self.assertEqual([item["number"] for item in report["issues"]], [30, 10, 20])
+        self.assertIn(
+            {"source": 10, "target": 20, "kind": "blocks"},
             report["relationships"],
         )
 

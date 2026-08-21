@@ -325,6 +325,7 @@ test.describe("issue planner document", () => {
     const sidebarBox = await page.locator(".docs-sidebar").boundingBox();
     const workspaceBox = await page.locator(".docs-workspace").boundingBox();
     const appBox = await page.locator(".atlas-app--planner").boundingBox();
+    const tabsBox = await page.locator(".view-tabs").boundingBox();
     const stageBox = await page.locator(".atlas-stage").boundingBox();
     const panelBox = await page.locator("[data-view-panel]").boundingBox();
 
@@ -335,22 +336,28 @@ test.describe("issue planner document", () => {
     expect(appBox.height).toBeCloseTo(workspaceBox.height, 0);
     expect(panelBox.width).toBeCloseTo(stageBox.width, 0);
     expect(panelBox.height).toBeCloseTo(stageBox.height, 0);
+    expect(tabsBox.width).toBeLessThan(workspaceBox.width * 0.6);
+    await expect(page.locator(".view-tab")).toHaveText(["Priority queue", "Runway", "All issues"]);
     await expect(page.locator("[data-view-panel]")).toHaveCount(1);
+    await expect(page.getByRole("tab", { name: "Priority queue" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("[data-view-panel=board]")).toBeVisible();
+    await expect(page).not.toHaveURL(/view=/);
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(900);
   });
 
   test("switches between runway, priority, and queue views", async ({ page }) => {
-    await expect(page.locator("[data-view-panel=runway] .runway-bar").first()).toBeVisible();
-    await page.getByRole("tab", { name: "Priority" }).click();
     await expect(page.locator("[data-view-panel=board] .board-lane").first()).toBeVisible();
+    await page.getByRole("tab", { name: "Runway" }).click();
+    await expect(page.locator("[data-view-panel=runway] .runway-bar").first()).toBeVisible();
     await expect(page.locator("[data-view-panel]")).toHaveCount(1);
-    await page.getByRole("tab", { name: "Queue" }).click();
+    await page.getByRole("tab", { name: "All issues" }).click();
     await expect(page.locator("[data-view-panel=queue] tbody tr").first()).toBeVisible();
     await expect(page.locator("[data-view-panel]")).toHaveCount(1);
     await expect(page).toHaveURL(/view=queue/);
   });
 
   test("labels the runway as indicative and shows no schedule dates", async ({ page }) => {
+    await page.getByRole("tab", { name: "Runway" }).click();
     await expect(page.locator(".runway-notice")).toContainText(
       "Indicative only — not a schedule",
     );
@@ -370,14 +377,14 @@ test.describe("issue planner document", () => {
     ).toHaveCount(0);
     await page.getByRole("button", { name: "Close issue details" }).click();
 
-    await page.getByRole("tab", { name: "Queue" }).click();
+    await page.getByRole("tab", { name: "All issues" }).click();
     await expect(page.getByRole("columnheader", { name: "Updated" })).toHaveCount(0);
   });
 
   test("keeps every planner tab usable on a phone", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload();
-    for (const view of ["Runway", "Priority", "Queue"]) {
+    for (const view of ["Priority queue", "Runway", "All issues"]) {
       await page.getByRole("tab", { name: view }).click();
       await expect(page.locator("[data-view-panel]")).toHaveCount(1);
       const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);

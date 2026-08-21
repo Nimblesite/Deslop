@@ -14,6 +14,7 @@
 pub mod corpus;
 pub mod corpus_confidence;
 pub mod corpus_precision;
+pub mod corpus_scope;
 pub mod enclosure;
 
 use std::{

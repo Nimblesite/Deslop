@@ -1,4 +1,4 @@
-import { clear, element, emptyState, svgElement } from "./dom.js";
+import { clear, element, emptyState, labelChip, svgElement } from "./dom.js";
 import { priorityColor, streamMap, visibleRelationships } from "./model.js";
 
 const WIDTH = 1200;
@@ -78,36 +78,6 @@ function nodeClass(issue) {
   return classes.join(" ");
 }
 
-function fixedStatusBadge(radius) {
-  const y = radius + 5;
-  const badge = svgElement("g", { class: "graph-node__status", "aria-hidden": "true" });
-  badge.append(
-    svgElement("rect", { class: "graph-node__status-bg", x: -25, y, width: 50, height: 9, rx: 4.5 }),
-    textNode("fixed-on-main", 0, y + 4.8, "graph-node__status-label"),
-  );
-  return badge;
-}
-
-function assigneeAvatar(issue, radius) {
-  const assignee = issue.assignees.find((candidate) => candidate.avatar);
-  if (!assignee) return null;
-  const size = 11;
-  const center = radius * 0.72;
-  return [
-    svgElement("circle", { class: "graph-node__assignee-frame", cx: center, cy: -center, r: size / 2 + 1 }),
-    svgElement("image", {
-      class: "graph-node__assignee",
-      href: assignee.avatar,
-      x: center - size / 2,
-      y: -center - size / 2,
-      width: size,
-      height: size,
-      preserveAspectRatio: "xMidYMid slice",
-      "aria-hidden": "true",
-    }),
-  ];
-}
-
 function createNode(position, stream, onSelect, tooltip) {
   const issue = position.issue;
   const radius = nodeRadius(issue);
@@ -132,9 +102,6 @@ function createNode(position, stream, onSelect, tooltip) {
   if (!fixedOnMain && issue.priority !== "release_blocker") ring.style.display = "none";
   if (issue.priority === "release_blocker") ring.style.stroke = priorityColor(issue);
   group.append(hitTarget, ring, dot, label);
-  if (fixedOnMain) group.append(fixedStatusBadge(radius));
-  const avatar = assigneeAvatar(issue, radius);
-  if (avatar) group.append(...avatar);
   bindNodeEvents(group, issue, onSelect, tooltip);
   return group;
 }
@@ -149,9 +116,23 @@ function bindNodeEvents(node, issue, onSelect, tooltip) {
   node.addEventListener("pointerleave", () => tooltip.classList.remove("is-visible"));
 }
 
+function tooltipAssignee(assignee) {
+  const children = [];
+  if (assignee.avatar) children.push(element("img", { attrs: { src: assignee.avatar, alt: "" } }));
+  children.push(document.createTextNode(`@${assignee.login}`));
+  return element("span", { className: "graph-tooltip__assignee" }, children);
+}
+
 function showTooltip(tooltip, issue, event) {
   clear(tooltip);
-  tooltip.append(element("span", { text: `#${issue.number} · ${issue.priority_name}` }), document.createTextNode(issue.title));
+  const assignees = issue.assignees.length
+    ? element("div", { className: "graph-tooltip__assignees" }, issue.assignees.map(tooltipAssignee))
+    : element("span", { className: "graph-tooltip__unassigned", text: "Unassigned" });
+  tooltip.append(
+    element("div", { className: "graph-tooltip__head" }, [element("span", { text: `#${issue.number} · ${issue.priority_name}` }), assignees]),
+    element("strong", { className: "graph-tooltip__title", text: issue.title }),
+  );
+  if (issue.labels.length) tooltip.append(element("div", { className: "graph-tooltip__labels" }, issue.labels.map(labelChip)));
   tooltip.classList.add("is-visible");
   placeTooltip(tooltip, event);
 }

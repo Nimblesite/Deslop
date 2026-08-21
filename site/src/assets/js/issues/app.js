@@ -1,7 +1,7 @@
 import { clear, element, labelChip } from "./dom.js";
 import { allLabels, filteredIssues, priorityColor, relatedIssues, streamMap } from "./model.js";
 import { renderNetwork } from "./graph.js";
-import { renderBoard, renderQueue, renderRunway } from "./views.js";
+import { renderBoard, renderQueue, renderRunway, renderStatistics } from "./views.js";
 
 const root = document.querySelector("[data-issue-atlas]");
 const stage = root.querySelector("[data-stage]");
@@ -49,6 +49,7 @@ const renderers = {
   runway: renderRunway,
   board: renderBoard,
   queue: renderQueue,
+  statistics: renderStatistics,
 };
 
 function render() {
