@@ -108,21 +108,24 @@ fn split_one<S: BuildHasher>(
 /// follows about whether either is a copy of the other. A component
 /// spanning languages exists only because [CONFIG-CROSS-LANGUAGE] was
 /// opted into, and splitting it into one cluster per language deletes
-/// precisely the finding that opt-in asks for. A component whose
-/// languages cannot be resolved is left alone for the same reason.
+/// precisely the finding that opt-in asks for. A member whose language
+/// cannot be resolved is unresolved, not agreeing: one of them is enough
+/// to hold the whole component back, because an unknown grammar is exactly
+/// the case this guard exists to refuse.
 fn speaks_one_language<S: BuildHasher>(
     members: &[usize],
     fingerprints: &[Fingerprint],
     file_languages: &HashMap<FileId, &'static str, S>,
 ) -> bool {
-    let mut languages = members.iter().filter_map(|index| {
+    let mut languages = members.iter().map(|index| {
         fingerprints
             .get(*index)
             .and_then(|member| file_languages.get(&member.file_id))
     });
     languages
         .next()
-        .is_some_and(|first| languages.all(|language| language == first))
+        .flatten()
+        .is_some_and(|first| languages.all(|language| language == Some(first)))
 }
 
 /// Partitions `families` into the regions of source they cover, merging

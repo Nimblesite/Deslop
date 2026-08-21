@@ -92,6 +92,16 @@ The next CI run caught the second overreach: `config_can_enable_cross_language_c
 
 Pinned red-first by `crates/deslop/tests/csharp_merged_clone_families.rs` — both families in one scan, each `nearly_identical` with two occurrences, `structural == 1.0`, `token_jaccard == 1.0` and `fused >= 0.85`; exactly two visible clusters and exactly one hidden; no cluster spanning `Alpha.cs` with `Delta.cs`; the two families separating strictly and in opposite directions on the content axes — the renamed pair certifying `rename_consistency == 1.0` at `agreement <= 0.75`, the literal-edited pair holding `agreement >= 0.9` at `rename_consistency < 1.0`; and a non-zero duplication metric. Watched red at `duplication_percent 0.0` with neither pair present. `crates/deslop/tests/common/mod.rs::fixture` now falls back to `deslop-mcp`'s fixture tree, the mirror of that crate's `copied_fixture_named`, so both suites read the same bytes rather than a second copy of the corpus. Eleven unit tests in `cluster_filters/structural_families/tests.rs` hold the region cases the E2E cannot reach, including the four-file bridge, the two-depth nesting that must survive it, and the two-language component the pass must not touch. `[PIPELINE-CLUSTER-ELECT]` added to `docs/specs/pipeline.md`, adjacent to `[PIPELINE-CLUSTER-EXACT]` and `[PIPELINE-CLUSTER-SUBSUME]`.
 
+## 3b. The six-language golden re-blessed after operator normalisation — [PIPELINE-NORMALIZE-AST-OPERATOR] — LANDED
+
+`cold_multilang_report_matches_committed_golden_byte_for_byte` and `fully_warm_multilang_run_reproduces_the_committed_golden` went red once the earlier failures stopped masking them — CI is fail-fast, so neither test had run on this branch since the operator change landed.
+
+Not a clustering regression, and proved so before blessing: disabling `[PIPELINE-CLUSTER-ELECT]` outright leaves the report byte-identical, so the election pass never touches this fixture. The drift is `[PIPELINE-NORMALIZE-AST-OPERATOR]` — behaviour-bearing operator tokens now survive normalisation as leaves, so every subtree containing them counts more nodes: rust 45→53, python 35→41, typescript 51→56, dart 50→57, csharp 46→52, go 52→57, a rise of 5–8 that matches the operator count in each `reconcile_entries` body. Every cluster id moved with it, because `cluster_id_source` is the minimum member digest and every digest changed.
+
+What did **not** move is the evidence the drift is benign: the same six clusters over the same six file pairs, every occurrence span byte-for-byte unchanged, all `identical`, `clusters_hidden 0`, `duplicated_loc 136`, `duplication_percent 64.76`. Only the ranking order shifted, and only because weight is the node count.
+
+`MULTILANG_CASES` in `crates/deslop/tests/common/multilang.rs` is re-pinned to the new ids and node counts. No assertion was relaxed — the contract still demands exact equality on the id, the node count, both spans, the bucket, the category and all four signals per language, which is what turned a bytes-match into a red test in the first place.
+
 ## 4. Subsumption escapes — #389 and #421
 
 The election is fixed and pinned (`[PIPELINE-CLUSTER-SUBSUME]`, `cross_cluster_collapse.rs`). These two are the known escapes around it, and both corrupt the reported figures as well as the cluster list.

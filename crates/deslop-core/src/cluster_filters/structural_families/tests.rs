@@ -344,3 +344,27 @@ fn a_component_spanning_two_languages_is_left_whole() {
          cross-language cluster the user opted into must survive intact"
     );
 }
+
+// The guard refuses what it cannot confirm. A member whose file carries no
+// language is not evidence that the component speaks one, and splitting on
+// an unknown grammar is the cross-language false negative by another route.
+#[test]
+fn a_component_with_an_unresolved_language_is_left_whole() {
+    let fingerprints = corpus(&[SUM_HASH, SUM_HASH, PRODUCT_HASH, PRODUCT_HASH]);
+    let languages: HashMap<FileId, &'static str> = fingerprints
+        .iter()
+        .take(MIN_FAMILY_MEMBERS)
+        .map(|member| (member.file_id, LANGUAGE))
+        .collect();
+
+    assert_eq!(
+        member_lists(&split_structural_families(
+            vec![component(fingerprints.len())],
+            &fingerprints,
+            &languages,
+        )),
+        vec![vec![0, 1, 2, 3]],
+        "two of the four members have no language on record, so the \
+         component cannot be shown to speak one and must not be split"
+    );
+}
