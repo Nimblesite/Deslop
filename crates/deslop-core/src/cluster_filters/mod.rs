@@ -442,7 +442,6 @@ fn collect_named_kinds(node: Node<'_>, kinds: &mut Vec<String>) {
     }
 }
 
-
 /// Returns the set of tree-sitter node kinds that count as function
 /// declarations for the purpose of polymorphism detection.
 pub(super) const fn function_kinds(language: &str) -> &'static [&'static str] {

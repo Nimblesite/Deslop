@@ -107,7 +107,8 @@ fn scaffolding_besides_functions<'tree>(
     if node.end_byte() <= range.start || node.start_byte() >= range.end {
         return true;
     }
-    if kinds.contains(&node.kind()) && node.start_byte() >= range.start
+    if kinds.contains(&node.kind())
+        && node.start_byte() >= range.start
         && node.end_byte() <= range.end
     {
         functions.push(node);

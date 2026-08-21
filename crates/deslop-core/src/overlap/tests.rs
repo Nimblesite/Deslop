@@ -407,11 +407,7 @@ fn rider_function(block: &str) -> String {
 #[test]
 fn the_fallback_never_credits_a_nested_right_subtree_twice() -> Result<(), String> {
     let block = boost_block(40);
-    let left_source = format!(
-        "{}\n{}",
-        host_function(260, &block),
-        rider_function(&block)
-    );
+    let left_source = format!("{}\n{}", host_function(260, &block), rider_function(&block));
     let right_source = host_function(260, &block);
     let mut registry = FileRegistry::new();
     let left_id = registry.register(PathBuf::from("left.rs"));
