@@ -60,11 +60,23 @@ function appendEdges(layer, relationships, positions) {
     const source = positions.get(edge.source);
     const target = positions.get(edge.target);
     if (!source || !target) continue;
-    const line = svgElement("line", { x1: source.x, y1: source.y, x2: target.x, y2: target.y, class: `graph-edge graph-edge--${edge.kind}` });
+    const attributes = { x1: source.x, y1: source.y, x2: target.x, y2: target.y, class: `graph-edge graph-edge--${edge.kind}` };
+    if (edge.kind === "blocks" || edge.kind === "sub_issue") attributes["marker-end"] = `url(#arrow-${edge.kind})`;
+    const line = svgElement("line", attributes);
     line.dataset.source = String(edge.source);
     line.dataset.target = String(edge.target);
     layer.append(line);
   }
+}
+
+function appendEdgeMarkers(svg) {
+  const definitions = svgElement("defs");
+  for (const kind of ["blocks", "sub_issue"]) {
+    const marker = svgElement("marker", { id: `arrow-${kind}`, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 5, markerHeight: 5, orient: "auto-start-reverse" });
+    marker.append(svgElement("path", { d: "M 0 0 L 10 5 L 0 10 z", class: `graph-arrow graph-arrow--${kind}` }));
+    definitions.append(marker);
+  }
+  svg.append(definitions);
 }
 
 function nodeRadius(issue) {
@@ -107,7 +119,7 @@ function createNode(position, stream, onSelect, tooltip) {
 }
 
 function bindNodeEvents(node, issue, onSelect, tooltip) {
-  node.addEventListener("click", (event) => { event.stopPropagation(); onSelect(issue); });
+  node.addEventListener("click", (event) => { event.stopPropagation(); node.focus(); onSelect(issue); });
   node.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") onSelect(issue);
   });
@@ -245,7 +257,9 @@ function legend(report, issues) {
     return element("span", { className: "legend-item" }, [swatch, document.createTextNode(stream.name)]);
   });
   items.push(statusLegend("Verification ring", "legend-ring"));
-  items.push(statusLegend("Explicit relationship", "legend-line"));
+  items.push(statusLegend("Blocks →", "legend-line legend-line--blocks"));
+  items.push(statusLegend("Parent → sub-issue", "legend-line legend-line--sub-issue"));
+  items.push(statusLegend("Cross-reference", "legend-line"));
   return element("div", { className: "graph-legend" }, items);
 }
 
@@ -268,6 +282,7 @@ export function renderNetwork(container, report, issues, onSelect) {
   const canvas = element("div", { className: "network-canvas" });
   const tooltip = element("div", { className: "graph-tooltip", attrs: { role: "tooltip" } });
   const svg = svgElement("svg", { class: "network-svg", viewBox: `0 0 ${WIDTH} ${HEIGHT}`, "aria-label": "Issue relationship network" });
+  appendEdgeMarkers(svg);
   const positions = layoutIssues(report, issues);
   const viewport = graphLayers(svg, report, issues, positions, onSelect, tooltip);
   const state = { x: 0, y: 0, scale: 1 };

@@ -55,7 +55,7 @@ jobs:
           changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
           echo "Changed files in this PR:"
           printf '%s\n' "$changed"
-          # site = at least one website file changed.
+          # site = at least one website or issue-report generator file changed.
           # code = at least one file OUTSIDE site/ changed, OR a
           #        design-system stylesheet that deslop-core compiles into
           #        the standalone HTML report via include_str!
@@ -65,12 +65,12 @@ jobs:
           #        so the code pipeline — including the _vsix-playwright-html
           #        report-CSS guard — must run, or a broken/unstyled report
           #        could ship unverified. A mixed PR sets both.
-          if printf '%s\n' "$changed" | grep -qE '^site/'; then
+          if printf '%s\n' "$changed" | grep -qE '^(site/|scripts/issues/)'; then
             echo "site=true" >> "$GITHUB_OUTPUT"
           else
             echo "site=false" >> "$GITHUB_OUTPUT"
           fi
-          if printf '%s\n' "$changed" | grep -qvE '^site/' \
+          if printf '%s\n' "$changed" | grep -qvE '^(site/|scripts/issues/)' \
              || printf '%s\n' "$changed" | grep -qE '^site/src/assets/css/'; then
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
@@ -436,6 +436,17 @@ jobs:
           cache: npm
           cache-dependency-path: site/package-lock.json
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Validate typed issue report
+        run: |
+          python -m pip install --disable-pip-version-check mypy==1.19.1 pyright==1.1.408
+          python -m unittest scripts.issues.test_generate_issue_report
+          python -m mypy --strict scripts/issues/generate_issue_report.py scripts/issues/test_generate_issue_report.py
+          pyright scripts/issues/generate_issue_report.py scripts/issues/test_generate_issue_report.py
+
       # Taxonomy content gate ([CLONE-BUCKETS-DUAL-LABEL]) scans site/src for
       # bare Type-N labels. It normally runs inside `make lint` (the `ci` job);
       # on a website-only PR that job is skipped, so the one gate that guards
@@ -461,6 +472,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm run build
+
+      - name: Install Playwright browser
+        working-directory: site
+        run: npx playwright install --with-deps chromium
+
+      - name: Test published issue experience
+        working-directory: site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CI: "true"
+        run: npm test -- --workers=1
 
   # Dependency review ([GITHUB-DEP-REVIEW]) — blocks PRs that pull in
   # dependencies with known vulnerabilities. One owner per concern: this is the

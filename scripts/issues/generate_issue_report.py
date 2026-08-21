@@ -9,7 +9,7 @@ import sys
 from collections import Counter, defaultdict
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import NotRequired, TypedDict, cast
+from typing import Callable, NotRequired, TypedDict, cast
 
 
 class RawLabel(TypedDict):
@@ -415,7 +415,7 @@ def sort_issues(issues: list[IssueData], relationships: list[RelationshipData]) 
         if edge["kind"] == "blocks" and edge["source"] in remaining and edge["target"] in remaining:
             blockers[edge["target"]].add(edge["source"])
     ordered: list[IssueData] = []
-    key = lambda item: (item["priority_rank"], -item["inbound_links"], item["created_at"], item["number"])
+    key: Callable[[IssueData], tuple[int, int, str, int]] = lambda item: (item["priority_rank"], -item["inbound_links"], item["created_at"], item["number"])
     while remaining:
         ready = [by_number[number] for number in remaining if not blockers[number] & remaining]
         selected = min(ready or [by_number[number] for number in remaining], key=key)

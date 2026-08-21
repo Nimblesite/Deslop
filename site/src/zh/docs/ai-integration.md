@@ -40,7 +40,7 @@ lang: zh
 | `session-config` | 检查运行中服务器的生效配置。 |
 | `schema-doc` | 每个响应的权威 JSON schema。每个会话调用**一次**，而非每次响应都调用。 |
 
-每一个响应都针对**实时**工作区状态计算。编辑器服务器在内存中持有实时报告，并在每次变更时刷新（防抖，并设有硬上限）；MCP 服务器则在下一次工具调用时通过本地 IPC 端点读取该实时状态。macOS 与 Linux 使用 `.deslop/cache/deslop.sock`；Windows 使用通过 `.deslop/cache/deslop.port` 发现的 token 门控 TCP 回环端点。没有批处理步骤。没有陈旧缓存。
+每一个响应都针对**实时**工作区状态计算。编辑器服务器在内存中持有实时报告，并在每次变更时刷新（防抖，并设有硬上限）；MCP 服务器则在下一次工具调用时通过本地 IPC 端点读取该实时状态。macOS 与 Linux 使用 `.deslop/cache/deslop.sock`；Windows 使用通过 `.deslop/cache/deslop.port` 发现的 token 门控 TCP 回环端点。没有批处理步骤。
 
 ## 将 `deslop-mcp` 接入你的客户端——指向 VSIX 捆绑的二进制文件
 
@@ -52,7 +52,7 @@ lang: zh
 ~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop-mcp
 ```
 
-`<platform>` 为 `darwin-arm64`、`darwin-x64`、`linux-x64`、`linux-arm64` 或 `win32-x64`。`<VERSION>` 为已安装的扩展版本——每次更新 VSIX 时都要相应递增。
+`<platform>` 为 `darwin-arm64`、`darwin-x64`、`linux-x64`、`linux-arm64` 或 `win32-x64`。`<VERSION>` 为已安装的扩展版本——每次更新 VSIX 后，都要把它改为新安装的版本号。
 
 ### Claude Code
 
@@ -87,7 +87,7 @@ args    = ["--root", "."]
 
 ## Homebrew / Scoop CLI 用户——指向 `$PATH` 上的裸 `deslop-mcp`
 
-如果你通过 `brew install nimblesite/tap/deslop` 或 `scoop install deslop` 安装了 CLI，该包还会把 **`deslop-mcp` 和 `deslop-lsp` 一并放到你的 `$PATH`** 上，与 `deslop` 并列——tap formula 和 Scoop manifest 会安装全部三个二进制文件，并与发布版本锁定。无需 VSIX、无需扩展目录、无需绝对路径。直接使用裸命令：
+如果你通过 `brew install nimblesite/tap/deslop` 或 `scoop install deslop` 安装了 CLI，该包还会把 **`deslop-mcp` 和 `deslop-lsp` 一并放到你的 `$PATH`** 上，与 `deslop` 并列——Homebrew tap 配方和 Scoop 清单会安装全部三个二进制文件，并与发布版本锁定。无需 VSIX、无需扩展目录、无需绝对路径。直接使用裸命令：
 
 ```bash
 claude mcp add deslop -s user -- deslop-mcp --root .
@@ -109,7 +109,6 @@ claude mcp add deslop -s user -- deslop-mcp --root .
 需要知道的三点：
 
 - **不存在 `deslop mcp` 子命令。** `deslop` CLI 只用于一次性运行和 CI 审计；MCP 由**独立的 `deslop-mcp` 二进制文件**提供。
-- **`$PATH` 上找不到 `deslop-mcp`？** 它是在 v0.13.0 加入 brew/scoop 包的。在较旧的安装上，运行 `brew upgrade deslop`（或 `scoop update deslop`）——当前发布版本会把 `deslop-mcp` 和 `deslop-lsp` 放到 `$PATH` 上。
 - **从源码构建不会把任何东西放到 `$PATH` 上。** 只有 `brew` / `scoop` 会这么做。这些包管理器会让二进制文件与发布版本步调一致地版本化；`cargo build` 不会。
 
 ## 智能体循环
@@ -157,7 +156,7 @@ claude mcp add deslop -s user -- deslop-mcp --root .
 
 ## Deslop 刻意不做的事
 
-- 它不会重写你的代码。Deslop 负责发现、排名、比较与预防重复；提取由你决定。自动清理是方向，而非已发布的能力。
+- 它不会重写你的代码。Deslop 负责发现、排名、比较与预防重复；提取由你决定。
 - 它不会让 CI 失败，除非你自己设置阈值。
 - 它不会假定"近似命中 = bug"。有些重复是有意为之的（测试夹具、引导代码）。Deslop 负责报告；由你来决定。
 - 它不会访问网络，除非你显式选择一个远程嵌入模型。

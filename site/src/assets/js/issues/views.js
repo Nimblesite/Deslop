@@ -36,7 +36,7 @@ export function renderBoard(container, report, issues, onSelect) {
   clear(container);
   if (!issues.length) return container.append(emptyState());
   const streams = streamMap(report);
-  const board = element("div", { className: "priority-board", attrs: { "data-view-panel": "board" } });
+  const board = element("div", { className: "priority-board", attrs: { id: "panel-board", role: "tabpanel", "aria-labelledby": "tab-board", "data-view-panel": "board" } });
   for (const priority of report.priorities) {
     const laneIssues = issues.filter((issue) => issue.priority === priority.id);
     if (laneIssues.length) board.append(boardLane(priority, laneIssues, streams, onSelect));
@@ -81,7 +81,7 @@ export function renderStatistics(container, report, issues) {
       element("p", { text: "It stays open until someone verifies the fix in a real release." }),
     ]),
   ]);
-  container.append(element("section", { className: "statistics-view", attrs: { "data-view-panel": "statistics" } }, [
+  container.append(element("section", { className: "statistics-view", attrs: { id: "panel-statistics", role: "tabpanel", "aria-labelledby": "tab-statistics", "data-view-panel": "statistics" } }, [
     element("header", { className: "statistics-view__header" }, [
       element("div", {}, [element("span", { className: "atlas-map-eyebrow", text: "Public GitHub issue data" }), element("h2", { text: "Issue statistics" })]),
       element("p", { text: "Compact counts reflect the filters above." }),
@@ -177,7 +177,7 @@ export function renderRunway(container, report, issues, onSelect) {
     element("span", { text: "Sequence and bar length show relative order and default effort—not dates, deadlines, estimates, or commitments." }),
   ]);
   const scroll = element("div", { className: "runway-scroll" }, [grid]);
-  container.append(element("div", { className: "runway-view", attrs: { "data-view-panel": "runway" } }, [notice, scroll]));
+  container.append(element("div", { className: "runway-view", attrs: { id: "panel-runway", role: "tabpanel", "aria-labelledby": "tab-runway", "data-view-panel": "runway" } }, [notice, scroll]));
 }
 
 function labelCell(issue) {
@@ -212,5 +212,5 @@ export function renderQueue(container, report, issues, onSelect) {
   const table = element("table", { className: "issue-table" });
   const body = element("tbody", {}, issues.map((issue) => queueRow(issue, streams, onSelect)));
   table.append(tableHead(), body);
-  container.append(element("div", { className: "queue-wrap", attrs: { "data-view-panel": "queue" } }, [table]));
+  container.append(element("div", { className: "queue-wrap", attrs: { id: "panel-queue", role: "tabpanel", "aria-labelledby": "tab-queue", "data-view-panel": "queue" } }, [table]));
 }

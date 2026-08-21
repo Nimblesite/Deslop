@@ -1,5 +1,6 @@
 import unittest
 from datetime import date
+from pathlib import Path
 from typing import Iterable
 from unittest.mock import MagicMock, patch
 
@@ -43,6 +44,16 @@ def issue(
 
 
 class IssueReportTests(unittest.TestCase):
+    def test_pages_deploy_always_generates_fresh_issue_data(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        package = (root / "site/package.json").read_text(encoding="utf-8")
+        workflow = (root / ".github/workflows/deploy-pages.yml").read_text(encoding="utf-8")
+
+        self.assertIn('"build": "npm run issues:generate && npx @11ty/eleventy"', package)
+        self.assertIn("issues: read", workflow)
+        self.assertIn("GITHUB_TOKEN: ${{ github.token }}", workflow)
+        self.assertIn("run: npm run build", workflow)
+
     @patch("scripts.issues.generate_issue_report.gh_json")
     def test_rest_dependency_summary_fetches_native_open_edges(self, mock_gh_json: MagicMock) -> None:
         item = issue(20, "Dependent work")
@@ -122,6 +133,27 @@ class IssueReportTests(unittest.TestCase):
             {"source": 10, "target": 20, "kind": "blocks"},
             report["relationships"],
         )
+
+    def test_default_effort_is_deterministic_date_free_and_not_ai_enriched(self) -> None:
+        issues = [
+            issue(1, "Verify", ("fixed-on-main",)),
+            issue(2, "Blocker", ("showstopper",)),
+            issue(3, "Critical", ("critical",)),
+            issue(4, "Bug"),
+            issue(5, "Feature", issue_type="Feature"),
+            issue(6, "Task", issue_type="Task"),
+        ]
+
+        report = build_report(issues, "Nimblesite/Deslop", date(2026, 8, 21))
+        efforts = {item["number"]: item.get("plan", {})["effort_units"] for item in report["issues"]}
+
+        self.assertEqual(efforts, {1: 2, 2: 3, 3: 4, 4: 5, 5: 8, 6: 4})
+        for item in report["issues"]:
+            self.assertEqual(set(item.get("plan", {})), {"offset", "effort_units", "track"})
+        self.assertIn("not a schedule", report["meta"]["planning_note"].lower())
+        self.assertIn("No AI enrichment", report["meta"]["method"])
+        repeated = build_report(issues, "Nimblesite/Deslop", date(2026, 8, 21))
+        self.assertEqual(report["issues"], repeated["issues"])
 
 
 if __name__ == "__main__":

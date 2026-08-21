@@ -51,9 +51,11 @@ use deslop_test_support::{
         Failure,
     },
     corpus_confidence::{
-        check_fused_bounded_max, check_type2_curated_recall, check_type2_gate_liveness,
+        check_curated_recall, check_fused_bounded_max, check_type2_curated_recall,
+        check_type2_gate_liveness,
     },
     corpus_precision::check_boilerplate_not_ranked_first,
+    corpus_scope::check_scan_scope,
 };
 use serde_json::Value;
 
@@ -178,7 +180,10 @@ fn duplication_percent(report: &Value) -> f64 {
 /// Checks the main gate evaluates. Used to scope baseline reconciliation so
 /// it never reports the determinism gate's entries as fixed.
 const GATE_CHECKS: &[&str] = &[
+    "files_analysed",
+    "cluster_count_band",
     "recall",
+    "recall_quality",
     "boilerplate_rank",
     "data_table_rank",
     "fused_bounded_max",
@@ -200,7 +205,11 @@ fn gate(name: &str) -> Result<()> {
     warn_when_accuracy_unasserted(name, &manifest);
 
     let mut failures = Vec::new();
-    check_recall(&manifest, &run, &mut failures);
+    // [CORPUS-SCOPE] First, because every check below iterates a set an
+    // empty report leaves empty: a scan that reached nothing satisfies all
+    // of them at once (gh #342).
+    check_scan_scope(&manifest, &run.report, &mut failures);
+    check_curated_recall(&manifest, &run.report, &mut failures);
     check_boilerplate_not_ranked_first(&manifest, &root, &run, &mut failures)?;
     check_data_tables_not_ranked_as_logic(&root, &run, &mut failures)?;
     // [CORPUS-BASELINE] The confidence checks. The first two read no
@@ -270,36 +279,6 @@ fn warn_when_accuracy_unasserted(name: &str, manifest: &Value) {
         );
     }
 }
-
-/// [CORPUS-RECALL] Every hand-verified duplicate in the manifest must be reported.
-/// A miss is a false negative on code a human confirmed is byte-identical.
-fn check_recall(manifest: &Value, run: &CorpusRun, failures: &mut Vec<Failure>) {
-    for entry in array(manifest, "must_find") {
-        let files: Vec<String> = array(entry, "files")
-            .iter()
-            .filter_map(|file| file.as_str().map(ToOwned::to_owned))
-            .collect();
-        if !reports_clone_spanning(&run.report, &files) {
-            failures.push(Failure::new(
-                "recall",
-                format!(
-                    "no cluster spans {files:?}. Verified duplicate: {}",
-                    entry.get("why").and_then(Value::as_str).unwrap_or("")
-                ),
-            ));
-        }
-    }
-}
-
-/// Number of top-ranked clusters subjected to the language-agnostic
-/// precision checks. Ranking is the product, so the head of the report is
-/// where a false positive does the most damage.
-const RANKED_HEAD: usize = 10;
-
-/// Fraction of non-whitespace characters that must be digits or data
-/// punctuation before a snippet counts as a data table rather than logic.
-/// Real logic carries identifiers and keywords, so it lands far below this.
-const DATA_TABLE_RATIO: f64 = 0.6;
 
 /// [CORPUS-PRECISION] Language-agnostic: a top-ranked cluster that is essentially a
 /// numeric table must not be classified `logic`. `CloneCategory::data`

@@ -8,6 +8,7 @@
     "issues:generate": "python3 ../scripts/issues/generate_issue_report.py --output src/assets/data/issues.json",
     "build": "npm run issues:generate && npx @11ty/eleventy",
     "clean": "rm -rf _site",
+    "pretest": "npm run issues:generate",
     "test": "playwright test"
   },
   "dependencies": {

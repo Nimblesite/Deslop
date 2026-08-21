@@ -166,3 +166,32 @@ fn a_manifest_status_never_contradicts_its_curated_list() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn every_manifest_curates_a_non_vacuous_scan_scope() -> Result<()> {
+    for (name, manifest) in manifests()? {
+        assert_positive_file_floor(&name, &manifest);
+        assert_valid_cluster_band(&name, &manifest);
+    }
+    Ok(())
+}
+
+fn assert_positive_file_floor(name: &str, manifest: &Value) {
+    let minimum = manifest.get("expect_files_min").and_then(Value::as_u64);
+    assert!(
+        minimum.is_some_and(|value| value > 0),
+        "{name}: `expect_files_min` must be a positive curated floor; without it, a scan that \
+         analysed zero files can pass every cluster assertion"
+    );
+}
+
+fn assert_valid_cluster_band(name: &str, manifest: &Value) {
+    let band = manifest.get("expect_clusters");
+    let minimum = band.and_then(|value| value.get("min")).and_then(Value::as_u64);
+    let maximum = band.and_then(|value| value.get("max")).and_then(Value::as_u64);
+    assert!(
+        matches!((minimum, maximum), (Some(min), Some(max)) if min > 0 && min <= max),
+        "{name}: `expect_clusters` must have a positive `min` no greater than `max`; without \
+         a curated band, a repository-wide detection collapse or explosion passes silently"
+    );
+}

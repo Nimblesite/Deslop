@@ -24,10 +24,10 @@
 <section class="atlas-app atlas-app--planner">
   <div class="atlas-toolbar">
     <div class="view-tabs" role="tablist" aria-label="Report view">
-      <button type="button" class="view-tab is-active" data-view="board" role="tab" aria-selected="true">Priority</button>
-      <button type="button" class="view-tab" data-view="queue" role="tab" aria-selected="false">Queue</button>
-      <button type="button" class="view-tab" data-view="statistics" role="tab" aria-selected="false">Statistics</button>
-      <button type="button" class="view-tab" data-view="runway" role="tab" aria-selected="false">Runway</button>
+      <button type="button" id="tab-board" class="view-tab is-active" data-view="board" role="tab" aria-controls="panel-board" aria-selected="true" tabindex="0">Priority</button>
+      <button type="button" id="tab-queue" class="view-tab" data-view="queue" role="tab" aria-controls="panel-queue" aria-selected="false" tabindex="-1">Queue</button>
+      <button type="button" id="tab-statistics" class="view-tab" data-view="statistics" role="tab" aria-controls="panel-statistics" aria-selected="false" tabindex="-1">Statistics</button>
+      <button type="button" id="tab-runway" class="view-tab" data-view="runway" role="tab" aria-controls="panel-runway" aria-selected="false" tabindex="-1">Runway</button>
     </div>
   </div>
   {{ filters(true) }}
@@ -38,4 +38,4 @@
 {% endif %}
 
 <div class="issue-drawer-scrim" data-drawer-scrim></div>
-<aside class="issue-drawer" data-issue-drawer aria-hidden="true" aria-label="Issue details"></aside>
+<aside class="issue-drawer" data-issue-drawer role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="issue-drawer-title" inert></aside>

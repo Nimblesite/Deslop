@@ -15,11 +15,9 @@ docsGroup: start
 
 The preferred way to install it is the **VS Code extension**. One install bundles all three surfaces: live editor warnings, the check agents call before writing code, and the CLI.
 
-> The **JetBrains plugin** (Rider first, then IntelliJ IDEA, PyCharm, WebStorm, RustRover, CLion) is in active development. Zed and Neovim are on the roadmap. Until those ship, the VSIX is the headline install, and the Homebrew tap / Scoop bucket are the CLI-only shortcuts.
-
 ## Install (preferred) — VS Code extension
 
-Install straight from the **VS Code Marketplace**. Nothing to download, no files to manage — pick whichever is closest to hand:
+Install from the **VS Code Marketplace**:
 
 - **In VS Code:** open **Extensions** (`⇧⌘X` / `Ctrl+Shift+X`), search **Deslop**, click **Install**.
 - **Command line:** `code --install-extension nimblesite.deslop-live`
@@ -177,11 +175,3 @@ max_duplication_percent = 5.0
 ```
 
 `--fail-over` overrides the config key; `--fail-over 0` fails on any duplication; `--no-fail-over` clears the gate for a single local run. The full [exit-code table](/docs/configuration/#exit-codes) is in the configuration reference, and the [GitHub Action](/docs/github-action/) wraps the same gate for CI.
-
-## What to do next
-
-1. Read [How It Works](/docs/how-it-works/) to understand the ranking formula and the live pipeline.
-2. Read [AI Agents](/docs/ai-integration/) to wire `deslop-mcp` into Claude Code, Cursor, Continue, or Codex — then point the agent itself at [For AI](/docs/for-ai/), the operating manual written for the machine, including what to do when MCP is unavailable.
-3. Read [VS Code](/docs/vscode-cluster-panel/) when you need the meaning of a panel label, score, or action.
-4. Read [Configuration and Reports](/docs/configuration/) for every `.deslop.toml` key, every CLI flag, the three report formats, and the exit codes.
-5. Check [Releases](/releases/) for the current VSIX, CLI archives, checksums, and changelog links.

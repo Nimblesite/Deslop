@@ -94,6 +94,7 @@
 .graph-cluster-count { fill: var(--outline); font: 10px var(--font-mono); pointer-events: none; }
 .graph-edge { stroke: var(--outline); stroke-opacity: 0.16; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .graph-edge--blocks, .graph-edge--sub_issue { stroke: var(--on-surface-variant); stroke-opacity: 0.44; stroke-width: 1.5; }
+.graph-arrow { fill: var(--on-surface-variant); }
 .graph-node { cursor: pointer; outline: none; }
 .graph-node__hit { fill: transparent; pointer-events: all; }
 .graph-node__dot { stroke: var(--surface-container-lowest); stroke-width: 2; transition: filter var(--dur), stroke-width var(--dur); }
@@ -119,6 +120,8 @@
 .legend-swatch { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--swatch); }
 .legend-ring { width: 0.75rem; height: 0.75rem; border: 2px dashed var(--verify); border-radius: 50%; }
 .legend-line { width: 1rem; height: 1px; background: var(--outline); }
+.legend-line--blocks, .legend-line--sub-issue { position: relative; background: var(--on-surface-variant); }
+.legend-line--blocks::after, .legend-line--sub-issue::after { content: ""; position: absolute; top: -0.2rem; right: -0.05rem; border-block: 0.22rem solid transparent; border-left: 0.3rem solid var(--on-surface-variant); }
 
 .priority-board { min-height: 46rem; padding: 1rem; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(18rem, 1fr); gap: 0.75rem; overflow-x: auto; align-items: start; }
 .board-lane { min-height: 40rem; background: var(--surface-container-low); }
@@ -133,7 +136,7 @@
 .issue-card strong { display: block; font-size: 0.84rem; line-height: 1.4; }
 .card-labels { margin-top: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.3rem; }
 
-.label-chip { display: inline-flex; padding: 0.22rem 0.42rem; border-radius: 999px; background: var(--label-color); color: #111; font: 700 0.56rem/1 var(--font-mono); }
+.label-chip { display: inline-flex; padding: 0.22rem 0.42rem; border-radius: 999px; background: var(--label-color); color: var(--label-ink); font: 700 0.56rem/1 var(--font-mono); }
 .runway-view { width: 100%; max-width: 100%; min-height: 46rem; overflow: auto; }
 .atlas-app--planner .runway-view { min-height: 0; height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
 .runway-notice { padding: 0.9rem 1rem; display: flex; align-items: baseline; gap: 0.75rem; background: color-mix(in srgb, var(--verify) 7%, var(--surface-container-low)); box-shadow: inset 3px 0 0 var(--verify); }

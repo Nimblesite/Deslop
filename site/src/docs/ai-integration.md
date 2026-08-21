@@ -39,7 +39,7 @@ Only `find-similar` belongs in the authoring inner loop. Everything else is a re
 | `session-config` | Inspect the running server's effective config. |
 | `schema-doc` | Authoritative JSON schema for every response. Call **once** per session, not per response. |
 
-Every response is computed against the **live** workspace state. The editor server holds the live report in memory and refreshes it on every change (debounced, with a hard cap); the MCP server reads that live state over the local IPC endpoint on the next tool call. macOS and Linux use `.deslop/cache/deslop.sock`; Windows uses a token-gated TCP loopback endpoint discovered through `.deslop/cache/deslop.port`. There is no batch step. There is no stale cache.
+Every response is computed against the **live** workspace state. The editor server holds the live report in memory and refreshes it on every change (debounced, with a hard cap); the MCP server reads that live state over the local IPC endpoint on the next tool call. macOS and Linux use `.deslop/cache/deslop.sock`; Windows uses a token-gated TCP loopback endpoint discovered through `.deslop/cache/deslop.port`. There is no batch step.
 
 ## Wire `deslop-mcp` into your client — point at the VSIX-bundled binary
 
@@ -108,7 +108,6 @@ The same `"command": "deslop-mcp"` form works in Codex (`~/.codex/config.toml`),
 Three things to know:
 
 - **There is no `deslop mcp` subcommand.** The `deslop` CLI runs one-shot and CI audits only; MCP is served by the **separate `deslop-mcp` binary**.
-- **`deslop-mcp` not found on `$PATH`?** It was added to the brew/scoop packages in v0.13.0. On an older install, run `brew upgrade deslop` (or `scoop update deslop`) — the current release ships `deslop-mcp` and `deslop-lsp` on `$PATH`.
 - **Building from source does not put anything on `$PATH`.** Only `brew` / `scoop` do. Those package managers version the binary lock-step with the release; a `cargo build` does not.
 
 ## The agent loop
@@ -156,7 +155,7 @@ The JetBrains plugin in `clients/jetbrains/` registers an IntelliJ Platform `lsp
 
 ## What Deslop deliberately does not do
 
-- It does not rewrite your code. Deslop finds, ranks, compares, and prevents duplication; extraction is your call. Automated cleanup is a direction, not a shipped capability.
+- It does not rewrite your code. Deslop finds, ranks, compares, and prevents duplication; extraction is your call.
 - It does not fail CI unless you set a threshold yourself.
 - It does not assume "near-miss = bug." Some duplication is intentional (test fixtures, bootstrapping). Deslop reports; you decide.
 - It does not talk to the network unless you explicitly pick a remote embedding model.

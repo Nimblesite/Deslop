@@ -15,6 +15,7 @@ const allowedViews = new Set([
 ]);
 const state = { view: defaultView, search: "", workstream: "", priority: "", label: "" };
 let report;
+let drawerInvoker = null;
 
 function option(value, text) {
   return element("option", { text, attrs: { value } });
@@ -64,6 +65,7 @@ function updateTabs(view) {
     const active = tab.dataset.view === view;
     tab.classList.toggle("is-active", active);
     tab.setAttribute("aria-selected", String(active));
+    tab.tabIndex = active ? 0 : -1;
   }
 }
 
@@ -100,7 +102,12 @@ function relationshipList(issue) {
 
 function relationshipLink(relation) {
   const link = element("a", { attrs: { href: relation.issue.url, target: "_blank", rel: "noopener noreferrer" } });
-  link.append(element("span", { text: `#${relation.issue.number} · ${relation.kind.replace("_", " ")}` }));
+  const labels = {
+    blocks: relation.direction === "out" ? "blocks" : "blocked by",
+    sub_issue: relation.direction === "out" ? "parent of" : "sub-issue of",
+    reference: relation.direction === "out" ? "references" : "referenced by",
+  };
+  link.append(element("span", { text: `#${relation.issue.number} · ${labels[relation.kind] || relation.kind}` }));
   link.append(element("strong", { text: relation.issue.title }));
   return link;
 }
@@ -133,7 +140,7 @@ function drawerContent(issue) {
   return [
     close,
     element("p", { className: "drawer-kicker", text: `Issue #${issue.number} · ${issue.lifecycle === "verify" ? "verify next release" : "open"}` }),
-    element("h2", { text: issue.title }),
+    element("h2", { text: issue.title, attrs: { id: "issue-drawer-title" } }),
     drawerPriority(issue),
     element("p", { className: "drawer-excerpt", text: issue.excerpt || "No description provided." }),
     drawerFacts(issue, streams),
@@ -145,8 +152,10 @@ function drawerContent(issue) {
 }
 
 function openDrawer(issue) {
+  if (!drawer.classList.contains("is-open") && document.activeElement !== document.body) drawerInvoker = document.activeElement;
   clear(drawer);
   drawer.append(...drawerContent(issue));
+  drawer.removeAttribute("inert");
   drawer.classList.add("is-open");
   drawerScrim.classList.add("is-open");
   drawer.setAttribute("aria-hidden", "false");
@@ -157,21 +166,52 @@ function openDrawer(issue) {
 }
 
 function closeDrawer() {
+  if (!drawer.classList.contains("is-open")) return;
   drawer.classList.remove("is-open");
   drawerScrim.classList.remove("is-open");
   drawer.setAttribute("aria-hidden", "true");
+  drawer.setAttribute("inert", "");
   document.body.style.overflow = "";
   root.querySelectorAll(".graph-node").forEach((node) => node.classList.remove("is-selected"));
   updateUrl();
+  if (drawerInvoker?.isConnected && typeof drawerInvoker.focus === "function") drawerInvoker.focus();
+  drawerInvoker = null;
+}
+
+function selectAdjacentTab(event) {
+  const tab = event.target.closest("[data-view]");
+  if (!tab || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  const tabs = [...root.querySelectorAll("[data-view]")];
+  const current = tabs.indexOf(tab);
+  const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+  event.preventDefault();
+  selectView(tabs[next].dataset.view);
+  tabs[next].focus();
+}
+
+function trapDrawerFocus(event) {
+  if (event.key !== "Tab" || !drawer.classList.contains("is-open")) return;
+  const focusable = [...drawer.querySelectorAll('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable.at(-1);
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
 }
 
 function bindEvents() {
-  root.querySelectorAll("[data-view]").forEach((tab) => tab.addEventListener("click", () => selectView(tab.dataset.view)));
+  root.querySelectorAll("[data-view]").forEach((tab) => {
+    tab.addEventListener("click", () => selectView(tab.dataset.view));
+    tab.addEventListener("keydown", selectAdjacentTab);
+  });
   filters.addEventListener("input", () => { filtersFromForm(); render(); });
   filters.addEventListener("change", () => { filtersFromForm(); render(); });
   filters.addEventListener("reset", () => setTimeout(() => { filtersFromForm(); render(); }));
   drawerScrim.addEventListener("click", closeDrawer);
-  document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeDrawer(); });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeDrawer();
+    else trapDrawerFocus(event);
+  });
 }
 
 function restoreUrlState() {

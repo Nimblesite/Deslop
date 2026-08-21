@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("documentation navigation", () => {
-  test("lists the three issue documents only inside the docs menu", async ({ page }) => {
+  test("lists the issue tools only inside the docs menu", async ({ page }) => {
     await page.goto("/docs/vscode-cluster-panel/");
 
     await expect(
@@ -15,14 +15,14 @@ test.describe("documentation navigation", () => {
     await expect(page.locator(".docs-sidebar").getByText("The Manuscript", { exact: true })).toHaveCount(0);
     await expect(page.locator(".docs-sidebar").getByText(/Live duplicate-code analysis/)).toHaveCount(0);
     await expect(docsNav.locator("details.docs-nav-group")).toHaveCount(4);
-    await expect(docsNav.locator("a")).toHaveCount(12);
+    await expect(docsNav.locator("a")).toHaveCount(11);
     await expect(
       docsNav.locator('[data-docs-group="guides"]'),
     ).toHaveAttribute("open", "");
     const trustGroup = docsNav.locator('[data-docs-group="trust"]');
     await expect(trustGroup.locator('a[href="/issues/"]')).toContainText("Interactive graph");
-    await expect(trustGroup.locator('a[href="/issues/statistics/"]')).toContainText("Stats dashboard");
     await expect(trustGroup.locator('a[href="/issues/planner/"]')).toContainText("Issue planner");
+    await expect(trustGroup.locator('a[href="/issues/statistics/"]')).toHaveCount(0);
   });
 
   test("uses clear plus and minus accordion indicators", async ({ page }) => {
@@ -56,7 +56,7 @@ test.describe("documentation navigation", () => {
     await page.goto("/zh/docs/");
 
     const docsNav = page.locator(".docs-sidebar__nav");
-    await expect(docsNav.locator("a")).toHaveCount(12);
+    await expect(docsNav.locator("a")).toHaveCount(11);
     await expect(docsNav.locator("summary")).toHaveText([
       "入门",
       "使用指南",
@@ -64,7 +64,6 @@ test.describe("documentation navigation", () => {
       "原理与透明度",
     ]);
     await expect(docsNav.locator('a[href="/issues/"]')).toContainText("交互式图谱");
-    await expect(docsNav.locator('a[href="/issues/statistics/"]')).toContainText("统计面板");
     await expect(docsNav.locator('a[href="/issues/planner/"]')).toContainText("问题规划器");
     await page.getByRole("button", { name: "Toggle menu" }).click();
     await expect(page.locator("body")).toHaveClass(/is-docs/);
@@ -97,10 +96,10 @@ test.describe("documentation navigation", () => {
   });
 
   test("gives every issue document the same collapsible docs sidebar", async ({ page }) => {
-    for (const path of ["/issues/", "/issues/statistics/", "/issues/planner/"]) {
+    for (const path of ["/issues/", "/issues/planner/"]) {
       await page.goto(path);
       await expect(page.locator("body")).toHaveClass(/is-docs/);
-      await expect(page.locator(".docs-sidebar__nav a")).toHaveCount(12);
+      await expect(page.locator(".docs-sidebar__nav a")).toHaveCount(11);
       await expect(page.getByRole("button", { name: "Collapse documentation sidebar" })).toBeVisible();
     }
 
@@ -112,6 +111,12 @@ test.describe("documentation navigation", () => {
     await expect(page.getByRole("button", { name: "Expand documentation sidebar" })).toHaveAttribute("aria-expanded", "false");
     expect((await workspace.boundingBox()).width).toBeGreaterThan(expandedWidth);
   });
+
+  test("redirects the retired statistics route into the planner tab", async ({ page }) => {
+    await page.goto("/issues/statistics/");
+    await expect(page).toHaveURL(/\/issues\/planner\/\?view=statistics$/);
+    await expect(page.getByRole("tab", { name: "Statistics" })).toHaveAttribute("aria-selected", "true");
+  });
 });
 
 test.describe("issue atlas", () => {
@@ -121,8 +126,17 @@ test.describe("issue atlas", () => {
   });
 
   test("renders the relationship graph without dashboard content", async ({ page }) => {
-    await expect(page.locator(".graph-node")).not.toHaveCount(0);
-    await expect(page.locator(".graph-halo")).toHaveCount(8);
+    const report = await page.evaluate(async () => (await fetch("/assets/data/issues.json")).json());
+    const populatedStreams = report.workstreams.filter((stream) => stream.count > 0);
+    await expect(page.locator(".graph-node")).toHaveCount(report.issues.length);
+    await expect(page.locator(".graph-halo")).toHaveCount(populatedStreams.length);
+    await expect(page.locator(".graph-cluster-label")).toHaveText(populatedStreams.map((stream) => stream.name));
+    await expect(page.locator(".graph-edge")).toHaveCount(report.relationships.length);
+    expect(await page.locator(".graph-edge--blocks").count()).toBeGreaterThan(0);
+    expect(await page.locator(".graph-edge--sub_issue").count()).toBeGreaterThan(0);
+    await expect(page.locator(".graph-edge--blocks").first()).toHaveAttribute("marker-end", "url(#arrow-blocks)");
+    await expect(page.locator(".graph-legend")).toContainText("Blocks →");
+    await expect(page.locator(".graph-legend")).toContainText("Parent → sub-issue");
     await expect(page.locator(".atlas-hero")).toHaveCount(0);
     await expect(page.locator(".atlas-summary")).toHaveCount(0);
     await expect(page.locator(".verification-note")).toHaveCount(0);
@@ -161,6 +175,9 @@ test.describe("issue atlas", () => {
     await expect(viewport).toHaveAttribute("data-zoom", "1");
     await page.getByRole("button", { name: "Zoom in" }).click();
     await expect(viewport).not.toHaveAttribute("data-zoom", "1");
+    const zoomedIn = Number(await viewport.getAttribute("data-zoom"));
+    await page.getByRole("button", { name: "Zoom out" }).click();
+    expect(Number(await viewport.getAttribute("data-zoom"))).toBeLessThan(zoomedIn);
     await page.getByRole("button", { name: "Reset graph position" }).click();
     await expect(viewport).toHaveAttribute("data-zoom", "1.00");
     const transform = await viewport.getAttribute("transform");
@@ -172,31 +189,38 @@ test.describe("issue atlas", () => {
     await page.mouse.move(box.x + box.width * 0.45, box.y + box.height * 0.45);
     await page.mouse.up();
     await expect(viewport).not.toHaveAttribute("transform", transform);
-    await page.locator(".graph-node").first().click();
-    await expect(page.locator("[data-issue-drawer]")).toHaveAttribute("aria-hidden", "false");
-    await expect(page.getByRole("link", { name: /Open the full issue on GitHub/ })).toBeVisible();
-    await page.getByRole("button", { name: "Close issue details" }).click();
-    await expect(page.locator("[data-issue-drawer]")).toHaveAttribute("aria-hidden", "true");
+    const selectedNode = page.locator(".graph-node").first();
+    await selectedNode.click();
+    const drawer = page.locator("[data-issue-drawer]");
+    await expect(drawer).toHaveAttribute("role", "dialog");
+    await expect(drawer).toHaveAttribute("aria-hidden", "false");
+    await expect(drawer).not.toHaveAttribute("inert", "");
+    const issueLink = page.getByRole("link", { name: /Open the full issue on GitHub/ });
+    const closeDrawer = page.getByRole("button", { name: "Close issue details" });
+    await expect(issueLink).toBeVisible();
+    await issueLink.focus();
+    await issueLink.press("Tab");
+    await expect(closeDrawer).toBeFocused();
+    await closeDrawer.click();
+    await expect(drawer).toHaveAttribute("aria-hidden", "true");
+    await expect(drawer).toHaveAttribute("inert", "");
+    await expect(selectedNode).toBeFocused();
   });
 
-  test("glows every fixed-on-main node with its label color", async ({ page }) => {
+  test("keeps fixed-on-main text off nodes and in the hover bubble", async ({ page }) => {
     const fixedIssues = await page.evaluate(async () => {
       const response = await fetch("/assets/data/issues.json");
       const report = await response.json();
       return report.issues.flatMap((issue) => {
         const label = issue.labels.find((candidate) => candidate.name === "fixed-on-main");
-        return label ? [{ number: issue.number, color: `#${label.color}` }] : [];
+        return label ? [{ number: issue.number, color: `#${label.color}`, description: label.description }] : [];
       });
     });
 
+    expect(fixedIssues.length).toBeGreaterThan(0);
     const fixedNodes = page.locator(".graph-node--fixed-on-main");
     await expect(fixedNodes).toHaveCount(fixedIssues.length);
-    await expect(fixedNodes.locator(".graph-node__status")).toHaveCount(
-      fixedIssues.length,
-    );
-    await expect(fixedNodes.locator(".graph-node__status").first()).toHaveText(
-      "fixed-on-main",
-    );
+    await expect(page.locator(".graph-node__status")).toHaveCount(0);
     for (const issue of fixedIssues) {
       const node = page.locator(`.graph-node[data-issue="${issue.number}"]`);
       await expect(node).toHaveClass(/graph-node--fixed-on-main/);
@@ -212,9 +236,14 @@ test.describe("issue atlas", () => {
         .locator(".graph-node__dot")
         .evaluate((element) => getComputedStyle(element).filter),
     ).not.toBe("none");
+    await fixedNodes.first().hover();
+    await expect(page.locator(".graph-tooltip")).toHaveClass(/is-visible/);
+    const fixedChip = page.locator(".graph-tooltip__labels .label-chip").filter({ hasText: "fixed-on-main" });
+    await expect(fixedChip).toBeVisible();
+    await expect(fixedChip).toHaveAttribute("title", fixedIssues[0].description);
   });
 
-  test("shows the assignee avatar on every assigned graph node", async ({ page }) => {
+  test("keeps assignee avatars off nodes and in the hover bubble", async ({ page }) => {
     const assignedIssues = await page.evaluate(async () => {
       const response = await fetch("/assets/data/issues.json");
       const report = await response.json();
@@ -226,17 +255,14 @@ test.describe("issue atlas", () => {
       });
     });
 
-    await expect(page.locator(".graph-node__assignee")).toHaveCount(
-      assignedIssues.length,
-    );
-    for (const issue of assignedIssues) {
-      const node = page.locator(`.graph-node[data-issue="${issue.number}"]`);
-      await expect(node.locator(".graph-node__assignee")).toHaveAttribute(
-        "href",
-        issue.avatar,
-      );
-      await expect(node).toHaveAttribute("aria-label", new RegExp(issue.login));
-    }
+    expect(assignedIssues.length).toBeGreaterThan(0);
+    await expect(page.locator(".graph-node__assignee, .graph-node image")).toHaveCount(0);
+    const assigned = assignedIssues[0];
+    const node = page.locator(`.graph-node[data-issue="${assigned.number}"]`);
+    await expect(node).toHaveAttribute("aria-label", new RegExp(assigned.login));
+    await node.hover();
+    await expect(page.locator(".graph-tooltip__assignee")).toContainText(`@${assigned.login}`);
+    await expect(page.locator(".graph-tooltip__assignee img")).toHaveAttribute("src", assigned.avatar);
   });
 
   test("filters fixed-on-main into the release verification queue", async ({ page }) => {
@@ -285,33 +311,6 @@ test.describe("issue atlas", () => {
   });
 });
 
-test.describe("issue statistics document", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto("/issues/statistics/");
-    await expect(page.locator("[data-summary=open]")).not.toHaveText("—");
-  });
-
-  test("contains the complete dashboard and no planner", async ({ page }) => {
-    await expect(page.getByRole("heading", { name: "Issue statistics" })).toBeVisible();
-    await expect(page.getByText("“fixed-on-main” is a verification state, not done.")).toBeVisible();
-    await expect(page.locator(".summary-card")).toHaveCount(5);
-    await expect(page.locator(".docs-sidebar")).toBeVisible();
-    await expect(page.locator(".network-svg")).toHaveCount(0);
-    await expect(page.locator(".view-tabs")).toHaveCount(0);
-    await expect(page.locator("[data-filters]")).toHaveCount(0);
-    await expect(page.locator("[data-generated-date]")).toHaveCount(0);
-  });
-
-  test("remains width-safe on a phone", async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.reload();
-    await expect(page.getByRole("heading", { name: "Issue statistics" })).toBeVisible();
-    expect(await page.evaluate(() => document.body.scrollWidth)).toBeLessThanOrEqual(390);
-    await page.getByRole("button", { name: "Toggle menu" }).click();
-    await expect(page.locator(".docs-sidebar")).toHaveClass(/open/);
-  });
-});
-
 test.describe("issue planner document", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/issues/planner/");
@@ -337,23 +336,75 @@ test.describe("issue planner document", () => {
     expect(panelBox.width).toBeCloseTo(stageBox.width, 0);
     expect(panelBox.height).toBeCloseTo(stageBox.height, 0);
     expect(tabsBox.width).toBeLessThan(workspaceBox.width * 0.6);
-    await expect(page.locator(".view-tab")).toHaveText(["Priority queue", "Runway", "All issues"]);
+    await expect(page.locator(".view-tab")).toHaveText(["Priority", "Queue", "Statistics", "Runway"]);
+    expect(await page.locator(".view-tab").evaluateAll((tabs) => tabs.map((tab) => tab.getAttribute("aria-controls")))).toEqual([
+      "panel-board", "panel-queue", "panel-statistics", "panel-runway",
+    ]);
     await expect(page.locator("[data-view-panel]")).toHaveCount(1);
-    await expect(page.getByRole("tab", { name: "Priority queue" })).toHaveAttribute("aria-selected", "true");
-    await expect(page.locator("[data-view-panel=board]")).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Priority", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("[data-view-panel=board]")).toHaveAttribute("aria-labelledby", "tab-board");
     await expect(page).not.toHaveURL(/view=/);
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(900);
   });
 
-  test("switches between runway, priority, and queue views", async ({ page }) => {
+  test("supports keyboard navigation across tabs in visual order", async ({ page }) => {
+    const priority = page.getByRole("tab", { name: "Priority", exact: true });
+    await priority.focus();
+    await priority.press("ArrowRight");
+    await expect(page.getByRole("tab", { name: "Queue", exact: true })).toBeFocused();
+    await expect(page.locator("[data-view-panel=queue]")).toBeVisible();
+    await page.getByRole("tab", { name: "Queue", exact: true }).press("End");
+    await expect(page.getByRole("tab", { name: "Runway" })).toBeFocused();
+    await expect(page.locator("[data-view-panel=runway]")).toBeVisible();
+    await page.getByRole("tab", { name: "Runway" }).press("Home");
+    await expect(priority).toBeFocused();
+    await expect(page.locator("[data-view-panel=board]")).toBeVisible();
+  });
+
+  test("switches between priority, queue, statistics, and runway", async ({ page }) => {
     await expect(page.locator("[data-view-panel=board] .board-lane").first()).toBeVisible();
-    await page.getByRole("tab", { name: "Runway" }).click();
-    await expect(page.locator("[data-view-panel=runway] .runway-bar").first()).toBeVisible();
-    await expect(page.locator("[data-view-panel]")).toHaveCount(1);
-    await page.getByRole("tab", { name: "All issues" }).click();
+    await page.getByRole("tab", { name: "Queue", exact: true }).click();
     await expect(page.locator("[data-view-panel=queue] tbody tr").first()).toBeVisible();
     await expect(page.locator("[data-view-panel]")).toHaveCount(1);
     await expect(page).toHaveURL(/view=queue/);
+    await page.getByRole("tab", { name: "Statistics" }).click();
+    await expect(page.locator("[data-view-panel=statistics]")).toBeVisible();
+    await page.getByRole("tab", { name: "Runway" }).click();
+    await expect(page.locator("[data-view-panel=runway] .runway-bar").first()).toBeVisible();
+    await expect(page.locator("[data-view-panel]")).toHaveCount(1);
+  });
+
+  test("renders GitHub label colors with readable text", async ({ page }) => {
+    const chips = page.locator(".priority-board .label-chip");
+    expect(await chips.count()).toBeGreaterThan(0);
+    const contrasts = await chips.evaluateAll((elements) => elements.map((element) => {
+      const luminance = (color) => {
+        const values = color.match(/[\d.]+/g).slice(0, 3).map((value) => Number(value) / 255);
+        const linear = values.map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+      };
+      const style = getComputedStyle(element);
+      const foreground = luminance(style.color);
+      const background = luminance(style.backgroundColor);
+      return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+    }));
+    expect(Math.min(...contrasts)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  test("shows compact filter-aware statistics inside the planner", async ({ page }) => {
+    const report = await page.evaluate(async () => (await fetch("/assets/data/issues.json")).json());
+    await page.getByRole("tab", { name: "Statistics" }).click();
+    await expect(page.getByRole("heading", { name: "Issue statistics" })).toBeVisible();
+    await expect(page.locator(".summary-card")).toHaveCount(5);
+    await expect(page.locator("[data-summary=open]")).toHaveText(String(report.summary.open));
+    await expect(page.getByText("“fixed-on-main” is a verification state, not done.")).toBeVisible();
+    await expect(page.locator(".statistics-source")).toContainText("No AI enrichment");
+    for (const card of await page.locator(".summary-card").all()) {
+      expect((await card.boundingBox()).height).toBeLessThan(200);
+    }
+    await page.selectOption('select[name="label"]', "fixed-on-main");
+    await expect(page.locator("[data-summary=open]")).toHaveText(String(report.summary.verify));
+    await expect(page.locator("[data-summary=verify]")).toHaveText(String(report.summary.verify));
   });
 
   test("labels the runway as indicative and shows no schedule dates", async ({ page }) => {
@@ -369,6 +420,7 @@ test.describe("issue planner document", () => {
     expect(runwayText).not.toMatch(
       /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\b/,
     );
+    expect(runwayText).not.toMatch(/\b20\d{2}-\d{2}-\d{2}\b/);
 
     await page.locator("[data-view-panel=runway] .runway-bar").first().click();
     await expect(page.locator("[data-issue-drawer]")).toHaveClass(/is-open/);
@@ -377,14 +429,14 @@ test.describe("issue planner document", () => {
     ).toHaveCount(0);
     await page.getByRole("button", { name: "Close issue details" }).click();
 
-    await page.getByRole("tab", { name: "All issues" }).click();
+    await page.getByRole("tab", { name: "Queue", exact: true }).click();
     await expect(page.getByRole("columnheader", { name: "Updated" })).toHaveCount(0);
   });
 
   test("keeps every planner tab usable on a phone", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload();
-    for (const view of ["Priority queue", "Runway", "All issues"]) {
+    for (const view of ["Priority", "Queue", "Statistics", "Runway"]) {
       await page.getByRole("tab", { name: view }).click();
       await expect(page.locator("[data-view-panel]")).toHaveCount(1);
       const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
