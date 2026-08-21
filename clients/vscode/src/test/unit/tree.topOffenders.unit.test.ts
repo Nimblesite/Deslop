@@ -32,7 +32,52 @@ import {
 } from "./tree.helpers";
 import { CATEGORY_STYLE } from "../../tree/nodes";
 
-function reportOccurrence(occurrencePath: string, startByte = 0, endByte = 20): ReportOccurrence {
+const DEFAULT_OCCURRENCE_END_BYTE = 20;
+const HIGHEST_CLUSTER_WEIGHT = 100;
+const HIGH_CLUSTER_WEIGHT = 80;
+const MEDIUM_CLUSTER_WEIGHT = 60;
+const TIED_CLUSTER_WEIGHT = 50;
+const FILE_GROUPING_MODE = "file";
+const IDENTICAL_BUCKET = "identical";
+const MISSING_LABEL = "<missing>";
+const MIXED_FILE_PATH = "/repo/Mixed.cs";
+const REPO_A_PATH = "/repo/A.cs";
+const REPO_B_PATH = "/repo/B.cs";
+const ALPHA_FILE_PATH = "/repo/src/a/Alpha.cs";
+const SORT_BY_SETTING = "topOffenders.sortBy";
+const PATH_SORT_MODE = "path";
+const ANALYSING_PHASE = "analysing";
+const FIRST_CLUSTER_ID = "c1";
+const SECOND_CLUSTER_ID = "c2";
+const BETA_FILE_PATH = "/repo/src/b/Beta.cs";
+const FIRST_FIXTURE_PATH = "/f1";
+const CLUSTER_ROOT_REQUIRED = "cluster root must exist";
+const CANONICAL_OCCURRENCE_CONTEXT = "deslop.occurrenceCanonical";
+const HEAVY_CLUSTER_ID = "heavy";
+const HEAVY_FILE_PATH = "/repo/z.cs";
+const LIGHT_CLUSTER_ID = "light";
+const LIGHT_FILE_PATH = "/repo/a.cs";
+const TEST_TWO = 2;
+const TEST_THREE = 3;
+const THIRD_ITEM_INDEX = TEST_TWO;
+const FOURTH_ITEM_INDEX = TEST_THREE;
+const PAIR_COUNT = TEST_TWO;
+const FILE_ROOT_COUNT = TEST_THREE;
+const ZERO_BASED_FOURTH_LINE = TEST_THREE;
+const SECOND_GENERATION = TEST_TWO;
+const CACHE_HIT_COUNT = TEST_TWO;
+const EXPECTED_TREE_REFRESH_COUNT = TEST_TWO;
+const MIN_VISIBLE_NODE_COUNT = TEST_TWO;
+const TEST_TEN = 10;
+const LOW_CLUSTER_WEIGHT = TEST_TEN;
+const DIRTY_OCCURRENCE_START_BYTE = TEST_TEN;
+const DIRTY_FILE_PATH = "/repo/Dirty.cs";
+
+function reportOccurrence(
+  occurrencePath: string,
+  startByte = 0,
+  endByte = DEFAULT_OCCURRENCE_END_BYTE,
+): ReportOccurrence {
   return { path: occurrencePath, start_byte: startByte, end_byte: endByte, hidden: false };
 }
 
@@ -66,7 +111,7 @@ suite("TopOffendersProvider", () => {
   // clean verdict must wait until the server confirms it is idle.
   test("never claims 'No duplication detected' before the scan completes", () => {
     const store = new ReportStore();
-    store.setLifecycle({ kind: "analysing" });
+    store.setLifecycle({ kind: ANALYSING_PHASE });
     store.setSnapshot(report([]), 0);
     const provider = new TopOffendersProvider(store, new StatusTicker());
     const [only] = provider.getChildren();
@@ -96,10 +141,10 @@ suite("TopOffendersProvider", () => {
   test("leads with an 'Analysing changes…' badge during incremental re-analysis", () => {
     const store = new ReportStore();
     store.setSnapshot(
-      report([cluster("c1", 100, "/repo/A.cs"), cluster("c2", 80, "/repo/B.cs")]),
+      report([cluster(FIRST_CLUSTER_ID, HIGHEST_CLUSTER_WEIGHT, REPO_A_PATH), cluster(SECOND_CLUSTER_ID, HIGH_CLUSTER_WEIGHT, REPO_B_PATH)]),
       0,
     );
-    store.setLifecycle({ kind: "analysing" });
+    store.setLifecycle({ kind: ANALYSING_PHASE });
     const provider = new TopOffendersProvider(store, new StatusTicker());
     const nodes = provider.getChildren();
     const [first] = nodes;
@@ -124,9 +169,9 @@ suite("TopOffendersProvider", () => {
     const store = new ReportStore();
     store.setSnapshot(
       report([
-        cluster("1111aaaabbbbcccc", 100, "/repo/src/b/Beta.cs"),
-        cluster("2222aaaabbbbcccc", 80, "/repo/src/a/Alpha.cs"),
-        cluster("3333aaaabbbbcccc", 60, "/repo/src/a/Alpha.cs"),
+        cluster("1111aaaabbbbcccc", HIGHEST_CLUSTER_WEIGHT, BETA_FILE_PATH),
+        cluster("2222aaaabbbbcccc", HIGH_CLUSTER_WEIGHT, ALPHA_FILE_PATH),
+        cluster("3333aaaabbbbcccc", MEDIUM_CLUSTER_WEIGHT, ALPHA_FILE_PATH),
         cluster("4444aaaabbbbcccc", 40, "/repo/src/c/Gamma.cs"),
       ]),
       0,
@@ -138,18 +183,18 @@ suite("TopOffendersProvider", () => {
     const descriptions = nodes.map((node) => String(node.description ?? ""));
 
     assert.equal(nodes.length, 4, "one top-level row must render per cluster");
-    assert.ok(labels[0]?.startsWith("1111aaa "), `worst row leads with its slug, got: ${labels[0] ?? "<missing>"}`);
-    assert.ok(labels[1]?.startsWith("2222aaa "), `row 2 leads with its slug, got: ${labels[1] ?? "<missing>"}`);
-    assert.ok(labels[2]?.startsWith("3333aaa "), `row 3 leads with its slug, got: ${labels[2] ?? "<missing>"}`);
-    assert.ok(labels[3]?.startsWith("4444aaa "), `row 4 leads with its slug, got: ${labels[3] ?? "<missing>"}`);
+    assert.ok(labels[0]?.startsWith("1111aaa "), `worst row leads with its slug, got: ${labels[0] ?? MISSING_LABEL}`);
+    assert.ok(labels[1]?.startsWith("2222aaa "), `row 2 leads with its slug, got: ${labels[1] ?? MISSING_LABEL}`);
+    assert.ok(labels[THIRD_ITEM_INDEX]?.startsWith("3333aaa "), `row 3 leads with its slug, got: ${labels[THIRD_ITEM_INDEX] ?? MISSING_LABEL}`);
+    assert.ok(labels[FOURTH_ITEM_INDEX]?.startsWith("4444aaa "), `row 4 leads with its slug, got: ${labels[FOURTH_ITEM_INDEX] ?? MISSING_LABEL}`);
     assert.match(labels[0] ?? "", /Beta\.cs/, "row label must show the file");
     assert.match(labels[1] ?? "", /Alpha\.cs/);
-    assert.match(labels[2] ?? "", /Alpha\.cs/);
-    assert.match(labels[3] ?? "", /Gamma\.cs/);
+    assert.match(labels[THIRD_ITEM_INDEX] ?? "", /Alpha\.cs/);
+    assert.match(labels[FOURTH_ITEM_INDEX] ?? "", /Gamma\.cs/);
     assert.match(descriptions[0] ?? "", /\brank\s+#1\b/, "row 1 carries rank #1 in its description");
     assert.match(descriptions[1] ?? "", /\brank\s+#2\b/, "row 2 carries rank #2 in its description");
-    assert.match(descriptions[2] ?? "", /\brank\s+#3\b/, "row 3 carries rank #3 in its description");
-    assert.match(descriptions[3] ?? "", /\brank\s+#4\b/, "row 4 carries rank #4 in its description");
+    assert.match(descriptions[THIRD_ITEM_INDEX] ?? "", /\brank\s+#3\b/, "row 3 carries rank #3 in its description");
+    assert.match(descriptions[FOURTH_ITEM_INDEX] ?? "", /\brank\s+#4\b/, "row 4 carries rank #4 in its description");
     assert.ok(
       descriptions.every((d) => /\b\d+ copies\b/.test(d)),
       `cluster descriptions must keep the copy count; got: ${JSON.stringify(descriptions)}`,
@@ -162,7 +207,7 @@ suite("TopOffendersProvider", () => {
       ["1111aaaabbbbcccc"],
       "command argument keeps the full 16-hex id; only the display is shortened",
     );
-    assert.equal(provider.getChildren(first).length, 2);
+    assert.equal(provider.getChildren(first).length, PAIR_COUNT);
   });
 
   test("cluster row label leads with the stable slug, not the volatile #N rank", () => {
@@ -178,8 +223,8 @@ suite("TopOffendersProvider", () => {
     const clusterId = "1802186da488862f";
     store.setSnapshot(
       report([
-        cluster(clusterId, 100, "/repo/src/Worst.cs"),
-        cluster("c0ffee1234567890", 80, "/repo/src/Next.cs"),
+        cluster(clusterId, HIGHEST_CLUSTER_WEIGHT, "/repo/src/Worst.cs"),
+        cluster("c0ffee1234567890", HIGH_CLUSTER_WEIGHT, "/repo/src/Next.cs"),
       ]),
       0,
     );
@@ -284,25 +329,25 @@ suite("TopOffendersProvider", () => {
     const store = new ReportStore();
     store.setSnapshot(
       report([
-        cluster("rank-1-beta", 100, "/repo/src/b/Beta.cs"),
-        cluster("rank-2-alpha", 80, "/repo/src/a/Alpha.cs"),
-        cluster("rank-3-alpha", 60, "/repo/src/a/Alpha.cs"),
+        cluster("rank-1-beta", HIGHEST_CLUSTER_WEIGHT, BETA_FILE_PATH),
+        cluster("rank-2-alpha", HIGH_CLUSTER_WEIGHT, ALPHA_FILE_PATH),
+        cluster("rank-3-alpha", MEDIUM_CLUSTER_WEIGHT, ALPHA_FILE_PATH),
         cluster("rank-4-gamma", 40, "/repo/src/c/Gamma.cs"),
       ]),
       0,
     );
     const provider = new TopOffendersProvider(store, new StatusTicker());
 
-    await withGroupBy("file", () => {
+    await withGroupBy(FILE_GROUPING_MODE, () => {
       const nodes = provider.getChildren();
-      assert.equal(nodes.length, 3, "three distinct files should produce three roots");
+      assert.equal(nodes.length, FILE_ROOT_COUNT, "three distinct files should produce three roots");
       const roots = nodes.filter((n): n is FileNode => n instanceof FileNode);
-      assert.equal(roots.length, 3, "every root in file mode must be a FileNode");
+      assert.equal(roots.length, FILE_ROOT_COUNT, "every root in file mode must be a FileNode");
       const filenames = roots.map((root) => labelText(root));
       assert.match(filenames[0] ?? "", /Beta\.cs/, "Beta's max weight 100 wins");
       // Alpha aggregates 80+60=140 (sum) but max 80 < Beta's 100.
       assert.match(filenames[1] ?? "", /Alpha\.cs/);
-      assert.match(filenames[2] ?? "", /Gamma\.cs/);
+      assert.match(filenames[THIRD_ITEM_INDEX] ?? "", /Gamma\.cs/);
       // Cluster count noun reflects multiplicity.
       assert.match(filenames[0] ?? "", /1 cluster/);
       assert.match(filenames[1] ?? "", /2 clusters/);
@@ -316,20 +361,20 @@ suite("TopOffendersProvider", () => {
     const store = new ReportStore();
     store.setSnapshot(
       report([
-        cluster("a-only", 50, "/repo/AlphaOnly.cs"),
-        cluster("b-1", 50, "/repo/BetaPair.cs"),
-        cluster("b-2", 50, "/repo/BetaPair.cs"),
-        cluster("c-only", 50, "/repo/CharlieOnly.cs"),
+        cluster("a-only", TIED_CLUSTER_WEIGHT, "/repo/AlphaOnly.cs"),
+        cluster("b-1", TIED_CLUSTER_WEIGHT, "/repo/BetaPair.cs"),
+        cluster("b-2", TIED_CLUSTER_WEIGHT, "/repo/BetaPair.cs"),
+        cluster("c-only", TIED_CLUSTER_WEIGHT, "/repo/CharlieOnly.cs"),
       ]),
       0,
     );
     const provider = new TopOffendersProvider(store, new StatusTicker());
 
-    await withGroupBy("file", () => {
+    await withGroupBy(FILE_GROUPING_MODE, () => {
       const labels = provider.getChildren().map(labelText);
       assert.match(labels[0] ?? "", /BetaPair\.cs/, "higher sum wins the max-tie");
       assert.match(labels[1] ?? "", /AlphaOnly\.cs/, "Alpha precedes Charlie by localeCompare on a sum tie");
-      assert.match(labels[2] ?? "", /CharlieOnly\.cs/);
+      assert.match(labels[THIRD_ITEM_INDEX] ?? "", /CharlieOnly\.cs/);
     });
   });
 
@@ -339,9 +384,9 @@ suite("TopOffendersProvider", () => {
     const store = new ReportStore();
     store.setSnapshot(
       report([
-        cluster("worst", 100, "/repo/A.cs"),
-        cluster("middle", 80, "/repo/B.cs"),
-        cluster("least", 60, "/repo/A.cs"),
+        cluster("worst", HIGHEST_CLUSTER_WEIGHT, REPO_A_PATH),
+        cluster("middle", HIGH_CLUSTER_WEIGHT, REPO_B_PATH),
+        cluster("least", MEDIUM_CLUSTER_WEIGHT, REPO_A_PATH),
       ]),
       0,
     );
@@ -354,7 +399,7 @@ suite("TopOffendersProvider", () => {
       "third row in cluster mode is rank #3 (least)",
     );
 
-    await withGroupBy("file", () => {
+    await withGroupBy(FILE_GROUPING_MODE, () => {
       const fileRoots = provider.getChildren();
       // A.cs (max 100) sits before B.cs (max 80). Inside A.cs there's
       // one bucket group with two clusters: ranks #1 and #3.
@@ -379,7 +424,7 @@ suite("TopOffendersProvider", () => {
   test("an unknown topOffenders.groupBy value falls back to cluster mode", async () => {
     // [VSIX-TOP-OFFENDERS-GROUPING] Defensive read; never panics.
     const store = new ReportStore();
-    store.setSnapshot(report([cluster("c", 100, "/repo/Mixed.cs")]), 0);
+    store.setSnapshot(report([cluster("c", HIGHEST_CLUSTER_WEIGHT, MIXED_FILE_PATH)]), 0);
     const provider = new TopOffendersProvider(store, new StatusTicker());
 
     const cfg = vscode.workspace.getConfiguration("deslop");
@@ -403,7 +448,7 @@ suite("TopOffendersProvider", () => {
     } finally {
       await cfg.update(
         "topOffenders.groupBy",
-        previous === "file" ? "file" : undefined,
+        previous === FILE_GROUPING_MODE ? FILE_GROUPING_MODE : undefined,
         vscode.ConfigurationTarget.Global,
       );
     }
@@ -414,19 +459,19 @@ suite("TopOffendersProvider", () => {
     const store = new ReportStore();
     store.setSnapshot(
       report([
-        cluster("c1", 100, "/repo/Mixed.cs", 0, 20, "identical"),
-        cluster("c2", 80, "/repo/Mixed.cs", 0, 20, "nearly_identical"),
-        cluster("c3", 60, "/repo/Mixed.cs", 0, 20, "identical"),
+        cluster(FIRST_CLUSTER_ID, HIGHEST_CLUSTER_WEIGHT, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, IDENTICAL_BUCKET),
+        cluster(SECOND_CLUSTER_ID, HIGH_CLUSTER_WEIGHT, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "nearly_identical"),
+        cluster("c3", MEDIUM_CLUSTER_WEIGHT, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, IDENTICAL_BUCKET),
       ]),
       0,
     );
     const provider = new TopOffendersProvider(store, new StatusTicker());
 
-    await withGroupBy("file", () => {
+    await withGroupBy(FILE_GROUPING_MODE, () => {
       const [fileRoot] = provider.getChildren();
       assert.ok(fileRoot instanceof FileNode, "single root must be a FileNode");
       const groups = provider.getChildren(fileRoot);
-      assert.equal(groups.length, 2, "only Identical and Nearly identical groups present");
+      assert.equal(groups.length, PAIR_COUNT, "only Identical and Nearly identical groups present");
       const groupLabels = groups.map(labelText);
       assert.match(groupLabels[0] ?? "", /Identical code \(2\)/, "Identical group has 2 clusters and the higher max weight (100)");
       assert.match(groupLabels[1] ?? "", /Nearly identical code \(1\)/);
@@ -438,20 +483,20 @@ suite("TopOffendersProvider", () => {
     const store = new ReportStore();
     store.setSnapshot(
       report([
-        cluster("hi", 100, "/repo/Mixed.cs", 0, 20, "identical"),
-        cluster("lo", 60, "/repo/Mixed.cs", 0, 20, "identical"),
+        cluster("hi", HIGHEST_CLUSTER_WEIGHT, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, IDENTICAL_BUCKET),
+        cluster("lo", MEDIUM_CLUSTER_WEIGHT, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, IDENTICAL_BUCKET),
       ]),
       0,
     );
     const provider = new TopOffendersProvider(store, new StatusTicker());
 
-    await withGroupBy("file", () => {
+    await withGroupBy(FILE_GROUPING_MODE, () => {
       const [fileRoot] = provider.getChildren();
       assert.ok(fileRoot, "file root must exist");
       const [bucketGroup] = provider.getChildren(fileRoot);
       assert.ok(bucketGroup, "bucket group must exist");
       const clusterNodes = provider.getChildren(bucketGroup);
-      assert.equal(clusterNodes.length, 2);
+      assert.equal(clusterNodes.length, PAIR_COUNT);
       const labels = clusterNodes.map(labelText);
       const descriptions = clusterNodes.map((n) => String(n.description ?? ""));
       assert.match(descriptions[0] ?? "", /\brank\s+#1\b/, "weight-100 cluster comes first and carries rank #1 in its description");
@@ -465,7 +510,7 @@ suite("TopOffendersProvider", () => {
     // [VSIX-TOP-OFFENDERS-FILE-MODE] Tooltip is mode-invariant.
     const store = new ReportStore();
     store.setSnapshot(
-      report([cluster("only", 100, "/repo/src/Mixed.cs", 0, 20, "identical")]),
+      report([cluster("only", HIGHEST_CLUSTER_WEIGHT, "/repo/src/Mixed.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, IDENTICAL_BUCKET)]),
       0,
     );
     const provider = new TopOffendersProvider(store, new StatusTicker());
@@ -474,7 +519,7 @@ suite("TopOffendersProvider", () => {
     assert.ok(clusterMode);
     assert.match(tooltipText(clusterMode), /\/repo\/src\/Mixed\.cs/);
 
-    await withGroupBy("file", () => {
+    await withGroupBy(FILE_GROUPING_MODE, () => {
       const [fileRoot] = provider.getChildren();
       assert.ok(fileRoot);
       const [bucketGroup] = provider.getChildren(fileRoot);
@@ -496,7 +541,7 @@ suite("TopOffendersProvider", () => {
     assert.ok(clusterRoot);
     const clusterModeOccurrences = provider.getChildren(clusterRoot);
 
-    await withGroupBy("file", () => {
+    await withGroupBy(FILE_GROUPING_MODE, () => {
       const [fileRoot] = provider.getChildren();
       assert.ok(fileRoot);
       const [bucketGroup] = provider.getChildren(fileRoot);
@@ -524,7 +569,7 @@ suite("TopOffendersProvider", () => {
     // [VSIX-TOP-OFFENDERS-GROUPING] The provider exposes a refresh()
     // hook the activation bridge calls when the setting changes.
     const store = new ReportStore();
-    store.setSnapshot(report([cluster("c", 100, "/repo/Mixed.cs")]), 0);
+    store.setSnapshot(report([cluster("c", HIGHEST_CLUSTER_WEIGHT, MIXED_FILE_PATH)]), 0);
     const provider = new TopOffendersProvider(store, new StatusTicker());
     let fires = 0;
     const sub = provider.onDidChangeTreeData(() => {
@@ -543,8 +588,8 @@ suite("TopOffendersProvider", () => {
     const store = new ReportStore();
     store.setSnapshot(
       report([
-        cluster("exact", 100, "/repo/src/a/Exact.cs", 0, 20, "identical"),
-        cluster("near", 90, "/repo/src/b/Near.cs", 0, 20, "nearly_identical"),
+        cluster("exact", HIGHEST_CLUSTER_WEIGHT, "/repo/src/a/Exact.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, IDENTICAL_BUCKET),
+        cluster("near", 90, "/repo/src/b/Near.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "nearly_identical"),
       ]),
       0,
     );
@@ -578,7 +623,7 @@ suite("TopOffendersProvider", () => {
     // [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Identical = error level, must not use green.
     const store = new ReportStore();
     store.setSnapshot(
-      report([cluster("clone", 100, "/repo/src/Clone.cs", 0, 20, "identical")]),
+      report([cluster("clone", HIGHEST_CLUSTER_WEIGHT, "/repo/src/Clone.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, IDENTICAL_BUCKET)]),
       0,
     );
     const provider = new TopOffendersProvider(store, new StatusTicker());
@@ -604,7 +649,7 @@ suite("TopOffendersProvider", () => {
 
   test("expanding a cluster node yields OccurrenceNode children", () => {
     const store = new ReportStore();
-    const c = cluster("a", 10, "/f1");
+    const c = cluster("a", LOW_CLUSTER_WEIGHT, "/f1");
     store.setSnapshot(report([c]), 0);
     const provider = new TopOffendersProvider(store, new StatusTicker());
     const roots = provider.getChildren();
@@ -614,10 +659,10 @@ suite("TopOffendersProvider", () => {
 
   test("occurrence node tooltip shows parent cluster rank, category, and position (#47)", () => {
     const store = new ReportStore();
-    store.setSnapshot(report([cluster("a", 10, "/f1")]), 0);
+    store.setSnapshot(report([cluster("a", LOW_CLUSTER_WEIGHT, FIRST_FIXTURE_PATH)]), 0);
     const provider = new TopOffendersProvider(store, new StatusTicker());
     const [root] = provider.getChildren();
-    assert.ok(root, "cluster root must exist");
+    assert.ok(root, CLUSTER_ROOT_REQUIRED);
     const [first, second] = provider.getChildren(root);
     assert.ok(first, "first occurrence node must exist");
     assert.ok(second, "second occurrence node must exist");
@@ -635,7 +680,7 @@ suite("TopOffendersProvider", () => {
       reportOccurrence("/single"),
     ]);
     store.setSnapshot(
-      report([cluster("multi", 10, "/f1"), singleOccurrence]),
+      report([cluster("multi", LOW_CLUSTER_WEIGHT, FIRST_FIXTURE_PATH), singleOccurrence]),
       0,
     );
     const provider = new TopOffendersProvider(store, new StatusTicker());
@@ -648,7 +693,7 @@ suite("TopOffendersProvider", () => {
     const [canonical, comparable] = provider.getChildren(multi);
     assert.ok(canonical, "canonical occurrence row must exist");
     assert.ok(comparable, "comparable occurrence row must exist");
-    assert.equal(canonical.contextValue, "deslop.occurrenceCanonical");
+    assert.equal(canonical.contextValue, CANONICAL_OCCURRENCE_CONTEXT);
     assert.equal(comparable.contextValue, "deslop.occurrence");
   });
 
@@ -664,10 +709,10 @@ suite("TopOffendersProvider", () => {
 
     try {
       const store = new ReportStore();
-      store.setSnapshot(report([cluster("issue-8", 10, occurrencePath, startByte, endByte)]), 0);
+      store.setSnapshot(report([cluster("issue-8", LOW_CLUSTER_WEIGHT, occurrencePath, startByte, endByte)]), 0);
       const provider = new TopOffendersProvider(store, new StatusTicker());
       const [root] = provider.getChildren();
-      assert.ok(root, "cluster root must exist");
+      assert.ok(root, CLUSTER_ROOT_REQUIRED);
 
       const [occurrence] = provider.getChildren(root);
       assert.ok(occurrence, "occurrence child must exist");
@@ -689,7 +734,7 @@ suite("TopOffendersProvider", () => {
       const editor = vscode.window.activeTextEditor;
       assert.ok(editor, "tapping the occurrence must open an editor");
       assert.equal(editor.document.uri.fsPath, occurrencePath);
-      assert.equal(editor.selection.start.line, 3, "cursor should move to line 4");
+      assert.equal(editor.selection.start.line, ZERO_BASED_FOURTH_LINE, "cursor should move to line 4");
       assert.equal(editor.selection.start.character, 4, "cursor should move to column 5");
       assert.equal(editor.selection.end.character, 13, "selection should cover the occurrence");
 
@@ -717,7 +762,7 @@ suite("TopOffendersProvider", () => {
 
   test("getTreeItem returns the node verbatim", () => {
     const store = new ReportStore();
-    store.setSnapshot(report([cluster("a", 10, "/f1")]), 0);
+    store.setSnapshot(report([cluster("a", LOW_CLUSTER_WEIGHT, FIRST_FIXTURE_PATH)]), 0);
     const provider = new TopOffendersProvider(store, new StatusTicker());
     const [root] = provider.getChildren();
     assert.ok(root, "root node must exist");
@@ -744,16 +789,16 @@ suite("TopOffendersProvider", () => {
 
       store.applyDelta({
         from_generation: 1,
-        to_generation: 2,
-        clusters_added: [cluster("fresh", 50, "/fresh.cs")],
+        to_generation: SECOND_GENERATION,
+        clusters_added: [cluster("fresh", TIED_CLUSTER_WEIGHT, "/fresh.cs")],
         clusters_removed: ["stale"],
         clusters_updated: [],
         metrics: metrics(),
-        cache_stats: { hits: 2, misses: 0 },
+        cache_stats: { hits: CACHE_HIT_COUNT, misses: 0 },
         tool_version: "v2",
       });
 
-      assert.equal(treeRefreshes, 2, "delta must refresh the tree");
+      assert.equal(treeRefreshes, EXPECTED_TREE_REFRESH_COUNT, "delta must refresh the tree");
       assert.match(
         String(provider.getChildren()[0]?.description ?? ""),
         /\brank\s+#1\b.*\b\d+ copies\b/,
@@ -770,9 +815,9 @@ suite("TopOffendersProvider", () => {
     const store = new ReportStore();
     store.setSnapshot(
       report([
-        cluster("fixed", 100, "/repo/Fixed.cs"),
+        cluster("fixed", HIGHEST_CLUSTER_WEIGHT, "/repo/Fixed.cs"),
         cluster("next", 95, "/repo/Next.cs"),
-        cluster("still", 80, "/repo/Still.cs"),
+        cluster("still", HIGH_CLUSTER_WEIGHT, "/repo/Still.cs"),
       ]),
       1,
     );
@@ -780,12 +825,12 @@ suite("TopOffendersProvider", () => {
 
     store.applyDelta({
       from_generation: 1,
-      to_generation: 2,
+      to_generation: SECOND_GENERATION,
       clusters_added: [],
       clusters_removed: ["fixed"],
       clusters_updated: [],
       metrics: metrics(),
-      cache_stats: { hits: 2, misses: 0 },
+      cache_stats: { hits: CACHE_HIT_COUNT, misses: 0 },
       tool_version: "v2",
     });
 
@@ -793,7 +838,7 @@ suite("TopOffendersProvider", () => {
     const labels = nodes.map(labelText);
     const joined = labels.join("\n");
 
-    assert.equal(nodes.length, 2, "top offenders must only show current report clusters");
+    assert.equal(nodes.length, PAIR_COUNT, "top offenders must only show current report clusters");
     assert.match(labels[0] ?? "", /Next\.cs/, "highest remaining offender must be first");
     assert.ok(labels.some((label) => /Next\.cs/.test(label)), "next offender must remain visible");
     assert.ok(labels.some((label) => /Still\.cs/.test(label)), "remaining offender must remain visible");
@@ -805,20 +850,20 @@ suite("TopOffendersProvider", () => {
 
   test("dirty file edits prune stale offsets from top offenders immediately (#78)", () => {
     const dirtyOnly = withOccurrences(
-      cluster("dirty-only", 100, "/repo/Dirty.cs"),
-      [reportOccurrence("/repo/Dirty.cs", 10, 20)],
+      cluster("dirty-only", 100, DIRTY_FILE_PATH),
+      [reportOccurrence(DIRTY_FILE_PATH, DIRTY_OCCURRENCE_START_BYTE, 20)],
     );
     const mixedSingleton = withOccurrences(
-      cluster("mixed-singleton", 95, "/repo/Dirty.cs"),
+      cluster("mixed-singleton", 95, DIRTY_FILE_PATH),
       [
-        reportOccurrence("/repo/Dirty.cs", 30, 40),
+        reportOccurrence(DIRTY_FILE_PATH, 30, 40),
         reportOccurrence("/repo/Clean.cs", 50, 60),
       ],
     );
     const mixedPeers = withOccurrences(
-      cluster("mixed-peers", 90, "/repo/Dirty.cs"),
+      cluster("mixed-peers", 90, DIRTY_FILE_PATH),
       [
-        reportOccurrence("/repo/Dirty.cs", 70, 80),
+        reportOccurrence(DIRTY_FILE_PATH, 70, 80),
         reportOccurrence("/repo/CleanA.cs", 90, 100),
         reportOccurrence("/repo/CleanB.cs", 110, 120),
       ],
@@ -844,14 +889,14 @@ suite("TopOffendersProvider", () => {
       assert.equal(before.length, 4, "fixture starts with four top-offender rows");
       assert.match(before.map(labelText).join("\n"), /Dirty\.cs/, "fixture must expose dirty offsets");
 
-      store.markFileDirty("/repo/Dirty.cs");
+      store.markFileDirty(DIRTY_FILE_PATH);
 
       const after = provider.getChildren();
       const labels = after.map(labelText);
       const mixedNode = after.find((node) => labelText(node).includes("CleanA.cs"));
 
       assert.equal(treeRefreshes, 1, "dirty pruning must refresh the tree once");
-      assert.equal(after.length, 2, "dirty-only and singleton clusters must disappear from top offenders");
+      assert.equal(after.length, PAIR_COUNT, "dirty-only and singleton clusters must disappear from top offenders");
       assert.doesNotMatch(labels.join("\n"), /Dirty\.cs/, "stale dirty-file offsets must be hidden");
       assert.doesNotMatch(labels.join("\n"), /Clean\.cs/, "one-copy mixed cluster must be hidden");
       assert.ok(mixedNode, "mixed cluster must remain via its clean peer occurrences");
@@ -866,7 +911,7 @@ suite("TopOffendersProvider", () => {
         /\brank\s+#3\b/,
         "the survivor keeps the global rank the engine gave it — pruning never renumbers",
       );
-      assert.equal(provider.getChildren(mixedNode).length, 2, "only clean peer occurrences remain expandable");
+      assert.equal(provider.getChildren(mixedNode).length, PAIR_COUNT, "only clean peer occurrences remain expandable");
     } finally {
       sub.dispose();
       provider.dispose();
@@ -890,15 +935,15 @@ suite("TopOffendersProvider", () => {
     const store = new ReportStore();
     store.setSnapshot(
       report([
-        cluster("c1", 100, "/repo/A.cs"),
-        cluster("c2", 80, "/repo/B.cs"),
+        cluster(FIRST_CLUSTER_ID, HIGHEST_CLUSTER_WEIGHT, REPO_A_PATH),
+        cluster(SECOND_CLUSTER_ID, HIGH_CLUSTER_WEIGHT, REPO_B_PATH),
       ]),
       0,
     );
-    store.setLifecycle({ kind: "analysing" });
+    store.setLifecycle({ kind: ANALYSING_PHASE });
     const provider = new TopOffendersProvider(store, new StatusTicker());
     const nodes = provider.getChildren();
-    assert.ok(nodes.length >= 2, "cluster rows must remain visible during re-analysis");
+    assert.ok(nodes.length >= MIN_VISIBLE_NODE_COUNT, "cluster rows must remain visible during re-analysis");
     const labels = nodes.map(labelText);
     assert.ok(labels.some((l) => /A\.cs/i.test(l) || /c1/i.test(l)), "A.cs cluster must stay visible");
     assert.ok(labels.some((l) => /B\.cs/i.test(l) || /c2/i.test(l)), "B.cs cluster must stay visible");
@@ -911,9 +956,9 @@ suite("TopOffendersProvider", () => {
     const store = new ReportStore();
     store.setSnapshot(
       report([
-        cluster("worst", 100, "/repo/src/a/Alpha.cs"),
-        cluster("mid", 80, "/repo/src/b/Beta.cs"),
-        cluster("least", 60, "/repo/src/a/Gamma.cs"),
+        cluster("worst", HIGHEST_CLUSTER_WEIGHT, ALPHA_FILE_PATH),
+        cluster("mid", HIGH_CLUSTER_WEIGHT, BETA_FILE_PATH),
+        cluster("least", MEDIUM_CLUSTER_WEIGHT, "/repo/src/a/Gamma.cs"),
       ]),
       0,
     );
@@ -947,15 +992,15 @@ suite("TopOffendersProvider", () => {
   test("file mode sort axis: impact is worst-first, path is alphabetical", async () => {
     const store = new ReportStore();
     store.setSnapshot(
-      report([cluster("heavy", 100, "/repo/z.cs"), cluster("light", 50, "/repo/a.cs")]),
+      report([cluster(HEAVY_CLUSTER_ID, HIGHEST_CLUSTER_WEIGHT, HEAVY_FILE_PATH), cluster(LIGHT_CLUSTER_ID, TIED_CLUSTER_WEIGHT, LIGHT_FILE_PATH)]),
       0,
     );
     const provider = new TopOffendersProvider(store, new StatusTicker());
-    await withGroupBy("file", async () => {
+    await withGroupBy(FILE_GROUPING_MODE, async () => {
       const [impactFirst] = provider.getChildren();
       assert.ok(impactFirst);
       assert.match(labelText(impactFirst), /z\.cs/, "impact: heaviest file first");
-      await withSetting("topOffenders.sortBy", "path", () => {
+      await withSetting(SORT_BY_SETTING, PATH_SORT_MODE, () => {
         const [pathFirst] = provider.getChildren();
         assert.ok(pathFirst);
         assert.match(labelText(pathFirst), /a\.cs/, "path: alphabetically first file first");
@@ -969,9 +1014,9 @@ suite("TopOffendersProvider", () => {
     const store = new ReportStore();
     store.setSnapshot(
       report([
-        cluster("rust1", 100, "/repo/src/a.rs"),
-        cluster("dart1", 80, "/repo/lib/a.dart"),
-        cluster("rust2", 60, "/repo/src/b.rs"),
+        cluster("rust1", HIGHEST_CLUSTER_WEIGHT, "/repo/src/a.rs"),
+        cluster("dart1", HIGH_CLUSTER_WEIGHT, "/repo/lib/a.dart"),
+        cluster("rust2", MEDIUM_CLUSTER_WEIGHT, "/repo/src/b.rs"),
       ]),
       0,
     );
@@ -988,7 +1033,7 @@ suite("TopOffendersProvider", () => {
         "languages ordered worst-first: Rust (100) before Dart (80)",
       );
       const rustChildren = provider.getChildren(roots[0]);
-      assert.equal(rustChildren.length, 2, "the Rust group holds both Rust clusters");
+      assert.equal(rustChildren.length, PAIR_COUNT, "the Rust group holds both Rust clusters");
       assert.match(
         String(rustChildren[0]?.description ?? ""),
         /rank #1/,
@@ -1003,7 +1048,7 @@ suite("TopOffendersProvider", () => {
   test("cluster mode sort axis reorders clusters: impact worst-first, path alphabetical (rank unchanged)", async () => {
     const store = new ReportStore();
     store.setSnapshot(
-      report([cluster("heavy", 100, "/repo/z.cs"), cluster("light", 50, "/repo/a.cs")]),
+      report([cluster(HEAVY_CLUSTER_ID, HIGHEST_CLUSTER_WEIGHT, HEAVY_FILE_PATH), cluster(LIGHT_CLUSTER_ID, TIED_CLUSTER_WEIGHT, LIGHT_FILE_PATH)]),
       0,
     );
     const provider = new TopOffendersProvider(store, new StatusTicker());
@@ -1012,7 +1057,7 @@ suite("TopOffendersProvider", () => {
     assert.match(labelText(impact[0] as vscode.TreeItem), /z\.cs/, "impact: heaviest cluster first");
     assert.match(labelText(impact[1] as vscode.TreeItem), /a\.cs/);
 
-    await withSetting("topOffenders.sortBy", "path", () => {
+    await withSetting(SORT_BY_SETTING, PATH_SORT_MODE, () => {
       const byPath = provider.getChildren();
       assert.match(labelText(byPath[0] as vscode.TreeItem), /a\.cs/, "path: alphabetically-first cluster leads");
       assert.match(labelText(byPath[1] as vscode.TreeItem), /z\.cs/);
@@ -1029,7 +1074,7 @@ suite("TopOffendersProvider", () => {
   // but the canonical badge follows the occurrence identity (original index 0),
   // never the display position.
   test("within-cluster occurrences sort by path; canonical identity stays on the original occurrence", async () => {
-    const multi = withOccurrences(cluster("multi", 10, "/repo/zzz.cs"), [
+    const multi = withOccurrences(cluster("multi", LOW_CLUSTER_WEIGHT, "/repo/zzz.cs"), [
       reportOccurrence("/repo/zzz.cs", 0, 9),
       reportOccurrence("/repo/aaa.cs", 0, 9),
     ]);
@@ -1037,13 +1082,13 @@ suite("TopOffendersProvider", () => {
     store.setSnapshot(report([multi]), 0);
     const provider = new TopOffendersProvider(store, new StatusTicker());
     const [root] = provider.getChildren();
-    assert.ok(root, "cluster root must exist");
+    assert.ok(root, CLUSTER_ROOT_REQUIRED);
 
     const impactOccurrences = provider.getChildren(root);
     assert.match(labelText(impactOccurrences[0] as vscode.TreeItem), /zzz\.cs/, "impact: canonical occurrence first");
-    assert.equal(impactOccurrences[0]?.contextValue, "deslop.occurrenceCanonical");
+    assert.equal(impactOccurrences[0]?.contextValue, CANONICAL_OCCURRENCE_CONTEXT);
 
-    await withSetting("topOffenders.sortBy", "path", () => {
+    await withSetting(SORT_BY_SETTING, PATH_SORT_MODE, () => {
       const pathOccurrences = provider.getChildren(root);
       assert.match(
         labelText(pathOccurrences[0] as vscode.TreeItem),
@@ -1058,7 +1103,7 @@ suite("TopOffendersProvider", () => {
       const canonicalNode = pathOccurrences.find((node) => /zzz\.cs/.test(labelText(node)));
       assert.equal(
         canonicalNode?.contextValue,
-        "deslop.occurrenceCanonical",
+        CANONICAL_OCCURRENCE_CONTEXT,
         "canonical identity follows the original occurrence (index 0), not the display position",
       );
     });
@@ -1069,7 +1114,7 @@ suite("TopOffendersProvider", () => {
   test("Expand All / Collapse All set the collapsible state the provider returns; released on data change", () => {
     const store = new ReportStore();
     store.setSnapshot(
-      report([cluster("a", 100, "/repo/A.cs"), cluster("b", 80, "/repo/B.cs")]),
+      report([cluster("a", HIGHEST_CLUSTER_WEIGHT, REPO_A_PATH), cluster("b", HIGH_CLUSTER_WEIGHT, REPO_B_PATH)]),
       1,
     );
     const provider = new TopOffendersProvider(store, new StatusTicker());
@@ -1102,8 +1147,8 @@ suite("TopOffendersProvider", () => {
 
       provider.setBulkExpansion("expand");
       store.setSnapshot(
-        report([cluster("a", 100, "/repo/A.cs"), cluster("b", 80, "/repo/B.cs")]),
-        2,
+        report([cluster("a", HIGHEST_CLUSTER_WEIGHT, REPO_A_PATH), cluster("b", HIGH_CLUSTER_WEIGHT, REPO_B_PATH)]),
+        SECOND_GENERATION,
       );
       assert.equal(
         provider.getTreeItem(provider.getChildren()[0] as vscode.TreeItem).collapsibleState,
@@ -1120,13 +1165,13 @@ suite("TopOffendersProvider", () => {
   test("sorting is UI-only: flipping the axis reorders existing rows without bumping the generation", async () => {
     const store = new ReportStore();
     store.setSnapshot(
-      report([cluster("heavy", 100, "/repo/z.cs"), cluster("light", 50, "/repo/a.cs")]),
+      report([cluster(HEAVY_CLUSTER_ID, HIGHEST_CLUSTER_WEIGHT, HEAVY_FILE_PATH), cluster(LIGHT_CLUSTER_ID, TIED_CLUSTER_WEIGHT, LIGHT_FILE_PATH)]),
       7,
     );
     const provider = new TopOffendersProvider(store, new StatusTicker());
     const impactOrder = provider.getChildren().map(labelText);
 
-    await withSetting("topOffenders.sortBy", "path", () => {
+    await withSetting(SORT_BY_SETTING, PATH_SORT_MODE, () => {
       const pathOrder = provider.getChildren().map(labelText);
       assert.notDeepEqual(pathOrder, impactOrder, "the sort axis actually changes the displayed order");
       assert.match(pathOrder[0] ?? "", /a\.cs/, "path order leads with the alphabetically-first file");

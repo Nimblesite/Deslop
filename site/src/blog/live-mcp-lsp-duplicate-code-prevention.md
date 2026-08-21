@@ -1,6 +1,6 @@
 ---
 layout: layouts/blog.njk
-title: "MCP for Coding Agents: Stop Duplicate Code Before It Lands"
+title: "MCP for Coding Agents: Catch Duplicate Code Before It Lands"
 date: 2026-06-12
 updated: 2026-06-12
 author: Christian Findlay
@@ -11,17 +11,16 @@ tags:
   - ai-coding-agents
   - duplicate-code
 category: engineering
-description: "How Deslop's live MCP + LSP server lets coding agents call find-similar before writing code, preventing duplicate code while the repo is still changing."
-keywords: "Model Context Protocol, MCP server, AI coding tools, coding agent, duplicate code, code duplication, duplicate-code analysis, technical debt, AI-generated code, LSP server, find-similar"
+description: "How Deslop's live MCP and LSP servers help coding agents call find-similar before writing code and catch duplicate logic while the repository changes."
 excerpt: "MCP gives coding agents tools. Deslop gives them live repository memory: call find-similar before writing, then reuse the code that already exists."
-heroImage: "/assets/img/blog/live-mcp-lsp-duplicate-code-prevention-header.png"
+heroImage: "/assets/img/blog/live-mcp-lsp-duplicate-code-prevention-header.webp"
 heroImageWidth: "1600"
 heroImageHeight: "900"
-heroImageAlt: "Header image showing a live MCP and LSP sidecar intercepting duplicate code before it reaches a repository."
-ogImage: "/assets/img/blog/live-mcp-lsp-duplicate-code-prevention-og.png"
+heroImageAlt: "Header image showing a live MCP and LSP sidecar checking duplicate code before it reaches a repository."
+ogImage: "/assets/img/blog/live-mcp-lsp-duplicate-code-prevention-og.jpg"
 ogImageWidth: "1200"
 ogImageHeight: "630"
-ogImageAlt: "Deslop live MCP and LSP sidecar preventing duplicate code before it lands."
+ogImageAlt: "Deslop live MCP and LSP sidecar checking duplicate code before it lands."
 ---
 
 By the time duplicate code shows up in CI, the agent has already written it, the pull request already contains it, and a reviewer has to ask why the same rule now exists in two places.

@@ -1,8 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: AI 智能体 — 面向 Claude Code、Cursor、Copilot 的 MCP 设置
-description: 在编码智能体写出另一个副本之前，告诉它相似代码已经存在。将 deslop-mcp 接入 Claude Code、Cursor、Continue 或 Codex，并用 find-similar 预防重复。
-keywords: deslop, mcp 服务器, claude code, cursor, copilot, continue, codex, find-similar, 重复代码, 编码智能体
+description: 将 Deslop MCP 服务器接入 Claude Code、Cursor、Continue、Copilot 或 Codex，让智能体在写出重复代码前调用 find-similar。
 eleventyNavigation:
   key: AI 智能体
   order: 3

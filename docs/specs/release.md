@@ -88,19 +88,40 @@ on drift. Coverage floors are owned by `coverage-thresholds.json`
   unreachable — the exact tests that prove the gate works (gh #412). The Rust
   embedding suites need no daemon; they drive an in-process mock server or a
   deliberately dead endpoint, so they belong in the gate. `make test-ollama`
-  covers only the VSIX suite, which does need a live daemon. The one suite that
-  must stay out — the clone-and-scan corpus gate ([corpus.md §CORPUS-PIN](corpus.md))
-  — is excluded structurally: `crates/deslop/Cargo.toml` declares its test target
-  with `required-features = ["corpus-repos"]`, so cargo does not build it unless
-  `make test-corpus` asks for the feature. Gating is by cost, never by name:
-  `corpus_manifest_contract` reads the pinned manifests off disk and runs in the
-  gate. Contract-tested by `scripts/repository/test-selection.test.mjs`, which
-  `make lint` runs. Gating costs coverage of the corpus suite's *execution*,
-  never of its *compilation*: `make lint` passes `--features deslop/corpus-repos`
-  to clippy so the target is still built and linted on every run. Without that,
-  a refactor elsewhere can leave the gate uncompilable and nothing notices until
-  someone runs `make test-corpus` — commit `77bcbaed5` deleted two constants the
-  suite still read and did exactly that.
+  covers only the VSIX suite, which does need a live daemon. A test that must
+  not run says so at its own declaration, under [TEST-SELECTION-SKIP] below.
+  Contract-tested by `scripts/repository/test-selection.test.mjs`, which
+  `make lint` runs.
+- **[TEST-SELECTION-SKIP] A skipped test carries its reason** — `#[ignore]` is
+  the only mechanism that may keep a test out of `make test`, and every use of
+  it states a category, a tracking issue, a spec id, and a plan document that
+  names that issue. The attribute is deliberately the *opposite* of a filter: a
+  filter hides a test from the person reading it, an `#[ignore]` shows them, and
+  the reason is printed on every run. `#[cfg_attr(.., ignore)]` is prohibited —
+  it hides the skip from the gate that reads them.
+
+  Exactly two categories are allowed, and "it was breaking CI" is not one of
+  them:
+
+  - **[SKIP-UNFINISHED]** — the feature behind the assertions is not finished.
+    The assertions stay intact and stay red; the issue owns the remaining work.
+    Weakening them to go green is prohibited.
+  - **[SKIP-TOO-LARGE-FOR-CI]** — a corpus or embedding suite whose clone, wall
+    time, or peak memory does not fit a hosted runner
+    ([corpus.md §CORPUS-CI](corpus.md), gh #422).
+
+  Skipping costs coverage of a test's *execution*, never of its *compilation*:
+  `#[ignore]` leaves the target inside `--all-targets`, so `make test` and
+  `make lint` still build and lint it. The previous `required-features` gate did
+  not, and commit `77bcbaed5` left the corpus suite uncompilable for exactly
+  that reason — deleting two constants it still read, with nothing to notice
+  until someone ran `make test-corpus`.
+
+  Enforced by `crates/deslop/tests/skip_policy_contract.rs`, which reads every
+  `#[ignore]` off the AST — a comment or string literal that merely mentions
+  `ignore` is not a skip — and compares the set found against a curated list.
+  Adding a skip fails that gate until someone adds it deliberately; a skip whose
+  fix has landed fails it until someone deletes it.
 - **[GITHUB-CODE-SCANNING] CodeQL** — `codeql.yml` runs CodeQL
   `security-extended` to feed GitHub code-scanning alerts (PRs to `main`, `v*`
   tags, weekly), across the `rust` / `javascript-typescript` / `actions` matrix

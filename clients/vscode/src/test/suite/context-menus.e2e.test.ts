@@ -14,6 +14,9 @@ import { activateExtension } from "./helpers";
 import { wireCluster } from "../cluster.helpers";
 import { signalsWith } from "../signals.helpers";
 
+const UTF8_ENCODING = "utf8";
+const CLOSE_ALL_EDITORS_COMMAND = "workbench.action.closeAllEditors";
+
 function cluster(
   id: string,
   bucket: Bucket,
@@ -53,7 +56,7 @@ suite("tree context menu commands", () => {
   test("deslop.copyHumanLocation writes path:line:column to the clipboard", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-e2e-hum-"));
     const file = path.join(dir, "hum.cs");
-    fs.writeFileSync(file, "a\nb\nc\n", "utf8");
+    fs.writeFileSync(file, "a\nb\nc\n", UTF8_ENCODING);
 
     const node = occurrenceNode({ path: file, start_byte: 2, end_byte: 3, hidden: false });
     await vscode.commands.executeCommand("deslop.copyHumanLocation", node);
@@ -67,8 +70,8 @@ suite("tree context menu commands", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-e2e-cl-"));
     const fileA = path.join(dir, "A.cs");
     const fileB = path.join(dir, "B.cs");
-    fs.writeFileSync(fileA, "A\n", "utf8");
-    fs.writeFileSync(fileB, "B\n", "utf8");
+    fs.writeFileSync(fileA, "A\n", UTF8_ENCODING);
+    fs.writeFileSync(fileB, "B\n", UTF8_ENCODING);
 
     const c = cluster("c-e2e-cl", "identical", [
       { path: fileA, start_byte: 0, end_byte: 1 },
@@ -101,7 +104,7 @@ suite("tree context menu commands", () => {
   test("deslop.copySourceSnippet wraps the occurrence bytes in a fenced block", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-e2e-snip-"));
     const file = path.join(dir, "snip.py");
-    fs.writeFileSync(file, "print('hi')\n", "utf8");
+    fs.writeFileSync(file, "print('hi')\n", UTF8_ENCODING);
 
     await vscode.commands.executeCommand(
       "deslop.copySourceSnippet",
@@ -117,7 +120,7 @@ suite("tree context menu commands", () => {
   test("deslop.revealOccurrenceInExplorer resolves a workspace path without throwing", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-e2e-rev-"));
     const file = path.join(dir, "rev.cs");
-    fs.writeFileSync(file, "x\n", "utf8");
+    fs.writeFileSync(file, "x\n", UTF8_ENCODING);
     await vscode.commands.executeCommand(
       "deslop.revealOccurrenceInExplorer",
       occurrenceNode({ path: file, start_byte: 0, end_byte: 1, hidden: false }),
@@ -128,7 +131,7 @@ suite("tree context menu commands", () => {
   test("deslop.openOccurrence accepts an occurrence tree row", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-e2e-go-"));
     const file = path.join(dir, "go.cs");
-    fs.writeFileSync(file, "zero\none\ntwo\n", "utf8");
+    fs.writeFileSync(file, "zero\none\ntwo\n", UTF8_ENCODING);
 
     try {
       await vscode.commands.executeCommand(
@@ -143,7 +146,7 @@ suite("tree context menu commands", () => {
       assert.equal(editor.selection.start.character, 0);
       assert.equal(editor.selection.end.character, 3);
     } finally {
-      await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+      await vscode.commands.executeCommand(CLOSE_ALL_EDITORS_COMMAND);
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
@@ -155,8 +158,8 @@ suite("tree context menu commands", () => {
     const source = "header\n    canonical call\n";
     const startByte = Buffer.byteLength("header\n    ", "utf8");
     const endByte = startByte + Buffer.byteLength("canonical", "utf8");
-    fs.writeFileSync(canonical, source, "utf8");
-    fs.writeFileSync(sibling, "sibling call\n", "utf8");
+    fs.writeFileSync(canonical, source, UTF8_ENCODING);
+    fs.writeFileSync(sibling, "sibling call\n", UTF8_ENCODING);
 
     try {
       const c = cluster("c-e2e-canon", "identical", [
@@ -172,7 +175,7 @@ suite("tree context menu commands", () => {
       assert.equal(editor.selection.start.character, 4);
       assert.equal(editor.selection.end.character, 13);
     } finally {
-      await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+      await vscode.commands.executeCommand(CLOSE_ALL_EDITORS_COMMAND);
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
@@ -184,7 +187,7 @@ suite("tree context menu commands", () => {
       fs.writeFileSync(p, `// ${name}\n`, "utf8");
       return p;
     });
-    await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+    await vscode.commands.executeCommand(CLOSE_ALL_EDITORS_COMMAND);
     const c = cluster(
       "c-e2e-all",
       "identical",
@@ -203,7 +206,7 @@ suite("tree context menu commands", () => {
     for (const file of files) {
       assert.ok(openPaths.has(file), `expected tab for ${file}`);
     }
-    await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+    await vscode.commands.executeCommand(CLOSE_ALL_EDITORS_COMMAND);
     fs.rmSync(dir, { recursive: true, force: true });
   });
 

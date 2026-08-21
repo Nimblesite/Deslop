@@ -13,6 +13,33 @@ surface. The Dart collection-literal data-table filter is a sibling of this
 family but lives with the ranking policy it feeds: see
 [exclusion.md §CLONE-NOISE-DART-DATA-TABLE-LITERAL](exclusion.md#clone-noise-dart-data-table-literal).
 
+### [CLONE-NOISE-VERBATIM-SUBGROUP] The escape hatch protects a family, not a whole cluster
+
+The verbatim escape hatch above was written as **"at least two members differ in
+raw bytes"**, which one unrelated member is enough to satisfy. A cluster holding a
+proven copy `A`/`A` *plus* a shape-compatible stranger `C` therefore took the
+suppression whole, and the copy — byte-for-byte duplication, the thing the tool
+exists to find — disappeared from the report entirely. Nothing about `C` has to be
+unusual: it only has to normalise to the same shape, which is precisely what every
+noise family is made of. Three routes were measured (`[CLONE-NOISE-CONSTANT-TABLE]`,
+`[CLONE-NOISE-LITERAL-VARIATION-CALLS]`, `[CLONE-NOISE-PY-COLLECTION-SIBLING-CELLS]`),
+and the rule is shared by every filter that carries the hatch.
+
+Loosening the predicate alone would trade the false negative for a false positive:
+keeping the cluster publishes `C` as an occurrence of a copy it is not part of. The
+**family** is what gets separated. Before signals are measured, a component the
+noise filters would suppress is replaced by one component per byte-identical family
+it holds, and every member outside those families is dropped. Each surviving
+component is then measured, bucketed, ranked and rendered from exactly the
+occurrences it kept — no signal is inherited from the members that left, and two
+disjoint copies inside one suppressed component come out as two findings rather than
+one merged cluster or none.
+
+A component the filters do **not** suppress is handed on untouched, so a
+consistently-renamed three-way clone stays one three-way clone. Implemented in
+`cluster_filters/verbatim_subgroup.rs`, pinned by
+`crates/deslop/tests/verbatim_subgroup_survives_noise.rs`.
+
 ## Language-agnostic filters
 
 ### [CLONE-NOISE-SIGNATURE-ONLY] Signature-only matches
@@ -27,7 +54,11 @@ Comparing bodies by normalised node-kind stream rather than raw bytes preserves
 genuine near-miss clusters whose bodies share shape but differ only in literals,
 identifiers, or comments. The stream is shared with
 [CLONE-NOISE-POLYMORPHIC-SIGNATURE] — one definition of "same body shape",
-`cluster_filters/body_shape.rs`.
+`cluster_filters/body_shape.rs`. It carries behaviour-bearing anonymous tokens
+alongside named kinds ([pipeline.md §PIPELINE-NORMALIZE-AST-OPERATOR](pipeline.md#pipeline-normalize-ast-operator)):
+reading named children alone made `base + fee` and `base - fee` identical streams,
+so both suppressions answered "these bodies are the same" about implementations
+that compute different answers.
 
 ### [CLONE-NOISE-POLYMORPHIC-SIGNATURE] Interface implementations sharing one name
 Every member resolves to one subject function — the innermost function enclosing

@@ -27,7 +27,7 @@ const OLLAMA_PROVIDER_ID: &str = "ollama";
 const UNSUPPORTED_STARTUP_FLAG: &str = "unsupported LSP startup flag";
 const USAGE_ERROR_PREFIX: &str = "usage: deslop-lsp";
 const ISSUE_201_WORKSPACE_ROOT: &str = "/tmp/deslop-201";
-const DEFAULT_MIN_NODES: usize = 30;
+const DEFAULT_MIN_NODES: u32 = 30;
 
 /// Plain `--version` prints the exact Deployment Toolkit contract and
 /// never attempts to start the server.
@@ -242,7 +242,10 @@ fn invalid_arguments_return_user_facing_errors() -> Result<()> {
         [PROGRAM_NAME, TEST_WORKSPACE_ROOT, WORKER_THREADS_FLAG],
         "--worker-threads requires",
     )?;
-    assert_error_contains([PROGRAM_NAME, TEST_WORKSPACE_ROOT, NICE_FLAG], "--nice requires")?;
+    assert_error_contains(
+        [PROGRAM_NAME, TEST_WORKSPACE_ROOT, NICE_FLAG],
+        "--nice requires",
+    )?;
     assert_error_contains(
         [PROGRAM_NAME, TEST_WORKSPACE_ROOT, NICE_FLAG, "20"],
         "--nice must be in the range",
@@ -276,7 +279,12 @@ fn ipc_transport_flag_parses_defaults_and_rejects() -> Result<()> {
     let default = serve_startup(action_from_args([PROGRAM_NAME, TEST_WORKSPACE_ROOT])?)?;
     assert_eq!(default.ipc_mode, IpcMode::platform_default());
     assert_error_contains(
-        [PROGRAM_NAME, TEST_WORKSPACE_ROOT, IPC_TRANSPORT_FLAG, "carrier-pigeon"],
+        [
+            PROGRAM_NAME,
+            TEST_WORKSPACE_ROOT,
+            IPC_TRANSPORT_FLAG,
+            "carrier-pigeon",
+        ],
         "--ipc-transport must be `unix` or `tcp`",
     )?;
     assert_error_contains(
@@ -318,7 +326,11 @@ fn ranking_structural_only_flag_parses_applies_and_rejects() -> Result<()> {
         "--ranking-structural-only: expected demote|ignore|keep",
     )?;
     assert_error_contains(
-        [PROGRAM_NAME, TEST_WORKSPACE_ROOT, RANKING_STRUCTURAL_ONLY_FLAG],
+        [
+            PROGRAM_NAME,
+            TEST_WORKSPACE_ROOT,
+            RANKING_STRUCTURAL_ONLY_FLAG,
+        ],
         "--ranking-structural-only requires",
     )?;
 
@@ -356,11 +368,21 @@ fn issue_83_legacy_startup_flags_are_rejected() -> Result<()> {
         UNSUPPORTED_STARTUP_FLAG,
     )?;
     assert_error_contains(
-        [PROGRAM_NAME, TEST_WORKSPACE_ROOT, "--embedding-provider", OLLAMA_PROVIDER_ID],
+        [
+            PROGRAM_NAME,
+            TEST_WORKSPACE_ROOT,
+            "--embedding-provider",
+            OLLAMA_PROVIDER_ID,
+        ],
         UNSUPPORTED_STARTUP_FLAG,
     )?;
     assert_error_contains(
-        [PROGRAM_NAME, TEST_WORKSPACE_ROOT, "--embedding-model", "unit-model"],
+        [
+            PROGRAM_NAME,
+            TEST_WORKSPACE_ROOT,
+            "--embedding-model",
+            "unit-model",
+        ],
         UNSUPPORTED_STARTUP_FLAG,
     )?;
     assert_error_contains(
@@ -420,7 +442,10 @@ fn issue_201_transport_flag_is_never_the_workspace_root() -> Result<()> {
         "--debug",
         STDIO_FLAG,
     ])?)?;
-    assert_eq!(debug.workspace_root, PathBuf::from(ISSUE_201_WORKSPACE_ROOT));
+    assert_eq!(
+        debug.workspace_root,
+        PathBuf::from(ISSUE_201_WORKSPACE_ROOT)
+    );
 
     // Robustness: the root is the first non-flag argument, not strictly
     // `args[1]`. Even if a future `vscode-languageclient` PREPENDED the

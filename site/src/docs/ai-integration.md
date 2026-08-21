@@ -1,8 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: AI Agents — MCP setup for Claude Code, Cursor, and Copilot
-description: Tell your coding agent when similar code already exists, before it writes another copy. Wire deslop-mcp into Claude Code, Cursor, Continue, or Codex, and use find-similar to prevent the duplicate.
-keywords: deslop, mcp server, claude code, cursor, copilot, continue, codex, find-similar, duplicate code, coding agent
+description: Connect the Deslop MCP server to Claude Code, Cursor, Continue, Copilot, or Codex so agents can call find-similar before writing duplicate code.
 eleventyNavigation:
   key: AI Agents
   order: 3

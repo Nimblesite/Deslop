@@ -252,8 +252,13 @@ fn collect_collapsed_leaves(
     for child in &node.children {
         collect_collapsed_leaves(child, out);
     }
+    // [PIPELINE-NORMALIZE-AST-OPERATOR] The operator placeholder is a
+    // frontier position like any other collapsed leaf: its raw bytes
+    // are what two shape-identical members disagree on when one adds
+    // and the other subtracts.
     let collapsed = node.kind == crate::lang::shared::IDENTIFIER_KIND
-        || node.kind == crate::lang::shared::LITERAL_KIND;
+        || node.kind == crate::lang::shared::LITERAL_KIND
+        || node.kind == crate::lang::shared::OPERATOR_KIND;
     if collapsed && out.len() == frontier {
         out.push((node.kind, node.byte_range));
     }

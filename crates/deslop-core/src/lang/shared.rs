@@ -30,6 +30,25 @@ pub const IDENTIFIER_KIND: &str = "__ident__";
 /// numeric / char / bool / null literal raw kinds to this value so
 /// constant edits do not perturb the fingerprint.
 pub const LITERAL_KIND: &str = "__literal__";
+/// Normalised operator placeholder ([PIPELINE-NORMALIZE-AST-OPERATOR]).
+///
+/// Every grammar here spells the operator of a binary, unary or
+/// compound-assignment expression as an *anonymous* token, and the walk
+/// below reads named children only. `alpha + beta` and `alpha - beta`
+/// therefore produced the same normalised subtree with the same
+/// identifier frontier: the pipeline held no evidence at all that they
+/// differ, and rendered `structural = 1.00`, `token_jaccard = 1.00`,
+/// `agreement = 1.00`, `fused = 1.00` over code that computes a
+/// different answer.
+///
+/// Operators collapse to *one* kind, exactly as identifiers and
+/// literals do, so a consistently-renamed clone still fingerprints
+/// identically and Type-2 recall is untouched. What the placeholder
+/// adds is a position on the content frontier
+/// ([`crate::tokens::collapsed_leaves`]) whose raw bytes are the
+/// operator itself — so `+` and `-` disagree where they always should
+/// have, and [FUSION-CONTENT-GATE] prices the difference.
+pub const OPERATOR_KIND: &str = "__op__";
 
 /// Maximum nesting depth of a normalised AST. Files whose tree-sitter tree
 /// nests deeper than this are rejected with [`CoreError::AstTooDeep`], so a
@@ -45,6 +64,47 @@ pub const LITERAL_KIND: &str = "__literal__";
 /// ([`crate::fingerprint`]), so depth no longer consumes stack and this
 /// value is free to bound work alone.
 pub const MAX_AST_DEPTH: usize = 500;
+
+/// Anonymous tokens that carry behaviour, kept as [`OPERATOR_KIND`]
+/// leaves ([PIPELINE-NORMALIZE-AST-OPERATOR]).
+///
+/// Tree-sitter names an anonymous node by its own token text, so this
+/// is one list for every grammar rather than a per-language table. It
+/// is an allowlist and not a punctuation denylist on purpose: brackets,
+/// commas, semicolons, colons, dots, arrows and the plain `=` of an
+/// assignment are *framing* — the parent production already says what
+/// they mean, and keeping them would inflate every subtree with nodes
+/// no two members can ever disagree on. Everything here changes what
+/// the code computes.
+const BEHAVIOUR_BEARING_TOKENS: &[&str] = &[
+    // Arithmetic, including Python's floor-divide and power.
+    "+", "-", "*", "/", "%", "**", "//",
+    // Comparison, including the strict forms and the legacy `<>`.
+    "==", "!=", "===", "!==", "<", ">", "<=", ">=", "<>",
+    // Boolean, symbolic and worded.
+    "&&", "||", "!", "and", "or", "not",
+    // Membership and identity — Python spells these as bare tokens
+    // inside a comparison, and `x in xs` versus `x is xs` is not a
+    // rename.
+    "in", "is",
+    // Bitwise and shifts.
+    "&", "|", "^", "~", "<<", ">>", ">>>",
+    // Compound assignment: the operator is the whole behaviour.
+    "+=", "-=", "*=", "/=", "%=", "**=", "//=", "&=", "|=", "^=", "<<=", ">>=", ">>>=", "&&=",
+    "||=", "??=",
+    // Null handling.
+    "??", "?.",
+    // Ranges — an inclusive bound is not the same loop as an exclusive
+    // one.
+    "..", "..=", "...",
+];
+
+/// True when an anonymous token changes what the code computes and must
+/// therefore survive normalisation as an [`OPERATOR_KIND`] leaf.
+#[must_use]
+pub fn is_behaviour_bearing_token(token: &str) -> bool {
+    BEHAVIOUR_BEARING_TOKENS.contains(&token)
+}
 
 /// Parses `source` with `language` and returns the tree-sitter
 /// [`Tree`]. Wraps the two possible failure modes in [`CoreError`]
@@ -89,13 +149,7 @@ pub fn build_normalised_root(
     language: &'static str,
 ) -> Result<NormalizedNode, CoreError> {
     let root = tree.root_node();
-    let mut children = Vec::new();
-    let mut cursor = root.walk();
-    for child in root.named_children(&mut cursor) {
-        if let Some(node) = normalise_node(child, file_id, normalise_kind, language, 1)? {
-            children.push(node);
-        }
-    }
+    let children = normalise_children(root, file_id, normalise_kind, language, 1)?;
     Ok(NormalizedNode {
         kind: FILE_KIND,
         byte_range: retained_span(&children).unwrap_or(ByteRange {
@@ -150,19 +204,7 @@ fn normalise_node(
     let Some(kind) = normalise_kind(node.kind()) else {
         return Ok(None);
     };
-    let mut children = Vec::new();
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
-        if let Some(child_node) = normalise_node(
-            child,
-            file_id,
-            normalise_kind,
-            language,
-            depth.saturating_add(1),
-        )? {
-            children.push(child_node);
-        }
-    }
+    let children = normalise_children(node, file_id, normalise_kind, language, depth)?;
     Ok(Some(NormalizedNode {
         kind,
         children,
@@ -172,6 +214,57 @@ fn normalise_node(
         },
         file_id,
     }))
+}
+
+/// Normalises every child of `node` — named children through
+/// [`normalise_node`], anonymous ones through
+/// [`is_behaviour_bearing_token`] ([PIPELINE-NORMALIZE-AST-OPERATOR]).
+///
+/// The two are collected in one pass over `children`, not two, so an
+/// operator keeps its position between its operands. A frontier that
+/// listed `alpha`, `beta`, `+` rather than `alpha`, `+`, `beta` would
+/// still detect the change, but it would stop aligning positionally
+/// with a member whose operand count differs.
+fn normalise_children(
+    node: Node<'_>,
+    file_id: FileId,
+    normalise_kind: fn(&str) -> Option<&'static str>,
+    language: &'static str,
+    depth: usize,
+) -> Result<Vec<NormalizedNode>, CoreError> {
+    let mut children = Vec::new();
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        let normalised = if child.is_named() {
+            normalise_node(
+                child,
+                file_id,
+                normalise_kind,
+                language,
+                depth.saturating_add(1),
+            )?
+        } else {
+            operator_leaf(child, file_id)
+        };
+        if let Some(child_node) = normalised {
+            children.push(child_node);
+        }
+    }
+    Ok(children)
+}
+
+/// The [`OPERATOR_KIND`] leaf for one anonymous token, or `None` when
+/// the token is framing rather than behaviour.
+fn operator_leaf(token: Node<'_>, file_id: FileId) -> Option<NormalizedNode> {
+    is_behaviour_bearing_token(token.kind()).then(|| NormalizedNode {
+        kind: OPERATOR_KIND,
+        children: Vec::new(),
+        byte_range: ByteRange {
+            start: token.start_byte(),
+            end: token.end_byte(),
+        },
+        file_id,
+    })
 }
 
 /// Interns `raw` into a `&'static str` backed by a thread-local cache.

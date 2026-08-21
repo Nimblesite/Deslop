@@ -10,6 +10,8 @@ import {
 } from "../../../src/types/signals";
 import type { ReportSignals } from "../../../src/types/report";
 
+const TWELVE_PIXEL_SIZE = "12px";
+
 interface Props {
   signals: ReportSignals;
   /** The engine's plain-English reading of these numbers, carried on the
@@ -77,7 +79,7 @@ const EVIDENCE_HEADING: JSX.CSSProperties = {
   color: COLOR.onSurfaceMuted,
   fontFamily: FONT.mono,
   borderTop: `1px solid ${COLOR.ghostBorder}`,
-  paddingTop: "12px",
+  paddingTop: TWELVE_PIXEL_SIZE,
 };
 
 const CELL_LABEL: JSX.CSSProperties = {
@@ -101,12 +103,12 @@ const BAR_FILL: JSX.CSSProperties = {
 const CELL_VALUE: JSX.CSSProperties = {
   marginTop: "4px",
   fontFamily: FONT.mono,
-  fontSize: "12px",
+  fontSize: TWELVE_PIXEL_SIZE,
 };
 
 const VERDICT: JSX.CSSProperties = {
   margin: "4px 0 0",
   color: COLOR.onSurface,
-  fontSize: "12px",
+  fontSize: TWELVE_PIXEL_SIZE,
   lineHeight: 1.5,
 };

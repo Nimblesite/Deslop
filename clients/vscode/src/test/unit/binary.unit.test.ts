@@ -32,6 +32,7 @@ const ARM64_ARCH = "arm64";
 const X64_ARCH = "x64";
 const EXECUTABLE_MODE = 0o755;
 const MISSING_BINARY_PATH = "/nope";
+const EMPTY_PATH_ENV_VALUE = "";
 
 function platformId(): string {
   if (process.platform === DARWIN_PLATFORM && process.arch === ARM64_ARCH) return "darwin-arm64";
@@ -145,7 +146,7 @@ suite("binary resolver", () => {
       LSP_KIND,
       manifest(),
       { lspPath: stalling },
-      { [PATH_ENV_VAR]: "" },
+      { [PATH_ENV_VAR]: EMPTY_PATH_ENV_VALUE },
     );
 
     assert.equal(
@@ -198,7 +199,7 @@ suite("binary resolver", () => {
       "vscode",
       manifest(),
       {},
-      { [PATH_ENV_VAR]: "" },
+      { [PATH_ENV_VAR]: EMPTY_PATH_ENV_VALUE },
     );
     assert.equal(resolved[LSP_BINARY_NAME]?.source, BUNDLED_SOURCE);
     assert.equal(resolved[MCP_BINARY_NAME]?.source, BUNDLED_SOURCE);
@@ -208,7 +209,10 @@ suite("binary resolver", () => {
     const emptyExt = resolve(tmp, "empty-ext");
     mkdirSync(resolve(emptyExt, BINARY_DIRECTORY, platformId()), { recursive: true });
     assert.throws(
-      () => resolveBinary(emptyExt, LSP_KIND, manifest(), {}, { [PATH_ENV_VAR]: "" }),
+      () =>
+        resolveBinary(emptyExt, LSP_KIND, manifest(), {}, {
+          [PATH_ENV_VAR]: EMPTY_PATH_ENV_VALUE,
+        }),
       BundledBinaryMissingError,
     );
   });
@@ -219,7 +223,10 @@ suite("binary resolver", () => {
     mkdirSync(mismatchBin, { recursive: true });
     writeVersionScript(resolve(mismatchBin, LSP_BINARY_NAME), PRODUCT_ID, EXPECTED_VERSION);
     assert.throws(
-      () => resolveBinary(mismatchExt, LSP_KIND, manifest(), {}, { [PATH_ENV_VAR]: "" }),
+      () =>
+        resolveBinary(mismatchExt, LSP_KIND, manifest(), {}, {
+          [PATH_ENV_VAR]: EMPTY_PATH_ENV_VALUE,
+        }),
       /Found deslop 0\.1\.0/,
     );
   });
@@ -230,7 +237,10 @@ suite("binary resolver", () => {
     mkdirSync(staleBin, { recursive: true });
     writeVersionScript(resolve(staleBin, LSP_BINARY_NAME), LSP_BINARY_NAME, MISMATCH_VERSION);
     assert.throws(
-      () => resolveBinary(staleExt, LSP_KIND, manifest(), {}, { [PATH_ENV_VAR]: "" }),
+      () =>
+        resolveBinary(staleExt, LSP_KIND, manifest(), {}, {
+          [PATH_ENV_VAR]: EMPTY_PATH_ENV_VALUE,
+        }),
       /Expected 0\.1\.0/,
     );
   });
@@ -266,7 +276,7 @@ suite("binary resolver", () => {
           LSP_KIND,
           manifest(),
           { lspPath: resolve(tmp, "nonexistent", LSP_BINARY_NAME) },
-          { [PATH_ENV_VAR]: "" },
+          { [PATH_ENV_VAR]: EMPTY_PATH_ENV_VALUE },
         ),
       (err: unknown) =>
         err instanceof BinaryMissingError && /was not found at/.test(err.message),

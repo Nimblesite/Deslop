@@ -1,6 +1,6 @@
 ---
 layout: layouts/blog.njk
-title: "面向编码智能体的 MCP：在重复代码落地之前就拦住它"
+title: "面向编码智能体的 MCP：在重复代码落地之前发现它"
 date: 2026-06-12
 updated: 2026-06-12
 author: Christian Findlay
@@ -11,17 +11,16 @@ tags:
   - ai-coding-agents
   - duplicate-code
 category: engineering
-description: "Deslop 的实时 MCP + LSP 服务器如何让编码智能体在写代码之前调用 find-similar，在仓库仍在变化时就阻止重复代码。"
-keywords: "Model Context Protocol, MCP 服务器, AI 编码工具, 编码智能体, 重复代码, 代码重复, 重复代码分析, 技术债务, AI 生成代码, LSP 服务器, find-similar"
+description: "Deslop 的实时 MCP 与 LSP 服务器如何让编码智能体在写代码前调用 find-similar，并在仓库变化过程中发现重复逻辑。"
 excerpt: "MCP 为编码智能体提供工具。Deslop 为它们提供实时的仓库记忆：在写代码之前调用 find-similar，然后复用已经存在的代码。"
-heroImage: "/assets/img/blog/live-mcp-lsp-duplicate-code-prevention-header.png"
+heroImage: "/assets/img/blog/live-mcp-lsp-duplicate-code-prevention-header.webp"
 heroImageWidth: "1600"
 heroImageHeight: "900"
-heroImageAlt: "页头图片，展示一个实时的 MCP 与 LSP 边车在重复代码到达仓库之前将其拦截。"
-ogImage: "/assets/img/blog/live-mcp-lsp-duplicate-code-prevention-og.png"
+heroImageAlt: "页头图片，展示一个实时的 MCP 与 LSP 边车在重复代码到达仓库之前检查它。"
+ogImage: "/assets/img/blog/live-mcp-lsp-duplicate-code-prevention-og.jpg"
 ogImageWidth: "1200"
 ogImageHeight: "630"
-ogImageAlt: "Deslop 实时 MCP 与 LSP 边车在重复代码落地之前将其阻止。"
+ogImageAlt: "Deslop 实时 MCP 与 LSP 边车在重复代码落地之前检查它。"
 lang: zh
 ---
 

@@ -34,6 +34,7 @@ const NEAR_TOKEN_SCORE = 0.96;
 const DEMOTED_FUSED_SCORE = 0.31;
 const FIXTURE_TEN = 10;
 const ENGINE_OCCURRENCE_COUNT = 35;
+const PAIR_COUNT = 2;
 const HINT_ACTION_ASSERTION =
   "the user must not be told to act on a pair the engine ranked as a hint";
 const STRUCTURAL_ONLY_TITLE = "Same shape, different content";
@@ -481,7 +482,7 @@ suite("report schema helpers", () => {
       occurrence_count: ENGINE_OCCURRENCE_COUNT,
       occurrences_truncated: true,
     });
-    assert.equal(truncated.occurrences.length, 2, "fixture: only two occurrences travelled");
+    assert.equal(truncated.occurrences.length, PAIR_COUNT, "fixture: only two occurrences travelled");
     assert.equal(
       occurrenceCount(truncated),
       ENGINE_OCCURRENCE_COUNT,
@@ -492,8 +493,8 @@ suite("report schema helpers", () => {
   test("occurrenceCount never falls back to a client-derived number", () => {
     assert.equal(occurrenceCount(cluster()), 4, "the fixture's own count, stamped as the engine would");
     assert.equal(
-      occurrenceCount(cluster({ occurrence_count: 2 })),
-      2,
+      occurrenceCount(cluster({ occurrence_count: PAIR_COUNT })),
+      PAIR_COUNT,
       "a smaller engine count is still the engine's answer",
     );
   });

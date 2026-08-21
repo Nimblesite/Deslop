@@ -89,50 +89,24 @@ fn clusters_by_id(report: &Report) -> BTreeMap<&str, &ReportCluster> {
         .collect()
 }
 
-/// Returns `true` when two clusters with the same id carry the same
-/// user-visible payload. Avoids a full structural `PartialEq` on
-/// [`ReportCluster`] (which would need derives across the whole report
-/// type surface) by comparing the fields a subscriber actually
-/// observes.
+/// Returns `true` when two clusters with the same id are the same
+/// cluster, field for field.
+///
+/// This was a hand-written list of the fields "a subscriber actually
+/// observes", and it had drifted: `bucket`, `category`,
+/// `occurrences_total`, `occurrences_truncated`, `intersects_diff` and
+/// `is_newly_introduced` were absent from it, as were the content axes
+/// of [`ReportSignals`] and the line numbers and diff tag of each
+/// occurrence. A cluster could change bucket, change category, gain or
+/// lose its diff tags, or move to different lines, and
+/// [`ReportDelta::between`] would report nothing — leaving every live
+/// subscriber rendering the previous generation's answer.
+///
+/// The list is gone. [`ReportCluster`] derives [`PartialEq`] in the
+/// generated wire module, so the comparison covers every field the wire
+/// carries, and a field added to `docs/models/live-ipc.td` is covered
+/// the day it lands rather than the day someone remembers this
+/// function.
 fn clusters_equal(left: &ReportCluster, right: &ReportCluster) -> bool {
-    (left.weight - right.weight).abs() <= f64::EPSILON
-        && left.size == right.size
-        && left.canonical_node_count == right.canonical_node_count
-        && signals_equal(left.signals, right.signals)
-        && left.rank == right.rank
-        && left.rank_band == right.rank_band
-        && left.language == right.language
-        && left.meets_fused_gate == right.meets_fused_gate
-        && left.evidence_verdict == right.evidence_verdict
-        && left.occurrence_count == right.occurrence_count
-        && left.summary == right.summary
-        && left.interpretation == right.interpretation
-        && occurrences_equal(&left.occurrences, &right.occurrences)
-}
-
-/// Bit-approximate equality for the rendered signal components.
-fn signals_equal(left: crate::report::ReportSignals, right: crate::report::ReportSignals) -> bool {
-    (left.structural - right.structural).abs() <= f64::EPSILON
-        && (left.token_jaccard - right.token_jaccard).abs() <= f64::EPSILON
-        && (left.embedding_cos - right.embedding_cos).abs() <= f64::EPSILON
-        && (left.fused - right.fused).abs() <= f64::EPSILON
-        && (left.shape - right.shape).abs() <= f64::EPSILON
-}
-
-/// Exact equality across two occurrence lists. Ordered — occurrence
-/// order is stable under [PIPELINE-CLUSTER-EXACT] so a reorder would
-/// itself be a semantic change.
-fn occurrences_equal(
-    left: &[crate::report::ReportOccurrence],
-    right: &[crate::report::ReportOccurrence],
-) -> bool {
-    if left.len() != right.len() {
-        return false;
-    }
-    left.iter().zip(right.iter()).all(|(a, b)| {
-        a.path == b.path
-            && a.start_byte == b.start_byte
-            && a.end_byte == b.end_byte
-            && a.hidden == b.hidden
-    })
+    left == right
 }

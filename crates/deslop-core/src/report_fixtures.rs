@@ -12,7 +12,10 @@
 //! reach it directly, and the other crates enable it through the
 //! `test-support` feature they already carry in their dev-dependencies.
 
-use crate::report::{ReportCluster, ReportOccurrence, ReportSignals};
+use crate::{
+    report::{CacheStats, Report, ReportCluster, ReportOccurrence, ReportSignals},
+    report_metrics::RepoMetrics,
+};
 
 /// The signal triple a byte-proven clone renders: a saturated shape
 /// match that the content gate had no reason to discount.
@@ -88,4 +91,31 @@ pub fn fixture_cluster(id: &str, occurrences: Vec<ReportOccurrence>) -> ReportCl
 /// definition, for a suite that changed its signals or occurrences.
 pub fn restamp_fixture(cluster: &mut ReportCluster) {
     crate::report_restamp::restamp_cluster(cluster);
+}
+
+/// A complete rendered report carrying `clusters` and nothing else —
+/// no cache activity, no boilerplate hints, no embedding pass, and the
+/// zeroed metrics a corpus with no analysed lines produces.
+///
+/// Suites that assert on report-level projections ([LIVE-DELTA]) need a
+/// `Report` and not just its clusters; hand-building one answers a
+/// dozen wire fields that have nothing to do with what is being
+/// asserted, and a copy that omits one renders a zero rather than
+/// failing to compile.
+#[must_use]
+pub fn fixture_report(clusters: Vec<ReportCluster>) -> Report {
+    Report {
+        tool_version: crate::version().to_owned(),
+        min_nodes: 4,
+        files_analysed: clusters.len(),
+        clusters_hidden: 0,
+        cache_stats: CacheStats::default(),
+        metrics: RepoMetrics::default(),
+        schema_doc: String::new(),
+        action_hints: Vec::new(),
+        boilerplate_hints: Vec::new(),
+        embedding_provenance: None,
+        clusters,
+        clusters_outside_diff: None,
+    }
 }

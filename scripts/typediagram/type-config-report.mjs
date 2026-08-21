@@ -1,7 +1,13 @@
 export const REPORT_TYPE_CONFIG = {
   ReportSignals: {
     docs: "Per-cluster signal breakdown so consumers can tell why the cluster was flagged.",
-    derives: ["Debug", "Clone", "Copy", "Serialize", "Deserialize"],
+    // `PartialEq` is load-bearing, not cosmetic: [LIVE-DELTA] decides
+    // whether a subscriber is told a cluster changed by comparing two
+    // renderings of it. A hand-written field-by-field comparison silently
+    // stops covering every field the moment one is added here, and the
+    // symptom is a live client left showing stale data — so the delta
+    // compares the whole value and the compiler keeps it complete.
+    derives: ["Debug", "Clone", "Copy", "PartialEq", "Serialize", "Deserialize"],
     // Reports written before the content gate carry only the four
     // fused-confidence fields. `--from-report` must replay them, and an
     // absent measurement must never demote a cluster the original run
@@ -31,7 +37,8 @@ export const REPORT_TYPE_CONFIG = {
   },
   ReportOccurrence: {
     docs: "A single clone occurrence — a specific `(file, byte_range)`.",
-    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    // See `ReportSignals`: [LIVE-DELTA] compares whole values.
+    derives: ["Debug", "Clone", "PartialEq", "Serialize", "Deserialize"],
     fieldOverrides: {
       path: "PathBuf",
       start_byte: "usize",
@@ -55,7 +62,8 @@ export const REPORT_TYPE_CONFIG = {
   },
   ReportCluster: {
     docs: "One cluster as it appears in the rendered report.",
-    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    // See `ReportSignals`: [LIVE-DELTA] compares whole values.
+    derives: ["Debug", "Clone", "PartialEq", "Serialize", "Deserialize"],
     fieldOverrides: {
       rank: "usize",
       size: "usize",

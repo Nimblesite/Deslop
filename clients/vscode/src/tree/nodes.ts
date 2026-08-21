@@ -30,6 +30,7 @@ import type { ThresholdStatus } from "./threshold";
 export { displayPath, representativePath } from "./paths";
 
 const TREE_ITEM_ROLE = "treeitem";
+const FILE_NODE_KIND = "file";
 
 export type Node =
   | ClusterNode
@@ -176,7 +177,7 @@ export class FileNode extends vscode.TreeItem {
     super(`${label} · ${clusterCount} ${noun}`, vscode.TreeItemCollapsibleState.Collapsed);
     this.description = `worst weight ${formatScore(worstWeight)}`;
     this.contextValue = "deslop.fileGroup";
-    this.iconPath = new vscode.ThemeIcon("file");
+    this.iconPath = new vscode.ThemeIcon(FILE_NODE_KIND);
     this.tooltip = new vscode.MarkdownString(
       `\`${filePath}\`\n\n` +
         `${clusterCount} duplicate ${noun} · worst weight \`${formatScore(worstWeight)}\``,
@@ -246,7 +247,7 @@ export class FolderNode extends vscode.TreeItem {
     fileCount: number,
   ) {
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
-    const noun = fileCount === 1 ? "file" : "files";
+    const noun = fileCount === 1 ? FILE_NODE_KIND : "files";
     this.description = `worst weight ${formatScore(worstWeight)} · ${fileCount} ${noun}`;
     this.contextValue = "deslop.folderGroup";
     this.iconPath = vscode.ThemeIcon.Folder;
@@ -345,7 +346,7 @@ export class FileMetricNode extends vscode.TreeItem {
     super(baseName(displayPath(metric.path)), vscode.TreeItemCollapsibleState.None);
     this.description = `${formatPercent(metric.duplication_percent)} · ${metric.duplicated_loc}/${metric.analysed_loc} LOC`;
     this.contextValue = "deslop.fileMetric";
-    this.iconPath = new vscode.ThemeIcon("file");
+    this.iconPath = new vscode.ThemeIcon(FILE_NODE_KIND);
     // `metric.path` is rendered relative to the scan root by the engine, so
     // it must be resolved against the workspace before it names a file on
     // disk — otherwise the row opens a phantom path at the filesystem root

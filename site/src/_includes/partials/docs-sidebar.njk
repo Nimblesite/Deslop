@@ -30,7 +30,9 @@
       {% endfor %}
       {% for item in navigation.docsExtras %}
       {% if item.group == group.id and (not item.lang or item.lang == currentLang) %}
-      <a href="{{ item.url }}" class="docs-sidebar__link{% if page.url == item.url %} is-active{% endif %}">
+      {% set itemUrl = item.url %}
+      {% if not item.external and not item.noLangPrefix and currentLang != defaultLanguage %}{% set itemUrl = item.url | altLangUrl('en', currentLang) %}{% endif %}
+      <a href="{{ itemUrl }}" class="docs-sidebar__link{% if page.url == itemUrl %} is-active{% endif %}">
         <span class="material-symbols-outlined" aria-hidden="true">{{ item.icon | default("article") }}</span>
         <span class="docs-sidebar__label">{{ item.i18nKey | t(currentLang) }}</span>
       </a>

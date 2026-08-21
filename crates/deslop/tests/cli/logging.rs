@@ -10,10 +10,7 @@ const DESLOP_INVOKED_MESSAGE: &str = "deslop invoked";
 /// its report under `<tmp>/report`. Every logging test shares this scan
 /// root + output layout; only the flag/env combination differs.
 fn csharp_small_command(tmp: &tempfile::TempDir) -> Result<Command> {
-    fixture_command(
-        CSHARP_SMALL_FIXTURE,
-        &tmp.path().join(REPORT_OUTPUT_STEM),
-    )
+    fixture_command(CSHARP_SMALL_FIXTURE, &tmp.path().join(REPORT_OUTPUT_STEM))
 }
 
 /// Decodes the captured stderr of a finished assertion into an owned
@@ -264,7 +261,10 @@ fn technical_mode_surfaces_raw_cache_stats_line() -> Result<()> {
     seed_scan_root(&fixture(CSHARP_SMALL_FIXTURE), &scan_root)?;
     // First run populates the cache.
     let mut first = deslop_command(&scan_root, &tmp.path().join("first"))?;
-    let _assertion = first.args([MIN_NODES_FLAG, MIN_NODES_VALUE]).assert().success();
+    let _assertion = first
+        .args([MIN_NODES_FLAG, MIN_NODES_VALUE])
+        .assert()
+        .success();
     let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
     let assertion = second
         .args([

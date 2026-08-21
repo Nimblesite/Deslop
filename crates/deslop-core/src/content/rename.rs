@@ -22,6 +22,7 @@ use crate::{buckets::CONTENT_SUPPORT_FLOOR, state::FileId};
 
 use super::{
     leaf_bytes, member_count, population, preserved_literal_count, vacuous_share, MemberContent,
+    Population,
 };
 
 /// Minimum occurrences of a substituted identifier pair before it counts
@@ -97,10 +98,13 @@ fn pair_rename_consistency<S: BuildHasher>(
     if canonical.keys.len() != member.keys.len() {
         return 0.0;
     }
-    let literals = population(&canonical.keys, &member.keys, true);
+    let literals = population(&canonical.keys, &member.keys, Population::Literal);
     let echoes = literal_echoes(canonical, member, sources);
     let echo_count: usize = echoes.values().sum();
-    let mapping = rename_mapping(&population(&canonical.keys, &member.keys, false), &echoes);
+    let mapping = rename_mapping(
+        &population(&canonical.keys, &member.keys, Population::Identifier),
+        &echoes,
+    );
     let consistent_literals = preserved_literal_count(&literals).saturating_add(echo_count);
     let anchors = consistent_literals.saturating_add(mapping.explained);
     let consistency = vacuous_share(consistent_literals, literals.len()).min(mapping.coverage);
@@ -256,7 +260,7 @@ fn literal_echoes<S: BuildHasher>(
     member: &MemberContent,
     sources: &HashMap<FileId, Vec<u8>, S>,
 ) -> BTreeMap<(u64, u64), usize> {
-    let identifiers = population(&canonical.keys, &member.keys, false);
+    let identifiers = population(&canonical.keys, &member.keys, Population::Identifier);
     let bijection = ModalBijection::over(&substituted_pairs(&identifiers));
     let substitutions = explained_substitution_bytes(canonical, member, &bijection, sources);
     let mut echoes: BTreeMap<(u64, u64), usize> = BTreeMap::new();
@@ -285,7 +289,11 @@ fn substituted_literal_positions(canonical: &MemberContent, member: &MemberConte
         .iter()
         .zip(member.keys.iter())
         .enumerate()
-        .filter(|(_, (left, right))| left.literal && right.literal && left.key != right.key)
+        .filter(|(_, (left, right))| {
+            left.population == Population::Literal
+                && right.population == Population::Literal
+                && left.key != right.key
+        })
         .map(|(index, _)| index)
         .collect()
 }
@@ -306,7 +314,11 @@ fn explained_substitution_bytes<'src, S: BuildHasher>(
     let mut out: Vec<SubstitutionBytes<'src>> = Vec::new();
     for (index, (left, right)) in canonical.keys.iter().zip(member.keys.iter()).enumerate() {
         let keys = (left.key, right.key);
-        if left.literal || right.literal || left.key == right.key || !bijection.explains(&keys) {
+        if left.population != Population::Identifier
+            || right.population != Population::Identifier
+            || left.key == right.key
+            || !bijection.explains(&keys)
+        {
             continue;
         }
         if out.iter().any(|(seen, _)| *seen == keys) {

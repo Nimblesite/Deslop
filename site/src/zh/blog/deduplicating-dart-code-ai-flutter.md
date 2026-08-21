@@ -12,11 +12,11 @@ tags:
 category: engineering
 description: "结构分析如何在 Flutter 项目中发现经过重命名和近似重复的 Dart 代码，以及编码智能体如何在写下另一份副本前先检查。"
 excerpt: "Flutter 项目中常会重复组件树、仓储层、映射器与测试初始化代码。本文说明 Deslop 如何比较其结构并把影响最大的重复排在前面。"
-heroImage: "/assets/img/blog/deduplicating-dart-code-ai-flutter-header.png"
+heroImage: "/assets/img/blog/deduplicating-dart-code-ai-flutter-header.webp"
 heroImageWidth: "1600"
 heroImageHeight: "900"
 heroImageAlt: "展示 Flutter widget 树、克隆的 Dart 卡片以及 find-similar 门禁的头图。"
-ogImage: "/assets/img/blog/deduplicating-dart-code-ai-flutter-og.png"
+ogImage: "/assets/img/blog/deduplicating-dart-code-ai-flutter-og.jpg"
 ogImageWidth: "1200"
 ogImageHeight: "630"
 ogImageAlt: "Deslop —— 当 AI 编写你的 Flutter 应用时为 Dart 代码去重。实时 LSP 与 MCP 重复代码服务器，按最严重者优先排序。"

@@ -1,8 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: GitHub Action — 在 CI 中为重复代码设置门禁
-description: Deslop.live GitHub Action 的完整配置 — 每一个输入与输出、退出码约定、阈值优先级、只度量不拦截、受支持的运行器、产物处理，以及固定的标签如何决定所安装的 CLI 版本。
-keywords: deslop, github action, ci 门禁, 重复代码, fail-over, 重复率阈值, 代码质量, 持续集成
+description: 配置 Deslop GitHub Action，以度量重复代码、按阈值设置 CI 门禁、上传报告、校验发布产物并选择 CLI 版本。
 eleventyNavigation:
   key: GitHub Action
   order: 7
@@ -110,7 +109,7 @@ jobs:
 | 代码 | 含义 |
 | --- | --- |
 | `0` | 分析成功，且重复率在阈值之内（或未设置阈值）。 |
-| `1` | 运行时错误 — 扫描路径错误、解析/IO 失败，或 `required` 的嵌入提供方不可达。绝不是 panic。 |
+| `1` | 运行时错误 — 扫描路径错误、解析/IO 失败，或 `required` 的嵌入提供方不可达。 |
 | `2` | 用法错误 — 未知参数，或超出范围/非有限的阈值。 |
 | `3` | **重复率突破阈值。** 报告仍会完整写出，以便 CI 呈现最严重的问题。 |
 
@@ -145,8 +144,8 @@ HTML 报告是给人看的；JSON 报告是用来解析的。各自的结构见[
 ## 供应链说明
 
 - 归档及其已发布的 `.sha256` 附属文件都会被下载，并且**在解压任何内容之前**校验摘要。不匹配即中止作业。
-- 每个输入都通过 `env` 到达其脚本，绝不插值进 shell 命令体，因此精心构造的输入无法注入 shell。
-- 只有运行器自有的常量会被写入 `$GITHUB_PATH` 与 `$GITHUB_ENV`，因此调用方提供的值无法影响后续步骤解析可执行文件的位置。
+- Action 输入通过环境变量传给脚本，而不是插值进 shell 命令体。
+- 只有运行器自有的常量会写入 `$GITHUB_PATH` 与 `$GITHUB_ENV`。
 
 ## 不使用 GitHub Actions？
 

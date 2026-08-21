@@ -36,15 +36,24 @@ type ClientFactory = () => LanguageClient | undefined;
 
 const LSP_REFRESH_REPORT_COMMAND = "deslop.lsp.refreshReport";
 const LSP_RENDER_HTML_REPORT_COMMAND = "deslop.lsp.renderHtmlReport";
-const STRING_TYPE = "string";
-const NUMBER_TYPE = "number";
-const OBJECT_TYPE = "object";
 const UTF8_ENCODING = "utf8";
 const WORKSPACE_EXECUTE_COMMAND_METHOD = "workspace/executeCommand";
 const LSP_CLIENT_NOT_READY_MESSAGE = "Deslop: LSP client is not ready.";
 const SHOW_ALL_LENSES_SETTING = "showAllLenses";
 const MARKDOWN_LANGUAGE = "markdown";
 const UNKNOWN_VALUE = "unknown";
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === "number";
+}
+
+function isObject(value: unknown): value is object {
+  return typeof value === "object" && value !== null;
+}
 
 interface CommandDeps {
   readonly context: vscode.ExtensionContext;
@@ -140,7 +149,7 @@ export async function openHtmlReport(clientOf: ClientFactory): Promise<void> {
         arguments: [],
       }),
   );
-  if (typeof html !== STRING_TYPE || html.length === 0) {
+  if (!isString(html) || html.length === 0) {
     void vscode.window.showInformationMessage("Deslop: no HTML report available yet.");
     return;
   }
@@ -160,7 +169,7 @@ export async function openOccurrenceTarget(target: unknown): Promise<void> {
 }
 
 export async function copyClusterContextById(store: ReportStore, id: unknown): Promise<void> {
-  const clusterId = typeof id === STRING_TYPE ? id : String(id);
+  const clusterId = isString(id) ? id : String(id);
   const cluster = store.current.report?.clusters.find((c) => c.id === clusterId);
   if (!cluster) return;
   const rank = (store.current.report?.clusters.indexOf(cluster) ?? -1) + 1;
@@ -222,19 +231,19 @@ function occurrenceFromCommandTarget(target: unknown): ReportOccurrence | undefi
 }
 
 function isOccurrenceNode(target: unknown): target is OccurrenceNode {
-  if (typeof target !== OBJECT_TYPE || target === null || !("occurrence" in target)) {
+  if (!isObject(target) || !("occurrence" in target)) {
     return false;
   }
   return isReportOccurrence(target.occurrence);
 }
 
 function isReportOccurrence(target: unknown): target is ReportOccurrence {
-  if (typeof target !== OBJECT_TYPE || target === null) return false;
+  if (!isObject(target)) return false;
   const occurrence = target as Partial<ReportOccurrence>;
   return (
-    typeof occurrence.path === STRING_TYPE &&
-    typeof occurrence.start_byte === NUMBER_TYPE &&
-    typeof occurrence.end_byte === NUMBER_TYPE
+    isString(occurrence.path) &&
+    isNumber(occurrence.start_byte) &&
+    isNumber(occurrence.end_byte)
   );
 }
 
@@ -273,8 +282,8 @@ function occurrenceAfterCommandIndex(
   occurrenceIndex: unknown,
 ): ReportOccurrence | undefined {
   if (
-    typeof clusterId !== STRING_TYPE ||
-    typeof occurrenceIndex !== NUMBER_TYPE ||
+    !isString(clusterId) ||
+    !isNumber(occurrenceIndex) ||
     !Number.isInteger(occurrenceIndex) ||
     occurrenceIndex < 0
   ) {
@@ -342,7 +351,7 @@ function clusterIdFromCompareTarget(
   store: ReportStore,
   target: unknown,
 ): string | undefined {
-  if (typeof target === STRING_TYPE) return target;
+  if (isString(target)) return target;
   if (isCompareTreeTarget(target)) return clusterIdForTreeNode(target, store);
   return undefined;
 }
@@ -354,13 +363,13 @@ function isCompareTreeTarget(
 }
 
 function isClusterNode(target: unknown): target is ClusterNode {
-  if (typeof target !== OBJECT_TYPE || target === null || !("cluster" in target)) {
+  if (!isObject(target) || !("cluster" in target)) {
     return false;
   }
   const cluster = (target as Partial<ClusterNode>).cluster as
     | Partial<ReportCluster>
     | undefined;
-  return typeof cluster?.id === STRING_TYPE && Array.isArray(cluster.occurrences);
+  return isString(cluster?.id) && Array.isArray(cluster.occurrences);
 }
 
 export async function compareWithCanonical(
@@ -421,7 +430,7 @@ async function fetchSchemaDocViaRpc(clientOf?: ClientFactory): Promise<string | 
   if (!client) return undefined;
   try {
     const text = await client.sendRequest<string>("deslop/reportSchemaDoc");
-    return typeof text === STRING_TYPE && text.length > 0 ? text : undefined;
+    return isString(text) && text.length > 0 ? text : undefined;
   } catch {
     return undefined;
   }
@@ -441,7 +450,7 @@ async function readPackagedSchemaDoc(
 }
 
 function firstNonEmpty(...values: (string | undefined)[]): string | undefined {
-  return values.find((v) => typeof v === STRING_TYPE && v.length > 0);
+  return values.find((value) => isString(value) && value.length > 0);
 }
 
 interface CpuPhaseRecord {

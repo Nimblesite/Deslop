@@ -20,6 +20,7 @@ use crate::{
 };
 
 use super::{
+    cache_seed_key::CacheSeedKey,
     cluster_lookup::resolve_cluster_by_id_prefix,
     embedding_refresh::{CommittedEmbeddingRefresh, EmbeddingRefreshInput, EmbeddingRefreshJob},
     errors::LiveError,
@@ -195,7 +196,17 @@ impl AnalysisSession {
         embedding_provider: Arc<dyn EmbeddingProvider>,
         mode: EmbeddingMode,
     ) -> Option<Self> {
-        let report = try_load_cached_report(&root)?;
+        // [LIVE-CACHE-SEED-KEY] A seed is served as an answer, so it
+        // must have been computed by a run with the same identity.
+        let key = CacheSeedKey::new(
+            &root,
+            min_nodes,
+            incremental,
+            config_path.as_deref(),
+            mode,
+            &embedding_provider.spec(),
+        );
+        let report = try_load_cached_report(&root, &key)?;
         let cluster_count = report.clusters.len();
         let session = Self::finalise(SessionInit {
             root,
@@ -789,7 +800,26 @@ impl AnalysisSession {
     /// cold-pass install — never on per-keystroke incremental updates.
     /// Best-effort: failures are logged but never propagated.
     fn write_state_file(&self) {
-        persist_state_file(&self.root, self.latest_report.as_ref(), self.generation);
+        persist_state_file(
+            &self.root,
+            self.latest_report.as_ref(),
+            self.generation,
+            &self.cache_seed_key(),
+        );
+    }
+
+    /// [LIVE-CACHE-SEED-KEY] The identity of this session's analysis
+    /// settings, recorded beside the state file so the next startup can
+    /// tell a re-usable seed from an incompatible one.
+    fn cache_seed_key(&self) -> CacheSeedKey {
+        CacheSeedKey::new(
+            &self.root,
+            self.min_nodes,
+            self.incremental,
+            self.config_path.as_deref(),
+            self.embedding_mode,
+            &self.embedding_provider.spec(),
+        )
     }
 
     /// Asserts `path` is under the workspace root.

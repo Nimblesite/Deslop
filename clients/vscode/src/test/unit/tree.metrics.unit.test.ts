@@ -28,6 +28,7 @@ const HEADLINE_DUPLICATED_LOC = 2_280;
 const CONFIG_THRESHOLD_SOURCE = "config";
 const ELSEWHERE_FOLDER = "elsewhere";
 const ROLLUP_DUPLICATED_LOC = 90;
+const EIGHT_DUPLICATION_VALUE = 8;
 
 /** Builds a Duplication panel over a report describing exactly one file, so
  * the path-resolution cases below differ only in the path they feed in.
@@ -176,17 +177,17 @@ suite("MetricsProvider", () => {
     const store = new ReportStore();
     store.setSnapshot(
       report([], {
-        duplication_percent: 8.0,
+        duplication_percent: EIGHT_DUPLICATION_VALUE,
         duplicated_loc: 800,
         threshold: {
           percent: BETA_DUPLICATION_VALUE,
           breached: false,
           source: CONFIG_THRESHOLD_SOURCE,
         },
-        per_file: [fileMetric(PRIMARY_FILE_METRIC_PATH, STANDARD_ANALYSED_LOC, 8, 8)],
+        per_file: [fileMetric(PRIMARY_FILE_METRIC_PATH, STANDARD_ANALYSED_LOC, EIGHT_DUPLICATION_VALUE, EIGHT_DUPLICATION_VALUE)],
         folders: [
-          fileMetric(SOURCE_A_FOLDER, STANDARD_ANALYSED_LOC, 8, 8),
-          fileMetric(SOURCE_ROOT_FOLDER, STANDARD_ANALYSED_LOC, 8, 8),
+          fileMetric(SOURCE_A_FOLDER, STANDARD_ANALYSED_LOC, EIGHT_DUPLICATION_VALUE, EIGHT_DUPLICATION_VALUE),
+          fileMetric(SOURCE_ROOT_FOLDER, STANDARD_ANALYSED_LOC, EIGHT_DUPLICATION_VALUE, EIGHT_DUPLICATION_VALUE),
         ],
       }),
       0,

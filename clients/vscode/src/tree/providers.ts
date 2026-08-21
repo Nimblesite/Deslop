@@ -67,6 +67,9 @@ export {
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_INTERVAL_MS = 120;
+const FAILED_LIFECYCLE_KIND = "failed";
+const INFORMATION_STATUS_KIND = "info";
+const DESLOP_CONFIGURATION_NAMESPACE = "deslop";
 
 // [VSIX reactivity] The busy/error status row for any non-"ready"
 // lifecycle. `hasReport` picks the scan-kind label: the initial cold
@@ -82,7 +85,7 @@ function scanStatus(
   frame: number,
 ): StatusNode | null {
   if (lifecycle.kind === "ready") return null;
-  if (lifecycle.kind === "failed") {
+  if (lifecycle.kind === FAILED_LIFECYCLE_KIND) {
     return new StatusNode(
       `Stopped: ${lifecycle.message}`,
       "error",
@@ -219,14 +222,14 @@ abstract class LifecycleAwareProvider implements vscode.TreeDataProvider<Node>, 
 // (cluster | file | folder | type, default cluster).
 function readGroupBy(): GroupBy {
   return normalizeGroupBy(
-    vscode.workspace.getConfiguration("deslop").get<string>("topOffenders.groupBy", "cluster"),
+    vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE).get<string>("topOffenders.groupBy", "cluster"),
   );
 }
 
 // [VSIX-TOP-OFFENDERS-SORT] Reads `deslop.topOffenders.sortBy`.
 function readSortBy(): SortBy {
   return normalizeSortBy(
-    vscode.workspace.getConfiguration("deslop").get<string>("topOffenders.sortBy", "impact"),
+    vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE).get<string>("topOffenders.sortBy", "impact"),
   );
 }
 
@@ -234,7 +237,7 @@ function readSortBy(): SortBy {
 function readSplitByLanguage(): boolean {
   return normalizeSplitByLanguage(
     vscode.workspace
-      .getConfiguration("deslop")
+      .getConfiguration(DESLOP_CONFIGURATION_NAMESPACE)
       .get<boolean>("topOffenders.splitByLanguage", false),
   );
 }
@@ -259,14 +262,14 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
     // gates the scan-kind label (cold vs incremental).
     const { visibleReport, report, lifecycle } = this.store.current;
     const indicator = scanStatus(lifecycle, !!report, this.ticker.currentFrame);
-    if (lifecycle.kind === "failed") return indicator ? [indicator] : [];
+    if (lifecycle.kind === FAILED_LIFECYCLE_KIND) return indicator ? [indicator] : [];
     if (!visibleReport || visibleReport.clusters.length === 0) {
       // Never declare the codebase clean until the server confirms a
       // completed scan ("ready"); while scanning, show progress instead.
       if (indicator) return [indicator];
       // [VSIX-PRINCIPLES] Silence when clean: a single calm empty-state row
       // when there is no duplication (principle 2).
-      return [new StatusNode("No duplication detected", "info")];
+      return [new StatusNode("No duplication detected", INFORMATION_STATUS_KIND)];
     }
     const roots = buildRoots(visibleReport.clusters);
     // [req: incremental indicator] Keep clusters visible during a
@@ -352,16 +355,16 @@ export class MetricsProvider extends LifecycleAwareProvider {
     if (node) return [];
     const { visibleReport, report, lifecycle } = this.store.current;
     const indicator = scanStatus(lifecycle, !!report, this.ticker.currentFrame);
-    if (lifecycle.kind === "failed") return indicator ? [indicator] : [];
+    if (lifecycle.kind === FAILED_LIFECYCLE_KIND) return indicator ? [indicator] : [];
     if (!visibleReport) {
-      return indicator ? [indicator] : [new StatusNode("No session yet", "info")];
+      return indicator ? [indicator] : [new StatusNode("No session yet", INFORMATION_STATUS_KIND)];
     }
     const metrics = visibleReport.metrics;
     if (metrics.duplicated_loc === 0) {
       // Same completion gate as Top Offenders: only the server's idle
       // state may render the terminal "clean" verdict ([VSIX reactivity]).
       if (indicator) return [indicator];
-      return [new StatusNode("No duplication detected", "info")];
+      return [new StatusNode("No duplication detected", INFORMATION_STATUS_KIND)];
     }
     return [metricsHeadline(metrics), ...buildMetricRows(metrics)];
   }
@@ -398,11 +401,11 @@ export class SessionProvider extends LifecycleAwareProvider {
     // Show spinner only before first report arrives, or on error. Once
     // session data exists it stays visible during re-analysis (stale >
     // blank); the Top Offenders panel carries the in-flight badge.
-    if (lifecycle.kind === "failed" || !report) {
+    if (lifecycle.kind === FAILED_LIFECYCLE_KIND || !report) {
       const status = scanStatus(lifecycle, !!report, this.ticker.currentFrame);
       if (status) return [status];
     }
-    if (!report) return [new StatusNode("No session yet", "info")];
+    if (!report) return [new StatusNode("No session yet", INFORMATION_STATUS_KIND)];
     const activeModel =
       report.embedding_provenance?.model_id ?? "Select model to enable AI matches";
     const model = pendingEmbeddingModel

@@ -45,16 +45,30 @@ const IDENTICAL_BUCKET = "identical";
 const TEST_SOURCE_PATH = "src/foo.cs";
 const FILE_A_NAME = "A.cs";
 const FILE_B_NAME = "B.cs";
-const DEFAULT_CLUSTER_WEIGHT = 10;
+const TEST_TEN = 10;
+const TEST_TWENTY = 20;
+const DEFAULT_CLUSTER_WEIGHT = TEST_TEN;
 const DEFAULT_OCCURRENCE_END_BYTE = 50;
 const CYCLE_OCCURRENCE_END_BYTE = 16;
+const CYCLE_CLUSTER_ID = "c-cycle";
 const REFRESH_REPORT_COMMAND = "deslop.refreshReport";
 const OPEN_CLUSTER_COMMAND = "deslop.openCluster";
 const MARKDOWN_LANGUAGE = "markdown";
 const CODE_FENCE = "```";
+const TEST_TWO = 2;
+const TEST_THREE = 3;
+const PAIR_COUNT = TEST_TWO;
+const TWO_CHARACTER_OFFSET = TEST_TWO;
+const THIRD_OCCURRENCE_INDEX = TEST_TWO;
+const REPORT_GET_CALL_COUNT = TEST_TWO;
+const THIRD_LINE_INDEX = TEST_TWO;
+const SHORT_OCCURRENCE_END_BYTE = TEST_THREE;
+const CPU_WORK_MILLISECONDS = TEST_THREE;
+const THREE_LINE_COUNT = TEST_THREE;
+const THIRD_RANK = TEST_THREE;
 
 async function findDiffTab(): Promise<vscode.TabInputTextDiff> {
-  for (let i = 0; i < 20; i += 1) {
+  for (let i = 0; i < TEST_TWENTY; i += 1) {
     for (const group of vscode.window.tabGroups.all) {
       for (const tab of group.tabs) {
         if (tab.input instanceof vscode.TabInputTextDiff) return tab.input;
@@ -86,7 +100,7 @@ function cluster(id: string, paths: string[]): ReportCluster {
   return wireCluster({
     id,
     weight: DEFAULT_CLUSTER_WEIGHT,
-    size: 2,
+    size: PAIR_COUNT,
     bucket: IDENTICAL_BUCKET,
     signals: bucketSignals(IDENTICAL_BUCKET),
     occurrences: paths.map((p) => ({
@@ -119,7 +133,12 @@ function report(clusters: ReportCluster[]): Report {
   return reportWithClusters(
     clusters,
     { schema_doc: "# docs" },
-    { analysed_loc: 10, duplicated_loc: 5, duplication_percent: 50, duplicated_files: 1 },
+    {
+      analysed_loc: TEST_TEN,
+      duplicated_loc: 5,
+      duplication_percent: 50,
+      duplicated_files: 1,
+    },
   );
 }
 
@@ -196,7 +215,7 @@ suite("register command implementations", () => {
     await openOccurrence({
       path: file,
       start_byte: 0,
-      end_byte: 3,
+      end_byte: SHORT_OCCURRENCE_END_BYTE,
       hidden: false,
     });
     fs.rmSync(dir, { recursive: true, force: true });
@@ -209,8 +228,8 @@ suite("register command implementations", () => {
     });
     const editor = await vscode.window.showTextDocument(doc);
     editor.selection = new vscode.Selection(
-      new vscode.Position(0, 2),
-      new vscode.Position(0, 2),
+      new vscode.Position(0, TWO_CHARACTER_OFFSET),
+      new vscode.Position(0, TWO_CHARACTER_OFFSET),
     );
     const store = new ReportStore();
     store.setSnapshot(
@@ -231,7 +250,7 @@ suite("register command implementations", () => {
     const store = new ReportStore();
     store.setSnapshot(
       report([
-        clusterWithRanges("c-cycle", [
+        clusterWithRanges(CYCLE_CLUSTER_ID, [
           { path: fileA, start_byte: 0, end_byte: CYCLE_OCCURRENCE_END_BYTE },
           { path: fileB, start_byte: 0, end_byte: CYCLE_OCCURRENCE_END_BYTE },
           { path: fileC, start_byte: 0, end_byte: CYCLE_OCCURRENCE_END_BYTE },
@@ -240,7 +259,7 @@ suite("register command implementations", () => {
       0,
     );
 
-    await jumpToNextOccurrence(store, "c-cycle", 0);
+    await jumpToNextOccurrence(store, CYCLE_CLUSTER_ID, 0);
     let editor = vscode.window.activeTextEditor;
     assert.equal(editor?.document.uri.fsPath, fileB);
     assert.match(editor?.document.getText() ?? "", /public class B/);
@@ -248,7 +267,7 @@ suite("register command implementations", () => {
     assert.equal(editor?.selection.start.character, 0);
     assert.equal(editor?.selection.end.character, CYCLE_OCCURRENCE_END_BYTE);
 
-    await jumpToNextOccurrence(store, "c-cycle", 2);
+    await jumpToNextOccurrence(store, CYCLE_CLUSTER_ID, THIRD_OCCURRENCE_INDEX);
     editor = vscode.window.activeTextEditor;
     assert.equal(editor?.document.uri.fsPath, fileA);
     assert.match(editor?.document.getText() ?? "", /public class A/);
@@ -385,7 +404,12 @@ suite("register command implementations", () => {
 
   test("compare provider renders a friendly fallback for a stale occurrence file", async () => {
     const uri = buildCompareUri(
-      { path: "missing-deslop-compare-file.cs", start_byte: 0, end_byte: 20, hidden: false },
+      {
+        path: "missing-deslop-compare-file.cs",
+        start_byte: 0,
+        end_byte: TEST_TWENTY,
+        hidden: false,
+      },
       "a",
       "stale-cluster",
     );
@@ -424,7 +448,7 @@ suite("register command implementations", () => {
         assert.equal(method, "deslop/cpuReport");
         return Promise.resolve({
           current_phase: "idle",
-          handler_counts: { "deslop/reportGet": 2, hover: 1 },
+          handler_counts: { "deslop/reportGet": REPORT_GET_CALL_COUNT, hover: 1 },
           in_flight: {
             pending_watcher_events: 0,
             pending_embed_requests: 0,
@@ -433,9 +457,9 @@ suite("register command implementations", () => {
           last_100_phases: [
             {
               phase: "report_rendering",
-              started_at_ms: 10,
-              duration_ms: 3,
-              cpu_ms: 3,
+              started_at_ms: TEST_TEN,
+              duration_ms: CPU_WORK_MILLISECONDS,
+              cpu_ms: CPU_WORK_MILLISECONDS,
               files_touched: ["src/Alpha.cs"],
             },
           ],
@@ -496,19 +520,19 @@ suite("tree menu renderers", () => {
     fs.writeFileSync(fileB, "public class B { }\n", UTF8_ENCODING);
 
     const c = clusterWithRanges("c-x", [
-      { path: fileA, start_byte: 0, end_byte: 10 },
-      { path: fileB, start_byte: 0, end_byte: 10 },
+      { path: fileA, start_byte: 0, end_byte: TEST_TEN },
+      { path: fileB, start_byte: 0, end_byte: TEST_TEN },
     ]);
     c.bucket = IDENTICAL_BUCKET;
 
     const text = clusterLocationsText(c);
     const lines = text.split("\n");
-    assert.equal(lines.length, 3, "header + 2 occurrences");
+    assert.equal(lines.length, THREE_LINE_COUNT, "header + 2 occurrences");
     assert.match(lines[0] ?? "", /^cluster c-x/);
     assert.match(lines[0] ?? "", /Identical code/);
     assert.match(lines[0] ?? "", /2 occurrences/);
     assert.match(lines[1] ?? "", /A\.cs:1:1$/);
-    assert.match(lines[2] ?? "", /B\.cs:1:1$/);
+    assert.match(lines[THIRD_LINE_INDEX] ?? "", /B\.cs:1:1$/);
     assert.ok(!text.includes("start_byte"));
     assert.ok(!text.includes(".."), "human copy must not include byte ranges");
 
@@ -548,7 +572,7 @@ suite("tree menu renderers", () => {
     const c = clusterWithRanges("1802186da488862f", [
       { path: TEST_SOURCE_PATH, start_byte: 0, end_byte: DEFAULT_CLUSTER_WEIGHT },
     ]);
-    const text = aiPayloadForCluster(c, 3);
+    const text = aiPayloadForCluster(c, THIRD_RANK);
     const lines = text.split("\n");
     const slugIndex = lines.findIndex((line) => /^slug: 1802186\b/.test(line));
     const clusterIdIndex = lines.findIndex((line) =>
@@ -614,7 +638,7 @@ suite("tree menu renderers", () => {
     const text = sourceSnippetText({
       path: file,
       start_byte: 0,
-      end_byte: 20,
+      end_byte: TEST_TWENTY,
       hidden: false,
     });
 
@@ -706,7 +730,7 @@ suite("tree menu handlers", () => {
     const node = occurrenceNodeFor({
       path: file,
       start_byte: 0,
-      end_byte: 3,
+      end_byte: SHORT_OCCURRENCE_END_BYTE,
       hidden: false,
     });
     await copyHumanLocation(node);
@@ -732,9 +756,9 @@ suite("tree menu handlers", () => {
     const clipboard = await vscode.env.clipboard.readText();
     const lines = clipboard.split("\n");
     assert.match(lines[0] ?? "", /cluster c-copy/);
-    assert.equal(lines.length, 3);
+    assert.equal(lines.length, THREE_LINE_COUNT);
     assert.match(lines[1] ?? "", /A\.cs:1:1$/);
-    assert.match(lines[2] ?? "", /B\.cs:1:1$/);
+    assert.match(lines[THIRD_LINE_INDEX] ?? "", /B\.cs:1:1$/);
 
     fs.rmSync(dir, { recursive: true, force: true });
   });
@@ -743,7 +767,7 @@ suite("tree menu handlers", () => {
     const c = clusterWithRanges(
       "c-ctx",
       [{ path: TEST_SOURCE_PATH, start_byte: 0, end_byte: DEFAULT_OCCURRENCE_END_BYTE }],
-      3,
+      THIRD_RANK,
     );
     c.bucket = "nearly_identical";
     const store = new ReportStore();
@@ -821,7 +845,7 @@ suite("tree menu handlers", () => {
     });
     const c = clusterWithRanges(
       "c-open-all",
-      files.map((p) => ({ path: p, start_byte: 0, end_byte: 3 })),
+      files.map((p) => ({ path: p, start_byte: 0, end_byte: SHORT_OCCURRENCE_END_BYTE })),
     );
     await openAllOccurrences(clusterNodeFor(c));
     fs.rmSync(dir, { recursive: true, force: true });

@@ -21,6 +21,17 @@ import {
   UnsupportedPlatformError,
 } from "../../binary";
 
+const OLLAMA_PROVIDER_ID = "ollama";
+const DEFAULT_EMBEDDING_MODEL = "nomic-embed-text";
+const TEST_BINARY_VERSION = "1.0.0";
+const MCP_COMPONENT_ID = "deslop-mcp";
+const EMBEDDING_MODE_SETTING = "embedding.mode";
+const EMBEDDING_PROVIDER_SETTING = "embedding.provider";
+const EMBEDDING_MODEL_SETTING = "embedding.model";
+const DEFAULT_EMBEDDING_ENDPOINT = "http://127.0.0.1:11434";
+const TEST_WORKSPACE_ROOT = "/tmp/deslop-workspace";
+const DESLOP_CONFIGURATION_NAMESPACE = "deslop";
+
 function fakeCtx(version: unknown): vscode.ExtensionContext {
   return {
     extension: { packageJSON: { version } },
@@ -74,14 +85,14 @@ suite("extension internals", () => {
         componentId: "deslop-lsp",
         source: "bundled",
         path: "/tmp/lsp",
-        version: "1.0.0",
+        version: TEST_BINARY_VERSION,
       },
       {
         kind: "mcp",
-        componentId: "deslop-mcp",
+        componentId: MCP_COMPONENT_ID,
         source: "bundled",
         path: "/tmp/mcp",
-        version: "1.0.0",
+        version: TEST_BINARY_VERSION,
       },
     );
   });
@@ -93,7 +104,7 @@ suite("extension internals", () => {
         componentId: "deslop-lsp",
         source: "env-dir",
         path: "/tmp/lsp",
-        version: "1.0.0",
+        version: TEST_BINARY_VERSION,
       },
       undefined,
     );
@@ -116,35 +127,35 @@ suite("extension internals", () => {
   });
 
   test("buildServerArgs keeps issue #83 legacy flags out of fresh VSIX sessions", async () => {
-    const cfg = vscode.workspace.getConfiguration("deslop");
-    await cfg.update("embedding.mode", "off", vscode.ConfigurationTarget.Global);
-    await cfg.update("embedding.provider", "ollama", vscode.ConfigurationTarget.Global);
-    await cfg.update("embedding.model", "nomic-embed-text", vscode.ConfigurationTarget.Global);
-    await cfg.update("embedding.endpoint", "http://127.0.0.1:11434", vscode.ConfigurationTarget.Global);
+    const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
+    await cfg.update(EMBEDDING_MODE_SETTING, "off", vscode.ConfigurationTarget.Global);
+    await cfg.update(EMBEDDING_PROVIDER_SETTING, OLLAMA_PROVIDER_ID, vscode.ConfigurationTarget.Global);
+    await cfg.update(EMBEDDING_MODEL_SETTING, DEFAULT_EMBEDDING_MODEL, vscode.ConfigurationTarget.Global);
+    await cfg.update("embedding.endpoint", DEFAULT_EMBEDDING_ENDPOINT, vscode.ConfigurationTarget.Global);
     const args = buildServerArgs("/tmp/deslop-workspace", false);
-    assert.deepEqual(args, ["/tmp/deslop-workspace"]);
+    assert.deepEqual(args, [TEST_WORKSPACE_ROOT]);
     assertNoLegacyLspFlags(args);
   });
 
   test("buildServerArgs keeps issue #83 legacy flags out of debug VSIX sessions", async () => {
-    const cfg = vscode.workspace.getConfiguration("deslop");
-    await cfg.update("embedding.mode", "auto", vscode.ConfigurationTarget.Global);
-    await cfg.update("embedding.provider", "ollama", vscode.ConfigurationTarget.Global);
-    await cfg.update("embedding.model", "nomic-embed-text", vscode.ConfigurationTarget.Global);
-    await cfg.update("embedding.endpoint", "http://127.0.0.1:11434", vscode.ConfigurationTarget.Global);
+    const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
+    await cfg.update(EMBEDDING_MODE_SETTING, "auto", vscode.ConfigurationTarget.Global);
+    await cfg.update(EMBEDDING_PROVIDER_SETTING, OLLAMA_PROVIDER_ID, vscode.ConfigurationTarget.Global);
+    await cfg.update(EMBEDDING_MODEL_SETTING, DEFAULT_EMBEDDING_MODEL, vscode.ConfigurationTarget.Global);
+    await cfg.update("embedding.endpoint", DEFAULT_EMBEDDING_ENDPOINT, vscode.ConfigurationTarget.Global);
     const args = buildServerArgs("/tmp/deslop-workspace", true);
-    assert.deepEqual(args, ["/tmp/deslop-workspace", "--debug"]);
+    assert.deepEqual(args, [TEST_WORKSPACE_ROOT, "--debug"]);
     assertNoLegacyLspFlags(args);
   });
 
   test("buildServerArgs forwards issue #28 LSP throttle settings", async () => {
-    const cfg = vscode.workspace.getConfiguration("deslop");
+    const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
     await cfg.update("lsp.workerThreads", 2, vscode.ConfigurationTarget.Global);
     await cfg.update("lsp.nice", 5, vscode.ConfigurationTarget.Global);
     try {
       const args = buildServerArgs("/tmp/deslop-workspace", false);
       assert.deepEqual(args, [
-        "/tmp/deslop-workspace",
+        TEST_WORKSPACE_ROOT,
         "--worker-threads",
         "2",
         "--nice",
@@ -170,10 +181,10 @@ suite("extension internals", () => {
   });
 
   test("syncEmbeddingSettingsToLsp forwards shared workspace settings", async () => {
-    const cfg = vscode.workspace.getConfiguration("deslop");
-    await cfg.update("embedding.mode", "auto", vscode.ConfigurationTarget.Global);
-    await cfg.update("embedding.provider", "ollama", vscode.ConfigurationTarget.Global);
-    await cfg.update("embedding.model", "nomic-embed-text", vscode.ConfigurationTarget.Global);
+    const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
+    await cfg.update(EMBEDDING_MODE_SETTING, "auto", vscode.ConfigurationTarget.Global);
+    await cfg.update(EMBEDDING_PROVIDER_SETTING, OLLAMA_PROVIDER_ID, vscode.ConfigurationTarget.Global);
+    await cfg.update(EMBEDDING_MODEL_SETTING, DEFAULT_EMBEDDING_MODEL, vscode.ConfigurationTarget.Global);
     const calls: Array<{ method: string; params: unknown }> = [];
     const client = {
       sendRequest: (method: string, params: unknown) => {
@@ -187,13 +198,13 @@ suite("extension internals", () => {
       {
         method: "deslop/embeddingSetModel",
         params: {
-          provider_id: "ollama",
-          model_id: "nomic-embed-text",
-          endpoint: "http://127.0.0.1:11434",
+          provider_id: OLLAMA_PROVIDER_ID,
+          model_id: DEFAULT_EMBEDDING_MODEL,
+          endpoint: DEFAULT_EMBEDDING_ENDPOINT,
         },
       },
     ]);
-    assert.equal(store.current.pendingEmbeddingModel, "nomic-embed-text");
+    assert.equal(store.current.pendingEmbeddingModel, DEFAULT_EMBEDDING_MODEL);
   });
 
   test("wireNotifications embeddingProgress handler pushes the payload into the store", () => {
@@ -208,16 +219,16 @@ suite("extension internals", () => {
     wireNotifications(client, store);
     progressCb?.({
       phase: "starting",
-      provider_id: "ollama",
-      model_id: "nomic-embed-text",
+      provider_id: OLLAMA_PROVIDER_ID,
+      model_id: DEFAULT_EMBEDDING_MODEL,
       done: 0,
       total: 100,
     });
     assert.equal(store.current.embeddingProgress?.total, 100);
     progressCb?.({
       phase: "complete",
-      provider_id: "ollama",
-      model_id: "nomic-embed-text",
+      provider_id: OLLAMA_PROVIDER_ID,
+      model_id: DEFAULT_EMBEDDING_MODEL,
       done: 100,
       total: 100,
     });
@@ -256,8 +267,8 @@ suite("extension internals", () => {
     const schedule = wireNotifications(client, store);
     progressCb?.({
       phase: "complete",
-      provider_id: "ollama",
-      model_id: "nomic-embed-text",
+      provider_id: OLLAMA_PROVIDER_ID,
+      model_id: DEFAULT_EMBEDDING_MODEL,
       done: 1,
       total: 1,
     });
@@ -319,13 +330,13 @@ suite("extension internals", () => {
 function optionalManifest() {
   return {
     manifestVersion: 1,
-    product: { id: "deslop", version: "0.1.0" },
+    product: { id: DESLOP_CONFIGURATION_NAMESPACE, version: "0.1.0" },
     components: [
       {
-        id: "deslop-mcp",
+        id: MCP_COMPONENT_ID,
         kind: "mcp",
         language: "rust",
-        binaryName: "deslop-mcp",
+        binaryName: MCP_COMPONENT_ID,
         expectedVersion: "0.1.0",
         bundled: { bundlePath: "bin/${platform}/${binaryName}${exe}" },
         required: true,

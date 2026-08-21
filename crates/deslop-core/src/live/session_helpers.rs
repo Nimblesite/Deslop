@@ -22,6 +22,7 @@ use crate::{
 };
 
 use super::{
+    cache_seed_key::{seed_key_matches, write_seed_key, CacheSeedKey},
     errors::LiveError,
     session::EmbeddingProgressReporter,
     wire::{EmbeddingModelInfo, EmbeddingPhase, EmbeddingProgress},
@@ -265,7 +266,12 @@ pub(super) fn atomic_write_json(dir: &Path, bytes: &[u8]) -> std::io::Result<()>
 /// [LIVE-SEED-CACHE] Atomically writes `report` to
 /// `{root}/.deslop/cache/live-report.json`. Best-effort: failures are
 /// logged at `warn` and never propagated.
-pub(super) fn persist_state_file(root: &Path, report: &Report, generation: u64) {
+pub(super) fn persist_state_file(
+    root: &Path,
+    report: &Report,
+    generation: u64,
+    key: &CacheSeedKey,
+) {
     let cache_dir = crate::paths::cache_dir(root);
     if let Err(error) = std::fs::create_dir_all(&cache_dir) {
         tracing::warn!(%error, "state_file_dir_create_failed");
@@ -277,6 +283,10 @@ pub(super) fn persist_state_file(root: &Path, report: &Report, generation: u64) 
             if let Err(error) = atomic_write_json(&cache_dir, &bytes) {
                 tracing::warn!(%error, "state_file_atomic_write_failed");
             } else {
+                // [LIVE-CACHE-SEED-KEY] Report first, key second: a
+                // crash between them leaves the previous key, which
+                // either still describes this run or refuses the seed.
+                write_seed_key(root, key);
                 tracing::info!(generation, "state_file_written");
             }
         }
@@ -284,10 +294,19 @@ pub(super) fn persist_state_file(root: &Path, report: &Report, generation: u64) 
 }
 
 /// [LIVE-CACHE-SEED] Best-effort load of `{root}/.deslop/cache/live-report.json`.
-/// Returns `None` for a missing file (cold start) and for any parse or
-/// I/O failure (the caller falls back to running a fresh full pass).
-pub(super) fn try_load_cached_report(root: &Path) -> Option<Report> {
+/// Returns `None` for a missing file (cold start), for any parse or
+/// I/O failure, and — [LIVE-CACHE-SEED-KEY] — for a report whose
+/// recorded run key is absent or does not describe the run asking for
+/// it. In every one of those cases the caller falls back to a fresh
+/// full pass, which is the only safe direction: a seed is served as an
+/// answer, and an answer computed under different settings is a wrong
+/// answer, not a slightly old one.
+pub(super) fn try_load_cached_report(root: &Path, key: &CacheSeedKey) -> Option<Report> {
     let path = crate::paths::cache_dir(root).join(STATE_FILE_NAME);
+    if !seed_key_matches(root, key) {
+        delete_incompatible_cached_report(&path);
+        return None;
+    }
     let bytes = match std::fs::read(&path) {
         Ok(bytes) => bytes,
         Err(error) => {
@@ -355,7 +374,8 @@ pub(super) fn append_ollama_models(
 
 #[cfg(test)]
 mod tests {
-    use super::try_load_cached_report;
+    use super::{try_load_cached_report, CacheSeedKey};
+    use crate::{embedding::EmbeddingMode, live::cache_seed_key::test_key};
 
     #[test]
     fn incompatible_cached_report_is_deleted_when_cache_seed_fails(
@@ -365,13 +385,15 @@ mod tests {
         std::fs::create_dir_all(&cache_dir)?;
         let state_path = cache_dir.join(super::STATE_FILE_NAME);
         std::fs::write(&state_path, br#"{"tool_version":"stale","clusters":[]}"#)?;
+        let key: CacheSeedKey = test_key(temp.path(), 4, EmbeddingMode::Off);
+        super::write_seed_key(temp.path(), &key);
 
         assert!(
             state_path.exists(),
             "test setup must start with an incompatible state file"
         );
         assert!(
-            try_load_cached_report(temp.path()).is_none(),
+            try_load_cached_report(temp.path(), &key).is_none(),
             "incompatible cached state must not seed a live session"
         );
         assert!(

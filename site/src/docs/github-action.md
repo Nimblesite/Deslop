@@ -1,8 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: GitHub Action — gate CI on duplicated code
-description: Full configuration for the Deslop.live GitHub Action — every input and output, the exit-code contract, threshold precedence, measure-without-gating, supported runners, artifact handling, and how the pinned tag selects the CLI version.
-keywords: deslop, github action, ci gate, duplicate code, fail-over, duplication threshold, code quality, continuous integration
+description: Configure the Deslop GitHub Action to measure duplicate code, gate CI by threshold, upload reports, verify release artifacts, and select the CLI version.
 eleventyNavigation:
   key: GitHub Action
   order: 7
@@ -109,7 +108,7 @@ The action **surfaces** the CLI's status; it never reinterprets it.
 | Code | Meaning |
 | --- | --- |
 | `0` | Analysis succeeded and duplication was within the threshold (or no threshold was set). |
-| `1` | Runtime error — bad scan path, parse/I-O failure, or an unreachable `required` embedding provider. Never a panic. |
+| `1` | Runtime error — bad scan path, parse/I-O failure, or an unreachable `required` embedding provider. |
 | `2` | Usage error — unknown flag, or an out-of-range / non-finite threshold value. |
 | `3` | **Duplication threshold breached.** The full report is still written so CI can surface the offenders. |
 
@@ -144,8 +143,8 @@ Any other pair is a hard error naming the unsupported combination. There is no W
 ## Supply-chain notes
 
 - The archive and its published `.sha256` sidecar are both downloaded, and the digest is **verified before anything is extracted**. A mismatch aborts the job.
-- Every input reaches its script through `env`, never interpolated into a shell body, so a crafted input cannot inject shell.
-- Only runner-owned constants are written to `$GITHUB_PATH` and `$GITHUB_ENV`, so no caller-supplied value can influence where later steps resolve executables from.
+- Action inputs reach the script through environment variables rather than interpolation into the shell body.
+- Only runner-owned constants are written to `$GITHUB_PATH` and `$GITHUB_ENV`.
 
 ## Not using GitHub Actions?
 

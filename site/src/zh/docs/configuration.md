@@ -1,8 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: 配置与报告 — .deslop.toml、命令行参数、JSON 输出
-description: 一处汇总 Deslop 的输入与输出 — .deslop.toml 的各个区段（exclude、report_hide、threshold、ranking、analysis、report）、无法关闭的内置规则、每一个命令行参数、三种报告格式，以及退出码。
-keywords: deslop, 配置, .deslop.toml, 命令行参数, exclude, report_hide, 阈值, 退出码, json 报告, html 报告
+description: 使用 .deslop.toml 和 CLI 参数配置 Deslop。查看排除项、阈值、排名、分析设置、JSON/HTML/文本报告与退出码。
 eleventyNavigation:
   key: 配置
   order: 6
@@ -320,10 +319,10 @@ deslop . --notext --nohtml      # 写入 .deslop/deslop-report.json
 | 退出码 | 含义 |
 | --- | --- |
 | `0` | 已完成。重复低于阈值，或未设置阈值。 |
-| `1` | 运行时错误 — 扫描路径不存在、分析失败、I/O 错误，或一个标记为 `required` 的嵌入提供方无法访问。绝不会是 panic。 |
+| `1` | 运行时错误 — 扫描路径不存在、分析失败、I/O 错误，或一个标记为 `required` 的嵌入提供方无法访问。 |
 | `2` | 用法错误 — 未知标志，或超出范围 / 非有限的阈值，在运行开始前即被拒绝。 |
 | `3` | **阈值被突破。** 完整报告仍会写入磁盘，以便呈现这些重复。 |
 
-`deslop` 绝不会因用户输入而 panic。失败通过这些退出码和 `stderr` 上的结构化错误呈现。
+失败通过这些退出码和 `stderr` 上的结构化错误呈现。
 
 退出码 `3` 是 **CI 门禁**。它只在你主动启用时才会触发 — 通过传入 `--fail-over <percent>`，或设置 `[threshold] max_duplication_percent`。详见[基于重复阈值设置 CI 门禁](/zh/docs/#gate-ci-on-a-duplication-threshold)的演练，或直接使用 [GitHub Action](/zh/docs/github-action/)。

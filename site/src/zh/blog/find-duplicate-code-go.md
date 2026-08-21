@@ -10,13 +10,13 @@ tags:
   - ai-generated-code
   - duplicate-code
 category: engineering
-description: "使用结构化克隆检测，在 Go 和 Golang 仓库中查找重复代码。Deslop 现已通过 tree-sitter 解析 .go 文件，并借助 LSP 和 MCP 实时检查代码。"
+description: "使用 tree-sitter 结构分析、实时 LSP 反馈和面向编码智能体的 MCP 检查，在 Go 与 Golang 仓库中查找重复代码。"
 excerpt: "Deslop 现在读得懂 Go。它会解析 .go 语法树、捕捉经过重命名的克隆结构、将最严重的重复排在最前面，并让编码智能体在写下另一份副本之前先行搜索。"
-heroImage: "/assets/img/blog/find-duplicate-code-go-header.png"
+heroImage: "/assets/img/blog/find-duplicate-code-go-header.webp"
 heroImageWidth: "1600"
 heroImageHeight: "900"
 heroImageAlt: "两棵重复的 Go 语法树通过实时分析中枢汇聚为一个可复用的实现。"
-ogImage: "/assets/img/blog/find-duplicate-code-go-og.png"
+ogImage: "/assets/img/blog/find-duplicate-code-go-og.jpg"
 ogImageWidth: "1200"
 ogImageHeight: "630"
 ogImageAlt: "两棵重复的 Go 语法树由实时分析中枢标出，旁边呈现一个可复用的结构。"

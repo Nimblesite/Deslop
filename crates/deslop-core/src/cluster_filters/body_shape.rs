@@ -7,6 +7,8 @@
 
 use tree_sitter::Node;
 
+use crate::lang::shared::is_behaviour_bearing_token;
+
 /// Marks the end of a subtree in a [`body_kind_stream`], so the stream
 /// encodes nesting and arity, not just a flat kind sequence — without
 /// it `A(B, C)` and `A(B(C))` would linearise identically. Negative,
@@ -23,12 +25,22 @@ enum Frame<'tree> {
     Exit,
 }
 
-/// Depth-first stream of `body`'s named node kinds with a
-/// [`SUBTREE_CLOSE`] marker per subtree. Only node *kinds* are emitted
-/// — never source text — and grammar extras (comments) are skipped, so
-/// two bodies compare equal exactly when they are the same construct
-/// tree regardless of what their identifiers and literals are named,
-/// what their comments say, or which values their literals carry.
+/// Depth-first stream of `body`'s node kinds with a [`SUBTREE_CLOSE`]
+/// marker per subtree. Only node *kinds* are emitted — never source
+/// text — and grammar extras (comments) are skipped, so two bodies
+/// compare equal exactly when they are the same construct tree
+/// regardless of what their identifiers and literals are named, what
+/// their comments say, or which values their literals carry.
+///
+/// Named children *and* behaviour-bearing anonymous tokens
+/// ([PIPELINE-NORMALIZE-AST-OPERATOR]). Reading named children alone
+/// made `self.total = base + fee` and `self.total = base - fee`
+/// identical streams, so every filter that asks "do these two bodies
+/// differ?" — the signature-only suppression and the polymorphic
+/// suppression both — answered *no* about implementations that compute
+/// different answers, and suppressed accordingly. Framing punctuation
+/// stays out: brackets and commas are already implied by the parent
+/// kind and the [`SUBTREE_CLOSE`] markers.
 pub(super) fn body_kind_stream(body: Node<'_>) -> Vec<i32> {
     let mut stream = Vec::new();
     let mut stack = vec![Frame::Enter(body)];
@@ -46,11 +58,14 @@ pub(super) fn body_kind_stream(body: Node<'_>) -> Vec<i32> {
     stream
 }
 
-/// Pushes `node`'s named children as [`Frame::Enter`] entries in
+/// Pushes `node`'s comparable children as [`Frame::Enter`] entries in
 /// reverse so the stack pops them in source order.
 fn push_named_child_frames<'tree>(node: Node<'tree>, stack: &mut Vec<Frame<'tree>>) {
     let mut cursor = node.walk();
-    let children: Vec<Node<'tree>> = node.named_children(&mut cursor).collect();
+    let children: Vec<Node<'tree>> = node
+        .children(&mut cursor)
+        .filter(|child| child.is_named() || is_behaviour_bearing_token(child.kind()))
+        .collect();
     for child in children.into_iter().rev() {
         stack.push(Frame::Enter(child));
     }

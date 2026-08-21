@@ -1,8 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: Accuracy Transparency — how duplication percentage is calculated
-description: How Deslop calculates duplication percentages and how the CI gate uses the measured value.
-keywords: deslop, accuracy, duplication percentage, duplicated lines, ci gate, false positive, false negative
+description: See how Deslop calculates repository duplication percentage, which files and ranges count, and how the measured value drives CI threshold gates.
 eleventyNavigation:
   key: Accuracy Transparency
   order: 9

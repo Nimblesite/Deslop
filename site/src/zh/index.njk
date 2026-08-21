@@ -16,7 +16,7 @@ lang: zh
   "applicationSubCategory": "Static Code Analysis",
   "operatingSystem": "macOS, Linux, Windows",
   "url": "https://deslop.live",
-  "downloadUrl": "https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live",
+  "downloadUrl": "https://marketplace.visualstudio.com/items?itemName=Nimblesite.deslop-live",
   "softwareHelp": "https://deslop.live/zh/docs/",
   "license": "https://github.com/Nimblesite/Deslop/blob/main/LICENSE",
   "description": "在 C#、Rust、Python、Dart、JavaScript、TypeScript/TSX、PHP、F# 和 Go 中查找重复代码。Deslop 把最严重的问题排在前面，并在相似代码已经存在时告诉编码智能体。",
@@ -25,11 +25,7 @@ lang: zh
     "按影响程度排列重复代码，并提供用于比较的规范出现位置",
     "VS Code 实时警告与面向编码智能体的 MCP 相似性检查"
   ],
-  "publisher": {
-    "@type": "Organization",
-    "name": "Nimblesite",
-    "url": "https://nimblesite.co"
-  },
+  "publisher": { "@id": "https://deslop.live/#organization" },
   "offers": {
     "@type": "Offer",
     "price": "0",
@@ -54,7 +50,7 @@ lang: zh
         <a href="vscode:extension/Nimblesite.deslop-live" class="btn-primary">为 VS Code 安装 Deslop</a>
       </div>
       <p class="hero__sublede">
-        一个扩展即可获得实时编辑器警告、面向智能体的 MCP 检查和 CLI。
+        一个扩展即可获得<a href="/zh/docs/vscode-cluster-panel/">实时编辑器警告</a>、<a href="/zh/docs/ai-integration/">面向编码智能体的 MCP 检查</a>和 <a href="/zh/docs/">CLI</a>。
       </p>
     </div>
 
@@ -77,7 +73,7 @@ lang: zh
     <figure class="showcase__figure">
       <img src="/assets/img/screenshot.webp"
            alt="Deslop VS Code 扩展正在真实工作区中排列重复代码簇，并显示实时警告和并排的规范副本比较。"
-           width="2560" height="1492" loading="eager" decoding="sync">
+           width="2560" height="1492" loading="lazy" decoding="async">
     </figure>
     <ol class="showcase__legend">
       <li class="showcase__cell">

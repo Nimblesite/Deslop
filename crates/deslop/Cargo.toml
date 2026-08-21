@@ -11,19 +11,6 @@ description = "Deslop CLI — cold-cache entry point for the live duplicate-code
 name = "deslop"
 path = "src/main.rs"
 
-[features]
-# [TEST-SELECTION] Opts a build in to the real-repository corpus suite. Off by
-# default, so `make test` never builds or runs a test that clones GitHub and
-# measures wall time. Selection is structural — nothing is filtered by name.
-corpus-repos = []
-
-# [CORPUS-PIN] The expensive clone-and-scan gate. `required-features` keeps it
-# out of `cargo test --workspace` unless `--features corpus-repos` asks for it.
-[[test]]
-name = "corpus_repos"
-path = "tests/corpus_repos.rs"
-required-features = ["corpus-repos"]
-
 [dependencies]
 deslop-core = { path = "../deslop-core" }
 anyhow.workspace = true

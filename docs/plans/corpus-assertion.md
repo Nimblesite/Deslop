@@ -163,6 +163,29 @@ Hand-verified ground truth at the bar the nest/tokio entries set — a real diff
 - [ ] Slice scheduling that rotates, so all nine repositories are covered across a week and the summary says which day covered what.
 - [ ] `make test-corpus` stays strict locally (ignores `known-failures.json`) — it is the honest run and must remain the default for humans.
 
+## Part 4 — Why the suite is skipped, and how the skip ends
+
+Tracked by **#422**, blocked on **#166**.
+
+`make test` selects no test by name (#412). The corpus suite stays out of it because of what it *costs*, and that cost is now stated at each test as `#[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 …"]` rather than filtered away in the Makefile ([release.md §TEST-SELECTION-SKIP](../specs/release.md), [corpus.md §CORPUS-CI](../specs/corpus.md)).
+
+| repository | measured cost | fits a hosted runner? |
+|---|---|---|
+| flutter/flutter | ~9.5 GB peak, 9m44s (#166) | no |
+| dotnet/fsharp | >13 GB peak | no |
+| the other seven | minutes each, times nine | not as a PR gate |
+
+Wall time and peak RSS are runner-dependent, so [CORPUS-CEILINGS] cannot assert a stable budget on shared hardware either.
+
+**How the skip ends.** #166 is the blocker: analysis is single-threaded and holds the whole corpus in RAM. Once it streams, peak memory should fit a hosted runner and the tests move into the PR gate one repository at a time — cheapest first (`tokio`, `nest`), largest last (`flutter`, `fsharp`).
+
+- [ ] **#166** stream the analysis rather than holding the corpus in RAM.
+- [ ] Re-measure peak RSS and wall time per repository against a hosted runner.
+- [ ] Move `corpus_tokio_rust` and `corpus_nest_typescript` into the PR gate: delete their `#[ignore]` and their entries in `crates/deslop/tests/skip_policy_contract.rs`.
+- [ ] Repeat per repository until #422 has nothing left to cover, then close it.
+
+Until then the skip is honest but it is still a skip: eleven tests that assert nothing on any pull request. The scheduled slice ([CORPUS-CI]) is the only thing standing between a pipeline regression and the next release.
+
 ## Close-outs
 
 - [ ] **#347** corpus gate never boots — three consecutive green corpus runs. Close naming the runs, not the colour.

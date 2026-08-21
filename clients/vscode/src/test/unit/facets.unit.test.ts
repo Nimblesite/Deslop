@@ -7,6 +7,7 @@ import * as assert from "node:assert/strict";
 
 import {
   applyFacetFilter,
+  IDENTICAL_BUCKET_VALUE,
   sanitizeFacetFilter,
 } from "../../types/report";
 import { buildTypeMode, getGroupNodeChildren } from "../../tree/grouping";
@@ -17,9 +18,9 @@ import { cluster, labelText, report, withSetting } from "./tree.helpers";
 
 // One cluster per bucket/category combination the tests slice on, each
 // carrying the global rank the engine stamped on it — worst first.
-const identicalLogic = cluster("aaaaaaa1", 9, "a.cs", 0, 20, "identical", undefined, 1);
+const identicalLogic = cluster("aaaaaaa1", 9, "a.cs", 0, 20, IDENTICAL_BUCKET_VALUE, undefined, 1);
 const nearlyLogic = cluster("bbbbbbb2", 7, "b.cs", 0, 20, "nearly_identical", undefined, 2);
-const identicalData = cluster("ccccccc3", 5, "c.dart", 0, 20, "identical", "data", 3);
+const identicalData = cluster("ccccccc3", 5, "c.dart", 0, 20, IDENTICAL_BUCKET_VALUE, "data", 3);
 const ALL = [identicalLogic, nearlyLogic, identicalData];
 
 suite("facet filter slice ([FACET-TOP-OFFENDERS-FILTER])", () => {
@@ -29,7 +30,7 @@ suite("facet filter slice ([FACET-TOP-OFFENDERS-FILTER])", () => {
   });
 
   test("bucket axis keeps only matching clusters", () => {
-    const out = applyFacetFilter(ALL, { buckets: ["identical"], categories: [] });
+    const out = applyFacetFilter(ALL, { buckets: [IDENTICAL_BUCKET_VALUE], categories: [] });
     assert.deepEqual(out.map((c) => c.id), [identicalLogic.id, identicalData.id]);
   });
 
@@ -39,7 +40,7 @@ suite("facet filter slice ([FACET-TOP-OFFENDERS-FILTER])", () => {
   });
 
   test("the two axes compose as an AND", () => {
-    const out = applyFacetFilter(ALL, { buckets: ["identical"], categories: ["logic"] });
+    const out = applyFacetFilter(ALL, { buckets: [IDENTICAL_BUCKET_VALUE], categories: ["logic"] });
     assert.deepEqual(out.map((c) => c.id), [identicalLogic.id]);
   });
 
@@ -51,8 +52,8 @@ suite("facet filter slice ([FACET-TOP-OFFENDERS-FILTER])", () => {
   });
 
   test("known values survive the sanitizer alongside dropped unknowns", () => {
-    const sanitized = sanitizeFacetFilter(["identical", "bogus"], ["data", "bogus"]);
-    assert.deepEqual(sanitized.buckets, ["identical"]);
+    const sanitized = sanitizeFacetFilter([IDENTICAL_BUCKET_VALUE, "bogus"], ["data", "bogus"]);
+    assert.deepEqual(sanitized.buckets, [IDENTICAL_BUCKET_VALUE]);
     assert.deepEqual(sanitized.categories, ["data"]);
   });
 });
@@ -107,7 +108,7 @@ suite("type grouping mode ([FACET-GROUP-BY-TYPE])", () => {
   test("the path sort axis orders clusters inside groups by representative path", () => {
     // d.cs carries the heaviest weight so path order and impact order
     // disagree inside the Identical group — the axis must win.
-    const identicalHeavy = cluster("ddddddd4", 20, "d.cs", 0, 20, "identical");
+    const identicalHeavy = cluster("ddddddd4", 20, "d.cs", 0, 20, IDENTICAL_BUCKET_VALUE);
     const withHeavy = [...ALL, identicalHeavy];
     const roots = buildTypeMode(withHeavy, "path");
     const identicalChildren = getGroupNodeChildren(roots[0] as BucketGroupNode) as ClusterNode[];
@@ -125,7 +126,7 @@ suite("type grouping mode ([FACET-GROUP-BY-TYPE])", () => {
 // with global rank gaps preserved and the filtered status row leading.
 suite("facet filter cross-surface consistency", () => {
   test("filtered tree = shared slice, rank gaps kept, status row leads with clear action", async () => {
-    await withSetting("topOffenders.filterBuckets", ["identical"], () => {
+    await withSetting("topOffenders.filterBuckets", [IDENTICAL_BUCKET_VALUE], () => {
       const store = new ReportStore();
       store.setSnapshot(report(ALL), 0);
       store.setLifecycle({ kind: "ready" });
@@ -146,7 +147,7 @@ suite("facet filter cross-surface consistency", () => {
       );
 
       const rows = nodes.filter((node): node is ClusterNode => node instanceof ClusterNode);
-      const expected = applyFacetFilter(ALL, { buckets: ["identical"], categories: [] });
+      const expected = applyFacetFilter(ALL, { buckets: [IDENTICAL_BUCKET_VALUE], categories: [] });
       assert.deepEqual(
         rows.map((node) => node.cluster.id),
         expected.map((c) => c.id),

@@ -6,10 +6,13 @@ author: Christian Findlay
 tags: posts
 description: Deslop parses source code with tree-sitter and compares normalized syntax trees so formatting and identifier changes do not hide structural duplicates.
 excerpt: Deslop uses parsed syntax trees instead of source-text patterns. Here is what that enables and where language-specific normalization fits.
-heroImage: "/assets/img/blog/tree-sitter-over-regex-header.png"
+heroImage: "/assets/img/blog/tree-sitter-over-regex-header.webp"
 heroImageWidth: "1600"
 heroImageHeight: "900"
 heroImageAlt: "Header image contrasting regex line matching with tree-sitter AST fingerprinting."
+ogImage: "/assets/img/blog/tree-sitter-over-regex-og.jpg"
+ogImageWidth: "1200"
+ogImageHeight: "630"
 ---
 
 Deslop parses source files with tree-sitter and compares normalized syntax trees. The parser gives the detector stable structural input without relying on source-text regular expressions.

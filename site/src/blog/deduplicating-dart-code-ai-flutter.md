@@ -12,11 +12,11 @@ tags:
 category: engineering
 description: "How structural analysis finds renamed and near-duplicate Dart code in Flutter projects, and how coding agents can check before writing another copy."
 excerpt: "Flutter projects repeat widget trees, repositories, mappers, and test setup. Here is how Deslop compares their structure and reports the highest-impact duplicates first."
-heroImage: "/assets/img/blog/deduplicating-dart-code-ai-flutter-header.png"
+heroImage: "/assets/img/blog/deduplicating-dart-code-ai-flutter-header.webp"
 heroImageWidth: "1600"
 heroImageHeight: "900"
 heroImageAlt: "Header image showing Flutter widget trees, cloned Dart cards, and a find-similar gate."
-ogImage: "/assets/img/blog/deduplicating-dart-code-ai-flutter-og.png"
+ogImage: "/assets/img/blog/deduplicating-dart-code-ai-flutter-og.jpg"
 ogImageWidth: "1200"
 ogImageHeight: "630"
 ogImageAlt: "Deslop — deduplicating Dart code when AI writes your Flutter app. Live LSP and MCP duplicate-code server, worst-offenders ranked."

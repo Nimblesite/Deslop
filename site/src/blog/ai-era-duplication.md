@@ -6,10 +6,13 @@ author: Christian Findlay
 tags: posts
 description: Coding agents can reproduce logic that already exists elsewhere in a repository. Fast LSP and MCP feedback makes that duplication visible during the edit.
 excerpt: Coding agents do not automatically know that similar code already exists elsewhere in a repository. This is why duplicate-code feedback belongs in the editing loop.
-heroImage: "/assets/img/blog/ai-era-duplication-header.png"
+heroImage: "/assets/img/blog/ai-era-duplication-header.webp"
 heroImageWidth: "1600"
 heroImageHeight: "900"
 heroImageAlt: "Header image showing duplicate-code growth outpacing feature review in AI-era repositories."
+ogImage: "/assets/img/blog/ai-era-duplication-og.jpg"
+ogImageWidth: "1200"
+ogImageHeight: "630"
 ---
 
 Coding agents can produce a plausible implementation without knowing that similar code already exists elsewhere in the repository. Repeating that pattern across feature work creates multiple implementations that must receive the same future fixes.

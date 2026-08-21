@@ -86,7 +86,9 @@ fn assert_mid_band_evidence(scan_root: &Path, cluster: &Value) -> Result<()> {
 // rendered confidence. Today `fused()` clamps 0.00 + 0.30 + 0.95 to a
 // flat 1.000 — indistinguishable from a byte-proven verbatim copy.
 #[test]
-#[ignore = "GH #369: RED ON PURPOSE, and materially closer than it was. \
+#[ignore = "[SKIP-UNFINISHED] GH #369 [FUSION-SHARED-SUBTREE] \
+            docs/plans/rename-recall-plan.md — RED ON PURPOSE, and materially closer than \
+            it was. \
             The two embedding-only false positives are gone and the real \
             clone is found — `cluster_count` is now the expected 1, where \
             it used to be 2 with the genuine pair hidden. Two expectations \

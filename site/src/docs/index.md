@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: Getting Started — Install Deslop and find duplicate code
-description: Install Deslop and find duplicate code across nine languages. The VS Code extension bundles live editor warnings, checks for coding agents, and the CLI in one install. Homebrew, Scoop, or curl for CLI-only.
+description: Install Deslop to find duplicate code in nine languages. Get live VS Code warnings, MCP checks for coding agents, and the CLI in one extension.
 eleventyNavigation:
   key: Getting Started
   order: 1

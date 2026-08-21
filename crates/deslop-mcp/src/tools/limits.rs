@@ -30,6 +30,7 @@ const TRUNCATED_KEY: &str = "truncated";
 const TRUNCATED_REASON_KEY: &str = "truncated_reason";
 const TRUNCATED_AT_BYTES_KEY: &str = "truncated_at_bytes";
 const NEXT_ACTION_KEY: &str = "next_action";
+#[cfg(test)]
 const WIRE_CAP_REASON_FRAGMENT: &str = "MCP wire cap";
 const REPORT_GET_TOOL_NAME: &str = "report-get";
 
@@ -122,10 +123,7 @@ fn pop_one_cluster(payload: &mut Value) -> bool {
     let Some(object) = payload.as_object_mut() else {
         return false;
     };
-    let Some(clusters) = object
-        .get_mut(CLUSTERS_KEY)
-        .and_then(Value::as_array_mut)
-    else {
+    let Some(clusters) = object.get_mut(CLUSTERS_KEY).and_then(Value::as_array_mut) else {
         return false;
     };
     clusters.pop().is_some()

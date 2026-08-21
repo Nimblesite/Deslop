@@ -8,6 +8,8 @@
 
 export type SortBy = "impact" | "path";
 
+const PATH_SORT_MODE = "path";
+
 /** A row keyed by a representative name plus the two impact keys it
  * sorts on — the comparable shape shared by file rows and folder rows.
  * `path` is the local sort key (a folder label or a file/folder name),
@@ -28,7 +30,7 @@ export interface WeightedPath {
 /** Reads the persisted sort axis, falling back to `"impact"` for
  * unknown / missing values — never throws. */
 export function normalizeSortBy(raw: string | undefined): SortBy {
-  return raw === "path" ? "path" : "impact";
+  return raw === PATH_SORT_MODE ? PATH_SORT_MODE : "impact";
 }
 
 /** Comparator for {@link WeightedPath} rows under the active sort axis.
@@ -36,7 +38,7 @@ export function normalizeSortBy(raw: string | undefined): SortBy {
  * `path` is alphabetical. Both end on `localeCompare` so the order is
  * total and stable. */
 export function compareWeightedPath(sortBy: SortBy): (left: WeightedPath, right: WeightedPath) => number {
-  if (sortBy === "path") {
+  if (sortBy === PATH_SORT_MODE) {
     return (left, right) => left.path.localeCompare(right.path);
   }
   return (left, right) =>

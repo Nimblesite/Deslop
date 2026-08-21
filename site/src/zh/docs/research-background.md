@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: 研究背景 — 代码克隆检测算法
-description: Deslop 的结构、词元与嵌入式克隆检测所依据的研究。
+description: 了解 Deslop 的结构、词元、MinHash LSH 与嵌入式代码克隆检测所依据的研究，并查阅原始论文。
 eleventyNavigation:
   key: 研究
   order: 8

@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: Research Background — Code-clone detection algorithms
-description: The research behind Deslop's structural, token, and embedding-based clone detection.
+description: Read the research behind Deslop's structural, token, MinHash LSH, and embedding-based code-clone detection, with links to the source papers.
 eleventyNavigation:
   key: Research
   order: 8

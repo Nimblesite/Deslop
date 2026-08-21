@@ -3,12 +3,20 @@
     "blog": {
       "back": "← Back to Blog",
       "title": "Blog",
+      "indexTitle": "Duplicate-code engineering",
       "subtitle": "Notes on duplicate detection, AI-era codebases, and the decisions behind Deslop.",
       "eyebrow": "Field notes",
       "readMore": "Read Article",
-      "tags": "Tags",
-      "categories": "Categories",
       "empty": "No blog posts yet."
+    },
+    "a11y": {
+      "skipToContent": "Skip to main content",
+      "liveServer": "Live analysis server",
+      "toggleTheme": "Toggle dark mode",
+      "toggleMenu": "Toggle menu"
+    },
+    "social": {
+      "defaultImageAlt": "Deslop duplicate-code analysis for editors and coding agents"
     },
     "nav": {
       "docs": "Docs",
@@ -82,12 +90,20 @@
     "blog": {
       "back": "← 返回博客",
       "title": "博客",
+      "indexTitle": "重复代码工程札记",
       "subtitle": "关于重复检测、AI 时代的代码库，以及 Deslop 背后设计取舍的技术札记。",
       "eyebrow": "技术札记",
       "readMore": "阅读全文",
-      "tags": "标签",
-      "categories": "分类",
       "empty": "暂无博客文章。"
+    },
+    "a11y": {
+      "skipToContent": "跳到主要内容",
+      "liveServer": "实时分析服务器",
+      "toggleTheme": "切换深浅色主题",
+      "toggleMenu": "切换菜单"
+    },
+    "social": {
+      "defaultImageAlt": "面向编辑器与编码智能体的 Deslop 重复代码分析"
     },
     "nav": {
       "docs": "文档",

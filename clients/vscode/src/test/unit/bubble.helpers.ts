@@ -38,6 +38,13 @@ export interface ClusterSignalOptions {
  * reads the engine's own `meets_fused_gate` verdict and owns no copy of
  * this number ([FUSION-CONTENT-GATE]). */
 export const ENGINE_FUSED_CUTOFF = 0.85;
+const FIXTURE_TEN = 10;
+export const DEFAULT_BUBBLE_CLUSTER_WEIGHT = FIXTURE_TEN;
+export const HIGH_FUSED_CONFIDENCE = 0.95;
+export const PRIMARY_BUBBLE_CLUSTER_ID = "c-a";
+const FIXTURE_OCCURRENCE_END_BYTE = FIXTURE_TEN;
+const FIXTURE_ANALYSED_LOC = FIXTURE_TEN;
+const FIXTURE_LINE_LENGTH = FIXTURE_TEN;
 
 // Builds a two-occurrence cluster whose fused confidence is explicit, so
 // a test can stage the exact [FUSION-CONTENT-GATE] band it is asserting.
@@ -66,8 +73,8 @@ export function bubbleCluster(
     }),
     meets_fused_gate: options.meetsFusedGate ?? fused >= ENGINE_FUSED_CUTOFF,
     occurrences: [
-      occurrence("/tmp/A.cs", 0, 10),
-      occurrence("/tmp/B.cs", 0, 10),
+      occurrence("/tmp/A.cs", 0, FIXTURE_OCCURRENCE_END_BYTE),
+      occurrence("/tmp/B.cs", 0, FIXTURE_OCCURRENCE_END_BYTE),
     ],
     occurrences_total: total,
     occurrence_count: total,
@@ -95,10 +102,10 @@ export function probeCluster(
 // so a probe claiming a different count is visibly wrong.
 export function probeReport(): Report {
   return reportWithClusters(
-    [probeCluster("c-a", 10, 0.95, 5)],
+    [probeCluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE, 5)],
     {},
     {
-      analysed_loc: 10,
+      analysed_loc: FIXTURE_ANALYSED_LOC,
       duplicated_loc: 2,
       duplication_percent: 20,
       duplicated_files: 2,
@@ -184,7 +191,7 @@ function fakeDocument(file: string): vscode.TextDocument {
     lineAt: () => ({
       range: new vscode.Range(
         new vscode.Position(0, 0),
-        new vscode.Position(0, 10),
+        new vscode.Position(0, FIXTURE_LINE_LENGTH),
       ),
     }),
   } as unknown as vscode.TextDocument;
@@ -238,7 +245,7 @@ export async function resolveProbe(
   request: DeferredProbeRequest | undefined,
   probe: Promise<void>,
   cancellationExpected?: boolean,
-  clusters: ReportCluster[] = [probeCluster("c-a", 10, 0.95)],
+  clusters: ReportCluster[] = [probeCluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)],
 ): Promise<void> {
   assert.ok(request !== undefined, "probe request must exist");
   if (cancellationExpected !== undefined) {
@@ -323,7 +330,7 @@ export function renderFullConfidenceBubble(
   clusterId: string,
 ): string {
   bubble.render(capture.editor, span(startChar), [
-    probeCluster(clusterId, 10, 0.95),
+    probeCluster(clusterId, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE),
   ]);
   return assertBubbleShows(
     capture,
@@ -339,7 +346,7 @@ export function retractCluster(store: ReportStore, clusterId: string): void {
     clusters_added: [],
     clusters_removed: [clusterId],
     clusters_updated: [],
-    metrics: repoMetrics({ analysed_loc: 10 }),
+    metrics: repoMetrics({ analysed_loc: FIXTURE_ANALYSED_LOC }),
     cache_stats: { hits: 0, misses: 0 },
     tool_version: "v2",
   });

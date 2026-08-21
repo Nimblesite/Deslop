@@ -16,6 +16,7 @@ pub mod corpus_confidence;
 pub mod corpus_precision;
 pub mod corpus_scope;
 pub mod enclosure;
+pub mod skip_policy;
 
 use std::{
     io::{BufRead, BufReader, Read, Write},

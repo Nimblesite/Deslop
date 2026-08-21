@@ -6,10 +6,13 @@ author: Christian Findlay
 tags: posts
 description: 编码智能体可能重复仓库中已有的逻辑。快速的 LSP 与 MCP 反馈可以在编辑过程中呈现这些重复。
 excerpt: 编码智能体不会自动知道仓库中已有相似代码。这就是重复代码反馈需要进入编辑闭环的原因。
-heroImage: "/assets/img/blog/ai-era-duplication-header.png"
+heroImage: "/assets/img/blog/ai-era-duplication-header.webp"
 heroImageWidth: "1600"
 heroImageHeight: "900"
 heroImageAlt: "标题图，展示在 AI 时代的仓库中，重复代码的增长速度超过了功能审查的速度。"
+ogImage: "/assets/img/blog/ai-era-duplication-og.jpg"
+ogImageWidth: "1200"
+ogImageHeight: "630"
 lang: zh
 ---
 

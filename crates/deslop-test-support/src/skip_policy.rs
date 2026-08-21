@@ -1,0 +1,296 @@
+//! [TEST-SELECTION-SKIP] Every `#[ignore]` in the workspace, read off the AST.
+//!
+//! `cargo test --skip` matches a substring of the *test name*, so it drops
+//! whatever happens to share those characters. That is how the corpus gate's
+//! own self-tests stopped running while the gate reported green (gh #412).
+//! Selection by name is gone. A test that must not run in the release gate
+//! now says so at its own declaration — the one place a reader of that test
+//! will look.
+//!
+//! An `#[ignore]` is still a test that protects nothing, so the attribute is
+//! only half the mechanism. This module extracts each skip and its stated
+//! reason through tree-sitter — never by matching source text — so
+//! `crates/deslop/tests/skip_policy_contract.rs` can hold every one of them
+//! to the documented policy.
+
+use std::{
+    fs,
+    iter::Peekable,
+    path::{Path, PathBuf},
+    str::Chars,
+};
+
+use anyhow::{bail, Context, Result};
+use deslop_core::lang::{rust_lang::RustParser, shared::parse_source, LanguageParser};
+use tree_sitter::Node;
+
+use crate::corpus::repo_root;
+
+/// The engine's `'static` id for the grammar this scan parses with.
+const RUST_LANGUAGE_ID: &str = "rust";
+
+/// tree-sitter-rust node kinds this scan walks. Outer attributes are siblings
+/// of the item they decorate, not children of it, so an `#[ignore]` is found
+/// by walking forward from the attribute rather than down from the function.
+const ATTRIBUTE_ITEM: &str = "attribute_item";
+const ATTRIBUTE: &str = "attribute";
+const FUNCTION_ITEM: &str = "function_item";
+const LINE_COMMENT: &str = "line_comment";
+const BLOCK_COMMENT: &str = "block_comment";
+const IDENTIFIER: &str = "identifier";
+
+/// The tree-sitter field naming an `attribute`'s `= "..."` operand.
+const VALUE_FIELD: &str = "value";
+/// The tree-sitter field naming a `function_item`'s identifier.
+const NAME_FIELD: &str = "name";
+
+/// The attribute that removes a test from every default run.
+const IGNORE_ATTRIBUTE: &str = "ignore";
+/// The conditional form. It would smuggle an `ignore` past a scan that only
+/// looks for the bare attribute, so finding one mentioning `ignore` is an
+/// error rather than a skip this module reports.
+const CFG_ATTR_ATTRIBUTE: &str = "cfg_attr";
+
+/// Directory names never scanned: build output, corpus clones, and installed
+/// dependencies. Anything beginning with `.` is skipped as well.
+const EXCLUDED_DIRECTORIES: [&str; 3] = ["target", "node_modules", "coverage"];
+
+/// The `.rs` extension, the only files this scan parses.
+const RUST_EXTENSION: &str = "rs";
+
+/// One `#[ignore]`d test, located and quoted.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct IgnoredTest {
+    /// Workspace-relative path of the file declaring it, `/`-separated.
+    pub file: String,
+    /// The test function's name.
+    pub test: String,
+    /// The `#[ignore = "..."]` reason as the compiler sees it — escapes and
+    /// line continuations resolved. Empty when the attribute carries none.
+    pub reason: String,
+}
+
+/// Every `#[ignore]`d test in the workspace, ordered by file then test name.
+///
+/// # Errors
+///
+/// Returns an error when a source file cannot be read or parsed, when an
+/// `#[ignore]` decorates something other than a function, or when a
+/// `#[cfg_attr(..)]` mentions `ignore`.
+pub fn ignored_tests() -> Result<Vec<IgnoredTest>> {
+    let root = repo_root();
+    let mut found = Vec::new();
+    for path in rust_sources(&root)? {
+        let file = workspace_relative(&root, &path);
+        let source = fs::read_to_string(&path)
+            .with_context(|| format!("unreadable Rust source: {}", path.display()))?;
+        found.extend(ignored_tests_in(&source, &file)?);
+    }
+    found.sort();
+    Ok(found)
+}
+
+/// Every `#[ignore]`d test declared by one Rust source, attributed to `file`.
+///
+/// # Errors
+///
+/// Returns an error when `source` does not parse, when an `#[ignore]`
+/// decorates something other than a function, or when a `#[cfg_attr(..)]`
+/// mentions `ignore`.
+pub fn ignored_tests_in(source: &str, file: &str) -> Result<Vec<IgnoredTest>> {
+    let grammar = RustParser::new().grammar();
+    let tree = parse_source(RUST_LANGUAGE_ID, &grammar, source.as_bytes())
+        .with_context(|| format!("unparsable Rust source: {file}"))?;
+    let mut found = Vec::new();
+    visit(tree.root_node(), source, file, &mut found)?;
+    Ok(found)
+}
+
+/// Walks every named node, recording the skips each `attribute_item` implies.
+fn visit(node: Node, source: &str, file: &str, found: &mut Vec<IgnoredTest>) -> Result<()> {
+    if node.kind() == ATTRIBUTE_ITEM {
+        record(node, source, file, found)?;
+    }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        visit(child, source, file, found)?;
+    }
+    Ok(())
+}
+
+/// Records one attribute when it is an `#[ignore]`, rejecting the
+/// conditional form outright.
+fn record(item: Node, source: &str, file: &str, found: &mut Vec<IgnoredTest>) -> Result<()> {
+    let Some(attribute) = child_of_kind(item, ATTRIBUTE) else {
+        return Ok(());
+    };
+    let path = attribute
+        .named_child(0)
+        .map(|node| text(node, source))
+        .unwrap_or_default();
+    if path == CFG_ATTR_ATTRIBUTE && mentions_ignore(attribute, source) {
+        bail!(
+            "{file}: `#[cfg_attr(.., {IGNORE_ATTRIBUTE})]` hides a skip from the \
+             [TEST-SELECTION-SKIP] gate. State the skip as a plain `#[ignore = \"..\"]`."
+        );
+    }
+    if path != IGNORE_ATTRIBUTE {
+        return Ok(());
+    }
+    found.push(ignored_test(item, attribute, source, file)?);
+    Ok(())
+}
+
+/// Builds the record for one confirmed `#[ignore]`.
+fn ignored_test(item: Node, attribute: Node, source: &str, file: &str) -> Result<IgnoredTest> {
+    Ok(IgnoredTest {
+        file: file.to_owned(),
+        test: decorated_function(item, source, file)?,
+        reason: attribute
+            .child_by_field_name(VALUE_FIELD)
+            .map(|value| literal_value(&text(value, source)))
+            .unwrap_or_default(),
+    })
+}
+
+/// True when any identifier under `attribute` is `ignore`.
+fn mentions_ignore(attribute: Node, source: &str) -> bool {
+    let mut cursor = attribute.walk();
+    let named: Vec<Node> = attribute.named_children(&mut cursor).collect();
+    named.iter().any(|child| {
+        (child.kind() == IDENTIFIER && text(*child, source) == IGNORE_ATTRIBUTE)
+            || mentions_ignore(*child, source)
+    })
+}
+
+/// The name of the function `item` decorates. Outer attributes are siblings,
+/// so the owner is the next item once further attributes and the doc comments
+/// interleaved with them are stepped over.
+fn decorated_function(item: Node, source: &str, file: &str) -> Result<String> {
+    let mut sibling = item.next_named_sibling();
+    while let Some(node) = sibling {
+        match node.kind() {
+            ATTRIBUTE_ITEM | LINE_COMMENT | BLOCK_COMMENT => sibling = node.next_named_sibling(),
+            FUNCTION_ITEM => return named_child_text(node, source, file),
+            other => bail!(
+                "{file}: `#[{IGNORE_ATTRIBUTE}]` decorates a `{other}`, not a test function"
+            ),
+        }
+    }
+    bail!("{file}: `#[{IGNORE_ATTRIBUTE}]` decorates nothing")
+}
+
+/// The `name` field of a `function_item`.
+fn named_child_text(function: Node, source: &str, file: &str) -> Result<String> {
+    function
+        .child_by_field_name(NAME_FIELD)
+        .map(|name| text(name, source))
+        .ok_or_else(|| anyhow::anyhow!("{file}: an ignored function declares no name"))
+}
+
+/// The first child of `node` with the given kind.
+fn child_of_kind(node: Node, kind: &str) -> Option<Node> {
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .find(|child| child.kind() == kind)
+}
+
+/// The source text a node spans.
+fn text(node: Node, source: &str) -> String {
+    source
+        .get(node.start_byte()..node.end_byte())
+        .unwrap_or_default()
+        .to_owned()
+}
+
+/// The value of a Rust string literal, as the compiler sees it.
+fn literal_value(literal: &str) -> String {
+    match literal.strip_prefix('r') {
+        Some(raw) => raw.trim_matches('#').trim_matches('"').to_owned(),
+        None => unescape(literal.trim_matches('"')),
+    }
+}
+
+/// Resolves the escapes an `#[ignore]` reason can carry, including the line
+/// continuation `\<newline>`, which drops the newline and the indentation
+/// that follows it. Without it a reason wrapped across lines would carry the
+/// leading whitespace of every continuation into the text being matched.
+fn unescape(body: &str) -> String {
+    let mut out = String::with_capacity(body.len());
+    let mut chars = body.chars().peekable();
+    while let Some(character) = chars.next() {
+        match (character, chars.peek()) {
+            ('\\', Some('n')) => push_escaped(&mut out, &mut chars, '\n'),
+            ('\\', Some('t')) => push_escaped(&mut out, &mut chars, '\t'),
+            ('\\', Some('\n')) => skip_continuation(&mut chars),
+            ('\\', Some(_)) => out.extend(chars.next()),
+            _ => out.push(character),
+        }
+    }
+    out
+}
+
+/// Consumes the escaped character and pushes what it stands for.
+fn push_escaped(out: &mut String, chars: &mut Peekable<Chars>, resolved: char) {
+    chars.next();
+    out.push(resolved);
+}
+
+/// Consumes a line continuation: the newline and all whitespace after it.
+fn skip_continuation(chars: &mut Peekable<Chars>) {
+    while chars.peek().is_some_and(|next| next.is_whitespace()) {
+        chars.next();
+    }
+}
+
+/// Every `.rs` file under `root`, excluding build output and dependencies.
+fn rust_sources(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut found = Vec::new();
+    collect_rust_sources(root, &mut found)?;
+    found.sort();
+    Ok(found)
+}
+
+/// Depth-first accumulation of `.rs` paths under `directory`.
+fn collect_rust_sources(directory: &Path, found: &mut Vec<PathBuf>) -> Result<()> {
+    let entries = fs::read_dir(directory)
+        .with_context(|| format!("unreadable directory: {}", directory.display()))?;
+    for entry in entries {
+        let path = entry?.path();
+        match (path.is_dir(), is_scanned(&path), is_rust_source(&path)) {
+            (true, true, _) => collect_rust_sources(&path, found)?,
+            (false, _, true) => found.push(path),
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// False for build output, dependency trees, and every dotted directory.
+fn is_scanned(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    !name.starts_with('.') && !EXCLUDED_DIRECTORIES.contains(&name)
+}
+
+/// True for a `.rs` file.
+fn is_rust_source(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|extension| extension == RUST_EXTENSION)
+}
+
+/// `path` relative to the workspace root, `/`-separated on every platform so
+/// the curated set in the contract test reads the same everywhere.
+fn workspace_relative(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+#[cfg(test)]
+mod tests;

@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: 工作原理 — tree-sitter AST、MinHash LSH、HNSW 嵌入
-description: Deslop 的流水线 —— tree-sitter 解析、AST 归一化、Merkle 指纹、MinHash + LSH、HNSW 嵌入、融合 0.85 阈值、最严重者优先的排名。响应式分析循环。
+description: Deslop 如何使用 tree-sitter AST、Merkle 指纹、MinHash LSH、可选 HNSW 嵌入与最严重者优先排名来检测重复代码。
 eleventyNavigation:
   key: 工作原理
   order: 2

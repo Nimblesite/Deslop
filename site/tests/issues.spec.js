@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+const DOCS_LINK_COUNT = 12;
+
 test.describe("documentation navigation", () => {
-  test("lists the issue tools only inside the docs menu", async ({ page }) => {
+  test("keeps releases and issue tools inside the docs menu", async ({ page }) => {
     await page.goto("/docs/vscode-cluster-panel/");
 
     await expect(
@@ -10,15 +12,23 @@ test.describe("documentation navigation", () => {
         exact: true,
       }),
     ).toHaveCount(0);
+    await expect(
+      page.locator(".site-header .nav-links").getByRole("link", {
+        name: "Releases",
+        exact: true,
+      }),
+    ).toHaveCount(0);
 
     const docsNav = page.locator(".docs-sidebar__nav");
     await expect(page.locator(".docs-sidebar").getByText("The Manuscript", { exact: true })).toHaveCount(0);
     await expect(page.locator(".docs-sidebar").getByText(/Live duplicate-code analysis/)).toHaveCount(0);
     await expect(docsNav.locator("details.docs-nav-group")).toHaveCount(4);
-    await expect(docsNav.locator("a")).toHaveCount(11);
+    await expect(docsNav.locator("a")).toHaveCount(DOCS_LINK_COUNT);
     await expect(
       docsNav.locator('[data-docs-group="guides"]'),
     ).toHaveAttribute("open", "");
+    const referenceGroup = docsNav.locator('[data-docs-group="reference"]');
+    await expect(referenceGroup.locator('a[href="/releases/"]')).toContainText("Releases");
     const trustGroup = docsNav.locator('[data-docs-group="trust"]');
     await expect(trustGroup.locator('a[href="/issues/"]')).toContainText("Issue graph");
     await expect(trustGroup.locator('a[href="/issues/planner/"]')).toContainText("Issue planner");
@@ -56,13 +66,14 @@ test.describe("documentation navigation", () => {
     await page.goto("/zh/docs/");
 
     const docsNav = page.locator(".docs-sidebar__nav");
-    await expect(docsNav.locator("a")).toHaveCount(11);
+    await expect(docsNav.locator("a")).toHaveCount(DOCS_LINK_COUNT);
     await expect(docsNav.locator("summary")).toHaveText([
       "入门",
       "使用指南",
       "参考",
       "原理与透明度",
     ]);
+    await expect(docsNav.locator('a[href="/zh/releases/"]')).toContainText("发布");
     await expect(docsNav.locator('a[href="/issues/"]')).toContainText("交互式图谱");
     await expect(docsNav.locator('a[href="/issues/planner/"]')).toContainText("问题规划器");
     await page.getByRole("button", { name: "Toggle menu" }).click();
@@ -99,7 +110,7 @@ test.describe("documentation navigation", () => {
     for (const path of ["/issues/", "/issues/planner/"]) {
       await page.goto(path);
       await expect(page.locator("body")).toHaveClass(/is-docs/);
-      await expect(page.locator(".docs-sidebar__nav a")).toHaveCount(11);
+      await expect(page.locator(".docs-sidebar__nav a")).toHaveCount(DOCS_LINK_COUNT);
       await expect(page.getByRole("button", { name: "Collapse documentation sidebar" })).toBeVisible();
     }
 

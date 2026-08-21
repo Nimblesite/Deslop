@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: VS Code — Reading a duplicate-code cluster in the editor
-description: Field guide to the Deslop VS Code extension — the Top Offenders tree, the live duplicate warning, and the cluster detail panel, including cluster ids, ranking, signals, occurrences, and comparison actions.
+description: Use the Deslop VS Code extension to review Top Offenders, inspect live duplicate warnings and cluster signals, and compare canonical occurrences.
 eleventyNavigation:
   key: VS Code
   order: 5

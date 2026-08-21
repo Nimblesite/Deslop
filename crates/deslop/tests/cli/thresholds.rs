@@ -1,5 +1,12 @@
 use crate::support::*;
 
+const FAIL_OVER_FLAG: &str = "--fail-over";
+const ZERO_THRESHOLD: &str = "0.0";
+const SOURCE_FIELD: &str = "source";
+const BREACHED_FIELD: &str = "breached";
+const CLI_SOURCE: &str = "cli";
+const CONFIG_SOURCE: &str = "config";
+
 /// Creates a `tempdir` with a `src` scan root seeded with the canonical
 /// clone pair, returning both so the `tempdir` guard stays alive.
 fn clone_pair_scan_root() -> Result<(tempfile::TempDir, PathBuf)> {
@@ -32,9 +39,9 @@ fn write_threshold_config(scan_root: &Path, percent: &str) -> Result<()> {
 /// asserts the run exits with clap's argument-error code 2.
 fn assert_fail_over_value_exits_two(value: &str) -> Result<()> {
     let (tmp, scan_root) = empty_scan_root()?;
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
     let _assertion = cmd
-        .args(["--fail-over", value, "--no-color"])
+        .args([FAIL_OVER_FLAG, value, NO_COLOR_FLAG])
         .assert()
         .code(2);
     Ok(())
@@ -44,14 +51,26 @@ fn assert_fail_over_value_exits_two(value: &str) -> Result<()> {
 fn fail_over_cli_passes_under_threshold() -> Result<()> {
     let (tmp, scan_root) = clone_pair_scan_root()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
     let _assertion = cmd
-        .args(["--min-nodes", "8", "--fail-over", "100", "--no-color"])
+        .args([
+            MIN_NODES_FLAG,
+            MIN_NODES_VALUE,
+            FAIL_OVER_FLAG,
+            "100",
+            NO_COLOR_FLAG,
+        ])
         .assert()
         .success();
     let json = read_json_report(&out.json)?;
-    assert_eq!(threshold_field(&json, "source").as_str(), Some("cli"));
-    assert_eq!(threshold_field(&json, "breached").as_bool(), Some(false));
+    assert_eq!(
+        threshold_field(&json, SOURCE_FIELD).as_str(),
+        Some(CLI_SOURCE)
+    );
+    assert_eq!(
+        threshold_field(&json, BREACHED_FIELD).as_bool(),
+        Some(false)
+    );
     Ok(())
 }
 
@@ -60,16 +79,19 @@ fn fail_over_cli_passes_under_threshold() -> Result<()> {
 #[test]
 fn fail_over_config_file_loaded_when_flag_absent() -> Result<()> {
     let (tmp, scan_root) = clone_pair_scan_root()?;
-    write_threshold_config(&scan_root, "0.0")?;
+    write_threshold_config(&scan_root, ZERO_THRESHOLD)?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
     let _assertion = cmd
-        .args(["--min-nodes", "8", "--no-color"])
+        .args([MIN_NODES_FLAG, MIN_NODES_VALUE, NO_COLOR_FLAG])
         .assert()
         .code(3);
     let json = read_json_report(&out.json)?;
-    assert_eq!(threshold_field(&json, "source").as_str(), Some("config"));
-    assert_eq!(threshold_field(&json, "breached").as_bool(), Some(true));
+    assert_eq!(
+        threshold_field(&json, SOURCE_FIELD).as_str(),
+        Some(CONFIG_SOURCE)
+    );
+    assert_eq!(threshold_field(&json, BREACHED_FIELD).as_bool(), Some(true));
     Ok(())
 }
 
@@ -78,16 +100,28 @@ fn fail_over_config_file_loaded_when_flag_absent() -> Result<()> {
 #[test]
 fn fail_over_cli_overrides_config_file() -> Result<()> {
     let (tmp, scan_root) = clone_pair_scan_root()?;
-    write_threshold_config(&scan_root, "0.0")?;
+    write_threshold_config(&scan_root, ZERO_THRESHOLD)?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
     let _assertion = cmd
-        .args(["--min-nodes", "8", "--fail-over", "100", "--no-color"])
+        .args([
+            MIN_NODES_FLAG,
+            MIN_NODES_VALUE,
+            FAIL_OVER_FLAG,
+            "100",
+            NO_COLOR_FLAG,
+        ])
         .assert()
         .success();
     let json = read_json_report(&out.json)?;
-    assert_eq!(threshold_field(&json, "source").as_str(), Some("cli"));
-    assert_eq!(threshold_field(&json, "breached").as_bool(), Some(false));
+    assert_eq!(
+        threshold_field(&json, SOURCE_FIELD).as_str(),
+        Some(CLI_SOURCE)
+    );
+    assert_eq!(
+        threshold_field(&json, BREACHED_FIELD).as_bool(),
+        Some(false)
+    );
     Ok(())
 }
 
@@ -96,15 +130,20 @@ fn fail_over_cli_overrides_config_file() -> Result<()> {
 #[test]
 fn no_fail_over_overrides_config_file_threshold() -> Result<()> {
     let (tmp, scan_root) = clone_pair_scan_root()?;
-    write_threshold_config(&scan_root, "0.0")?;
+    write_threshold_config(&scan_root, ZERO_THRESHOLD)?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
     let _assertion = cmd
-        .args(["--min-nodes", "8", "--no-fail-over", "--no-color"])
+        .args([
+            MIN_NODES_FLAG,
+            MIN_NODES_VALUE,
+            "--no-fail-over",
+            NO_COLOR_FLAG,
+        ])
         .assert()
         .success();
     let json = read_json_report(&out.json)?;
-    assert_eq!(threshold_field(&json, "source").as_str(), Some("none"));
+    assert_eq!(threshold_field(&json, SOURCE_FIELD).as_str(), Some("none"));
     Ok(())
 }
 
@@ -123,9 +162,9 @@ fn fail_over_invalid_value_exits_two() -> Result<()> {
 fn from_report_replays_metrics_without_reanalysing() -> Result<()> {
     let (tmp, scan_root) = clone_pair_scan_root()?;
     let initial = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
     let _assertion = cmd
-        .args(["--min-nodes", "8", "--no-color"])
+        .args([MIN_NODES_FLAG, MIN_NODES_VALUE, NO_COLOR_FLAG])
         .assert()
         .success();
     let original = read_json_report(&initial.json)?;
@@ -137,7 +176,7 @@ fn from_report_replays_metrics_without_reanalysing() -> Result<()> {
     let _assertion2 = cmd2
         .arg("--from-report")
         .arg(&initial.json)
-        .arg("--no-color")
+        .arg(NO_COLOR_FLAG)
         .assert()
         .success();
     let replay_json = read_json_report(&with_ext(&replay_prefix, "json"))?;
@@ -155,9 +194,15 @@ fn from_report_replays_metrics_without_reanalysing() -> Result<()> {
 fn text_renderer_shows_repo_duplication_header() -> Result<()> {
     let (tmp, scan_root) = clone_pair_scan_root()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
     let _assertion = cmd
-        .args(["--min-nodes", "8", "--fail-over", "0", "--no-color"])
+        .args([
+            MIN_NODES_FLAG,
+            MIN_NODES_VALUE,
+            FAIL_OVER_FLAG,
+            "0",
+            NO_COLOR_FLAG,
+        ])
         .assert()
         .code(3);
     let txt = fs::read_to_string(&out.txt)?;
@@ -180,9 +225,15 @@ fn html_renderer_colour_codes_threshold_state() -> Result<()> {
     // Breached variant.
     let (tmp, scan_root) = clone_pair_scan_root()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
     let _assertion = cmd
-        .args(["--min-nodes", "8", "--fail-over", "0", "--no-color"])
+        .args([
+            MIN_NODES_FLAG,
+            MIN_NODES_VALUE,
+            FAIL_OVER_FLAG,
+            "0",
+            NO_COLOR_FLAG,
+        ])
         .assert()
         .code(3);
     let html_breached = fs::read_to_string(&out.html)?;
@@ -194,9 +245,9 @@ fn html_renderer_colour_codes_threshold_state() -> Result<()> {
     // Neutral variant (no threshold).
     let (tmp2, scan_root2) = clone_pair_scan_root()?;
     let out2 = outputs_under(tmp2.path());
-    let mut cmd2 = deslop_command(&scan_root2, &tmp2.path().join("report"))?;
+    let mut cmd2 = deslop_command(&scan_root2, &tmp2.path().join(REPORT_OUTPUT_STEM))?;
     let _assertion2 = cmd2
-        .args(["--min-nodes", "8", "--no-color"])
+        .args([MIN_NODES_FLAG, MIN_NODES_VALUE, NO_COLOR_FLAG])
         .assert()
         .success();
     let html_neutral = fs::read_to_string(&out2.html)?;
@@ -226,9 +277,9 @@ fn fail_over_nan_exits_two() -> Result<()> {
 fn config_threshold_out_of_range_fails_runtime() -> Result<()> {
     let (tmp, scan_root) = clone_pair_scan_root()?;
     write_threshold_config(&scan_root, "150.0")?;
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
     let _assertion = cmd
-        .args(["--min-nodes", "8", "--no-color"])
+        .args([MIN_NODES_FLAG, MIN_NODES_VALUE, NO_COLOR_FLAG])
         .assert()
         .code(1);
     Ok(())

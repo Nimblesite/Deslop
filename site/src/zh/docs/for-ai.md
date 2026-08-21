@@ -1,8 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: 面向 AI — 编码智能体如何用 Deslop 阻止重复代码
-description: 本页写给智能体本身。写代码前先调用 find-similar；当 MCP 不可用时，回退到 deslop CLI。含阈值、JSON 字段与字节范围。
-keywords: deslop, AI 智能体, 编码智能体, find-similar, mcp, CLI 回退, 重复代码, Claude Code, Cursor, Codex
+description: 面向编码智能体的操作说明：写代码前调用 find-similar；MCP 不可用时使用 Deslop CLI；正确解读阈值与字节范围。
 eleventyNavigation:
   key: 面向 AI
   order: 4

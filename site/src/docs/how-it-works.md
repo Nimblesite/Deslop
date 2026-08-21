@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: How It Works — Tree-sitter ASTs, MinHash LSH, HNSW embeddings
-description: Deslop's pipeline — tree-sitter parse, AST normalization, Merkle fingerprints, MinHash + LSH, HNSW embeddings, fused 0.85 threshold, worst-offenders ranking. Reactive analysis loop.
+description: How Deslop detects duplicate code with tree-sitter ASTs, Merkle fingerprints, MinHash LSH, optional HNSW embeddings, and worst-first ranking.
 eleventyNavigation:
   key: How It Works
   order: 2

@@ -35,6 +35,7 @@ const TEN_PIXEL_SIZE = "10px";
 const LARGE_SPACING = "24px";
 const SMALL_SPACING = "8px";
 const FLEX_DISPLAY = "flex";
+const SPACE_TEXT = " ";
 const GRID_DISPLAY = "grid";
 const WRAP_LAYOUT = "wrap";
 const END_ALIGNMENT = "flex-end";
@@ -155,7 +156,7 @@ function ClusterApp() {
             }}
           >
             <HelpedText topic={CLUSTER_ID_TOPIC} title={clusterIdTitle(cluster.id, rank, list.length)}>
-              CLUSTER ·{" "}
+              CLUSTER ·{SPACE_TEXT}
               <DocTextLink topic={CLUSTER_ID_TOPIC} title={clusterIdTitle(cluster.id, rank, list.length)}>
                 {cluster.id}
               </DocTextLink>
@@ -399,16 +400,16 @@ function HotkeyHelp({ accent }: { accent: string }) {
     >
       <span style={{ color: accent }} title="j moves the focused occurrence down; k moves it up.">
         j/k
-      </span>{" "}
-      next/prev occurrence ·{" "}
+      </span>{SPACE_TEXT}
+      next/prev occurrence ·{SPACE_TEXT}
       <span style={{ color: accent }} title="n moves to the next cluster; p moves to the previous cluster.">
         n/p
-      </span>{" "}
-      next/prev cluster ·{" "}
+      </span>{SPACE_TEXT}
+      next/prev cluster ·{SPACE_TEXT}
       <span style={{ color: accent }} title="Enter opens the currently focused occurrence in the editor.">
         Enter
-      </span>{" "}
-      open ·{" "}
+      </span>{SPACE_TEXT}
+      open ·{SPACE_TEXT}
       <button
         onClick={() => {
           shortcutHelpExpanded.value = !shortcutHelpExpanded.value;
@@ -418,7 +419,7 @@ function HotkeyHelp({ accent }: { accent: string }) {
         style={{ padding: BADGE_PADDING, color: accent }}
       >
         ?
-      </button>{" "}
+      </button>{SPACE_TEXT}
       help <HelpBubble topic="keyboard-shortcuts" />
       {shortcutHelpExpanded.value ? (
         <div

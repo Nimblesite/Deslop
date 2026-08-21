@@ -31,6 +31,7 @@ import {
 } from "../types/report";
 
 const REDRAW_DEBOUNCE_MS = 60;
+const UTF8_ENCODING = "utf8";
 
 export class DecorationManager implements vscode.Disposable {
   private readonly byKind: Map<DeslopSeverity, vscode.TextEditorDecorationType>;
@@ -81,7 +82,7 @@ export class DecorationManager implements vscode.Disposable {
       const severity = clusterSeverity(cluster);
       for (const occurrence of cluster.occurrences) {
         if (!sameFile(occurrence.path, activePath)) continue;
-        buffer ??= Buffer.from(editor.document.getText(), "utf8");
+        buffer ??= Buffer.from(editor.document.getText(), UTF8_ENCODING);
         const range = rangeFromBuffer(editor.document, buffer, occurrence);
         if (range) buckets.get(severity)?.push({ range });
       }
@@ -120,7 +121,7 @@ export function byteRangeToRange(
   document: vscode.TextDocument,
   occurrence: ReportOccurrence,
 ): vscode.Range | null {
-  return rangeFromBuffer(document, Buffer.from(document.getText(), "utf8"), occurrence);
+  return rangeFromBuffer(document, Buffer.from(document.getText(), UTF8_ENCODING), occurrence);
 }
 
 // Converts a UTF-8 byte range to an editor range using a buffer the caller already
@@ -131,8 +132,8 @@ export function rangeFromBuffer(
   occurrence: ReportOccurrence,
 ): vscode.Range | null {
   if (occurrence.start_byte > buffer.length || occurrence.end_byte > buffer.length) return null;
-  const start = document.positionAt(buffer.slice(0, occurrence.start_byte).toString("utf8").length);
-  const end = document.positionAt(buffer.slice(0, occurrence.end_byte).toString("utf8").length);
+  const start = document.positionAt(buffer.slice(0, occurrence.start_byte).toString(UTF8_ENCODING).length);
+  const end = document.positionAt(buffer.slice(0, occurrence.end_byte).toString(UTF8_ENCODING).length);
   return new vscode.Range(start, end);
 }
 

@@ -11,10 +11,13 @@ tags:
 category: engineering
 description: "AI 生成的代码可能制造重复代码和技术债务。了解如何借助代码克隆检测来检查这些问题，以及 Deslop 如何审计 AI 时代的代码库。"
 excerpt: "AI 生成的代码可能在代码审查发现之前就成倍增加重复逻辑。本指南讲解该检查什么、为什么重复代码会变成技术债务，以及在哪里阅读完整的 Deslop 研究背景。"
-heroImage: "/assets/img/blog/ai-generated-code-duplicate-code-header.png"
+heroImage: "/assets/img/blog/ai-generated-code-duplicate-code-header.webp"
 heroImageWidth: "1600"
 heroImageHeight: "900"
 heroImageAlt: "标题图，展示针对 AI 生成代码的四层重复代码检查清单。"
+ogImage: "/assets/img/blog/ai-generated-code-duplicate-code-og.jpg"
+ogImageWidth: "1200"
+ogImageHeight: "630"
 lang: zh
 ---
 

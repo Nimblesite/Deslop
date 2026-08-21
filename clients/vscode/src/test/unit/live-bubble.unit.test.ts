@@ -7,7 +7,10 @@ import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { LiveBubble } from "../../bubble/live";
 import {
+  DEFAULT_BUBBLE_CLUSTER_WEIGHT,
   ENGINE_FUSED_CUTOFF,
+  HIGH_FUSED_CONFIDENCE,
+  PRIMARY_BUBBLE_CLUSTER_ID,
   bubbleCluster,
   bubbleFixture,
   openLiveDocument,
@@ -19,11 +22,13 @@ import {
   span,
 } from "./bubble.helpers";
 
+const DISMISSIBLE_CLUSTER_ID = "c-dismiss";
+
 suite("LiveBubble render", () => {
   test("inline mode renders the bubble decoration", async () => {
     const { capture, bubble } = await bubbleFixture();
     try {
-      bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
+      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
       const visible = capture.visible();
 
       assert.ok(
@@ -40,7 +45,7 @@ suite("LiveBubble render", () => {
 
       // Idempotent re-render (same cluster + range) must not repaint.
       const before = capture.calls.length;
-      bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
+      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
       assert.equal(
         capture.calls.length,
         before,
@@ -57,7 +62,7 @@ suite("LiveBubble render", () => {
       // construction — a byte-proven copy never renders 0.2. A weak hint
       // is what the engine actually pairs with a low confidence, and it is
       // the population the cutoff exists to gate.
-      const weakHint = bubbleCluster("c-low", 10, 0.2, {
+      const weakHint = bubbleCluster("c-low", DEFAULT_BUBBLE_CLUSTER_WEIGHT, 0.2, {
         bucket: "loosely_similar",
         structural: 0.3,
         token: 0.4,
@@ -72,7 +77,7 @@ suite("LiveBubble render", () => {
       // the cutoff comes back. Without this the assertion above would also
       // pass if hints were banned from the surface outright.
       bubble.render(capture.editor, span(12), [
-        bubbleCluster("c-hint", 10, ENGINE_FUSED_CUTOFF, {
+        bubbleCluster("c-hint", DEFAULT_BUBBLE_CLUSTER_WEIGHT, ENGINE_FUSED_CUTOFF, {
           bucket: "loosely_similar",
           structural: 0.3,
           token: 0.4,
@@ -94,7 +99,7 @@ suite("LiveBubble render", () => {
     const { capture, bubble } = await bubbleFixture();
 
     try {
-      bubble.render(capture.editor, span(0), [cluster("c-a", 100, 0.95, 35)]);
+      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, 100, HIGH_FUSED_CONFIDENCE, 35)]);
       const visible = capture.visible() ?? "";
 
       assert.equal(
@@ -122,7 +127,7 @@ suite("LiveBubble render", () => {
   test("ghost mode renders the ghost-line decoration", async () => {
     const { capture, bubble } = await bubbleFixture({ mode: "ghost" });
     try {
-      bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
+      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
       const ghost = capture.visible() ?? "";
 
       assert.match(ghost, /└─/, "ghost mode renders the tree-branch prefix");
@@ -142,7 +147,7 @@ suite("LiveBubble render", () => {
       // Switching mode mid-session must move the same cluster to the
       // other surface rather than leaving both painted.
       await setMode("inline");
-      bubble.render(capture.editor, span(6), [cluster("c-a", 10, 0.95)]);
+      bubble.render(capture.editor, span(6), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
       const inline = capture.visible() ?? "";
       assert.doesNotMatch(inline, /└─/, "inline mode drops the ghost prefix");
       assert.match(inline, /Identical code/, "the bucket title survives the mode switch");
@@ -159,7 +164,7 @@ suite("LiveBubble render", () => {
   test("render without a report is a no-op", async () => {
     const { store, capture, bubble } = await bubbleFixture({ snapshot: null });
     try {
-      bubble.render(capture.editor, span(0), [cluster("x", 1, 0.95)]);
+      bubble.render(capture.editor, span(0), [cluster("x", 1, HIGH_FUSED_CONFIDENCE)]);
 
       assert.equal(
         capture.calls.length,
@@ -180,7 +185,7 @@ suite("LiveBubble render", () => {
   test("render clears the bubble when no cluster passes the threshold", async () => {
     const { capture, bubble } = await bubbleFixture();
     try {
-      renderFullConfidenceBubble(capture, bubble, 0, "c-a");
+      renderFullConfidenceBubble(capture, bubble, 0, PRIMARY_BUBBLE_CLUSTER_ID);
 
       // The bucket is load-bearing: an `identical` cluster is byte-proven and
       // its `bounded_fused` is ≥ 0.99 by construction, so the engine cannot
@@ -221,7 +226,7 @@ suite("LiveBubble render", () => {
       const visible = renderFullConfidenceBubble(capture, bubble, 0, "c-a");
       assert.match(visible, /Identical code/, "seeded at full confidence");
 
-      retractCluster(store, "c-a");
+      retractCluster(store, PRIMARY_BUBBLE_CLUSTER_ID);
 
       assert.equal(
         capture.visible(),
@@ -248,12 +253,12 @@ suite("LiveBubble render", () => {
     const { store, capture, bubble } = await bubbleFixture({ generation: 1 });
 
     try {
-      renderFullConfidenceBubble(capture, bubble, 0, "c-a");
+      renderFullConfidenceBubble(capture, bubble, 0, PRIMARY_BUBBLE_CLUSTER_ID);
 
-      retractCluster(store, "c-a");
+      retractCluster(store, PRIMARY_BUBBLE_CLUSTER_ID);
       assert.equal(capture.visible(), undefined, "the delta must clear the bubble");
 
-      bubble.render(capture.editor, span(6), [cluster("c-a", 10, 0.95)]);
+      bubble.render(capture.editor, span(6), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
       assert.equal(
         capture.visible(),
         undefined,
@@ -299,12 +304,12 @@ suite("LiveBubble render", () => {
   test("deslop.bubble.dismissCluster command hides the dismissed cluster from future renders", async () => {
     const { capture, bubble } = await bubbleFixture();
     try {
-      renderFullConfidenceBubble(capture, bubble, 0, "c-dismiss");
+      renderFullConfidenceBubble(capture, bubble, 0, DISMISSIBLE_CLUSTER_ID);
 
-      bubble.dismissCluster("c-dismiss");
+      bubble.dismissCluster(DISMISSIBLE_CLUSTER_ID);
       // The dismissedClusters filter drops it before the sort step, so
       // even at unchanged confidence it must not come back.
-      bubble.render(capture.editor, span(6), [cluster("c-dismiss", 10, 0.95)]);
+      bubble.render(capture.editor, span(6), [cluster(DISMISSIBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
       assert.equal(
         capture.visible(),
         undefined,
@@ -343,7 +348,7 @@ suite("LiveBubble render", () => {
     const bubble = new LiveBubble(store, () => undefined);
     try {
       const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));
-      bubble.render(editor, range, [cluster("c-inlay", 10, 0.95)]);
+      bubble.render(editor, range, [cluster("c-inlay", DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
       const hints = await vscode.commands.executeCommand<vscode.InlayHint[]>(
         "vscode.executeInlayHintProvider",
         doc.uri,

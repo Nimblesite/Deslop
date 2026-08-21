@@ -74,4 +74,8 @@ Without this field no manifest could express the thing seven open false-positive
 
 The corpus workflow is scheduled and dispatchable, and has **no `pull_request` trigger**. It reports; it does not gate. Merges must not depend on a suite that is red on tracked defects, and a suite that is red on tracked defects must not be quietly weakened to make it green.
 
-Scheduled runs scan a slice sized to finish in about a minute, not the whole corpus. The job summary states which repositories were skipped, so a green scheduled run is never misread as full coverage.
+Scheduled runs scan a slice sized to finish in about a minute, not the whole corpus. The job summary states which repositories were skipped, so a green scheduled run is never misread as full coverage. The slice is selected by `--exact`, never by substring: a filter that matches part of a test name selects nothing the day a test is renamed, and an empty run reports green (gh #412).
+
+Every test in the suite is `#[ignore]`d under [SKIP-TOO-LARGE-FOR-CI] and cites **gh #422**, which records the measurement — `flutter/flutter` at roughly 9.5 GB peak and 9m44s (#166), `dotnet/fsharp` above 13 GB — and the memory work that would let these tests move into the PR gate. `--ignored` is what selects them; nothing is selected by name. See [release.md §TEST-SELECTION-SKIP](release.md).
+
+`make test` and `make lint` still **compile and lint** the target. Skipping costs coverage of the suite's execution, never of its compilation: the earlier `required-features` gate removed it from `--all-targets` entirely, and commit `77bcbaed5` left it uncompilable, with nothing to notice until someone ran `make test-corpus`.

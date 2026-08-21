@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: 快速开始 — 安装 Deslop 并查找重复代码
-description: 安装 Deslop，在九种编程语言中查找重复代码。VS Code 扩展一次安装即捆绑实时编辑器警告、面向编码智能体的检查与 CLI。仅需 CLI 时可使用 Homebrew、Scoop 或 curl。
+description: 安装 Deslop，在九种编程语言中查找重复代码。一个 VS Code 扩展即可获得实时警告、面向编码智能体的 MCP 检查和 CLI。
 eleventyNavigation:
   key: 快速开始
   order: 1

@@ -36,7 +36,7 @@ use crate::{
     ast::{ByteRange, NormalizedNode},
     cluster::Cluster,
     fingerprint::Fingerprint,
-    lang::shared::LITERAL_KIND,
+    lang::shared::{LITERAL_KIND, OPERATOR_KIND},
     state::FileId,
     tokens::collapsed_leaves,
 };
@@ -60,6 +60,9 @@ const LITERAL_TABLE_MIN_LITERALS: usize = 8;
 /// agreement would resurrect the exact #331 mega-cluster the content
 /// gate exists to demote.
 const VERBATIM_MEMBER_SHARE_FLOOR: f64 = 0.5;
+
+/// Smallest token-identical family that is a copy of anything.
+const MIN_VERBATIM_FAMILY: usize = 2;
 
 /// Measured raw-content evidence for one cluster, produced by
 /// [`attach_content_evidence`] and consumed by bucket routing, the
@@ -138,12 +141,55 @@ impl ContentEvidence {
     }
 }
 
+/// The largest token-identical family inside a cluster: one member of
+/// it, and how many members it holds.
+#[derive(Debug, Clone, Copy)]
+struct DominantFamily {
+    /// Index of the family's earliest member — the anchor every other
+    /// member's agreement is measured against.
+    anchor: usize,
+    /// Number of members in the family.
+    size: usize,
+}
+
+/// Which evidence population a collapsed frontier leaf belongs to.
+///
+/// Identifiers and literals are the two populations the rename and
+/// literal-preservation measurements are defined over. Operators are a
+/// third ([PIPELINE-NORMALIZE-AST-OPERATOR]) and deliberately belong to
+/// neither: there is no substitution that turns `+` into `-`, so
+/// counting an operator as an identifier would report a broken rename,
+/// and counting it as a literal would report a data table. It is
+/// evidence of its own kind — positional agreement, and nothing else.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum Population {
+    /// A collapsed identifier position.
+    Identifier,
+    /// A collapsed literal position.
+    Literal,
+    /// A behaviour-bearing operator token.
+    Operator,
+}
+
+impl Population {
+    /// The population a normalised leaf kind belongs to. Anything that
+    /// is neither a literal nor an operator reached the frontier as a
+    /// collapsed identifier.
+    fn of(kind: &str) -> Self {
+        match kind {
+            LITERAL_KIND => Self::Literal,
+            OPERATOR_KIND => Self::Operator,
+            _ => Self::Identifier,
+        }
+    }
+}
+
 /// One collapsed-leaf content key: the population flag plus a truncated
 /// hash of the leaf's raw source bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 struct LeafKey {
-    /// True when the leaf is a literal position, false for identifiers.
-    literal: bool,
+    /// Which evidence population the leaf belongs to.
+    population: Population,
     /// Truncated blake3 hash of the leaf's raw source bytes.
     key: u64,
 }
@@ -219,10 +265,11 @@ fn measure_cluster<S: BuildHasher>(
         .collect();
     let canonical = member_contents.first().and_then(Option::as_ref);
     let canonical_keys = keys_of(canonical);
+    let dominant = dominant_verbatim_family(&member_contents);
     let verbatim_dominated = member_contents.len() >= 2
-        && dominant_verbatim_share(&member_contents) > VERBATIM_MEMBER_SHARE_FLOOR;
+        && dominant_verbatim_share(dominant, member_contents.len()) > VERBATIM_MEMBER_SHARE_FLOOR;
     ContentEvidence {
-        agreement: cluster_agreement(&member_contents, verbatim_dominated),
+        agreement: cluster_agreement(&member_contents, dominant),
         rename_consistency: rename::cluster_rename_consistency(
             canonical,
             &member_contents,
@@ -272,9 +319,17 @@ fn pair_substance_varies(canonical: Option<&[LeafKey]>, member: Option<&[LeafKey
     if canonical.len() != member.len() {
         return true;
     }
-    let literals = population(canonical, member, true);
+    let literals = population(canonical, member, Population::Literal);
     let literals_vary = !literals.is_empty() && literal_preservation(&literals) < 1.0;
-    literals_vary || mapping_consistency(&population(canonical, member, false)) < 1.0
+    // [PIPELINE-NORMALIZE-AST-OPERATOR] An operator that changed is
+    // substance that changed. There is no substitution that explains
+    // `+` becoming `-`: it is a different computation, not a different
+    // name for the same one.
+    let operators = population(canonical, member, Population::Operator);
+    let operators_vary = operators.iter().any(|(left, right)| left != right);
+    literals_vary
+        || operators_vary
+        || mapping_consistency(&population(canonical, member, Population::Identifier)) < 1.0
 }
 
 /// Fraction of the canonical member's collapsed leaves that are literal
@@ -287,39 +342,70 @@ fn canonical_literal_fraction(canonical: Option<&[LeafKey]>) -> f64 {
     let Some(leaves) = canonical else {
         return 0.0;
     };
-    let literals = leaves.iter().filter(|leaf| leaf.literal).count();
-    if literals < LITERAL_TABLE_MIN_LITERALS || leaves.is_empty() {
+    let literals = leaves
+        .iter()
+        .filter(|leaf| leaf.population == Population::Literal)
+        .count();
+    // Operators are neither data nor names, so they belong to neither
+    // side of "is this a data literal?" and are left out of the
+    // denominator — a table stays as literal-dominated as it was before
+    // operators joined the frontier ([CLONE-NOISE-LITERAL-TABLE]).
+    let vocabulary = leaves
+        .iter()
+        .filter(|leaf| leaf.population != Population::Operator)
+        .count();
+    if literals < LITERAL_TABLE_MIN_LITERALS || vocabulary == 0 {
         return 0.0;
     }
-    member_count(literals) / member_count(leaves.len())
+    member_count(literals) / member_count(vocabulary)
 }
 
-/// Mean pooled agreement of every non-canonical member against the
-/// canonical (first) member. `1.0` for degenerate single-member
-/// clusters; a member whose leaves cannot be resolved contributes `0.0`
-/// — unresolvable content is no evidence of agreement.
-fn cluster_agreement(member_contents: &[Option<MemberContent>], verbatim_dominated: bool) -> f64 {
-    if member_contents.len() < 2 || verbatim_dominated {
+/// Mean pooled agreement of every other member against one anchor.
+/// `1.0` for degenerate single-member clusters; a member whose leaves
+/// cannot be resolved contributes `0.0` — unresolvable content is no
+/// evidence of agreement.
+///
+/// The anchor is a member of the largest token-identical family when
+/// there is one, and the first member otherwise. That choice is the
+/// whole of what the old `verbatim_dominated` short-circuit was for:
+/// measuring a cluster of proven copies against a canonical that
+/// happens *not* to be one of them averaged the copies down below the
+/// support floor, so the measurement was replaced wholesale by `1.0`.
+///
+/// Replacing it was too much. A strict majority is not everyone: a
+/// five-member cluster of three exact copies plus two shape-compatible
+/// strangers cleared the floor at 3/5 and every member — strangers
+/// included — was then handed the proof the three copies had earned,
+/// saturating `fused` for code that is not duplicated. Anchoring
+/// instead of short-circuiting keeps the copies at `1.0` where they
+/// belong and leaves each stranger scoring its own real agreement, so
+/// the cluster's number describes the cluster.
+fn cluster_agreement(
+    member_contents: &[Option<MemberContent>],
+    dominant: Option<DominantFamily>,
+) -> f64 {
+    if member_contents.len() < 2 {
         return 1.0;
     }
-    let canonical = keys_of(member_contents.first().and_then(Option::as_ref));
+    let anchor = dominant.map_or(0, |family| family.anchor);
+    let canonical = keys_of(member_contents.get(anchor).and_then(Option::as_ref));
     let total: f64 = member_contents
         .iter()
-        .skip(1)
-        .map(|content| pair_agreement(canonical, keys_of(content.as_ref())))
+        .enumerate()
+        .filter(|(index, _)| *index != anchor)
+        .map(|(_, content)| pair_agreement(canonical, keys_of(content.as_ref())))
         .sum();
     total / member_count(member_contents.len().saturating_sub(1))
 }
 
-/// Paired keys at the positions where both members carry the requested
-/// population (literal or identifier). Shape-aligned members disagree on
-/// a position's population only at parse-artifact boundaries; such
-/// positions belong to neither population.
-fn population(canonical: &[LeafKey], member: &[LeafKey], literal: bool) -> Vec<(u64, u64)> {
+/// Paired keys at the positions where both members carry `wanted`.
+/// Shape-aligned members disagree on a position's population only at
+/// parse-artifact boundaries; such positions belong to no population.
+fn population(canonical: &[LeafKey], member: &[LeafKey], wanted: Population) -> Vec<(u64, u64)> {
     canonical
         .iter()
         .zip(member.iter())
-        .filter(|(left, right)| left.literal == literal && right.literal == literal)
+        .filter(|(left, right)| left.population == wanted && right.population == wanted)
         .map(|(left, right)| (left.key, right.key))
         .collect()
 }
@@ -384,21 +470,37 @@ fn vacuous_share(numerator: usize, denominator: usize) -> f64 {
 /// same identifier and literal carry equal leaf keys while being
 /// different statements, so leaf keys alone pair non-copies
 /// (`python-issue-72-monkeypatch-setenv`).
-fn dominant_verbatim_share(member_contents: &[Option<MemberContent>]) -> f64 {
-    let mut counts: HashMap<([u8; 32], &[LeafKey]), usize> = HashMap::new();
-    for content in member_contents.iter().flatten() {
-        if !content.keys.is_empty() {
-            let entry = counts
-                .entry((content.shape, content.keys.as_slice()))
-                .or_insert(0_usize);
-            *entry = entry.saturating_add(1);
+fn dominant_verbatim_family(member_contents: &[Option<MemberContent>]) -> Option<DominantFamily> {
+    let mut families: HashMap<([u8; 32], &[LeafKey]), (usize, usize)> = HashMap::new();
+    for (index, content) in member_contents.iter().enumerate() {
+        let Some(content) = content else { continue };
+        if content.keys.is_empty() {
+            continue;
         }
+        let entry = families
+            .entry((content.shape, content.keys.as_slice()))
+            .or_insert((index, 0_usize));
+        entry.1 = entry.1.saturating_add(1);
     }
-    let dominant = counts.values().copied().max().unwrap_or(0);
-    if dominant < 2 || member_contents.is_empty() {
+    // Largest family wins; the earliest member breaks a tie so the
+    // choice is independent of hash iteration order
+    // ([PIPELINE-DETERMINISM]).
+    families
+        .into_values()
+        .filter(|(_, size)| *size >= MIN_VERBATIM_FAMILY)
+        .max_by(|left, right| left.1.cmp(&right.1).then_with(|| right.0.cmp(&left.0)))
+        .map(|(anchor, size)| DominantFamily { anchor, size })
+}
+
+/// The share of a cluster held by its largest token-identical family.
+fn dominant_verbatim_share(dominant: Option<DominantFamily>, members: usize) -> f64 {
+    let Some(family) = dominant else {
+        return 0.0;
+    };
+    if members == 0 {
         return 0.0;
     }
-    member_count(dominant) / member_count(member_contents.len())
+    member_count(family.size) / member_count(members)
 }
 
 /// Agreement between two members' collapsed-leaf content keys.
@@ -454,7 +556,7 @@ fn member_content<S: BuildHasher>(
         .iter()
         .map(|(kind, range)| {
             source.get(range.start..range.end).map(|bytes| LeafKey {
-                literal: *kind == LITERAL_KIND,
+                population: Population::of(kind),
                 key: truncated_hash(bytes),
             })
         })

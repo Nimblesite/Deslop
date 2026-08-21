@@ -64,9 +64,11 @@ typediagram-gen:
 ##       the corpus gate's own self-tests and the mock-Ollama suites
 ##       (gh #412). The Rust embedding tests are hermetic — they drive an
 ##       in-process mock server or a deliberately dead endpoint and need no
-##       daemon. The one suite that must not run here, the real-repository
-##       corpus gate, is excluded structurally by `required-features` on its
-##       Cargo test target; `make test-corpus` opts in.
+##       daemon. [TEST-SELECTION-SKIP] The suites that must not run here say
+##       so at their own declaration, with `#[ignore = ".."]`: the reason is
+##       printed on every run and `skip_policy_contract` holds it to the
+##       policy. `#[ignore]` still compiles and lints the target — skipping
+##       costs coverage of a test's execution, never of its compilation.
 ##       The `--ignore-filename-regex` list lives in
 ##       `coverage-thresholds.json` under `.rust.ignore_filename_regex`
 ##       (single source of truth). Per-crate thresholds live under
@@ -141,17 +143,17 @@ _coverage_check:
 ##       ([CLONE-BUCKETS-DUAL-LABEL]): every product-facing `Type-N`
 ##       mention in site/src and examples must co-locate a canonical
 ##       bucket label. [TEST-SELECTION]: the release gate may not select
-##       tests by name substring, and the corpus suite stays feature-gated.
-##       clippy enables `deslop/corpus-repos` so the feature-gated corpus
-##       target is still type-checked and linted on every run — gating it out
-##       of `make test` must cost coverage of its execution, never of its
-##       compilation. Commit 77bcbaed5 left it uncompilable for exactly that
-##       reason.
+##       tests by name substring, and [TEST-SELECTION-SKIP]: every `#[ignore]`
+##       must carry a category, an issue, a spec id and a plan. clippy runs
+##       `--all-targets`, which now covers the corpus suite too: `#[ignore]`
+##       keeps it compiled and linted where `required-features` had removed
+##       it from the build entirely. Commit 77bcbaed5 left it uncompilable
+##       for exactly that reason.
 ##       Depends on typediagram-gen so the wire-generated module exists
 ##       before clippy parses the workspace on a fresh checkout.
 lint: typediagram-gen
 	@echo "==> Linting..."
-	cargo clippy --release --all-targets --workspace --features deslop/corpus-repos -- -D warnings
+	cargo clippy --release --all-targets --workspace -- -D warnings
 	@bash scripts/repository/taxonomy-gate.sh
 	@echo "==> VSIX harness + packaging script gates (unit)..."
 	@node --test clients/vscode/scripts/*.test.mjs
@@ -231,15 +233,17 @@ ci-ollama: ci test-ollama
 
 ## test-corpus: [CORPUS-*] Accuracy + resource suite against real public repos
 ##              pinned by `corpus/*.json`. Clones into git-ignored `.corpus/`
-##              first (re-runs are free once cloned). [TEST-SELECTION] Its
-##              Cargo test target carries `required-features = ["corpus-repos"]`
-##              so `make test`/`make ci` never build it: it needs the network
-##              and measures wall time and peak memory, which are
-##              runner-dependent. Run it when touching the pipeline.
+##              first (re-runs are free once cloned). [TEST-SELECTION-SKIP]
+##              Every test in the suite is `#[ignore]`d as
+##              [SKIP-TOO-LARGE-FOR-CI] (gh #422) — it needs the network and
+##              measures wall time and peak memory, which are
+##              runner-dependent — so `--ignored` is what selects it here.
+##              `make test`/`make ci` still compile and lint the target. Run
+##              this when touching the pipeline.
 test-corpus:
 	node scripts/corpus/fetch-corpus.mjs
 	cargo build --release --bin deslop
-	cargo test --release -p deslop --features corpus-repos --test corpus_repos -- --nocapture --test-threads=1
+	cargo test --release -p deslop --test corpus_repos -- --ignored --nocapture --test-threads=1
 
 ## test-corpus-ci: `make test-corpus` in baseline mode — failures already
 ##                 recorded in `corpus/known-failures.json` are reported but
@@ -252,7 +256,7 @@ test-corpus-ci:
 	node scripts/corpus/fetch-corpus.mjs $(CORPUS_REPOS)
 	cargo build --release --bin deslop
 	@fail=0; for t in $(CORPUS_TESTS); do \
-	   cargo test --release -p deslop --features corpus-repos --test corpus_repos $$t -- --nocapture --test-threads=1 || fail=1; \
+	   cargo test --release -p deslop --test corpus_repos -- --ignored --exact --nocapture --test-threads=1 $$t || fail=1; \
 	 done; \
 	 if [ $$fail -ne 0 ]; then echo "==> corpus: NEW failures (see [NEW] lines above)"; fi; \
 	 exit $$fail

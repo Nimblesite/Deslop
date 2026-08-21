@@ -28,6 +28,18 @@ use common::{fixture_root, value_array, value_get};
 #[cfg(unix)]
 use common::{pid_exists, read_mcp_pid, terminate_pid, wait_for_pid_exit, KILLABLE_PARENT_SCRIPT};
 
+const REPORT_GET_TOOL: &str = "report-get";
+const REPORT_QUERY_TOOL: &str = "report-query";
+const OFFSET_PARAM: &str = "offset";
+const LIMIT_PARAM: &str = "limit";
+const CLUSTERS_POINTER: &str = "/clusters";
+const ERROR_CODE_POINTER: &str = "/error/code";
+const INVALID_PARAMS_CODE: i64 = -32_602;
+
+fn page_args(offset: u64, limit: u64) -> Value {
+    json!({ (OFFSET_PARAM): offset, (LIMIT_PARAM): limit })
+}
+
 /// One live `deslop-mcp` child-process conversation. Holds stdio
 /// handles + the buffered line reader so the test author works in
 /// request/response pairs instead of raw bytes.
@@ -445,7 +457,7 @@ fn workspace_with_extra_file(leaf: &str, contents: &str) -> Result<(TempDir, Mcp
 /// `clusters[]` array.
 fn assert_empty_page(page: &Value) -> Result<()> {
     assert_eq!(value_get(page, "/total_clusters")?, json!(0));
-    assert!(value_get(page, "/clusters")?
+    assert!(value_get(page, CLUSTERS_POINTER)?
         .as_array()
         .is_some_and(Vec::is_empty));
     Ok(())
@@ -726,7 +738,7 @@ fn top_offenders_returns_full_clusters_with_occurrences_and_interpretation() -> 
         Some(3),
         "n must echo the requested value"
     );
-    let clusters = value_get(&payload, "/clusters")?;
+    let clusters = value_get(&payload, CLUSTERS_POINTER)?;
     let clusters_arr = clusters
         .as_array()
         .ok_or_else(|| anyhow!("clusters must be an array"))?;
@@ -775,7 +787,7 @@ fn top_offenders_defaults_to_five_and_clusters_are_worst_first() -> Result<()> {
         Some(5),
         "omitting n must default to 5"
     );
-    let clusters = value_get(&payload, "/clusters")?;
+    let clusters = value_get(&payload, CLUSTERS_POINTER)?;
     let clusters_arr = clusters
         .as_array()
         .ok_or_else(|| anyhow!("clusters must be an array"))?;
@@ -844,7 +856,7 @@ fn issue_136_top_offenders_max_occurrences_caps_response_and_reports_total() -> 
         Some(baseline_total),
         "total_occurrences must equal the unfiltered count, not the budgeted count"
     );
-    let clusters = value_get(&payload, "/clusters")?;
+    let clusters = value_get(&payload, CLUSTERS_POINTER)?;
     let clusters_arr = clusters
         .as_array()
         .ok_or_else(|| anyhow!("clusters must be an array"))?;
@@ -901,7 +913,7 @@ fn issue_136_top_offenders_default_max_occurrences_is_fifteen() -> Result<()> {
 fn issue_134_top_offenders_does_not_label_structural_only_matches_as_nearly_identical() -> Result<()>
 {
     let (child, payload) = init_and_tool_payload("top-offenders", &json!({ "n": 5 }))?;
-    let clusters = value_get(&payload, "/clusters")?;
+    let clusters = value_get(&payload, CLUSTERS_POINTER)?;
     let structural_only_nearly_identical = clusters
         .as_array()
         .ok_or_else(|| anyhow!("clusters must be an array"))?
@@ -1024,7 +1036,7 @@ fn issue_113_find_similar_description_leads_with_prevention() -> Result<()> {
 
 #[test]
 fn report_get_returns_paginated_slim_report_page() -> Result<()> {
-    let (child, page) = init_and_tool_payload("report-get", &json!({ "offset": 0, "limit": 10 }))?;
+    let (child, page) = init_and_tool_payload(REPORT_GET_TOOL, &page_args(0, 10))?;
     assert!(
         page.get("report_schema_version").is_none(),
         "report pages must not expose internal report-format revisions"
@@ -1057,11 +1069,8 @@ fn report_get_returns_paginated_slim_report_page() -> Result<()> {
 #[test]
 fn issue_110_report_pages_omit_schema_doc_and_schema_doc_tool_serves_it() -> Result<()> {
     let mut child = spawn_and_init()?;
-    let report_get = structured_tool_result(&call_tool(
-        &mut child,
-        "report-get",
-        &json!({ "offset": 0, "limit": 2 }),
-    )?)?;
+    let report_get =
+        structured_tool_result(&call_tool(&mut child, REPORT_GET_TOOL, &page_args(0, 2))?)?;
     assert!(
         report_get.get("schema_doc").is_none(),
         "issue #110/#111: report-get must not inline repeated schema_doc; got {} chars",
@@ -1072,8 +1081,8 @@ fn issue_110_report_pages_omit_schema_doc_and_schema_doc_tool_serves_it() -> Res
     );
     let report_query = structured_tool_result(&call_tool(
         &mut child,
-        "report-query",
-        &json!({ "offset": 0, "limit": 2, "bucket": "identical" }),
+        REPORT_QUERY_TOOL,
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 2, "bucket": "identical" }),
     )?)?;
     assert!(
         report_query.get("schema_doc").is_none(),
@@ -1130,8 +1139,8 @@ fn report_query_accepts_dart_language_filter() -> Result<()> {
     // now derived from the core parser registry, so the filter must be
     // accepted (returning a, possibly empty, page) rather than rejected.
     let (child, response) = init_and_tool_response(
-        "report-query",
-        &json!({ "offset": 0, "limit": 5, "language": "dart" }),
+        REPORT_QUERY_TOOL,
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 5, "language": "dart" }),
     )?;
     assert!(
         response.get("error").is_none(),
@@ -1155,10 +1164,10 @@ fn report_query_accepts_dart_language_filter() -> Result<()> {
 
 #[test]
 fn report_get_requires_offset_argument() -> Result<()> {
-    let (child, response) = init_and_tool_response("report-get", &json!({ "limit": 10 }))?;
+    let (child, response) = init_and_tool_response(REPORT_GET_TOOL, &json!({ (LIMIT_PARAM): 10 }))?;
     assert_eq!(
-        value_get(&response, "/error/code")?.as_i64(),
-        Some(-32_602),
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(INVALID_PARAMS_CODE),
         "missing offset must be InvalidParams; got {response}"
     );
     let _ = child.finish();
@@ -1167,10 +1176,10 @@ fn report_get_requires_offset_argument() -> Result<()> {
 
 #[test]
 fn report_get_requires_limit_argument() -> Result<()> {
-    let (child, response) = init_and_tool_response("report-get", &json!({ "offset": 0 }))?;
+    let (child, response) = init_and_tool_response(REPORT_GET_TOOL, &json!({ (OFFSET_PARAM): 0 }))?;
     assert_eq!(
-        value_get(&response, "/error/code")?.as_i64(),
-        Some(-32_602),
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(INVALID_PARAMS_CODE),
         "missing limit must be InvalidParams; got {response}"
     );
     let _ = child.finish();
@@ -1179,8 +1188,8 @@ fn report_get_requires_limit_argument() -> Result<()> {
 
 #[test]
 fn report_get_clusters_are_slim_summaries_only() -> Result<()> {
-    let (child, page) = init_and_tool_payload("report-get", &json!({ "offset": 0, "limit": 10 }))?;
-    let clusters = value_get(&page, "/clusters")?;
+    let (child, page) = init_and_tool_payload(REPORT_GET_TOOL, &page_args(0, 10))?;
+    let clusters = value_get(&page, CLUSTERS_POINTER)?;
     let array = clusters
         .as_array()
         .ok_or_else(|| anyhow!("clusters not array"))?;
@@ -1231,9 +1240,8 @@ fn report_get_clusters_are_slim_summaries_only() -> Result<()> {
 
 #[test]
 fn report_get_first_occurrence_belongs_to_full_cluster() -> Result<()> {
-    let (mut child, page) =
-        init_and_tool_payload("report-get", &json!({ "offset": 0, "limit": 10 }))?;
-    let clusters = value_array(&page, "/clusters")?;
+    let (mut child, page) = init_and_tool_payload(REPORT_GET_TOOL, &page_args(0, 10))?;
+    let clusters = value_array(&page, CLUSTERS_POINTER)?;
     assert!(!clusters.is_empty(), "fixture should produce >= 1 cluster");
     for summary in &clusters {
         assert_first_occurrence_matches_full_cluster(&mut child, summary)?;
@@ -1270,16 +1278,15 @@ fn same_occurrence(left: &Value, right: &Value) -> bool {
 
 #[test]
 fn report_get_offset_past_end_returns_empty_page() -> Result<()> {
-    let (mut child, probe) =
-        init_and_tool_payload("report-get", &json!({ "offset": 0, "limit": 1 }))?;
+    let (mut child, probe) = init_and_tool_payload(REPORT_GET_TOOL, &page_args(0, 1))?;
     let total = value_get(&probe, "/total_clusters")?
         .as_u64()
         .ok_or_else(|| anyhow!("total_clusters missing"))?;
     let past = total.saturating_add(100);
     let page = structured_tool_result(&call_tool(
         &mut child,
-        "report-get",
-        &json!({ "offset": past, "limit": 10 }),
+        REPORT_GET_TOOL,
+        &page_args(past, 10),
     )?)?;
     assert_eq!(
         value_get(&page, "/page/returned")?,
@@ -1287,7 +1294,7 @@ fn report_get_offset_past_end_returns_empty_page() -> Result<()> {
         "offset past end must return zero clusters"
     );
     assert!(
-        value_get(&page, "/clusters")?
+        value_get(&page, CLUSTERS_POINTER)?
             .as_array()
             .is_some_and(Vec::is_empty),
         "clusters[] must be empty when offset is past the end"
@@ -1305,7 +1312,7 @@ fn report_get_offset_past_end_returns_empty_page() -> Result<()> {
 
 #[test]
 fn report_get_response_stays_under_byte_budget() -> Result<()> {
-    let (child, page) = init_and_tool_payload("report-get", &json!({ "offset": 0, "limit": 50 }))?;
+    let (child, page) = init_and_tool_payload(REPORT_GET_TOOL, &page_args(0, 50))?;
     let serialised = serde_json::to_string(&page)?;
     // 50KB budget. Earlier "fat" report-get on a real workspace was 2.4MB
     // which blew out every agent context; the slim ClusterSummary must
@@ -1344,10 +1351,10 @@ fn initialize_capabilities_have_no_null_values() -> Result<()> {
 #[test]
 fn report_query_filters_by_language() -> Result<()> {
     let (child, page) = init_and_tool_payload(
-        "report-query",
-        &json!({ "offset": 0, "limit": 50, "language": "csharp" }),
+        REPORT_QUERY_TOOL,
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50, "language": "csharp" }),
     )?;
-    let clusters = value_get(&page, "/clusters")?;
+    let clusters = value_get(&page, CLUSTERS_POINTER)?;
     let array = clusters
         .as_array()
         .ok_or_else(|| anyhow!("clusters not array"))?;
@@ -1369,8 +1376,8 @@ fn report_query_filters_by_language() -> Result<()> {
 #[test]
 fn report_query_filters_by_unknown_language_returns_empty() -> Result<()> {
     let (child, page) = init_and_tool_payload(
-        "report-query",
-        &json!({ "offset": 0, "limit": 50, "language": "cobol" }),
+        REPORT_QUERY_TOOL,
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50, "language": "cobol" }),
     )?;
     assert_empty_page(&page)?;
     let _ = child.finish();
@@ -1380,10 +1387,10 @@ fn report_query_filters_by_unknown_language_returns_empty() -> Result<()> {
 #[test]
 fn report_query_filters_by_path_contains() -> Result<()> {
     let (mut child, page) = init_and_tool_payload(
-        "report-query",
-        &json!({ "offset": 0, "limit": 50, "path_contains": "Alpha" }),
+        REPORT_QUERY_TOOL,
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50, "path_contains": "Alpha" }),
     )?;
-    let array = value_array(&page, "/clusters")?;
+    let array = value_array(&page, CLUSTERS_POINTER)?;
     assert!(
         !array.is_empty(),
         "Alpha.cs participates in the planted clone family"
@@ -1399,11 +1406,8 @@ fn report_query_filters_by_path_contains() -> Result<()> {
         // total_clusters dropped vs the unfiltered baseline.
         let _ = first_path;
     }
-    let unfiltered = structured_tool_result(&call_tool(
-        &mut child,
-        "report-get",
-        &json!({ "offset": 0, "limit": 1 }),
-    )?)?;
+    let unfiltered =
+        structured_tool_result(&call_tool(&mut child, REPORT_GET_TOOL, &page_args(0, 1))?)?;
     let unfiltered_total = value_get(&unfiltered, "/total_clusters")?
         .as_u64()
         .unwrap_or(0);
@@ -1419,10 +1423,10 @@ fn report_query_filters_by_path_contains() -> Result<()> {
 #[test]
 fn report_query_filters_by_min_size() -> Result<()> {
     let (child, page) = init_and_tool_payload(
-        "report-query",
-        &json!({ "offset": 0, "limit": 50, "min_size": 20 }),
+        REPORT_QUERY_TOOL,
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50, "min_size": 20 }),
     )?;
-    let clusters = value_get(&page, "/clusters")?;
+    let clusters = value_get(&page, CLUSTERS_POINTER)?;
     for cluster in clusters.as_array().unwrap_or(&Vec::new()) {
         let size = cluster
             .get("size_nodes")
@@ -1439,18 +1443,17 @@ fn report_query_filters_by_min_size() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_min_score() -> Result<()> {
-    let (mut child, baseline) =
-        init_and_tool_payload("report-get", &json!({ "offset": 0, "limit": 1 }))?;
+    let (mut child, baseline) = init_and_tool_payload(REPORT_GET_TOOL, &page_args(0, 1))?;
     let max_score = value_get(&baseline, "/clusters/0/score")?
         .as_f64()
         .ok_or_else(|| anyhow!("baseline score missing"))?;
     let floor = max_score / 2.0;
     let page = structured_tool_result(&call_tool(
         &mut child,
-        "report-query",
-        &json!({ "offset": 0, "limit": 50, "min_score": floor }),
+        REPORT_QUERY_TOOL,
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50, "min_score": floor }),
     )?)?;
-    for cluster in value_get(&page, "/clusters")?
+    for cluster in value_get(&page, CLUSTERS_POINTER)?
         .as_array()
         .unwrap_or(&Vec::new())
     {
@@ -1470,13 +1473,13 @@ fn report_query_requires_offset_and_limit() -> Result<()> {
     let response = child.request(
         "tools/call",
         &json!({
-            "name": "report-query",
+            "name": REPORT_QUERY_TOOL,
             "arguments": { "language": "csharp" }
         }),
     )?;
     assert_eq!(
-        value_get(&response, "/error/code")?.as_i64(),
-        Some(-32_602),
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(INVALID_PARAMS_CODE),
         "missing offset+limit must be InvalidParams; got {response}"
     );
     let _ = child.finish();
@@ -1486,8 +1489,8 @@ fn report_query_requires_offset_and_limit() -> Result<()> {
 #[test]
 fn report_query_filters_by_min_score_excludes_above_max() -> Result<()> {
     let (child, page) = init_and_tool_payload(
-        "report-query",
-        &json!({ "offset": 0, "limit": 50, "min_score": 9_999_999.0 }),
+        REPORT_QUERY_TOOL,
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50, "min_score": 9_999_999.0 }),
     )?;
     assert_empty_page(&page)?;
     let _ = child.finish();
@@ -1497,8 +1500,8 @@ fn report_query_filters_by_min_score_excludes_above_max() -> Result<()> {
 #[test]
 fn report_query_filters_by_min_size_excludes_above_max() -> Result<()> {
     let (child, page) = init_and_tool_payload(
-        "report-query",
-        &json!({ "offset": 0, "limit": 50, "min_size": 99_999 }),
+        REPORT_QUERY_TOOL,
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50, "min_size": 99_999 }),
     )?;
     assert_empty_page(&page)?;
     let _ = child.finish();
@@ -1508,8 +1511,8 @@ fn report_query_filters_by_min_size_excludes_above_max() -> Result<()> {
 #[test]
 fn report_query_filters_by_unknown_bucket_returns_empty() -> Result<()> {
     let (child, page) = init_and_tool_payload(
-        "report-query",
-        &json!({ "offset": 0, "limit": 50, "bucket": "loosely_similar" }),
+        REPORT_QUERY_TOOL,
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50, "bucket": "loosely_similar" }),
     )?;
     assert_empty_page(&page)?;
     let filters = value_get(&page, "/filters")?;
@@ -1521,10 +1524,10 @@ fn report_query_filters_by_unknown_bucket_returns_empty() -> Result<()> {
 #[test]
 fn report_query_filters_by_nonmatching_path_returns_empty() -> Result<()> {
     let (child, page) = init_and_tool_payload(
-        "report-query",
+        REPORT_QUERY_TOOL,
         &json!({
-            "offset": 0,
-            "limit": 50,
+            (OFFSET_PARAM): 0,
+            (LIMIT_PARAM): 50,
             "path_contains": "ZZZ_NEVER_MATCHES_ANYTHING"
         }),
     )?;
@@ -1536,10 +1539,10 @@ fn report_query_filters_by_nonmatching_path_returns_empty() -> Result<()> {
 #[test]
 fn report_query_filters_by_matching_bucket_includes_clusters() -> Result<()> {
     let (child, page) = init_and_tool_payload(
-        "report-query",
-        &json!({ "offset": 0, "limit": 50, "bucket": "nearly_identical" }),
+        REPORT_QUERY_TOOL,
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 50, "bucket": "nearly_identical" }),
     )?;
-    let clusters = value_array(&page, "/clusters")?;
+    let clusters = value_array(&page, CLUSTERS_POINTER)?;
     assert!(
         !clusters.is_empty(),
         "fixture has at least one nearly-identical cluster"
@@ -1557,10 +1560,10 @@ fn report_query_filters_by_matching_bucket_includes_clusters() -> Result<()> {
 #[test]
 fn report_query_echoes_filters_in_response() -> Result<()> {
     let (child, page) = init_and_tool_payload(
-        "report-query",
+        REPORT_QUERY_TOOL,
         &json!({
-            "offset": 0,
-            "limit": 5,
+            (OFFSET_PARAM): 0,
+            (LIMIT_PARAM): 5,
             "language": "csharp",
             "min_size": 10,
         }),
@@ -1576,7 +1579,7 @@ fn report_query_echoes_filters_in_response() -> Result<()> {
 fn report_for_file_returns_only_matching_clusters() -> Result<()> {
     let (child, payload) =
         init_and_tool_payload("report-for-file", &json!({ "path": "Alpha.cs" }))?;
-    let clusters = value_get(&payload, "/clusters")?;
+    let clusters = value_get(&payload, CLUSTERS_POINTER)?;
     let array = clusters
         .as_array()
         .ok_or_else(|| anyhow!("clusters not array"))?;
@@ -1608,7 +1611,10 @@ fn report_for_range_rejects_inverted_range() -> Result<()> {
         "report-for-range",
         &json!({ "path": "Alpha.cs", "start_byte": 100, "end_byte": 1 }),
     )?;
-    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
+    assert_eq!(
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(INVALID_PARAMS_CODE)
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -1647,7 +1653,10 @@ fn find_similar_snippet_unsupported_language_yields_error() -> Result<()> {
         "find-similar",
         &json!({ "snippet": "fn main() {}", "language": "cobol" }),
     )?;
-    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_004));
+    assert_eq!(
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(-32_004)
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -1655,7 +1664,10 @@ fn find_similar_snippet_unsupported_language_yields_error() -> Result<()> {
 #[test]
 fn find_similar_requires_exactly_one_input_variant() -> Result<()> {
     let (child, response) = init_and_tool_response("find-similar", &json!({}))?;
-    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
+    assert_eq!(
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(INVALID_PARAMS_CODE)
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -1694,8 +1706,7 @@ fn find_similar_range_finds_clone_on_alpha() -> Result<()> {
 
 #[test]
 fn cluster_by_id_round_trips() -> Result<()> {
-    let (mut child, report_value) =
-        init_and_tool_payload("report-get", &json!({ "offset": 0, "limit": 1 }))?;
+    let (mut child, report_value) = init_and_tool_payload(REPORT_GET_TOOL, &page_args(0, 1))?;
     let first_id = value_get(&report_value, "/clusters/0/id")?
         .as_str()
         .ok_or_else(|| anyhow!("first cluster id missing"))?
@@ -1718,7 +1729,10 @@ fn cluster_by_id_round_trips() -> Result<()> {
 fn cluster_by_id_unknown_returns_error() -> Result<()> {
     let (child, response) =
         init_and_tool_response("cluster-by-id", &json!({ "id": "not-a-real-id" }))?;
-    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
+    assert_eq!(
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(INVALID_PARAMS_CODE)
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -1913,7 +1927,10 @@ fn resources_read_schema_returns_markdown_body() -> Result<()> {
 fn resources_read_unknown_uri_errors() -> Result<()> {
     let mut child = spawn_and_init()?;
     let response = child.request("resources/read", &json!({ "uri": "deslop://invalid" }))?;
-    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
+    assert_eq!(
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(INVALID_PARAMS_CODE)
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -1922,7 +1939,10 @@ fn resources_read_unknown_uri_errors() -> Result<()> {
 fn unknown_method_returns_method_not_found() -> Result<()> {
     let mut child = spawn_and_init()?;
     let response = child.request("completely/made-up", &json!({}))?;
-    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_601));
+    assert_eq!(
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(-32_601)
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -1932,7 +1952,10 @@ fn malformed_frame_returns_parse_error() -> Result<()> {
     let mut child = spawn_and_init()?;
     child.send_raw_line("{this is not valid json")?;
     let response = child.read_frame()?;
-    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_700));
+    assert_eq!(
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(-32_700)
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -1950,7 +1973,10 @@ fn path_outside_root_is_rejected() -> Result<()> {
             "arguments": { "path": outside_file }
         }),
     )?;
-    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_003));
+    assert_eq!(
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(-32_003)
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -1968,11 +1994,8 @@ fn notifications_initialized_is_accepted_silently() -> Result<()> {
 #[test]
 fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
     let (temp, mut child) = two_file_workspace_with_state()?;
-    let first = structured_tool_result(&call_tool(
-        &mut child,
-        "report-get",
-        &json!({ "offset": 0, "limit": 100 }),
-    )?)?;
+    let first =
+        structured_tool_result(&call_tool(&mut child, REPORT_GET_TOOL, &page_args(0, 100))?)?;
     let first_count = value_get(&first, "/total_clusters")?.as_u64().unwrap_or(0);
     assert!(first_count >= 1, "expected at least one cluster initially");
     let _ = child.finish();
@@ -1985,8 +2008,8 @@ fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
     let _ = init_session(&mut second)?;
     let rerun = structured_tool_result(&call_tool(
         &mut second,
-        "report-get",
-        &json!({ "offset": 0, "limit": 100 }),
+        REPORT_GET_TOOL,
+        &page_args(0, 100),
     )?)?;
     let rerun_count = value_get(&rerun, "/total_clusters")?.as_u64().unwrap_or(0);
     assert!(
@@ -2148,7 +2171,10 @@ fn find_similar_snippet_with_empty_source_returns_empty_result() -> Result<()> {
 fn tools_call_missing_name_returns_invalid_params() -> Result<()> {
     let mut child = spawn_and_init()?;
     let response = child.request("tools/call", &json!({ "arguments": {} }))?;
-    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
+    assert_eq!(
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(INVALID_PARAMS_CODE)
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -2156,7 +2182,10 @@ fn tools_call_missing_name_returns_invalid_params() -> Result<()> {
 #[test]
 fn tools_call_unknown_tool_returns_method_not_found_error() -> Result<()> {
     let (child, response) = init_and_tool_response("bogus-tool", &json!({}))?;
-    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_601));
+    assert_eq!(
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(-32_601)
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -2165,7 +2194,10 @@ fn tools_call_unknown_tool_returns_method_not_found_error() -> Result<()> {
 fn resources_read_missing_uri_returns_invalid_params() -> Result<()> {
     let mut child = spawn_and_init()?;
     let response = child.request("resources/read", &json!({}))?;
-    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
+    assert_eq!(
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(INVALID_PARAMS_CODE)
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -2175,7 +2207,10 @@ fn invalid_jsonrpc_version_returns_invalid_request() -> Result<()> {
     let mut child = spawn_and_init()?;
     child.send_raw_line(r#"{"jsonrpc":"1.5","id":99,"method":"ping"}"#)?;
     let response = child.read_frame()?;
-    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_600));
+    assert_eq!(
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(-32_600)
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -2230,7 +2265,10 @@ fn relative_path_insideworkspace_is_accepted() -> Result<()> {
 fn tool_missing_required_string_arg_returns_invalid_params() -> Result<()> {
     // report-for-file needs a "path" string — omit it.
     let (child, response) = init_and_tool_response("report-for-file", &json!({}))?;
-    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
+    assert_eq!(
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(INVALID_PARAMS_CODE)
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -2240,7 +2278,10 @@ fn tool_missing_required_integer_arg_returns_invalid_params() -> Result<()> {
     // report-for-range needs start_byte + end_byte — omit both.
     let (child, response) =
         init_and_tool_response("report-for-range", &json!({ "path": "Alpha.cs" }))?;
-    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
+    assert_eq!(
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(INVALID_PARAMS_CODE)
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -2251,7 +2292,10 @@ fn set_embedding_model_missing_model_id_returns_invalid_params() -> Result<()> {
         "set-embedding-model",
         &json!({ "provider_id": "ollama", "user_initiated": true }),
     )?;
-    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
+    assert_eq!(
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(INVALID_PARAMS_CODE)
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -2263,7 +2307,10 @@ fn set_embedding_model_without_user_initiation_returns_invalid_params() -> Resul
         "set-embedding-model",
         &json!({ "provider_id": "ollama", "model_id": "nomic-embed-text" }),
     )?;
-    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
+    assert_eq!(
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(INVALID_PARAMS_CODE)
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -2271,7 +2318,10 @@ fn set_embedding_model_without_user_initiation_returns_invalid_params() -> Resul
 #[test]
 fn cluster_by_id_missing_id_returns_invalid_params() -> Result<()> {
     let (child, response) = init_and_tool_response("cluster-by-id", &json!({}))?;
-    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
+    assert_eq!(
+        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
+        Some(INVALID_PARAMS_CODE)
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -2401,11 +2451,8 @@ fn binary_rejects_unknown_embedding_provider_at_init() -> Result<()> {
 #[test]
 fn files_changed_notification_triggers_reanalysis() -> Result<()> {
     let (temp, mut child) = two_file_workspace_with_state()?;
-    let before = structured_tool_result(&call_tool(
-        &mut child,
-        "report-get",
-        &json!({ "offset": 0, "limit": 100 }),
-    )?)?;
+    let before =
+        structured_tool_result(&call_tool(&mut child, REPORT_GET_TOOL, &page_args(0, 100))?)?;
     let before_count = value_get(&before, "/total_clusters")?.as_u64().unwrap_or(0);
     assert!(before_count >= 1, "expected at least one cluster");
     // Edit Two.cs so the clone disappears, regenerate the state file, then notify.
@@ -2415,8 +2462,8 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
     // read under heavy CI load (see poll_total_clusters_below).
     let after = poll_total_clusters_below(
         &mut child,
-        "report-get",
-        &json!({ "offset": 0, "limit": 100 }),
+        REPORT_GET_TOOL,
+        &page_args(0, 100),
         before_count,
     )?;
     let after_count = value_get(&after, "/total_clusters")?.as_u64().unwrap_or(0);

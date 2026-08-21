@@ -34,7 +34,7 @@
 }
 .eyebrow-chip > span {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--type-label-sm);
   color: var(--on-surface-variant);
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -66,10 +66,16 @@
 .hero__sublede {
   font-family: var(--font-body);
   color: var(--on-surface-muted, var(--on-surface-variant));
-  font-size: 0.875rem;
+  font-size: var(--type-label-md);
   line-height: 1.5;
   margin-top: var(--space-4);
   max-width: 40rem;
+}
+
+.hero__sublede a {
+  color: var(--on-surface);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .hero__sublede code {
@@ -92,7 +98,7 @@
   padding: var(--space-4) var(--space-8);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
-  font-size: 0.875rem;
+  font-size: var(--type-label-md);
   font-weight: 700;
   border: none;
   cursor: pointer;
@@ -128,7 +134,7 @@
   background: var(--surface-container-high);
   color: var(--on-surface-variant);
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--type-label-sm);
   line-height: 1.5;
   padding: var(--space-3) var(--space-4);
 }
@@ -183,7 +189,7 @@
 }
 .showcase__pos {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--type-label-sm);
   color: var(--secondary-fixed-dim);
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -258,7 +264,7 @@
 }
 .editor-card__registry {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--type-label-sm);
   color: var(--secondary-fixed-dim);
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -277,7 +283,7 @@
   align-items: center;
   gap: var(--space-1);
   font-family: var(--font-mono);
-  font-size: 0.8125rem;
+  font-size: var(--type-label-md);
   font-weight: 700;
   color: var(--on-surface);
   text-decoration: none;

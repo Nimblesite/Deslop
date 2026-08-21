@@ -296,7 +296,7 @@ function interpolateBundlePath(template: string, component: DeploymentComponent)
   return template
     .replace("${platform}", currentPlatform())
     .replace("${binaryName}", component.binaryName)
-    .replace("${exe}", currentPlatform().startsWith("win32") ? ".exe" : "");
+    .replace("${exe}", currentPlatform().startsWith(WINDOWS_PLATFORM) ? ".exe" : "");
 }
 
 function resolvedBinary(
@@ -348,7 +348,7 @@ function mismatchMessage(
 }
 
 function nameWithSuffix(component: DeploymentComponent): string {
-  const suffix = currentPlatform().startsWith("win32") ? ".exe" : "";
+  const suffix = currentPlatform().startsWith(WINDOWS_PLATFORM) ? ".exe" : "";
   return `${component.binaryName}${suffix}`;
 }
 
@@ -363,13 +363,16 @@ function nonBlank(value: string | undefined): string | undefined {
   return trimmed;
 }
 
+const X64_ARCHITECTURE = "x64";
+const WINDOWS_PLATFORM = "win32";
+
 function currentPlatform(): Platform {
   const platform = process.platform;
   const arch = process.arch;
   if (platform === "darwin" && arch === "arm64") return "darwin-arm64";
-  if (platform === "darwin" && arch === "x64") return "darwin-x64";
-  if (platform === "linux" && arch === "x64") return "linux-x64";
+  if (platform === "darwin" && arch === X64_ARCHITECTURE) return "darwin-x64";
+  if (platform === "linux" && arch === X64_ARCHITECTURE) return "linux-x64";
   if (platform === "linux" && arch === "arm64") return "linux-arm64";
-  if (platform === "win32" && arch === "x64") return "win32-x64";
+  if (platform === WINDOWS_PLATFORM && arch === X64_ARCHITECTURE) return "win32-x64";
   throw new UnsupportedPlatformError(platform, arch);
 }

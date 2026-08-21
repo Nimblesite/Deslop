@@ -1,8 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: For AI — how coding agents use Deslop to stop duplicate code
-description: Addressed to the agent. Call find-similar before writing code; when MCP is unavailable, fall back to the deslop CLI. Thresholds, JSON fields, byte ranges.
-keywords: deslop, ai agent, coding agent, find-similar, mcp, cli fallback, duplicate code, claude code, cursor, codex
+description: "Instructions for coding agents: call find-similar before writing code, use the Deslop CLI when MCP is unavailable, and interpret thresholds and byte ranges."
 eleventyNavigation:
   key: For AI
   order: 4

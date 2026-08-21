@@ -7,6 +7,8 @@
 import * as fs from "node:fs";
 import * as vscode from "vscode";
 
+const UTF8_ENCODING = "utf8";
+
 import { occurrenceDisplayLocation } from "../locations";
 import { formatScorePrecise } from "../types/format";
 import { languageForPath } from "../types/languages";
@@ -267,12 +269,12 @@ function dedupeOccurrences(
 function readOccurrenceBytes(occurrence: ReportOccurrence): string {
   try {
     const uri = resolveOccurrenceUri(occurrence.path);
-    const content = fs.readFileSync(uri.fsPath, "utf8");
-    const buffer = Buffer.from(content, "utf8");
+    const content = fs.readFileSync(uri.fsPath, UTF8_ENCODING);
+    const buffer = Buffer.from(content, UTF8_ENCODING);
     const clamp = (n: number): number => Math.max(0, Math.min(n, buffer.length));
     return buffer
       .slice(clamp(occurrence.start_byte), clamp(occurrence.end_byte))
-      .toString("utf8");
+      .toString(UTF8_ENCODING);
   } catch {
     return "";
   }

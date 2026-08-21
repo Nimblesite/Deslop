@@ -6,10 +6,13 @@ author: Christian Findlay
 tags: posts
 description: Deslop 通过 clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes) 为重复代码簇排名。本文说明每个因子的含义。
 excerpt: Deslop 按片段大小、额外副本数和字节跨度为簇排名，让影响更大的发现排在前面。
-heroImage: "/assets/img/blog/ranking-formula-header.png"
+heroImage: "/assets/img/blog/ranking-formula-header.webp"
 heroImageWidth: "1600"
 heroImageHeight: "900"
 heroImageAlt: "展示 Deslop 固定排名公式以及最严重者优先报告的头图。"
+ogImage: "/assets/img/blog/ranking-formula-og.jpg"
+ogImageWidth: "1200"
+ogImageHeight: "630"
 lang: zh
 ---
 

@@ -6,10 +6,13 @@ author: Christian Findlay
 tags: posts
 description: Deslop 使用 tree-sitter 解析源代码并比较归一化后的语法树，因此格式与标识符变化不会掩盖结构性重复。
 excerpt: Deslop 比较解析后的语法树，而不是匹配源代码文本。本文说明这样做能解决什么问题，以及语言专用的归一化位于何处。
-heroImage: "/assets/img/blog/tree-sitter-over-regex-header.png"
+heroImage: "/assets/img/blog/tree-sitter-over-regex-header.webp"
 heroImageWidth: "1600"
 heroImageHeight: "900"
 heroImageAlt: "对比正则表达式逐行匹配与 tree-sitter AST 指纹的页头图片。"
+ogImage: "/assets/img/blog/tree-sitter-over-regex-og.jpg"
+ogImageWidth: "1200"
+ogImageHeight: "630"
 lang: zh
 ---
 

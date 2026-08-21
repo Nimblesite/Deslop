@@ -6,10 +6,13 @@ author: Christian Findlay
 tags: posts
 description: Deslop ranks duplicate-code clusters by clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes). Here is what each factor measures.
 excerpt: Deslop ranks clusters by fragment size, additional copies, and spanned bytes so higher-impact findings appear first.
-heroImage: "/assets/img/blog/ranking-formula-header.png"
+heroImage: "/assets/img/blog/ranking-formula-header.webp"
 heroImageWidth: "1600"
 heroImageHeight: "900"
 heroImageAlt: "Header image showing Deslop's fixed ranking formula and a worst-offender-first report."
+ogImage: "/assets/img/blog/ranking-formula-og.jpg"
+ogImageWidth: "1200"
+ogImageHeight: "630"
 ---
 
 An unranked list of duplicate clusters leaves the user to decide where to begin. Deslop assigns each cluster an impact weight and sorts the report from highest to lowest.

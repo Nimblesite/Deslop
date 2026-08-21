@@ -12,6 +12,7 @@
 
 use crate::{
     cluster::build_ranked_fused_clusters,
+    cluster_filters::split_noise_verbatim_families,
     error::CoreError,
     lsh::band_collisions,
     overlap::apply_shared_subtree_rescue,
@@ -79,7 +80,17 @@ impl PipelineSession {
             candidate_pairs = pairs.len(),
             "clustering by transitive closure"
         );
-        let fused_clusters = cluster_by_transitive_closure(&pairs);
+        // [CLONE-NOISE-VERBATIM-SUBGROUP] Partition a noise family off
+        // the byte-identical copy it swept up *before* signals are
+        // measured, so the surviving cluster is measured, bucketed and
+        // ranked from exactly the occurrences it kept. A component the
+        // noise filters do not suppress is handed on untouched.
+        let fused_clusters = split_noise_verbatim_families(
+            cluster_by_transitive_closure(&pairs),
+            fingerprints,
+            &self.sources,
+            &self.file_languages,
+        );
         tracing::debug!(clusters = fused_clusters.len(), "building ranked clusters");
         // [FUSION-CLUSTER-SIGNALS] One signature space per run: the
         // cross-language space compares any pair when the audit mode is

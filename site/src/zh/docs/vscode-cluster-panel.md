@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: VS Code — 在编辑器中解读重复代码簇
-description: Deslop VS Code 扩展的实用指南 —— Top Offenders 树、实时重复警告与簇详情面板，涵盖簇 id、排名、信号、出现位置以及比较操作。
+description: 使用 Deslop VS Code 扩展查看 Top Offenders、实时重复警告与代码簇信号，并比较规范出现位置。
 eleventyNavigation:
   key: VS Code
   order: 5

@@ -84,8 +84,7 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
   padding: var(--space-4);
   flex: 1;
 }
-.docs-nav-group { border-bottom: 1px solid var(--outline-variant); }
-.docs-nav-group:last-child { border-bottom: 0; }
+.docs-nav-group[open] { background: var(--surface-container-low); }
 .docs-nav-group__summary {
   min-height: 2.75rem;
   padding: 0 var(--space-3);
@@ -95,7 +94,7 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
   cursor: pointer;
   list-style: none;
   color: var(--on-surface-variant);
-  font: 700 0.68rem/1 var(--font-mono);
+  font: 700 var(--type-label-sm)/1 var(--font-mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -118,12 +117,13 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 .docs-sidebar__link {
   display: flex;
   align-items: center;
+  min-height: 3rem;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   color: color-mix(in srgb, var(--on-surface) 55%, transparent);
   font-family: var(--font-mono);
-  font-size: 0.8125rem;
+  font-size: var(--type-label-md);
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .docs-sidebar__link .material-symbols-outlined {
@@ -150,10 +150,11 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
   justify-content: center;
   gap: var(--space-2);
   width: 100%;
+  min-height: 3rem;
   background: var(--surface-container-highest);
   color: var(--on-surface);
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--type-label-md);
   font-weight: 700;
   padding: var(--space-2);
   border-radius: var(--radius-sm);
@@ -164,12 +165,14 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 
 @media (max-width: 767.98px) {
   .docs-nav-group__summary,
-  .docs-nav-group__items .docs-sidebar__link { min-height: 3rem; }
+  .docs-nav-group__items .docs-sidebar__link,
+  .docs-sidebar__site-nav .docs-sidebar__link { min-height: 3rem; }
 }
 
 /* ─────────── Reading column (docs main + blog) ─────────── */
 .docs-main {
   flex: 1;
+  min-width: 0;
   width: 100%;
   max-width: 56rem;
   margin-inline: auto;
@@ -187,13 +190,13 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
   gap: var(--space-2);
   color: var(--on-surface-variant);
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--type-label-md);
   margin-bottom: var(--space-4);
   flex-wrap: wrap;
 }
 .docs-breadcrumb a { color: inherit; }
 .docs-breadcrumb a:hover { color: var(--on-surface); }
-.docs-breadcrumb .material-symbols-outlined { font-size: 0.75rem; }
+.docs-breadcrumb .material-symbols-outlined { font-size: var(--type-label-md); }
 .docs-breadcrumb__current { color: var(--on-surface); }
 
 /* Markdown-driven docs title (h1 leads the body). Scoped so blog bodies, whose
@@ -220,19 +223,16 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
   flex-wrap: wrap;
   padding-top: var(--space-8);
   margin-top: var(--space-16);
-  background: linear-gradient(to bottom, var(--surface-container-high) 0 1px, transparent 1px);
-  background-size: 100% 1px;
-  background-repeat: no-repeat;
-  background-position: top;
 }
 .docs-article__prev,
 .docs-article__next,
 .post-article__back {
   display: inline-flex;
   align-items: center;
+  min-height: 3rem;
   gap: var(--space-2);
   font-family: var(--font-mono);
-  font-size: 0.8125rem;
+  font-size: var(--type-label-md);
   color: var(--on-surface-variant);
   transition: color var(--dur) var(--ease);
 }
@@ -259,7 +259,7 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 .blog-header { margin-bottom: var(--space-12); }
 .blog-eyebrow {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--type-label-sm);
   color: var(--on-surface-variant);
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -282,8 +282,11 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 
 .blog-nav { display: flex; gap: var(--space-3); margin-bottom: var(--space-10); flex-wrap: wrap; }
 .blog-nav-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 3rem;
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--type-label-md);
   color: var(--on-surface-variant);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
@@ -316,7 +319,6 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 .post-card__thumb {
   display: block;
   overflow: hidden;
-  border-bottom: 1px solid color-mix(in srgb, var(--outline-variant) 30%, transparent);
 }
 .post-card__thumb img {
   display: block;
@@ -348,6 +350,9 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 .post-card__sep { opacity: 0.5; }
 
 .post-card__title {
+  display: flex;
+  align-items: center;
+  min-height: 3rem;
   font-family: var(--font-head);
   font-size: 1.25rem;
   font-weight: 700;
@@ -371,10 +376,11 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 .post-card--featured .post-card__excerpt { font-size: 1.0625rem; -webkit-line-clamp: none; }
 
 .post-card__more {
+  min-height: 3rem;
   margin-top: auto;
   padding-top: var(--space-2);
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--type-label-md);
   font-weight: 700;
   color: var(--on-surface);
   text-transform: uppercase;
@@ -408,6 +414,9 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 
 .post-article__tags { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .post-article__tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 3rem;
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   background: var(--surface-container-high);
@@ -422,10 +431,6 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 .post-article__footer {
   margin-top: var(--space-16);
   padding-top: var(--space-8);
-  background: linear-gradient(to bottom, var(--surface-container-high) 0 1px, transparent 1px);
-  background-size: 100% 1px;
-  background-repeat: no-repeat;
-  background-position: top;
 }
 
 /* ─────────── Prose hero image (docs + blog post) ─────────── */
@@ -433,15 +438,12 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
   margin: 0 0 var(--space-10);
   border-radius: var(--radius-sm);
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--outline-variant) 30%, transparent);
   box-shadow: var(--shadow-lg);
 }
 .prose-hero__img {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 1200 / 630;
-  object-fit: cover;
 }
 
 /* ─────────── Inline content figure (docs screenshots & diagrams) ─────────── */
@@ -452,7 +454,6 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
   display: block;
   width: 100%;
   border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in srgb, var(--outline-variant) 30%, transparent);
   box-shadow: var(--shadow-lg);
 }
 .prose figcaption {
@@ -475,7 +476,7 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 }
 .prose h3 { font-size: 1.25rem; font-weight: 700; margin-top: var(--space-8); letter-spacing: -0.02em; color: var(--on-surface); }
 .prose p { color: var(--on-surface-variant); line-height: 1.75; font-size: 1.0625rem; }
-.prose ul, .prose ol { color: var(--on-surface-variant); padding-left: var(--space-6); line-height: 1.75; }
+.prose ul, .prose ol { color: var(--on-surface-variant); padding-left: var(--space-6); line-height: 1.75; font-size: 1.0625rem; }
 .prose li { margin-bottom: var(--space-2); }
 .prose li::marker { color: var(--outline); }
 .prose strong { color: var(--on-surface); font-weight: 700; }
@@ -496,4 +497,5 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 .prose table { display: block; width: 100%; overflow-x: auto; border-collapse: collapse; font-size: 0.9375rem; }
 .prose th, .prose td { padding: var(--space-3) var(--space-4); text-align: left; }
 .prose thead th { color: var(--on-surface); font-weight: 700; background: var(--surface-container-low); }
-.prose tbody td { color: var(--on-surface-variant); background: linear-gradient(to bottom, transparent calc(100% - 1px), var(--surface-container-high) calc(100% - 1px)); }
+.prose tbody td { color: var(--on-surface-variant); }
+.prose tbody tr:nth-child(even) td { background: var(--surface-container-low); }

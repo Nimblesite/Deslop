@@ -1,8 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: 准确性透明度 — 重复率的计算方式
-description: Deslop 如何计算重复率，以及 CI 门禁如何使用测得的数值。
-keywords: deslop, 准确性, 重复率, 重复行, ci 门禁, 误报, 漏报
+description: 了解 Deslop 如何计算仓库重复率、哪些文件和代码范围会计入，以及实测值如何驱动 CI 阈值门禁。
 eleventyNavigation:
   key: 准确性透明度
   order: 9
