@@ -7,6 +7,7 @@ eleventyNavigation:
   key: Configuration
   order: 6
 icon: tune
+docsGroup: reference
 ---
 
 # Configuration and Reports

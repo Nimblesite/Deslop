@@ -7,6 +7,7 @@ eleventyNavigation:
   key: Accuracy Transparency
   order: 9
 icon: fact_check
+docsGroup: trust
 ---
 
 # Accuracy Transparency

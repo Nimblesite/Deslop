@@ -7,6 +7,7 @@ eleventyNavigation:
   key: AI Agents
   order: 3
 icon: smart_toy
+docsGroup: guides
 ---
 
 # AI Agents

@@ -69,6 +69,24 @@
 .verification-note p { margin: 0.25rem 0 0; color: var(--on-surface-variant); }
 
 .atlas-app { max-width: var(--atlas-width); margin: 0 auto; background: var(--surface-container-lowest); box-shadow: var(--shadow-lg); }
+.is-issue-graph { height: 100dvh; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.is-issue-graph #main-content,
+.issue-atlas--graph,
+.atlas-app--graph,
+.issue-atlas--graph .atlas-stage,
+.issue-atlas--graph .network-view { width: 100%; height: 100%; min-height: 0; }
+.atlas-app--graph { max-width: none; position: relative; box-shadow: none; }
+.issue-atlas--graph .network-view { grid-template-rows: auto minmax(0, 1fr) auto; }
+.issue-atlas--graph .network-canvas,
+.issue-atlas--graph .network-svg { width: 100%; height: 100%; min-height: 0; }
+
+.graph-filter-panel { position: absolute; z-index: 6; top: 0.75rem; left: 1rem; width: min(72rem, calc(100% - 2rem)); pointer-events: none; }
+.graph-filter-panel summary { width: fit-content; min-height: 2.75rem; padding: 0.75rem 1rem; display: flex; align-items: center; gap: 1rem; cursor: pointer; pointer-events: auto; list-style: none; background: color-mix(in srgb, var(--surface-container-high) 92%, transparent); box-shadow: var(--shadow-sm); color: var(--on-surface); font: 700 0.68rem/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.graph-filter-panel summary::-webkit-details-marker { display: none; }
+.graph-filter-panel summary::before { content: "+"; color: var(--primary); font-size: 1rem; }
+.graph-filter-panel[open] summary::before { content: "−"; }
+.graph-filter-panel .atlas-count { white-space: nowrap; }
+.graph-filter-panel .atlas-filters { max-height: min(28rem, calc(100dvh - 10rem)); overflow-y: auto; pointer-events: auto; box-shadow: var(--shadow-lg); }
 .atlas-toolbar { min-height: 5rem; padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; background: var(--surface-container-low); }
 .view-tabs { display: flex; gap: 0.25rem; padding: 0.25rem; background: var(--surface-container-lowest); }
 .view-tab { border: 0; padding: 0.75rem 1rem; cursor: pointer; background: transparent; color: var(--outline); font: 0.75rem/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
@@ -91,7 +109,7 @@
 .network-view { min-height: 46rem; display: grid; grid-template-rows: auto 1fr auto; }
 .network-tools { padding: 0.75rem 1rem; display: flex; justify-content: space-between; align-items: center; background: var(--surface-container-low); }
 .network-tools__buttons { display: flex; gap: 0.35rem; }
-.network-tool { width: 2.35rem; height: 2.35rem; border: 0; cursor: pointer; background: var(--surface-container-high); color: var(--on-surface); font: 1rem/1 var(--font-mono); }
+.network-tool { width: 2.75rem; height: 2.75rem; border: 0; cursor: pointer; background: var(--surface-container-high); color: var(--on-surface); font: 1rem/1 var(--font-mono); }
 .network-hint { font: 0.68rem/1.3 var(--font-mono); color: var(--outline); }
 .network-canvas { min-height: 38rem; position: relative; overflow: hidden; cursor: grab; background: radial-gradient(circle at center, var(--surface-container-low), var(--surface-container-lowest) 66%); }
 .network-canvas.is-panning { cursor: grabbing; }
@@ -102,10 +120,14 @@
 .graph-edge { stroke: var(--outline); stroke-opacity: 0.16; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .graph-edge--blocks, .graph-edge--sub_issue { stroke: var(--on-surface-variant); stroke-opacity: 0.44; stroke-width: 1.5; }
 .graph-node { cursor: pointer; outline: none; }
+.graph-node__hit { fill: transparent; pointer-events: all; }
 .graph-node__dot { stroke: var(--surface-container-lowest); stroke-width: 2; transition: filter var(--dur), stroke-width var(--dur); }
 .graph-node:hover .graph-node__dot, .graph-node:focus .graph-node__dot, .graph-node.is-selected .graph-node__dot { filter: brightness(1.28) drop-shadow(0 0 8px currentColor); stroke: var(--on-surface); stroke-width: 3; }
 .graph-node__ring { fill: none; stroke: var(--primary); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .graph-node--verify .graph-node__ring { stroke: var(--verify); stroke-dasharray: 3 2; }
+.graph-node--fixed-on-main .graph-node__ring { stroke: var(--fixed-on-main-color); filter: drop-shadow(0 0 6px var(--fixed-on-main-color)); }
+.graph-node--fixed-on-main .graph-node__dot { filter: drop-shadow(0 0 7px var(--fixed-on-main-color)); stroke: var(--fixed-on-main-color); stroke-width: 2.5; }
+.graph-node--fixed-on-main:hover .graph-node__dot, .graph-node--fixed-on-main:focus .graph-node__dot, .graph-node--fixed-on-main.is-selected .graph-node__dot { filter: brightness(1.3) drop-shadow(0 0 11px var(--fixed-on-main-color)); }
 .graph-node__label { fill: #0e0e0e; font: 700 7px var(--font-mono); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
 .graph-tooltip { position: absolute; z-index: 4; max-width: 19rem; pointer-events: none; padding: 0.8rem; background: var(--surface-bright); color: var(--on-surface); box-shadow: var(--shadow-lg); font-size: 0.78rem; opacity: 0; transform: translateY(0.4rem); transition: opacity var(--dur), transform var(--dur); }
 .graph-tooltip.is-visible { opacity: 1; transform: none; }
@@ -158,7 +180,7 @@
 .issue-drawer-scrim.is-open { visibility: visible; opacity: 1; }
 .issue-drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 110; width: min(32rem, 94vw); overflow-y: auto; padding: 1.5rem; background: var(--surface-container-low); box-shadow: var(--shadow-lg); transform: translateX(105%); transition: transform var(--dur) var(--ease); }
 .issue-drawer.is-open { transform: none; }
-.drawer-close { float: right; width: 2.5rem; height: 2.5rem; border: 0; cursor: pointer; background: var(--surface-container-high); color: var(--on-surface); }
+.drawer-close { float: right; width: 2.75rem; height: 2.75rem; border: 0; cursor: pointer; background: var(--surface-container-high); color: var(--on-surface); }
 .drawer-kicker { margin: 4rem 0 0.75rem; color: var(--outline); font: 0.68rem/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
 .issue-drawer h2 { font-size: clamp(1.6rem, 4vw, 2.3rem); line-height: 1.12; }
 .drawer-priority { margin: 1.25rem 0; padding: 1rem; background: var(--surface-container); box-shadow: inset 3px 0 0 var(--priority-color); }
@@ -211,7 +233,13 @@
   .atlas-filters { grid-template-columns: 1fr; }
   .search-field { grid-column: auto; }
   .network-hint { display: none; }
-  .network-canvas, .network-svg { min-height: 33rem; }
+  .graph-filter-panel { top: 0.5rem; left: 0.5rem; width: calc(100% - 1rem); }
+  .graph-filter-panel summary { max-width: calc(100vw - 8rem); }
+  .graph-filter-panel .atlas-count { overflow: hidden; text-overflow: ellipsis; }
   .graph-legend { max-height: 7rem; overflow-y: auto; }
   .atlas-method { margin-top: 3rem; padding: 0; }
+}
+
+@media (pointer: coarse) {
+  .graph-node__hit { r: 46px; }
 }

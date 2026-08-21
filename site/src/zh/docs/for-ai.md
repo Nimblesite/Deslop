@@ -7,6 +7,7 @@ eleventyNavigation:
   key: 面向 AI
   order: 4
 icon: terminal
+docsGroup: reference
 lang: zh
 ---
 

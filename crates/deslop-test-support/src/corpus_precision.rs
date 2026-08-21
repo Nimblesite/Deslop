@@ -16,11 +16,11 @@
 use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
+use deslop_core::{lang::shared::parse_source, pipeline::default_parsers};
 use serde_json::Value;
 
 use crate::{
-    corpus::{array, field_u64, u64_field, CorpusRun},
-    corpus::Failure,
+    corpus::{array, field_u64, u64_field, CorpusRun, Failure},
     enclosure::{span_of, Span},
 };
 
@@ -113,25 +113,213 @@ fn first_occurrence_source(scan_root: &Path, cluster: &Value) -> Result<(String,
     Ok((source, span))
 }
 
-/// True when the declaration enclosing `span` in `source` names `supertype`
-/// among its base types.
+/// Per-language heritage grammar: the declaration kinds that can carry base
+/// types, and the direct-child clause kinds that hold them.
+///
+/// Every pair here was read off the grammar's own `node-types.json` and is
+/// exercised by this module's tests, so nothing is asserted about a grammar
+/// that was not checked. Languages without a base-type clause — Rust, Go,
+/// F# — are deliberately absent, and a manifest that names one fails the
+/// gate rather than passing it.
+struct Heritage {
+    /// Node kinds that introduce a type which may declare base types.
+    declarations: &'static [&'static str],
+    /// Kinds of the direct named child holding those base types.
+    clauses: &'static [&'static str],
+}
+
+/// The heritage grammar of every language a `must_not_rank_first` rule may
+/// name.
+const HERITAGE: &[(&str, Heritage)] = &[
+    (
+        "dart",
+        Heritage {
+            declarations: &["class_declaration"],
+            clauses: &["superclass"],
+        },
+    ),
+    (
+        "csharp",
+        Heritage {
+            declarations: &[
+                "class_declaration",
+                "record_declaration",
+                "struct_declaration",
+                "interface_declaration",
+            ],
+            clauses: &["base_list"],
+        },
+    ),
+    (
+        "javascript",
+        Heritage {
+            declarations: &["class_declaration", "class"],
+            clauses: &["class_heritage"],
+        },
+    ),
+    (
+        "typescript",
+        Heritage {
+            declarations: &["class_declaration", "class"],
+            clauses: &["class_heritage"],
+        },
+    ),
+    (
+        "tsx",
+        Heritage {
+            declarations: &["class_declaration", "class"],
+            clauses: &["class_heritage"],
+        },
+    ),
+    (
+        "python",
+        Heritage {
+            declarations: &["class_definition"],
+            // `class_definition`'s `superclasses` field; it is the only
+            // `argument_list` a class header can hold.
+            clauses: &["argument_list"],
+        },
+    ),
+    (
+        "php",
+        Heritage {
+            declarations: &["class_declaration", "interface_declaration"],
+            clauses: &["base_clause"],
+        },
+    ),
+];
+
+/// Subtrees inside a heritage clause that name type *arguments*, not base
+/// types. `extends State<LedgerView>` declares `State`; `LedgerView` is what
+/// it was instantiated with.
+const TYPE_ARGUMENT_KINDS: &[&str] = &["type_arguments", "type_argument_list", "type_parameters"];
+
+/// True when a type declaration overlapping `span` in `source` names
+/// `supertype` among its base types.
+///
+/// Both the declaration *containing* the span and any declaration the span
+/// contains count: a ranked occurrence is usually the framework-mandated
+/// member (Flutter's `createState`), not the class header that makes it
+/// mandated.
+///
+/// This replaces `occurrence_text.contains("extends <supertype>")` (gh
+/// #401), which was wrong in both directions at once — it fired on a
+/// comment, doc comment or string literal that merely mentioned the
+/// supertype, and it missed a declaration whose clause was wrapped across
+/// lines. Both directions are pinned by this module's tests. The deleted
+/// arm was also a straight `CLAUDE.md` violation: no pattern matching on
+/// source text, use the AST.
 ///
 /// # Errors
 ///
-/// Returns an error when `language` has no registered heritage grammar here.
+/// Returns an error when `span` is outside `source`, when `language` has no
+/// registered parser, when it has no heritage grammar here, or when the
+/// parse fails.
 pub fn declares_forbidden_supertype(
     language: &str,
     source: &str,
     span: &Span,
     supertype: &str,
 ) -> Result<bool> {
-    let _ = language;
+    let heritage = HERITAGE
+        .iter()
+        .find(|(id, _)| *id == language)
+        .map(|(_, heritage)| heritage)
+        .ok_or_else(|| {
+            anyhow!(
+                "`must_not_rank_first` names {supertype} for language `{language}`, which \
+                 carries no heritage grammar here — curate one rather than letting the \
+                 precision gate pass without judging anything"
+            )
+        })?;
+    let grammar = grammar_for(language)?;
+    let tree = parse_source(language_id(language)?, &grammar, source.as_bytes())?;
+    let bytes = source.as_bytes();
     let start = usize::try_from(span.start)?;
     let end = usize::try_from(span.end)?;
-    let text = source
-        .get(start..end)
-        .ok_or_else(|| anyhow!("span {start}..{end} is outside {}", span.path))?;
-    Ok(text.contains(&format!("extends {supertype}")))
+    Ok(declarations_overlapping(&tree, heritage, start..end)
+        .iter()
+        .any(|node| names_supertype(*node, heritage, bytes, supertype)))
+}
+
+/// Every declaration node whose byte range overlaps `range`.
+fn declarations_overlapping<'tree>(
+    tree: &'tree tree_sitter::Tree,
+    heritage: &Heritage,
+    range: std::ops::Range<usize>,
+) -> Vec<tree_sitter::Node<'tree>> {
+    let mut cursor = tree.walk();
+    let mut pending = vec![tree.root_node()];
+    let mut found = Vec::new();
+    while let Some(node) = pending.pop() {
+        if node.start_byte() >= range.end || node.end_byte() <= range.start {
+            continue;
+        }
+        if heritage.declarations.contains(&node.kind()) {
+            found.push(node);
+        }
+        pending.extend(node.named_children(&mut cursor));
+    }
+    found
+}
+
+/// True when `declaration`'s heritage clause names `supertype`.
+fn names_supertype(
+    declaration: tree_sitter::Node<'_>,
+    heritage: &Heritage,
+    source: &[u8],
+    supertype: &str,
+) -> bool {
+    let mut cursor = declaration.walk();
+    let clauses: Vec<tree_sitter::Node<'_>> = declaration
+        .named_children(&mut cursor)
+        .filter(|child| heritage.clauses.contains(&child.kind()))
+        .collect();
+    clauses
+        .into_iter()
+        .any(|clause| clause_names(clause, source, supertype))
+}
+
+/// True when a type-name leaf of `clause` reads exactly `supertype`.
+///
+/// Only leaves count, and only outside type-argument subtrees, so
+/// `extends State<LedgerView>` names `State` and not `LedgerView`.
+fn clause_names(clause: tree_sitter::Node<'_>, source: &[u8], supertype: &str) -> bool {
+    let mut cursor = clause.walk();
+    let mut pending = vec![clause];
+    while let Some(node) = pending.pop() {
+        if TYPE_ARGUMENT_KINDS.contains(&node.kind()) {
+            continue;
+        }
+        let children: Vec<tree_sitter::Node<'_>> = node.named_children(&mut cursor).collect();
+        if children.is_empty() {
+            if node.utf8_text(source).is_ok_and(|text| text == supertype) {
+                return true;
+            }
+            continue;
+        }
+        pending.extend(children);
+    }
+    false
+}
+
+/// The tree-sitter grammar registered for `language`.
+fn grammar_for(language: &str) -> Result<tree_sitter::Language> {
+    default_parsers()
+        .iter()
+        .find(|parser| parser.id() == language)
+        .map(|parser| parser.grammar())
+        .ok_or_else(|| anyhow!("no registered parser for language `{language}`"))
+}
+
+/// The engine's `'static` id for `language`, which `parse_source` needs for
+/// its error reporting.
+fn language_id(language: &str) -> Result<&'static str> {
+    default_parsers()
+        .iter()
+        .find(|parser| parser.id() == language)
+        .map(|parser| parser.id())
+        .ok_or_else(|| anyhow!("no registered parser for language `{language}`"))
 }
 
 #[cfg(test)]

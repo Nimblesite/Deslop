@@ -6,6 +6,7 @@ eleventyNavigation:
   key: 工作原理
   order: 2
 icon: account_tree
+docsGroup: trust
 lang: zh
 ---
 

@@ -6,6 +6,7 @@ eleventyNavigation:
   key: How It Works
   order: 2
 icon: account_tree
+docsGroup: trust
 ---
 
 # How It Works

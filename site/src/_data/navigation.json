@@ -21,6 +21,38 @@
       "external": true
     }
   ],
+  "docsGroups": [
+    {
+      "id": "start",
+      "i18nKey": "docsNav.start"
+    },
+    {
+      "id": "guides",
+      "i18nKey": "docsNav.guides"
+    },
+    {
+      "id": "reference",
+      "i18nKey": "docsNav.reference"
+    },
+    {
+      "id": "trust",
+      "i18nKey": "docsNav.trust"
+    }
+  ],
+  "docsExtras": [
+    {
+      "group": "trust",
+      "i18nKey": "docsNav.issueMap",
+      "url": "/issues/",
+      "icon": "hub"
+    },
+    {
+      "group": "trust",
+      "i18nKey": "docsNav.issueOverview",
+      "url": "/issues/overview/",
+      "icon": "dashboard"
+    }
+  ],
   "footer": [
     {
       "title": "Product",
@@ -73,6 +105,7 @@
         },
         {
           "text": "Issue map",
+          "i18nKey": "docsNav.issueMap",
           "url": "/issues/",
           "noLangPrefix": true
         }

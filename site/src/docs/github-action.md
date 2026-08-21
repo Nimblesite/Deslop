@@ -7,6 +7,7 @@ eleventyNavigation:
   key: GitHub Action
   order: 7
 icon: rule
+docsGroup: guides
 ---
 
 # GitHub Action

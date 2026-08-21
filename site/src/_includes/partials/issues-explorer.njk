@@ -1,0 +1,40 @@
+{% macro filters() %}
+<form class="atlas-filters" data-filters>
+  <label class="search-field"><span class="sr-only">Search issues</span><span aria-hidden="true">⌕</span><input type="search" name="search" placeholder="Search number, title, label…" autocomplete="off"></label>
+  <label><span>Workstream</span><select name="workstream"><option value="">All workstreams</option></select></label>
+  <label><span>Priority</span><select name="priority"><option value="">All priorities</option></select></label>
+  <label><span>Label</span><select name="label"><option value="">All labels</option></select></label>
+  <button type="reset" class="filter-reset">Reset</button>
+</form>
+{% endmacro %}
+
+{% if issueDefaultView == "network" %}
+<main class="atlas-app atlas-app--graph">
+  <h1 class="sr-only">Issue relationship graph</h1>
+  <details class="graph-filter-panel">
+    <summary><span>Filters</span><span class="atlas-count" aria-live="polite" data-visible-count>Loading issues…</span></summary>
+    {{ filters() }}
+  </details>
+  <div class="atlas-stage" data-stage aria-live="polite">
+    <div class="atlas-loading"><span></span><p>Mapping the backlog…</p></div>
+  </div>
+</main>
+{% else %}
+<main class="atlas-app atlas-app--overview">
+  <div class="atlas-toolbar">
+    <div class="view-tabs" role="tablist" aria-label="Report view">
+      <button type="button" class="view-tab is-active" data-view="runway" role="tab" aria-selected="true">Runway</button>
+      <button type="button" class="view-tab" data-view="board" role="tab" aria-selected="false">Priority</button>
+      <button type="button" class="view-tab" data-view="queue" role="tab" aria-selected="false">Queue</button>
+    </div>
+    <div class="atlas-count" aria-live="polite" data-visible-count>Loading issues…</div>
+  </div>
+  {{ filters() }}
+  <div class="atlas-stage" data-stage aria-live="polite">
+    <div class="atlas-loading"><span></span><p>Loading the backlog…</p></div>
+  </div>
+</main>
+{% endif %}
+
+<div class="issue-drawer-scrim" data-drawer-scrim></div>
+<aside class="issue-drawer" data-issue-drawer aria-hidden="true" aria-label="Issue details"></aside>

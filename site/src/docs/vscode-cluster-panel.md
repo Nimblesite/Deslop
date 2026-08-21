@@ -6,6 +6,7 @@ eleventyNavigation:
   key: VS Code
   order: 5
 icon: account_tree
+docsGroup: guides
 ---
 
 # VS Code Cluster Panel

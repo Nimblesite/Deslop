@@ -6,6 +6,7 @@ eleventyNavigation:
   key: Research
   order: 8
 icon: science
+docsGroup: trust
 ---
 
 # Research Background

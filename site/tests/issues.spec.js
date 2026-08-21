@@ -32,6 +32,7 @@ test.describe("documentation navigation", () => {
   });
 
   test("localizes the grouped documentation navigation", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/zh/docs/");
 
     const docsNav = page.locator(".docs-sidebar__nav");
@@ -48,6 +49,10 @@ test.describe("documentation navigation", () => {
     await expect(
       docsNav.getByRole("link", { name: "问题概览", exact: true }),
     ).toHaveAttribute("href", "/issues/overview/");
+    await page.getByRole("button", { name: "Toggle menu" }).click();
+    await expect(page.locator("body")).toHaveClass(/is-docs/);
+    await expect(page.locator(".docs-sidebar")).toHaveClass(/open/);
+    await expect(page.locator(".site-header .nav-links")).toBeHidden();
   });
 
   test("expands grouped docs navigation without overflowing a phone", async ({ page }) => {
@@ -89,6 +94,30 @@ test.describe("issue atlas", () => {
     await expect(page.locator(".verification-note")).toHaveCount(0);
     await expect(page.locator(".view-tabs")).toHaveCount(0);
     await expect(page.locator(".atlas-method")).toHaveCount(0);
+  });
+
+  test("fills the viewport below the header with no content above the graph", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.reload();
+    const headerBox = await page.locator(".site-header").boundingBox();
+    const visualizerBox = await page.locator(".issue-atlas--graph").boundingBox();
+    const stageBox = await page.locator(".atlas-stage").boundingBox();
+    const canvasBox = await page.locator(".network-canvas").boundingBox();
+
+    expect(visualizerBox.x).toBe(0);
+    expect(visualizerBox.width).toBe(1440);
+    expect(visualizerBox.y).toBeCloseTo(headerBox.y + headerBox.height, 0);
+    expect(visualizerBox.height).toBeCloseTo(900 - headerBox.height, 0);
+    expect(stageBox.y).toBeCloseTo(visualizerBox.y, 0);
+    expect(canvasBox.width).toBe(1440);
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(900);
+  });
+
+  test("cannot switch the graph-only page to a dashboard view", async ({ page }) => {
+    await page.goto("/issues/?view=queue");
+    await expect(page.locator(".network-svg")).toBeVisible();
+    await expect(page.locator("[data-view-panel=queue]")).toHaveCount(0);
+    await expect(page).not.toHaveURL(/view=queue/);
   });
 
   test("zooms the graph and opens useful issue detail", async ({ page }) => {
@@ -166,6 +195,21 @@ test.describe("issue atlas", () => {
     await page.reload();
     await expect(page.locator(".network-svg")).toBeVisible();
     await expect(page.locator(".atlas-hero")).toHaveCount(0);
+    const canvas = page.locator(".network-canvas");
+    const canvasBox = await canvas.boundingBox();
+    expect(canvasBox.y).toBeLessThan(844);
+    expect(canvasBox.height).toBeGreaterThanOrEqual(300);
+    for (const button of await page.locator(".network-tool").all()) {
+      const box = await button.boundingBox();
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+    await page.locator(".graph-node").first().click();
+    const closeBox = await page
+      .getByRole("button", { name: "Close issue details" })
+      .boundingBox();
+    expect(closeBox.width).toBeGreaterThanOrEqual(44);
+    expect(closeBox.height).toBeGreaterThanOrEqual(44);
     const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
     const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
     expect(bodyWidth).toBeLessThanOrEqual(viewportWidth);
@@ -201,8 +245,11 @@ test.describe("issue overview", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload();
     await expect(page.locator(".atlas-hero h1")).toBeVisible();
-    const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
-    const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
-    expect(bodyWidth).toBeLessThanOrEqual(viewportWidth);
+    for (const view of ["Runway", "Priority", "Queue"]) {
+      await page.getByRole("tab", { name: view }).click();
+      const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
+      const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
+      expect(bodyWidth).toBeLessThanOrEqual(viewportWidth);
+    }
   });
 });

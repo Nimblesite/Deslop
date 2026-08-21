@@ -7,6 +7,7 @@ eleventyNavigation:
   key: AI 智能体
   order: 3
 icon: smart_toy
+docsGroup: guides
 lang: zh
 ---
 

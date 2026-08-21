@@ -37,6 +37,13 @@ pub(crate) mod verdict;
 /// `signals`.
 pub(crate) mod incremental;
 
+/// The authored clone corpus, its cold ground truth, and the positive
+/// report-shape assertions both equivalence suites are judged by —
+/// the batch-process one and the live-session one. Imported explicitly
+/// with `use crate::common::clone_corpus::*;`, for the same reason as
+/// `signals`.
+pub(crate) mod clone_corpus;
+
 /// The six-language `incremental-multilang` fixture vocabulary. Imported
 /// explicitly with `use crate::common::multilang::*;`, for the same
 /// reason as `signals`.

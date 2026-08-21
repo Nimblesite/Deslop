@@ -69,9 +69,11 @@ impl CorpusStore {
     /// splice from the same [`CachedFile`] at the same offset.
     pub(super) fn upsert(&mut self, file_id: FileId, path_key: PathBuf, cached: CachedFile) {
         let _replaced = self.remove(file_id);
+        // MUTANT: append instead of splicing in path order
         let position = self
             .entries
-            .partition_point(|entry| entry.sort_key() < (&path_key, file_id));
+            .partition_point(|entry| entry.sort_key() < (&path_key, file_id))
+            .max(self.entries.len());
         let offset = self.record_offset(position);
         let CachedFile {
             tree,

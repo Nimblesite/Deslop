@@ -7,6 +7,7 @@ eleventyNavigation:
   key: 配置
   order: 6
 icon: tune
+docsGroup: reference
 lang: zh
 ---
 

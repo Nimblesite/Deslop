@@ -109,28 +109,34 @@ layout: layouts/base.njk
       <a href="{{ langPrefix }}/" class="docs-sidebar__link">{{ "nav.home" | t(currentLang) | default("Home") }}</a>
       {% for item in navigation.main %}
       {% set navUrl = item.url %}
-      {% if not item.external and currentLang != defaultLanguage %}{% set navUrl = item.url | altLangUrl('en', currentLang) %}{% endif %}
-      <a href="{{ navUrl }}" class="docs-sidebar__link"{% if item.external %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.text }}</a>
+      {% if not item.external and not item.noLangPrefix and currentLang != defaultLanguage %}{% set navUrl = item.url | altLangUrl('en', currentLang) %}{% endif %}
+      <a href="{{ navUrl }}" class="docs-sidebar__link"{% if item.external %} target="_blank" rel="noopener noreferrer"{% endif %}>{% if item.i18nKey and currentLang != defaultLanguage %}{{ item.i18nKey | t(currentLang) | default(item.text) }}{% else %}{{ item.text }}{% endif %}</a>
       {% endfor %}
     </nav>
     <nav class="docs-sidebar__nav" aria-label="Documentation">
-      {% for entry in navPages %}
-      {% set entryLang = entry.url | extractLangFromUrl(defaultLanguage) %}
-      {% if entryLang == currentLang %}
-      <a href="{{ entry.url }}" class="docs-sidebar__link{% if page.url == entry.url %} is-active{% endif %}">
-        <span class="material-symbols-outlined">{{ entry.data.icon | default("article") }}</span>
-        <span class="docs-sidebar__label">{{ entry.title }}</span>
-      </a>
-      {% if entry.children.length %}
-      <div class="docs-sidebar__children">
-        {% for child in entry.children %}
-        <a href="{{ child.url }}" class="docs-sidebar__link docs-sidebar__link--child{% if page.url == child.url %} is-active{% endif %}">
-          <span class="docs-sidebar__label">{{ child.title }}</span>
+      {% for group in navigation.docsGroups %}
+      <details class="docs-nav-group" data-docs-group="{{ group.id }}"{% if docsGroup == group.id %} open{% endif %}>
+        <summary class="docs-nav-group__summary">{{ group.i18nKey | t(currentLang) | default(group.id) }}</summary>
+        <div class="docs-nav-group__items">
+        {% for entry in navPages %}
+        {% set entryLang = entry.url | extractLangFromUrl(defaultLanguage) %}
+        {% if entryLang == currentLang and entry.data.docsGroup == group.id %}
+        <a href="{{ entry.url }}" class="docs-sidebar__link{% if page.url == entry.url %} is-active{% endif %}">
+          <span class="material-symbols-outlined">{{ entry.data.icon | default("article") }}</span>
+          <span class="docs-sidebar__label">{{ entry.title }}</span>
         </a>
+        {% endif %}
         {% endfor %}
-      </div>
-      {% endif %}
-      {% endif %}
+        {% for item in navigation.docsExtras %}
+        {% if item.group == group.id %}
+        <a href="{{ item.url }}" class="docs-sidebar__link">
+          <span class="material-symbols-outlined">{{ item.icon | default("article") }}</span>
+          <span class="docs-sidebar__label">{{ item.i18nKey | t(currentLang) }}</span>
+        </a>
+        {% endif %}
+        {% endfor %}
+        </div>
+      </details>
       {% endfor %}
     </nav>
     <div class="docs-sidebar__foot">
@@ -407,7 +413,7 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   {% if site.stylesheet %}<link rel="stylesheet" href="{{ site.stylesheet }}">{% endif %}
   {% block head %}{% endblock %}
 </head>
-<body class="{% if page.url.startsWith('/docs/') %}is-docs{% endif %}">
+<body class="{% if basePath.startsWith('/docs/') %}is-docs{% endif %}{% if bodyClass %} {{ bodyClass }}{% endif %}">
   <a href="#main-content" class="skip-link">Skip to main content</a>
 
   <header class="site-header">
@@ -472,7 +478,7 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
     {% block content %}{{ content | safe }}{% endblock %}
   </main>
 
-  <footer class="site-footer">
+  {% if not hideFooter %}<footer class="site-footer">
     <div class="footer-content">
       {% if navigation.footer %}
       <div class="footer-grid">
@@ -498,7 +504,7 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
         <p>&copy; {% year %} <a href="https://nimblesite.co" target="_blank" rel="noopener noreferrer">Nimblesite</a>. {{ site.name | default(site.title) }} is a Nimblesite product.</p>
       </div>
     </div>
-  </footer>
+  </footer>{% endif %}
 
   <script src="/techdoc/js/main.js" type="module"></script>
   <script src="/assets/js/drawer.js" type="module"></script>

@@ -7,6 +7,7 @@ eleventyNavigation:
   key: For AI
   order: 4
 icon: terminal
+docsGroup: reference
 ---
 
 # For AI

@@ -26,6 +26,14 @@
       "communitySupport": "Community support",
       "previous": "Previous"
     },
+    "docsNav": {
+      "start": "Start here",
+      "guides": "Guides",
+      "reference": "Reference",
+      "trust": "Internals & transparency",
+      "issueMap": "Issue map",
+      "issueOverview": "Issue overview"
+    },
     "footer": {
       "product": "Product",
       "community": "Community",
@@ -101,6 +109,14 @@
       "versionTag": "实时重复代码分析 · 预览",
       "communitySupport": "社区支持",
       "previous": "上一页"
+    },
+    "docsNav": {
+      "start": "入门",
+      "guides": "使用指南",
+      "reference": "参考",
+      "trust": "原理与透明度",
+      "issueMap": "问题图谱",
+      "issueOverview": "问题概览"
     },
     "footer": {
       "product": "产品",

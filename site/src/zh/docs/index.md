@@ -6,6 +6,7 @@ eleventyNavigation:
   key: 快速开始
   order: 1
 icon: rocket_launch
+docsGroup: start
 lang: zh
 ---
 

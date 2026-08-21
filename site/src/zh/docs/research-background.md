@@ -6,6 +6,7 @@ eleventyNavigation:
   key: 研究
   order: 8
 icon: science
+docsGroup: trust
 lang: zh
 ---
 

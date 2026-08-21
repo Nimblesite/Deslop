@@ -72,22 +72,30 @@ function nodeRadius(issue) {
 }
 
 function nodeClass(issue) {
-  const lifecycle = issue.lifecycle === "verify" ? " graph-node--verify" : "";
-  return `graph-node${lifecycle}`;
+  const classes = ["graph-node"];
+  if (issue.lifecycle === "verify") classes.push("graph-node--verify");
+  if (issue.labels.some((label) => label.name === "fixed-on-main")) classes.push("graph-node--fixed-on-main");
+  return classes.join(" ");
 }
 
 function createNode(position, stream, onSelect, tooltip) {
   const issue = position.issue;
   const radius = nodeRadius(issue);
   const group = svgElement("g", { class: nodeClass(issue), role: "button", tabindex: "0", "aria-label": `Issue ${issue.number}: ${issue.title}` });
+  const fixedOnMain = issue.labels.find((label) => label.name === "fixed-on-main");
+  if (fixedOnMain) {
+    const color = fixedOnMain.color.startsWith("#") ? fixedOnMain.color : `#${fixedOnMain.color}`;
+    group.style.setProperty("--fixed-on-main-color", color);
+  }
   group.dataset.issue = String(issue.number);
   group.setAttribute("transform", `translate(${position.x} ${position.y})`);
+  const hitTarget = svgElement("circle", { r: radius + 8, class: "graph-node__hit" });
   const ring = svgElement("circle", { r: radius + 4, class: "graph-node__ring" });
   const dot = svgElement("circle", { r: radius, class: "graph-node__dot", fill: stream.color });
   const label = textNode(String(issue.number), 0, 0.5, "graph-node__label");
-  if (issue.lifecycle !== "verify" && issue.priority !== "release_blocker") ring.style.display = "none";
+  if (!fixedOnMain && issue.priority !== "release_blocker") ring.style.display = "none";
   if (issue.priority === "release_blocker") ring.style.stroke = priorityColor(issue);
-  group.append(ring, dot, label);
+  group.append(hitTarget, ring, dot, label);
   bindNodeEvents(group, issue, onSelect, tooltip);
   return group;
 }
@@ -164,6 +172,10 @@ function bindWheel(svg, viewport, state) {
 
 function bindPan(svg, canvas, viewport, state) {
   let pointer = null;
+  const endPan = () => {
+    pointer = null;
+    canvas.classList.remove("is-panning");
+  };
   svg.addEventListener("pointerdown", (event) => {
     if (event.target.closest(".graph-node")) return;
     pointer = { x: event.clientX, y: event.clientY };
@@ -178,7 +190,9 @@ function bindPan(svg, canvas, viewport, state) {
     pointer = { x: event.clientX, y: event.clientY };
     applyTransform(viewport, state);
   });
-  svg.addEventListener("pointerup", () => { pointer = null; canvas.classList.remove("is-panning"); });
+  svg.addEventListener("pointerup", endPan);
+  svg.addEventListener("pointercancel", endPan);
+  svg.addEventListener("lostpointercapture", endPan);
 }
 
 function resetTransform(viewport, state) {

@@ -8,7 +8,12 @@ const stage = root.querySelector("[data-stage]");
 const filters = root.querySelector("[data-filters]");
 const drawer = root.querySelector("[data-issue-drawer]");
 const drawerScrim = root.querySelector("[data-drawer-scrim]");
-const state = { view: "network", search: "", workstream: "", priority: "", label: "" };
+const defaultView = root.dataset.defaultView || "network";
+const allowedViews = new Set([
+  defaultView,
+  ...Array.from(root.querySelectorAll("[data-view]"), (tab) => tab.dataset.view),
+]);
+const state = { view: defaultView, search: "", workstream: "", priority: "", label: "" };
 let report;
 
 function option(value, text) {
@@ -31,8 +36,10 @@ function renderSummary() {
     const target = root.querySelector(`[data-summary="${name}"]`);
     if (target) target.textContent = String(value);
   }
-  root.querySelector("[data-generated-date]").textContent = `Snapshot · ${shortDate(report.meta.generated_at)}`;
-  root.querySelector("[data-planning-note]").textContent = report.meta.planning_note;
+  const generatedDate = root.querySelector("[data-generated-date]");
+  const planningNote = root.querySelector("[data-planning-note]");
+  if (generatedDate) generatedDate.textContent = `Snapshot · ${shortDate(report.meta.generated_at)}`;
+  if (planningNote) planningNote.textContent = report.meta.planning_note;
 }
 
 function filtersFromForm() {
@@ -71,6 +78,7 @@ function updateTabs(view) {
 }
 
 function selectView(view) {
+  if (!allowedViews.has(view)) return;
   state.view = view;
   updateTabs(view);
   render();
@@ -78,7 +86,8 @@ function selectView(view) {
 
 function updateUrl(issue) {
   const url = new URL(window.location.href);
-  url.searchParams.set("view", state.view);
+  if (state.view === defaultView) url.searchParams.delete("view");
+  else url.searchParams.set("view", state.view);
   if (issue) url.searchParams.set("issue", String(issue.number));
   else if (!drawer.classList.contains("is-open")) url.searchParams.delete("issue");
   history.replaceState({}, "", url);
@@ -177,7 +186,8 @@ function bindEvents() {
 
 function restoreUrlState() {
   const params = new URLSearchParams(window.location.search);
-  if (renderers[params.get("view")]) state.view = params.get("view");
+  const requestedView = params.get("view");
+  if (renderers[requestedView] && allowedViews.has(requestedView)) state.view = requestedView;
   updateTabs(state.view);
   return Number(params.get("issue")) || null;
 }

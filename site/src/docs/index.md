@@ -6,6 +6,7 @@ eleventyNavigation:
   key: Getting Started
   order: 1
 icon: rocket_launch
+docsGroup: start
 ---
 
 # Getting Started
