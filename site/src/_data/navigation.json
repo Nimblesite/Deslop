@@ -16,6 +16,11 @@
       "url": "/releases/"
     },
     {
+      "text": "Issue map",
+      "url": "/issues/",
+      "noLangPrefix": true
+    },
+    {
       "text": "GitHub",
       "url": "https://github.com/Nimblesite/Deslop",
       "external": true
@@ -70,6 +75,11 @@
           "text": "Releases",
           "i18nKey": "footer.releases",
           "url": "/releases/"
+        },
+        {
+          "text": "Issue map",
+          "url": "/issues/",
+          "noLangPrefix": true
         }
       ]
     },

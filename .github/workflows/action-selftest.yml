@@ -21,11 +21,11 @@ on:
     branches: [main]
     paths:
       - action.yml
-      - scripts/action-*.mjs
-      - scripts/test-action-contract.mjs
+      - scripts/actions/action-*.mjs
+      - scripts/actions/test-action-contract.mjs
       # The contract test imports the pin list and its parser from here, so a
       # change to the stamper changes what the test checks. [ACTION-VERSION]
-      - scripts/stamp-release-version.mjs
+      - scripts/release/stamp-release-version.mjs
       - .github/workflows/action-selftest.yml
 
 permissions:
@@ -80,7 +80,7 @@ jobs:
       # v0.30.0 shipped a Marketplace listing advertising `@v0.27.0` through that
       # gap. The docs now commit no version for the check to date: it asserts
       # they cannot, which is true offline, on every PR. [ACTION-VERSION]
-      - run: node scripts/test-action-contract.mjs
+      - run: node scripts/actions/test-action-contract.mjs
 
   # [ACTION-VERSION] end to end. Every other job passes `version:` explicitly, so
   # the derivation path every Marketplace consumer actually takes — no `version:`
@@ -268,7 +268,7 @@ jobs:
       # legs cannot disagree about the patch they gate on. [ACTION-GATE]
       - name: Write a diff that adds duplicated code
         shell: bash
-        run: node scripts/action-copy-patch.mjs examples/rust examples/rust/action_diff_gate_copy.rs change.patch
+        run: node scripts/actions/action-copy-patch.mjs examples/rust examples/rust/action_diff_gate_copy.rs change.patch
 
       - name: The added duplication fails the same zero ceiling
         id: breach
@@ -411,7 +411,7 @@ jobs:
           printf 'not an archive' > tampered.tar.gz
           printf '%s  tampered.tar.gz\n' \
             0000000000000000000000000000000000000000000000000000000000000000 > tampered.tar.gz.sha256
-          if node scripts/action-verify-checksum.mjs tampered.tar.gz tampered.tar.gz.sha256; then
+          if node scripts/actions/action-verify-checksum.mjs tampered.tar.gz tampered.tar.gz.sha256; then
             echo "checksum verification accepted a tampered archive" >&2
             exit 1
           fi

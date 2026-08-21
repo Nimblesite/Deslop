@@ -67,7 +67,9 @@ class IssueReportTests(unittest.TestCase):
         self.assertEqual(report["summary"]["verify"], 1)
         self.assertEqual(report["issues"][0]["number"], 12)
         self.assertEqual(report["issues"][0]["lifecycle"], "verify")
-        self.assertEqual(report["issues"][0]["plan"]["effort_days"], 2)
+        first_issue = report["issues"][0]
+        self.assertIn("plan", first_issue)
+        self.assertEqual(first_issue.get("plan", {})["effort_days"], 2)
         self.assertIn(
             {"source": 10, "target": 11, "kind": "sub_issue"},
             report["relationships"],

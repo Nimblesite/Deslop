@@ -80,7 +80,7 @@ function releaseBuildsTaggedSourceWithoutPostTagVersionCommit() {
     "release workflow must not push mutable source changes during a tag release",
   );
   assertPresent(
-    /node scripts\/stamp-release-version\.mjs "\$\{\{ steps\.extract\.outputs\.version \}\}"/,
+    /node scripts\/release\/stamp-release-version\.mjs "\$\{\{ steps\.extract\.outputs\.version \}\}"/,
     "release workflow must stamp the tag version as a build-time input",
   );
 }

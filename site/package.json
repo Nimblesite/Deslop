@@ -5,7 +5,8 @@
   "private": true,
   "scripts": {
     "dev": "npx @11ty/eleventy --serve",
-    "build": "npx @11ty/eleventy",
+    "issues:generate": "python3 ../scripts/issues/generate_issue_report.py --output src/assets/data/issues.json",
+    "build": "npm run issues:generate && npx @11ty/eleventy",
     "clean": "rm -rf _site",
     "test": "playwright test"
   },

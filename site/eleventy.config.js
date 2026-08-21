@@ -428,7 +428,7 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
         {% for item in navData.main %}
         <li>
           {% set navUrl = item.url %}
-          {% if not item.external and currentLang != defaultLanguage %}
+          {% if not item.external and not item.noLangPrefix and currentLang != defaultLanguage %}
             {% set navUrl = item.url | altLangUrl('en', currentLang) %}
           {% endif %}
           <a href="{{ navUrl }}" {% if item.external %}target="_blank" rel="noopener noreferrer"{% endif %}

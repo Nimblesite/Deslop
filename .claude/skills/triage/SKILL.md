@@ -39,7 +39,7 @@ Also verify domain labels are right: `false-positive`, `false-negative`, `spec-v
 
 **Severity flows up the dependency tree.** If a blocked issue is showstopper, its root-cause issue is at least showstopper too — a root can never be less severe than anything it blocks. After clustering (Step 4), re-walk each tree from the leaves and raise ancestors as needed.
 
-If it looks as thought the issue has been fixed on the main branch, you must label it with 'fixed-on-main'. This reminds us to test it again after the release so that we can close it. 
+If it looks as thought the issue has been fixed on the main branch, you must label it with 'fixed-on-main'. This reminds us to test it again after the release so that we can close it. Leave a comment with any evidence as to why you think it has been already fixed on main.
 
 ## Step 4: Cluster related issues
 

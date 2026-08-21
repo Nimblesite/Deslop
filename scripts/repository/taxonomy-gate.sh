@@ -17,7 +17,7 @@
 # offending file:line on failure.
 
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 # Research / academic pages where bare Type-N is the subject matter.
 ALLOWLIST=(

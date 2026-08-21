@@ -1,0 +1,78 @@
+---
+layout: layouts/base.njk
+title: "Deslop Issue Atlas | What We Are Tackling Next"
+description: "Explore Deslop's public engineering backlog as an interactive relationship graph, delivery runway, priority board, and issue queue."
+permalink: /issues/
+noTranslation: true
+---
+
+{% block head %}
+<link rel="stylesheet" href="/assets/css/issues.css">
+{% endblock %}
+
+<div class="issue-atlas" data-issue-atlas>
+  <header class="atlas-hero">
+    <div class="atlas-hero__copy">
+      <div class="eyebrow-chip"><span>Public engineering map · GitHub source</span></div>
+      <h1>The work,<br><em>made legible.</em></h1>
+      <p class="atlas-hero__lede">See how Deslop's open issues connect, where the risk concentrates, and what should happen next. Every signal comes from public GitHub metadata and documented rules—no AI enrichment.</p>
+      <div class="atlas-hero__meta">
+        <a href="https://github.com/Nimblesite/Deslop/issues" target="_blank" rel="noopener noreferrer">Open GitHub issues <span aria-hidden="true">↗</span></a>
+        <span data-generated-date>Loading current snapshot…</span>
+      </div>
+    </div>
+    <div class="atlas-hero__signal" aria-label="Issue snapshot summary">
+      <div class="signal-orbit" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div class="signal-core"><strong data-summary="open">—</strong><span>open issues</span></div>
+    </div>
+  </header>
+
+  <section class="atlas-summary" aria-label="Backlog summary">
+    <article class="summary-card summary-card--verify"><span>Release verification</span><strong data-summary="verify">—</strong><p>fixed on main</p></article>
+    <article class="summary-card summary-card--blocker"><span>Stop the line</span><strong data-summary="release_blockers">—</strong><p>showstoppers</p></article>
+    <article class="summary-card"><span>Accuracy critical</span><strong data-summary="accuracy_critical">—</strong><p>correctness risks</p></article>
+    <article class="summary-card"><span>Connected work</span><strong data-summary="linked">—</strong><p>linked issues</p></article>
+  </section>
+
+  <aside class="verification-note">
+    <span class="verification-note__mark" aria-hidden="true">✓</span>
+    <div><strong>“fixed-on-main” is a verification state, not done.</strong><p>To the best of our knowledge the bug is fixed on main. It stays open until someone tests it in the next real release.</p></div>
+  </aside>
+
+  <main class="atlas-app" aria-label="Interactive issue atlas">
+    <div class="atlas-toolbar">
+      <div class="view-tabs" role="tablist" aria-label="Report view">
+        <button type="button" class="view-tab is-active" data-view="network" role="tab" aria-selected="true">Network</button>
+        <button type="button" class="view-tab" data-view="runway" role="tab" aria-selected="false">Runway</button>
+        <button type="button" class="view-tab" data-view="board" role="tab" aria-selected="false">Priority</button>
+        <button type="button" class="view-tab" data-view="queue" role="tab" aria-selected="false">Queue</button>
+      </div>
+      <div class="atlas-count" aria-live="polite" data-visible-count>Loading issues…</div>
+    </div>
+
+    <form class="atlas-filters" data-filters>
+      <label class="search-field"><span class="sr-only">Search issues</span><span aria-hidden="true">⌕</span><input type="search" name="search" placeholder="Search number, title, label…" autocomplete="off"></label>
+      <label><span>Workstream</span><select name="workstream"><option value="">All workstreams</option></select></label>
+      <label><span>Priority</span><select name="priority"><option value="">All priorities</option></select></label>
+      <label><span>Label</span><select name="label"><option value="">All labels</option></select></label>
+      <button type="reset" class="filter-reset">Reset</button>
+    </form>
+
+    <div class="atlas-stage" data-stage aria-live="polite">
+      <div class="atlas-loading"><span></span><p>Mapping the backlog…</p></div>
+    </div>
+  </main>
+
+  <section class="atlas-method">
+    <div><span class="method-index">01</span><h2>Relationships</h2><p>Solid links are GitHub sub-issues or blockers. Fine links are explicit issue references.</p></div>
+    <div><span class="method-index">02</span><h2>Recommended order</h2><p>Verification and release safety lead; accuracy, critical defects, assurance, and planned work follow.</p></div>
+    <div><span class="method-index">03</span><h2>Runway defaults</h2><p data-planning-note>Planning dates are transparent defaults, not team estimates.</p></div>
+  </section>
+
+  <div class="issue-drawer-scrim" data-drawer-scrim></div>
+  <aside class="issue-drawer" data-issue-drawer aria-hidden="true" aria-label="Issue details"></aside>
+</div>
+
+{% block scripts %}
+<script type="module" src="/assets/js/issues/app.js"></script>
+{% endblock %}

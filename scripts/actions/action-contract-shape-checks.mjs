@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { check } from "./action-contract-harness.mjs";
 import { resolveVersion } from "./action-resolve-artifact.mjs";
 import { actionPinDocs, readActionPins, PIN_PLACEHOLDER } from "../release/stamp-release-version.mjs";
-import * as releasesData from "../site/src/_data/releases.js";
+import * as releasesData from "../../site/src/_data/releases.js";
 
 const action = readFileSync("action.yml", "utf8");
 

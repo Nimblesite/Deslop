@@ -441,7 +441,7 @@ jobs:
       # on a website-only PR that job is skipped, so the one gate that guards
       # website copy runs here instead.
       - name: Taxonomy content gate
-        run: bash scripts/taxonomy-gate.sh
+        run: bash scripts/repository/taxonomy-gate.sh
 
       # Installer fail-closed contract ([DEPLOY-DOCS-INSTALLER-FAILCLOSED]).
       # The snippet under test IS site content (site/src/docs/index.md and
@@ -450,7 +450,7 @@ jobs:
       # written to protect the security-sensitive snippet must run wherever
       # that snippet can change.
       - name: Installer snippet contract
-        run: node --test scripts/installer-snippet.test.mjs
+        run: node --test scripts/deployment/installer-snippet.test.mjs
 
       - name: Install site dependencies
         working-directory: site
@@ -458,6 +458,8 @@ jobs:
 
       - name: Build site
         working-directory: site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm run build
 
   # Dependency review ([GITHUB-DEP-REVIEW]) — blocks PRs that pull in
