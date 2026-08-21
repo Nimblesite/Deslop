@@ -13,7 +13,9 @@ use tree_sitter::Node;
 use super::{
     body_shape::{body_kind_stream, ShapeToken},
     contract_index::{declared_bases, enclosing_container, function_name_node},
-    enclosing_kind, function_kinds, parse_for, spans_multiple_files, ParseCache, Snippet,
+    enclosing_kind, function_kinds,
+    override_marker::carries_override_marker,
+    parse_for, spans_multiple_files, ParseCache, Snippet,
 };
 use crate::{ast::ByteRange, state::FileId};
 
@@ -26,6 +28,10 @@ struct Subject<'src> {
     bases: Vec<Vec<u8>>,
     /// The subject body's shape, carrying collaborator identity.
     shape: Vec<ShapeToken<'src>>,
+    /// Whether the language's own override marker qualifies the subject,
+    /// which proves a contract declares it even when that contract is
+    /// outside the scan ([`carries_override_marker`]).
+    overrides: bool,
 }
 
 /// Detects the polymorphic-signature pattern: every cluster member
@@ -33,7 +39,10 @@ struct Subject<'src> {
 /// shared declared name, the members span at least two distinct files,
 /// the bodies differ ([`body_kind_stream`]), and every subject method is
 /// *declared by a contract* its enclosing type derives from
-/// ([`ContractIndex::declares`], [CLONE-NOISE-POLYMORPHIC-CONTRACT]).
+/// ([`ContractIndex::declares`], [CLONE-NOISE-POLYMORPHIC-CONTRACT]) —
+/// or carries the language's own override marker, which proves the same
+/// thing for a contract the scan never reached
+/// ([`carries_override_marker`]).
 ///
 /// The contract requirement is the positive evidence the pattern is
 /// named for. Without it every same-named cross-file function was
@@ -79,7 +88,7 @@ pub(super) fn is_polymorphic_signature_cluster<S: BuildHasher>(
     let contracts = cache.contracts(sources, file_languages, language);
     subjects
         .iter()
-        .all(|subject| contracts.declares(&subject.bases, subject.name))
+        .all(|subject| subject.overrides || contracts.declares(&subject.bases, subject.name))
 }
 
 /// Resolves one member's subject function and everything the decision
@@ -94,6 +103,7 @@ fn subject_of<'src>(snippet: &Snippet<'src>) -> Option<Subject<'src>> {
             .map(|container| declared_bases(container, snippet.source))
             .unwrap_or_default(),
         shape: body_kind_stream(function.child_by_field_name("body")?, snippet.source),
+        overrides: carries_override_marker(function, snippet.language, snippet.source),
     })
 }
 

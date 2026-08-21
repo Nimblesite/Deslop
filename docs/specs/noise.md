@@ -118,6 +118,27 @@ Files in other languages are excluded: a Python `Sink` and a C# `Sink` are
 unrelated contracts. An unresolved base — declared outside the scanned corpus —
 contributes no proof.
 
+**An explicit override marker is the same proof, for the contracts a scan never
+reaches.** A method implementing a *framework* interface has no declaring base
+in the index — Flutter's `State<T>.build` is not in the user's repository — so
+the index alone reads every `@override` implementation as an ordinary same-named
+function and clusters it as duplication. Six distinct Flutter widgets did
+exactly that, two of their `build` overrides rendering `nearly_identical` at
+`fused = 0.889` on `structural = 0.889, token_jaccard = 0.797` while the
+measured content evidence said `agreement = 0.25, rename_consistency = 0.0`
+([FUSION-CONTENT-GATE] keys on saturation and this pair sits under it). The
+languages that spell the relationship — Dart `@override`, C# `override`,
+TypeScript `override` — reject the marker outright when nothing is being
+overridden, so its presence is compiler-enforced evidence the index cannot
+supply and convention cannot forge. `cluster_filters/override_marker.rs` carries
+one row per parsed language; a language without a marker returns `None` and
+keeps relying on the index alone, which is why Python — where inheritance is
+checked and never declared — is unaffected and gh #373 stays closed. Recall is
+untouched in the direction that matters: the filter still requires the bodies to
+*differ*, so a genuinely copy-pasted override is never suppressed. Pinned by
+`issue_331_distinct_widget_declarations_must_not_saturate_fused_confidence` and
+by the per-language unit tests in `cluster_filters/override_marker/tests.rs`.
+
 Languages whose contracts are implicit **fail open**. Go declares methods
 outside the receiver type and never writes interface satisfaction down, so a Go
 method has no enclosing type declaration to resolve and the filter never
