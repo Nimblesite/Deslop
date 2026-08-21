@@ -42,7 +42,13 @@ test("declares the social image with its actual MIME type", async ({ page }) => 
   // The declaration used to be the literal "image/png" on every page, so it
   // was right here and wrong on the seven blog posts whose cards are JPEGs.
   // One page proves nothing; the pair has to agree everywhere.
-  const response = await page.request.get(socialImage);
+  //
+  // Fetched from the site under test by pathname, not from the absolute
+  // production URL the tag carries: the assertion is about the card *this
+  // build ships*. Against production it passed only for posts already
+  // deployed and failed for every new one, which makes it a deployment
+  // check wearing a build check's name.
+  const response = await page.request.get(new URL(socialImage).pathname);
   expect(response.ok(), socialImage).toBeTruthy();
   expect(response.headers()["content-type"], socialImage).toContain(socialImageType);
 });

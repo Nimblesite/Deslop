@@ -22,10 +22,18 @@ pub(crate) const SEEDED_MIN_NODES: u32 = 8;
 
 /// Stable id of the authored `alpha.rs`/`beta.rs` clone
 /// ([PIPELINE-DETERMINISM]).
-const SEEDED_CLONE_ID: &str = "813200b2b97c58c5";
+const SEEDED_CLONE_ID: &str = "990afd51350955c9";
 
 /// `canonical_node_count` of the authored clone.
-const SEEDED_CLONE_NODES: u64 = 40;
+///
+/// Seven higher than the pre-[PIPELINE-NORMALIZE-AST-OPERATOR] count:
+/// the body carries seven behaviour-bearing anonymous tokens — `&` in
+/// `&[i32]`, `in`, the `*` of `*item`, `>`, `+=`, the `*` of `item * 2`,
+/// and `-=` — and each now survives normalisation as an `__op__` leaf so
+/// `+` and `-` can disagree. The reported spans, bucket, category,
+/// signals and metrics are all unchanged; only the canonical tree the
+/// count and the id are taken from grew.
+const SEEDED_CLONE_NODES: u64 = 47;
 
 /// Where each copy is reported: `(file, start_line, end_line,
 /// start_byte, end_byte)`. Both bodies are byte-identical and 171 bytes

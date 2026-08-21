@@ -1,14 +1,14 @@
 {
   "meta": {
     "repo": "Nimblesite/Deslop",
-    "published_at": "2026-08-21T11:46:09Z",
-    "published_at_long": "21st of August 2026, 11am",
+    "published_at": "2026-08-21T13:01:42Z",
+    "published_at_long": "21st of August 2026, 1pm",
     "source_url": "https://github.com/Nimblesite/Deslop/issues",
     "method": "GitHub metadata, explicit relationships, cross-references, and documented keyword rules. No AI enrichment.",
-    "planning_note": "Indicative only — not a schedule. Relative sequencing uses two parallel tracks per workstream and default effort units: verify 2, showstopper 3, critical 4, bug 5, task 4, feature 8."
+    "planning_note": "Indicative only — not a schedule. Relative sequencing uses two parallel tracks per workstream, holds blocked work until every blocker finishes, and applies default effort units: verify 2, showstopper 3, critical 4, bug 5, task 4, feature 8."
   },
   "summary": {
-    "open": 104,
+    "open": 106,
     "verify": 16,
     "release_blockers": 3,
     "accuracy_critical": 22,
@@ -28,7 +28,7 @@
         "incorrect",
         "lies"
       ],
-      "count": 33,
+      "count": 35,
       "urgent": 33,
       "verify": 9
     },
@@ -223,7 +223,7 @@
       "rank": 7,
       "name": "Maintenance & tasks",
       "description": "Task or unclassified work after higher-priority queues.",
-      "count": 16
+      "count": 18
     }
   ],
   "issues": [
@@ -1241,9 +1241,9 @@
       "workstream": "accuracy",
       "inbound_links": 1,
       "plan": {
-        "offset": 23,
+        "offset": 26,
         "effort_units": 4,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -1276,9 +1276,9 @@
       "workstream": "accuracy",
       "inbound_links": 0,
       "plan": {
-        "offset": 26,
+        "offset": 23,
         "effort_units": 4,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -1721,9 +1721,9 @@
       "workstream": "accuracy",
       "inbound_links": 3,
       "plan": {
-        "offset": 39,
+        "offset": 42,
         "effort_units": 3,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -1763,7 +1763,7 @@
       "plan": {
         "offset": 42,
         "effort_units": 4,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -1801,9 +1801,9 @@
       "workstream": "accuracy",
       "inbound_links": 3,
       "plan": {
-        "offset": 42,
+        "offset": 45,
         "effort_units": 4,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -1843,7 +1843,7 @@
       "plan": {
         "offset": 46,
         "effort_units": 4,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -1881,9 +1881,9 @@
       "workstream": "accuracy",
       "inbound_links": 2,
       "plan": {
-        "offset": 46,
+        "offset": 49,
         "effort_units": 4,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -1923,7 +1923,7 @@
       "plan": {
         "offset": 50,
         "effort_units": 4,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -1961,9 +1961,9 @@
       "workstream": "accuracy",
       "inbound_links": 2,
       "plan": {
-        "offset": 50,
+        "offset": 53,
         "effort_units": 4,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -2003,7 +2003,7 @@
       "plan": {
         "offset": 54,
         "effort_units": 4,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -2036,9 +2036,9 @@
       "workstream": "performance",
       "inbound_links": 2,
       "plan": {
-        "offset": 0,
+        "offset": 4,
         "effort_units": 4,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -2136,7 +2136,7 @@
       "workstream": "detection",
       "inbound_links": 1,
       "plan": {
-        "offset": 4,
+        "offset": 19,
         "effort_units": 4,
         "track": 0
       }
@@ -2786,7 +2786,7 @@
       "workstream": "reporting",
       "inbound_links": 1,
       "plan": {
-        "offset": 6,
+        "offset": 18,
         "effort_units": 4,
         "track": 0
       }
@@ -2846,9 +2846,9 @@
       "workstream": "performance",
       "inbound_links": 0,
       "plan": {
-        "offset": 4,
+        "offset": 0,
         "effort_units": 4,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -3042,9 +3042,9 @@
       "workstream": "performance",
       "inbound_links": 4,
       "plan": {
-        "offset": 4,
+        "offset": 19,
         "effort_units": 8,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -3071,7 +3071,7 @@
       "workstream": "detection",
       "inbound_links": 7,
       "plan": {
-        "offset": 8,
+        "offset": 27,
         "effort_units": 8,
         "track": 0
       }
@@ -3143,9 +3143,9 @@
       "workstream": "reporting",
       "inbound_links": 1,
       "plan": {
-        "offset": 10,
+        "offset": 12,
         "effort_units": 8,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -3215,7 +3215,7 @@
       "workstream": "reporting",
       "inbound_links": 0,
       "plan": {
-        "offset": 12,
+        "offset": 20,
         "effort_units": 8,
         "track": 1
       }
@@ -3263,7 +3263,7 @@
       "workstream": "reporting",
       "inbound_links": 0,
       "plan": {
-        "offset": 18,
+        "offset": 22,
         "effort_units": 8,
         "track": 0
       }
@@ -3298,9 +3298,9 @@
       "workstream": "performance",
       "inbound_links": 4,
       "plan": {
-        "offset": 8,
+        "offset": 4,
         "effort_units": 4,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -3370,7 +3370,7 @@
       "workstream": "delivery",
       "inbound_links": 1,
       "plan": {
-        "offset": 6,
+        "offset": 8,
         "effort_units": 4,
         "track": 0
       }
@@ -3400,9 +3400,9 @@
       "workstream": "detection",
       "inbound_links": 1,
       "plan": {
-        "offset": 10,
+        "offset": 45,
         "effort_units": 4,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -3448,7 +3448,7 @@
       "workstream": "reporting",
       "inbound_links": 0,
       "plan": {
-        "offset": 20,
+        "offset": 28,
         "effort_units": 4,
         "track": 1
       }
@@ -3496,9 +3496,9 @@
       "workstream": "reporting",
       "inbound_links": 0,
       "plan": {
-        "offset": 24,
+        "offset": 30,
         "effort_units": 4,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -3586,7 +3586,7 @@
       "workstream": "delivery",
       "inbound_links": 0,
       "plan": {
-        "offset": 10,
+        "offset": 12,
         "effort_units": 4,
         "track": 0
       }
@@ -3616,9 +3616,9 @@
       "workstream": "delivery",
       "inbound_links": 3,
       "plan": {
-        "offset": 12,
+        "offset": 24,
         "effort_units": 4,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -3640,9 +3640,9 @@
       "workstream": "performance",
       "inbound_links": 0,
       "plan": {
-        "offset": 12,
+        "offset": 8,
         "effort_units": 4,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -3670,7 +3670,7 @@
       "workstream": "detection",
       "inbound_links": 0,
       "plan": {
-        "offset": 14,
+        "offset": 10,
         "effort_units": 4,
         "track": 1
       }
@@ -3694,9 +3694,69 @@
       "workstream": "detection",
       "inbound_links": 0,
       "plan": {
-        "offset": 16,
+        "offset": 14,
+        "effort_units": 4,
+        "track": 1
+      }
+    },
+    {
+      "number": 423,
+      "title": "Go implicit interfaces are invisible to [CLONE-NOISE-POLYMORPHIC-CONTRACT], and body_shape misses selector_expression",
+      "url": "https://github.com/Nimblesite/Deslop/issues/423",
+      "excerpt": "Defect Two gaps, one root: the polymorphic-signature suppression cannot see a Go contract. 1. No lexical enclosing type [CLONE-NOISE-POLYMORPHIC-CONTRACT] (crates/deslop-core/src/cluster_filters/contract_index.rs) proves a subject method is contract-forced by resolving the *ne…",
+      "type": "Unclassified",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-21T12:28:30Z",
+      "updated_at": "2026-08-21T12:28:30Z",
+      "lifecycle": "active",
+      "priority": "task",
+      "priority_rank": 7,
+      "priority_name": "Maintenance & tasks",
+      "priority_reason": "Task or unclassified work after higher-priority queues.",
+      "workstream": "accuracy",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 57,
         "effort_units": 4,
         "track": 0
+      }
+    },
+    {
+      "number": 425,
+      "title": "find-similar answers \"nothing similar\" from an unbuilt live report instead of waiting for the first pass",
+      "url": "https://github.com/Nimblesite/Deslop/issues/425",
+      "excerpt": "Defect AnalysisSession::find_similar (crates/deslop-core/src/live/session.rs:527) answers from self.latest_report unconditionally. There is no readiness gate: before the first analysis pass commits, latest_report is empty, so the MCP and LSP surfaces return An empty result is…",
+      "type": "Unclassified",
+      "labels": [
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-21T12:59:14Z",
+      "updated_at": "2026-08-21T12:59:14Z",
+      "lifecycle": "active",
+      "priority": "task",
+      "priority_rank": 7,
+      "priority_name": "Maintenance & tasks",
+      "priority_reason": "Task or unclassified work after higher-priority queues.",
+      "workstream": "accuracy",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 58,
+        "effort_units": 4,
+        "track": 1
       }
     }
   ],
