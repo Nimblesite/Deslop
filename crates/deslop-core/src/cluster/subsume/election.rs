@@ -9,10 +9,7 @@
 //! carries the fixture that would break without it.
 
 use crate::{
-    buckets::{
-        is_demoted_tier, measured_kind, spans_multiple_files, ClusterKind,
-        STRUCTURAL_SATURATION_FLOOR,
-    },
+    buckets::{is_demoted_tier, measured_kind, spans_multiple_files, ClusterKind},
     report::ReportSignals,
 };
 
@@ -82,24 +79,40 @@ pub(super) fn preferred_view(proposed: &Cluster, other: &Cluster, nesting: Nesti
 /// with a saturated 13-node fragment nested inside it erased the only
 /// actionable finding in five languages.
 ///
-/// The reverse arm carries a byte-proof bar: a demoted view yields only
-/// to *verbatim-proven* duplication
-/// ([`crate::content::ContentEvidence::verbatim_dominated`]) that
-/// crosses files. Any
-/// sub-window of a demoted surface measures higher agreement than the
-/// surface itself — the divergent positions are what the window
-/// excludes — so without the bar, the #197 in-file sibling-method
-/// family resurfaced as a credible six-line window family the moment
-/// its demoted umbrella died (`dart_issue_197_single_file_structural_only`).
-/// Narrowing a demoted surface must not launder it into a finding;
-/// byte-equal copies crossing files are a copy event the umbrella's
-/// in-file judgment does not speak to, and still overturn the umbrella
-/// that would bury them. A verbatim family confined to one file is that
-/// in-file judgment's own subject — sibling scaffolding repeating a
-/// mandatory line — and four byte-equal `assert` statements once
-/// deleted their demoted umbrella and surfaced as an act-now finding
+/// The reverse arm carries a byte-proof bar with a mass floor: a
+/// demoted view yields only to *verbatim-proven* duplication
+/// ([`crate::content::ContentEvidence::verbatim_dominated`]) whose
+/// every occurrence carries real statement mass
+/// ([`has_overturn_mass`]). Any sub-window of a demoted surface
+/// measures higher agreement than the surface itself — the divergent
+/// positions are what the window excludes — so an unconditional
+/// "credible beats demoted" let the #197 in-file sibling-method family
+/// resurface as a credible six-line window family the moment its
+/// demoted umbrella died (`dart_issue_197_single_file_structural_only`).
+/// The byte proof alone is not enough either, in either direction of
+/// file spread: in one file, four byte-equal `assert` statements once
+/// deleted their umbrella and surfaced as an act-now finding
 /// (`python-issue-71-rest-endpoint-shape`,
-/// `rest_endpoint_family_with_fstring_paths_is_suppressed`).
+/// `rest_endpoint_family_with_fstring_paths_is_suppressed`); across
+/// files, one byte-equal mandatory kwargs line deleted the umbrella
+/// over two *different* model constructors, and the fifteen absorbed
+/// micro-views it released were published as four visible clusters no
+/// noise filter could recognise (`python-issue-100-kwargs-ctor`,
+/// `message_vs_agentlog_kwargs_constructors_do_not_cluster`).
+///
+/// A byte-proven view with real statement mass is different in kind
+/// from those idiom lines: it is a copied block, the demoted encloser
+/// is that block plus a remainder whose content evidence failed, and a
+/// judgment that failed on its own content cannot vouch for code that
+/// is byte-provenly repeated. The verbatim 158-byte five-statement run
+/// inside `csharp-merge-readafter`'s two methods was deleted by the
+/// `structural` 0.85 straddle enclosing it — a Type-1 false negative
+/// that also claimed nine duplicated lines where five are
+/// (`byte_identical_clone_survives_a_demoted_enclosing_view_in_one_file`,
+/// `declared_inside_read_after_refuses`) — and the byte-identical
+/// `if` block shared by two otherwise-divergent functions was deleted
+/// by the whole-file echo enclosing it
+/// (`content_proven_nested_clone_survives_content_poor_enclosing_view`).
 /// Where the tiers do
 /// not distinguish the views, the structurally more precise view wins
 /// as before ([`structural_precision`]) — so between two credible
@@ -112,62 +125,11 @@ pub(super) fn preferred_view(proposed: &Cluster, other: &Cluster, nesting: Nesti
 /// `issue_343_sum_clamp_saturation` counted the orphan). Content
 /// overturns enclosure only across the demoted/credible boundary,
 /// never inside it.
-#[expect(
-    clippy::panic,
-    reason = "CLAUDE.md accuracy quarantine: the routing this panic replaces \
-              deleted a byte-proven single-file clone, which is silently-wrong \
-              output; pinned by \
-              byte_identical_clone_survives_a_demoted_enclosing_view_in_one_file"
-)]
 fn precision_preference(proposed: &Cluster, other: &Cluster, nesting: Nesting) -> Preference {
     match (demoted(proposed), demoted(other)) {
         (false, true) => Preference::First,
-        (true, false)
-            if other.content.verbatim_dominated && spans_multiple_files(&other.members) =>
-        {
+        (true, false) if other.content.verbatim_dominated && has_overturn_mass(other) => {
             Preference::Second
-        }
-        // QUARANTINE — CLAUDE.md STRICT NO INACCURATE CODE RULE.
-        //
-        // What the removed routing did: a demoted proposed view whose own
-        // occurrences disagree in shape (`structural` below
-        // [`STRUCTURAL_SATURATION_FLOOR`]) faced a *byte-proven* credible
-        // view confined to one file and fell through to the enclosure arm
-        // below, where the demoted encloser won and the byte-identical
-        // clone was deleted from the report. On `csharp-merge-readafter` a
-        // `structural_only` straddle at `structural` 0.85 (235 B vs 189 B —
-        // its own occurrences are not the same code) deleted the verbatim
-        // 158-byte five-statement run at `Prefix.cs` L6-10/L17-21: a
-        // Type-1 false negative, plus a metric false positive (nine lines
-        // claimed duplicated where five are).
-        //
-        // Why it was deleted: the arm above bars the byte-proof escape to
-        // clones that cross files, so a single-file byte-proven clone had
-        // no route past a demoted encloser, however incoherent that
-        // encloser's own scope. The bar itself is load-bearing only for
-        // *saturated* umbrellas: at `--min-nodes 4` the
-        // `python-issue-71-rest-endpoint-shape` umbrella (`structural`
-        // 1.0) correctly absorbs a byte-proven in-file assert family
-        // (`rest_endpoint_family_with_fstring_paths_is_suppressed`), so
-        // the saturation guard on this arm keeps that absorption intact
-        // and quarantines only the non-saturated straddle case.
-        //
-        // Pinned by
-        // `byte_identical_clone_survives_a_demoted_enclosing_view_in_one_file`
-        // (`crates/deslop/tests/cross_cluster_collapse.rs`) and
-        // `declared_inside_read_after_refuses`
-        // (`crates/deslop-core/tests/refactor_merge_refusals.rs`).
-        (true, false)
-            if other.content.verbatim_dominated
-                && proposed.signals.structural < STRUCTURAL_SATURATION_FLOOR =>
-        {
-            panic!(
-                "quarantined: a demoted view whose occurrences disagree in \
-                 shape must not delete a byte-proven clone (proposed {} vs \
-                 other {})",
-                proposed.id.as_str(),
-                other.id.as_str()
-            )
         }
         // Within one credibility tier the enclosing view is normally
         // the duplication and the nested view re-describes it, so
@@ -205,34 +167,75 @@ fn precision_preference(proposed: &Cluster, other: &Cluster, nesting: Nesting) -
 ///   it: a 28-byte parameter list, 10% of the method enclosing it,
 ///   deleted the whole-method Type-3 clone in `ts-type3-stmt` (#408).
 ///
-/// Measured on the two fixtures that bracket the rule, by the share of
-/// the enclosing view's bytes the proven nested view accounts for:
-///
-/// | fixture | encloser | nested | share | correct survivor |
-/// |---|---|---|---|---|
-/// | `incremental-multilang` C# | class, `structural` 0.85 | `ReconcileEntries`, byte-identical | **0.82** | nested |
-/// | `javascript-type3` | function, `structural` 0.87 | `for` body, byte-identical | **0.49** | encloser |
-/// | `ts-type3-stmt` | method, `structural` 0.88 | parameter list, byte-identical | **0.10** | encloser |
-///
-/// The C# encloser is a *container*: a class holding one duplicated
-/// method plus members that differ (a `const` in one file, a `record`
-/// in the other). Electing it relabels a byte-proven Type-1 clone as a
-/// Type-3 near-miss and counts the non-duplicated scaffolding as
-/// duplicated. The JavaScript encloser is a *duplicate*: the whole
-/// function is copied bar one trailing statement, so the `for` body
-/// nested inside it re-describes half of a finding that is real at full
+/// The `incremental-multilang` C# encloser [`accounts_for_bulk`]
+/// separates is a *container*: a class holding one duplicated method
+/// plus members that differ (a `const` in one file, a `record` in the
+/// other). Electing it relabels a byte-proven Type-1 clone as a Type-3
+/// near-miss and counts the non-duplicated scaffolding as duplicated.
+/// The `javascript-type3` encloser is a *duplicate*: the whole function
+/// is copied bar one trailing statement, so the `for` body nested
+/// inside it re-describes half of a finding that is real at full
 /// extent.
-///
-/// [`SHARE_NUMERATOR`]`/`[`SHARE_DENOMINATOR`] sits between 0.49 and
-/// 0.82 with margin on both sides. Byte span rather than node count
-/// because node mass compresses the difference (0.63 against 0.76 on
-/// the same two fixtures) to where no threshold separates them safely.
 fn nested_view_is_the_duplication(nested: &Cluster, enclosing: &Cluster) -> bool {
     nested.content.verbatim_dominated
         && spans_multiple_files(&nested.members)
-        && byte_span(nested).saturating_mul(SHARE_DENOMINATOR)
-            >= byte_span(enclosing).saturating_mul(SHARE_NUMERATOR)
+        && accounts_for_bulk(nested, enclosing)
 }
+
+/// True when `nested` claims at least
+/// [`SHARE_NUMERATOR`]`/`[`SHARE_DENOMINATOR`] of `enclosing`'s bytes —
+/// the boundary between "the enclosing view is this duplication plus
+/// code that is not duplicated" and "the nested view re-describes a
+/// fragment of a finding that is real at full extent". Measured, by the
+/// share of the enclosing view's bytes the byte-proven nested view
+/// accounts for:
+///
+/// | fixture | share | correct survivor |
+/// |---|---|---|
+/// | `incremental-multilang` C# class around a copied method | **0.82** | nested |
+/// | `javascript-type3` function around a copied `for` body | **0.49** | encloser |
+/// | `ts-type3-stmt` method around a copied parameter list | **0.10** | encloser |
+///
+/// Two thirds sits between 0.49 and 0.82 with margin on both sides.
+/// Byte span rather than node count because node mass compresses the
+/// bracketing measurements (0.63 against 0.76) to where no threshold
+/// separates them safely.
+fn accounts_for_bulk(nested: &Cluster, enclosing: &Cluster) -> bool {
+    byte_span(nested).saturating_mul(SHARE_DENOMINATOR)
+        >= byte_span(enclosing).saturating_mul(SHARE_NUMERATOR)
+}
+
+/// True when every occurrence of a byte-proven view carries at least
+/// [`VERBATIM_OVERTURN_MIN_NODES`] normalised nodes — a copied
+/// *block*, with the standing to overturn a demoted enclosing view,
+/// rather than a mandatory idiom line repeating inside sibling
+/// scaffolding. The minimum over occurrences, not the sum: a family of
+/// many tiny repeats gains no standing from its cardinality.
+///
+/// Measured on the fixtures that bracket the demoted-encloser
+/// exception, by `--min-nodes` bisection of the deciding view:
+///
+/// | fixture | view | nodes per occurrence | verdict |
+/// |---|---|---|---|
+/// | `csharp-merge-readafter` | five-statement verbatim run | ≥ 28 | overturns |
+/// | `alpha`/`beta` shared-logic pair | byte-identical `if` block | 24–27 | overturns |
+/// | `python-issue-71-rest-endpoint-shape` | byte-equal `assert` line | 8–9 | absorbed |
+/// | `python-issue-100-kwargs-ctor` | byte-equal kwargs line | 8–9 | absorbed |
+///
+/// Sixteen sits between 9 and 24 with real margin on both sides, and
+/// above the saturated 13-node fragment this module's history already
+/// records as the canonical sliver (#408).
+fn has_overturn_mass(cluster: &Cluster) -> bool {
+    cluster
+        .members
+        .iter()
+        .map(|member| member.node_count)
+        .min()
+        .is_some_and(|smallest| smallest >= VERBATIM_OVERTURN_MIN_NODES)
+}
+
+/// Node floor for [`has_overturn_mass`] — see its measurement table.
+const VERBATIM_OVERTURN_MIN_NODES: usize = 16;
 
 /// The second exception to "the encloser wins": a nested view with
 /// strictly **more occurrences** than the view enclosing it is not
@@ -268,8 +271,8 @@ fn nested_view_outnumbers(nested: &Cluster, enclosing: &Cluster) -> bool {
 /// Numerator of the share of an enclosing view a proven nested view
 /// must cover to be elected over it.
 const SHARE_NUMERATOR: usize = 2;
-/// Denominator of that share. Two thirds — see
-/// [`nested_view_is_the_duplication`] for the measurements it separates.
+/// Denominator of that share. Two thirds — see [`accounts_for_bulk`]
+/// for the measurements it separates.
 const SHARE_DENOMINATOR: usize = 3;
 
 /// Total source bytes a view claims, summed over its occurrences.

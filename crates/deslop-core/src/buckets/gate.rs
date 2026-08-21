@@ -73,9 +73,8 @@ pub fn has_saturating_shape_evidence(signals: ReportSignals) -> bool {
 /// normalised tree: [FUSION-SHARED-SUBTREE] grades `1 - TED/max(nodes)`,
 /// so saturation means the members align node for node and the view is a
 /// faithful description of one repeated shape. Named because three
-/// routing sites and the subsumption election all turn on this single
-/// boundary — a view *below* it is measuring occurrences that disagree,
-/// and nothing downstream may treat its scope as trustworthy.
+/// routing sites turn on this single boundary — a view *below* it is
+/// measuring occurrences that disagree in shape.
 pub const STRUCTURAL_SATURATION_FLOOR: f64 = 0.99;
 
 /// Content support carried by the two independent measured

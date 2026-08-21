@@ -337,7 +337,7 @@ fn byte_identical_clone_survives_a_demoted_enclosing_view_in_one_file() -> Resul
 
     let clone = byte_identical
         .first()
-        .expect("length asserted to be exactly one above");
+        .ok_or_else(|| anyhow::anyhow!("length asserted to be exactly one above"))?;
     let occurrences = cluster_occurrences(clone);
     assert_eq!(
         occurrences.len(),

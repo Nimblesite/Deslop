@@ -24,5 +24,20 @@ fn message_vs_agentlog_kwargs_constructors_do_not_cluster() -> Result<()> {
         agent_log_hits.is_empty(),
         "AgentLog(...) constructor calls must not surface as duplicates: {agent_log_hits:#?}"
     );
+    let visible = visible_cluster_lines(&report);
+    assert!(
+        visible.is_empty(),
+        "the two models share only the mandatory kwargs-constructor \
+         scaffolding, so no visible cluster may exist over this fixture at \
+         all — nested windows below the constructor call are the same \
+         non-duplicate seen narrower, not new findings: {visible:#?}"
+    );
+    assert_eq!(
+        clusters_hidden(&report),
+        1,
+        "the whole constructor pair is measured and then hidden by \
+         [CLONE-NOISE-PY-KWARGS-CTOR] — hidden, not unseen: a zero here \
+         means the detector went blind to the pair rather than judging it"
+    );
     Ok(())
 }
