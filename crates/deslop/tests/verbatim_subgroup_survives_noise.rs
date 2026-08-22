@@ -74,8 +74,19 @@ const CELL_STRANGER_LINE: u64 = 4;
 
 /// Lines each copy of the constant table covers.
 const CONST_LOC_PER_FILE: u64 = 4;
-/// Lines each copy of the call run covers — the four `persist` calls.
-const CALL_LOC_PER_FILE: u64 = 4;
+/// Lines each copy of the call run covers — the whole five-line `emit`
+/// function, not only the four `persist` calls inside it.
+///
+/// `invoice_emitter.py` and `invoice_emitter_copy.py` are byte-identical
+/// files, so `def emit():` is as duplicated as the calls under it, and
+/// the published `identical` cluster spans L1-5 of both. Four was what
+/// the same-file overlap collapse elected while it ranked an
+/// overlapping run by cross-file edge strength: the four-call window
+/// scored higher than the function enclosing it purely by carrying less
+/// code, and the `def` line went uncounted
+/// ([PIPELINE-CLUSTER-EXACT-SCOPE], gh #408). The undercount was the
+/// artifact; five is what the two files actually share.
+const CALL_LOC_PER_FILE: u64 = 5;
 
 /// Renders one `verbatim-subgroup` case.
 fn render(case: &str, min_nodes: u32) -> Result<Value> {

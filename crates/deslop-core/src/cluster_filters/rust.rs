@@ -572,8 +572,20 @@ fn struct_body_in_range_is_all_fields(struct_item: Node<'_>, range: ByteRange) -
 
 /// Returns true when every named child of `container` that `range` covers is a
 /// whole struct whose in-range body is only field declarations, or a leading
-/// attribute sibling — and at least one field is covered. Any function, impl,
-/// or other item keeps the cluster.
+/// attribute, import, or comment sibling — and at least one field is covered.
+/// Any function, impl, or other item keeps the cluster.
+///
+/// `use_declaration` is on that list because a sibling window over a data
+/// model starts where the file starts. `host.rs` and `manifest.rs` in the
+/// #224 fixture hold nothing but distinct serde structs, and the elected
+/// window opened on their shared `use serde::{Deserialize, Serialize};` —
+/// one non-struct sibling, and the whole 125-node view escaped the filter
+/// and published `structural_only` across both files. An import is already
+/// boilerplate in its own right ([CLONE-NOISE-RUST-DECL]), so a run of
+/// distinct field structs does not stop being a data model because one sits
+/// above it. The `saw_field` requirement is what keeps this from
+/// swallowing an import-only window, and `raw_snippet_texts_differ` still
+/// lets a byte-identical copy-pasted struct through.
 fn range_covers_only_field_structs(container: Node<'_>, range: ByteRange) -> bool {
     let mut cursor = container.walk();
     let mut saw_field = false;
@@ -593,7 +605,7 @@ fn range_covers_only_field_structs(container: Node<'_>, range: ByteRange) -> boo
                     saw_field = true;
                 }
             }
-            "attribute_item" => {}
+            "attribute_item" | "use_declaration" => {}
             kind if kind.ends_with("comment") => {}
             _ => return false,
         }

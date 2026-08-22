@@ -7,9 +7,7 @@
 use std::path::PathBuf;
 
 use super::*;
-use crate::{
-    ast::ByteRange, fingerprint::Fingerprint, lang::LanguageParser, state::FileRegistry,
-};
+use crate::{ast::ByteRange, fingerprint::Fingerprint, lang::LanguageParser, state::FileRegistry};
 
 fn fingerprint(seed: u8, start: usize, end: usize) -> Fingerprint {
     let mut registry = FileRegistry::new();
@@ -263,12 +261,16 @@ fn a_repeated_token_stream_costs_one_minhash_construction() -> Result<(), String
     let first = registry.register(PathBuf::from("repeat_a.fs"));
     let second = registry.register(PathBuf::from("repeat_b.fs"));
 
-    let first_source = format!("module RepeatFirst
+    let first_source = format!(
+        "module RepeatFirst
 
-{SHARED_WINDOW}");
-    let second_source = format!("module RepeatSecondRenamed
+{SHARED_WINDOW}"
+    );
+    let second_source = format!(
+        "module RepeatSecondRenamed
 
-{SHARED_WINDOW}");
+{SHARED_WINDOW}"
+    );
     let first_tree = fsharp_tree(&first_source, first)?;
     let second_tree = fsharp_tree(&second_source, second)?;
     let first_window = window_fingerprint(&first_source, &first_tree, first)?;
