@@ -416,6 +416,13 @@ jobs:
       # artifacts and must never be keyed together with the release
       # target directory, or one job's write would poison the other's
       # restore.
+      #
+      # The generated wire modules ride along for the reason the build
+      # job spells out: git-ignored, so regenerating them on a fresh
+      # checkout invalidates the fingerprints just restored. Carrying
+      # them across a near-miss restore is safe either way — the
+      # generator compares content, so a genuinely changed wire model is
+      # still rewritten and still rebuilds what depends on it.
       - name: Cache instrumented build
         uses: actions/cache@v6
         with:
@@ -423,6 +430,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target/llvm-cov-target
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
           key: ${{ runner.os }}-cargo-cov-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-cargo-cov-
