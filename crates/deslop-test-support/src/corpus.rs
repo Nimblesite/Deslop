@@ -298,9 +298,22 @@ pub fn scan(scan_root: &Path, output_prefix: &Path) -> Result<CorpusRun> {
     })
 }
 
+/// Where the release binary the suite measures is expected to sit.
+///
+/// The stem carries [`std::env::consts::EXE_SUFFIX`]: cargo writes
+/// `deslop.exe` on Windows, and a bare stem makes the existence check below
+/// false with the binary sitting right beside it — every corpus test then
+/// dies on "release binary missing" before it scans anything.
+fn release_binary_path() -> PathBuf {
+    repo_root()
+        .join("target")
+        .join("release")
+        .join(format!("deslop{}", std::env::consts::EXE_SUFFIX))
+}
+
 /// Locates the release binary the suite measures.
 fn release_binary() -> Result<PathBuf> {
-    let binary = repo_root().join("target").join("release").join("deslop");
+    let binary = release_binary_path();
     if binary.is_file() {
         return Ok(binary);
     }
@@ -535,3 +548,6 @@ pub fn array<'a>(value: &'a Value, name: &str) -> &'a [Value] {
 pub fn field_u64(value: &Value, name: &str) -> u64 {
     value.get(name).and_then(Value::as_u64).unwrap_or_default()
 }
+
+#[cfg(test)]
+mod tests;
