@@ -8,6 +8,8 @@
 
 use std::{env::consts::EXE_SUFFIX, path::Path};
 
+use anyhow::Result;
+
 use super::{peak_rss_mb, release_binary_path};
 
 /// The binary cargo actually produces is `deslop` on Unix and `deslop.exe`
@@ -48,35 +50,44 @@ fn repo_target_release() -> std::path::PathBuf {
 
 /// GNU `/usr/bin/time -v` reports kbytes, and the label says so.
 #[test]
-fn a_gnu_peak_is_read_as_kbytes() {
+fn a_gnu_peak_is_read_as_kbytes() -> Result<()> {
     let stderr = "\tMaximum resident set size (kbytes): 7340032\n";
-    let parsed = peak_rss_mb(stderr).expect("GNU peak parses");
+    let parsed = peak_rss_mb(stderr)?;
     assert_eq!(
         parsed, 7168,
         "7340032 kbytes is 7168 MB, the runner ceiling"
     );
+    Ok(())
 }
 
 /// BSD `/usr/bin/time -l` reports bytes, with no unit in the label.
 #[test]
-fn a_bsd_peak_is_read_as_bytes() {
+fn a_bsd_peak_is_read_as_bytes() -> Result<()> {
     let stderr = "         7516192768  maximum resident set size\n";
-    let parsed = peak_rss_mb(stderr).expect("BSD peak parses");
+    let parsed = peak_rss_mb(stderr)?;
     assert_eq!(
         parsed, 7168,
         "7516192768 bytes is 7168 MB, the runner ceiling"
     );
+    Ok(())
 }
 
 /// A measurement that never appeared is an error, never a zero: a silent
 /// zero would clear every memory ceiling in the corpus at once.
 #[test]
 fn a_missing_peak_is_an_error_rather_than_zero() {
-    let error = peak_rss_mb("nothing useful here\n")
-        .expect_err("a stderr with no peak line must not yield a number");
+    let outcome = peak_rss_mb("nothing useful here\n");
     assert!(
-        error.to_string().contains("maximum resident set size"),
-        "the error must name what it could not find, got: {error}"
+        outcome.is_err(),
+        "a stderr with no peak line must not yield a number, got: {outcome:?}"
+    );
+    let message = outcome
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+    assert!(
+        message.contains("maximum resident set size"),
+        "the error must name what it could not find, got: {message}"
     );
 }
 
