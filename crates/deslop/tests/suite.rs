@@ -219,6 +219,8 @@ mod regex_literal_delimiters;
 mod rename_literal_monotonicity;
 #[path = "rename_literal_substring_boundary.rs"]
 mod rename_literal_substring_boundary;
+#[path = "rename_needs_an_anchor.rs"]
+mod rename_needs_an_anchor;
 #[path = "report_golden.rs"]
 mod report_golden;
 #[path = "rerun.rs"]

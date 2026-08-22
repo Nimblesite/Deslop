@@ -131,6 +131,15 @@ fn precision_preference(proposed: &Cluster, other: &Cluster, nesting: Nesting) -
         (true, false) if other.content.verbatim_dominated && has_overturn_mass(other) => {
             Preference::Second
         }
+        // The occurrence-count exception below was measured between two
+        // demoted views: seven shape-only methods against the two class
+        // containers enclosing them. It is not independent content proof
+        // and must not jump the tier boundary. Otherwise a synthetic
+        // statement window can exclude the one differing endpoint, certify
+        // itself from the substitutions it retained, then use its seven
+        // occurrences to delete the demoted view that still carries the
+        // contradiction (`rename_needs_an_anchor`).
+        (true, false) if nesting == Nesting::ProposedEncloses => Preference::First,
         // Within one credibility tier the enclosing view is normally
         // the duplication and the nested view re-describes it, so
         // enclosure decides and the signal grades are not compared at
