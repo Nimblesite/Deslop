@@ -5,9 +5,7 @@ use std::fs;
 use anyhow::{anyhow, Context as _};
 use serde_json::Value;
 
-use super::{
-    corpus_dir, golden_report_path, BLESS, GOLDEN_MIN_NODES, PAIR_FILES, TRIO_FILES,
-};
+use super::{corpus_dir, golden_report_path, BLESS, GOLDEN_MIN_NODES, PAIR_FILES, TRIO_FILES};
 use crate::common::{golden::*, verdict::*, *};
 
 // [PIPELINE-DETERMINISM] Half two: correct. Byte equality alone only

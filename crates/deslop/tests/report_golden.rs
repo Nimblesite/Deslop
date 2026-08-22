@@ -26,6 +26,12 @@ use std::{fs, path::PathBuf};
 
 use crate::common::{golden::*, *};
 
+// [TEST-SELECTION] Spelled out because rustfmt resolves a child of a
+// `#[path]`-loaded module against that file's own directory, not the
+// directory rustc gives the module. Left implicit, `cargo fmt --check`
+// aborts on "failed to resolve mod `contract`" and the format gate
+// fails while the crate compiles.
+#[path = "report_golden/contract.rs"]
 mod contract;
 
 /// Fixed `--min-nodes` the golden is rendered at. 16 sits above the
