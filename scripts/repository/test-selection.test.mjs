@@ -32,17 +32,12 @@ import { fileURLToPath } from "node:url";
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const makefile = readFileSync(resolve(repoRoot, "Makefile"), "utf8").split("\n");
 
-// The package that owns the real-repository corpus suite, and the cargo test
-// target that carries it. [TEST-ONE-BINARY] linked every `tests/*.rs` into one
-// binary, so the target is `suite` and the corpus tests are a module inside it.
-// Naming the module as a `--test` target is what made `make test-corpus` exit
-// on `no test target named corpus_repos` before it scanned anything (gh #347).
+// The package and dedicated Cargo test target that own the real-repository
+// corpus suite.
 const CORPUS_PACKAGE = "deslop";
-const CORPUS_TARGET = "suite";
-const CORPUS_MODULE = "corpus_repos";
-// How `make test-corpus` scopes the run to the corpus module: libtest matches
-// a positional filter against the full `<module>::<test>` path.
-const CORPUS_MODULE_FILTER = `${CORPUS_MODULE}::`;
+const CORPUS_TARGET = "corpus_repos";
+const CORPUS_TEST_PREFIX = "corpus_";
+const ANALYZE_TARGET = "_ci-analyze";
 
 // The make variable naming the resource-bounded slice the scheduled corpus
 // workflow runs, and how libtest selects the skipped suite: `--ignored`, plus
@@ -215,25 +210,14 @@ test("[TEST-SELECTION-SKIP] the corpus targets select by --ignored, never by nam
     );
     assert.ok(
       args.includes("--test") && args.includes(CORPUS_TARGET),
-      `\`make ${target}\` must select the ${CORPUS_TARGET} target explicitly. Naming a module ` +
-        `(\`--test ${CORPUS_MODULE}\`) instead of the target cargo builds makes the recipe die ` +
-        "on `no test target named ...` before it clones a repository (gh #347).",
+      `\`make ${target}\` must select Cargo's ${CORPUS_TARGET} target explicitly, or the recipe ` +
+        "runs a different test binary and can report green without scanning a repository.",
     );
     assert.ok(
       !args.includes("--skip"),
       `\`make ${target}\` must not pass --skip — substring selection is the defect (gh #412)`,
     );
   }
-});
-
-test("[TEST-SELECTION-SKIP] the corpus run stays scoped to the corpus module", () => {
-  const args = words(recipe("test-corpus"));
-  assert.ok(
-    args.includes(CORPUS_MODULE_FILTER),
-    `\`make test-corpus\` must scope the run to \`${CORPUS_MODULE_FILTER}\`. The ${CORPUS_TARGET} ` +
-      "target carries every integration suite in the crate, so `--ignored` alone would also run " +
-      "the unrelated skips that live there — a corpus target that runs whatever else is red.",
-  );
 });
 
 test("[TEST-SELECTION-SKIP] the scheduled slice matches test names exactly", () => {
@@ -252,11 +236,10 @@ test("[TEST-SELECTION-SKIP] the scheduled slice matches test names exactly", () 
   );
   for (const name of slice) {
     assert.ok(
-      name.startsWith(CORPUS_MODULE_FILTER),
+      name.startsWith(CORPUS_TEST_PREFIX),
       `${CORPUS_SLICE_VARIABLE} names \`${name}\`, which ${EXACT_FLAG} resolves to nothing: ` +
-        `inside the ${CORPUS_TARGET} binary the tests answer to \`${CORPUS_MODULE_FILTER}<test>\`, ` +
-        "not the bare function name. The scheduled run would execute zero repositories and " +
-        "report green (gh #347).",
+        `inside the ${CORPUS_TARGET} binary every corpus test starts with ` +
+        `\`${CORPUS_TEST_PREFIX}\`. The scheduled run would execute zero repositories and report green.`,
     );
   }
 });
@@ -272,7 +255,7 @@ test("[TEST-SELECTION] the gate's own self-tests are inside the gate's workspace
       "corpus precision, scope and confidence contracts — the tests that decide whether a corpus " +
       "result means anything. `--skip corpus_` already hid them once (gh #412); `test = false` " +
       `would hide them again, and \`make test-corpus\` runs only \`-p ${CORPUS_PACKAGE} --test ` +
-      `${CORPUS_TARGET} ... ${CORPUS_MODULE_FILTER}\`.`,
+      `${CORPUS_TARGET}\`.`,
   );
   assert.deepEqual(
     Object.keys(pkg.features).sort(),
@@ -284,8 +267,9 @@ test("[TEST-SELECTION] the gate's own self-tests are inside the gate's workspace
 
 test("[TEST-SELECTION-SKIP] an ignored test is still compiled and linted every run", () => {
   assert.ok(
-    words(recipe("lint")).includes(ALL_TARGETS_FLAG),
-    "`make lint` must lint every target. `#[ignore]` costs coverage of a test's *execution*, " +
+    words(recipe(ANALYZE_TARGET)).includes(ALL_TARGETS_FLAG),
+    `\`make ${ANALYZE_TARGET}\` must lint every target. ` +
+      "`#[ignore]` costs coverage of a test's *execution*, " +
       "never of its *compilation*: the target stays in `--all-targets` and clippy still reads it.",
   );
   assert.ok(
@@ -294,14 +278,14 @@ test("[TEST-SELECTION-SKIP] an ignored test is still compiled and linted every r
       `compiling — the failure mode of commit ${UNCOMPILABLE_CORPUS_COMMIT}`,
   );
   assert.equal(
-    featureSet("lint"),
+    featureSet(ANALYZE_TARGET),
     featureSet("test"),
-    `\`make lint\` must compile the feature set \`make test\` runs. Clippy only reads the code ` +
+    `\`make ${ANALYZE_TARGET}\` must compile the feature set \`make test\` runs. Clippy only reads the code ` +
       "the features it was given compile, so a feature the release gate enables and lint omits " +
       "is a module nobody ever lints — `deslop-lsp/profiling` was exactly that module.",
   );
   assert.equal(
-    featureSet("lint"),
+    featureSet(ANALYZE_TARGET),
     FEATURES_REFERENCE,
     `both must reach it through \`${FEATURES_REFERENCE}\`: two literal copies of the same list ` +
       "agree until the day one of them is edited",

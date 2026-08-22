@@ -9,14 +9,18 @@ import { resolve } from "node:path";
 import { enforceLineThreshold, loadThresholds, thresholdsPath, vsixRoot } from "./coverage-paths.mjs";
 
 const thresholds = loadThresholds();
+const webview = process.argv.includes("--webview");
 const vsixCfg = thresholds.vsix;
-if (!vsixCfg || !Number.isFinite(Number(vsixCfg.default_threshold))) {
-  console.error(`${thresholdsPath} is missing .vsix.default_threshold`);
+const thresholdKey = webview ? "webview_threshold" : "default_threshold";
+if (!vsixCfg || !Number.isFinite(Number(vsixCfg[thresholdKey]))) {
+  console.error(`${thresholdsPath} is missing .vsix.${thresholdKey}`);
   process.exit(1);
 }
-const target = Number(vsixCfg.default_threshold);
+const target = Number(vsixCfg[thresholdKey]);
 
-const summaryPath = resolve(vsixRoot, "coverage", "coverage-summary.json");
+const summaryPath = webview
+  ? resolve(vsixRoot, "coverage", "webview", "coverage-summary.json")
+  : resolve(vsixRoot, "coverage", "coverage-summary.json");
 let summary;
 try {
   summary = JSON.parse(readFileSync(summaryPath, "utf8"));
@@ -31,4 +35,4 @@ if (!Number.isFinite(pct)) {
   process.exit(1);
 }
 
-process.exit(enforceLineThreshold(pct, target, "VSIX"));
+process.exit(enforceLineThreshold(pct, target, webview ? "Webview" : "VSIX"));
