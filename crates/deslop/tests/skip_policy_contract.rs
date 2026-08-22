@@ -28,7 +28,6 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use serde_json::Value;
 use deslop_test_support::{
     corpus::repo_root,
     skip_contract::{
@@ -36,6 +35,7 @@ use deslop_test_support::{
     },
     skip_policy::ignored_tests,
 };
+use serde_json::Value;
 
 /// The specification that documents this policy, and the id it is filed
 /// under. Code, specs, and tests must agree, so the categories this gate
@@ -320,7 +320,11 @@ fn target_is_a_test(target: &Value) -> bool {
     target
         .get("kind")
         .and_then(Value::as_array)
-        .is_some_and(|kinds| kinds.iter().any(|kind| kind.as_str() == Some(TEST_TARGET_KIND)))
+        .is_some_and(|kinds| {
+            kinds
+                .iter()
+                .any(|kind| kind.as_str() == Some(TEST_TARGET_KIND))
+        })
 }
 
 /// Every `--test <target>` the Makefile hands cargo for the `deslop` package.
