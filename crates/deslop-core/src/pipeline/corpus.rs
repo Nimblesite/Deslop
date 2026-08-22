@@ -278,10 +278,10 @@ fn load_or_parse_file(
         }
         stats.misses = stats.misses.saturating_add(1);
     }
-    let built = build_cached_file(parser, source, file_id, min_nodes, build)?;
-    build.add_built(built.signatures.len());
-    persist_cached_file(cache, source, &built);
-    Ok(built)
+    let parsed = build_cached_file(parser, source, file_id, min_nodes, build)?;
+    build.add_built(parsed.signatures.len());
+    persist_cached_file(cache, source, &parsed);
+    Ok(parsed)
 }
 
 /// Serves a cache hit only when the stored fingerprints equal the set
