@@ -41,9 +41,11 @@ pub enum CoreError {
     ConfigParse {
         /// Config path that failed to parse.
         path: PathBuf,
-        /// Upstream TOML parse error.
+        /// Upstream TOML parse error. Boxed: it is 88 bytes, which alone
+        /// pushed `CoreError` to clippy's `result_large_err` threshold and
+        /// so widened every `Result<_, CoreError>` in the crate.
         #[source]
-        source: toml::de::Error,
+        source: Box<toml::de::Error>,
     },
 
     /// `[threshold] max_duplication_percent` in the exclusion config
@@ -64,9 +66,11 @@ pub enum CoreError {
         path: PathBuf,
         /// The offending pattern string.
         pattern: String,
-        /// Upstream error from `ignore::gitignore`.
+        /// Upstream error from `ignore::gitignore`. Boxed for the same
+        /// reason as [`CoreError::ConfigParse`]: 64 bytes inline, beside a
+        /// `PathBuf` and a `String`, is the widest variant this enum has.
         #[source]
-        source: ignore::Error,
+        source: Box<ignore::Error>,
     },
 
     /// Report JSON supplied via `--from-report` could not be parsed.
@@ -139,3 +143,6 @@ pub enum CoreError {
         limit: usize,
     },
 }
+
+#[cfg(test)]
+mod tests;
