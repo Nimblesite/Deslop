@@ -32,9 +32,17 @@ import { fileURLToPath } from "node:url";
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const makefile = readFileSync(resolve(repoRoot, "Makefile"), "utf8").split("\n");
 
-// The package that owns the real-repository corpus suite, and its test target.
+// The package that owns the real-repository corpus suite, and the cargo test
+// target that carries it. [TEST-ONE-BINARY] linked every `tests/*.rs` into one
+// binary, so the target is `suite` and the corpus tests are a module inside it.
+// Naming the module as a `--test` target is what made `make test-corpus` exit
+// on `no test target named corpus_repos` before it scanned anything (gh #347).
 const CORPUS_PACKAGE = "deslop";
-const CORPUS_TARGET = "corpus_repos";
+const CORPUS_TARGET = "suite";
+const CORPUS_MODULE = "corpus_repos";
+// How `make test-corpus` scopes the run to the corpus module: libtest matches
+// a positional filter against the full `<module>::<test>` path.
+const CORPUS_MODULE_FILTER = `${CORPUS_MODULE}::`;
 
 // The make variable naming the resource-bounded slice the scheduled corpus
 // workflow runs, and how libtest selects the skipped suite: `--ignored`, plus
@@ -185,13 +193,25 @@ test("[TEST-SELECTION-SKIP] the corpus targets select by --ignored, never by nam
     );
     assert.ok(
       args.includes("--test") && args.includes(CORPUS_TARGET),
-      `\`make ${target}\` must select the ${CORPUS_TARGET} target explicitly`,
+      `\`make ${target}\` must select the ${CORPUS_TARGET} target explicitly. Naming a module ` +
+        `(\`--test ${CORPUS_MODULE}\`) instead of the target cargo builds makes the recipe die ` +
+        "on `no test target named ...` before it clones a repository (gh #347).",
     );
     assert.ok(
       !args.includes("--skip"),
       `\`make ${target}\` must not pass --skip — substring selection is the defect (gh #412)`,
     );
   }
+});
+
+test("[TEST-SELECTION-SKIP] the corpus run stays scoped to the corpus module", () => {
+  const args = words(recipe("test-corpus"));
+  assert.ok(
+    args.includes(CORPUS_MODULE_FILTER),
+    `\`make test-corpus\` must scope the run to \`${CORPUS_MODULE_FILTER}\`. The ${CORPUS_TARGET} ` +
+      "target carries every integration suite in the crate, so `--ignored` alone would also run " +
+      "the unrelated skips that live there — a corpus target that runs whatever else is red.",
+  );
 });
 
 test("[TEST-SELECTION-SKIP] the scheduled slice matches test names exactly", () => {
@@ -208,6 +228,15 @@ test("[TEST-SELECTION-SKIP] the scheduled slice matches test names exactly", () 
     `${CORPUS_SLICE_VARIABLE} must still name the scheduled slice, or the corpus workflow runs ` +
       "nothing and the summary reports a green run over zero repositories",
   );
+  for (const name of slice) {
+    assert.ok(
+      name.startsWith(CORPUS_MODULE_FILTER),
+      `${CORPUS_SLICE_VARIABLE} names \`${name}\`, which ${EXACT_FLAG} resolves to nothing: ` +
+        `inside the ${CORPUS_TARGET} binary the tests answer to \`${CORPUS_MODULE_FILTER}<test>\`, ` +
+        "not the bare function name. The scheduled run would execute zero repositories and " +
+        "report green (gh #347).",
+    );
+  }
 });
 
 test("[TEST-SELECTION] the gate's own self-tests are inside the gate's workspace", () => {
@@ -220,7 +249,8 @@ test("[TEST-SELECTION] the gate's own self-tests are inside the gate's workspace
     `\`${GATE_SELFTEST_PACKAGE}\` must keep unit tests enabled on its lib target: it holds the ` +
       "corpus precision, scope and confidence contracts — the tests that decide whether a corpus " +
       "result means anything. `--skip corpus_` already hid them once (gh #412); `test = false` " +
-      "would hide them again, and `make test-corpus` runs only `-p deslop --test corpus_repos`.",
+      `would hide them again, and \`make test-corpus\` runs only \`-p ${CORPUS_PACKAGE} --test ` +
+      `${CORPUS_TARGET} ... ${CORPUS_MODULE_FILTER}\`.`,
   );
   assert.deepEqual(
     Object.keys(pkg.features).sort(),

@@ -23,9 +23,12 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
+    path::Path,
+    process::Command,
 };
 
 use anyhow::{anyhow, Context, Result};
+use serde_json::Value;
 use deslop_test_support::{
     corpus::repo_root,
     skip_contract::{
@@ -45,6 +48,15 @@ const SPEC_DIRECTORY: &str = "docs/specs";
 const MAKEFILE: &str = "Makefile";
 const CORPUS_SLICE_VARIABLE: &str = "CORPUS_TESTS";
 const CORPUS_SUITE: &str = "crates/deslop/tests/corpus_repos.rs";
+
+/// The package whose corpus targets the Makefile invokes, and the recipe
+/// tokens that identify one of those invocations.
+const DESLOP_PACKAGE: &str = "deslop";
+const CARGO_TEST: &str = "cargo test";
+const PACKAGE_FLAG: &str = "-p deslop";
+const TEST_TARGET_FLAG: &str = "--test";
+/// The `cargo metadata` target kind that names an integration-test binary.
+const TEST_TARGET_KIND: &str = "test";
 
 /// Every test allowed not to run, with the issue that owns its return.
 ///
@@ -266,12 +278,115 @@ fn scheduled_slice() -> Result<Vec<String>> {
         .collect())
 }
 
+/// Test-target binaries cargo actually builds for the `deslop` package.
+///
+/// Read from `cargo metadata` so the manifest is parsed by cargo itself
+/// rather than by matching the text of a structured document.
+fn declared_test_targets() -> Result<BTreeSet<String>> {
+    let output = Command::new(env!("CARGO"))
+        .args(["metadata", "--format-version", "1", "--no-deps"])
+        .current_dir(repo_root())
+        .output()
+        .context("failed to run `cargo metadata`")?;
+    anyhow::ensure!(
+        output.status.success(),
+        "`cargo metadata` failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let metadata: Value = serde_json::from_slice(&output.stdout)
+        .context("`cargo metadata` did not emit valid JSON")?;
+    Ok(test_target_names(&metadata))
+}
+
+/// The `test` target names declared by the `deslop` package in `metadata`.
+fn test_target_names(metadata: &Value) -> BTreeSet<String> {
+    metadata
+        .get("packages")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .filter(|package| package.get("name").and_then(Value::as_str) == Some(DESLOP_PACKAGE))
+        .filter_map(|package| package.get("targets").and_then(Value::as_array))
+        .flatten()
+        .filter(|target| target_is_a_test(target))
+        .filter_map(|target| target.get("name").and_then(Value::as_str))
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+/// True when a `cargo metadata` target is an integration-test binary.
+fn target_is_a_test(target: &Value) -> bool {
+    target
+        .get("kind")
+        .and_then(Value::as_array)
+        .is_some_and(|kinds| kinds.iter().any(|kind| kind.as_str() == Some(TEST_TARGET_KIND)))
+}
+
+/// Every `--test <target>` the Makefile hands cargo for the `deslop` package.
+fn makefile_test_targets() -> Result<BTreeSet<String>> {
+    let makefile = read(MAKEFILE)?;
+    Ok(makefile
+        .lines()
+        .filter(|line| line.contains(CARGO_TEST) && line.contains(PACKAGE_FLAG))
+        .filter_map(target_after_test_flag)
+        .collect())
+}
+
+/// The token following `--test` on one recipe line.
+fn target_after_test_flag(line: &str) -> Option<String> {
+    let mut tokens = line.split_whitespace();
+    while let Some(token) = tokens.next() {
+        if token == TEST_TARGET_FLAG {
+            return tokens.next().map(ToOwned::to_owned);
+        }
+    }
+    None
+}
+
+/// [TEST-ONE-BINARY] `autotests = false` leaves `crates/deslop/Cargo.toml`
+/// declaring exactly one `[[test]]` binary, so a Makefile naming any other
+/// target dies on `no test target named ...` before it clones a repository.
+/// The corpus gate then fails for a reason that has nothing to do with the
+/// corpus, which is how it came to run zero repositories (gh #347).
+#[test]
+fn every_corpus_make_target_names_a_cargo_test_target_that_exists() -> Result<()> {
+    let declared = declared_test_targets()?;
+    let invoked = makefile_test_targets()?;
+    assert!(
+        !invoked.is_empty(),
+        "{MAKEFILE} no longer invokes `{CARGO_TEST} {PACKAGE_FLAG} {TEST_TARGET_FLAG} ...`, so \
+         nothing here pins the corpus gate to a target that exists"
+    );
+    for target in &invoked {
+        assert!(
+            declared.contains(target),
+            "{MAKEFILE}: `{TEST_TARGET_FLAG} {target}` names no cargo test target in the \
+             `{DESLOP_PACKAGE}` package, so the corpus gate exits before it scans anything. \
+             The package declares {declared:?}."
+        );
+    }
+    Ok(())
+}
+
+/// [TEST-ONE-BINARY] The runtime path a corpus test answers to inside the
+/// single `suite` binary: `<module>::<test>`, where the module is the corpus
+/// suite file's own stem. `--exact` matches this path, not the bare function
+/// name.
+fn qualified(test: &str) -> String {
+    let module = Path::new(CORPUS_SUITE)
+        .file_stem()
+        .and_then(std::ffi::OsStr::to_str)
+        .unwrap_or_default();
+    format!("{module}::{test}")
+}
+
 #[test]
 fn the_scheduled_corpus_slice_names_tests_that_still_exist() -> Result<()> {
     let suite: Vec<String> = ignored_tests()?
         .into_iter()
         .filter(|skip| skip.file == CORPUS_SUITE)
-        .map(|skip| skip.test)
+        .map(|skip| qualified(&skip.test))
         .collect();
     let slice = scheduled_slice()?;
     assert!(
@@ -283,16 +398,18 @@ fn the_scheduled_corpus_slice_names_tests_that_still_exist() -> Result<()> {
     Ok(())
 }
 
-/// Every name the scheduled slice selects must be a test the suite declares.
-/// `--exact` makes a stale name select nothing rather than something adjacent,
+/// Every name the scheduled slice selects must be a test the suite declares,
+/// spelled the way `--exact` matches it: the `<module>::<test>` path the
+/// single `suite` binary reports, not the bare function name. `--exact` makes
+/// a stale or unqualified name select nothing rather than something adjacent,
 /// and a run that executes zero tests reports green — gh #412, one rename away.
 fn assert_slice_resolves(slice: &[String], suite: &[String]) {
     for name in slice {
         assert!(
             suite.contains(name),
-            "{MAKEFILE}: {CORPUS_SLICE_VARIABLE} selects `{name}`, which is not a test in \
-             {CORPUS_SUITE}. The scheduled run would execute zero tests and report green. \
-             The suite declares {suite:?}."
+            "{MAKEFILE}: {CORPUS_SLICE_VARIABLE} selects `{name}`, which `--exact` resolves to \
+             no test in {CORPUS_SUITE}. The scheduled run would execute zero tests and report \
+             green. The suite declares {suite:?}."
         );
     }
 }
