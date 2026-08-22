@@ -6,7 +6,6 @@
 //! they all collapse to `assert __var__[__str__][__str__] == __const__`,
 //! producing cross-file clusters that are not actionable.
 
-mod common;
 
 use crate::common::{verdict::*, *};
 

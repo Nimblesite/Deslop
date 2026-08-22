@@ -7,7 +7,6 @@
 //! canonical, would-empty file, non-definition occurrences, non-Rust
 //! languages) must refuse with a reason.
 
-mod common;
 
 use std::{
     collections::HashMap,

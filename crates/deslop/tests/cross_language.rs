@@ -8,7 +8,6 @@ use std::{collections::BTreeSet, fs, path::Path, path::PathBuf};
 use anyhow::Result;
 use serde_json::Value;
 
-mod common;
 use crate::common::*;
 
 #[test]

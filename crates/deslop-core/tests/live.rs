@@ -25,7 +25,6 @@ use deslop_core::{
     EmbeddingProvider, EmbeddingSpec, ExclusionConfig, ProviderError,
 };
 
-mod common;
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::common::*;

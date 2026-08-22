@@ -16,7 +16,7 @@
 //! overshoots it by an order of magnitude while the cached path clears it
 //! several times over on debug, release, and coverage builds alike.
 
-mod common;
+use crate::common;
 
 use std::{fmt::Write as _, time::Instant};
 

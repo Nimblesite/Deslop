@@ -16,7 +16,6 @@ use std::{
 use anyhow::Result;
 use serde_json::Value;
 
-mod common;
 use crate::common::*;
 
 fn report_path(tmp: &Path) -> PathBuf {

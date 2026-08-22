@@ -139,7 +139,7 @@ _coverage_check:
 ##       before clippy parses the workspace on a fresh checkout.
 lint: typediagram-gen
 	@echo "==> Linting..."
-	cargo clippy --release --all-targets --workspace -- -D warnings
+	cargo clippy --profile release-test --all-targets --workspace -- -D warnings
 	@bash scripts/taxonomy-gate.sh
 	@echo "==> VSIX harness + packaging script gates (unit)..."
 	@node --test clients/vscode/scripts/*.test.mjs

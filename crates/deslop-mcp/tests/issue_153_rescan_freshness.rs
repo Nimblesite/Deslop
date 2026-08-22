@@ -15,7 +15,7 @@
 use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::Value;
 
-mod common;
+use crate::common;
 use common::{lsp_workspace_with_socket, rescan_call, wait_for_state_then_init_mcp};
 
 /// One unique C# file body that shares no normalised subtrees with

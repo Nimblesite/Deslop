@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Deslop CLI — cold-cache entry point for the live duplicate-code analysis server. One-shot scans, CI gates, and report rendering (JSON / TXT / HTML)."
+autotests = false
 
 [[bin]]
 name = "deslop"
@@ -28,3 +29,7 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "suite"
+path = "tests/suite.rs"

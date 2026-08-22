@@ -1,7 +1,7 @@
 //! Real-LSP regression for [PIPELINE-DETERMINISM]. Returning to identical
 //! source and config bytes must return the identical ordered report.
 
-mod common;
+use crate::common;
 
 use std::{collections::BTreeMap, fs, path::Path, time::Duration};
 

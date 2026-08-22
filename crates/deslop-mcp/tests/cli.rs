@@ -23,7 +23,7 @@ use assert_cmd::cargo::cargo_bin;
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
-mod common;
+use crate::common;
 use common::{fixture_root, value_array, value_get};
 #[cfg(unix)]
 use common::{pid_exists, read_mcp_pid, terminate_pid, wait_for_pid_exit, KILLABLE_PARENT_SCRIPT};

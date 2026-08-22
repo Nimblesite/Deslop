@@ -27,16 +27,41 @@ function generateTs() {
   return `${TS_HEADER}\n${importBlock}${body}`;
 }
 
+// [BUILD-GEN-IDEMPOTENT] Writes `contents` to `path` only when it would
+// change the file, and reports which happened.
+//
+// The Rust output is a *source file* of deslop-core. Cargo fingerprints
+// local sources by mtime, so rewriting it with byte-identical content
+// still invalidates deslop-core and, through it, every dependent crate
+// and all ~200 release test binaries. This generator is a prerequisite
+// of `fmt`, `lint`, `test`, `test-shard`, `coverage` and `_vsix-build`,
+// so an unconditional write discarded the release build CI had just
+// cached on every one of those targets — measured at 0.13s for a no-op
+// workspace rebuild versus 1m30s after one generator run, and ~20
+// minutes with `--all-targets`, which is what cancelled all four Rust
+// shards on run 32549706011 despite an exact cache hit.
+//
+// Compares content rather than trusting a timestamp: a clobbered or
+// half-written file still differs, so it is still rewritten.
+// `scripts/typediagram-gen.test.mjs` pins both halves.
+function writeIfChanged(path, contents) {
+  mkdirSync(dirname(path), { recursive: true });
+  try {
+    if (readFileSync(path, "utf8") === contents) return "unchanged";
+  } catch {
+    // No readable file yet (fresh checkout, or a partial write) — fall
+    // through and generate it.
+  }
+  writeFileSync(path, contents, "utf8");
+  return "wrote";
+}
+
 function main() {
   const rust = postprocess(runTypediagram("rust"));
-  mkdirSync(dirname(OUT_RUST), { recursive: true });
-  writeFileSync(OUT_RUST, rust, "utf8");
-  process.stdout.write(`typediagram-gen: wrote ${OUT_RUST}\n`);
+  process.stdout.write(`typediagram-gen: ${writeIfChanged(OUT_RUST, rust)} ${OUT_RUST}\n`);
 
   const ts = generateTs();
-  mkdirSync(dirname(OUT_TS), { recursive: true });
-  writeFileSync(OUT_TS, ts, "utf8");
-  process.stdout.write(`typediagram-gen: wrote ${OUT_TS}\n`);
+  process.stdout.write(`typediagram-gen: ${writeIfChanged(OUT_TS, ts)} ${OUT_TS}\n`);
 }
 
 main();

@@ -15,7 +15,6 @@ use std::{collections::BTreeSet, path::Path};
 use anyhow::Result;
 use serde_json::Value;
 
-mod common;
 use crate::common::*;
 
 #[test]

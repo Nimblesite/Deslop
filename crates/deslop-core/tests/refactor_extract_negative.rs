@@ -4,7 +4,6 @@
 //! and non-exact-bucket clusters must all be silently refused —
 //! `Ok(None)`, never an error, never a partial plan.
 
-mod common;
 
 use std::fs;
 

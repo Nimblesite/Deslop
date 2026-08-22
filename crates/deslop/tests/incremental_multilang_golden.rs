@@ -30,7 +30,6 @@
 
 use serde_json::Value;
 
-mod common;
 use crate::common::{golden::*, incremental::*, multilang::*, multilang_warm::*, verdict::*, *};
 
 /// Renders the fixture cold, with the store never consulted, into a

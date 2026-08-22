@@ -36,7 +36,6 @@ use anyhow::Result;
 use mock_ollama::MockOllama;
 use serde_json::Value;
 
-mod common;
 use crate::common::{embeddings::scan_fixture_copy_with_mock, role_gate::*, *};
 
 /// Scans a private copy of `fixture_root` with `--embeddings off`, the

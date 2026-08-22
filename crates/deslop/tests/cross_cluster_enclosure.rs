@@ -18,7 +18,6 @@
 use anyhow::Result;
 use deslop_test_support::enclosure::{first_nested_view as first_nested, spans_of as spans, Span};
 
-mod common;
 use crate::common::*;
 
 /// The published clusters as `(id, spans)`, the shape the shared

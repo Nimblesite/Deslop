@@ -1,4 +1,4 @@
-use crate::support::*;
+use super::support::*;
 
 /// Creates a `tempdir` with a `src` scan root seeded with the canonical
 /// clone pair, returning both so the `tempdir` guard stays alive.

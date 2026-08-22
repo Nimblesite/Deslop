@@ -8,7 +8,6 @@ use deslop_core::{
     EmbeddingMode,
 };
 
-mod common;
 use crate::common::*;
 
 #[test]

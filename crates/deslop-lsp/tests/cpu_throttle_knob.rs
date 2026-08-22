@@ -8,7 +8,6 @@
 //! configuration is covered at unit test level inside the LSP crate
 //! but the CLI contract is owned here.
 
-mod common;
 
 use std::{
     io::{BufRead, BufReader},

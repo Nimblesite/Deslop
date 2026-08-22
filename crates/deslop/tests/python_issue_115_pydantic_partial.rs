@@ -7,7 +7,6 @@
 //! as a cluster after identifier normalisation. The cluster filter
 //! must drop those `*Create` / `*Update` mirrors.
 
-mod common;
 
 use crate::common::*;
 

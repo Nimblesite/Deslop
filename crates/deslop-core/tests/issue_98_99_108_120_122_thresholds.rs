@@ -1,7 +1,7 @@
 //! Regression coverage for the low-structure fusion false positives
 //! tracked in GH #98, #99, #108, #120, and #122.
 
-mod common;
+use crate::common;
 
 use anyhow::Result;
 use common::ReportFixture;

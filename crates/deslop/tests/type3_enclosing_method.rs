@@ -63,7 +63,6 @@
 use anyhow::Result;
 use serde_json::Value;
 
-mod common;
 use crate::common::*;
 
 /// The whole-method span the surviving cluster must cover in one file,

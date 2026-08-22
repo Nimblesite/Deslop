@@ -2,7 +2,7 @@
 //! [CONFIG-EXCLUDE-DEPENDENCIES]. The real filesystem watcher must honour
 //! the same opt-in as the cold pipeline scan.
 
-mod common;
+use crate::common;
 
 use std::{fs, path::Path, time::Duration};
 

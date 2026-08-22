@@ -6,7 +6,6 @@
 
 use anyhow::Result;
 
-mod common;
 use crate::common::*;
 
 // GH #70 regression: four `test_*_write` functions call the same helper

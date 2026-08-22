@@ -6,7 +6,7 @@
 #[path = "../../deslop/tests/cli/mock_ollama.rs"]
 mod mock_ollama;
 
-mod common;
+use crate::common;
 
 use std::{
     io::BufReader,

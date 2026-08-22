@@ -13,7 +13,6 @@ use std::{
 use anyhow::{Context, Result};
 use serde_json::Value;
 
-mod common;
 use crate::common::*;
 
 fn deslop_core_lang_dir() -> Result<PathBuf> {

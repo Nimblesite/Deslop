@@ -13,7 +13,6 @@ use anyhow::Result;
 use assert_cmd::Command;
 use predicates::str::contains;
 
-mod common;
 use crate::common::*;
 
 /// Config body that excludes the `Beta.cs` half of the seeded clone pair.

@@ -38,7 +38,6 @@ use anyhow::Result;
 use mock_ollama::MockOllama;
 use serde_json::Value;
 
-mod common;
 use crate::common::{embeddings::run_mock_embedding_report, signals::*, *};
 
 /// Largest byte span an occurrence may have relative to the smallest in

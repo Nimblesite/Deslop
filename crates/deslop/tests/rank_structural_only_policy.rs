@@ -19,7 +19,6 @@ use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
 
-mod common;
 use crate::common::*;
 
 /// Generates one shape-identical API method. The method name, endpoint

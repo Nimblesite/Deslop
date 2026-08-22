@@ -14,7 +14,6 @@ use std::{collections::BTreeSet, ffi::OsStr, path::Path};
 use anyhow::Result;
 use serde_json::Value;
 
-mod common;
 use crate::common::*;
 
 /// Asserts discovery reached every file the fixture holds. Without it a

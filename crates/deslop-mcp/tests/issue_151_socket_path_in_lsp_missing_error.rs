@@ -14,7 +14,7 @@ use anyhow::{ensure, Result};
 use serde_json::json;
 use tempfile::TempDir;
 
-mod common;
+use crate::common;
 use common::{error_and_message, expected_socket_fragment, initialized_mcp};
 
 #[test]

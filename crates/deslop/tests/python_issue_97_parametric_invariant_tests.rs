@@ -8,7 +8,6 @@
 //! that vary only by enum-style identifier access (`X.K8S` vs
 //! `X.DOCKER`) inside `test_*` functions must be dropped.
 
-mod common;
 
 use crate::common::*;
 

@@ -8,7 +8,6 @@ use std::{
 
 use anyhow::Result;
 
-mod common;
 use crate::common::*;
 
 fn report_path(tmp: &Path) -> PathBuf {

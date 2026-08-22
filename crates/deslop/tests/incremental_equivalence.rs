@@ -36,7 +36,6 @@ use std::{
 
 use serde_json::Value;
 
-mod common;
 use crate::common::{incremental::*, *};
 
 /// `--min-nodes` low enough that the eleven-line clone body

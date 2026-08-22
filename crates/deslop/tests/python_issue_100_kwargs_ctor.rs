@@ -6,7 +6,6 @@
 //! refactor — extraction would collapse the per-model field contract.
 //! The cluster filter must drop those clusters from the rendered report.
 
-mod common;
 
 use crate::common::*;
 

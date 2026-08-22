@@ -81,7 +81,14 @@ jobs:
     name: CI
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    # [CI-RUNNER] The Rust gates are the only jobs whose cost is compile
+    # time, so they are the only ones sized up. `vars.RUST_RUNNER` is the
+    # single place the label lives: set it to a larger-runner label
+    # (`gh variable set RUST_RUNNER --body ubuntu-latest-16-cores`) and
+    # every Rust job moves together. It falls back to `ubuntu-latest`,
+    # because a `runs-on` label the org has not provisioned does not fail
+    # — it queues forever, which is worse than a slow run.
+    runs-on: ${{ vars.RUST_RUNNER || 'ubuntu-latest' }}
     # Covers a release clippy build, an instrumented coverage build, the
     # full workspace suite, the self-scan duplication gate and the
     # deployment gates. The previous 10 was sized against runs that

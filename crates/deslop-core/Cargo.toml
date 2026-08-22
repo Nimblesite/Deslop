@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Deslop analysis engine — AST fingerprinting, clustering, ranking, live incremental re-analysis. The shared core behind the LSP, MCP, and CLI surfaces."
+autotests = false
 
 [features]
 default = []
@@ -60,3 +61,7 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "suite"
+path = "tests/suite.rs"

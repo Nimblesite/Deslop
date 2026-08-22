@@ -13,7 +13,6 @@
 
 use anyhow::Result;
 
-mod common;
 use crate::common::*;
 
 /// Drives the `deslop` binary over the named fixture at `min_nodes` and

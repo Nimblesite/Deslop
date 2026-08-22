@@ -36,7 +36,6 @@ mod mock_ollama;
 use anyhow::Result;
 use mock_ollama::MockOllama;
 
-mod common;
 use crate::common::role_gate::*;
 
 /// Source text unique to the Dart class body in the role-mismatch

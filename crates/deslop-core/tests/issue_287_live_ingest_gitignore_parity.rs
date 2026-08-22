@@ -21,7 +21,6 @@ use std::{fs, path::Path, sync::Arc};
 use anyhow::{Context, Result};
 use deslop_core::{embedding::test_support::StubProvider, live::AnalysisSession};
 
-mod common;
 use crate::common::*;
 
 /// C# that clusters with the fixture's `Alpha.cs`, so an admitted copy is
