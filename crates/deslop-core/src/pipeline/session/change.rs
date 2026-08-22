@@ -92,24 +92,18 @@ impl PipelineSession {
             .unwrap_or_else(|| self.registry.register(absolute.clone()));
         let config = self.pipeline_config_with_mode(embedding);
         let mut build_stats = CorpusBuildStats::default();
-        let (cached, source, lines) = match parse_one_file(
-            file_id,
-            &absolute,
-            parser,
-            &config,
-            stats,
-            &mut build_stats,
-        ) {
-            Ok(parsed) => parsed,
-            // A pathologically deep file must not crash the long-lived
-            // server: drop it and keep serving, the same way an
-            // excluded path is handled above. Real parser errors propagate.
-            Err(CoreError::AstTooDeep { language, limit }) => {
-                log_skip_too_deep(language, limit);
-                return Ok(self.drop_path(&absolute));
-            }
-            Err(other) => return Err(other),
-        };
+        let (cached, source, lines) =
+            match parse_one_file(file_id, &absolute, parser, &config, stats, &mut build_stats) {
+                Ok(parsed) => parsed,
+                // A pathologically deep file must not crash the long-lived
+                // server: drop it and keep serving, the same way an
+                // excluded path is handled above. Real parser errors propagate.
+                Err(CoreError::AstTooDeep { language, limit }) => {
+                    log_skip_too_deep(language, limit);
+                    return Ok(self.drop_path(&absolute));
+                }
+                Err(other) => return Err(other),
+            };
         if self
             .sources
             .get(&file_id)
