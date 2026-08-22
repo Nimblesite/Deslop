@@ -15,7 +15,7 @@ use std::{
 };
 
 use crate::{
-    ast::NormalizedNode,
+    ast::{ByteRange, NormalizedNode},
     content::{attach_content_evidence, ContentEvidence},
     fingerprint::Fingerprint,
     lsh::Signature,
@@ -24,10 +24,14 @@ use crate::{
     state::FileId,
 };
 
+/// The authored declaration an occurrence sits inside
+/// ([PIPELINE-CLUSTER-EXACT-SCOPE]).
+mod scope;
 /// Rendered-truth signal measurement ([FUSION-CLUSTER-SIGNALS]).
 mod signals;
 /// Cross-cluster subsumption ([PIPELINE-CLUSTER-SUBSUME]).
 mod subsume;
+use scope::DeclarationScopes;
 use signals::measured_signals;
 use subsume::collapse_cross_cluster_overlap;
 
@@ -81,13 +85,14 @@ const MIN_REPORTABLE_MEMBERS: usize = 2;
 /// smallest member's hash so identical fused clusters across runs
 /// always report the same id.
 #[must_use]
-pub fn build_ranked_fused_clusters<S: BuildHasher, H: BuildHasher>(
+pub fn build_ranked_fused_clusters<S: BuildHasher, H: BuildHasher, L: BuildHasher>(
     fingerprints: &[Fingerprint],
     signatures: &[Signature],
     embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     fused_clusters: &[FusedCluster],
     trees: &[NormalizedNode],
     sources: &HashMap<FileId, Vec<u8>, H>,
+    file_languages: &HashMap<FileId, &'static str, L>,
 ) -> Vec<Cluster> {
     let mut clusters = reportable_clusters(
         fingerprints,
@@ -95,6 +100,7 @@ pub fn build_ranked_fused_clusters<S: BuildHasher, H: BuildHasher>(
         embedding_vectors,
         fused_clusters,
         trees,
+        &DeclarationScopes::new(trees, file_languages),
     );
     let dropped_below_min_members = fused_clusters.len().saturating_sub(clusters.len());
     clusters.sort_by(|left, right| {
@@ -123,6 +129,7 @@ fn reportable_clusters<S: BuildHasher>(
     embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     fused_clusters: &[FusedCluster],
     trees: &[NormalizedNode],
+    scopes: &DeclarationScopes<'_, impl BuildHasher>,
 ) -> Vec<Cluster> {
     let mut overlap = OverlapMeasurer::new(trees);
     let mut spent = BuildSpent::default();
@@ -135,6 +142,7 @@ fn reportable_clusters<S: BuildHasher>(
                 embedding_vectors,
                 fused,
                 &mut overlap,
+                scopes,
                 &mut spent,
             )
         })
@@ -211,10 +219,11 @@ fn build_fused_cluster<S: BuildHasher>(
     embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     fused: &FusedCluster,
     overlap: &mut OverlapMeasurer<'_>,
+    scopes: &DeclarationScopes<'_, impl BuildHasher>,
     spent: &mut BuildSpent,
 ) -> Option<Cluster> {
     let collapse_started = std::time::Instant::now();
-    let occurrence_indices = collapse_overlapping_per_file(fused, fingerprints);
+    let occurrence_indices = collapse_overlapping_per_file(fused, fingerprints, scopes);
     spent.collapse = spent.collapse.saturating_add(collapse_started.elapsed());
     if occurrence_indices.len() < MIN_REPORTABLE_MEMBERS {
         return None;
@@ -320,7 +329,11 @@ fn cluster_id_source(members: &[Fingerprint]) -> [u8; 32] {
 /// discovery edge always beats a wider, more weakly matched one; width
 /// only breaks ties between peers (see [`cross_file_edge_strengths`]).
 #[must_use]
-fn collapse_overlapping_per_file(fused: &FusedCluster, fingerprints: &[Fingerprint]) -> Vec<usize> {
+fn collapse_overlapping_per_file(
+    fused: &FusedCluster,
+    fingerprints: &[Fingerprint],
+    scopes: &DeclarationScopes<'_, impl BuildHasher>,
+) -> Vec<usize> {
     let strengths = cross_file_edge_strengths(fused, fingerprints);
     let mut by_file: BTreeMap<FileId, Vec<(usize, Fingerprint)>> = BTreeMap::new();
     for index in fused.members.iter().copied() {
@@ -334,7 +347,7 @@ fn collapse_overlapping_per_file(fused: &FusedCluster, fingerprints: &[Fingerpri
     }
     let mut out: Vec<usize> = Vec::new();
     for bucket in by_file.into_values() {
-        out.extend(collapse_overlapping_single_file(bucket, &strengths));
+        out.extend(collapse_overlapping_single_file(bucket, &strengths, scopes));
     }
     // Corpus-index order, not `FileId` order: ids encode registration
     // history (a removed-and-restored file gets a fresh id), while the
@@ -399,6 +412,7 @@ fn cross_file_edge_strengths(
 fn collapse_overlapping_single_file(
     mut bucket: Vec<(usize, Fingerprint)>,
     strengths: &HashMap<usize, f64>,
+    scopes: &DeclarationScopes<'_, impl BuildHasher>,
 ) -> Vec<usize> {
     bucket.sort_by_key(|(_, member)| {
         (
@@ -407,71 +421,129 @@ fn collapse_overlapping_single_file(
         )
     });
     let mut runs: Vec<OverlapRun> = Vec::with_capacity(bucket.len());
-    for candidate in bucket {
-        let strength = strengths.get(&candidate.0).copied().unwrap_or(0.0);
+    for (index, member) in bucket {
+        let candidate = Occurrence {
+            index,
+            range: member.byte_range,
+            strength: strengths.get(&index).copied().unwrap_or(0.0),
+            declaration: scopes.enclosing(&member),
+        };
         match runs.last_mut() {
-            Some(run) if run.reaches(&candidate.1) => run.absorb(candidate, strength),
-            _ => runs.push(OverlapRun::start(candidate, strength)),
+            Some(run) if run.reaches(candidate.range) => run.absorb(candidate),
+            _ => runs.push(OverlapRun::start(candidate)),
         }
     }
-    runs.into_iter().map(|run| run.representative).collect()
+    runs.into_iter()
+        .map(|run| run.representative.index)
+        .collect()
+}
+
+/// One same-file occurrence competing to represent an overlapping run.
+#[derive(Clone, Copy)]
+struct Occurrence {
+    /// Fingerprint index, which is what the run finally publishes.
+    index: usize,
+    /// Byte range this occurrence claims.
+    range: ByteRange,
+    /// Strongest cross-file discovery edge it carries
+    /// ([`cross_file_edge_strengths`]).
+    strength: f64,
+    /// The authored declaration it sits strictly inside, when the
+    /// grammar names one ([`DeclarationScopes::enclosing`]).
+    declaration: Option<ByteRange>,
+}
+
+impl Occurrence {
+    /// True when both occurrences sit strictly inside the *same*
+    /// authored declaration.
+    fn shares_declaration_with(&self, other: &Self) -> bool {
+        matches!((self.declaration, other.declaration), (Some(mine), Some(theirs)) if mine == theirs)
+    }
+
+    /// True when this occurrence covers `other` and is wider on at
+    /// least one side.
+    fn encloses(&self, other: &Self) -> bool {
+        self.range.start <= other.range.start
+            && other.range.end <= self.range.end
+            && (self.range.start < other.range.start || other.range.end < self.range.end)
+    }
 }
 
 /// One transitively-overlapping run of same-file occurrences, reduced to
 /// the reported location plus the frontier the next window is tested
 /// against.
 struct OverlapRun {
-    /// Fingerprint index of the best member so far — the occurrence
-    /// the report publishes for this run.
-    representative: usize,
-    /// Byte width of the representative, for the width contest.
-    width: usize,
-    /// The representative's strongest cross-file edge strength
-    /// ([`cross_file_edge_strengths`]). A representative is only
-    /// displaced by a candidate with strictly stronger cross-file
-    /// evidence, or equal evidence over a wider byte span.
-    strength: f64,
+    /// The best occurrence so far — the one the report publishes for
+    /// this run.
+    representative: Occurrence,
     /// Highest end byte anywhere in the run, which is not always the
     /// representative's end.
     end: usize,
 }
 
 impl OverlapRun {
-    /// Opens a run at `member`.
-    fn start((index, member): (usize, Fingerprint), strength: f64) -> Self {
+    /// Opens a run at `first`.
+    fn start(first: Occurrence) -> Self {
         Self {
-            representative: index,
-            width: member.byte_range.len(),
-            strength,
-            end: member.byte_range.end,
+            end: first.range.end,
+            representative: first,
         }
     }
 
     /// Returns `true` when `candidate` overlaps the run. Members arrive
     /// in ascending start order, so reaching past the frontier is the
     /// whole half-open overlap test.
-    fn reaches(&self, candidate: &Fingerprint) -> bool {
-        candidate.byte_range.start < self.end
+    fn reaches(&self, candidate: ByteRange) -> bool {
+        candidate.start < self.end
     }
 
-    /// Extends the run, promoting `member` to representative when it
+    /// Extends the run, promoting `candidate` to representative when it
     /// outranks the incumbent ([`Self::displaces`]).
-    fn absorb(&mut self, (index, member): (usize, Fingerprint), strength: f64) {
-        self.end = self.end.max(member.byte_range.end);
-        if self.displaces(strength, member.byte_range.len()) {
-            self.representative = index;
-            self.width = member.byte_range.len();
-            self.strength = strength;
+    fn absorb(&mut self, candidate: Occurrence) {
+        self.end = self.end.max(candidate.range.end);
+        if self.displaces(&candidate) {
+            self.representative = candidate;
         }
     }
 
     /// Strictly stronger cross-file evidence displaces the incumbent;
     /// between equals, only a strictly wider byte span wins.
-    fn displaces(&self, candidate_strength: f64, candidate_width: usize) -> bool {
-        match candidate_strength.total_cmp(&self.strength) {
+    ///
+    /// **Inside one declaration the grades are not comparable**
+    /// ([PIPELINE-CLUSTER-EXACT-SCOPE], gh #408). A window nested in
+    /// the occurrence it competes with scores a higher cross-file edge
+    /// exactly to the extent that it drops the statements the two
+    /// copies disagree on, so the strength contest inside one authored
+    /// declaration elects whichever window omits the most. In
+    /// `typescript-type3` the enclosing view of `accumulate`/`aggregate`
+    /// measured 0.857 against the 37-node run nested in it at 1.00, and
+    /// the 1.00 was the interior `let` + `for` with the extra
+    /// `running = running + 2` cut off the end: the pair was published
+    /// as Merkle-equal, and the one statement that makes it a Type-3
+    /// near-miss disappeared from the report
+    /// (`js_ts_signatures::typescript_near_miss_produces_cross_file_structural_cluster`,
+    /// `js_ts_clone_buckets::javascript_near_miss_extra_guard_is_a_proven_rename`).
+    ///
+    /// Across declarations the two spans describe genuinely different
+    /// amounts of authored code and the grade is the honest
+    /// discriminator, which is what keeps #339 intact: there the
+    /// enclosing view is a run of *top-level bindings* whose tail
+    /// differs in shape, no function production encloses either view,
+    /// and the exact sibling window at 1.00 must still displace the
+    /// weakly token-matched wider view at 0.879
+    /// (`fsharp_issue_339_sibling_window_rename`). The numbers alone
+    /// cannot separate the two — 0.857 must win and 0.879 must lose —
+    /// so the scope is what decides, never a threshold.
+    fn displaces(&self, candidate: &Occurrence) -> bool {
+        if self.representative.encloses(candidate)
+            && self.representative.shares_declaration_with(candidate)
+        {
+            return false;
+        }
+        match candidate.strength.total_cmp(&self.representative.strength) {
             std::cmp::Ordering::Greater => true,
             std::cmp::Ordering::Less => false,
-            std::cmp::Ordering::Equal => candidate_width > self.width,
+            std::cmp::Ordering::Equal => candidate.range.len() > self.representative.range.len(),
         }
     }
 }

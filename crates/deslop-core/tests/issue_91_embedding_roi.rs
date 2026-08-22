@@ -68,6 +68,7 @@ fn issue_91_embedding_only_pair_survives_when_lsh_misses_match() -> Result<()> {
         &clusters,
         &[],
         &HashMap::new(),
+        &HashMap::new(),
     );
     assert_eq!(
         rendered.len(),

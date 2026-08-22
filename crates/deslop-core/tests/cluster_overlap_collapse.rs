@@ -52,7 +52,15 @@ fn ranked_with_edges(members: &[Fingerprint], edges: Vec<FusedEdge>) -> Vec<Clus
         edges,
     }];
     let vectors: HashMap<usize, Vec<f32>> = HashMap::new();
-    build_ranked_fused_clusters(members, &signatures, &vectors, &fused, &[], &HashMap::new())
+    build_ranked_fused_clusters(
+        members,
+        &signatures,
+        &vectors,
+        &fused,
+        &[],
+        &HashMap::new(),
+        &HashMap::new(),
+    )
 }
 
 /// Runs the clustering stage with no surviving discovery edge, which is
