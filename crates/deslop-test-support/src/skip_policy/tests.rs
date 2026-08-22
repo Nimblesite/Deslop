@@ -19,6 +19,27 @@ use super::{ignored_tests_in, IgnoredTest};
 /// Stand-in path for the parsed fragments, so failures name a source.
 const FILE: &str = "crates/example/tests/example.rs";
 
+/// `cfg` predicates that hold in no configuration at all. `any()` over
+/// nothing is the canonical spelling; the others are the same claim
+/// written differently, and a gate that only knew the first spelling
+/// would be trivially stepped around.
+const NEVER_SATISFIED_PREDICATES: [&str; 4] = [
+    "any()",
+    "not(all())",
+    "all(any())",
+    "any(any(), not(all()))",
+];
+
+/// `cfg` predicates a real configuration can satisfy. Every one of these
+/// is an ordinary conditional test that must be left alone.
+const SATISFIABLE_PREDICATES: [&str; 5] = [
+    "unix",
+    "windows",
+    "all()",
+    "feature = \"live\"",
+    "any(unix, windows)",
+];
+
 /// Scans one fragment, failing the test rather than the assertion when the
 /// fragment cannot be parsed at all.
 fn scan(source: &str) -> Result<Vec<IgnoredTest>> {
@@ -233,6 +254,66 @@ mod grouped {}
         message.contains("mod_item"),
         "an `#[ignore]` on a non-function must name what it decorated rather than being \
          attributed to a later test: {message}"
+    );
+    Ok(())
+}
+
+/// A `cfg` no configuration satisfies deletes its test, and must be
+/// reported rather than passing as an ordinary conditional.
+///
+/// `#[cfg(any())]` is the canonical "never compile this" idiom. On a test
+/// it is a skip that nothing registers: the function compiles under no
+/// configuration, so it runs nowhere, and the `#[ignore]` registry — the
+/// one place a reader looks for tests that do not run — never hears of it.
+#[test]
+fn a_cfg_no_configuration_satisfies_is_rejected_on_a_test() -> Result<()> {
+    for predicate in NEVER_SATISFIED_PREDICATES {
+        let source = format!("#[cfg({predicate})]\n#[test]\nfn deleted_by_cfg() {{}}\n");
+        let message = scan(&source)
+            .err()
+            .ok_or_else(|| anyhow!("`#[cfg({predicate})]` on a test must be rejected"))?
+            .to_string();
+        assert!(
+            message.contains("deleted_by_cfg"),
+            "the rejection must name the test it deletes: {message}"
+        );
+        assert!(
+            message.contains("no configuration"),
+            "and say why `#[cfg({predicate})]` is not an ordinary \
+             conditional: {message}"
+        );
+    }
+    Ok(())
+}
+
+/// A `cfg` some configuration does satisfy is left alone.
+///
+/// This is the other half, and the more important one: a platform test or
+/// a feature-gated test is not a hidden skip, and reporting it as one
+/// would push authors to delete legitimate conditionals to get green.
+#[test]
+fn an_ordinary_conditional_on_a_test_is_not_rejected() -> Result<()> {
+    for predicate in SATISFIABLE_PREDICATES {
+        let source = format!("#[cfg({predicate})]\n#[test]\nfn platform_specific() {{}}\n");
+        assert_eq!(
+            scan(&source)?,
+            Vec::new(),
+            "`#[cfg({predicate})]` holds in some configuration, so it is an \
+             ordinary conditional and not a skip"
+        );
+    }
+    Ok(())
+}
+
+/// The same unsatisfiable `cfg` on something that is not a test is not
+/// this gate's business — it is dead code, not a deleted test.
+#[test]
+fn a_cfg_no_configuration_satisfies_is_ignored_off_a_test() -> Result<()> {
+    let source = "#[cfg(any())]\nfn not_a_test() {}\n";
+    assert_eq!(
+        scan(source)?,
+        Vec::new(),
+        "an unsatisfiable `cfg` on a plain function deletes no test"
     );
     Ok(())
 }

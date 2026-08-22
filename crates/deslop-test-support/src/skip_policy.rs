@@ -58,6 +58,20 @@ const IGNORE_ATTRIBUTE: &str = "ignore";
 /// looks for the bare attribute, so finding one mentioning `ignore` is an
 /// error rather than a skip this module reports.
 const CFG_ATTR_ATTRIBUTE: &str = "cfg_attr";
+/// The plain conditional-compilation attribute. A predicate that no
+/// configuration can satisfy deletes the test it decorates outright, which
+/// is a skip the registry never sees.
+const CFG_ATTRIBUTE: &str = "cfg";
+/// The attribute that makes a function a test.
+const TEST_ATTRIBUTE: &str = "test";
+/// `cfg` predicate that holds when at least one operand does.
+const ANY_PREDICATE: &str = "any";
+/// `cfg` predicate that holds when every operand does.
+const ALL_PREDICATE: &str = "all";
+/// `cfg` predicate that inverts its single operand.
+const NOT_PREDICATE: &str = "not";
+/// A parenthesised operand list, as tree-sitter-rust reports it.
+const TOKEN_TREE: &str = "token_tree";
 
 /// Directory names never scanned: build output, corpus clones, and installed
 /// dependencies. Anything beginning with `.` is skipped as well.
@@ -142,11 +156,131 @@ fn record(item: Node<'_>, source: &str, file: &str, found: &mut Vec<IgnoredTest>
              [TEST-SELECTION-SKIP] gate. State the skip as a plain `#[ignore = \"..\"]`."
         );
     }
+    if path == CFG_ATTRIBUTE && deletes_a_test(item, attribute, source) {
+        bail!(
+            "{file}: `#[{CFG_ATTRIBUTE}(..)]` on `{}` can be satisfied by no \
+             configuration, so the test is compiled by nothing and runs \
+             nowhere. That is a skip the [TEST-SELECTION-SKIP] registry never \
+             sees. State it as a plain `#[{IGNORE_ATTRIBUTE} = \"..\"]`.",
+            decorated_function(item, source, file)?
+        );
+    }
     if path != IGNORE_ATTRIBUTE {
         return Ok(());
     }
     found.push(ignored_test(item, attribute, source, file)?);
     Ok(())
+}
+
+/// Whether this `cfg` deletes a test function outright.
+///
+/// Both halves have to hold. A `cfg` no configuration satisfies is only a
+/// silent skip when what it decorates is a test; and a `cfg` on a test is
+/// perfectly ordinary when some configuration satisfies it — a
+/// platform-specific or feature-gated test is not a hidden skip, and must
+/// not be reported as one.
+fn deletes_a_test(item: Node<'_>, attribute: Node<'_>, source: &str) -> bool {
+    let unsatisfiable = predicates(attribute)
+        .first()
+        .is_some_and(|(name, operands)| {
+            evaluate(&text(*name, source), *operands, source) == Some(false)
+        });
+    unsatisfiable && decorates_a_test(item, source)
+}
+
+/// Whether the attribute run `item` belongs to also carries `#[test]`.
+fn decorates_a_test(item: Node<'_>, source: &str) -> bool {
+    let mut sibling = item.next_named_sibling();
+    while let Some(node) = sibling {
+        match node.kind() {
+            ATTRIBUTE_ITEM => {
+                if attribute_path(node, source).as_deref() == Some(TEST_ATTRIBUTE) {
+                    return true;
+                }
+                sibling = node.next_named_sibling();
+            }
+            LINE_COMMENT | BLOCK_COMMENT => sibling = node.next_named_sibling(),
+            _ => return false,
+        }
+    }
+    false
+}
+
+/// The name of one `attribute_item`'s attribute.
+fn attribute_path(item: Node<'_>, source: &str) -> Option<String> {
+    let attribute = child_of_kind(item, ATTRIBUTE)?;
+    attribute.named_child(0).map(|node| text(node, source))
+}
+
+/// Each predicate inside a node's operand list, as its name and its own
+/// operand list.
+fn predicates(node: Node<'_>) -> Vec<(Node<'_>, Option<Node<'_>>)> {
+    child_of_kind(node, TOKEN_TREE)
+        .map(nested_predicates)
+        .unwrap_or_default()
+}
+
+/// The operand list belonging to the predicate at `at`, when it has one.
+fn operands_after<'tree>(children: &[Node<'tree>], at: usize) -> Option<Node<'tree>> {
+    children
+        .get(at.saturating_add(1))
+        .filter(|next| next.kind() == TOKEN_TREE)
+        .copied()
+}
+
+/// Evaluates a `cfg` predicate as far as it goes without knowing the
+/// configuration. `None` means the answer depends on one.
+fn evaluate(name: &str, operands: Option<Node<'_>>, source: &str) -> Option<bool> {
+    let inner = operands.map(nested_predicates).unwrap_or_default();
+    let mut values = inner
+        .iter()
+        .map(|(id, args)| evaluate(&text(*id, source), *args, source));
+    match name {
+        ANY_PREDICATE => any_of(&mut values),
+        ALL_PREDICATE => all_of(&mut values),
+        NOT_PREDICATE => values.next().flatten().map(|held| !held),
+        _ => None,
+    }
+}
+
+/// The predicates directly inside an operand list.
+fn nested_predicates<'tree>(tree: Node<'tree>) -> Vec<(Node<'tree>, Option<Node<'tree>>)> {
+    let mut cursor = tree.walk();
+    let children: Vec<Node<'tree>> = tree.named_children(&mut cursor).collect();
+    children
+        .iter()
+        .enumerate()
+        .filter(|(_, child)| child.kind() != TOKEN_TREE)
+        .map(|(at, child)| (*child, operands_after(&children, at)))
+        .collect()
+}
+
+/// `any(..)`: true once one operand is, false only when every operand is
+/// definitely false — which `any()` over no operands at all vacuously is.
+fn any_of(values: &mut dyn Iterator<Item = Option<bool>>) -> Option<bool> {
+    let mut depends_on_configuration = false;
+    for value in values {
+        match value {
+            Some(true) => return Some(true),
+            None => depends_on_configuration = true,
+            Some(false) => {}
+        }
+    }
+    (!depends_on_configuration).then_some(false)
+}
+
+/// `all(..)`: false once one operand is, true only when every operand is
+/// definitely true — which `all()` over no operands vacuously is.
+fn all_of(values: &mut dyn Iterator<Item = Option<bool>>) -> Option<bool> {
+    let mut depends_on_configuration = false;
+    for value in values {
+        match value {
+            Some(false) => return Some(false),
+            None => depends_on_configuration = true,
+            Some(true) => {}
+        }
+    }
+    (!depends_on_configuration).then_some(true)
 }
 
 /// Builds the record for one confirmed `#[ignore]`.
