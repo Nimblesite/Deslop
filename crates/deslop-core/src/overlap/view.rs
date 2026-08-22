@@ -84,7 +84,10 @@ pub(super) fn build_view(
     let mut entries: Vec<Fingerprint> = Vec::new();
     for member in &members {
         push_postorder(member, &mut postorder);
-        entries.extend(collect_fingerprints(member, SHARED_SUBTREE_MIN_CREDIT_NODES));
+        entries.extend(collect_fingerprints(
+            member,
+            SHARED_SUBTREE_MIN_CREDIT_NODES,
+        ));
     }
     let total = postorder.len();
     let kind_counts = count_kinds(&postorder);

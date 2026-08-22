@@ -579,9 +579,14 @@ fn a_fleet_of_identical_windows_costs_one_alignment() -> Result<(), String> {
             values.push(measurer.overlap(left, right));
         }
     }
-    let first = values.first().copied().ok_or("the fleet measured nothing")?;
+    let first = values
+        .first()
+        .copied()
+        .ok_or("the fleet measured nothing")?;
     assert!(
-        values.iter().all(|value| (value - first).abs() < f64::EPSILON),
+        values
+            .iter()
+            .all(|value| (value - first).abs() < f64::EPSILON),
         "all {count} structurally identical pairs must measure the same overlap",
         count = values.len(),
     );
@@ -593,7 +598,8 @@ fn a_fleet_of_identical_windows_costs_one_alignment() -> Result<(), String> {
     let stats = measurer.stats();
     let pair_count = u64::try_from(values.len()).unwrap_or(u64::MAX);
     assert_eq!(
-        stats.alignments, 1,
+        stats.alignments,
+        1,
         "one distinct structural pair must cost exactly one alignment — \
          {pair_count} byte-range pairs collapsed by the Merkle-hash memo, \
          measured {alignments}",

@@ -5,12 +5,7 @@
 //! fingerprints plus the per-file source bytes the embedding pass will
 //! reuse.
 
-use std::{
-    collections::HashMap,
-    fs,
-    path::Path,
-    time::Instant,
-};
+use std::{collections::HashMap, fs, path::Path, time::Instant};
 
 use crate::{
     ast::NormalizedNode,
@@ -364,10 +359,7 @@ fn fingerprints_for(
         normalised, min_nodes, language,
     ));
     if let Some(build) = build {
-        build.add_fingerprint_kinds(
-            exact_count,
-            fingerprints.len().saturating_sub(exact_count),
-        );
+        build.add_fingerprint_kinds(exact_count, fingerprints.len().saturating_sub(exact_count));
     }
     fingerprints
 }

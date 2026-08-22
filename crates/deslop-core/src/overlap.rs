@@ -57,8 +57,8 @@ use alignment::aligned_shared_nodes;
 use view::{build_view, EndpointView};
 
 use crate::{
-    ast::NormalizedNode, fingerprint::Fingerprint, observe::bump,
-    pair::SHARED_SUBTREE_MIN_OVERLAP, state::FileId,
+    ast::NormalizedNode, fingerprint::Fingerprint, observe::bump, pair::SHARED_SUBTREE_MIN_OVERLAP,
+    state::FileId,
 };
 
 /// Largest endpoint (in nodes) measured by exact tree alignment. The
