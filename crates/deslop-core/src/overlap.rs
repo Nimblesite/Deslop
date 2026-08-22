@@ -177,14 +177,20 @@ impl<'corpus> OverlapMeasurer<'corpus> {
             bump(&mut self.stats.hash_equal);
             return 1.0;
         }
+        // Views before the memo, always: the memo key is the hash pair,
+        // but resolvability is a property of each byte range in its own
+        // tree, so an unresolvable pair must answer `0.0` whether or
+        // not a resolvable copy of the same structural pair was
+        // measured first
+        // (`an_unresolvable_copy_still_scores_its_unequal_pairs_zero`).
+        let Some((left_view, right_view)) = self.view_pair(left, right) else {
+            return 0.0;
+        };
         let key = pair_key(left, right);
         if let Some(&cached) = self.exact_results.get(&key) {
             bump(&mut self.stats.exact_hits);
             return cached;
         }
-        let Some((left_view, right_view)) = self.view_pair(left, right) else {
-            return 0.0;
-        };
         let result = self.measure_views(&left_view, &right_view);
         let _previous = self.exact_results.insert(key, result);
         result
@@ -203,6 +209,12 @@ impl<'corpus> OverlapMeasurer<'corpus> {
             bump(&mut self.stats.hash_equal);
             return 1.0;
         }
+        // Views before either memo, for the same reason as
+        // [`Self::overlap`]: an unresolvable pair answers `0.0`
+        // whatever a resolvable copy of its structural pair measured.
+        let Some((left_view, right_view)) = self.view_pair(left, right) else {
+            return 0.0;
+        };
         let key = pair_key(left, right);
         if let Some(&cached) = self.exact_results.get(&key) {
             bump(&mut self.stats.exact_hits);
@@ -212,9 +224,6 @@ impl<'corpus> OverlapMeasurer<'corpus> {
             bump(&mut self.stats.bound_hits);
             return bound;
         }
-        let Some((left_view, right_view)) = self.view_pair(left, right) else {
-            return 0.0;
-        };
         let bound = kind_bound_ratio(&left_view, &right_view);
         if bound < SHARED_SUBTREE_MIN_OVERLAP {
             bump(&mut self.stats.bound_skips);
@@ -224,6 +233,17 @@ impl<'corpus> OverlapMeasurer<'corpus> {
         let result = self.measure_views(&left_view, &right_view);
         let _previous = self.exact_results.insert(key, result);
         result
+    }
+
+    /// Whether this endpoint's byte range resolves to a measurable
+    /// view, resolving (and memoising) it on first ask. Resolvability
+    /// partitions equal-hash members for the grouped signal
+    /// measurement ([FUSION-CLUSTER-SIGNALS]): an equal-hash pair is
+    /// `1.0` by short-circuit either way, but a *different*-hash pair
+    /// with an unresolvable side is `0.0`, so one representative may
+    /// only stand for members that resolve the same way.
+    pub fn resolvable(&mut self, endpoint: &Fingerprint) -> bool {
+        self.view(endpoint).is_some()
     }
 
     /// Resolves both endpoint views, counting a pair with either side
