@@ -362,14 +362,13 @@ ci-ollama: ci test-ollama
 ##              [SKIP-TOO-LARGE-FOR-CI] (gh #422) — it needs the network and
 ##              measures wall time and peak memory, which are
 ##              runner-dependent — so `--ignored` is what selects it here,
-##              scoped to the `corpus_repos::` module because [TEST-ONE-BINARY]
-##              links every suite into the one `suite` target.
+##              scoped to Cargo's dedicated `corpus_repos` test target.
 ##              `make test`/`make ci` still compile and lint the target. Run
 ##              this when touching the pipeline.
 test-corpus:
 	node scripts/corpus/fetch-corpus.mjs
 	cargo build --release --bin deslop
-	cargo test --release -p deslop --test suite -- --ignored --nocapture --test-threads=1 corpus_repos::
+	cargo test --release -p deslop --test corpus_repos -- --ignored --nocapture --test-threads=1
 
 ## test-corpus-ci: `make test-corpus` in baseline mode — failures already
 ##                 recorded in `corpus/known-failures.json` are reported but
@@ -382,7 +381,7 @@ test-corpus-ci:
 	node scripts/corpus/fetch-corpus.mjs $(CORPUS_REPOS)
 	cargo build --release --bin deslop
 	@fail=0; for t in $(CORPUS_TESTS); do \
-	   cargo test --release -p deslop --test suite -- --ignored --exact --nocapture --test-threads=1 $$t || fail=1; \
+	   cargo test --release -p deslop --test corpus_repos -- --ignored --exact --nocapture --test-threads=1 $$t || fail=1; \
 	 done; \
 	 if [ $$fail -ne 0 ]; then echo "==> corpus: NEW failures (see [NEW] lines above)"; fi; \
 	 exit $$fail
@@ -396,7 +395,7 @@ test-corpus-ci:
 # peak above 13 GB (#166) and take minutes to scan. Run the full suite with
 # `make test-corpus` locally, or dispatch the workflow with `full`.
 CORPUS_REPOS ?= tokio nest
-CORPUS_TESTS ?= corpus_repos::corpus_tokio_rust corpus_repos::corpus_nest_typescript corpus_repos::corpus_determinism_nest_typescript
+CORPUS_TESTS ?= corpus_tokio_rust corpus_nest_typescript corpus_determinism_nest_typescript
 
 # [CI-DESLOP] Self-hosted duplication gate. Runs the release binary built by
 #   `build` against this repo, so the gate is always the CURRENT detector, never
