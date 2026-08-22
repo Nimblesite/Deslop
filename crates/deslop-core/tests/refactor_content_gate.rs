@@ -14,7 +14,6 @@
 //! Both directions are pinned here, because a gate that only ever
 //! refuses is as wrong as one that only ever allows.
 
-
 use std::{
     collections::HashMap,
     fs,

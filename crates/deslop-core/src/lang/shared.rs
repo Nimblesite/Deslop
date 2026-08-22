@@ -233,7 +233,7 @@ pub fn build_normalised_root(
     language: &'static str,
 ) -> Result<NormalizedNode, CoreError> {
     let root = tree.root_node();
-    let children = normalise_children(root, file_id, normalise_kind, language, 1)?;
+    let children = normalise_children(root, FILE_KIND, file_id, normalise_kind, language, 1)?;
     Ok(NormalizedNode {
         kind: FILE_KIND,
         byte_range: retained_span(&children).unwrap_or(ByteRange {
@@ -288,7 +288,7 @@ fn normalise_node(
     let Some(kind) = normalise_kind(node.kind()) else {
         return Ok(None);
     };
-    let children = normalise_children(node, file_id, normalise_kind, language, depth)?;
+    let children = normalise_children(node, kind, file_id, normalise_kind, language, depth)?;
     Ok(Some(NormalizedNode {
         kind,
         children,
@@ -304,6 +304,14 @@ fn normalise_node(
 /// [`normalise_node`], anonymous ones through
 /// [`is_behaviour_bearing_token`] ([PIPELINE-NORMALIZE-AST-OPERATOR]).
 ///
+/// `parent_kind` is the kind `node` *normalised to*, never its raw
+/// grammar kind. [`OPERATOR_FRAMING_PARENTS`] is read against it, so the
+/// list can name a normalised kind such as [`LITERAL_KIND`] — every
+/// language maps its own literal productions onto that one kind, and a
+/// raw-kind list would have to enumerate `regex`, `string`,
+/// `template_string` and their equivalent in every grammar to say the
+/// same thing.
+///
 /// The two are collected in one pass over `children`, not two, so an
 /// operator keeps its position between its operands. A frontier that
 /// listed `alpha`, `beta`, `+` rather than `alpha`, `+`, `beta` would
@@ -311,6 +319,7 @@ fn normalise_node(
 /// with a member whose operand count differs.
 fn normalise_children(
     node: Node<'_>,
+    parent_kind: &'static str,
     file_id: FileId,
     normalise_kind: fn(&str) -> Option<&'static str>,
     language: &'static str,
@@ -328,19 +337,95 @@ fn normalise_children(
                 depth.saturating_add(1),
             )?
         } else {
-            operator_leaf(child, file_id)
+            operator_leaf(child, parent_kind, file_id)
         };
         if let Some(child_node) = normalised {
-            children.push(child_node);
+            if !is_literal_fragment(parent_kind, child_node.kind) {
+                children.push(child_node);
+            }
         }
     }
     Ok(children)
 }
 
+/// True when `child_kind` is a *fragment* of the literal it sits inside
+/// rather than code embedded in it ([PIPELINE-NORMALIZE-AST]).
+///
+/// That section collapses every literal to one `__literal__`, but
+/// tree-sitter models some literals as a wrapper over parts: `/[a-z]+/i`
+/// is a `regex` holding a `regex_pattern` and a `regex_flags`, and each
+/// part normalises to [`LITERAL_KIND`] in its own right. The one literal
+/// therefore arrived as three leaves, and since normalisation erases the
+/// text, *every* flagged regex in the corpus carried the same three-node
+/// shape — enough for two regexes matching completely different text to
+/// publish as duplication.
+///
+/// Only literal-inside-literal collapses. An expression interpolated into
+/// a literal normalises to its own expression kind, never to
+/// [`LITERAL_KIND`], so real code inside a template string survives.
+fn is_literal_fragment(parent_kind: &str, child_kind: &str) -> bool {
+    parent_kind == LITERAL_KIND && child_kind == LITERAL_KIND
+}
+
+/// Grammar productions in which a behaviour-bearing token is **framing**
+/// and must not become a leaf ([PIPELINE-NORMALIZE-AST-OPERATOR]).
+///
+/// [`BEHAVIOUR_BEARING_TOKENS`] is keyed on token *text*, because
+/// tree-sitter names an anonymous node by its own token, and text alone
+/// cannot separate the `|` of `left | right` from the `|` that delimits a
+/// Rust closure's binding list. Only the parent production tells them
+/// apart, which is what this list is for.
+///
+/// Every entry must be justified by a test that fails without it, and the
+/// list is deliberately as short as that rule allows. Suppressing a leaf
+/// is not free: it erases a difference two members could otherwise
+/// disagree on, and an entry that erases a *real* difference manufactures
+/// a false positive. That is not hypothetical — `type_arguments` and
+/// `type_parameters` were in this list and had to come out. They promoted
+/// the seven sibling Dart API methods in `rank_structural_only_policy`
+/// from `structural_only` to `nearly_identical`: a shape-only family
+/// relabelled as near-duplicate code, which is the #134/#197 defect that
+/// fixture exists to pin. Removing them cost nothing —
+/// `rust_issue_147_iter_collect_idiom` still passes, and the committed AST
+/// and report goldens stop drifting.
+///
+/// The direction of the list is deliberate. A production missing from an
+/// *allowlist* of operator productions would drop its operator and let
+/// `alpha + beta` and `alpha - beta` hash identically again — the defect
+/// this whole section exists to fix. A production missing from this
+/// denylist leaves a subtree larger than it should be. Both are worth
+/// fixing; only one certifies an operator swap as duplication.
+const OPERATOR_FRAMING_PARENTS: &[&str] = &[
+    // Rust closure parameter lists: the pipes delimit the binding list,
+    // they are not bitwise-or. Emitting them changed the hash and the LSH
+    // bands of every closure-bearing function in gh #147, which fragmented
+    // the single component `main` forms into sixteen and left
+    // [CLONE-NOISE-RUST-ITER-COLLECT] with no cluster whose every member
+    // holds the idiom. Pinned by `rust_issue_147_iter_collect_idiom`.
+    "closure_parameters",
+    // A delimiter *inside* a literal: a JavaScript regex's `/`. Without
+    // this the literal stops being one leaf and becomes
+    // `__op__/ __literal__ __op__/`, a three-node shape every regex in the
+    // corpus shares — so two unrelated regex constants publish as
+    // duplication. Pinned by `regex_literal_delimiters`.
+    LITERAL_KIND,
+];
+
+/// True when `parent_kind` is a production in which a behaviour-bearing
+/// token is framing — see [`OPERATOR_FRAMING_PARENTS`].
+fn is_framing_parent(parent_kind: &str) -> bool {
+    OPERATOR_FRAMING_PARENTS.contains(&parent_kind)
+}
+
 /// The operator leaf for one anonymous token, or `None` when the token
 /// is framing rather than behaviour. Tree-sitter names an anonymous
-/// node by its own token text, so the node kind *is* the operator.
-fn operator_leaf(token: Node<'_>, file_id: FileId) -> Option<NormalizedNode> {
+/// node by its own token text, so the node kind *is* the operator — but
+/// the same text is framing in some productions, which is why
+/// `parent_kind` decides too ([`OPERATOR_FRAMING_PARENTS`]).
+fn operator_leaf(token: Node<'_>, parent_kind: &str, file_id: FileId) -> Option<NormalizedNode> {
+    if is_framing_parent(parent_kind) {
+        return None;
+    }
     operator_kind(token.kind()).map(|kind| NormalizedNode {
         kind,
         children: Vec::new(),

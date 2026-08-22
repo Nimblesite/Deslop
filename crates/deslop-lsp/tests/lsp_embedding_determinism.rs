@@ -3,9 +3,6 @@
 //! Drives the real `deslop-lsp` binary over stdio; no pipeline internals
 //! are called.
 
-#[path = "../../deslop/tests/cli/mock_ollama.rs"]
-mod mock_ollama;
-
 use crate::common;
 
 use std::{
@@ -13,6 +10,7 @@ use std::{
     process::{ChildStdin, ChildStdout},
 };
 
+use crate::mock_ollama::MockOllama;
 use anyhow::{anyhow, Result};
 use common::{
     at, call, handshake, path as json_path,
@@ -22,7 +20,6 @@ use common::{
     },
     spawn_lsp_guarded,
 };
-use mock_ollama::MockOllama;
 use serde_json::{json, Value};
 
 const SET_MODEL: &str = "deslop/embeddingSetModel";

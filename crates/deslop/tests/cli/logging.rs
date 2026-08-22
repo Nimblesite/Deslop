@@ -290,7 +290,7 @@ fn technical_mode_surfaces_raw_cache_stats_line() -> Result<()> {
 // provider end-to-end without depending on a real install.
 #[test]
 fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
-    let server = super::mock_ollama::MockOllama::spawn()?;
+    let server = crate::mock_ollama::MockOllama::spawn()?;
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture(CSHARP_SMALL_FIXTURE), &scan_root)?;

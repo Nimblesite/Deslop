@@ -9,9 +9,7 @@ use serde_json::Value;
 
 use crate::common::*;
 
-#[path = "cli/mock_ollama.rs"]
-mod mock_ollama;
-use mock_ollama::{MockBehavior, MockOllama};
+use crate::mock_ollama::{MockBehavior, MockOllama};
 
 #[test]
 fn mock_provider_rejected_subtrees_are_reported() -> Result<()> {

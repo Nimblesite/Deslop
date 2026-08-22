@@ -50,7 +50,5 @@ mod merge_plan;
 mod orphan_exit;
 #[path = "state_file_backend.rs"]
 mod state_file_backend;
-#[path = "tcp_transport.rs"]
-mod tcp_transport;
 #[path = "wrong_root.rs"]
 mod wrong_root;

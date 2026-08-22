@@ -14,6 +14,13 @@
 /// Shared fixture helpers, declared once for every suite below.
 mod common;
 
+/// The HTTP mock for the embedding provider, declared once for the whole
+/// suite. Twelve files used to `#[path]`-include it; as one binary that is
+/// the same file loaded twelve times (`clippy::duplicate_mod`), so it is
+/// declared here and reached as `crate::mock_ollama` everywhere.
+#[path = "cli/mock_ollama.rs"]
+mod mock_ollama;
+
 #[path = "boilerplate.rs"]
 mod boilerplate;
 #[path = "cache_blob_integrity.rs"]
@@ -28,8 +35,6 @@ mod cli;
 mod config_include_dependencies;
 #[path = "corpus_manifest_contract.rs"]
 mod corpus_manifest_contract;
-#[path = "corpus_repos.rs"]
-mod corpus_repos;
 #[path = "cross_cluster_collapse.rs"]
 mod cross_cluster_collapse;
 #[path = "cross_cluster_enclosure.rs"]
@@ -208,6 +213,8 @@ mod python_same_shape_backends;
 mod python_signatures;
 #[path = "rank_structural_only_policy.rs"]
 mod rank_structural_only_policy;
+#[path = "regex_literal_delimiters.rs"]
+mod regex_literal_delimiters;
 #[path = "rename_literal_monotonicity.rs"]
 mod rename_literal_monotonicity;
 #[path = "rename_literal_substring_boundary.rs"]

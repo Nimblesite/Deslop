@@ -18,12 +18,8 @@
 //! their body by definition, so the more perfect the duplicate, the more
 //! certainly its embedding evidence was destroyed.
 
-#[path = "cli/mock_ollama.rs"]
-mod mock_ollama;
-
-
+use crate::mock_ollama::MockOllama;
 use anyhow::Result;
-use mock_ollama::MockOllama;
 use serde_json::Value;
 
 use crate::common::{embeddings::run_mock_embedding_report, *};

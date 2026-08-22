@@ -33,3 +33,12 @@ workspace = true
 [[test]]
 name = "suite"
 path = "tests/suite.rs"
+
+# [CORPUS-PIN] [TEST-SELECTION] `corpus_repos` stays its own test target for
+# the same reason `tcp_transport` does in deslop-mcp: `make test-corpus` and
+# `make test-corpus-ci` select it by target name, and every test in it is
+# `#[ignore]`d, so `-- --ignored` against the whole `suite` would drag in
+# every other ignored test in the crate.
+[[test]]
+name = "corpus_repos"
+path = "tests/corpus_repos.rs"

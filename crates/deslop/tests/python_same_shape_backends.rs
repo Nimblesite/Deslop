@@ -22,7 +22,6 @@
 //! report satisfies the absence half and fails the presence half, so a
 //! detector that went blind cannot pass this test.
 
-
 use crate::common::*;
 
 /// The fixture holding the contract pair and the rename clone.

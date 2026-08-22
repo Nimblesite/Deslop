@@ -6,9 +6,6 @@
 //! provider. Production no longer ships the stub, so we drive the
 //! same code path through an inline mock Ollama HTTP server.
 
-#[path = "cli/mock_ollama.rs"]
-mod mock_ollama;
-
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -21,7 +18,7 @@ use crate::common::{
     approx, cluster_bucket, cluster_size, embeddings::run_mock_embedding_report,
     expect_cluster_spanning, occurrence_files, signal,
 };
-use self::mock_ollama::MockOllama;
+use crate::mock_ollama::MockOllama;
 
 /// Clone files each corpus writes.
 const CLONE_FILES: usize = 8;

@@ -4,12 +4,8 @@
 //! vector is rejected evidence: it must never enter the cache, ANN index,
 //! candidate graph, or rendered signal triple.
 
-#[path = "cli/mock_ollama.rs"]
-mod mock_ollama;
-
-
+use crate::mock_ollama::{MockBehavior, MockOllama};
 use anyhow::Result;
-use mock_ollama::{MockBehavior, MockOllama};
 
 use crate::common::{clusters, embeddings::run_mock_embedding_report, field, fixture, seed};
 

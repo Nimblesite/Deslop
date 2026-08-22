@@ -9,7 +9,7 @@
 # human entry points and are the only ones `make help` lists.
 # =============================================================================
 
-.PHONY: build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
+.PHONY: build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify compile-release-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
 
 _JETBRAINS_DIR := clients/jetbrains
 
@@ -198,26 +198,24 @@ clean:
 	$(RM) lcov.info
 	$(RM) .deslop-cache
 
-## ci: fmt + lint + Rust test + build + deployment-verify + VSIX coverage +
-##     VSIX E2E + webview coverage + HTML-report CSS (Playwright). Full CI
-##     simulation mirroring the .github/workflows/ci.yml vsix job. Runs every
-##     non-Ollama test suite, Rust and VSIX, and enforces per-crate + VSIX +
-##     webview coverage thresholds. `_vsix-coverage` runs the unit + E2E suite
-##     under c8 ([VSIX-TESTING-COVERAGE]); `_vsix-test` re-runs the same E2E
-##     against the packaged bundle without coverage. Ollama-gated suites run
-##     via `make ci-ollama`.
+## ci: [CI-RELEASE-BUILD] The three phases `.github/workflows/ci.yml` runs,
+##     in the same order and over the same artifacts, so a green `make ci`
+##     locally means exactly what a green pipeline means:
+##
+##       1. `_ci-build` — every release artifact, compiled once: the
+##          workspace, every release test binary, and the VSIX bundle with
+##          those same binaries staged into it. This is the only phase that
+##          compiles anything.
+##       2. `_ci-gate` — the gates that read those artifacts (duplication,
+##          deployment manifest). Cheap, and they fail before a suite runs.
+##       3. `_ci-test` — the Rust suite, the VSIX suites and coverage, in
+##          parallel, executing what phase 1 built.
+##
+##     Ollama-gated suites are excluded; they run via `make ci-ollama`.
 ci:
-	@$(MAKE) fmt CHECK=1
-	@$(MAKE) lint
-	@$(MAKE) test
-	@$(MAKE) coverage
-	@$(MAKE) build
-	@$(MAKE) dup-gate
-	@$(MAKE) deployment-verify
-	@$(MAKE) _vsix-coverage
-	@$(MAKE) _vsix-test
-	@$(MAKE) _vsix-webview-coverage
-	@$(MAKE) _vsix-playwright-html
+	@$(MAKE) _ci-build
+	@$(MAKE) _ci-gate
+	@$(MAKE) _ci-test
 
 ## setup: Post-create dev environment setup (used by devcontainer).
 ##        Version pin for `typediagram` must match `.github/workflows/ci.yml`
@@ -235,6 +233,62 @@ setup:
 # Repo-Specific Targets
 # =============================================================================
 
+## compile-release-tests: [CI-RELEASE-BUILD] Every release test binary,
+##                        compiled but not executed. One home for the command,
+##                        called by `make ci`'s build phase and by the CI
+##                        `build` job, so the artifacts the test phase runs
+##                        are the artifacts the build phase produced. Without
+##                        it a test job restores a target directory holding no
+##                        test artifacts and recompiles all of them: CI run
+##                        32542178321 spent 21m24s doing exactly that in front
+##                        of a suite that runs in 1m34s.
+compile-release-tests: typediagram-gen
+	@echo "==> Compiling release test binaries (no run)..."
+	cargo test --release --workspace --all-targets --features deslop-core/live --no-run
+
+# _ci-build: [CI-RELEASE-BUILD] Phase 1 of `make ci` — every release artifact
+#   the later phases consume, produced exactly once. Mirrors the CI `build`
+#   job step for step. Nothing after this phase is allowed to compile.
+_ci-build:
+	@$(MAKE) fmt CHECK=1
+	@$(MAKE) lint
+	@$(MAKE) build
+	@$(MAKE) compile-release-tests
+	@$(MAKE) _vsix-build
+	@$(MAKE) _vsix-stage-bundled-binaries
+
+# _ci-gate: Phase 2 — the gates that only read phase 1's artifacts. They are
+#   seconds of work against a report, so they run before any suite: a
+#   duplication or deployment regression should not wait behind the tests.
+_ci-gate:
+	@$(MAKE) dup-gate
+	@$(MAKE) deployment-verify
+
+# _ci-test: Phase 3 — the suites, concurrently, over the binaries phase 1
+#   built. CI runs these as three parallel jobs off one cached release build
+#   (`rust-tests`, `vsix`, `coverage`); `-j3` is the local equivalent. Every
+#   cargo invocation below is a no-op against the warm target directory —
+#   they execute the cached release binaries, they do not rebuild them.
+#   `coverage` is the one exception and cannot be otherwise: an instrumented
+#   artifact can never share a fingerprint with an uninstrumented one, so it
+#   owns a separate target directory, which is exactly why it is here in the
+#   parallel phase rather than in front of the suites.
+_ci-test:
+	@$(MAKE) -j3 _ci-test-rust _ci-test-vsix coverage
+
+# _ci-test-rust: The Rust half of phase 3.
+_ci-test-rust:
+	@$(MAKE) test
+
+# _ci-test-vsix: The VSIX half of phase 3 — E2E under coverage, the same E2E
+#   against the packaged bundle, the webview unit suite, and the HTML-report
+#   Playwright check.
+_ci-test-vsix:
+	@$(MAKE) _vsix-coverage
+	@$(MAKE) _vsix-test
+	@$(MAKE) _vsix-webview-coverage
+	@$(MAKE) _vsix-playwright-html
+
 ## test-shard: [CI-RELEASE-BUILD] [TEST-SELECTION] One slice of the release
 ##             suite, for CI's parallel matrix. `make test` remains the whole
 ##             suite and is what a developer runs. The split is over test
@@ -242,10 +296,12 @@ setup:
 ##             substring of the name and silently dropped whole suites that
 ##             way (gh #412) — and `test-shards.test.mjs` proves the union of
 ##             the shards is the whole set for every shard count CI uses.
-##             Measured: 200 binaries, 2924s end to end, with a long tail
-##             (`config_include_dependencies` 540s,
-##             `fsharp_language_label_over_mcp` 499s), so the run phase is
-##             worth splitting once the compile is a cache hit.
+##             [TEST-ONE-BINARY] Each crate's suites are modules of one
+##             binary, so the partition is over 13 binaries rather than the
+##             200 that preceded it, and the bulk of the runtime sits in
+##             `deslop`'s. libtest already runs that binary's tests across
+##             every core, so a shard is worth having for the crates it can
+##             actually separate, not for balance.
 ##             Usage: `make test-shard SHARD=1 SHARDS=4`.
 test-shard: _delete-path-binaries typediagram-gen
 	@echo "==> Testing shard $(SHARD)/$(SHARDS) (fail-fast, release profile)..."

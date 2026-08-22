@@ -4,7 +4,6 @@
 //! client-bound `window/showDocument` requests so command handlers run
 //! through the same transport a real editor uses.
 
-
 use std::process::{ChildStdin, ChildStdout};
 
 use anyhow::{anyhow, Result};

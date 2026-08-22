@@ -27,13 +27,10 @@
 //! behaviour-equivalence group, lifting their cosine above the floor
 //! while every other pair keeps its honest shingle cosine.
 
-#[path = "cli/mock_ollama.rs"]
-mod mock_ollama;
-
 use std::path::Path;
 
+use crate::mock_ollama::MockOllama;
 use anyhow::Result;
-use mock_ollama::MockOllama;
 use serde_json::Value;
 
 use crate::common::{embeddings::scan_fixture_copy_with_mock, role_gate::*, *};
