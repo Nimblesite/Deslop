@@ -49,8 +49,16 @@ const RUST_EXTENSION: &str = "rs";
 const MOD_ITEM: &str = "mod_item";
 /// tree-sitter-rust kind for a `#[..]` attribute above an item.
 const ATTRIBUTE_ITEM: &str = "attribute_item";
-/// tree-sitter-rust kind of a quoted string.
-const STRING_LITERAL: &str = "string_literal";
+/// tree-sitter-rust kind of the attribute body inside `#[..]`.
+const ATTRIBUTE: &str = "attribute";
+/// tree-sitter-rust kind of an identifier.
+const IDENTIFIER: &str = "identifier";
+/// tree-sitter-rust field naming an attribute's assigned value.
+const VALUE_FIELD: &str = "value";
+/// tree-sitter-rust kind of the text inside a string literal, quotes
+/// excluded — so the value is read off the tree rather than by stripping
+/// characters from the literal's source text.
+const STRING_CONTENT: &str = "string_content";
 /// tree-sitter-rust field naming the identifier of a `mod_item`.
 const NAME_FIELD: &str = "name";
 /// The attribute that redirects a module at an explicit file.
@@ -174,34 +182,52 @@ fn module_file(item: Node<'_>, source: &str, tests: &Path) -> Option<String> {
         Some(path) => path,
         None => format!("{}.{RUST_EXTENSION}", field_text(item, NAME_FIELD, source)?),
     };
-    let is_top_level_file = !named.contains('/') && tests.join(&named).is_file();
+    let is_top_level_file =
+        Path::new(&named).components().count() == 1 && tests.join(&named).is_file();
     is_top_level_file.then_some(named)
 }
 
-/// The value of a `#[path = ".."]` attribute sitting above `item`.
+/// The file named by a `#[path = ".."]` attribute above `item`.
+///
+/// Read structurally. Scanning the attribute's source text for the word
+/// `path` would also match `#[cfg(feature = "path")]` and any doc comment
+/// that mentions it, and would answer from the spelling of the code
+/// rather than from its shape.
 fn path_attribute(item: Node<'_>, source: &str) -> Option<String> {
     let mut sibling = item.prev_named_sibling();
     while let Some(node) = sibling {
         if node.kind() != ATTRIBUTE_ITEM {
             return None;
         }
-        if text(node, source).contains(PATH_ATTRIBUTE) {
-            return string_operand(node, source);
+        if let Some(path) = attribute_path(node, source) {
+            return Some(path);
         }
         sibling = node.prev_named_sibling();
     }
     None
 }
 
-/// The first quoted string anywhere under `node`, unquoted.
-fn string_operand(node: Node<'_>, source: &str) -> Option<String> {
-    if node.kind() == STRING_LITERAL {
-        return Some(text(node, source).trim_matches('"').to_owned());
+/// The value of one `attribute_item`, when it is a `#[path = ".."]`.
+///
+/// The grammar gives every part its own node: the attribute's name is its
+/// `identifier` child, and the file is the `string_content` beneath the
+/// `value` field.
+fn attribute_path(item: Node<'_>, source: &str) -> Option<String> {
+    let attribute = child_of_kind(item, ATTRIBUTE)?;
+    let name = child_of_kind(attribute, IDENTIFIER)?;
+    if text(name, source) != PATH_ATTRIBUTE {
+        return None;
     }
+    let literal = attribute.child_by_field_name(VALUE_FIELD)?;
+    child_of_kind(literal, STRING_CONTENT).map(|content| text(content, source))
+}
+
+/// The first direct named child of `node` with `kind`.
+fn child_of_kind<'tree>(node: Node<'tree>, kind: &str) -> Option<Node<'tree>> {
     let mut cursor = node.walk();
     let found = node
         .named_children(&mut cursor)
-        .find_map(|child| string_operand(child, source));
+        .find(|child| child.kind() == kind);
     found
 }
 
