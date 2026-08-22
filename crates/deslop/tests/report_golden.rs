@@ -18,8 +18,8 @@
 //! the authored fixture sources, so a wrongly-blessed golden cannot
 //! self-certify.
 //!
-//! Regenerate with `DESLOP_BLESS=1 cargo test -p deslop --test
-//! report_golden`, then review the diff — see
+//! Regenerate with `DESLOP_BLESS=1 cargo test -p deslop --test suite
+//! report_golden::`, then review the diff — see
 //! `tests/fixtures/report-golden/README.md`.
 
 use std::{fs, path::PathBuf};
@@ -59,7 +59,7 @@ fn golden_report_path() -> PathBuf {
 }
 
 /// The command that regenerates the committed golden.
-const BLESS: &str = "`DESLOP_BLESS=1 cargo test -p deslop --test report_golden`";
+const BLESS: &str = "`DESLOP_BLESS=1 cargo test -p deslop --test suite report_golden::`";
 
 /// Why a drift here is worth investigating before it is blessed away.
 const DRIFT_HINT: &str = "Ranking, spans, ids and metrics all change user-visible output.";

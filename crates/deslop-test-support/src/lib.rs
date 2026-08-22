@@ -19,6 +19,7 @@ pub mod corpus_scope;
 pub mod enclosure;
 pub mod skip_contract;
 pub mod skip_policy;
+pub mod test_target_parity;
 
 use std::{
     io::{BufRead, BufReader, Read, Write},

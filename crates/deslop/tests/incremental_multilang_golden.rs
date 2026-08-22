@@ -24,8 +24,8 @@
 //! - **warm** — a fully-warm store-backed run must reproduce that same
 //!   golden, having rebuilt no signature at all.
 //!
-//! Regenerate with `DESLOP_BLESS=1 cargo test -p deslop --test
-//! incremental_multilang_golden`, then review the diff — see
+//! Regenerate with `DESLOP_BLESS=1 cargo test -p deslop --test suite
+//! incremental_multilang_golden::`, then review the diff — see
 //! `tests/fixtures/incremental-multilang/README.md`.
 
 use serde_json::Value;
@@ -52,7 +52,8 @@ fn render_cold_multilang() -> Result<Vec<u8>> {
 }
 
 /// The command that regenerates the committed golden.
-const BLESS: &str = "`DESLOP_BLESS=1 cargo test -p deslop --test incremental_multilang_golden`";
+const BLESS: &str =
+    "`DESLOP_BLESS=1 cargo test -p deslop --test suite incremental_multilang_golden::`";
 
 /// Why a drift here is worth investigating before it is blessed away.
 const DRIFT_HINT: &str = "Ranking, spans, ids and metrics are all user-visible, and a drift \

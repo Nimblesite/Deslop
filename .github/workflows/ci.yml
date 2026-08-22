@@ -87,13 +87,15 @@ jobs:
     name: Build release
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    # Sixteen cores rather than the four a standard runner gives, because
-    # this job is one long `rustc` fan-out and nothing else: a release
-    # clippy pass, the release workspace build, and a compile of every
-    # release test binary. `cargo` saturates whatever it is given, so the
-    # step scales with core count almost linearly. The larger labels are
-    # free for public repositories, which this repository is.
-    runs-on: ubuntu-latest-16-cores
+    # A standard runner, deliberately. `ubuntu-latest-16-cores` was tried
+    # here and never resolved: on run 32558651602 every `ubuntu-latest` job
+    # finished while `build` and `coverage` sat queued indefinitely, which
+    # is worse than a slow build — nothing downstream ever starts. The
+    # larger labels need the org to provision them, and this job no longer
+    # needs one: [TEST-ONE-BINARY] took the compile from ~27 minutes to
+    # 1m02s for a full rebuild of the workspace plus all 13 test binaries,
+    # so cores were never the bottleneck. Linking 193 times was.
+    runs-on: ubuntu-latest
     # The compile is the bulk of the job: 20m1s on run 32548446084 with
     # four cores, which a 25-minute cap cancelled mid-gate and took every
     # downstream shard, the VSIX job and the JetBrains gate with it. The
@@ -348,10 +350,9 @@ jobs:
     name: Coverage + thresholds
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    # Sixteen cores for the same reason `build` takes them: a cold
-    # instrumented compile of the whole workspace is the job, and it is
-    # the other long pole in the pipeline.
-    runs-on: ubuntu-latest-16-cores
+    # A standard runner, for the same reason `build` uses one: the larger
+    # label queues forever on this repository.
+    runs-on: ubuntu-latest
     # TIMEOUT EXCEPTION: a cold instrumented release build of the whole
     # workspace is ~21 minutes on a cache miss.
     timeout-minutes: 40
