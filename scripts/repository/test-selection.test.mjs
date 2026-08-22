@@ -99,6 +99,18 @@ function words(body) {
 // self-tests. `--skip corpus_` hid every one of them.
 const GATE_SELFTEST_PACKAGE = "deslop-test-support";
 
+// The cargo flag that keeps every target compiled, the flag that selects
+// features, and the make variable single-sourcing the feature set the release
+// gate compiles with — referenced by `test`, `lint`, `coverage` and the shard
+// runner so none of them can drift from the others.
+const ALL_TARGETS_FLAG = "--all-targets";
+const FEATURES_FLAG = "--features";
+const FEATURES_VARIABLE = "_TEST_FEATURES";
+const FEATURES_REFERENCE = `$(${FEATURES_VARIABLE})`;
+
+// The commit that feature-gated the corpus target out of every default build.
+const UNCOMPILABLE_CORPUS_COMMIT = "77bcbaed5";
+
 // The workspace as cargo itself resolves it — the authoritative parse of the
 // manifests, so this contract cannot drift from what cargo actually builds.
 function workspacePackages() {
@@ -118,6 +130,16 @@ function packageNamed(name) {
 
 function corpusPackage() {
   return packageNamed(CORPUS_PACKAGE);
+}
+
+// The value a recipe hands cargo's feature flag, as one word — the make
+// variable reference itself, not its expansion, so a second literal copy of
+// the list is a visible difference rather than a coincidental match.
+function featureSet(target) {
+  const args = words(recipe(target));
+  const flag = args.indexOf(FEATURES_FLAG);
+  assert.ok(flag >= 0, `\`make ${target}\` no longer passes \`${FEATURES_FLAG}\` at all`);
+  return args[flag + 1];
 }
 
 test("[TEST-SELECTION] the release gate selects no test by name", () => {
@@ -261,20 +283,54 @@ test("[TEST-SELECTION] the gate's own self-tests are inside the gate's workspace
 });
 
 test("[TEST-SELECTION-SKIP] an ignored test is still compiled and linted every run", () => {
-  const args = words(recipe("lint"));
   assert.ok(
-    args.includes("--all-targets"),
+    words(recipe("lint")).includes(ALL_TARGETS_FLAG),
     "`make lint` must lint every target. `#[ignore]` costs coverage of a test's *execution*, " +
       "never of its *compilation*: the target stays in `--all-targets` and clippy still reads it.",
   );
   assert.ok(
-    !args.includes("--features"),
-    "`make lint` must not need a feature to reach the corpus target any more — it is no longer " +
-      "gated out of the default build, so asking for one would mean the gate came back",
+    words(recipe("test")).includes(ALL_TARGETS_FLAG),
+    "`make test` must build every target, so a skipped suite still fails the gate when it stops " +
+      `compiling — the failure mode of commit ${UNCOMPILABLE_CORPUS_COMMIT}`,
+  );
+  assert.equal(
+    featureSet("lint"),
+    featureSet("test"),
+    `\`make lint\` must compile the feature set \`make test\` runs. Clippy only reads the code ` +
+      "the features it was given compile, so a feature the release gate enables and lint omits " +
+      "is a module nobody ever lints — `deslop-lsp/profiling` was exactly that module.",
+  );
+  assert.equal(
+    featureSet("lint"),
+    FEATURES_REFERENCE,
+    `both must reach it through \`${FEATURES_REFERENCE}\`: two literal copies of the same list ` +
+      "agree until the day one of them is edited",
   );
   assert.ok(
-    words(recipe("test")).includes("--all-targets"),
-    "`make test` must build every target, so a skipped suite still fails the gate when it stops " +
-      "compiling — the failure mode of commit 77bcbaed5",
+    variable(FEATURES_VARIABLE).length > 0,
+    `\`${FEATURES_VARIABLE}\` must name at least one feature, or every recipe referencing it ` +
+      "compiles the default build while claiming to compile the matrix",
   );
+});
+
+test("[TEST-SELECTION-SKIP] no feature can gate the corpus suite out of a build", () => {
+  const pkg = corpusPackage();
+  assert.deepEqual(
+    Object.keys(pkg.features).sort(),
+    [],
+    `\`${CORPUS_PACKAGE}\` must declare no features. \`required-features\` may only name a ` +
+      "feature of its own package, so a package that declares none has no way to remove a " +
+      "target from the default build — which is what left the corpus suite uncompilable for " +
+      `weeks in commit ${UNCOMPILABLE_CORPUS_COMMIT}. Read from the manifest cargo itself ` +
+      "resolves, so it holds whatever flags a recipe happens to pass.",
+  );
+  for (const target of pkg.targets) {
+    assert.deepEqual(
+      target["required-features"] ?? target.required_features ?? [],
+      [],
+      `\`${CORPUS_PACKAGE}\`'s \`${target.name}\` target must carry no required-features: ` +
+        `that is the exact mechanism that dropped \`${CORPUS_TARGET}\` out of ` +
+        `\`${ALL_TARGETS_FLAG}\``,
+    );
+  }
 });

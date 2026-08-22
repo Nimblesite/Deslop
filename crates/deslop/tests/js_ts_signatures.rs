@@ -39,17 +39,22 @@ fn tsx_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
 
 #[test]
 fn javascript_near_miss_produces_cross_file_structural_cluster() -> Result<()> {
-    // GH #427: JavaScript publishes the nested `let running = 0; for (…)`
-    // run rather than the enclosing function pair TypeScript reports off
-    // the same source shape, and a fragment view is Merkle-equal. This
-    // pins what the engine does today; #427 tracks making it agree with
-    // every other language, at which point this becomes `Overlap::Graded`.
+    // GH #427, closed. JavaScript used to publish the nested
+    // `let running = 0; for (…)` run rather than the enclosing function
+    // pair TypeScript reports off the same source shape, and that
+    // fragment view was Merkle-equal — so one language called the same
+    // code an exact clone and the other a near miss. The fragment won
+    // because the same-file overlap collapse ranked an overlapping run
+    // by cross-file edge strength, and a window scores higher exactly to
+    // the extent that it drops what the two copies disagree on
+    // ([PIPELINE-CLUSTER-EXACT-SCOPE]). Both languages now elect the
+    // enclosing view and both grade it, which is what #427 asked for.
     assert_type3_clone(
         "javascript-type3",
         8,
         "delta.js",
         "epsilon.js",
-        Overlap::MerkleEqual,
+        Overlap::Graded,
     )
 }
 
@@ -72,13 +77,23 @@ fn typescript_near_miss_produces_cross_file_structural_cluster() -> Result<()> {
 fn assert_type2_clone(fixture_name: &str, min_nodes: u32, left: &str, right: &str) -> Result<()> {
     let report = run_report(&fixture(fixture_name), min_nodes)?;
     let top = top_cluster(&report, fixture_name)?;
-    assert!(is_exact_one(signal(top, "structural")));
     assert_eq!(
         cluster_bucket(top),
         "nearly_identical",
         "{fixture_name} top cluster bucket mismatch: {report:#}"
     );
-    assert!(is_exact_one(signal(top, "token_jaccard")));
+    // A renamed Type-2 clone *is* the Merkle-equal case: normalisation
+    // erases the renames, so the elected view hashes the same on both
+    // sides and both axes short-circuit. Saying it in the same
+    // vocabulary the Type-3 fixtures use keeps one statement of what
+    // saturation means, and keeps this assertion honest about *why* it
+    // expects exactly one rather than repeating the bare comparison.
+    assert_axes(
+        (signal(top, "structural"), signal(top, "token_jaccard")),
+        (fixture_name, left, right),
+        &report,
+        Overlap::MerkleEqual,
+    );
     assert!(spans_both(top, left, right));
     Ok(())
 }
@@ -102,6 +117,22 @@ enum Overlap {
     /// above [`SHARED_SUBTREE_MIN_OVERLAP`], the floor row 4b admitted the
     /// pair on.
     Graded,
+}
+
+/// Applies whichever axis contract `overlap` names, so the saturated and
+/// graded cases are stated in one place and a caller picks between them
+/// by naming the view its fixture elects rather than by repeating the
+/// comparison.
+fn assert_axes(
+    axes: (f64, f64),
+    names: (&str, &str, &str),
+    report: &Value,
+    overlap: Overlap,
+) {
+    match overlap {
+        Overlap::MerkleEqual => assert_saturated_axes(axes, names, report),
+        Overlap::Graded => assert_graded_axes(axes, names, report),
+    }
 }
 
 /// Asserts that a Type-3 near miss surfaces a token-supported
@@ -131,18 +162,12 @@ fn assert_type3_clone(
              the pipeline would not admit: {axis} = {measured}: {report:#}"
         );
     }
-    match overlap {
-        Overlap::MerkleEqual => assert_saturated_axes(
-            (structural, token_jaccard),
-            (fixture_name, left, right),
-            &report,
-        ),
-        Overlap::Graded => assert_graded_axes(
-            (structural, token_jaccard),
-            (fixture_name, left, right),
-            &report,
-        ),
-    }
+    assert_axes(
+        (structural, token_jaccard),
+        (fixture_name, left, right),
+        &report,
+        overlap,
+    );
     Ok(())
 }
 
