@@ -9,7 +9,7 @@
 # human entry points and are the only ones `make help` lists.
 # =============================================================================
 
-.PHONY: build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify compile-release-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
+.PHONY: build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify compile-release-tests coverage coverage-run coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-coverage-check _vsix-webview-coverage _vsix-webview-coverage-check _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
 
 _JETBRAINS_DIR := clients/jetbrains
 
@@ -174,15 +174,22 @@ _coverage_check:
 ##       for exactly that reason.
 ##       Depends on typediagram-gen so the wire-generated module exists
 ##       before clippy parses the workspace on a fresh checkout.
-lint: typediagram-gen
+lint: _ci-analyze _ci-contract-tests
+
+# _ci-analyze: Read-only analyzers only. CI runs this before the build; test
+#   harness self-tests live in _ci-contract-tests and run in the test phase.
+_ci-analyze: typediagram-gen
 	@echo "==> Linting..."
 	cargo clippy --release --all-targets --workspace --features $(_TEST_FEATURES) -- -D warnings
 	@bash scripts/repository/taxonomy-gate.sh
+	@node scripts/actions/verify-env-path-writes.mjs
+
+# _ci-contract-tests: Test the repository's Node-based gates exactly once.
+_ci-contract-tests:
 	@echo "==> VSIX harness + packaging script gates (unit)..."
 	@node --test clients/vscode/scripts/*.test.mjs
 	@echo "==> PATH/env injection gate ([ACTION-ENVPATH])..."
 	@node --test scripts/actions/verify-env-path-writes.test.mjs
-	@node scripts/actions/verify-env-path-writes.mjs
 	@echo "==> Composite-action step scanner proof ([ACTION-TESTS])..."
 	@node --test scripts/actions/action-yaml.test.mjs
 	@echo "==> Docs installer snippet fail-closed gate ([DEPLOY-DOCS-INSTALLER-FAILCLOSED])..."
@@ -276,33 +283,25 @@ _ci-gate:
 	@$(MAKE) dup-gate
 	@$(MAKE) deployment-verify
 
-# _ci-test: Phase 3 — the suites, concurrently, over the binaries phase 1
-#   built. CI runs these as three parallel jobs off one cached release build
-#   (`rust-tests`, `vsix`, `coverage`); `-j3` is the local equivalent. Every
-#   cargo invocation below is a no-op against the warm target directory —
-#   they execute the cached release binaries, they do not rebuild them.
-#   `coverage` is the one exception and cannot be otherwise: an instrumented
-#   artifact can never share a fingerprint with an uninstrumented one, so it
-#   owns a separate target directory, which is exactly why it is here in the
-#   parallel phase rather than in front of the suites.
+# _ci-test: Phase 3 — run every suite exactly once, instrumented for coverage.
+#   `coverage-report` is deliberately excluded: it is phase 4 and runs only
+#   after all collectors complete.
 _ci-test:
-	@$(MAKE) -j3 _ci-test-rust _ci-test-vsix coverage
+	@$(MAKE) -j2 _ci-test-rust _ci-test-vsix
 
 # _ci-test-rust: The Rust half of phase 3.
 _ci-test-rust:
-	@$(MAKE) test
+	@$(MAKE) coverage-run
 
-# _ci-test-vsix: The VSIX half of phase 3 — E2E under coverage, the same E2E
-#   against the packaged bundle, the webview unit suite, and the HTML-report
-#   Playwright check.
+# _ci-test-vsix: The VSIX half of phase 3 — extension-host and webview
+#   coverage collection plus the standalone HTML-report Playwright check.
 _ci-test-vsix:
 	@$(MAKE) _vsix-coverage
-	@$(MAKE) _vsix-test
 	@$(MAKE) _vsix-webview-coverage
 	@$(MAKE) _vsix-playwright-html
 
-## test-shard: [CI-RELEASE-BUILD] [TEST-SELECTION] One slice of the release
-##             suite, for CI's parallel matrix. `make test` remains the whole
+## test-shard: [TEST-SELECTION] One optional slice of the release suite for
+##             local diagnosis. `make test` remains the whole
 ##             suite and is what a developer runs. The split is over test
 ##             *binaries*, never test names — `cargo test --skip` matches a
 ##             substring of the name and silently dropped whole suites that
@@ -331,11 +330,17 @@ test-shard: _delete-path-binaries typediagram-gen
 ##           Carries `_delete-path-binaries` for the same reason `test`
 ##           does: this target runs the suite, and a Deslop binary leaked
 ##           onto PATH would shadow the built one.
-coverage: _delete-path-binaries typediagram-gen
-	@echo "==> Coverage (instrumented release + per-crate threshold)..."
+coverage: coverage-run coverage-report
+
+coverage-run: _delete-path-binaries typediagram-gen
+	@echo "==> Coverage test collection (instrumented release)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
+	cargo llvm-cov --release --workspace --all-targets --features $(_TEST_FEATURES) --no-report
+
+coverage-report:
+	@echo "==> Coverage calculation and threshold enforcement..."
 	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
-	 cargo llvm-cov --release --workspace --all-targets --features $(_TEST_FEATURES) \
+	 cargo llvm-cov report --release --features $(_TEST_FEATURES) \
 	    --ignore-filename-regex "$$_rust_ignore" \
 	    --lcov --output-path lcov.info
 	@$(MAKE) _coverage_check RUST_LCOV=lcov.info
@@ -523,10 +528,14 @@ _vsix-test: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-
 _vsix-test-ollama: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-binaries
 	cd clients/vscode && npm run test:ollama
 
-# _vsix-coverage: Run VS Code E2E + enforce the VSIX coverage threshold.
-#   Threshold lives in the repo-root coverage-thresholds.json.
+# _vsix-coverage: Run the VS Code suite once with coverage collection enabled.
+#   Threshold calculation is deferred to _vsix-coverage-check, after every
+#   coverage collector has finished.
 _vsix-coverage: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-binaries
-	cd clients/vscode && npm run coverage
+	cd clients/vscode && npm run coverage:collect
+
+_vsix-coverage-check:
+	cd clients/vscode && npm run coverage:check
 
 # _vsix-playwright-html: Render the standalone HTML report from a fixture repo
 #   with the real deslop CLI, then assert in a headless browser (Playwright)
@@ -540,14 +549,17 @@ _vsix-playwright-html: _vsix-install
 	cd clients/vscode && npx playwright install --with-deps chromium && npm run test:playwright:html
 
 # _vsix-webview-coverage: Drive the webview bundle in a real browser (Playwright)
-#   with V8 coverage on, map executed ranges back to webview-ui/src via inline
-#   sourcemaps, and enforce .vsix.webview_threshold from coverage-thresholds.json.
+#   with V8 coverage on and map executed ranges back to webview-ui/src. Threshold
+#   calculation is deferred to _vsix-webview-coverage-check.
 #   The webview is invisible to the vscode-test c8 pass (extension host only);
 #   this closes that blind spot (#254). The script rebuilds the production
 #   bundle in a finally, so a coverage build is never left staged for packaging
 #   — even if the Playwright run or mapping fails.
 _vsix-webview-coverage: _vsix-install
 	cd clients/vscode && npx playwright install --with-deps chromium && npm run coverage:webview
+
+_vsix-webview-coverage-check:
+	cd clients/vscode && npm run coverage:webview:check
 
 ## vsix-package: Build the .vsix artifact (does not publish).
 ##               Stages the host-platform deslop-lsp + deslop-mcp + deslop
