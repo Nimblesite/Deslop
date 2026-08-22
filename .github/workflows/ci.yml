@@ -89,9 +89,13 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     # Covers a release clippy build, the release workspace build, the
-    # self-scan duplication gate and the deployment gates. The test
-    # suites moved out to `ci` and `vsix`.
-    timeout-minutes: 25
+    # compile of every release test binary, the self-scan duplication
+    # gate and the deployment gates. The test suites moved out to
+    # `rust-tests` and `vsix`, but their *compile* stays here so the
+    # shards restore a warm target directory. That compile is the bulk
+    # of the job: 20m1s on run 32548446084, which a 25-minute cap
+    # cancelled mid-gate and took every downstream shard with it.
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v7
 
