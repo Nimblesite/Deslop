@@ -233,7 +233,7 @@ pub fn build_normalised_root(
     language: &'static str,
 ) -> Result<NormalizedNode, CoreError> {
     let root = tree.root_node();
-    let children = normalise_children(root, file_id, normalise_kind, language, 1)?;
+    let children = normalise_children(root, FILE_KIND, file_id, normalise_kind, language, 1)?;
     Ok(NormalizedNode {
         kind: FILE_KIND,
         byte_range: retained_span(&children).unwrap_or(ByteRange {
@@ -288,7 +288,7 @@ fn normalise_node(
     let Some(kind) = normalise_kind(node.kind()) else {
         return Ok(None);
     };
-    let children = normalise_children(node, file_id, normalise_kind, language, depth)?;
+    let children = normalise_children(node, kind, file_id, normalise_kind, language, depth)?;
     Ok(Some(NormalizedNode {
         kind,
         children,
@@ -304,6 +304,14 @@ fn normalise_node(
 /// [`normalise_node`], anonymous ones through
 /// [`is_behaviour_bearing_token`] ([PIPELINE-NORMALIZE-AST-OPERATOR]).
 ///
+/// `parent_kind` is the kind `node` *normalised to*, never its raw
+/// grammar kind. [`OPERATOR_FRAMING_PARENTS`] is read against it, so the
+/// list can name a normalised kind such as [`LITERAL_KIND`] — every
+/// language maps its own literal productions onto that one kind, and a
+/// raw-kind list would have to enumerate `regex`, `string`,
+/// `template_string` and their equivalent in every grammar to say the
+/// same thing.
+///
 /// The two are collected in one pass over `children`, not two, so an
 /// operator keeps its position between its operands. A frontier that
 /// listed `alpha`, `beta`, `+` rather than `alpha`, `+`, `beta` would
@@ -311,6 +319,7 @@ fn normalise_node(
 /// with a member whose operand count differs.
 fn normalise_children(
     node: Node<'_>,
+    parent_kind: &'static str,
     file_id: FileId,
     normalise_kind: fn(&str) -> Option<&'static str>,
     language: &'static str,
@@ -328,13 +337,34 @@ fn normalise_children(
                 depth.saturating_add(1),
             )?
         } else {
-            operator_leaf(child, node.kind(), file_id)
+            operator_leaf(child, parent_kind, file_id)
         };
         if let Some(child_node) = normalised {
-            children.push(child_node);
+            if !is_literal_fragment(parent_kind, child_node.kind) {
+                children.push(child_node);
+            }
         }
     }
     Ok(children)
+}
+
+/// True when `child_kind` is a *fragment* of the literal it sits inside
+/// rather than code embedded in it ([PIPELINE-NORMALIZE-AST]).
+///
+/// That section collapses every literal to one `__literal__`, but
+/// tree-sitter models some literals as a wrapper over parts: `/[a-z]+/i`
+/// is a `regex` holding a `regex_pattern` and a `regex_flags`, and each
+/// part normalises to [`LITERAL_KIND`] in its own right. The one literal
+/// therefore arrived as three leaves, and since normalisation erases the
+/// text, *every* flagged regex in the corpus carried the same three-node
+/// shape — enough for two regexes matching completely different text to
+/// publish as duplication.
+///
+/// Only literal-inside-literal collapses. An expression interpolated into
+/// a literal normalises to its own expression kind, never to
+/// [`LITERAL_KIND`], so real code inside a template string survives.
+fn is_literal_fragment(parent_kind: &str, child_kind: &str) -> bool {
+    parent_kind == LITERAL_KIND && child_kind == LITERAL_KIND
 }
 
 /// Grammar productions in which a behaviour-bearing token is **framing**
@@ -373,6 +403,12 @@ const OPERATOR_FRAMING_PARENTS: &[&str] = &[
     // [CLONE-NOISE-RUST-ITER-COLLECT] with no cluster whose every member
     // holds the idiom. Pinned by `rust_issue_147_iter_collect_idiom`.
     "closure_parameters",
+    // A delimiter *inside* a literal: a JavaScript regex's `/`. Without
+    // this the literal stops being one leaf and becomes
+    // `__op__/ __literal__ __op__/`, a three-node shape every regex in the
+    // corpus shares — so two unrelated regex constants publish as
+    // duplication. Pinned by `regex_literal_delimiters`.
+    LITERAL_KIND,
 ];
 
 /// True when `parent_kind` is a production in which a behaviour-bearing

@@ -213,6 +213,8 @@ mod python_same_shape_backends;
 mod python_signatures;
 #[path = "rank_structural_only_policy.rs"]
 mod rank_structural_only_policy;
+#[path = "regex_literal_delimiters.rs"]
+mod regex_literal_delimiters;
 #[path = "rename_literal_monotonicity.rs"]
 mod rename_literal_monotonicity;
 #[path = "rename_literal_substring_boundary.rs"]
