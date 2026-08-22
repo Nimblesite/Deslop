@@ -354,6 +354,12 @@ jobs:
           name: rust-coverage-raw
           path: target/llvm-cov-target
 
+      - name: Restore raw Windows Rust coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: windows-rust-coverage-raw
+          path: target/windows-llvm-cov
+
       - name: Restore VSIX coverage
         uses: actions/download-artifact@v8
         with:
@@ -368,6 +374,14 @@ jobs:
 
       - name: Calculate Rust coverage
         run: make coverage-report
+
+      - name: Calculate Windows Rust coverage
+        env:
+          CARGO_LLVM_COV_TARGET_DIR: target/windows-llvm-cov
+        run: >-
+          cargo llvm-cov --release
+          --features deslop-core/live,deslop-lsp/profiling report
+          --lcov --output-path windows-lcov.info
 
       - name: Enforce VSIX coverage
         run: make _vsix-coverage-check
@@ -385,23 +399,32 @@ jobs:
           name: coverage-report
           path: |
             lcov.info
+            windows-lcov.info
             target/llvm-cov/
             coverage/repository/coverage-summary.json
           retention-days: 1
 
-  # Windows compile gate ([LIVE-IPC-TCP]). Runtime tests execute once in the
-  # instrumented Rust collector; this job compiles the Windows-only paths
-  # without executing a second copy of any test.
+  # Windows runtime gate ([LIVE-IPC-TCP]). The dedicated `tcp_transport`
+  # target executes exactly once here, on the platform that ships TCP as its
+  # default IPC transport. Linux coverage excludes this target. Raw profiles
+  # are uploaded for calculation only after every test job has completed.
   windows:
-    name: Windows compile check
+    name: Windows tests + coverage collection
     needs: [changes, build]
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      CARGO_TARGET_DIR: target/windows-llvm-cov
     steps:
       - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2.85.13
+        with:
+          tool: cargo-llvm-cov
 
       - uses: actions/setup-node@v7
         with:
@@ -424,8 +447,26 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Check workspace (Windows)
-        run: cargo check --workspace --locked --all-targets
+      - name: Run Windows tests with coverage collection
+        run: |
+          $coverageEnv = cargo llvm-cov show-env --cmd
+          foreach ($line in $coverageEnv) {
+            if ($line -match '^set ([^=]+)=(.*)$') {
+              Set-Item -Path "Env:$($Matches[1])" -Value $Matches[2]
+            }
+          }
+          cargo build --release -p deslop-lsp --bin deslop-lsp
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --release -p deslop-mcp --test tcp_transport --features deslop-core/live
+
+      - name: Upload raw Windows Rust coverage
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-rust-coverage-raw
+          path: target/windows-llvm-cov
+          include-hidden-files: true
+          retention-days: 1
 
   # [CI-RELEASE-BUILD] Runs in parallel with `ci`. `_vsix-build`'s
   # `cargo build --release -p deslop-lsp -p deslop-mcp -p deslop` is a

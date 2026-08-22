@@ -340,7 +340,7 @@ coverage-run: _delete-path-binaries typediagram-gen
 coverage-report:
 	@echo "==> Coverage calculation and threshold enforcement..."
 	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
-	 cargo llvm-cov report --release --features $(_TEST_FEATURES) \
+	 cargo llvm-cov --release --features $(_TEST_FEATURES) report \
 	    --ignore-filename-regex "$$_rust_ignore" \
 	    --lcov --output-path lcov.info
 	@$(MAKE) _coverage_check RUST_LCOV=lcov.info
