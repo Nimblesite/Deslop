@@ -1,5 +1,3 @@
-#![cfg(windows)]
-
 //! Windows E2E proof for the TCP loopback IPC transport ([LIVE-IPC-TCP],
 //! [MCP-IPC-DISCOVERY]).
 //!
@@ -9,6 +7,8 @@
 //! code path Windows uses in production. Keeping the dedicated target
 //! Windows-only makes the workflow execute these tests exactly once; the
 //! ordinary Linux collector does not run a duplicate copy.
+
+#![cfg(windows)]
 
 use std::{
     fs,
