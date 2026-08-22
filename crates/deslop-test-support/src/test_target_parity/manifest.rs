@@ -24,6 +24,8 @@ const TEST_TABLE: &str = "test";
 const PATH_KEY: &str = "path";
 /// TOML key gating a target behind Cargo features.
 const REQUIRED_FEATURES_KEY: &str = "required-features";
+/// TOML key that stops Cargo running a target's tests at all.
+const TEST_KEY: &str = "test";
 /// Directory holding a crate's integration tests, relative to the crate.
 pub(super) const TESTS_DIR: &str = "tests";
 /// Extension of a Rust source file.
@@ -120,4 +122,57 @@ fn rust_file(component: Component<'_>) -> Option<String> {
         .then(|| text.to_str())
         .flatten()
         .map(ToOwned::to_owned)
+}
+
+/// Why Cargo does not build and run `tests/suite.rs` on an ordinary
+/// `cargo test`, when it does not.
+///
+/// Every module in the suite root is only as reachable as the target that
+/// compiles it. Delete the `[[test]]` entry, gate it behind
+/// `required-features`, or set `test = false` on it, and the whole suite
+/// stops running while each `mod` line still reads as perfectly wired —
+/// the largest silent-skip there is, and invisible to a check that only
+/// compares module declarations against files on disk.
+pub(super) fn suite_target_defect(manifest: &toml::Table) -> Option<String> {
+    let declared = manifest.get(TEST_TABLE).and_then(toml::Value::as_array);
+    match declared
+        .into_iter()
+        .flatten()
+        .find(|target| names_suite_root(target))
+    {
+        Some(suite) => suite_target_gating(suite),
+        None => Some(format!(
+            "no `[[{TEST_TABLE}]]` entry declares `{TESTS_DIR}/{SUITE_FILE}`, so \
+             with `{AUTOTESTS_KEY} = false` nothing compiles the suite and every \
+             `mod` line in it is decoration"
+        )),
+    }
+}
+
+/// The gating on an otherwise present suite target.
+fn suite_target_gating(suite: &toml::Value) -> Option<String> {
+    if is_gated(suite) {
+        return Some(format!(
+            "the `{TESTS_DIR}/{SUITE_FILE}` target is behind \
+             `{REQUIRED_FEATURES_KEY}`, so an ordinary `cargo test` builds none \
+             of the suite"
+        ));
+    }
+    let runs_tests = suite.get(TEST_KEY).and_then(toml::Value::as_bool) != Some(false);
+    (!runs_tests).then(|| {
+        format!(
+            "the `{TESTS_DIR}/{SUITE_FILE}` target sets `{TEST_KEY} = false`, so \
+             Cargo compiles the suite and runs none of it"
+        )
+    })
+}
+
+/// Whether one `[[test]]` entry declares the suite root as its source.
+fn names_suite_root(target: &toml::Value) -> bool {
+    target
+        .get(PATH_KEY)
+        .and_then(toml::Value::as_str)
+        .and_then(|declared| tests_relative(Path::new(declared)))
+        .as_deref()
+        == Some(SUITE_FILE)
 }

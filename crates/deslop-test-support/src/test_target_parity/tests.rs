@@ -30,6 +30,19 @@ const SAMPLE_CRATE: &str = "crates/deslop";
 /// The file the synthetic declarations all point at.
 const REGRESSION_FILE: &str = "regression.rs";
 
+/// A plain, enabled `[[test]]` naming the suite root.
+const ENABLED_SUITE_TARGET: &str = "[[test]]\nname = \"suite\"\npath = \"tests/suite.rs\"\n";
+
+/// A manifest that declares a test target, but not one for the suite root.
+const NO_SUITE_TARGET_MANIFEST: &str =
+    "[[test]]\nname = \"regression\"\npath = \"tests/regression.rs\"\n";
+
+/// A Cargo feature name to gate a synthetic target behind.
+const SAMPLE_FEATURE: &str = "live";
+
+/// The manifest key that gates a target behind features.
+const REQUIRED_FEATURES_KEY: &str = "required-features";
+
 /// A `tests/` directory to resolve bare `mod` declarations against.
 fn sample_tests_dir() -> PathBuf {
     repo_root().join(SAMPLE_CRATE).join("tests")
@@ -77,6 +90,12 @@ fn every_integration_test_file_is_built_by_a_cargo_target() -> Result<()> {
             Vec::<&str>::new(),
             "{krate}: these files are named by tests/suite.rs or a \
              [[test]] target but do not exist on disk"
+        );
+        assert_eq!(
+            wiring.unbuilt_suite(),
+            None,
+            "{krate}: nothing Cargo builds compiles tests/suite.rs, so every \
+             module in it is decoration and the whole suite is skipped"
         );
         assert_eq!(
             wiring.conditionally_reached(),
@@ -287,5 +306,106 @@ fn every_derived_crate_disables_autotests_and_has_a_suite_root() -> Result<()> {
             suite.display()
         );
     }
+    Ok(())
+}
+
+/// A crate that declares no suite target runs none of its suite.
+///
+/// This is the widest bypass of all: with `autotests = false` and no
+/// `[[test]]` naming `tests/suite.rs`, every `mod` line in the suite still
+/// reads as perfectly wired and every file on disk is still mentioned, so
+/// a check comparing declarations against files agrees with itself while
+/// Cargo compiles none of it.
+#[test]
+fn a_crate_with_no_suite_target_is_reported_as_unbuilt() -> Result<()> {
+    let manifest: toml::Table = NO_SUITE_TARGET_MANIFEST.parse()?;
+    let defect = manifest::suite_target_defect(&manifest);
+    assert!(
+        defect.is_some(),
+        "no [[test]] compiles the suite root, which must be reported: \
+         {defect:?}"
+    );
+    Ok(())
+}
+
+/// A suite target behind `required-features` builds on no ordinary run.
+#[test]
+fn a_suite_target_behind_required_features_is_reported_as_unbuilt() -> Result<()> {
+    let manifest: toml::Table =
+        format!("{ENABLED_SUITE_TARGET}required-features = [\"{SAMPLE_FEATURE}\"]\n").parse()?;
+    let defect = manifest::suite_target_defect(&manifest);
+    assert!(
+        defect.is_some_and(|reason| reason.contains(REQUIRED_FEATURES_KEY)),
+        "a feature-gated suite target compiles on no plain `cargo test`"
+    );
+    Ok(())
+}
+
+/// A suite target with `test = false` is compiled and never run.
+#[test]
+fn a_suite_target_with_test_false_is_reported_as_unbuilt() -> Result<()> {
+    let manifest: toml::Table = format!("{ENABLED_SUITE_TARGET}test = false\n").parse()?;
+    let defect = manifest::suite_target_defect(&manifest);
+    assert!(
+        defect.is_some(),
+        "`test = false` means Cargo runs none of the suite's tests, which \
+         is a silent skip of every one of them: {defect:?}"
+    );
+    Ok(())
+}
+
+/// The plain, enabled suite target is not reported — proof the three
+/// assertions above turn on the gating and not on the scan misreading an
+/// ordinary manifest.
+#[test]
+fn an_enabled_suite_target_is_not_reported_as_unbuilt() -> Result<()> {
+    let manifest: toml::Table = ENABLED_SUITE_TARGET.parse()?;
+    assert_eq!(
+        manifest::suite_target_defect(&manifest),
+        None,
+        "an ordinary [[test]] naming tests/suite.rs builds and runs the \
+         suite, and must not be flagged"
+    );
+    Ok(())
+}
+
+/// A `#![cfg(..)]` at the top of `suite.rs` switches the whole crate off.
+///
+/// One inner attribute above the first `mod` disables every test in the
+/// binary while each module declaration below it is untouched, so reading
+/// the attributes on the modules alone never sees it.
+#[test]
+fn a_crate_root_cfg_gates_every_module_in_the_suite() -> Result<()> {
+    let source = format!("#![cfg(any())]\n#[path = \"{REGRESSION_FILE}\"]\nmod regression;\n");
+    let reached = suite_scan::scan(&source, &sample_tests_dir())?;
+    assert!(
+        reached.always.is_empty(),
+        "a crate-root `cfg` compiles nothing, so no module below it may \
+         count as built: {reached:?}"
+    );
+    assert!(
+        reached.conditional.contains(REGRESSION_FILE),
+        "the module must still be named, so the gate can report it: \
+         {reached:?}"
+    );
+    Ok(())
+}
+
+/// An inner attribute that is not a `cfg` leaves the suite alone — proof
+/// the assertion above turns on the `cfg` and not on inner attributes in
+/// general, of which every real suite root has several.
+#[test]
+fn a_crate_root_inner_attribute_that_is_not_a_cfg_gates_nothing() -> Result<()> {
+    let source =
+        format!("#![allow(dead_code)]\n#[path = \"{REGRESSION_FILE}\"]\nmod regression;\n");
+    let reached = suite_scan::scan(&source, &sample_tests_dir())?;
+    assert!(
+        reached.always.contains(REGRESSION_FILE),
+        "`#![allow(..)]` does not gate compilation: {reached:?}"
+    );
+    assert!(
+        reached.conditional.is_empty(),
+        "nothing is conditional here: {reached:?}"
+    );
     Ok(())
 }

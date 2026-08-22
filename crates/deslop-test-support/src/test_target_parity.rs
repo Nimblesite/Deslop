@@ -31,7 +31,13 @@
 //!   than listed here, so a fifth crate setting `autotests = false` is
 //!   covered the moment it does;
 //! - a `mod` naming a file that no longer exists stays in the reached set,
-//!   so `dangling()` can see it rather than it vanishing on the way.
+//!   so `dangling()` can see it rather than it vanishing on the way;
+//! - the suite root itself has to be built — delete its `[[test]]`, gate it
+//!   behind `required-features`, or set `test = false` on it, and every
+//!   module in the suite is decoration while the wiring still reads right;
+//! - a `#![cfg(..)]` at the top of `suite.rs` gates the whole crate, so it
+//!   demotes every module below it rather than being invisible to a scan
+//!   that only reads the attributes attached to each `mod`.
 //!
 //! It lives in this crate's *unit* tests on purpose. `autotests = false`
 //! only suppresses integration targets under `tests/`, so a gate placed
@@ -84,6 +90,12 @@ impl Reached {
     fn mentions(&self, file: &str) -> bool {
         self.always.contains(file) || self.conditional.contains(file)
     }
+
+    /// Demotes everything reached so far, for when the thing that would
+    /// have compiled it turns out to be gated itself.
+    fn make_all_conditional(&mut self) {
+        self.conditional.append(&mut self.always);
+    }
 }
 
 /// What one crate's `tests/` directory holds versus what its Cargo test
@@ -94,9 +106,23 @@ pub struct SuiteWiring {
     pub present: BTreeSet<String>,
     /// What the crate's declarations reach, and how conditionally.
     reached: Reached,
+    /// Why Cargo does not build the suite root itself, when it does not.
+    unbuilt_suite: Option<String>,
 }
 
 impl SuiteWiring {
+    /// Why the suite root is not compiled and run on an ordinary `cargo
+    /// test`, when that is the case.
+    ///
+    /// The single largest silent-skip available: with `autotests = false`
+    /// and no enabled `[[test]]` naming `tests/suite.rs`, every module in
+    /// the suite goes unbuilt while each `mod` line still reads as wired.
+    /// Comparing declarations against files on disk cannot see it, because
+    /// both sides agree — they are just both irrelevant.
+    #[must_use]
+    pub fn unbuilt_suite(&self) -> Option<&str> {
+        self.unbuilt_suite.as_deref()
+    }
     /// Files that exist and nothing mentions — silently skipped tests.
     #[must_use]
     pub fn orphaned(&self) -> Vec<&str> {
@@ -169,13 +195,17 @@ pub fn suite_crates() -> Result<Vec<String>> {
 pub fn wiring(member: &str) -> Result<SuiteWiring> {
     let crate_dir = repo_root().join(member);
     let tests = crate_dir.join(TESTS_DIR);
+    let crate_manifest = read_manifest(&crate_dir.join(MANIFEST_FILE))?;
+    let unbuilt_suite = manifest::suite_target_defect(&crate_manifest);
     let mut reached = suite_modules(&tests)?;
-    reached.absorb(manifest::targets(&read_manifest(
-        &crate_dir.join(MANIFEST_FILE),
-    )?));
+    if unbuilt_suite.is_some() {
+        reached.make_all_conditional();
+    }
+    reached.absorb(manifest::targets(&crate_manifest));
     Ok(SuiteWiring {
         present: present_sources(&tests)?,
         reached,
+        unbuilt_suite,
     })
 }
 

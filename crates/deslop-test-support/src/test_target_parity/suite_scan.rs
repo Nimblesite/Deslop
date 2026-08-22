@@ -23,6 +23,9 @@ const RUST_LANGUAGE_ID: &str = "rust";
 const MOD_ITEM: &str = "mod_item";
 /// tree-sitter-rust kind for a `#[..]` attribute above an item.
 const ATTRIBUTE_ITEM: &str = "attribute_item";
+/// tree-sitter-rust kind for a `#![..]` attribute applying to the whole
+/// enclosing file.
+const INNER_ATTRIBUTE_ITEM: &str = "inner_attribute_item";
 /// tree-sitter-rust kind of the attribute body inside `#[..]`.
 const ATTRIBUTE: &str = "attribute";
 /// tree-sitter-rust kind of an identifier.
@@ -56,9 +59,36 @@ pub(super) fn scan(source: &str, tests: &Path) -> Result<Reached> {
     let grammar = RustParser::new().grammar();
     let tree = parse_source(RUST_LANGUAGE_ID, &grammar, source.as_bytes())
         .context("the suite root must parse, or its modules cannot be read")?;
+    let root = tree.root_node();
     let mut reached = Reached::default();
-    collect(tree.root_node(), source, tests, &mut reached);
+    collect(root, source, tests, &mut reached);
+    if crate_is_gated(root, source) {
+        reached.make_all_conditional();
+    }
     Ok(reached)
+}
+
+/// Whether a `#![cfg(..)]` at the top of the file gates the whole suite.
+///
+/// An inner attribute applies to everything below it, so one line above
+/// the first `mod` can switch every test in the crate off while each
+/// module declaration still reads as wired up. Checking the attributes on
+/// the modules alone never sees it.
+fn crate_is_gated(root: Node<'_>, source: &str) -> bool {
+    let mut cursor = root.walk();
+    let gated = root
+        .named_children(&mut cursor)
+        .filter(|child| child.kind() == INNER_ATTRIBUTE_ITEM)
+        .any(|inner| is_conditional_attribute(inner, source));
+    gated
+}
+
+/// Whether one attribute node is a `cfg` or `cfg_attr`.
+fn is_conditional_attribute(item: Node<'_>, source: &str) -> bool {
+    matches!(
+        attribute_name(item, source).as_deref(),
+        Some(CFG_ATTRIBUTE | CFG_ATTR_ATTRIBUTE)
+    )
 }
 
 /// Records the file every `mod_item` under `node` resolves to.
@@ -97,12 +127,9 @@ fn attribute_run(item: Node<'_>, source: &str) -> Attributes {
     };
     let mut sibling = item.prev_named_sibling();
     while let Some(node) = sibling.filter(|node| node.kind() == ATTRIBUTE_ITEM) {
-        match attribute_name(node, source).as_deref() {
-            Some(PATH_ATTRIBUTE) => {
-                found.path = found.path.or_else(|| attribute_value(node, source));
-            }
-            Some(CFG_ATTRIBUTE | CFG_ATTR_ATTRIBUTE) => found.is_conditional = true,
-            _ => {}
+        found.is_conditional |= is_conditional_attribute(node, source);
+        if attribute_name(node, source).as_deref() == Some(PATH_ATTRIBUTE) {
+            found.path = found.path.or_else(|| attribute_value(node, source));
         }
         sibling = node.prev_named_sibling();
     }
