@@ -26,7 +26,6 @@
 //! bought #331's precision by widening the gate over genuine duplicates
 //! fails here.
 
-
 use std::fs;
 use std::path::Path;
 

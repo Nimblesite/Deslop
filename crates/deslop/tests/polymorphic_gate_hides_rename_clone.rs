@@ -17,7 +17,6 @@
 //! surface, and the genuine abstract-method implementations of gh #69
 //! must stay suppressed in the same run.
 
-
 use crate::common::*;
 
 #[test]

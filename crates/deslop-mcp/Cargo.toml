@@ -43,3 +43,15 @@ workspace = true
 [[test]]
 name = "suite"
 path = "tests/suite.rs"
+
+# [CI-RELEASE-BUILD] [TEST-ONE-BINARY] `tcp_transport` stays its own test
+# target rather than a module of `suite`, because CI addresses it by target
+# name: `.github/workflows/ci.yml`'s Windows leg runs
+# `cargo test -p deslop-mcp --test tcp_transport`, the only place the TCP
+# transport is exercised on the platform that ships it. Folding it into the
+# suite made that a hard `no test target named` error. Selecting it out of
+# the suite by test-name filter is not an option — a filter that matches
+# nothing exits 0, so a rename would silently stop running it (gh #412).
+[[test]]
+name = "tcp_transport"
+path = "tests/tcp_transport.rs"

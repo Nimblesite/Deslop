@@ -87,14 +87,20 @@ jobs:
     name: Build release
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
-    # Covers a release clippy build, the release workspace build, the
-    # compile of every release test binary, the self-scan duplication
-    # gate and the deployment gates. The test suites moved out to
-    # `rust-tests` and `vsix`, but their *compile* stays here so the
-    # shards restore a warm target directory. That compile is the bulk
-    # of the job: 20m1s on run 32548446084, which a 25-minute cap
-    # cancelled mid-gate and took every downstream shard with it.
+    # Sixteen cores rather than the four a standard runner gives, because
+    # this job is one long `rustc` fan-out and nothing else: a release
+    # clippy pass, the release workspace build, and a compile of every
+    # release test binary. `cargo` saturates whatever it is given, so the
+    # step scales with core count almost linearly. The larger labels are
+    # free for public repositories, which this repository is.
+    runs-on: ubuntu-latest-16-cores
+    # The compile is the bulk of the job: 20m1s on run 32548446084 with
+    # four cores, which a 25-minute cap cancelled mid-gate and took every
+    # downstream shard, the VSIX job and the JetBrains gate with it. The
+    # cap is generous rather than tight on purpose — a build that runs
+    # long is a slow pipeline, but a build that is *cancelled* publishes
+    # no artifacts and fails the whole run for a reason that has nothing
+    # to do with the code under test.
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@v7
@@ -258,6 +264,7 @@ jobs:
       # race it. The exact key hits the release build this run already
       # produced, so nothing here recompiles the workspace.
       - name: Restore release build
+        id: restore-release
         uses: actions/cache/restore@v6
         with:
           path: |
@@ -269,12 +276,33 @@ jobs:
             ${{ runner.os }}-cargo-release-
             ${{ runner.os }}-cargo-
 
+      # [CI-RELEASE-BUILD] A shard exists to *run* the binaries `build`
+      # compiled. `restore-keys` means the step above succeeds on a stale
+      # near-miss too, and a shard that restores the wrong commit's target
+      # directory silently recompiles the workspace instead — which is
+      # exactly how all four shards burned their whole 20-minute cap on
+      # run 32549706011. Only an exact hit on this commit's key proves the
+      # handoff, so anything else fails here, immediately and by name,
+      # rather than twenty minutes later as a timeout.
+      - name: Prove the release build was restored exactly
+        env:
+          CACHE_HIT: ${{ steps.restore-release.outputs.cache-hit }}
+          PRIMARY_KEY: ${{ steps.restore-release.outputs.cache-primary-key }}
+          MATCHED_KEY: ${{ steps.restore-release.outputs.cache-matched-key }}
+        run: |
+          set -euo pipefail
+          echo "primary key: ${PRIMARY_KEY}"
+          echo "matched key: ${MATCHED_KEY:-<none>}"
+          if [ "${CACHE_HIT}" != "true" ]; then
+            echo "::error::no cache entry for ${PRIMARY_KEY} - the build job published nothing for this commit, so this shard would recompile the workspace instead of testing it"
+            exit 1
+          fi
+
       # [TEST-RULES] Fail-fast, release profile. The binaries were
       # compiled by `build` and restored above, so this step links
-      # nothing and is purely the suite's runtime — which is why it is
-      # worth splitting: 200 binaries, 2924s end to end when run
-      # serially. Each shard runs its own slice; the union is the whole
-      # set, proved by `scripts/repository/test-shards.test.mjs`.
+      # nothing and is purely the suite's runtime. Each shard runs its
+      # own slice; the union is the whole set, proved by
+      # `scripts/repository/test-shards.test.mjs`.
       - name: Test
         run: make test-shard SHARD=${{ matrix.shard }} SHARDS=${{ strategy.job-total }}
 
@@ -320,7 +348,10 @@ jobs:
     name: Coverage + thresholds
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    # Sixteen cores for the same reason `build` takes them: a cold
+    # instrumented compile of the whole workspace is the job, and it is
+    # the other long pole in the pipeline.
+    runs-on: ubuntu-latest-16-cores
     # TIMEOUT EXCEPTION: a cold instrumented release build of the whole
     # workspace is ~21 minutes on a cache miss.
     timeout-minutes: 40

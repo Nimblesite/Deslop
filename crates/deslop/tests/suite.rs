@@ -28,8 +28,6 @@ mod cli;
 mod config_include_dependencies;
 #[path = "corpus_manifest_contract.rs"]
 mod corpus_manifest_contract;
-#[path = "corpus_repos.rs"]
-mod corpus_repos;
 #[path = "cross_cluster_collapse.rs"]
 mod cross_cluster_collapse;
 #[path = "cross_cluster_enclosure.rs"]

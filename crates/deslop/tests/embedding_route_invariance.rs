@@ -25,7 +25,6 @@
 #[path = "cli/mock_ollama.rs"]
 mod mock_ollama;
 
-
 use std::collections::BTreeMap;
 
 use anyhow::{Context, Result};

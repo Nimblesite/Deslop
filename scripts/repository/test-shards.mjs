@@ -2,10 +2,13 @@
 // [CI-RELEASE-BUILD] Partitions the workspace's release test binaries so
 // CI can run them in parallel.
 //
-// The suite's cost is its run phase: 200 binaries, 2924s end to end,
-// with a long tail (config_include_dependencies 540s,
-// fsharp_language_label_over_mcp 499s). One runner executes that
-// serially; N runners each execute their own slice.
+// The suite's cost is its run phase. One runner executes the binaries
+// serially; N runners each execute their own slice. [TEST-ONE-BINARY]
+// collapsed 200 binaries into 13 — most of the 2924s that motivated the
+// split was per-process startup, not test work, and libtest parallelises
+// within a binary — so the slices are coarse and unbalanced by
+// construction. Correctness of the partition is what matters here; the
+// balance is bounded by the largest single binary either way.
 //
 // [TEST-SELECTION] The partition is over *binaries*, never test names.
 // `cargo test --skip` matches a substring of the test name and silently

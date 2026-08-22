@@ -17,7 +17,7 @@ use std::{
 use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
-use crate::common;
+mod common;
 use common::{
     copied_fixture, initialized_mcp, spawn_lsp_with_args, structured_content, wait_for_path,
     ChildKillOnDrop, SOCKET_TIMEOUT,

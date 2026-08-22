@@ -328,7 +328,7 @@ fn normalise_children(
                 depth.saturating_add(1),
             )?
         } else {
-            operator_leaf(child, file_id)
+            operator_leaf(child, node.kind(), file_id)
         };
         if let Some(child_node) = normalised {
             children.push(child_node);
@@ -337,10 +337,72 @@ fn normalise_children(
     Ok(children)
 }
 
+/// Grammar productions in which a behaviour-bearing token is **framing**
+/// and must not become a leaf ([PIPELINE-NORMALIZE-AST-OPERATOR]).
+///
+/// The allowlist is over token *text*, because tree-sitter names an
+/// anonymous node by its own token. Text alone cannot separate the `<` of
+/// `alpha < beta` from the `<` of `Vec<T>`: the same byte carries a
+/// comparison in one production and a bracket in the other. Keeping the
+/// bracket contradicts the rule the allowlist exists to serve — framing is
+/// implied by the parent production, and preserving it inflates every
+/// subtree with positions no two members can disagree on.
+///
+/// Measured, not guessed: every entry here was read off a committed AST
+/// golden as the parent of an emitted operator leaf. `Vec<&str>` grew from
+/// under the `--min-nodes 4` floor to eight nodes, became a clustering
+/// candidate, and published six type annotations across three unrelated
+/// files as `identical` at `fused 1.00` — the gh #147 idiom the
+/// [CLONE-NOISE-RUST-ITER-COLLECT] fixture exists to keep out of the
+/// report.
+///
+/// This is a denylist rather than an allowlist of operator productions,
+/// and the direction is deliberate. A production missing from an
+/// *allowlist* would drop its operator and let `alpha + beta` and
+/// `alpha - beta` hash identically again — the defect this whole section
+/// exists to fix. A production missing from this denylist can only leave a
+/// subtree larger than it should be. Both are worth fixing; only one
+/// certifies an operator swap as duplication.
+const OPERATOR_FRAMING_PARENTS: &[&str] = &[
+    // Generics: the angle brackets delimit a type argument list.
+    "type_arguments",
+    "type_parameters",
+    // JSX/TSX tag punctuation, not a comparison.
+    "jsx_opening_element",
+    "jsx_closing_element",
+    // Type syntax: Rust `&T` / `&self`, Go `*T` and `...T`.
+    "reference_type",
+    "self_parameter",
+    "pointer_type",
+    "variadic_parameter_declaration",
+    // Rust `println!` — the bang is part of the macro's name.
+    "macro_invocation",
+    // Rust closure parameter lists: the pipes delimit the binding
+    // list, they are not bitwise-or. Emitting them changed the hash and
+    // the LSH bands of every closure-bearing function in gh #147, which
+    // fragmented the one component `main` forms into sixteen and left
+    // [CLONE-NOISE-RUST-ITER-COLLECT] with no cluster whose every
+    // member holds the idiom.
+    "closure_parameters",
+    // A delimiter *inside* a literal, such as a JavaScript regex's `/`.
+    LITERAL_KIND,
+];
+
+/// True when `parent_kind` is a production in which a behaviour-bearing
+/// token is framing — see [`OPERATOR_FRAMING_PARENTS`].
+fn is_framing_parent(parent_kind: &str) -> bool {
+    OPERATOR_FRAMING_PARENTS.contains(&parent_kind)
+}
+
 /// The operator leaf for one anonymous token, or `None` when the token
 /// is framing rather than behaviour. Tree-sitter names an anonymous
-/// node by its own token text, so the node kind *is* the operator.
-fn operator_leaf(token: Node<'_>, file_id: FileId) -> Option<NormalizedNode> {
+/// node by its own token text, so the node kind *is* the operator — but
+/// the same text is framing in some productions, which is why
+/// `parent_kind` decides too ([`OPERATOR_FRAMING_PARENTS`]).
+fn operator_leaf(token: Node<'_>, parent_kind: &str, file_id: FileId) -> Option<NormalizedNode> {
+    if is_framing_parent(parent_kind) {
+        return None;
+    }
     operator_kind(token.kind()).map(|kind| NormalizedNode {
         kind,
         children: Vec::new(),

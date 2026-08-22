@@ -242,10 +242,12 @@ setup:
 ##             substring of the name and silently dropped whole suites that
 ##             way (gh #412) — and `test-shards.test.mjs` proves the union of
 ##             the shards is the whole set for every shard count CI uses.
-##             Measured: 200 binaries, 2924s end to end, with a long tail
-##             (`config_include_dependencies` 540s,
-##             `fsharp_language_label_over_mcp` 499s), so the run phase is
-##             worth splitting once the compile is a cache hit.
+##             [TEST-ONE-BINARY] Each crate's suites are modules of one
+##             binary, so the partition is over 13 binaries rather than the
+##             200 that preceded it, and the bulk of the runtime sits in
+##             `deslop`'s. libtest already runs that binary's tests across
+##             every core, so a shard is worth having for the crates it can
+##             actually separate, not for balance.
 ##             Usage: `make test-shard SHARD=1 SHARDS=4`.
 test-shard: _delete-path-binaries typediagram-gen
 	@echo "==> Testing shard $(SHARD)/$(SHARDS) (fail-fast, release profile)..."

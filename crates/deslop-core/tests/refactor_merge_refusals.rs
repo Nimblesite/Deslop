@@ -6,7 +6,6 @@
 //! partial plan, because a partial merge silently changes behaviour
 //! while looking like a successful refactor.
 
-
 use anyhow::{anyhow, ensure, Context, Result};
 use deslop_core::wire_generated::MergeVerdict;
 

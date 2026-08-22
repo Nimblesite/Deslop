@@ -106,7 +106,7 @@ enum Overlap {
 
 /// Asserts that a Type-3 near miss surfaces a token-supported
 /// `nearly_identical` cross-file cluster whose measured overlap is what
-/// `overlap` says it must be, corroborated by a saturated token axis.
+/// `overlap` says it must be, corroborated by the token axis.
 fn assert_type3_clone(
     fixture_name: &str,
     min_nodes: u32,
@@ -121,36 +121,86 @@ fn assert_type3_clone(
         anyhow::bail!("{fixture_name} must report a nearly_identical clone spanning {left} and {right}: {report:#}");
     };
     let structural = signal(cluster, "structural");
-    assert!(
-        structural >= SHARED_SUBTREE_MIN_OVERLAP,
-        "{fixture_name}: a shared-subtree near miss is admitted on \
-         `structural >= {SHARED_SUBTREE_MIN_OVERLAP}` and must still measure \
-         at least that once rendered, or the report is showing a cluster the \
-         pipeline would not admit: got {structural}: {report:#}"
-    );
+    let token_jaccard = signal(cluster, "token_jaccard");
+    for (axis, measured) in [("structural", structural), ("token_jaccard", token_jaccard)] {
+        assert!(
+            measured >= SHARED_SUBTREE_MIN_OVERLAP,
+            "{fixture_name}: a shared-subtree near miss is admitted on \
+             `>= {SHARED_SUBTREE_MIN_OVERLAP}` and both axes must still measure \
+             at least that once rendered, or the report is showing a cluster \
+             the pipeline would not admit: {axis} = {measured}: {report:#}"
+        );
+    }
     match overlap {
-        Overlap::MerkleEqual => assert!(
-            is_exact_one(structural),
-            "{fixture_name}: the elected view is Merkle-equal across \
-             {left} and {right}, and [FUSION-SHARED-SUBTREE] short-circuits \
-             those to exactly 1.0 — a graded value here means a different, \
-             wider view was elected: got {structural}: {report:#}"
+        Overlap::MerkleEqual => assert_saturated_axes(
+            (structural, token_jaccard),
+            (fixture_name, left, right),
+            &report,
         ),
-        Overlap::Graded => assert!(
-            structural < 1.0,
-            "{fixture_name}: {left} and {right} differ by a real subtree, so \
-             `1 - TED / max(nodes)` cannot reach 1.0 — measuring exactly one \
-             means the fragment view is being published in place of the \
-             enclosing pair, the gh #408 recall hole: got {structural}: \
-             {report:#}"
+        Overlap::Graded => assert_graded_axes(
+            (structural, token_jaccard),
+            (fixture_name, left, right),
+            &report,
         ),
     }
-    assert!(
-        is_exact_one(signal(cluster, "token_jaccard")),
-        "{fixture_name}: normalisation is rename-invariant, so the token axis \
-         must saturate across {left} and {right}: {report:#}"
-    );
     Ok(())
+}
+
+/// The [`Overlap::MerkleEqual`] contract: the elected view is one tree, so
+/// both axes short-circuit to exactly one.
+fn assert_saturated_axes(
+    (structural, token_jaccard): (f64, f64),
+    (fixture_name, left, right): (&str, &str, &str),
+    report: &Value,
+) {
+    assert!(
+        is_exact_one(structural),
+        "{fixture_name}: the elected view is Merkle-equal across {left} and \
+         {right}, and [FUSION-SHARED-SUBTREE] short-circuits those to exactly \
+         1.0 — a graded value here means a different, wider view was elected: \
+         got {structural}: {report:#}"
+    );
+    assert!(
+        is_exact_one(token_jaccard),
+        "{fixture_name}: the elected view is one normalised tree across {left} \
+         and {right}, so the kind stream is the same stream and the token axis \
+         has nothing to disagree about: got {token_jaccard}: {report:#}"
+    );
+}
+
+/// The [`Overlap::Graded`] contract: the members differ by a real subtree,
+/// so **neither** axis may saturate.
+///
+/// The ceiling on the token axis is the load-bearing half.
+/// [PIPELINE-NORMALIZE-AST-OPERATOR]: while every operator collapsed to one
+/// `__op__` kind, `running = running + 2` and `running = running - 5`
+/// produced the identical kind stream, so `delta.ts`'s extra statement
+/// contributed no token the other file lacked and this axis read exactly
+/// 1.0 — a saturated measurement asserting the two files said the same
+/// thing while the structural axis was required to grade them apart. A
+/// token axis that saturates over members the shape evidence separates is
+/// normalisation having gone blind, and this is the assertion that says so.
+fn assert_graded_axes(
+    (structural, token_jaccard): (f64, f64),
+    (fixture_name, left, right): (&str, &str, &str),
+    report: &Value,
+) {
+    assert!(
+        structural < 1.0,
+        "{fixture_name}: {left} and {right} differ by a real subtree, so \
+         `1 - TED / max(nodes)` cannot reach 1.0 — measuring exactly one \
+         means the fragment view is being published in place of the \
+         enclosing pair, the gh #408 recall hole: got {structural}: \
+         {report:#}"
+    );
+    assert!(
+        token_jaccard < 1.0,
+        "{fixture_name}: {left} and {right} differ by a real subtree, and a \
+         difference the shape evidence grades below 1.0 must reach the kind \
+         stream too — a saturated token axis here means normalisation \
+         erased it ([PIPELINE-NORMALIZE-AST-OPERATOR]): got {token_jaccard}: \
+         {report:#}"
+    );
 }
 
 /// Returns the top-ranked visible cluster, or an actionable test error.

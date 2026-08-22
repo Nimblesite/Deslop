@@ -20,7 +20,6 @@
 //! An empty report satisfies the absence half and fails the presence
 //! half, so a detector that went blind cannot pass this test.
 
-
 use crate::common::*;
 
 /// The fixture holding the real contract pair and the inherited-but-not-

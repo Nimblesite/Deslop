@@ -7,7 +7,6 @@
 //! these rows verbatim; recomputing a percentage outside the engine is
 //! prohibited, so this suite is the contract every client leans on.
 
-
 use std::{fs, path::Path};
 
 use crate::common::*;

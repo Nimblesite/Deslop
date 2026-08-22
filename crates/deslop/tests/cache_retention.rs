@@ -13,7 +13,6 @@
 //! scenario asserts the rendered report against the seeded truth —
 //! retention must never move a reported figure.
 
-
 use std::{fs, path::Path};
 
 use serde_json::Value;

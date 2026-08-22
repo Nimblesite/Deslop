@@ -3,7 +3,6 @@
 //! Tests [LSP-TESTING] — spawns the real LSP binary and talks JSON-RPC
 //! over stdio against fixture workspaces; no mocked live session.
 
-
 use std::{
     path::Path,
     process::{Child, Command as StdCommand, ExitStatus, Stdio},

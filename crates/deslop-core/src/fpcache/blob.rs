@@ -64,7 +64,15 @@ pub(super) const MAGIC: u32 = 0xC0DE_D180;
 /// trees in which `base + fee` and `base - fee` still hash identically,
 /// so a warm run would keep certifying an operator swap as duplication
 /// long after the normalisation that produced it was replaced.
-pub(super) const SEMANTIC_EPOCH: u32 = 3;
+///
+/// Epoch 4: the same section stopped emitting an operator leaf when the
+/// parent production makes the token framing rather than behaviour —
+/// `Vec<T>`'s angle brackets, a Rust closure's `|` binding pipes, a JSX
+/// tag's `<`/`>`. A store warmed under epoch 3 holds trees carrying those
+/// leaves, so a warm run would keep both the inflated node counts and the
+/// LSH bands they shifted, and would go on publishing the gh #147
+/// `Vec<&str>` type annotations as `identical` at `fused 1.00`.
+pub(super) const SEMANTIC_EPOCH: u32 = 4;
 
 /// Bytes of blob header preceding the payload: the magic plus the
 /// 32-byte binding digest.
