@@ -69,12 +69,41 @@ function main() {
     exit(2);
   }
   const mine = slice(binaries, shard, shards);
-  console.log(`shard ${shard}/${shards}: ${mine.length} of ${binaries.length} binaries`);
+  announce(shard, shards, mine, binaries.length);
+  const elapsed = [];
   // Fail-fast ([TEST-RULES]): the first failing binary ends the shard.
   for (const binary of mine) {
     console.log(`==> ${basename(binary)}`);
+    const started = Date.now();
     execFileSync(binary, { stdio: "inherit" });
+    elapsed.push([basename(binary), Date.now() - started]);
   }
+  summarise(shard, shards, elapsed);
+}
+
+/** Prints the shard's manifest before a single test runs.
+ *
+ *  A shard that times out prints nothing about what it was carrying, so
+ *  a run that dies at the cap gives no way to tell an imbalanced slice
+ *  from a genuinely slow test. Naming the binaries up front means the
+ *  log answers that even when the job is killed mid-flight. */
+function announce(shard, shards, mine, total) {
+  console.log(`shard ${shard}/${shards}: ${mine.length} of ${total} binaries`);
+  for (const binary of mine) console.log(`    ${basename(binary)}`);
+}
+
+/** Prints each binary's wall time, slowest first, plus the shard total.
+ *
+ *  Rebalancing wants measured runtime, not a count: the slices are dealt
+ *  round-robin over binaries of very different size, so a count says
+ *  nothing about which shard sets the wall clock. */
+function summarise(shard, shards, elapsed) {
+  const total = elapsed.reduce((sum, [, ms]) => sum + ms, 0);
+  console.log(`shard ${shard}/${shards} timings, slowest first:`);
+  for (const [name, ms] of [...elapsed].sort(([, a], [, b]) => b - a)) {
+    console.log(`    ${(ms / 1000).toFixed(1)}s  ${name}`);
+  }
+  console.log(`shard ${shard}/${shards} total: ${(total / 1000).toFixed(1)}s`);
 }
 
 if (argv[1] && resolve(argv[1]) === resolve(fileURLToPath(import.meta.url))) {
