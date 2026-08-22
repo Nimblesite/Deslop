@@ -1,118 +1,190 @@
-//! [TEST-SELECTION] Every integration-test source file is reachable by a
-//! Cargo test target — proved without asking Cargo.
+//! [TEST-SELECTION] Every integration-test source file is built by a Cargo
+//! test target on an ordinary run — proved without asking Cargo.
 //!
-//! The four Rust crates set `autotests = false` and funnel their suites
-//! through a hand-maintained `tests/suite.rs`, because Cargo otherwise
-//! builds one whole-program-linked executable per `tests/*.rs`
-//! ([CI-RELEASE-BUILD]). That trade is only safe if adding a file cannot
-//! silently skip it: with auto-discovery off, a `tests/new_regression.rs`
-//! nobody wired into `suite.rs` is not a target, so `make test`, the CI
-//! shards and coverage all stay green while the test never runs. Cargo
-//! reports nothing, because Cargo never learned the file exists.
+//! Four Rust crates set `autotests = false` and funnel their suites through
+//! a hand-maintained `tests/suite.rs`, because Cargo otherwise builds one
+//! whole-program-linked executable per `tests/*.rs` ([CI-RELEASE-BUILD]).
+//! That trade is only safe if adding a file cannot silently skip it: with
+//! auto-discovery off, a `tests/new_regression.rs` nobody wired into
+//! `suite.rs` is not a target, so `make test`, the CI shards and coverage
+//! all stay green while the test never runs. Cargo reports nothing, because
+//! Cargo never learned the file exists.
 //!
 //! That is why this gate never consults Cargo's discovered target list —
 //! the list is the thing under test. It reads the filesystem for what
-//! exists, `Cargo.toml` for the explicitly declared targets, and
-//! `tests/suite.rs` through tree-sitter for the modules the suite pulls
-//! in, then requires the two sides to agree exactly. A new file that
-//! nobody wired up fails here; so does a `mod` line pointing at a file
-//! that has been deleted.
+//! exists, the manifests for the declared targets, and `tests/suite.rs`
+//! through tree-sitter for the modules the suite pulls in, then requires
+//! the two sides to agree exactly.
+//!
+//! **It fails closed on every way Cargo can decline to build a test**, not
+//! just on a plain omission. A file counts as reached only when nothing
+//! conditional stands between it and the compiler:
+//!
+//! - a `#[cfg(..)]` or `#[cfg_attr(..)]` on the `suite.rs` module is
+//!   conditional — `#[cfg(any())] #[path = "regression.rs"] mod
+//!   regression;` mentions the file and never compiles it;
+//! - a `[[test]]` carrying `required-features` is conditional — an
+//!   ordinary `cargo test` builds no such target;
+//! - a declared path is compared whole, so `path = "elsewhere/regression.rs"`
+//!   cannot certify an unwired `tests/regression.rs` of the same name;
+//! - the guarded crate set is derived from the workspace members rather
+//!   than listed here, so a fifth crate setting `autotests = false` is
+//!   covered the moment it does;
+//! - a `mod` naming a file that no longer exists stays in the reached set,
+//!   so `dangling()` can see it rather than it vanishing on the way.
 //!
 //! It lives in this crate's *unit* tests on purpose. `autotests = false`
 //! only suppresses integration targets under `tests/`, so a gate placed
 //! there could be removed from the run by the very hole it guards.
 
-use std::{
-    collections::BTreeSet,
-    fs,
-    path::{Path, PathBuf},
-};
+mod manifest;
+mod suite_scan;
+
+use std::{collections::BTreeSet, fs, path::Path};
 
 use anyhow::{Context, Result};
-use deslop_core::lang::{rust_lang::RustParser, shared::parse_source, LanguageParser};
-use tree_sitter::Node;
 
 use crate::corpus::repo_root;
+use manifest::{RUST_EXTENSION, SUITE_FILE, TESTS_DIR};
 
-/// The crates that declare `autotests = false` and so depend on this gate.
-pub const SUITE_CRATES: [&str; 4] = ["deslop", "deslop-core", "deslop-lsp", "deslop-mcp"];
+/// Cargo's manifest file name.
+const MANIFEST_FILE: &str = "Cargo.toml";
 
-/// The engine's `'static` id for the grammar this scan parses with.
-const RUST_LANGUAGE_ID: &str = "rust";
-/// The suite root every crate funnels its integration tests through.
-const SUITE_FILE: &str = "suite.rs";
-/// Directory holding a crate's integration tests, relative to the crate.
-const TESTS_DIR: &str = "tests";
-/// Extension of a Rust source file.
-const RUST_EXTENSION: &str = "rs";
-/// tree-sitter-rust kind for `mod name;` and `mod name { .. }`.
-const MOD_ITEM: &str = "mod_item";
-/// tree-sitter-rust kind for a `#[..]` attribute above an item.
-const ATTRIBUTE_ITEM: &str = "attribute_item";
-/// tree-sitter-rust kind of the attribute body inside `#[..]`.
-const ATTRIBUTE: &str = "attribute";
-/// tree-sitter-rust kind of an identifier.
-const IDENTIFIER: &str = "identifier";
-/// tree-sitter-rust field naming an attribute's assigned value.
-const VALUE_FIELD: &str = "value";
-/// tree-sitter-rust kind of the text inside a string literal, quotes
-/// excluded — so the value is read off the tree rather than by stripping
-/// characters from the literal's source text.
-const STRING_CONTENT: &str = "string_content";
-/// tree-sitter-rust field naming the identifier of a `mod_item`.
-const NAME_FIELD: &str = "name";
-/// The attribute that redirects a module at an explicit file.
-const PATH_ATTRIBUTE: &str = "path";
-/// TOML table holding one explicitly declared Cargo test target.
-const TEST_TABLE: &str = "test";
-/// TOML key naming that target's source file.
-const PATH_KEY: &str = "path";
+/// Files some set of declarations reaches, split by whether Cargo builds
+/// them on an ordinary run.
+#[derive(Debug, Default)]
+pub(crate) struct Reached {
+    /// Built by every plain `cargo test`.
+    always: BTreeSet<String>,
+    /// Built only when some `cfg` or feature happens to be enabled.
+    conditional: BTreeSet<String>,
+}
+
+impl Reached {
+    /// Files one declaration reaches, on the side its gating puts it.
+    fn record(&mut self, file: String, is_conditional: bool) {
+        let side = if is_conditional {
+            &mut self.conditional
+        } else {
+            &mut self.always
+        };
+        let _inserted = side.insert(file);
+    }
+
+    /// Folds `other` in, keeping the unconditional side dominant: a file
+    /// one declaration builds unconditionally is built, whatever a second
+    /// conditional declaration of it says.
+    fn absorb(&mut self, other: Self) {
+        self.always.extend(other.always);
+        self.conditional.extend(other.conditional);
+        self.conditional = &self.conditional - &self.always;
+    }
+
+    /// Whether any declaration mentions `file`, however it is gated.
+    fn mentions(&self, file: &str) -> bool {
+        self.always.contains(file) || self.conditional.contains(file)
+    }
+}
 
 /// What one crate's `tests/` directory holds versus what its Cargo test
-/// targets actually reach.
+/// targets actually build.
 #[derive(Debug)]
 pub struct SuiteWiring {
     /// Top-level `tests/*.rs` files present on disk, `suite.rs` excluded.
     pub present: BTreeSet<String>,
-    /// Top-level `tests/*.rs` files a Cargo test target reaches, either as
-    /// a module of `suite.rs` or as its own `[[test]]` target.
-    pub reachable: BTreeSet<String>,
+    /// What the crate's declarations reach, and how conditionally.
+    reached: Reached,
 }
 
 impl SuiteWiring {
-    /// Files that exist but no target reaches — silently skipped tests.
+    /// Files that exist and nothing mentions — silently skipped tests.
     #[must_use]
     pub fn orphaned(&self) -> Vec<&str> {
         self.present
-            .difference(&self.reachable)
+            .iter()
+            .filter(|file| !self.reached.mentions(file))
             .map(String::as_str)
             .collect()
     }
 
-    /// Files a target names that are not on disk — a dangling `mod`.
+    /// Files a declaration names that are not on disk — a dangling `mod`
+    /// or a `[[test]]` pointing at nothing.
     #[must_use]
     pub fn dangling(&self) -> Vec<&str> {
-        self.reachable
-            .difference(&self.present)
-            .map(String::as_str)
-            .collect()
+        let mut found = difference(&self.reached.always, &self.present);
+        found.extend(difference(&self.reached.conditional, &self.present));
+        found.sort_unstable();
+        found.dedup();
+        found
+    }
+
+    /// Files reached only behind a `cfg` or `required-features` gate.
+    ///
+    /// Mentioned is not built. These compile on some invocation and not on
+    /// an ordinary one, so they are exactly as skippable as a file nobody
+    /// wired up — and far easier to miss, because the wiring looks present.
+    #[must_use]
+    pub fn conditionally_reached(&self) -> Vec<&str> {
+        difference(&self.reached.conditional, &self.reached.always)
     }
 }
 
-/// Reads one crate's integration-test wiring.
+/// Names in `left` that are absent from `right`.
+fn difference<'set>(left: &'set BTreeSet<String>, right: &BTreeSet<String>) -> Vec<&'set str> {
+    left.iter()
+        .filter(|name| !right.contains(*name))
+        .map(String::as_str)
+        .collect()
+}
+
+/// Every workspace member that turned Cargo's test discovery off, as a
+/// repo-relative crate directory.
+///
+/// Derived rather than listed: a new crate setting `autotests = false` is
+/// guarded from the moment it does, with nothing to remember to update.
+///
+/// # Errors
+///
+/// Returns an error when the workspace manifest, or any member's manifest,
+/// cannot be read or parsed.
+pub fn suite_crates() -> Result<Vec<String>> {
+    let root = read_manifest(&repo_root().join(MANIFEST_FILE))?;
+    let mut found = Vec::new();
+    for member in manifest::members(&root) {
+        let member_manifest = read_manifest(&repo_root().join(&member).join(MANIFEST_FILE))?;
+        if manifest::disables_autotests(&member_manifest) {
+            found.push(member);
+        }
+    }
+    Ok(found)
+}
+
+/// Reads one crate's integration-test wiring, given its repo-relative
+/// directory.
 ///
 /// # Errors
 ///
 /// Returns an error when the crate's `tests/` directory, `Cargo.toml` or
 /// `tests/suite.rs` cannot be read, or when `suite.rs` does not parse.
-pub fn wiring(krate: &str) -> Result<SuiteWiring> {
-    let tests = repo_root().join("crates").join(krate).join(TESTS_DIR);
-    let mut reachable = suite_modules(&tests)?;
-    reachable.extend(explicit_targets(krate)?);
+pub fn wiring(member: &str) -> Result<SuiteWiring> {
+    let crate_dir = repo_root().join(member);
+    let tests = crate_dir.join(TESTS_DIR);
+    let mut reached = suite_modules(&tests)?;
+    reached.absorb(manifest::targets(&read_manifest(
+        &crate_dir.join(MANIFEST_FILE),
+    )?));
     Ok(SuiteWiring {
         present: present_sources(&tests)?,
-        reachable,
+        reached,
     })
+}
+
+/// Parses one `Cargo.toml`.
+fn read_manifest(path: &Path) -> Result<toml::Table> {
+    fs::read_to_string(path)
+        .with_context(|| format!("unreadable manifest: {}", path.display()))?
+        .parse()
+        .with_context(|| format!("unparsable manifest: {}", path.display()))
 }
 
 /// Every top-level `tests/*.rs` on disk except the suite root itself.
@@ -121,8 +193,7 @@ fn present_sources(tests: &Path) -> Result<BTreeSet<String>> {
         .with_context(|| format!("unreadable tests directory: {}", tests.display()))?;
     let mut found = BTreeSet::new();
     for entry in entries {
-        let path = entry?.path();
-        if let Some(name) = rust_file_name(&path) {
+        if let Some(name) = rust_file_name(&entry?.path()) {
             if name != SUITE_FILE {
                 let _inserted = found.insert(name);
             }
@@ -142,135 +213,12 @@ fn rust_file_name(path: &Path) -> Option<String> {
 }
 
 /// The top-level files `tests/suite.rs` pulls in as modules.
-///
-/// A module reached through a subdirectory (`#[path = "cli/mock_ollama.rs"]`)
-/// is not a top-level file and is not part of this comparison.
-fn suite_modules(tests: &Path) -> Result<BTreeSet<String>> {
+fn suite_modules(tests: &Path) -> Result<Reached> {
     let suite = tests.join(SUITE_FILE);
     let source = fs::read_to_string(&suite)
         .with_context(|| format!("unreadable suite root: {}", suite.display()))?;
-    let grammar = RustParser::new().grammar();
-    let tree = parse_source(RUST_LANGUAGE_ID, &grammar, source.as_bytes())
-        .with_context(|| format!("unparsable suite root: {}", suite.display()))?;
-    let mut found = BTreeSet::new();
-    collect_modules(tree.root_node(), &source, tests, &mut found);
-    Ok(found)
-}
-
-/// Records the file every `mod_item` under `node` resolves to.
-fn collect_modules(node: Node<'_>, source: &str, tests: &Path, found: &mut BTreeSet<String>) {
-    if node.kind() == MOD_ITEM {
-        if let Some(file) = module_file(node, source, tests) {
-            let _inserted = found.insert(file);
-        }
-    }
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
-        collect_modules(child, source, tests, found);
-    }
-}
-
-/// The top-level file a `mod_item` names, or `None` when it resolves
-/// anywhere else.
-///
-/// Two cases resolve elsewhere and are not part of this comparison: a
-/// `#[path]` reaching into a subdirectory (`cli/mock_ollama.rs`), and a
-/// bare `mod common;` that Rust resolves to `common/mod.rs` — a directory
-/// module, which has no top-level file to be orphaned from.
-fn module_file(item: Node<'_>, source: &str, tests: &Path) -> Option<String> {
-    let named = match path_attribute(item, source) {
-        Some(path) => path,
-        None => format!("{}.{RUST_EXTENSION}", field_text(item, NAME_FIELD, source)?),
-    };
-    let is_top_level_file =
-        Path::new(&named).components().count() == 1 && tests.join(&named).is_file();
-    is_top_level_file.then_some(named)
-}
-
-/// The file named by a `#[path = ".."]` attribute above `item`.
-///
-/// Read structurally. Scanning the attribute's source text for the word
-/// `path` would also match `#[cfg(feature = "path")]` and any doc comment
-/// that mentions it, and would answer from the spelling of the code
-/// rather than from its shape.
-fn path_attribute(item: Node<'_>, source: &str) -> Option<String> {
-    let mut sibling = item.prev_named_sibling();
-    while let Some(node) = sibling {
-        if node.kind() != ATTRIBUTE_ITEM {
-            return None;
-        }
-        if let Some(path) = attribute_path(node, source) {
-            return Some(path);
-        }
-        sibling = node.prev_named_sibling();
-    }
-    None
-}
-
-/// The value of one `attribute_item`, when it is a `#[path = ".."]`.
-///
-/// The grammar gives every part its own node: the attribute's name is its
-/// `identifier` child, and the file is the `string_content` beneath the
-/// `value` field.
-fn attribute_path(item: Node<'_>, source: &str) -> Option<String> {
-    let attribute = child_of_kind(item, ATTRIBUTE)?;
-    let name = child_of_kind(attribute, IDENTIFIER)?;
-    if text(name, source) != PATH_ATTRIBUTE {
-        return None;
-    }
-    let literal = attribute.child_by_field_name(VALUE_FIELD)?;
-    child_of_kind(literal, STRING_CONTENT).map(|content| text(content, source))
-}
-
-/// The first direct named child of `node` with `kind`.
-fn child_of_kind<'tree>(node: Node<'tree>, kind: &str) -> Option<Node<'tree>> {
-    let mut cursor = node.walk();
-    let found = node
-        .named_children(&mut cursor)
-        .find(|child| child.kind() == kind);
-    found
-}
-
-/// The source text of `node`'s named field, when it has one.
-fn field_text(node: Node<'_>, field: &str, source: &str) -> Option<String> {
-    node.child_by_field_name(field)
-        .map(|child| text(child, source))
-}
-
-/// The source slice `node` spans.
-fn text(node: Node<'_>, source: &str) -> String {
-    source.get(node.byte_range()).unwrap_or_default().to_owned()
-}
-
-/// Top-level `tests/*.rs` files declared as their own `[[test]]` target,
-/// read straight out of `Cargo.toml` rather than from Cargo's own
-/// discovery. `suite.rs` is excluded: it is the funnel, not a leaf.
-fn explicit_targets(krate: &str) -> Result<BTreeSet<String>> {
-    let manifest_path = repo_root().join("crates").join(krate).join("Cargo.toml");
-    let body = fs::read_to_string(&manifest_path)
-        .with_context(|| format!("unreadable manifest: {}", manifest_path.display()))?;
-    let manifest: toml::Table = body
-        .parse()
-        .with_context(|| format!("unparsable manifest: {}", manifest_path.display()))?;
-    Ok(manifest
-        .get(TEST_TABLE)
-        .and_then(toml::Value::as_array)
-        .map(|targets| targets.iter().filter_map(target_file).collect())
-        .unwrap_or_default())
-}
-
-/// The top-level file one `[[test]]` entry points at, `suite.rs` aside.
-fn target_file(target: &toml::Value) -> Option<String> {
-    let path = PathBuf::from(target.get(PATH_KEY)?.as_str()?);
-    let name = rust_file_name_unchecked(&path)?;
-    (name != SUITE_FILE).then_some(name)
-}
-
-/// The file-name component of `path`, without touching the filesystem.
-fn rust_file_name_unchecked(path: &Path) -> Option<String> {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .map(ToOwned::to_owned)
+    suite_scan::scan(&source, tests)
+        .with_context(|| format!("unparsable suite root: {}", suite.display()))
 }
 
 #[cfg(test)]

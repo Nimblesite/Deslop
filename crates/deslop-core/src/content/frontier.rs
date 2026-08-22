@@ -51,6 +51,31 @@ impl Population {
             _ => Self::Identifier,
         }
     }
+
+    /// Whether a leaf in this population is *authored content* — bytes
+    /// normalisation erased, which is the only thing
+    /// [FUSION-CONTENT-GATE] exists to measure.
+    ///
+    /// An operator is not erased. [PIPELINE-NORMALIZE-AST-OPERATOR]
+    /// keeps it in the normalised kind, so `structural` and
+    /// `token_jaccard` already carry it, and two members that align
+    /// positionally have equal digests — every operator position
+    /// matches *by construction*. Counting those matches as content
+    /// agreement is the shape voting a second time under a name that is
+    /// supposed to mean independent proof: measured on the
+    /// structural-only fixture it lifted same-file agreement from 0.18
+    /// to 0.383 and cross-file from 0.17 to 0.371 with the rename proof
+    /// still 0.000, promoting scaffolding that shares no authored byte.
+    ///
+    /// Only *agreement* is withheld, never disagreement: an operator
+    /// that differs is a different computation and still counts against
+    /// the members, in [`positional_agreement`], [`key_set_jaccard`]
+    /// and [`super::pair_substance_varies`] alike. The literal-table
+    /// measurement already draws this same line
+    /// ([`super::canonical_literal_fraction`]).
+    pub(super) const fn is_authored_content(self) -> bool {
+        matches!(self, Self::Identifier | Self::Literal)
+    }
 }
 
 /// One collapsed-leaf content key: the population flag plus a truncated
@@ -112,15 +137,58 @@ pub(super) fn population(
 }
 
 /// Jaccard similarity of two members' content-key sets.
+///
+/// A key both members carry that is not authored content
+/// ([`Population::is_authored_content`]) is struck from *both* halves
+/// of the ratio: it would raise the score while proving nothing the
+/// shape signals had not already claimed. A one-sided operator stays in
+/// the union, so a member that computes a different answer still scores
+/// lower than one that does not.
 pub(super) fn key_set_jaccard(left: &[LeafKey], right: &[LeafKey]) -> f64 {
     let left: BTreeSet<LeafKey> = left.iter().copied().collect();
     let right: BTreeSet<LeafKey> = right.iter().copied().collect();
-    let intersection = left.intersection(&right).count();
-    let union = left.union(&right).count();
+    let free = left
+        .intersection(&right)
+        .filter(|key| !key.population.is_authored_content())
+        .count();
+    let intersection = left.intersection(&right).count().saturating_sub(free);
+    let union = left.union(&right).count().saturating_sub(free);
     if union == 0 {
         return 1.0;
     }
     member_count(intersection) / member_count(union)
+}
+
+/// Positional agreement between two shape-aligned members' frontiers:
+/// the share of measured positions whose raw bytes match.
+///
+/// A position is measured when it carries authored content or when it
+/// disagrees. A *matching* non-content position — in practice a shared
+/// operator — is measured by neither numerator nor denominator, because
+/// shape-aligned members carry identical operator kinds by construction
+/// ([`Population::is_authored_content`]).
+///
+/// `1.0` when nothing was measured, the same answer two empty
+/// frontiers get and for the same reason: a subtree with no authored
+/// content has nothing to disagree on.
+pub(super) fn positional_agreement(canonical: &[LeafKey], member: &[LeafKey]) -> f64 {
+    let (matched, measured) = canonical.iter().zip(member.iter()).fold(
+        (0_usize, 0_usize),
+        |(matched, measured), (left, right)| {
+            let agrees = left == right;
+            if agrees && !left.population.is_authored_content() {
+                return (matched, measured);
+            }
+            (
+                matched.saturating_add(usize::from(agrees)),
+                measured.saturating_add(1),
+            )
+        },
+    );
+    if measured == 0 {
+        return 1.0;
+    }
+    member_count(matched) / member_count(measured)
 }
 
 /// One member's resolved content frontier: a key and its source range

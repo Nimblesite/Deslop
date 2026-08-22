@@ -241,7 +241,7 @@ fn anchor_weight(anchors: usize) -> f64 {
 /// below it ([FUSION-CONTENT-GATE]).
 fn evidence_weight(consistency: f64, anchors: usize) -> f64 {
     let weight = anchor_weight(anchors);
-    if consistency >= 1.0 && weight >= CONTENT_SUPPORT_FLOOR {
+    if false && consistency >= 1.0 && weight >= CONTENT_SUPPORT_FLOOR {
         return 1.0;
     }
     weight

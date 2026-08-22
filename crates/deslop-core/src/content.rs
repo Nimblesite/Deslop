@@ -33,8 +33,8 @@ mod frontier;
 mod rename;
 
 use frontier::{
-    key_set_jaccard, keys_of, member_content, member_count, population, LeafKey, MemberContent,
-    Population,
+    key_set_jaccard, keys_of, member_content, member_count, population, positional_agreement,
+    LeafKey, MemberContent, Population,
 };
 use rename::ModalBijection;
 
@@ -435,6 +435,13 @@ fn dominant_verbatim_share(dominant: Option<DominantFamily>, members: usize) -> 
 /// shares nearly all its keys, while renamed scaffolding shares few.
 /// Unresolvable members score `0.0`; two empty vectors agree fully — a
 /// subtree with no identifiers or literals has nothing to disagree on.
+///
+/// Both measurements read only *authored* content
+/// ([`Population::is_authored_content`]). An operator the members share
+/// is already carried by `structural` and `token_jaccard`, so counting
+/// it here would let the shape signals vouch for themselves through the
+/// gate built to check them; an operator that differs still counts
+/// against them in either measurement.
 fn pair_agreement(canonical: Option<&[LeafKey]>, member: Option<&[LeafKey]>) -> f64 {
     let (Some(canonical), Some(member)) = (canonical, member) else {
         return 0.0;
@@ -445,10 +452,5 @@ fn pair_agreement(canonical: Option<&[LeafKey]>, member: Option<&[LeafKey]>) -> 
     if canonical.len() != member.len() {
         return key_set_jaccard(canonical, member);
     }
-    let equal = canonical
-        .iter()
-        .zip(member.iter())
-        .filter(|(left, right)| left == right)
-        .count();
-    member_count(equal) / member_count(canonical.len())
+    positional_agreement(canonical, member)
 }
