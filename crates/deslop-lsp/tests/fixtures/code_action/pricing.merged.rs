@@ -1,4 +1,4 @@
-fn merged_from_cluster_600951(book: &mut Vec<(String, i64)>, arg0: &'static str, arg1: i64) {
+fn merged_from_cluster_810d45(book: &mut Vec<(String, i64)>, arg0: &'static str, arg1: i64) {
     let label = arg0;
     let ceiling = arg1;
     book.push((label.to_owned(), ceiling));
@@ -10,9 +10,9 @@ fn merged_from_cluster_600951(book: &mut Vec<(String, i64)>, arg0: &'static str,
 }
 
 pub fn apply_standard(book: &mut Vec<(String, i64)>) {
-    merged_from_cluster_600951(book, "standard", 100);
+    merged_from_cluster_810d45(book, "standard", 100);
 }
 
 pub fn apply_premium(book: &mut Vec<(String, i64)>) {
-    merged_from_cluster_600951(book, "premium", 250);
+    merged_from_cluster_810d45(book, "premium", 250);
 }

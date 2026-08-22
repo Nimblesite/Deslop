@@ -33,7 +33,7 @@ use deslop_test_support::{
     skip_contract::{
         bracketed_ids, breaches, registry_diff, Breach, PolicyContext, CATEGORIES, PLAN_PREFIX,
     },
-    skip_policy::{conditional_tests, ignored_tests},
+    skip_policy::{conditional_tests, feature_liveness_pins, ignored_tests},
 };
 use serde_json::Value;
 
@@ -466,23 +466,33 @@ const CONDITIONAL_TESTS: [(&str, &str); 8] = [
     ),
 ];
 
-/// The one conditional test no ordinary run compiles, let alone executes.
+/// The one conditional test whose predicate names a cargo feature.
 ///
-/// `deslop-lsp` declares `default = []` and `make test` enables only
-/// `deslop-core/live`, so nothing in the pipeline turns `profiling` on. The
-/// test is therefore absent from every gate — not slow, not skipped, absent
-/// — and `#[ignore]`, the mechanism the spec mandates, would at least have
-/// kept it compiled and linted. Evidence it is genuinely uncovered: linting
-/// with `--all-features` surfaced two `missing_docs` violations in
-/// `crates/deslop-lsp/src/profiling.rs` that the ordinary lint never saw.
+/// `deslop-lsp` declares `default = []`, so `profiling` is off unless a
+/// command opts in — and for as long as nothing did, this test was not
+/// skipped but *absent*: never compiled, never linted, never covered, and
+/// never reported as missing. `--all-features` linting proved it, surfacing
+/// two `missing_docs` violations in `crates/deslop-lsp/src/profiling.rs`
+/// that the ordinary lint had never seen.
 ///
-/// Pinned here so it stays visible and owned rather than invisible, exactly
-/// as [`CURATED_SKIPS`] does for `#[ignore]`. It predates this branch — it
-/// is present unchanged on `main`.
-const FEATURE_GATED_TEST: (&str, &str) = (
+/// The Makefile's `_TEST_FEATURES` now enables it, and
+/// [`FEATURE_LIVENESS_PIN`] is what keeps that true.
+const FEATURE_GATED_TEST: (&str, &str, &str) = (
     "crates/deslop-lsp/tests/observability_heartbeat.rs",
     "profile_dir_writes_non_empty_firefox_profile_on_shutdown",
+    "profiling",
 );
+
+/// The unconditional test that proves the feature above is enabled by
+/// whatever command is running this suite.
+///
+/// A static scan cannot answer that question: whether `feature =
+/// "profiling"` holds is decided by the command, not by the source, and
+/// reading the command back out of the Makefile would only move the
+/// guess. An unconditional `#[test]` asserting `cfg!(feature = "..")` is
+/// compiled into the same target as the gated test and fails in any run
+/// where the feature is off, so it answers the question by being run.
+const FEATURE_LIVENESS_PIN: &str = "crates/deslop-lsp/tests/observability_heartbeat.rs";
 
 /// No test is gated by a `#[cfg]` that nobody has accounted for.
 ///
@@ -517,35 +527,37 @@ fn every_cfg_gated_test_is_accounted_for() -> Result<()> {
     Ok(())
 }
 
-/// The feature-gated test is compiled by no gate at all, and is recorded
-/// here as such rather than passing as ordinary platform scope.
+/// Every cargo feature a `#[cfg]`-gated test depends on is proved live by
+/// an unconditional pin in the same test target.
 ///
-/// This assertion is what stops the entry above reading as a blessing. It
-/// states the defect in the tree so a reader of the registry meets it, and
-/// it fails the moment someone makes `profiling` part of an ordinary run —
-/// at which point the entry should go.
+/// This is the half [`every_cfg_gated_test_is_accounted_for`] cannot
+/// reach. A registry entry records that a `#[cfg]` exists; it says nothing
+/// about whether the required command satisfies it, so a feature-gated
+/// test can sit in the registry looking accounted for while compiling
+/// nowhere — which is exactly what `profiling` did. The pin closes it by
+/// running: drop the feature from `_TEST_FEATURES` and the pin fails
+/// rather than the gated test silently disappearing.
 #[test]
-fn the_feature_gated_test_is_still_absent_from_every_ordinary_run() -> Result<()> {
-    let (file, test) = FEATURE_GATED_TEST;
+fn every_feature_gated_test_is_proved_live_by_a_pin_beside_it() -> Result<()> {
+    let (file, test, feature) = FEATURE_GATED_TEST;
     let condition = conditional_tests()?
         .into_iter()
         .find(|(found_file, found_test, _)| found_file == file && found_test == test)
         .map(|(_, _, condition)| condition)
         .ok_or_else(|| anyhow!("{file}::{test} no longer carries a `#[cfg]`"))?;
     assert!(
-        condition.contains("profiling"),
+        condition.contains(feature),
         "{file}::{test} is pinned as the feature-gated case, so it must be \
-         the feature that gates it: {condition}"
+         `{feature}` that gates it: {condition}"
     );
-    assert_eq!(
-        read("crates/deslop-lsp/Cargo.toml")?
-            .lines()
-            .find(|line| line.starts_with("default ="))
-            .map(str::trim),
-        Some("default = []"),
-        "the entry above records that nothing enables `profiling` on an \
-         ordinary run. If deslop-lsp now enables it by default, this test \
-         is covered again and belongs in neither list."
+    let pins = feature_liveness_pins()?;
+    assert!(
+        pins.contains(&(FEATURE_LIVENESS_PIN.to_owned(), feature.to_owned())),
+        "{file}::{test} compiles only with `{feature}` on, and nothing in \
+         {FEATURE_LIVENESS_PIN} asserts it is. Add an unconditional \
+         `#[test]` there asserting `cfg!(feature = \"{feature}\")`, or the \
+         gated test goes back to being absent rather than skipped the next \
+         time the feature set changes. Pins found: {pins:?}"
     );
     Ok(())
 }

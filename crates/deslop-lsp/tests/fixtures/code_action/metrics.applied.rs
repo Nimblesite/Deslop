@@ -1,7 +1,7 @@
 // TODO: deslop — replace `DeslopTodo` with real types.
 type DeslopTodo = ();
 
-fn extracted_from_cluster_d071d5(amounts: DeslopTodo, tax_rate: DeslopTodo) -> DeslopTodo {
+fn extracted_from_cluster_4e4f5f(amounts: DeslopTodo, tax_rate: DeslopTodo) -> DeslopTodo {
     let mut total = 0;
     for amount in amounts {
         let taxed = amount * tax_rate / 100;
@@ -14,9 +14,9 @@ fn extracted_from_cluster_d071d5(amounts: DeslopTodo, tax_rate: DeslopTodo) -> D
 }
 
 pub fn total_with_tax(amounts: &[usize], tax_rate: usize) -> usize {
-    extracted_from_cluster_d071d5(amounts, tax_rate)
+    extracted_from_cluster_4e4f5f(amounts, tax_rate)
 }
 
 pub fn subtotal_with_tax(amounts: &[usize], tax_rate: usize) -> usize {
-    extracted_from_cluster_d071d5(amounts, tax_rate)
+    extracted_from_cluster_4e4f5f(amounts, tax_rate)
 }

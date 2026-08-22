@@ -494,5 +494,9 @@ fn workspace_relative(root: &Path, path: &Path) -> String {
         .join("/")
 }
 
+mod liveness;
+
+pub use liveness::{feature_liveness_pins, feature_liveness_pins_in};
+
 #[cfg(test)]
 mod tests;

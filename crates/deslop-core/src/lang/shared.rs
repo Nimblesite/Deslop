@@ -390,7 +390,7 @@ fn normalise_children(
                 depth.saturating_add(1),
             )?
         } else {
-            operator_field_leaf(node, parent_kind, child, index, file_id)
+            operator_field_leaf(node, parent_kind, child, index, file_id, language)
         };
         if let Some(child_node) = normalised {
             children.push(child_node);
@@ -436,6 +436,7 @@ fn operator_field_leaf(
     token: Node<'_>,
     index: usize,
     file_id: FileId,
+    language: &'static str,
 ) -> Option<NormalizedNode> {
     if parent_normalised_kind == LITERAL_KIND {
         return None;
@@ -448,7 +449,7 @@ fn operator_field_leaf(
     // unrecognised field name suppresses the leaf exactly as framing does.
     let is_operator = match field {
         Some(name) => OPERATOR_FIELDS.contains(&name),
-        None => is_unfielded_operator(parent.kind()),
+        None => is_unfielded_operator(language, parent.kind()),
     };
     if !is_operator {
         return None;
@@ -464,7 +465,8 @@ fn operator_field_leaf(
     })
 }
 
-/// Productions that carry an operator the grammar forgot to field-name
+/// Productions that carry an operator the grammar forgot to field-name,
+/// keyed by the grammar that names them
 /// ([PIPELINE-NORMALIZE-AST-OPERATOR]).
 ///
 /// Every grammar the engine ships names the token that decides what a
@@ -482,6 +484,19 @@ fn operator_field_leaf(
 /// [`BEHAVIOUR_BEARING_TOKENS`], to classify a role. It cannot: the `|`
 /// of `left | right` and the `|` of `|x| x + 1` are the same bytes.
 ///
+/// **And a production name means nothing outside its own grammar.**
+/// Every row names a residual peculiarity of one grammar, so it is keyed
+/// by the language id that grammar parses under. Unkeyed, a production
+/// name that means "unfielded operator" in one grammar silently claimed
+/// the same role in every other that happens to spell a production the
+/// same way — `unary_expression` exists in `tree-sitter-rust`,
+/// `tree-sitter-javascript` and `tree-sitter-go` alike, and only Rust's
+/// leaves the token unfielded. The other two field it, so the row was
+/// dead rather than wrong there; the next collision would not be, and a
+/// row that is right by luck is not a contract.
+/// `tests::a_row_never_reaches_a_grammar_it_was_not_written_for` measures
+/// that directly.
+///
 /// Inverting the list from a framing *denylist* to this operator
 /// *allowlist* also removes the per-grammar chase. A denylist had to name
 /// `type_arguments`, `reference_type`, `pointer_type`,
@@ -493,48 +508,54 @@ fn operator_field_leaf(
 /// manufactures false positives, and the operators are proven present by
 /// `tests::the_grammars_mark_operators_and_only_operators` across all
 /// eight grammars.
-const UNFIELDED_OPERATOR_PRODUCTIONS: &[&str] = &[
+const UNFIELDED_OPERATOR_PRODUCTIONS: &[(&str, &str)] = &[
     // `tree-sitter-rust`: `-x`, `!x` and `*x` are a bare alternation with
     // no field, so without this row negation, dereference and arithmetic
     // negation all collapse into one subtree.
-    "unary_expression",
+    ("rust", "unary_expression"),
     // `tree-sitter-python`: `not x` is its own production and leaves the
     // keyword unfielded. Dropping it makes `not ready` and `ready` the
     // same shape — an inverted condition certified as duplication.
-    "not_operator",
+    ("python", "not_operator"),
     // `tree-sitter-c-sharp`: prefix `-x`, `!x`, `~x` and `&x` share one
     // unfielded production, so all four collapse together without this.
-    "prefix_unary_expression",
+    ("csharp", "prefix_unary_expression"),
     // `tree-sitter-dart` fields only `assignment_expression`. Every other
     // operator sits in a per-precedence production that names nothing, so
     // each level needs its own row or the operators at that level collapse
     // into one another — `a + b` and `a - b`, `a < b` and `a >= b`, `a &&
     // b` and `a || b`. Read off the grammar by the contract test below,
     // not guessed: a name that does not exist is a silently dead row.
-    "additive_expression",
-    "multiplicative_expression",
-    "shift_expression",
-    "relational_operator",
-    "equality_expression",
-    "logical_and_expression",
-    "logical_or_expression",
-    "bitwise_and_expression",
-    "bitwise_or_expression",
-    "bitwise_xor_expression",
-    "if_null_expression",
-    "prefix_operator",
-    "postfix_expression",
-    "negate_operator",
+    ("dart", "additive_expression"),
+    ("dart", "multiplicative_expression"),
+    ("dart", "shift_expression"),
+    ("dart", "relational_operator"),
+    ("dart", "equality_expression"),
+    ("dart", "logical_and_expression"),
+    ("dart", "logical_or_expression"),
+    ("dart", "bitwise_and_expression"),
+    ("dart", "bitwise_or_expression"),
+    ("dart", "bitwise_xor_expression"),
+    ("dart", "if_null_expression"),
+    ("dart", "prefix_operator"),
+    ("dart", "postfix_expression"),
+    ("dart", "negate_operator"),
 ];
 
-/// True when the grammar left this production's operator unfielded, so
-/// the anonymous token in it is behaviour rather than framing.
+/// True when `language`'s grammar left this production's operator
+/// unfielded, so the anonymous token in it is behaviour rather than
+/// framing.
 ///
-/// Reads the parent production kind alone. The token is a label carried
-/// through to the leaf; it never decides the role.
+/// Reads the language id and the production kind, both AST metadata. The
+/// token is a label carried through to the leaf; it never decides the
+/// role, and a row written for one grammar never answers for another.
 #[must_use]
-pub fn is_unfielded_operator(parent_kind: &str) -> bool {
-    UNFIELDED_OPERATOR_PRODUCTIONS.contains(&parent_kind)
+pub fn is_unfielded_operator(language: &str, parent_kind: &str) -> bool {
+    UNFIELDED_OPERATOR_PRODUCTIONS
+        .iter()
+        .any(|(keyed_language, production)| {
+            *keyed_language == language && *production == parent_kind
+        })
 }
 
 /// Interns `raw` into a `&'static str` backed by a thread-local cache.
@@ -568,6 +589,7 @@ mod tests {
 
     use super::{
         is_unfielded_operator, BEHAVIOUR_BEARING_TOKENS, OPERATOR_FIELDS, OPERATOR_KIND_PREFIX,
+        UNFIELDED_OPERATOR_PRODUCTIONS,
     };
 
     /// [PIPELINE-NORMALIZE-AST-OPERATOR] Each row's normalised kind must
@@ -655,8 +677,8 @@ mod tests {
                 fields.iter().any(|(parent, spelling, field)| {
                     spelling == token
                         && match field.as_deref() {
-                            Some(name) => OPERATOR_FIELDS.contains(&name),
-                            None => is_unfielded_operator(parent),
+                            Some(field_name) => OPERATOR_FIELDS.contains(&field_name),
+                            None => is_unfielded_operator(name, parent),
                         }
                 })
             };
@@ -674,6 +696,50 @@ mod tests {
                     "{name}: `{token}` is framing — the production already says what \
                      it means. Emitting it inflates every subtree with a position no \
                      two members can disagree on: {fields:?}"
+                );
+            }
+        }
+    }
+
+    /// [PIPELINE-NORMALIZE-AST-OPERATOR] A row written for one grammar
+    /// never answers for another.
+    ///
+    /// Production names are not namespaced. `unary_expression` is a
+    /// production in `tree-sitter-rust`, `tree-sitter-javascript`,
+    /// `tree-sitter-typescript` and `tree-sitter-go`; only Rust's leaves
+    /// the operator unfielded, and only Rust's row is meant to fire.
+    /// Before the table was keyed, every one of those grammars matched
+    /// the Rust row — harmless only because the others field the token
+    /// and never reach the residual branch at all. The next collision
+    /// would not be harmless: a framing token in a same-named production
+    /// elsewhere would be emitted as an operator, inflating every subtree
+    /// that carries it.
+    ///
+    /// Driven off [`default_parsers`] rather than a hand-written list, so
+    /// a newly registered grammar is covered the moment it is registered.
+    #[test]
+    fn a_row_never_reaches_a_grammar_it_was_not_written_for() {
+        let registered: Vec<&'static str> = crate::pipeline::default_parsers()
+            .iter()
+            .map(|parser| parser.id())
+            .collect();
+        for (keyed, production) in UNFIELDED_OPERATOR_PRODUCTIONS {
+            assert!(
+                registered.contains(keyed),
+                "`{keyed}/{production}` is keyed to a language no parser \
+                 registers, so the row is dead: {registered:?}"
+            );
+            for other in &registered {
+                if other == keyed {
+                    continue;
+                }
+                assert!(
+                    !is_unfielded_operator(other, production),
+                    "`{production}` is a residual of `{keyed}` only, yet \
+                     `{other}` classifies it as an unfielded operator too. \
+                     A production name means nothing outside its own \
+                     grammar, so `{other}` would emit whatever token that \
+                     production carries as behaviour"
                 );
             }
         }

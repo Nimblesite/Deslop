@@ -23,26 +23,36 @@ pub(crate) const SEEDED_MIN_NODES: u32 = 8;
 /// Stable id of the authored `alpha.rs`/`beta.rs` clone
 /// ([PIPELINE-DETERMINISM]).
 ///
-/// Re-blessed when [PIPELINE-NORMALIZE-AST-OPERATOR] gave each operator
-/// leaf its own kind (`__op__+` rather than a shared `__op__`). The id
-/// is the canonical subtree's Merkle hash, and the seven operator
-/// leaves below now hash by their own tokens, so the hash moved. Nothing
-/// the reader sees moved with it: the spans, bucket, category, node
-/// count, signals and metrics asserted in this file are all unchanged,
-/// which is what proves the change discriminated operators rather than
-/// perturbing the corpus.
-const SEEDED_CLONE_ID: &str = "f26a1a0312987ef1";
+/// Re-blessed twice by [PIPELINE-NORMALIZE-AST-OPERATOR]: first when
+/// each operator leaf gained its own kind (`__op__+` rather than a
+/// shared `__op__`), then when the unfielded classifier became an
+/// operator *allowlist* and stopped emitting framing tokens. The id is
+/// the canonical subtree's Merkle hash, so both changes moved it.
+/// Nothing the reader sees moved with either: the spans, bucket,
+/// category, signals and metrics asserted in this file are unchanged
+/// across both, which is what proves the changes discriminated
+/// operators rather than perturbing the corpus.
+const SEEDED_CLONE_ID: &str = "e6cb128c880c95b4";
 
 /// `canonical_node_count` of the authored clone.
 ///
-/// Seven higher than the pre-[PIPELINE-NORMALIZE-AST-OPERATOR] count:
-/// the body carries seven behaviour-bearing anonymous tokens — `&` in
-/// `&[i32]`, `in`, the `*` of `*item`, `>`, `+=`, the `*` of `item * 2`,
-/// and `-=` — and each now survives normalisation as a leaf carrying
-/// its own token so `+` and `-` can disagree. The reported spans, bucket, category,
-/// signals and metrics are all unchanged; only the canonical tree the
-/// count and the id are taken from grew.
-const SEEDED_CLONE_NODES: u64 = 47;
+/// Five higher than the pre-[PIPELINE-NORMALIZE-AST-OPERATOR] count:
+/// the body carries five behaviour-bearing anonymous tokens — the `*`
+/// of `*item`, `>`, `+=`, the `*` of `item * 2`, and `-=` — and each
+/// survives normalisation as a leaf carrying its own token so `+` and
+/// `-` can disagree.
+///
+/// Two further tokens the first cut of that section emitted are framing
+/// and are gone again: the `&` of `&[i32]` belongs to `reference_type`,
+/// which builds a type rather than computing anything, and the `in` of
+/// `for item in items` belongs to `for_expression`, which spells
+/// exactly one `in` in every instance — a position no two members can
+/// ever disagree on, so emitting it inflated the count and the LSH
+/// bands while proving nothing ([`UNFIELDED_OPERATOR_PRODUCTIONS`] is
+/// an operator allowlist for that reason). The reported spans, bucket,
+/// category, signals and metrics are unchanged across both cuts; only
+/// the canonical tree the count and the id are taken from moved.
+const SEEDED_CLONE_NODES: u64 = 45;
 
 /// Where each copy is reported: `(file, start_line, end_line,
 /// start_byte, end_byte)`. Both bodies are byte-identical and 171 bytes

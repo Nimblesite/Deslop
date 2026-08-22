@@ -37,6 +37,18 @@ endif
 # ---------------------------------------------------------------------------
 _COVERAGE_THRESHOLDS_FILE := coverage-thresholds.json
 
+# ---------------------------------------------------------------------------
+# [TEST-SELECTION] The cargo features every required test command enables.
+# One definition, because a second copy is how a test stops being compiled
+# without anyone noticing: `deslop-lsp/profiling` was off in every gate, so
+# `profile_dir_writes_non_empty_firefox_profile_on_shutdown` was absent
+# rather than skipped, and `--all-features` linting found two `missing_docs`
+# violations in code no ordinary run had ever compiled.
+# `deslop-lsp/tests/observability_heartbeat.rs` asserts each feature here is
+# live, so dropping one fails the suite instead of silently deleting a test.
+# ---------------------------------------------------------------------------
+_TEST_FEATURES := deslop-core/live,deslop-lsp/profiling
+
 # =============================================================================
 # Standard Targets
 # =============================================================================
@@ -90,7 +102,7 @@ typediagram-gen:
 ##       other gate already uses and the suite reports in minutes.
 test: _delete-path-binaries typediagram-gen
 	@echo "==> Testing (fail-fast, release profile)..."
-	cargo test --release --workspace --all-targets --features deslop-core/live
+	cargo test --release --workspace --all-targets --features $(_TEST_FEATURES)
 
 _coverage_check:
 	@_lcov="$${RUST_LCOV:-lcov.info}"; \
@@ -164,7 +176,7 @@ _coverage_check:
 ##       before clippy parses the workspace on a fresh checkout.
 lint: typediagram-gen
 	@echo "==> Linting..."
-	cargo clippy --release --all-targets --workspace -- -D warnings
+	cargo clippy --release --all-targets --workspace --features $(_TEST_FEATURES) -- -D warnings
 	@bash scripts/repository/taxonomy-gate.sh
 	@echo "==> VSIX harness + packaging script gates (unit)..."
 	@node --test clients/vscode/scripts/*.test.mjs
@@ -244,7 +256,7 @@ setup:
 ##                        of a suite that runs in 1m34s.
 compile-release-tests: typediagram-gen
 	@echo "==> Compiling release test binaries (no run)..."
-	cargo test --release --workspace --all-targets --features deslop-core/live --no-run
+	cargo test --release --workspace --all-targets --features $(_TEST_FEATURES) --no-run
 
 # _ci-build: [CI-RELEASE-BUILD] Phase 1 of `make ci` — every release artifact
 #   the later phases consume, produced exactly once. Mirrors the CI `build`
@@ -305,7 +317,7 @@ _ci-test-vsix:
 ##             Usage: `make test-shard SHARD=1 SHARDS=4`.
 test-shard: _delete-path-binaries typediagram-gen
 	@echo "==> Testing shard $(SHARD)/$(SHARDS) (fail-fast, release profile)..."
-	@node scripts/repository/test-shards.mjs --shard $(SHARD) --of $(SHARDS)
+	@node scripts/repository/test-shards.mjs --shard $(SHARD) --of $(SHARDS) --features $(_TEST_FEATURES)
 
 ## coverage: [CI-RELEASE-BUILD] [COVERAGE-THRESHOLDS-JSON] Instrumented
 ##           release run + per-crate threshold enforcement. Split out of
@@ -323,7 +335,7 @@ coverage: _delete-path-binaries typediagram-gen
 	@echo "==> Coverage (instrumented release + per-crate threshold)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
 	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
-	 cargo llvm-cov --release --workspace --all-targets --features deslop-core/live \
+	 cargo llvm-cov --release --workspace --all-targets --features $(_TEST_FEATURES) \
 	    --ignore-filename-regex "$$_rust_ignore" \
 	    --lcov --output-path lcov.info
 	@$(MAKE) _coverage_check RUST_LCOV=lcov.info

@@ -20,14 +20,23 @@ import { basename, resolve } from "node:path";
 import { argv, exit } from "node:process";
 import { fileURLToPath } from "node:url";
 
-const CARGO_ARGS = [
-  "test", "--release", "--workspace", "--all-targets",
-  "--features", "deslop-core/live", "--no-run", "--message-format=json",
-];
+/** Cargo's arguments for enumerating the shardable binaries.
+ *
+ *  [TEST-SELECTION] The feature set is passed in rather than repeated
+ *  here. A second copy drifts, and a feature this script does not enable
+ *  is a test binary cargo never builds — the shard then reports green
+ *  over a partition that is missing a target rather than failing. The
+ *  Makefile's `_TEST_FEATURES` is the one definition. */
+function cargoArgs(features) {
+  return [
+    "test", "--release", "--workspace", "--all-targets",
+    "--features", features, "--no-run", "--message-format=json",
+  ];
+}
 
 /** Every release test binary cargo builds, in a deterministic order. */
-function testBinaries() {
-  const stdout = execFileSync("cargo", CARGO_ARGS, {
+function testBinaries(features) {
+  const stdout = execFileSync("cargo", cargoArgs(features), {
     encoding: "utf8",
     maxBuffer: 512 * 1024 * 1024,
     stdio: ["ignore", "pipe", "inherit"],
@@ -52,20 +61,39 @@ function parse(argv) {
     const at = argv.indexOf(flag);
     return at === -1 ? undefined : Number(argv[at + 1]);
   };
-  return { list: argv.includes("--list"), shard: read("--shard"), shards: read("--of") };
+  const readText = (flag) => {
+    const at = argv.indexOf(flag);
+    return at === -1 ? undefined : argv[at + 1];
+  };
+  return {
+    list: argv.includes("--list"),
+    shard: read("--shard"),
+    shards: read("--of"),
+    features: readText("--features"),
+  };
 }
 
 /** Enumerates or runs one shard. Only reached on direct invocation, so
  *  the contract test can import [`slice`] without cargo running. */
 function main() {
-  const { list, shard, shards } = parse(argv.slice(2));
-  const binaries = testBinaries();
+  const { list, shard, shards, features } = parse(argv.slice(2));
+  if (!features) {
+    console.error(
+      "test-shards.mjs: --features is required. Pass the Makefile's " +
+        "_TEST_FEATURES; guessing it here is how a test binary stops " +
+        "being built without the shard noticing.",
+    );
+    exit(2);
+  }
+  const binaries = testBinaries(features);
   if (list) {
     for (const binary of binaries) console.log(binary);
     return;
   }
   if (!Number.isInteger(shard) || !Number.isInteger(shards) || shard < 1 || shard > shards) {
-    console.error("usage: test-shards.mjs --shard <1-based> --of <count> | --list");
+    console.error(
+      "usage: test-shards.mjs --features <set> --shard <1-based> --of <count> | --list",
+    );
     exit(2);
   }
   const mine = slice(binaries, shard, shards);

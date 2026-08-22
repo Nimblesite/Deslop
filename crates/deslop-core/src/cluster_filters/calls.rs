@@ -103,6 +103,9 @@ fn call_shape_from_node(call: Node<'_>, source: &[u8], language: &str) -> Option
 /// the case this distinguishes: one varying call, four invariant ones.
 /// Scaffolding has nothing left once the literals are removed.
 fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>]) -> bool {
+    if !snippets.iter().all(every_covered_statement_has_call) {
+        return false;
+    }
     let sequences: Option<Vec<Vec<CallShape>>> =
         snippets.iter().map(call_shapes_in_range).collect();
     let Some(sequences) = sequences else {
@@ -115,6 +118,71 @@ fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>]) -> bool {
         return false;
     }
     (0..first.len()).all(|index| sequence_position_differs(&sequences, index))
+}
+
+/// Whether every complete statement covered by `snippet` contains a call.
+///
+/// A varying call is not the whole matched region when an adjacent authored
+/// statement carries additional work. Ignoring that statement let one REST
+/// call hide the endpoint-bearing accessor window while its call-free data
+/// handling remained inside the range (`rename_needs_an_anchor`).
+fn every_covered_statement_has_call(snippet: &Snippet<'_>) -> bool {
+    let Some(tree) = parse_for(snippet) else {
+        return false;
+    };
+    let mut statements = Vec::new();
+    collect_covered_statements(tree.root_node(), snippet.range, &mut statements);
+    !statements.is_empty()
+        && statements
+            .iter()
+            .all(|node| subtree_contains_call(*node, call_kinds(snippet.language)))
+}
+
+/// Collects the outermost complete statement-shaped nodes inside `range`.
+fn collect_covered_statements<'tree>(
+    node: Node<'tree>,
+    range: ByteRange,
+    out: &mut Vec<Node<'tree>>,
+) {
+    if node.end_byte() <= range.start || node.start_byte() >= range.end {
+        return;
+    }
+    if node.start_byte() >= range.start
+        && node.end_byte() <= range.end
+        && is_statement_shape(node.kind())
+    {
+        out.push(node);
+        return;
+    }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        collect_covered_statements(child, range, out);
+    }
+}
+
+/// Statement and binding declarations used by the grammars this filter scans.
+fn is_statement_shape(kind: &str) -> bool {
+    kind.ends_with("_statement")
+        || matches!(
+            kind,
+            "assignment"
+                | "expression_statement"
+                | "lexical_declaration"
+                | "local_variable_declaration"
+                | "variable_declaration"
+        )
+}
+
+/// Whether `node` contains a call production for its language.
+fn subtree_contains_call(node: Node<'_>, kinds: &[&str]) -> bool {
+    if kinds.contains(&node.kind()) {
+        return true;
+    }
+    let mut cursor = node.walk();
+    let found = node
+        .named_children(&mut cursor)
+        .any(|child| subtree_contains_call(child, kinds));
+    found
 }
 
 /// Returns every call fully contained in `snippet.range`, preserving

@@ -456,10 +456,35 @@ struct Occurrence {
 }
 
 impl Occurrence {
-    /// True when both occurrences sit strictly inside the *same*
-    /// authored declaration.
+    /// True when the two occupy one authored declaration's worth of
+    /// scope, so a grade measured over one describes the other's code
+    /// too.
+    ///
+    /// Two occurrences strictly inside the *same* declaration qualify.
+    /// So does the asymmetric case: `self` at or above declaration
+    /// level (no function production encloses it) against `other`
+    /// inside one. A whole-file view holding a function whole, against
+    /// an interior window of that same function, is the same
+    /// non-comparability seen from one level up — the window scores
+    /// higher only by dropping part of what the file says. `ledger_left`
+    /// and `ledger_right` reorder every statement of one function: the
+    /// file view measured 0.850 and an interior 80..438 window measured
+    /// 0.897, and electing the window published `structural 0.730,
+    /// token 0.727`, which buckets `loosely_similar` and is hidden —
+    /// two fully duplicated files reported as nothing
+    /// (`lsh_only_nearmiss_recall`).
+    ///
+    /// Two occurrences that are both at or above declaration level do
+    /// **not** qualify. They span whole declarations, so what one
+    /// excludes is other declarations rather than part of one, and the
+    /// grades describe comparable code — which is what keeps #339's
+    /// exact sibling window ahead of the wider token-matched view.
     fn shares_declaration_with(&self, other: &Self) -> bool {
-        matches!((self.declaration, other.declaration), (Some(mine), Some(theirs)) if mine == theirs)
+        match (self.declaration, other.declaration) {
+            (Some(mine), Some(theirs)) => mine == theirs,
+            (None, Some(_)) => true,
+            (Some(_), None) | (None, None) => false,
+        }
     }
 
     /// True when this occurrence covers `other` and is wider on at

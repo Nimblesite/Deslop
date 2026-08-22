@@ -16,10 +16,14 @@
 //! in favour of an addition. Sign errors, inverted comparisons and
 //! inverted boolean guards are exactly the defects that survive review.
 //!
-//! Three families are pinned, because three different grammar
-//! productions carry the token: arithmetic (`binary_operator`),
-//! comparison (`comparison_operator`) and boolean
-//! (`boolean_operator`).
+//! Four families are pinned. Three cover the grammar productions that
+//! carry the token — arithmetic (`binary_operator`), comparison
+//! (`comparison_operator`) and boolean (`boolean_operator`) — and none
+//! of them clusters once the operator reaches the digest. The fourth,
+//! `ledger`, is a twelve-line body differing in exactly one `+`/`-`,
+//! which is what a real sign error looks like: it *does* cluster, so it
+//! is the only one that measures what the report may claim about a
+//! published operator-drift pair.
 //!
 //! The contract is *not* "never cluster them". Two functions that share
 //! a shape and differ in an operator may well be worth a reader's
@@ -43,50 +47,67 @@ use crate::common::{signals::*, *};
 /// candidate window.
 const MIN_NODES: u32 = 8;
 
-/// The three operator families, as
-/// `(label, left file, right file, is published)`.
+/// The operator families, with the disposition each one is pinned to.
 ///
-/// The fourth column is the family's **pinned disposition**, and it is
-/// what stops this suite passing by disappearance. Measured on the
-/// fixture, all three families reach the report as nothing at all, with
-/// `clusters_hidden` at 0 — so "no cluster" is the current, deliberate
-/// answer and is asserted as such. Skipping a missing family instead, as
-/// this test did, made a recall hole and a correct exclusion look
-/// identical: every operator assertion below was unreachable and the
-/// suite was green while pinning nothing.
+/// `is_published` is what stops this suite passing by disappearance.
+/// Measured on the fixture, the first three families reach the report as
+/// nothing at all, with `clusters_hidden` at 0 — so "no cluster" is the
+/// current, deliberate answer and is asserted as such. Skipping a
+/// missing family instead, as this test did, made a recall hole and a
+/// correct exclusion look identical.
 ///
-/// A family that starts publishing flips its column and fails here, which
-/// is the point: whether these pairs should be shown at all is a judgement
-/// for a person, and the signal assertions below still bound what may be
+/// A family that changes disposition fails here, which is the point:
+/// whether these pairs should be shown at all is a judgement for a
+/// person, and the signal assertions below still bound what may be
 /// claimed if one ever is.
-const FAMILIES: [Family; 3] = [
+///
+/// The `ledger` family is pinned **published**, and it is there because
+/// the other three cannot exercise those bounds. A four-statement body
+/// over one operator does not cluster at all once the operator reaches
+/// the digest, so `found` is `None` for each of them and every bound
+/// below it — bucket, fused, agreement — was unreachable in any passing
+/// run. The claim that they were pinned was untrue. `ledger_credit.py`
+/// and `ledger_debit.py` share a twelve-line body and differ in exactly
+/// one token, `+` against `-` on the `shifted` line, which is the shape
+/// a real sign error takes: large enough to pair on everything it does
+/// share, so the report does publish it and the bounds are measured on
+/// a live cluster.
+const FAMILIES: [Family; 4] = [
     Family {
         label: "arithmetic + / -",
         left: "arithmetic_add.py",
         right: "arithmetic_sub.py",
-        left_operator: "__op__+",
-        right_operator: "__op__-",
+        left_leaves: &["__op__+", "__op__+", "__op__+", "__op__+"],
+        right_leaves: &["__op__-", "__op__-", "__op__-", "__op__-"],
         is_published: false,
     },
     Family {
         label: "comparison == / !=",
         left: "comparison_eq.py",
         right: "comparison_ne.py",
-        left_operator: "__op__==",
-        right_operator: "__op__!=",
+        left_leaves: &["__op__==", "__op__==", "__op__==", "__op__=="],
+        right_leaves: &["__op__!=", "__op__!=", "__op__!=", "__op__!="],
         is_published: false,
     },
     Family {
         label: "boolean and / or",
         left: "boolean_and.py",
         right: "boolean_or.py",
-        left_operator: "__op__and",
-        right_operator: "__op__or",
+        left_leaves: &["__op__and", "__op__and", "__op__and", "__op__and"],
+        right_leaves: &["__op__or", "__op__or", "__op__or", "__op__or"],
         is_published: false,
+    },
+    Family {
+        label: "ledger + / - inside a shared body",
+        left: "ledger_credit.py",
+        right: "ledger_debit.py",
+        left_leaves: &["__op__*", "__op__+", "__op__+", "__op__/", "__op__-"],
+        right_leaves: &["__op__*", "__op__-", "__op__+", "__op__/", "__op__-"],
+        is_published: true,
     },
 ];
 
-/// One operator family: the pair, the operator leaf each member must
+/// One operator family: the pair, the operator leaves each member must
 /// normalise to, and whether the report publishes the pair.
 struct Family {
     /// Human label used in every assertion message.
@@ -95,10 +116,10 @@ struct Family {
     left: &'static str,
     /// The member holding the second.
     right: &'static str,
-    /// The normalised leaf `left` must carry, and `right` must not.
-    left_operator: &'static str,
-    /// The normalised leaf `right` must carry, and `left` must not.
-    right_operator: &'static str,
+    /// Every operator leaf `left` normalises to, in dump order.
+    left_leaves: &'static [&'static str],
+    /// Every operator leaf `right` normalises to, in dump order.
+    right_leaves: &'static [&'static str],
     /// The pinned disposition: whether a cluster spans the pair.
     is_published: bool,
 }
@@ -107,13 +128,13 @@ struct Family {
 /// families above.
 const CONTROL: [&str; 2] = ["control_alpha.py", "control_beta.py"];
 
-/// Every file the fixture holds: three operator pairs plus the control.
+/// Every file the fixture holds: four operator pairs plus the control.
 ///
 /// Asserted per run so "the family published nothing" can only ever mean
 /// the pair was analysed and excluded. The control proves the *run* was
 /// still detecting; this proves these particular files reached the
 /// pipeline at all, which a control in other files cannot say.
-const FIXTURE_FILE_COUNT: u64 = 8;
+const FIXTURE_FILE_COUNT: u64 = 10;
 
 /// Renders the fixture.
 fn render() -> Result<Value> {
@@ -301,48 +322,50 @@ fn operator_leaves(file_name: &str) -> Result<Vec<String>> {
 /// The namespace every operator leaf is emitted behind.
 const OPERATOR_KIND_PREFIX: &str = "__op__";
 
-/// Operator occurrences each family member carries. Every fixture body
-/// is four statements over one operator, so this is also the proof that
-/// *every* occurrence normalised — one surviving occurrence would
-/// satisfy a mere presence check while the other three were dropped.
-const OPERATOR_LEAVES_PER_MEMBER: usize = 4;
-
 // The operator-specific non-vacuity proof, on the pairs themselves.
 //
-// The disposition pin above says each family publishes nothing, and the
-// control says the run was still detecting — but neither shows that these
-// particular files exercised *operator* normalisation. They would both
-// hold just as well if operators had stopped reaching the digest
-// altogether, and that is the original defect: with the operator dropped,
-// `alpha + beta` and `alpha - beta` normalise to the same subtree.
+// The disposition pin above says what each family reaches the report as,
+// and the control says the run was still detecting — but neither shows
+// that these particular files exercised *operator* normalisation. They
+// would both hold just as well if operators had stopped reaching the
+// digest altogether, and that is the original defect: with the operator
+// dropped, `alpha + beta` and `alpha - beta` normalise to the same
+// subtree.
 //
-// This reads the two members' normalised trees directly and pins each
-// one's operator leaves *exactly*: the file carries its own spelling,
-// four times, and carries no other operator at all. It is the whole
-// mechanism the fixture exists for, asserted where it happens rather
-// than inferred from the report.
+// This reads each member's normalised tree directly and pins its
+// operator leaves *exactly*, in dump order. Exactly, because a presence
+// check passes while three of four occurrences are dropped, and because
+// `contains("__op__+")` is also satisfied by `__op__++` and `__op__+=`.
+// The two sides are then required to differ, which is what makes the
+// pair an operator-drift pair at all: identical leaf lists would mean
+// the fixture had stopped posing the question.
 #[test]
-fn each_family_member_normalises_to_its_own_operator_leaf() -> Result<()> {
+fn each_family_member_normalises_to_its_own_operator_leaves() -> Result<()> {
     for family in FAMILIES {
-        for (file, own) in [
-            (family.left, family.left_operator),
-            (family.right, family.right_operator),
+        for (file, expected) in [
+            (family.left, family.left_leaves),
+            (family.right, family.right_leaves),
         ] {
-            let leaves = operator_leaves(file)?;
-            let expected: Vec<String> =
-                std::iter::repeat_n(own.to_owned(), OPERATOR_LEAVES_PER_MEMBER).collect();
             assert_eq!(
-                leaves,
+                operator_leaves(file)?,
                 expected,
-                "{label}: {file} must normalise to exactly \
-                 {OPERATOR_LEAVES_PER_MEMBER} x {own} and nothing else under \
-                 {OPERATOR_KIND_PREFIX}. Fewer means the operator stopped \
-                 reaching the digest and this file now hashes the same as its \
-                 sibling; a different spelling means normalisation is telling \
-                 the reader about a token nobody wrote.",
+                "{label}: {file} must normalise to exactly these operator \
+                 leaves under {OPERATOR_KIND_PREFIX}, in this order. Fewer \
+                 means an operator stopped reaching the digest and this file \
+                 now hashes closer to its sibling; a different spelling means \
+                 normalisation is telling the reader about a token nobody \
+                 wrote.",
                 label = family.label,
             );
         }
+        assert_ne!(
+            family.left_leaves,
+            family.right_leaves,
+            "{label}: the two members carry the same operator leaves, so \
+             the pair no longer differs in an operator and the family \
+             proves nothing about operator drift",
+            label = family.label,
+        );
     }
     Ok(())
 }
