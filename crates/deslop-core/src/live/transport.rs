@@ -203,21 +203,20 @@ fn write_port_file(root: &Path, port: u16, token: &str) -> std::io::Result<()> {
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
     let path = port_file_path(root);
     std::fs::write(&path, payload)?;
-    restrict_to_owner(&path)
+    // Owner-only permissions are a Unix concept. Windows ACLs on the
+    // workspace already scope the record to the user, so there is nothing
+    // to tighten — and no stub that only ever succeeds, which is a function
+    // whose `Result` tells the caller nothing.
+    #[cfg(unix)]
+    restrict_to_owner(&path)?;
+    Ok(())
 }
 
-/// Tightens the discovery record to owner-only where Unix permissions
-/// exist; Windows workspace ACLs already scope the file to the user.
+/// Tightens the discovery record to owner-only.
 #[cfg(unix)]
 fn restrict_to_owner(path: &Path) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
-}
-
-/// Windows ACLs on the workspace already scope the record to the user.
-#[cfg(not(unix))]
-fn restrict_to_owner(_path: &Path) -> std::io::Result<()> {
-    Ok(())
 }
 
 /// Per-session hex token derived from OS entropy. The token only
