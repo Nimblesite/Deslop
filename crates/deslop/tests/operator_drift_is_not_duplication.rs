@@ -265,8 +265,16 @@ fn the_real_clone_outranks_every_operator_family() -> Result<()> {
     Ok(())
 }
 
-/// The `--debug-ast` dump for one fixture file.
-fn debug_ast(file_name: &str) -> Result<String> {
+/// The `--debug-ast` dump for one fixture file, as the exact sequence of
+/// normalised node kinds it names.
+///
+/// The dump prints one node per line as `<indent><kind> [start..end]`, so
+/// the kind is everything between the indent and the span. Reading it
+/// this way is what makes the assertions below exact: a `contains` test
+/// for `"__op__+"` is also satisfied by `__op__++` and `__op__+=`, and a
+/// grammar that started emitting the wrong one of those would have gone
+/// unnoticed while the fixture stayed green.
+fn debug_ast_kinds(file_name: &str) -> Result<Vec<String>> {
     let output = assert_cmd::Command::cargo_bin("deslop")?
         .arg("--debug-ast")
         .arg(fixture("operator-drift").join(file_name))
@@ -275,8 +283,29 @@ fn debug_ast(file_name: &str) -> Result<String> {
         .get_output()
         .stdout
         .clone();
-    Ok(String::from_utf8(output)?)
+    Ok(String::from_utf8(output)?
+        .lines()
+        .filter_map(|line| line.trim_start().split_once(" ["))
+        .map(|(kind, _span)| kind.to_owned())
+        .collect())
 }
+
+/// Every operator leaf one file normalises to, in dump order.
+fn operator_leaves(file_name: &str) -> Result<Vec<String>> {
+    Ok(debug_ast_kinds(file_name)?
+        .into_iter()
+        .filter(|kind| kind.starts_with(OPERATOR_KIND_PREFIX))
+        .collect())
+}
+
+/// The namespace every operator leaf is emitted behind.
+const OPERATOR_KIND_PREFIX: &str = "__op__";
+
+/// Operator occurrences each family member carries. Every fixture body
+/// is four statements over one operator, so this is also the proof that
+/// *every* occurrence normalised — one surviving occurrence would
+/// satisfy a mere presence check while the other three were dropped.
+const OPERATOR_LEAVES_PER_MEMBER: usize = 4;
 
 // The operator-specific non-vacuity proof, on the pairs themselves.
 //
@@ -287,30 +316,30 @@ fn debug_ast(file_name: &str) -> Result<String> {
 // altogether, and that is the original defect: with the operator dropped,
 // `alpha + beta` and `alpha - beta` normalise to the same subtree.
 //
-// This reads the two members' normalised trees directly and requires each
-// to carry its own operator leaf and not its sibling's. It is the whole
-// mechanism the fixture exists for, asserted where it happens rather than
-// inferred from the report.
+// This reads the two members' normalised trees directly and pins each
+// one's operator leaves *exactly*: the file carries its own spelling,
+// four times, and carries no other operator at all. It is the whole
+// mechanism the fixture exists for, asserted where it happens rather
+// than inferred from the report.
 #[test]
 fn each_family_member_normalises_to_its_own_operator_leaf() -> Result<()> {
     for family in FAMILIES {
-        for (file, own, sibling) in [
-            (family.left, family.left_operator, family.right_operator),
-            (family.right, family.right_operator, family.left_operator),
+        for (file, own) in [
+            (family.left, family.left_operator),
+            (family.right, family.right_operator),
         ] {
-            let dump = debug_ast(file)?;
-            assert!(
-                dump.contains(own),
-                "{label}: {file} must carry {own} in its normalised tree — \
-                 without it the operator never reaches the digest and this \
-                 file hashes the same as its sibling:\n{dump}",
-                label = family.label,
-            );
-            assert!(
-                !dump.contains(sibling),
-                "{label}: {file} must not carry {sibling} — the two members \
-                 differ in exactly this token, so sharing it means \
-                 normalisation stopped telling them apart:\n{dump}",
+            let leaves = operator_leaves(file)?;
+            let expected: Vec<String> =
+                std::iter::repeat_n(own.to_owned(), OPERATOR_LEAVES_PER_MEMBER).collect();
+            assert_eq!(
+                leaves,
+                expected,
+                "{label}: {file} must normalise to exactly \
+                 {OPERATOR_LEAVES_PER_MEMBER} x {own} and nothing else under \
+                 {OPERATOR_KIND_PREFIX}. Fewer means the operator stopped \
+                 reaching the digest and this file now hashes the same as its \
+                 sibling; a different spelling means normalisation is telling \
+                 the reader about a token nobody wrote.",
                 label = family.label,
             );
         }

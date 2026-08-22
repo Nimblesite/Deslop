@@ -64,7 +64,7 @@ pub(super) fn targets(manifest: &toml::Table) -> Reached {
     let mut reached = Reached::default();
     for target in declared.into_iter().flatten() {
         if let Some(file) = target_file(target) {
-            reached.record(file, is_gated(target));
+            reached.record(file, target_gating(target).is_some());
         }
     }
     reached
@@ -83,15 +83,25 @@ fn target_file(target: &toml::Value) -> Option<String> {
     (name != SUITE_FILE).then_some(name)
 }
 
-/// Whether Cargo builds this target only when extra features are enabled.
+/// The manifest key that stops Cargo building and running this target on
+/// an ordinary `cargo test`, when one does.
 ///
-/// `required-features` is a way for a test to compile on no ordinary run
-/// at all, so such a target cannot stand as proof that its file is built.
-fn is_gated(target: &toml::Value) -> bool {
-    target
+/// Two keys do it, and both have to be checked on every target rather
+/// than only on the suite root. `required-features` makes the target
+/// compile on no plain run; `test = false` compiles it and runs none of
+/// it. Either way the target is not proof that its file is exercised, so
+/// declaring one is a way to unwire a test from `suite.rs` and still look
+/// wired.
+fn target_gating(target: &toml::Value) -> Option<&'static str> {
+    let feature_gated = target
         .get(REQUIRED_FEATURES_KEY)
         .and_then(toml::Value::as_array)
-        .is_some_and(|features| !features.is_empty())
+        .is_some_and(|features| !features.is_empty());
+    if feature_gated {
+        return Some(REQUIRED_FEATURES_KEY);
+    }
+    let runs_tests = target.get(TEST_KEY).and_then(toml::Value::as_bool) != Some(false);
+    (!runs_tests).then_some(TEST_KEY)
 }
 
 /// The file name when `path` names a Rust source directly inside `tests/`.
@@ -149,22 +159,19 @@ pub(super) fn suite_target_defect(manifest: &toml::Table) -> Option<String> {
     }
 }
 
-/// The gating on an otherwise present suite target.
+/// The gating on an otherwise present suite target, spelled out.
 fn suite_target_gating(suite: &toml::Value) -> Option<String> {
-    if is_gated(suite) {
-        return Some(format!(
+    match target_gating(suite)? {
+        REQUIRED_FEATURES_KEY => Some(format!(
             "the `{TESTS_DIR}/{SUITE_FILE}` target is behind \
              `{REQUIRED_FEATURES_KEY}`, so an ordinary `cargo test` builds none \
              of the suite"
-        ));
+        )),
+        key => Some(format!(
+            "the `{TESTS_DIR}/{SUITE_FILE}` target sets `{key} = false`, so Cargo \
+             compiles the suite and runs none of it"
+        )),
     }
-    let runs_tests = suite.get(TEST_KEY).and_then(toml::Value::as_bool) != Some(false);
-    (!runs_tests).then(|| {
-        format!(
-            "the `{TESTS_DIR}/{SUITE_FILE}` target sets `{TEST_KEY} = false`, so \
-             Cargo compiles the suite and runs none of it"
-        )
-    })
 }
 
 /// Whether one `[[test]]` entry declares the suite root as its source.
