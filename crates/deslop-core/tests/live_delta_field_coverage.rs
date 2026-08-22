@@ -25,7 +25,7 @@ use deslop_core::{
     report_fixtures::{fixture_cluster, fixture_occurrence, fixture_report},
     ReportDelta,
 };
-use serde_json::{Map, Value};
+use serde_json::{Map, Number, Value};
 
 /// The cluster id both generations carry, so every mutation is judged
 /// as an *update* rather than an add plus a remove.
@@ -33,6 +33,16 @@ const CLUSTER_ID: &str = "c0ffee00c0ffee00";
 
 /// The two occurrence paths of the fixture clone.
 const OCCURRENCE_PATHS: [&str; 2] = ["src/alpha.rs", "src/beta.rs"];
+
+/// The wire pointer to the cluster's identity. `ReportDelta` keys on it
+/// rather than comparing it, so changing it does not describe an
+/// updated cluster — it describes a different one. Asserted below as
+/// the add-plus-remove it actually is, never skipped.
+const IDENTITY_POINTER: &str = "/id";
+
+/// What [`mutate_leaf`] appends to a string, so the id an identity
+/// mutation produces is predictable rather than merely different.
+const STRING_MUTATION_SUFFIX: &str = "-changed";
 
 /// The rendered cluster every mutation starts from. Its optional wire
 /// fields are answered rather than omitted, so `intersects_diff`,
@@ -69,13 +79,31 @@ fn report_of(cluster: ReportCluster) -> Report {
 fn mutate_leaf(value: &Value) -> Option<Value> {
     match value {
         Value::Bool(flag) => Some(Value::Bool(!flag)),
-        Value::Number(number) => number
+        Value::Number(number) => mutate_number(number).map(Value::Number),
+        Value::String(text) => Some(Value::String(format!("{text}{STRING_MUTATION_SUFFIX}"))),
+        Value::Null | Value::Array(_) | Value::Object(_) => None,
+    }
+}
+
+/// A different number carrying the same representation as `number`.
+///
+/// JSON has one number type; the wire model does not. A count
+/// deserialises into an unsigned integer and a signal into a float, so
+/// widening every number through `as_f64` handed `canonical_node_count`
+/// the value `5.0` — which serde refuses, because a `u64` field cannot
+/// take a fractional literal. `replace_at` promises a value *of the
+/// same type*, and for integers it was not keeping that promise. The
+/// cost was not one noisy failure: `canonical_node_count` sorts second
+/// in the wire object, so the walk died there and every leaf after it
+/// went unasserted.
+fn mutate_number(number: &Number) -> Option<Number> {
+    match (number.as_u64(), number.as_i64()) {
+        (Some(count), _) => Some(Number::from(count.saturating_add(1))),
+        (_, Some(signed)) => Some(Number::from(signed.saturating_add(1))),
+        _ => number
             .as_f64()
             .map(|numeric| numeric + 1.0)
-            .and_then(serde_json::Number::from_f64)
-            .map(Value::Number),
-        Value::String(text) => Some(Value::String(format!("{text}-changed"))),
-        Value::Null | Value::Array(_) | Value::Object(_) => None,
+            .and_then(Number::from_f64),
     }
 }
 
@@ -148,29 +176,80 @@ fn changing_any_single_field_of_a_cluster_reports_it_updated() {
         );
         let Ok(changed) = parsed else { continue };
         let delta = ReportDelta::between(Some((1, &previous)), 2, &report_of(changed));
-        assert_eq!(
-            delta
-                .clusters_updated
-                .iter()
-                .map(|cluster| cluster.id.as_str())
-                .collect::<Vec<_>>(),
-            vec![CLUSTER_ID],
-            "{pointer} changed and the delta did not say so. A subscriber \
-             told nothing keeps rendering the previous generation, and the \
-             next identical generation produces no delta either, so the \
-             stale view never heals: {delta:?}"
-        );
-        assert!(
-            delta.clusters_added.is_empty() && delta.clusters_removed.is_empty(),
-            "{pointer}: the id did not change, so this is an update and \
-             neither an add nor a remove: {delta:?}"
-        );
-        assert!(
-            !delta.is_empty(),
-            "{pointer}: a non-empty delta must not report itself empty — \
-             `is_empty` is what gates the `report/changed` notification"
-        );
+        match pointer.as_str() {
+            IDENTITY_POINTER => assert_identity_change(&delta),
+            _ => assert_payload_change(&pointer, &delta),
+        }
     }
+}
+
+/// The delta a payload change must produce: this same cluster, updated.
+fn assert_payload_change(pointer: &str, delta: &ReportDelta) {
+    assert_eq!(
+        updated_ids(delta),
+        vec![CLUSTER_ID],
+        "{pointer} changed and the delta did not say so. A subscriber \
+         told nothing keeps rendering the previous generation, and the \
+         next identical generation produces no delta either, so the \
+         stale view never heals: {delta:?}"
+    );
+    assert!(
+        delta.clusters_added.is_empty() && delta.clusters_removed.is_empty(),
+        "{pointer}: the id did not change, so this is an update and \
+         neither an add nor a remove: {delta:?}"
+    );
+    assert!(
+        !delta.is_empty(),
+        "{pointer}: a non-empty delta must not report itself empty — \
+         `is_empty` is what gates the `report/changed` notification"
+    );
+}
+
+/// The delta an identity change must produce: the old cluster gone and
+/// the renamed one added. Reporting it as an *update* would tell a
+/// subscriber to patch a cluster it has never seen, leaving the real
+/// one on screen for ever.
+fn assert_identity_change(delta: &ReportDelta) {
+    assert_eq!(
+        delta.clusters_removed,
+        vec![CLUSTER_ID.to_owned()],
+        "the cluster the subscriber holds is gone and must be withdrawn \
+         by id: {delta:?}"
+    );
+    assert_eq!(
+        added_ids(delta),
+        vec![format!("{CLUSTER_ID}{STRING_MUTATION_SUFFIX}")],
+        "the renamed cluster is new to the subscriber and must arrive \
+         whole, not as a patch: {delta:?}"
+    );
+    assert!(
+        delta.clusters_updated.is_empty(),
+        "an id is an identity, not a payload field: nothing was updated \
+         here: {delta:?}"
+    );
+    assert!(
+        !delta.is_empty(),
+        "an add and a remove is a change, and `is_empty` gates the \
+         `report/changed` notification: {delta:?}"
+    );
+}
+
+/// The ids of the clusters `delta` reports as updated.
+fn updated_ids(delta: &ReportDelta) -> Vec<&str> {
+    delta
+        .clusters_updated
+        .iter()
+        .map(|cluster| cluster.id.as_str())
+        .collect()
+}
+
+/// The ids of the clusters `delta` reports as added.
+fn added_ids(delta: &ReportDelta) -> Vec<String> {
+    delta
+        .clusters_added
+        .iter()
+        .map(|cluster| cluster.id.clone())
+        .collect()
 }
 
 // The other side of the contract: an unchanged generation is silent, so
