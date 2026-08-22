@@ -636,14 +636,20 @@ mod tests {
     /// off the field trips here rather than silently in a golden.
     #[test]
     fn the_grammars_mark_operators_and_only_operators() {
-        for (name, source, behaviour, framing) in operator_field_cases() {
+        for (name, language, source, behaviour, framing) in operator_field_cases() {
             let mut parser = Parser::new();
-            parser
-                .set_language(&grammar_for(name))
-                .expect("pinned grammar binds");
-            let tree = parser
-                .parse(source.as_bytes(), None)
-                .expect("probe source parses");
+            assert!(
+                parser.set_language(&language).is_ok(),
+                "{name}: the pinned grammar must bind — this table is the only \
+                 proof the classifier matches the grammars actually shipped"
+            );
+            let parsed = parser.parse(source.as_bytes(), None);
+            assert!(
+                parsed.is_some(),
+                "{name}: the probe source must parse, or the rows below are \
+                 measured against nothing"
+            );
+            let Some(tree) = parsed else { continue };
             let fields = anonymous_token_fields(tree.root_node());
             let is_operator = |token: &str| {
                 fields.iter().any(|(parent, spelling, field)| {
@@ -673,21 +679,28 @@ mod tests {
         }
     }
 
+    /// One grammar's row: its id, the pinned grammar, a source exercising
+    /// its operators, the spellings that must survive normalisation, and
+    /// the framing tokens that must not.
+    type OperatorFieldCase = (
+        &'static str,
+        tree_sitter::Language,
+        &'static str,
+        Vec<&'static str>,
+        Vec<&'static str>,
+    );
+
     /// `(language, source, behaviour spellings, framing spellings)` for
     /// every grammar the engine ships.
     ///
     /// Behaviour entries are tokens that must never collapse into one
     /// another; framing entries are the exact tokens whose emission
     /// inflated the committed goldens.
-    fn operator_field_cases() -> Vec<(
-        &'static str,
-        &'static str,
-        Vec<&'static str>,
-        Vec<&'static str>,
-    )> {
+    fn operator_field_cases() -> Vec<OperatorFieldCase> {
         vec![
             (
                 "javascript",
+                tree_sitter_javascript::LANGUAGE.into(),
                 "let a = b + c; a++; a--; a -= 2; delete o.k; typeof v; void v; \
                  const t = x < y && p ?? q; const j = <Tag attr={v}>hi</Tag>;",
                 vec![
@@ -697,6 +710,7 @@ mod tests {
             ),
             (
                 "typescript",
+                tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
                 "const a: number = b + c; let d = e < f && g !== h; d ||= i; j++; \
                  const k: Array<number> = [];",
                 vec!["+", "<", "&&", "!==", "||=", "++"],
@@ -704,6 +718,7 @@ mod tests {
             ),
             (
                 "rust",
+                tree_sitter_rust::LANGUAGE.into(),
                 "fn f<T>(v: &Vec<T>) -> usize { let g = |x: usize| x + 1; \
                  println!(\"{}\", g(v.len())); if v.len() < 2 { v.len() * 2 } else { !0 } }",
                 vec!["+", "*", "<", "!"],
@@ -711,6 +726,7 @@ mod tests {
             ),
             (
                 "go",
+                tree_sitter_go::LANGUAGE.into(),
                 "package m\nfunc f(p *int, xs ...int) int { c := *p + len(xs); c -= 1; \
                  if c < 2 && c != 0 { c *= 2 }; return -c }\n",
                 vec!["+", "-=", "<", "&&", "!=", "*=", "-"],
@@ -718,6 +734,7 @@ mod tests {
             ),
             (
                 "python",
+                tree_sitter_python::LANGUAGE.into(),
                 "def f(a, b):\n    c = a + b\n    c -= 1\n    \
                  if a < b and a != b and a is not b and a in [b]:\n        c *= 2\n    \
                  return not c\n",
@@ -726,6 +743,7 @@ mod tests {
             ),
             (
                 "csharp",
+                tree_sitter_c_sharp::LANGUAGE.into(),
                 "class K { int F(int a, int b) { var c = a + b; c -= 1; \
                  if (a < b && a != b) c *= 2; return -c; } }",
                 vec!["+", "-=", "<", "&&", "!=", "*=", "-"],
@@ -733,6 +751,7 @@ mod tests {
             ),
             (
                 "php",
+                tree_sitter_php::LANGUAGE_PHP.into(),
                 "<?php function f($a, $b) { $c = $a + $b; $c -= 1; \
                  if ($a < $b && $a !== $b) { $c *= 2; } return !$c; }",
                 vec!["+", "-=", "<", "&&", "!==", "*=", "!"],
@@ -740,6 +759,7 @@ mod tests {
             ),
             (
                 "dart",
+                tree_sitter_dart::LANGUAGE.into(),
                 "int f(int a, int b) { var c = a + b - 1; c *= 2; c ~/= 3; \
                  var d = a % b; var e = a << 2 | b >> 1 & 3 ^ 7; \
                  var g = a / b; var h = a ?? b; \
@@ -752,21 +772,6 @@ mod tests {
                 vec![";", ",", "(", ")", "{", "}", "var"],
             ),
         ]
-    }
-
-    /// The pinned grammar for one language id.
-    fn grammar_for(name: &str) -> tree_sitter::Language {
-        match name {
-            "javascript" => tree_sitter_javascript::LANGUAGE.into(),
-            "typescript" => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
-            "rust" => tree_sitter_rust::LANGUAGE.into(),
-            "go" => tree_sitter_go::LANGUAGE.into(),
-            "python" => tree_sitter_python::LANGUAGE.into(),
-            "csharp" => tree_sitter_c_sharp::LANGUAGE.into(),
-            "php" => tree_sitter_php::LANGUAGE_PHP.into(),
-            "dart" => tree_sitter_dart::LANGUAGE.into(),
-            other => unreachable!("unpinned grammar in the operator-field table: {other}"),
-        }
     }
 
     /// Every anonymous token in the tree as

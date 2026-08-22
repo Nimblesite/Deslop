@@ -36,8 +36,10 @@ const SAMPLE_FREQUENCY_HZ: i32 = 99;
 /// Firefox profile sampling interval corresponding to the pprof rate.
 #[cfg(all(feature = "profiling", unix))]
 const SAMPLE_INTERVAL_MS: u64 = 10;
+/// Process name recorded in the emitted Firefox profile.
 #[cfg(all(feature = "profiling", unix))]
 const PROCESS_NAME: &str = "deslop-lsp";
+/// Profile start time, in milliseconds, that samples are offset from.
 #[cfg(all(feature = "profiling", unix))]
 const REFERENCE_START_MS: f64 = 0.0;
 
