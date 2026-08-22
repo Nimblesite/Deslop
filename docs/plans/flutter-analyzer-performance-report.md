@@ -219,6 +219,147 @@ No code was changed as part of this report. The smallest useful future instrumen
 
 Those counters would determine whether the dominant first-stage cost is sibling-window range resolution, token emission, MinHash construction, normalization, or some combination. The current log cannot split them.
 
+## Detailed TODO [PERF-FLUTTER-TODO]
+
+This list defines the required outcomes. It deliberately does not prescribe implementation techniques, data structures, concurrency models, or code organization.
+
+### Definition of done [PERF-FLUTTER-TODO-DONE]
+
+- [ ] Complete a cold, non-incremental analysis of the pinned Flutter corpus in less than 600 seconds.
+- [ ] Keep peak process memory at or below the corpus ceiling of 7,168 MiB.
+- [ ] Complete every pipeline stage, including clustering, ranking, and report rendering, without timeout or termination.
+- [ ] Produce the expected JSON report and all requested output formats.
+- [ ] Preserve every curated Flutter `must_find` result.
+- [ ] Preserve all curated precision, boilerplate-ranking, data-table, confidence, and scan-scope guarantees.
+- [ ] Preserve deterministic output for identical corpus contents and configuration.
+- [ ] Demonstrate that the performance result applies to the current release binary, not a stale or locally modified executable.
+- [ ] Demonstrate that the result is repeatable under controlled conditions.
+- [ ] Ensure diagnostic logging remains useful and bounded for the full Flutter workload.
+
+### Establish trustworthy measurements [PERF-FLUTTER-TODO-MEASURE]
+
+- [ ] Record the exact Deslop revision, binary identity, build profile, Flutter revision, configuration, command-line options, cache state, machine specification, and operating-system version for every comparison run.
+- [ ] Ensure each benchmark run is isolated from builds, tests, other analyzer processes, and other known resource-intensive local work.
+- [ ] Establish an uncontaminated result for the known-good `f92300e` revision.
+- [ ] Establish an uncontaminated result for the current revision using identical workload and run conditions.
+- [ ] Record total wall time, process CPU time, peak working set, completion status, and report identity for both revisions.
+- [ ] Repeat the comparison sufficiently to distinguish a stable regression from run-to-run variance.
+- [ ] Confirm that the compared runs discover the same intended files.
+- [ ] Confirm that the compared runs use the same language policy, minimum-node threshold, embedding policy, incremental policy, and report settings.
+- [ ] Identify the first revision at which each independently observed regression appears.
+- [ ] Keep cold-run and warm-incremental measurements separate and clearly labeled.
+
+### Resolve the corpus-build bottleneck [PERF-FLUTTER-TODO-CORPUS]
+
+- [ ] Measure the separate cost of file reading, parsing, normalization, structural fingerprint generation, sibling-window fingerprint generation, token extraction, range resolution, and signature generation.
+- [ ] Quantify work by language for every corpus-build substage.
+- [ ] Quantify structural fingerprints and sibling-window fingerprints separately.
+- [ ] Quantify exact-node, synthetic-window, token-derived, and fallback signature populations separately.
+- [ ] Quantify how many source nodes and tokens are visited while producing signatures.
+- [ ] Determine which corpus-build substage accounts for the regression from `f92300e`.
+- [ ] Determine whether the regression is concentrated in Dart, synthetic sibling windows, particular AST shapes, or the general signature path.
+- [ ] Determine whether identical or equivalent range-resolution, token-extraction, or signature work is repeated unnecessarily.
+- [ ] Determine whether recent normalization changes materially increased AST nodes, fingerprints, signatures, or work per signature.
+- [ ] Reduce corpus-build wall time enough for the complete end-to-end scan to remain inside the 600-second requirement.
+- [ ] Ensure corpus-build resource use scales predictably with file, AST-node, fingerprint, and signature counts.
+- [ ] Preserve the accuracy behavior that motivated language-aware and sibling-window signatures.
+- [ ] Preserve support for pathologically deep but valid source files.
+
+### Resolve candidate-pair amplification [PERF-FLUTTER-TODO-PAIRS]
+
+- [ ] Record LSH bucket counts and bucket-size distribution for Flutter.
+- [ ] Identify which fingerprint classes, languages, files, and normalized shapes produce the largest collision populations.
+- [ ] Record raw pair emissions, duplicate pair emissions, unique LSH pairs, policy-admitted candidates, and final candidate objects separately.
+- [ ] Compare every pair-population count with `f92300e` under identical conditions.
+- [ ] Determine why the measured revision produces 55,332,661 raw LSH pairs.
+- [ ] Determine how much of the pair population comes from sibling-window signatures.
+- [ ] Determine how much of the pair population comes from newly represented operator or normalization tokens.
+- [ ] Determine how much of the pair population is rejected later and therefore represents avoidable downstream work.
+- [ ] Bound pair-generation and candidate-construction time within an explicit share of the end-to-end budget.
+- [ ] Bound the resident pair population so it cannot independently exceed the memory budget.
+- [ ] Preserve every candidate required for curated recall and confidence guarantees.
+- [ ] Confirm that reductions in pair volume do not hide false negatives or manufacture false positives.
+
+### Resolve shared-subtree rescue cost [PERF-FLUTTER-TODO-RESCUE]
+
+- [ ] Record the total candidates scanned by shared-subtree rescue.
+- [ ] Record how many candidates satisfy each rescue eligibility condition.
+- [ ] Record how many eligible pairs cross files, resolve both endpoints, use exact alignment, use the large-tree fallback, and are ultimately rescued.
+- [ ] Record endpoint-size and alignment-work distributions for the rescue population.
+- [ ] Record endpoint-view and pair-result reuse effectiveness.
+- [ ] Determine which candidate families account for most rescue wall time.
+- [ ] Determine whether the expensive rescue population is materially larger than at the feature's acceptance fixtures.
+- [ ] Determine whether the same logical rescue result is evaluated more than once.
+- [ ] Bound rescue work independently of the raw LSH-pair population.
+- [ ] Ensure rescue completes within an explicit share of the end-to-end budget.
+- [ ] Preserve all recall cases that require shared-subtree rescue.
+- [ ] Preserve the documented behavior for equal endpoints, inserted statements, unresolvable endpoints, large endpoints, and same-file exclusions.
+- [ ] Confirm that rescue changes do not admit structurally unrelated token collisions.
+
+### Bring memory within budget [PERF-FLUTTER-TODO-MEMORY]
+
+- [ ] Attribute retained memory at every major stage to sources, normalized trees, fingerprints, signatures, raw pairs, candidate objects, endpoint views, pair results, clusters, and report data.
+- [ ] Record both logical element counts and allocated capacity for the dominant retained collections.
+- [ ] Identify the data that must remain available at each pipeline stage and the data whose lifetime exceeds its last required use.
+- [ ] Determine whether equivalent data is retained in more than one representation at the same time.
+- [ ] Determine the cause of the rise from approximately 5.5 GiB after corpus construction to the 14.28 GiB peak.
+- [ ] Establish a peak-memory budget for each major stage whose combined maximum remains below 7,168 MiB.
+- [ ] Ensure peak memory remains within budget for both successful completion and diagnostic logging modes.
+- [ ] Confirm that memory use returns to an expected steady state after each completed analysis in long-running sessions.
+- [ ] Confirm that memory improvements do not remove information required for accurate ranking, rendering, or incremental updates.
+
+### Make long-running work observable [PERF-FLUTTER-TODO-OBSERVABILITY]
+
+- [ ] Emit a start, completion, elapsed-time, input-count, and output-count event for every major pipeline stage.
+- [ ] Provide bounded progress reporting during any stage that can run for more than a short interactive interval.
+- [ ] Report corpus-build progress without exposing source contents or user-data paths.
+- [ ] Report candidate-generation progress with raw, unique, admitted, and rejected counts.
+- [ ] Report rescue progress with scanned, eligible, aligned, resolved, and rescued counts.
+- [ ] Report current throughput and elapsed time for long-running stages.
+- [ ] Report enough stage context to distinguish active progress, resource exhaustion, deadlock, and termination.
+- [ ] Remove unbounded per-item logging from corpus-scale hot paths.
+- [ ] Ensure debug logging does not materially change the performance conclusion of the workload being diagnosed.
+- [ ] Ensure logs remain small enough to inspect and retain after a complete Flutter run.
+- [ ] Ensure final aggregate events are available even when a stage processes no eligible items.
+
+### Protect correctness while performance changes [PERF-FLUTTER-TODO-ACCURACY]
+
+- [ ] Capture the known-good Flutter report as a comparison artifact before performance changes are accepted.
+- [ ] Compare reported clusters, occurrences, file paths, ranges, buckets, signals, confidence values, ranking order, and repository metrics after every performance change.
+- [ ] Verify every curated byte-identical Flutter duplicate remains visible with all expected occurrences.
+- [ ] Verify framework-mandated Flutter scaffolding does not displace genuine duplication at the top of the report.
+- [ ] Verify data tables remain categorized and ranked correctly.
+- [ ] Verify Type-2 and Type-3 recall guarantees remain live.
+- [ ] Verify cross-file and same-file behavior remains consistent with the documented rescue contract.
+- [ ] Verify report determinism across repeated cold runs.
+- [ ] Verify incremental and full analyses agree when they represent the same final corpus state.
+- [ ] Treat any false positive, false negative, changed occurrence set, or unexplained ranking change as a failed performance change.
+
+### Enforce the result [PERF-FLUTTER-TODO-GATE]
+
+- [ ] Make the Flutter corpus wall-time requirement executable and fail when the completed scan exceeds 600 seconds.
+- [ ] Keep the existing 7,168 MiB peak-memory ceiling executable and fail when exceeded.
+- [ ] Fail when the analyzer times out, is killed, or exits without a complete report.
+- [ ] Fail when required provenance or resource measurements are missing.
+- [ ] Fail when the scan analyzes fewer files than the curated scope requires.
+- [ ] Define and enforce a valid Flutter cluster-count range after a trustworthy full report completes.
+- [ ] Keep performance failures distinct from accuracy, scope, and determinism failures in test output.
+- [ ] Ensure the gate measures the release artifact users receive.
+- [ ] Ensure the gate cannot silently pass with absent or zero resource measurements.
+- [ ] Retain enough benchmark artifacts to diagnose future regressions without rerunning blindly.
+
+### Reconcile documentation and handoff [PERF-FLUTTER-TODO-DOCS]
+
+- [ ] Replace stale Flutter timing and memory claims with completed, controlled measurements.
+- [ ] Clearly distinguish measured facts, inferred causes, confirmed regressions, and unresolved hypotheses.
+- [ ] Document the authoritative cold-run and warm-run expectations separately.
+- [ ] Document the exact corpus and binary provenance behind every published figure.
+- [ ] Record the confirmed regression point or points relative to `f92300e`.
+- [ ] Record the final stage-by-stage time, memory, and cardinality breakdown.
+- [ ] Record the accuracy evidence that permits each performance change to ship.
+- [ ] Remove temporary diagnostic instructions and obsolete measurements after the permanent observability requirements are satisfied.
+- [ ] Close this plan only after the full Flutter report is produced inside both wall-time and memory budgets with all accuracy checks passing.
+
 ## Final diagnosis
 
 The analyzer misses the 10-minute requirement for two concrete reasons:
