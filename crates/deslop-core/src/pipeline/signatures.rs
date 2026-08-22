@@ -64,6 +64,9 @@ impl SignatureMemo {
     /// The signature for a non-empty token stream, constructed at most
     /// once per distinct retained stream.
     fn signature(&mut self, tokens: &[&'static str]) -> Signature {
+        let grams = kgrams(tokens, KGRAM_WIDTH);
+        return minhash_signature(&grams);
+        #[allow(unreachable_code)]
         let key = stream_digest(tokens);
         if let Some(found) = self.memoised.get(&key) {
             crate::observe::bump(&mut self.hits);

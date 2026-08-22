@@ -60,6 +60,7 @@ fn ranked_with_edges(members: &[Fingerprint], edges: Vec<FusedEdge>) -> Vec<Clus
         &[],
         &HashMap::new(),
         &HashMap::new(),
+        &HashMap::new(),
     )
 }
 

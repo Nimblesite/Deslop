@@ -10,7 +10,7 @@
 //! corpus state — the audited flatten-per-render copy duplicated
 //! ~157 MiB of signature bytes alone on the benchmark corpus.
 
-use std::time::Instant;
+use std::{collections::HashMap, path::PathBuf, time::Instant};
 
 use crate::{
     cluster::build_ranked_fused_clusters,
@@ -20,6 +20,7 @@ use crate::{
     overlap::apply_shared_subtree_rescue,
     pair::{candidate_pairs_for_language_policy, cluster_by_transitive_closure},
     report::{render_report, CacheStats, Report, ReportInputs},
+    state::FileId,
 };
 
 use super::{
@@ -28,6 +29,7 @@ use super::{
         embedding_pass::{run_embedding_pass, CorpusView},
         signatures::build_cross_language_signatures,
     },
+    store::relative_path_key,
     PipelineSession,
 };
 
@@ -113,6 +115,19 @@ impl PipelineSession {
         // on; the per-language space is exact otherwise. Mixing spaces
         // inside one cluster mean would average incomparable values.
         let measurement_signatures = cross_language_signatures.as_deref().unwrap_or(signatures);
+        // [PIPELINE-DETERMINISM] (gh #430) Workspace-relative path per
+        // fingerprinted file — the second input of the cluster id digest.
+        // Built from the fingerprints themselves so every member's file is
+        // covered by construction, and keyed on the same
+        // workspace-relative form the report renders.
+        let file_paths: HashMap<FileId, PathBuf> = fingerprints
+            .iter()
+            .filter_map(|found| {
+                self.registry
+                    .path(found.file_id)
+                    .map(|path| (found.file_id, relative_path_key(path, &self.root)))
+            })
+            .collect();
         let clusters = build_ranked_fused_clusters(
             fingerprints,
             measurement_signatures,
@@ -121,6 +136,7 @@ impl PipelineSession {
             self.store.trees(),
             &self.sources,
             &self.file_languages,
+            &file_paths,
         );
         tracing::info!(
             ranked_clusters = clusters.len(),

@@ -304,10 +304,18 @@ jobs:
           key: ${{ runner.os }}-cargo-release-${{ github.sha }}
       - name: Run repository contract tests
         run: make _ci-contract-tests
-      - name: Run built-artifact gates
-        run: |
-          make dup-gate
-          make deployment-verify
+
+      # Duplication gate ([CI-DESLOP]). Self-hosted: runs the release binary
+      # the build job produced (restored via cache) against this repo, so the
+      # gate is always the CURRENT detector. It reads the ratcheted
+      # [threshold] max_duplication_percent from .deslop.toml and exits 3
+      # (failing CI) the moment repo-wide duplication climbs past it. The
+      # threshold is the single source of truth — never hardcoded here.
+      - name: Duplication gate (deslop)
+        run: make dup-gate
+
+      - name: Deployment manifest and binary gates
+        run: make deployment-verify
       - name: Upload raw repository coverage
         uses: actions/upload-artifact@v7
         if: always()
@@ -685,9 +693,10 @@ jobs:
       # its zh twin), so a site-only PR can change it while the `ci` job —
       # where `make lint` normally runs this — is skipped. The one test
       # written to protect the security-sensitive snippet must run wherever
-      # that snippet can change.
+      # that snippet can change: this step fires on every PR that touched
+      # site content, and `make lint` covers the rest.
       - name: Installer snippet contract
-        if: needs.changes.outputs.code != 'true'
+        if: needs.changes.outputs.site == 'true'
         run: node --test scripts/deployment/installer-snippet.test.mjs
 
       - name: Install site dependencies

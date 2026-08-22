@@ -143,6 +143,7 @@ fn assert_rendered_signals_are_measured(
         &[],
         &HashMap::new(),
         &HashMap::new(),
+        &HashMap::new(),
     );
     assert_eq!(
         rendered.len(),
