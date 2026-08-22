@@ -483,7 +483,7 @@ impl Occurrence {
         match (self.declaration, other.declaration) {
             (Some(mine), Some(theirs)) => mine == theirs,
             (None, Some(_)) => true,
-            (Some(_), None) | (None, None) => false,
+            (_, None) => false,
         }
     }
 
