@@ -115,6 +115,7 @@ impl PipelineSession {
             &fused_clusters,
             self.store.trees(),
             &self.sources,
+            &self.file_languages,
         );
         tracing::info!(
             ranked_clusters = clusters.len(),

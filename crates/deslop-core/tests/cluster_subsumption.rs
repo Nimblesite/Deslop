@@ -75,6 +75,7 @@ fn published(left: [(usize, usize); 2], right: [(usize, usize); 2]) -> Vec<Clust
         &fused,
         &[],
         &HashMap::new(),
+        &HashMap::new(),
     )
 }
 
