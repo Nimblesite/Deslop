@@ -235,6 +235,22 @@ setup:
 # Repo-Specific Targets
 # =============================================================================
 
+## test-shard: [CI-RELEASE-BUILD] [TEST-SELECTION] One slice of the release
+##             suite, for CI's parallel matrix. `make test` remains the whole
+##             suite and is what a developer runs. The split is over test
+##             *binaries*, never test names — `cargo test --skip` matches a
+##             substring of the name and silently dropped whole suites that
+##             way (gh #412) — and `test-shards.test.mjs` proves the union of
+##             the shards is the whole set for every shard count CI uses.
+##             Measured: 200 binaries, 2924s end to end, with a long tail
+##             (`config_include_dependencies` 540s,
+##             `fsharp_language_label_over_mcp` 499s), so the run phase is
+##             worth splitting once the compile is a cache hit.
+##             Usage: `make test-shard SHARD=1 SHARDS=4`.
+test-shard: _delete-path-binaries typediagram-gen
+	@echo "==> Testing shard $(SHARD)/$(SHARDS) (fail-fast, release profile)..."
+	@node scripts/repository/test-shards.mjs --shard $(SHARD) --of $(SHARDS)
+
 ## coverage: [CI-RELEASE-BUILD] [COVERAGE-THRESHOLDS-JSON] Instrumented
 ##           release run + per-crate threshold enforcement. Split out of
 ##           `make test` because llvm-cov's instrumented target directory
@@ -244,7 +260,10 @@ setup:
 ##           `coverage-thresholds.json` and `_coverage_check` enforces each
 ##           crate independently — no workspace roll-up masking. The
 ##           `--ignore-filename-regex` list has the same single source.
-coverage: typediagram-gen
+##           Carries `_delete-path-binaries` for the same reason `test`
+##           does: this target runs the suite, and a Deslop binary leaked
+##           onto PATH would shadow the built one.
+coverage: _delete-path-binaries typediagram-gen
 	@echo "==> Coverage (instrumented release + per-crate threshold)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
 	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \

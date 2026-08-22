@@ -218,12 +218,19 @@ jobs:
   # this job reused nothing from the release build and recompiled the
   # whole workspace ahead of every suite. This job runs the release
   # binaries `build` produced and nothing else.
-  ci:
-    name: CI
+  rust-tests:
+    name: Rust tests (${{ matrix.shard }}/4)
     needs: [changes, build]
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      # Never `fail-fast: false` at the matrix level either: one shard
+      # going red means the suite is red, and the remaining runners have
+      # nothing left to prove.
+      fail-fast: true
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
 
@@ -258,11 +265,40 @@ jobs:
             ${{ runner.os }}-cargo-release-
             ${{ runner.os }}-cargo-
 
-      # [TEST-RULES] Fail-fast, release profile, every target. The
-      # binaries were compiled by `build` and restored above, so this
-      # step links nothing and is the suite's actual runtime.
+      # [TEST-RULES] Fail-fast, release profile. The binaries were
+      # compiled by `build` and restored above, so this step links
+      # nothing and is purely the suite's runtime — which is why it is
+      # worth splitting: 200 binaries, 2924s end to end when run
+      # serially. Each shard runs its own slice; the union is the whole
+      # set, proved by `scripts/repository/test-shards.test.mjs`.
       - name: Test
-        run: make test
+        run: make test-shard SHARD=${{ matrix.shard }} SHARDS=${{ strategy.job-total }}
+
+  # [CI-RELEASE-BUILD] The required status check. Branch protection
+  # requires a check named exactly `CI`, so the name has to survive the
+  # split — a renamed required check stays pending forever and blocks
+  # every merge. This job carries the name and gates on every shard.
+  #
+  # It must fail when any shard fails *or is skipped*. `needs` alone does
+  # not do that: a skipped dependency satisfies `needs`, so a shard that
+  # never ran would leave this green. The result is asserted explicitly.
+  ci:
+    name: CI
+    needs: [changes, rust-tests]
+    if: always() && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every Rust shard passed
+        env:
+          SHARDS_RESULT: ${{ needs.rust-tests.result }}
+        run: |
+          set -euo pipefail
+          echo "rust-tests: ${SHARDS_RESULT}"
+          if [ "${SHARDS_RESULT}" != "success" ]; then
+            echo "::error::the Rust suite did not pass (${SHARDS_RESULT})"
+            exit 1
+          fi
 
   # [CI-RELEASE-BUILD] [COVERAGE-THRESHOLDS-JSON] Coverage, on its own
   # cache and its own critical path. It cannot share the release build:
