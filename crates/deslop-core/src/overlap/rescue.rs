@@ -2,44 +2,21 @@
 //! ([FUSION-SHARED-SUBTREE], gh #408).
 //!
 //! The loop is corpus-scale — tens of millions of scanned candidates on
-//! a large repository — so its observability contract is aggregate
-//! counters plus fixed-interval progress records, never per-pair events
-//! ([PIPELINE-OBSERVABILITY-STAGES]). The per-pair debug record this
-//! module once emitted produced 793,076 lines on the Flutter corpus and
-//! materially slowed the exact stage it was reporting on.
-
-use std::time::Instant;
+//! a large repository — so its observability contract is the aggregate
+//! gate counters in [`super::tally`] plus fixed-interval progress
+//! records, never per-pair events
+//! ([PERF-FLUTTER-TODO-OBSERVABILITY]).
 
 use crate::{
     ast::NormalizedNode,
     fingerprint::Fingerprint,
-    observe::{bump, elapsed_ms},
     pair::{
         CandidatePair, SHARED_SUBTREE_MIN_JACCARD, SHARED_SUBTREE_MIN_NODE_COUNT,
         SHARED_SUBTREE_MIN_OVERLAP,
     },
 };
 
-use super::{MeasureStats, OverlapMeasurer};
-
-/// Measured pairs between progress records. Count-based so the cadence
-/// is deterministic for a given candidate set; each record carries
-/// elapsed time so throughput is readable from any two records
-/// ([PIPELINE-OBSERVABILITY-STAGES]).
-const RESCUE_PROGRESS_INTERVAL: u64 = 25_000;
-
-/// Aggregate counters for one rescue pass
-/// ([PIPELINE-OBSERVABILITY-STAGES]).
-#[derive(Debug, Default, Clone, Copy)]
-struct RescueStats {
-    /// Candidate pairs scanned.
-    scanned: u64,
-    /// Pairs that passed eligibility plus the cross-file gate and were
-    /// measured.
-    measured: u64,
-    /// Measured pairs whose overlap clears the admission floor.
-    rescued: u64,
-}
+use super::{tally::RescueTally, OverlapMeasurer};
 
 /// Measures shared-subtree overlap onto every candidate pair the fused
 /// threshold would otherwise drop despite corroborating token evidence
@@ -53,44 +30,39 @@ pub fn apply_shared_subtree_rescue(
     trees: &[NormalizedNode],
 ) {
     let mut measurer = OverlapMeasurer::new(trees);
-    let mut stats = RescueStats::default();
-    let started = Instant::now();
+    let mut tally = RescueTally::new();
     for pair in pairs.iter_mut() {
-        bump(&mut stats.scanned);
-        if !measure_one(pair, fingerprints, &mut measurer, &mut stats) {
-            continue;
-        }
-        if stats.measured % RESCUE_PROGRESS_INTERVAL == 0 {
-            log_progress(stats, measurer.stats(), started);
-        }
+        tally.scan();
+        measure_one(pair, fingerprints, &mut measurer, &mut tally);
     }
-    log_completion(stats, measurer.stats(), started);
+    tally.report_total(measurer.stats());
 }
 
-/// Measures one pair when it is eligible, resolvable, and cross-file;
-/// returns whether a measurement happened.
+/// Measures one pair when it is eligible, resolvable, and cross-file,
+/// recording every gate it passes.
 fn measure_one(
     pair: &mut CandidatePair,
     fingerprints: &[Fingerprint],
     measurer: &mut OverlapMeasurer<'_>,
-    stats: &mut RescueStats,
-) -> bool {
+    tally: &mut RescueTally,
+) {
     if !rescue_eligible(pair) {
-        return false;
+        return;
     }
+    tally.eligible();
     let (Some(left), Some(right)) = (fingerprints.get(pair.left), fingerprints.get(pair.right))
     else {
-        return false;
+        return;
     };
     if !crosses_files(left, right) {
-        return false;
+        return;
     }
-    bump(&mut stats.measured);
+    tally.cross_file();
     pair.shared_subtree_overlap = measurer.rescue_overlap(left, right);
-    if pair.shared_subtree_overlap >= SHARED_SUBTREE_MIN_OVERLAP {
-        bump(&mut stats.rescued);
-    }
-    true
+    tally.measure(
+        pair.shared_subtree_overlap >= SHARED_SUBTREE_MIN_OVERLAP,
+        measurer.stats(),
+    );
 }
 
 /// True when the pair's endpoints live in different files.
@@ -119,38 +91,4 @@ fn rescue_eligible(pair: &CandidatePair) -> bool {
         && score.bounded_fused() < pair.fused_min_score
         && score.token_jaccard >= SHARED_SUBTREE_MIN_JACCARD
         && pair.endpoint_node_counts.0 >= SHARED_SUBTREE_MIN_NODE_COUNT
-}
-
-/// One fixed-interval progress record ([PIPELINE-OBSERVABILITY-STAGES]).
-fn log_progress(stats: RescueStats, measure: MeasureStats, started: Instant) {
-    tracing::info!(
-        scanned = stats.scanned,
-        measured = stats.measured,
-        rescued = stats.rescued,
-        alignments = measure.alignments,
-        exact_hits = measure.exact_hits,
-        bound_skips = measure.bound_skips,
-        elapsed_ms = elapsed_ms(started),
-        "shared-subtree rescue progress"
-    );
-}
-
-/// The stage-completion record. Emitted even when nothing was eligible,
-/// so a stage that measured nothing is distinguishable from one that
-/// never finished ([PIPELINE-OBSERVABILITY-STAGES]).
-fn log_completion(stats: RescueStats, measure: MeasureStats, started: Instant) {
-    tracing::info!(
-        scanned = stats.scanned,
-        measured = stats.measured,
-        rescued_pairs = stats.rescued,
-        alignments = measure.alignments,
-        credit_fallbacks = measure.credit_fallbacks,
-        hash_equal = measure.hash_equal,
-        exact_hits = measure.exact_hits,
-        bound_hits = measure.bound_hits,
-        bound_skips = measure.bound_skips,
-        unresolved = measure.unresolved,
-        elapsed_ms = elapsed_ms(started),
-        "shared-subtree rescue overlaps measured"
-    );
 }

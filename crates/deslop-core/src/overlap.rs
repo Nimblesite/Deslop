@@ -42,6 +42,8 @@ mod alignment;
 mod credit;
 /// Rescue application over the candidate set ([FUSION-SHARED-SUBTREE]).
 mod rescue;
+/// Rescue-pass gate counters ([PERF-FLUTTER-TODO-OBSERVABILITY]).
+mod tally;
 /// Endpoint view construction ([FUSION-SHARED-SUBTREE]).
 mod view;
 

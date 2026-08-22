@@ -172,6 +172,59 @@ fn record(item: Node<'_>, source: &str, file: &str, found: &mut Vec<IgnoredTest>
     Ok(())
 }
 
+/// Every `#[cfg]`-decorated `#[test]` in the workspace, as
+/// `(file, test, condition)`.
+///
+/// # Errors
+///
+/// Returns an error when a source file cannot be read or parsed.
+pub fn conditional_tests() -> Result<Vec<(String, String, String)>> {
+    let root = repo_root();
+    let mut found = Vec::new();
+    for path in rust_sources(&root)? {
+        let file = workspace_relative(&root, &path);
+        let source = fs::read_to_string(&path)
+            .with_context(|| format!("unreadable Rust source: {}", path.display()))?;
+        found.extend(conditional_tests_in(&source, &file)?);
+    }
+    found.sort();
+    Ok(found)
+}
+
+/// Every `#[cfg]`-decorated `#[test]` declared by one Rust source.
+///
+/// # Errors
+///
+/// Returns an error when `source` does not parse.
+pub fn conditional_tests_in(source: &str, file: &str) -> Result<Vec<(String, String, String)>> {
+    let grammar = RustParser::new().grammar();
+    let tree = parse_source(RUST_LANGUAGE_ID, &grammar, source.as_bytes())
+        .with_context(|| format!("unparsable Rust source: {file}"))?;
+    let mut found = Vec::new();
+    visit_conditionals(tree.root_node(), source, file, &mut found);
+    Ok(found)
+}
+
+/// Records every `cfg` attribute that decorates a test function.
+fn visit_conditionals(
+    node: Node<'_>,
+    source: &str,
+    file: &str,
+    found: &mut Vec<(String, String, String)>,
+) {
+    if node.kind() == ATTRIBUTE_ITEM
+        && attribute_path(node, source).as_deref() == Some(CFG_ATTRIBUTE)
+        && decorates_a_test(node, source)
+    {
+        let test = decorated_function(node, source, file).unwrap_or_default();
+        found.push((file.to_owned(), test, text(node, source)));
+    }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        visit_conditionals(child, source, file, found);
+    }
+}
+
 /// Whether this `cfg` deletes a test function outright.
 ///
 /// Both halves have to hold. A `cfg` no configuration satisfies is only a

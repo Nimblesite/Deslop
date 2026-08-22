@@ -33,7 +33,7 @@ use deslop_test_support::{
     skip_contract::{
         bracketed_ids, breaches, registry_diff, Breach, PolicyContext, CATEGORIES, PLAN_PREFIX,
     },
-    skip_policy::ignored_tests,
+    skip_policy::{conditional_tests, ignored_tests},
 };
 use serde_json::Value;
 
@@ -416,4 +416,136 @@ fn assert_slice_resolves(slice: &[String], suite: &[String]) {
              green. The suite declares {suite:?}."
         );
     }
+}
+
+/// Every `#[cfg]`-gated test, with the platform or feature that gates it.
+///
+/// [TEST-SELECTION-SKIP] says `#[ignore]` is the only mechanism that may
+/// keep a test out of `make test`, because a skip has to be visible to the
+/// person reading the test and to the gate that reads them all. A `#[cfg]`
+/// is neither: it removes the test from the build, so it costs coverage of
+/// the test's *compilation* as well as its execution — the exact failure
+/// `77bcbaed5` caused and the spec cites.
+///
+/// The seven `unix` entries are platform scope: they compile and run on the
+/// platform CI uses, and the Windows job covers the other side. The
+/// `profiling` entry is different in kind and is tracked, not blessed —
+/// see [`FEATURE_GATED_TEST`].
+const CONDITIONAL_TESTS: [(&str, &str); 8] = [
+    (
+        "crates/deslop-lsp/tests/observability_heartbeat.rs",
+        "profile_dir_writes_non_empty_firefox_profile_on_shutdown",
+    ),
+    (
+        "crates/deslop-lsp/tests/state_file_and_ipc.rs",
+        "current_state_file_loads_and_incremental_updates_continue",
+    ),
+    (
+        "crates/deslop-lsp/tests/state_file_and_ipc.rs",
+        "ipc_socket_handles_find_similar_request",
+    ),
+    (
+        "crates/deslop-lsp/tests/state_file_and_ipc.rs",
+        "ipc_socket_handles_list_models_request",
+    ),
+    (
+        "crates/deslop-lsp/tests/state_file_and_ipc.rs",
+        "ipc_socket_handles_refresh_report_request",
+    ),
+    (
+        "crates/deslop-lsp/tests/state_file_and_ipc.rs",
+        "ipc_socket_returns_method_not_found_for_unknown_method",
+    ),
+    (
+        "crates/deslop-lsp/tests/state_file_and_ipc.rs",
+        "state_file_updated_after_file_change",
+    ),
+    (
+        "crates/deslop/tests/cli/cache_and_debug.rs",
+        "cache_write_failure_is_degraded_not_fatal",
+    ),
+];
+
+/// The one conditional test no ordinary run compiles, let alone executes.
+///
+/// `deslop-lsp` declares `default = []` and `make test` enables only
+/// `deslop-core/live`, so nothing in the pipeline turns `profiling` on. The
+/// test is therefore absent from every gate — not slow, not skipped, absent
+/// — and `#[ignore]`, the mechanism the spec mandates, would at least have
+/// kept it compiled and linted. Evidence it is genuinely uncovered: linting
+/// with `--all-features` surfaced two `missing_docs` violations in
+/// `crates/deslop-lsp/src/profiling.rs` that the ordinary lint never saw.
+///
+/// Pinned here so it stays visible and owned rather than invisible, exactly
+/// as [`CURATED_SKIPS`] does for `#[ignore]`. It predates this branch — it
+/// is present unchanged on `main`.
+const FEATURE_GATED_TEST: (&str, &str) = (
+    "crates/deslop-lsp/tests/observability_heartbeat.rs",
+    "profile_dir_writes_non_empty_firefox_profile_on_shutdown",
+);
+
+/// No test is gated by a `#[cfg]` that nobody has accounted for.
+///
+/// [TEST-SELECTION-SKIP] Adding one fails here until someone adds it
+/// deliberately — the same bargain [`CURATED_SKIPS`] strikes for
+/// `#[ignore]`, and for the same reason: a skip nobody can see is a test
+/// that protects nothing while reporting that it does.
+#[test]
+fn every_cfg_gated_test_is_accounted_for() -> Result<()> {
+    let found: BTreeSet<(String, String)> = conditional_tests()?
+        .into_iter()
+        .map(|(file, test, _)| (file, test))
+        .collect();
+    let curated: BTreeSet<(String, String)> = CONDITIONAL_TESTS
+        .iter()
+        .map(|(file, test)| ((*file).to_owned(), (*test).to_owned()))
+        .collect();
+    assert_eq!(
+        found.difference(&curated).collect::<Vec<_>>(),
+        Vec::<&(String, String)>::new(),
+        "a `#[cfg]` on a test keeps it out of `make test` without the \
+         [TEST-SELECTION-SKIP] registry ever seeing it, and costs coverage \
+         of its compilation too. Use `#[ignore = \"..\"]`, which the spec \
+         mandates and which leaves the target inside --all-targets."
+    );
+    assert_eq!(
+        curated.difference(&found).collect::<Vec<_>>(),
+        Vec::<&(String, String)>::new(),
+        "a curated conditional test no longer carries a `#[cfg]`; remove it \
+         from CONDITIONAL_TESTS so the list keeps meaning something"
+    );
+    Ok(())
+}
+
+/// The feature-gated test is compiled by no gate at all, and is recorded
+/// here as such rather than passing as ordinary platform scope.
+///
+/// This assertion is what stops the entry above reading as a blessing. It
+/// states the defect in the tree so a reader of the registry meets it, and
+/// it fails the moment someone makes `profiling` part of an ordinary run —
+/// at which point the entry should go.
+#[test]
+fn the_feature_gated_test_is_still_absent_from_every_ordinary_run() -> Result<()> {
+    let (file, test) = FEATURE_GATED_TEST;
+    let condition = conditional_tests()?
+        .into_iter()
+        .find(|(found_file, found_test, _)| found_file == file && found_test == test)
+        .map(|(_, _, condition)| condition)
+        .ok_or_else(|| anyhow!("{file}::{test} no longer carries a `#[cfg]`"))?;
+    assert!(
+        condition.contains("profiling"),
+        "{file}::{test} is pinned as the feature-gated case, so it must be \
+         the feature that gates it: {condition}"
+    );
+    assert_eq!(
+        read("crates/deslop-lsp/Cargo.toml")?
+            .lines()
+            .find(|line| line.starts_with("default ="))
+            .map(str::trim),
+        Some("default = []"),
+        "the entry above records that nothing enables `profiling` on an \
+         ordinary run. If deslop-lsp now enables it by default, this test \
+         is covered again and belongs in neither list."
+    );
+    Ok(())
 }
