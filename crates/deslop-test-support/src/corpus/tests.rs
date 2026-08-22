@@ -8,7 +8,7 @@
 
 use std::{env::consts::EXE_SUFFIX, path::Path};
 
-use super::{peak_rss_mb, release_binary_path};
+use super::{measurement, peak_rss_mb, release_binary_path, Measurement};
 
 /// The binary cargo actually produces is `deslop` on Unix and `deslop.exe`
 /// on Windows. Naming the bare stem makes `is_file()` false on Windows, so
@@ -89,4 +89,24 @@ fn the_measured_binary_is_not_a_directory() {
         "the corpus harness resolved a directory as the binary it measures: {}",
         path.display()
     );
+}
+
+/// [CORPUS-CEILINGS] Every platform the corpus gate runs on must be able to
+/// read a *true* peak. A platform with no measurement leaves every memory
+/// ceiling in `corpus/*.json` unasserted while the suite still reports green.
+#[test]
+fn the_harness_measures_peak_rss_on_this_platform() {
+    match measurement() {
+        Measurement::PosixTime { flag } => assert!(
+            flag == "-v" || flag == "-l",
+            "`/usr/bin/time` takes `-v` (GNU) or `-l` (BSD); `{flag}` would be rejected and \
+             kill every scan before a check ran"
+        ),
+        Measurement::WindowsPeakMonitor { script } => assert!(
+            script.is_file(),
+            "Windows has no `/usr/bin/time`, so the harness needs its peak monitor at {}. \
+             Without it every corpus test dies before it scans anything.",
+            script.display()
+        ),
+    }
 }

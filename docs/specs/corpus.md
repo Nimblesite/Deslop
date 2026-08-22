@@ -12,7 +12,11 @@ Clones live in git-ignored `.corpus/`. A missing clone is a hard error naming `m
 
 ### [CORPUS-CEILINGS] Resource budget
 
-Every manifest carries `ceilings.max_wall_seconds` and `ceilings.max_peak_rss_mb`, measured by running the release binary under `/usr/bin/time`.
+Every manifest carries `ceilings.max_wall_seconds` and `ceilings.max_peak_rss_mb`, measured by running the release binary under the platform's peak-RSS measurement.
+
+That measurement must report a **true** peak, never a sampled one. A sample taken on an interval is a lower bound, and a lower bound on a ceiling assertion produces false passes — sampling `WorkingSet64` during a flutter scan read 3,629 MB where the OS's own peak counter read 4,818 MB. Both supported platforms therefore read a counter the kernel maintains: POSIX wraps the scan in `/usr/bin/time` (`-v` GNU, `-l` BSD), and Windows, which has no such tool, spawns the scan directly and watches `PeakWorkingSet64` for its pid via `scripts/corpus/peak-working-set.ps1`. Both emit the same `Maximum resident set size (kbytes):` line, so one parser reads either.
+
+A measurement that never arrived is an error, never a zero. A zero would parse as a real number and clear every memory ceiling in the corpus at once.
 
 The memory ceiling is **7168 MB — the RAM of a standard GitHub Actions runner**, not an invented number. Deslop ships a GitHub Action; a scan that exceeds the runner is a scan the documented product cannot perform. The wall ceiling is deliberately loose: it exists to catch a hang, not to police throughput.
 
