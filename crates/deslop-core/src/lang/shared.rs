@@ -70,6 +70,28 @@ pub const LITERAL_KIND: &str = "__literal__";
 /// happens to spell itself `in`, `is` or `not`.
 pub const OPERATOR_KIND_PREFIX: &str = "__op__";
 
+/// The tree-sitter field names the supported grammars give the token that
+/// decides what a production computes
+/// ([PIPELINE-NORMALIZE-AST-OPERATOR]).
+///
+/// `binary_expression`, `unary_expression`, `update_expression`,
+/// `augmented_assignment` and their per-grammar spellings all name their
+/// operator `operator`. Python's `comparison_operator` is the one
+/// exception and names it **`operators`**, plural, because the production
+/// is variadic — `low < mid < high` is one node carrying two operators.
+/// Both are read: accepting only the singular silently dropped every
+/// Python comparison, so `alpha < beta` and `alpha > beta` normalised to
+/// the same subtree, which is precisely the defect this section exists to
+/// remove.
+///
+/// Framing punctuation — brackets, commas, semicolons, tag delimiters,
+/// generic angle brackets, closure pipes — carries no field name at all,
+/// and a declaration keyword carries an unrelated one (`let` and `const`
+/// are the `kind` field of `lexical_declaration`, not operators).
+/// `tests::the_grammars_mark_operators_and_only_operators` measures every
+/// half of that against the pinned grammars.
+pub const OPERATOR_FIELDS: [&str; 2] = ["operator", "operators"];
+
 /// Maximum nesting depth of a normalised AST. Files whose tree-sitter tree
 /// nests deeper than this are rejected with [`CoreError::AstTooDeep`], so a
 /// pathologically deep file is skipped rather than analysed (#168).
@@ -88,10 +110,12 @@ pub const MAX_AST_DEPTH: usize = 500;
 /// Anonymous tokens that carry behaviour, as `(token, normalised
 /// kind)` ([PIPELINE-NORMALIZE-AST-OPERATOR]).
 ///
-/// The kind is written out rather than built from
-/// [`OPERATOR_KIND_PREFIX`] at runtime so normalisation allocates
-/// nothing per operator: `operator_leaf` runs on every anonymous child
-/// of every node of every file. `tests::every_row_is_its_own_token`
+/// A zero-allocation fast path for the common spellings, not the set of
+/// operators — the grammar decides that ([`operator_field_leaf`]). The
+/// kind is written out rather than built from [`OPERATOR_KIND_PREFIX`] at
+/// runtime so the operators seen on nearly every line cost no allocation.
+/// A spelling missing from this table is interned, never dropped.
+/// `tests::every_row_is_its_own_token`
 /// proves each row's kind is exactly the prefix plus its own token and
 /// that no two rows collide — a typo pairing `<<=` with `__op__<<`
 /// would silently make two different operators one subtree, which is
@@ -170,6 +194,11 @@ pub fn is_behaviour_bearing_token(token: &str) -> bool {
 /// The normalised kind for one behaviour-bearing `token` —
 /// [`OPERATOR_KIND_PREFIX`] followed by the token itself — or `None`
 /// when the token is framing rather than behaviour.
+///
+/// Kept for callers that classify a bare token with no tree to consult.
+/// Normalisation does not use it: a token's spelling cannot say whether
+/// it is an operator, only the production it sits in can, which is what
+/// [`operator_field_leaf`] reads.
 #[must_use]
 pub fn operator_kind(token: &str) -> Option<&'static str> {
     BEHAVIOUR_BEARING_TOKENS
@@ -178,16 +207,33 @@ pub fn operator_kind(token: &str) -> Option<&'static str> {
         .map(|(_, kind)| *kind)
 }
 
+/// The normalised kind for a token the grammar has already identified as
+/// an operator, for *any* spelling.
+///
+/// [`BEHAVIOUR_BEARING_TOKENS`] is consulted first so the common
+/// operators cost a table scan and no allocation. A spelling the table
+/// does not carry is interned instead of dropped, which is what makes the
+/// rule fail *closed*: before this, `operator_kind` returned `None` for
+/// every operator missing from the table and normalisation silently
+/// erased it, so `value++` and `value--` — and `delete v`, `typeof v`,
+/// `void v` — hashed identically. An operator the table has never seen
+/// now still reaches the digest as its own leaf.
+fn operator_kind_for_field(token: &str) -> &'static str {
+    operator_kind(token).unwrap_or_else(|| intern_kind(&format!("{OPERATOR_KIND_PREFIX}{token}")))
+}
+
 /// True when a normalised kind is an operator leaf.
 ///
-/// Matched against the table rather than by prefix alone, so the answer
-/// is exact: no grammar kind can satisfy it by accident, and no
-/// operator kind can be missed.
+/// Matched by [`OPERATOR_KIND_PREFIX`] rather than against
+/// [`BEHAVIOUR_BEARING_TOKENS`]. The table is a zero-allocation fast path,
+/// not the set of operators: the grammar decides what an operator is
+/// ([`operator_field_leaf`]), so an operator the table has never seen
+/// still normalises to a prefixed kind and must still answer `true` here.
+/// The prefix is disjoint from every grammar kind, so nothing can satisfy
+/// this by accident.
 #[must_use]
 pub fn is_operator_kind(kind: &str) -> bool {
-    BEHAVIOUR_BEARING_TOKENS
-        .iter()
-        .any(|(_, candidate)| *candidate == kind)
+    kind.starts_with(OPERATOR_KIND_PREFIX)
 }
 
 /// Parses `source` with `language` and returns the tree-sitter
@@ -301,16 +347,23 @@ fn normalise_node(
 }
 
 /// Normalises every child of `node` — named children through
-/// [`normalise_node`], anonymous ones through
-/// [`is_behaviour_bearing_token`] ([PIPELINE-NORMALIZE-AST-OPERATOR]).
+/// [`normalise_node`], anonymous ones through [`operator_field_leaf`]
+/// ([PIPELINE-NORMALIZE-AST-OPERATOR]).
 ///
 /// `parent_kind` is the kind `node` *normalised to*, never its raw
-/// grammar kind. [`OPERATOR_FRAMING_PARENTS`] is read against it, so the
-/// list can name a normalised kind such as [`LITERAL_KIND`] — every
-/// language maps its own literal productions onto that one kind, and a
-/// raw-kind list would have to enumerate `regex`, `string`,
-/// `template_string` and their equivalent in every grammar to say the
-/// same thing.
+/// grammar kind. [`operator_field_leaf`] reads it to recognise a literal
+/// in any language at once, rather than enumerating `regex`, `string`,
+/// `template_string` and their equivalent in every grammar.
+///
+/// A literal's *named* parts are deliberately kept. Collapsing them into
+/// the parent looks tidy and is an accuracy defect: [FUSION-CONTENT-GATE]
+/// reads the frontier's literal leaves as content evidence, so erasing
+/// them erases the only thing separating "same shape, different content"
+/// from "same code". Measured on `js-async`, where two functions calling
+/// different endpoints were promoted from `structural_only` to
+/// `nearly_identical` at `token_jaccard = 1.00` once their route literals
+/// stopped reaching the frontier. What must not survive is the framing
+/// *punctuation* between those parts, which `operator_field_leaf` drops.
 ///
 /// The two are collected in one pass over `children`, not two, so an
 /// operator keeps its position between its operands. A frontier that
@@ -327,7 +380,7 @@ fn normalise_children(
 ) -> Result<Vec<NormalizedNode>, CoreError> {
     let mut children = Vec::new();
     let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
+    for (index, child) in node.children(&mut cursor).enumerate() {
         let normalised = if child.is_named() {
             normalise_node(
                 child,
@@ -337,97 +390,71 @@ fn normalise_children(
                 depth.saturating_add(1),
             )?
         } else {
-            operator_leaf(child, parent_kind, file_id)
+            operator_field_leaf(node, parent_kind, child, index, file_id)
         };
         if let Some(child_node) = normalised {
-            if !is_literal_fragment(parent_kind, child_node.kind) {
-                children.push(child_node);
-            }
+            children.push(child_node);
         }
     }
     Ok(children)
 }
 
-/// True when `child_kind` is a *fragment* of the literal it sits inside
-/// rather than code embedded in it ([PIPELINE-NORMALIZE-AST]).
+/// The operator leaf for one anonymous token, or `None` when the token is
+/// framing rather than behaviour ([PIPELINE-NORMALIZE-AST-OPERATOR]).
 ///
-/// That section collapses every literal to one `__literal__`, but
-/// tree-sitter models some literals as a wrapper over parts: `/[a-z]+/i`
-/// is a `regex` holding a `regex_pattern` and a `regex_flags`, and each
-/// part normalises to [`LITERAL_KIND`] in its own right. The one literal
-/// therefore arrived as three leaves, and since normalisation erases the
-/// text, *every* flagged regex in the corpus carried the same three-node
-/// shape — enough for two regexes matching completely different text to
-/// publish as duplication.
+/// **The grammar decides the role; the token is only a label.**
+/// Tree-sitter names an anonymous node by its own token text, so the same
+/// bytes appear in both roles: the `<` of `alpha < beta` compares, the `<`
+/// of `Vec<T>` opens a type argument list; the `|` of `left | right` is
+/// bitwise-or, the `|` of `|x| x + 1` delimits a closure's bindings; the
+/// `*` of `total * rate` multiplies, the `*` of `p *int` is a pointer.
+/// Text cannot separate them and is never asked to. Every decision here
+/// reads AST metadata — the field name the grammar assigned the child, and
+/// the parent's production kind. `token.kind()` is carried through to the
+/// leaf so two operators stay distinguishable; it never selects the role.
 ///
-/// Only literal-inside-literal collapses. An expression interpolated into
-/// a literal normalises to its own expression kind, never to
-/// [`LITERAL_KIND`], so real code inside a template string survives.
-fn is_literal_fragment(parent_kind: &str, child_kind: &str) -> bool {
-    parent_kind == LITERAL_KIND && child_kind == LITERAL_KIND
-}
-
-/// Grammar productions in which a behaviour-bearing token is **framing**
-/// and must not become a leaf ([PIPELINE-NORMALIZE-AST-OPERATOR]).
+/// That answers the case a spelling table cannot: an operator whose
+/// spelling the table has never seen is still kept, so `value++` and
+/// `value--`, and `delete v` / `typeof v` / `void v`, stop normalising
+/// into one another.
 ///
-/// [`BEHAVIOUR_BEARING_TOKENS`] is keyed on token *text*, because
-/// tree-sitter names an anonymous node by its own token, and text alone
-/// cannot separate the `|` of `left | right` from the `|` that delimits a
-/// Rust closure's binding list. Only the parent production tells them
-/// apart, which is what this list is for.
+/// **Nothing inside a literal is behaviour.** A literal's delimiters
+/// cannot distinguish anything once its text collapses:
+/// `/[a-z]+@[a-z]+/i` and `/[0-9]{3}-[0-9]{4}/g` match completely
+/// different text, and the slashes are all that would be left to compare.
+/// Emitting them made a regex subtree clear the `--min-nodes` floor and
+/// two unrelated regex constants published at `duplication_percent:
+/// 40.0`. The check is on the parent's *normalised* kind, so it holds for
+/// every grammar's literal productions at once rather than enumerating
+/// `regex`, `string` and `template_string` in each.
 ///
-/// Every entry must be justified by a test that fails without it, and the
-/// list is deliberately as short as that rule allows. Suppressing a leaf
-/// is not free: it erases a difference two members could otherwise
-/// disagree on, and an entry that erases a *real* difference manufactures
-/// a false positive. That is not hypothetical — `type_arguments` and
-/// `type_parameters` were in this list and had to come out. They promoted
-/// the seven sibling Dart API methods in `rank_structural_only_policy`
-/// from `structural_only` to `nearly_identical`: a shape-only family
-/// relabelled as near-duplicate code, which is the #134/#197 defect that
-/// fixture exists to pin. Removing them cost nothing —
-/// `rust_issue_147_iter_collect_idiom` still passes, and the committed AST
-/// and report goldens stop drifting.
-///
-/// The direction of the list is deliberate. A production missing from an
-/// *allowlist* of operator productions would drop its operator and let
-/// `alpha + beta` and `alpha - beta` hash identically again — the defect
-/// this whole section exists to fix. A production missing from this
-/// denylist leaves a subtree larger than it should be. Both are worth
-/// fixing; only one certifies an operator swap as duplication.
-const OPERATOR_FRAMING_PARENTS: &[&str] = &[
-    // Rust closure parameter lists: the pipes delimit the binding list,
-    // they are not bitwise-or. Emitting them changed the hash and the LSH
-    // bands of every closure-bearing function in gh #147, which fragmented
-    // the single component `main` forms into sixteen and left
-    // [CLONE-NOISE-RUST-ITER-COLLECT] with no cluster whose every member
-    // holds the idiom. Pinned by `rust_issue_147_iter_collect_idiom`.
-    "closure_parameters",
-    // A delimiter *inside* a literal: a JavaScript regex's `/`. Without
-    // this the literal stops being one leaf and becomes
-    // `__op__/ __literal__ __op__/`, a three-node shape every regex in the
-    // corpus shares — so two unrelated regex constants publish as
-    // duplication. Pinned by `regex_literal_delimiters`.
-    LITERAL_KIND,
-];
-
-/// True when `parent_kind` is a production in which a behaviour-bearing
-/// token is framing — see [`OPERATOR_FRAMING_PARENTS`].
-fn is_framing_parent(parent_kind: &str) -> bool {
-    OPERATOR_FRAMING_PARENTS.contains(&parent_kind)
-}
-
-/// The operator leaf for one anonymous token, or `None` when the token
-/// is framing rather than behaviour. Tree-sitter names an anonymous
-/// node by its own token text, so the node kind *is* the operator — but
-/// the same text is framing in some productions, which is why
-/// `parent_kind` decides too ([`OPERATOR_FRAMING_PARENTS`]).
-fn operator_leaf(token: Node<'_>, parent_kind: &str, file_id: FileId) -> Option<NormalizedNode> {
-    if is_framing_parent(parent_kind) {
+/// **Where the grammar left no field**, the production decides
+/// ([`UNFIELDED_OPERATOR_PRODUCTIONS`]).
+fn operator_field_leaf(
+    parent: Node<'_>,
+    parent_normalised_kind: &str,
+    token: Node<'_>,
+    index: usize,
+    file_id: FileId,
+) -> Option<NormalizedNode> {
+    if parent_normalised_kind == LITERAL_KIND {
         return None;
     }
-    operator_kind(token.kind()).map(|kind| NormalizedNode {
-        kind,
+    let field = u32::try_from(index)
+        .ok()
+        .and_then(|position| parent.field_name_for_child(position));
+    // A field the grammar gave another meaning — `let` and `const` are the
+    // `kind` of a `lexical_declaration` — is never an operator, so an
+    // unrecognised field name suppresses the leaf exactly as framing does.
+    let is_operator = match field {
+        Some(name) => OPERATOR_FIELDS.contains(&name),
+        None => is_unfielded_operator(parent.kind()),
+    };
+    if !is_operator {
+        return None;
+    }
+    Some(NormalizedNode {
+        kind: operator_kind_for_field(token.kind()),
         children: Vec::new(),
         byte_range: ByteRange {
             start: token.start_byte(),
@@ -435,6 +462,79 @@ fn operator_leaf(token: Node<'_>, parent_kind: &str, file_id: FileId) -> Option<
         },
         file_id,
     })
+}
+
+/// Productions that carry an operator the grammar forgot to field-name
+/// ([PIPELINE-NORMALIZE-AST-OPERATOR]).
+///
+/// Every grammar the engine ships names the token that decides what a
+/// production computes ([`OPERATOR_FIELDS`]) — except `tree-sitter-rust`'s
+/// `unary_expression`, which spells `-x`, `!x` and `*x` as a bare
+/// alternation with no field. Without this row all three collapse into
+/// one subtree and negation, dereference and arithmetic negation certify
+/// as the same code.
+///
+/// **This is a list of productions, never of token text.** A production
+/// kind is AST metadata the grammar assigns; a token's spelling is not,
+/// and the earlier attempt to decide the residual case by spelling was
+/// exactly the axis this section exists to abolish — `is_unfielded_operator`
+/// asked `operator_kind(token)`, which is a literal-text match against
+/// [`BEHAVIOUR_BEARING_TOKENS`], to classify a role. It cannot: the `|`
+/// of `left | right` and the `|` of `|x| x + 1` are the same bytes.
+///
+/// Inverting the list from a framing *denylist* to this operator
+/// *allowlist* also removes the per-grammar chase. A denylist had to name
+/// `type_arguments`, `reference_type`, `pointer_type`,
+/// `variadic_parameter_declaration`, `macro_invocation`,
+/// `closure_parameters` and the JSX tags, and would have had to keep
+/// naming the next one; anything it had not thought of kept inflating
+/// silently. Here an unfielded token in any production not named below is
+/// dropped, which is the safe direction: framing that survives
+/// manufactures false positives, and the operators are proven present by
+/// `tests::the_grammars_mark_operators_and_only_operators` across all
+/// eight grammars.
+const UNFIELDED_OPERATOR_PRODUCTIONS: &[&str] = &[
+    // `tree-sitter-rust`: `-x`, `!x` and `*x` are a bare alternation with
+    // no field, so without this row negation, dereference and arithmetic
+    // negation all collapse into one subtree.
+    "unary_expression",
+    // `tree-sitter-python`: `not x` is its own production and leaves the
+    // keyword unfielded. Dropping it makes `not ready` and `ready` the
+    // same shape — an inverted condition certified as duplication.
+    "not_operator",
+    // `tree-sitter-c-sharp`: prefix `-x`, `!x`, `~x` and `&x` share one
+    // unfielded production, so all four collapse together without this.
+    "prefix_unary_expression",
+    // `tree-sitter-dart` fields only `assignment_expression`. Every other
+    // operator sits in a per-precedence production that names nothing, so
+    // each level needs its own row or the operators at that level collapse
+    // into one another — `a + b` and `a - b`, `a < b` and `a >= b`, `a &&
+    // b` and `a || b`. Read off the grammar by the contract test below,
+    // not guessed: a name that does not exist is a silently dead row.
+    "additive_expression",
+    "multiplicative_expression",
+    "shift_expression",
+    "relational_operator",
+    "equality_expression",
+    "logical_and_expression",
+    "logical_or_expression",
+    "bitwise_and_expression",
+    "bitwise_or_expression",
+    "bitwise_xor_expression",
+    "if_null_expression",
+    "prefix_operator",
+    "postfix_expression",
+    "negate_operator",
+];
+
+/// True when the grammar left this production's operator unfielded, so
+/// the anonymous token in it is behaviour rather than framing.
+///
+/// Reads the parent production kind alone. The token is a label carried
+/// through to the leaf; it never decides the role.
+#[must_use]
+pub fn is_unfielded_operator(parent_kind: &str) -> bool {
+    UNFIELDED_OPERATOR_PRODUCTIONS.contains(&parent_kind)
 }
 
 /// Interns `raw` into a `&'static str` backed by a thread-local cache.
@@ -464,7 +564,11 @@ fn intern(entries: &mut Vec<&'static str>, raw: &str) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{BEHAVIOUR_BEARING_TOKENS, OPERATOR_KIND_PREFIX};
+    use tree_sitter::{Node, Parser};
+
+    use super::{
+        is_unfielded_operator, BEHAVIOUR_BEARING_TOKENS, OPERATOR_FIELDS, OPERATOR_KIND_PREFIX,
+    };
 
     /// [PIPELINE-NORMALIZE-AST-OPERATOR] Each row's normalised kind must
     /// be exactly its own token behind the namespace prefix, and no two
@@ -513,5 +617,176 @@ mod tests {
             "a token appears twice in the table, so which kind it \
              normalises to depends on lookup order"
         );
+    }
+
+    /// [PIPELINE-NORMALIZE-AST-OPERATOR] The contract normalisation rests
+    /// on, measured against all eight pinned grammars rather than assumed:
+    /// the token that decides what a production computes carries one of
+    /// [`OPERATOR_FIELDS`], and framing punctuation carries none of them.
+    ///
+    /// This is the completeness check a spelling table could never be. The
+    /// old table enumerated operators by hand and silently dropped the
+    /// ones it missed — `++`/`--` under `update_expression` and
+    /// `delete`/`typeof`/`void` under `unary_expression` were all absent,
+    /// so `value++` and `value--` normalised to the same subtree. Reading
+    /// the grammar instead is only safe if the grammars agree, and they
+    /// very nearly do not: Python alone spells the field `operators`.
+    /// Every row below is a spelling that spelling-only or denylist
+    /// classification got wrong, so a grammar bump that moves any of them
+    /// off the field trips here rather than silently in a golden.
+    #[test]
+    fn the_grammars_mark_operators_and_only_operators() {
+        for (name, source, behaviour, framing) in operator_field_cases() {
+            let mut parser = Parser::new();
+            parser
+                .set_language(&grammar_for(name))
+                .expect("pinned grammar binds");
+            let tree = parser
+                .parse(source.as_bytes(), None)
+                .expect("probe source parses");
+            let fields = anonymous_token_fields(tree.root_node());
+            let is_operator = |token: &str| {
+                fields.iter().any(|(parent, spelling, field)| {
+                    spelling == token
+                        && match field.as_deref() {
+                            Some(name) => OPERATOR_FIELDS.contains(&name),
+                            None => is_unfielded_operator(parent),
+                        }
+                })
+            };
+            for token in behaviour {
+                assert!(
+                    is_operator(token),
+                    "{name}: `{token}` decides what its production computes, so it \
+                     must survive normalisation — dropped, two different \
+                     computations hash alike: {fields:?}"
+                );
+            }
+            for token in framing {
+                assert!(
+                    !is_operator(token),
+                    "{name}: `{token}` is framing — the production already says what \
+                     it means. Emitting it inflates every subtree with a position no \
+                     two members can disagree on: {fields:?}"
+                );
+            }
+        }
+    }
+
+    /// `(language, source, behaviour spellings, framing spellings)` for
+    /// every grammar the engine ships.
+    ///
+    /// Behaviour entries are tokens that must never collapse into one
+    /// another; framing entries are the exact tokens whose emission
+    /// inflated the committed goldens.
+    fn operator_field_cases() -> Vec<(
+        &'static str,
+        &'static str,
+        Vec<&'static str>,
+        Vec<&'static str>,
+    )> {
+        vec![
+            (
+                "javascript",
+                "let a = b + c; a++; a--; a -= 2; delete o.k; typeof v; void v; \
+                 const t = x < y && p ?? q; const j = <Tag attr={v}>hi</Tag>;",
+                vec![
+                    "+", "++", "--", "-=", "delete", "typeof", "void", "<", "&&", "??",
+                ],
+                vec![";", ".", "{", "}", "</", ">", "let", "const"],
+            ),
+            (
+                "typescript",
+                "const a: number = b + c; let d = e < f && g !== h; d ||= i; j++; \
+                 const k: Array<number> = [];",
+                vec!["+", "<", "&&", "!==", "||=", "++"],
+                vec![":", ";", ",", "[", "]", "const", "let"],
+            ),
+            (
+                "rust",
+                "fn f<T>(v: &Vec<T>) -> usize { let g = |x: usize| x + 1; \
+                 println!(\"{}\", g(v.len())); if v.len() < 2 { v.len() * 2 } else { !0 } }",
+                vec!["+", "*", "<", "!"],
+                vec![">", "&", "|", "->", ":", ";", ".", "{", "}"],
+            ),
+            (
+                "go",
+                "package m\nfunc f(p *int, xs ...int) int { c := *p + len(xs); c -= 1; \
+                 if c < 2 && c != 0 { c *= 2 }; return -c }\n",
+                vec!["+", "-=", "<", "&&", "!=", "*=", "-"],
+                vec!["...", "(", ")", ",", "{", "}", ":="],
+            ),
+            (
+                "python",
+                "def f(a, b):\n    c = a + b\n    c -= 1\n    \
+                 if a < b and a != b and a is not b and a in [b]:\n        c *= 2\n    \
+                 return not c\n",
+                vec!["+", "-=", "<", "and", "!=", "is not", "in", "*=", "not"],
+                vec![":", ",", "(", ")", "[", "]", "="],
+            ),
+            (
+                "csharp",
+                "class K { int F(int a, int b) { var c = a + b; c -= 1; \
+                 if (a < b && a != b) c *= 2; return -c; } }",
+                vec!["+", "-=", "<", "&&", "!=", "*=", "-"],
+                vec![";", ",", "(", ")", "{", "}"],
+            ),
+            (
+                "php",
+                "<?php function f($a, $b) { $c = $a + $b; $c -= 1; \
+                 if ($a < $b && $a !== $b) { $c *= 2; } return !$c; }",
+                vec!["+", "-=", "<", "&&", "!==", "*=", "!"],
+                vec![";", ",", "(", ")", "{", "}"],
+            ),
+            (
+                "dart",
+                "int f(int a, int b) { var c = a + b - 1; c *= 2; c ~/= 3; \
+                 var d = a % b; var e = a << 2 | b >> 1 & 3 ^ 7; \
+                 var g = a / b; var h = a ?? b; \
+                 if (a < b && a != b || a >= b) { c = ~c; } \
+                 var i = !(a > b); c++; c--; return -c; }",
+                vec![
+                    "+", "-", "*=", "~/=", "%", "<<", "|", ">>", "&", "^", "/", "??", "<", "&&",
+                    "!=", "||", ">=", "~", "!", ">", "++", "--",
+                ],
+                vec![";", ",", "(", ")", "{", "}", "var"],
+            ),
+        ]
+    }
+
+    /// The pinned grammar for one language id.
+    fn grammar_for(name: &str) -> tree_sitter::Language {
+        match name {
+            "javascript" => tree_sitter_javascript::LANGUAGE.into(),
+            "typescript" => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+            "rust" => tree_sitter_rust::LANGUAGE.into(),
+            "go" => tree_sitter_go::LANGUAGE.into(),
+            "python" => tree_sitter_python::LANGUAGE.into(),
+            "csharp" => tree_sitter_c_sharp::LANGUAGE.into(),
+            "php" => tree_sitter_php::LANGUAGE_PHP.into(),
+            "dart" => tree_sitter_dart::LANGUAGE.into(),
+            other => unreachable!("unpinned grammar in the operator-field table: {other}"),
+        }
+    }
+
+    /// Every anonymous token in the tree as
+    /// `(parent kind, spelling, field name)`.
+    fn anonymous_token_fields(root: Node<'_>) -> Vec<(String, String, Option<String>)> {
+        let mut found = Vec::new();
+        let mut stack = vec![root];
+        while let Some(node) = stack.pop() {
+            let mut cursor = node.walk();
+            for (index, child) in node.children(&mut cursor).enumerate() {
+                if !child.is_named() {
+                    let field = u32::try_from(index)
+                        .ok()
+                        .and_then(|position| node.field_name_for_child(position))
+                        .map(str::to_owned);
+                    found.push((node.kind().to_owned(), child.kind().to_owned(), field));
+                }
+                stack.push(child);
+            }
+        }
+        found
     }
 }

@@ -2,21 +2,17 @@
 //! a literal are framing, not behaviour, and must never become operator
 //! leaves.
 //!
-//! `OPERATOR_FRAMING_PARENTS` names `LITERAL_KIND` as a framing parent and
-//! documents the case it exists for — "a delimiter *inside* a literal,
-//! such as a JavaScript regex's `/`". The row is compared against the raw
-//! tree-sitter parent kind, which for a regex is `regex`; the normalised
-//! kind `__literal__` is never a parent kind tree-sitter produces, so the
-//! row can never match and the delimiters are emitted.
+//! A regex's `/` delimits the literal; it computes nothing. Emitting it
+//! reproduced the gh #147 mechanism verbatim: the literal grew from the
+//! parts it is made of to those parts *plus* two `__op__/` leaves, which
+//! lifted `const name = /.../;` from four nodes to eight and over the
+//! `--min-nodes` floor. Two unrelated files then published their regex
+//! constants as duplication at `duplication_percent: 40.0`.
 //!
-//! The cost is the gh #147 mechanism verbatim. A regex that must normalise
-//! to one collapsed literal leaf instead spans five nodes
-//! (`__literal__` over `__op__/`, `__literal__`, `__op__/`,
-//! `__literal__`), which lifts it over the `--min-nodes` floor and makes
-//! two regexes that match entirely different text hash the same — the
-//! delimiters and the collapsed pattern are all that is left to compare.
-//! Two unrelated files then publish their regex constants as `identical`
-//! duplication.
+//! The delimiters are what must go, not the literal's parts. Its named
+//! parts stay: [FUSION-CONTENT-GATE] reads literal leaves as content
+//! evidence, so collapsing `regex_pattern` into its parent would erase the
+//! only thing that tells `/[a-z]+@[a-z]+/i` from `/[0-9]{3}-[0-9]{4}/g`.
 
 use std::fs;
 
@@ -34,13 +30,24 @@ const FIXTURE: &str = "js-regex-literal-delimiters";
 /// Both fixture files, for the cross-file span assertion.
 const FIXTURE_FILES: [&str; 2] = ["email_rules.js", "order_codes.js"];
 
-/// Node floor the fixture is pinned at. A correctly collapsed regex is a
-/// single leaf and cannot reach it; the inflated form clears it with the
-/// delimiters alone.
-const MIN_NODES: &str = "4";
+/// Node floor the fixture is pinned at, chosen so the two outcomes fall on
+/// opposite sides of it and nothing else does.
+///
+/// A correctly collapsed regex is one leaf, so `const name = /.../;` is
+/// four nodes — `lexical_declaration`, `variable_declarator`, `__ident__`,
+/// `__literal__` — and cannot reach this floor. The inflated form spans
+/// five (`__literal__` over `__op__/`, `__literal__`, `__op__/`,
+/// `__literal__`), which makes the declaration eight and clears it. A
+/// floor of four would put *both* forms above it and the assertion would
+/// be measuring the floor rather than the defect: at four nodes "a
+/// constant bound to a literal" is a real shared shape, and suppressing it
+/// is the min-nodes question, not this one.
+const MIN_NODES: &str = "8";
 
-/// The normalised kind every literal collapses to.
-const LITERAL_KIND: &str = "__literal__";
+/// The namespace every operator leaf is emitted behind. Neither fixture
+/// file computes anything — a declaration, a member access and a call —
+/// so a single leaf under this prefix is a framing token that escaped.
+const OPERATOR_KIND_PREFIX: &str = "__op__";
 
 /// The operator leaf a regex delimiter is wrongly emitted as.
 const REGEX_DELIMITER_LEAF: &str = "__op__/";
@@ -103,11 +110,11 @@ fn a_regex_literal_collapses_to_a_single_leaf_with_no_delimiter_operators() -> R
              the literal from one node to five and gives two different \
              patterns the same hash:\n{dump}"
         );
-        assert_eq!(
-            dump.matches(LITERAL_KIND).count(),
-            1,
-            "{file_name}: the file holds exactly one literal — the regex — and \
-             it must collapse to exactly one {LITERAL_KIND} leaf:\n{dump}"
+        assert!(
+            !dump.contains(OPERATOR_KIND_PREFIX),
+            "{file_name}: nothing in this file computes anything — it declares a \
+             constant, reads a member and calls it — so no token may reach the \
+             digest as an operator:\n{dump}"
         );
     }
     Ok(())
