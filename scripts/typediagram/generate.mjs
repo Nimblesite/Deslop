@@ -27,16 +27,35 @@ function generateTs() {
   return `${TS_HEADER}\n${importBlock}${body}`;
 }
 
+// [BUILD-GEN-IDEMPOTENT] Writes only when the content would change.
+//
+// The Rust output is a source file of deslop-core, and cargo fingerprints
+// local sources by mtime — so rewriting it with byte-identical content
+// still invalidates deslop-core and every crate and test target below it.
+// This generator is a prerequisite of `fmt`, `lint`, `test`, `test-shard`,
+// `coverage` and `_vsix-build`, so an unconditional write discarded the
+// release build the previous target had just cached. Measured: a no-op
+// workspace rebuild is 0.13s, and 1m30s after one generator run.
+//
+// Compares content rather than trusting a timestamp, so a clobbered or
+// half-written file is still regenerated.
+function writeIfChanged(path, contents) {
+  mkdirSync(dirname(path), { recursive: true });
+  try {
+    if (readFileSync(path, "utf8") === contents) return "unchanged";
+  } catch {
+    // No readable file yet (fresh checkout, or a partial write).
+  }
+  writeFileSync(path, contents, "utf8");
+  return "wrote";
+}
+
 function main() {
   const rust = postprocess(runTypediagram("rust"));
-  mkdirSync(dirname(OUT_RUST), { recursive: true });
-  writeFileSync(OUT_RUST, rust, "utf8");
-  process.stdout.write(`typediagram-gen: wrote ${OUT_RUST}\n`);
+  process.stdout.write(`typediagram-gen: ${writeIfChanged(OUT_RUST, rust)} ${OUT_RUST}\n`);
 
   const ts = generateTs();
-  mkdirSync(dirname(OUT_TS), { recursive: true });
-  writeFileSync(OUT_TS, ts, "utf8");
-  process.stdout.write(`typediagram-gen: wrote ${OUT_TS}\n`);
+  process.stdout.write(`typediagram-gen: ${writeIfChanged(OUT_TS, ts)} ${OUT_TS}\n`);
 }
 
 main();

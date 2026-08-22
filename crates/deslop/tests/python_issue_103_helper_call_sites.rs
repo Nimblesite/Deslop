@@ -27,7 +27,6 @@
 
 use anyhow::Result;
 
-mod common;
 use crate::common::{negative_pin::assert_family_demoted_with_control, *};
 
 /// The false-negative control.

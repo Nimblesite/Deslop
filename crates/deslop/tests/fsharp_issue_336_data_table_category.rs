@@ -16,7 +16,6 @@
 
 use serde_json::Value;
 
-mod common;
 use crate::common::{corpora::*, *};
 
 /// True for the distinct-value table files in the shared #336 corpus.

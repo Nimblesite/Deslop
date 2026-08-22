@@ -18,7 +18,6 @@ use std::{collections::BTreeSet, fs, path::Path};
 
 use anyhow::{Context, Result};
 
-mod common;
 use crate::common::*;
 
 fn cluster_paths(cluster: &serde_json::Value) -> BTreeSet<String> {

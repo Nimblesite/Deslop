@@ -20,7 +20,6 @@
 
 use serde_json::Value;
 
-mod common;
 use crate::common::{corpora::*, *};
 
 /// The agent-facing act-now line ([FUSED-THRESHOLD]): `find-similar`

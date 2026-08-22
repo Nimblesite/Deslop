@@ -35,7 +35,6 @@ use std::{ffi::OsString, path::Path};
 
 use serde_json::Value;
 
-mod common;
 use crate::common::{clone_corpus::*, incremental::*, rerun_ops::*, *};
 
 /// Runs one CLI invocation that initialises a session over `scan_root`,

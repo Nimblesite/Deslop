@@ -23,7 +23,6 @@
 
 use std::fs;
 
-mod common;
 use crate::common::{incremental::*, multilang::*, multilang_warm::*, *};
 
 // [PIPELINE-INCREMENTAL-INVALIDATION] Touching one file in one language

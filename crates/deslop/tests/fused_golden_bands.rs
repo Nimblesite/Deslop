@@ -40,7 +40,6 @@ use std::path::Path;
 
 use serde_json::Value;
 
-mod common;
 use crate::common::{signals::*, *};
 
 /// Node floor for the golden corpora — matches the small-fixture value the

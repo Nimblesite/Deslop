@@ -4,7 +4,7 @@
 //! and the wire `WorkspaceEdit`. Unknown ids surface the stable
 //! `UnknownCluster` error.
 
-mod common;
+use crate::common;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use common::{

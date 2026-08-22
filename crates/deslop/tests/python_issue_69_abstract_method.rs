@@ -9,7 +9,6 @@
 //! promoting it reported both files 100% duplicated on the strength of
 //! bytes the contract forces to agree.
 
-mod common;
 
 use crate::common::*;
 

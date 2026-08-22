@@ -42,7 +42,6 @@ use std::collections::BTreeSet;
 
 use serde_json::Value;
 
-mod common;
 use crate::common::{signals::*, *};
 
 /// Node floor low enough that a run of four sibling constant

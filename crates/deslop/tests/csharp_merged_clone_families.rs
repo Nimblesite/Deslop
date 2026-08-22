@@ -29,7 +29,6 @@
 //! them only in isolation would pass a two-file test and still ship this
 //! bug.
 
-mod common;
 
 use crate::common::*;
 use serde_json::Value;

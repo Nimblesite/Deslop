@@ -33,7 +33,6 @@
 
 use serde_json::Value;
 
-mod common;
 use crate::common::{multilang::*, *};
 
 /// The floor gh #389 reproduces at. The 13-node signature window only

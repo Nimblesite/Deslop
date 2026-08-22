@@ -19,7 +19,6 @@ use anyhow::Result;
 use deslop_test_support::write_dart_data_table_fixture;
 use serde_json::Value;
 
-mod common;
 use crate::common::*;
 
 fn report_path(tmp: &Path, stem: &str) -> PathBuf {

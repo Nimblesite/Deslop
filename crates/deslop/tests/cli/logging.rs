@@ -1,4 +1,4 @@
-use crate::support::*;
+use super::support::*;
 
 const RUST_LOG_ENV: &str = "RUST_LOG";
 const LOG_TO_CONSOLE_FLAG: &str = "--log-to-console";
@@ -290,7 +290,7 @@ fn technical_mode_surfaces_raw_cache_stats_line() -> Result<()> {
 // provider end-to-end without depending on a real install.
 #[test]
 fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
-    let server = crate::mock_ollama::MockOllama::spawn()?;
+    let server = super::mock_ollama::MockOllama::spawn()?;
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture(CSHARP_SMALL_FIXTURE), &scan_root)?;

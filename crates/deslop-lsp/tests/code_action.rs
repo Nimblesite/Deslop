@@ -7,7 +7,7 @@
 //! `WorkspaceEdit` client-side, and asserts the resulting buffer
 //! matches the shared golden snapshot.
 
-mod common;
+use crate::common;
 
 use std::{
     fs,

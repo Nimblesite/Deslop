@@ -20,7 +20,7 @@ use anyhow::{ensure, Result};
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
-mod common;
+use crate::common;
 use common::{error_and_message, initialized_mcp};
 
 #[test]

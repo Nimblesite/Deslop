@@ -7,7 +7,7 @@
 //! announced with a `window/showMessage` warning, or the user's click
 //! silently does nothing.
 
-mod common;
+use crate::common;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use common::{

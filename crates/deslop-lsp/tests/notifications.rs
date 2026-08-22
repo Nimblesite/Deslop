@@ -15,7 +15,6 @@ use std::{
 
 use anyhow::{anyhow, ensure, Result};
 
-mod common;
 use crate::common::*;
 
 type FrameResult = std::result::Result<serde_json::Value, String>;

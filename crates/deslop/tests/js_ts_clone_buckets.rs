@@ -25,7 +25,6 @@
 use anyhow::Result;
 use serde_json::Value;
 
-mod common;
 use crate::common::{
     signals::{assert_near_miss_rename_contract, assert_proven_rename_contract},
     *,

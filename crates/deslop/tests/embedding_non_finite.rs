@@ -7,7 +7,6 @@
 #[path = "cli/mock_ollama.rs"]
 mod mock_ollama;
 
-mod common;
 
 use anyhow::Result;
 use mock_ollama::{MockBehavior, MockOllama};

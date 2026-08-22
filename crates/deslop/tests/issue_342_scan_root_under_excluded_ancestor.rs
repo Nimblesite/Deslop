@@ -24,7 +24,6 @@
 use anyhow::Result;
 use serde_json::Value;
 
-mod common;
 use crate::common::*;
 
 /// The two byte-identical files seeded into every scan root below.

@@ -12,7 +12,6 @@
 //! `legacy_b`), and names one file outside the scan root
 //! (`docs/notes.md`) that ingest must ignore.
 
-mod common;
 
 use std::fs;
 

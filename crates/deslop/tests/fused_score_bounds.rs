@@ -8,7 +8,6 @@
 
 use anyhow::anyhow;
 
-mod common;
 use crate::common::*;
 
 /// Every cluster's `(id, signals.fused)`, erroring on a missing

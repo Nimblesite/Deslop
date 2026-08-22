@@ -1,4 +1,4 @@
-use crate::support::*;
+use super::support::*;
 use deslop_core::lang::shared::OPERATOR_KIND_PREFIX;
 use std::fmt::Write as _;
 

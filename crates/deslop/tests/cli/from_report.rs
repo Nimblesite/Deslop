@@ -1,4 +1,4 @@
-use crate::support::*;
+use super::support::*;
 
 /// Writes `report_body` to `<tmp>/<file_name>`, runs the CLI in
 /// `--from-report` replay mode over it (adding `--no-color` when

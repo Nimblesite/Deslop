@@ -11,7 +11,7 @@
 use anyhow::{anyhow, ensure, Result};
 use serde_json::{json, Value};
 
-mod common;
+use crate::common;
 use common::{
     copied_fixture, spawn_lsp_and_wait_for_socket, structured_content,
     wait_for_state_then_init_mcp, McpHandle,

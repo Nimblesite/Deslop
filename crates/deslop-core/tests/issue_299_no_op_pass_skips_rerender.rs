@@ -43,7 +43,6 @@ use deslop_core::{
 };
 use tokio::sync::broadcast::{error::TryRecvError, Receiver};
 
-mod common;
 use crate::common::*;
 
 /// C# that clusters with the fixture's `Alpha.cs`, so if any gate were to

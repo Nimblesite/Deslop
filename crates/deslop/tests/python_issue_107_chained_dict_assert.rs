@@ -15,7 +15,6 @@
 //! asserted an empty report, which a detector that had stopped
 //! producing candidates would have satisfied perfectly.
 
-mod common;
 
 use crate::common::{negative_pin::assert_family_hidden_with_control, verdict::*, *};
 

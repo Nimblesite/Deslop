@@ -23,7 +23,6 @@
 //! `ts-rename-literal-substring` is the same rename with one mangled
 //! message and must stay a demoted, uncertified `structural_only` match.
 
-mod common;
 use crate::common::{signals::*, *};
 
 use deslop_core::buckets::CONTENT_SUPPORT_FLOOR;

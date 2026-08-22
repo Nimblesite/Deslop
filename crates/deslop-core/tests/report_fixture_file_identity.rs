@@ -7,7 +7,7 @@
 //! misdescribes the corpus makes every assertion built on it vacuous:
 //! these tests pin the harness itself to reality.
 
-mod common;
+use crate::common;
 
 use anyhow::{bail, Result};
 use common::ReportFixture;

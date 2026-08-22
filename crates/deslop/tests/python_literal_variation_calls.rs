@@ -19,7 +19,6 @@
 
 use anyhow::Result;
 
-mod common;
 use crate::common::{negative_pin::assert_family_hidden_with_control, *};
 
 /// The false-negative control staged in every fixture here.

@@ -27,7 +27,6 @@ use std::{fs, path::PathBuf};
 use anyhow::{anyhow, Context as _};
 use serde_json::Value;
 
-mod common;
 use crate::common::{golden::*, verdict::*, *};
 
 /// Fixed `--min-nodes` the golden is rendered at. 16 sits above the

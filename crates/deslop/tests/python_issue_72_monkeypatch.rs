@@ -17,7 +17,6 @@
 
 use anyhow::Result;
 
-mod common;
 use crate::common::{negative_pin::assert_family_hidden_with_control, *};
 
 // [CLONE-NOISE-PY-MONKEYPATCH] gh #72, gh #103 class 1.

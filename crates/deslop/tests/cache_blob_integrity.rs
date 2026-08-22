@@ -27,7 +27,6 @@ use std::{
 
 use anyhow::anyhow;
 
-mod common;
 use crate::common::{incremental::*, multilang_warm::seed_twins, seeded::*, store::*, *};
 
 /// Seeds the corpus and runs the store-filling cold pass, returning the

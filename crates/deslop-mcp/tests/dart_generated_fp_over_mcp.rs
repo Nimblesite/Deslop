@@ -13,7 +13,7 @@
 use anyhow::{ensure, Result};
 use serde_json::{json, Value};
 
-mod common;
+use crate::common;
 use common::{call_tool, copied_fixture_named, initialized_mcp, spawn_lsp_and_wait_for_socket};
 
 /// File names of every occurrence across all returned clusters.

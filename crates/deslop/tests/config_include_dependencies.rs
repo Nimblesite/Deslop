@@ -24,7 +24,6 @@ use std::{fs, path::Path};
 use anyhow::Result;
 use serde_json::Value;
 
-mod common;
 use crate::common::*;
 
 /// `min-nodes` for the seeded fixture, matching

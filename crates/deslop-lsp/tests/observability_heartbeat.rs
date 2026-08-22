@@ -19,7 +19,6 @@ use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 use std::io::BufReader;
 
-mod common;
 use crate::common::*;
 
 static NEXT_ID: AtomicI64 = AtomicI64::new(90_000);

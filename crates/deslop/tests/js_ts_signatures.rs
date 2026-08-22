@@ -16,7 +16,6 @@ use anyhow::Result;
 use deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP;
 use serde_json::Value;
 
-mod common;
 use crate::common::*;
 
 #[test]

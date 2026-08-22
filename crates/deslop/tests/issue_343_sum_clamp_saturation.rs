@@ -33,7 +33,6 @@ use anyhow::Result;
 use mock_ollama::MockOllama;
 use serde_json::Value;
 
-mod common;
 use crate::common::{embeddings::run_mock_embedding_report, signals::*, *};
 
 /// Scans a private copy of just the LSH-plus-embedding pair from

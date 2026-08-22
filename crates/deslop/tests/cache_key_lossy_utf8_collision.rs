@@ -31,7 +31,6 @@ use std::{fs, path::Path};
 use anyhow::Result;
 use serde_json::Value;
 
-mod common;
 use crate::common::{incremental::*, *};
 
 /// The clone body shared by both files. Seven lines, identical in each,

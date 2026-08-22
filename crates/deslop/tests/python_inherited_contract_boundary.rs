@@ -20,7 +20,6 @@
 //! An empty report satisfies the absence half and fails the presence
 //! half, so a detector that went blind cannot pass this test.
 
-mod common;
 
 use crate::common::*;
 

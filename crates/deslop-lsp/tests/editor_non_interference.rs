@@ -12,7 +12,6 @@
 //! structural fix is to advertise none of the standard providers at all,
 //! which these tests pin.
 
-mod common;
 
 use std::{path::Path, thread, time::Duration};
 

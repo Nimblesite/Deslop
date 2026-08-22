@@ -19,7 +19,6 @@
 
 use serde_json::Value;
 
-mod common;
 use crate::common::{corpora::*, *};
 
 /// The genuine clone with its module renamed one character LONGER, so

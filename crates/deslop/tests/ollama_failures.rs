@@ -7,7 +7,6 @@ use std::{fs, path::Path};
 use anyhow::{anyhow, Result};
 use serde_json::Value;
 
-mod common;
 use crate::common::*;
 
 #[path = "cli/mock_ollama.rs"]

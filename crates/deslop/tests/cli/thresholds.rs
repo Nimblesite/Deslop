@@ -1,4 +1,4 @@
-use crate::support::*;
+use super::support::*;
 
 const FAIL_OVER_FLAG: &str = "--fail-over";
 const ZERO_THRESHOLD: &str = "0.0";

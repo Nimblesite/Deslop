@@ -10,7 +10,6 @@ use deslop_core::{
     embedding::test_support::StubProvider, live::AnalysisSession, report::ReportCluster,
 };
 
-mod common;
 use crate::common::*;
 
 #[tokio::test(flavor = "multi_thread")]

@@ -32,7 +32,6 @@
 use anyhow::anyhow;
 use serde_json::Value;
 
-mod common;
 use crate::common::*;
 
 /// The duplicated region: two consecutive top-level bindings, verbatim in

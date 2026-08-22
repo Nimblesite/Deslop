@@ -32,7 +32,6 @@ use std::{fs, path::PathBuf};
 
 use serde_json::Value;
 
-mod common;
 use crate::common::{clone_corpus::*, incremental::*, *};
 
 /// Seeds a fresh root with [`corpus`], then asserts the baseline cold
