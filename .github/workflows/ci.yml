@@ -162,6 +162,19 @@ jobs:
       # there is how a test job silently recompiles the workspace and
       # the parallelism buys nothing. `restore-keys` still hands a cold
       # run the previous commit's target directory to build on top of.
+      #
+      # The two generated wire modules are cached WITH the target
+      # directory, and have to be. They are git-ignored, so a consumer
+      # job checks out without them, regenerates them, and hands every
+      # dependent crate a source file newer than the fingerprint it just
+      # restored — cargo then rebuilds deslop-core and everything below
+      # it. That is not hypothetical: on run 32562462371 shard 1 proved
+      # an exact cache hit and still spent 3m11s recompiling five crates
+      # before its first test, and four shards paying that is how the
+      # 20-minute cap was reached on run 32549706011. Restored with the
+      # target directory they keep the build job's mtimes, the
+      # generator's own content check reports them unchanged, and the
+      # restored fingerprints stay valid.
       - name: Cache cargo registry and release target
         uses: actions/cache@v6
         with:
@@ -169,6 +182,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
           key: ${{ runner.os }}-cargo-release-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-cargo-release-
@@ -273,6 +288,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
           key: ${{ runner.os }}-cargo-release-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-cargo-release-
@@ -518,6 +535,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
           key: ${{ runner.os }}-cargo-release-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-cargo-release-
