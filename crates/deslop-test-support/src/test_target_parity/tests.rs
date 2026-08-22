@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use super::{suite_crates, wiring};
+use super::{suite_crates, suite_scan, wiring, Reached};
 use crate::corpus::repo_root;
 
 /// The crates known to funnel their integration tests through a suite root
@@ -45,6 +45,60 @@ const SAMPLE_FEATURE: &str = "live";
 
 /// The manifest key that gates a target behind features.
 const REQUIRED_FEATURES_KEY: &str = "required-features";
+
+/// One `[[test]]` naming the regression file, plus `extra` manifest keys.
+///
+/// Every gate below is the same declaration with one key added, so the
+/// declaration itself is written once and the key under test is the only
+/// thing each case spells out.
+fn regression_target(extra: &str) -> String {
+    format!("[[test]]\nname = \"regression\"\npath = \"tests/{REGRESSION_FILE}\"\n{extra}")
+}
+
+/// Scans a synthetic suite root against a real `tests/` directory.
+fn scan(source: &str) -> Result<Reached> {
+    suite_scan::scan(source, &sample_tests_dir())
+}
+
+/// Asserts the regression file is built and run on every ordinary run.
+fn assert_built(reached: &Reached, why: &str) {
+    assert!(
+        reached.always.contains(REGRESSION_FILE),
+        "{why}, so tests/{REGRESSION_FILE} must count as built: {reached:?}"
+    );
+    assert!(
+        reached.conditional.is_empty(),
+        "{why}, so nothing here is conditional: {reached:?}"
+    );
+}
+
+/// Asserts the regression file is mentioned but not built on an ordinary
+/// run — the distinction the whole gate turns on.
+///
+/// Both halves matter. Not being counted as built is what stops the gate
+/// passing; still being mentioned is what lets it name the file instead of
+/// dropping it and reporting nothing at all.
+fn assert_gated(reached: &Reached, why: &str) {
+    assert!(
+        !reached.always.contains(REGRESSION_FILE),
+        "{why}, so it cannot stand as proof tests/{REGRESSION_FILE} is \
+         exercised: {reached:?}"
+    );
+    assert!(
+        reached.conditional.contains(REGRESSION_FILE),
+        "{why}, and the file must still be recorded so the gate names it \
+         rather than dropping it: {reached:?}"
+    );
+}
+
+/// Asserts nothing at all reaches the regression file.
+fn assert_says_nothing(reached: &Reached, why: &str) {
+    assert!(
+        !reached.mentions(REGRESSION_FILE),
+        "{why}, so it says nothing about tests/{REGRESSION_FILE}, gated or \
+         otherwise: {reached:?}"
+    );
+}
 
 /// A `tests/` directory to resolve bare `mod` declarations against.
 fn sample_tests_dir() -> PathBuf {

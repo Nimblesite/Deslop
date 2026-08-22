@@ -9,43 +9,50 @@
 use anyhow::Result;
 
 use super::{
-    ENABLED_SUITE_TARGET, NO_SUITE_TARGET_MANIFEST, REGRESSION_FILE, REQUIRED_FEATURES_KEY,
-    SAMPLE_FEATURE,
+    assert_built, assert_gated, assert_says_nothing, regression_target, ENABLED_SUITE_TARGET,
+    NO_SUITE_TARGET_MANIFEST, REGRESSION_FILE, REQUIRED_FEATURES_KEY, SAMPLE_FEATURE,
 };
 use crate::test_target_parity::manifest;
 
 /// A `[[test]]` behind `required-features` builds on no ordinary run.
 #[test]
 fn a_required_features_target_is_not_counted_as_built() -> Result<()> {
-    let declared: toml::Table = format!(
-        "[[test]]\nname = \"regression\"\npath = \"tests/{REGRESSION_FILE}\"\n\
-         required-features = [\"live\"]\n"
-    )
+    let declared: toml::Table = regression_target(&format!(
+        "{REQUIRED_FEATURES_KEY} = [\"{SAMPLE_FEATURE}\"]\n"
+    ))
     .parse()?;
-    let reached = manifest::targets(&declared);
-    assert!(
-        !reached.always.contains(REGRESSION_FILE),
-        "`required-features` means a plain `cargo test` builds no such \
-         target, so it cannot prove the file is built: {reached:?}"
-    );
-    assert!(
-        reached.conditional.contains(REGRESSION_FILE),
-        "the target must still be recorded, so the gate names the file \
-         rather than dropping it: {reached:?}"
+    assert_gated(
+        &manifest::targets(&declared),
+        "`required-features` means a plain `cargo test` builds no such target",
     );
     Ok(())
 }
 
-/// The same target without the gate is counted — proof the assertion
-/// above turns on `required-features`.
+/// A `[[test]]` with `test = false` is compiled and never run.
+///
+/// `test = false` was only ever checked on the suite root, so unwiring a
+/// file from `suite.rs` and declaring a `test = false` target for it left
+/// the gate satisfied while Cargo ran none of it — a silent skip dressed
+/// up as an explicit target.
 #[test]
-fn the_same_target_without_required_features_is_counted_as_built() -> Result<()> {
-    let declared: toml::Table =
-        format!("[[test]]\nname = \"regression\"\npath = \"tests/{REGRESSION_FILE}\"\n").parse()?;
-    let reached = manifest::targets(&declared);
-    assert!(
-        reached.always.contains(REGRESSION_FILE),
-        "an ungated [[test]] builds its file: {reached:?}"
+fn a_leaf_target_with_test_false_is_not_counted_as_built() -> Result<()> {
+    let declared: toml::Table = regression_target("test = false\n").parse()?;
+    assert_gated(
+        &manifest::targets(&declared),
+        "Cargo runs no tests in a `test = false` target",
+    );
+    Ok(())
+}
+
+/// The same target with neither key is counted — proof the two assertions
+/// above turn on the gating and not on the scan misreading an ordinary
+/// manifest and reporting everything as unbuilt.
+#[test]
+fn the_same_target_without_a_gate_is_counted_as_built() -> Result<()> {
+    let declared: toml::Table = regression_target("").parse()?;
+    assert_built(
+        &manifest::targets(&declared),
+        "an ungated [[test]] is built",
     );
     Ok(())
 }
@@ -61,16 +68,31 @@ fn a_target_outside_the_tests_directory_certifies_nothing() -> Result<()> {
     let declared: toml::Table =
         format!("[[test]]\nname = \"regression\"\npath = \"somewhere_else/{REGRESSION_FILE}\"\n")
             .parse()?;
-    let reached = manifest::targets(&declared);
-    assert!(
-        !reached.always.contains(REGRESSION_FILE),
-        "a target building somewhere_else/{REGRESSION_FILE} says nothing \
-         about tests/{REGRESSION_FILE}: {reached:?}"
+    assert_says_nothing(
+        &manifest::targets(&declared),
+        "a target building somewhere_else/regression.rs is about a different file",
     );
-    assert!(
-        reached.conditional.is_empty(),
-        "nor is the file conditionally reached — the target is simply \
-         about a different file: {reached:?}"
+    Ok(())
+}
+
+/// The whole leaf bypass, end to end: a file absent from the suite root
+/// and declared only as a `test = false` target must still be reported,
+/// and the suite root's own target must not be blamed for it.
+#[test]
+fn unwiring_a_file_behind_a_test_false_target_is_still_reported() -> Result<()> {
+    let manifest: toml::Table = format!(
+        "{ENABLED_SUITE_TARGET}\n{}",
+        regression_target("test = false\n")
+    )
+    .parse()?;
+    assert_eq!(
+        manifest::suite_target_defect(&manifest),
+        None,
+        "the suite target itself is fine here; only the leaf is gated"
+    );
+    assert_gated(
+        &manifest::targets(&manifest),
+        "the leaf target runs nothing",
     );
     Ok(())
 }
@@ -88,8 +110,7 @@ fn a_crate_with_no_suite_target_is_reported_as_unbuilt() -> Result<()> {
     let defect = manifest::suite_target_defect(&manifest);
     assert!(
         defect.is_some(),
-        "no [[test]] compiles the suite root, which must be reported: \
-         {defect:?}"
+        "no [[test]] compiles the suite root, which must be reported: {defect:?}"
     );
     Ok(())
 }
@@ -98,7 +119,8 @@ fn a_crate_with_no_suite_target_is_reported_as_unbuilt() -> Result<()> {
 #[test]
 fn a_suite_target_behind_required_features_is_reported_as_unbuilt() -> Result<()> {
     let manifest: toml::Table =
-        format!("{ENABLED_SUITE_TARGET}required-features = [\"{SAMPLE_FEATURE}\"]\n").parse()?;
+        format!("{ENABLED_SUITE_TARGET}{REQUIRED_FEATURES_KEY} = [\"{SAMPLE_FEATURE}\"]\n")
+            .parse()?;
     let defect = manifest::suite_target_defect(&manifest);
     assert!(
         defect.is_some_and(|reason| reason.contains(REQUIRED_FEATURES_KEY)),
@@ -131,54 +153,6 @@ fn an_enabled_suite_target_is_not_reported_as_unbuilt() -> Result<()> {
         None,
         "an ordinary [[test]] naming tests/suite.rs builds and runs the \
          suite, and must not be flagged"
-    );
-    Ok(())
-}
-
-/// A leaf `[[test]]` with `test = false` compiles and runs nothing.
-///
-/// `test = false` was only ever checked on the suite root, so unwiring a
-/// file from `suite.rs` and declaring a `test = false` target for it left
-/// the gate satisfied while Cargo ran none of it — a silent skip dressed
-/// up as an explicit target.
-#[test]
-fn a_leaf_target_with_test_false_is_not_counted_as_built() -> Result<()> {
-    let declared: toml::Table = format!(
-        "[[test]]\nname = \"regression\"\npath = \"tests/{REGRESSION_FILE}\"\ntest = false\n"
-    )
-    .parse()?;
-    let reached = manifest::targets(&declared);
-    assert!(
-        !reached.always.contains(REGRESSION_FILE),
-        "Cargo runs no tests in a `test = false` target, so it cannot \
-         stand as proof the file is exercised: {reached:?}"
-    );
-    assert!(
-        reached.conditional.contains(REGRESSION_FILE),
-        "the target must still be recorded so the gate names the file: \
-         {reached:?}"
-    );
-    Ok(())
-}
-
-/// The whole bypass, end to end: a file absent from the suite root and
-/// declared only as a `test = false` target must still be reported.
-#[test]
-fn unwiring_a_file_behind_a_test_false_target_is_still_reported() -> Result<()> {
-    let manifest: toml::Table = format!(
-        "{ENABLED_SUITE_TARGET}\n[[test]]\nname = \"regression\"\npath = \"tests/{REGRESSION_FILE}\"\ntest = false\n"
-    )
-    .parse()?;
-    assert_eq!(
-        manifest::suite_target_defect(&manifest),
-        None,
-        "the suite target itself is fine here; only the leaf is gated"
-    );
-    let reached = manifest::targets(&manifest);
-    assert!(
-        !reached.always.contains(REGRESSION_FILE),
-        "the leaf is gated, so tests/{REGRESSION_FILE} is not built on an \
-         ordinary run and conditionally_reached() must name it: {reached:?}"
     );
     Ok(())
 }
