@@ -29,13 +29,10 @@
 //! coherent with its siblings, and the two-ledger scan reports exactly the
 //! one real duplicate family.
 
-#[path = "cli/mock_ollama.rs"]
-mod mock_ollama;
-
 use std::path::Path;
 
+use crate::mock_ollama::MockOllama;
 use anyhow::Result;
-use mock_ollama::MockOllama;
 use serde_json::Value;
 
 use crate::common::{embeddings::run_mock_embedding_report, signals::*, *};

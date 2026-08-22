@@ -1,5 +1,5 @@
-use super::mock_ollama::{MockOllama, MOCK_CONTEXT_TOKENS};
 use super::support::*;
+use crate::mock_ollama::{MockOllama, MOCK_CONTEXT_TOKENS};
 
 // different default. Reports are parsed via `serde_json` so the
 // assertions are schema-aware rather than substring-guessing.

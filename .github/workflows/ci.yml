@@ -189,7 +189,7 @@ jobs:
       # exactly that before running a suite that takes 1m34s. `--no-run`
       # stops short of executing them, so this job stays a build job.
       - name: Compile release test binaries
-        run: cargo test --release --workspace --all-targets --features deslop-core/live --no-run
+        run: make compile-release-tests
 
       # Duplication gate ([CI-DESLOP]). Self-hosted: runs the release binary
       # built by the step above against this repo, so the gate is always the

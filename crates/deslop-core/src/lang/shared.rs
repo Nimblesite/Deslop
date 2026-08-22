@@ -340,52 +340,39 @@ fn normalise_children(
 /// Grammar productions in which a behaviour-bearing token is **framing**
 /// and must not become a leaf ([PIPELINE-NORMALIZE-AST-OPERATOR]).
 ///
-/// The allowlist is over token *text*, because tree-sitter names an
-/// anonymous node by its own token. Text alone cannot separate the `<` of
-/// `alpha < beta` from the `<` of `Vec<T>`: the same byte carries a
-/// comparison in one production and a bracket in the other. Keeping the
-/// bracket contradicts the rule the allowlist exists to serve — framing is
-/// implied by the parent production, and preserving it inflates every
-/// subtree with positions no two members can disagree on.
+/// [`BEHAVIOUR_BEARING_TOKENS`] is keyed on token *text*, because
+/// tree-sitter names an anonymous node by its own token, and text alone
+/// cannot separate the `|` of `left | right` from the `|` that delimits a
+/// Rust closure's binding list. Only the parent production tells them
+/// apart, which is what this list is for.
 ///
-/// Measured, not guessed: every entry here was read off a committed AST
-/// golden as the parent of an emitted operator leaf. `Vec<&str>` grew from
-/// under the `--min-nodes 4` floor to eight nodes, became a clustering
-/// candidate, and published six type annotations across three unrelated
-/// files as `identical` at `fused 1.00` — the gh #147 idiom the
-/// [CLONE-NOISE-RUST-ITER-COLLECT] fixture exists to keep out of the
-/// report.
+/// Every entry must be justified by a test that fails without it, and the
+/// list is deliberately as short as that rule allows. Suppressing a leaf
+/// is not free: it erases a difference two members could otherwise
+/// disagree on, and an entry that erases a *real* difference manufactures
+/// a false positive. That is not hypothetical — `type_arguments` and
+/// `type_parameters` were in this list and had to come out. They promoted
+/// the seven sibling Dart API methods in `rank_structural_only_policy`
+/// from `structural_only` to `nearly_identical`: a shape-only family
+/// relabelled as near-duplicate code, which is the #134/#197 defect that
+/// fixture exists to pin. Removing them cost nothing —
+/// `rust_issue_147_iter_collect_idiom` still passes, and the committed AST
+/// and report goldens stop drifting.
 ///
-/// This is a denylist rather than an allowlist of operator productions,
-/// and the direction is deliberate. A production missing from an
-/// *allowlist* would drop its operator and let `alpha + beta` and
-/// `alpha - beta` hash identically again — the defect this whole section
-/// exists to fix. A production missing from this denylist can only leave a
-/// subtree larger than it should be. Both are worth fixing; only one
-/// certifies an operator swap as duplication.
+/// The direction of the list is deliberate. A production missing from an
+/// *allowlist* of operator productions would drop its operator and let
+/// `alpha + beta` and `alpha - beta` hash identically again — the defect
+/// this whole section exists to fix. A production missing from this
+/// denylist leaves a subtree larger than it should be. Both are worth
+/// fixing; only one certifies an operator swap as duplication.
 const OPERATOR_FRAMING_PARENTS: &[&str] = &[
-    // Generics: the angle brackets delimit a type argument list.
-    "type_arguments",
-    "type_parameters",
-    // JSX/TSX tag punctuation, not a comparison.
-    "jsx_opening_element",
-    "jsx_closing_element",
-    // Type syntax: Rust `&T` / `&self`, Go `*T` and `...T`.
-    "reference_type",
-    "self_parameter",
-    "pointer_type",
-    "variadic_parameter_declaration",
-    // Rust `println!` — the bang is part of the macro's name.
-    "macro_invocation",
-    // Rust closure parameter lists: the pipes delimit the binding
-    // list, they are not bitwise-or. Emitting them changed the hash and
-    // the LSH bands of every closure-bearing function in gh #147, which
-    // fragmented the one component `main` forms into sixteen and left
-    // [CLONE-NOISE-RUST-ITER-COLLECT] with no cluster whose every
-    // member holds the idiom.
+    // Rust closure parameter lists: the pipes delimit the binding list,
+    // they are not bitwise-or. Emitting them changed the hash and the LSH
+    // bands of every closure-bearing function in gh #147, which fragmented
+    // the single component `main` forms into sixteen and left
+    // [CLONE-NOISE-RUST-ITER-COLLECT] with no cluster whose every member
+    // holds the idiom. Pinned by `rust_issue_147_iter_collect_idiom`.
     "closure_parameters",
-    // A delimiter *inside* a literal, such as a JavaScript regex's `/`.
-    LITERAL_KIND,
 ];
 
 /// True when `parent_kind` is a production in which a behaviour-bearing

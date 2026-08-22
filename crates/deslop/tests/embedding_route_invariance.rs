@@ -22,13 +22,10 @@
 //! bucket. A single hand-built cluster could only pin one corner of
 //! that; this pins every cluster of every corpus swept.
 
-#[path = "cli/mock_ollama.rs"]
-mod mock_ollama;
-
 use std::collections::BTreeMap;
 
+use crate::mock_ollama::MockOllama;
 use anyhow::{Context, Result};
-use mock_ollama::MockOllama;
 
 use crate::common::{
     cluster_bucket, cluster_file_set, clusters, embeddings::run_mock_embedding_report, field,

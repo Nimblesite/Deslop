@@ -27,9 +27,6 @@
 //! [`drive_failed_refresh`] holds it once; a test supplies the mock
 //! provider and the behaviour its diagnostics name.
 
-#[path = "../../deslop/tests/cli/mock_ollama.rs"]
-mod mock_ollama;
-
 use crate::common;
 
 use std::{
@@ -38,12 +35,12 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::mock_ollama::{MockBehavior, MockOllama};
 use anyhow::{anyhow, Result};
 use common::{
     at, call, call_capturing, handshake, path as json_path, reports::assert_initialize_contract,
     spawn_lsp_guarded, wait_for_report_matching, POLL_INTERVAL,
 };
-use mock_ollama::{MockBehavior, MockOllama};
 use serde_json::{json, Value};
 
 const REPORT_TIMEOUT: Duration = Duration::from_secs(20);
