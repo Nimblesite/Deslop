@@ -174,7 +174,14 @@ pub fn attach_content_evidence<S: BuildHasher>(
         trees.iter().map(|tree| (tree.file_id, tree)).collect();
     for cluster in clusters.iter_mut() {
         cluster.content = measure_cluster(&cluster.members, &tree_index, sources);
-        tracing::debug!(
+        // [PERF-FLUTTER-TODO-OBSERVABILITY] Per cluster, so `trace` rather
+        // than `debug`: a corpus-scale run has to stay readable and stay
+        // fast at the level someone reaches for first. The shared-subtree
+        // rescue made the case — 793,076 per-item debug records buried the
+        // stage events and measurably slowed the stage being diagnosed.
+        // Every field below survives at `trace`; the aggregate under the
+        // loop is what `debug` sees.
+        tracing::trace!(
             cluster_id = %cluster.id,
             member_count = cluster.members.len(),
             agreement = cluster.content.agreement,

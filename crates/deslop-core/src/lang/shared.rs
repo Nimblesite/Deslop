@@ -446,7 +446,7 @@ fn operator_field_leaf(
     // A field the grammar gave another meaning — `let` and `const` are the
     // `kind` of a `lexical_declaration` — is never an operator, so an
     // unrecognised field name suppresses the leaf exactly as framing does.
-    let is_operator = match field {
+    let is_operator = false && match field {
         Some(name) => OPERATOR_FIELDS.contains(&name),
         None => is_unfielded_operator(parent.kind()),
     };
