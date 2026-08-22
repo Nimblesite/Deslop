@@ -61,13 +61,14 @@ These gates run in `.github/workflows/` and `.deslop.toml` and fail the pipeline
 on drift. Coverage floors are owned by `coverage-thresholds.json`
 (`REPO-STANDARDS-SPEC [COVERAGE-THRESHOLDS-JSON]`).
 
-- **[CI-RELEASE-BUILD] One release build, two parallel test jobs** — the
+- **[CI-RELEASE-BUILD] One release build, three parallel consumers** — the
   workspace is compiled exactly once per run, by the `build` job, in release.
   That job owns format, lint, `make build`, the duplication gate and the
   deployment gates, and caches `target/` plus the cargo registry under a key
-  containing the commit SHA. `ci` (Rust suite) and `vsix` (extension suite)
-  then run **in parallel**, both restoring that exact entry read-only; a second
-  writer on the same key would race the build job. The SHA in the key is what
+  containing the commit SHA. `ci` (Rust suite), `vsix` (extension
+  suite) and `jetbrains` (package gate) then run **in parallel**, all restoring
+  that exact entry read-only; a second writer on the same key would race the
+  build job. `coverage` runs alongside them on its own cache. The SHA in the key is what
   makes the hit exact — a key that only hashes `Cargo.lock` matches a previous
   run's target directory, and a test job that silently recompiles the workspace
   buys nothing from the split. `restore-keys` still hands a cold run the
@@ -79,13 +80,26 @@ on drift. Coverage floors are owned by `coverage-thresholds.json`
   surfaced as a fresh CI round. Both now gate on `build` and report on every
   run.
 
-  `make test` runs `cargo llvm-cov --release` for the same reason: the
-  duplication gate, the deployment gates and the whole VSIX E2E suite exercise
+  `make test` runs `cargo test --release` for the same reason: the duplication
+  gate, the deployment gates and the whole VSIX E2E suite exercise
   `target/release`, so a debug-profile suite gates release artifacts on code it
-  never executed. Coverage still cannot reuse those artifacts — `cargo llvm-cov`
-  compiles instrumented binaries into `target/llvm-cov-target`, and an
-  instrumented artifact can never share a fingerprint with an uninstrumented one
-  — but it runs at the same optimisation level.
+  never executed. The `build` job compiles the release *test* binaries too
+  (`cargo test … --no-run`), so what it caches is what `ci` needs and `ci`
+  links nothing.
+
+  **Coverage is a separate job, and this is the measurement that put it there.**
+  `cargo llvm-cov` compiles into `target/llvm-cov-target`, because an
+  instrumented artifact can never share a fingerprint with an uninstrumented
+  one. Measuring coverage inside `ci` therefore reused nothing from the release
+  build and recompiled the whole workspace ahead of every suite — and nothing
+  cached that directory, so the cost was paid on every single run. On run
+  32542178321 the `Test` step took 23m29s: **21m24s compiling, 1m34s running**.
+  Sharding the suite across N runners would have multiplied the compile by N
+  and saved nothing, because the tests were never the cost. The `coverage` job
+  now owns `make coverage`, keys `target/llvm-cov-target` under its own cache,
+  and depends on `changes` alone — gating it on `build` would add waiting for
+  artifacts it cannot reuse. It runs in parallel with `ci` and still enforces
+  every per-crate threshold in `coverage-thresholds.json`; no threshold moved.
 
   `windows` keeps its own cache and its own build: a different runner OS
   produces different artifacts that can never be shared. It is not split, and

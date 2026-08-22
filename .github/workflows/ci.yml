@@ -172,6 +172,15 @@ jobs:
       - name: Build
         run: make build
 
+      # [CI-RELEASE-BUILD] The release *test* binaries, compiled here and
+      # written into the cache this job owns. Without this the `ci` job
+      # restores a target directory holding no test artifacts and
+      # recompiles all of them: CI run 32542178321 spent 21m24s doing
+      # exactly that before running a suite that takes 1m34s. `--no-run`
+      # stops short of executing them, so this job stays a build job.
+      - name: Compile release test binaries
+        run: cargo test --release --workspace --all-targets --features deslop-core/live --no-run
+
       # Duplication gate ([CI-DESLOP]). Self-hosted: runs the release binary
       # built by the step above against this repo, so the gate is always the
       # CURRENT detector. It reads the ratcheted [threshold]
@@ -202,28 +211,23 @@ jobs:
   # by name — renaming it would leave the required status pending
   # forever and block every merge.
   #
-  # Coverage cannot reuse `target/release/deslop` itself: `cargo
-  # llvm-cov` compiles instrumented binaries into
-  # `target/llvm-cov-target`, and an instrumented artifact can never
-  # share a fingerprint with an uninstrumented one. `make test` passes
-  # `--release` so the suite is at least the same *profile* as the
-  # binaries every other job exercises, instead of gating release
-  # artifacts on a debug-profile run.
+  # Coverage is measured by the separate `coverage` job, not here.
+  # `cargo llvm-cov` compiles instrumented binaries into
+  # `target/llvm-cov-target` — an instrumented artifact can never share
+  # a fingerprint with an uninstrumented one — so measuring coverage in
+  # this job reused nothing from the release build and recompiled the
+  # whole workspace ahead of every suite. This job runs the release
+  # binaries `build` produced and nothing else.
   ci:
     name: CI
     needs: [changes, build]
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
-    # TIMEOUT EXCEPTION: an instrumented release build of the whole
-    # workspace plus the full E2E suite. Sized against runs that reach
-    # the end rather than aborting at the first failure.
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: llvm-tools-preview
 
       - uses: actions/setup-node@v7
         with:
@@ -237,11 +241,6 @@ jobs:
       # `make test`'s own `typediagram-gen` prerequisite.
       - name: Install typediagram
         run: npm install -g typediagram@0.11.0
-
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@v2.85.13
-        with:
-          tool: cargo-llvm-cov
 
       # [CI-RELEASE-BUILD] Restore-only: the `build` job owns the entry
       # for this commit, and a second job writing the same key would
@@ -259,10 +258,68 @@ jobs:
             ${{ runner.os }}-cargo-release-
             ${{ runner.os }}-cargo-
 
-      # make test = fail-fast + coverage + threshold enforcement ([TEST-RULES]).
-      # Thresholds live in coverage-thresholds.json ([COVERAGE-THRESHOLDS-JSON]).
+      # [TEST-RULES] Fail-fast, release profile, every target. The
+      # binaries were compiled by `build` and restored above, so this
+      # step links nothing and is the suite's actual runtime.
       - name: Test
         run: make test
+
+  # [CI-RELEASE-BUILD] [COVERAGE-THRESHOLDS-JSON] Coverage, on its own
+  # cache and its own critical path. It cannot share the release build:
+  # `cargo llvm-cov` compiles into `target/llvm-cov-target` because an
+  # instrumented artifact can never share a fingerprint with an
+  # uninstrumented one. Bundled into `ci` that cost 21m24s of cold
+  # compile before a 1m34s suite, on every run, because nothing ever
+  # cached the instrumented directory. It has its own key now, so the
+  # first run pays the compile and later ones restore it, and it runs in
+  # parallel with `ci` rather than in front of it.
+  #
+  # It depends on `changes` only — an instrumented build shares nothing
+  # with `build`, so gating on that job would add wait for no reuse.
+  coverage:
+    name: Coverage + thresholds
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    # TIMEOUT EXCEPTION: a cold instrumented release build of the whole
+    # workspace is ~21 minutes on a cache miss.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.x"
+
+      - name: Install typediagram
+        run: npm install -g typediagram@0.11.0
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2.85.13
+        with:
+          tool: cargo-llvm-cov
+
+      # Its own key. `target/llvm-cov-target` holds the instrumented
+      # artifacts and must never be keyed together with the release
+      # target directory, or one job's write would poison the other's
+      # restore.
+      - name: Cache instrumented build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/llvm-cov-target
+          key: ${{ runner.os }}-cargo-cov-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-cov-
+
+      - name: Coverage
+        run: make coverage
 
       - name: Upload coverage
         uses: actions/upload-artifact@v7

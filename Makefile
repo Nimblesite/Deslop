@@ -78,19 +78,19 @@ typediagram-gen:
 ##       gate runs on. The duplication gate, the deployment gates and the
 ##       whole VSIX E2E suite all exercise `target/release`, so a
 ##       debug-profile test run gates release artifacts on code it never
-##       executed. Coverage still cannot share those artifacts —
-##       `cargo llvm-cov` compiles instrumented binaries into
-##       `target/llvm-cov-target`, and an instrumented artifact can never
-##       share a fingerprint with an uninstrumented one — but it can and
-##       does run at the same optimisation level.
+##       executed.
+##       [CI-RELEASE-BUILD] Coverage is **not** measured here, and that is
+##       the point. `cargo llvm-cov` compiles into `target/llvm-cov-target`
+##       because an instrumented artifact can never share a fingerprint
+##       with an uninstrumented one, so a coverage run reuses nothing from
+##       `target/release` and rebuilds the whole workspace. Measured on CI
+##       run 32542178321: 21m24s compiling, 1m34s running. Coverage moved
+##       to `make coverage`, which owns its own cache and runs in parallel,
+##       so this target is a cache hit against the release build every
+##       other gate already uses and the suite reports in minutes.
 test: _delete-path-binaries typediagram-gen
-	@echo "==> Testing (fail-fast + coverage + per-crate threshold)..."
-	rustup component add llvm-tools-preview 2>/dev/null || true
-	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
-	 cargo llvm-cov --release --workspace --all-targets --features deslop-core/live \
-	    --ignore-filename-regex "$$_rust_ignore" \
-	    --lcov --output-path lcov.info
-	@$(MAKE) _coverage_check RUST_LCOV=lcov.info
+	@echo "==> Testing (fail-fast, release profile)..."
+	cargo test --release --workspace --all-targets --features deslop-core/live
 
 _coverage_check:
 	@_lcov="$${RUST_LCOV:-lcov.info}"; \
@@ -210,6 +210,7 @@ ci:
 	@$(MAKE) fmt CHECK=1
 	@$(MAKE) lint
 	@$(MAKE) test
+	@$(MAKE) coverage
 	@$(MAKE) build
 	@$(MAKE) dup-gate
 	@$(MAKE) deployment-verify
@@ -233,6 +234,24 @@ setup:
 # =============================================================================
 # Repo-Specific Targets
 # =============================================================================
+
+## coverage: [CI-RELEASE-BUILD] [COVERAGE-THRESHOLDS-JSON] Instrumented
+##           release run + per-crate threshold enforcement. Split out of
+##           `make test` because llvm-cov's instrumented target directory
+##           shares nothing with `target/release`: bundling them made every
+##           test run pay a 21-minute cold compile of the whole workspace
+##           for a suite that executes in 94 seconds. Thresholds live in
+##           `coverage-thresholds.json` and `_coverage_check` enforces each
+##           crate independently — no workspace roll-up masking. The
+##           `--ignore-filename-regex` list has the same single source.
+coverage: typediagram-gen
+	@echo "==> Coverage (instrumented release + per-crate threshold)..."
+	rustup component add llvm-tools-preview 2>/dev/null || true
+	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
+	 cargo llvm-cov --release --workspace --all-targets --features deslop-core/live \
+	    --ignore-filename-regex "$$_rust_ignore" \
+	    --lcov --output-path lcov.info
+	@$(MAKE) _coverage_check RUST_LCOV=lcov.info
 
 ## test-ollama: [TEST-SELECTION] The VSIX `.vscode-test-ollama.mjs` suite —
 ##              the only tests that need a real daemon on 127.0.0.1:11434
