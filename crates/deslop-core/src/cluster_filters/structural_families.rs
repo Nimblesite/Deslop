@@ -36,8 +36,12 @@
 //! at two depths, not a weld, and [PIPELINE-CLUSTER-SUBSUME] and the
 //! same-file overlap collapse elect between those views on evidence this
 //! pass cannot see. So the families are first merged into the *regions*
-//! they cover, and only a component spanning **two or more** regions is
-//! split.
+//! they cover, and a component is split only when it spans **two or more**
+//! regions *and* two of those regions share no byte — the weld itself.
+//! Regions alone do not prove one: mutual coverage fails one way whenever
+//! an enclosing view reaches fewer files than the run nested inside it,
+//! and splitting there publishes the narrower view as a cluster of its
+//! own rather than undoing any merge.
 
 use std::{collections::HashMap, hash::BuildHasher};
 
@@ -48,10 +52,6 @@ use super::family::{families_by, restrict};
 /// Smallest family worth reporting on its own: one lone occurrence is
 /// not a duplicate of anything.
 const MIN_FAMILY_MEMBERS: usize = 2;
-
-/// Fewest regions that make a component a merge rather than one
-/// duplication seen at several depths.
-const MIN_REGIONS_TO_SPLIT: usize = 2;
 
 /// Replaces every fused component that welds two or more separate regions
 /// of code with one component per region, dropping the members that belong
@@ -91,11 +91,55 @@ fn split_one<S: BuildHasher>(
         .filter(|family| family.len() >= MIN_FAMILY_MEMBERS)
         .collect();
     let regions = regions(&reportable, fingerprints);
-    (regions.len() >= MIN_REGIONS_TO_SPLIT).then(|| {
+    holds_a_weld(&regions, fingerprints).then(|| {
         regions
             .iter()
             .map(|region| restrict(fused, region))
             .collect()
+    })
+}
+
+/// True when the component holds two regions that share no byte — the
+/// weld this pass exists to undo. A component of fewer than two regions
+/// offers no pair and is never a weld, which is the whole of the
+/// region-count floor.
+///
+/// Region count alone does not prove one. Regions are families merged by
+/// *mutual* coverage, and one-way coverage leaves a region of its own
+/// even when the two describe the same code: an enclosing view seen in
+/// two files, and the run nested inside it that also appears in a third,
+/// cover each other in the two files they share and part company in the
+/// third. That is one duplication at two depths over an uneven file
+/// reach, not two pieces of code a token edge glued together, and
+/// splitting it publishes the enclosing view as a cluster of its own —
+/// narrower than the family it came from, and so under the spread floors
+/// that were hiding the pattern. The #112 pytest payload fixtures reached
+/// the report exactly that way: a whole-module family of two split out of
+/// a function family of four, published `structural_only` at `agreement =
+/// 0.14`.
+///
+/// A weld needs two regions of *distinct* code, which is what disjoint
+/// bytes mean. The bridge family that encloses two disjoint clones still
+/// splits: the clones share no byte with each other, so the weld is
+/// present and all three regions are published — the bridge touching both
+/// is what made it a bridge.
+fn holds_a_weld(regions: &[Vec<usize>], fingerprints: &[Fingerprint]) -> bool {
+    regions.iter().enumerate().any(|(position, region)| {
+        regions
+            .iter()
+            .skip(position.saturating_add(1))
+            .any(|other| !touches(region, other, fingerprints))
+    })
+}
+
+/// True when some member of `left` shares bytes with some member of
+/// `right`. An unresolvable member counts as touching, so a missing
+/// fingerprint can only ever stop a split, never cause one.
+fn touches(left: &[usize], right: &[usize], fingerprints: &[Fingerprint]) -> bool {
+    left.iter().any(|member| {
+        right
+            .iter()
+            .any(|other| shares_bytes(*member, *other, fingerprints))
     })
 }
 

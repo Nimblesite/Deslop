@@ -79,12 +79,22 @@ const RENAMED_PAIR_MAX_AGREEMENT: f64 = 0.75;
 /// substance is shared.
 const LITERAL_PAIR_MIN_AGREEMENT: f64 = 0.9;
 
-/// The one view left hidden: a four-occurrence `for`-header family whose
-/// normalised shape is identical in all four files and whose substance
-/// is not. Both visible families already cover those loops, so hiding it
-/// removes nothing a reader would act on — but it must stay at exactly
-/// one, or something new is being suppressed.
-const HIDDEN_CLUSTERS: u64 = 1;
+/// Nothing is hidden: every view of this corpus is either published or
+/// elected away by a view of the same region.
+///
+/// This was one. A four-occurrence `for`-loop family spanned all four
+/// files, because `total = total + index` and `product = product *
+/// factor` normalised to the same subtree while operators collapsed to
+/// a shared placeholder ([PIPELINE-NORMALIZE-AST-OPERATOR]). Spanning
+/// both families, it nested inside neither method cluster and could
+/// not be elected against either, so it survived to be hidden. With
+/// each operator leaf carrying its own token the four-way view does not
+/// exist: it is two two-occurrence views, each nested inside its own
+/// method cluster and elected away there.
+///
+/// Zero is the stronger pin, and the assertion's purpose is unchanged —
+/// anything hidden here is a family suppressed rather than elected.
+const HIDDEN_CLUSTERS: u64 = 0;
 
 #[test]
 fn two_clone_families_in_one_corpus_do_not_erase_each_other() -> Result<()> {
@@ -125,9 +135,9 @@ fn assert_families_were_elected_apart(report: &Value, visible: &[String]) {
     assert_eq!(
         clusters_hidden(report),
         HIDDEN_CLUSTERS,
-        "only the four-occurrence `for`-header view stays hidden; a \
-         second hidden view means a family was suppressed rather than \
-         elected: {visible:#?}"
+        "every view of this corpus is published or elected away by a \
+         view of the same region; a hidden view means a family was \
+         suppressed rather than elected: {visible:#?}"
     );
 }
 

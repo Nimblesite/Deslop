@@ -85,8 +85,17 @@ pub const OPERATOR_KIND_PREFIX: &str = "__op__";
 /// value is free to bound work alone.
 pub const MAX_AST_DEPTH: usize = 500;
 
-/// Anonymous tokens that carry behaviour, each kept as a leaf of its
-/// own kind ([PIPELINE-NORMALIZE-AST-OPERATOR]).
+/// Anonymous tokens that carry behaviour, as `(token, normalised
+/// kind)` ([PIPELINE-NORMALIZE-AST-OPERATOR]).
+///
+/// The kind is written out rather than built from
+/// [`OPERATOR_KIND_PREFIX`] at runtime so normalisation allocates
+/// nothing per operator: `operator_leaf` runs on every anonymous child
+/// of every node of every file. `tests::every_row_is_its_own_token`
+/// proves each row's kind is exactly the prefix plus its own token and
+/// that no two rows collide — a typo pairing `<<=` with `__op__<<`
+/// would silently make two different operators one subtree, which is
+/// the defect this whole section exists to remove.
 ///
 /// Tree-sitter names an anonymous node by its own token text, so this
 /// is one list for every grammar rather than a per-language table. It
@@ -96,32 +105,66 @@ pub const MAX_AST_DEPTH: usize = 500;
 /// they mean, and keeping them would inflate every subtree with nodes
 /// no two members can ever disagree on. Everything here changes what
 /// the code computes.
-const BEHAVIOUR_BEARING_TOKENS: &[&str] = &[
-    // Arithmetic, including Python's floor-divide and power.
-    "+", "-", "*", "/", "%", "**", "//",
-    // Comparison, including the strict forms and the legacy `<>`.
-    "==", "!=", "===", "!==", "<", ">", "<=", ">=", "<>",
-    // Boolean, symbolic and worded.
-    "&&", "||", "!", "and", "or", "not",
-    // Membership and identity — Python spells these as bare tokens
-    // inside a comparison, and `x in xs` versus `x is xs` is not a
-    // rename.
-    "in", "is", // Bitwise and shifts.
-    "&", "|", "^", "~", "<<", ">>", ">>>",
-    // Compound assignment: the operator is the whole behaviour.
-    "+=", "-=", "*=", "/=", "%=", "**=", "//=", "&=", "|=", "^=", "<<=", ">>=", ">>>=", "&&=",
-    "||=", "??=", // Null handling.
-    "??", "?.",
-    // Ranges — an inclusive bound is not the same loop as an exclusive
-    // one.
-    "..", "..=", "...",
+const BEHAVIOUR_BEARING_TOKENS: &[(&str, &str)] = &[
+    ("+", "__op__+"),
+    ("-", "__op__-"),
+    ("*", "__op__*"),
+    ("/", "__op__/"),
+    ("%", "__op__%"),
+    ("**", "__op__**"),
+    ("//", "__op__//"),
+    ("==", "__op__=="),
+    ("!=", "__op__!="),
+    ("===", "__op__==="),
+    ("!==", "__op__!=="),
+    ("<", "__op__<"),
+    (">", "__op__>"),
+    ("<=", "__op__<="),
+    (">=", "__op__>="),
+    ("<>", "__op__<>"),
+    ("&&", "__op__&&"),
+    ("||", "__op__||"),
+    ("!", "__op__!"),
+    ("and", "__op__and"),
+    ("or", "__op__or"),
+    ("not", "__op__not"),
+    ("in", "__op__in"),
+    ("is", "__op__is"),
+    ("&", "__op__&"),
+    ("|", "__op__|"),
+    ("^", "__op__^"),
+    ("~", "__op__~"),
+    ("<<", "__op__<<"),
+    (">>", "__op__>>"),
+    (">>>", "__op__>>>"),
+    ("+=", "__op__+="),
+    ("-=", "__op__-="),
+    ("*=", "__op__*="),
+    ("/=", "__op__/="),
+    ("%=", "__op__%="),
+    ("**=", "__op__**="),
+    ("//=", "__op__//="),
+    ("&=", "__op__&="),
+    ("|=", "__op__|="),
+    ("^=", "__op__^="),
+    ("<<=", "__op__<<="),
+    (">>=", "__op__>>="),
+    (">>>=", "__op__>>>="),
+    ("&&=", "__op__&&="),
+    ("||=", "__op__||="),
+    ("??=", "__op__??="),
+    ("??", "__op__??"),
+    ("?.", "__op__?."),
+    ("..", "__op__.."),
+    ("..=", "__op__..="),
+    ("...", "__op__..."),
 ];
 
 /// True when an anonymous token changes what the code computes and must
 /// therefore survive normalisation as an operator leaf.
 #[must_use]
 pub fn is_behaviour_bearing_token(token: &str) -> bool {
-    BEHAVIOUR_BEARING_TOKENS.contains(&token)
+    operator_kind(token).is_some()
 }
 
 /// The normalised kind for one behaviour-bearing `token` —
@@ -129,19 +172,22 @@ pub fn is_behaviour_bearing_token(token: &str) -> bool {
 /// when the token is framing rather than behaviour.
 #[must_use]
 pub fn operator_kind(token: &str) -> Option<&'static str> {
-    is_behaviour_bearing_token(token)
-        .then(|| intern_kind(&format!("{OPERATOR_KIND_PREFIX}{token}")))
+    BEHAVIOUR_BEARING_TOKENS
+        .iter()
+        .find(|(candidate, _)| *candidate == token)
+        .map(|(_, kind)| *kind)
 }
 
 /// True when a normalised kind is an operator leaf.
 ///
-/// Matched by stripping the namespace prefix and checking the remainder
-/// against the token allowlist, so the answer is exact: no grammar kind
-/// can satisfy it by accident, and no operator kind can be missed.
+/// Matched against the table rather than by prefix alone, so the answer
+/// is exact: no grammar kind can satisfy it by accident, and no
+/// operator kind can be missed.
 #[must_use]
 pub fn is_operator_kind(kind: &str) -> bool {
-    kind.strip_prefix(OPERATOR_KIND_PREFIX)
-        .is_some_and(is_behaviour_bearing_token)
+    BEHAVIOUR_BEARING_TOKENS
+        .iter()
+        .any(|(_, candidate)| *candidate == kind)
 }
 
 /// Parses `source` with `language` and returns the tree-sitter
@@ -329,4 +375,58 @@ fn intern(entries: &mut Vec<&'static str>, raw: &str) -> &'static str {
     let leaked: &'static str = Box::leak(raw.to_owned().into_boxed_str());
     entries.push(leaked);
     leaked
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BEHAVIOUR_BEARING_TOKENS, OPERATOR_KIND_PREFIX};
+
+    /// [PIPELINE-NORMALIZE-AST-OPERATOR] Each row's normalised kind must
+    /// be exactly its own token behind the namespace prefix, and no two
+    /// rows may name the same kind.
+    ///
+    /// The kinds are written out by hand so normalisation allocates
+    /// nothing, and a hand-written table can pair `<<=` with `__op__<<`.
+    /// Nothing downstream could ever notice: two different operators
+    /// would simply share a leaf, `alpha <<= beta` and `alpha << beta`
+    /// would hash identically, and the fingerprint would certify them as
+    /// the same code — the exact defect this section removes, reinstated
+    /// for one row by a typo.
+    #[test]
+    fn every_row_is_its_own_token_behind_the_prefix() {
+        for (token, kind) in BEHAVIOUR_BEARING_TOKENS {
+            assert_eq!(
+                *kind,
+                format!("{OPERATOR_KIND_PREFIX}{token}"),
+                "operator `{token}` is normalised to `{kind}`, which is not \
+                 its own token behind the prefix — the leaf cannot \
+                 discriminate the operator it stands for"
+            );
+        }
+        let mut kinds: Vec<&str> = BEHAVIOUR_BEARING_TOKENS
+            .iter()
+            .map(|(_, kind)| *kind)
+            .collect();
+        let total = kinds.len();
+        kinds.sort_unstable();
+        kinds.dedup();
+        assert_eq!(
+            kinds.len(),
+            total,
+            "two operators share a normalised kind, so a swap between them \
+             leaves the subtree hashing identically"
+        );
+        let mut tokens: Vec<&str> = BEHAVIOUR_BEARING_TOKENS
+            .iter()
+            .map(|(token, _)| *token)
+            .collect();
+        tokens.sort_unstable();
+        tokens.dedup();
+        assert_eq!(
+            tokens.len(),
+            total,
+            "a token appears twice in the table, so which kind it \
+             normalises to depends on lookup order"
+        );
+    }
 }

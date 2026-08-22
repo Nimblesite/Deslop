@@ -313,6 +313,64 @@ fn a_bridge_family_enclosing_two_disjoint_clones_does_not_merge_them() {
     );
 }
 
+// #112 in miniature, and the reason a region count is not a weld. An
+// enclosing view seen in two files, and the run nested inside it that also
+// appears in a third: mutual coverage fails one way, so these are two
+// regions — but every region touches every other, so no token edge glued
+// anything and there is nothing to undo. Splitting published the enclosing
+// pair as a cluster of its own, narrow enough to slip under the spread
+// floors that were hiding the pattern.
+#[test]
+fn an_enclosing_view_reaching_fewer_files_than_its_nested_run_is_not_a_weld() {
+    let fingerprints = placed_corpus(&[
+        (SUM_HASH, 0, 0, 200),
+        (SUM_HASH, 1, 0, 200),
+        (PRODUCT_HASH, 0, 50, 200),
+        (PRODUCT_HASH, 1, 50, 200),
+        (PRODUCT_HASH, 2, 50, 200),
+    ]);
+
+    assert_eq!(
+        member_lists(&elect(vec![component(5)], &fingerprints)),
+        vec![vec![0, 1, 2, 3, 4]],
+        "the enclosing pair and the nested run overlap in both files they \
+         share, so the component holds one piece of code at two depths; \
+         publishing the pair alone reports a narrower view of a family the \
+         spread floors were hiding"
+    );
+}
+
+// The weld the pass exists for survives the check: the two clones share no
+// byte with each other, so a disjoint pair of regions is present even
+// though the bridge touches both.
+#[test]
+fn a_bridge_touching_both_clones_does_not_hide_the_weld_between_them() {
+    let fingerprints = placed_corpus(&[
+        (SUM_HASH, 0, 0, 200),
+        (SUM_HASH, 1, 0, 200),
+        (PRODUCT_HASH, 2, 0, 200),
+        (PRODUCT_HASH, 3, 0, 200),
+        (QUOTIENT_HASH, 0, 50, 100),
+        (QUOTIENT_HASH, 1, 50, 100),
+        (QUOTIENT_HASH, 2, 50, 100),
+        (QUOTIENT_HASH, 3, 50, 100),
+    ]);
+    let elected = elect(vec![component(8)], &fingerprints);
+
+    assert_eq!(
+        member_lists(&elected),
+        vec![vec![0, 1], vec![2, 3], vec![4, 5, 6, 7]],
+        "the summing clone and the multiplying clone share no byte, so the \
+         weld is present and the bridge that touches both must not conceal it"
+    );
+    assert_eq!(
+        elected.len(),
+        3,
+        "the bridge is a finding too — a shape duplicated across four \
+         files — and dropping it would trade one false negative for another"
+    );
+}
+
 // [CONFIG-CROSS-LANGUAGE]: a port of one algorithm into another language is
 // a different normalised subtree by construction, so the digest says
 // nothing about whether it is a copy. Splitting on it deletes the very
