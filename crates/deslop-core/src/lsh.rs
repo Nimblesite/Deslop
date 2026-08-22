@@ -90,6 +90,13 @@ pub fn band_collisions(signatures: &[Signature]) -> Vec<(usize, usize)> {
             buckets.entry(key).or_default().push(index);
         }
     }
+    let max_bucket = buckets.values().map(Vec::len).max().unwrap_or(0);
+    tracing::debug!(
+        signatures = signatures.len(),
+        buckets = buckets.len(),
+        max_bucket,
+        "LSH band buckets built"
+    );
     collect_pairs(&buckets)
 }
 
@@ -115,7 +122,13 @@ fn collect_pairs(buckets: &HashMap<[u8; 32], Vec<usize>>) -> Vec<(usize, usize)>
         }
     }
     pairs.sort_unstable();
+    let raw_pairs = pairs.len();
     pairs.dedup();
+    tracing::debug!(
+        raw_pairs,
+        unique_pairs = pairs.len(),
+        "LSH pairs deduplicated"
+    );
     pairs
 }
 

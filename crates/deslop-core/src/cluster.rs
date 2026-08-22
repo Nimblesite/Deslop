@@ -125,7 +125,7 @@ fn reportable_clusters<S: BuildHasher>(
     trees: &[NormalizedNode],
 ) -> Vec<Cluster> {
     let mut overlap = OverlapMeasurer::new(trees);
-    fused_clusters
+    let clusters = fused_clusters
         .iter()
         .filter_map(|fused| {
             build_fused_cluster(
@@ -136,7 +136,23 @@ fn reportable_clusters<S: BuildHasher>(
                 &mut overlap,
             )
         })
-        .collect()
+        .collect();
+    log_signal_measurement(overlap.stats());
+    clusters
+}
+
+/// Emits the cluster-signal overlap measurement counters, so memo
+/// effectiveness across the whole ranked build is readable from one
+/// event ([FUSION-SHARED-SUBTREE-MEMO], [PIPELINE-OBSERVABILITY-STAGES]).
+fn log_signal_measurement(stats: crate::overlap::MeasureStats) {
+    tracing::debug!(
+        alignments = stats.alignments,
+        credit_fallbacks = stats.credit_fallbacks,
+        hash_equal = stats.hash_equal,
+        exact_hits = stats.exact_hits,
+        unresolved = stats.unresolved,
+        "cluster signal overlaps measured"
+    );
 }
 
 /// Emits the structured GH#45 ranked-cluster distribution summary.

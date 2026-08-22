@@ -23,23 +23,40 @@
 //! grow: its error is the root-to-edit spine, whose share of the tree
 //! vanishes at exactly the sizes the fallback covers. A lower bound
 //! can suppress a rescue, never manufacture one.
+//!
+//! Measurement is memoised by the ordered pair of endpoint Merkle
+//! hashes ([FUSION-SHARED-SUBTREE-MEMO]): hash equality pins the whole
+//! normalised structure — the same premise as the `1.0` short-circuit —
+//! so a corpus holding many byte-offset copies of one window costs one
+//! alignment per *distinct structural pair*, not one per byte-range
+//! combination. The rescue path additionally refuses the quadratic
+//! alignment outright when a sound constant-per-node upper bound already
+//! proves the pair cannot clear the admission floor
+//! ([FUSION-SHARED-SUBTREE-BOUND]).
 
 use std::{collections::HashMap, rc::Rc};
 
 /// Zhang–Shasha ordered tree alignment ([FUSION-SHARED-SUBTREE]).
 mod alignment;
+/// Large-tree greedy coverage fallback ([FUSION-SHARED-SUBTREE]).
+mod credit;
+/// Rescue application over the candidate set ([FUSION-SHARED-SUBTREE]).
+mod rescue;
+/// Endpoint view construction ([FUSION-SHARED-SUBTREE]).
+mod view;
 
 /// Measurement unit tests ([FUSION-SHARED-SUBTREE]).
 #[cfg(test)]
 mod tests;
-use alignment::{aligned_shared_nodes, PostNode};
+
+pub use rescue::apply_shared_subtree_rescue;
+
+use alignment::aligned_shared_nodes;
+use view::{build_view, EndpointView};
 
 use crate::{
-    ast::NormalizedNode,
-    fingerprint::{collect_fingerprints, Fingerprint},
-    pair::{CandidatePair, SHARED_SUBTREE_MIN_JACCARD, SHARED_SUBTREE_MIN_NODE_COUNT},
-    state::FileId,
-    tokens::resolve_range_nodes,
+    ast::NormalizedNode, fingerprint::Fingerprint, observe::bump,
+    pair::SHARED_SUBTREE_MIN_OVERLAP, state::FileId,
 };
 
 /// Largest endpoint (in nodes) measured by exact tree alignment. The
@@ -67,86 +84,36 @@ pub const ALIGNMENT_MAX_NODES: usize = 768;
 /// measure the language's grammar, not the code.
 pub const SHARED_SUBTREE_MIN_CREDIT_NODES: usize = 3;
 
-/// Measures shared-subtree overlap onto every candidate pair the fused
-/// threshold would otherwise drop despite corroborating token evidence
-/// ([FUSION-SHARED-SUBTREE]). Only those pairs are measured: aligning
-/// two subtrees for all candidates would repeat the admission-cost
-/// mistake [FUSION-CONTENT-GATE] deliberately avoids, and a pair that
-/// already survives needs no rescue.
-pub fn apply_shared_subtree_rescue(
-    pairs: &mut [CandidatePair],
-    fingerprints: &[Fingerprint],
-    trees: &[NormalizedNode],
-) {
-    let mut measurer = OverlapMeasurer::new(trees);
-    let mut rescued_pairs = 0_usize;
-    for pair in pairs.iter_mut() {
-        if !rescue_eligible(pair) || !crosses_files(pair, fingerprints) {
-            continue;
-        }
-        if measure_onto(pair, fingerprints, &mut measurer) {
-            rescued_pairs = rescued_pairs.saturating_add(1);
-        }
-    }
-    tracing::debug!(rescued_pairs, "shared-subtree rescue overlaps measured");
-}
-
-/// Measures one eligible pair, returning whether both endpoints
-/// resolved.
-fn measure_onto(
-    pair: &mut CandidatePair,
-    fingerprints: &[Fingerprint],
-    measurer: &mut OverlapMeasurer<'_>,
-) -> bool {
-    let (Some(left), Some(right)) = (fingerprints.get(pair.left), fingerprints.get(pair.right))
-    else {
-        return false;
-    };
-    pair.shared_subtree_overlap = measurer.overlap(left, right);
-    tracing::debug!(
-        left_nodes = left.node_count,
-        right_nodes = right.node_count,
-        token_jaccard = pair.score.token_jaccard,
-        overlap = pair.shared_subtree_overlap,
-        "shared-subtree overlap measured"
-    );
-    true
-}
-
-/// True when the pair's endpoints live in different files.
-///
-/// The rescue is deliberately cross-file only. Every clone this route
-/// exists to recover is a copy *between* files ([FUSION-SHARED-SUBTREE],
-/// gh #408), and admitting same-file pairs on shape overlap is the
-/// #197 in-file sibling-family shape, which the report already spends a
-/// dedicated proof suppressing. It is also what keeps a single-file
-/// corpus intact: same-file rescues union that file's subtrees into one
-/// transitive component, and the same-file overlap collapse then
-/// reduces it to a single logical location, which is dropped below
-/// `MIN_REPORTABLE_MEMBERS` — so the file's real duplication
-/// disappeared entirely rather than being reported
-/// (`issue_119_role_gate_exercised`).
-fn crosses_files(pair: &CandidatePair, fingerprints: &[Fingerprint]) -> bool {
-    match (fingerprints.get(pair.left), fingerprints.get(pair.right)) {
-        (Some(left), Some(right)) => left.file_id != right.file_id,
-        _ => false,
-    }
-}
-
-/// True for a pair worth measuring: dropped below its fused floor on a
-/// zero structural anchor, yet carrying the token corroboration and
-/// endpoint substance the rescue route requires.
-fn rescue_eligible(pair: &CandidatePair) -> bool {
-    let score = pair.score.finite();
-    score.structural <= 0.0
-        && score.bounded_fused() < pair.fused_min_score
-        && score.token_jaccard >= SHARED_SUBTREE_MIN_JACCARD
-        && pair.endpoint_node_counts.0 >= SHARED_SUBTREE_MIN_NODE_COUNT
+/// Aggregate measurement counters for one [`OverlapMeasurer`]
+/// ([FUSION-SHARED-SUBTREE-MEMO], [PIPELINE-OBSERVABILITY-STAGES]).
+/// Snapshot via [`OverlapMeasurer::stats`]; the rescue and cluster
+/// stages log them so cache effectiveness and alignment volume are
+/// readable from any run.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct MeasureStats {
+    /// Pairs answered `1.0` by Merkle equality of the endpoints.
+    pub hash_equal: u64,
+    /// Pairs answered from the exact-overlap memo.
+    pub exact_hits: u64,
+    /// Rescue queries answered from the below-floor bound memo.
+    pub bound_hits: u64,
+    /// Rescue queries whose freshly computed kind-multiset bound proved
+    /// the pair cannot clear the floor, skipping the alignment
+    /// ([FUSION-SHARED-SUBTREE-BOUND]).
+    pub bound_skips: u64,
+    /// Exact Zhang–Shasha alignments computed.
+    pub alignments: u64,
+    /// Greedy large-tree credit fallbacks computed.
+    pub credit_fallbacks: u64,
+    /// Pairs with an unresolvable endpoint, reported `0.0` uncached.
+    pub unresolved: u64,
 }
 
 /// Measures shared-subtree overlap between fingerprint endpoints over
-/// one corpus, memoising per-endpoint views and per-pair results so an
-/// endpoint appearing in many pairs is walked once.
+/// one corpus, memoising per-endpoint views and per-structural-pair
+/// results so an endpoint appearing in many pairs is walked once and a
+/// structure appearing at many byte offsets is aligned once
+/// ([FUSION-SHARED-SUBTREE-MEMO]).
 #[derive(Debug)]
 pub struct OverlapMeasurer<'corpus> {
     /// `FileId → normalised root` for the corpus under measurement.
@@ -154,61 +121,27 @@ pub struct OverlapMeasurer<'corpus> {
     /// Per-endpoint resolved state. `None` records an unresolvable
     /// range so it is not re-walked per pair.
     endpoints: HashMap<EndpointKey, Option<Rc<EndpointView>>>,
-    /// Per-pair measured overlap, keyed order-insensitively.
-    pair_results: HashMap<(EndpointKey, EndpointKey), f64>,
+    /// Exact measured overlap per structural pair.
+    exact_results: HashMap<PairKey, f64>,
+    /// Below-floor upper bounds per structural pair, usable only by the
+    /// rescue's floor comparison ([FUSION-SHARED-SUBTREE-BOUND]) —
+    /// never as an exact value.
+    bound_results: HashMap<PairKey, f64>,
+    /// Aggregate counters ([PIPELINE-OBSERVABILITY-STAGES]).
+    stats: MeasureStats,
 }
 
-/// Identity of one endpoint's resolved range.
+/// Identity of one endpoint's resolved range, for the view memo.
 type EndpointKey = (FileId, usize, usize);
 
-/// One endpoint's resolved measurement state.
-#[derive(Debug)]
-struct EndpointView {
-    /// Post-order `(kind, leftmost-leaf index)` sequence under a
-    /// synthetic window root, for the alignment.
-    postorder: Vec<PostNode>,
-    /// Total nodes excluding the synthetic root.
-    total: usize,
-    /// Creditable subtrees for the large-tree fallback, largest first.
-    entries: Vec<Fingerprint>,
-}
-
-impl EndpointView {
-    /// Builds a view over a flat run of leaves under the synthetic
-    /// window root — the minimal shape for asserting the alignment's
-    /// arithmetic directly, without a parser in the way.
-    #[cfg(test)]
-    fn from_flat_leaves(kinds: &[&'static str]) -> Self {
-        let mut postorder: Vec<PostNode> = kinds
-            .iter()
-            .enumerate()
-            .map(|(index, kind)| PostNode {
-                kind,
-                leftmost: index.saturating_add(1),
-            })
-            .collect();
-        let total = postorder.len();
-        postorder.push(PostNode {
-            kind: "__window__",
-            leftmost: 1,
-        });
-        Self {
-            postorder,
-            total,
-            entries: Vec::new(),
-        }
-    }
-
-    /// Post-order sequence, including the synthetic window root.
-    fn postorder(&self) -> &[PostNode] {
-        &self.postorder
-    }
-
-    /// Node total, excluding the synthetic window root.
-    const fn total(&self) -> usize {
-        self.total
-    }
-}
+/// Memo key for a measured pair: the ordered Merkle hashes of the two
+/// endpoints ([FUSION-SHARED-SUBTREE-MEMO]). Hash equality pins the
+/// whole normalised structure — the premise the `1.0` short-circuit
+/// already stands on — so every byte-offset copy of one structural
+/// pair shares this key, and the measurement runs once per *structure*
+/// rather than once per byte-range combination
+/// (`a_fleet_of_identical_windows_costs_one_alignment`).
+type PairKey = ([u8; 32], [u8; 32]);
 
 impl<'corpus> OverlapMeasurer<'corpus> {
     /// Builds a measurer over the corpus trees.
@@ -217,8 +150,16 @@ impl<'corpus> OverlapMeasurer<'corpus> {
         Self {
             tree_index: trees.iter().map(|tree| (tree.file_id, tree)).collect(),
             endpoints: HashMap::new(),
-            pair_results: HashMap::new(),
+            exact_results: HashMap::new(),
+            bound_results: HashMap::new(),
+            stats: MeasureStats::default(),
         }
+    }
+
+    /// Snapshot of the aggregate measurement counters.
+    #[must_use]
+    pub const fn stats(&self) -> MeasureStats {
+        self.stats
     }
 
     /// Shared-subtree overlap between two endpoints in `[0, 1]`.
@@ -231,30 +172,86 @@ impl<'corpus> OverlapMeasurer<'corpus> {
     /// described honestly.
     pub fn overlap(&mut self, left: &Fingerprint, right: &Fingerprint) -> f64 {
         if left.hash == right.hash {
+            bump(&mut self.stats.hash_equal);
             return 1.0;
         }
-        let pair_key = ordered_key(endpoint_key(left), endpoint_key(right));
-        if let Some(&cached) = self.pair_results.get(&pair_key) {
+        let key = pair_key(left, right);
+        if let Some(&cached) = self.exact_results.get(&key) {
+            bump(&mut self.stats.exact_hits);
             return cached;
         }
-        let result = self.measure(left, right);
-        let _previous = self.pair_results.insert(pair_key, result);
+        let Some((left_view, right_view)) = self.view_pair(left, right) else {
+            return 0.0;
+        };
+        let result = self.measure_views(&left_view, &right_view);
+        let _previous = self.exact_results.insert(key, result);
         result
     }
 
-    /// Measures one uncached, non-equal pair.
-    fn measure(&mut self, left: &Fingerprint, right: &Fingerprint) -> f64 {
-        let (Some(left_view), Some(right_view)) = (self.view(left), self.view(right)) else {
+    /// Overlap for the rescue's floor comparison
+    /// ([FUSION-SHARED-SUBTREE-BOUND]). Identical to [`Self::overlap`]
+    /// whenever the pair could clear `SHARED_SUBTREE_MIN_OVERLAP`; when
+    /// a sound upper bound already proves it cannot, the bound itself —
+    /// strictly below the floor — is returned without running the
+    /// alignment. The admission decision is identical by construction;
+    /// the value differs only on pairs the rescue then drops, where it
+    /// is never rendered.
+    pub fn rescue_overlap(&mut self, left: &Fingerprint, right: &Fingerprint) -> f64 {
+        if left.hash == right.hash {
+            bump(&mut self.stats.hash_equal);
+            return 1.0;
+        }
+        let key = pair_key(left, right);
+        if let Some(&cached) = self.exact_results.get(&key) {
+            bump(&mut self.stats.exact_hits);
+            return cached;
+        }
+        if let Some(&bound) = self.bound_results.get(&key) {
+            bump(&mut self.stats.bound_hits);
+            return bound;
+        }
+        let Some((left_view, right_view)) = self.view_pair(left, right) else {
             return 0.0;
         };
-        let larger = left_view.total.max(right_view.total);
+        let bound = kind_bound_ratio(&left_view, &right_view);
+        if bound < SHARED_SUBTREE_MIN_OVERLAP {
+            bump(&mut self.stats.bound_skips);
+            let _previous = self.bound_results.insert(key, bound);
+            return bound;
+        }
+        let result = self.measure_views(&left_view, &right_view);
+        let _previous = self.exact_results.insert(key, result);
+        result
+    }
+
+    /// Resolves both endpoint views, counting a pair with either side
+    /// unresolvable. Unresolvable pairs are deliberately not memoised
+    /// under the pair key: resolvability is a property of the byte
+    /// range, not of the structure the key describes.
+    fn view_pair(
+        &mut self,
+        left: &Fingerprint,
+        right: &Fingerprint,
+    ) -> Option<(Rc<EndpointView>, Rc<EndpointView>)> {
+        let views = self.view(left).zip(self.view(right));
+        if views.is_none() {
+            bump(&mut self.stats.unresolved);
+        }
+        views
+    }
+
+    /// Measures one resolved, non-equal pair.
+    fn measure_views(&mut self, left: &EndpointView, right: &EndpointView) -> f64 {
+        let larger = left.total.max(right.total);
         if larger == 0 {
             return 0.0;
         }
         let shared = if larger > ALIGNMENT_MAX_NODES {
-            credit_shared_nodes(&left_view, &right_view)
+            bump(&mut self.stats.credit_fallbacks);
+            credit::credit_shared_nodes(left, right)
         } else {
-            aligned_shared_nodes(&left_view, &right_view)
+            bump(&mut self.stats.alignments);
+            aligned_shared_nodes(left, right)
         };
         (lossless_count(shared) / lossless_count(larger)).clamp(0.0, 1.0)
     }
@@ -271,7 +268,7 @@ impl<'corpus> OverlapMeasurer<'corpus> {
     }
 }
 
-/// The endpoint's cache identity.
+/// The endpoint's view-memo identity.
 fn endpoint_key(endpoint: &Fingerprint) -> EndpointKey {
     (
         endpoint.file_id,
@@ -280,178 +277,54 @@ fn endpoint_key(endpoint: &Fingerprint) -> EndpointKey {
     )
 }
 
-/// Order-insensitive pair cache key.
-fn ordered_key(left: EndpointKey, right: EndpointKey) -> (EndpointKey, EndpointKey) {
-    if left <= right {
+/// Order-insensitive memo key for a measured pair
+/// ([FUSION-SHARED-SUBTREE-MEMO]).
+fn pair_key(left: &Fingerprint, right: &Fingerprint) -> PairKey {
+    if left.hash <= right.hash {
+        (left.hash, right.hash)
+    } else {
+        (right.hash, left.hash)
+    }
+}
+
+/// Sound upper bound on the alignment's shared-node count
+/// ([FUSION-SHARED-SUBTREE-BOUND]). Any edit script maps some set `M`
+/// of node pairs; its cost is `deletes + inserts + relabels =
+/// larger + smaller − 2|M| + relabels`, so the shared mass
+/// `larger − TED` never exceeds the kind-preserving part of `M` — which
+/// is bounded by the smaller endpoint and by the kind-multiset
+/// intersection. Both bounds are constant per node, so refusing an
+/// alignment here can never refuse a pair the alignment would admit.
+fn kind_shared_upper_bound(left: &EndpointView, right: &EndpointView) -> usize {
+    let smaller = left.total.min(right.total);
+    smaller.min(kind_intersection(&left.kind_counts, &right.kind_counts))
+}
+
+/// Multiset-intersection cardinality of two kind-count maps.
+fn kind_intersection(
+    left: &HashMap<&'static str, usize>,
+    right: &HashMap<&'static str, usize>,
+) -> usize {
+    let (small, large) = if left.len() <= right.len() {
         (left, right)
     } else {
         (right, left)
-    }
-}
-
-/// Resolves the endpoint's nodes and builds both measurement inputs.
-/// Resolution reuses [`resolve_range_nodes`] — the same resolver the
-/// token stream and content walks use — so every signal sees the same
-/// code, including synthetic sibling windows.
-fn build_view(
-    tree_index: &HashMap<FileId, &NormalizedNode>,
-    endpoint: &Fingerprint,
-) -> Option<EndpointView> {
-    let root = tree_index.get(&endpoint.file_id)?;
-    let members = resolve_range_nodes(root, endpoint.byte_range.start, endpoint.byte_range.end)?;
-    let mut postorder: Vec<PostNode> = Vec::new();
-    let mut entries: Vec<Fingerprint> = Vec::new();
-    for member in &members {
-        push_postorder(member, &mut postorder);
-        entries.extend(collect_fingerprints(
-            member,
-            SHARED_SUBTREE_MIN_CREDIT_NODES,
-        ));
-    }
-    let total = postorder.len();
-    // Synthetic window root: aligns the members as ordered siblings so
-    // a multi-node sibling window is one tree for the alignment. It
-    // matches its counterpart at zero cost, so the distance is exactly
-    // the forest distance.
-    postorder.push(PostNode {
-        kind: "__window__",
-        leftmost: 1,
-    });
-    entries.sort_by(|left, right| {
-        right
-            .node_count
-            .cmp(&left.node_count)
-            .then(left.byte_range.start.cmp(&right.byte_range.start))
-    });
-    Some(EndpointView {
-        postorder,
-        total,
-        entries,
-    })
-}
-
-/// One in-progress frame of the iterative post-order walk.
-struct WalkFrame<'tree> {
-    /// Node being expanded.
-    node: &'tree NormalizedNode,
-    /// Next child to descend into.
-    next_child: usize,
-    /// Leftmost-leaf index inherited from the first child.
-    leftmost: Option<usize>,
-}
-
-impl<'tree> WalkFrame<'tree> {
-    /// Opens a frame over `node` with no children walked yet.
-    const fn new(node: &'tree NormalizedNode) -> Self {
-        Self {
-            node,
-            next_child: 0,
-            leftmost: None,
-        }
-    }
-}
-
-/// Appends `node`'s subtree to `out` in post-order, recording each
-/// node's leftmost-leaf index. Iterative so a deep tree cannot
-/// overflow the stack (matching `fingerprint::hash_and_collect`).
-fn push_postorder(node: &NormalizedNode, out: &mut Vec<PostNode>) {
-    let mut stack = vec![WalkFrame::new(node)];
-    while let Some(frame) = stack.last_mut() {
-        if let Some(child) = frame.node.children.get(frame.next_child) {
-            frame.next_child = frame.next_child.saturating_add(1);
-            stack.push(WalkFrame::new(child));
-            continue;
-        }
-        close_frame(&mut stack, out);
-    }
-}
-
-/// Emits the top frame's node and folds its leftmost leaf into its
-/// parent, which inherits it from its first child.
-fn close_frame(stack: &mut Vec<WalkFrame<'_>>, out: &mut Vec<PostNode>) {
-    let Some(frame) = stack.pop() else {
-        return;
     };
-    let leftmost = frame
-        .leftmost
-        .unwrap_or_else(|| out.len().saturating_add(1));
-    out.push(PostNode {
-        kind: frame.node.kind,
-        leftmost,
-    });
-    if let Some(parent) = stack.last_mut() {
-        if parent.leftmost.is_none() {
-            parent.leftmost = Some(leftmost);
-        }
-    }
-}
-
-/// Large-tree fallback: greedy-maximal shared-Merkle-subtree node
-/// credit. Largest left subtrees first, each credit consuming one
-/// concrete right-side occurrence, nested-in-credited spans skipped on
-/// **both** endpoints. A conservative lower bound on
-/// [`aligned_shared_nodes`] — node mass matched under a bijection of
-/// disjoint identical subtrees is achievable by an alignment. The
-/// bijection needs both sides tracked: consuming bare hash counts on
-/// the right let a disjoint left copy re-claim nodes nested inside an
-/// already-credited right subtree, counting them twice and overshooting
-/// the alignment this bound stands in for
-/// (`the_fallback_never_credits_a_nested_right_subtree_twice`).
-///
-/// Left entries arrive largest-first, so every candidate span is no
-/// larger than the spans already credited on its side; a strict
-/// container has strictly more nodes than its subtree, so a later
-/// candidate can never contain a credited span and the nested-inside
-/// test alone keeps each side's credited spans disjoint.
-fn credit_shared_nodes(left: &EndpointView, right: &EndpointView) -> usize {
-    let mut open_right: HashMap<[u8; 32], Vec<(usize, usize)>> = HashMap::new();
-    for entry in &right.entries {
-        open_right
-            .entry(entry.hash)
-            .or_default()
-            .push((entry.byte_range.start, entry.byte_range.end));
-    }
-    let mut left_taken: Vec<(usize, usize)> = Vec::new();
-    let mut right_taken: Vec<(usize, usize)> = Vec::new();
-    let mut credit = 0_usize;
-    for entry in &left.entries {
-        let span = (entry.byte_range.start, entry.byte_range.end);
-        if nested_in_credited(span, &left_taken) {
-            continue;
-        }
-        let Some(claimed) = claim_right_occurrence(entry.hash, &mut open_right, &right_taken)
-        else {
-            continue;
-        };
-        credit = credit.saturating_add(entry.node_count);
-        left_taken.push(span);
-        right_taken.push(claimed);
-    }
-    credit
-}
-
-/// True when `span` nests inside any already-credited span.
-fn nested_in_credited(span: (usize, usize), taken: &[(usize, usize)]) -> bool {
-    let (start, end) = span;
-    taken
+    small
         .iter()
-        .any(|(taken_start, taken_end)| *taken_start <= start && end <= *taken_end)
+        .map(|(kind, count)| (*count).min(large.get(kind).copied().unwrap_or(0)))
+        .fold(0_usize, usize::saturating_add)
 }
 
-/// Consumes and returns one right-side occurrence of `hash` that is not
-/// nested inside an already-credited right span. Identical hashes have
-/// identical node counts, so any open occurrence is an equally-sized
-/// witness and the first open one serves.
-fn claim_right_occurrence(
-    hash: [u8; 32],
-    open_right: &mut HashMap<[u8; 32], Vec<(usize, usize)>>,
-    right_taken: &[(usize, usize)],
-) -> Option<(usize, usize)> {
-    let candidates = open_right.get_mut(&hash)?;
-    let position = candidates
-        .iter()
-        .position(|candidate| !nested_in_credited(*candidate, right_taken))?;
-    Some(candidates.swap_remove(position))
+/// The upper bound as an overlap ratio against the larger endpoint —
+/// directly comparable to `SHARED_SUBTREE_MIN_OVERLAP`
+/// ([FUSION-SHARED-SUBTREE-BOUND]).
+fn kind_bound_ratio(left: &EndpointView, right: &EndpointView) -> f64 {
+    let larger = left.total.max(right.total);
+    if larger == 0 {
+        return 0.0;
+    }
+    lossless_count(kind_shared_upper_bound(left, right)) / lossless_count(larger)
 }
 
 /// Lossless small-count conversion for the coverage divisor.

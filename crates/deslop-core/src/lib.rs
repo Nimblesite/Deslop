@@ -34,6 +34,7 @@ pub mod lang;
 #[cfg(feature = "live")]
 pub mod live;
 pub mod lsh;
+pub mod observe;
 pub mod overlap;
 pub mod pair;
 pub mod paths;

@@ -5,7 +5,12 @@
 //! fingerprints plus the per-file source bytes the embedding pass will
 //! reuse.
 
-use std::{collections::HashMap, fs, path::Path};
+use std::{
+    collections::HashMap,
+    fs,
+    path::Path,
+    time::Instant,
+};
 
 use crate::{
     ast::NormalizedNode,
@@ -23,37 +28,19 @@ use crate::{
 
 use super::{config::PipelineConfig, signatures::signatures_for_file};
 
+/// Corpus-build observability counters
+/// ([PIPELINE-OBSERVABILITY-STAGES]).
+mod stats;
 #[cfg(test)]
 mod tests;
 
-/// Per-run signature construction/reuse counters surfaced on the
-/// `fingerprint corpus built` event
-/// ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]). Observability only —
-/// deliberately not part of the wire-model [`CacheStats`], which is
-/// generated from the typeDiagram IPC contract.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct SignatureStats {
-    /// Signatures constructed from token streams this pass.
-    pub built: u64,
-    /// Signatures attached from the on-disk parse store this pass.
-    pub reused: u64,
-}
+pub use stats::CorpusBuildStats;
 
-impl SignatureStats {
-    /// Records `count` signatures constructed from token streams.
-    fn add_built(&mut self, count: usize) {
-        self.built = self
-            .built
-            .saturating_add(u64::try_from(count).unwrap_or(u64::MAX));
-    }
-
-    /// Records `count` signatures attached from the parse store.
-    fn add_reused(&mut self, count: usize) {
-        self.reused = self
-            .reused
-            .saturating_add(u64::try_from(count).unwrap_or(u64::MAX));
-    }
-}
+/// Files between corpus-build progress records
+/// ([PIPELINE-OBSERVABILITY-STAGES]). Count-based so the cadence is
+/// deterministic for a given file list; each record carries elapsed
+/// time so throughput is readable from any two records.
+const CORPUS_PROGRESS_FILE_INTERVAL: usize = 250;
 
 /// Output of [`fingerprint_corpus`]. Kept together so the file
 /// sources can be reused by the embedding pass without re-reading
@@ -96,15 +83,19 @@ pub fn fingerprint_corpus(
 ) -> Result<FingerprintCorpus, CoreError> {
     let min_nodes_usize = usize::try_from(config.min_nodes).unwrap_or(usize::MAX);
     let mut corpus = FingerprintCorpus::default();
-    let mut signature_stats = SignatureStats::default();
+    let mut build = CorpusBuildStats::default();
     let mut live_blobs = LiveBlobs::default();
     let cache_base = crate::paths::cache_dir(&config.root);
     let mut caches: HashMap<&'static str, FingerprintCache> = HashMap::new();
-    for discovered in files {
+    let started = Instant::now();
+    let mut fingerprints_running: usize = 0;
+    for (position, discovered) in files.iter().enumerate() {
         let Some(parser) = parser_for_language(parsers, discovered.language) else {
             continue;
         };
+        let read_started = Instant::now();
         let source = read_source(&discovered.path)?;
+        build.add_read(read_started.elapsed());
         if config.incremental {
             live_blobs.record(discovered.language, &source);
         }
@@ -125,7 +116,7 @@ pub fn fingerprint_corpus(
             discovered.file_id,
             min_nodes_usize,
             &mut corpus.cache_stats,
-            &mut signature_stats,
+            &mut build,
         ) {
             Ok(processed) => processed,
             // A single pathologically deep file is skipped, not fatal: it
@@ -144,24 +135,13 @@ pub fn fingerprint_corpus(
                 discovered.language,
             ));
         let lines = count_analysed_lines(&source);
+        fingerprints_running = fingerprints_running.saturating_add(processed.fingerprints.len());
         let _previous_lines = corpus.analysed_lines.insert(discovered.file_id, lines);
         let _previous = corpus.per_file.insert(discovered.file_id, processed);
         let _previous_source = corpus.sources.insert(discovered.file_id, source);
+        log_corpus_progress(position, files.len(), fingerprints_running, started);
     }
-    let fingerprints_total: usize = corpus
-        .per_file
-        .values()
-        .map(|cached| cached.fingerprints.len())
-        .sum();
-    tracing::info!(
-        files_processed = files.len(),
-        fingerprints = fingerprints_total,
-        cache_hits = corpus.cache_stats.hits,
-        cache_misses = corpus.cache_stats.misses,
-        signatures_built = signature_stats.built,
-        signatures_reused = signature_stats.reused,
-        "fingerprint corpus built",
-    );
+    log_corpus_built(files.len(), fingerprints_running, &corpus, &build, started);
     // [PIPELINE-INCREMENTAL-RETENTION] A full pass is the one moment
     // the live blob set is exactly known, so retention runs here —
     // never on a single-file change pass, and never when the store is
@@ -170,6 +150,50 @@ pub fn fingerprint_corpus(
         sweep_store(&cache_base, &live_blobs, config.min_nodes);
     }
     Ok(corpus)
+}
+
+/// One fixed-interval corpus-build progress record
+/// ([PIPELINE-OBSERVABILITY-STAGES]): counts and elapsed time only,
+/// never paths or contents, per the logging rules.
+fn log_corpus_progress(position: usize, files_total: usize, fingerprints: usize, started: Instant) {
+    let files_done = position.saturating_add(1);
+    if files_done % CORPUS_PROGRESS_FILE_INTERVAL != 0 {
+        return;
+    }
+    tracing::info!(
+        files_done,
+        files_total,
+        fingerprints,
+        elapsed_ms = crate::observe::elapsed_ms(started),
+        "fingerprint corpus progress"
+    );
+}
+
+/// The corpus-build completion record, attributing the stage's time to
+/// its substages ([PIPELINE-OBSERVABILITY-STAGES]).
+fn log_corpus_built(
+    files_processed: usize,
+    fingerprints: usize,
+    corpus: &FingerprintCorpus,
+    build: &CorpusBuildStats,
+    started: Instant,
+) {
+    tracing::info!(
+        files_processed,
+        fingerprints,
+        cache_hits = corpus.cache_stats.hits,
+        cache_misses = corpus.cache_stats.misses,
+        signatures_built = build.signatures_built,
+        signatures_reused = build.signatures_reused,
+        exact_fingerprints = build.exact_fingerprints,
+        sibling_fingerprints = build.sibling_fingerprints,
+        read_ms = build.read_ms(),
+        parse_ms = build.parse_ms(),
+        fingerprint_ms = build.fingerprint_ms(),
+        signature_ms = build.signature_ms(),
+        elapsed_ms = crate::observe::elapsed_ms(started),
+        "fingerprint corpus built",
+    );
 }
 
 /// Parses one file, consulting the incremental cache when enabled.
@@ -187,7 +211,7 @@ pub fn parse_one_file(
     parser: &dyn LanguageParser,
     config: &PipelineConfig<'_>,
     stats: &mut CacheStats,
-    signature_stats: &mut SignatureStats,
+    build: &mut CorpusBuildStats,
 ) -> Result<(CachedFile, Vec<u8>, u64), CoreError> {
     let source = read_source(path)?;
     let cache_base = crate::paths::cache_dir(&config.root);
@@ -198,15 +222,7 @@ pub fn parse_one_file(
         None
     };
     let min_nodes = usize::try_from(config.min_nodes).unwrap_or(usize::MAX);
-    let processed = load_or_parse_file(
-        cache,
-        parser,
-        &source,
-        file_id,
-        min_nodes,
-        stats,
-        signature_stats,
-    )?;
+    let processed = load_or_parse_file(cache, parser, &source, file_id, min_nodes, stats, build)?;
     let lines = count_analysed_lines(&source);
     Ok((processed, source, lines))
 }
@@ -252,18 +268,18 @@ fn load_or_parse_file(
     file_id: FileId,
     min_nodes: usize,
     stats: &mut CacheStats,
-    signature_stats: &mut SignatureStats,
+    build: &mut CorpusBuildStats,
 ) -> Result<CachedFile, CoreError> {
     if let Some(cache) = cache {
         if let Some(hit) = validated_cache_hit(cache, parser, source, file_id, min_nodes) {
             stats.hits = stats.hits.saturating_add(1);
-            signature_stats.add_reused(hit.signatures.len());
+            build.add_reused(hit.signatures.len());
             return Ok(hit);
         }
         stats.misses = stats.misses.saturating_add(1);
     }
-    let built = build_cached_file(parser, source, file_id, min_nodes)?;
-    signature_stats.add_built(built.signatures.len());
+    let built = build_cached_file(parser, source, file_id, min_nodes, build)?;
+    build.add_built(built.signatures.len());
     persist_cached_file(cache, source, &built);
     Ok(built)
 }
@@ -281,7 +297,7 @@ fn validated_cache_hit(
     min_nodes: usize,
 ) -> Option<CachedFile> {
     let hit = cache.get(source, file_id)?;
-    let rederived = fingerprints_for(&hit.tree, min_nodes, parser.id());
+    let rederived = fingerprints_for(&hit.tree, min_nodes, parser.id(), None);
     if rederived == hit.fingerprints {
         return Some(hit);
     }
@@ -296,16 +312,25 @@ fn validated_cache_hit(
 
 /// Parses `source` and assembles the full cache bundle: normalised
 /// tree, boilerplate-filtered fingerprints, and their `MinHash`
-/// signatures ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
+/// signatures ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]). Each substage's
+/// elapsed time accumulates onto `build`
+/// ([PIPELINE-OBSERVABILITY-STAGES]).
 fn build_cached_file(
     parser: &dyn LanguageParser,
     source: &[u8],
     file_id: FileId,
     min_nodes: usize,
+    build: &mut CorpusBuildStats,
 ) -> Result<CachedFile, CoreError> {
+    let parse_started = Instant::now();
     let tree = parser.parse_and_normalize(source, file_id)?;
-    let fingerprints = fingerprints_for(&tree, min_nodes, parser.id());
+    build.add_parse(parse_started.elapsed());
+    let fingerprint_started = Instant::now();
+    let fingerprints = fingerprints_for(&tree, min_nodes, parser.id(), Some(build));
+    build.add_fingerprint(fingerprint_started.elapsed());
+    let signature_started = Instant::now();
     let signatures = signatures_for_file(&tree, &fingerprints, Some(parser.id()));
+    build.add_signature(signature_started.elapsed());
     Ok(CachedFile {
         tree,
         fingerprints,
@@ -323,16 +348,27 @@ fn persist_cached_file(cache: Option<&FingerprintCache>, source: &[u8], built: &
     }
 }
 
-/// Collects structural and sibling fingerprints after boilerplate filtering.
+/// Collects structural and sibling fingerprints after boilerplate
+/// filtering, recording the per-family split when a build accumulator
+/// is supplied ([PIPELINE-OBSERVABILITY-STAGES]). The cache-validation
+/// re-derivation passes `None` — it produces no new fingerprints.
 fn fingerprints_for(
     normalised: &NormalizedNode,
     min_nodes: usize,
     language: &str,
+    build: Option<&mut CorpusBuildStats>,
 ) -> Vec<Fingerprint> {
     let mut fingerprints = collect_non_boilerplate_fingerprints(normalised, min_nodes, language);
+    let exact_count = fingerprints.len();
     fingerprints.extend(collect_non_boilerplate_sibling_fingerprints(
         normalised, min_nodes, language,
     ));
+    if let Some(build) = build {
+        build.add_fingerprint_kinds(
+            exact_count,
+            fingerprints.len().saturating_sub(exact_count),
+        );
+    }
     fingerprints
 }
 
