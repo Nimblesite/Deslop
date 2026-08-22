@@ -156,3 +156,33 @@ fn an_enabled_suite_target_is_not_reported_as_unbuilt() -> Result<()> {
     );
     Ok(())
 }
+
+/// A `[[test]]` with `harness = false` compiles every test and calls none.
+///
+/// The quietest bypass of the three: the target is enabled, Cargo builds
+/// it, the binary runs, and it exits zero — because `harness = false`
+/// replaces libtest with the file's own `main`, so no `#[test]` is ever
+/// invoked. Pair it with `fn main() {}` in `suite.rs` and the entire suite
+/// reports success having executed nothing.
+#[test]
+fn a_leaf_target_with_no_harness_is_not_counted_as_built() -> Result<()> {
+    let declared: toml::Table = regression_target("harness = false\n").parse()?;
+    assert_gated(
+        &manifest::targets(&declared),
+        "`harness = false` means no `#[test]` in the file is ever called",
+    );
+    Ok(())
+}
+
+/// The same, on the suite root itself — where it would silence everything.
+#[test]
+fn a_suite_target_with_no_harness_is_reported_as_unbuilt() -> Result<()> {
+    let manifest: toml::Table = format!("{ENABLED_SUITE_TARGET}harness = false\n").parse()?;
+    let defect = manifest::suite_target_defect(&manifest);
+    assert!(
+        defect.is_some(),
+        "a harness-less suite root runs its own `main` and calls no test \
+         in any module it pulls in: {defect:?}"
+    );
+    Ok(())
+}

@@ -26,6 +26,8 @@ const PATH_KEY: &str = "path";
 const REQUIRED_FEATURES_KEY: &str = "required-features";
 /// TOML key that stops Cargo running a target's tests at all.
 const TEST_KEY: &str = "test";
+/// TOML key that replaces libtest with the target's own `main`.
+const HARNESS_KEY: &str = "harness";
 /// Directory holding a crate's integration tests, relative to the crate.
 pub(super) const TESTS_DIR: &str = "tests";
 /// Extension of a Rust source file.
@@ -86,12 +88,16 @@ fn target_file(target: &toml::Value) -> Option<String> {
 /// The manifest key that stops Cargo building and running this target on
 /// an ordinary `cargo test`, when one does.
 ///
-/// Two keys do it, and both have to be checked on every target rather
-/// than only on the suite root. `required-features` makes the target
-/// compile on no plain run; `test = false` compiles it and runs none of
-/// it. Either way the target is not proof that its file is exercised, so
-/// declaring one is a way to unwire a test from `suite.rs` and still look
-/// wired.
+/// Three keys do it, and every one has to be checked on every target
+/// rather than only on the suite root. `required-features` makes the
+/// target compile on no plain run. `test = false` compiles it and runs
+/// none of it. `harness = false` replaces libtest with the target's own
+/// `main`, so every `#[test]` in the file is compiled and never called —
+/// the quietest of the three, because the target is enabled, the binary
+/// runs, and it exits zero having tested nothing.
+///
+/// None of them is proof that the file is exercised, so each is a way to
+/// unwire a test from `suite.rs` and still look perfectly wired.
 fn target_gating(target: &toml::Value) -> Option<&'static str> {
     let feature_gated = target
         .get(REQUIRED_FEATURES_KEY)
@@ -100,8 +106,9 @@ fn target_gating(target: &toml::Value) -> Option<&'static str> {
     if feature_gated {
         return Some(REQUIRED_FEATURES_KEY);
     }
-    let runs_tests = target.get(TEST_KEY).and_then(toml::Value::as_bool) != Some(false);
-    (!runs_tests).then_some(TEST_KEY)
+    [TEST_KEY, HARNESS_KEY]
+        .into_iter()
+        .find(|key| target.get(*key).and_then(toml::Value::as_bool) == Some(false))
 }
 
 /// The file name when `path` names a Rust source directly inside `tests/`.
@@ -139,8 +146,9 @@ fn rust_file(component: Component<'_>) -> Option<String> {
 ///
 /// Every module in the suite root is only as reachable as the target that
 /// compiles it. Delete the `[[test]]` entry, gate it behind
-/// `required-features`, or set `test = false` on it, and the whole suite
-/// stops running while each `mod` line still reads as perfectly wired —
+/// `required-features`, or set `test = false` or `harness = false` on it,
+/// and the whole suite stops running while each `mod` line still reads as
+/// perfectly wired —
 /// the largest silent-skip there is, and invisible to a check that only
 /// compares module declarations against files on disk.
 pub(super) fn suite_target_defect(manifest: &toml::Table) -> Option<String> {
@@ -169,7 +177,7 @@ fn suite_target_gating(suite: &toml::Value) -> Option<String> {
         )),
         key => Some(format!(
             "the `{TESTS_DIR}/{SUITE_FILE}` target sets `{key} = false`, so Cargo \
-             compiles the suite and runs none of it"
+             compiles the suite and runs none of its tests"
         )),
     }
 }
