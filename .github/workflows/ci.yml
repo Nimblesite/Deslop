@@ -162,6 +162,19 @@ jobs:
       # there is how a test job silently recompiles the workspace and
       # the parallelism buys nothing. `restore-keys` still hands a cold
       # run the previous commit's target directory to build on top of.
+      #
+      # The two generated wire modules are cached WITH the target
+      # directory, and have to be. They are git-ignored, so a consumer
+      # job checks out without them, regenerates them, and hands every
+      # dependent crate a source file newer than the fingerprint it just
+      # restored — cargo then rebuilds deslop-core and everything below
+      # it. That is not hypothetical: on run 32562462371 shard 1 proved
+      # an exact cache hit and still spent 3m11s recompiling five crates
+      # before its first test, and four shards paying that is how the
+      # 20-minute cap was reached on run 32549706011. Restored with the
+      # target directory they keep the build job's mtimes, the
+      # generator's own content check reports them unchanged, and the
+      # restored fingerprints stay valid.
       - name: Cache cargo registry and release target
         uses: actions/cache@v6
         with:
@@ -169,6 +182,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
           key: ${{ runner.os }}-cargo-release-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-cargo-release-
@@ -273,6 +288,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
           key: ${{ runner.os }}-cargo-release-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-cargo-release-
@@ -323,16 +340,36 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # [CI-RELEASE-BUILD] A roll-up is a symptom, not a diagnosis. The
+      # matrix collapses to one `result`, so "the Rust suite did not pass
+      # (skipped)" was all this printed while the actual cause sat in
+      # another job entirely — and `skipped` is what a shard reports when
+      # something upstream of it broke. Naming every failed job and the
+      # step inside it means the cause is in this job's log, not four
+      # clicks away.
       - name: Every Rust shard passed
         env:
           SHARDS_RESULT: ${{ needs.rust-tests.result }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+          SELF: CI
         run: |
           set -euo pipefail
           echo "rust-tests: ${SHARDS_RESULT}"
-          if [ "${SHARDS_RESULT}" != "success" ]; then
-            echo "::error::the Rust suite did not pass (${SHARDS_RESULT})"
-            exit 1
+          if [ "${SHARDS_RESULT}" = "success" ]; then
+            exit 0
           fi
+          echo "::group::what actually failed in this run"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100" \
+            | jq -r --arg self "${SELF}" '.jobs[]
+                  | select(.name != $self)
+                  | select(.conclusion != "success" and .conclusion != null and .conclusion != "skipped")
+                  | "\(.name) [\(.conclusion)] -> "
+                    + ([.steps[]? | select(.conclusion == "failure") | .name] | join(", ") | if . == "" then "no failed step recorded" else . end)' \
+            || echo "could not list this run's jobs - open the run to see which one failed"
+          echo "::endgroup::"
+          echo "::error::the Rust suite did not pass (${SHARDS_RESULT}) - see the failed jobs and steps listed above"
+          exit 1
 
   # [CI-RELEASE-BUILD] [COVERAGE-THRESHOLDS-JSON] Coverage, on its own
   # cache and its own critical path. It cannot share the release build:
@@ -379,6 +416,13 @@ jobs:
       # artifacts and must never be keyed together with the release
       # target directory, or one job's write would poison the other's
       # restore.
+      #
+      # The generated wire modules ride along for the reason the build
+      # job spells out: git-ignored, so regenerating them on a fresh
+      # checkout invalidates the fingerprints just restored. Carrying
+      # them across a near-miss restore is safe either way — the
+      # generator compares content, so a genuinely changed wire model is
+      # still rewritten and still rebuilds what depends on it.
       - name: Cache instrumented build
         uses: actions/cache@v6
         with:
@@ -386,6 +430,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target/llvm-cov-target
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
           key: ${{ runner.os }}-cargo-cov-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-cargo-cov-
@@ -498,6 +544,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
           key: ${{ runner.os }}-cargo-release-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-cargo-release-

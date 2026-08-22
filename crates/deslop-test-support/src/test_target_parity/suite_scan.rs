@@ -91,14 +91,20 @@ fn is_conditional_attribute(item: Node<'_>, source: &str) -> bool {
     )
 }
 
-/// Records the file every `mod_item` under `node` resolves to.
-fn collect(node: Node<'_>, source: &str, tests: &Path, reached: &mut Reached) {
-    if node.kind() == MOD_ITEM {
-        record(node, source, tests, reached);
-    }
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
-        collect(child, source, tests, reached);
+/// Records the file each `mod` at the top of the suite root resolves to.
+///
+/// Only the top level counts. A `mod` nested inside an inline module
+/// resolves against that module's own directory — `mod helpers { mod
+/// regression; }` is `tests/helpers/regression.rs`, not
+/// `tests/regression.rs` — so walking into inline modules and recording
+/// the bare name certified a top-level file that nothing built. Anything
+/// gating the enclosing module was lost on the way down too.
+fn collect(root: Node<'_>, source: &str, tests: &Path, reached: &mut Reached) {
+    let mut cursor = root.walk();
+    for child in root.named_children(&mut cursor) {
+        if child.kind() == MOD_ITEM {
+            record(child, source, tests, reached);
+        }
     }
 }
 

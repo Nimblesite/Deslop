@@ -409,3 +409,49 @@ fn a_crate_root_inner_attribute_that_is_not_a_cfg_gates_nothing() -> Result<()> 
     );
     Ok(())
 }
+
+/// A `mod` nested inside an inline module certifies no top-level file.
+///
+/// `mod helpers { mod regression; }` resolves to
+/// `tests/helpers/regression.rs`. Recording the bare name as it was
+/// walked past marked `tests/regression.rs` as reached, so an unwired
+/// top-level test could be certified by a module that has nothing to do
+/// with it — and any `cfg` on the enclosing module was lost on the way
+/// down, so a disabled block certified its contents too.
+#[test]
+fn a_module_nested_in_an_inline_module_certifies_no_top_level_file() -> Result<()> {
+    let source = "mod helpers {\n    mod regression;\n}\n";
+    let reached = suite_scan::scan(source, &sample_tests_dir())?;
+    assert!(
+        !reached.mentions(REGRESSION_FILE),
+        "a nested `mod regression;` resolves under helpers/, so it says \
+         nothing about tests/{REGRESSION_FILE}: {reached:?}"
+    );
+    Ok(())
+}
+
+/// The same nesting under a `cfg`-gated block is equally inert.
+#[test]
+fn a_cfg_gated_inline_module_certifies_nothing_it_contains() -> Result<()> {
+    let source = format!(
+        "#[cfg(any())]\nmod disabled {{\n    #[path = \"{REGRESSION_FILE}\"]\n    mod regression;\n}}\n"
+    );
+    let reached = suite_scan::scan(&source, &sample_tests_dir())?;
+    assert!(
+        !reached.always.contains(REGRESSION_FILE),
+        "nothing inside a `cfg`-gated block is built: {reached:?}"
+    );
+    Ok(())
+}
+
+/// An inline module at the top level names no file of its own either.
+#[test]
+fn an_inline_module_is_not_itself_a_top_level_file() -> Result<()> {
+    let source = "mod inline_helpers {\n    pub const X: u8 = 1;\n}\n";
+    let reached = suite_scan::scan(source, &sample_tests_dir())?;
+    assert!(
+        !reached.mentions("inline_helpers.rs"),
+        "a `mod x` with a body has no file of its own: {reached:?}"
+    );
+    Ok(())
+}
