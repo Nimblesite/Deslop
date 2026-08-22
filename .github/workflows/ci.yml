@@ -78,62 +78,12 @@ jobs:
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # [CI-PREFLIGHT] Read-only formatting and analyzer gates run before release
-  # compilation, in one job so toolchain setup is paid once.
-  checks:
-    name: Format + analyzers
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "22.x"
-      - name: Install typediagram
-        run: npm install -g typediagram@0.11.0
-      - name: Check formatting
-        run: make fmt CHECK=1
-      - name: Cache analyzer build
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-            crates/deslop-core/src/wire_generated.rs
-            clients/vscode/src/types/wire-generated.ts
-          key: ${{ runner.os }}-cargo-analyzers-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-analyzers-
-            ${{ runner.os }}-cargo-
-      - name: Verify grammar pins
-        run: |
-          set -euo pipefail
-          for dep in tree-sitter tree-sitter-c-sharp tree-sitter-rust tree-sitter-python tree-sitter-dart tree-sitter-typescript tree-sitter-javascript tree-sitter-php tree-sitter-fsharp tree-sitter-go; do
-            line=$(grep -E "^${dep} = " Cargo.toml || true)
-            if [ -z "${line}" ]; then
-              echo "MISSING PIN: ${dep} must appear in workspace.dependencies"
-              exit 1
-            fi
-            if ! echo "${line}" | grep -qE '"=[0-9]+\.[0-9]+\.[0-9]+"'; then
-              echo "LOOSE PIN: ${dep} must use an exact =x.y.z constraint, got: ${line}"
-              exit 1
-            fi
-            echo "OK: ${line}"
-          done
-      - name: Run analyzers
-        run: make _ci-analyze
-
-  # [CI-RELEASE-BUILD] Compilation starts only after preflight passes.
-  # This job owns and saves the release cache consumed by every test job.
+  # [CI-RELEASE-BUILD] Formatting and analyzers run first, followed by release
+  # compilation in the same sequential job. The completed release cache is then
+  # saved for every parallel test job.
   build:
-    name: Build release
-    needs: [changes, checks]
+    name: Format + analyzers + build release
+    needs: changes
     if: needs.changes.outputs.code == 'true'
     # A standard runner, deliberately. `ubuntu-latest-16-cores` was tried
     # here and never resolved: on run 32558651602 every `ubuntu-latest` job
@@ -155,8 +105,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # The preflight jobs already ran rustfmt and clippy.
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - uses: actions/setup-node@v7
         with:
@@ -175,6 +126,42 @@ jobs:
       # sync per CLAUDE.md dependency-pinning rules.
       - name: Install typediagram
         run: npm install -g typediagram@0.11.0
+
+      - name: Restore prior release cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
+          key: ${{ runner.os }}-cargo-release-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-
+            ${{ runner.os }}-cargo-
+
+      - name: Check formatting
+        run: make fmt CHECK=1
+
+      - name: Verify grammar pins
+        run: |
+          set -euo pipefail
+          for dep in tree-sitter tree-sitter-c-sharp tree-sitter-rust tree-sitter-python tree-sitter-dart tree-sitter-typescript tree-sitter-javascript tree-sitter-php tree-sitter-fsharp tree-sitter-go; do
+            line=$(grep -E "^${dep} = " Cargo.toml || true)
+            if [ -z "${line}" ]; then
+              echo "MISSING PIN: ${dep} must appear in workspace.dependencies"
+              exit 1
+            fi
+            if ! echo "${line}" | grep -qE '"=[0-9]+\.[0-9]+\.[0-9]+"'; then
+              echo "LOOSE PIN: ${dep} must use an exact =x.y.z constraint, got: ${line}"
+              exit 1
+            fi
+            echo "OK: ${line}"
+          done
+
+      - name: Run analyzers
+        run: make _ci-analyze
 
       # [CI-RELEASE-BUILD] One release build per run, shared by every
       # downstream job. The key is the commit, so the two parallel test
@@ -196,21 +183,6 @@ jobs:
       # target directory they keep the build job's mtimes, the
       # generator's own content check reports them unchanged, and the
       # restored fingerprints stay valid.
-      - name: Restore prior release cache
-        uses: actions/cache/restore@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-            crates/deslop-core/src/wire_generated.rs
-            clients/vscode/src/types/wire-generated.ts
-          key: ${{ runner.os }}-cargo-release-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-analyzers-${{ github.sha }}
-            ${{ runner.os }}-cargo-release-
-            ${{ runner.os }}-cargo-
-
       - name: Build
         run: make build
 
@@ -612,27 +584,27 @@ jobs:
       - name: _jetbrains-real-binary-test
         run: make _jetbrains-real-binary-test
 
-      # Real IDE-level test ([JETBRAINS-TESTING]): boots a headless IntelliJ Platform
+      # Run the LSP4IJ unit suite and the distinct IDE-level integration suite.
+      # The shared-module suite already ran once in _jetbrains-real-binary-test.
+      # The integration task boots a headless IntelliJ Platform
       # with the ASSEMBLED plugin installed and asserts the Deslop tool window + Tools
       # action register through the shipped classloader layout — catches the
       # lib/modules/ content-module regression the descriptor test cannot. Invoked
       # through the Gradle wrapper directly (not a make target) to keep the Makefile
       # unchanged; every other jetbrains step goes through make.
-      - name: jetbrains integration test (IDE-level UI registration)
-        run: cd clients/jetbrains && ./gradlew :deslop-lsp4ij:integrationTest --no-daemon
+      - name: JetBrains LSP4IJ unit + integration tests
+        run: cd clients/jetbrains && ./gradlew :deslop-lsp4ij:test :deslop-lsp4ij:integrationTest --no-daemon
 
       # Uses the checked-in Gradle wrapper via the Makefile default.
       - name: jetbrains-package deployment gate
         run: make _jetbrains-package
 
-  # Website build + content gate. Runs whenever site/** changes — including on
-  # website-only PRs, where the heavy `ci` job is skipped. Cheap: Node + Eleventy,
-  # no Rust toolchain. This is the gate that keeps a website-only PR honest now
-  # that it no longer drags the full pipeline behind it.
+  # Website build + complete website test suite. Runs after the release build on
+  # code PRs and still runs independently on website-only PRs.
   site:
     name: Website build
     needs: [changes, build]
-    if: always() && needs.changes.outputs.site == 'true' && (needs.changes.outputs.code != 'true' || needs.build.result == 'success')
+    if: always() && (needs.changes.outputs.code == 'true' || needs.changes.outputs.site == 'true') && (needs.changes.outputs.code != 'true' || needs.build.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -669,6 +641,7 @@ jobs:
       # written to protect the security-sensitive snippet must run wherever
       # that snippet can change.
       - name: Installer snippet contract
+        if: needs.changes.outputs.code != 'true'
         run: node --test scripts/deployment/installer-snippet.test.mjs
 
       - name: Install site dependencies
