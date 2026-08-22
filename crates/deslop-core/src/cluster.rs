@@ -125,6 +125,7 @@ fn reportable_clusters<S: BuildHasher>(
     trees: &[NormalizedNode],
 ) -> Vec<Cluster> {
     let mut overlap = OverlapMeasurer::new(trees);
+    let mut spent = BuildSpent::default();
     let clusters = fused_clusters
         .iter()
         .filter_map(|fused| {
@@ -134,23 +135,41 @@ fn reportable_clusters<S: BuildHasher>(
                 embedding_vectors,
                 fused,
                 &mut overlap,
+                &mut spent,
             )
         })
         .collect();
-    log_signal_measurement(overlap.stats());
+    log_signal_measurement(overlap.stats(), &spent);
     clusters
 }
 
-/// Emits the cluster-signal overlap measurement counters, so memo
-/// effectiveness across the whole ranked build is readable from one
-/// event ([FUSION-SHARED-SUBTREE-MEMO], [PIPELINE-OBSERVABILITY-STAGES]).
-fn log_signal_measurement(stats: crate::overlap::MeasureStats) {
-    tracing::debug!(
+/// Wall time the ranked build spent per substage, accumulated across
+/// every cluster so the signal event can attribute the stage
+/// ([PIPELINE-OBSERVABILITY-STAGES]).
+#[derive(Debug, Default)]
+struct BuildSpent {
+    /// Same-file overlap collapse.
+    collapse: std::time::Duration,
+    /// Pairwise signal measurement.
+    signals: std::time::Duration,
+    /// Cluster materialisation (weight, id, member copies).
+    materialize: std::time::Duration,
+}
+
+/// Emits the cluster-signal overlap measurement counters and substage
+/// wall time, so memo effectiveness and cost attribution across the
+/// whole ranked build are readable from one event
+/// ([FUSION-SHARED-SUBTREE-MEMO], [PIPELINE-OBSERVABILITY-STAGES]).
+fn log_signal_measurement(stats: crate::overlap::MeasureStats, spent: &BuildSpent) {
+    tracing::info!(
         alignments = stats.alignments,
         credit_fallbacks = stats.credit_fallbacks,
         hash_equal = stats.hash_equal,
         exact_hits = stats.exact_hits,
         unresolved = stats.unresolved,
+        collapse_ms = crate::observe::duration_ms(spent.collapse),
+        signals_ms = crate::observe::duration_ms(spent.signals),
+        materialize_ms = crate::observe::duration_ms(spent.materialize),
         "cluster signal overlaps measured"
     );
 }
@@ -192,11 +211,15 @@ fn build_fused_cluster<S: BuildHasher>(
     embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     fused: &FusedCluster,
     overlap: &mut OverlapMeasurer<'_>,
+    spent: &mut BuildSpent,
 ) -> Option<Cluster> {
+    let collapse_started = std::time::Instant::now();
     let occurrence_indices = collapse_overlapping_per_file(fused, fingerprints);
+    spent.collapse = spent.collapse.saturating_add(collapse_started.elapsed());
     if occurrence_indices.len() < MIN_REPORTABLE_MEMBERS {
         return None;
     }
+    let signals_started = std::time::Instant::now();
     let measured = measured_signals(
         &occurrence_indices,
         fingerprints,
@@ -204,11 +227,15 @@ fn build_fused_cluster<S: BuildHasher>(
         embedding_vectors,
         overlap,
     );
+    spent.signals = spent.signals.saturating_add(signals_started.elapsed());
+    let materialize_started = std::time::Instant::now();
     let members: Vec<Fingerprint> = occurrence_indices
         .iter()
         .filter_map(|index| fingerprints.get(*index).cloned())
         .collect();
-    Some(materialize_cluster(members, measured))
+    let cluster = materialize_cluster(members, measured);
+    spent.materialize = spent.materialize.saturating_add(materialize_started.elapsed());
+    Some(cluster)
 }
 
 /// Builds the final reportable cluster from already-filtered members.

@@ -14,6 +14,19 @@ use std::time::Duration;
 
 use crate::observe::duration_ms;
 
+use super::super::signatures::SignatureMemo;
+
+/// Working state threaded through one corpus build: the observability
+/// counters and the signature memo ([PIPELINE-SIGNATURE-MEMO]), which
+/// share exactly one lifetime — one batch build or one change pass.
+#[derive(Debug, Default)]
+pub struct CorpusBuildState {
+    /// Counters surfaced on the corpus-built record.
+    pub stats: CorpusBuildStats,
+    /// Stream-digest signature memo for the same pass.
+    pub memo: SignatureMemo,
+}
+
 /// Per-run corpus-build counters surfaced on the `fingerprint corpus
 /// built` event and the fixed-interval progress records.
 #[derive(Debug, Default)]

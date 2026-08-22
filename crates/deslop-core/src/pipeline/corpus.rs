@@ -29,7 +29,7 @@ mod stats;
 #[cfg(test)]
 mod tests;
 
-pub use stats::CorpusBuildStats;
+pub use stats::{CorpusBuildState, CorpusBuildStats};
 
 /// Files between corpus-build progress records
 /// ([PIPELINE-OBSERVABILITY-STAGES]). Count-based so the cadence is
@@ -78,7 +78,7 @@ pub fn fingerprint_corpus(
 ) -> Result<FingerprintCorpus, CoreError> {
     let min_nodes_usize = usize::try_from(config.min_nodes).unwrap_or(usize::MAX);
     let mut corpus = FingerprintCorpus::default();
-    let mut build = CorpusBuildStats::default();
+    let mut build = CorpusBuildState::default();
     let mut live_blobs = LiveBlobs::default();
     let cache_base = crate::paths::cache_dir(&config.root);
     let mut caches: HashMap<&'static str, FingerprintCache> = HashMap::new();
@@ -90,7 +90,7 @@ pub fn fingerprint_corpus(
         };
         let read_started = Instant::now();
         let source = read_source(&discovered.path)?;
-        build.add_read(read_started.elapsed());
+        build.stats.add_read(read_started.elapsed());
         if config.incremental {
             live_blobs.record(discovered.language, &source);
         }
@@ -170,7 +170,7 @@ fn log_corpus_built(
     files_processed: usize,
     fingerprints: usize,
     corpus: &FingerprintCorpus,
-    build: &CorpusBuildStats,
+    build: &CorpusBuildState,
     started: Instant,
 ) {
     tracing::info!(
@@ -178,14 +178,16 @@ fn log_corpus_built(
         fingerprints,
         cache_hits = corpus.cache_stats.hits,
         cache_misses = corpus.cache_stats.misses,
-        signatures_built = build.signatures_built,
-        signatures_reused = build.signatures_reused,
-        exact_fingerprints = build.exact_fingerprints,
-        sibling_fingerprints = build.sibling_fingerprints,
-        read_ms = build.read_ms(),
-        parse_ms = build.parse_ms(),
-        fingerprint_ms = build.fingerprint_ms(),
-        signature_ms = build.signature_ms(),
+        signatures_built = build.stats.signatures_built,
+        signatures_reused = build.stats.signatures_reused,
+        exact_fingerprints = build.stats.exact_fingerprints,
+        sibling_fingerprints = build.stats.sibling_fingerprints,
+        read_ms = build.stats.read_ms(),
+        parse_ms = build.stats.parse_ms(),
+        fingerprint_ms = build.stats.fingerprint_ms(),
+        signature_ms = build.stats.signature_ms(),
+        signature_memo_hits = build.memo.hits(),
+        signature_memo_misses = build.memo.misses(),
         elapsed_ms = crate::observe::elapsed_ms(started),
         "fingerprint corpus built",
     );
@@ -206,7 +208,7 @@ pub fn parse_one_file(
     parser: &dyn LanguageParser,
     config: &PipelineConfig<'_>,
     stats: &mut CacheStats,
-    build: &mut CorpusBuildStats,
+    build: &mut CorpusBuildState,
 ) -> Result<(CachedFile, Vec<u8>, u64), CoreError> {
     let source = read_source(path)?;
     let cache_base = crate::paths::cache_dir(&config.root);
@@ -263,18 +265,18 @@ fn load_or_parse_file(
     file_id: FileId,
     min_nodes: usize,
     stats: &mut CacheStats,
-    build: &mut CorpusBuildStats,
+    build: &mut CorpusBuildState,
 ) -> Result<CachedFile, CoreError> {
     if let Some(cache) = cache {
         if let Some(hit) = validated_cache_hit(cache, parser, source, file_id, min_nodes) {
             stats.hits = stats.hits.saturating_add(1);
-            build.add_reused(hit.signatures.len());
+            build.stats.add_reused(hit.signatures.len());
             return Ok(hit);
         }
         stats.misses = stats.misses.saturating_add(1);
     }
     let parsed = build_cached_file(parser, source, file_id, min_nodes, build)?;
-    build.add_built(parsed.signatures.len());
+    build.stats.add_built(parsed.signatures.len());
     persist_cached_file(cache, source, &parsed);
     Ok(parsed)
 }
@@ -315,17 +317,17 @@ fn build_cached_file(
     source: &[u8],
     file_id: FileId,
     min_nodes: usize,
-    build: &mut CorpusBuildStats,
+    build: &mut CorpusBuildState,
 ) -> Result<CachedFile, CoreError> {
     let parse_started = Instant::now();
     let tree = parser.parse_and_normalize(source, file_id)?;
-    build.add_parse(parse_started.elapsed());
+    build.stats.add_parse(parse_started.elapsed());
     let fingerprint_started = Instant::now();
-    let fingerprints = fingerprints_for(&tree, min_nodes, parser.id(), Some(build));
-    build.add_fingerprint(fingerprint_started.elapsed());
+    let fingerprints = fingerprints_for(&tree, min_nodes, parser.id(), Some(&mut build.stats));
+    build.stats.add_fingerprint(fingerprint_started.elapsed());
     let signature_started = Instant::now();
-    let signatures = signatures_for_file(&tree, &fingerprints, Some(parser.id()));
-    build.add_signature(signature_started.elapsed());
+    let signatures = signatures_for_file(&tree, &fingerprints, Some(parser.id()), &mut build.memo);
+    build.stats.add_signature(signature_started.elapsed());
     Ok(CachedFile {
         tree,
         fingerprints,
