@@ -28,11 +28,14 @@ use std::{collections::HashMap, rc::Rc};
 
 /// Zhang–Shasha ordered tree alignment ([FUSION-SHARED-SUBTREE]).
 mod alignment;
+mod tally;
 
 /// Measurement unit tests ([FUSION-SHARED-SUBTREE]).
 #[cfg(test)]
 mod tests;
 use alignment::{aligned_shared_nodes, PostNode};
+
+use tally::RescueTally;
 
 use crate::{
     ast::NormalizedNode,
@@ -79,16 +82,20 @@ pub fn apply_shared_subtree_rescue(
     trees: &[NormalizedNode],
 ) {
     let mut measurer = OverlapMeasurer::new(trees);
-    let mut rescued_pairs = 0_usize;
+    let mut tally = RescueTally::default();
     for pair in pairs.iter_mut() {
-        if !rescue_eligible(pair) || !crosses_files(pair, fingerprints) {
+        tally.scanned = tally.scanned.saturating_add(1);
+        if !rescue_eligible(pair) {
             continue;
         }
-        if measure_onto(pair, fingerprints, &mut measurer) {
-            rescued_pairs = rescued_pairs.saturating_add(1);
+        tally.eligible = tally.eligible.saturating_add(1);
+        if !crosses_files(pair, fingerprints) {
+            continue;
         }
+        tally.cross_file = tally.cross_file.saturating_add(1);
+        tally.record(measure_onto(pair, fingerprints, &mut measurer));
     }
-    tracing::debug!(rescued_pairs, "shared-subtree rescue overlaps measured");
+    tally.report_total();
 }
 
 /// Measures one eligible pair, returning whether both endpoints
@@ -103,13 +110,6 @@ fn measure_onto(
         return false;
     };
     pair.shared_subtree_overlap = measurer.overlap(left, right);
-    tracing::debug!(
-        left_nodes = left.node_count,
-        right_nodes = right.node_count,
-        token_jaccard = pair.score.token_jaccard,
-        overlap = pair.shared_subtree_overlap,
-        "shared-subtree overlap measured"
-    );
     true
 }
 
