@@ -243,7 +243,9 @@ fn build_fused_cluster<S: BuildHasher>(
         .filter_map(|index| fingerprints.get(*index).cloned())
         .collect();
     let cluster = materialize_cluster(members, measured);
-    spent.materialize = spent.materialize.saturating_add(materialize_started.elapsed());
+    spent.materialize = spent
+        .materialize
+        .saturating_add(materialize_started.elapsed());
     Some(cluster)
 }
 

@@ -90,7 +90,11 @@ impl PipelineSession {
         let stage_started = Instant::now();
         let fused_clusters =
             split_structural_families(fused_clusters, fingerprints, &self.file_languages);
-        log_cluster_stage("structural_family_split", fused_clusters.len(), stage_started);
+        log_cluster_stage(
+            "structural_family_split",
+            fused_clusters.len(),
+            stage_started,
+        );
         // [CLONE-NOISE-VERBATIM-SUBGROUP] Partition a noise family off
         // the byte-identical copy it swept up *before* signals are
         // measured, so the surviving cluster is measured, bucketed and
