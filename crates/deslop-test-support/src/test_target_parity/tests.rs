@@ -101,8 +101,9 @@ fn every_integration_test_file_is_built_by_a_cargo_target() -> Result<()> {
             wiring.conditionally_reached(),
             Vec::<&str>::new(),
             "{krate}: these tests/*.rs files are reached only behind a \
-             `cfg` or `required-features` gate, so an ordinary `cargo \
-             test` never builds them. Mentioned is not built."
+             `cfg`, a `required-features`, or a `test = false` target, so \
+             an ordinary `cargo test` never runs them. Mentioned is not \
+             built, and built is not run."
         );
     }
     Ok(())
@@ -452,6 +453,54 @@ fn an_inline_module_is_not_itself_a_top_level_file() -> Result<()> {
     assert!(
         !reached.mentions("inline_helpers.rs"),
         "a `mod x` with a body has no file of its own: {reached:?}"
+    );
+    Ok(())
+}
+
+/// A leaf `[[test]]` with `test = false` compiles and runs nothing.
+///
+/// `test = false` was only ever checked on the suite root, so unwiring a
+/// file from `suite.rs` and declaring a `test = false` target for it left
+/// the gate satisfied while Cargo ran none of it — a silent skip dressed
+/// up as an explicit target.
+#[test]
+fn a_leaf_target_with_test_false_is_not_counted_as_built() -> Result<()> {
+    let declared: toml::Table = format!(
+        "[[test]]\nname = \"regression\"\npath = \"tests/{REGRESSION_FILE}\"\ntest = false\n"
+    )
+    .parse()?;
+    let reached = manifest::targets(&declared);
+    assert!(
+        !reached.always.contains(REGRESSION_FILE),
+        "Cargo runs no tests in a `test = false` target, so it cannot \
+         stand as proof the file is exercised: {reached:?}"
+    );
+    assert!(
+        reached.conditional.contains(REGRESSION_FILE),
+        "the target must still be recorded so the gate names the file: \
+         {reached:?}"
+    );
+    Ok(())
+}
+
+/// The whole bypass, end to end: a file absent from the suite root and
+/// declared only as a `test = false` target must still be reported.
+#[test]
+fn unwiring_a_file_behind_a_test_false_target_is_still_reported() -> Result<()> {
+    let manifest: toml::Table = format!(
+        "{ENABLED_SUITE_TARGET}\n[[test]]\nname = \"regression\"\npath = \"tests/{REGRESSION_FILE}\"\ntest = false\n"
+    )
+    .parse()?;
+    assert_eq!(
+        manifest::suite_target_defect(&manifest),
+        None,
+        "the suite target itself is fine here; only the leaf is gated"
+    );
+    let reached = manifest::targets(&manifest);
+    assert!(
+        !reached.always.contains(REGRESSION_FILE),
+        "the leaf is gated, so tests/{REGRESSION_FILE} is not built on an \
+         ordinary run and conditionally_reached() must name it: {reached:?}"
     );
     Ok(())
 }
