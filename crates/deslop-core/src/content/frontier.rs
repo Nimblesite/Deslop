@@ -16,7 +16,7 @@ use std::hash::BuildHasher;
 use crate::{
     ast::{ByteRange, NormalizedNode},
     fingerprint::Fingerprint,
-    lang::shared::{LITERAL_KIND, OPERATOR_KIND},
+    lang::shared::{is_operator_kind, LITERAL_KIND},
     state::FileId,
     tokens::collapsed_leaves,
 };
@@ -47,7 +47,7 @@ impl Population {
     pub(super) fn of(kind: &str) -> Self {
         match kind {
             LITERAL_KIND => Self::Literal,
-            OPERATOR_KIND => Self::Operator,
+            other if is_operator_kind(other) => Self::Operator,
             _ => Self::Identifier,
         }
     }

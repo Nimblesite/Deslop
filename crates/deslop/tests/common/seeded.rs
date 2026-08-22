@@ -22,15 +22,24 @@ pub(crate) const SEEDED_MIN_NODES: u32 = 8;
 
 /// Stable id of the authored `alpha.rs`/`beta.rs` clone
 /// ([PIPELINE-DETERMINISM]).
-const SEEDED_CLONE_ID: &str = "990afd51350955c9";
+///
+/// Re-blessed when [PIPELINE-NORMALIZE-AST-OPERATOR] gave each operator
+/// leaf its own kind (`__op__+` rather than a shared `__op__`). The id
+/// is the canonical subtree's Merkle hash, and the seven operator
+/// leaves below now hash by their own tokens, so the hash moved. Nothing
+/// the reader sees moved with it: the spans, bucket, category, node
+/// count, signals and metrics asserted in this file are all unchanged,
+/// which is what proves the change discriminated operators rather than
+/// perturbing the corpus.
+const SEEDED_CLONE_ID: &str = "f26a1a0312987ef1";
 
 /// `canonical_node_count` of the authored clone.
 ///
 /// Seven higher than the pre-[PIPELINE-NORMALIZE-AST-OPERATOR] count:
 /// the body carries seven behaviour-bearing anonymous tokens — `&` in
 /// `&[i32]`, `in`, the `*` of `*item`, `>`, `+=`, the `*` of `item * 2`,
-/// and `-=` — and each now survives normalisation as an `__op__` leaf so
-/// `+` and `-` can disagree. The reported spans, bucket, category,
+/// and `-=` — and each now survives normalisation as a leaf carrying
+/// its own token so `+` and `-` can disagree. The reported spans, bucket, category,
 /// signals and metrics are all unchanged; only the canonical tree the
 /// count and the id are taken from grew.
 const SEEDED_CLONE_NODES: u64 = 47;

@@ -74,11 +74,20 @@ typediagram-gen:
 ##       (single source of truth). Per-crate thresholds live under
 ##       `.rust.crates.<crate>`; `_coverage_check` enforces each one
 ##       independently — no workspace roll-up masking.
+##       [CI-RELEASE-BUILD] `--release` matches the profile every other
+##       gate runs on. The duplication gate, the deployment gates and the
+##       whole VSIX E2E suite all exercise `target/release`, so a
+##       debug-profile test run gates release artifacts on code it never
+##       executed. Coverage still cannot share those artifacts —
+##       `cargo llvm-cov` compiles instrumented binaries into
+##       `target/llvm-cov-target`, and an instrumented artifact can never
+##       share a fingerprint with an uninstrumented one — but it can and
+##       does run at the same optimisation level.
 test: _delete-path-binaries typediagram-gen
 	@echo "==> Testing (fail-fast + coverage + per-crate threshold)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
 	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
-	 cargo llvm-cov --workspace --all-targets --features deslop-core/live \
+	 cargo llvm-cov --release --workspace --all-targets --features deslop-core/live \
 	    --ignore-filename-regex "$$_rust_ignore" \
 	    --lcov --output-path lcov.info
 	@$(MAKE) _coverage_check RUST_LCOV=lcov.info

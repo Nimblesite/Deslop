@@ -55,12 +55,16 @@ pub(super) const MAGIC: u32 = 0xC0DE_D180;
 /// in its failure message, so the change that must bump it is also the
 /// change that is told to.
 /// Epoch 2: [PIPELINE-NORMALIZE-AST-OPERATOR] keeps behaviour-bearing
-/// anonymous tokens as `__op__` leaves, so the normalised tree of an
-/// unchanged file changed meaning. Without this bump every tree already
-/// in a warm store stays addressable and a warm run serves the
-/// pre-operator normalisation, in which `base + fee` and `base - fee`
-/// are the same subtree.
-pub(super) const SEMANTIC_EPOCH: u32 = 2;
+/// anonymous tokens as operator leaves, so the normalised tree of an
+/// unchanged file changed meaning.
+///
+/// Epoch 3: the same section stopped collapsing those leaves to one
+/// `__op__` kind and gave each one its own token (`__op__+`). Epoch 2
+/// alone is not enough to cover it — a store warmed under epoch 2 holds
+/// trees in which `base + fee` and `base - fee` still hash identically,
+/// so a warm run would keep certifying an operator swap as duplication
+/// long after the normalisation that produced it was replaced.
+pub(super) const SEMANTIC_EPOCH: u32 = 3;
 
 /// Bytes of blob header preceding the payload: the magic plus the
 /// 32-byte binding digest.

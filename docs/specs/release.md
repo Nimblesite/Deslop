@@ -61,6 +61,37 @@ These gates run in `.github/workflows/` and `.deslop.toml` and fail the pipeline
 on drift. Coverage floors are owned by `coverage-thresholds.json`
 (`REPO-STANDARDS-SPEC [COVERAGE-THRESHOLDS-JSON]`).
 
+- **[CI-RELEASE-BUILD] One release build, two parallel test jobs** — the
+  workspace is compiled exactly once per run, by the `build` job, in release.
+  That job owns format, lint, `make build`, the duplication gate and the
+  deployment gates, and caches `target/` plus the cargo registry under a key
+  containing the commit SHA. `ci` (Rust suite) and `vsix` (extension suite)
+  then run **in parallel**, both restoring that exact entry read-only; a second
+  writer on the same key would race the build job. The SHA in the key is what
+  makes the hit exact — a key that only hashes `Cargo.lock` matches a previous
+  run's target directory, and a test job that silently recompiles the workspace
+  buys nothing from the split. `restore-keys` still hands a cold run the
+  previous commit's directory to build incrementally on top of.
+
+  The dependency edge is the point, not just the speed. While `vsix` and
+  `jetbrains` gated on `ci`, every red Rust run left both suites `skipped`, so
+  extension breakage stayed invisible until the Rust suite went green and then
+  surfaced as a fresh CI round. Both now gate on `build` and report on every
+  run.
+
+  `make test` runs `cargo llvm-cov --release` for the same reason: the
+  duplication gate, the deployment gates and the whole VSIX E2E suite exercise
+  `target/release`, so a debug-profile suite gates release artifacts on code it
+  never executed. Coverage still cannot reuse those artifacts — `cargo llvm-cov`
+  compiles instrumented binaries into `target/llvm-cov-target`, and an
+  instrumented artifact can never share a fingerprint with an uninstrumented one
+  — but it runs at the same optimisation level.
+
+  `windows` keeps its own cache and its own build: a different runner OS
+  produces different artifacts that can never be shared. It is not split, and
+  measurement is why — the job completes in 2–3 minutes, most of it checkout,
+  toolchain and cache restore, all of which a split would pay again per part.
+
 - **[CI-DESLOP] Self-hosted duplication gate** — Deslop dog-foods its own
   detector: the `build` job runs the just-built release binary
   (`./target/release/deslop . --no-color`) against this repository. The binary

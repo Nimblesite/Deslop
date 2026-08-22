@@ -30,7 +30,8 @@ pub const IDENTIFIER_KIND: &str = "__ident__";
 /// numeric / char / bool / null literal raw kinds to this value so
 /// constant edits do not perturb the fingerprint.
 pub const LITERAL_KIND: &str = "__literal__";
-/// Normalised operator placeholder ([PIPELINE-NORMALIZE-AST-OPERATOR]).
+/// Namespace prefix for a normalised operator leaf
+/// ([PIPELINE-NORMALIZE-AST-OPERATOR]).
 ///
 /// Every grammar here spells the operator of a binary, unary or
 /// compound-assignment expression as an *anonymous* token, and the walk
@@ -41,14 +42,33 @@ pub const LITERAL_KIND: &str = "__literal__";
 /// `agreement = 1.00`, `fused = 1.00` over code that computes a
 /// different answer.
 ///
-/// Operators collapse to *one* kind, exactly as identifiers and
-/// literals do, so a consistently-renamed clone still fingerprints
-/// identically and Type-2 recall is untouched. What the placeholder
-/// adds is a position on the content frontier
-/// ([`crate::tokens::collapsed_leaves`]) whose raw bytes are the
-/// operator itself — so `+` and `-` disagree where they always should
-/// have, and [FUSION-CONTENT-GATE] prices the difference.
-pub const OPERATOR_KIND: &str = "__op__";
+/// The operator is kept as a leaf **carrying its own token**, and that
+/// is the whole point: the kind is `__op__+`, never a shared `__op__`.
+/// Collapsing operators to one placeholder — the way [`IDENTIFIER_KIND`]
+/// and [`LITERAL_KIND`] collapse theirs — breaks the premise the digest
+/// rests on. Identifiers and literals collapse because a rename and a
+/// constant edit preserve behaviour, so equal hashes mean "the same code
+/// up to renames" and unequal hashes mean the code itself differs
+/// ([`crate::cluster_filters`] states that premise and elects on it). An
+/// operator swap is neither a rename nor a literal edit, so a shared
+/// placeholder makes `alpha + beta` and `alpha - beta` hash identically
+/// and the fingerprint asserts sameness that does not exist. Everything
+/// reading the digest then inherits it: `structural` saturates at 1.00,
+/// `token_jaccard` echoes it, the LSH bands collide, subsumption elects
+/// between views of code that computes different answers, and
+/// [FUSION-CONTENT-GATE] is left pricing four disagreeing frontier
+/// positions out of twenty as a ten-percent discount — `fused = 0.90`,
+/// over the [FUSED-THRESHOLD] act-now line.
+///
+/// Type-2 recall is untouched. A consistently-renamed clone changes
+/// identifiers and literals, which still collapse; it does not change
+/// its operators, so the operator leaves stay equal and the subtree
+/// still hashes identically.
+///
+/// The prefix keeps the namespace disjoint from every grammar kind, so
+/// an operator can never be confused with a named production that
+/// happens to spell itself `in`, `is` or `not`.
+pub const OPERATOR_KIND_PREFIX: &str = "__op__";
 
 /// Maximum nesting depth of a normalised AST. Files whose tree-sitter tree
 /// nests deeper than this are rejected with [`CoreError::AstTooDeep`], so a
@@ -65,8 +85,8 @@ pub const OPERATOR_KIND: &str = "__op__";
 /// value is free to bound work alone.
 pub const MAX_AST_DEPTH: usize = 500;
 
-/// Anonymous tokens that carry behaviour, kept as [`OPERATOR_KIND`]
-/// leaves ([PIPELINE-NORMALIZE-AST-OPERATOR]).
+/// Anonymous tokens that carry behaviour, each kept as a leaf of its
+/// own kind ([PIPELINE-NORMALIZE-AST-OPERATOR]).
 ///
 /// Tree-sitter names an anonymous node by its own token text, so this
 /// is one list for every grammar rather than a per-language table. It
@@ -98,10 +118,30 @@ const BEHAVIOUR_BEARING_TOKENS: &[&str] = &[
 ];
 
 /// True when an anonymous token changes what the code computes and must
-/// therefore survive normalisation as an [`OPERATOR_KIND`] leaf.
+/// therefore survive normalisation as an operator leaf.
 #[must_use]
 pub fn is_behaviour_bearing_token(token: &str) -> bool {
     BEHAVIOUR_BEARING_TOKENS.contains(&token)
+}
+
+/// The normalised kind for one behaviour-bearing `token` —
+/// [`OPERATOR_KIND_PREFIX`] followed by the token itself — or `None`
+/// when the token is framing rather than behaviour.
+#[must_use]
+pub fn operator_kind(token: &str) -> Option<&'static str> {
+    is_behaviour_bearing_token(token)
+        .then(|| intern_kind(&format!("{OPERATOR_KIND_PREFIX}{token}")))
+}
+
+/// True when a normalised kind is an operator leaf.
+///
+/// Matched by stripping the namespace prefix and checking the remainder
+/// against the token allowlist, so the answer is exact: no grammar kind
+/// can satisfy it by accident, and no operator kind can be missed.
+#[must_use]
+pub fn is_operator_kind(kind: &str) -> bool {
+    kind.strip_prefix(OPERATOR_KIND_PREFIX)
+        .is_some_and(is_behaviour_bearing_token)
 }
 
 /// Parses `source` with `language` and returns the tree-sitter
@@ -251,11 +291,12 @@ fn normalise_children(
     Ok(children)
 }
 
-/// The [`OPERATOR_KIND`] leaf for one anonymous token, or `None` when
-/// the token is framing rather than behaviour.
+/// The operator leaf for one anonymous token, or `None` when the token
+/// is framing rather than behaviour. Tree-sitter names an anonymous
+/// node by its own token text, so the node kind *is* the operator.
 fn operator_leaf(token: Node<'_>, file_id: FileId) -> Option<NormalizedNode> {
-    is_behaviour_bearing_token(token.kind()).then(|| NormalizedNode {
-        kind: OPERATOR_KIND,
+    operator_kind(token.kind()).map(|kind| NormalizedNode {
+        kind,
         children: Vec::new(),
         byte_range: ByteRange {
             start: token.start_byte(),

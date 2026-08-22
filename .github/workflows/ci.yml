@@ -78,16 +78,20 @@ jobs:
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
 
-  ci:
-    name: CI
+  # [CI-RELEASE-BUILD] The one place the workspace is compiled. Format,
+  # lint and the release gates all need the same warm target directory,
+  # so they live here rather than duplicating the build across three
+  # jobs. `ci` (Rust suite) and `vsix` (extension suite) then run in
+  # parallel against exactly what this job cached.
+  build:
+    name: Build release
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
-    # Covers a release clippy build, an instrumented coverage build, the
-    # full workspace suite, the self-scan duplication gate and the
-    # deployment gates. The previous 10 was sized against runs that
-    # aborted at the first test failure and never reached the rest.
-    timeout-minutes: 30
+    # Covers a release clippy build, the release workspace build, the
+    # self-scan duplication gate and the deployment gates. The test
+    # suites moved out to `ci` and `vsix`.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
 
@@ -119,7 +123,7 @@ jobs:
       # `Cargo.toml`; the step above verifies the pins stay exact.
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy, llvm-tools-preview
+          components: rustfmt, clippy
 
       - uses: actions/setup-node@v7
         with:
@@ -139,20 +143,23 @@ jobs:
       - name: Install typediagram
         run: npm install -g typediagram@0.11.0
 
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@v2.85.13
-        with:
-          tool: cargo-llvm-cov
-
-      - name: Cache cargo registry and target
+      # [CI-RELEASE-BUILD] One release build per run, shared by every
+      # downstream job. The key is the commit, so the two parallel test
+      # jobs get an exact hit on the build this run produced rather than
+      # whatever a previous run happened to leave behind — a near-miss
+      # there is how a test job silently recompiles the workspace and
+      # the parallelism buys nothing. `restore-keys` still hands a cold
+      # run the previous commit's target directory to build on top of.
+      - name: Cache cargo registry and release target
         uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-release-${{ github.sha }}
           restore-keys: |
+            ${{ runner.os }}-cargo-release-
             ${{ runner.os }}-cargo-
 
       # fmt, lint, test are three separate, non-overlapping steps.
@@ -161,21 +168,6 @@ jobs:
 
       - name: Lint
         run: make lint
-
-      # make test = fail-fast + coverage + threshold enforcement ([TEST-RULES]).
-      # Thresholds live in coverage-thresholds.json ([COVERAGE-THRESHOLDS-JSON]).
-      - name: Test
-        run: make test
-
-      - name: Upload coverage
-        uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: coverage-report
-          path: |
-            lcov.info
-            target/llvm-cov/
-          retention-days: 1
 
       - name: Build
         run: make build
@@ -200,7 +192,86 @@ jobs:
           name: build-artifacts
           path: |
             target/release/deslop
-            target/release/deslop.exe
+            target/release/deslop-lsp
+            target/release/deslop-mcp
+          retention-days: 1
+
+  # [CI-RELEASE-BUILD] The Rust suite, running in parallel with `vsix`
+  # against the release build the `build` job cached. Keeps the `ci` job
+  # id and the `CI` name because branch protection requires that check
+  # by name — renaming it would leave the required status pending
+  # forever and block every merge.
+  #
+  # Coverage cannot reuse `target/release/deslop` itself: `cargo
+  # llvm-cov` compiles instrumented binaries into
+  # `target/llvm-cov-target`, and an instrumented artifact can never
+  # share a fingerprint with an uninstrumented one. `make test` passes
+  # `--release` so the suite is at least the same *profile* as the
+  # binaries every other job exercises, instead of gating release
+  # artifacts on a debug-profile run.
+  ci:
+    name: CI
+    needs: [changes, build]
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    # TIMEOUT EXCEPTION: an instrumented release build of the whole
+    # workspace plus the full E2E suite. Sized against runs that reach
+    # the end rather than aborting at the first failure.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.x"
+          cache: npm
+          cache-dependency-path: |
+            clients/vscode/package-lock.json
+            clients/vscode/webview-ui/package-lock.json
+
+      # See the build job — typediagram is required by build.rs and by
+      # `make test`'s own `typediagram-gen` prerequisite.
+      - name: Install typediagram
+        run: npm install -g typediagram@0.11.0
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2.85.13
+        with:
+          tool: cargo-llvm-cov
+
+      # [CI-RELEASE-BUILD] Restore-only: the `build` job owns the entry
+      # for this commit, and a second job writing the same key would
+      # race it. The exact key hits the release build this run already
+      # produced, so nothing here recompiles the workspace.
+      - name: Restore release build
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-release-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-
+            ${{ runner.os }}-cargo-
+
+      # make test = fail-fast + coverage + threshold enforcement ([TEST-RULES]).
+      # Thresholds live in coverage-thresholds.json ([COVERAGE-THRESHOLDS-JSON]).
+      - name: Test
+        run: make test
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: coverage-report
+          path: |
+            lcov.info
+            target/llvm-cov/
           retention-days: 1
 
   # Windows compile + transport gate ([LIVE-IPC-TCP]). Until now,
@@ -253,9 +324,14 @@ jobs:
       - name: TCP transport E2E (real binaries)
         run: cargo test --locked -p deslop-mcp --test tcp_transport
 
+  # [CI-RELEASE-BUILD] Runs in parallel with `ci`. `_vsix-build`'s
+  # `cargo build --release -p deslop-lsp -p deslop-mcp -p deslop` is a
+  # cache hit against the `build` job's target directory, so the E2E
+  # suites spawn the very binaries that job produced instead of
+  # compiling a second copy on the critical path.
   vsix:
     name: VSIX tests + coverage
-    needs: [changes, ci]
+    needs: [changes, build]
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     # TIMEOUT EXCEPTION: builds the real LSP+MCP from source, installs Node
@@ -282,15 +358,20 @@ jobs:
       - name: Install typediagram
         run: npm install -g typediagram@0.11.0
 
-      - name: Cache cargo registry and target
-        uses: actions/cache@v6
+      # [CI-RELEASE-BUILD] Restore-only: the `build` job owns the entry
+      # for this commit, and a second job writing the same key would
+      # race it. The exact key hits the release build this run already
+      # produced, so nothing here recompiles the workspace.
+      - name: Restore release build
+        uses: actions/cache/restore@v6
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-release-${{ github.sha }}
           restore-keys: |
+            ${{ runner.os }}-cargo-release-
             ${{ runner.os }}-cargo-
 
       # xvfb gives Electron a display; dbus gives it a session bus so
@@ -359,7 +440,7 @@ jobs:
 
   jetbrains:
     name: JetBrains package gate
-    needs: [changes, ci]
+    needs: [changes, build]
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     # TIMEOUT EXCEPTION: a cold Gradle/IntelliJ-Platform build resolves the JB
