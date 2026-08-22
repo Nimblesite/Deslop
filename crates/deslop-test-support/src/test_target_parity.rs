@@ -77,7 +77,7 @@ impl Reached {
     fn absorb(&mut self, other: Self) {
         self.always.extend(other.always);
         self.conditional.extend(other.conditional);
-        self.conditional = &self.conditional - &self.always;
+        self.conditional.retain(|file| !self.always.contains(file));
     }
 
     /// Whether any declaration mentions `file`, however it is gated.

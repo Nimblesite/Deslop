@@ -99,7 +99,7 @@ fn attribute_run(item: Node<'_>, source: &str) -> Attributes {
     while let Some(node) = sibling.filter(|node| node.kind() == ATTRIBUTE_ITEM) {
         match attribute_name(node, source).as_deref() {
             Some(PATH_ATTRIBUTE) => {
-                found.path = found.path.or_else(|| attribute_value(node, source))
+                found.path = found.path.or_else(|| attribute_value(node, source));
             }
             Some(CFG_ATTRIBUTE | CFG_ATTR_ATTRIBUTE) => found.is_conditional = true,
             _ => {}
