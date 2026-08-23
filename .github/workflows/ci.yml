@@ -397,19 +397,12 @@ jobs:
           find target/llvm-cov-target -maxdepth 2 -name '*.profraw' | head -3
           find target/llvm-cov-target/release -type f -exec chmod u+x {} +
 
-      - name: Restore raw Windows Rust coverage
+      - name: Restore Windows Rust coverage report
         uses: actions/download-artifact@v8
         with:
-          name: windows-rust-coverage-raw
-          path: target/windows-llvm-cov
+          name: windows-rust-coverage
+          path: .
           merge-multiple: true
-
-      # Same mode loss as the Linux restore: the Windows report step
-      # scans these object files on this Linux runner.
-      - name: Normalize raw Windows coverage layout
-        run: |
-          find target/windows-llvm-cov -type f -name '*.profraw' | head -3
-          find target/windows-llvm-cov -type f -exec chmod u+x {} +
 
       - name: Restore VSIX coverage
         uses: actions/download-artifact@v8
@@ -427,14 +420,6 @@ jobs:
 
       - name: Calculate Rust coverage
         run: make coverage-report
-
-      - name: Calculate Windows Rust coverage
-        env:
-          CARGO_LLVM_COV_TARGET_DIR: target/windows-llvm-cov
-        run: >-
-          cargo llvm-cov --release
-          --features deslop-core/live,deslop-lsp/profiling report
-          --lcov --output-path windows-lcov.info
 
       - name: Enforce VSIX coverage
         run: make _vsix-coverage-check
@@ -512,13 +497,20 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --release -p deslop-mcp --test tcp_transport --features deslop-core/live
 
-      - name: Upload raw Windows Rust coverage
+      # The Windows lcov is calculated HERE, not in the coverage job:
+      # the instrumented PE/PDB binaries can only be read by a Windows
+      # llvm-cov, and shipping the 300MB target dir to a Linux runner
+      # only produced "not recognized as a valid object file" on every
+      # run. The coverage job consumes the finished report.
+      - name: Calculate Windows Rust coverage
+        run: cargo llvm-cov --release --features deslop-core/live,deslop-lsp/profiling report --lcov --output-path windows-lcov.info
+
+      - name: Upload Windows Rust coverage report
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: windows-rust-coverage-raw
-          path: target/windows-llvm-cov
-          include-hidden-files: true
+          name: windows-rust-coverage
+          path: windows-lcov.info
           retention-days: 1
 
   # [CI-RELEASE-BUILD] Runs in parallel with `ci`. `_vsix-build`'s
