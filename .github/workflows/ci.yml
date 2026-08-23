@@ -366,10 +366,14 @@ jobs:
       # [CI-COVERAGE-ONCE] `merge-multiple: true` is load-bearing: a
       # single-path upload zips the directory's *contents* at the zip
       # root, and the default `merge-multiple: false` extracts them
-      # under `path/<artifact-name>/` — one directory too deep, which
-      # made every report step below search an empty target dir and
-      # fail with `not found object files` on every run since the job
-      # was created.
+      # under `path/<artifact-name>/` — one directory too deep.
+      #
+      # The restore also strips the executable bit: download-artifact's
+      # implementation does not preserve unix modes from the zip, and
+      # cargo-llvm-cov collects object files by filtering executables —
+      # every restored test binary at 0644 reads as "not found object
+      # files". chmod re-marks them; the hoist below is a self-heal in
+      # case a restore ever lands nested despite merge-multiple.
       - name: Restore raw Rust coverage
         uses: actions/download-artifact@v8
         with:
@@ -377,15 +381,8 @@ jobs:
           path: target/llvm-cov-target
           merge-multiple: true
 
-      # Diagnostic + self-heal: prove on the runner what the artifact
-      # extraction actually produced. If any restore lands nested under
-      # an artifact-name directory despite merge-multiple, hoist its
-      # contents to where the report steps read them; if the expected
-      # layout is already there this is a no-op that prints evidence.
-      - name: Verify raw coverage layout
+      - name: Normalize raw Rust coverage layout
         run: |
-          set -x
-          ls -la target/llvm-cov-target | head -20
           test -d target/llvm-cov-target/release || {
             echo "release/ missing at expected depth; searching"
             find target/llvm-cov-target -maxdepth 3 -type d -name release
@@ -398,6 +395,7 @@ jobs:
           }
           ls target/llvm-cov-target/release | head -5
           find target/llvm-cov-target -maxdepth 2 -name '*.profraw' | head -3
+          find target/llvm-cov-target/release -type f -exec chmod u+x {} +
 
       - name: Restore raw Windows Rust coverage
         uses: actions/download-artifact@v8
@@ -405,6 +403,13 @@ jobs:
           name: windows-rust-coverage-raw
           path: target/windows-llvm-cov
           merge-multiple: true
+
+      # Same mode loss as the Linux restore: the Windows report step
+      # scans these object files on this Linux runner.
+      - name: Normalize raw Windows coverage layout
+        run: |
+          find target/windows-llvm-cov -type f -name '*.profraw' | head -3
+          find target/windows-llvm-cov -type f -exec chmod u+x {} +
 
       - name: Restore VSIX coverage
         uses: actions/download-artifact@v8
