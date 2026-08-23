@@ -377,6 +377,28 @@ jobs:
           path: target/llvm-cov-target
           merge-multiple: true
 
+      # Diagnostic + self-heal: prove on the runner what the artifact
+      # extraction actually produced. If any restore lands nested under
+      # an artifact-name directory despite merge-multiple, hoist its
+      # contents to where the report steps read them; if the expected
+      # layout is already there this is a no-op that prints evidence.
+      - name: Verify raw coverage layout
+        run: |
+          set -x
+          ls -la target/llvm-cov-target | head -20
+          test -d target/llvm-cov-target/release || {
+            echo "release/ missing at expected depth; searching"
+            find target/llvm-cov-target -maxdepth 3 -type d -name release
+            for nested in target/llvm-cov-target/*/; do
+              if [ -d "${nested}release" ]; then
+                echo "hoisting ${nested}release -> target/llvm-cov-target/"
+                mv "${nested}"* target/llvm-cov-target/
+              fi
+            done
+          }
+          ls target/llvm-cov-target/release | head -5
+          find target/llvm-cov-target -maxdepth 2 -name '*.profraw' | head -3
+
       - name: Restore raw Windows Rust coverage
         uses: actions/download-artifact@v8
         with:
