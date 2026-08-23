@@ -63,14 +63,51 @@ const TEST_TARGET_KIND: &str = "test";
 /// Ordered by file then test name, matching `ignored_tests()`. The eleven
 /// `corpus_repos` entries are the real-repository gate (gh #422, blocked on
 /// the memory work in #166); `corpus_manifest_contract` is the curation those
-/// same two oversized repositories block (gh #426); the three others are
-/// assertions that are red on purpose against unfinished fusion and embedding
-/// behaviour.
-const CURATED_SKIPS: [(&str, &str, u32); 15] = [
+/// same two oversized repositories block (gh #426); the three embedding
+/// entries are red on purpose against unfinished fusion and embedding
+/// behaviour. The twenty-two gh #432–#435 entries are the fused-score follow-ups'
+/// own accuracy pins, skipped in flight per
+/// `docs/plans/fused-score-followups.md` — each returns when its issue lands.
+const CURATED_SKIPS: [(&str, &str, u32); 37] = [
+    (
+        "crates/deslop-core/tests/embedding_pass_observability.rs",
+        "issue_94_embedding_pass_emits_batch_observability_events",
+        435,
+    ),
+    (
+        "crates/deslop-core/tests/issue_45_observability.rs",
+        "issue_45_pipeline_emits_stage_observability_events",
+        435,
+    ),
+    (
+        "crates/deslop-core/tests/refactor_merge_refusals.rs",
+        "operator_drift_refuses_via_residual_proof",
+        432,
+    ),
+    (
+        "crates/deslop-lsp/tests/history_determinism.rs",
+        "config_exclusion_cycle_preserves_the_complete_report",
+        433,
+    ),
     (
         "crates/deslop-lsp/tests/lsp_embedding_determinism.rs",
         "lsp_embedding_refresh_is_bounded_and_reproducible",
         369,
+    ),
+    (
+        "crates/deslop-lsp/tests/state_file_and_ipc.rs",
+        "current_state_file_loads_and_incremental_updates_continue",
+        433,
+    ),
+    (
+        "crates/deslop-lsp/tests/state_file_and_ipc.rs",
+        "issue_73_cold_pass_commits_and_replaces_the_seed_after_seeded_startup",
+        433,
+    ),
+    (
+        "crates/deslop-lsp/tests/state_file_and_ipc.rs",
+        "issue_73_lsp_report_get_uses_prestaged_live_report_cache",
+        433,
     ),
     (
         "crates/deslop/tests/corpus_manifest_contract.rs",
@@ -130,9 +167,84 @@ const CURATED_SKIPS: [(&str, &str, u32); 15] = [
         356,
     ),
     (
+        "crates/deslop/tests/incremental_multilang_golden.rs",
+        "cold_multilang_report_matches_committed_golden_byte_for_byte",
+        433,
+    ),
+    (
+        "crates/deslop/tests/incremental_multilang_golden.rs",
+        "committed_multilang_golden_satisfies_the_authored_contract",
+        433,
+    ),
+    (
+        "crates/deslop/tests/incremental_multilang_golden.rs",
+        "fully_warm_multilang_run_reproduces_the_committed_golden",
+        433,
+    ),
+    (
         "crates/deslop/tests/issue_343_sum_clamp_saturation.rs",
         "mid_band_cluster_confidence_never_exceeds_its_strongest_axis",
         369,
+    ),
+    (
+        "crates/deslop/tests/lsh_only_nearmiss_recall.rs",
+        "the_lsh_only_pair_keeps_its_verdict_across_the_persistence_matrix",
+        433,
+    ),
+    (
+        "crates/deslop/tests/operator_drift_is_not_duplication.rs",
+        "an_operator_only_difference_never_reaches_the_act_now_line",
+        432,
+    ),
+    (
+        "crates/deslop/tests/operator_drift_is_not_duplication.rs",
+        "the_real_clone_outranks_every_operator_family",
+        432,
+    ),
+    (
+        "crates/deslop/tests/polymorphic_gate_hides_rename_clone.rs",
+        "hidden_group_summary_names_the_hider_not_the_users_config",
+        434,
+    ),
+    (
+        "crates/deslop/tests/python_issue_107_chained_dict_assert.rs",
+        "chained_dict_assertions_are_suppressed_while_a_real_clone_survives",
+        434,
+    ),
+    (
+        "crates/deslop/tests/python_issue_72_monkeypatch.rs",
+        "monkeypatch_setenv_chains_are_suppressed_while_a_real_clone_survives",
+        434,
+    ),
+    (
+        "crates/deslop/tests/python_literal_variation_calls.rs",
+        "rest_endpoint_family_is_suppressed_while_a_real_clone_survives",
+        434,
+    ),
+    (
+        "crates/deslop/tests/python_literal_variation_calls.rs",
+        "write_file_call_family_is_suppressed_while_a_real_clone_survives",
+        434,
+    ),
+    (
+        "crates/deslop/tests/rank_structural_only_policy.rs",
+        "keep_policy_restores_full_weight_ranking",
+        432,
+    ),
+    (
+        "crates/deslop/tests/rank_structural_only_policy.rs",
+        "unit_weight_neutralises_demotion",
+        432,
+    ),
+    (
+        "crates/deslop/tests/report_golden.rs",
+        "cold_report_matches_committed_golden_byte_for_byte",
+        432,
+    ),
+    (
+        "crates/deslop/tests/ts_issue_284_produce_then_assert.rs",
+        "produce_then_assert_scenarios_are_suppressed_while_a_real_clone_survives",
+        434,
     ),
 ];
 

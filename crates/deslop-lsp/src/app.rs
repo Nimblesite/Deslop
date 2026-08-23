@@ -126,7 +126,10 @@ where
     Fut: std::future::Future<Output = Result<()>>,
 {
     let _profile_guard = crate::profiling::LspProfileGuard::from_env();
+    #[cfg(unix)]
     apply_process_nice(startup.nice)?;
+    #[cfg(not(unix))]
+    apply_process_nice(startup.nice);
     if let Some(policy) = startup.ranking_structural_only {
         deslop_core::state::set_structural_only_override(policy);
     }
@@ -307,6 +310,7 @@ fn build_runtime(worker_threads: usize) -> Result<Runtime> {
 }
 
 /// Applies the user-requested process nice value when configured.
+#[cfg(unix)]
 fn apply_process_nice(nice: i32) -> Result<()> {
     if nice == 0 {
         return Ok(());
@@ -322,11 +326,12 @@ fn apply_process_nice_impl(nice: i32) -> Result<()> {
     Ok(())
 }
 
-/// Ignores `--nice` on non-Unix targets where POSIX priorities do not exist.
+/// Ignores `--nice` on targets where POSIX priorities do not exist.
 #[cfg(not(unix))]
-fn apply_process_nice_impl(nice: i32) -> Result<()> {
-    tracing::warn!(nice, "--nice is only supported on macOS/Linux");
-    Ok(())
+fn apply_process_nice(nice: i32) {
+    if nice != 0 {
+        tracing::warn!(nice, "--nice is only supported on macOS/Linux");
+    }
 }
 
 /// Initialises tracing diagnostics against `RUST_LOG`.

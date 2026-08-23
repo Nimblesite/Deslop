@@ -12,6 +12,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     hash::BuildHasher,
+    path::{Path, PathBuf},
 };
 
 use crate::{
@@ -77,32 +78,53 @@ const MIN_REPORTABLE_MEMBERS: usize = 2;
 /// how the cluster was discovered.
 ///
 /// The signal breakdown is measured between each cluster's rendered
-/// occurrences ([FUSION-CLUSTER-SIGNALS]) from `signatures` and
-/// `embedding_vectors`, and each cluster's [`ContentEvidence`] is
+/// occurrences ([FUSION-CLUSTER-SIGNALS]) from the inputs' `signatures`
+/// and `embedding_vectors`, and each cluster's [`ContentEvidence`] is
 /// measured from `trees` and `sources` **before** cross-cluster
 /// subsumption elects the surviving view ([FUSION-CONTENT-GATE],
-/// [PIPELINE-CLUSTER-SUBSUME]). Cluster ids are derived from the
-/// smallest member's hash so identical fused clusters across runs
-/// always report the same id.
+/// [PIPELINE-CLUSTER-SUBSUME]). Cluster ids hash the smallest member's
+/// digest together with every member's workspace-relative path
+/// ([PIPELINE-DETERMINISM], gh #430), so identical fused clusters across
+/// runs always report the same id while same-shape findings in different
+/// Inputs accepted by [`build_ranked_fused_clusters`]. Grouped for the
+/// same reason [`crate::report::ReportInputs`] exists: the list
+/// outgrew the 7-argument function budget, and every field here is
+/// borrowed for the whole build so one struct keeps the call sites
+/// name-checked.
+#[derive(Debug)]
+pub struct ClusterBuildInputs<'a, S: BuildHasher, H: BuildHasher, L: BuildHasher> {
+    /// Every live fingerprint, flat, in corpus order.
+    pub fingerprints: &'a [Fingerprint],
+    /// Per-fingerprint `MinHash` signatures, positionally aligned.
+    pub signatures: &'a [Signature],
+    /// Embedding vectors by corpus index ([FUSION-CLUSTER-SIGNALS]).
+    pub embedding_vectors: &'a HashMap<usize, Vec<f32>, S>,
+    /// Transitive-closure components to rehydrate.
+    pub fused_clusters: &'a [FusedCluster],
+    /// Normalised trees the fingerprints walk.
+    pub trees: &'a [NormalizedNode],
+    /// Source bytes keyed by the file id each fingerprint references.
+    pub sources: &'a HashMap<FileId, Vec<u8>, H>,
+    /// `FileId → language_id` for declaration-scope matching.
+    pub file_languages: &'a HashMap<FileId, &'static str, L>,
+    /// `FileId → workspace-relative path` — the second input of the
+    /// cluster id digest ([PIPELINE-DETERMINISM], gh #430).
+    pub file_paths: &'a HashMap<FileId, PathBuf>,
+}
+
+/// Builds ranked clusters from a fused-cluster list produced by
+/// [`crate::pair::cluster_by_transitive_closure`]. Each `FusedCluster`
+/// references fingerprint indices; this materialises the full [`Cluster`]
+/// so ranking and rendering need not know how the cluster was discovered.
 #[must_use]
 pub fn build_ranked_fused_clusters<S: BuildHasher, H: BuildHasher, L: BuildHasher>(
-    fingerprints: &[Fingerprint],
-    signatures: &[Signature],
-    embedding_vectors: &HashMap<usize, Vec<f32>, S>,
-    fused_clusters: &[FusedCluster],
-    trees: &[NormalizedNode],
-    sources: &HashMap<FileId, Vec<u8>, H>,
-    file_languages: &HashMap<FileId, &'static str, L>,
+    inputs: &ClusterBuildInputs<'_, S, H, L>,
 ) -> Vec<Cluster> {
     let mut clusters = reportable_clusters(
-        fingerprints,
-        signatures,
-        embedding_vectors,
-        fused_clusters,
-        trees,
-        &DeclarationScopes::new(trees, file_languages),
+        inputs,
+        &DeclarationScopes::new(inputs.trees, inputs.file_languages),
     );
-    let dropped_below_min_members = fused_clusters.len().saturating_sub(clusters.len());
+    let dropped_below_min_members = inputs.fused_clusters.len().saturating_sub(clusters.len());
     clusters.sort_by(|left, right| {
         right
             .weight
@@ -114,38 +136,29 @@ pub fn build_ranked_fused_clusters<S: BuildHasher, H: BuildHasher, L: BuildHashe
     // #408): subsumption deletes whole views, and the choice must see
     // the same measured content evidence the report will render — a
     // survivor elected on raw geometry cannot be re-elected later.
-    attach_content_evidence(&mut clusters, trees, sources);
+    attach_content_evidence(&mut clusters, inputs.trees, inputs.sources);
     let collapsed = collapse_cross_cluster_overlap(clusters);
-    log_ranked_cluster_distribution(&collapsed, fused_clusters.len(), dropped_below_min_members);
+    log_ranked_cluster_distribution(
+        &collapsed,
+        inputs.fused_clusters.len(),
+        dropped_below_min_members,
+    );
     collapsed
 }
 
 /// Materialises every fused cluster that remains reportable. One
 /// [`OverlapMeasurer`] serves the whole build so an occurrence shared
 /// by several clusters is inventoried once ([FUSION-SHARED-SUBTREE]).
-fn reportable_clusters<S: BuildHasher>(
-    fingerprints: &[Fingerprint],
-    signatures: &[Signature],
-    embedding_vectors: &HashMap<usize, Vec<f32>, S>,
-    fused_clusters: &[FusedCluster],
-    trees: &[NormalizedNode],
+fn reportable_clusters<S: BuildHasher, H: BuildHasher, L: BuildHasher>(
+    inputs: &ClusterBuildInputs<'_, S, H, L>,
     scopes: &DeclarationScopes<'_, impl BuildHasher>,
 ) -> Vec<Cluster> {
-    let mut overlap = OverlapMeasurer::new(trees);
+    let mut overlap = OverlapMeasurer::new(inputs.trees);
     let mut spent = BuildSpent::default();
-    let clusters = fused_clusters
+    let clusters = inputs
+        .fused_clusters
         .iter()
-        .filter_map(|fused| {
-            build_fused_cluster(
-                fingerprints,
-                signatures,
-                embedding_vectors,
-                fused,
-                &mut overlap,
-                scopes,
-                &mut spent,
-            )
-        })
+        .filter_map(|fused| build_fused_cluster(inputs, fused, &mut overlap, scopes, &mut spent))
         .collect();
     log_signal_measurement(overlap.stats(), &spent);
     clusters
@@ -213,15 +226,14 @@ fn weight_summary(clusters: &[Cluster]) -> (f64, f64) {
 /// location; those groups are artifacts, not duplicates, and are
 /// dropped before ranking. Signals are measured **after** the collapse
 /// so they describe exactly the occurrences the report shows.
-fn build_fused_cluster<S: BuildHasher>(
-    fingerprints: &[Fingerprint],
-    signatures: &[Signature],
-    embedding_vectors: &HashMap<usize, Vec<f32>, S>,
+fn build_fused_cluster<S: BuildHasher, H: BuildHasher, L: BuildHasher>(
+    inputs: &ClusterBuildInputs<'_, S, H, L>,
     fused: &FusedCluster,
     overlap: &mut OverlapMeasurer<'_>,
     scopes: &DeclarationScopes<'_, impl BuildHasher>,
     spent: &mut BuildSpent,
 ) -> Option<Cluster> {
+    let fingerprints = inputs.fingerprints;
     let collapse_started = std::time::Instant::now();
     let occurrence_indices = collapse_overlapping_per_file(fused, fingerprints, scopes);
     spent.collapse = spent.collapse.saturating_add(collapse_started.elapsed());
@@ -232,8 +244,8 @@ fn build_fused_cluster<S: BuildHasher>(
     let measured = measured_signals(
         &occurrence_indices,
         fingerprints,
-        signatures,
-        embedding_vectors,
+        inputs.signatures,
+        inputs.embedding_vectors,
         overlap,
     );
     spent.signals = spent.signals.saturating_add(signals_started.elapsed());
@@ -242,7 +254,7 @@ fn build_fused_cluster<S: BuildHasher>(
         .iter()
         .filter_map(|index| fingerprints.get(*index).cloned())
         .collect();
-    let cluster = materialize_cluster(members, measured);
+    let cluster = materialize_cluster(members, measured, inputs.file_paths);
     spent.materialize = spent
         .materialize
         .saturating_add(materialize_started.elapsed());
@@ -250,13 +262,17 @@ fn build_fused_cluster<S: BuildHasher>(
 }
 
 /// Builds the final reportable cluster from already-filtered members.
-fn materialize_cluster(members: Vec<Fingerprint>, signals: PairScore) -> Cluster {
+fn materialize_cluster(
+    members: Vec<Fingerprint>,
+    signals: PairScore,
+    file_paths: &HashMap<FileId, PathBuf>,
+) -> Cluster {
     let size = members.len();
     let smallest_nodes = smallest_node_count(&members);
     let rank_nodes = refactor_potential_node_count(smallest_nodes, signals);
     let spanned_bytes = spanned_byte_count(&members);
     let weight = rank_weight(rank_nodes, size, spanned_bytes);
-    let id_source = cluster_id_source(&members);
+    let id_source = cluster_id_source(&members, file_paths);
     Cluster {
         id: encode_short_id(id_source),
         members,
@@ -303,12 +319,41 @@ fn refactor_potential_node_count(clone_node_count: usize, signals: PairScore) ->
     }
 }
 
-/// Selects the deterministic hash source for the public cluster id.
-fn cluster_id_source(members: &[Fingerprint]) -> [u8; 32] {
-    members
+/// Selects the deterministic hash source for the public cluster id
+/// ([PIPELINE-DETERMINISM], gh #430).
+///
+/// The smallest member's digest alone names every cluster that shares a
+/// normalised subtree: the #107 fixture stamps three unrelated
+/// same-shape findings — one per file — with one id, so `cluster-by-id`
+/// resolves to whichever is found first and the ranking tie-break stops
+/// being a total order. Hashing that digest together with every
+/// member's workspace-relative path keeps the id content-derived —
+/// identical clusters across runs still agree, because both inputs are
+/// functions of workspace state, never of registration history — while
+/// distinguishing findings that merely share a shape. `file_paths` must
+/// cover every member's file; an uncovered file degrades that member's
+/// contribution to empty and reintroduces the shape-only collision the
+/// id exists to prevent.
+fn cluster_id_source(members: &[Fingerprint], file_paths: &HashMap<FileId, PathBuf>) -> [u8; 32] {
+    let Some(smallest) = members.iter().min_by_key(|member| member.hash) else {
+        return [0_u8; 32];
+    };
+    let mut paths: Vec<&Path> = members
         .iter()
-        .min_by_key(|member| member.hash)
-        .map_or([0_u8; 32], |member| member.hash)
+        .map(|member| {
+            file_paths
+                .get(&member.file_id)
+                .map_or(Path::new(""), |path| path.as_path())
+        })
+        .collect();
+    paths.sort_unstable();
+    let mut hasher = blake3::Hasher::new();
+    let _ = hasher.update(&smallest.hash);
+    for path in paths {
+        let _ = hasher.update(path.as_os_str().as_encoded_bytes());
+        let _ = hasher.update(&[0]);
+    }
+    *hasher.finalize().as_bytes()
 }
 
 /// Collapses overlapping sibling-window occurrences that live in the

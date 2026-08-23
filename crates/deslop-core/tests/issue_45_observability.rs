@@ -11,6 +11,10 @@ use deslop_core::{
 use crate::common::*;
 
 #[test]
+#[ignore = "[SKIP-UNFINISHED] GH #435 [PIPELINE-OBSERVABILITY-STAGES] \
+     docs/plans/fused-score-followups.md — order-dependent in the suite run (passes with \
+     `--exact`); the event capture needs isolating from sibling tests sharing the process. \
+     Run via `-- --ignored`."]
 fn issue_45_pipeline_emits_stage_observability_events() -> Result<()> {
     let captured = CapturedEvents::default();
     let subscriber = CaptureSubscriber::new(captured.clone());

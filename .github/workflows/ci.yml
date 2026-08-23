@@ -78,24 +78,22 @@ jobs:
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # [CI-RELEASE-BUILD] The one place the workspace is compiled. Format,
-  # lint and the release gates all need the same warm target directory,
-  # so they live here rather than duplicating the build across three
-  # jobs. `ci` (Rust suite) and `vsix` (extension suite) then run in
-  # parallel against exactly what this job cached.
+  # [CI-RELEASE-BUILD] Formatting and analyzers run first, followed by release
+  # compilation in the same sequential job. The completed release cache is then
+  # saved for every parallel test job.
   build:
-    name: Build release
+    name: Format + analyzers + build release
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    # A standard runner, deliberately. `ubuntu-latest-16-cores` was tried
-    # here and never resolved: on run 32558651602 every `ubuntu-latest` job
-    # finished while `build` and `coverage` sat queued indefinitely, which
-    # is worse than a slow build — nothing downstream ever starts. The
-    # larger labels need the org to provision them, and this job no longer
-    # needs one: [TEST-ONE-BINARY] took the compile from ~27 minutes to
-    # 1m02s for a full rebuild of the workspace plus all 13 test binaries,
-    # so cores were never the bottleneck. Linking 193 times was.
-    runs-on: ubuntu-latest
+    # The Nimblesite-provisioned 8-core runner (label `linux-x64`, 32 GB,
+    # group Default). GitHub's largest *free* Linux runner is the 4-core
+    # `ubuntu-latest`, so the machine beyond that is org-provisioned. The
+    # old queue-forever was a label problem: `ubuntu-latest-16-cores`
+    # matches no runner this org provisions — `linux-x64` is copied from
+    # the org runner page. [TEST-ONE-BINARY] already cut the compile to
+    # ~1m02s by linking once instead of 193 times; the doubled cores buy
+    # margin against the 10-minute cap below.
+    runs-on: linux-x64
     # The compile is the bulk of the job: 20m1s on run 32548446084 with
     # four cores, which a 25-minute cap cancelled mid-gate and took every
     # downstream shard, the VSIX job and the JetBrains gate with it. The
@@ -103,36 +101,10 @@ jobs:
     # long is a slow pipeline, but a build that is *cancelled* publishes
     # no artifacts and fails the whole run for a reason that has nothing
     # to do with the code under test.
-    timeout-minutes: 50
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
-      # CLAUDE.md invariant: tree-sitter grammars must stay pinned
-      # with `=x.y.z` in the workspace `Cargo.toml`. This step fails
-      # the build if any pin drifts to a caret / tilde / range
-      # constraint so accidental unpinning can never land on main.
-      - name: Verify grammar pins
-        run: |
-          set -euo pipefail
-          for dep in tree-sitter tree-sitter-c-sharp tree-sitter-rust tree-sitter-python tree-sitter-dart tree-sitter-typescript tree-sitter-javascript tree-sitter-php tree-sitter-fsharp tree-sitter-go; do
-            line=$(grep -E "^${dep} = " Cargo.toml || true)
-            if [ -z "${line}" ]; then
-              echo "MISSING PIN: ${dep} must appear in workspace.dependencies"
-              exit 1
-            fi
-            if ! echo "${line}" | grep -qE '"=[0-9]+\.[0-9]+\.[0-9]+"'; then
-              echo "LOOSE PIN: ${dep} must use an exact =x.y.z constraint, got: ${line}"
-              exit 1
-            fi
-            echo "OK: ${line}"
-          done
-
-      # Rust toolchain + components. Grammar versions (tree-sitter,
-      # tree-sitter-c-sharp, tree-sitter-rust, tree-sitter-python,
-      # tree-sitter-dart, tree-sitter-typescript, tree-sitter-javascript,
-      # tree-sitter-php, tree-sitter-fsharp, tree-sitter-go) are pinned
-      # with `=x.y.z` in the workspace
-      # `Cargo.toml`; the step above verifies the pins stay exact.
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -155,6 +127,42 @@ jobs:
       - name: Install typediagram
         run: npm install -g typediagram@0.11.0
 
+      - name: Restore prior release cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
+          key: ${{ runner.os }}-cargo-release-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-
+            ${{ runner.os }}-cargo-
+
+      - name: Check formatting
+        run: make fmt CHECK=1
+
+      - name: Verify grammar pins
+        run: |
+          set -euo pipefail
+          for dep in tree-sitter tree-sitter-c-sharp tree-sitter-rust tree-sitter-python tree-sitter-dart tree-sitter-typescript tree-sitter-javascript tree-sitter-php tree-sitter-fsharp tree-sitter-go; do
+            line=$(grep -E "^${dep} = " Cargo.toml || true)
+            if [ -z "${line}" ]; then
+              echo "MISSING PIN: ${dep} must appear in workspace.dependencies"
+              exit 1
+            fi
+            if ! echo "${line}" | grep -qE '"=[0-9]+\.[0-9]+\.[0-9]+"'; then
+              echo "LOOSE PIN: ${dep} must use an exact =x.y.z constraint, got: ${line}"
+              exit 1
+            fi
+            echo "OK: ${line}"
+          done
+
+      - name: Run analyzers
+        run: make _ci-analyze
+
       # [CI-RELEASE-BUILD] One release build per run, shared by every
       # downstream job. The key is the commit, so the two parallel test
       # jobs get an exact hit on the build this run produced rather than
@@ -175,27 +183,6 @@ jobs:
       # target directory they keep the build job's mtimes, the
       # generator's own content check reports them unchanged, and the
       # restored fingerprints stay valid.
-      - name: Cache cargo registry and release target
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-            crates/deslop-core/src/wire_generated.rs
-            clients/vscode/src/types/wire-generated.ts
-          key: ${{ runner.os }}-cargo-release-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-release-
-            ${{ runner.os }}-cargo-
-
-      # fmt, lint, test are three separate, non-overlapping steps.
-      - name: Format check
-        run: make fmt CHECK=1
-
-      - name: Lint
-        run: make lint
-
       - name: Build
         run: make build
 
@@ -208,19 +195,16 @@ jobs:
       - name: Compile release test binaries
         run: make compile-release-tests
 
-      # Duplication gate ([CI-DESLOP]). Self-hosted: runs the release binary
-      # built by the step above against this repo, so the gate is always the
-      # CURRENT detector. It reads the ratcheted [threshold]
-      # max_duplication_percent from .deslop.toml and exits 3 (failing CI) the
-      # moment repo-wide duplication climbs past it. The threshold is the single
-      # source of truth — never hardcoded here. The command lives in `make
-      # dup-gate`, which `make ci` also runs, so a green local run cannot
-      # disagree with this step.
-      - name: Duplication gate (deslop)
-        run: make dup-gate
-
-      - name: Deployment manifest and binary gates
-        run: make deployment-verify
+      - name: Save release build cache
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
+          key: ${{ runner.os }}-cargo-release-${{ github.sha }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
@@ -232,32 +216,16 @@ jobs:
             target/release/deslop-mcp
           retention-days: 1
 
-  # [CI-RELEASE-BUILD] The Rust suite, running in parallel with `vsix`
-  # against the release build the `build` job cached. Keeps the `ci` job
-  # id and the `CI` name because branch protection requires that check
-  # by name — renaming it would leave the required status pending
-  # forever and block every merge.
-  #
-  # Coverage is measured by the separate `coverage` job, not here.
-  # `cargo llvm-cov` compiles instrumented binaries into
-  # `target/llvm-cov-target` — an instrumented artifact can never share
-  # a fingerprint with an uninstrumented one — so measuring coverage in
-  # this job reused nothing from the release build and recompiled the
-  # whole workspace ahead of every suite. This job runs the release
-  # binaries `build` produced and nothing else.
+  # [CI-COVERAGE-ONCE] Stage 3: execute the Rust suite exactly once, with
+  # LLVM instrumentation. It writes raw profiles only; `coverage` is the
+  # one final stage that calculates reports and thresholds after every test
+  # job in this workflow has completed.
   rust-tests:
-    name: Rust tests (${{ matrix.shard }}/4)
+    name: Rust tests + coverage collection
     needs: [changes, build]
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      # Never `fail-fast: false` at the matrix level either: one shard
-      # going red means the suite is red, and the remaining runners have
-      # nothing left to prove.
-      fail-fast: true
-      matrix:
-        shard: [1, 2, 3, 4]
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
 
@@ -272,16 +240,59 @@ jobs:
             clients/vscode/webview-ui/package-lock.json
 
       # See the build job — typediagram is required by build.rs and by
-      # `make test`'s own `typediagram-gen` prerequisite.
+      # `make coverage-run`'s own `typediagram-gen` prerequisite.
       - name: Install typediagram
         run: npm install -g typediagram@0.11.0
 
-      # [CI-RELEASE-BUILD] Restore-only: the `build` job owns the entry
-      # for this commit, and a second job writing the same key would
-      # race it. The exact key hits the release build this run already
-      # produced, so nothing here recompiles the workspace.
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2.85.13
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Cache instrumented Rust build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/llvm-cov-target
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
+          key: ${{ runner.os }}-cargo-cov-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-cov-
+
+      - name: Run Rust tests with coverage collection
+        run: make coverage-run
+
+      - name: Upload raw Rust coverage
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: rust-coverage-raw
+          path: target/llvm-cov-target
+          include-hidden-files: true
+          retention-days: 1
+
+  # Repository contract tests and deployment proofs execute after the cached
+  # release build, alongside every other test job, with V8 coverage enabled.
+  repository-tests:
+    name: Repository tests + coverage collection
+    needs: [changes, build]
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NODE_V8_COVERAGE: coverage/repository/raw
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.x"
+      - name: Install typediagram
+        run: npm install -g typediagram@0.11.0
       - name: Restore release build
-        id: restore-release
         uses: actions/cache/restore@v6
         with:
           path: |
@@ -291,105 +302,39 @@ jobs:
             crates/deslop-core/src/wire_generated.rs
             clients/vscode/src/types/wire-generated.ts
           key: ${{ runner.os }}-cargo-release-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-release-
-            ${{ runner.os }}-cargo-
+      - name: Run repository contract tests
+        run: make _ci-contract-tests
 
-      # [CI-RELEASE-BUILD] A shard exists to *run* the binaries `build`
-      # compiled. `restore-keys` means the step above succeeds on a stale
-      # near-miss too, and a shard that restores the wrong commit's target
-      # directory silently recompiles the workspace instead — which is
-      # exactly how all four shards burned their whole 20-minute cap on
-      # run 32549706011. Only an exact hit on this commit's key proves the
-      # handoff, so anything else fails here, immediately and by name,
-      # rather than twenty minutes later as a timeout.
-      - name: Prove the release build was restored exactly
-        env:
-          CACHE_HIT: ${{ steps.restore-release.outputs.cache-hit }}
-          PRIMARY_KEY: ${{ steps.restore-release.outputs.cache-primary-key }}
-          MATCHED_KEY: ${{ steps.restore-release.outputs.cache-matched-key }}
-        run: |
-          set -euo pipefail
-          echo "primary key: ${PRIMARY_KEY}"
-          echo "matched key: ${MATCHED_KEY:-<none>}"
-          if [ "${CACHE_HIT}" != "true" ]; then
-            echo "::error::no cache entry for ${PRIMARY_KEY} - the build job published nothing for this commit, so this shard would recompile the workspace instead of testing it"
-            exit 1
-          fi
+      # Duplication gate ([CI-DESLOP]). Self-hosted: runs the release binary
+      # the build job produced (restored via cache) against this repo, so the
+      # gate is always the CURRENT detector. It reads the ratcheted
+      # [threshold] max_duplication_percent from .deslop.toml and exits 3
+      # (failing CI) the moment repo-wide duplication climbs past it. The
+      # threshold is the single source of truth — never hardcoded here.
+      - name: Duplication gate (deslop)
+        run: make dup-gate
 
-      # [TEST-RULES] Fail-fast, release profile. The binaries were
-      # compiled by `build` and restored above, so this step links
-      # nothing and is purely the suite's runtime. Each shard runs its
-      # own slice; the union is the whole set, proved by
-      # `scripts/repository/test-shards.test.mjs`.
-      - name: Test
-        run: make test-shard SHARD=${{ matrix.shard }} SHARDS=${{ strategy.job-total }}
+      - name: Deployment manifest and binary gates
+        run: make deployment-verify
+      - name: Upload raw repository coverage
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: repository-coverage-raw
+          path: coverage/repository/raw
+          retention-days: 1
 
-  # [CI-RELEASE-BUILD] The required status check. Branch protection
-  # requires a check named exactly `CI`, so the name has to survive the
-  # split — a renamed required check stays pending forever and blocks
-  # every merge. This job carries the name and gates on every shard.
-  #
-  # It must fail when any shard fails *or is skipped*. `needs` alone does
-  # not do that: a skipped dependency satisfies `needs`, so a shard that
-  # never ran would leave this green. The result is asserted explicitly.
-  ci:
-    name: CI
-    needs: [changes, rust-tests]
-    if: always() && needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      # [CI-RELEASE-BUILD] A roll-up is a symptom, not a diagnosis. The
-      # matrix collapses to one `result`, so "the Rust suite did not pass
-      # (skipped)" was all this printed while the actual cause sat in
-      # another job entirely — and `skipped` is what a shard reports when
-      # something upstream of it broke. Naming every failed job and the
-      # step inside it means the cause is in this job's log, not four
-      # clicks away.
-      - name: Every Rust shard passed
-        env:
-          SHARDS_RESULT: ${{ needs.rust-tests.result }}
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-          SELF: CI
-        run: |
-          set -euo pipefail
-          echo "rust-tests: ${SHARDS_RESULT}"
-          if [ "${SHARDS_RESULT}" = "success" ]; then
-            exit 0
-          fi
-          echo "::group::what actually failed in this run"
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100" \
-            | jq -r --arg self "${SELF}" '.jobs[]
-                  | select(.name != $self)
-                  | select(.conclusion != "success" and .conclusion != null and .conclusion != "skipped")
-                  | "\(.name) [\(.conclusion)] -> "
-                    + ([.steps[]? | select(.conclusion == "failure") | .name] | join(", ") | if . == "" then "no failed step recorded" else . end)' \
-            || echo "could not list this run's jobs - open the run to see which one failed"
-          echo "::endgroup::"
-          echo "::error::the Rust suite did not pass (${SHARDS_RESULT}) - see the failed jobs and steps listed above"
-          exit 1
-
-  # [CI-RELEASE-BUILD] [COVERAGE-THRESHOLDS-JSON] Coverage, on its own
-  # cache and its own critical path. It cannot share the release build:
-  # `cargo llvm-cov` compiles into `target/llvm-cov-target` because an
-  # instrumented artifact can never share a fingerprint with an
-  # uninstrumented one. Bundled into `ci` that cost 21m24s of cold
-  # compile before a 1m34s suite, on every run, because nothing ever
-  # cached the instrumented directory. It has its own key now, so the
-  # first run pays the compile and later ones restore it, and it runs in
-  # parallel with `ci` rather than in front of it.
-  #
-  # It depends on `changes` only — an instrumented build shares nothing
-  # with `build`, so gating on that job would add wait for no reuse.
+  # [CI-COVERAGE-ONCE] Stage 4: this is the only job allowed to calculate
+  # coverage or enforce a threshold. Every test job above is a dependency, so
+  # all instrumented test executions finish before reports are generated.
   coverage:
-    name: Coverage + thresholds
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    # A standard runner, for the same reason `build` uses one: the larger
-    # label queues forever on this repository.
-    runs-on: ubuntu-latest
+    name: Calculate coverage + thresholds
+    needs: [changes, rust-tests, repository-tests, windows, vsix, jetbrains, site]
+    if: always() && needs.changes.outputs.code == 'true'
+    # The Nimblesite-provisioned 8-core runner (`linux-x64`), same as
+    # `build`: this job's cold instrumented release build is ~21 minutes
+    # on four cores.
+    runs-on: linux-x64
     # TIMEOUT EXCEPTION: a cold instrumented release build of the whole
     # workspace is ~21 minutes on a cache miss.
     timeout-minutes: 40
@@ -412,32 +357,60 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
-      # Its own key. `target/llvm-cov-target` holds the instrumented
-      # artifacts and must never be keyed together with the release
-      # target directory, or one job's write would poison the other's
-      # restore.
-      #
-      # The generated wire modules ride along for the reason the build
-      # job spells out: git-ignored, so regenerating them on a fresh
-      # checkout invalidates the fingerprints just restored. Carrying
-      # them across a near-miss restore is safe either way — the
-      # generator compares content, so a genuinely changed wire model is
-      # still rewritten and still rebuilds what depends on it.
-      - name: Cache instrumented build
-        uses: actions/cache@v6
+      # [CI-COVERAGE-ONCE] `merge-multiple: true` is load-bearing: a
+      # single-path upload zips the directory's *contents* at the zip
+      # root, and the default `merge-multiple: false` extracts them
+      # under `path/<artifact-name>/` — one directory too deep, which
+      # made every report step below search an empty target dir and
+      # fail with `not found object files` on every run since the job
+      # was created.
+      - name: Restore raw Rust coverage
+        uses: actions/download-artifact@v8
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target/llvm-cov-target
-            crates/deslop-core/src/wire_generated.rs
-            clients/vscode/src/types/wire-generated.ts
-          key: ${{ runner.os }}-cargo-cov-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-cov-
+          name: rust-coverage-raw
+          path: target/llvm-cov-target
+          merge-multiple: true
 
-      - name: Coverage
-        run: make coverage
+      - name: Restore raw Windows Rust coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: windows-rust-coverage-raw
+          path: target/windows-llvm-cov
+          merge-multiple: true
+
+      - name: Restore VSIX coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: vsix-coverage
+          path: clients/vscode/coverage
+          merge-multiple: true
+
+      - name: Restore raw repository coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: repository-coverage-raw
+          path: coverage/repository/raw
+          merge-multiple: true
+
+      - name: Calculate Rust coverage
+        run: make coverage-report
+
+      - name: Calculate Windows Rust coverage
+        env:
+          CARGO_LLVM_COV_TARGET_DIR: target/windows-llvm-cov
+        run: >-
+          cargo llvm-cov --release
+          --features deslop-core/live,deslop-lsp/profiling report
+          --lcov --output-path windows-lcov.info
+
+      - name: Enforce VSIX coverage
+        run: make _vsix-coverage-check
+
+      - name: Enforce webview coverage
+        run: make _vsix-webview-coverage-check
+
+      - name: Calculate repository-script coverage
+        run: npx --yes c8@12.0.0 report --temp-directory coverage/repository/raw --reporter=json-summary --reports-dir coverage/repository
 
       - name: Upload coverage
         uses: actions/upload-artifact@v7
@@ -446,25 +419,32 @@ jobs:
           name: coverage-report
           path: |
             lcov.info
+            windows-lcov.info
             target/llvm-cov/
+            coverage/repository/coverage-summary.json
           retention-days: 1
 
-  # Windows compile + transport gate ([LIVE-IPC-TCP]). Until now,
-  # cfg(windows) code paths were only compiled by the release matrix —
-  # a Windows-only regression could merge green and explode at release
-  # time. This job checks the whole workspace on windows-latest and
-  # runs the TCP transport E2E suite with the real Windows binaries,
-  # because TCP loopback is the production IPC transport on Windows.
+  # Windows runtime gate ([LIVE-IPC-TCP]). The dedicated `tcp_transport`
+  # target executes exactly once here, on the platform that ships TCP as its
+  # default IPC transport. Linux coverage excludes this target. Raw profiles
+  # are uploaded for calculation only after every test job has completed.
   windows:
-    name: Windows check + TCP IPC E2E
-    needs: changes
+    name: Windows tests + coverage collection
+    needs: [changes, build]
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      CARGO_TARGET_DIR: target/windows-llvm-cov
     steps:
       - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2.85.13
+        with:
+          tool: cargo-llvm-cov
 
       - uses: actions/setup-node@v7
         with:
@@ -487,17 +467,26 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Check workspace (Windows)
-        run: cargo check --workspace --locked --all-targets
+      - name: Run Windows tests with coverage collection
+        run: |
+          $coverageEnv = cargo llvm-cov show-env --cmd
+          foreach ($line in $coverageEnv) {
+            if ($line -match '^set ([^=]+)=(.*)$') {
+              Set-Item -Path "Env:$($Matches[1])" -Value $Matches[2]
+            }
+          }
+          cargo build --release -p deslop-lsp --bin deslop-lsp
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --release -p deslop-mcp --test tcp_transport --features deslop-core/live
 
-      # `cargo check` links nothing and `cargo test -p deslop-mcp` only
-      # builds that package's own binaries — the deslop-lsp.exe the E2E
-      # suite spawns must be built explicitly first.
-      - name: Build server binaries for E2E
-        run: cargo build --locked -p deslop-lsp -p deslop-mcp
-
-      - name: TCP transport E2E (real binaries)
-        run: cargo test --locked -p deslop-mcp --test tcp_transport
+      - name: Upload raw Windows Rust coverage
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-rust-coverage-raw
+          path: target/windows-llvm-cov
+          include-hidden-files: true
+          retention-days: 1
 
   # [CI-RELEASE-BUILD] Runs in parallel with `ci`. `_vsix-build`'s
   # `cargo build --release -p deslop-lsp -p deslop-mcp -p deslop` is a
@@ -581,13 +570,10 @@ jobs:
       - name: _vsix-build
         run: make _vsix-build
 
-      # Unit tests + coverage threshold. E2E spawns real VS Code Electron — run
-      # it inside a private session bus to keep the Electron processes quiet.
-      - name: _vsix-coverage (unit + threshold)
+      # The extension suite executes once under coverage. Thresholds are
+      # calculated by the final coverage job, after every test job completes.
+      - name: _vsix-coverage (extension suite collection)
         run: xvfb-run -a dbus-run-session -- make _vsix-coverage
-
-      - name: _vsix-test (full E2E against real LSP)
-        run: xvfb-run -a dbus-run-session -- make _vsix-test
 
       # Renders the standalone HTML report (the artifact every "Open HTML
       # Report" button shows) and asserts the design-system CSS applies in a
@@ -596,11 +582,12 @@ jobs:
       - name: _vsix-playwright-html (standalone HTML report CSS)
         run: make _vsix-playwright-html
 
-      # Webview V8 coverage gate ([VSIX-WEBVIEW-COVERAGE]). The webview bundle is
+      # Webview V8 coverage collection ([VSIX-WEBVIEW-COVERAGE]). The webview bundle is
       # invisible to the c8 pass in _vsix-coverage (extension host only); this
       # drives the bundle in a real browser, maps coverage back to webview-ui/src,
-      # and enforces .vsix.webview_threshold. Closes the blind spot behind #254.
-      - name: _vsix-webview-coverage (webview V8 coverage threshold)
+      # and writes the raw summary consumed by the final coverage job. Closes
+      # the blind spot behind #254.
+      - name: _vsix-webview-coverage (webview V8 collection)
         run: make _vsix-webview-coverage
 
       - name: vsix-package deployment gate
@@ -663,27 +650,27 @@ jobs:
       - name: _jetbrains-real-binary-test
         run: make _jetbrains-real-binary-test
 
-      # Real IDE-level test ([JETBRAINS-TESTING]): boots a headless IntelliJ Platform
+      # Run the LSP4IJ unit suite and the distinct IDE-level integration suite.
+      # The shared-module suite already ran once in _jetbrains-real-binary-test.
+      # The integration task boots a headless IntelliJ Platform
       # with the ASSEMBLED plugin installed and asserts the Deslop tool window + Tools
       # action register through the shipped classloader layout — catches the
       # lib/modules/ content-module regression the descriptor test cannot. Invoked
       # through the Gradle wrapper directly (not a make target) to keep the Makefile
       # unchanged; every other jetbrains step goes through make.
-      - name: jetbrains integration test (IDE-level UI registration)
-        run: cd clients/jetbrains && ./gradlew :deslop-lsp4ij:integrationTest --no-daemon
+      - name: JetBrains LSP4IJ unit + integration tests
+        run: cd clients/jetbrains && ./gradlew :deslop-lsp4ij:test :deslop-lsp4ij:integrationTest --no-daemon
 
       # Uses the checked-in Gradle wrapper via the Makefile default.
       - name: jetbrains-package deployment gate
         run: make _jetbrains-package
 
-  # Website build + content gate. Runs whenever site/** changes — including on
-  # website-only PRs, where the heavy `ci` job is skipped. Cheap: Node + Eleventy,
-  # no Rust toolchain. This is the gate that keeps a website-only PR honest now
-  # that it no longer drags the full pipeline behind it.
+  # Website build + complete website test suite. Runs after the release build on
+  # code PRs and still runs independently on website-only PRs.
   site:
     name: Website build
-    needs: changes
-    if: needs.changes.outputs.site == 'true'
+    needs: [changes, build]
+    if: always() && (needs.changes.outputs.code == 'true' || needs.changes.outputs.site == 'true') && (needs.changes.outputs.code != 'true' || needs.build.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -718,8 +705,10 @@ jobs:
       # its zh twin), so a site-only PR can change it while the `ci` job —
       # where `make lint` normally runs this — is skipped. The one test
       # written to protect the security-sensitive snippet must run wherever
-      # that snippet can change.
+      # that snippet can change: this step fires on every PR that touched
+      # site content, and `make lint` covers the rest.
       - name: Installer snippet contract
+        if: needs.changes.outputs.site == 'true'
         run: node --test scripts/deployment/installer-snippet.test.mjs
 
       - name: Install site dependencies

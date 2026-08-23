@@ -32,7 +32,7 @@ pub(crate) const SEEDED_MIN_NODES: u32 = 8;
 /// category, signals and metrics asserted in this file are unchanged
 /// across both, which is what proves the changes discriminated
 /// operators rather than perturbing the corpus.
-const SEEDED_CLONE_ID: &str = "e6cb128c880c95b4";
+const SEEDED_CLONE_ID: &str = "8ee6ee0646e2da99";
 
 /// `canonical_node_count` of the authored clone.
 ///

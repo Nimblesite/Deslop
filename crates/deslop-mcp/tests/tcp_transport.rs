@@ -1,12 +1,14 @@
-//! E2E proof for the TCP loopback IPC transport ([LIVE-IPC-TCP],
+//! Windows E2E proof for the TCP loopback IPC transport ([LIVE-IPC-TCP],
 //! [MCP-IPC-DISCOVERY]).
 //!
 //! Spawns the real `deslop-lsp` with `--ipc-transport tcp`, waits for
 //! the `.deslop/cache/deslop.port` discovery record, then drives the
 //! real `deslop-mcp` over stdio. Every assertion exercises the exact
-//! code path Windows uses in production — no Unix sockets appear
-//! anywhere in this file, so the suite runs on every platform,
-//! including the Windows CI check leg.
+//! code path Windows uses in production. Keeping the dedicated target
+//! Windows-only makes the workflow execute these tests exactly once; the
+//! ordinary Linux collector does not run a duplicate copy.
+
+#![cfg(windows)]
 
 use std::{
     fs,

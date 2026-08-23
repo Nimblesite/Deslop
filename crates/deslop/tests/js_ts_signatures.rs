@@ -123,12 +123,7 @@ enum Overlap {
 /// graded cases are stated in one place and a caller picks between them
 /// by naming the view its fixture elects rather than by repeating the
 /// comparison.
-fn assert_axes(
-    axes: (f64, f64),
-    names: (&str, &str, &str),
-    report: &Value,
-    overlap: Overlap,
-) {
+fn assert_axes(axes: (f64, f64), names: (&str, &str, &str), report: &Value, overlap: Overlap) {
     match overlap {
         Overlap::MerkleEqual => assert_saturated_axes(axes, names, report),
         Overlap::Graded => assert_graded_axes(axes, names, report),

@@ -16,7 +16,7 @@ use std::{collections::HashMap, path::PathBuf};
 use anyhow::{Context, Result};
 use deslop_core::{
     ast::ByteRange,
-    cluster::{build_ranked_fused_clusters, Cluster},
+    cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs},
     embedding::EmbeddingPair,
     fingerprint::Fingerprint,
     lsh::{Signature, SIGNATURE_LEN},
@@ -135,15 +135,16 @@ fn assert_rendered_signals_are_measured(
         (2, vec![1.0, 0.0]),
         (3, vec![0.98, 0.198_997_49]),
     ]);
-    let rendered = build_ranked_fused_clusters(
+    let rendered = build_ranked_fused_clusters(&ClusterBuildInputs {
         fingerprints,
         signatures,
-        &vectors,
-        clusters,
-        &[],
-        &HashMap::new(),
-        &HashMap::new(),
-    );
+        embedding_vectors: &vectors,
+        fused_clusters: clusters,
+        trees: &[],
+        sources: &HashMap::new(),
+        file_languages: &HashMap::new(),
+        file_paths: &HashMap::new(),
+    });
     assert_eq!(
         rendered.len(),
         2,

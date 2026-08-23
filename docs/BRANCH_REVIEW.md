@@ -23,6 +23,21 @@ The old 55-million-pair LSH fan-out and per-measurement logging are fixed, but t
 
 Done when the controlled Flutter run produces a report inside both budgets with no accuracy-contract changes.
 
+## P0 — Make operator disagreement visible to the content signals
+
+Two operator-drift tests are red on this branch and pin a real false positive. `crates/deslop/tests/fixtures/operator-drift/ledger_credit.py` and `ledger_debit.py` differ in exactly one token (`scaled + floor` vs `scaled - floor`) — they compute different answers — yet publish as `id=3c351ea8ee5cb48d bucket=nearly_identical fused=0.9477 agreement=0.9565 rename_consistency=1.0000 token_jaccard=1.0000 structural=0.9907`, clearing `ACT_NOW_FUSED` and outranking the byte-identical control in the same corpus.
+
+Two independent mechanisms produce it. The second is on `main` and is filed there as [#431](https://github.com/Nimblesite/Deslop/issues/431) — the content gate overwrites a measured `token_jaccard` with `1.0` across the whole `structural >= 0.99` band, on a Merkle-identity argument that only holds at exactly `1.0`. Nothing below is a substitute for that fix; both must land for the pair to stop publishing.
+
+The first is branch-only, because `main` emits no operator leaves at all and has no `Population` enum to extend:
+
+- [ ] `content/rename.rs::pair_rename_consistency` measures only the identifier and literal populations, so a position where the two members carry different `__op__` leaves is invisible to it and it returns `1.0000` — a claim of perfect renaming for a pair that is not a rename.
+- [ ] Give operator leaves a `Population` of their own so a disagreeing operator lowers rename consistency rather than being skipped, and confirm the content-support gate and `content_confidence` both see the reduction.
+- [ ] Keep `each_family_member_normalises_to_its_own_operator_leaves` asserting exact ordered multisets; the leaves are already correct — the defect is downstream of normalization, in what the content signals choose to read.
+- [ ] Turn `an_operator_only_difference_never_reaches_the_act_now_line` and `the_real_clone_outranks_every_operator_family` green without relaxing either assertion, and keep all four families and the published control in the fixture.
+
+Done when a one-operator difference cannot reach an act-now bucket and the byte-identical control ranks first.
+
 ## P1 — Split the oversized operator-normalization module
 
 `crates/deslop-core/src/lang/shared.rs` is 863 lines, and `operator_field_cases()` remains far above the 20-line function limit.

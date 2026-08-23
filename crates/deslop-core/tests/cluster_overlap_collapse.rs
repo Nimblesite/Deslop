@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 use deslop_core::{
     ast::ByteRange,
-    cluster::{build_ranked_fused_clusters, Cluster},
+    cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs},
     fingerprint::Fingerprint,
     lsh::Signature,
     pair::{FusedCluster, FusedEdge},
@@ -52,15 +52,16 @@ fn ranked_with_edges(members: &[Fingerprint], edges: Vec<FusedEdge>) -> Vec<Clus
         edges,
     }];
     let vectors: HashMap<usize, Vec<f32>> = HashMap::new();
-    build_ranked_fused_clusters(
-        members,
-        &signatures,
-        &vectors,
-        &fused,
-        &[],
-        &HashMap::new(),
-        &HashMap::new(),
-    )
+    build_ranked_fused_clusters(&ClusterBuildInputs {
+        fingerprints: members,
+        signatures: &signatures,
+        embedding_vectors: &vectors,
+        fused_clusters: &fused,
+        trees: &[],
+        sources: &HashMap::new(),
+        file_languages: &HashMap::new(),
+        file_paths: &HashMap::new(),
+    })
 }
 
 /// Runs the clustering stage with no surviving discovery edge, which is

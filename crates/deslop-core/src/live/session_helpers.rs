@@ -11,7 +11,6 @@ use std::{
 };
 
 use crate::{
-    cluster::encode_short_id,
     embedding::{EmbeddingMode, EmbeddingProvider, OllamaModelInfo},
     fingerprint::collect_fingerprints,
     lang::LanguageParser,
@@ -233,18 +232,6 @@ pub(super) fn parse_and_hash_snippet(
             .map(|fingerprint| fingerprint.hash),
     );
     Ok(hashes)
-}
-
-/// Returns `true` when `cluster.id` matches any of the provided
-/// snippet hashes when projected through the same short-id encoding
-/// used by [`crate::cluster`].
-pub(super) fn cluster_matches_any_hash(
-    cluster: &ReportCluster,
-    snippet_hashes: &[[u8; 32]],
-) -> bool {
-    snippet_hashes
-        .iter()
-        .any(|hash| encode_short_id(*hash) == cluster.id)
 }
 
 /// [LIVE-CACHE-SEED] Default name of the cache file the LSP writes
