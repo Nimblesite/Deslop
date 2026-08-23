@@ -111,8 +111,8 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         "rust",
         "ledger_alpha.rs",
         "ledger_beta.rs",
-        "d8a38df1507e6efd",
-        45,
+        "927b05fad1c1cc0f",
+        53,
         (5, 15, 124, 381),
         (7, 17, 131, 388),
     ),
@@ -120,8 +120,8 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         "python",
         "ledger_alpha.py",
         "ledger_beta.py",
-        "3b08286c43ec5193",
-        35,
+        "b63105455a75704b",
+        41,
         (6, 13, 109, 315),
         (8, 15, 118, 324),
     ),
@@ -129,8 +129,8 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         "typescript",
         "ledger_alpha.ts",
         "ledger_beta.ts",
-        "75331bdf6bb59eea",
-        51,
+        "ffa9824eae18b341",
+        56,
         (5, 15, 127, 391),
         (7, 17, 138, 402),
     ),
@@ -138,8 +138,8 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         "dart",
         "ledger_alpha.dart",
         "ledger_beta.dart",
-        "09ec87de54dfeffb",
-        50,
+        "7c61b26360939eaa",
+        57,
         (5, 15, 121, 350),
         (7, 17, 123, 352),
     ),
@@ -147,8 +147,8 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         "csharp",
         "LedgerAlpha.cs",
         "LedgerBeta.cs",
-        "f887f991dc1f4969",
-        46,
+        "dc672f7f39f21ba4",
+        52,
         (9, 24, 173, 537),
         (9, 24, 180, 544),
     ),
@@ -156,23 +156,11 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         "go",
         "ledger_alpha.go",
         "ledger_beta.go",
-        "7e9099352ffa58f5",
-        52,
+        "f44d1ebae4c45e3a",
+        57,
         (7, 17, 125, 345),
         (9, 19, 135, 355),
     ),
-];
-
-/// Every authored clone is a byte-identical Type-1 copy with embeddings
-/// off, so all four signals are pinned to exact values — no bands, no
-/// approximation. `token_jaccard` is the load-bearing one: the audit's
-/// corrupted-signature regression surfaced precisely as this value
-/// moving while every other field held ([PIPELINE-INCREMENTAL-INTEGRITY]).
-pub(crate) const MULTILANG_SIGNALS: &[(&str, f64)] = &[
-    ("structural", 1.0),
-    ("token_jaccard", 1.0),
-    ("embedding_cos", 0.0),
-    ("fused", 1.0),
 ];
 
 /// `tests/fixtures/incremental-multilang`.

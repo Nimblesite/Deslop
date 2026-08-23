@@ -43,13 +43,23 @@ This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on stru
 
 That literal was a false negative by construction (gh #408). A single inserted statement rehashes every ancestor Merkle node, so a textbook Type-3 near-miss — full identifier rename plus one extra statement — scored `structural = 0.0` on the enclosing method while the unchanged statements *inside* it stayed Merkle-identical. The fragments were reported and the method was not, in **every** language: the pipeline held the evidence and discarded it. Measured on the five `*-type3` fixtures the enclosing pairs score 0.84–0.91, while their exact whole-method token Jaccard is only 0.74–0.85 — below `admission.fused_threshold`, which is why token evidence alone could never rescue them.
 
-Overlap is an alignment, never a bag of matching subtree hashes. The discriminating information is the *order and nesting* of the matches, which is exactly what a multiset discards: two unrelated functions built from the same statement vocabulary share the same hashes as a genuine copy. Endpoints above `overlap.rs::ALIGNMENT_MAX_NODES` fall back to greedy maximal shared-subtree coverage — largest left subtrees first, each credit consuming one concrete occurrence on each endpoint, span-tracked on both sides. Both sides, because consuming bare hash counts on the right let a disjoint left copy re-claim nodes nested inside an already-credited right subtree, counting them twice and overshooting the alignment the bound stands in for (`the_fallback_never_credits_a_nested_right_subtree_twice`). So tracked, it is a conservative lower bound whose error is the root-to-edit spine — vanishing at the sizes where it applies. A lower bound can suppress a rescue; it cannot manufacture one.
+Overlap is an alignment, never a bag of matching subtree hashes. The discriminating information is the *order and nesting* of the matches, which is exactly what a multiset discards: two unrelated functions built from the same statement vocabulary share the same hashes as a genuine copy. Endpoints above `overlap.rs::ALIGNMENT_MAX_NODES` (768 nodes) fall back to greedy maximal shared-subtree coverage — largest left subtrees first, each credit consuming one concrete occurrence on each endpoint, span-tracked on both sides. Both sides, because consuming bare hash counts on the right let a disjoint left copy re-claim nodes nested inside an already-credited right subtree, counting them twice and overshooting the alignment the bound stands in for (`the_fallback_never_credits_a_nested_right_subtree_twice`). So tracked, it is a conservative lower bound whose error is the root-to-edit spine — vanishing at the sizes where it applies. A lower bound can suppress a rescue; it cannot manufacture one.
+
+The cap counts nodes of the *normalised* tree, so [PIPELINE-NORMALIZE-AST-OPERATOR](pipeline.md) moved what it reaches without the number changing: operator tokens survive as leaves, and an operator-dense expression counts around half as many nodes again. At 512 that pulled `ts-mixed-band`'s ninety-term expression — 558 nodes, a consistent rename plus one redundant paren, exactly the case this section exists to rescue — onto the conservative bound, which scored it under the admission floor and reported **nothing**. The cap must reach the largest endpoint the admission path is expected to rescue, and is set above the largest pinned such case with room to spare rather than trimmed to it. Moving it is a performance decision, pinned deliberately by `the_alignment_cap_is_the_documented_operating_point`, whose companion assertion fails if the cap ever falls back below that measured case.
 
 **Admission is a compound gate over two independently measured axes, not sum fusion.** A pair below `admission.fused_threshold` is admitted only when overlap ≥ `admission.shared_subtree_min_overlap` **and** `token_jaccard` ≥ `admission.shared_subtree_min_jaccard` **and** both endpoints clear `admission.shared_subtree_min_node_count`. Neither axis admits alone — normalisation makes scaffolding Merkle-identical across unrelated files, so shape must be corroborated by tokens. The rendered fused confidence remains the bounded max ([FUSION-STRATEGY-BOUNDED-MAX]); this gate changes what is *measured*, never how confidence is combined. Overlap is measured only on pairs that would otherwise be dropped yet carry the token corroboration, so the cost is bounded away from the ~596K-candidate admission set that [FUSION-CONTENT-GATE] deliberately avoids.
 
 **Routing gains one row, and one comparison is retired.** [CLONE-BUCKETS-ROUTING] row 4b routes high overlap corroborated by an independent axis — the token axis at `admission.shared_subtree_min_jaccard`, **or** the embedding axis at `candidates.embedding_support_floor` — to `nearly_identical`, using the same floors that admitted the pair — so the pipeline can never admit a shared-subtree near-miss the renderer then hides. Row 4's old `structural ≤ 0.01` leg is gone: it predates the measurement, when any non-zero value meant a Merkle anchor, and additional shape evidence must never *hide* a cluster the token axis already carries. Clusters below the overlap floor keep the anchor-free demotion guard unchanged.
 
 Because the value is now graded, **it is no longer comparable across two views of different scope**. A window nested inside a near-miss scores higher exactly to the extent that it excludes what differs, so [PIPELINE-CLUSTER-SUBSUME] compares grades only between views that do not nest; where one encloses the other, enclosure decides within a credibility tier. Pinned by `type3_enclosing_method.rs` in all five languages.
+
+### [FUSION-SHARED-SUBTREE-MEMO] Overlap is memoised by ordered Merkle hash pair
+
+One measurement per *structure pair*, never per byte-range pair. The memo key is the ordered pair of the two endpoints' Merkle hashes — the same premise the `1.0` short-circuit already stands on: hash equality pins the entire normalised structure, so every byte-offset copy of one structural pair shares the key, and the alignment runs once however many byte-range combinations LSH produced. The memoised value is exact — admission decisions and stored overlap values are identical to unmemoised measurement, only the alignment count changes. On the corpus that motivated it, 793,076 byte-range pairs collapsed onto a fraction as many structure pairs; without the memo the rescue never finished. Pinned by `a_fleet_of_identical_windows_costs_one_alignment` (36 byte-range pairs, exactly 1 alignment). Exact and bound results ([FUSION-SHARED-SUBTREE-BOUND]) are memoised separately, because a bound answers only the rescue question.
+
+### [FUSION-SHARED-SUBTREE-BOUND] The kind-multiset bound refuses hopeless alignments
+
+Shared mass never exceeds `min(smaller_total, kind-multiset intersection)`: any edit script maps a set of node pairs, and only kind-preserving pairs contribute to `larger − TED`. The rescue path (`rescue_overlap`) computes this bound first; when `bound / larger` is already below `admission.shared_subtree_min_overlap`, the quadratic alignment is skipped and the bound itself is returned. Sound because the bound never undercuts the alignment (`the_kind_multiset_bound_never_undercuts_the_alignment`), so a value below the floor proves the exact value is too — the admission decision is identical by construction (`the_rescue_path_agrees_with_the_exact_measure_on_admission`), and a refused pair pays for no alignment (`a_pair_the_bound_refuses_never_pays_for_an_alignment`). The bound applies only to the rescue's admission question; cluster signal measurement ([FUSION-CLUSTER-SIGNALS]) always uses the exact `overlap`, because a rendered `structural` value below the floor must still be the measured one.
 
 ### [FUSION-CLUSTER-SIGNALS] Rendered cluster signals are measured, never aggregated from discovery edges
 
@@ -113,6 +123,33 @@ erased:
      literal anchors and rendered a maximal one-literal Type-2 rename at
      `fused = 0.0588`, an agent-surface false negative
      (`type2_rename_anchor_floor.rs`).
+     **A certified rename carries no doubt left for the mass term to
+     price** (gh #410). When the lesser of literal consistency and
+     coverage is exactly 1.0, every aligned literal is preserved or
+     echoed and every constrained identifier position is byte-identical
+     or a corroborated bijection substitution: the mapping is total,
+     contradiction-free and literal-preserving, and the only doubt the
+     anchor mass still prices is coincidence. Coincidence is discharged
+     by mass, so the discount is dropped exactly where the mass term
+     already vouches for the pair on its own — where
+     `anchors / (anchors + content_gate.rename_evidence_half_mass)`
+     reaches `content_gate.support_floor`, i.e. at ten anchors. There
+     the weight is 1.0 and `rename_consistency` reads 1.0. Certification
+     therefore never promotes a cluster the mass discount would have
+     demoted; it only stops charging a proven rename for evidence it is
+     not missing. Below that bar, and for any pair carrying a single
+     contradiction, the smooth discount applies unchanged, so an
+     anchor-poor forwarding scaffold (subject name twice plus one
+     collaborator, mass 3, weight 3/7) stays below every routing floor.
+     Because completing a rename can only raise consistency and add
+     anchors, certification can only switch on — the
+     [REPAIR-RENAME-LITERAL-ECHO] monotonicity property is preserved.
+     Without it the axis was capped at
+     `rename_consistency_discount × anchors / (anchors + 4)`, so
+     `fused >= 0.85` needed 68 affirming positions and **no Type-2
+     rename could reach the act-now band in any language** — the top
+     agent band meant "byte-identical" rather than "do not write this
+     copy" (`fused_golden_bands.rs`, six languages, both rename stems).
    A maximally renamed clone of real logic scores low pooled `agreement` but
    high `rename_consistency` — every renamed name repeats, so nearly every
    position is a corroborated anchor; pooling the populations into one mean
@@ -121,8 +158,10 @@ erased:
    byte-equivalent, `fused = max(embedding_cos, max(structural, token_jaccard)
    × max(agreement, rename_consistency_discount × rename_consistency))`. The
    discount reflects that mapping-explained identifier positions are strictly
-   weaker evidence than byte equality, keeping a proven rename in the act-now
-   band while reserving `fused = 1.0` for byte-proven duplication. LSH-only and
+   weaker evidence than byte equality: a certified rename tops out at
+   `rename_consistency_discount` of a saturated shape, which is inside the
+   act-now band, while `fused = 1.0` stays reserved for byte-proven
+   duplication — so proven copy-paste always outranks proven rename. LSH-only and
    embedding-discovered pairs render the bounded max fusion unchanged — the
    same formula with the content factor at its implicit 1.0.
 4. **Routing — three zones over `support = max(agreement,
@@ -218,7 +257,7 @@ A number is a **lever** when changing it changes which clusters are reported, wh
 | `content_gate.saturating_token_floor` | `buckets.rs:291` | 0.95 | **Defect** (#368). The surviving flutter/flutter #331 cluster read `structural = 0.62, token_jaccard = 0.98` — the token layer echoing shape, not reporting content. |
 | `content_gate.rename_consistency_discount` | `buckets.rs:301` | 0.9 | **Derived** (#346). Keeps a proven Type-2 rename above `fused_threshold` while reserving `fused = 1.0` for byte-proven duplication. |
 | `content_gate.rename_corroboration_min` | `content.rs` | 2 | **Literature.** [TECH-PMATCH-BAKER] prev-encoding: a parameter symbol's first occurrence matches anything and constrains nothing; only repetition carries binding proof. |
-| `content_gate.rename_evidence_half_mass` | `content.rs` | 4 | **Defect.** Replaces the `rename_evidence_min_literals = 4` cliff (#346), which zeroed sub-floor rename evidence and rendered a maximal one-literal Type-2 rename at `fused = 0.0588` (`type2_rename_anchor_floor.rs`). Same operating point, now a half-saturation mass: a forwarding echo's single substitution (mass 2, weight 1/3) stays below every routing floor while a 16-anchor maximal rename clears the reuse line. |
+| `content_gate.rename_evidence_half_mass` | `content/rename.rs` | 4 | **Defect.** Replaces the `rename_evidence_min_literals = 4` cliff (#346), which zeroed sub-floor rename evidence and rendered a maximal one-literal Type-2 rename at `fused = 0.0588` (`type2_rename_anchor_floor.rs`). Same operating point, now a half-saturation mass: a forwarding echo's single substitution (mass 2, weight 1/3) stays below every routing floor while a 16-anchor maximal rename clears the reuse line. The weight is an asymptote, so it applies only while doubt remains: a rename certified contradiction-free at or above `content_gate.support_floor` of mass weighs 1.0 (#410, above). |
 | `content_gate.verbatim_member_share_floor` | `content.rs:54` | 0.5 | **Defect** (#341, tightened #346). A strict majority — the share must *exceed* it. #104's verbatim pair among lookalikes (share ≥ 2/3) must stay visible; two byte-identical widgets inside 453 framework declarations (≈ 0.004) must not vouch for the family; and two disjoint identical pairs at exactly 0.5 must not certify each other. |
 | `content_gate.literal_table_min_fraction` | `buckets.rs:257` | 0.8 | **Derived** (#341), value unswept. "Overwhelmingly literal" is the stated criterion for [CLONE-NOISE-LITERAL-TABLE]; 0.8 is where it was set, not where it was measured. |
 | `content_gate.literal_table_min_literals` | `content.rs:36` | 8 | **Derived** (#341), value unswept. A data table is a run of values, so a two-element tuple return must not reach the classifier — the argument fixes the direction, not the number. |

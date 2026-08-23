@@ -47,7 +47,6 @@
 
 use anyhow::Result;
 
-mod common;
 use crate::common::{verdict::*, *};
 
 // What a suppression of each fixture would prove. Every control states

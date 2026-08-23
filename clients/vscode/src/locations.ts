@@ -16,6 +16,8 @@ import {
 } from "./types/report";
 import { resolveWorkspacePath } from "./pathUtils";
 
+const UTF8_ENCODING = "utf8";
+
 export function occurrenceDisplayLocation(
   occurrence: ReportOccurrence,
 ): OccurrenceDisplayLocation | undefined {
@@ -66,16 +68,16 @@ function displayLocationFrom(
 
 function readOccurrenceSource(occurrencePath: string): string | undefined {
   try {
-    return fs.readFileSync(resolveWorkspacePath(occurrencePath), "utf8");
+    return fs.readFileSync(resolveWorkspacePath(occurrencePath), UTF8_ENCODING);
   } catch {
     return undefined;
   }
 }
 
 function positionForByte(source: string, byte: number): { line: number; column: number } {
-  const buffer = Buffer.from(source, "utf8");
+  const buffer = Buffer.from(source, UTF8_ENCODING);
   const safeByte = Math.min(Math.max(byte, 0), buffer.length);
-  const prefix = buffer.slice(0, safeByte).toString("utf8");
+  const prefix = buffer.slice(0, safeByte).toString(UTF8_ENCODING);
   const line = prefix.split("\n").length;
   const lastNewline = prefix.lastIndexOf("\n");
   const columnOffset = lastNewline === -1 ? prefix.length : prefix.length - lastNewline - 1;

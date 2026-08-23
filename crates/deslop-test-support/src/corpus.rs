@@ -7,7 +7,7 @@
 //! scan of a real codebase stays inside a wall-clock and memory budget.
 //!
 //! Clones live in git-ignored `.corpus/`, populated by
-//! `scripts/fetch-corpus.mjs` (which `make test-corpus` runs first). Nothing
+//! `scripts/corpus/fetch-corpus.mjs` (which `make test-corpus` runs first). Nothing
 //! here touches the network: a missing clone is a hard error naming the
 //! target to run, never a silent skip.
 
@@ -15,7 +15,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
-    process::{Command, Output},
+    process::{Command, Output, Stdio},
     time::{Duration, Instant},
 };
 
@@ -198,7 +198,7 @@ pub struct CorpusRun {
     pub report: Value,
     /// Wall-clock duration of the scan process.
     pub wall: Duration,
-    /// Peak resident set size in mebibytes, as reported by `/usr/bin/time`.
+    /// Peak resident set size in mebibytes, as reported by [`Measurement`].
     pub peak_rss_mb: u64,
 }
 
@@ -266,8 +266,9 @@ pub fn u64_field(value: &Value, name: &str) -> Result<u64> {
         .ok_or_else(|| anyhow!("corpus manifest field `{name}` is missing or not an integer"))
 }
 
-/// Scans `scan_root` with the release `deslop` binary under `/usr/bin/time`,
-/// returning the parsed report plus measured wall time and peak RSS.
+/// Scans `scan_root` with the release `deslop` binary under this platform's
+/// peak-RSS [`Measurement`], returning the parsed report plus measured wall
+/// time and peak RSS.
 ///
 /// Embeddings are off and the fingerprint cache is disabled so the measurement
 /// reflects a cold analytical run and never writes into the clone.
@@ -298,9 +299,22 @@ pub fn scan(scan_root: &Path, output_prefix: &Path) -> Result<CorpusRun> {
     })
 }
 
+/// Where the release binary the suite measures is expected to sit.
+///
+/// The stem carries [`std::env::consts::EXE_SUFFIX`]: cargo writes
+/// `deslop.exe` on Windows, and a bare stem makes the existence check below
+/// false with the binary sitting right beside it — every corpus test then
+/// dies on "release binary missing" before it scans anything.
+fn release_binary_path() -> PathBuf {
+    repo_root()
+        .join("target")
+        .join("release")
+        .join(format!("deslop{}", std::env::consts::EXE_SUFFIX))
+}
+
 /// Locates the release binary the suite measures.
 fn release_binary() -> Result<PathBuf> {
-    let binary = repo_root().join("target").join("release").join("deslop");
+    let binary = release_binary_path();
     if binary.is_file() {
         return Ok(binary);
     }
@@ -310,35 +324,143 @@ fn release_binary() -> Result<PathBuf> {
     ))
 }
 
-/// Runs one scan under `/usr/bin/time`, capturing its output.
+/// How this platform measures a child process's peak resident set size.
+///
+/// [CORPUS-CEILINGS] needs a *true* peak, not a sampled one: a sample taken
+/// every few hundred milliseconds is a lower bound, and a lower bound on a
+/// ceiling assertion produces false passes. Both arms below read a counter
+/// the kernel maintains, so neither can miss a spike.
+#[derive(Debug)]
+pub enum Measurement {
+    /// POSIX: `/usr/bin/time <flag>` wraps the scan and reports the peak on
+    /// stderr when it exits.
+    PosixTime {
+        /// The peak-RSS flag this platform's `time` accepts.
+        flag: &'static str,
+    },
+    /// Windows has no `/usr/bin/time`. The scan is spawned directly and a
+    /// PowerShell monitor watches `PeakWorkingSet64` — the OS's own
+    /// monotonically increasing peak counter — for that pid.
+    WindowsPeakMonitor {
+        /// The monitor script this platform runs.
+        script: PathBuf,
+    },
+}
+
+/// The peak-RSS measurement this platform uses.
+#[must_use]
+pub fn measurement() -> Measurement {
+    if cfg!(windows) {
+        Measurement::WindowsPeakMonitor {
+            script: windows_monitor_script(),
+        }
+    } else {
+        Measurement::PosixTime {
+            flag: PEAK_RSS_FLAG,
+        }
+    }
+}
+
+/// The PowerShell monitor that reports a pid's peak working set.
+fn windows_monitor_script() -> PathBuf {
+    repo_root()
+        .join("scripts")
+        .join("corpus")
+        .join("peak-working-set.ps1")
+}
+
+/// The analysis flags every corpus scan runs with.
+///
+/// Embeddings are off and the fingerprint cache is disabled so the
+/// measurement reflects a cold analytical run and never writes into the
+/// clone. Shared by both measurement arms so the two platforms cannot drift
+/// into scanning with different settings.
+const SCAN_FLAGS: [&str; 7] = [
+    "--no-incremental",
+    "--embeddings",
+    "off",
+    "--no-fail-over",
+    "--no-color",
+    "--notext",
+    "--nohtml",
+];
+
+/// Runs one scan under this platform's peak-RSS measurement, capturing its
+/// output. Both arms leave the peak on stderr in the form [`peak_rss_mb`]
+/// reads, so everything downstream is platform-independent.
 fn timed_scan(binary: &Path, scan_root: &Path, output_prefix: &Path) -> Result<Output> {
+    match measurement() {
+        Measurement::PosixTime { flag } => posix_scan(flag, binary, scan_root, output_prefix),
+        Measurement::WindowsPeakMonitor { script } => {
+            windows_scan(&script, binary, scan_root, output_prefix)
+        }
+    }
+}
+
+/// Runs the scan under `/usr/bin/time`, which reports the peak itself.
+fn posix_scan(flag: &str, binary: &Path, scan_root: &Path, output_prefix: &Path) -> Result<Output> {
     Command::new("/usr/bin/time")
-        .arg(PEAK_RSS_FLAG)
+        .arg(flag)
         .arg(binary)
         .arg(scan_root)
         .arg("--output")
         .arg(output_prefix)
-        .args([
-            "--no-incremental",
-            "--embeddings",
-            "off",
-            "--no-fail-over",
-            "--no-color",
-            "--notext",
-            "--nohtml",
-        ])
+        .args(SCAN_FLAGS)
         .output()
         .context("failed to spawn /usr/bin/time")
 }
 
+/// Runs the scan directly and watches its peak working set from PowerShell.
+///
+/// The monitor takes only a pid, so no path has to survive a shell quoting
+/// round-trip. Its reading is appended to the scan's own stderr, which is
+/// where the POSIX arm leaves it too.
+fn windows_scan(
+    script: &Path,
+    binary: &Path,
+    scan_root: &Path,
+    output_prefix: &Path,
+) -> Result<Output> {
+    let child = Command::new(binary)
+        .arg(scan_root)
+        .arg("--output")
+        .arg(output_prefix)
+        .args(SCAN_FLAGS)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("failed to spawn {}", binary.display()))?;
+    let monitor = spawn_peak_monitor(script, child.id())?;
+    let mut output = child.wait_with_output().context("scan did not complete")?;
+    let peak = monitor
+        .wait_with_output()
+        .context("peak-working-set monitor did not complete")?;
+    output.stderr.extend_from_slice(&peak.stdout);
+    Ok(output)
+}
+
+/// Starts the PowerShell monitor watching `process_id`.
+fn spawn_peak_monitor(script: &Path, process_id: u32) -> Result<std::process::Child> {
+    Command::new("powershell")
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
+        .arg(script)
+        .arg("-ProcessId")
+        .arg(process_id.to_string())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("failed to spawn {}", script.display()))
+}
+
 /// Describes a non-zero scan, quoting stderr.
 ///
-/// The failing process may be `deslop` or `/usr/bin/time` itself — a flag the
-/// host's `time` does not accept dies here too — so the message names both
-/// rather than blaming the scan for a harness fault.
+/// The failing process may be `deslop` or the measurement wrapper itself — a
+/// flag the host's `time` does not accept dies here too — so the message
+/// names the measurement rather than blaming the scan for a harness fault.
 fn scan_failure(scan_root: &Path, output: &Output) -> anyhow::Error {
     anyhow!(
-        "`/usr/bin/time {PEAK_RSS_FLAG} deslop {}` exited {:?}: {}",
+        "`{:?} deslop {}` exited {:?}: {}",
+        measurement(),
         scan_root.display(),
         output.status.code(),
         String::from_utf8_lossy(&output.stderr)
@@ -367,7 +489,7 @@ fn peak_rss_mb(stderr: &str) -> Result<u64> {
             line.to_ascii_lowercase()
                 .contains("maximum resident set size")
         })
-        .ok_or_else(|| anyhow!("/usr/bin/time did not report a maximum resident set size"))?;
+        .ok_or_else(|| anyhow!("the measurement reported no maximum resident set size"))?;
 
     let value: u64 = line
         .split_whitespace()
@@ -427,6 +549,61 @@ pub fn reports_clone_spanning(report: &Value, files: &[String]) -> bool {
     })
 }
 
+/// Clusters the report actually shows a user. A cluster whose every
+/// occurrence is hidden carries no claim, so it can neither satisfy recall
+/// nor breach precision.
+#[must_use]
+pub fn visible_clusters(report: &Value) -> Vec<&Value> {
+    match report.get("clusters").and_then(Value::as_array) {
+        None => Vec::new(),
+        Some(clusters) => clusters
+            .iter()
+            .filter(|cluster| !all_occurrences_hidden(cluster))
+            .collect(),
+    }
+}
+
+/// True when every occurrence of a cluster is hidden, so nothing is rendered.
+fn all_occurrences_hidden(cluster: &Value) -> bool {
+    match cluster.get("occurrences").and_then(Value::as_array) {
+        None => true,
+        Some(occurrences) => occurrences
+            .iter()
+            .all(|occurrence| occurrence.get("hidden").and_then(Value::as_bool) == Some(true)),
+    }
+}
+
+/// True when every path in `files` appears among the cluster's **shown**
+/// occurrences.
+///
+/// One predicate, read in opposite directions: [CORPUS-RECALL] wants it
+/// true for a curated duplicate, [CORPUS-PRECISION-CURATED] wants it false
+/// for a curated non-duplicate. Both are claims about what the report
+/// *shows*, so a hidden occurrence counts for neither — a suppressed side
+/// is a pair the user never sees, and an unshown coincidence is not a false
+/// positive anyone was told about.
+///
+/// An empty list is false, never true, for the same reason
+/// [`reports_clone_spanning`] refuses one: `all()` over nothing is
+/// vacuously true, and an entry naming no files would then assert nothing
+/// while reading as a satisfied check.
+#[must_use]
+pub fn cluster_shows_span(cluster: &Value, files: &[String]) -> bool {
+    if files.is_empty() {
+        return false;
+    }
+    let paths: Vec<&str> = cluster
+        .get("occurrences")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .filter(|occurrence| occurrence.get("hidden").and_then(Value::as_bool) != Some(true))
+        .filter_map(|occurrence| occurrence.get("path").and_then(Value::as_str))
+        .collect();
+    files.iter().all(|file| paths.contains(&file.as_str()))
+}
+
 /// Reads the source slice a cluster's first occurrence points at.
 ///
 /// # Errors
@@ -462,3 +639,24 @@ fn byte_offset(occurrence: &Value, name: &str) -> Result<usize> {
         .and_then(|value| usize::try_from(value).ok())
         .ok_or_else(|| anyhow!("occurrence is missing {name}"))
 }
+
+/// Array-valued field of `value`, or an empty slice when absent or not an
+/// array. Manifest and report readers share this so an absent curated list
+/// reads as "asserts nothing" in exactly one place.
+#[must_use]
+pub fn array<'a>(value: &'a Value, name: &str) -> &'a [Value] {
+    value
+        .get(name)
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+}
+
+/// Unsigned scalar field of `value`, or `0` when absent.
+#[must_use]
+pub fn field_u64(value: &Value, name: &str) -> u64 {
+    value.get(name).and_then(Value::as_u64).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests;

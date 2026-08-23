@@ -8,8 +8,6 @@
 //! with the LSP code-action suite. The fixtures a merge must *decline*
 //! live in `refactor_merge_refusals.rs`.
 
-mod common;
-
 use std::fs;
 
 use anyhow::{ensure, Context, Result};

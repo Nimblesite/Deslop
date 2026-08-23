@@ -9,8 +9,6 @@
 //! fully-applied buffer against golden snapshots shared with the LSP
 //! code-action tests.
 
-mod common;
-
 use std::fs;
 
 use anyhow::{anyhow, ensure, Context, Result};

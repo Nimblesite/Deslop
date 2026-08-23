@@ -10,13 +10,17 @@
 //! corpus state — the audited flatten-per-render copy duplicated
 //! ~157 MiB of signature bytes alone on the benchmark corpus.
 
+use std::{collections::HashMap, path::PathBuf, time::Instant};
+
 use crate::{
-    cluster::build_ranked_fused_clusters,
+    cluster::{build_ranked_fused_clusters, ClusterBuildInputs},
+    cluster_filters::{split_noise_verbatim_families, split_structural_families},
     error::CoreError,
     lsh::band_collisions,
     overlap::apply_shared_subtree_rescue,
     pair::{candidate_pairs_for_language_policy, cluster_by_transitive_closure},
     report::{render_report, CacheStats, Report, ReportInputs},
+    state::FileId,
 };
 
 use super::{
@@ -25,6 +29,7 @@ use super::{
         embedding_pass::{run_embedding_pass, CorpusView},
         signatures::build_cross_language_signatures,
     },
+    store::relative_path_key,
     PipelineSession,
 };
 
@@ -75,25 +80,64 @@ impl PipelineSession {
         // overlap the anchor axis discards before survival drops the
         // enclosing Type-3 pair and leaves only its fragment views.
         apply_shared_subtree_rescue(&mut pairs, fingerprints, self.store.trees());
-        tracing::debug!(
-            candidate_pairs = pairs.len(),
-            "clustering by transitive closure"
-        );
+        let stage_started = Instant::now();
         let fused_clusters = cluster_by_transitive_closure(&pairs);
-        tracing::debug!(clusters = fused_clusters.len(), "building ranked clusters");
+        log_cluster_stage("transitive_closure", fused_clusters.len(), stage_started);
+        // [PIPELINE-CLUSTER-ELECT] Transitive closure treats a token
+        // band collision like a shared subtree, so one such edge welds
+        // two structural families into a component that agrees with
+        // itself nowhere, buckets down, and is hidden — losing both
+        // families to the presence of each other. Elect the families
+        // back out before anything is measured.
+        let stage_started = Instant::now();
+        let fused_clusters =
+            split_structural_families(fused_clusters, fingerprints, &self.file_languages);
+        log_cluster_stage(
+            "structural_family_split",
+            fused_clusters.len(),
+            stage_started,
+        );
+        // [CLONE-NOISE-VERBATIM-SUBGROUP] Partition a noise family off
+        // the byte-identical copy it swept up *before* signals are
+        // measured, so the surviving cluster is measured, bucketed and
+        // ranked from exactly the occurrences it kept. A component the
+        // noise filters do not suppress is handed on untouched.
+        let stage_started = Instant::now();
+        let fused_clusters = split_noise_verbatim_families(
+            fused_clusters,
+            fingerprints,
+            &self.sources,
+            &self.file_languages,
+        );
+        log_cluster_stage("noise_verbatim_split", fused_clusters.len(), stage_started);
         // [FUSION-CLUSTER-SIGNALS] One signature space per run: the
         // cross-language space compares any pair when the audit mode is
         // on; the per-language space is exact otherwise. Mixing spaces
         // inside one cluster mean would average incomparable values.
         let measurement_signatures = cross_language_signatures.as_deref().unwrap_or(signatures);
-        let clusters = build_ranked_fused_clusters(
+        // [PIPELINE-DETERMINISM] (gh #430) Workspace-relative path per
+        // fingerprinted file — the second input of the cluster id digest.
+        // Built from the fingerprints themselves so every member's file is
+        // covered by construction, and keyed on the same
+        // workspace-relative form the report renders.
+        let file_paths: HashMap<FileId, PathBuf> = fingerprints
+            .iter()
+            .filter_map(|found| {
+                self.registry
+                    .path(found.file_id)
+                    .map(|path| (found.file_id, relative_path_key(path, &self.root)))
+            })
+            .collect();
+        let clusters = build_ranked_fused_clusters(&ClusterBuildInputs {
             fingerprints,
-            measurement_signatures,
-            &embedding_outcome.vectors,
-            &fused_clusters,
-            self.store.trees(),
-            &self.sources,
-        );
+            signatures: measurement_signatures,
+            embedding_vectors: &embedding_outcome.vectors,
+            fused_clusters: &fused_clusters,
+            trees: self.store.trees(),
+            sources: &self.sources,
+            file_languages: &self.file_languages,
+            file_paths: &file_paths,
+        });
         tracing::info!(
             ranked_clusters = clusters.len(),
             fingerprints = fingerprints.len(),
@@ -115,4 +159,19 @@ impl PipelineSession {
             diff: self.diff_scope.as_ref(),
         }))
     }
+}
+
+/// One bounded cluster-stage boundary record
+/// ([PERF-FLUTTER-TODO-OBSERVABILITY]). A corpus-scale run spends
+/// minutes between candidate survival and ranked clusters; at most a
+/// handful of these per render, they make the running stage tellable
+/// from a hang at the default `info` level, with the elapsed time that
+/// attributes the gap.
+fn log_cluster_stage(stage: &'static str, clusters: usize, started: Instant) {
+    tracing::info!(
+        stage,
+        clusters,
+        elapsed_ms = crate::observe::elapsed_ms(started),
+        "cluster stage complete"
+    );
 }

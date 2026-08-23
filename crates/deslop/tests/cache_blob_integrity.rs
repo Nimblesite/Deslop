@@ -1,8 +1,9 @@
 //! The parse store must never serve bytes it cannot prove belong to
 //! the address that selected them ([PIPELINE-INCREMENTAL-INTEGRITY]).
 //!
-//! Pins the blob-trust regressions from the incremental persistence
-//! audit in `docs/plans/incremental-analysis-plan.md`:
+//! Pins the blob-trust regressions found by the incremental
+//! persistence audit — each one reproduced serving a wrong report
+//! before it was closed:
 //!
 //! - a blob whose signature payload was corrupted decoded cleanly and
 //!   was served as a valid hit, changing `token_jaccard` — a report
@@ -26,7 +27,6 @@ use std::{
 
 use anyhow::anyhow;
 
-mod common;
 use crate::common::{incremental::*, multilang_warm::seed_twins, seeded::*, store::*, *};
 
 /// Seeds the corpus and runs the store-filling cold pass, returning the

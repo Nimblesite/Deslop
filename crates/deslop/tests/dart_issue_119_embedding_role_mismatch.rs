@@ -30,13 +30,9 @@
 //! behaviour-equivalent, which lifts their cosine above the floor while
 //! unrelated snippets keep their honest shingle cosine.
 
-#[path = "cli/mock_ollama.rs"]
-mod mock_ollama;
-
+use crate::mock_ollama::MockOllama;
 use anyhow::Result;
-use mock_ollama::MockOllama;
 
-mod common;
 use crate::common::role_gate::*;
 
 /// Source text unique to the Dart class body in the role-mismatch

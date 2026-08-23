@@ -30,6 +30,80 @@ fn build_tree_index(trees: &[NormalizedNode]) -> HashMap<FileId, &NormalizedNode
     trees.iter().map(|tree| (tree.file_id, tree)).collect()
 }
 
+/// Memoises `MinHash` construction by token-stream digest across one
+/// corpus build ([PIPELINE-SIGNATURE-MEMO]).
+///
+/// `MinHash` over the k-grams is a pure function of the token stream
+/// alone, so two fingerprints whose ranges resolve to identical streams
+/// — the common case in a corpus whose whole pathology is repeated
+/// structure — get byte-identical signatures from one construction and
+/// a digest lookup, instead of paying the per-k-gram hash cascade
+/// again. Sound by construction: the key pins the exact stream, not a
+/// structural proxy for it. Fallback signatures never pass through
+/// here — they are deliberately scoped to the fingerprint's byte range
+/// ([`fallback_signature`]) and stay per-fingerprint.
+#[derive(Debug, Default)]
+pub struct SignatureMemo {
+    /// Stream digest → the signature its k-grams minhash to.
+    memoised: HashMap<[u8; 32], Signature>,
+    /// Streams answered from the memo.
+    hits: u64,
+    /// Streams that paid for a fresh `MinHash` construction.
+    misses: u64,
+}
+
+/// Most distinct streams one memo retains. Each entry holds a
+/// 32-byte digest and a 1 KiB signature, so the memo's resident
+/// ceiling is ~270 MiB — a bounded share of the
+/// [PERF-FLUTTER-TODO-MEMORY] budget however large the corpus grows.
+/// Past the cap a fresh stream is constructed and not retained; the
+/// output is identical either way, the memo being transparent.
+const SIGNATURE_MEMO_MAX_ENTRIES: usize = 262_144;
+
+impl SignatureMemo {
+    /// The signature for a non-empty token stream, constructed at most
+    /// once per distinct retained stream.
+    fn signature(&mut self, tokens: &[&'static str]) -> Signature {
+        let key = stream_digest(tokens);
+        if let Some(found) = self.memoised.get(&key) {
+            crate::observe::bump(&mut self.hits);
+            return *found;
+        }
+        crate::observe::bump(&mut self.misses);
+        let grams = kgrams(tokens, KGRAM_WIDTH);
+        let constructed = minhash_signature(&grams);
+        if self.memoised.len() < SIGNATURE_MEMO_MAX_ENTRIES {
+            let _previous = self.memoised.insert(key, constructed);
+        }
+        constructed
+    }
+
+    /// Streams answered from the memo.
+    #[must_use]
+    pub fn hits(&self) -> u64 {
+        self.hits
+    }
+
+    /// Streams that paid for a fresh construction — the distinct-stream
+    /// population, which is also the memo's resident entry count.
+    #[must_use]
+    pub fn misses(&self) -> u64 {
+        self.misses
+    }
+}
+
+/// Collision-free digest of a token stream: every token length-prefixed
+/// so no two distinct streams serialise to the same bytes.
+fn stream_digest(tokens: &[&'static str]) -> [u8; 32] {
+    let mut hasher = Hasher::new();
+    for token in tokens {
+        let length = u64::try_from(token.len()).unwrap_or(u64::MAX);
+        let _ = hasher.update(&length.to_le_bytes());
+        let _ = hasher.update(token.as_bytes());
+    }
+    *hasher.finalize().as_bytes()
+}
+
 /// Language-aware signature for one fingerprint against its file's
 /// normalised tree. When the language is known, import/prologue
 /// boilerplate is stripped from the token stream so shared import
@@ -50,6 +124,7 @@ fn signature_for_fingerprint(
     root: &NormalizedNode,
     fingerprint: &Fingerprint,
     language: Option<&str>,
+    memo: &mut SignatureMemo,
 ) -> Signature {
     let tokens = language.map_or_else(
         || token_stream_for_fingerprint(root, fingerprint),
@@ -57,7 +132,7 @@ fn signature_for_fingerprint(
     );
     tokens.map_or_else(
         || empty_signature(fingerprint, language),
-        |tokens| signature_for_tokens(&tokens, fingerprint, language),
+        |tokens| signature_for_tokens(&tokens, fingerprint, language, memo),
     )
 }
 
@@ -71,10 +146,11 @@ pub fn signatures_for_file(
     tree: &NormalizedNode,
     fingerprints: &[Fingerprint],
     language: Option<&str>,
+    memo: &mut SignatureMemo,
 ) -> Vec<Signature> {
     fingerprints
         .iter()
-        .map(|fingerprint| signature_for_fingerprint(tree, fingerprint, language))
+        .map(|fingerprint| signature_for_fingerprint(tree, fingerprint, language, memo))
         .collect()
 }
 
@@ -86,11 +162,12 @@ pub fn build_cross_language_signatures<S: BuildHasher>(
     file_languages: &HashMap<FileId, &'static str, S>,
 ) -> Vec<Signature> {
     let tree_index = build_tree_index(trees);
+    let mut memo = SignatureMemo::default();
     fingerprints
         .iter()
         .map(|fingerprint| {
             let language = file_languages.get(&fingerprint.file_id).copied();
-            cross_language_signature(fingerprint, &tree_index, language)
+            cross_language_signature(fingerprint, &tree_index, language, &mut memo)
         })
         .collect()
 }
@@ -100,6 +177,7 @@ fn cross_language_signature(
     fingerprint: &Fingerprint,
     tree_index: &HashMap<FileId, &NormalizedNode>,
     language: Option<&str>,
+    memo: &mut SignatureMemo,
 ) -> Signature {
     let Some(language) = language else {
         return empty_signature(fingerprint, None);
@@ -110,7 +188,7 @@ fn cross_language_signature(
     let tokens = cross_language_token_stream_for_fingerprint(root, fingerprint, language);
     tokens.map_or_else(
         || empty_signature(fingerprint, Some(language)),
-        |tokens| signature_for_tokens(&tokens, fingerprint, Some(language)),
+        |tokens| signature_for_tokens(&tokens, fingerprint, Some(language), memo),
     )
 }
 
@@ -120,16 +198,12 @@ fn signature_for_tokens(
     tokens: &[&'static str],
     fingerprint: &Fingerprint,
     language: Option<&str>,
+    memo: &mut SignatureMemo,
 ) -> Signature {
-    if tokens.is_empty() {
+    if tokens.len() < KGRAM_WIDTH {
         return empty_signature(fingerprint, language);
     }
-    let grams = kgrams(tokens, KGRAM_WIDTH);
-    if grams.is_empty() {
-        return empty_signature(fingerprint, language);
-    }
-    let gram_slices: Vec<&[&'static str]> = grams.into_iter().collect();
-    minhash_signature(&gram_slices)
+    memo.signature(tokens)
 }
 
 /// Empty-token signatures are scoped to the exact fingerprint instead of a
@@ -167,242 +241,4 @@ fn fallback_signature(fingerprint: &Fingerprint) -> Signature {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
-
-    use super::*;
-    use crate::{
-        ast::ByteRange, fingerprint::Fingerprint, lang::LanguageParser, state::FileRegistry,
-    };
-
-    fn fingerprint(seed: u8, start: usize, end: usize) -> Fingerprint {
-        let mut registry = FileRegistry::new();
-        let file_id = registry.register(PathBuf::from(format!("fixture_{seed}.rs")));
-        Fingerprint {
-            hash: [seed; 32],
-            file_id,
-            byte_range: ByteRange { start, end },
-            node_count: 1,
-        }
-    }
-
-    /// The duplicated region, verbatim in both files.
-    const SHARED_WINDOW: &str = "\
-let accumulate (values: int list) (floor: int) =
-    let mutable total = 0
-    for value in values do
-        if value > floor then
-            total <- total + value * 2
-    total
-
-let combine (values: int list) (ceiling: int) =
-    let mutable carried = 1
-    for value in values do
-        if value < ceiling then
-            carried <- carried * value + 7
-    carried
-";
-
-    /// Parses `source` as F# and returns its normalised root.
-    fn fsharp_tree(source: &str, file_id: FileId) -> Result<NormalizedNode, String> {
-        crate::lang::fsharp::FSharpParser
-            .parse_and_normalize(source.as_bytes(), file_id)
-            .map_err(|error| format!("the F# fixture must parse: {error}"))
-    }
-
-    /// Returns the shallowest node whose range starts at `offset`.
-    fn node_starting_at(node: &NormalizedNode, offset: usize) -> Option<&NormalizedNode> {
-        if node.byte_range.start == offset {
-            return Some(node);
-        }
-        node.children
-            .iter()
-            .find_map(|child| node_starting_at(child, offset))
-    }
-
-    /// Returns true when some node in `root` owns exactly `[start, end)`.
-    fn exact_node_exists(root: &NormalizedNode, start: usize, end: usize) -> bool {
-        (root.byte_range.start == start && root.byte_range.end == end)
-            || root
-                .children
-                .iter()
-                .any(|child| exact_node_exists(child, start, end))
-    }
-
-    /// A fingerprint spanning the shared window inside `source`, with the
-    /// range derived from parsed declaration boundaries: it starts at the
-    /// `accumulate` binding's node and ends at the `combine` binding's node.
-    ///
-    /// Deliberately not an exact-node range: it spans two consecutive
-    /// children of the module and therefore matches no single subtree. That
-    /// is the sibling-window shape an exact-node resolver cannot resolve.
-    /// Both files get the *same* structural hash, because two copies of one
-    /// window really do share a Merkle hash — that is why they pair at all.
-    fn window_fingerprint(
-        source: &str,
-        root: &NormalizedNode,
-        file_id: FileId,
-    ) -> Result<Fingerprint, String> {
-        let accumulate_offset = source
-            .find("let accumulate")
-            .ok_or("fixture contains the accumulate binding")?;
-        let combine_offset = source
-            .find("let combine")
-            .ok_or("fixture contains the combine binding")?;
-        let start = node_starting_at(root, accumulate_offset)
-            .ok_or("a parsed node starts at the accumulate binding")?
-            .byte_range
-            .start;
-        let end = node_starting_at(root, combine_offset)
-            .ok_or("a parsed node starts at the combine binding")?
-            .byte_range
-            .end;
-        if exact_node_exists(root, start, end) {
-            return Err(format!(
-                "fixture: {start}..{end} must be a sibling window, not an exact node"
-            ));
-        }
-        Ok(Fingerprint {
-            hash: [7; 32],
-            file_id,
-            byte_range: ByteRange { start, end },
-            node_count: 40,
-        })
-    }
-
-    // #339 ([FUSION-SIGNALS-THREE-LAYER]). Isolated at the signature layer on
-    // purpose: `content_gated_signals` overwrites a shape-identical cluster's
-    // rendered `token_jaccard` to 1.0, so NO end-to-end assertion on a
-    // rendered signal can distinguish real token evidence from the renderer
-    // supplying the value. This is the only layer where the question is
-    // answerable.
-    //
-    // A module rename shifts every byte offset in the second file. The window
-    // itself is byte-for-byte unchanged, and the normalised kind stream it
-    // produces is rename-invariant by construction, so the two signatures must
-    // be equal. `fallback_signature` hashes `(hash, byte_range.start,
-    // byte_range.end)`, so if the fingerprint falls through to it the two
-    // signatures differ completely — and `token_jaccard` is then measuring
-    // whether the copies happened to land at the same offset, not whether
-    // their tokens agree.
-    #[test]
-    fn issue_339_sibling_window_signature_is_offset_invariant() -> Result<(), String> {
-        let mut registry = FileRegistry::new();
-        let short = registry.register(PathBuf::from("window_a.fs"));
-        let long = registry.register(PathBuf::from("window_b.fs"));
-
-        let short_source = format!("module ParseHelpers\n\n{SHARED_WINDOW}");
-        let long_source = format!("module ParseHelpersWithALongerName\n\n{SHARED_WINDOW}");
-        let short_tree = fsharp_tree(&short_source, short)?;
-        let long_tree = fsharp_tree(&long_source, long)?;
-        let short_window = window_fingerprint(&short_source, &short_tree, short)?;
-        let long_window = window_fingerprint(&long_source, &long_tree, long)?;
-
-        assert_ne!(
-            short_window.byte_range.start, long_window.byte_range.start,
-            "fixture: the rename must actually shift the window's offsets"
-        );
-        let short_len = short_window
-            .byte_range
-            .end
-            .checked_sub(short_window.byte_range.start);
-        let long_len = long_window
-            .byte_range
-            .end
-            .checked_sub(long_window.byte_range.start);
-        assert_eq!(
-            short_len, long_len,
-            "fixture: and must not change its length"
-        );
-
-        let short_signatures = signatures_for_file(
-            &short_tree,
-            std::slice::from_ref(&short_window),
-            Some("fsharp"),
-        );
-        let long_signatures = signatures_for_file(
-            &long_tree,
-            std::slice::from_ref(&long_window),
-            Some("fsharp"),
-        );
-
-        let ([short_signature], [long_signature]) =
-            (short_signatures.as_slice(), long_signatures.as_slice())
-        else {
-            return Err(format!(
-                "expected one signature per fingerprint, got {} and {}",
-                short_signatures.len(),
-                long_signatures.len()
-            ));
-        };
-        assert_ne!(
-            *short_signature,
-            fallback_signature(&short_window),
-            "issue #339: the sibling-window signature must come from the resolved token \
-             stream, not the offset-seeded fallback — falling back means `token_jaccard` \
-             measures whether the copies landed at the same byte offset, not whether \
-             their tokens agree"
-        );
-        assert_ne!(
-            *long_signature,
-            fallback_signature(&long_window),
-            "issue #339: the shifted copy must not be the offset-seeded fallback either"
-        );
-        assert_eq!(
-            short_signature, long_signature,
-            "issue #339: two copies of one window must produce the same token signature \
-             regardless of the byte offset the rename shifted them to"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn issue_86_empty_non_python_signatures_are_fingerprint_scoped() {
-        let first = fingerprint(1, 0, 0);
-        let second = fingerprint(2, 0, 0);
-
-        let first_rust = empty_signature(&first, Some("rust"));
-        let second_rust = empty_signature(&second, Some("rust"));
-        let first_unknown = empty_signature(&first, None);
-        let second_unknown = empty_signature(&second, None);
-
-        assert_ne!(
-            first_rust, second_rust,
-            "issue #86: unrelated empty Rust token streams must not share a legacy signature"
-        );
-        assert_ne!(
-            first_unknown, second_unknown,
-            "issue #86: unrelated empty unknown-language streams must not share a legacy signature"
-        );
-        assert_eq!(
-            first_rust,
-            empty_signature(&first, Some("rust")),
-            "fingerprint-scoped fallback must stay deterministic for the same fingerprint"
-        );
-    }
-
-    // [PIPELINE-INCREMENTAL-INTEGRITY] The fallback signature persists
-    // in the parse store, so its slots must be a pure, fixed function
-    // of the fingerprint — identical on every architecture and across
-    // releases. A 32-bit build hashing 4-byte offsets, or any semantic
-    // drift in the derivation, changes every slot and fails this pin.
-    #[test]
-    fn fallback_signature_slots_are_architecture_independent() {
-        let signature = fallback_signature(&fingerprint(7, 3, 9));
-        assert_eq!(
-            signature.get(..4),
-            Some(
-                &[
-                    13_181_474_024_201_563_239_u64,
-                    1_576_249_985_012_619_851,
-                    14_983_257_718_629_721_174,
-                    4_485_375_611_891_913_186,
-                ][..]
-            ),
-            "the fallback signature's leading slots moved — either the \
-             derivation changed semantics (bump the parse store's \
-             SEMANTIC_EPOCH) or the input encoding became \
-             architecture-dependent"
-        );
-    }
-}
+mod tests;

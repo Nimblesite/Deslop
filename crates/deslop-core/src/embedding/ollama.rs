@@ -14,7 +14,7 @@ use crate::embedding::provider::{
 };
 
 // `OllamaModelInfo` is generated from `docs/models/live-ipc.td` by
-// `scripts/typediagram-gen.mjs`. Per CLAUDE.md the IPC model code is
+// `scripts/typediagram/generate.mjs`. Per CLAUDE.md the IPC model code is
 // not stored in git; the binding lives in `crate::wire_generated`.
 pub use crate::wire_generated::OllamaModelInfo;
 

@@ -31,7 +31,6 @@
 
 use anyhow::Result;
 
-mod common;
 use crate::common::{verdict::*, *};
 
 /// Asserts the fixture's cross-file copy stayed visible across `files`

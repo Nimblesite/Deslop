@@ -7,10 +7,14 @@
 //! change splices exactly one file's records in place; a render pass
 //! borrows the flat slices as they are. The audited alternative —
 //! re-flattening an owned copy of the whole corpus on every render —
-//! duplicated ~157 MiB of signature bytes alone on the pinned
-//! benchmark corpus, the +241 MB warm-RSS regression recorded as
-//! finding 5 of the regression audit in
-//! `docs/plans/incremental-analysis-plan.md`.
+//! duplicated ~157 MiB of signature bytes alone on the pinned tokio
+//! benchmark corpus, a +241 MB warm-RSS regression.
+//!
+//! The path order is not cosmetic: a render borrows these slices as
+//! they are, so a splice that appends a changed file's records instead
+//! of inserting them at the file's sort position renders its occurrence
+//! — and the `summary` line built from it — in edit-arrival order.
+//! Pinned by `deslop/tests/live_session_equivalence.rs`.
 
 use std::path::{Path, PathBuf};
 

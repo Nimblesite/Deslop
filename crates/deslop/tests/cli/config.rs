@@ -1,4 +1,4 @@
-use crate::support::*;
+use super::support::*;
 
 /// Returns the command scanning the `csharp-small` fixture with
 /// `--config <tmp>/<file_name>`, writing `body` there first when `Some`

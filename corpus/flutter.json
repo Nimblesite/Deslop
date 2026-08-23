@@ -37,11 +37,11 @@
     }
   ],
   "must_not_rank_first": {
-    "why": "Flutter mandates that every StatefulWidget declare its own createState(), and every StatelessWidget its own build(). These shapes cannot be extracted or merged, so they must never outrank genuine copy-paste. Tracked by issue #331.",
+    "why": "Flutter mandates that every StatefulWidget declare its own createState(), and every StatelessWidget its own build(). These shapes cannot be extracted or merged, so they must never outrank genuine copy-paste. Tracked by issue #331. Each entry is a base-type name, matched against the AST heritage clause of the declaration the ranked occurrence belongs to - never against source text, which fired on comments and missed wrapped clauses (issue #401).",
     "issue": 331,
-    "forbidden_top_shapes": [
-      "extends StatefulWidget",
-      "extends StatelessWidget"
+    "forbidden_top_supertypes": [
+      "StatefulWidget",
+      "StatelessWidget"
     ],
     "top_n": 5
   }

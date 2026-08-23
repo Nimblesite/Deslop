@@ -13,7 +13,7 @@ use std::{
 use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
-mod common;
+use crate::common;
 use common::{
     fixture_root, pid_exists, read_mcp_pid, terminate_pid, value_get, wait_for_pid_exit,
     KILLABLE_PARENT_SCRIPT,

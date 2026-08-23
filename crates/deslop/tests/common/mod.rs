@@ -15,6 +15,10 @@
 /// Suites that assert on `signals.fused` import it explicitly with
 /// `use crate::common::signals::*;` — a glob re-export here would be an
 /// unused import in every binary that never touches the vocabulary.
+/// The two-sided contract every noise-family pin is judged by: the
+/// family stays hidden while a real clone in the same run stays visible.
+pub(crate) mod negative_pin;
+
 pub(crate) mod signals;
 
 /// The deterministic mock-embedder runner. Imported explicitly with
@@ -32,6 +36,19 @@ pub(crate) mod verdict;
 /// with `use crate::common::incremental::*;`, for the same reason as
 /// `signals`.
 pub(crate) mod incremental;
+
+/// The authored clone corpus, its cold ground truth, and the positive
+/// report-shape assertions both equivalence suites are judged by —
+/// the batch-process one and the live-session one. Imported explicitly
+/// with `use crate::common::clone_corpus::*;`, for the same reason as
+/// `signals`.
+pub(crate) mod clone_corpus;
+
+/// The `--rerun-add SRC=DST` spec vocabulary shared by every suite that
+/// mutates a tree between the initial analysis and the rerun. Imported
+/// explicitly with `use crate::common::rerun_ops::*;`, for the same
+/// reason as `signals`.
+pub(crate) mod rerun_ops;
 
 /// The six-language `incremental-multilang` fixture vocabulary. Imported
 /// explicitly with `use crate::common::multilang::*;`, for the same
@@ -86,11 +103,25 @@ pub(crate) use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
 
-/// Absolute path to the named directory under `tests/fixtures`.
+/// Absolute path to the named directory under `tests/fixtures`, falling
+/// back to the `deslop-mcp` crate's fixture tree.
+///
+/// The fallback is the mirror of `deslop-mcp`'s `copied_fixture_named`,
+/// which resolves the other way. A corpus that proves a detection defect
+/// through the MCP surface proves the same defect through the CLI, and
+/// the two suites must read the *same* bytes: a second copy of the
+/// fixture would let one suite go green while the code it pins is still
+/// broken under the other.
 pub(crate) fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
+    let local = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
+        .join(name);
+    if local.is_dir() {
+        return local;
+    }
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../deslop-mcp/tests/fixtures")
         .join(name)
 }
 

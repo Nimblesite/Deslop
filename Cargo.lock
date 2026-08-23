@@ -486,6 +486,8 @@ dependencies = [
  "assert_cmd",
  "deslop-core",
  "serde_json",
+ "toml",
+ "tree-sitter",
 ]
 
 [[package]]

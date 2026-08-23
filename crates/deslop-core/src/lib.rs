@@ -34,6 +34,7 @@ pub mod lang;
 #[cfg(feature = "live")]
 pub mod live;
 pub mod lsh;
+pub mod observe;
 pub mod overlap;
 pub mod pair;
 pub mod paths;
@@ -56,7 +57,7 @@ pub mod state;
 pub mod tokens;
 pub mod version_contract;
 /// Wire-format models generated from `docs/models/live-ipc.td` by
-/// `scripts/typediagram-gen.mjs`. Always compiled (no feature gate)
+/// `scripts/typediagram/generate.mjs`. Always compiled (no feature gate)
 /// because the always-on `embedding::ollama` module re-exports
 /// `OllamaModelInfo` from here.
 pub mod wire_generated;

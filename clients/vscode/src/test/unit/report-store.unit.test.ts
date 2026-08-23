@@ -14,6 +14,7 @@ const DELTA_METRICS = metrics({
   duplicated_loc: 1046,
   duplication_percent: 11.2,
 });
+const EMBEDDING_MODEL_ID = "nomic-embed-text";
 
 /**
  * Applies one delta and returns the resulting report. Every applyDelta
@@ -223,14 +224,14 @@ suite("ReportStore", () => {
     store.onDidChange(() => {
       fired += 1;
     });
-    store.setPendingEmbeddingModel("nomic-embed-text");
-    assert.equal(store.current.pendingEmbeddingModel, "nomic-embed-text");
+    store.setPendingEmbeddingModel(EMBEDDING_MODEL_ID);
+    assert.equal(store.current.pendingEmbeddingModel, EMBEDDING_MODEL_ID);
     assert.equal(fired, 1);
   });
 
   test("setSnapshot clears any pending embedding model once a fresh report arrives", () => {
     const store = new ReportStore();
-    store.setPendingEmbeddingModel("nomic-embed-text");
+    store.setPendingEmbeddingModel(EMBEDDING_MODEL_ID);
     store.setSnapshot(emptyReport(), 1);
     assert.equal(store.current.pendingEmbeddingModel, null);
   });
@@ -244,7 +245,7 @@ suite("ReportStore", () => {
     store.setEmbeddingProgress({
       phase: "starting",
       provider_id: "ollama",
-      model_id: "nomic-embed-text",
+      model_id: EMBEDDING_MODEL_ID,
       done: 0,
       total: 200,
       percent: 0,
@@ -254,7 +255,7 @@ suite("ReportStore", () => {
     assert.deepEqual(store.current.embeddingProgress, {
       phase: "starting",
       provider_id: "ollama",
-      model_id: "nomic-embed-text",
+      model_id: EMBEDDING_MODEL_ID,
       done: 0,
       total: 200,
       percent: 0,
@@ -313,7 +314,7 @@ suite("ReportStore", () => {
     store.setEmbeddingProgress({
       phase: "complete",
       provider_id: "ollama",
-      model_id: "nomic-embed-text",
+      model_id: EMBEDDING_MODEL_ID,
       done: 64,
       total: 64,
       percent: 100,

@@ -30,7 +30,7 @@ Neither suite scans this directory in place — both copy `src/` into a throwawa
 ## Regenerating
 
 ```
-DESLOP_BLESS=1 cargo test -p deslop --test incremental_multilang_golden
+DESLOP_BLESS=1 cargo test -p deslop --test suite incremental_multilang_golden::
 ```
 
 The bless run rewrites `expected-report.json` and then fails on purpose, telling you to re-run without the variable. Regenerating is never the remedy on its own: `committed_multilang_golden_satisfies_the_authored_contract` checks the golden against the authored sources themselves — every occurrence must slice back out of `src/` and match its sibling byte-for-byte, every language must appear exactly once, weights must rank non-increasing, and the cold cache counters must be zero — so a golden blessed while a language was silently missing, or while the store was cross-serving trees, fails even though its bytes match.

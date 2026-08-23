@@ -1,4 +1,4 @@
-use crate::support::*;
+use super::support::*;
 
 // Two Rust files that are renamed (Type-2) clones of one function: the
 // copy renames the function and its parameter but keeps the body's

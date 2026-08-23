@@ -1,4 +1,4 @@
-use crate::support::*;
+use super::support::*;
 use std::fmt::Write as _;
 
 #[test]

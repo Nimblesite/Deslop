@@ -24,16 +24,12 @@
 //! near-duplicate, so the confidence must also stay act-now-worthy — the
 //! fix bounds the fusion, it does not erase the evidence.
 
-#[path = "cli/mock_ollama.rs"]
-mod mock_ollama;
-
 use std::path::Path;
 
+use crate::mock_ollama::MockOllama;
 use anyhow::Result;
-use mock_ollama::MockOllama;
 use serde_json::Value;
 
-mod common;
 use crate::common::{embeddings::run_mock_embedding_report, signals::*, *};
 
 /// Scans a private copy of just the LSH-plus-embedding pair from
@@ -86,7 +82,9 @@ fn assert_mid_band_evidence(scan_root: &Path, cluster: &Value) -> Result<()> {
 // rendered confidence. Today `fused()` clamps 0.00 + 0.30 + 0.95 to a
 // flat 1.000 — indistinguishable from a byte-proven verbatim copy.
 #[test]
-#[ignore = "GH #369: RED ON PURPOSE, and materially closer than it was. \
+#[ignore = "[SKIP-UNFINISHED] GH #369 [FUSION-SHARED-SUBTREE] \
+            docs/plans/rename-recall-plan.md — RED ON PURPOSE, and materially closer than \
+            it was. \
             The two embedding-only false positives are gone and the real \
             clone is found — `cluster_count` is now the expected 1, where \
             it used to be 2 with the genuine pair hidden. Two expectations \

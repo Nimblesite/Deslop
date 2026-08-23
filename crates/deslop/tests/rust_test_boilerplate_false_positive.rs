@@ -16,7 +16,6 @@ use std::{fs, path::Path, path::PathBuf};
 use anyhow::Result;
 use serde_json::Value;
 
-mod common;
 use crate::common::deslop_cmd;
 
 /// Path to the `deslop-core` test directory — the actual source of the

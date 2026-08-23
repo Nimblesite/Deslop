@@ -10,8 +10,6 @@
 //! own test files showed 100%) even though `report-for-file` carried no
 //! cluster for it at all.
 
-mod common;
-
 use crate::common::*;
 
 #[test]

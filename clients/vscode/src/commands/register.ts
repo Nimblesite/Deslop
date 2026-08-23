@@ -36,6 +36,24 @@ type ClientFactory = () => LanguageClient | undefined;
 
 const LSP_REFRESH_REPORT_COMMAND = "deslop.lsp.refreshReport";
 const LSP_RENDER_HTML_REPORT_COMMAND = "deslop.lsp.renderHtmlReport";
+const UTF8_ENCODING = "utf8";
+const WORKSPACE_EXECUTE_COMMAND_METHOD = "workspace/executeCommand";
+const LSP_CLIENT_NOT_READY_MESSAGE = "Deslop: LSP client is not ready.";
+const SHOW_ALL_LENSES_SETTING = "showAllLenses";
+const MARKDOWN_LANGUAGE = "markdown";
+const UNKNOWN_VALUE = "unknown";
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === "number";
+}
+
+function isObject(value: unknown): value is object {
+  return typeof value === "object" && value !== null;
+}
 
 interface CommandDeps {
   readonly context: vscode.ExtensionContext;
@@ -105,7 +123,7 @@ export function registerCommands(
 }
 
 export function refreshReport(clientOf: ClientFactory): Thenable<unknown> | undefined {
-  return clientOf()?.sendRequest("workspace/executeCommand", {
+  return clientOf()?.sendRequest(WORKSPACE_EXECUTE_COMMAND_METHOD, {
     command: LSP_REFRESH_REPORT_COMMAND,
     arguments: [],
   });
@@ -120,18 +138,18 @@ export function refreshReport(clientOf: ClientFactory): Thenable<unknown> | unde
 export async function openHtmlReport(clientOf: ClientFactory): Promise<void> {
   const client = clientOf();
   if (!client) {
-    void vscode.window.showInformationMessage("Deslop: LSP client is not ready.");
+    void vscode.window.showInformationMessage(LSP_CLIENT_NOT_READY_MESSAGE);
     return;
   }
   const html = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: "Deslop: rendering HTML report…" },
     () =>
-      client.sendRequest<string>("workspace/executeCommand", {
+      client.sendRequest<string>(WORKSPACE_EXECUTE_COMMAND_METHOD, {
         command: LSP_RENDER_HTML_REPORT_COMMAND,
         arguments: [],
       }),
   );
-  if (typeof html !== "string" || html.length === 0) {
+  if (!isString(html) || html.length === 0) {
     void vscode.window.showInformationMessage("Deslop: no HTML report available yet.");
     return;
   }
@@ -140,8 +158,8 @@ export async function openHtmlReport(clientOf: ClientFactory): Promise<void> {
 
 export async function toggleShowAllLenses(): Promise<void> {
   const cfg = vscode.workspace.getConfiguration("deslop");
-  const next = !cfg.get<boolean>("showAllLenses", false);
-  await cfg.update("showAllLenses", next, vscode.ConfigurationTarget.Workspace);
+  const next = !cfg.get<boolean>(SHOW_ALL_LENSES_SETTING, false);
+  await cfg.update(SHOW_ALL_LENSES_SETTING, next, vscode.ConfigurationTarget.Workspace);
 }
 
 export async function openOccurrenceTarget(target: unknown): Promise<void> {
@@ -151,7 +169,7 @@ export async function openOccurrenceTarget(target: unknown): Promise<void> {
 }
 
 export async function copyClusterContextById(store: ReportStore, id: unknown): Promise<void> {
-  const clusterId = typeof id === "string" ? id : String(id);
+  const clusterId = isString(id) ? id : String(id);
   const cluster = store.current.report?.clusters.find((c) => c.id === clusterId);
   if (!cluster) return;
   const rank = (store.current.report?.clusters.indexOf(cluster) ?? -1) + 1;
@@ -213,19 +231,19 @@ function occurrenceFromCommandTarget(target: unknown): ReportOccurrence | undefi
 }
 
 function isOccurrenceNode(target: unknown): target is OccurrenceNode {
-  if (typeof target !== "object" || target === null || !("occurrence" in target)) {
+  if (!isObject(target) || !("occurrence" in target)) {
     return false;
   }
   return isReportOccurrence(target.occurrence);
 }
 
 function isReportOccurrence(target: unknown): target is ReportOccurrence {
-  if (typeof target !== "object" || target === null) return false;
+  if (!isObject(target)) return false;
   const occurrence = target as Partial<ReportOccurrence>;
   return (
-    typeof occurrence.path === "string" &&
-    typeof occurrence.start_byte === "number" &&
-    typeof occurrence.end_byte === "number"
+    isString(occurrence.path) &&
+    isNumber(occurrence.start_byte) &&
+    isNumber(occurrence.end_byte)
   );
 }
 
@@ -264,8 +282,8 @@ function occurrenceAfterCommandIndex(
   occurrenceIndex: unknown,
 ): ReportOccurrence | undefined {
   if (
-    typeof clusterId !== "string" ||
-    typeof occurrenceIndex !== "number" ||
+    !isString(clusterId) ||
+    !isNumber(occurrenceIndex) ||
     !Number.isInteger(occurrenceIndex) ||
     occurrenceIndex < 0
   ) {
@@ -333,7 +351,7 @@ function clusterIdFromCompareTarget(
   store: ReportStore,
   target: unknown,
 ): string | undefined {
-  if (typeof target === "string") return target;
+  if (isString(target)) return target;
   if (isCompareTreeTarget(target)) return clusterIdForTreeNode(target, store);
   return undefined;
 }
@@ -345,13 +363,13 @@ function isCompareTreeTarget(
 }
 
 function isClusterNode(target: unknown): target is ClusterNode {
-  if (typeof target !== "object" || target === null || !("cluster" in target)) {
+  if (!isObject(target) || !("cluster" in target)) {
     return false;
   }
   const cluster = (target as Partial<ClusterNode>).cluster as
     | Partial<ReportCluster>
     | undefined;
-  return typeof cluster?.id === "string" && Array.isArray(cluster.occurrences);
+  return isString(cluster?.id) && Array.isArray(cluster.occurrences);
 }
 
 export async function compareWithCanonical(
@@ -400,7 +418,7 @@ export async function openSchemaDoc(
   const content =
     firstNonEmpty(packaged, remote, fallback) ?? "Schema doc unavailable.";
   const doc = await vscode.workspace.openTextDocument({
-    language: "markdown",
+    language: MARKDOWN_LANGUAGE,
     content,
   });
   await vscode.window.showTextDocument(doc, { preview: true });
@@ -412,7 +430,7 @@ async function fetchSchemaDocViaRpc(clientOf?: ClientFactory): Promise<string | 
   if (!client) return undefined;
   try {
     const text = await client.sendRequest<string>("deslop/reportSchemaDoc");
-    return typeof text === "string" && text.length > 0 ? text : undefined;
+    return isString(text) && text.length > 0 ? text : undefined;
   } catch {
     return undefined;
   }
@@ -424,7 +442,7 @@ async function readPackagedSchemaDoc(
   try {
     const uri = vscode.Uri.joinPath(ctx.extensionUri, "dist", "schema_doc.md");
     const bytes = await vscode.workspace.fs.readFile(uri);
-    const text = Buffer.from(bytes).toString("utf8");
+    const text = Buffer.from(bytes).toString(UTF8_ENCODING);
     return text.length > 0 ? text : undefined;
   } catch {
     return undefined;
@@ -432,7 +450,7 @@ async function readPackagedSchemaDoc(
 }
 
 function firstNonEmpty(...values: (string | undefined)[]): string | undefined {
-  return values.find((v) => typeof v === "string" && v.length > 0);
+  return values.find((value) => isString(value) && value.length > 0);
 }
 
 interface CpuPhaseRecord {
@@ -457,12 +475,12 @@ interface CpuReport {
 export async function openCpuReport(clientOf: ClientFactory): Promise<void> {
   const client = clientOf();
   if (!client) {
-    void vscode.window.showInformationMessage("Deslop: LSP client is not ready.");
+    void vscode.window.showInformationMessage(LSP_CLIENT_NOT_READY_MESSAGE);
     return;
   }
   const report = await client.sendRequest<CpuReport>("deslop/cpuReport");
   const doc = await vscode.workspace.openTextDocument({
-    language: "markdown",
+    language: MARKDOWN_LANGUAGE,
     content: renderCpuReport(report),
   });
   await vscode.window.showTextDocument(doc, { preview: true });
@@ -477,7 +495,7 @@ export function renderCpuReport(report: CpuReport): string {
   const lines = [
     "# Deslop CPU Report",
     "",
-    `- Current phase: ${report.current_phase ?? "unknown"}`,
+    `- Current phase: ${report.current_phase ?? UNKNOWN_VALUE}`,
     `- Pending watcher events: ${inFlight.pending_watcher_events ?? 0}`,
     `- Pending embedding requests: ${inFlight.pending_embed_requests ?? 0}`,
     `- In-progress parse batch: ${inFlight.in_progress_parse_batch ?? 0}`,
@@ -494,7 +512,7 @@ export function renderCpuReport(report: CpuReport): string {
     "|---|---:|---:|---:|---|",
     ...phases.map((phase) => {
       const files = (phase.files_touched ?? []).join(", ");
-      return `| ${phase.phase ?? "unknown"} | ${phase.started_at_ms ?? 0} | ${phase.duration_ms ?? 0} | ${phase.cpu_ms ?? 0} | ${files || "-"} |`;
+      return `| ${phase.phase ?? UNKNOWN_VALUE} | ${phase.started_at_ms ?? 0} | ${phase.duration_ms ?? 0} | ${phase.cpu_ms ?? 0} | ${files || "-"} |`;
     }),
   ];
   return lines.join("\n");
@@ -515,14 +533,14 @@ export function findClusterContaining(
 }
 
 export function byteToPosition(doc: vscode.TextDocument, byte: number): vscode.Position {
-  const buffer = Buffer.from(doc.getText(), "utf8");
-  const slice = buffer.slice(0, Math.min(byte, buffer.length)).toString("utf8");
+  const buffer = Buffer.from(doc.getText(), UTF8_ENCODING);
+  const slice = buffer.slice(0, Math.min(byte, buffer.length)).toString(UTF8_ENCODING);
   return doc.positionAt(slice.length);
 }
 
 export function utf8ByteOffset(doc: vscode.TextDocument, position: vscode.Position): number {
   return Buffer.byteLength(
     doc.getText(new vscode.Range(new vscode.Position(0, 0), position)),
-    "utf8",
+    UTF8_ENCODING,
   );
 }

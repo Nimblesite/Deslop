@@ -18,10 +18,11 @@
 
 use std::{collections::BTreeMap, collections::HashMap, hash::BuildHasher};
 
-use crate::state::FileId;
+use crate::{buckets::CONTENT_SUPPORT_FLOOR, state::FileId};
 
 use super::{
-    leaf_bytes, member_count, population, preserved_literal_count, vacuous_share, MemberContent,
+    frontier::{leaf_bytes, member_count, population, MemberContent, Population},
+    preserved_literal_count, vacuous_share,
 };
 
 /// Minimum occurrences of a substituted identifier pair before it counts
@@ -97,14 +98,17 @@ fn pair_rename_consistency<S: BuildHasher>(
     if canonical.keys.len() != member.keys.len() {
         return 0.0;
     }
-    let literals = population(&canonical.keys, &member.keys, true);
+    let literals = population(&canonical.keys, &member.keys, Population::Literal);
     let echoes = literal_echoes(canonical, member, sources);
     let echo_count: usize = echoes.values().sum();
-    let mapping = rename_mapping(&population(&canonical.keys, &member.keys, false), &echoes);
+    let mapping = rename_mapping(
+        &population(&canonical.keys, &member.keys, Population::Identifier),
+        &echoes,
+    );
     let consistent_literals = preserved_literal_count(&literals).saturating_add(echo_count);
     let anchors = consistent_literals.saturating_add(mapping.explained);
-    vacuous_share(consistent_literals, literals.len()).min(mapping.coverage)
-        * anchor_weight(anchors)
+    let consistency = vacuous_share(consistent_literals, literals.len()).min(mapping.coverage);
+    consistency * evidence_weight(consistency, anchors)
 }
 
 /// Rename-mapping evidence over one pair's aligned identifier positions
@@ -197,6 +201,52 @@ fn anchor_weight(anchors: usize) -> f64 {
     mass / (mass + RENAME_EVIDENCE_HALF_MASS)
 }
 
+/// The mass discount actually applied to one pair's rename proof, and
+/// gh #410's answer: **a rename the measurement has certified carries
+/// no doubt for the mass term to price.**
+///
+/// [`anchor_weight`] is an asymptote — it reaches `1.0` only in the
+/// limit — so multiplying it into the proof put a ceiling on the whole
+/// rename axis. With [`crate::buckets::RENAME_CONSISTENCY_DISCOUNT`]
+/// stacked on top, `fused >= 0.85` needed 68 affirming positions:
+/// unreachable at any body length a human writes, so the top agent band
+/// meant "byte-identical" instead of "do not write this copy", and a
+/// maximal Type-2 rename of real logic rendered `0.729`
+/// (`deslop/tests/fused_golden_bands.rs`). Two discounts were stacked
+/// to produce that, and only one of them was designed to.
+///
+/// `consistency` is `min(literal_consistency, coverage)`. At exactly
+/// `1.0` every aligned literal is preserved or echoes an elected
+/// substitution, and every *constrained* identifier position is either
+/// byte-identical or a bijection-explained substitution corroborated by
+/// repetition: the bijection is total, contradiction-free and
+/// literal-preserving, and nothing in the pair disputes it. The
+/// remaining doubt the mass term prices is coincidence — and that doubt
+/// is discharged by mass, which is the same quantity. So the
+/// certification is granted only where the mass term **already vouches
+/// for the pair on its own**, at [`CONTENT_SUPPORT_FLOOR`]: certifying
+/// never promotes a cluster the mass discount would have demoted, it
+/// only stops charging a proven rename for evidence it is not missing.
+/// Below that bar — and for every pair carrying a single contradiction
+/// — the smooth discount applies unchanged, so an anchor-poor
+/// forwarding scaffold (its subject name twice plus one collaborator,
+/// mass 3, weight 3/7) stays exactly where
+/// `[REPAIR-RENAME-ANCHOR-MASS]` left it.
+///
+/// The result is monotone: completing a rename can only raise
+/// `consistency` and add anchors, so certification can only switch on
+/// (`rename_literal_monotonicity.rs`). `RENAME_CONSISTENCY_DISCOUNT`
+/// still separates a certified rename from byte proof, so proven
+/// copy-paste keeps `fused == 1.0` and a certified rename tops out
+/// below it ([FUSION-CONTENT-GATE]).
+fn evidence_weight(consistency: f64, anchors: usize) -> f64 {
+    let weight = anchor_weight(anchors);
+    if consistency >= 1.0 && weight >= CONTENT_SUPPORT_FLOOR {
+        return 1.0;
+    }
+    weight
+}
+
 /// Literal echoes of the elected identifier substitutions (#409), as a
 /// per-substitution count: an aligned literal position whose bytes
 /// transform into the partner's bytes exactly by one bijection-explained
@@ -210,7 +260,7 @@ fn literal_echoes<S: BuildHasher>(
     member: &MemberContent,
     sources: &HashMap<FileId, Vec<u8>, S>,
 ) -> BTreeMap<(u64, u64), usize> {
-    let identifiers = population(&canonical.keys, &member.keys, false);
+    let identifiers = population(&canonical.keys, &member.keys, Population::Identifier);
     let bijection = ModalBijection::over(&substituted_pairs(&identifiers));
     let substitutions = explained_substitution_bytes(canonical, member, &bijection, sources);
     let mut echoes: BTreeMap<(u64, u64), usize> = BTreeMap::new();
@@ -239,7 +289,11 @@ fn substituted_literal_positions(canonical: &MemberContent, member: &MemberConte
         .iter()
         .zip(member.keys.iter())
         .enumerate()
-        .filter(|(_, (left, right))| left.literal && right.literal && left.key != right.key)
+        .filter(|(_, (left, right))| {
+            left.population == Population::Literal
+                && right.population == Population::Literal
+                && left.key != right.key
+        })
         .map(|(index, _)| index)
         .collect()
 }
@@ -260,7 +314,11 @@ fn explained_substitution_bytes<'src, S: BuildHasher>(
     let mut out: Vec<SubstitutionBytes<'src>> = Vec::new();
     for (index, (left, right)) in canonical.keys.iter().zip(member.keys.iter()).enumerate() {
         let keys = (left.key, right.key);
-        if left.literal || right.literal || left.key == right.key || !bijection.explains(&keys) {
+        if left.population != Population::Identifier
+            || right.population != Population::Identifier
+            || left.key == right.key
+            || !bijection.explains(&keys)
+        {
             continue;
         }
         if out.iter().any(|(seen, _)| *seen == keys) {
@@ -274,32 +332,64 @@ fn explained_substitution_bytes<'src, S: BuildHasher>(
     out
 }
 
-/// True when replacing every occurrence of `from` in `left` with `to`
-/// yields exactly `right`, with at least one occurrence replaced. Pure
-/// byte-content equality under one substitution — no pattern language,
-/// no tokenisation; the leaves being compared were already isolated by
-/// the AST.
+/// True when replacing the *symbol-boundary* occurrences of `from` in
+/// `left` with `to` yields exactly `right`, with at least one occurrence
+/// replaced. Pure byte-content equality under one substitution — no
+/// pattern language, no tokenisation; the leaves being compared were
+/// already isolated by the AST.
+///
+/// Replacing every raw byte occurrence instead accepted arbitrary data
+/// as rename proof: under an elected `a -> x` substitution, the literal
+/// `"banana"` transforms into `"bxnxnx"`, so a string whose payload
+/// merely *contains* the substituted bytes corroborated the rename it
+/// contradicts. Repeated across enough identifier positions that cleared
+/// [`CONTENT_SUPPORT_FLOOR`], it certified `rename_consistency = 1.0`
+/// for code whose literal data had changed. An echo is a *symbol* echo:
+/// the bytes have to occupy a place a symbol reference could occupy —
+/// `"OrderService"`, a name inside a path or a message — never the
+/// inside of a longer word ([REPAIR-RENAME-LITERAL-ECHO], gh #409).
 fn replaced_matches(left: &[u8], from: &[u8], to: &[u8], right: &[u8]) -> bool {
     let mut expected: Vec<u8> = Vec::with_capacity(right.len());
-    let mut rest = left;
+    let mut cursor = 0_usize;
     let mut replaced = false;
-    while let Some(offset) = find_bytes(rest, from) {
-        let Some((head, tail)) = split_around(rest, offset, from.len()) else {
+    while let Some(start) = next_occurrence(left, from, cursor) {
+        let Some(head) = left.get(cursor..start) else {
             break;
         };
         expected.extend_from_slice(head);
-        expected.extend_from_slice(to);
-        rest = tail;
-        replaced = true;
+        let boundary = at_symbol_boundary(left, start, from.len());
+        expected.extend_from_slice(if boundary { to } else { from });
+        replaced = replaced || boundary;
+        cursor = start.saturating_add(from.len());
     }
-    expected.extend_from_slice(rest);
+    expected.extend_from_slice(left.get(cursor..).unwrap_or_default());
     replaced && expected == right
 }
 
-/// The bytes before `start` and after `start + len`, `None` only if the
-/// window overruns the slice.
-fn split_around(bytes: &[u8], start: usize, len: usize) -> Option<(&[u8], &[u8])> {
-    Some((bytes.get(..start)?, bytes.get(start.saturating_add(len)..)?))
+/// First offset at or after `from_index` where `needle` occurs in
+/// `haystack`, `None` when there is none left.
+fn next_occurrence(haystack: &[u8], needle: &[u8], from_index: usize) -> Option<usize> {
+    let offset = find_bytes(haystack.get(from_index..)?, needle)?;
+    Some(from_index.saturating_add(offset))
+}
+
+/// True when the window `[start, start + len)` is delimited on both
+/// sides by a byte that cannot continue an identifier — the only place
+/// inside a literal payload where a symbol *reference* can sit. The
+/// quote characters that bound a string leaf count as delimiters, so a
+/// literal that is exactly the renamed symbol still echoes it.
+fn at_symbol_boundary(bytes: &[u8], start: usize, len: usize) -> bool {
+    let before = start.checked_sub(1).and_then(|index| bytes.get(index));
+    let after = bytes.get(start.saturating_add(len));
+    !before.is_some_and(|byte| is_word_byte(*byte))
+        && !after.is_some_and(|byte| is_word_byte(*byte))
+}
+
+/// True for a byte that continues an identifier-like word: ASCII
+/// alphanumerics and `_`, plus every non-ASCII byte, since a UTF-8 word
+/// continues through its lead and continuation bytes.
+fn is_word_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_' || !byte.is_ascii()
 }
 
 /// First byte offset of `needle` in `haystack`, `None` when absent or

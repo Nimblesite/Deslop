@@ -8,8 +8,6 @@
 //! diff input it cannot honour — refusals are usage errors (exit 2),
 //! never analysis failures, and never a silently empty scope.
 
-mod common;
-
 use std::fs;
 
 use crate::common::{diff_scope::*, field, fixture, load_json, Result};

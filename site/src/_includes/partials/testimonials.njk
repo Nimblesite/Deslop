@@ -1,0 +1,43 @@
+{#- Testimonial band — shared by the en (/) and zh (/zh/) home pages so the
+    markup lives in exactly one place. Quotes, attribution and the merged
+    pull-request evidence come from _data/testimonials.js (single source of
+    truth); section copy comes from i18n.json (testimonials.*) keyed by the
+    page language. Quotes stay in the language they were written in. -#}
+{% set currentLang = lang | default('en') %}
+<section class="testimonials" aria-labelledby="testimonials-title">
+  <div class="testimonials__head">
+    <div class="eyebrow-chip"><span>{{ "testimonials.eyebrow" | t(currentLang) | default("Field report") }}</span></div>
+    <h2 class="testimonials__title" id="testimonials-title">{{ "testimonials.title" | t(currentLang) | default("Findings that ship.") }}</h2>
+  </div>
+  <ul class="testimonials__list">
+    {% for item in testimonials %}
+    <li class="testimonial">
+      <figure class="testimonial__figure">
+        <blockquote class="testimonial__quote" cite="{{ item.sourceUrl }}">{{ item.quote }}</blockquote>
+        <figcaption class="testimonial__by">
+          <a class="testimonial__author" href="{{ item.authorUrl }}" target="_blank" rel="noopener noreferrer">{{ item.author }}</a>
+          <span class="testimonial__role">{{ item.role[currentLang] | default(item.role.en) }}</span>
+          <a class="testimonial__source" href="{{ item.sourceUrl }}" target="_blank" rel="noopener noreferrer">
+            <svg class="testimonial__mark" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117Z"/></svg>
+            {{ item.handle }} · {{ item.sourceDate }}
+          </a>
+        </figcaption>
+      </figure>
+      <div class="testimonial__evidence">
+        <p class="testimonial__note">{{ item.evidence.note[currentLang] | default(item.evidence.note.en) }}</p>
+        <ul class="testimonial__prs">
+          {% for pullRequest in item.evidence.pullRequests %}
+          <li>
+            <a class="pr-chip" href="{{ pullRequest.url }}" target="_blank" rel="noopener noreferrer">
+              <span class="pr-chip__repo">{{ pullRequest.repo }}</span>
+              <span class="pr-chip__loc">&minus;{{ pullRequest.linesRemoved }} {{ "testimonials.loc" | t(currentLang) | default("LOC") }}</span>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+        <a class="testimonial__reaction" href="{{ item.evidence.sourceUrl }}" target="_blank" rel="noopener noreferrer">{{ item.evidence.quote }}</a>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</section>

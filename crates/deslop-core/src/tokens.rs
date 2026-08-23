@@ -252,8 +252,14 @@ fn collect_collapsed_leaves(
     for child in &node.children {
         collect_collapsed_leaves(child, out);
     }
+    // [PIPELINE-NORMALIZE-AST-OPERATOR] An operator leaf is a frontier
+    // position like any other collapsed leaf. Its kind already carries
+    // the token, so members that add and subtract disagree in the
+    // digest; the frontier position is what lets the content stage say
+    // *which* positions disagreed rather than only that the shapes did.
     let collapsed = node.kind == crate::lang::shared::IDENTIFIER_KIND
-        || node.kind == crate::lang::shared::LITERAL_KIND;
+        || node.kind == crate::lang::shared::LITERAL_KIND
+        || crate::lang::shared::is_operator_kind(node.kind);
     if collapsed && out.len() == frontier {
         out.push((node.kind, node.byte_range));
     }

@@ -86,6 +86,15 @@ intellijPlatformTesting {
             }
             task {
                 useJUnitPlatform()
+                // The borrowed `test` classpath below includes jars that
+                // :deslop-lsp4ij:prepareTestSandbox stages into the shared
+                // plugins-test sandbox. Consuming another task's outputs
+                // without a declared edge fails Gradle's implicit-dependency
+                // validation whenever `test` and `integrationTest` are
+                // requested in one invocation — exactly what CI runs — and
+                // would leave the sandbox absent on a lone `integrationTest`
+                // run. dependsOn fixes both.
+                dependsOn(tasks.named("prepareTestSandbox"))
                 testClassesDirs = integrationTest.output.classesDirs
                 // CRUCIAL: IPGP's test runtime defaults plugins on idea.plugins.path to the core
                 // (flat test) classloader, which would resolve the plugin's classes off THIS

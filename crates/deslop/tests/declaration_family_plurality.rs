@@ -24,7 +24,6 @@
 
 use anyhow::Result;
 
-mod common;
 use crate::common::{verdict::*, *};
 
 #[test]

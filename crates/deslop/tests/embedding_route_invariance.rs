@@ -22,15 +22,10 @@
 //! bucket. A single hand-built cluster could only pin one corner of
 //! that; this pins every cluster of every corpus swept.
 
-#[path = "cli/mock_ollama.rs"]
-mod mock_ollama;
-
-mod common;
-
 use std::collections::BTreeMap;
 
+use crate::mock_ollama::MockOllama;
 use anyhow::{Context, Result};
-use mock_ollama::MockOllama;
 
 use crate::common::{
     cluster_bucket, cluster_file_set, clusters, embeddings::run_mock_embedding_report, field,
@@ -99,7 +94,8 @@ fn published(report: &serde_json::Value) -> Published {
 /// C# Type-3 near-miss carve-out, and every other cosine-reading
 /// filter.
 #[test]
-#[ignore = "GH #356: ollama-provider suite, excluded from the release gate. RED ON PURPOSE — \
+#[ignore = "[SKIP-UNFINISHED] GH #356 [FUSION-CLUSTER-SIGNALS] \
+            docs/plans/embedding-accuracy-plan.md — RED ON PURPOSE — \
             the surviving half of #356, and a measured false negative, not a flake. \
             `ts-mixed-band`: ledger_a/ledger_b are one Merkle class (fingerprints 93+277, \
             `structural = 1.00`) and publish `structural_only` with embeddings off. With \

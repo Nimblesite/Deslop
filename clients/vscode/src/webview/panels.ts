@@ -15,6 +15,10 @@ import { Report, ReportOccurrence } from "../types/report";
 
 type PanelKind = "cluster" | "report" | "duplication";
 
+const CLUSTER_PANEL_KIND: PanelKind = "cluster";
+const REPORT_PANEL_KIND: PanelKind = "report";
+const DUPLICATION_PANEL_KIND: PanelKind = "duplication";
+
 interface WebviewPanelState {
   panel: vscode.WebviewPanel;
   kind: PanelKind;
@@ -32,14 +36,14 @@ export function openClusterPanel(
   const existing = activePanels.get(key);
   if (existing) return existing.panel.reveal(vscode.ViewColumn.Active);
   const anchor = anchorForClusterId(store.current.report, clusterId);
-  const panel = createPanel(context, "cluster", `Deslop: cluster ${clusterId}`);
-  const unsub = wirePanel(panel, store, "cluster", { anchor });
+  const panel = createPanel(context, CLUSTER_PANEL_KIND, `Deslop: cluster ${clusterId}`);
+  const unsub = wirePanel(panel, store, CLUSTER_PANEL_KIND, { anchor });
   wireMessages(panel, store);
   panel.onDidDispose(() => {
     unsub.dispose();
     activePanels.delete(key);
   });
-  activePanels.set(key, { panel, kind: "cluster", storeSubscription: unsub });
+  activePanels.set(key, { panel, kind: CLUSTER_PANEL_KIND, storeSubscription: unsub });
 }
 
 // [VSIX-REPORT-WEBVIEW] Full report webview — the host pushes report
@@ -48,14 +52,14 @@ export function openReportPanel(context: vscode.ExtensionContext, store: ReportS
   const key = "report";
   const existing = activePanels.get(key);
   if (existing) return existing.panel.reveal(vscode.ViewColumn.Active);
-  const panel = createPanel(context, "report", "Deslop: report");
-  const unsub = wirePanel(panel, store, "report");
+  const panel = createPanel(context, REPORT_PANEL_KIND, "Deslop: report");
+  const unsub = wirePanel(panel, store, REPORT_PANEL_KIND);
   wireMessages(panel, store);
   panel.onDidDispose(() => {
     unsub.dispose();
     activePanels.delete(key);
   });
-  activePanels.set(key, { panel, kind: "report", storeSubscription: unsub });
+  activePanels.set(key, { panel, kind: REPORT_PANEL_KIND, storeSubscription: unsub });
 }
 
 // [VSIX-METRICS-REPORT] Duplication report — the headline of the
@@ -68,14 +72,14 @@ export function openDuplicationReportPanel(
   const key = "duplication";
   const existing = activePanels.get(key);
   if (existing) return existing.panel.reveal(vscode.ViewColumn.Active);
-  const panel = createPanel(context, "duplication", "Deslop: Duplication");
-  const unsub = wirePanel(panel, store, "duplication");
+  const panel = createPanel(context, DUPLICATION_PANEL_KIND, "Deslop: Duplication");
+  const unsub = wirePanel(panel, store, DUPLICATION_PANEL_KIND);
   wireMessages(panel, store);
   panel.onDidDispose(() => {
     unsub.dispose();
     activePanels.delete(key);
   });
-  activePanels.set(key, { panel, kind: "duplication", storeSubscription: unsub });
+  activePanels.set(key, { panel, kind: DUPLICATION_PANEL_KIND, storeSubscription: unsub });
 }
 
 function createPanel(

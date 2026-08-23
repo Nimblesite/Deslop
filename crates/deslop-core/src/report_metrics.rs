@@ -22,7 +22,7 @@ use crate::{
 
 // `RepoMetrics`, `DiffMetrics`, `ThresholdSummary`, and
 // `ThresholdSource` are generated from `docs/models/live-ipc.td` by
-// `scripts/typediagram-gen.mjs`. The data shapes live in
+// `scripts/typediagram/generate.mjs`. The data shapes live in
 // `crate::wire_generated`; the constructors and `Default` impl below
 // stay here.
 pub use crate::wire_generated::{

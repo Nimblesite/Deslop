@@ -5,8 +5,6 @@
 //! loss the type-safety backstop cannot catch. Writes to span-*bound*
 //! names stay extractable: they vacate with the span.
 
-mod common;
-
 use anyhow::{anyhow, Result};
 
 use crate::common::clusters::needle_cluster_plan;

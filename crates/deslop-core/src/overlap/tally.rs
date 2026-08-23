@@ -1,0 +1,126 @@
+//! [PERF-FLUTTER-TODO-OBSERVABILITY] What one shared-subtree rescue pass
+//! did, counted rather than narrated.
+//!
+//! The rescue loop used to emit one `tracing::debug!` per measured pair.
+//! On the pinned Flutter corpus that was 793,076 records — 72 MB of log by
+//! the halfway point — and the formatting and I/O measurably slowed the
+//! very stage being diagnosed, while burying the stage events a reader
+//! needs under repetition. Counts at every gate say strictly more, in a
+//! volume bounded by how long the stage runs rather than by how much work
+//! it does.
+
+use std::time::Instant;
+
+use crate::observe::{bump, elapsed_ms};
+
+use super::MeasureStats;
+
+/// How often the rescue loop reports progress, counted in pairs measured.
+///
+/// [PERF-FLUTTER-TODO-OBSERVABILITY] A stage that runs for a quarter of an
+/// hour has to be distinguishable from a hang, but one record per pair is
+/// not progress reporting. An interval keeps the record count bounded by
+/// how long the stage runs rather than proportional to the work it does.
+/// Counted on measured pairs specifically: those are the ones that cost
+/// alignment time, so the cadence tracks the work rather than the scan.
+const RESCUE_PROGRESS_INTERVAL: u64 = 50_000;
+
+/// What one rescue pass did, counted rather than narrated.
+///
+/// Counts at each gate, not just the last one: "measured 793,076 pairs"
+/// says nothing about whether the population is large because the
+/// eligibility test is too loose or because the corpus genuinely has that
+/// many cross-file near-misses. Separating scanned from eligible from
+/// cross-file from measured from rescued answers that from one record.
+#[derive(Debug)]
+pub(super) struct RescueTally {
+    /// Candidate pairs examined, whatever became of them.
+    scanned: u64,
+    /// Pairs the fused threshold would drop despite token corroboration.
+    eligible: u64,
+    /// Eligible pairs whose endpoints live in different files — the
+    /// population handed to the measurer.
+    cross_file: u64,
+    /// Cross-file pairs the measurer answered, from any route.
+    measured: u64,
+    /// Measured pairs whose overlap cleared
+    /// [`crate::pair::SHARED_SUBTREE_MIN_OVERLAP`] — the pairs the
+    /// rescue actually admits. Distinct from `measured`, which counts
+    /// every pair the route looked at: conflating the two reports a
+    /// rescue population that never existed.
+    rescued: u64,
+    /// Stage start, for the throughput a reader needs to tell slow from
+    /// stuck.
+    started: Instant,
+}
+
+impl RescueTally {
+    /// Opens a tally, starting the stage clock.
+    pub(super) fn new() -> Self {
+        Self {
+            scanned: 0,
+            eligible: 0,
+            cross_file: 0,
+            measured: 0,
+            rescued: 0,
+            started: Instant::now(),
+        }
+    }
+
+    /// Records one candidate examined.
+    pub(super) fn scan(&mut self) {
+        bump(&mut self.scanned);
+    }
+
+    /// Records one pair past the eligibility gate.
+    pub(super) fn eligible(&mut self) {
+        bump(&mut self.eligible);
+    }
+
+    /// Records one pair past the cross-file gate.
+    pub(super) fn cross_file(&mut self) {
+        bump(&mut self.cross_file);
+    }
+
+    /// Records one measured pair and whether it cleared the admission
+    /// floor, reporting progress on schedule.
+    pub(super) fn measure(&mut self, rescued: bool, measure: MeasureStats) {
+        bump(&mut self.measured);
+        if rescued {
+            bump(&mut self.rescued);
+        }
+        if self.measured.checked_rem(RESCUE_PROGRESS_INTERVAL) == Some(0) {
+            self.report("shared-subtree rescue in progress", measure);
+        }
+    }
+
+    /// Emits the pass's totals. Always emitted, including when the stage
+    /// found nothing eligible — an absent event and an empty population
+    /// are otherwise indistinguishable in a log.
+    pub(super) fn report_total(&self, measure: MeasureStats) {
+        self.report("shared-subtree rescue overlaps measured", measure);
+    }
+
+    /// One aggregate record. `info`, not `debug`: the whole point is that
+    /// a default-level run of a corpus-scale repository can be told apart
+    /// from a hung one, and the Flutter run that prompted this emitted
+    /// nothing at `info` for fifteen minutes.
+    fn report(&self, message: &'static str, measure: MeasureStats) {
+        tracing::info!(
+            scanned = self.scanned,
+            eligible = self.eligible,
+            cross_file = self.cross_file,
+            measured = self.measured,
+            rescued_pairs = self.rescued,
+            alignments = measure.alignments,
+            credit_fallbacks = measure.credit_fallbacks,
+            hash_equal = measure.hash_equal,
+            exact_hits = measure.exact_hits,
+            bound_hits = measure.bound_hits,
+            bound_skips = measure.bound_skips,
+            unresolved = measure.unresolved,
+            elapsed_ms = elapsed_ms(self.started),
+            message
+        );
+    }
+}

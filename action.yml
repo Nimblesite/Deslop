@@ -165,13 +165,15 @@ runs:
       if: inputs.diff == '-'
       shell: bash
       run: |
-        echo "::error::The diff input cannot be \"-\". A composite action has no stdin to read a patch from, so Deslop would measure an empty diff and report a false pass. Write the patch to a file and pass its path — for example: git diff origin/\${{ github.base_ref }}...HEAD > /tmp/pr.diff"
+        printf '::error::The diff input cannot be "-". A composite action has no stdin to read a patch from, so Deslop would measure an empty diff and report a false pass. Write the patch to a file and pass its path — for example: git diff origin/%s...HEAD > /tmp/pr.diff\n' "${BASE_REF:-main}"
         exit 2
+      env:
+        BASE_REF: ${{ github.base_ref }}
 
     - name: Resolve the deslop release
       id: resolve
       shell: bash
-      run: node "${GITHUB_ACTION_PATH}/scripts/action-resolve-artifact.mjs" "${RUNNER_OS}" "${RUNNER_ARCH}" "${VERSION_INPUT}" "${ACTION_REF}"
+      run: node "${GITHUB_ACTION_PATH}/scripts/actions/action-resolve-artifact.mjs" "${RUNNER_OS}" "${RUNNER_ARCH}" "${VERSION_INPUT}" "${ACTION_REF}"
       env:
         VERSION_INPUT: ${{ inputs.version }}
         ACTION_REF: ${{ github.action_ref }}
@@ -193,7 +195,7 @@ runs:
     - name: Verify the archive checksum
       shell: bash
       run: |
-        node "${GITHUB_ACTION_PATH}/scripts/action-verify-checksum.mjs" \
+        node "${GITHUB_ACTION_PATH}/scripts/actions/action-verify-checksum.mjs" \
           "${RUNNER_TEMP}/deslop/${ARCHIVE}" "${RUNNER_TEMP}/deslop/${ARCHIVE}.sha256"
       env:
         ARCHIVE: ${{ steps.resolve.outputs.archive }}
@@ -215,7 +217,7 @@ runs:
       # input a say in where later steps resolve their executables from. The
       # staged directory is therefore moved to a fixed `bin` name and only that
       # constant is exported. Enforced with an error by
-      # `scripts/verify-env-path-writes.mjs` ([ACTION-ENVPATH]).
+      # `scripts/actions/verify-env-path-writes.mjs` ([ACTION-ENVPATH]).
       #
       # `mv` doubles as the layout assertion — a release repackaged without the
       # versioned top-level directory fails here instead of silently exporting
@@ -324,7 +326,7 @@ runs:
       if: inputs.nojson != 'true'
       shell: bash
       run: |
-        node "${GITHUB_ACTION_PATH}/scripts/action-read-outputs.mjs" "${OUTPUT}" "${EXIT_CODE}" "${ONLY_CHANGED}"
+        node "${GITHUB_ACTION_PATH}/scripts/actions/action-read-outputs.mjs" "${OUTPUT}" "${EXIT_CODE}" "${ONLY_CHANGED}"
       env:
         OUTPUT: ${{ inputs.output }}
         EXIT_CODE: ${{ steps.run.outputs.exit-code }}

@@ -7,8 +7,8 @@
 
 use deslop_test_support::write_dart_data_table_fixture;
 
-use crate::language_sections::{RUST_A, RUST_B};
-use crate::support::*;
+use super::language_sections::{RUST_A, RUST_B};
+use super::support::*;
 
 // Two byte-identical (Type-1) copies of one function — saturates both
 // the structural and token signals, routing to the `identical` bucket

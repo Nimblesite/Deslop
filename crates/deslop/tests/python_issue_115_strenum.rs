@@ -5,8 +5,6 @@
 //! distinct closed discriminator. After identifier normalisation they
 //! cluster as duplicates. The cluster filter must drop them.
 
-mod common;
-
 use crate::common::*;
 
 #[test]

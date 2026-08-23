@@ -39,8 +39,40 @@ pub(super) const MAGIC: u32 = 0xC0DE_D180;
 /// [`super::TOOL_VERSION`]: the workspace version is a permanently-
 /// reused development string (`0.0.0-dev`), so the directory partition
 /// alone cannot invalidate blobs across a semantic change
-/// ([PIPELINE-INCREMENTAL-INTEGRITY]).
-pub(super) const SEMANTIC_EPOCH: u32 = 1;
+/// ([PIPELINE-INCREMENTAL-INTEGRITY]). A release build is stamped with
+/// its own version and therefore partitioned on its own, so a forgotten
+/// bump can only ever mislead a development store.
+///
+/// **This is the one invalidation lever no equivalence test can pull on
+/// its own**, because a stale blob makes the warm *and* cold sides of a
+/// comparison stale together. What catches a forgotten bump is the set
+/// of goldens that pin the pre-change analysis and go red on any change
+/// to its meaning — the per-language `Sample.expected.ast` dumps
+/// ([PIPELINE-NORMALIZE-AST], `deslop/tests/cli/cache_and_debug.rs`) for
+/// parsing and normalisation, and the two committed report goldens
+/// (`report_golden.rs`, `incremental_multilang_golden.rs`) for
+/// fingerprinting and signature construction. Each names this constant
+/// in its failure message, so the change that must bump it is also the
+/// change that is told to.
+/// Epoch 2: [PIPELINE-NORMALIZE-AST-OPERATOR] keeps behaviour-bearing
+/// anonymous tokens as operator leaves, so the normalised tree of an
+/// unchanged file changed meaning.
+///
+/// Epoch 3: the same section stopped collapsing those leaves to one
+/// `__op__` kind and gave each one its own token (`__op__+`). Epoch 2
+/// alone is not enough to cover it — a store warmed under epoch 2 holds
+/// trees in which `base + fee` and `base - fee` still hash identically,
+/// so a warm run would keep certifying an operator swap as duplication
+/// long after the normalisation that produced it was replaced.
+///
+/// Epoch 4: the same section stopped emitting an operator leaf when the
+/// parent production makes the token framing rather than behaviour —
+/// `Vec<T>`'s angle brackets, a Rust closure's `|` binding pipes, a JSX
+/// tag's `<`/`>`. A store warmed under epoch 3 holds trees carrying those
+/// leaves, so a warm run would keep both the inflated node counts and the
+/// LSH bands they shifted, and would go on publishing the gh #147
+/// `Vec<&str>` type annotations as `identical` at `fused 1.00`.
+pub(super) const SEMANTIC_EPOCH: u32 = 4;
 
 /// Bytes of blob header preceding the payload: the magic plus the
 /// 32-byte binding digest.

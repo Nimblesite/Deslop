@@ -5,8 +5,8 @@
 //! is no longer a production provider, so the same flows are now
 //! driven against an in-process mock Ollama HTTP server.
 
+use super::support::*;
 use crate::mock_ollama::MockOllama;
-use crate::support::*;
 
 /// Runs the full ollama embedding pass for `mode` (`required`/`auto`)
 /// against `scan_root`, writing to `output_prefix`, and asserts the CLI

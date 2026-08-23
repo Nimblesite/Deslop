@@ -19,7 +19,7 @@
 use deslop_core::{buckets::has_saturating_shape_evidence, wire_generated::ReportSignals};
 use serde_json::Value;
 
-use crate::corpus::{reports_clone_spanning, Failure};
+use crate::corpus::{cluster_shows_span, reports_clone_spanning, visible_clusters, Failure};
 
 /// Minimum demoted clusters before [`check_type2_gate_liveness`] will judge a
 /// report.
@@ -202,6 +202,136 @@ fn rendered_signals(cluster: &Value) -> ReportSignals {
     }
 }
 
+/// Buckets a byte-identical clone may legitimately render in.
+///
+/// Exactly one. [CORPUS-RECALL] defines `must_find` as duplication a human
+/// confirmed **byte for byte**, with the diff that proved it, so anything
+/// short of `identical` is the engine disagreeing with a verified fact
+/// about the source — the same defect class as missing the pair outright,
+/// only harder to see because the report still shows something.
+const VERBATIM_BUCKET: &str = "identical";
+
+/// [CORPUS-RECALL] `recall` and `recall_quality` — every hand-verified
+/// byte-identical duplicate in `must_find` must be reported, shown, labelled
+/// `identical`, and ranked where a user would find it.
+///
+/// `recall` alone used to be the whole assertion, and it asked only that
+/// *some* cluster's occurrence paths covered the curated files. A 137-line
+/// byte-identical clone that rendered `loosely_similar`, hid one of its two
+/// occurrences and ranked #900 satisfied it completely — while the Type-2
+/// check next door already demanded span *plus* bucket *plus* visibility for
+/// the strictly harder case. The byte-identical case is the easier proof and
+/// held the weaker contract; `recall_quality` closes that.
+///
+/// An empty list asserts nothing, and an entry naming fewer than two files
+/// fails rather than passing vacuously.
+pub fn check_curated_recall(manifest: &Value, report: &Value, failures: &mut Vec<Failure>) {
+    let entries = manifest
+        .get("must_find")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    for entry in entries {
+        check_one_curated_clone(entry, report, failures);
+    }
+}
+
+/// Judges one curated `must_find` entry against the rendered report.
+fn check_one_curated_clone(entry: &Value, report: &Value, failures: &mut Vec<Failure>) {
+    let files = curated_files(entry);
+    let why = entry.get("why").and_then(Value::as_str).unwrap_or("");
+    if !reports_clone_spanning(report, &files) {
+        failures.push(Failure::new(
+            "recall",
+            format!("no cluster spans {files:?}. Verified duplicate: {why}"),
+        ));
+        return;
+    }
+    let ranked: Vec<(usize, &Value)> = visible_clusters(report)
+        .into_iter()
+        .enumerate()
+        .filter(|(_, cluster)| cluster_shows_span(cluster, &files))
+        .collect();
+    let Some((rank, cluster)) = ranked
+        .iter()
+        .find(|(_, cluster)| in_set(cluster, &[VERBATIM_BUCKET]))
+    else {
+        failures.push(Failure::new(
+            "recall_quality",
+            format!(
+                "a cluster spans {files:?} but no *shown* `{VERBATIM_BUCKET}` cluster does \
+                 — the verified byte-identical pair was demoted to {buckets:?}, or one of \
+                 its occurrences is hidden and the user never sees the pair. Verified \
+                 duplicate: {why}",
+                buckets = ranked
+                    .iter()
+                    .map(|(_, cluster)| bucket_of(cluster))
+                    .collect::<Vec<_>>(),
+            ),
+        ));
+        return;
+    };
+    check_rank_ceiling(entry, *rank, cluster, &files, why, failures);
+}
+
+/// Applies the entry's optional `max_rank`. A curated 137-line clone ranking
+/// below the scaffolding is a ranking defect the gate should name, not a
+/// number it should print.
+fn check_rank_ceiling(
+    entry: &Value,
+    rank: usize,
+    cluster: &Value,
+    files: &[String],
+    why: &str,
+    failures: &mut Vec<Failure>,
+) {
+    let Some(ceiling) = entry.get("max_rank").and_then(Value::as_u64) else {
+        return;
+    };
+    let ceiling = usize::try_from(ceiling).unwrap_or(usize::MAX);
+    if rank > ceiling {
+        failures.push(Failure::new(
+            "recall_quality",
+            format!(
+                "the verified duplicate spanning {files:?} is reported, but ranks {rank} \
+                 against a curated ceiling of {ceiling}. Ranking is the product: a finding \
+                 a user never scrolls to is a finding they do not get. Bucket \
+                 {bucket}, size {size}. Verified duplicate: {why}",
+                bucket = bucket_of(cluster),
+                size = cluster
+                    .get("size")
+                    .and_then(Value::as_u64)
+                    .unwrap_or_default(),
+            ),
+        ));
+    }
+}
+
+/// The entry's curated file list. An entry naming fewer than two files
+/// yields an empty list, which every predicate here refuses.
+fn curated_files(entry: &Value) -> Vec<String> {
+    let files: Vec<String> = entry
+        .get("files")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|file| file.as_str().map(ToOwned::to_owned))
+        .collect();
+    if files.len() < 2 {
+        return Vec::new();
+    }
+    files
+}
+
+/// The cluster's rendered bucket label, or a placeholder.
+fn bucket_of(cluster: &Value) -> &str {
+    cluster
+        .get("bucket")
+        .and_then(Value::as_str)
+        .unwrap_or("<unlabelled>")
+}
+
 /// [CORPUS-RECALL] `type2_recall` — every hand-verified Type-2 rename in the
 /// manifest's `must_find_type2` list must be reported as a visible,
 /// gate-vouched cluster spanning its curated files.
@@ -225,14 +355,7 @@ pub fn check_type2_curated_recall(manifest: &Value, report: &Value, failures: &m
 
 /// Judges one curated `must_find_type2` entry against the rendered report.
 fn check_one_curated_type2(entry: &Value, report: &Value, failures: &mut Vec<Failure>) {
-    let files: Vec<String> = entry
-        .get("files")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|file| file.as_str().map(ToOwned::to_owned))
-        .collect();
+    let files = curated_files(entry);
     let why = entry.get("why").and_then(Value::as_str).unwrap_or("");
     if !reports_clone_spanning(report, &files) {
         failures.push(Failure::new(
@@ -243,7 +366,7 @@ fn check_one_curated_type2(entry: &Value, report: &Value, failures: &mut Vec<Fai
     }
     let vouched = visible_clusters(report)
         .iter()
-        .any(|cluster| gate_vouched(cluster) && cluster_spans(cluster, &files));
+        .any(|cluster| gate_vouched(cluster) && cluster_shows_span(cluster, &files));
     if !vouched {
         failures.push(Failure::new(
             "type2_recall",
@@ -254,54 +377,6 @@ fn check_one_curated_type2(entry: &Value, report: &Value, failures: &mut Vec<Fai
                  gate. Hand-verified Type-2 rename: {why}"
             ),
         ));
-    }
-}
-
-/// True when every curated file appears among the cluster's *shown*
-/// occurrence paths — the same exact-path predicate as
-/// [`crate::corpus::reports_clone_spanning`], and false for an empty list
-/// for the same reason: an entry naming no files must never pass vacuously.
-///
-/// Hidden occurrences are excluded rather than merely deprioritised.
-/// [`visible_clusters`] only asks that *some* occurrence of a cluster is
-/// shown, so a cluster carrying twenty siblings could satisfy it while the
-/// curated rename's own side is suppressed — the user would never see the
-/// pair, which is the false negative the entry exists to catch.
-fn cluster_spans(cluster: &Value, files: &[String]) -> bool {
-    if files.is_empty() {
-        return false;
-    }
-    let paths: Vec<&str> = cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-        .iter()
-        .filter(|occurrence| occurrence.get("hidden").and_then(Value::as_bool) != Some(true))
-        .filter_map(|occurrence| occurrence.get("path").and_then(Value::as_str))
-        .collect();
-    files.iter().all(|file| paths.contains(&file.as_str()))
-}
-
-/// Clusters the report actually shows a user. A hidden cluster carries no
-/// claim, so it can neither collapse the spread nor rescue recall.
-fn visible_clusters(report: &Value) -> Vec<&Value> {
-    match report.get("clusters").and_then(Value::as_array) {
-        None => Vec::new(),
-        Some(clusters) => clusters
-            .iter()
-            .filter(|cluster| !all_occurrences_hidden(cluster))
-            .collect(),
-    }
-}
-
-/// True when every occurrence of a cluster is hidden, so nothing is rendered.
-fn all_occurrences_hidden(cluster: &Value) -> bool {
-    match cluster.get("occurrences").and_then(Value::as_array) {
-        None => true,
-        Some(occurrences) => occurrences
-            .iter()
-            .all(|occurrence| occurrence.get("hidden").and_then(Value::as_bool) == Some(true)),
     }
 }
 

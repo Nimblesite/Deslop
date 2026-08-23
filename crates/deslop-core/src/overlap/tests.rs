@@ -10,8 +10,8 @@
 use std::path::PathBuf;
 
 use super::{
-    alignment::aligned_shared_nodes, build_view, credit_shared_nodes, EndpointView,
-    OverlapMeasurer, ALIGNMENT_MAX_NODES,
+    alignment::aligned_shared_nodes, build_view, credit::credit_shared_nodes,
+    kind_shared_upper_bound, EndpointView, OverlapMeasurer, ALIGNMENT_MAX_NODES,
 };
 use crate::{
     ast::{ByteRange, NormalizedNode},
@@ -262,7 +262,7 @@ fn the_large_tree_fallback_never_exceeds_the_alignment() -> Result<(), String> {
 #[test]
 fn the_alignment_cap_is_the_documented_operating_point() {
     assert_eq!(
-        ALIGNMENT_MAX_NODES, 512,
+        ALIGNMENT_MAX_NODES, 768,
         "changing the alignment cap changes which pairs get the exact measure \
          and which get the conservative bound — move the spec with it"
     );
@@ -439,5 +439,282 @@ fn the_fallback_never_credits_a_nested_right_subtree_twice() -> Result<(), Strin
          mass ({aligned}): the right-hand boost block sits inside the credited \
          `alpha` subtree, so a second credit for it counts those nodes twice"
     );
+    Ok(())
+}
+
+/// Terms in the arithmetic expression `ts-mixed-band` is built from. The
+/// fixture that pins the rescue
+/// (`without_embeddings_the_mid_band_pair_is_visible_without_saturating`)
+/// is ninety terms wide.
+const RESCUED_EXPRESSION_TERMS: usize = 90;
+
+/// A function whose body is one `terms`-wide arithmetic expression —
+/// `ts-mixed-band`'s shape, in the language these tests parse.
+fn wide_expression(name: &str, terms: usize) -> String {
+    let sum = (1..=terms).fold(String::from("seed"), |mut expression, index| {
+        use std::fmt::Write as _;
+        let _written = write!(expression, " + seed * {index}");
+        expression
+    });
+    format!("fn {name}(seed: u32) -> u32 {{\n    {sum}\n}}\n")
+}
+
+// [FUSION-SHARED-SUBTREE] The cap is measured in nodes of the
+// *normalised* tree, so a normalisation change moves what it reaches
+// without the number changing. [PIPELINE-NORMALIZE-AST-OPERATOR] did
+// exactly that: operator tokens became leaves, an operator-dense
+// expression counts around half as many nodes again, and at 512 the
+// ninety-term pair fell onto the conservative bound, scored under the
+// admission floor and was reported as nothing at all. Measuring the
+// expression here — rather than restating a number — is what makes this
+// fail again the next time normalisation grows the tree.
+#[test]
+fn the_cap_still_reaches_the_expression_the_rescue_is_pinned_on() -> Result<(), String> {
+    let mut registry = FileRegistry::new();
+    let file_id = registry.register(PathBuf::from("ledger.rs"));
+    let parsed = parse(
+        &wide_expression("settle", RESCUED_EXPRESSION_TERMS),
+        file_id,
+    )?;
+
+    assert!(
+        parsed.whole.node_count <= ALIGNMENT_MAX_NODES,
+        "a {RESCUED_EXPRESSION_TERMS}-term expression must still get the exact \
+         alignment: it normalises to {} nodes against a cap of \
+         {ALIGNMENT_MAX_NODES}, and past the cap the conservative bound scores \
+         a consistent rename under the admission floor and reports nothing",
+        parsed.whole.node_count
+    );
+    Ok(())
+}
+
+/// Files per structure in the repeated-window fleet below: six copies
+/// of each side make 36 candidate pairs that are all the same logical
+/// measurement.
+const FLEET_FILES_PER_STRUCTURE: usize = 6;
+
+/// The floor every rescue admission compares against.
+const ADMISSION_FLOOR: f64 = crate::pair::SHARED_SUBTREE_MIN_OVERLAP;
+
+/// Rust source whose normalised kinds barely intersect `ACCUMULATE`'s —
+/// a struct, an impl and a match instead of a loop over an accumulator
+/// — and roughly twice its node mass. The shape the admission bound
+/// must refuse without paying for an alignment.
+const DISJOINT_KINDS: &str = "\
+struct Widget {
+    name: String,
+    width: u32,
+    height: u32,
+}
+
+impl Widget {
+    fn label(&self) -> String {
+        match (self.width, self.height) {
+            (0, 0) => String::new(),
+            (0, tall) => format!(\"tall {tall}\"),
+            (wide, 0) => format!(\"wide {wide}\"),
+            (wide, tall) => format!(\"{wide} by {tall} {name}\", name = self.name),
+        }
+    }
+}
+";
+
+/// Parses `left_source` and `right_source` into two files and returns
+/// their whole-file endpoint views.
+fn views_of(left_source: &str, right_source: &str) -> Result<(EndpointView, EndpointView), String> {
+    let mut registry = FileRegistry::new();
+    let left_id = registry.register(PathBuf::from("left.rs"));
+    let right_id = registry.register(PathBuf::from("right.rs"));
+    let left = parse(left_source, left_id)?;
+    let right = parse(right_source, right_id)?;
+    let trees = [left.tree, right.tree];
+    let index = trees
+        .iter()
+        .map(|tree| (tree.file_id, tree))
+        .collect::<std::collections::HashMap<FileId, &NormalizedNode>>();
+    let left_view = build_view(&index, &left.whole).ok_or("the left endpoint resolves")?;
+    let right_view = build_view(&index, &right.whole).ok_or("the right endpoint resolves")?;
+    Ok((left_view, right_view))
+}
+
+// [FUSION-SHARED-SUBTREE-MEMO] The Flutter-scale blowup, captured at
+// unit scale. A corpus holds many byte-offset copies of one window, and
+// every cross pair of the two structures is the same logical
+// measurement: Merkle hash equality pins the whole normalised
+// structure, which is the exact premise the `1.0` short-circuit already
+// stands on. Six copies of each side form 36 candidate pairs; the
+// measurer must run one alignment and answer the other 35 from the
+// memo. Keyed by byte range instead, this shape scales as copies², and
+// on the Flutter corpus it reached 793,076 serial alignments without
+// finishing the stage.
+#[test]
+fn a_fleet_of_identical_windows_costs_one_alignment() -> Result<(), String> {
+    let mut registry = FileRegistry::new();
+    let mut trees = Vec::new();
+    let mut lefts = Vec::new();
+    let mut rights = Vec::new();
+    for index in 0..FLEET_FILES_PER_STRUCTURE {
+        let left_id = registry.register(PathBuf::from(format!("left_{index}.rs")));
+        let right_id = registry.register(PathBuf::from(format!("right_{index}.rs")));
+        let left = parse(ACCUMULATE, left_id)?;
+        let right = parse(AGGREGATE_WITH_INSERTION, right_id)?;
+        lefts.push(left.whole);
+        rights.push(right.whole);
+        trees.push(left.tree);
+        trees.push(right.tree);
+    }
+    let first_left = lefts.first().ok_or("the fleet built no left copies")?;
+    let first_right = rights.first().ok_or("the fleet built no right copies")?;
+    assert!(
+        lefts.iter().all(|left| left.hash == first_left.hash)
+            && rights.iter().all(|right| right.hash == first_right.hash)
+            && first_left.hash != first_right.hash,
+        "fixture guard: every copy of one source must Merkle-equal its siblings \
+         across files, and the two structures must differ"
+    );
+    let mut measurer = OverlapMeasurer::new(&trees);
+    let mut values = Vec::new();
+    for left in &lefts {
+        for right in &rights {
+            values.push(measurer.overlap(left, right));
+        }
+    }
+    let first = values
+        .first()
+        .copied()
+        .ok_or("the fleet measured nothing")?;
+    assert!(
+        values
+            .iter()
+            .all(|value| (value - first).abs() < f64::EPSILON),
+        "all {count} structurally identical pairs must measure the same overlap",
+        count = values.len(),
+    );
+    assert!(
+        first >= ADMISSION_FLOOR,
+        "fixture guard: the fleet pair is the #408 near-miss and must clear the \
+         floor, got {first}"
+    );
+    let stats = measurer.stats();
+    let pair_count = u64::try_from(values.len()).unwrap_or(u64::MAX);
+    assert_eq!(
+        stats.alignments,
+        1,
+        "one distinct structural pair must cost exactly one alignment — \
+         {pair_count} byte-range pairs collapsed by the Merkle-hash memo, \
+         measured {alignments}",
+        alignments = stats.alignments,
+    );
+    assert_eq!(
+        stats.exact_hits,
+        pair_count.saturating_sub(1),
+        "every pair after the first must be a memo hit"
+    );
+    Ok(())
+}
+
+// [FUSION-SHARED-SUBTREE-BOUND] The prefilter is sound only while the
+// kind-multiset bound never undercuts the alignment: an undercut would
+// veto a rescue the exact measure grants — a manufactured false
+// negative. Held across a genuine near-miss, a vocabulary-only match,
+// and a kind-disjoint pair.
+#[test]
+fn the_kind_multiset_bound_never_undercuts_the_alignment() -> Result<(), String> {
+    let cases = [
+        (ACCUMULATE, AGGREGATE_WITH_INSERTION),
+        (ACCUMULATE, UNRELATED_SAME_VOCABULARY),
+        (ACCUMULATE, DISJOINT_KINDS),
+        (AGGREGATE_WITH_INSERTION, UNRELATED_SAME_VOCABULARY),
+    ];
+    for (left_source, right_source) in cases {
+        let (left_view, right_view) = views_of(left_source, right_source)?;
+        let bound = kind_shared_upper_bound(&left_view, &right_view);
+        let aligned = aligned_shared_nodes(&left_view, &right_view);
+        assert!(
+            bound >= aligned,
+            "the kind-multiset bound ({bound}) must never undercut the aligned \
+             shared mass ({aligned}) — an undercut would let the prefilter veto \
+             a rescue the alignment grants"
+        );
+    }
+    Ok(())
+}
+
+// [FUSION-SHARED-SUBTREE-BOUND] The other half of the capture: when the
+// cheap bound already proves a pair cannot clear the floor, the
+// quadratic alignment must not run at all. This is what detaches rescue
+// cost from the raw candidate population.
+#[test]
+fn a_pair_the_bound_refuses_never_pays_for_an_alignment() -> Result<(), String> {
+    let mut registry = FileRegistry::new();
+    let left_id = registry.register(PathBuf::from("left.rs"));
+    let right_id = registry.register(PathBuf::from("right.rs"));
+    let left = parse(ACCUMULATE, left_id)?;
+    let right = parse(DISJOINT_KINDS, right_id)?;
+    let trees = [left.tree, right.tree];
+    let mut measurer = OverlapMeasurer::new(&trees);
+    let overlap = measurer.rescue_overlap(&left.whole, &right.whole);
+    assert!(
+        overlap < ADMISSION_FLOOR,
+        "a kind-disjoint pair must stay under the admission floor, got {overlap}"
+    );
+    let stats = measurer.stats();
+    assert_eq!(
+        stats.alignments, 0,
+        "the bound must refuse this pair before any alignment runs"
+    );
+    assert_eq!(
+        stats.bound_skips, 1,
+        "the refusal must be recorded as a bound skip"
+    );
+    let again = measurer.rescue_overlap(&left.whole, &right.whole);
+    assert!(
+        (again - overlap).abs() < f64::EPSILON && measurer.stats().bound_hits == 1,
+        "a repeated refusal must come from the bound memo, not a re-walk"
+    );
+    Ok(())
+}
+
+// [FUSION-SHARED-SUBTREE-BOUND] The rescue path must agree with the
+// exact measure on every admission decision, return exactly the exact
+// value whenever the pair clears the floor, and never sit below the
+// exact value (its skip answer is an upper bound).
+#[test]
+fn the_rescue_path_agrees_with_the_exact_measure_on_admission() -> Result<(), String> {
+    let cases = [
+        (ACCUMULATE, AGGREGATE_WITH_INSERTION),
+        (ACCUMULATE, UNRELATED_SAME_VOCABULARY),
+        (ACCUMULATE, DISJOINT_KINDS),
+    ];
+    for (left_source, right_source) in cases {
+        let mut registry = FileRegistry::new();
+        let left_id = registry.register(PathBuf::from("left.rs"));
+        let right_id = registry.register(PathBuf::from("right.rs"));
+        let left = parse(left_source, left_id)?;
+        let right = parse(right_source, right_id)?;
+        let trees = [left.tree, right.tree];
+        let mut rescue_measurer = OverlapMeasurer::new(&trees);
+        let mut exact_measurer = OverlapMeasurer::new(&trees);
+        let rescue = rescue_measurer.rescue_overlap(&left.whole, &right.whole);
+        let exact = exact_measurer.overlap(&left.whole, &right.whole);
+        assert_eq!(
+            rescue >= ADMISSION_FLOOR,
+            exact >= ADMISSION_FLOOR,
+            "the rescue path and the exact measure must make the same admission \
+             decision: rescue {rescue}, exact {exact}"
+        );
+        assert!(
+            rescue >= exact - f64::EPSILON,
+            "the rescue value may only sit at or above the exact value — it is \
+             an upper bound when it skips: rescue {rescue}, exact {exact}"
+        );
+        if exact >= ADMISSION_FLOOR {
+            assert!(
+                (rescue - exact).abs() < f64::EPSILON,
+                "at or above the floor the rescue must return the exact value: \
+                 rescue {rescue}, exact {exact}"
+            );
+        }
+    }
     Ok(())
 }

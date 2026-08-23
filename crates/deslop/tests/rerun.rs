@@ -13,8 +13,7 @@ use anyhow::Result;
 use assert_cmd::Command;
 use predicates::str::contains;
 
-mod common;
-use crate::common::*;
+use crate::common::{rerun_ops::*, *};
 
 /// Config body that excludes the `Beta.cs` half of the seeded clone pair.
 const EXCLUDE_BETA: &str = "[defaults]\nexclude = [\"**/Beta.cs\"]\n";
@@ -33,20 +32,6 @@ fn seeded_root() -> Result<(tempfile::TempDir, PathBuf)> {
     let scan_root = tmp.path().join("src");
     seed(&fixture("csharp-small"), &scan_root)?;
     Ok((tmp, scan_root))
-}
-
-/// Formats the `<src>=<dst>` spec that `--rerun-add` takes.
-fn add_spec(src: &Path, dst: &Path) -> String {
-    format!("{}={}", src.display(), dst.display())
-}
-
-/// Writes `contents` to `<tmp>/<stem>` — outside the scan root, so
-/// `initialise` cannot see it — and returns the `--rerun-add` spec that
-/// lands it at `dst` between generation 0 and generation 1.
-fn staged_spec(tmp: &Path, stem: &str, contents: &str, dst: &Path) -> Result<String> {
-    let staged = tmp.join(stem);
-    fs::write(&staged, contents)?;
-    Ok(add_spec(&staged, dst))
 }
 
 /// Builds `deslop <scan_root> --output <out_base> --min-nodes <min_nodes>`

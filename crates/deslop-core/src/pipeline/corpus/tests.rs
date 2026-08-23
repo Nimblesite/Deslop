@@ -26,8 +26,9 @@ fn tampered_fingerprints_invalidate_stored_signatures_and_self_heal() -> Result<
     let tmp = tempfile::tempdir().map_err(|error| error.to_string())?;
     let cache = FingerprintCache::open(tmp.path(), "rust", 8).map_err(|error| error.to_string())?;
     let file_id = FileRegistry::new().register(PathBuf::from("fixture.rs"));
-    let honest =
-        build_cached_file(parser, SOURCE, file_id, MIN_NODES).map_err(|error| error.to_string())?;
+    let mut honest_build = CorpusBuildState::default();
+    let honest = build_cached_file(parser, SOURCE, file_id, MIN_NODES, &mut honest_build)
+        .map_err(|error| error.to_string())?;
     assert!(
         !honest.fingerprints.is_empty(),
         "fixture must fingerprint at least one subtree"
@@ -35,7 +36,7 @@ fn tampered_fingerprints_invalidate_stored_signatures_and_self_heal() -> Result<
     store_forged_bundle(&cache, &honest)?;
 
     let mut stats = CacheStats::default();
-    let mut signature_stats = SignatureStats::default();
+    let mut build_stats = CorpusBuildState::default();
     let served = load_or_parse_file(
         Some(&cache),
         parser,
@@ -43,7 +44,7 @@ fn tampered_fingerprints_invalidate_stored_signatures_and_self_heal() -> Result<
         file_id,
         MIN_NODES,
         &mut stats,
-        &mut signature_stats,
+        &mut build_stats,
     )
     .map_err(|error| error.to_string())?;
     assert_eq!(
@@ -52,11 +53,11 @@ fn tampered_fingerprints_invalidate_stored_signatures_and_self_heal() -> Result<
         "a blob whose fingerprints disagree with the re-derived set must miss, never hit"
     );
     assert_eq!(
-        signature_stats.reused, 0,
+        build_stats.stats.signatures_reused, 0,
         "no signature may be attached off a rejected blob"
     );
     assert_eq!(
-        signature_stats.built,
+        build_stats.stats.signatures_built,
         signature_count(&served),
         "every signature must be rebuilt from token streams after the rejection"
     );
@@ -98,7 +99,7 @@ fn assert_healed(
     honest: &CachedFile,
 ) -> Result<(), String> {
     let mut stats = CacheStats::default();
-    let mut signature_stats = SignatureStats::default();
+    let mut build_stats = CorpusBuildState::default();
     let healed = load_or_parse_file(
         Some(cache),
         parser,
@@ -106,7 +107,7 @@ fn assert_healed(
         file_id,
         MIN_NODES,
         &mut stats,
-        &mut signature_stats,
+        &mut build_stats,
     )
     .map_err(|error| error.to_string())?;
     assert_eq!(
@@ -115,11 +116,11 @@ fn assert_healed(
         "the self-healed blob must hit on the very next pass"
     );
     assert_eq!(
-        signature_stats.built, 0,
+        build_stats.stats.signatures_built, 0,
         "a validated hit must rebuild no signatures"
     );
     assert_eq!(
-        signature_stats.reused,
+        build_stats.stats.signatures_reused,
         signature_count(&healed),
         "the healed blob's signatures must be attached from the store"
     );

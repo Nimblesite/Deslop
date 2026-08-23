@@ -10,19 +10,17 @@ tags:
   - ai-generated-code
   - duplicate-code
 category: engineering
-description: "Find duplicate code in Go and Golang repositories with structural clone detection. Deslop now parses .go files with tree-sitter and checks code live through LSP and MCP."
+description: "Find duplicate code in Go and Golang repositories with tree-sitter structural analysis, live LSP feedback, and MCP checks for coding agents."
 excerpt: "Deslop now understands Go. It parses .go syntax trees, catches renamed clone shapes, ranks the worst duplication first, and lets coding agents search before they write another copy."
-heroImage: "/assets/img/blog/find-duplicate-code-go-header.png"
+heroImage: "/assets/img/blog/find-duplicate-code-go-header.webp"
 heroImageWidth: "1600"
 heroImageHeight: "900"
 heroImageAlt: "Two duplicate Go syntax trees converging through a live analysis hub into one reusable implementation."
-ogImage: "/assets/img/blog/find-duplicate-code-go-og.png"
+ogImage: "/assets/img/blog/find-duplicate-code-go-og.jpg"
 ogImageWidth: "1200"
 ogImageHeight: "630"
 ogImageAlt: "Two duplicate Go syntax trees highlighted by a live analysis hub beside one reusable structure."
 ---
-
-If you searched for **“find duplicate code in Go,” “Golang duplicate code,”** or **“Go linter for duplicate code,”** the short answer is this: Deslop now understands `.go` files.
 
 Go support runs through the same structural clone-detection pipeline as every other Deslop language. That means tree-sitter parsing instead of regex, identifier and literal normalization instead of raw line matching, worst-offender-first ranking instead of an unordered warning pile, and live LSP + MCP feedback while the repository is changing.
 
@@ -117,27 +115,3 @@ deslop .
 The CLI writes JSON, text, and HTML reports. The VS Code extension adds live findings and a worst-first cluster view. Connect the MCP server and your coding agent can query the same running analysis before it writes.
 
 Start with the first cluster. That is the duplicate with the largest measured impact, not merely the first one the scanner happened to encounter.
-
-## FAQ
-
-### Does Deslop support Go or Golang?
-
-Yes. The language's proper name is Go; “Golang” is the search-friendly label. Deslop discovers `.go` files and reports the language as Go.
-
-### Does this replace gofmt, go vet, Staticcheck, or golangci-lint?
-
-No. Keep them. They solve formatting, correctness, style, security, and other static-analysis problems. Deslop is focused on code clones and duplicate-code prevention.
-
-### Does Deslop compare Go with regex or raw lines?
-
-Neither. It parses Go with tree-sitter and compares normalized syntax-tree structure before adding token and optional semantic signals. Read [Tree-sitter Over Regex](/blog/tree-sitter-over-regex/) for why that boundary matters.
-
-### Is all duplicate Go code bad?
-
-No. Generated files, small test fixtures, and intentionally separate paths may be cheaper to leave alone. Deslop ranks the evidence; you decide whether to extract, reuse, or accept it.
-
-### Can a coding agent check before writing Go?
-
-Yes. That is the point of `find-similar`: the agent asks the live repository whether the proposed shape already exists, while it can still choose reuse over copy number two.
-
-Go support is here because Lance contributed it, the shared engine was ready for it, and Go teams deserve better than finding the second implementation during a production incident. Open the messiest Go repository you own. Read line one.

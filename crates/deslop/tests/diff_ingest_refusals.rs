@@ -12,8 +12,6 @@
 //! subdirectory, and diffs arrive on stdin via `--diff -` with
 //! repo-root-relative `a/` / `b/` paths, mirroring the CI flow.
 
-mod common;
-
 use std::{fs, path::PathBuf};
 
 use anyhow::Context as _;

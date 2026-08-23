@@ -9,8 +9,6 @@
 //! that the repo `duplicated_loc` equals the lines the visible clusters
 //! cover, so a hidden / structural-only match could never inflate it.
 
-mod common;
-
 use serde_json::Value;
 
 use crate::common::*;

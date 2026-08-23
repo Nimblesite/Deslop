@@ -1,7 +1,7 @@
 /* ─────────── Mobile ─────────── */
 @media (max-width: 768px) {
   .nav { padding: var(--space-3) var(--space-4); }
-  .hero { padding: var(--space-16) var(--space-4) var(--space-12); gap: var(--space-12); }
+  .hero { padding: var(--space-16) var(--space-4); gap: var(--space-12); }
   .hero h1 { font-size: clamp(2rem, 9vw, 3rem); }
   .footer-grid { padding-bottom: var(--space-8); }
   .logo,
@@ -33,6 +33,15 @@
   .blog-container { padding: var(--space-10) var(--space-4); }
   .post-list .blog-post { padding: var(--space-6); }
   .docs-article__footer { flex-direction: column; align-items: flex-start; gap: var(--space-4); }
+}
+
+/* The bar is at its widest on the Chinese pages, where the language switch
+   reads "English" beside three 48px touch targets. On a 320px screen that only
+   clears the wordmark once the padding, gaps, and switch label tighten. */
+@media (max-width: 420px) {
+  .nav { padding-inline: var(--space-3); gap: var(--space-2); }
+  .nav-actions { gap: var(--space-1); }
+  .lang-link { font-size: var(--type-nav-label); }
 }
 
 /* Prism syntax highlighting — uniform across docs, blog, landing */

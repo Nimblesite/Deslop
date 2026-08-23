@@ -1,12 +1,12 @@
 ---
 layout: layouts/docs.njk
 title: Configuration and Reports — .deslop.toml, flags, output
-description: Every Deslop knob in one place — the .deslop.toml sections (exclude, report_hide, threshold, ranking, analysis, report), the built-in rules you can't turn off, every CLI flag, the three report formats, and the exit codes.
-keywords: deslop, configuration, .deslop.toml, cli flags, exclude, report_hide, threshold, exit codes, json report, html report
+description: Configure Deslop with .deslop.toml and CLI flags. Review exclusions, thresholds, ranking, analysis settings, JSON/HTML/text reports, and exit codes.
 eleventyNavigation:
   key: Configuration
   order: 6
 icon: tune
+docsGroup: reference
 ---
 
 # Configuration and Reports
@@ -231,7 +231,7 @@ The hybrid embedding layer is **off by default**; Deslop ships structural and to
 | `--log-to-console` | off | Send logs to stderr instead of a timestamped `deslop-<timestamp>.log` file. |
 | `--log-level <LEVEL>` | `info` | `error` \| `warn` \| `info` \| `debug` \| `trace`. Overridden by `RUST_LOG`. |
 | `--no-color` | off | Disable colour in the stderr preamble and summary. |
-| `--no-incremental` | off | Turn **off** the on-disk fingerprint cache under `<root>/.deslop/cache/`. The cache is on by default, so unchanged files skip parsing on the next run; pass this to leave the scanned tree untouched. |
+| `--no-incremental` | off | Disable reads and writes for the on-disk fingerprint and embedding caches under `<root>/.deslop/cache/`. Reports and logs are still written normally. |
 
 ### Developer and simulation flags
 
@@ -308,10 +308,10 @@ Diagnostics are separate from reports. By default they go to a timestamped log f
 | Code | Meaning |
 | --- | --- |
 | `0` | Completed. Duplication was below the threshold, or no threshold was set. |
-| `1` | Runtime error — nonexistent scan path, analysis failure, I/O error, or a `required` embedding provider that was unreachable. Never a panic. |
+| `1` | Runtime error — nonexistent scan path, analysis failure, I/O error, or a `required` embedding provider that was unreachable. |
 | `2` | Usage error — unknown flag, or an out-of-range / non-finite threshold value, rejected before the run starts. |
 | `3` | **Threshold breached.** The full report is still written to disk so the offenders can be surfaced. |
 
-`deslop` never panics on user input. Failures surface through these exit codes and a structured error on `stderr`.
+Failures surface through these exit codes and a structured error on `stderr`.
 
 Exit `3` is the **CI gate**. It only ever fires when you opt in — by passing `--fail-over <percent>` or setting `[threshold] max_duplication_percent`. See [Gate CI on a duplication threshold](/docs/#gate-ci-on-a-duplication-threshold) for the walkthrough, or the [GitHub Action](/docs/github-action/) for a ready-to-use CI job.

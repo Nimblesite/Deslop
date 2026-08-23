@@ -21,9 +21,13 @@ import {
   sanitizeFacetFilter,
 } from "../types/report";
 
+const FILTER_BUCKETS_SETTING = "topOffenders.filterBuckets";
+const FILTER_CATEGORIES_SETTING = "topOffenders.filterCategories";
+const DESLOP_CONFIGURATION_NAMESPACE = "deslop";
+
 async function updateWorkspace(key: string, value: unknown): Promise<void> {
   await vscode.workspace
-    .getConfiguration("deslop")
+    .getConfiguration(DESLOP_CONFIGURATION_NAMESPACE)
     .update(key, value, vscode.ConfigurationTarget.Workspace);
 }
 
@@ -39,7 +43,7 @@ export async function setTopOffendersSortBy(value: "impact" | "path"): Promise<v
 
 export async function toggleTopOffendersSplitByLanguage(): Promise<void> {
   const current = vscode.workspace
-    .getConfiguration("deslop")
+    .getConfiguration(DESLOP_CONFIGURATION_NAMESPACE)
     .get<boolean>("topOffenders.splitByLanguage", false);
   await updateWorkspace("topOffenders.splitByLanguage", !current);
 }
@@ -48,10 +52,10 @@ export async function toggleTopOffendersSplitByLanguage(): Promise<void> {
 // dropping unknown values (the typo fallback — a bad value must never
 // yield an empty tree).
 export function readTopOffendersFilter(): FacetFilter {
-  const config = vscode.workspace.getConfiguration("deslop");
+  const config = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
   return sanitizeFacetFilter(
-    config.get<string[]>("topOffenders.filterBuckets", []) ?? [],
-    config.get<string[]>("topOffenders.filterCategories", []) ?? [],
+    config.get<string[]>(FILTER_BUCKETS_SETTING, []) ?? [],
+    config.get<string[]>(FILTER_CATEGORIES_SETTING, []) ?? [],
   );
 }
 
@@ -65,8 +69,8 @@ export function isTopOffendersFilterActive(): boolean {
 // [FACET-TOP-OFFENDERS-FILTER] Clears both persisted filter axes — the
 // action bound to the filtered status row and the active-filter button.
 export async function clearTopOffendersFilter(): Promise<void> {
-  await updateWorkspace("topOffenders.filterBuckets", []);
-  await updateWorkspace("topOffenders.filterCategories", []);
+  await updateWorkspace(FILTER_BUCKETS_SETTING, []);
+  await updateWorkspace(FILTER_CATEGORIES_SETTING, []);
 }
 
 /** One row of the Choose Filter QuickPick, remembering which axis and
@@ -127,11 +131,11 @@ export async function chooseTopOffendersFilter(store: ReportStore): Promise<void
   });
   if (!picked) return;
   await updateWorkspace(
-    "topOffenders.filterBuckets",
+    FILTER_BUCKETS_SETTING,
     picked.filter((item) => item.axis === "bucket").map((item) => item.wire),
   );
   await updateWorkspace(
-    "topOffenders.filterCategories",
+    FILTER_CATEGORIES_SETTING,
     picked.filter((item) => item.axis === "category").map((item) => item.wire),
   );
 }

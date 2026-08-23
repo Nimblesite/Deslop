@@ -30,5 +30,10 @@
       ]
     }
   ],
-  "must_find_type2_status": "CURATED. Both entries were hand-verified by diffing the two files and confirming the only differences are renamed identifiers and literals - Type-2 by definition, and not byte-identical, so neither can reach the `identical` bucket. A miss on either is a false negative on proven ground truth."
+  "must_find_type2_status": "CURATED. Both entries were hand-verified by diffing the two files and confirming the only differences are renamed identifiers and literals - Type-2 by definition, and not byte-identical, so neither can reach the `identical` bucket. A miss on either is a false negative on proven ground truth.",
+  "expect_files_min": 1290,
+  "expect_clusters": {
+    "min": 550,
+    "max": 2230
+  }
 }

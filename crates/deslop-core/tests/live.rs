@@ -25,7 +25,6 @@ use deslop_core::{
     EmbeddingProvider, EmbeddingSpec, ExclusionConfig, ProviderError,
 };
 
-mod common;
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::common::*;
@@ -750,12 +749,24 @@ async fn exercise_session_config(
     assert!(!config.languages.is_empty());
     let request = FindSimilarRequest {
         input: FindSimilarInput::Snippet {
-            snippet: "namespace N { class C { void M(int x) { return; } } }".to_owned(),
+            // The corpus's own `Alpha.cs` — a snippet whose subtree
+            // digests exist in the workspace. Pins the content join:
+            // cluster ids are not derivable from pathless digests
+            // (gh #430), so any regression of the hash→occurrence→
+            // report join returns empty clusters here while the
+            // Windows TCP twin fails `mcp_tools_work_over_tcp_transport`.
+            snippet: fs::read_to_string(root.join("Alpha.cs")).context("read corpus Alpha.cs")?,
             language: "csharp".to_owned(),
         },
         max_results: Some(5),
     };
-    let _result = service.find_similar(&request).await?;
+    let result = service.find_similar(&request).await?;
+    assert!(
+        !result.clusters.is_empty(),
+        "find-similar on the corpus's own file must locate its clusters \
+         — an empty answer means the snippet-hash join went blind: \
+         {result:?}"
+    );
     let guard = session_lock.lock().await;
     assert_eq!(guard.root(), root, "root accessor should match");
     let generation = guard.generation();

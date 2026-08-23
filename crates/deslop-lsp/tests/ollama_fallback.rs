@@ -11,7 +11,7 @@
 //! unreachable provider must degrade gracefully — a clean JSON-RPC reply and
 //! a live process — never a crash that loops the editor's restart logic.
 
-mod common;
+use crate::common;
 
 use std::{
     thread,

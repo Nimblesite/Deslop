@@ -420,10 +420,12 @@ fn the_blob_format_revisions_are_pinned() {
          superseded values must stay rejected, never reused"
     );
     assert_eq!(
-        SEMANTIC_EPOCH, 1,
+        SEMANTIC_EPOCH, 4,
         "the semantic epoch changes when parse/normalise/fingerprint/signature \
          *meaning* changes without moving a byte — the case the `0.0.0-dev` \
-         directory partition cannot invalidate"
+         directory partition cannot invalidate. 4 is the framing-token drop \
+         (gh #147); bumping past it requires a new dated entry on the \
+         constant's doc, then this pin"
     );
     assert_eq!(
         SIGNATURE_LEN * 8,

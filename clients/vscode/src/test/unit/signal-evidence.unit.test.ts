@@ -28,6 +28,15 @@ import {
 } from "../../types/signals";
 import { parseWebviewSource } from "./webview-source.helpers";
 
+const FULL_CONFIDENCE_TEXT = "1.00";
+const STRUCTURAL_TOPIC = "structural";
+const JACCARD_TOPIC = "jaccard";
+const EMBEDDING_TOPIC = "embedding";
+const ZERO_CONFIDENCE_TEXT = "0.00";
+const FUSED_TOPIC = "fused";
+const AGREEMENT_TOPIC = "agreement";
+const CONTENT_EVIDENCE_TOPIC = "content-evidence";
+
 // Shape saturates, content does not back it up: the scaffolding family the
 // engine demotes. Rendered by `deslop-core::buckets::content_gated_signals`
 // as a perfect shape match discounted to a sixth of itself.
@@ -105,37 +114,37 @@ function topics(rows: SignalRow[]): string[] {
 suite("signal evidence rendering", () => {
   test("every one of the seven wire fields reaches a labelled, valued row", () => {
     assert.deepEqual(rendered(confidenceRows(SCAFFOLDING)), [
-      ["structural", "1.00"],
-      ["jaccard", "1.00"],
-      ["embedding", "0.00"],
-      ["fused", "0.16"],
+      [STRUCTURAL_TOPIC, FULL_CONFIDENCE_TEXT],
+      [JACCARD_TOPIC, FULL_CONFIDENCE_TEXT],
+      [EMBEDDING_TOPIC, ZERO_CONFIDENCE_TEXT],
+      [FUSED_TOPIC, "0.16"],
     ]);
     assert.deepEqual(rendered(evidenceRows(SCAFFOLDING)), [
-      ["agreement", "0.08"],
-      ["rename", "0.00"],
+      [AGREEMENT_TOPIC, "0.08"],
+      ["rename", ZERO_CONFIDENCE_TEXT],
       ["literal", "0.91"],
     ]);
     assert.deepEqual(topics(confidenceRows(SCAFFOLDING)), [
-      "structural",
-      "jaccard",
-      "embedding",
-      "fused",
+      STRUCTURAL_TOPIC,
+      JACCARD_TOPIC,
+      EMBEDDING_TOPIC,
+      FUSED_TOPIC,
     ]);
     assert.deepEqual(topics(evidenceRows(SCAFFOLDING)), [
-      "agreement",
+      AGREEMENT_TOPIC,
       "rename-consistency",
       "literal-fraction",
     ]);
     assert.deepEqual(rendered(evidenceRows(PROVEN_RENAME)), [
-      ["agreement", "0.10"],
-      ["rename", "1.00"],
-      ["literal", "0.00"],
+      [AGREEMENT_TOPIC, "0.10"],
+      ["rename", FULL_CONFIDENCE_TEXT],
+      ["literal", ZERO_CONFIDENCE_TEXT],
     ]);
     assert.deepEqual(rendered(confidenceRows(VERBATIM)), [
-      ["structural", "1.00"],
-      ["jaccard", "1.00"],
-      ["embedding", "0.00"],
-      ["fused", "1.00"],
+      [STRUCTURAL_TOPIC, FULL_CONFIDENCE_TEXT],
+      [JACCARD_TOPIC, FULL_CONFIDENCE_TEXT],
+      [EMBEDDING_TOPIC, ZERO_CONFIDENCE_TEXT],
+      [FUSED_TOPIC, FULL_CONFIDENCE_TEXT],
     ]);
     assert.equal(VERBATIM.shape, 1, "a byte-proven cluster carries a saturated shape reading");
   });
@@ -144,12 +153,12 @@ suite("signal evidence rendering", () => {
     // The whole point of #344: without the evidence rows and the verdict,
     // these two clusters are indistinguishable in the panel.
     assert.deepEqual(rendered(confidenceRows(SCAFFOLDING)).slice(0, 2), [
-      ["structural", "1.00"],
-      ["jaccard", "1.00"],
+      [STRUCTURAL_TOPIC, FULL_CONFIDENCE_TEXT],
+      [JACCARD_TOPIC, FULL_CONFIDENCE_TEXT],
     ]);
     assert.deepEqual(rendered(confidenceRows(PROVEN_RENAME)).slice(0, 2), [
-      ["structural", "1.00"],
-      ["jaccard", "1.00"],
+      [STRUCTURAL_TOPIC, FULL_CONFIDENCE_TEXT],
+      [JACCARD_TOPIC, FULL_CONFIDENCE_TEXT],
     ]);
     assert.notDeepEqual(
       rendered(evidenceRows(SCAFFOLDING)),
@@ -233,21 +242,21 @@ suite("signal evidence rendering", () => {
 
   test("the signal help vocabulary covers every axis and both headings", () => {
     assert.deepEqual(Object.keys(SIGNAL_HELP).sort(), [
-      "agreement",
-      "content-evidence",
-      "embedding",
-      "fused",
-      "jaccard",
+      AGREEMENT_TOPIC,
+      CONTENT_EVIDENCE_TOPIC,
+      EMBEDDING_TOPIC,
+      FUSED_TOPIC,
+      JACCARD_TOPIC,
       "literal-fraction",
       "rename-consistency",
       "signals",
-      "structural",
+      STRUCTURAL_TOPIC,
     ]);
     for (const [topic, copy] of Object.entries(SIGNAL_HELP)) {
       assert.ok(copy.length > 20, `help copy for ${topic} explains nothing`);
     }
-    assert.match(SIGNAL_HELP["content-evidence"], /structural 1\.00 and jaccard 1\.00/);
-    assert.match(SIGNAL_HELP["content-evidence"], /sibling boilerplate/);
+    assert.match(SIGNAL_HELP[CONTENT_EVIDENCE_TOPIC], /structural 1\.00 and jaccard 1\.00/);
+    assert.match(SIGNAL_HELP[CONTENT_EVIDENCE_TOPIC], /sibling boilerplate/);
     assert.match(SIGNAL_HELP.fused, /discounted by the content evidence/);
   });
 

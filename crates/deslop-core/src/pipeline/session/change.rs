@@ -17,7 +17,7 @@ use crate::{
 use super::{
     super::{
         config::{EmbeddingSettings, PipelineConfig},
-        corpus::{log_skip_too_deep, parse_one_file, parser_for_language, SignatureStats},
+        corpus::{log_skip_too_deep, parse_one_file, parser_for_language, CorpusBuildState},
     },
     PipelineSession,
 };
@@ -91,25 +91,19 @@ impl PipelineSession {
             .file_id_for(&absolute)
             .unwrap_or_else(|| self.registry.register(absolute.clone()));
         let config = self.pipeline_config_with_mode(embedding);
-        let mut signature_stats = SignatureStats::default();
-        let (cached, source, lines) = match parse_one_file(
-            file_id,
-            &absolute,
-            parser,
-            &config,
-            stats,
-            &mut signature_stats,
-        ) {
-            Ok(parsed) => parsed,
-            // A pathologically deep file must not crash the long-lived
-            // server: drop it and keep serving, the same way an
-            // excluded path is handled above. Real parser errors propagate.
-            Err(CoreError::AstTooDeep { language, limit }) => {
-                log_skip_too_deep(language, limit);
-                return Ok(self.drop_path(&absolute));
-            }
-            Err(other) => return Err(other),
-        };
+        let mut build_stats = CorpusBuildState::default();
+        let (cached, source, lines) =
+            match parse_one_file(file_id, &absolute, parser, &config, stats, &mut build_stats) {
+                Ok(parsed) => parsed,
+                // A pathologically deep file must not crash the long-lived
+                // server: drop it and keep serving, the same way an
+                // excluded path is handled above. Real parser errors propagate.
+                Err(CoreError::AstTooDeep { language, limit }) => {
+                    log_skip_too_deep(language, limit);
+                    return Ok(self.drop_path(&absolute));
+                }
+                Err(other) => return Err(other),
+            };
         if self
             .sources
             .get(&file_id)
@@ -124,8 +118,8 @@ impl PipelineSession {
         }
         tracing::debug!(
             fingerprints = cached.fingerprints.len(),
-            signatures_built = signature_stats.built,
-            signatures_reused = signature_stats.reused,
+            signatures_built = build_stats.stats.signatures_built,
+            signatures_reused = build_stats.stats.signatures_reused,
             "live change spliced into corpus",
         );
         let ranges = collect_import_boilerplate_ranges(&cached.tree, language);

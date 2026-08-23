@@ -15,6 +15,9 @@ use tower_lsp::{
 
 use crate::{backend::LspBackend, notifications::ReportChangedLspNotification};
 
+/// JSON-RPC field naming the command in an `executeCommand` request.
+const COMMAND_FIELD: &str = "command";
+
 /// Forces a full report refresh.
 pub const REFRESH_REPORT: &str = "deslop.lsp.refreshReport";
 /// Opens the current report virtual document.
@@ -96,7 +99,7 @@ async fn refresh_report(backend: &LspBackend) -> LspResult<Option<Value>> {
         .await;
     notify_if_changed(backend, &delta).await;
     Ok(Some(json!({
-        "command": REFRESH_REPORT,
+        (COMMAND_FIELD): REFRESH_REPORT,
         "generation": delta.to_generation,
         "clustersAdded": delta.clusters_added.len(),
         "clustersRemoved": delta.clusters_removed.len(),
@@ -171,7 +174,7 @@ async fn show_uri(backend: &LspBackend, command: &str, uri: &str) -> LspResult<O
         })
         .await?;
     Ok(Some(
-        json!({ "command": command, "uri": uri, "shown": shown }),
+        json!({ (COMMAND_FIELD): command, "uri": uri, "shown": shown }),
     ))
 }
 
@@ -179,7 +182,7 @@ async fn show_uri(backend: &LspBackend, command: &str, uri: &str) -> LspResult<O
 async fn pick_embedding_model(backend: &LspBackend) -> LspResult<Option<Value>> {
     let models = backend.service().embedding_list_models().await;
     Ok(Some(
-        json!({ "command": PICK_EMBEDDING_MODEL, "models": models }),
+        json!({ (COMMAND_FIELD): PICK_EMBEDDING_MODEL, "models": models }),
     ))
 }
 
@@ -191,7 +194,7 @@ async fn toggle_incremental(backend: &LspBackend) -> LspResult<Option<Value>> {
         guard.toggle_incremental()
     };
     Ok(Some(json!({
-        "command": TOGGLE_INCREMENTAL,
+        (COMMAND_FIELD): TOGGLE_INCREMENTAL,
         "incremental": config.incremental,
     })))
 }

@@ -14,8 +14,6 @@
 //! Both directions are pinned here, because a gate that only ever
 //! refuses is as wrong as one that only ever allows.
 
-mod common;
-
 use std::{
     collections::HashMap,
     fs,
@@ -265,9 +263,10 @@ fn content_proven_clone_still_reaches_the_verbatim_extract() -> Result<()> {
         plan.edits.len()
     );
     ensure!(
-        plan.method_name == "ExtractedFromCluster_b50f11",
-        "the helper name derives from the cluster id, got {}",
-        plan.method_name
+        plan.method_name == format!("ExtractedFromCluster_{}", &cluster.id[..6]),
+        "the helper name derives from the cluster id, got {} for id {}",
+        plan.method_name,
+        cluster.id
     );
     Ok(())
 }
@@ -291,8 +290,11 @@ fn proven_rename_survives_the_gate_that_agreement_alone_would_fail() -> Result<(
         cluster.signals.agreement
     );
     ensure!(
-        (0.83..0.85).contains(&cluster.signals.rename_consistency),
-        "the corroborated rename proof is ~0.84, got {:.3}",
+        cluster.signals.rename_consistency >= 0.99,
+        "a textbook Type-2 rename is corroborated at 1.0 — every authored \
+         position differs and every difference is a consistent rename \
+         ([PIPELINE-NORMALIZE-AST-OPERATOR] keeps shared operators out of \
+         the ratio), got {:.3}",
         cluster.signals.rename_consistency
     );
     ensure!(

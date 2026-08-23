@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Deslop LSP server — live duplicate-code analysis streamed to any LSP-capable editor as code is written."
+autotests = false
 
 [[bin]]
 name = "deslop-lsp"
@@ -47,3 +48,7 @@ tower-lsp.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "suite"
+path = "tests/suite.rs"

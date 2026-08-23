@@ -141,3 +141,6 @@ clients/jetbrains/deslop-shared/build/
 
 
 Book/dist/
+
+
+.codex-tmp/

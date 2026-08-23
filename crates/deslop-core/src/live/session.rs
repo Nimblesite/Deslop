@@ -6,6 +6,7 @@
 //! — nothing else holds mutable analysis state.
 
 use std::{
+    collections::HashSet,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
@@ -20,15 +21,16 @@ use crate::{
 };
 
 use super::{
+    cache_seed_key::CacheSeedKey,
     cluster_lookup::resolve_cluster_by_id_prefix,
     embedding_refresh::{CommittedEmbeddingRefresh, EmbeddingRefreshInput, EmbeddingRefreshJob},
     errors::LiveError,
     freshness::FreshnessTracker,
     session_helpers::{
-        append_ollama_models, cluster_matches_any_hash, cluster_overlaps_range,
-        cluster_touches_path, collapse_overlapping_clusters_for_range, earliest_byte_for_path,
-        initialise_pipeline, live_batch_yield, parse_and_hash_snippet, persist_state_file,
-        truncate, try_load_cached_report,
+        append_ollama_models, cluster_overlaps_range, cluster_touches_path,
+        collapse_overlapping_clusters_for_range, earliest_byte_for_path, initialise_pipeline,
+        live_batch_yield, parse_and_hash_snippet, persist_state_file, truncate,
+        try_load_cached_report,
     },
     watcher::{live_exclusion, publish_exclusion, LiveExclusion},
     wire::{
@@ -195,7 +197,17 @@ impl AnalysisSession {
         embedding_provider: Arc<dyn EmbeddingProvider>,
         mode: EmbeddingMode,
     ) -> Option<Self> {
-        let report = try_load_cached_report(&root)?;
+        // [LIVE-CACHE-SEED-KEY] A seed is served as an answer, so it
+        // must have been computed by a run with the same identity.
+        let key = CacheSeedKey::new(
+            &root,
+            min_nodes,
+            incremental,
+            config_path.as_deref(),
+            mode,
+            &embedding_provider.spec(),
+        );
+        let report = try_load_cached_report(&root, &key)?;
         let cluster_count = report.clusters.len();
         let session = Self::finalise(SessionInit {
             root,
@@ -746,7 +758,7 @@ impl AnalysisSession {
                 total_occurrences: 0,
             });
         }
-        let mut clusters = self.clusters_matching_hashes(&snippet_hashes);
+        let mut clusters = self.clusters_at_subtree_hashes(&snippet_hashes);
         truncate(&mut clusters, max_results);
         let total_occurrences: usize = clusters.iter().map(crate::report::occurrence_count).sum();
         Ok(FindSimilarResult {
@@ -756,12 +768,33 @@ impl AnalysisSession {
         })
     }
 
-    /// Returns clusters whose stable id matches one of `snippet_hashes`.
-    fn clusters_matching_hashes(&self, snippet_hashes: &[[u8; 32]]) -> Vec<ReportCluster> {
+    /// Returns the report clusters whose occurrences carry any of
+    /// `snippet_hashes` — the content join behind snippet `find_similar`.
+    ///
+    /// A snippet has no workspace identity, so it can only be located
+    /// by content: each hash resolves to the live fingerprints that
+    /// carry it, their ranges are joined to the report through
+    /// [`report_for_range_in`] (the same lookup the open-range variant
+    /// uses), and the surviving clusters keep report order with no
+    /// duplicates. The public cluster id cannot take part: since gh
+    /// #430 it mixes the members' paths, so it is not derivable from a
+    /// pathless snippet's digests at all.
+    fn clusters_at_subtree_hashes(&self, snippet_hashes: &[[u8; 32]]) -> Vec<ReportCluster> {
+        let Some(pipeline) = self.pipeline.as_ref() else {
+            return Vec::new();
+        };
+        let matched_ids: HashSet<String> = pipeline
+            .subtree_occurrences(snippet_hashes)
+            .iter()
+            .flat_map(|(path, range)| {
+                report_for_range_in(&self.latest_report, path, range.start, range.end)
+            })
+            .map(|cluster| cluster.id)
+            .collect();
         self.latest_report
             .clusters
             .iter()
-            .filter(|cluster| cluster_matches_any_hash(cluster, snippet_hashes))
+            .filter(|cluster| matched_ids.contains(&cluster.id))
             .cloned()
             .collect()
     }
@@ -789,7 +822,26 @@ impl AnalysisSession {
     /// cold-pass install — never on per-keystroke incremental updates.
     /// Best-effort: failures are logged but never propagated.
     fn write_state_file(&self) {
-        persist_state_file(&self.root, self.latest_report.as_ref(), self.generation);
+        persist_state_file(
+            &self.root,
+            self.latest_report.as_ref(),
+            self.generation,
+            &self.cache_seed_key(),
+        );
+    }
+
+    /// [LIVE-CACHE-SEED-KEY] The identity of this session's analysis
+    /// settings, recorded beside the state file so the next startup can
+    /// tell a re-usable seed from an incompatible one.
+    fn cache_seed_key(&self) -> CacheSeedKey {
+        CacheSeedKey::new(
+            &self.root,
+            self.min_nodes,
+            self.incremental,
+            self.config_path.as_deref(),
+            self.embedding_mode,
+            &self.embedding_provider.spec(),
+        )
     }
 
     /// Asserts `path` is under the workspace root.

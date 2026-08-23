@@ -6,65 +6,105 @@
 //! refactor. Split out of `mod.rs` to keep every file under the 500-LOC
 //! budget and to house the widened member resolution.
 
+use std::{collections::HashMap, hash::BuildHasher};
+
 use tree_sitter::Node;
 
-use super::{enclosing_kind, function_kinds, parse_for, spans_multiple_files, Snippet};
-use crate::ast::ByteRange;
+use super::{
+    body_shape::{body_kind_stream, ShapeToken},
+    contract_index::{declared_bases, enclosing_container, function_name_node},
+    enclosing_kind, function_kinds,
+    override_marker::carries_override_marker,
+    parse_for, spans_multiple_files, ParseCache, Snippet,
+};
+use crate::{ast::ByteRange, state::FileId};
+
+/// What one cluster member contributes to the polymorphic decision.
+struct Subject<'src> {
+    /// The subject function's declared name.
+    name: &'src [u8],
+    /// Simple names of the bases the subject's enclosing type declares,
+    /// empty for a free function.
+    bases: Vec<Vec<u8>>,
+    /// The subject body's shape, carrying collaborator identity.
+    shape: Vec<ShapeToken<'src>>,
+    /// Whether the language's own override marker qualifies the subject,
+    /// which proves a contract declares it even when that contract is
+    /// outside the scan ([`carries_override_marker`]).
+    overrides: bool,
+}
 
 /// Detects the polymorphic-signature pattern: every cluster member
 /// resolves to a function definition ([`polymorphic_subject`]) with one
 /// shared declared name, the members span at least two distinct files,
-/// and the bodies are not byte-equivalent — so a genuine copy-pasted
-/// helper that happens to share a name (e.g. a private `_helper` reused
-/// in two modules) still fires as a cluster.
-pub(super) fn is_polymorphic_signature_cluster(snippets: &[Snippet<'_>]) -> bool {
-    let names: Option<Vec<&[u8]>> = snippets.iter().map(subject_name).collect();
-    let Some(names) = names else { return false };
-    let Some(first_name) = names.first() else {
+/// the bodies differ ([`body_kind_stream`]), and every subject method is
+/// *declared by a contract* its enclosing type derives from
+/// ([`ContractIndex::declares`], [CLONE-NOISE-POLYMORPHIC-CONTRACT]) —
+/// or carries the language's own override marker, which proves the same
+/// thing for a contract the scan never reached
+/// ([`carries_override_marker`]).
+///
+/// The contract requirement is the positive evidence the pattern is
+/// named for. Without it every same-named cross-file function was
+/// treated as polymorphic on the strength of a body difference, so a
+/// copy-pasted helper renamed past the shared collaborators would be
+/// deleted from the report the moment it shared its name (gh #373,
+/// `polymorphic_gate_hides_rename_clone.rs`). Reading the requirement as
+/// "the enclosing type names *some* base" was the same false negative one
+/// step further out: two ordinary subclasses of one shared base that
+/// happen to copy a method are not implementing anything
+/// (`python_inherited_contract_boundary.rs`). The base must declare the
+/// method. A free function is never an interface implementation; nothing
+/// forces its signature.
+///
+/// The contract index is corpus-wide and therefore built lazily, after
+/// the cheap per-cluster checks have already agreed the cluster looks
+/// polymorphic.
+pub(super) fn is_polymorphic_signature_cluster<S: BuildHasher>(
+    snippets: &[Snippet<'_>],
+    sources: &HashMap<FileId, Vec<u8>>,
+    file_languages: &HashMap<FileId, &'static str, S>,
+    cache: &ParseCache,
+) -> bool {
+    let subjects: Option<Vec<Subject<'_>>> = snippets.iter().map(subject_of).collect();
+    let Some(subjects) = subjects else {
         return false;
     };
-    if !names.iter().all(|name| name == first_name) {
+    let Some(first) = subjects.first() else {
+        return false;
+    };
+    if !subjects.iter().all(|subject| subject.name == first.name) {
         return false;
     }
     if !spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id)) {
         return false;
     }
-    subject_bodies_differ(snippets)
-}
-
-/// Returns true when at least two members' subject-function bodies
-/// differ in raw source bytes — distinguishes polymorphism (different
-/// implementations of one signature) from genuinely duplicated helper
-/// functions that share a name.
-fn subject_bodies_differ(snippets: &[Snippet<'_>]) -> bool {
-    let bodies: Option<Vec<Vec<u8>>> = snippets
-        .iter()
-        .map(|snippet| {
-            let tree = parse_for(snippet)?;
-            let function = polymorphic_subject(tree.root_node(), snippet)?;
-            let body = function.child_by_field_name("body")?;
-            snippet
-                .source
-                .get(body.start_byte()..body.end_byte())
-                .map(<[u8]>::to_vec)
-        })
-        .collect();
-    let Some(bodies) = bodies else { return false };
-    let Some(first) = bodies.first() else {
+    if !subjects.iter().any(|subject| subject.shape != first.shape) {
+        return false;
+    }
+    let Some(language) = snippets.first().map(|snippet| snippet.language) else {
         return false;
     };
-    bodies.iter().any(|body| body != first)
+    let contracts = cache.contracts(sources, file_languages, language);
+    subjects
+        .iter()
+        .all(|subject| subject.overrides || contracts.declares(&subject.bases, subject.name))
 }
 
-/// Returns the declared name of the member's subject function, when one
-/// resolves.
-fn subject_name<'a>(snippet: &'a Snippet<'_>) -> Option<&'a [u8]> {
+/// Resolves one member's subject function and everything the decision
+/// reads from it, in a single parse.
+fn subject_of<'src>(snippet: &Snippet<'src>) -> Option<Subject<'src>> {
     let tree = parse_for(snippet)?;
     let function = polymorphic_subject(tree.root_node(), snippet)?;
     let name_node = function_name_node(function)?;
-    snippet
-        .source
-        .get(name_node.start_byte()..name_node.end_byte())
+    Some(Subject {
+        name: snippet.source.get(name_node.byte_range())?,
+        bases: enclosing_container(function)
+            .map(|container| declared_bases(container, snippet.source))
+            .unwrap_or_default(),
+        shape: body_kind_stream(function.child_by_field_name("body")?, snippet.source),
+        overrides: carries_override_marker(function, snippet.language, snippet.source),
+    })
 }
 
 /// The one function a member view is *about*: the innermost function
@@ -151,27 +191,4 @@ fn is_docstring(node: Node<'_>) -> bool {
         && node
             .named_child(0)
             .is_some_and(|child| child.kind() == "string")
-}
-
-/// Resolves the identifier node that names `function`. Python, C#, and
-/// Rust expose a direct `name` field on the function node. Dart instead
-/// nests it under `signature` — `function_signature.name` for a top-level
-/// `function_declaration`, and `method_signature → function_signature.name`
-/// for a `method_declaration`. Without this descent
-/// [`subject_name`] returns `None` for every Dart member, so
-/// the polymorphic-signature filter could never fire on Dart even
-/// though `function_kinds` lists its node kinds.
-fn function_name_node(function: Node<'_>) -> Option<Node<'_>> {
-    if let Some(name) = function.child_by_field_name("name") {
-        return Some(name);
-    }
-    let signature = function.child_by_field_name("signature")?;
-    if let Some(name) = signature.child_by_field_name("name") {
-        return Some(name);
-    }
-    let mut cursor = signature.walk();
-    let nested = signature
-        .named_children(&mut cursor)
-        .find_map(|child| child.child_by_field_name("name"));
-    nested
 }

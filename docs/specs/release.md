@@ -8,7 +8,7 @@ Source-controlled project versions intentionally stay at the placeholder
 tree with:
 
 ```bash
-node scripts/stamp-release-version.mjs 1.2.3
+node scripts/release/stamp-release-version.mjs 1.2.3
 ```
 
 The release workflow must never commit that stamped tree back to Deslop. The
@@ -33,7 +33,7 @@ VSIX release artifacts are platform-specific and must be packaged with
 
 `make jetbrains-package` builds the JetBrains plugin zip, runs Gradle project
 configuration and plugin structure verification, then runs
-`scripts/verify-jetbrains-package.mjs` against the generated archive. The
+`scripts/deployment/verify-jetbrains-package.mjs` against the generated archive. The
 archive verifier checks the root `shipwright.json`, the manifest-listed
 host `deslop-lsp` binary, executable mode on Unix platforms, `--version`
 identity, and undeclared native files under the shipped `bin/<platform>/`
@@ -61,6 +61,51 @@ These gates run in `.github/workflows/` and `.deslop.toml` and fail the pipeline
 on drift. Coverage floors are owned by `coverage-thresholds.json`
 (`REPO-STANDARDS-SPEC [COVERAGE-THRESHOLDS-JSON]`).
 
+- **[CI-RELEASE-BUILD] One release build, three parallel consumers** — the
+  workspace is compiled exactly once per run, by the `build` job, in release.
+  That job owns format, lint, `make build`, the duplication gate and the
+  deployment gates, and caches `target/` plus the cargo registry under a key
+  containing the commit SHA. `ci` (Rust suite), `vsix` (extension
+  suite) and `jetbrains` (package gate) then run **in parallel**, all restoring
+  that exact entry read-only; a second writer on the same key would race the
+  build job. `coverage` runs alongside them on its own cache. The SHA in the key is what
+  makes the hit exact — a key that only hashes `Cargo.lock` matches a previous
+  run's target directory, and a test job that silently recompiles the workspace
+  buys nothing from the split. `restore-keys` still hands a cold run the
+  previous commit's directory to build incrementally on top of.
+
+  The dependency edge is the point, not just the speed. While `vsix` and
+  `jetbrains` gated on `ci`, every red Rust run left both suites `skipped`, so
+  extension breakage stayed invisible until the Rust suite went green and then
+  surfaced as a fresh CI round. Both now gate on `build` and report on every
+  run.
+
+  `make test` runs `cargo test --release` for the same reason: the duplication
+  gate, the deployment gates and the whole VSIX E2E suite exercise
+  `target/release`, so a debug-profile suite gates release artifacts on code it
+  never executed. The `build` job compiles the release *test* binaries too
+  (`cargo test … --no-run`), so what it caches is what `ci` needs and `ci`
+  links nothing.
+
+  **Coverage is a separate job, and this is the measurement that put it there.**
+  `cargo llvm-cov` compiles into `target/llvm-cov-target`, because an
+  instrumented artifact can never share a fingerprint with an uninstrumented
+  one. Measuring coverage inside `ci` therefore reused nothing from the release
+  build and recompiled the whole workspace ahead of every suite — and nothing
+  cached that directory, so the cost was paid on every single run. On run
+  32542178321 the `Test` step took 23m29s: **21m24s compiling, 1m34s running**.
+  Sharding the suite across N runners would have multiplied the compile by N
+  and saved nothing, because the tests were never the cost. The `coverage` job
+  now owns `make coverage`, keys `target/llvm-cov-target` under its own cache,
+  and depends on `changes` alone — gating it on `build` would add waiting for
+  artifacts it cannot reuse. It runs in parallel with `ci` and still enforces
+  every per-crate threshold in `coverage-thresholds.json`; no threshold moved.
+
+  `windows` keeps its own cache and its own build: a different runner OS
+  produces different artifacts that can never be shared. It is not split, and
+  measurement is why — the job completes in 2–3 minutes, most of it checkout,
+  toolchain and cache restore, all of which a split would pay again per part.
+
 - **[CI-DESLOP] Self-hosted duplication gate** — Deslop dog-foods its own
   detector: the `build` job runs the just-built release binary
   (`./target/release/deslop . --no-color`) against this repository. The binary
@@ -69,7 +114,7 @@ on drift. Coverage floors are owned by `coverage-thresholds.json`
   ([pipeline.md §EXIT-CODES](pipeline.md)) the moment repo-wide weighted
   duplication climbs past it. The same threshold surfaces as a single LSP startup
   warning ([CI-DESLOP] is a CLI-only *gate*; the live LSP surface only *warns*).
-  Provenance is contract-tested by `scripts/dup-gate-source.test.mjs`, which
+  Provenance is contract-tested by `scripts/repository/dup-gate-source.test.mjs`, which
   `make lint` runs: `dup-gate` must depend on `build` and invoke
   `./target/release/deslop`, `make build` must compile the workspace rather than
   download a release archive, `ci.yml` must run `make build` before `make
@@ -78,6 +123,50 @@ on drift. Coverage floors are owned by `coverage-thresholds.json`
   exemption is `action-selftest.yml`, whose whole purpose is proving the
   published action works and which scans the `examples/` fixtures, never this
   tree. A gate running last month's binary would report last month's percentage.
+- **[TEST-SELECTION] No test is selected by name** — the release gate
+  (`make test`) runs `cargo llvm-cov --workspace --all-targets` with no test
+  filter at all. `cargo test --skip` matches a *substring of the test name*, so
+  the previous `--skip ollama_ --skip corpus_` dropped every hermetic test whose
+  name merely mentioned a service: the corpus gate's own precision, scope and
+  confidence self-tests in `deslop-test-support`, the mock-Ollama embedding
+  suites, and the tests that assert graceful degradation when Ollama is
+  unreachable — the exact tests that prove the gate works (gh #412). The Rust
+  embedding suites need no daemon; they drive an in-process mock server or a
+  deliberately dead endpoint, so they belong in the gate. `make test-ollama`
+  covers only the VSIX suite, which does need a live daemon. A test that must
+  not run says so at its own declaration, under [TEST-SELECTION-SKIP] below.
+  Contract-tested by `scripts/repository/test-selection.test.mjs`, which
+  `make lint` runs.
+- **[TEST-SELECTION-SKIP] A skipped test carries its reason** — `#[ignore]` is
+  the only mechanism that may keep a test out of `make test`, and every use of
+  it states a category, a tracking issue, a spec id, and a plan document that
+  names that issue. The attribute is deliberately the *opposite* of a filter: a
+  filter hides a test from the person reading it, an `#[ignore]` shows them, and
+  the reason is printed on every run. `#[cfg_attr(.., ignore)]` is prohibited —
+  it hides the skip from the gate that reads them.
+
+  Exactly two categories are allowed, and "it was breaking CI" is not one of
+  them:
+
+  - **[SKIP-UNFINISHED]** — the feature behind the assertions is not finished.
+    The assertions stay intact and stay red; the issue owns the remaining work.
+    Weakening them to go green is prohibited.
+  - **[SKIP-TOO-LARGE-FOR-CI]** — a corpus or embedding suite whose clone, wall
+    time, or peak memory does not fit a hosted runner
+    ([corpus.md §CORPUS-CI](corpus.md), gh #422).
+
+  Skipping costs coverage of a test's *execution*, never of its *compilation*:
+  `#[ignore]` leaves the target inside `--all-targets`, so `make test` and
+  `make lint` still build and lint it. The previous `required-features` gate did
+  not, and commit `77bcbaed5` left the corpus suite uncompilable for exactly
+  that reason — deleting two constants it still read, with nothing to notice
+  until someone ran `make test-corpus`.
+
+  Enforced by `crates/deslop/tests/skip_policy_contract.rs`, which reads every
+  `#[ignore]` off the AST — a comment or string literal that merely mentions
+  `ignore` is not a skip — and compares the set found against a curated list.
+  Adding a skip fails that gate until someone adds it deliberately; a skip whose
+  fix has landed fails it until someone deletes it.
 - **[GITHUB-CODE-SCANNING] CodeQL** — `codeql.yml` runs CodeQL
   `security-extended` to feed GitHub code-scanning alerts (PRs to `main`, `v*`
   tags, weekly), across the `rust` / `javascript-typescript` / `actions` matrix
@@ -236,7 +325,7 @@ resolve their executables — CodeQL's `actions/envpath-injection`. The install
 step therefore moves the extracted `deslop-<version>-<artifact>` directory to a
 fixed `bin` name and exports `${RUNNER_TEMP}/deslop/bin`, a constant; the `mv`
 doubles as the layout assertion, failing loudly if a release is ever repackaged
-without that top-level directory. `scripts/verify-env-path-writes.mjs` enforces
+without that top-level directory. `scripts/actions/verify-env-path-writes.mjs` enforces
 this with an error across `action.yml` and every workflow, in `make lint` so it
 runs on every CI job rather than behind a path filter, and
 `verify-env-path-writes.test.mjs` proves the gate rejects the tainted form.
@@ -256,7 +345,7 @@ interpolated into a `run` body, so a crafted input cannot inject shell.
 
 **[ACTION-CACHE] The parse store survives between runs.**
 
-> **Status: shipped.** Pinned by the action contract suite (`scripts/test-action-contract.mjs`) and the two-runner `cache-seed`/`cache-warm` self-test.
+> **Status: shipped.** Pinned by the action contract suite (`scripts/actions/test-action-contract.mjs`) and the two-runner `cache-seed`/`cache-warm` self-test.
 
 The action restores `.deslop/cache` under the scan root before the run step and saves it afterwards with the SHA-pinned `actions/cache/restore` and `actions/cache/save` steps ([SWR-SEC-ACTION-PINNING]). The path derives from the `path` input, never the repository root — the store lives beside the scan root by contract ([pipeline.md §PIPELINE-INCREMENTAL]). The key is `deslop-<resolved version>-<runner os>-<run id>` with a `restore-keys` prefix that drops the run id: the store mutates every pass and an exact-key hit is never re-saved, so the per-run key plus prefix fallback is what lets each run restore the newest same-version store and save its own successor. Keying on the resolved CLI version keeps superseded partitions from riding between runs, and the post-pass retention sweep bounds every save at 2 GiB ([pipeline.md §PIPELINE-INCREMENTAL-RETENTION]), well under the 10 GiB repository ceiling Actions evicts against. Correctness never rests on the restore: every blob is digest-verified against its full address before a payload byte is decoded, and anything stale, foreign, or tampered is refused into a plain miss and rebuilt from source ([pipeline.md §PIPELINE-INCREMENTAL-INTEGRITY]) — the worst a bad cache entry can cost is a re-parse. A `cache: "false"` input skips both steps and changes nothing else.
 
@@ -267,7 +356,7 @@ Marketplace Developer Agreement accepted on the `Nimblesite` org and a unique
 `name`. The listing resolves metadata from the tag, not from `main`, so the
 first listed version must be a tag whose commit already contains `action.yml`.
 
-**[ACTION-TESTS] Two layers.** `scripts/test-action-contract.mjs` runs in
+**[ACTION-TESTS] Two layers.** `scripts/actions/test-action-contract.mjs` runs in
 `make deployment-verify` and proves what a runner cannot cheaply re-prove per
 PR: the asset mapping against the real `release.yml` matrix, version derivation,
 checksum rejection, output extraction, and the static shape of `action.yml`

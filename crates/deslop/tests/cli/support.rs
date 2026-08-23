@@ -4,6 +4,17 @@ pub(crate) use predicates::str::contains;
 pub(crate) use serde_json::Value;
 pub(crate) use std::{fs, path::Path, path::PathBuf};
 
+/// Shared CLI flag selecting the minimum AST node count.
+pub(crate) const MIN_NODES_FLAG: &str = "--min-nodes";
+/// Shared small-fixture node-count value.
+pub(crate) const MIN_NODES_VALUE: &str = "8";
+/// Shared CLI flag disabling ANSI colour sequences.
+pub(crate) const NO_COLOR_FLAG: &str = "--no-color";
+/// Shared output stem used by CLI integration tests.
+pub(crate) const REPORT_OUTPUT_STEM: &str = "report";
+/// Canonical small C# fixture name.
+pub(crate) const CSHARP_SMALL_FIXTURE: &str = "csharp-small";
+
 pub(crate) fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -24,7 +35,7 @@ pub(crate) struct RunOutputs {
 
 /// Renders the three output paths for an `--output <dir>/report` layout.
 pub(crate) fn outputs_under(dir: &Path) -> RunOutputs {
-    let base = dir.join("report");
+    let base = dir.join(REPORT_OUTPUT_STEM);
     RunOutputs {
         json: with_ext(&base, "json"),
         txt: with_ext(&base, "txt"),

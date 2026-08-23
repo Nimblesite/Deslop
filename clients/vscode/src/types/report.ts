@@ -63,7 +63,7 @@ export function occurrenceCount(cluster: ReportCluster): number {
 }
 
 // Wire-format models generated from `docs/models/live-ipc.td` by
-// `scripts/typediagram-gen.mjs`. Re-exported here so the historical
+// `scripts/typediagram/generate.mjs`. Re-exported here so the historical
 // `clients/vscode/src/types/report` import path keeps resolving for
 // every consumer. The generated source is gitignored; `make
 // typediagram-gen` (chained into `make vsix-build`) regenerates it.
@@ -156,8 +156,10 @@ export type Bucket =
   | "loosely_similar"
   | "same_behavior";
 
+export const IDENTICAL_BUCKET_VALUE: Bucket = "identical";
+
 export const BUCKETS: readonly Bucket[] = [
-  "identical",
+  IDENTICAL_BUCKET_VALUE,
   "nearly_identical",
   "structural_only",
   "loosely_similar",
@@ -186,7 +188,7 @@ const LABELS: Record<Bucket, BucketLabels> = {
     hybridTitle: "Identical code [Type-1/2]",
     actionSentence: "Safe to extract — every copy is the same.",
     taxonomyLabel: "Type-1 or Type-2 exact clone",
-    cssSuffix: "identical",
+    cssSuffix: IDENTICAL_BUCKET_VALUE,
     aiMatch: false,
   },
   nearly_identical: {
@@ -261,7 +263,7 @@ export function resolveBucket(cluster: ReportCluster): Bucket {
 // is a false positive. Exported so the live bubble, the tree, and the tests
 // share one definition ([VSIX-LIVE-BUBBLE]).
 export const ACT_NOW_BUCKETS: readonly Bucket[] = [
-  "identical",
+  IDENTICAL_BUCKET_VALUE,
   "nearly_identical",
 ] as const;
 
@@ -279,7 +281,9 @@ export function isActNow(bucket: Bucket): boolean {
 // Wire label carried in JSON `cluster.category`.
 export type Category = "logic" | "data";
 
-export const CATEGORIES: readonly Category[] = ["logic", "data"] as const;
+export const DATA_CATEGORY_VALUE: Category = "data";
+
+export const CATEGORIES: readonly Category[] = ["logic", DATA_CATEGORY_VALUE] as const;
 
 export interface CategoryLabels {
   // Plain title for facet surfaces (filter QuickPick, webview category
@@ -304,7 +308,7 @@ export function categoryLabels(category: Category): CategoryLabels {
 // "logic" for absent or unknown values — mirrors
 // deslop-core::clone_category::from_wire_label.
 export function resolveCategory(cluster: ReportCluster): Category {
-  return cluster.category === "data" ? "data" : "logic";
+  return cluster.category === DATA_CATEGORY_VALUE ? DATA_CATEGORY_VALUE : "logic";
 }
 
 /** A sanitized facet filter: only registry-known values survive. */
@@ -358,4 +362,3 @@ export function clusterInterpretation(cluster: ReportCluster): string {
     ? cluster.interpretation
     : bucketLabels(resolveBucket(cluster)).actionSentence;
 }
-

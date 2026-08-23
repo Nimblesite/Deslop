@@ -36,7 +36,6 @@ use std::{
 use anyhow::Result;
 use serde_json::Value;
 
-mod common;
 use crate::common::*;
 
 /// Nesting depths the depth guard accepts and the recursive walks then

@@ -1,4 +1,5 @@
-use crate::support::*;
+use super::support::*;
+use deslop_core::lang::shared::OPERATOR_KIND_PREFIX;
 use std::fmt::Write as _;
 
 /// Runs a default (cache-on, [PIPELINE-INCREMENTAL]) pass over
@@ -377,12 +378,12 @@ fn synthetic_corpus_scale_smoke_test() -> Result<()> {
     Ok(())
 }
 
-// Implements the [BUG-FIXTURE] workflow from CLAUDE.md: every bug
-// reproduced into `tests/fixtures/bug-*/` becomes a permanent e2e
-// test. This is the seed example — an empty C# class body used to
-// be silently dropped before the sibling-window fingerprint pass
-// existed; the cluster test below pins that behaviour so the bug
-// cannot regress.
+// Implements the fixture-per-bug workflow from
+// `.claude/skills/fix-bug/SKILL.md`: every bug reproduced into
+// `tests/fixtures/bug-*/` becomes a permanent e2e test. This is the
+// seed example — an empty C# class body used to be silently dropped
+// before the sibling-window fingerprint pass existed; the assertion
+// below pins that behaviour so the bug cannot regress.
 #[test]
 fn bug_fixture_walks_trivial_class_body_without_panicking() -> Result<()> {
     let tmp = tempfile::tempdir()?;
@@ -441,10 +442,19 @@ fn assert_ast_golden(fixture_dir: &str, sample_name: &str) -> Result<()> {
         expected,
         "AST dump drifted from {}. Regenerating is NOT the default remedy — \
          prove the new dump satisfies the contract first; the committed file \
-         is only a golden while it is correct.",
+         is only a golden while it is correct.\n\
+         If the new dump IS correct, the normalised tree has changed meaning \
+         while the parse store's blob layout has not, so **bump \
+         `fpcache::blob::SEMANTIC_EPOCH`** in the same change \
+         ([PIPELINE-INCREMENTAL-INTEGRITY]). Blobs are addressed by \
+         `(language, tool_version, min_nodes, source_hash)` and the workspace \
+         version is the permanently-reused `0.0.0-dev`, so without that bump \
+         every already-stored tree stays addressable and a warm run serves \
+         the pre-change normalisation — the one way a warm report can differ \
+         from the cold report of the same tree.",
         expected_path.display(),
     );
-    assert_dump_is_correct(&expected, fs::metadata(&source)?.len(), fixture_dir);
+    assert_dump_is_correct(&expected, &fs::read(&source)?, fixture_dir);
     Ok(())
 }
 
@@ -467,7 +477,8 @@ struct DumpNode {
 /// a file the tool wrote. These invariants come from the contract instead,
 /// so a regenerated dump that re-admits trivia fails here even though it
 /// matches the committed bytes exactly.
-fn assert_dump_is_correct(dump: &str, source_len: u64, label: &str) {
+fn assert_dump_is_correct(dump: &str, source: &[u8], label: &str) {
+    let source_len = u64::try_from(source.len()).unwrap_or(u64::MAX);
     let nodes: Vec<DumpNode> = dump.lines().filter_map(parse_dump_line).collect();
     assert!(!nodes.is_empty(), "{label}: dump has no nodes");
     for node in &nodes {
@@ -486,6 +497,43 @@ fn assert_dump_is_correct(dump: &str, source_len: u64, label: &str) {
     }
     assert_root_spans_retained_children(&nodes, label);
     assert_ranges_nest(&nodes, label);
+    assert_operators_carry_their_token(&nodes, source, label);
+}
+
+/// [PIPELINE-NORMALIZE-AST-OPERATOR] Every operator leaf must be named
+/// by the token it stands for, and its name must be the bytes it spans.
+///
+/// This is what stops the golden from being self-certifying on the one
+/// axis that matters most here. A dump full of a shared `__op__`
+/// placeholder is byte-for-byte stable and completely wrong: it records
+/// a tree in which `alpha + beta` and `alpha - beta` are the same
+/// subtree, and regenerating the file would promote that to "expected"
+/// exactly as it once promoted the dropped Go comments. Reading the
+/// name back out of the source proves the leaf discriminates, and it
+/// proves it against the fixture rather than against the tool.
+fn assert_operators_carry_their_token(nodes: &[DumpNode], source: &[u8], label: &str) {
+    let operators = nodes
+        .iter()
+        .filter(|node| node.kind.starts_with(OPERATOR_KIND_PREFIX));
+    for node in operators {
+        let range = usize::try_from(node.start)
+            .ok()
+            .zip(usize::try_from(node.end).ok());
+        let spanned = range
+            .and_then(|(start, end)| source.get(start..end))
+            .map(String::from_utf8_lossy)
+            .unwrap_or_default();
+        assert_eq!(
+            node.kind,
+            format!("{OPERATOR_KIND_PREFIX}{spanned}"),
+            "{label}: operator leaf `{}` at [{}..{}] spans `{spanned}`. An \
+             operator leaf named anything but its own token cannot tell `+` \
+             from `-`, and every signal taken from the digest inherits that",
+            node.kind,
+            node.start,
+            node.end,
+        );
+    }
 }
 
 /// Splits `<indent><kind> [start..end]`; indent is two spaces per level.

@@ -29,6 +29,9 @@ import type { ThresholdStatus } from "./threshold";
 // after the helpers moved to the cycle-free `./paths` leaf module.
 export { displayPath, representativePath } from "./paths";
 
+const TREE_ITEM_ROLE = "treeitem";
+const FILE_NODE_KIND = "file";
+
 export type Node =
   | ClusterNode
   | OccurrenceNode
@@ -109,7 +112,7 @@ export class ClusterNode extends vscode.TreeItem {
     this.iconPath = categoryIcon(bucket);
     this.accessibilityInformation = {
       label: `${labels.plainTitle} in ${fileLabel}, cluster ${cluster.id}, rank ${rank}`,
-      role: "treeitem",
+      role: TREE_ITEM_ROLE,
     };
     // Tooltip is the AI-scrapable hover surface and stays mode-invariant
     // — always carries the full file path. [VSIX-TOP-OFFENDERS-FILE-MODE]
@@ -174,14 +177,14 @@ export class FileNode extends vscode.TreeItem {
     super(`${label} · ${clusterCount} ${noun}`, vscode.TreeItemCollapsibleState.Collapsed);
     this.description = `worst weight ${formatScore(worstWeight)}`;
     this.contextValue = "deslop.fileGroup";
-    this.iconPath = new vscode.ThemeIcon("file");
+    this.iconPath = new vscode.ThemeIcon(FILE_NODE_KIND);
     this.tooltip = new vscode.MarkdownString(
       `\`${filePath}\`\n\n` +
         `${clusterCount} duplicate ${noun} · worst weight \`${formatScore(worstWeight)}\``,
     );
     this.accessibilityInformation = {
       label: `${label}, ${clusterCount} duplicate ${noun}`,
-      role: "treeitem",
+      role: TREE_ITEM_ROLE,
     };
   }
 }
@@ -206,7 +209,7 @@ export abstract class GroupNode extends vscode.TreeItem {
     if (icon) this.iconPath = icon;
     this.accessibilityInformation = {
       label: `${title}, ${clusters.length} clusters`,
-      role: "treeitem",
+      role: TREE_ITEM_ROLE,
     };
   }
 }
@@ -244,7 +247,7 @@ export class FolderNode extends vscode.TreeItem {
     fileCount: number,
   ) {
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
-    const noun = fileCount === 1 ? "file" : "files";
+    const noun = fileCount === 1 ? FILE_NODE_KIND : "files";
     this.description = `worst weight ${formatScore(worstWeight)} · ${fileCount} ${noun}`;
     this.contextValue = "deslop.folderGroup";
     this.iconPath = vscode.ThemeIcon.Folder;
@@ -254,7 +257,7 @@ export class FolderNode extends vscode.TreeItem {
     );
     this.accessibilityInformation = {
       label: `${label}, ${fileCount} duplicated ${noun}`,
-      role: "treeitem",
+      role: TREE_ITEM_ROLE,
     };
   }
 }
@@ -275,7 +278,7 @@ export class LanguageGroupNode extends vscode.TreeItem {
     this.iconPath = new vscode.ThemeIcon("symbol-namespace");
     this.accessibilityInformation = {
       label: `${languageDisplayName(language)}, ${clusterCount} ${noun}`,
-      role: "treeitem",
+      role: TREE_ITEM_ROLE,
     };
   }
 }
@@ -331,7 +334,7 @@ export class FolderMetricNode extends vscode.TreeItem {
     );
     this.accessibilityInformation = {
       label: `${label}, ${formatPercent(percent)} duplicated`,
-      role: "treeitem",
+      role: TREE_ITEM_ROLE,
     };
   }
 }
@@ -343,7 +346,7 @@ export class FileMetricNode extends vscode.TreeItem {
     super(baseName(displayPath(metric.path)), vscode.TreeItemCollapsibleState.None);
     this.description = `${formatPercent(metric.duplication_percent)} · ${metric.duplicated_loc}/${metric.analysed_loc} LOC`;
     this.contextValue = "deslop.fileMetric";
-    this.iconPath = new vscode.ThemeIcon("file");
+    this.iconPath = new vscode.ThemeIcon(FILE_NODE_KIND);
     // `metric.path` is rendered relative to the scan root by the engine, so
     // it must be resolved against the workspace before it names a file on
     // disk — otherwise the row opens a phantom path at the filesystem root

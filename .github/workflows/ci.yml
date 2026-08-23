@@ -5,16 +5,24 @@ on:
   pull_request:
     branches: [main]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+# TEMP-UNBLOCK: the concurrency block is suspended until zombie run
+# 32620898314 clears — its coverage job is queued on the starved
+# linux-x64 label, queue time does not count toward timeout-minutes,
+# and cancel-in-progress cannot cancel a QUEUED run, only an in-progress
+# one. Every new PR run therefore sat pending with 0 jobs. Restore this
+# block as soon as that run is gone. Concurrency is read from the
+# workflow file at each run's triggering commit, so only runs created
+# while it is suspended are ungated.
+# concurrency:
+#   group: ${{ github.workflow }}-${{ github.ref }}
+#   cancel-in-progress: true
 
 jobs:
   # Path classifier — decides whether the heavy Rust / VSIX / JetBrains / Windows
   # gates need to run at all. A PR that only touches site/** (the Eleventy
-  # website) cannot affect those suites, so they are skipped; website content is
-  # still validated by the `site` job below. Any changed file outside site/ sets
-  # `code=true` and the full pipeline runs (a mixed PR runs everything).
+  # website) or scripts/issues/** cannot affect those suites, so they are
+  # skipped; the issue experience is still validated by the `site` job below.
+  # Any other changed path sets `code=true` (a mixed PR runs everything).
   #
   # Gating uses job-level `if:` rather than workflow-level paths-ignore on
   # purpose: a workflow skipped by path filtering leaves its required checks
@@ -55,8 +63,9 @@ jobs:
           changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
           echo "Changed files in this PR:"
           printf '%s\n' "$changed"
-          # site = at least one website file changed.
-          # code = at least one file OUTSIDE site/ changed, OR a
+          # site = at least one website or issue-report generator file changed.
+          # code = at least one file OUTSIDE site/ and scripts/issues/ changed,
+          #        OR a
           #        design-system stylesheet that deslop-core compiles into
           #        the standalone HTML report via include_str!
           #        (crates/deslop-core/src/render/html_css.rs). Those CSS
@@ -65,60 +74,45 @@ jobs:
           #        so the code pipeline — including the _vsix-playwright-html
           #        report-CSS guard — must run, or a broken/unstyled report
           #        could ship unverified. A mixed PR sets both.
-          if printf '%s\n' "$changed" | grep -qE '^site/'; then
+          if printf '%s\n' "$changed" | grep -qE '^(site/|scripts/issues/)'; then
             echo "site=true" >> "$GITHUB_OUTPUT"
           else
             echo "site=false" >> "$GITHUB_OUTPUT"
           fi
-          if printf '%s\n' "$changed" | grep -qvE '^site/' \
+          if printf '%s\n' "$changed" | grep -qvE '^(site/|scripts/issues/)' \
              || printf '%s\n' "$changed" | grep -qE '^site/src/assets/css/'; then
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
 
-  ci:
-    name: CI
+  # [CI-RELEASE-BUILD] Formatting and analyzers run first, followed by release
+  # compilation in the same sequential job. The completed release cache is then
+  # saved for every parallel test job.
+  build:
+    name: Format + analyzers + build release
     needs: changes
     if: needs.changes.outputs.code == 'true'
+    # HOSTED RUNNER: every org-provisioned label tried here starved —
+    # `linux-x64` queued 16m+ per runner, `Medium` 20m+ with none
+    # arriving (runs 32620898314, 32622436702). Hosted `ubuntu-latest`
+    # starts in seconds and [TEST-ONE-BINARY] already cut the compile to
+    # ~1m02s by linking once instead of 193 times.
     runs-on: ubuntu-latest
-    # Covers a release clippy build, an instrumented coverage build, the
-    # full workspace suite, the self-scan duplication gate and the
-    # deployment gates. The previous 10 was sized against runs that
-    # aborted at the first test failure and never reached the rest.
-    timeout-minutes: 30
+    # The compile is the bulk of the job: 20m1s on run 32548446084 with
+    # four cores, which a 25-minute cap cancelled mid-gate and took every
+    # downstream shard, the VSIX job and the JetBrains gate with it. The
+    # cap is generous rather than tight on purpose — a build that runs
+    # long is a slow pipeline, but a build that is *cancelled* publishes
+    # no artifacts and fails the whole run for a reason that has nothing
+    # to do with the code under test.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
-      # CLAUDE.md invariant: tree-sitter grammars must stay pinned
-      # with `=x.y.z` in the workspace `Cargo.toml`. This step fails
-      # the build if any pin drifts to a caret / tilde / range
-      # constraint so accidental unpinning can never land on main.
-      - name: Verify grammar pins
-        run: |
-          set -euo pipefail
-          for dep in tree-sitter tree-sitter-c-sharp tree-sitter-rust tree-sitter-python tree-sitter-dart tree-sitter-typescript tree-sitter-javascript tree-sitter-php tree-sitter-fsharp tree-sitter-go; do
-            line=$(grep -E "^${dep} = " Cargo.toml || true)
-            if [ -z "${line}" ]; then
-              echo "MISSING PIN: ${dep} must appear in workspace.dependencies"
-              exit 1
-            fi
-            if ! echo "${line}" | grep -qE '"=[0-9]+\.[0-9]+\.[0-9]+"'; then
-              echo "LOOSE PIN: ${dep} must use an exact =x.y.z constraint, got: ${line}"
-              exit 1
-            fi
-            echo "OK: ${line}"
-          done
-
-      # Rust toolchain + components. Grammar versions (tree-sitter,
-      # tree-sitter-c-sharp, tree-sitter-rust, tree-sitter-python,
-      # tree-sitter-dart, tree-sitter-typescript, tree-sitter-javascript,
-      # tree-sitter-php, tree-sitter-fsharp, tree-sitter-go) are pinned
-      # with `=x.y.z` in the workspace
-      # `Cargo.toml`; the step above verifies the pins stay exact.
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy, llvm-tools-preview
+          components: rustfmt, clippy
 
       - uses: actions/setup-node@v7
         with:
@@ -138,33 +132,300 @@ jobs:
       - name: Install typediagram
         run: npm install -g typediagram@0.11.0
 
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@v2.85.13
-        with:
-          tool: cargo-llvm-cov
-
-      - name: Cache cargo registry and target
-        uses: actions/cache@v6
+      - name: Restore prior release cache
+        uses: actions/cache/restore@v6
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
+          key: ${{ runner.os }}-cargo-release-${{ github.sha }}
           restore-keys: |
+            ${{ runner.os }}-cargo-release-
             ${{ runner.os }}-cargo-
 
-      # fmt, lint, test are three separate, non-overlapping steps.
-      - name: Format check
+      - name: Check formatting
         run: make fmt CHECK=1
 
-      - name: Lint
-        run: make lint
+      - name: Verify grammar pins
+        run: |
+          set -euo pipefail
+          for dep in tree-sitter tree-sitter-c-sharp tree-sitter-rust tree-sitter-python tree-sitter-dart tree-sitter-typescript tree-sitter-javascript tree-sitter-php tree-sitter-fsharp tree-sitter-go; do
+            line=$(grep -E "^${dep} = " Cargo.toml || true)
+            if [ -z "${line}" ]; then
+              echo "MISSING PIN: ${dep} must appear in workspace.dependencies"
+              exit 1
+            fi
+            if ! echo "${line}" | grep -qE '"=[0-9]+\.[0-9]+\.[0-9]+"'; then
+              echo "LOOSE PIN: ${dep} must use an exact =x.y.z constraint, got: ${line}"
+              exit 1
+            fi
+            echo "OK: ${line}"
+          done
 
-      # make test = fail-fast + coverage + threshold enforcement ([TEST-RULES]).
-      # Thresholds live in coverage-thresholds.json ([COVERAGE-THRESHOLDS-JSON]).
-      - name: Test
-        run: make test
+      - name: Run analyzers
+        run: make _ci-analyze
+
+      # [CI-RELEASE-BUILD] One release build per run, shared by every
+      # downstream job. The key is the commit, so the two parallel test
+      # jobs get an exact hit on the build this run produced rather than
+      # whatever a previous run happened to leave behind — a near-miss
+      # there is how a test job silently recompiles the workspace and
+      # the parallelism buys nothing. `restore-keys` still hands a cold
+      # run the previous commit's target directory to build on top of.
+      #
+      # The two generated wire modules are cached WITH the target
+      # directory, and have to be. They are git-ignored, so a consumer
+      # job checks out without them, regenerates them, and hands every
+      # dependent crate a source file newer than the fingerprint it just
+      # restored — cargo then rebuilds deslop-core and everything below
+      # it. That is not hypothetical: on run 32562462371 shard 1 proved
+      # an exact cache hit and still spent 3m11s recompiling five crates
+      # before its first test, and four shards paying that is how the
+      # 20-minute cap was reached on run 32549706011. Restored with the
+      # target directory they keep the build job's mtimes, the
+      # generator's own content check reports them unchanged, and the
+      # restored fingerprints stay valid.
+      - name: Build
+        run: make build
+
+      # [CI-RELEASE-BUILD] The release *test* binaries, compiled here and
+      # written into the cache this job owns. Without this the `ci` job
+      # restores a target directory holding no test artifacts and
+      # recompiles all of them: CI run 32542178321 spent 21m24s doing
+      # exactly that before running a suite that takes 1m34s. `--no-run`
+      # stops short of executing them, so this job stays a build job.
+      - name: Compile release test binaries
+        run: make compile-release-tests
+
+      - name: Save release build cache
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
+          key: ${{ runner.os }}-cargo-release-${{ github.sha }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-artifacts
+          path: |
+            target/release/deslop
+            target/release/deslop-lsp
+            target/release/deslop-mcp
+          retention-days: 1
+
+  # [CI-COVERAGE-ONCE] Stage 3: execute the Rust suite exactly once, with
+  # LLVM instrumentation. It writes raw profiles only; `coverage` is the
+  # one final stage that calculates reports and thresholds after every test
+  # job in this workflow has completed.
+  rust-tests:
+    name: Rust tests + coverage collection
+    needs: [changes, build]
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.x"
+          cache: npm
+          cache-dependency-path: |
+            clients/vscode/package-lock.json
+            clients/vscode/webview-ui/package-lock.json
+
+      # See the build job — typediagram is required by build.rs and by
+      # `make coverage-run`'s own `typediagram-gen` prerequisite.
+      - name: Install typediagram
+        run: npm install -g typediagram@0.11.0
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2.85.13
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Cache instrumented Rust build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/llvm-cov-target
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
+          key: ${{ runner.os }}-cargo-cov-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-cov-
+
+      - name: Run Rust tests with coverage collection
+        run: make coverage-run
+
+      - name: Upload raw Rust coverage
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: rust-coverage-raw
+          path: target/llvm-cov-target
+          include-hidden-files: true
+          retention-days: 1
+
+  # Repository contract tests and deployment proofs execute after the cached
+  # release build, alongside every other test job, with V8 coverage enabled.
+  repository-tests:
+    name: Repository tests + coverage collection
+    needs: [changes, build]
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NODE_V8_COVERAGE: coverage/repository/raw
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.x"
+      - name: Install typediagram
+        run: npm install -g typediagram@0.11.0
+      - name: Restore release build
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
+          key: ${{ runner.os }}-cargo-release-${{ github.sha }}
+      - name: Run repository contract tests
+        run: make _ci-contract-tests
+
+      # Duplication gate ([CI-DESLOP]). Self-hosted: runs the release binary
+      # the build job produced (restored via cache) against this repo, so the
+      # gate is always the CURRENT detector. It reads the ratcheted
+      # [threshold] max_duplication_percent from .deslop.toml and exits 3
+      # (failing CI) the moment repo-wide duplication climbs past it. The
+      # threshold is the single source of truth — never hardcoded here.
+      - name: Duplication gate (deslop)
+        run: make dup-gate
+
+      - name: Deployment manifest and binary gates
+        run: make deployment-verify
+      - name: Upload raw repository coverage
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: repository-coverage-raw
+          path: coverage/repository/raw
+          retention-days: 1
+
+  # [CI-COVERAGE-ONCE] Stage 4: this is the only job allowed to calculate
+  # coverage or enforce a threshold. Every test job above is a dependency, so
+  # all instrumented test executions finish before reports are generated.
+  coverage:
+    name: Calculate coverage + thresholds
+    needs: [changes, rust-tests, repository-tests, windows, vsix, jetbrains, site]
+    if: always() && needs.changes.outputs.code == 'true'
+    # HOSTED RUNNER: same starvation as `build` — org labels `linux-x64`
+    # and `Medium` never picked a runner up. Hosted `ubuntu-latest`:
+    # cold instrumented release build is ~21 minutes on four cores,
+    # inside the 40-minute cap below.
+    runs-on: ubuntu-latest
+    # TIMEOUT EXCEPTION: a cold instrumented release build of the whole
+    # workspace is ~21 minutes on a cache miss.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.x"
+
+      - name: Install typediagram
+        run: npm install -g typediagram@0.11.0
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2.85.13
+        with:
+          tool: cargo-llvm-cov
+
+      # [CI-COVERAGE-ONCE] `merge-multiple: true` is load-bearing: a
+      # single-path upload zips the directory's *contents* at the zip
+      # root, and the default `merge-multiple: false` extracts them
+      # under `path/<artifact-name>/` — one directory too deep.
+      #
+      # The restore also strips the executable bit: download-artifact's
+      # implementation does not preserve unix modes from the zip, and
+      # cargo-llvm-cov collects object files by filtering executables —
+      # every restored test binary at 0644 reads as "not found object
+      # files". chmod re-marks them; the hoist below is a self-heal in
+      # case a restore ever lands nested despite merge-multiple.
+      - name: Restore raw Rust coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: rust-coverage-raw
+          path: target/llvm-cov-target
+          merge-multiple: true
+
+      - name: Normalize raw Rust coverage layout
+        run: |
+          test -d target/llvm-cov-target/release || {
+            echo "release/ missing at expected depth; searching"
+            find target/llvm-cov-target -maxdepth 3 -type d -name release
+            for nested in target/llvm-cov-target/*/; do
+              if [ -d "${nested}release" ]; then
+                echo "hoisting ${nested}release -> target/llvm-cov-target/"
+                mv "${nested}"* target/llvm-cov-target/
+              fi
+            done
+          }
+          ls target/llvm-cov-target/release | head -5
+          find target/llvm-cov-target -maxdepth 2 -name '*.profraw' | head -3
+          find target/llvm-cov-target/release -type f -exec chmod u+x {} +
+
+      - name: Restore Windows Rust coverage report
+        uses: actions/download-artifact@v8
+        with:
+          name: windows-rust-coverage
+          path: .
+          merge-multiple: true
+
+      - name: Restore VSIX coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: vsix-coverage
+          path: clients/vscode/coverage
+          merge-multiple: true
+
+      - name: Restore raw repository coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: repository-coverage-raw
+          path: coverage/repository/raw
+          merge-multiple: true
+
+      - name: Calculate Rust coverage
+        run: make coverage-report
+
+      - name: Enforce webview coverage
+        run: make _vsix-webview-coverage-check
+
+      - name: Calculate repository-script coverage
+        run: npx --yes c8@12.0.0 report --temp-directory coverage/repository/raw --reporter=json-summary --reports-dir coverage/repository
 
       - name: Upload coverage
         uses: actions/upload-artifact@v7
@@ -173,51 +434,32 @@ jobs:
           name: coverage-report
           path: |
             lcov.info
+            windows-lcov.info
             target/llvm-cov/
+            coverage/repository/coverage-summary.json
           retention-days: 1
 
-      - name: Build
-        run: make build
-
-      # Duplication gate ([CI-DESLOP]). Self-hosted: runs the release binary
-      # built by the step above against this repo, so the gate is always the
-      # CURRENT detector. It reads the ratcheted [threshold]
-      # max_duplication_percent from .deslop.toml and exits 3 (failing CI) the
-      # moment repo-wide duplication climbs past it. The threshold is the single
-      # source of truth — never hardcoded here. The command lives in `make
-      # dup-gate`, which `make ci` also runs, so a green local run cannot
-      # disagree with this step.
-      - name: Duplication gate (deslop)
-        run: make dup-gate
-
-      - name: Deployment manifest and binary gates
-        run: make deployment-verify
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: build-artifacts
-          path: |
-            target/release/deslop
-            target/release/deslop.exe
-          retention-days: 1
-
-  # Windows compile + transport gate ([LIVE-IPC-TCP]). Until now,
-  # cfg(windows) code paths were only compiled by the release matrix —
-  # a Windows-only regression could merge green and explode at release
-  # time. This job checks the whole workspace on windows-latest and
-  # runs the TCP transport E2E suite with the real Windows binaries,
-  # because TCP loopback is the production IPC transport on Windows.
+  # Windows runtime gate ([LIVE-IPC-TCP]). The dedicated `tcp_transport`
+  # target executes exactly once here, on the platform that ships TCP as its
+  # default IPC transport. Linux coverage excludes this target. Raw profiles
+  # are uploaded for calculation only after every test job has completed.
   windows:
-    name: Windows check + TCP IPC E2E
-    needs: changes
+    name: Windows tests + coverage collection
+    needs: [changes, build]
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      CARGO_TARGET_DIR: target/windows-llvm-cov
     steps:
       - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2.85.13
+        with:
+          tool: cargo-llvm-cov
 
       - uses: actions/setup-node@v7
         with:
@@ -240,21 +482,44 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Check workspace (Windows)
-        run: cargo check --workspace --locked --all-targets
+      - name: Run Windows tests with coverage collection
+        run: |
+          $coverageEnv = cargo llvm-cov show-env --cmd
+          foreach ($line in $coverageEnv) {
+            if ($line -match '^set ([^=]+)=(.*)$') {
+              Set-Item -Path "Env:$($Matches[1])" -Value $Matches[2]
+            }
+          }
+          cargo build --release -p deslop-lsp --bin deslop-lsp
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --release -p deslop-mcp --test tcp_transport --features deslop-core/live
 
-      # `cargo check` links nothing and `cargo test -p deslop-mcp` only
-      # builds that package's own binaries — the deslop-lsp.exe the E2E
-      # suite spawns must be built explicitly first.
-      - name: Build server binaries for E2E
-        run: cargo build --locked -p deslop-lsp -p deslop-mcp
+      # The Windows lcov is calculated HERE, not in the coverage job:
+      # the instrumented PE/PDB binaries can only be read by a Windows
+      # llvm-cov, and shipping the 300MB target dir to a Linux runner
+      # only produced "not recognized as a valid object file" on every
+      # run. The coverage job consumes the finished report.
+      - name: Calculate Windows Rust coverage
+        env:
+          CARGO_LLVM_COV_TARGET_DIR: target/windows-llvm-cov
+        run: cargo llvm-cov --release --features deslop-core/live,deslop-lsp/profiling report --lcov --output-path windows-lcov.info
 
-      - name: TCP transport E2E (real binaries)
-        run: cargo test --locked -p deslop-mcp --test tcp_transport
+      - name: Upload Windows Rust coverage report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-rust-coverage
+          path: windows-lcov.info
+          retention-days: 1
 
+  # [CI-RELEASE-BUILD] Runs in parallel with `ci`. `_vsix-build`'s
+  # `cargo build --release -p deslop-lsp -p deslop-mcp -p deslop` is a
+  # cache hit against the `build` job's target directory, so the E2E
+  # suites spawn the very binaries that job produced instead of
+  # compiling a second copy on the critical path.
   vsix:
     name: VSIX tests + coverage
-    needs: [changes, ci]
+    needs: [changes, build]
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     # TIMEOUT EXCEPTION: builds the real LSP+MCP from source, installs Node
@@ -281,15 +546,22 @@ jobs:
       - name: Install typediagram
         run: npm install -g typediagram@0.11.0
 
-      - name: Cache cargo registry and target
-        uses: actions/cache@v6
+      # [CI-RELEASE-BUILD] Restore-only: the `build` job owns the entry
+      # for this commit, and a second job writing the same key would
+      # race it. The exact key hits the release build this run already
+      # produced, so nothing here recompiles the workspace.
+      - name: Restore release build
+        uses: actions/cache/restore@v6
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
+          key: ${{ runner.os }}-cargo-release-${{ github.sha }}
           restore-keys: |
+            ${{ runner.os }}-cargo-release-
             ${{ runner.os }}-cargo-
 
       # xvfb gives Electron a display; dbus gives it a session bus so
@@ -322,13 +594,10 @@ jobs:
       - name: _vsix-build
         run: make _vsix-build
 
-      # Unit tests + coverage threshold. E2E spawns real VS Code Electron — run
-      # it inside a private session bus to keep the Electron processes quiet.
-      - name: _vsix-coverage (unit + threshold)
+      # The extension suite executes once under coverage. Thresholds are
+      # calculated by the final coverage job, after every test job completes.
+      - name: _vsix-coverage (extension suite collection)
         run: xvfb-run -a dbus-run-session -- make _vsix-coverage
-
-      - name: _vsix-test (full E2E against real LSP)
-        run: xvfb-run -a dbus-run-session -- make _vsix-test
 
       # Renders the standalone HTML report (the artifact every "Open HTML
       # Report" button shows) and asserts the design-system CSS applies in a
@@ -337,11 +606,12 @@ jobs:
       - name: _vsix-playwright-html (standalone HTML report CSS)
         run: make _vsix-playwright-html
 
-      # Webview V8 coverage gate ([VSIX-WEBVIEW-COVERAGE]). The webview bundle is
+      # Webview V8 coverage collection ([VSIX-WEBVIEW-COVERAGE]). The webview bundle is
       # invisible to the c8 pass in _vsix-coverage (extension host only); this
       # drives the bundle in a real browser, maps coverage back to webview-ui/src,
-      # and enforces .vsix.webview_threshold. Closes the blind spot behind #254.
-      - name: _vsix-webview-coverage (webview V8 coverage threshold)
+      # and writes the raw summary consumed by the final coverage job. Closes
+      # the blind spot behind #254.
+      - name: _vsix-webview-coverage (webview V8 collection)
         run: make _vsix-webview-coverage
 
       - name: vsix-package deployment gate
@@ -358,7 +628,7 @@ jobs:
 
   jetbrains:
     name: JetBrains package gate
-    needs: [changes, ci]
+    needs: [changes, build]
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     # TIMEOUT EXCEPTION: a cold Gradle/IntelliJ-Platform build resolves the JB
@@ -404,27 +674,27 @@ jobs:
       - name: _jetbrains-real-binary-test
         run: make _jetbrains-real-binary-test
 
-      # Real IDE-level test ([JETBRAINS-TESTING]): boots a headless IntelliJ Platform
+      # Run the LSP4IJ unit suite and the distinct IDE-level integration suite.
+      # The shared-module suite already ran once in _jetbrains-real-binary-test.
+      # The integration task boots a headless IntelliJ Platform
       # with the ASSEMBLED plugin installed and asserts the Deslop tool window + Tools
       # action register through the shipped classloader layout — catches the
       # lib/modules/ content-module regression the descriptor test cannot. Invoked
       # through the Gradle wrapper directly (not a make target) to keep the Makefile
       # unchanged; every other jetbrains step goes through make.
-      - name: jetbrains integration test (IDE-level UI registration)
-        run: cd clients/jetbrains && ./gradlew :deslop-lsp4ij:integrationTest --no-daemon
+      - name: JetBrains LSP4IJ unit + integration tests
+        run: cd clients/jetbrains && ./gradlew :deslop-lsp4ij:test :deslop-lsp4ij:integrationTest --no-daemon
 
       # Uses the checked-in Gradle wrapper via the Makefile default.
       - name: jetbrains-package deployment gate
         run: make _jetbrains-package
 
-  # Website build + content gate. Runs whenever site/** changes — including on
-  # website-only PRs, where the heavy `ci` job is skipped. Cheap: Node + Eleventy,
-  # no Rust toolchain. This is the gate that keeps a website-only PR honest now
-  # that it no longer drags the full pipeline behind it.
+  # Website build + complete website test suite. Runs after the release build on
+  # code PRs and still runs independently on website-only PRs.
   site:
     name: Website build
-    needs: changes
-    if: needs.changes.outputs.site == 'true'
+    needs: [changes, build]
+    if: always() && (needs.changes.outputs.code == 'true' || needs.changes.outputs.site == 'true') && (needs.changes.outputs.code != 'true' || needs.build.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -436,21 +706,34 @@ jobs:
           cache: npm
           cache-dependency-path: site/package-lock.json
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Validate typed issue report
+        run: |
+          python -m pip install --disable-pip-version-check mypy==1.19.1 pyright==1.1.408
+          python -B -m unittest scripts.issues.test_generate_issue_report
+          python -m mypy --strict scripts/issues/generate_issue_report.py scripts/issues/test_generate_issue_report.py
+          pyright scripts/issues/generate_issue_report.py scripts/issues/test_generate_issue_report.py
+
       # Taxonomy content gate ([CLONE-BUCKETS-DUAL-LABEL]) scans site/src for
       # bare Type-N labels. It normally runs inside `make lint` (the `ci` job);
       # on a website-only PR that job is skipped, so the one gate that guards
       # website copy runs here instead.
       - name: Taxonomy content gate
-        run: bash scripts/taxonomy-gate.sh
+        run: bash scripts/repository/taxonomy-gate.sh
 
       # Installer fail-closed contract ([DEPLOY-DOCS-INSTALLER-FAILCLOSED]).
       # The snippet under test IS site content (site/src/docs/index.md and
       # its zh twin), so a site-only PR can change it while the `ci` job —
       # where `make lint` normally runs this — is skipped. The one test
       # written to protect the security-sensitive snippet must run wherever
-      # that snippet can change.
+      # that snippet can change: this step fires on every PR that touched
+      # site content, and `make lint` covers the rest.
       - name: Installer snippet contract
-        run: node --test scripts/installer-snippet.test.mjs
+        if: needs.changes.outputs.site == 'true'
+        run: node --test scripts/deployment/installer-snippet.test.mjs
 
       - name: Install site dependencies
         working-directory: site
@@ -458,7 +741,20 @@ jobs:
 
       - name: Build site
         working-directory: site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm run build
+
+      - name: Install Playwright browser
+        working-directory: site
+        run: npx playwright install --with-deps chromium
+
+      - name: Test published issue experience
+        working-directory: site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CI: "true"
+        run: npm test -- --workers=1
 
   # Dependency review ([GITHUB-DEP-REVIEW]) — blocks PRs that pull in
   # dependencies with known vulnerabilities. One owner per concern: this is the
@@ -484,3 +780,27 @@ jobs:
         with:
           fail-on-severity: high
           comment-summary-in-pr: on-failure
+
+  # The branch ruleset requires a status context literally named "CI" —
+  # the old monolithic job's name. The split into named jobs orphaned it
+  # (every merge since then has violated the rule). This gate restores the
+  # context: it succeeds only when every job in the workflow succeeded or
+  # was skipped (a skip satisfies branch protection, same as the path-
+  # gated heavy jobs).
+  ci:
+    name: CI
+    needs: [changes, security, build, rust-tests, repository-tests, windows, vsix, jetbrains, site, coverage]
+    if: always() && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Enforce every job's conclusion
+        run: |
+          results='${{ toJSON(needs.*.result) }}'
+          echo "Job conclusions: $results"
+          for result in $(echo "$results" | tr -d '[]"' | tr ',' ' '); do
+            case "$result" in
+              success|skipped) ;;
+              *) echo "FAIL: a required job ended '$result'"; exit 1 ;;
+            esac
+          done

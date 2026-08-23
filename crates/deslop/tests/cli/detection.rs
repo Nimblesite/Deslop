@@ -1,4 +1,4 @@
-use crate::support::*;
+use super::support::*;
 
 /// Runs the CLI against `fixture(fixture_name)` with `--min-nodes
 /// <min_nodes>`, asserts the process succeeded, and returns the raw

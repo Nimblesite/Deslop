@@ -18,11 +18,17 @@ use std::fs;
 use anyhow::{anyhow, ensure, Result};
 use serde_json::{json, Value};
 
-mod common;
+use crate::common;
 use common::{
     copied_fixture, initialized_mcp, lsp_workspace_with_socket, spawn_lsp_and_wait_for_socket,
     structured_content, wait_for_state_then_init_mcp, McpHandle,
 };
+
+const TOOLS_CALL_METHOD: &str = "tools/call";
+const NAME_FIELD: &str = "name";
+const ARGUMENTS_FIELD: &str = "arguments";
+const RESCAN_TOOL: &str = "rescan";
+const REPORT_GET_TOOL: &str = "report-get";
 
 /// [MCP-IPC-CLIENT] When the LSP is running, MCP must delegate
 /// `find-similar` to the LSP IPC socket and return real cluster data
@@ -34,10 +40,10 @@ fn find_similar_via_mcp_delegates_to_running_lsp() -> Result<()> {
     let mut mcp = wait_for_state_then_init_mcp(workspace.path())?;
 
     let response = mcp.request(
-        "tools/call",
+        TOOLS_CALL_METHOD,
         &json!({
-            "name": "find-similar",
-            "arguments": {
+            (NAME_FIELD): "find-similar",
+            (ARGUMENTS_FIELD): {
                 "snippet": include_str!("fixtures/csharp-mcp/Alpha.cs"),
                 "language": "csharp",
                 "top_n": 5
@@ -73,8 +79,8 @@ fn list_embedding_models_via_mcp_delegates_to_running_lsp() -> Result<()> {
 
     let mut mcp = initialized_mcp(workspace.path())?;
     let response = mcp.request(
-        "tools/call",
-        &json!({ "name": "list-embedding-models", "arguments": {} }),
+        TOOLS_CALL_METHOD,
+        &json!({ (NAME_FIELD): "list-embedding-models", (ARGUMENTS_FIELD): {} }),
     )?;
     let structured = structured_content(&response, "list-embedding-models")?;
     let models = structured
@@ -90,7 +96,7 @@ fn list_embedding_models_via_mcp_delegates_to_running_lsp() -> Result<()> {
     );
     for model in models {
         for legacy_key in [
-            "name",
+            NAME_FIELD,
             "bare_id",
             "digest",
             "size_bytes",
@@ -123,10 +129,10 @@ fn issue_286_set_embedding_model_reaches_the_running_lsp() -> Result<()> {
     let mut mcp = wait_for_state_then_init_mcp(workspace.path())?;
 
     let response = mcp.request(
-        "tools/call",
+        TOOLS_CALL_METHOD,
         &json!({
-            "name": "set-embedding-model",
-            "arguments": {
+            (NAME_FIELD): "set-embedding-model",
+            (ARGUMENTS_FIELD): {
                 "user_initiated": true,
                 "provider_id": "definitely-not-a-registered-provider",
                 "model_id": "nomic-embed-text"
@@ -167,12 +173,12 @@ fn rescan_via_mcp_triggers_lsp_reanalysis() -> Result<()> {
     // Flush any pending cold-pass install so the post-mutation rescan
     // does not race a delayed background commit.
     let _flush = mcp.request(
-        "tools/call",
-        &json!({ "name": "rescan", "arguments": { "n": 1 } }),
+        TOOLS_CALL_METHOD,
+        &json!({ (NAME_FIELD): RESCAN_TOOL, (ARGUMENTS_FIELD): { "n": 1 } }),
     )?;
     let before = mcp.request(
-        "tools/call",
-        &json!({ "name": "top-offenders", "arguments": { "n": 100 } }),
+        TOOLS_CALL_METHOD,
+        &json!({ (NAME_FIELD): "top-offenders", (ARGUMENTS_FIELD): { "n": 100 } }),
     )?;
     let before_structured = structured_content(&before, "top-offenders")?;
     let before_count = before_structured
@@ -191,16 +197,16 @@ fn rescan_via_mcp_triggers_lsp_reanalysis() -> Result<()> {
     )?;
 
     let response = mcp.request(
-        "tools/call",
+        TOOLS_CALL_METHOD,
         &json!({
-            "name": "rescan",
-            "arguments": {
+            (NAME_FIELD): RESCAN_TOOL,
+            (ARGUMENTS_FIELD): {
                 "paths": [beta.to_string_lossy().into_owned()],
                 "n": 100
             }
         }),
     )?;
-    let after = structured_content(&response, "rescan")?;
+    let after = structured_content(&response, RESCAN_TOOL)?;
     let after_count = after
         .get("total_clusters")
         .and_then(Value::as_u64)
@@ -221,10 +227,10 @@ fn rescan_via_mcp_triggers_lsp_reanalysis() -> Result<()> {
     // same fresh state — proving the read path doesn't leak the
     // pre-edit cluster from any cache.
     let cross = mcp.request(
-        "tools/call",
-        &json!({ "name": "report-get", "arguments": { "offset": 0, "limit": 100 } }),
+        TOOLS_CALL_METHOD,
+        &json!({ (NAME_FIELD): REPORT_GET_TOOL, (ARGUMENTS_FIELD): { "offset": 0, "limit": 100 } }),
     )?;
-    let cross_structured = structured_content(&cross, "report-get")?;
+    let cross_structured = structured_content(&cross, REPORT_GET_TOOL)?;
     let cross_count = cross_structured
         .get("total_clusters")
         .and_then(Value::as_u64)
@@ -248,13 +254,13 @@ fn issue_135_rescan_generation_matches_report_get_and_session_config() -> Result
         b"namespace Solo { class Only { public int Go() => 1; } }\n",
     )?;
     let response = mcp.request(
-        "tools/call",
+        TOOLS_CALL_METHOD,
         &json!({
-            "name": "rescan",
-            "arguments": { "paths": [beta.to_string_lossy().into_owned()], "n": 1 }
+            (NAME_FIELD): RESCAN_TOOL,
+            (ARGUMENTS_FIELD): { "paths": [beta.to_string_lossy().into_owned()], "n": 1 }
         }),
     )?;
-    let after = structured_content(&response, "rescan")?;
+    let after = structured_content(&response, RESCAN_TOOL)?;
     assert_rescan_generation_matches_visible_state(&mut mcp, &after)?;
     Ok(())
 }
@@ -305,13 +311,13 @@ fn assert_rescan_generation_matches_visible_state(
         .and_then(Value::as_u64)
         .ok_or_else(|| anyhow!("rescan must expose a numeric generation: {after}"))?;
     let report = mcp.request(
-        "tools/call",
-        &json!({ "name": "report-get", "arguments": { "offset": 0, "limit": 0 } }),
+        TOOLS_CALL_METHOD,
+        &json!({ (NAME_FIELD): REPORT_GET_TOOL, (ARGUMENTS_FIELD): { "offset": 0, "limit": 0 } }),
     )?;
-    let report_page = structured_content(&report, "report-get")?;
+    let report_page = structured_content(&report, REPORT_GET_TOOL)?;
     let session = mcp.request(
-        "tools/call",
-        &json!({ "name": "session-config", "arguments": {} }),
+        TOOLS_CALL_METHOD,
+        &json!({ (NAME_FIELD): "session-config", (ARGUMENTS_FIELD): {} }),
     )?;
     let session_config = structured_content(&session, "session-config")?;
     ensure!(

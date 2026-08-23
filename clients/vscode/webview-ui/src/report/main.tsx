@@ -30,6 +30,13 @@ import {
 } from "../../../src/types/report";
 import { LANGUAGES, languageDisplayName } from "../../../src/types/languages";
 
+const GRID_DISPLAY = "grid";
+const TWELVE_PIXEL_SIZE = "12px";
+const LARGE_SPACING = "24px";
+const MEDIUM_SPACING = "16px";
+const RIGHT_ALIGNMENT = "right";
+const MONOSPACE_CLASS = "mono";
+
 // [FACET-REPORT-WEBVIEW] Every option list derives from the shared
 // registries (the #170/#198 anti-drift rule): languages from the
 // language registry, severities from SEVERITIES, buckets/categories
@@ -70,7 +77,7 @@ function ReportApp() {
 
   if (!snapshot) {
     return (
-      <main style={{ padding: "24px" }}>
+      <main style={{ padding: LARGE_SPACING }}>
         <p>Deslop is warming up…</p>
       </main>
     );
@@ -78,7 +85,7 @@ function ReportApp() {
 
   return (
     <main style={{ padding: "24px clamp(16px, 6vw, 32px)" }}>
-      <header style={{ display: "grid", gap: "16px", paddingBottom: "24px" }}>
+      <header style={{ display: GRID_DISPLAY, gap: MEDIUM_SPACING, paddingBottom: LARGE_SPACING }}>
         <div
           class="label"
           style={{ fontFamily: FONT.mono, color: COLOR.onSurfaceMuted }}
@@ -87,18 +94,18 @@ function ReportApp() {
         </div>
         <div
           style={{
-            display: "grid",
+            display: GRID_DISPLAY,
             gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
             alignItems: "baseline",
-            gap: "24px",
+            gap: LARGE_SPACING,
           }}
         >
           <MetricHeading value={snapshot.metrics.duplication_percent} label="duplicated" />
           <div
             style={{
-              textAlign: "right",
+              textAlign: RIGHT_ALIGNMENT,
               fontFamily: FONT.mono,
-              fontSize: "12px",
+              fontSize: TWELVE_PIXEL_SIZE,
               minWidth: 0,
             }}
           >
@@ -116,10 +123,10 @@ function ReportApp() {
 
       <section
         style={{
-          display: "grid",
+          display: GRID_DISPLAY,
           gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
-          gap: "12px",
-          paddingBottom: "16px",
+          gap: TWELVE_PIXEL_SIZE,
+          paddingBottom: MEDIUM_SPACING,
         }}
       >
         <FilterSelect
@@ -168,9 +175,9 @@ function ReportApp() {
                 post({ kind: "open/cluster", id: cluster.id });
               }}
               style={{
-                display: "grid",
+                display: GRID_DISPLAY,
                 gridTemplateColumns: "auto minmax(0,1fr) auto auto",
-                gap: "16px",
+                gap: MEDIUM_SPACING,
                 alignItems: "center",
                 padding: "12px 20px",
                 background: i % 2 === 0 ? COLOR.surfaceContainerLow : COLOR.surface,
@@ -219,16 +226,16 @@ function ReportApp() {
                   ) : null}
                 </div>
                 <div
-                  class="mono"
+                  class={MONOSPACE_CLASS}
                   style={{ color: COLOR.onSurfaceMuted, fontSize: "11px", marginTop: "2px" }}
                 >
                   {cluster.occurrences[0]?.path ?? "?"}
                 </div>
               </div>
-              <div class="mono" style={{ fontSize: "12px", textAlign: "right" }}>
+              <div class={MONOSPACE_CLASS} style={{ fontSize: TWELVE_PIXEL_SIZE, textAlign: RIGHT_ALIGNMENT }}>
                 × {occurrenceCount(cluster)}
               </div>
-              <div class="mono" style={{ fontSize: "12px", textAlign: "right" }}>
+              <div class={MONOSPACE_CLASS} style={{ fontSize: TWELVE_PIXEL_SIZE, textAlign: RIGHT_ALIGNMENT }}>
                 w {cluster.weight.toFixed(1)}
               </div>
             </li>

@@ -14,6 +14,8 @@ import { buildFolderRollup, type RollupChild } from "../../../src/tree/rollup";
 import { thresholdStatus } from "../../../src/tree/threshold";
 import { formatPercent } from "../../../src/types/format";
 
+const MONOSPACE_CLASS = "mono";
+
 function percentColor(percent: number): string {
   if (percent >= 30) return "#e5534b";
   if (percent >= 10) return "#d4a72c";
@@ -57,11 +59,11 @@ function Row({ child, depth }: { child: RollupChild; depth: number }) {
           {isFolder ? "📁 " : ""}
           {name}
         </span>
-        <span class="mono" style={{ fontSize: "11px", color: COLOR.onSurfaceMuted }}>
+        <span class={MONOSPACE_CLASS} style={{ fontSize: "11px", color: COLOR.onSurfaceMuted }}>
           {detail}
         </span>
         <span
-          class="mono"
+          class={MONOSPACE_CLASS}
           style={{
             fontSize: "13px",
             fontWeight: 600,
@@ -102,7 +104,7 @@ function DuplicationApp() {
           DESLOP · DUPLICATION · {snapshot.tool_version}
         </div>
         <MetricHeading value={metrics.duplication_percent} label="duplicated" />
-        <div class="mono" style={{ fontSize: "12px", color: COLOR.onSurfaceMuted }}>
+        <div class={MONOSPACE_CLASS} style={{ fontSize: "12px", color: COLOR.onSurfaceMuted }}>
           {metrics.duplicated_loc}/{metrics.analysed_loc} LOC · {metrics.clusters_total} clusters ·{" "}
           {metrics.duplicated_files} files{gate}
         </div>

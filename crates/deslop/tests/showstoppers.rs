@@ -15,7 +15,6 @@ use std::{
 
 use anyhow::Result;
 
-mod common;
 use crate::common::*;
 
 fn visible_count(cluster: &serde_json::Value) -> usize {

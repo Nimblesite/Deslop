@@ -20,6 +20,7 @@ import {
 import { repoMetrics, reportWithClusters } from "./report.helpers";
 
 const SHAPE_ONLY_TITLE = bucketLabels("structural_only").plainTitle;
+const PROVEN_CLONE_TITLE = bucketLabels("nearly_identical").plainTitle;
 
 function provenClone(id: string, fused: number) {
   return bubbleCluster(id, 40, fused, {
@@ -50,7 +51,7 @@ suite("LiveBubble journeys", () => {
     try {
       // 1. Cursor on the proven clone: it is offered, in full.
       bubble.render(capture.editor, span(0), [proven]);
-      const first = assertBubbleShows(capture, "Nearly identical code", "step 1");
+      const first = assertBubbleShows(capture, PROVEN_CLONE_TITLE, "step 1");
       assert.match(first, /×\s*4/, "step 1: renders the proven clone's occurrence count");
       assert.match(first, /A\.cs/, "step 1: names the canonical file");
       assert.doesNotMatch(first, new RegExp(SHAPE_ONLY_TITLE), "step 1: no demoted title");
@@ -77,7 +78,7 @@ suite("LiveBubble journeys", () => {
       });
       store.setSnapshot(reportWithClusters([promoted, proven]), 1);
       bubble.render(capture.editor, span(12), [promoted]);
-      const afterPromote = assertBubbleShows(capture, "Nearly identical code", "step 3");
+      const afterPromote = assertBubbleShows(capture, PROVEN_CLONE_TITLE, "step 3");
       assert.match(afterPromote, /×\s*9/, "step 3: the promoted family brings its own count");
       assert.doesNotMatch(
         afterPromote,
@@ -96,7 +97,7 @@ suite("LiveBubble journeys", () => {
 
       // 5. The proven clone is still offered — the churn did not lose it.
       bubble.render(capture.editor, span(24), [proven]);
-      const last = assertBubbleShows(capture, "Nearly identical code", "step 5");
+      const last = assertBubbleShows(capture, PROVEN_CLONE_TITLE, "step 5");
       assert.match(last, /×\s*4/, "step 5: the untouched clone keeps its count");
       assert.ok(capture.visibleHover() !== undefined, "step 5: and its hover card");
     } finally {
@@ -113,7 +114,7 @@ suite("LiveBubble journeys", () => {
     try {
       // 1. Inline: title, count, hover, no ghost furniture.
       bubble.render(capture.editor, span(0), [proven]);
-      const inline = assertBubbleShows(capture, "Nearly identical code", "inline");
+      const inline = assertBubbleShows(capture, PROVEN_CLONE_TITLE, "inline");
       assert.doesNotMatch(inline, /└─/, "inline: no ghost prefix");
       assert.match(inline, /×\s*4/, "inline: carries the count");
       assert.ok(capture.visibleHover() !== undefined, "inline: carries a hover card");
@@ -121,7 +122,7 @@ suite("LiveBubble journeys", () => {
       // 2. Ghost: same verdict, different furniture, no hover.
       await setBubbleMode("ghost");
       bubble.render(capture.editor, span(6), [proven]);
-      const ghost = assertBubbleShows(capture, "Nearly identical code", "ghost");
+      const ghost = assertBubbleShows(capture, PROVEN_CLONE_TITLE, "ghost");
       assert.match(ghost, /└─/, "ghost: renders the tree-branch prefix");
       assert.match(ghost, /[▁▂▃▄▅▆▇█]{3}/u, "ghost: renders the three-bar strip");
       assert.match(ghost, /×\s*4/, "ghost: carries the same count");
@@ -130,7 +131,7 @@ suite("LiveBubble journeys", () => {
       // 3. Back to inline: the verdict is unchanged across the round trip.
       await setBubbleMode("inline");
       bubble.render(capture.editor, span(12), [proven]);
-      const back = assertBubbleShows(capture, "Nearly identical code", "back to inline");
+      const back = assertBubbleShows(capture, PROVEN_CLONE_TITLE, "back to inline");
       assert.doesNotMatch(back, /└─/, "back to inline: ghost furniture is gone");
       assert.match(back, /×\s*4/, "back to inline: the count survived the round trip");
       assert.ok(capture.visibleHover() !== undefined, "back to inline: hover restored");
@@ -141,7 +142,7 @@ suite("LiveBubble journeys", () => {
 
       // 5. Plain dismiss is not sticky — the next probe paints it again.
       bubble.render(capture.editor, span(18), [proven]);
-      assertBubbleShows(capture, "Nearly identical code", "after a plain dismiss");
+      assertBubbleShows(capture, PROVEN_CLONE_TITLE, "after a plain dismiss");
     } finally {
       await setBubbleMode("inline");
       bubble.dispose();
@@ -162,7 +163,7 @@ suite("LiveBubble journeys", () => {
     try {
       // 1. Both clusters are offerable to begin with.
       bubble.render(capture.editor, span(0), [first]);
-      assertBubbleShows(capture, "Nearly identical code", "step 1");
+      assertBubbleShows(capture, PROVEN_CLONE_TITLE, "step 1");
       bubble.render(capture.editor, span(6), [second]);
       const secondText = assertBubbleShows(capture, "Identical code", "step 1b");
       assert.match(secondText, /×\s*2/, "step 1b: the second cluster brings its own count");

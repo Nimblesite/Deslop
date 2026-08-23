@@ -1,11 +1,12 @@
 ---
 layout: layouts/docs.njk
 title: VS Code — Reading a duplicate-code cluster in the editor
-description: Field guide to the Deslop VS Code extension — the Top Offenders tree, the live duplicate warning, and the cluster detail panel, including cluster ids, ranking, signals, occurrences, and comparison actions.
+description: Use the Deslop VS Code extension to review Top Offenders, inspect live duplicate warnings and cluster signals, and compare canonical occurrences.
 eleventyNavigation:
   key: VS Code
   order: 5
 icon: account_tree
+docsGroup: guides
 ---
 
 # VS Code Cluster Panel
@@ -69,11 +70,11 @@ Weight is not a percentage and it is not a CI gate. Use repository duplication p
 
 ## Size
 
-Size is the number of cloned AST members represented by the cluster. A larger size usually means the duplicated unit is a bigger structural fragment.
+Size is the number of raw clone members combined into the cluster before overlapping same-file members are collapsed. It does not measure fragment length.
 
 ## Occurrence Count
 
-The occurrence count is the number of editor locations in this cluster. It may be larger than the number of rows shown, because Deslop caps how many occurrences a single very large cluster sends to the panel.
+Occurrence count is the authoritative number of editor locations after overlapping same-file members are collapsed. It can exceed the rows shown when a large cluster is truncated for display.
 
 ## Canonical
 

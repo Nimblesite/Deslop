@@ -18,13 +18,8 @@
 //! against noise, the defect class of GH #366. The arithmetic itself is
 //! pinned by the unit tests in `deslop-core/src/embedding/pairs.rs`.
 
-#[path = "cli/mock_ollama.rs"]
-mod mock_ollama;
-
-mod common;
-
+use crate::mock_ollama::MockOllama;
 use anyhow::Result;
-use mock_ollama::MockOllama;
 
 use crate::common::{
     cluster_bucket, clusters, embeddings::run_mock_embedding_report, expect_cluster_spanning,
