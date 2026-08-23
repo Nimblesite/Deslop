@@ -141,6 +141,7 @@ mod verbatim_subgroup;
 use std::{
     collections::{BTreeSet, HashMap},
     hash::BuildHasher,
+    rc::Rc,
 };
 
 use tree_sitter::Node;
@@ -184,8 +185,8 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
     let polymorphic = || {
         polymorphic::is_polymorphic_signature_cluster(&snippets, sources, file_languages, cache)
     };
-    let signature_only = || is_signature_only_cluster(&snippets);
-    let literal_calls = || calls::is_literal_variation_call_cluster(&snippets);
+    let signature_only = || is_signature_only_cluster(&snippets, cache);
+    let literal_calls = || calls::is_literal_variation_call_cluster(&snippets, cache);
     let constant_table = || constant_table::is_constant_table_cluster(&snippets);
     let language_specific = || language_specific_noise(language, &snippets, cache);
     let checks: [(NoiseFilter, &dyn Fn() -> bool); 5] = [
@@ -467,13 +468,22 @@ pub(super) fn trim_ascii_start(bytes: &[u8]) -> &[u8] {
 /// where two functions share the same signature and body — byte for
 /// byte or under a consistent rename — has equal streams, so genuine
 /// duplication keeps clustering.
-fn is_signature_only_cluster(snippets: &[Snippet<'_>]) -> bool {
+fn is_signature_only_cluster(snippets: &[Snippet<'_>], cache: &ParseCache) -> bool {
     if snippets.len() < 2 {
         return false;
     }
-    let shapes: Option<Vec<Vec<body_shape::ShapeToken<'_>>>> = snippets
+    let shapes: Option<Vec<Rc<Vec<body_shape::OwnedShapeToken>>>> = snippets
         .iter()
-        .map(snippet_body_shape_when_signature_only)
+        .map(|snippet| {
+            cache.signature_shape(snippet, || {
+                snippet_body_shape_when_signature_only(snippet).map(|stream| {
+                    stream
+                        .iter()
+                        .map(body_shape::OwnedShapeToken::from)
+                        .collect()
+                })
+            })
+        })
         .collect();
     let Some(shapes) = shapes else { return false };
     let Some(first) = shapes.first() else {

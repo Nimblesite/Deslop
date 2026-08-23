@@ -10,8 +10,10 @@ use std::{collections::HashMap, hash::BuildHasher};
 
 use tree_sitter::Node;
 
+use std::rc::Rc;
+
 use super::{
-    body_shape::{body_kind_stream, ShapeToken},
+    body_shape::{body_kind_stream, OwnedShapeToken},
     contract_index::{declared_bases, enclosing_container, function_name_node},
     enclosing_kind, function_kinds,
     override_marker::carries_override_marker,
@@ -19,19 +21,22 @@ use super::{
 };
 use crate::{ast::ByteRange, state::FileId};
 
-/// What one cluster member contributes to the polymorphic decision.
-struct Subject<'src> {
+/// What one cluster member contributes to the polymorphic decision, in
+/// owned form so [`ParseCache`] can memoise it by `(file, range)`
+/// beyond the source borrow ([PERF-FLUTTER-TODO-CORPUS]). Field
+/// comparison semantics are unchanged from the borrowed original.
+pub(super) struct OwnedSubject {
     /// The subject function's declared name.
-    name: &'src [u8],
+    pub(super) name: Vec<u8>,
     /// Simple names of the bases the subject's enclosing type declares,
     /// empty for a free function.
-    bases: Vec<Vec<u8>>,
+    pub(super) bases: Vec<Vec<u8>>,
     /// The subject body's shape, carrying collaborator identity.
-    shape: Vec<ShapeToken<'src>>,
+    pub(super) shape: Vec<OwnedShapeToken>,
     /// Whether the language's own override marker qualifies the subject,
     /// which proves a contract declares it even when that contract is
     /// outside the scan ([`carries_override_marker`]).
-    overrides: bool,
+    pub(super) overrides: bool,
 }
 
 /// Detects the polymorphic-signature pattern: every cluster member
@@ -66,7 +71,10 @@ pub(super) fn is_polymorphic_signature_cluster<S: BuildHasher>(
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
 ) -> bool {
-    let subjects: Option<Vec<Subject<'_>>> = snippets.iter().map(subject_of).collect();
+    let subjects: Option<Vec<Rc<OwnedSubject>>> = snippets
+        .iter()
+        .map(|snippet| cache.subject(snippet, || subject_of(snippet)))
+        .collect();
     let Some(subjects) = subjects else {
         return false;
     };
@@ -86,23 +94,27 @@ pub(super) fn is_polymorphic_signature_cluster<S: BuildHasher>(
         return false;
     };
     let contracts = cache.contracts(sources, file_languages, language);
-    subjects
-        .iter()
-        .all(|subject| subject.overrides || contracts.declares(&subject.bases, subject.name))
+    subjects.iter().all(|subject| {
+        subject.overrides || contracts.declares(&subject.bases, &subject.name)
+    })
 }
 
 /// Resolves one member's subject function and everything the decision
-/// reads from it, in a single parse.
-fn subject_of<'src>(snippet: &Snippet<'src>) -> Option<Subject<'src>> {
+/// reads from it, in a single parse — memoised per `(file, range)` in
+/// the cache by the caller ([PERF-FLUTTER-TODO-CORPUS]).
+fn subject_of(snippet: &Snippet<'_>) -> Option<OwnedSubject> {
     let tree = parse_for(snippet)?;
     let function = polymorphic_subject(tree.root_node(), snippet)?;
     let name_node = function_name_node(function)?;
-    Some(Subject {
-        name: snippet.source.get(name_node.byte_range())?,
+    Some(OwnedSubject {
+        name: snippet.source.get(name_node.byte_range())?.to_vec(),
         bases: enclosing_container(function)
             .map(|container| declared_bases(container, snippet.source))
             .unwrap_or_default(),
-        shape: body_kind_stream(function.child_by_field_name("body")?, snippet.source),
+        shape: body_kind_stream(function.child_by_field_name("body")?, snippet.source)
+            .iter()
+            .map(OwnedShapeToken::from)
+            .collect(),
         overrides: carries_override_marker(function, snippet.language, snippet.source),
     })
 }

@@ -4,7 +4,12 @@
 
 use tree_sitter::Node;
 
-use super::{constant_table::is_literal_value, enclosing_kind, parse_for, Snippet};
+use std::rc::Rc;
+
+use super::{
+    constant_table::is_literal_value, enclosing_kind, parse_for, snippets::CallSequence,
+    ParseCache, Snippet,
+};
 use crate::ast::ByteRange;
 
 /// Detects literal-variation call scaffolding
@@ -12,17 +17,23 @@ use crate::ast::ByteRange;
 /// resolves to the same callee/arity call shape — one enclosing call,
 /// or the same ordered call sequence — with **at least one string
 /// literal argument differing** across members.
-pub(super) fn is_literal_variation_call_cluster(snippets: &[Snippet<'_>]) -> bool {
-    let calls: Option<Vec<CallShape>> = snippets.iter().map(call_shape).collect();
+pub(super) fn is_literal_variation_call_cluster(
+    snippets: &[Snippet<'_>],
+    cache: &ParseCache,
+) -> bool {
+    let calls: Option<Vec<Rc<CallShape>>> = snippets
+        .iter()
+        .map(|snippet| cache.call_shape(snippet, || call_shape(snippet)))
+        .collect();
     if is_literal_variation_call_set(calls) {
         return true;
     }
-    is_literal_variation_call_sequence(snippets)
+    is_literal_variation_call_sequence(snippets, cache)
 }
 
 /// Applies the literal-variation rule to one comparable call per
 /// cluster member.
-fn is_literal_variation_call_set(calls: Option<Vec<CallShape>>) -> bool {
+fn is_literal_variation_call_set(calls: Option<Vec<Rc<CallShape>>>) -> bool {
     let Some(calls) = calls else { return false };
     let Some(first) = calls.first() else {
         return false;
@@ -36,12 +47,12 @@ fn is_literal_variation_call_set(calls: Option<Vec<CallShape>>) -> bool {
     if !calls.iter().all(|call| call.keywords == first.keywords) {
         return false;
     }
-    has_differing_string_literals(&calls)
+    has_differing_string_literals(calls.iter().map(std::convert::AsRef::as_ref))
 }
 
 /// Distilled view of a call expression used to compare cluster members.
 #[derive(Clone)]
-struct CallShape {
+pub(super) struct CallShape {
     /// Concrete callee string. Captured from raw source so identifier
     /// text the normalised AST collapses is preserved.
     callee: Vec<u8>,
@@ -102,12 +113,24 @@ fn call_shape_from_node(call: Node<'_>, source: &[u8], language: &str) -> Option
 /// that fetch different URLs and then run the same four assertions are
 /// the case this distinguishes: one varying call, four invariant ones.
 /// Scaffolding has nothing left once the literals are removed.
-fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>]) -> bool {
-    if !snippets.iter().all(every_covered_statement_has_call) {
+fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>], cache: &ParseCache) -> bool {
+    let cells: Option<Vec<Rc<CallSequence>>> = snippets
+        .iter()
+        .map(|snippet| cache.call_sequence(snippet, || Some(call_sequence(snippet))))
+        .collect();
+    let Some(cells) = cells else {
+        return false;
+    };
+    if !cells
+        .iter()
+        .all(|cell| cell.all_statements_have_call)
+    {
         return false;
     }
-    let sequences: Option<Vec<Vec<CallShape>>> =
-        snippets.iter().map(call_shapes_in_range).collect();
+    let sequences: Option<Vec<&[CallShape]>> = cells
+        .iter()
+        .map(|cell| cell.shapes.as_deref())
+        .collect();
     let Some(sequences) = sequences else {
         return false;
     };
@@ -118,6 +141,17 @@ fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>]) -> bool {
         return false;
     }
     (0..first.len()).all(|index| sequence_position_differs(&sequences, index))
+}
+
+/// Computes the fused literal-variation sequence cell for one snippet:
+/// the covered-statement flag and the in-range call sequence, both pure
+/// functions of `(file, range)` and memoised together
+/// ([PERF-FLUTTER-TODO-CORPUS]).
+fn call_sequence(snippet: &Snippet<'_>) -> super::snippets::CallSequence {
+    super::snippets::CallSequence {
+        all_statements_have_call: every_covered_statement_has_call(snippet),
+        shapes: call_shapes_in_range(snippet),
+    }
 }
 
 /// Whether every complete statement covered by `snippet` contains a call.
@@ -272,12 +306,12 @@ fn same_call_headers(calls: &[CallShape], expected: &[CallShape]) -> bool {
 
 /// Returns true when `index` has intentional literal variation across
 /// all call sequences.
-fn sequence_position_differs(sequences: &[Vec<CallShape>], index: usize) -> bool {
-    let calls: Vec<CallShape> = sequences
+fn sequence_position_differs(sequences: &[&[CallShape]], index: usize) -> bool {
+    let calls: Vec<&CallShape> = sequences
         .iter()
-        .filter_map(|sequence| sequence.get(index).cloned())
+        .filter_map(|sequence| sequence.get(index))
         .collect();
-    calls.len() == sequences.len() && has_differing_string_literals(&calls)
+    calls.len() == sequences.len() && has_differing_string_literals(calls)
 }
 
 /// Returns the set of tree-sitter node kinds that count as call
@@ -465,7 +499,8 @@ fn is_string_kind(kind: &str) -> bool {
 /// differing string-literal bytes across the cluster. Non-string
 /// arguments are ignored — the heuristic only fires when the
 /// distinguishing variation is in literal text.
-fn has_differing_string_literals(calls: &[CallShape]) -> bool {
+fn has_differing_string_literals<'c>(calls: impl IntoIterator<Item = &'c CallShape>) -> bool {
+    let calls: Vec<&CallShape> = calls.into_iter().collect();
     let Some(first) = calls.first() else {
         return false;
     };

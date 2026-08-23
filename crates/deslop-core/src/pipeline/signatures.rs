@@ -52,7 +52,9 @@ const EDGE_LEN: usize = KGRAM_WIDTH - 1;
 /// `""`, which no normalised kind ever is.
 #[derive(Debug, Clone, Copy, Default)]
 struct TokenEnds {
+    /// The edge tokens, padded with `""`.
     tokens: [&'static str; EDGE_LEN],
+    /// How many slots are real tokens.
     len: usize,
 }
 
@@ -64,7 +66,7 @@ impl TokenEnds {
             match self.tokens.get_mut(self.len) {
                 Some(slot) => {
                     *slot = token;
-                    self.len += 1;
+                    self.len = self.len.saturating_add(1);
                 }
                 None => break,
             }
@@ -85,7 +87,7 @@ impl TokenEnds {
             match tokens.get_mut(len) {
                 Some(slot) => {
                     *slot = token;
-                    len += 1;
+                    len = len.saturating_add(1);
                 }
                 None => break,
             }
@@ -94,7 +96,7 @@ impl TokenEnds {
             match tokens.get_mut(len) {
                 Some(slot) => {
                     *slot = token;
-                    len += 1;
+                    len = len.saturating_add(1);
                 }
                 None => break,
             }
@@ -220,7 +222,7 @@ fn junction_gram(
     for token in tail.tokens.into_iter().take(tail.len).skip(junction_start) {
         if let Some(slot) = gram.get_mut(filled) {
             *slot = token;
-            filled += 1;
+            filled = filled.saturating_add(1);
         }
     }
     for token in head.tokens.into_iter().take(head.len) {
@@ -229,7 +231,7 @@ fn junction_gram(
         }
         if let Some(slot) = gram.get_mut(filled) {
             *slot = token;
-            filled += 1;
+            filled = filled.saturating_add(1);
         }
     }
     gram
@@ -238,8 +240,11 @@ fn junction_gram(
 /// One in-progress frame of the iterative signature fold: the node being
 /// closed and its finished children's states, in order.
 struct FoldFrame<'tree> {
+    /// The node being closed.
     node: &'tree NormalizedNode,
+    /// Index of the next child to fold into `children`.
     next_child: usize,
+    /// Finished child states, in source order.
     children: Vec<TokenState>,
 }
 
@@ -421,7 +426,7 @@ fn fold_window_state(
     for member in children.get(start..end).unwrap_or(&[]) {
         state = join_states(&state, member);
     }
-    emit_member_range(state, range, positions, filled, out);
+    emit_member_range(&state, range, positions, filled, out);
 }
 
 /// Emits `state`'s signature for every fingerprint position covering
@@ -435,7 +440,7 @@ fn emit_member(
     out: &mut [Signature],
 ) {
     emit_member_range(
-        *state,
+        state,
         (byte_range.start, byte_range.end),
         positions,
         filled,
@@ -445,7 +450,7 @@ fn emit_member(
 
 /// Range-keyed emission half of [`emit_member`].
 fn emit_member_range(
-    state: TokenState,
+    state: &TokenState,
     range: (usize, usize),
     positions: &Positions,
     filled: &mut Filled,

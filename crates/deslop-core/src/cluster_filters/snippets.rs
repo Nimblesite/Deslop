@@ -10,8 +10,11 @@
 
 use std::{cell::RefCell, collections::HashMap, hash::BuildHasher, rc::Rc};
 
-use super::contract_index::ContractIndex;
-use crate::{ast::ByteRange, fingerprint::Fingerprint, lang::shared::parse_source, state::FileId};
+use super::{calls::CallShape, contract_index::ContractIndex, polymorphic::OwnedSubject};
+use super::body_shape::OwnedShapeToken;
+use crate::{
+    ast::ByteRange, fingerprint::Fingerprint, lang::shared::parse_source, state::FileId,
+};
 
 /// One re-parsed cluster member: language, raw bytes, the byte range
 /// inside `source` that the fingerprint covered, and the originating
@@ -61,6 +64,69 @@ pub(crate) struct ParseCache {
     /// accumulated time per sub-check, so a corpus-scale run's log says
     /// which filter the time went to.
     noise: RefCell<HashMap<&'static str, NoiseCounters>>,
+    /// Enclosing-call shape per member range
+    /// ([PERF-FLUTTER-TODO-CORPUS]). The literal-variation filter asks
+    /// for the same member ranges once per containing cluster; the
+    /// answer is a pure function of `(file, range)`, so it is computed
+    /// once however many clusters share the member. Bounded: past the
+    /// cap the value is recomputed rather than stored.
+    call_shapes: RefCell<HashMap<SnippetKey, Option<Rc<CallShape>>>>,
+    /// Covered-statement flag plus in-range call sequence per member
+    /// range — one cell because the literal-variation sequence rule
+    /// always asks for both, and fusing them halves the memo lookups.
+    call_sequences: RefCell<HashMap<SnippetKey, Option<Rc<CallSequence>>>>,
+    /// Signature-only body stream per member range.
+    signature_shapes: RefCell<HashMap<SnippetKey, Option<Rc<Vec<OwnedShapeToken>>>>>,
+    /// Polymorphic subject per member range.
+    subjects: RefCell<HashMap<SnippetKey, Option<Rc<OwnedSubject>>>>,
+}
+
+/// Identity of one member across caches: the file, plus the byte range
+/// the fingerprint covers. A file has one language, so this triple
+/// fully determines every memoised analysis.
+type SnippetKey = (FileId, usize, usize);
+
+/// The fused literal-variation sequence cell: whether every complete
+/// statement covered by the range contains a call, and the ordered call
+/// shapes fully inside it (`None` when the file has no grammar here).
+pub(crate) struct CallSequence {
+    /// `every_covered_statement_has_call` verdict.
+    pub(crate) all_statements_have_call: bool,
+    /// Ordered [`CallShape`]s inside the range.
+    pub(crate) shapes: Option<Vec<CallShape>>,
+}
+
+/// Most cells each cache may retain. Beyond the cap a value is
+/// recomputed on demand — results are identical, only reuse ends, so
+/// the resident cost of memoisation stays bounded on corpus-scale runs
+/// ([PERF-FLUTTER-TODO-MEMORY]).
+const CALL_SHAPE_MEMO_MAX: usize = 131_072;
+/// Cap for the call-sequence cells.
+const CALL_SEQUENCE_MEMO_MAX: usize = 65_536;
+/// Cap for the signature-only body streams.
+const SIGNATURE_SHAPE_MEMO_MAX: usize = 65_536;
+/// Cap for the polymorphic subject cells.
+const SUBJECT_MEMO_MAX: usize = 65_536;
+
+/// Shared get-or-compute for one memo map: returns the memoised value,
+/// computing and (within the cap) storing it on a miss. `None` results
+/// are stored too — "no enclosing call" is as expensive to rederive as
+/// the value itself.
+fn memo_entry<T>(
+    map: &RefCell<HashMap<SnippetKey, Option<Rc<T>>>>,
+    key: SnippetKey,
+    cap: usize,
+    compute: impl FnOnce() -> Option<T>,
+) -> Option<Rc<T>> {
+    if let Some(hit) = map.borrow().get(&key) {
+        return hit.clone();
+    }
+    let computed = compute().map(Rc::new);
+    let mut map = map.borrow_mut();
+    if map.len() < cap {
+        let _replaced = map.insert(key, computed.clone());
+    }
+    computed
 }
 
 /// Running totals for one cluster-noise sub-check.
@@ -78,17 +144,59 @@ pub(crate) struct NoiseCounters {
 
 /// Which shape-defining kinds a member subtree contains — the fused
 /// answer to the four membership questions the Dart field filter used
-/// to ask with four separate walks.
+/// to ask with four separate walks. One bit per question keeps the
+/// cell at a byte.
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct FieldKinds {
-    /// Any `function_body` in the subtree.
-    pub has_body: bool,
-    /// Any `function_expression` in the subtree.
-    pub has_function_expression: bool,
-    /// Any `static_final_declaration_list` in the subtree.
-    pub has_static_final_list: bool,
-    /// Any `initialized_identifier_list` in the subtree.
-    pub has_initialized_identifier_list: bool,
+    /// Set bits: [`FieldKinds::BODY`] for any `function_body`,
+    /// [`FieldKinds::FUNCTION_EXPRESSION`] for any
+    /// `function_expression`, [`FieldKinds::STATIC_FINAL_LIST`] for any
+    /// `static_final_declaration_list`, and
+    /// [`FieldKinds::INITIALIZED_IDENTIFIER_LIST`] for any
+    /// `initialized_identifier_list`.
+    bits: u8,
+}
+
+impl FieldKinds {
+    /// Bit for `function_body` presence.
+    const BODY: u8 = 1 << 0;
+    /// Bit for `function_expression` presence.
+    const FUNCTION_EXPRESSION: u8 = 1 << 1;
+    /// Bit for `static_final_declaration_list` presence.
+    const STATIC_FINAL_LIST: u8 = 1 << 2;
+    /// Bit for `initialized_identifier_list` presence.
+    const INITIALIZED_IDENTIFIER_LIST: u8 = 1 << 3;
+
+    /// Records one kind's presence.
+    pub(crate) fn mark(&mut self, kind: &str) {
+        self.bits |= match kind {
+            "function_body" => Self::BODY,
+            "function_expression" => Self::FUNCTION_EXPRESSION,
+            "static_final_declaration_list" => Self::STATIC_FINAL_LIST,
+            "initialized_identifier_list" => Self::INITIALIZED_IDENTIFIER_LIST,
+            _ => 0,
+        };
+    }
+
+    /// Whether any `function_body` was seen.
+    pub(crate) fn has_body(self) -> bool {
+        self.bits & Self::BODY != 0
+    }
+
+    /// Whether any `function_expression` was seen.
+    pub(crate) fn has_function_expression(self) -> bool {
+        self.bits & Self::FUNCTION_EXPRESSION != 0
+    }
+
+    /// Whether any `static_final_declaration_list` was seen.
+    pub(crate) fn has_static_final_list(self) -> bool {
+        self.bits & Self::STATIC_FINAL_LIST != 0
+    }
+
+    /// Whether any `initialized_identifier_list` was seen.
+    pub(crate) fn has_initialized_identifier_list(self) -> bool {
+        self.bits & Self::INITIALIZED_IDENTIFIER_LIST != 0
+    }
 }
 
 impl ParseCache {
@@ -96,6 +204,66 @@ impl ParseCache {
     #[must_use]
     pub(crate) fn new() -> Self {
         Self::default()
+    }
+
+    /// The enclosing-call [`CallShape`] for `snippet`'s range,
+    /// memoised ([PERF-FLUTTER-TODO-CORPUS]).
+    pub(crate) fn call_shape(
+        &self,
+        snippet: &Snippet<'_>,
+        compute: impl FnOnce() -> Option<CallShape>,
+    ) -> Option<Rc<CallShape>> {
+        memo_entry(
+            &self.call_shapes,
+            (snippet.file_id, snippet.range.start, snippet.range.end),
+            CALL_SHAPE_MEMO_MAX,
+            compute,
+        )
+    }
+
+    /// The fused call-sequence cell for `snippet`'s range, memoised
+    /// ([PERF-FLUTTER-TODO-CORPUS]).
+    pub(crate) fn call_sequence(
+        &self,
+        snippet: &Snippet<'_>,
+        compute: impl FnOnce() -> Option<CallSequence>,
+    ) -> Option<Rc<CallSequence>> {
+        memo_entry(
+            &self.call_sequences,
+            (snippet.file_id, snippet.range.start, snippet.range.end),
+            CALL_SEQUENCE_MEMO_MAX,
+            compute,
+        )
+    }
+
+    /// The signature-only body stream for `snippet`'s range, memoised
+    /// ([PERF-FLUTTER-TODO-CORPUS]).
+    pub(crate) fn signature_shape(
+        &self,
+        snippet: &Snippet<'_>,
+        compute: impl FnOnce() -> Option<Vec<OwnedShapeToken>>,
+    ) -> Option<Rc<Vec<OwnedShapeToken>>> {
+        memo_entry(
+            &self.signature_shapes,
+            (snippet.file_id, snippet.range.start, snippet.range.end),
+            SIGNATURE_SHAPE_MEMO_MAX,
+            compute,
+        )
+    }
+
+    /// The polymorphic subject for `snippet`'s range, memoised
+    /// ([PERF-FLUTTER-TODO-CORPUS]).
+    pub(crate) fn subject(
+        &self,
+        snippet: &Snippet<'_>,
+        compute: impl FnOnce() -> Option<OwnedSubject>,
+    ) -> Option<Rc<OwnedSubject>> {
+        memo_entry(
+            &self.subjects,
+            (snippet.file_id, snippet.range.start, snippet.range.end),
+            SUBJECT_MEMO_MAX,
+            compute,
+        )
     }
 
     /// Records one cluster-noise sub-check outcome
@@ -108,7 +276,8 @@ impl ParseCache {
         elapsed: std::time::Duration,
     ) {
         let label = filter.label();
-        let entry = self.noise.borrow_mut().entry(label).or_default();
+        let mut map = self.noise.borrow_mut();
+        let entry = map.entry(label).or_default();
         entry.calls = entry.calls.saturating_add(1);
         entry.members = entry.members.saturating_add(members as u64);
         entry.fired = entry.fired.saturating_add(u64::from(fired));
@@ -269,17 +438,11 @@ fn grammar_for(language: &str) -> Option<tree_sitter::Language> {
 /// Folds the shape-defining kind membership of `node`'s subtree into
 /// `kinds` — the single walk that replaces four per-kind walks.
 fn collect_field_kinds(node: tree_sitter::Node<'_>, kinds: &mut FieldKinds) {
-    match node.kind() {
-        "function_body" => kinds.has_body = true,
-        "function_expression" => kinds.has_function_expression = true,
-        "static_final_declaration_list" => kinds.has_static_final_list = true,
-        "initialized_identifier_list" => kinds.has_initialized_identifier_list = true,
-        _ => {}
-    }
-    if kinds.has_body
-        && kinds.has_function_expression
-        && kinds.has_static_final_list
-        && kinds.has_initialized_identifier_list
+    kinds.mark(node.kind());
+    if kinds.has_body()
+        && kinds.has_function_expression()
+        && kinds.has_static_final_list()
+        && kinds.has_initialized_identifier_list()
     {
         return;
     }

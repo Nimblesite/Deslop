@@ -150,7 +150,7 @@ fn covers_only_field_declarations(snippet: &Snippet<'_>, cache: &ParseCache) -> 
 /// accepted collateral.
 fn is_field_member(member: Node<'_>, file_id: crate::state::FileId, cache: &ParseCache) -> bool {
     let kinds = cache.dart_field_kinds(file_id, member);
-    !kinds.has_body
-        && !kinds.has_function_expression
-        && (kinds.has_static_final_list || kinds.has_initialized_identifier_list)
+    !kinds.has_body()
+        && !kinds.has_function_expression()
+        && (kinds.has_static_final_list() || kinds.has_initialized_identifier_list())
 }

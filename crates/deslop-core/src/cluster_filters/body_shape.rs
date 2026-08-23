@@ -46,6 +46,29 @@ pub(super) enum ShapeToken<'src> {
     Close,
 }
 
+/// The owned mirror of [`ShapeToken`], for memoising a body stream in
+/// [`ParseCache`](super::snippets::ParseCache) beyond the source
+/// borrow. Identical comparison semantics — conversions are lossless.
+#[derive(PartialEq, Eq, Clone)]
+pub(super) enum OwnedShapeToken {
+    /// A node's grammar kind id.
+    Kind(u16),
+    /// The bytes of an identifier the body reaches for.
+    Symbol(Vec<u8>),
+    /// Marks the end of a subtree.
+    Close,
+}
+
+impl From<&ShapeToken<'_>> for OwnedShapeToken {
+    fn from(token: &ShapeToken<'_>) -> Self {
+        match token {
+            ShapeToken::Kind(kind) => Self::Kind(*kind),
+            ShapeToken::Symbol(bytes) => Self::Symbol(bytes.to_vec()),
+            ShapeToken::Close => Self::Close,
+        }
+    }
+}
+
 /// A pending step in the iterative [`body_kind_stream`] walk. Explicit
 /// frames keep the walk stack-safe on adversarially deep trees, the
 /// same discipline the fingerprint hasher follows.
