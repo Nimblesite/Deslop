@@ -334,7 +334,7 @@ jobs:
     # The Nimblesite-provisioned 8-core runner (`linux-x64`), same as
     # `build`: this job's cold instrumented release build is ~21 minutes
     # on four cores.
-    runs-on: linux-x64
+    runs-on: Medium
     # TIMEOUT EXCEPTION: a cold instrumented release build of the whole
     # workspace is ~21 minutes on a cache miss.
     timeout-minutes: 40
