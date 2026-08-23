@@ -34,7 +34,7 @@
 //! proves the pair cannot clear the admission floor
 //! ([FUSION-SHARED-SUBTREE-BOUND]).
 
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, sync::Arc};
 
 /// Zhang–Shasha ordered tree alignment ([FUSION-SHARED-SUBTREE]).
 mod alignment;
@@ -55,6 +55,24 @@ pub use rescue::apply_shared_subtree_rescue;
 
 use alignment::aligned_shared_nodes;
 use view::{build_view, EndpointView};
+
+/// Most endpoint views one measurer retains
+/// ([PERF-FLUTTER-TODO-MEMORY]). Star-shaped bucket members reuse one
+/// endpoint across many pairs, which is what the memo buys; a corpus-scale
+/// rescue population holds millions of *distinct* endpoints, and retaining
+/// every view was a large share of the stage's memory. Past the cap the
+/// view is rebuilt per use — identical values, bounded residence.
+const ENDPOINT_VIEW_MEMO_MAX: usize = 4_096;
+
+/// Most exact-overlap results one measurer retains. The memo exists so a
+/// structural pair appearing at many byte offsets costs one alignment;
+/// past the cap a repeat pair re-measures — identical value, bounded
+/// residence.
+const EXACT_RESULT_MEMO_MAX: usize = 32_768;
+
+/// Most below-floor bounds one measurer retains, for the same reason as
+/// [`EXACT_RESULT_MEMO_MAX`].
+const BOUND_RESULT_MEMO_MAX: usize = 32_768;
 
 use crate::{
     ast::NormalizedNode, fingerprint::Fingerprint, observe::bump, pair::SHARED_SUBTREE_MIN_OVERLAP,
@@ -122,7 +140,7 @@ pub struct OverlapMeasurer<'corpus> {
     tree_index: HashMap<FileId, &'corpus NormalizedNode>,
     /// Per-endpoint resolved state. `None` records an unresolvable
     /// range so it is not re-walked per pair.
-    endpoints: HashMap<EndpointKey, Option<Rc<EndpointView>>>,
+    endpoints: HashMap<EndpointKey, Option<Arc<EndpointView>>>,
     /// Exact measured overlap per structural pair.
     exact_results: HashMap<PairKey, f64>,
     /// Below-floor upper bounds per structural pair, usable only by the
@@ -131,6 +149,25 @@ pub struct OverlapMeasurer<'corpus> {
     bound_results: HashMap<PairKey, f64>,
     /// Aggregate counters ([PIPELINE-OBSERVABILITY-STAGES]).
     stats: MeasureStats,
+}
+
+impl MeasureStats {
+    /// Sums two counter snapshots — shard results merging in shard
+    /// order, deterministically ([PERF-FLUTTER-TODO-RESCUE]).
+    #[must_use]
+    pub const fn add(self, other: MeasureStats) -> MeasureStats {
+        MeasureStats {
+            hash_equal: self.hash_equal.saturating_add(other.hash_equal),
+            exact_hits: self.exact_hits.saturating_add(other.exact_hits),
+            bound_hits: self.bound_hits.saturating_add(other.bound_hits),
+            bound_skips: self.bound_skips.saturating_add(other.bound_skips),
+            alignments: self.alignments.saturating_add(other.alignments),
+            credit_fallbacks: self
+                .credit_fallbacks
+                .saturating_add(other.credit_fallbacks),
+            unresolved: self.unresolved.saturating_add(other.unresolved),
+        }
+    }
 }
 
 /// Identity of one endpoint's resolved range, for the view memo.
@@ -164,6 +201,7 @@ impl<'corpus> OverlapMeasurer<'corpus> {
         self.stats
     }
 
+
     /// Shared-subtree overlap between two endpoints in `[0, 1]`.
     ///
     /// `1.0` requires Merkle equality of the endpoints themselves; a
@@ -192,7 +230,9 @@ impl<'corpus> OverlapMeasurer<'corpus> {
             return cached;
         }
         let result = self.measure_views(&left_view, &right_view);
-        let _previous = self.exact_results.insert(key, result);
+        if self.exact_results.len() < EXACT_RESULT_MEMO_MAX {
+            let _previous = self.exact_results.insert(key, result);
+        }
         result
     }
 
@@ -227,11 +267,15 @@ impl<'corpus> OverlapMeasurer<'corpus> {
         let bound = kind_bound_ratio(&left_view, &right_view);
         if bound < SHARED_SUBTREE_MIN_OVERLAP {
             bump(&mut self.stats.bound_skips);
-            let _previous = self.bound_results.insert(key, bound);
+            if self.bound_results.len() < BOUND_RESULT_MEMO_MAX {
+                let _previous = self.bound_results.insert(key, bound);
+            }
             return bound;
         }
         let result = self.measure_views(&left_view, &right_view);
-        let _previous = self.exact_results.insert(key, result);
+        if self.exact_results.len() < EXACT_RESULT_MEMO_MAX {
+            let _previous = self.exact_results.insert(key, result);
+        }
         result
     }
 
@@ -254,7 +298,7 @@ impl<'corpus> OverlapMeasurer<'corpus> {
         &mut self,
         left: &Fingerprint,
         right: &Fingerprint,
-    ) -> Option<(Rc<EndpointView>, Rc<EndpointView>)> {
+    ) -> Option<(Arc<EndpointView>, Arc<EndpointView>)> {
         let views = self.view(left).zip(self.view(right));
         if views.is_none() {
             bump(&mut self.stats.unresolved);
@@ -279,13 +323,17 @@ impl<'corpus> OverlapMeasurer<'corpus> {
     }
 
     /// Returns (building on first use) the endpoint's resolved view.
-    fn view(&mut self, endpoint: &Fingerprint) -> Option<Rc<EndpointView>> {
+    /// Retention is bounded by [`ENDPOINT_VIEW_MEMO_MAX`]; a view built
+    /// past the cap is returned without being retained.
+    fn view(&mut self, endpoint: &Fingerprint) -> Option<Arc<EndpointView>> {
         let key = endpoint_key(endpoint);
         if let Some(cached) = self.endpoints.get(&key) {
             return cached.clone();
         }
-        let built = build_view(&self.tree_index, endpoint).map(Rc::new);
-        let _previous = self.endpoints.insert(key, built.clone());
+        let built = build_view(&self.tree_index, endpoint).map(Arc::new);
+        if self.endpoints.len() < ENDPOINT_VIEW_MEMO_MAX {
+            let _previous = self.endpoints.insert(key, built.clone());
+        }
         built
     }
 }

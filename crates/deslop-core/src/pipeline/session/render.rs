@@ -16,7 +16,7 @@ use crate::{
     cluster::{build_ranked_fused_clusters, ClusterBuildInputs},
     cluster_filters::{split_noise_verbatim_families, split_structural_families},
     error::CoreError,
-    lsh::band_collisions,
+    lsh::BandCollisionSource,
     overlap::apply_shared_subtree_rescue,
     pair::{candidate_pairs_for_language_policy, cluster_by_transitive_closure},
     report::{render_report, CacheStats, Report, ReportInputs},
@@ -47,8 +47,12 @@ impl PipelineSession {
         // constructs none of them, and borrows rather than copies.
         let fingerprints = self.store.fingerprints();
         let signatures = self.store.signatures();
-        tracing::debug!(signatures = signatures.len(), "running LSH band collisions");
-        let lsh_pairs = band_collisions(signatures);
+        // [PERF-FLUTTER-TODO-PAIRS] The LSH pass streams its band
+        // collisions straight into the admission-gated candidate
+        // construction — no materialised pair vector, no per-pair
+        // candidate objects for pairs the survival gate refuses.
+        let stage_started = Instant::now();
+        let lsh_source = BandCollisionSource::new(signatures);
         let cross_language_signatures =
             self.exclusion.allows_cross_language_comparison().then(|| {
                 build_cross_language_signatures(
@@ -57,25 +61,22 @@ impl PipelineSession {
                     &self.file_languages,
                 )
             });
-        tracing::debug!(lsh_pairs = lsh_pairs.len(), "running embedding pass");
+        tracing::debug!(signatures = signatures.len(), "streaming LSH band collisions");
         let view = CorpusView {
             fingerprints,
             sources: &self.sources,
         };
         let embedding_outcome = run_embedding_pass(config, &view)?;
-        tracing::debug!(
-            embedding_pairs = embedding_outcome.pairs.len(),
-            "collecting candidate pairs"
-        );
         let mut pairs = candidate_pairs_for_language_policy(
             fingerprints,
             signatures,
-            &lsh_pairs,
+            &lsh_source,
             &embedding_outcome.pairs,
             cross_language_signatures.as_deref(),
             &self.file_languages,
             self.exclusion.allows_cross_language_comparison(),
         );
+        log_cluster_stage("candidate_pairs", pairs.len(), stage_started);
         // [FUSION-SHARED-SUBTREE] (gh #408): measure the structural
         // overlap the anchor axis discards before survival drops the
         // enclosing Type-3 pair and leaves only its fragment views.

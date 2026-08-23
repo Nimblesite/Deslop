@@ -180,7 +180,7 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
         || is_signature_only_cluster(&snippets)
         || calls::is_literal_variation_call_cluster(&snippets)
         || constant_table::is_constant_table_cluster(&snippets)
-        || language_specific_noise(language, &snippets)
+        || language_specific_noise(language, &snippets, cache)
 }
 
 /// Classifies a cluster's [`CloneCategory`] ([RANK-CATEGORY]) by re-parsing
@@ -243,10 +243,10 @@ fn is_literal_dominated_table(literal_fraction: f64, snippets: &[Snippet<'_>]) -
 /// only walked by matchers that can fire for it. C# has no idiom filter
 /// today; Dart suppresses const-data-registry field clusters. Both
 /// also rely on the generic checks plus the fusion and report-hide gates.
-fn language_specific_noise(language: &str, snippets: &[Snippet<'_>]) -> bool {
+fn language_specific_noise(language: &str, snippets: &[Snippet<'_>], cache: &ParseCache) -> bool {
     match language {
         "dart" => {
-            dart::is_dart_class_field_declaration_cluster(snippets)
+            dart::is_dart_class_field_declaration_cluster(snippets, cache)
                 || dart::is_dart_widget_scaffold_cluster(snippets)
         }
         "python" => python_noise(snippets),

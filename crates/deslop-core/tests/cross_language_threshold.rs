@@ -58,7 +58,7 @@ fn policy_pairs(
     candidate_pairs_for_language_policy(
         fingerprints,
         signatures,
-        lsh_pairs,
+        &lsh_pairs,
         &[],
         None,
         languages,

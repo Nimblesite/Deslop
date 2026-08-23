@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 
-use super::{alignment::PostNode, SHARED_SUBTREE_MIN_CREDIT_NODES};
+use super::{alignment::PostNode, ALIGNMENT_MAX_NODES, SHARED_SUBTREE_MIN_CREDIT_NODES};
 use crate::{
     ast::NormalizedNode,
     fingerprint::{collect_fingerprints, Fingerprint},
@@ -25,6 +25,10 @@ pub(super) struct EndpointView {
     /// Total nodes excluding the synthetic root.
     pub(super) total: usize,
     /// Creditable subtrees for the large-tree fallback, largest first.
+    /// Built only when `total` passes [`super::ALIGNMENT_MAX_NODES`] —
+    /// the only population that ever consumes them — so the vast
+    /// majority of views never pay for the collection
+    /// ([PERF-FLUTTER-TODO-MEMORY]).
     pub(super) entries: Vec<Fingerprint>,
     /// Node-kind multiset, excluding the synthetic root, for the
     /// admission upper bound ([FUSION-SHARED-SUBTREE-BOUND]).
@@ -81,16 +85,12 @@ pub(super) fn build_view(
     let root = tree_index.get(&endpoint.file_id)?;
     let members = resolve_range_nodes(root, endpoint.byte_range.start, endpoint.byte_range.end)?;
     let mut postorder: Vec<PostNode> = Vec::new();
-    let mut entries: Vec<Fingerprint> = Vec::new();
     for member in &members {
         push_postorder(member, &mut postorder);
-        entries.extend(collect_fingerprints(
-            member,
-            SHARED_SUBTREE_MIN_CREDIT_NODES,
-        ));
     }
     let total = postorder.len();
     let kind_counts = count_kinds(&postorder);
+    let entries = creditable_entries(&members, total);
     // Synthetic window root: aligns the members as ordered siblings so
     // a multi-node sibling window is one tree for the alignment. It
     // matches its counterpart at zero cost, so the distance is exactly
@@ -99,18 +99,35 @@ pub(super) fn build_view(
         kind: "__window__",
         leftmost: 1,
     });
-    entries.sort_by(|left, right| {
-        right
-            .node_count
-            .cmp(&left.node_count)
-            .then(left.byte_range.start.cmp(&right.byte_range.start))
-    });
     Some(EndpointView {
         postorder,
         total,
         entries,
         kind_counts,
     })
+}
+
+/// The creditable-subtree collection for a resolved endpoint, built only
+/// for endpoints past [`super::ALIGNMENT_MAX_NODES`] — the large-tree
+/// fallback's exclusive population.
+fn creditable_entries(members: &[&NormalizedNode], total: usize) -> Vec<Fingerprint> {
+    if total <= ALIGNMENT_MAX_NODES {
+        return Vec::new();
+    }
+    let mut entries = Vec::new();
+    for member in members {
+        entries.extend(collect_fingerprints(
+            member,
+            SHARED_SUBTREE_MIN_CREDIT_NODES,
+        ));
+    }
+    entries.sort_by(|left, right| {
+        right
+            .node_count
+            .cmp(&left.node_count)
+            .then(left.byte_range.start.cmp(&right.byte_range.start))
+    });
+    entries
 }
 
 /// Kind-multiset of a post-order sequence ([FUSION-SHARED-SUBTREE-BOUND]).

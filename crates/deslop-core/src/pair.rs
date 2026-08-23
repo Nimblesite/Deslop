@@ -15,9 +15,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::fingerprint::Fingerprint;
+
 /// Candidate-pair construction helpers kept separate from closure clustering.
 mod candidates;
-pub use candidates::{candidate_pairs, candidate_pairs_for_language_policy};
+pub use candidates::{candidate_pairs, candidate_pairs_for_language_policy, LshPairs};
 
 /// Minimum fused score required before a pair enters a cluster. The
 /// threshold is calibrated against a unit-bounded fused confidence:
@@ -361,6 +363,63 @@ fn survival_decision(pair: &CandidatePair) -> PairSurvival {
         return PairSurvival::SurvivedSharedSubtree;
     }
     PairSurvival::Survived
+}
+
+/// The insertion-time half of [`survival_decision`]
+/// ([PERF-FLUTTER-TODO-PAIRS]): whether the pair survives when its
+/// shared-subtree overlap is still unknown (`0.0`). Used by candidate
+/// construction to refuse dead pairs before they are retained — the
+/// arithmetic is the same function of the same axes, so a pair kept here
+/// is exactly a pair the closure keeps, and a pair refused here is
+/// exactly one the closure would drop (unless the rescue can still
+/// admit it, which [`rescue_eligible`] covers separately).
+pub(crate) fn construction_survives(pair: &CandidatePair) -> bool {
+    let score = pair.score.finite();
+    if score.bounded_fused() < pair.fused_min_score {
+        return false;
+    }
+    if score.structural <= 0.0 && !endpoints_are_size_coherent(pair.endpoint_node_counts) {
+        return false;
+    }
+    let lsh_only = score.structural <= 0.0 && score.embedding_cos <= 0.0;
+    if lsh_only && score.token_jaccard < pair.lsh_only_min_jaccard {
+        return false;
+    }
+    if lsh_only && pair.lsh_only_node_floor < LSH_ONLY_MIN_NODE_COUNT {
+        return false;
+    }
+    true
+}
+
+/// True for a pair worth measuring: dropped below its fused floor on a
+/// zero structural anchor, yet carrying the token corroboration and
+/// endpoint substance the rescue route requires
+/// ([FUSION-SHARED-SUBTREE]). Shared with the rescue pass so the
+/// construction gate and the measurer can never disagree about which
+/// pairs are rescue candidates.
+pub(crate) fn rescue_eligible(pair: &CandidatePair) -> bool {
+    let score = pair.score.finite();
+    score.structural <= 0.0
+        && score.bounded_fused() < pair.fused_min_score
+        && score.token_jaccard >= SHARED_SUBTREE_MIN_JACCARD
+        && pair.endpoint_node_counts.0 >= SHARED_SUBTREE_MIN_NODE_COUNT
+}
+
+/// True when the pair's endpoints live in different files.
+///
+/// The rescue is deliberately cross-file only. Every clone this route
+/// exists to recover is a copy *between* files ([FUSION-SHARED-SUBTREE],
+/// gh #408), and admitting same-file pairs on shape overlap is the
+/// #197 in-file sibling-family shape, which the report already spends a
+/// dedicated proof suppressing. It is also what keeps a single-file
+/// corpus intact: same-file rescues union that file's subtrees into one
+/// transitive component, and the same-file overlap collapse then
+/// reduces it to a single logical location, which is dropped below
+/// `MIN_REPORTABLE_MEMBERS` — so the file's real duplication
+/// disappeared entirely rather than being reported
+/// (`issue_119_role_gate_exercised`).
+pub(crate) fn crosses_files(left: &Fingerprint, right: &Fingerprint) -> bool {
+    left.file_id != right.file_id
 }
 
 /// [FUSION-SHARED-SUBTREE] admission: a pair below the fused threshold

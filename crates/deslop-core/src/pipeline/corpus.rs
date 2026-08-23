@@ -186,8 +186,6 @@ fn log_corpus_built(
         parse_ms = build.stats.parse_ms(),
         fingerprint_ms = build.stats.fingerprint_ms(),
         signature_ms = build.stats.signature_ms(),
-        signature_memo_hits = build.memo.hits(),
-        signature_memo_misses = build.memo.misses(),
         elapsed_ms = crate::observe::elapsed_ms(started),
         "fingerprint corpus built",
     );
@@ -326,7 +324,10 @@ fn build_cached_file(
     let fingerprints = fingerprints_for(&tree, min_nodes, parser.id(), Some(&mut build.stats));
     build.stats.add_fingerprint(fingerprint_started.elapsed());
     let signature_started = Instant::now();
-    let signatures = signatures_for_file(&tree, &fingerprints, Some(parser.id()), &mut build.memo);
+    // [PERF-FLUTTER-TODO-CORPUS] One bottom-up fold per file
+    // ([PIPELINE-SIGNATURE-FOLD]) replaces the historical per-fingerprint
+    // root-resolving walk.
+    let signatures = signatures_for_file(&tree, &fingerprints, Some(parser.id()));
     build.stats.add_signature(signature_started.elapsed());
     Ok(CachedFile {
         tree,

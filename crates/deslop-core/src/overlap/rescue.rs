@@ -1,41 +1,109 @@
 //! Applies the shared-subtree rescue over the candidate set
 //! ([FUSION-SHARED-SUBTREE], gh #408).
 //!
-//! The loop is corpus-scale — tens of millions of scanned candidates on
-//! a large repository — so its observability contract is the aggregate
-//! gate counters in [`super::tally`] plus fixed-interval progress
-//! records, never per-pair events
+//! Only pairs the fused threshold would otherwise drop — despite
+//! corroborating token evidence — are measured: aligning two subtrees for
+//! all candidates would repeat the admission-cost mistake
+//! [FUSION-CONTENT-GATE] deliberately avoids, and a pair that already
+//! survives needs no rescue.
+//!
+//! The pass is measured work over a corpus-scale population, so it runs
+//! sharded across the available cores ([PERF-FLUTTER-TODO-RESCUE]): each
+//! shard owns a disjoint slice of the candidate list and its own
+//! [`OverlapMeasurer`]. Every measurement is a pure function of the
+//! corpus, so sharding changes no value — only which thread computes it.
+//! Shard results merge in shard order, keeping the reported counters
+//! deterministic.
+//!
+//! Observability is the aggregate gate counters in [`super::tally`] plus
+//! fixed-interval progress records, never per-pair events
 //! ([PERF-FLUTTER-TODO-OBSERVABILITY]).
 
 use crate::{
     ast::NormalizedNode,
     fingerprint::Fingerprint,
-    pair::{
-        CandidatePair, SHARED_SUBTREE_MIN_JACCARD, SHARED_SUBTREE_MIN_NODE_COUNT,
-        SHARED_SUBTREE_MIN_OVERLAP,
-    },
+    pair::{crosses_files, rescue_eligible, CandidatePair, SHARED_SUBTREE_MIN_OVERLAP},
 };
 
 use super::{tally::RescueTally, OverlapMeasurer};
 
-/// Measures shared-subtree overlap onto every candidate pair the fused
-/// threshold would otherwise drop despite corroborating token evidence
-/// ([FUSION-SHARED-SUBTREE]). Only those pairs are measured: aligning
-/// two subtrees for all candidates would repeat the admission-cost
-/// mistake [FUSION-CONTENT-GATE] deliberately avoids, and a pair that
-/// already survives needs no rescue.
+/// Fewest candidate pairs worth sharding at all — below this the thread
+/// spawn costs more than the measurements.
+const MIN_SHARD_WORK: usize = 4_096;
+
+/// Measures shared-subtree overlap onto every rescue-eligible candidate
+/// pair, in parallel when the population justifies it.
 pub fn apply_shared_subtree_rescue(
     pairs: &mut [CandidatePair],
     fingerprints: &[Fingerprint],
     trees: &[NormalizedNode],
 ) {
+    let workers = worker_count(pairs.len());
+    if workers <= 1 {
+        let mut measurer = OverlapMeasurer::new(trees);
+        let mut tally = RescueTally::new();
+        for pair in pairs.iter_mut() {
+            tally.scan();
+            measure_one(pair, fingerprints, &mut measurer, &mut tally);
+        }
+        tally.report_total(measurer.stats());
+        return;
+    }
+    let shard_size = pairs.len().div_ceil(workers);
+    let mut shards: Vec<(RescueTally, super::MeasureStats)> = Vec::with_capacity(workers);
+    std::thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(workers);
+        for chunk in pairs.chunks_mut(shard_size) {
+            handles.push(scope.spawn(move || run_shard(chunk, fingerprints, trees)));
+        }
+        for handle in handles {
+            if let Ok(shard) = handle.join() {
+                shards.push(shard);
+            }
+        }
+    });
+    report_shards(&shards);
+}
+
+/// Measures one shard of the candidate list with its own measurer.
+fn run_shard(
+    chunk: &mut [CandidatePair],
+    fingerprints: &[Fingerprint],
+    trees: &[NormalizedNode],
+) -> (RescueTally, super::MeasureStats) {
     let mut measurer = OverlapMeasurer::new(trees);
     let mut tally = RescueTally::new();
-    for pair in pairs.iter_mut() {
+    for pair in chunk.iter_mut() {
         tally.scan();
         measure_one(pair, fingerprints, &mut measurer, &mut tally);
     }
-    tally.report_total(measurer.stats());
+    let stats = measurer.stats();
+    (tally, stats)
+}
+
+/// Emits the merged, deterministic totals for a sharded run.
+fn report_shards(shards: &[(RescueTally, super::MeasureStats)]) {
+    let Some((first, stats)) = shards.first() else {
+        return;
+    };
+    let mut merged = first.clone();
+    let mut totals = *stats;
+    for (tally, stats) in shards.iter().skip(1) {
+        merged.absorb(tally);
+        totals = totals.add(*stats);
+    }
+    merged.report_total(totals);
+}
+
+/// How many worker threads the rescue uses for `pairs` candidates:
+/// the available parallelism, capped so every shard carries real work.
+fn worker_count(pairs: usize) -> usize {
+    if pairs < MIN_SHARD_WORK {
+        return 1;
+    }
+    let available = std::thread::available_parallelism()
+        .map_or(1, std::num::NonZeroUsize::get);
+    available.min(pairs / MIN_SHARD_WORK).max(1)
 }
 
 /// Measures one pair when it is eligible, resolvable, and cross-file,
@@ -63,32 +131,4 @@ fn measure_one(
         pair.shared_subtree_overlap >= SHARED_SUBTREE_MIN_OVERLAP,
         measurer.stats(),
     );
-}
-
-/// True when the pair's endpoints live in different files.
-///
-/// The rescue is deliberately cross-file only. Every clone this route
-/// exists to recover is a copy *between* files ([FUSION-SHARED-SUBTREE],
-/// gh #408), and admitting same-file pairs on shape overlap is the
-/// #197 in-file sibling-family shape, which the report already spends a
-/// dedicated proof suppressing. It is also what keeps a single-file
-/// corpus intact: same-file rescues union that file's subtrees into one
-/// transitive component, and the same-file overlap collapse then
-/// reduces it to a single logical location, which is dropped below
-/// `MIN_REPORTABLE_MEMBERS` — so the file's real duplication
-/// disappeared entirely rather than being reported
-/// (`issue_119_role_gate_exercised`).
-fn crosses_files(left: &Fingerprint, right: &Fingerprint) -> bool {
-    left.file_id != right.file_id
-}
-
-/// True for a pair worth measuring: dropped below its fused floor on a
-/// zero structural anchor, yet carrying the token corroboration and
-/// endpoint substance the rescue route requires.
-fn rescue_eligible(pair: &CandidatePair) -> bool {
-    let score = pair.score.finite();
-    score.structural <= 0.0
-        && score.bounded_fused() < pair.fused_min_score
-        && score.token_jaccard >= SHARED_SUBTREE_MIN_JACCARD
-        && pair.endpoint_node_counts.0 >= SHARED_SUBTREE_MIN_NODE_COUNT
 }

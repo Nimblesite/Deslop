@@ -8,20 +8,32 @@
 //! the flattened per-file lists instead of reconstructing them.
 //! Cross-language signatures stay render-time — they exist only for
 //! the opt-in audit mode ([CONFIG-CROSS-LANGUAGE]).
+//!
+//! ## Bottom-up fold ([PERF-FLUTTER-TODO-CORPUS])
+//!
+//! The historical construction resolved every fingerprint's byte range
+//! from the file root and re-walked the resolved subtree to emit its
+//! token stream — `O(fingerprints × tree)` per file, which measured
+//! 602 of the Flutter corpus stage's 630 seconds. The fold below walks
+//! each file once, carrying a composable [`TokenState`] up the tree:
+//! the `MinHash` of a sequence is the element-wise minimum over its
+//! k-grams, so a parent's signature is `min` over its children's plus
+//! the few k-grams straddling their boundaries — recomputable from
+//! each child's signature and its first/last `k-1` tokens alone. The
+//! result is byte-identical to the top-down construction (pinned by
+//! `fold_signatures_match_the_top_down_construction`), at `O(nodes)`
+//! per file.
 
-use std::{collections::HashMap, hash::BuildHasher};
-
-use blake3::Hasher;
+use std::collections::HashMap;
 
 use crate::{
     ast::NormalizedNode,
+    boilerplate::{is_import_boilerplate_carrier, is_import_boilerplate_only_subtree},
     fingerprint::Fingerprint,
     lsh::{minhash_signature, Signature, SIGNATURE_LEN},
+    sibling::MAX_WINDOW_WIDTH,
     state::FileId,
-    tokens::{
-        cross_language_token_stream_for_fingerprint, kgrams, token_stream_for_fingerprint,
-        token_stream_for_fingerprint_with_language, KGRAM_WIDTH,
-    },
+    tokens::{cross_language_token_stream_for_fingerprint, kgrams, KGRAM_WIDTH},
 };
 
 /// Builds a `FileId → &NormalizedNode` index to avoid O(files) linear scans
@@ -30,144 +42,499 @@ fn build_tree_index(trees: &[NormalizedNode]) -> HashMap<FileId, &NormalizedNode
     trees.iter().map(|tree| (tree.file_id, tree)).collect()
 }
 
-/// Memoises `MinHash` construction by token-stream digest across one
-/// corpus build ([PIPELINE-SIGNATURE-MEMO]).
-///
-/// `MinHash` over the k-grams is a pure function of the token stream
-/// alone, so two fingerprints whose ranges resolve to identical streams
-/// — the common case in a corpus whose whole pathology is repeated
-/// structure — get byte-identical signatures from one construction and
-/// a digest lookup, instead of paying the per-k-gram hash cascade
-/// again. Sound by construction: the key pins the exact stream, not a
-/// structural proxy for it. Fallback signatures never pass through
-/// here — they are deliberately scoped to the fingerprint's byte range
-/// ([`fallback_signature`]) and stay per-fingerprint.
+/// Boundary tokens one [`TokenState`] must retain: exactly `KGRAM_WIDTH - 1`
+/// from each end of its token sequence, which is the most any
+/// junction-spanning k-gram can read.
+const EDGE_LEN: usize = KGRAM_WIDTH - 1;
+
+/// The first/last [`EDGE_LEN`] tokens of a token sequence, stored inline
+/// so [`TokenState`] stays copyable and allocation-free. Unused slots hold
+/// `""`, which no normalised kind ever is.
+#[derive(Debug, Clone, Copy, Default)]
+struct TokenEnds {
+    tokens: [&'static str; EDGE_LEN],
+    len: usize,
+}
+
+impl TokenEnds {
+    /// The `count` leading tokens of `self` followed by `next`'s, truncated
+    /// to [`EDGE_LEN`].
+    fn prefix_joined(mut self, next: Self) -> Self {
+        for token in next.tokens.into_iter().take(next.len) {
+            match self.tokens.get_mut(self.len) {
+                Some(slot) => {
+                    *slot = token;
+                    self.len += 1;
+                }
+                None => break,
+            }
+        }
+        self
+    }
+
+    /// The last [`EDGE_LEN`] tokens of `self ++ next`:
+    /// `next`'s whole tail when it already fills the window, else
+    /// `self`'s trailing tokens followed by all of `next`'s — in sequence
+    /// order, unlike the prefix which truncates from the right.
+    fn suffix_joined(self, next: Self) -> Self {
+        let mut tokens = [""; EDGE_LEN];
+        let mut len = 0_usize;
+        let needed = EDGE_LEN.saturating_sub(next.len);
+        let from = self.len.saturating_sub(needed);
+        for token in self.tokens.into_iter().take(self.len).skip(from) {
+            match tokens.get_mut(len) {
+                Some(slot) => {
+                    *slot = token;
+                    len += 1;
+                }
+                None => break,
+            }
+        }
+        for token in next.tokens.into_iter().take(next.len) {
+            match tokens.get_mut(len) {
+                Some(slot) => {
+                    *slot = token;
+                    len += 1;
+                }
+                None => break,
+            }
+        }
+        TokenEnds { tokens, len }
+    }
+}
+
+/// One subtree's composable token-stream measurement state: the `MinHash`
+/// over its interior k-grams, the boundary tokens junction k-grams need,
+/// and its token count. Joining two adjacent states reproduces the
+/// top-down `MinHash` of the concatenated sequence exactly, because the
+/// concatenated k-grams are precisely the left k-grams, the right k-grams,
+/// and the junction-straddling ones.
+#[derive(Debug, Clone, Copy)]
+struct TokenState {
+    /// Element-wise minimum over the sequence's k-gram signatures;
+    /// all-`u64::MAX` when the sequence holds no k-gram.
+    signature: Signature,
+    /// First `k-1` tokens of the sequence.
+    prefix: TokenEnds,
+    /// Last `k-1` tokens of the sequence.
+    suffix: TokenEnds,
+    /// Total tokens in the sequence.
+    count: usize,
+}
+
+impl TokenState {
+    /// The state of a sequence holding no tokens.
+    fn empty() -> Self {
+        Self {
+            signature: [u64::MAX; SIGNATURE_LEN],
+            prefix: TokenEnds::default(),
+            suffix: TokenEnds::default(),
+            count: 0,
+        }
+    }
+
+    /// The state of a sequence holding exactly `kind`.
+    fn singleton(kind: &'static str) -> Self {
+        let ends = TokenEnds {
+            tokens: [kind; EDGE_LEN],
+            len: 1,
+        };
+        Self {
+            signature: [u64::MAX; SIGNATURE_LEN],
+            prefix: ends,
+            suffix: ends,
+            count: 1,
+        }
+    }
+}
+
+/// Element-wise minimum of `other` into `target`.
+fn min_into(target: &mut Signature, other: &Signature) {
+    for (slot, value) in target.iter_mut().zip(other.iter()) {
+        if *value < *slot {
+            *slot = *value;
+        }
+    }
+}
+
+/// Concatenation of two adjacent token sequences as a [`TokenState`].
+fn join_states(left: &TokenState, right: &TokenState) -> TokenState {
+    if left.count == 0 {
+        return *right;
+    }
+    if right.count == 0 {
+        return *left;
+    }
+    let count = left.count.saturating_add(right.count);
+    let mut signature = left.signature;
+    min_into(&mut signature, &right.signature);
+    if count >= KGRAM_WIDTH {
+        fold_junction_grams(left, right, count, &mut signature);
+    }
+    TokenState {
+        signature,
+        prefix: left.prefix.prefix_joined(right.prefix),
+        suffix: left.suffix.suffix_joined(right.suffix),
+        count,
+    }
+}
+
+/// Folds the k-grams straddling the left/right junction into `signature`.
+/// Those grams — and only those — start at combined positions
+/// `[max(0, left.count - k + 1), min(left.count - 1, count - k)]`; every
+/// one reads solely left's last `k-1` tokens and right's first `k-1`.
+fn fold_junction_grams(
+    left: &TokenState,
+    right: &TokenState,
+    count: usize,
+    signature: &mut Signature,
+) {
+    let tail = &left.suffix;
+    let head = &right.prefix;
+    let junction_len = tail.len.saturating_add(head.len);
+    if junction_len < KGRAM_WIDTH {
+        return;
+    }
+    let first = left.count.saturating_sub(EDGE_LEN);
+    let last = (left.count.saturating_sub(1)).min(count.saturating_sub(KGRAM_WIDTH));
+    let tail_offset = left.count.saturating_sub(tail.len);
+    for start in first..=last {
+        let junction_start = start.saturating_sub(tail_offset);
+        if junction_start.saturating_add(KGRAM_WIDTH) > junction_len {
+            continue;
+        }
+        let gram = junction_gram(*tail, *head, junction_start);
+        let slice: &[&'static str] = gram.as_slice();
+        min_into(signature, &minhash_signature(std::slice::from_ref(&slice)));
+    }
+}
+
+/// The k-gram starting at `junction_start` within `tail ++ head`.
+fn junction_gram(
+    tail: TokenEnds,
+    head: TokenEnds,
+    junction_start: usize,
+) -> [&'static str; KGRAM_WIDTH] {
+    let mut gram = [""; KGRAM_WIDTH];
+    let mut filled = 0_usize;
+    for token in tail.tokens.into_iter().take(tail.len).skip(junction_start) {
+        if let Some(slot) = gram.get_mut(filled) {
+            *slot = token;
+            filled += 1;
+        }
+    }
+    for token in head.tokens.into_iter().take(head.len) {
+        if filled >= KGRAM_WIDTH {
+            break;
+        }
+        if let Some(slot) = gram.get_mut(filled) {
+            *slot = token;
+            filled += 1;
+        }
+    }
+    gram
+}
+
+/// One in-progress frame of the iterative signature fold: the node being
+/// closed and its finished children's states, in order.
+struct FoldFrame<'tree> {
+    node: &'tree NormalizedNode,
+    next_child: usize,
+    children: Vec<TokenState>,
+}
+
+impl<'tree> FoldFrame<'tree> {
+    /// Opens a frame over `node` with no children closed yet.
+    const fn new(node: &'tree NormalizedNode) -> Self {
+        Self {
+            node,
+            next_child: 0,
+            children: Vec::new(),
+        }
+    }
+}
+
+/// Output positions of every fingerprint whose byte range is `(start, end)`.
+/// A range can index several fingerprints (an exact node and a window that
+/// cover the same bytes resolve to the same token stream), so the value is
+/// a list.
+type Positions = HashMap<(usize, usize), Vec<usize>>;
+
+/// Builds the range → output-positions index for `fingerprints`.
+fn positions_for(fingerprints: &[Fingerprint]) -> Positions {
+    let mut positions: Positions = HashMap::with_capacity(fingerprints.len());
+    for (index, fingerprint) in fingerprints.iter().enumerate() {
+        let key = (
+            fingerprint.byte_range.start,
+            fingerprint.byte_range.end,
+        );
+        positions.entry(key).or_default().push(index);
+    }
+    positions
+}
+
+/// Which output positions the exact-node pass has already filled. The
+/// top-down resolver answers a range that is both an exact node's and a
+/// sibling window's — a tight wrapper covering exactly the window's
+/// children — with the **node** (it checks node ranges before windows on
+/// the way down), so the exact emission must win and the window emission
+/// must leave those positions alone.
 #[derive(Debug, Default)]
-pub struct SignatureMemo {
-    /// Stream digest → the signature its k-grams minhash to.
-    memoised: HashMap<[u8; 32], Signature>,
-    /// Streams answered from the memo.
-    hits: u64,
-    /// Streams that paid for a fresh `MinHash` construction.
-    misses: u64,
-}
+struct Filled(Vec<bool>);
 
-/// Most distinct streams one memo retains. Each entry holds a
-/// 32-byte digest and a 1 KiB signature, so the memo's resident
-/// ceiling is ~270 MiB — a bounded share of the
-/// [PERF-FLUTTER-TODO-MEMORY] budget however large the corpus grows.
-/// Past the cap a fresh stream is constructed and not retained; the
-/// output is identical either way, the memo being transparent.
-const SIGNATURE_MEMO_MAX_ENTRIES: usize = 262_144;
-
-impl SignatureMemo {
-    /// The signature for a non-empty token stream, constructed at most
-    /// once per distinct retained stream.
-    fn signature(&mut self, tokens: &[&'static str]) -> Signature {
-        let key = stream_digest(tokens);
-        if let Some(found) = self.memoised.get(&key) {
-            crate::observe::bump(&mut self.hits);
-            return *found;
+impl Filled {
+    /// Marks `index` filled.
+    fn mark(&mut self, index: usize) {
+        if let Some(slot) = self.0.get_mut(index) {
+            *slot = true;
         }
-        crate::observe::bump(&mut self.misses);
-        let grams = kgrams(tokens, KGRAM_WIDTH);
-        let constructed = minhash_signature(&grams);
-        if self.memoised.len() < SIGNATURE_MEMO_MAX_ENTRIES {
-            let _previous = self.memoised.insert(key, constructed);
-        }
-        constructed
     }
 
-    /// Streams answered from the memo.
-    #[must_use]
-    pub fn hits(&self) -> u64 {
-        self.hits
-    }
-
-    /// Streams that paid for a fresh construction — the distinct-stream
-    /// population, which is also the memo's resident entry count.
-    #[must_use]
-    pub fn misses(&self) -> u64 {
-        self.misses
+    /// True when `index` was marked.
+    fn is_marked(&self, index: usize) -> bool {
+        self.0.get(index).copied().unwrap_or(false)
     }
 }
 
-/// Collision-free digest of a token stream: every token length-prefixed
-/// so no two distinct streams serialise to the same bytes.
-fn stream_digest(tokens: &[&'static str]) -> [u8; 32] {
-    let mut hasher = Hasher::new();
-    for token in tokens {
-        let length = u64::try_from(token.len()).unwrap_or(u64::MAX);
-        let _ = hasher.update(&length.to_le_bytes());
-        let _ = hasher.update(token.as_bytes());
-    }
-    *hasher.finalize().as_bytes()
+/// True when the token-stream fold must contribute nothing for `node`:
+/// import/prologue carriers and import-only subtrees are skipped by the
+/// language-aware top-down walk ([`crate::tokens`]), so the fold skips
+/// them too — their bytes never enter any signature.
+fn token_skipped(node: &NormalizedNode, language: Option<&str>) -> bool {
+    language.is_some_and(|language| {
+        is_import_boilerplate_carrier(language, node.kind)
+            || is_import_boilerplate_only_subtree(language, node)
+    })
 }
 
-/// Language-aware signature for one fingerprint against its file's
-/// normalised tree. When the language is known, import/prologue
-/// boilerplate is stripped from the token stream so shared import
-/// patterns stop feeding the LSH false-positive path described in
-/// [PIPELINE-BOILERPLATE-FILTER] — the structural pass already applies
-/// the same filter, so the two signals share the same corpus. The
-/// language-aware path also resolves synthetic sibling-window byte
-/// ranges (#339): a window spanning several consecutive children gets
-/// its signature from the resolved token stream instead of the
-/// offset-seeded fallback, so `token_jaccard` measures token evidence
-/// rather than byte-offset luck.
-///
-/// A pure function of the tree content, the fingerprint's range and
-/// hash, and the language — never of [`FileId`] — which is what
-/// licenses persisting the result in the content-addressed parse
-/// store ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
-fn signature_for_fingerprint(
-    root: &NormalizedNode,
-    fingerprint: &Fingerprint,
+/// Closes the top fold frame: folds the node's own state over its
+/// children, emits signatures for member ranges, and passes the state up.
+fn close_fold_frame(
+    stack: &mut Vec<FoldFrame<'_>>,
     language: Option<&str>,
-    memo: &mut SignatureMemo,
-) -> Signature {
-    let tokens = language.map_or_else(
-        || token_stream_for_fingerprint(root, fingerprint),
-        |language| token_stream_for_fingerprint_with_language(root, fingerprint, language),
+    positions: &Positions,
+    filled: &mut Filled,
+    out: &mut [Signature],
+) {
+    let Some(frame) = stack.pop() else {
+        return;
+    };
+    let skipped = token_skipped(frame.node, language);
+    let mut state = if skipped {
+        TokenState::empty()
+    } else {
+        TokenState::singleton(frame.node.kind)
+    };
+    if !skipped {
+        for child in &frame.children {
+            state = join_states(&state, child);
+        }
+    }
+    emit_exact_member(&frame, stack, &state, positions, filled, out);
+    if language.is_some() {
+        emit_window_members(&frame, positions, filled, out);
+    }
+    if let Some(parent) = stack.last_mut() {
+        parent.children.push(state);
+    }
+}
+
+/// Emits the signature for the node's own range when a fingerprint covers
+/// it. Deferred to the parent when the parent owns the identical range:
+/// the top-down resolver returns the shallowest matching node, so a
+/// wrapper chain must answer from its outermost member.
+fn emit_exact_member(
+    frame: &FoldFrame<'_>,
+    stack: &[FoldFrame<'_>],
+    state: &TokenState,
+    positions: &Positions,
+    filled: &mut Filled,
+    out: &mut [Signature],
+) {
+    let Some(parent) = stack.last() else {
+        emit_member(state, frame.node.byte_range, positions, filled, out);
+        return;
+    };
+    if parent.node.byte_range == frame.node.byte_range {
+        return;
+    }
+    emit_member(state, frame.node.byte_range, positions, filled, out);
+}
+
+/// Emits signatures for the sibling-window ranges of `frame`'s children
+/// that fingerprints cover. Windows of width 2..=[`MAX_WINDOW_WIDTH`] are
+/// enumerated exactly as [`crate::sibling`] enumerates the fingerprints
+/// themselves; membership in `positions` is the fingerprint gate, so no
+/// window that was never fingerprinted costs a fold. Only called on the
+/// language-aware path: the language-agnostic resolver (`locate`) answers
+/// exact nodes only, so window fingerprints there keep their fallback.
+fn emit_window_members(
+    frame: &FoldFrame<'_>,
+    positions: &Positions,
+    filled: &mut Filled,
+    out: &mut [Signature],
+) {
+    let child_count = frame.node.children.len();
+    for width in 2..=MAX_WINDOW_WIDTH {
+        for start in 0..child_count {
+            let end = start.saturating_add(width);
+            if end > child_count {
+                break;
+            }
+            let Some(first) = frame.node.children.get(start) else {
+                break;
+            };
+            let Some(last) = frame.node.children.get(end.saturating_sub(1)) else {
+                break;
+            };
+            let range = (
+                first.byte_range.start,
+                last.byte_range.end,
+            );
+            // A well-formed window spans bytes forward. Positionally
+            // unordered children (impossible in a real parse) produce
+            // inverted ranges the top-down resolver can never resolve —
+            // those fingerprints keep their fallback, and the fold must
+            // agree.
+            if first.byte_range.start >= last.byte_range.end {
+                continue;
+            }
+            if !positions.contains_key(&range) {
+                continue;
+            }
+            fold_window_state(&frame.children, start, end, range, positions, filled, out);
+        }
+    }
+}
+
+/// Folds the member states of one window and emits its signature.
+fn fold_window_state(
+    children: &[TokenState],
+    start: usize,
+    end: usize,
+    range: (usize, usize),
+    positions: &Positions,
+    filled: &mut Filled,
+    out: &mut [Signature],
+) {
+    let mut state = TokenState::empty();
+    for member in children.get(start..end).unwrap_or(&[]) {
+        state = join_states(&state, member);
+    }
+    emit_member_range(state, range, positions, filled, out);
+}
+
+/// Emits `state`'s signature for every fingerprint position covering
+/// `byte_range` when the stream is long enough, leaving the
+/// fingerprint-scoped fallback otherwise (short streams carry no k-grams).
+fn emit_member(
+    state: &TokenState,
+    byte_range: crate::ast::ByteRange,
+    positions: &Positions,
+    filled: &mut Filled,
+    out: &mut [Signature],
+) {
+    emit_member_range(
+        *state,
+        (byte_range.start, byte_range.end),
+        positions,
+        filled,
+        out,
     );
-    tokens.map_or_else(
-        || empty_signature(fingerprint, language),
-        |tokens| signature_for_tokens(&tokens, fingerprint, language, memo),
-    )
+}
+
+/// Range-keyed emission half of [`emit_member`].
+fn emit_member_range(
+    state: TokenState,
+    range: (usize, usize),
+    positions: &Positions,
+    filled: &mut Filled,
+    out: &mut [Signature],
+) {
+    if state.count < KGRAM_WIDTH {
+        return;
+    }
+    if let Some(indexes) = positions.get(&range) {
+        for &index in indexes {
+            if filled.is_marked(index) {
+                continue;
+            }
+            filled.mark(index);
+            if let Some(slot) = out.get_mut(index) {
+                *slot = state.signature;
+            }
+        }
+    }
 }
 
 /// Builds one file's `MinHash` signatures, positionally 1:1 with
-/// `fingerprints`. Called at parse/load time so the result is
-/// persisted in the parse store beside the fingerprints it was built
-/// from and reattached on later cache hits
+/// `fingerprints`. Called at parse/load time so the result is persisted
+/// in the parse store beside the fingerprints it was built from and
+/// reattached on later cache hits
 /// ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
+///
+/// Every fingerprint starts at its fingerprint-scoped
+/// [`fallback_signature`] — the correct signature for a stream too short
+/// to hold a k-gram, and the only signature an unresolvable range can
+/// have — and the fold overwrites exactly the positions whose ranges
+/// resolve to a token stream with k-grams in it. The output therefore
+/// matches the historical per-fingerprint construction for every input,
+/// including hand-built fingerprint lists the corpus never produces.
 #[must_use]
 pub fn signatures_for_file(
     tree: &NormalizedNode,
     fingerprints: &[Fingerprint],
     language: Option<&str>,
-    memo: &mut SignatureMemo,
 ) -> Vec<Signature> {
-    fingerprints
-        .iter()
-        .map(|fingerprint| signature_for_fingerprint(tree, fingerprint, language, memo))
-        .collect()
+    let mut out: Vec<Signature> = fingerprints.iter().map(fallback_signature).collect();
+    let mut filled = Filled(vec![false; fingerprints.len()]);
+    let positions = positions_for(fingerprints);
+    let mut stack = vec![FoldFrame::new(tree)];
+    while let Some(frame) = stack.last_mut() {
+        if let Some(child) = frame.node.children.get(frame.next_child) {
+            frame.next_child = frame.next_child.saturating_add(1);
+            stack.push(FoldFrame::new(child));
+            continue;
+        }
+        close_fold_frame(&mut stack, language, &positions, &mut filled, &mut out);
+    }
+    out
+}
+
+/// The historical top-down construction of one fingerprint's signature,
+/// kept as the reference the fold must reproduce byte-for-byte
+/// (`fold_signatures_match_the_top_down_construction`).
+#[cfg(test)]
+fn top_down_signature(
+    root: &NormalizedNode,
+    fingerprint: &Fingerprint,
+    language: Option<&str>,
+) -> Signature {
+    let tokens = language.map_or_else(
+        || crate::tokens::token_stream_for_fingerprint(root, fingerprint),
+        |language| {
+            crate::tokens::token_stream_for_fingerprint_with_language(root, fingerprint, language)
+        },
+    );
+    tokens.map_or_else(
+        || fallback_signature(fingerprint),
+        |tokens| signature_for_tokens(&tokens, fingerprint),
+    )
 }
 
 /// Builds aliases-only signatures for explicit cross-language audits.
 #[must_use]
-pub fn build_cross_language_signatures<S: BuildHasher>(
+pub fn build_cross_language_signatures<S: std::hash::BuildHasher>(
     fingerprints: &[Fingerprint],
     trees: &[NormalizedNode],
     file_languages: &HashMap<FileId, &'static str, S>,
 ) -> Vec<Signature> {
     let tree_index = build_tree_index(trees);
-    let mut memo = SignatureMemo::default();
     fingerprints
         .iter()
         .map(|fingerprint| {
             let language = file_languages.get(&fingerprint.file_id).copied();
-            cross_language_signature(fingerprint, &tree_index, language, &mut memo)
+            cross_language_signature(fingerprint, &tree_index, language)
         })
         .collect()
 }
@@ -177,41 +544,27 @@ fn cross_language_signature(
     fingerprint: &Fingerprint,
     tree_index: &HashMap<FileId, &NormalizedNode>,
     language: Option<&str>,
-    memo: &mut SignatureMemo,
 ) -> Signature {
     let Some(language) = language else {
-        return empty_signature(fingerprint, None);
+        return fallback_signature(fingerprint);
     };
     let Some(root) = tree_index.get(&fingerprint.file_id).copied() else {
-        return empty_signature(fingerprint, Some(language));
+        return fallback_signature(fingerprint);
     };
     let tokens = cross_language_token_stream_for_fingerprint(root, fingerprint, language);
     tokens.map_or_else(
-        || empty_signature(fingerprint, Some(language)),
-        |tokens| signature_for_tokens(&tokens, fingerprint, Some(language), memo),
+        || fallback_signature(fingerprint),
+        |tokens| signature_for_tokens(&tokens, fingerprint),
     )
 }
 
 /// Produces a signature from a prepared token stream using the configured
 /// k-gram width.
-fn signature_for_tokens(
-    tokens: &[&'static str],
-    fingerprint: &Fingerprint,
-    language: Option<&str>,
-    memo: &mut SignatureMemo,
-) -> Signature {
+fn signature_for_tokens(tokens: &[&'static str], fingerprint: &Fingerprint) -> Signature {
     if tokens.len() < KGRAM_WIDTH {
-        return empty_signature(fingerprint, language);
+        return fallback_signature(fingerprint);
     }
-    memo.signature(tokens)
-}
-
-/// Empty-token signatures are scoped to the exact fingerprint instead of a
-/// shared legacy default so unrelated empty token streams do not LSH-cluster
-/// through compatibility behavior.
-fn empty_signature(fingerprint: &Fingerprint, language: Option<&str>) -> Signature {
-    let _ = language;
-    fallback_signature(fingerprint)
+    minhash_signature(&kgrams(tokens, KGRAM_WIDTH))
 }
 
 /// Fingerprint-scoped signature used when no k-grams are available. This
@@ -225,17 +578,22 @@ fn empty_signature(fingerprint: &Fingerprint, language: Option<&str>) -> Signatu
 fn fallback_signature(fingerprint: &Fingerprint) -> Signature {
     let start = u64::try_from(fingerprint.byte_range.start).unwrap_or(u64::MAX);
     let end = u64::try_from(fingerprint.byte_range.end).unwrap_or(u64::MAX);
-    let mut hasher = Hasher::new();
+    let mut hasher = blake3::Hasher::new();
     let _ = hasher.update(&fingerprint.hash);
     let _ = hasher.update(&start.to_le_bytes());
     let _ = hasher.update(&end.to_le_bytes());
-    let mut expanded = [0u8; SIGNATURE_LEN * 8];
+    let mut expanded = [0_u8; SIGNATURE_LEN * 8];
     hasher.finalize_xof().fill(&mut expanded);
+    decode_slots(&expanded)
+}
+
+/// Decodes an XOF byte stream into signature slots, little-endian.
+fn decode_slots(expanded: &[u8]) -> Signature {
     let mut signature = [0_u64; SIGNATURE_LEN];
     for (slot, chunk) in signature.iter_mut().zip(expanded.chunks_exact(8)) {
-        let mut arr = [0u8; 8];
-        arr.copy_from_slice(chunk);
-        *slot = u64::from_le_bytes(arr);
+        let mut bytes = [0_u8; 8];
+        bytes.copy_from_slice(chunk);
+        *slot = u64::from_le_bytes(bytes);
     }
     signature
 }

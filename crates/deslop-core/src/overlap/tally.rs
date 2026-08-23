@@ -32,7 +32,7 @@ const RESCUE_PROGRESS_INTERVAL: u64 = 50_000;
 /// eligibility test is too loose or because the corpus genuinely has that
 /// many cross-file near-misses. Separating scanned from eligible from
 /// cross-file from measured from rescued answers that from one record.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct RescueTally {
     /// Candidate pairs examined, whatever became of them.
     scanned: u64,
@@ -92,6 +92,17 @@ impl RescueTally {
         if self.measured.checked_rem(RESCUE_PROGRESS_INTERVAL) == Some(0) {
             self.report("shared-subtree rescue in progress", measure);
         }
+    }
+
+    /// Folds another tally's counts into this one. The stage clock stays
+    /// this tally's own — shard tallies share the pass start, so the
+    /// merged elapsed time is the pass's ([PERF-FLUTTER-TODO-RESCUE]).
+    pub(super) fn absorb(&mut self, other: &RescueTally) {
+        self.scanned = self.scanned.saturating_add(other.scanned);
+        self.eligible = self.eligible.saturating_add(other.eligible);
+        self.cross_file = self.cross_file.saturating_add(other.cross_file);
+        self.measured = self.measured.saturating_add(other.measured);
+        self.rescued = self.rescued.saturating_add(other.rescued);
     }
 
     /// Emits the pass's totals. Always emitted, including when the stage

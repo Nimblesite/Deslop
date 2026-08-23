@@ -79,65 +79,178 @@ pub fn estimate_jaccard(left: &Signature, right: &Signature) -> f64 {
     f64::from(agreements) / f64::from(u32::try_from(SIGNATURE_LEN).unwrap_or(u32::MAX))
 }
 
-/// Returns pair indices `(i, j)` with `i < j` whose signatures collide in at
-/// least one band. Deterministic output order: sorted ascending by `(i, j)`.
-#[must_use]
-pub fn band_collisions(signatures: &[Signature]) -> Vec<(usize, usize)> {
-    let mut buckets: HashMap<[u8; 32], Vec<usize>> = HashMap::new();
-    for (index, signature) in signatures.iter().enumerate() {
-        for band in 0..BANDS {
+/// Streams every pair of signature indexes `(i, j)`, `i < j`, whose
+/// signatures collide in at least one LSH band
+/// ([PERF-FLUTTER-TODO-PAIRS]).
+///
+/// The historical [`band_collisions`] materialised the full pair vector —
+/// 55 million pairs, ~880 MB, on the Flutter corpus — before any consumer
+/// touched it. This source instead walks one band at a time: the band's
+/// `(hash, index)` tags are sorted in a reused buffer (a few tens of MB),
+/// each equal-hash run is verified against the full 32-byte band key so a
+/// truncated sort hash can never manufacture a collision, and the run's
+/// star pairs are handed straight to `emit`. Memory is bounded by one
+/// band's tags, not by the pair count; the caller deduplicates a pair that
+/// collides in several bands.
+///
+/// Emission order is deterministic: bands ascending, runs in sorted order,
+/// each run's pairs from its smallest member outward.
+pub fn for_each_band_collision(signatures: &[Signature], emit: &mut dyn FnMut(usize, usize)) {
+    let mut tagged: Vec<(u64, u32)> = Vec::with_capacity(signatures.len());
+    for band in 0..BANDS {
+        tagged.clear();
+        for (index, signature) in signatures.iter().enumerate() {
             let key = band_key(signature, band);
-            buckets.entry(key).or_default().push(index);
+            tagged.push((truncated_band_hash(&key), index_to_tag(index)));
         }
+        tagged.sort_unstable();
+        emit_run_pairs(signatures, band, &tagged, emit);
     }
-    let max_bucket = buckets.values().map(Vec::len).max().unwrap_or(0);
-    tracing::debug!(
-        signatures = signatures.len(),
-        buckets = buckets.len(),
-        max_bucket,
-        "LSH band buckets built"
-    );
-    collect_pairs(&buckets)
 }
 
-/// Extracts deduplicated pairs from LSH buckets using a star topology per
-/// bucket (the canonical member is paired with every other), matching the
-/// structural-pass strategy in [`crate::pair::collect_structural_pairs`].
-/// This keeps the LSH pair count linear in bucket size, which matters for
-/// popular bands on large corpora where a single bucket can hold
-/// thousands of fingerprints.
-fn collect_pairs(buckets: &HashMap<[u8; 32], Vec<usize>>) -> Vec<(usize, usize)> {
-    let mut pairs: Vec<(usize, usize)> = Vec::new();
-    for members in buckets.values() {
-        if members.len() < 2 {
-            continue;
+/// Emits the star pairs of every equal-hash run in one band's sorted tags.
+fn emit_run_pairs(
+    signatures: &[Signature],
+    band: usize,
+    tagged: &[(u64, u32)],
+    emit: &mut dyn FnMut(usize, usize),
+) {
+    let mut run_start = 0_usize;
+    while let Some(start_tag) = tagged.get(run_start) {
+        let run_hash = start_tag.0;
+        let run_end = tagged
+            .get(run_start.saturating_add(1)..)
+            .unwrap_or(&[])
+            .iter()
+            .position(|&(hash, _)| hash != run_hash)
+            .map_or(
+                tagged.len(),
+                |offset| run_start.saturating_add(1).saturating_add(offset),
+            );
+        emit_one_run(signatures, band, tagged, run_start, run_end, emit);
+        if run_end >= tagged.len() {
+            break;
         }
-        let mut sorted = members.clone();
-        sorted.sort_unstable();
-        let Some(canonical) = sorted.first().copied() else {
-            continue;
-        };
-        for other in sorted.iter().skip(1) {
-            pairs.push(ordered_pair(canonical, *other));
-        }
+        run_start = run_end;
     }
-    pairs.sort_unstable();
-    let raw_pairs = pairs.len();
-    pairs.dedup();
-    tracing::debug!(
-        raw_pairs,
-        unique_pairs = pairs.len(),
-        "LSH pairs deduplicated"
-    );
-    pairs
 }
 
-/// Normalises a pair so the smaller index is first. Keeps the downstream
-/// candidate set symmetric without extra bookkeeping. `usize::min`
-/// and `usize::max` are branch-free CPU intrinsics, so this reads
-/// cleanly in the coverage report.
-fn ordered_pair(a: usize, b: usize) -> (usize, usize) {
-    (a.min(b), a.max(b))
+/// Emits one equal-hash run's star pairs, verifying full band keys.
+///
+/// The sorted tag hash is a truncation of the 32-byte band key, so a run
+/// can hold members with different full keys. Adjacent-key verification
+/// splits such runs; when a split is needed the whole run is regrouped by
+/// full key so two equal keys separated by a colliding third still pair —
+/// exactness cannot depend on hash luck.
+fn emit_one_run(
+    signatures: &[Signature],
+    band: usize,
+    tagged: &[(u64, u32)],
+    start: usize,
+    end: usize,
+    emit: &mut dyn FnMut(usize, usize),
+) {
+    if end.saturating_sub(start) < 2 {
+        return;
+    }
+    if run_keys_split(signatures, band, tagged, start, end) {
+        emit_regrouped_run(signatures, band, tagged, start, end, emit);
+        return;
+    }
+    emit_star_pairs(tagged, start, end, emit);
+}
+
+/// True when adjacent members of the run disagree on the full band key.
+fn run_keys_split(
+    signatures: &[Signature],
+    band: usize,
+    tagged: &[(u64, u32)],
+    start: usize,
+    end: usize,
+) -> bool {
+    let slice = tagged.get(start..end).unwrap_or(&[]);
+    let mut previous: Option<u32> = None;
+    for tag in slice {
+        if let Some(prior) = previous {
+            if band_key_at(signatures, band, prior) != band_key_at(signatures, band, tag.1) {
+                return true;
+            }
+        }
+        previous = Some(tag.1);
+    }
+    false
+}
+
+/// Regroups a key-collided run by full band key and emits each group's
+/// star pairs.
+fn emit_regrouped_run(
+    signatures: &[Signature],
+    band: usize,
+    tagged: &[(u64, u32)],
+    start: usize,
+    end: usize,
+    emit: &mut dyn FnMut(usize, usize),
+) {
+    let mut groups: HashMap<[u8; 32], Vec<usize>> = HashMap::new();
+    for position in start..end {
+        let index = tagged.get(position).map_or(0, |tag| tag.1);
+        let key = band_key_at(signatures, band, index);
+        groups.entry(key).or_default().push(index_as_usize(index));
+    }
+    let mut members: Vec<Vec<usize>> = groups.into_values().collect();
+    members.sort_unstable();
+    for group in members {
+        emit_sorted_star(&group, emit);
+    }
+}
+
+/// Emits star pairs for one tag range whose keys are known equal.
+fn emit_star_pairs(
+    tagged: &[(u64, u32)],
+    start: usize,
+    end: usize,
+    emit: &mut dyn FnMut(usize, usize),
+) {
+    let mut members: Vec<usize> = tagged
+        .get(start..end)
+        .unwrap_or(&[])
+        .iter()
+        .map(|tag| index_as_usize(tag.1))
+        .collect();
+    members.sort_unstable();
+    emit_sorted_star(&members, emit);
+}
+
+/// Emits `(smallest, other)` for every member of a sorted group.
+fn emit_sorted_star(members: &[usize], emit: &mut dyn FnMut(usize, usize)) {
+    let Some(canonical) = members.first().copied() else {
+        return;
+    };
+    for &other in members.iter().skip(1) {
+        emit(canonical, other);
+    }
+}
+
+/// The band key of signature `index`, tolerating an out-of-range index.
+fn band_key_at(signatures: &[Signature], band: usize, index: u32) -> [u8; 32] {
+    signatures
+        .get(index_as_usize(index))
+        .map_or([0_u8; 32], |signature| band_key(signature, band))
+}
+
+/// Truncates a band key to the sort hash. Collisions are handled by full
+/// key verification, never by luck.
+fn truncated_band_hash(key: &[u8; 32]) -> u64 {
+    let mut bytes = [0_u8; 8];
+    bytes.copy_from_slice(key.get(..8).unwrap_or(&[0_u8; 8]));
+    u64::from_le_bytes(bytes)
+}
+
+/// Lossless `usize → u32` tag for the sort buffer; saturates for corpora
+/// past four billion signatures, which the fingerprint memory ceiling
+/// excludes long before.
+fn index_to_tag(index: usize) -> u32 {
+    u32::try_from(index).unwrap_or(u32::MAX)
 }
 
 /// Encodes one band as its four little-endian rows for use as a `HashMap` key.
@@ -186,5 +299,33 @@ mod tests {
         signature[ROWS_PER_BAND..ROWS_PER_BAND * 2].copy_from_slice(&rows);
 
         assert_eq!(band_key(&signature, 1), std::array::from_fn(byte_index));
+    }
+}
+
+/// Widens a signature index tag losslessly; a saturated tag indexes past
+/// every real signature, which [`band_key_at`] answers as the zero key.
+fn index_as_usize(index: u32) -> usize {
+    usize::try_from(index).unwrap_or(usize::MAX)
+}
+
+/// [`crate::pair::LshPairs`] adapter over the streaming band source —
+/// the render pass's LSH leg, without materialising the pair list.
+#[derive(Debug)]
+pub struct BandCollisionSource<'a> {
+    /// The signatures whose band collisions are streamed.
+    signatures: &'a [Signature],
+}
+
+impl<'a> BandCollisionSource<'a> {
+    /// Wraps `signatures` for streaming.
+    #[must_use]
+    pub const fn new(signatures: &'a [Signature]) -> Self {
+        Self { signatures }
+    }
+}
+
+impl crate::pair::LshPairs for BandCollisionSource<'_> {
+    fn for_each(&self, emit: &mut dyn FnMut(usize, usize)) {
+        for_each_band_collision(self.signatures, emit);
     }
 }

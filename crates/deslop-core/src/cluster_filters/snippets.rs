@@ -49,6 +49,28 @@ pub(crate) struct ParseCache {
     /// reaches the contract question, so a report with no same-named
     /// cross-file candidate never pays for it.
     contracts: RefCell<HashMap<&'static str, Rc<ContractIndex>>>,
+    /// Kind membership per `(file, byte range)`, fused into one walk
+    /// ([PERF-FLUTTER-TODO-CORPUS]). A corpus-scale report asks the
+    /// same member ranges repeatedly — across clusters and across the
+    /// noise, category, and ranking passes — and each ask used to walk
+    /// the member subtree once per kind. One memoised walk per distinct
+    /// range replaces all of them.
+    field_kinds: RefCell<HashMap<(FileId, usize, usize), FieldKinds>>,
+}
+
+/// Which shape-defining kinds a member subtree contains — the fused
+/// answer to the four membership questions the Dart field filter used
+/// to ask with four separate walks.
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct FieldKinds {
+    /// Any `function_body` in the subtree.
+    pub has_body: bool,
+    /// Any `function_expression` in the subtree.
+    pub has_function_expression: bool,
+    /// Any `static_final_declaration_list` in the subtree.
+    pub has_static_final_list: bool,
+    /// Any `initialized_identifier_list` in the subtree.
+    pub has_initialized_identifier_list: bool,
 }
 
 impl ParseCache {
@@ -56,6 +78,24 @@ impl ParseCache {
     #[must_use]
     pub(crate) fn new() -> Self {
         Self::default()
+    }
+
+    /// Which shape-defining kinds `node`'s subtree contains, memoised by
+    /// `(file, range)` — one walk per distinct member range, however
+    /// many clusters and passes ask ([PERF-FLUTTER-TODO-CORPUS]).
+    pub(crate) fn dart_field_kinds(
+        &self,
+        file_id: FileId,
+        node: tree_sitter::Node<'_>,
+    ) -> FieldKinds {
+        let key = (file_id, node.start_byte(), node.end_byte());
+        if let Some(hit) = self.field_kinds.borrow().get(&key) {
+            return *hit;
+        }
+        let mut kinds = FieldKinds::default();
+        collect_field_kinds(node, &mut kinds);
+        let _previous = self.field_kinds.borrow_mut().insert(key, kinds);
+        kinds
     }
 
     /// Returns the cached CST for `file_id`, parsing `source` with the
@@ -168,5 +208,29 @@ fn grammar_for(language: &str) -> Option<tree_sitter::Language> {
         "fsharp" => Some(tree_sitter_fsharp::LANGUAGE_FSHARP.into()),
         "go" => Some(tree_sitter_go::LANGUAGE.into()),
         _ => None,
+    }
+}
+
+
+/// Folds the shape-defining kind membership of `node`'s subtree into
+/// `kinds` — the single walk that replaces four per-kind walks.
+fn collect_field_kinds(node: tree_sitter::Node<'_>, kinds: &mut FieldKinds) {
+    match node.kind() {
+        "function_body" => kinds.has_body = true,
+        "function_expression" => kinds.has_function_expression = true,
+        "static_final_declaration_list" => kinds.has_static_final_list = true,
+        "initialized_identifier_list" => kinds.has_initialized_identifier_list = true,
+        _ => {}
+    }
+    if kinds.has_body
+        && kinds.has_function_expression
+        && kinds.has_static_final_list
+        && kinds.has_initialized_identifier_list
+    {
+        return;
+    }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        collect_field_kinds(child, kinds);
     }
 }
