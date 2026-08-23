@@ -5,9 +5,17 @@ on:
   pull_request:
     branches: [main]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+# TEMP-UNBLOCK: the concurrency block is suspended until zombie run
+# 32620898314 clears — its coverage job is queued on the starved
+# linux-x64 label, queue time does not count toward timeout-minutes,
+# and cancel-in-progress cannot cancel a QUEUED run, only an in-progress
+# one. Every new PR run therefore sat pending with 0 jobs. Restore this
+# block as soon as that run is gone. Concurrency is read from the
+# workflow file at each run's triggering commit, so only runs created
+# while it is suspended are ungated.
+# concurrency:
+#   group: ${{ github.workflow }}-${{ github.ref }}
+#   cancel-in-progress: true
 
 jobs:
   # Path classifier — decides whether the heavy Rust / VSIX / JetBrains / Windows
