@@ -51,13 +51,15 @@ pub(crate) fn split_noise_verbatim_families<S: BuildHasher>(
     file_languages: &HashMap<FileId, &'static str, S>,
 ) -> Vec<FusedCluster> {
     let cache = ParseCache::new();
-    fused_clusters
+    let out = fused_clusters
         .into_iter()
         .flat_map(|fused| {
             split_one(&fused, fingerprints, sources, file_languages, &cache)
                 .unwrap_or_else(|| vec![fused])
         })
-        .collect()
+        .collect();
+    cache.log_noise_totals("noise_verbatim_split");
+    out
 }
 
 /// The replacement clusters for one component, or `None` to keep it as

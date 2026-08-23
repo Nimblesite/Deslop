@@ -165,9 +165,11 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
     cache: &ParseCache,
 ) -> bool {
     let Some(language) = uniform_language(members, file_languages) else {
+        cache.record_noise(NoiseFilter::UniformLanguage, members.len(), false, std::time::Duration::ZERO);
         return false;
     };
     let Some(snippets) = collect_snippets(members, sources, language, cache) else {
+        cache.record_noise(NoiseFilter::CollectSnippets, members.len(), false, std::time::Duration::ZERO);
         return false;
     };
     // Generic, language-agnostic noise checks run for every language (they
@@ -176,11 +178,68 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
     // than walking every Dart/C# cluster's CST through Python/Rust matchers
     // that can never match — that wasted walk dominated analysis time on
     // large codegen-heavy repos ([CLONE-NOISE-REPARSE-CACHE]).
-    polymorphic::is_polymorphic_signature_cluster(&snippets, sources, file_languages, cache)
-        || is_signature_only_cluster(&snippets)
-        || calls::is_literal_variation_call_cluster(&snippets)
-        || constant_table::is_constant_table_cluster(&snippets)
-        || language_specific_noise(language, &snippets, cache)
+    // Short-circuit preserved exactly: each check runs only until one
+    // fires, and the counters record only what actually ran
+    // ([PERF-FLUTTER-TODO-OBSERVABILITY]).
+    let polymorphic = || {
+        polymorphic::is_polymorphic_signature_cluster(&snippets, sources, file_languages, cache)
+    };
+    let signature_only = || is_signature_only_cluster(&snippets);
+    let literal_calls = || calls::is_literal_variation_call_cluster(&snippets);
+    let constant_table = || constant_table::is_constant_table_cluster(&snippets);
+    let language_specific = || language_specific_noise(language, &snippets, cache);
+    let checks: [(NoiseFilter, &dyn Fn() -> bool); 5] = [
+        (NoiseFilter::Polymorphic, &polymorphic),
+        (NoiseFilter::SignatureOnly, &signature_only),
+        (NoiseFilter::LiteralCalls, &literal_calls),
+        (NoiseFilter::ConstantTable, &constant_table),
+        (NoiseFilter::LanguageSpecific, &language_specific),
+    ];
+    for (filter, check) in checks {
+        let started = std::time::Instant::now();
+        let result = check();
+        cache.record_noise(filter, snippets.len(), result, started.elapsed());
+        if result {
+            return true;
+        }
+    }
+    false
+}
+
+/// One cluster-noise sub-check, for [`ParseCache`]'s aggregate counters
+/// ([PERF-FLUTTER-TODO-OBSERVABILITY]): which filter the corpus-scale
+/// time actually goes to, and which of them ever fire.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum NoiseFilter {
+    /// The uniform-language pre-gate.
+    UniformLanguage,
+    /// The snippet-collection pre-gate.
+    CollectSnippets,
+    /// The polymorphic-signature contract filter.
+    Polymorphic,
+    /// The signature-only filter.
+    SignatureOnly,
+    /// The literal-variation call filter.
+    LiteralCalls,
+    /// The constant-table filter.
+    ConstantTable,
+    /// The language-specific idiom filters.
+    LanguageSpecific,
+}
+
+impl NoiseFilter {
+    /// Stable label for the aggregate record.
+    pub(crate) const fn label(self) -> &'static str {
+        match self {
+            Self::UniformLanguage => "uniform_language",
+            Self::CollectSnippets => "collect_snippets",
+            Self::Polymorphic => "polymorphic",
+            Self::SignatureOnly => "signature_only",
+            Self::LiteralCalls => "literal_calls",
+            Self::ConstantTable => "constant_table",
+            Self::LanguageSpecific => "language_specific",
+        }
+    }
 }
 
 /// Classifies a cluster's [`CloneCategory`] ([RANK-CATEGORY]) by re-parsing

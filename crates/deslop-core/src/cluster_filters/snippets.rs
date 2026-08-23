@@ -56,6 +56,24 @@ pub(crate) struct ParseCache {
     /// the member subtree once per kind. One memoised walk per distinct
     /// range replaces all of them.
     field_kinds: RefCell<HashMap<(FileId, usize, usize), FieldKinds>>,
+    /// Aggregate cluster-noise counters
+    /// ([PERF-FLUTTER-TODO-OBSERVABILITY]): calls, members, fires, and
+    /// accumulated time per sub-check, so a corpus-scale run's log says
+    /// which filter the time went to.
+    noise: RefCell<HashMap<&'static str, NoiseCounters>>,
+}
+
+/// Running totals for one cluster-noise sub-check.
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct NoiseCounters {
+    /// Clusters the check ran on.
+    pub calls: u64,
+    /// Members across those clusters.
+    pub members: u64,
+    /// Clusters the check suppressed.
+    pub fired: u64,
+    /// Accumulated wall time in microseconds.
+    pub micros: u128,
 }
 
 /// Which shape-defining kinds a member subtree contains — the fused
@@ -78,6 +96,42 @@ impl ParseCache {
     #[must_use]
     pub(crate) fn new() -> Self {
         Self::default()
+    }
+
+    /// Records one cluster-noise sub-check outcome
+    /// ([PERF-FLUTTER-TODO-OBSERVABILITY]).
+    pub(crate) fn record_noise(
+        &self,
+        filter: super::NoiseFilter,
+        members: usize,
+        fired: bool,
+        elapsed: std::time::Duration,
+    ) {
+        let label = filter.label();
+        let entry = self.noise.borrow_mut().entry(label).or_default();
+        entry.calls = entry.calls.saturating_add(1);
+        entry.members = entry.members.saturating_add(members as u64);
+        entry.fired = entry.fired.saturating_add(u64::from(fired));
+        entry.micros = entry.micros.saturating_add(elapsed.as_micros());
+    }
+
+    /// Emits the aggregate cluster-noise counters once per pass. Sorted
+    /// by label so the record is deterministic.
+    pub(crate) fn log_noise_totals(&self, stage: &'static str) {
+        let mut rows: Vec<(&'static str, NoiseCounters)> =
+            self.noise.borrow().iter().map(|(label, counters)| (*label, *counters)).collect();
+        rows.sort_unstable_by_key(|(label, _)| *label);
+        for (label, counters) in rows {
+            tracing::info!(
+                stage,
+                filter = label,
+                calls = counters.calls,
+                members = counters.members,
+                fired = counters.fired,
+                micros = counters.micros,
+                "cluster noise filter totals"
+            );
+        }
     }
 
     /// Which shape-defining kinds `node`'s subtree contains, memoised by
