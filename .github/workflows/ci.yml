@@ -780,3 +780,26 @@ jobs:
         with:
           fail-on-severity: high
           comment-summary-in-pr: on-failure
+
+  # The branch ruleset requires a status context literally named "CI" —
+  # the old monolithic job's name. The split into named jobs orphaned it
+  # (every merge since then has violated the rule). This gate restores the
+  # context: it succeeds only when every job in the workflow succeeded or
+  # was skipped (a skip satisfies branch protection, same as the path-
+  # gated heavy jobs).
+  ci:
+    name: CI
+    needs: [changes, security, build, rust-tests, repository-tests, windows, vsix, jetbrains, site, coverage]
+    if: always() && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Enforce every job's conclusion
+        run: |
+          echo "Job conclusions: ${{ toJSON(needs.*.result) }}"
+          for result in $(echo '${{ toJSON(needs.*.result) }}' | tr ',' ' '); do
+            case "$result" in
+              *success*|*skipped*) ;;
+              *) echo "FAIL: a required job ended '$result'"; exit 1 ;;
+            esac
+          done
