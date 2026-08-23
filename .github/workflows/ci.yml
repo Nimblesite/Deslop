@@ -503,6 +503,8 @@ jobs:
       # only produced "not recognized as a valid object file" on every
       # run. The coverage job consumes the finished report.
       - name: Calculate Windows Rust coverage
+        env:
+          CARGO_LLVM_COV_TARGET_DIR: target/windows-llvm-cov
         run: cargo llvm-cov --release --features deslop-core/live,deslop-lsp/profiling report --lcov --output-path windows-lcov.info
 
       - name: Upload Windows Rust coverage report
