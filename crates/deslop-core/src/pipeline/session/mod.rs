@@ -21,6 +21,7 @@ use std::{
 };
 
 use crate::{
+    ast::ByteRange,
     boilerplate::BoilerplateRange,
     config::{is_config_path, watched_config_paths, ExclusionConfig},
     discover::{
@@ -328,6 +329,34 @@ impl PipelineSession {
     #[must_use]
     pub fn fingerprint_count(&self) -> usize {
         self.store.fingerprint_count()
+    }
+
+    /// Resolves subtree digests to the live occurrences that carry
+    /// them — the workspace path and byte range of every fingerprint
+    /// whose normalised-subtree hash is in `hashes`
+    /// ([PIPELINE-FINGERPRINT-MERKLE]).
+    ///
+    /// The join `find_similar` runs for snippet input: a snippet has no
+    /// workspace identity, so it can only be located by content. The
+    /// public cluster id is *not* content alone ([PIPELINE-DETERMINISM],
+    /// gh #430 — it mixes the members' paths so same-shape findings in
+    /// different files never share one), so a caller that matched
+    /// `encode_short_id(hash) == cluster.id` returned empty for every
+    /// snippet the moment ids stopped being bare member digests. The
+    /// occurrence ranges this returns are joined against the report
+    /// through [`Report`] range lookups, which is the same join the
+    /// open-range variant of `find_similar` uses.
+    #[must_use]
+    pub fn subtree_occurrences(&self, hashes: &[[u8; 32]]) -> Vec<(PathBuf, ByteRange)> {
+        self.store
+            .fingerprints()
+            .iter()
+            .filter(|found| hashes.contains(&found.hash))
+            .filter_map(|found| {
+                self.path_for(found.file_id)
+                    .map(|path| (path.to_path_buf(), found.byte_range))
+            })
+            .collect()
     }
 
     /// Returns the path associated with `file_id`, if the session has
