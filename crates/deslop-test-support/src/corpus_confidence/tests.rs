@@ -100,7 +100,24 @@ const TRIPLES: [(&str, f64, f64, f64); 5] = [
     ("same_behavior", 0.10, 0.20, 0.88),
 ];
 
-/// One cluster whose occurrences carry the given rendered paths.
+/// Smallest cluster that can credibly *be* the whole-module rename the
+/// curated entries in these tests describe, in `canonical_node_count`.
+///
+/// A floor, not a pin: the legitimate whole-module view of one curated
+/// pair measured 348 and 395 nodes on two different builds of the same
+/// pinned tokio commit, so the extent a correct engine reports moves.
+/// What does not move is the two orders of magnitude between that view
+/// and the fragments gh #439 shows satisfying the check —
+/// [`curated::ACCESSOR_NODES`] and [`curated::FRAGMENT_NODES`]. No
+/// operating point is being tuned here; any value in the wide gap
+/// separates them.
+const CURATED_MIN_NODES: u64 = 300;
+
+/// The whole-module view of a curated pair, as tokio renders it today.
+const MODULE_NODES: u64 = 348;
+
+/// One cluster whose occurrences carry the given rendered paths, at the
+/// extent a credible whole-module rename carries. [`sized`] overrides it.
 fn spanning(bucket: &str, structural: f64, token: f64, files: &[&str]) -> Value {
     let occurrences: Vec<Value> = files
         .iter()
@@ -108,6 +125,7 @@ fn spanning(bucket: &str, structural: f64, token: f64, files: &[&str]) -> Value 
         .collect();
     json!({
         "bucket": bucket,
+        "canonical_node_count": MODULE_NODES,
         "signals": {
             "structural": structural,
             "token_jaccard": token,
@@ -118,11 +136,20 @@ fn spanning(bucket: &str, structural: f64, token: f64, files: &[&str]) -> Value 
     })
 }
 
-/// A manifest curating one hand-verified Type-2 pair.
+/// The same cluster reported at `nodes` instead, so a case can vary the
+/// extent alone and leave every other rendered field identical.
+fn sized(mut cluster: Value, nodes: u64) -> Value {
+    cluster["canonical_node_count"] = json!(nodes);
+    cluster
+}
+
+/// A manifest curating one hand-verified Type-2 pair, with the extent
+/// [CORPUS-RECALL] requires an entry to curate.
 fn manifest_with_type2(files: &[&str]) -> Value {
     json!({
         "must_find_type2": [{
             "files": files,
+            "min_nodes": CURATED_MIN_NODES,
             "why": "hand-verified rename pair for the unit test",
         }]
     })
