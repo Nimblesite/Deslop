@@ -395,7 +395,7 @@ test-corpus-ci:
 # peak above 13 GB (#166) and take minutes to scan. Run the full suite with
 # `make test-corpus` locally, or dispatch the workflow with `full`.
 CORPUS_REPOS ?= tokio nest
-CORPUS_TESTS ?= corpus_tokio_rust corpus_nest_typescript corpus_determinism_nest_typescript
+CORPUS_TESTS ?= corpus_repos::corpus_tokio_rust corpus_repos::corpus_nest_typescript corpus_repos::corpus_determinism_nest_typescript
 
 # [CI-DESLOP] Self-hosted duplication gate. Runs the release binary built by
 #   `build` against this repo, so the gate is always the CURRENT detector, never

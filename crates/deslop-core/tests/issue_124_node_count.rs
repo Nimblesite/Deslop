@@ -12,7 +12,7 @@ use std::{collections::HashMap, path::PathBuf};
 use anyhow::{Context, Result};
 use deslop_core::{
     ast::ByteRange,
-    cluster::{build_ranked_fused_clusters, Cluster},
+    cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs},
     fingerprint::Fingerprint,
     lsh::{Signature, SIGNATURE_LEN},
     pair::FusedCluster,
@@ -32,16 +32,16 @@ const SIGNAL_TOLERANCE: f64 = 1e-5;
 fn issue_124_type4_node_count_does_not_dominate_refactor_ranking() -> Result<()> {
     let fixture = type4_weight_fixture();
 
-    let clusters = build_ranked_fused_clusters(
-        &fixture.fingerprints,
-        &fixture.signatures,
-        &fixture.vectors,
-        &fixture.fused_clusters,
-        &[],
-        &HashMap::new(),
-        &HashMap::new(),
-        &HashMap::new(),
-    );
+    let clusters = build_ranked_fused_clusters(&ClusterBuildInputs {
+        fingerprints: &fixture.fingerprints,
+        signatures: &fixture.signatures,
+        embedding_vectors: &fixture.vectors,
+        fused_clusters: &fixture.fused_clusters,
+        trees: &[],
+        sources: &HashMap::new(),
+        file_languages: &HashMap::new(),
+        file_paths: &HashMap::new(),
+    });
     assert_eq!(
         clusters.len(),
         2,

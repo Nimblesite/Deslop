@@ -19,7 +19,7 @@ use std::collections::HashMap;
 
 use deslop_core::{
     ast::ByteRange,
-    cluster::{build_ranked_fused_clusters, Cluster},
+    cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs},
     fingerprint::Fingerprint,
     lsh::Signature,
     pair::FusedCluster,
@@ -68,16 +68,16 @@ fn published(left: [(usize, usize); 2], right: [(usize, usize); 2]) -> Vec<Clust
         },
     ];
     let vectors: HashMap<usize, Vec<f32>> = HashMap::new();
-    build_ranked_fused_clusters(
-        &members,
-        &signatures,
-        &vectors,
-        &fused,
-        &[],
-        &HashMap::new(),
-        &HashMap::new(),
-        &HashMap::new(),
-    )
+    build_ranked_fused_clusters(&ClusterBuildInputs {
+        fingerprints: &members,
+        signatures: &signatures,
+        embedding_vectors: &vectors,
+        fused_clusters: &fused,
+        trees: &[],
+        sources: &HashMap::new(),
+        file_languages: &HashMap::new(),
+        file_paths: &HashMap::new(),
+    })
 }
 
 /// The published clusters' occurrence spans, in rank order.

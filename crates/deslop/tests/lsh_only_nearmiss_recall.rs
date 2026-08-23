@@ -103,10 +103,15 @@ const RIGHT_SOURCE: &str = "import os\nimport sys\n\n\ndef settle(entries, floor
 const RIGHT_FILE: &str = "ledger_right.py";
 
 /// Token-Jaccard the pair measures (`MinHash` estimate, deterministic per
-/// [PIPELINE-DETERMINISM]) — captured from the reproducing run. Above
-/// the 0.90 LSH-only floor, below the 0.95 saturating-shape line, so
-/// the spec's row 4 is the *only* row that admits it.
-const MEASURED_JACCARD: f64 = 0.945_312_5;
+/// [PIPELINE-DETERMINISM]) — captured from the reproducing run. Measured
+/// again after #408 made `structural` a subtree-overlap grade and
+/// [PIPELINE-NORMALIZE-AST-OPERATOR] added operator kinds to the token
+/// stream: the pair now admits through the **anchored** near-miss row
+/// (`structural` 0.85 shared-subtree overlap) rather than the anchor-free
+/// row 4, and the richer token stream lowers the k-gram estimate to
+/// 95/128 components. The recall contract this file pins — reported,
+/// `nearly_identical`, act-now fused — is unchanged.
+const MEASURED_JACCARD: f64 = 0.742_187_5;
 
 /// Seeds the two-file Python corpus.
 fn seed(scan_root: &Path) -> Result<()> {

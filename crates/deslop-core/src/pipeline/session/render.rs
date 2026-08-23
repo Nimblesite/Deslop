@@ -13,7 +13,7 @@
 use std::{collections::HashMap, path::PathBuf, time::Instant};
 
 use crate::{
-    cluster::build_ranked_fused_clusters,
+    cluster::{build_ranked_fused_clusters, ClusterBuildInputs},
     cluster_filters::{split_noise_verbatim_families, split_structural_families},
     error::CoreError,
     lsh::band_collisions,
@@ -128,16 +128,16 @@ impl PipelineSession {
                     .map(|path| (found.file_id, relative_path_key(path, &self.root)))
             })
             .collect();
-        let clusters = build_ranked_fused_clusters(
+        let clusters = build_ranked_fused_clusters(&ClusterBuildInputs {
             fingerprints,
-            measurement_signatures,
-            &embedding_outcome.vectors,
-            &fused_clusters,
-            self.store.trees(),
-            &self.sources,
-            &self.file_languages,
-            &file_paths,
-        );
+            signatures: measurement_signatures,
+            embedding_vectors: &embedding_outcome.vectors,
+            fused_clusters: &fused_clusters,
+            trees: self.store.trees(),
+            sources: &self.sources,
+            file_languages: &self.file_languages,
+            file_paths: &file_paths,
+        });
         tracing::info!(
             ranked_clusters = clusters.len(),
             fingerprints = fingerprints.len(),
