@@ -93,7 +93,7 @@ jobs:
     # the org runner page. [TEST-ONE-BINARY] already cut the compile to
     # ~1m02s by linking once instead of 193 times; the doubled cores buy
     # margin against the 10-minute cap below.
-    runs-on: linux-x64
+    runs-on: Medium
     # The compile is the bulk of the job: 20m1s on run 32548446084 with
     # four cores, which a 25-minute cap cancelled mid-gate and took every
     # downstream shard, the VSIX job and the JetBrains gate with it. The
