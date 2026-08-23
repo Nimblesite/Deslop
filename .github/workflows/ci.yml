@@ -85,15 +85,15 @@ jobs:
     name: Format + analyzers + build release
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    # A standard runner, deliberately. `ubuntu-latest-16-cores` was tried
-    # here and never resolved: on run 32558651602 every `ubuntu-latest` job
-    # finished while `build` and `coverage` sat queued indefinitely, which
-    # is worse than a slow build — nothing downstream ever starts. The
-    # larger labels need the org to provision them, and this job no longer
-    # needs one: [TEST-ONE-BINARY] took the compile from ~27 minutes to
-    # 1m02s for a full rebuild of the workspace plus all 13 test binaries,
-    # so cores were never the bottleneck. Linking 193 times was.
-    runs-on: ubuntu-latest
+    # The Nimblesite-provisioned 8-core runner (label `linux-x64`, 32 GB,
+    # group Default). GitHub's largest *free* Linux runner is the 4-core
+    # `ubuntu-latest`, so the machine beyond that is org-provisioned. The
+    # old queue-forever was a label problem: `ubuntu-latest-16-cores`
+    # matches no runner this org provisions — `linux-x64` is copied from
+    # the org runner page. [TEST-ONE-BINARY] already cut the compile to
+    # ~1m02s by linking once instead of 193 times; the doubled cores buy
+    # margin against the 10-minute cap below.
+    runs-on: linux-x64
     # The compile is the bulk of the job: 20m1s on run 32548446084 with
     # four cores, which a 25-minute cap cancelled mid-gate and took every
     # downstream shard, the VSIX job and the JetBrains gate with it. The
@@ -101,7 +101,7 @@ jobs:
     # long is a slow pipeline, but a build that is *cancelled* publishes
     # no artifacts and fails the whole run for a reason that has nothing
     # to do with the code under test.
-    timeout-minutes: 50
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
@@ -331,9 +331,10 @@ jobs:
     name: Calculate coverage + thresholds
     needs: [changes, rust-tests, repository-tests, windows, vsix, jetbrains, site]
     if: always() && needs.changes.outputs.code == 'true'
-    # A standard runner, for the same reason `build` uses one: the larger
-    # label queues forever on this repository.
-    runs-on: ubuntu-latest
+    # The Nimblesite-provisioned 8-core runner (`linux-x64`), same as
+    # `build`: this job's cold instrumented release build is ~21 minutes
+    # on four cores.
+    runs-on: linux-x64
     # TIMEOUT EXCEPTION: a cold instrumented release build of the whole
     # workspace is ~21 minutes on a cache miss.
     timeout-minutes: 40
@@ -356,29 +357,40 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
+      # [CI-COVERAGE-ONCE] `merge-multiple: true` is load-bearing: a
+      # single-path upload zips the directory's *contents* at the zip
+      # root, and the default `merge-multiple: false` extracts them
+      # under `path/<artifact-name>/` — one directory too deep, which
+      # made every report step below search an empty target dir and
+      # fail with `not found object files` on every run since the job
+      # was created.
       - name: Restore raw Rust coverage
         uses: actions/download-artifact@v8
         with:
           name: rust-coverage-raw
           path: target/llvm-cov-target
+          merge-multiple: true
 
       - name: Restore raw Windows Rust coverage
         uses: actions/download-artifact@v8
         with:
           name: windows-rust-coverage-raw
           path: target/windows-llvm-cov
+          merge-multiple: true
 
       - name: Restore VSIX coverage
         uses: actions/download-artifact@v8
         with:
           name: vsix-coverage
           path: clients/vscode/coverage
+          merge-multiple: true
 
       - name: Restore raw repository coverage
         uses: actions/download-artifact@v8
         with:
           name: repository-coverage-raw
           path: coverage/repository/raw
+          merge-multiple: true
 
       - name: Calculate Rust coverage
         run: make coverage-report
