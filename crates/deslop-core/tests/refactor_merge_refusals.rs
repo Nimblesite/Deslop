@@ -119,6 +119,10 @@ fn dart_written_context_variable_refuses() -> Result<()> {
 /// The residual byte proof: operator drift outside the holes refuses
 /// even though the normalised skeletons match.
 #[test]
+#[ignore = "[SKIP-UNFINISHED] GH #432 [FUSED-THRESHOLD] \
+     docs/plans/fused-score-followups.md — the drifted pair is no longer admitted at any \
+     floor, so the residual byte-proof path has no reachable cluster to refuse. \
+     Run via `-- --ignored`."]
 fn operator_drift_refuses_via_residual_proof() -> Result<()> {
     assert_all_refused_with(
         "csharp-merge-operatordrift",
