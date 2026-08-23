@@ -93,15 +93,12 @@ jobs:
     name: Format + analyzers + build release
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    # The Nimblesite-provisioned 8-core runner (label `linux-x64`, 32 GB,
-    # group Default). GitHub's largest *free* Linux runner is the 4-core
-    # `ubuntu-latest`, so the machine beyond that is org-provisioned. The
-    # old queue-forever was a label problem: `ubuntu-latest-16-cores`
-    # matches no runner this org provisions — `linux-x64` is copied from
-    # the org runner page. [TEST-ONE-BINARY] already cut the compile to
-    # ~1m02s by linking once instead of 193 times; the doubled cores buy
-    # margin against the 10-minute cap below.
-    runs-on: Medium
+    # HOSTED RUNNER: every org-provisioned label tried here starved —
+    # `linux-x64` queued 16m+ per runner, `Medium` 20m+ with none
+    # arriving (runs 32620898314, 32622436702). Hosted `ubuntu-latest`
+    # starts in seconds and [TEST-ONE-BINARY] already cut the compile to
+    # ~1m02s by linking once instead of 193 times.
+    runs-on: ubuntu-latest
     # The compile is the bulk of the job: 20m1s on run 32548446084 with
     # four cores, which a 25-minute cap cancelled mid-gate and took every
     # downstream shard, the VSIX job and the JetBrains gate with it. The
@@ -339,10 +336,11 @@ jobs:
     name: Calculate coverage + thresholds
     needs: [changes, rust-tests, repository-tests, windows, vsix, jetbrains, site]
     if: always() && needs.changes.outputs.code == 'true'
-    # The Nimblesite-provisioned 8-core runner (`linux-x64`), same as
-    # `build`: this job's cold instrumented release build is ~21 minutes
-    # on four cores.
-    runs-on: Medium
+    # HOSTED RUNNER: same starvation as `build` — org labels `linux-x64`
+    # and `Medium` never picked a runner up. Hosted `ubuntu-latest`:
+    # cold instrumented release build is ~21 minutes on four cores,
+    # inside the 40-minute cap below.
+    runs-on: ubuntu-latest
     # TIMEOUT EXCEPTION: a cold instrumented release build of the whole
     # workspace is ~21 minutes on a cache miss.
     timeout-minutes: 40
