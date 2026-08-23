@@ -796,10 +796,11 @@ jobs:
     steps:
       - name: Enforce every job's conclusion
         run: |
-          echo "Job conclusions: ${{ toJSON(needs.*.result) }}"
-          for result in $(echo '${{ toJSON(needs.*.result) }}' | tr ',' ' '); do
+          results='${{ toJSON(needs.*.result) }}'
+          echo "Job conclusions: $results"
+          for result in $(echo "$results" | tr -d '[]"' | tr ',' ' '); do
             case "$result" in
-              *success*|*skipped*) ;;
+              success|skipped) ;;
               *) echo "FAIL: a required job ended '$result'"; exit 1 ;;
             esac
           done
