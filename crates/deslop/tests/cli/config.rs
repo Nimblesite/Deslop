@@ -1,22 +1,89 @@
-use crate::support::*;
+use super::support::*;
 
-/// Writes `config_body` to `<tmp>/deslop.toml`, runs the CLI over the
-/// `csharp-small` fixture with `--min-nodes 8 --config <that file>`,
-/// asserts success, and returns the JSON report body as a string. Used
-/// by the `--config`-driven exclusion/hide scenarios that differ only
-/// in the TOML they supply.
+/// Returns the command scanning the `csharp-small` fixture with
+/// `--config <tmp>/<file_name>`, writing `body` there first when `Some`
+/// — an absent file is what the missing-config path needs. Reports land
+/// at `<tmp>/report.*`; the caller adds its flags and asserts.
+fn config_command(tmp: &Path, file_name: &str, body: Option<&str>) -> Result<Command> {
+    let config = tmp.join(file_name);
+    if let Some(body) = body {
+        fs::write(&config, body)?;
+    }
+    let mut cmd = fixture_command("csharp-small", &tmp.join("report"))?;
+    let _cmd = cmd.arg("--config").arg(&config);
+    Ok(cmd)
+}
+
+/// Runs [`config_command`] with `config_body` at `--min-nodes 8`,
+/// asserts success, and returns the JSON report body — the
+/// `--config`-driven scenarios differ only in the TOML they supply.
 fn run_with_config(config_body: &str) -> Result<String> {
     let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let config = tmp.path().join("deslop.toml");
-    fs::write(&config, config_body)?;
-    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .args(["--min-nodes", "8", "--config"])
-        .arg(&config)
-        .assert()
-        .success();
-    Ok(fs::read_to_string(&out.json)?)
+    let mut cmd = config_command(tmp.path(), "deslop.toml", Some(config_body))?;
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
+    Ok(fs::read_to_string(outputs_under(tmp.path()).json)?)
+}
+
+/// The scan root [`seeded_scan_command`] materialises under `tmp`.
+fn scan_root_under(tmp: &Path) -> PathBuf {
+    tmp.join("scan-root")
+}
+
+/// Copies `csharp-small` fixture files into `scan_root`: each
+/// `(directory, file name)` pair lands at
+/// `<scan_root>/<directory>/<file name>`, an empty directory meaning
+/// the scan root itself.
+fn place_fixture_files(scan_root: &Path, placements: &[(&str, &str)]) -> Result<()> {
+    placements.iter().try_for_each(|&(directory, file_name)| {
+        let target = scan_root.join(directory);
+        fs::create_dir_all(&target)?;
+        let source = fixture("csharp-small").join(file_name);
+        let _bytes = fs::copy(source, target.join(file_name))?;
+        Ok(())
+    })
+}
+
+/// Seeds [`scan_root_under`] with `placements` and, when `config_body`
+/// is `Some`, a `.deslop.toml` holding it — the default config filename
+/// the pipeline discovers without `--config`. Returns the command
+/// scanning that root at `--min-nodes 8`, reporting to `<tmp>/report.*`.
+fn seeded_scan_command(
+    tmp: &Path,
+    placements: &[(&str, &str)],
+    config_body: Option<&str>,
+) -> Result<Command> {
+    let scan_root = scan_root_under(tmp);
+    fs::create_dir_all(&scan_root)?;
+    place_fixture_files(&scan_root, placements)?;
+    if let Some(body) = config_body {
+        fs::write(scan_root.join(".deslop.toml"), body)?;
+    }
+    let mut cmd = deslop_command(&scan_root, &tmp.join("report"))?;
+    let _cmd = cmd.args(["--min-nodes", "8"]);
+    Ok(cmd)
+}
+
+/// The `hidden` flag of the last occurrence, across every cluster,
+/// whose path ends with `suffix`; `None` when no occurrence matches.
+/// A later match overwrites an earlier one, so the fold keeps the last.
+fn hidden_flag_for(report: &Value, suffix: &str) -> Option<bool> {
+    field(report, "clusters")
+        .as_array()?
+        .iter()
+        .flat_map(|cluster| {
+            field(cluster, "occurrences")
+                .as_array()
+                .into_iter()
+                .flatten()
+        })
+        .filter(|occurrence| {
+            field(occurrence, "path")
+                .as_str()
+                .is_some_and(|path| path.ends_with(suffix))
+        })
+        .fold(None, |_earlier, occurrence| {
+            Some(field(occurrence, "hidden").as_bool().unwrap_or(false))
+        })
 }
 
 #[test]
@@ -83,24 +150,13 @@ fn exclude_per_language_overlay_scoped_to_its_language() -> Result<()> {
 #[test]
 fn default_config_file_in_scan_root_is_loaded() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    fs::create_dir_all(&scan_root)?;
-    let _alpha_bytes = fs::copy(
-        fixture("csharp-small").join("Alpha.cs"),
-        scan_root.join("Alpha.cs"),
+    let mut cmd = seeded_scan_command(
+        tmp.path(),
+        &[("", "Alpha.cs"), ("", "Beta.cs")],
+        Some("[defaults]\nexclude = [\"**/Beta.cs\"]\n"),
     )?;
-    let _beta_bytes = fs::copy(
-        fixture("csharp-small").join("Beta.cs"),
-        scan_root.join("Beta.cs"),
-    )?;
-    fs::write(
-        scan_root.join(".deslop.toml"),
-        "[defaults]\nexclude = [\"**/Beta.cs\"]\n",
-    )?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
-    let json = fs::read_to_string(&out.json)?;
+    let _assertion = cmd.assert().success();
+    let json = fs::read_to_string(outputs_under(tmp.path()).json)?;
     assert!(json.contains("\"files_analysed\": 1"));
     Ok(())
 }
@@ -112,17 +168,12 @@ fn default_config_file_in_scan_root_is_loaded() -> Result<()> {
 #[test]
 fn files_without_extensions_are_skipped_silently() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    fs::create_dir_all(&scan_root)?;
-    let _alpha_bytes = fs::copy(
-        fixture("csharp-small").join("Alpha.cs"),
-        scan_root.join("Alpha.cs"),
-    )?;
+    let mut cmd = seeded_scan_command(tmp.path(), &[("", "Alpha.cs")], None)?;
+    let scan_root = scan_root_under(tmp.path());
     fs::write(scan_root.join("Makefile"), "all:\n\techo hi\n")?;
     fs::write(scan_root.join("README"), "nothing to see here\n")?;
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
-    let json = fs::read_to_string(tmp.path().join("report.json"))?;
+    let _assertion = cmd.assert().success();
+    let json = fs::read_to_string(outputs_under(tmp.path()).json)?;
     assert!(
         json.contains("\"files_analysed\": 1"),
         "Makefile / README must be filtered before the language dispatch: {json}"
@@ -137,11 +188,8 @@ fn files_without_extensions_are_skipped_silently() -> Result<()> {
 #[test]
 fn missing_config_file_reports_error() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let missing = tmp.path().join("does-not-exist.toml");
-    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
+    let mut cmd = config_command(tmp.path(), "does-not-exist.toml", None)?;
     let _assertion = cmd
-        .arg("--config")
-        .arg(&missing)
         .arg("--no-color")
         .assert()
         .failure()
@@ -155,12 +203,9 @@ fn missing_config_file_reports_error() -> Result<()> {
 #[test]
 fn invalid_exclude_pattern_reports_error() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let config = tmp.path().join("deslop.toml");
-    fs::write(&config, "[defaults]\nexclude = [\"[unclosed\"]\n")?;
-    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
+    let body = "[defaults]\nexclude = [\"[unclosed\"]\n";
+    let mut cmd = config_command(tmp.path(), "deslop.toml", Some(body))?;
     let _assertion = cmd
-        .arg("--config")
-        .arg(&config)
         .arg("--no-color")
         .assert()
         .failure()
@@ -173,12 +218,8 @@ fn invalid_exclude_pattern_reports_error() -> Result<()> {
 #[test]
 fn malformed_config_file_reports_error() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let config = tmp.path().join("deslop.toml");
-    fs::write(&config, "not valid toml = = =\n")?;
-    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
+    let mut cmd = config_command(tmp.path(), "deslop.toml", Some("not valid toml = = =\n"))?;
     let _assertion = cmd
-        .arg("--config")
-        .arg(&config)
         .arg("--no-color")
         .assert()
         .failure()
@@ -195,53 +236,20 @@ fn malformed_config_file_reports_error() -> Result<()> {
 #[test]
 fn report_hide_pattern_is_scan_root_relative() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("repo");
-    let hidden_dir = scan_root.join("benchmarks").join("fixtures");
-    let visible_dir = scan_root.join("src");
-    fs::create_dir_all(&hidden_dir)?;
-    fs::create_dir_all(&visible_dir)?;
-    let _alpha_bytes = fs::copy(
-        fixture("csharp-small").join("Alpha.cs"),
-        hidden_dir.join("Alpha.cs"),
+    let mut cmd = seeded_scan_command(
+        tmp.path(),
+        &[("benchmarks/fixtures", "Alpha.cs"), ("src", "Beta.cs")],
+        Some("[defaults]\nreport_hide = [\"benchmarks/fixtures/**\"]\n"),
     )?;
-    let _beta_bytes = fs::copy(
-        fixture("csharp-small").join("Beta.cs"),
-        visible_dir.join("Beta.cs"),
-    )?;
-    fs::write(
-        scan_root.join(".deslop.toml"),
-        "[defaults]\nreport_hide = [\"benchmarks/fixtures/**\"]\n",
-    )?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
-    let report = read_json_report(&out.json)?;
-    let clusters = field(&report, "clusters")
-        .as_array()
-        .context("clusters array")?;
-    let mut alpha_hidden: Option<bool> = None;
-    let mut beta_hidden: Option<bool> = None;
-    for cluster in clusters {
-        let Some(occurrences) = field(cluster, "occurrences").as_array() else {
-            continue;
-        };
-        for occurrence in occurrences {
-            let path = field(occurrence, "path").as_str().unwrap_or("");
-            let hidden = field(occurrence, "hidden").as_bool().unwrap_or(false);
-            if path.ends_with("Alpha.cs") {
-                alpha_hidden = Some(hidden);
-            } else if path.ends_with("Beta.cs") {
-                beta_hidden = Some(hidden);
-            }
-        }
-    }
+    let _assertion = cmd.assert().success();
+    let report = read_json_report(&outputs_under(tmp.path()).json)?;
     assert_eq!(
-        alpha_hidden,
+        hidden_flag_for(&report, "Alpha.cs"),
         Some(true),
         "scan-root-relative pattern `benchmarks/fixtures/**` must hide Alpha.cs at <scan_root>/benchmarks/fixtures/Alpha.cs",
     );
     assert_eq!(
-        beta_hidden,
+        hidden_flag_for(&report, "Beta.cs"),
         Some(false),
         "Beta.cs at <scan_root>/src/Beta.cs must remain visible",
     );
@@ -255,27 +263,13 @@ fn report_hide_pattern_is_scan_root_relative() -> Result<()> {
 #[test]
 fn exclude_pattern_is_scan_root_relative() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("repo");
-    let excluded_dir = scan_root.join("benchmarks").join("fixtures");
-    let kept_dir = scan_root.join("src");
-    fs::create_dir_all(&excluded_dir)?;
-    fs::create_dir_all(&kept_dir)?;
-    let _alpha_bytes = fs::copy(
-        fixture("csharp-small").join("Alpha.cs"),
-        excluded_dir.join("Alpha.cs"),
+    let mut cmd = seeded_scan_command(
+        tmp.path(),
+        &[("benchmarks/fixtures", "Alpha.cs"), ("src", "Beta.cs")],
+        Some("[defaults]\nexclude = [\"benchmarks/fixtures/**\"]\n"),
     )?;
-    let _beta_bytes = fs::copy(
-        fixture("csharp-small").join("Beta.cs"),
-        kept_dir.join("Beta.cs"),
-    )?;
-    fs::write(
-        scan_root.join(".deslop.toml"),
-        "[defaults]\nexclude = [\"benchmarks/fixtures/**\"]\n",
-    )?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
-    let body = fs::read_to_string(&out.json)?;
+    let _assertion = cmd.assert().success();
+    let body = fs::read_to_string(outputs_under(tmp.path()).json)?;
     assert!(
         body.contains("\"files_analysed\": 1"),
         "scan-root-relative `exclude` pattern must drop benchmarks/fixtures/Alpha.cs and leave only Beta.cs analysed: {body}",

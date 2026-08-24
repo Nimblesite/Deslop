@@ -138,3 +138,9 @@ clients/jetbrains/buildSrc/build/
 clients/jetbrains/buildSrc/.gradle/
 clients/jetbrains/deslop-lsp4ij/build/
 clients/jetbrains/deslop-shared/build/
+
+
+Book/dist/
+
+
+.codex-tmp/

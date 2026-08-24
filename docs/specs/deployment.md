@@ -183,6 +183,10 @@ helper must be listed in the manifest. Startup failure must surface through a
 JetBrains notification or Event Log entry with the same expected/found/path
 details required by [DEPLOY-RESOLVER].
 
+### [DEPLOY-DOCS-INSTALLER-FAILCLOSED] Published curl installer fails closed
+
+The curl installer snippet on the docs pages (`site/src/docs/index.md`, `site/src/zh/docs/index.md`) is a published contract: when version resolution, either download, or SHA-256 verification fails, nothing may be extracted and nothing may be installed. The snippet therefore runs entirely inside one subshell under `set -euo pipefail`, downloads into a `mktemp -d` work directory removed by an `EXIT` trap, and only reaches `tar` and `install` after the checksum check passes. The subshell's exit status must not be tested by the surrounding command (no trailing `&& …`): bash 3.2 — the `/bin/bash` macOS ships — disables `set -e` inside a subshell whose status is tested, which silently reopens the fail-open path. `DESLOP_TAG` pins a release; `DESLOP_RELEASE_BASE` overrides the release mirror and doubles as the offline test seam. The no-sudo alternative creates `~/.local/bin` before installing. Both locales stay functionally identical; comments are the only translated lines. Enforced by `scripts/deployment/installer-snippet.test.mjs` (a `make lint` gate), which runs the exact published snippets against a local fixture release and proves a bad checksum yields a non-zero exit with no extraction, no install, and no leaked work directory.
+
 ### [DEPLOY-CI-GATES] CI and release gates
 
 CI and release jobs must fail fast on deployment drift.

@@ -4,14 +4,35 @@
 //! and the wire `WorkspaceEdit`. Unknown ids surface the stable
 //! `UnknownCluster` error.
 
-mod common;
+use crate::common;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use common::{
     copied_fixture_named, spawn_lsp_and_wait_for_socket, structured_content,
-    wait_for_state_then_init_mcp, McpHandle,
+    wait_for_state_then_init_mcp, ChildKillOnDrop, McpHandle,
 };
 use serde_json::{json, Value};
+
+/// Brings up one scenario: a private copy of `fixture`, the real LSP
+/// listening on its socket, and an initialised MCP session talking to
+/// it. Returned as a pair so the caller keeps both alive for the test —
+/// dropping the workspace or the LSP guard early tears the session down
+/// mid-request.
+fn mcp_session(fixture: &str) -> Result<(tempfile::TempDir, ChildKillOnDrop, McpHandle)> {
+    let workspace = copied_fixture_named(fixture)?;
+    let lsp = spawn_lsp_and_wait_for_socket(workspace.path())?;
+    let mcp = wait_for_state_then_init_mcp(workspace.path())?;
+    Ok((workspace, lsp, mcp))
+}
+
+/// Requests the `n` worst clusters and returns the structured payload.
+fn request_top_offenders(mcp: &mut McpHandle, count: u32) -> Result<Value> {
+    let offenders = mcp.request(
+        "tools/call",
+        &json!({ "name": "top-offenders", "arguments": { "n": count } }),
+    )?;
+    structured_content(&offenders, "top-offenders")
+}
 
 /// Requests `merge-plan` for `cluster_id` and returns the structured
 /// plan — the request idiom every scenario shares.
@@ -27,15 +48,9 @@ fn request_merge_plan(mcp: &mut McpHandle, cluster_id: &str) -> Result<Value> {
 /// end to end (MCP → IPC → LSP → refactor engine).
 #[test]
 fn merge_plan_returns_mechanical_plan_over_ipc() -> Result<()> {
-    let workspace = copied_fixture_named("csharp-merge-mcp")?;
-    let _lsp = spawn_lsp_and_wait_for_socket(workspace.path())?;
-    let mut mcp = wait_for_state_then_init_mcp(workspace.path())?;
+    let (_workspace, _lsp, mut mcp) = mcp_session("csharp-merge-mcp")?;
 
-    let offenders = mcp.request(
-        "tools/call",
-        &json!({ "name": "top-offenders", "arguments": { "n": 5 } }),
-    )?;
-    let offenders = structured_content(&offenders, "top-offenders")?;
+    let offenders = request_top_offenders(&mut mcp, 5)?;
     let cluster_id = offenders
         .pointer("/clusters/0/id")
         .and_then(Value::as_str)
@@ -86,9 +101,7 @@ fn merge_plan_returns_mechanical_plan_over_ipc() -> Result<()> {
 /// through the tool envelope.
 #[test]
 fn merge_plan_unknown_id_is_a_stable_error() -> Result<()> {
-    let workspace = copied_fixture_named("csharp-merge-mcp")?;
-    let _lsp = spawn_lsp_and_wait_for_socket(workspace.path())?;
-    let mut mcp = wait_for_state_then_init_mcp(workspace.path())?;
+    let (_workspace, _lsp, mut mcp) = mcp_session("csharp-merge-mcp")?;
 
     let response = mcp.request(
         "tools/call",
@@ -112,15 +125,9 @@ fn merge_plan_unknown_id_is_a_stable_error() -> Result<()> {
 /// verdict and a reason, never an error ([AUTOFIX-MERGE-GATE]).
 #[test]
 fn unmergeable_cluster_answers_with_ai_or_human() -> Result<()> {
-    let workspace = copied_fixture_named("csharp-mcp")?;
-    let _lsp = spawn_lsp_and_wait_for_socket(workspace.path())?;
-    let mut mcp = wait_for_state_then_init_mcp(workspace.path())?;
+    let (_workspace, _lsp, mut mcp) = mcp_session("csharp-mcp")?;
 
-    let offenders = mcp.request(
-        "tools/call",
-        &json!({ "name": "top-offenders", "arguments": { "n": 1 } }),
-    )?;
-    let offenders = structured_content(&offenders, "top-offenders")?;
+    let offenders = request_top_offenders(&mut mcp, 1)?;
     let Some(cluster_id) = offenders
         .pointer("/clusters/0/id")
         .and_then(Value::as_str)
@@ -149,15 +156,9 @@ fn unmergeable_cluster_answers_with_ai_or_human() -> Result<()> {
 /// imports the canonical symbol.
 #[test]
 fn merge_plan_routes_cross_file_cluster_to_consolidation() -> Result<()> {
-    let workspace = copied_fixture_named("rust-consolidate")?;
-    let _lsp = spawn_lsp_and_wait_for_socket(workspace.path())?;
-    let mut mcp = wait_for_state_then_init_mcp(workspace.path())?;
+    let (_workspace, _lsp, mut mcp) = mcp_session("rust-consolidate")?;
 
-    let offenders = mcp.request(
-        "tools/call",
-        &json!({ "name": "top-offenders", "arguments": { "n": 5 } }),
-    )?;
-    let offenders = structured_content(&offenders, "top-offenders")?;
+    let offenders = request_top_offenders(&mut mcp, 5)?;
     let clusters = offenders
         .pointer("/clusters")
         .and_then(Value::as_array)

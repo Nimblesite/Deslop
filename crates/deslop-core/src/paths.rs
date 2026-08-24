@@ -6,11 +6,11 @@
 //!
 //! ```text
 //! <root>/
-//!   .deslop.toml                     # config — user-authored, tracked
-//!   .deslop/                         # everything Deslop writes
-//!     deslop-report.{json,txt,html}  # rendered reports (CLI)
-//!     logs/deslop-<epoch>.log        # tracing sink (CLI)
-//!     cache/                         # analysis state, never hand-edited
+//!.deslop.toml # config — user-authored, tracked
+//!.deslop/ # everything Deslop writes
+//! deslop-report.{json,txt,html} # rendered reports (CLI)
+//! logs/deslop-<epoch>.log # tracing sink (CLI)
+//! cache/ # analysis state, never hand-edited
 //!       fingerprints/ embeddings/
 //!       live-report.json deslop.sock deslop.port
 //! ```

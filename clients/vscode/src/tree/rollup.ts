@@ -1,12 +1,13 @@
-// Pure per-folder rollup of `metrics.per_file` ([METRICS-REPO],
-// [VSIX-METRICS-PANEL]). No VS Code imports — shared by the extension's
-// Duplication tree (`./metrics`) and the duplication-report webview, so
-// the percentage math lives in exactly one place. Denominators include
-// clean files so each folder percentage is exact; folders and files
-// with no duplication are dropped, and rows are worst-first by
-// percentage.
+// [VSIX-METRICS-PANEL] Folder/file rows for the Duplication panel and
+// the duplication-report webview. This module performs NO percentage
+// arithmetic — every figure (file, folder, repo) is computed once by
+// the engine's `percent` function ([METRICS-REPO],
+// `crates/deslop-core/src/report_metrics.rs`) and carried on the wire
+// as `metrics.per_file` / `metrics.folders`. This file only nests those
+// wire rows into a tree; recomputing a percentage or re-summing LOC in
+// the VSIX is prohibited.
 
-import { FileMetric } from "../types/report";
+import { FileMetric, RepoMetrics } from "../types/report";
 import { buildPathTree, PathTree } from "./pathTree";
 
 export interface FolderRollup {
@@ -22,25 +23,30 @@ export type RollupChild =
   | { kind: "folder"; percent: number; folder: FolderRollup }
   | { kind: "file"; percent: number; file: FileMetric };
 
-interface FolderSums {
-  analysedLoc: number;
-  duplicatedLoc: number;
+type MetricRows = Pick<RepoMetrics, "per_file" | "folders">;
+
+/** Nests the engine-computed `metrics.folders` / `metrics.per_file` rows
+ * into worst-first display rows. Pure structure: values are read off the
+ * wire verbatim. */
+export function buildFolderRollup(metrics: MetricRows): RollupChild[] {
+  const folderRows = new Map<string, FileMetric>();
+  for (const row of metrics.folders) folderRows.set(normalizePath(row.path), row);
+  return rollupChildren(buildPathTree(metrics.per_file, (file) => file.path), folderRows);
 }
 
-/** Rolls `perFile` into worst-first folder rows. `pathOf` maps a file to
- * its display path (workspace-relative in the extension, raw in the
- * webview). */
-export function buildFolderRollup(
-  perFile: FileMetric[],
-  pathOf: (file: FileMetric) => string,
+/** Joins a wire path's segments with `/` so folder-row lookups match the
+ * trie paths built from file rows regardless of platform separator. */
+function normalizePath(path: string): string {
+  return path.split(/[/\\]/).filter(Boolean).join("/");
+}
+
+function rollupChildren(
+  tree: PathTree<FileMetric>,
+  folderRows: Map<string, FileMetric>,
 ): RollupChild[] {
-  return rollupChildren(buildPathTree(perFile, pathOf));
-}
-
-function rollupChildren(tree: PathTree<FileMetric>): RollupChild[] {
   const children: RollupChild[] = [];
   for (const folder of tree.folders) {
-    const built = rollupFolder(folder);
+    const built = rollupFolder(folder, folderRows);
     if (built) children.push({ kind: "folder", percent: built.percent, folder: built });
   }
   for (const file of tree.leaves) {
@@ -52,33 +58,21 @@ function rollupChildren(tree: PathTree<FileMetric>): RollupChild[] {
   return children;
 }
 
-function rollupFolder(folder: PathTree<FileMetric>): FolderRollup | null {
-  const sums = sumFolder(folder);
-  if (sums.duplicatedLoc === 0) return null;
-  const percent = sums.analysedLoc === 0 ? 0 : (sums.duplicatedLoc / sums.analysedLoc) * 100;
+/** A folder renders only when the engine emitted a row for it — no row
+ * means no duplicated lines beneath it. Compressed single-child chains
+ * read the deepest folder's row, whose figures equal the whole chain's. */
+function rollupFolder(
+  folder: PathTree<FileMetric>,
+  folderRows: Map<string, FileMetric>,
+): FolderRollup | null {
+  const row = folderRows.get(normalizePath(folder.path));
+  if (!row) return null;
   return {
     label: folder.label,
     path: folder.path,
-    analysedLoc: sums.analysedLoc,
-    duplicatedLoc: sums.duplicatedLoc,
-    percent,
-    children: rollupChildren(folder),
+    analysedLoc: row.analysed_loc,
+    duplicatedLoc: row.duplicated_loc,
+    percent: row.duplication_percent,
+    children: rollupChildren(folder, folderRows),
   };
-}
-
-function sumFolder(folder: PathTree<FileMetric>): FolderSums {
-  const leafSums = folder.leaves.reduce<FolderSums>(
-    (acc, file) => ({
-      analysedLoc: acc.analysedLoc + file.analysed_loc,
-      duplicatedLoc: acc.duplicatedLoc + file.duplicated_loc,
-    }),
-    { analysedLoc: 0, duplicatedLoc: 0 },
-  );
-  return folder.folders.reduce<FolderSums>((acc, child) => {
-    const childSums = sumFolder(child);
-    return {
-      analysedLoc: acc.analysedLoc + childSums.analysedLoc,
-      duplicatedLoc: acc.duplicatedLoc + childSums.duplicatedLoc,
-    };
-  }, leafSums);
 }

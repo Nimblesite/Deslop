@@ -2,10 +2,10 @@
 //! to keep each file under the 500-LOC budget.
 //!
 //! Issues addressed (see parent `mod.rs` header):
-//! - **#72**  [CLONE-NOISE-PY-MONKEYPATCH] — `monkeypatch.setenv` literals.
-//! - **#96**  [CLONE-NOISE-PY-ALL-EXPORTS] — module-level `__all__` lists.
-//! - **#114** [CLONE-NOISE-PY-JWT-HS256] — independent HS256 implementations.
-//! - **#126** [CLONE-NOISE-PY-GENERATED-OUTPUT] — generated-output headers
+//! - [CLONE-NOISE-PY-MONKEYPATCH] — `monkeypatch.setenv` literals.
+//! - [CLONE-NOISE-PY-ALL-EXPORTS] — module-level `__all__` lists.
+//! - [CLONE-NOISE-PY-JWT-HS256] — independent HS256 implementations.
+//! - [CLONE-NOISE-PY-GENERATED-OUTPUT] — generated-output headers
 //!   shared between generator templates and generated files.
 
 use tree_sitter::Node;
@@ -16,7 +16,7 @@ use super::{
 };
 use crate::state::FileId;
 
-/// Detects **issue #114**: production HS256/JWT signing code and tests
+/// Detects ****: production HS256/JWT signing code and tests
 /// that re-implement the same HMAC calculation independently. The
 /// test-side duplication is intentional black-box verification; if the
 /// test called the production minter/helper, it would stop proving the
@@ -73,7 +73,7 @@ fn python_body_looks_like_hs256(body_source: &[u8]) -> bool {
         && contains_bytes(body_source, b"urlsafe_b64encode")
 }
 
-/// Detects **issue #126**: a hand-written generator source contains a
+/// Detects ****: a hand-written generator source contains a
 /// template literal for a generated-file header, and the generated file
 /// itself carries the same `DO NOT HAND-EDIT` marker. These two ranges
 /// are intentionally related, but the generated output is not a refactor
@@ -89,7 +89,7 @@ pub(super) fn is_generated_template_output_cluster(snippets: &[Snippet<'_>]) -> 
 
 /// Returns true when the reported range itself contains a generated-file
 /// marker, but the file is not the generated output. This is the
-/// generator-template side of issue #126.
+/// generator-template side of.
 fn is_generated_header_template_snippet(snippet: &Snippet<'_>) -> bool {
     !is_generated_output_source(snippet)
         && snippet_range_text(snippet).is_some_and(contains_generated_marker)
@@ -111,7 +111,7 @@ fn contains_generated_marker(bytes: &[u8]) -> bool {
     contains_bytes(bytes, b"DO NOT HAND-EDIT")
 }
 
-/// Detects **issue #96**: every cluster member is a Python module-level
+/// Detects ****: every cluster member is a Python module-level
 /// `__all__ = [...]` assignment. The export list shape is identical
 /// across modules by convention, but the listed names always differ —
 /// after Type-2 normalisation they look identical, yet the package
@@ -164,7 +164,7 @@ fn python_descend_to_assignment(node: Node<'_>) -> Node<'_> {
 }
 
 /// Suppresses tiny string literal clusters inside pytest monkeypatch
-/// setup tests. Issue #72 covers this exact scaffold: literals differ
+/// setup tests. covers this exact scaffold: literals differ
 /// intentionally because they are environment keys and values.
 pub(super) fn is_monkeypatch_scaffolding_literal_cluster(snippets: &[Snippet<'_>]) -> bool {
     snippets.iter().all(is_monkeypatch_scaffolding_literal)

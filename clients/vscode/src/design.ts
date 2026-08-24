@@ -25,9 +25,10 @@ export const COLOR = {
   ghostBorder: "rgba(90, 64, 61, 0.2)",
 } as const;
 
-// Severity ramp per [LSP-SEVERITY] + [VSIX-LIVE-BUBBLE]:
-// Crimson is the surgical tool, reserved for the worst offenders.
-// Amber uses primary; mid uses tertiary blue; faint uses the on-surface muted grey.
+// Percentile ramp per [LSP-SEVERITY-PERCENTILE]. Drives the *filter facet*
+// and the webview badge, which both sort by impact. It is NOT the paint:
+// [SEVERITY-COLOR] gives colour to the bucket, and using this ramp to paint
+// an editor surface is what made rank-1 shape-only scaffolding crimson.
 export const SEVERITY_COLOR = {
   worst: COLOR.primaryContainer,
   top10: COLOR.primary,
@@ -35,6 +36,19 @@ export const SEVERITY_COLOR = {
   faint: COLOR.onSurfaceMuted,
 } as const;
 
+// [SEVERITY-COLOR] The paint. Keyed by the Deslop severity level, which is a
+// function of the bucket alone ([SEVERITY-DESLOP-MAP]), so an occurrence is
+// coloured by what kind of duplicate it is and never by where it happens to
+// sort. Same four tokens as the percentile ramp — crimson is still the
+// surgical tool — but earned by evidence rather than by position.
+export const DESLOP_SEVERITY_COLOR = {
+  error: COLOR.primaryContainer,
+  warning: COLOR.primary,
+  information: COLOR.tertiary,
+  hint: COLOR.onSurfaceMuted,
+} as const;
+
+// Glyph density per [SEVERITY-COLOR]: the weight-percentile channel.
 export const SEVERITY_DOT = {
   worst: "●●",
   top10: "●",

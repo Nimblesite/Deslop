@@ -1,6 +1,6 @@
-# Competitive landscape + where Deslop wins
+# Competitive landscape
 
-Clone detection is a 20-year-old problem; a dozen tools exist. None of them ship the four-way combination Deslop targets: **deterministic hybrid core + long-running LSP daemon + MCP for AI agents + first-class VSIX with live Ollama model selection**. This doc inventories the field and locks in the feature bar we must clear to be the default choice.
+This document compares Deslop's deterministic hybrid core, LSP daemon, MCP surface, and VSIX with existing clone detectors.
 
 ### The field (2024–2026)
 
@@ -14,7 +14,7 @@ Clone detection is a 20-year-old problem; a dozen tools exist. None of them ship
 | **SonarQube / SonarLint** | Token with per-language tokenisers | SaaS + self-host + IDE plugin | Near-live on save | Type-1/2 | Commercial | File-level metric, no cross-file refactor targeting, no MCP, expensive enterprise tier. |
 | **JetBrains "Duplicated Code" inspection** | AST (PSI) with anonymisation | Bundled in IntelliJ/Rider/PyCharm/RustRover | In-IDE live on open file | Good Type-2/3 | Active | Ultimate-only for project-wide; no headless CLI; no MCP; no export; locked to JetBrains IDEs. |
 
-#### Research-grade (not shippable as-is)
+#### Research prototypes
 
 | Tool | Status |
 |---|---|
@@ -62,7 +62,7 @@ Breaking the niche into four axes:
 - **MCP tool surface for AI agents** — zero clone detectors as of 2026-Q1. General code-search MCP servers exist (Serena, ast-grep wrappers) but none rank clones, and none let an agent ask *"is the block I'm about to write already a clone?"* ([MCP-TOOL-FINDSIMILAR]).
 - **Local Ollama embedding selection for Type-4** — no clone detector exposes this. Continue.dev and some RAG tools let you pick embedding models, but they're not clone-specific.
 
-**Deslop is the only product that ships all four.** Anyone building the same combination has to rebuild the hybrid core — and we already spent P0–P6 on that.
+No compared product ships all four axes.
 
 ### Features we must clear
 

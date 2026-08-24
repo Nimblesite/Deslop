@@ -102,7 +102,7 @@ pub trait EmbeddingProvider: std::fmt::Debug + Send + Sync {
 
     /// Maximum source characters this provider accepts in one input.
     /// Subtrees longer than this are counted as failures and never
-    /// dispatched ([FUSION-EMBED-PROVIDER], #82).
+    /// dispatched ([FUSION-EMBED-PROVIDER]).
     ///
     /// The budget belongs to the provider because it is a property of
     /// the model behind it — `nomic-embed-text` reports a 2,048-token
@@ -110,7 +110,7 @@ pub trait EmbeddingProvider: std::fmt::Debug + Send + Sync {
     /// cannot be right for both: too generous and the provider
     /// silently truncates, too tight and the largest subtrees — the
     /// ones re-derived duplication hurts most — are dropped from the
-    /// index with only `failed_subtrees` to show for it (#286).
+    /// index with only `failed_subtrees` to show for it.
     ///
     /// The conservative default is what every provider got before the
     /// budget became overridable; implementations that know their

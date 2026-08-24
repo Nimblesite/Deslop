@@ -23,6 +23,7 @@ import {
 } from "./binary";
 import { log, logError, initOutputChannel } from "./logging";
 import { wireMcpRegistration } from "./mcpRegistration";
+import { wireNotifications, wireSessionReset } from "./notifications";
 import { promptToIgnoreCache } from "./gitignorePrompt";
 import { ReportStore } from "./reportStore";
 import { registerCommands } from "./commands/register";
@@ -44,13 +45,7 @@ import { LiveBubble } from "./bubble/live";
 import { StatusBar } from "./commands/statusBar";
 import { registerCompareProvider } from "./compare/provider";
 import { registerClusterDocumentProvider } from "./clusterDocument";
-import {
-  Report,
-  ReportChangedNotification,
-  ReportDelta,
-  AnalysisState,
-  EmbeddingProgress,
-} from "./types/report";
+import { Report } from "./types/report";
 
 let client: LanguageClient | undefined;
 let resolvedLsp: ResolvedBinary | undefined;
@@ -59,6 +54,8 @@ let mcpDefinition: vscode.McpStdioServerDefinition | undefined;
 let activeReportStore: ReportStore | undefined;
 
 const REPORT_READY_CONTEXT = "deslop.reportReady";
+const SET_CONTEXT_COMMAND = "setContext";
+const DESLOP_CONFIGURATION_NAMESPACE = "deslop";
 
 // Derived from the single language registry so a newly supported language
 // reaches the hover card and LSP document sync without a per-site edit
@@ -251,6 +248,10 @@ export async function activate(
 
   if (client) {
     reportStore.setLifecycle({ kind: "analysing" });
+    // Armed before start() so the initial Running transition is counted
+    // as session one — subscribing later would make the first *restart*
+    // look like the initial session and skip its reset.
+    context.subscriptions.push(wireSessionReset(client, reportStore));
     try {
       await client.start();
     } catch (err) {
@@ -312,19 +313,19 @@ export function currentApi(): ExtensionApi {
 // buttons, and the filter button its active-filter icon state. Unknown
 // / missing values fall back to the spec defaults — never throws.
 export function syncTopOffendersContext(): void {
-  const cfg = vscode.workspace.getConfiguration("deslop");
+  const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
   const groupBy = normalizeGroupBy(cfg.get<string>("topOffenders.groupBy", "cluster"));
   const sortBy = cfg.get<string>("topOffenders.sortBy", "impact") === "path" ? "path" : "impact";
   const splitByLanguage = cfg.get<boolean>("topOffenders.splitByLanguage", false) === true;
-  void vscode.commands.executeCommand("setContext", "deslop.topOffendersGroupBy", groupBy);
-  void vscode.commands.executeCommand("setContext", "deslop.topOffendersSortBy", sortBy);
+  void vscode.commands.executeCommand(SET_CONTEXT_COMMAND, "deslop.topOffendersGroupBy", groupBy);
+  void vscode.commands.executeCommand(SET_CONTEXT_COMMAND, "deslop.topOffendersSortBy", sortBy);
   void vscode.commands.executeCommand(
-    "setContext",
+    SET_CONTEXT_COMMAND,
     "deslop.topOffendersSplitByLanguage",
     splitByLanguage,
   );
   void vscode.commands.executeCommand(
-    "setContext",
+    SET_CONTEXT_COMMAND,
     "deslop.topOffendersFiltered",
     isTopOffendersFilterActive(),
   );
@@ -332,7 +333,7 @@ export function syncTopOffendersContext(): void {
 
 export function syncReportReadyContext(store: ReportStore): void {
   void vscode.commands.executeCommand(
-    "setContext",
+    SET_CONTEXT_COMMAND,
     REPORT_READY_CONTEXT,
     store.current.report !== null,
   );
@@ -369,7 +370,7 @@ export function startLanguageClient(
   const clientOptions: LanguageClientOptions = {
     documentSelector: ANALYSED_DOCUMENTS,
     synchronize: {
-      configurationSection: "deslop",
+      configurationSection: DESLOP_CONFIGURATION_NAMESPACE,
       fileEvents: vscode.workspace.createFileSystemWatcher("**/*.{cs,rs,py}"),
     },
     outputChannel: initOutputChannel(),
@@ -381,7 +382,7 @@ export function startLanguageClient(
     // (registered separately), which stacks alongside the language
     // server's hover instead of replacing it.
   };
-  return new LanguageClient("deslop", "Deslop", serverOptions, clientOptions);
+  return new LanguageClient(DESLOP_CONFIGURATION_NAMESPACE, "Deslop", serverOptions, clientOptions);
 }
 
 export function buildServerArgs(
@@ -390,7 +391,7 @@ export function buildServerArgs(
 ): string[] {
   if (!workspaceRoot) return debug ? ["--debug"] : [];
   const args = [workspaceRoot];
-  const cfg = vscode.workspace.getConfiguration("deslop");
+  const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
   const workerThreads = cfg.get<number>("lsp.workerThreads", 0);
   if (Number.isInteger(workerThreads) && workerThreads > 0) {
     args.push("--worker-threads", String(workerThreads));
@@ -417,7 +418,7 @@ export function resolveWorkspaceRoot(): string | undefined {
 }
 
 export function currentInitializationOptions(): Record<string, unknown> {
-  const cfg = vscode.workspace.getConfiguration("deslop");
+  const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
   const embedding = embeddingSettingsFromConfiguration(cfg);
   return {
     minNodes: cfg.get<number>("minNodes", 30),
@@ -454,70 +455,6 @@ function embeddingSettingsFromConfiguration(
   };
 }
 
-export async function refreshAfterChange(
-  c: LanguageClient,
-  store: ReportStore,
-  payload: ReportChangedNotification,
-): Promise<void> {
-  // Pull the delta spanning the store's own baseline (#230). Without a
-  // `since_generation` the server defaults to `current - 1`, which only spans
-  // one generation — so a client that missed a `reportChanged` (lagged
-  // broadcast or async gap) would merge a delta that never retracts the
-  // clusters dropped in the skipped generations, leaving them as phantoms.
-  const delta = await c.sendRequest<ReportDelta | null>("deslop/reportDelta", {
-    since_generation: store.current.generation,
-  });
-  // applyDelta rejects (returns false) when no report is seeded yet or the
-  // delta's baseline does not match the store's generation. Either way fall
-  // back to the full snapshot so the store converges to the live engine.
-  if (delta && store.applyDelta(delta)) return;
-  const snapshot = await c.sendRequest<Report>("deslop/reportGet");
-  store.setSnapshot(snapshot, payload.generation);
-}
-
-async function refreshAfterEmbedding(
-  c: LanguageClient,
-  store: ReportStore,
-): Promise<void> {
-  const snapshot = await c.sendRequest<Report>("deslop/reportGet");
-  store.setSnapshot(snapshot, store.current.generation + 1);
-}
-
-export function wireNotifications(c: LanguageClient, store: ReportStore): void {
-  c.onNotification(
-    "deslop/reportChanged",
-    (payload: ReportChangedNotification) => {
-      refreshAfterChange(c, store, payload).catch((err: unknown) =>
-        logError(err, "refresh report after change"),
-      );
-    },
-  );
-  c.onNotification("deslop/analysisState", (state: AnalysisState) => {
-    log("analysis state", { state });
-    if (state.state === "running") store.setLifecycle({ kind: "analysing" });
-    else if (state.state === "idle") store.setLifecycle({ kind: "ready" });
-    else if (state.state === "errored") {
-      store.setLifecycle({
-        kind: "failed",
-        message: state.message,
-      });
-    }
-  });
-  c.onNotification(
-    "deslop/embeddingProgress",
-    (progress: EmbeddingProgress) => {
-      if (progress.phase === "complete") {
-        store.setEmbeddingProgress(null);
-        refreshAfterEmbedding(c, store).catch((err: unknown) =>
-          logError(err, "refresh report after embedding"),
-        );
-      } else {
-        store.setEmbeddingProgress(progress);
-      }
-    },
-  );
-}
-
 export function wireDirtyDocuments(store: ReportStore): vscode.Disposable {
   // [VSIX-STATE-DIRTY]: text edits add to the dirty set so the visible
   // projection elides their occurrences; saves remove the file from the set
@@ -542,7 +479,7 @@ export async function syncEmbeddingSettingsToLsp(
 ): Promise<void> {
   const c = clientOf();
   if (!c) return;
-  const cfg = vscode.workspace.getConfiguration("deslop");
+  const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
   const { provider, model, endpoint, mode } = embeddingSettingsFromConfiguration(cfg);
   if (mode === "off") return;
   if (store.current.pendingEmbeddingModel === model) return;
@@ -588,7 +525,7 @@ export function tryResolveOptional(
 }
 
 export function currentBinarySettings(): BinarySettings {
-  const cfg = vscode.workspace.getConfiguration("deslop");
+  const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
   return {
     lspPath: cfg.get<string>("lspPath", ""),
     mcpPath: cfg.get<string>("mcpPath", ""),

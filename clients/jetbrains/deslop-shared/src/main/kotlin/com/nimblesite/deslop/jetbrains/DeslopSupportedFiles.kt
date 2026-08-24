@@ -3,27 +3,29 @@ package com.nimblesite.deslop.jetbrains
 import com.intellij.openapi.vfs.VirtualFile
 
 object DeslopSupportedFiles {
+    /** A language's display name and the file extensions that reach it. */
+    private data class LanguageInfo(val label: String, val fileExtensions: Set<String>)
+
     /**
-     * File extension → human display language name: the single source of truth for
-     * both [extensions] (derived from these keys) and the Language grouping-axis label
-     * in the worst-offenders tree. Adding a language here extends analysis start-up and
-     * grouping together, so the two surfaces cannot drift out of sync.
+     * Engine language id → display name and file extensions: the single source of
+     * truth for [extensions] (which files start the server), for [languageLabel]
+     * (an extension's display name), and for [languageName] (the display name of
+     * the language id the engine stamps on a cluster). The ids are the parser
+     * registry's own ([PIPELINE-LANG-TRAIT]), so a cluster's language is looked up
+     * here rather than re-derived from its path. Adding a language here extends
+     * analysis start-up and grouping together, so the surfaces cannot drift apart.
      */
-    private val languageLabels: Map<String, String> = mapOf(
-        "cs" to "C#",
-        "rs" to "Rust",
-        "py" to "Python",
-        "dart" to "Dart",
-        "js" to "JavaScript",
-        "mjs" to "JavaScript",
-        "cjs" to "JavaScript",
-        "jsx" to "JavaScript",
-        "ts" to "TypeScript",
-        "tsx" to "TypeScript",
-        "php" to "PHP",
-        "fs" to "F#",
-        "fsx" to "F#",
-        "go" to "Go",
+    private val languages: Map<String, LanguageInfo> = mapOf(
+        "csharp" to LanguageInfo("C#", setOf("cs")),
+        "rust" to LanguageInfo("Rust", setOf("rs")),
+        "python" to LanguageInfo("Python", setOf("py")),
+        "dart" to LanguageInfo("Dart", setOf("dart")),
+        "javascript" to LanguageInfo("JavaScript", setOf("js", "mjs", "cjs", "jsx")),
+        "typescript" to LanguageInfo("TypeScript", setOf("ts")),
+        "tsx" to LanguageInfo("TypeScript", setOf("tsx")),
+        "php" to LanguageInfo("PHP", setOf("php")),
+        "fsharp" to LanguageInfo("F#", setOf("fs", "fsx")),
+        "go" to LanguageInfo("Go", setOf("go")),
     )
 
     /** Display name for a path whose extension is not one Deslop analyses. */
@@ -36,7 +38,7 @@ object DeslopSupportedFiles {
      * match exactly — the native surface and the LSP4IJ surface must agree on which
      * files start the server. Keep in lockstep with the languages deslop-lsp parses.
      */
-    val extensions: Set<String> = languageLabels.keys
+    val extensions: Set<String> = languages.values.flatMapTo(mutableSetOf(), LanguageInfo::fileExtensions)
 
     fun includes(file: VirtualFile): Boolean =
         !file.isDirectory && supportsExtension(file.extension)
@@ -55,6 +57,17 @@ object DeslopSupportedFiles {
      * stripped): the Language grouping-axis label in the worst-offenders tree. Unknown
      * or absent extensions map to [OTHER_LANGUAGE] so every cluster lands in a group.
      */
-    fun languageLabel(extension: String?): String =
-        extension?.lowercase()?.let(languageLabels::get) ?: OTHER_LANGUAGE
+    fun languageLabel(extension: String?): String {
+        val normalised = extension?.lowercase() ?: return OTHER_LANGUAGE
+        return languages.values.firstOrNull { normalised in it.fileExtensions }?.label ?: OTHER_LANGUAGE
+    }
+
+    /**
+     * Human display name for the language id the engine stamped on a cluster
+     * ([PIPELINE-LANG-TRAIT]). Unknown or absent ids map to [OTHER_LANGUAGE] so
+     * every cluster lands in a group — including one from a report written
+     * before the engine carried the field.
+     */
+    fun languageName(languageId: String?): String =
+        languages[languageId?.lowercase()]?.label ?: OTHER_LANGUAGE
 }

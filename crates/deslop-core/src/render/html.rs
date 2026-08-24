@@ -29,7 +29,7 @@ use crate::{
         html_footer::write_run_details,
     },
     report::{Report, ReportCluster, ReportOccurrence},
-    report_location::format_occurrence,
+    report_location::{diff_badge, format_occurrence},
     report_metrics::ThresholdSource,
 };
 
@@ -162,12 +162,12 @@ fn write_intro(out: &mut String, report: &Report, split_by_language: bool) {
 }
 
 /// Writes the repo-wide duplication banner per [METRICS-REPO]. Colour
-/// comes from a class selector driven by the threshold verdict so
-/// themes override it cleanly:
+/// comes from a class selector driven by the **governing** threshold
+/// verdict so themes override it cleanly:
 /// `metrics-banner--ok` (green) / `--breached` (red) / `--neutral`.
 fn write_metrics_banner(out: &mut String, report: &Report) {
-    let metrics = &report.metrics;
-    let variant = match (metrics.threshold.source, metrics.threshold.breached) {
+    let governing = governing_threshold(report);
+    let variant = match (governing.source, governing.breached) {
         (ThresholdSource::None, _) => "neutral",
         (_, true) => "breached",
         (_, false) => "ok",
@@ -179,20 +179,38 @@ fn write_metrics_banner(out: &mut String, report: &Report) {
     );
 }
 
+/// The gate that governs the banner colour and the run's exit code:
+/// the diff-scoped threshold when the CLI resolved one onto the diff
+/// (`--only-changed`), otherwise the repo-wide threshold
+/// ([METRICS-DIFF-SCOPE]). The page must never render green while the
+/// run exited breached.
+fn governing_threshold(report: &Report) -> &crate::report_metrics::ThresholdSummary {
+    match report.metrics.diff.as_ref() {
+        Some(diff) if !matches!(diff.threshold.source, ThresholdSource::None) => &diff.threshold,
+        _ => &report.metrics.threshold,
+    }
+}
+
 /// Plain-English metrics + threshold sentence rendered inside the
 /// banner. Kept as text (not HTML) so escaping is uniform with the
 /// rest of the intro.
 fn metrics_banner_text(report: &Report) -> String {
     let metrics = &report.metrics;
+    // Repo-scoped figure: under `--only-changed`, `clusters_total`
+    // follows the filtered body ([METRICS-REPO]), so the repo-wide
+    // count is body + omitted ([METRICS-DIFF-SCOPE]).
+    let repo_clusters = metrics
+        .clusters_total
+        .saturating_add(report.clusters_outside_diff.unwrap_or(0));
     let head = format!(
         "repo: {pct:.1}% duplicated ({dup} / {total} LOC, {clusters} clusters across {files} files)",
         pct = metrics.duplication_percent,
         dup = metrics.duplicated_loc,
         total = metrics.analysed_loc,
-        clusters = metrics.clusters_total,
+        clusters = repo_clusters,
         files = metrics.duplicated_files,
     );
-    match metrics.threshold.source {
+    let mut sentence = match metrics.threshold.source {
         ThresholdSource::None => head,
         ThresholdSource::Cli | ThresholdSource::Config => {
             let verdict = if metrics.threshold.breached {
@@ -205,7 +223,57 @@ fn metrics_banner_text(report: &Report) -> String {
                 pct = metrics.threshold.percent
             )
         }
+    };
+    sentence.push_str(&diff_banner_text(report));
+    sentence
+}
+
+/// Diff-scoped tail of the metrics banner ([METRICS-DIFF-SCOPE]):
+/// added-line duplication, the governing diff-gate verdict when the
+/// CLI resolved one, and under `--only-changed` the four-figure delta.
+/// Empty on a no-diff run so the banner stays byte-identical.
+fn diff_banner_text(report: &Report) -> String {
+    let Some(diff) = report.metrics.diff.as_ref() else {
+        return String::new();
+    };
+    let mut tail = format!(
+        " · diff: {pct:.1}% of added lines duplicated ({dup} / {added} added LOC)",
+        pct = diff.duplication_percent,
+        dup = diff.duplicated_added_loc,
+        added = diff.added_loc,
+    );
+    if !matches!(diff.threshold.source, ThresholdSource::None) {
+        let verdict = if diff.threshold.breached {
+            "breached"
+        } else {
+            "ok"
+        };
+        let _ = write!(
+            tail,
+            " · diff threshold {pct:.2}% ({verdict})",
+            pct = diff.threshold.percent,
+        );
     }
+    tail.push_str(&diff_delta_segment(report));
+    tail
+}
+
+/// The `--only-changed` delta segment: newly introduced, cross-file
+/// with untouched code (#364's requested classification), and the
+/// omitted count. Empty unless the filter ran.
+fn diff_delta_segment(report: &Report) -> String {
+    let Some(outside) = report.clusters_outside_diff else {
+        return String::new();
+    };
+    let newly = report
+        .clusters
+        .iter()
+        .filter(|cluster| cluster.is_newly_introduced == Some(true))
+        .count();
+    let cross_file = report.clusters.len().saturating_sub(newly);
+    format!(
+        " · {newly} newly introduced group(s), {cross_file} cross-file with untouched code, {outside} untouched group(s) omitted",
+    )
 }
 
 /// Builds the plain-English intro line. Avoids jargon; says what was
@@ -402,7 +470,7 @@ pub(super) fn write_cluster_card(
     };
     let _ = write!(
         out,
-        "<article class=\"cluster-card {kind_class} cat-{category_class}\">\
+        "<article class=\"cluster-card {kind_class} cat-{category_class}{diff_class}\">\
          <header class=\"cluster-card__head\">\
          <h3 class=\"cluster-card__title\">{title}</h3>\
          {ai_badge}{category_chip}\
@@ -411,6 +479,7 @@ pub(super) fn write_cluster_card(
          <p class=\"cluster-card__action\">{action}</p>",
         kind_class = kind_class(kind),
         category_class = category.wire_label(),
+        diff_class = diff_card_class(cluster),
         title = escape(&kind_title(kind, occurrences.len())),
         category_chip = category_chip(category),
         cost = escape(&cost_chip(cluster)),
@@ -419,6 +488,28 @@ pub(super) fn write_cluster_card(
     write_example(out, occurrences, snippets);
     write_also_list(out, occurrences, snippets);
     let _ = write!(out, "</article>");
+}
+
+/// Card class suffix for a cluster the verified diff touches
+/// ([OUTPUT-SCHEMA-DIFF-TAGS]): `" in-diff"` when any non-hidden
+/// occurrence carries added lines, empty otherwise — including on
+/// no-diff runs, so their markup stays byte-identical.
+fn diff_card_class(cluster: &ReportCluster) -> &'static str {
+    match cluster.intersects_diff {
+        Some(true) => " in-diff",
+        Some(false) | None => "",
+    }
+}
+
+/// Badge markup for an occurrence's diff membership, sourced from the
+/// shared [`diff_badge`] helper. Empty on a no-diff run.
+fn diff_badge_markup(in_diff: Option<bool>) -> String {
+    diff_badge(in_diff).map_or_else(String::new, |badge| {
+        format!(
+            " <span class=\"diff-badge\">{badge}</span>",
+            badge = escape(badge),
+        )
+    })
 }
 
 /// Renders the `data table` category chip for the card header, or an empty
@@ -455,11 +546,12 @@ fn write_example(
     };
     let language = language_for_path(&example.path);
     let location = snippets.location(&example.path, example.start_byte);
+    let badge = diff_badge_markup(example.in_diff);
     match snippets.snippet(&example.path, example.start_byte, example.end_byte) {
         Some((source, start_line)) => {
             let _ = write!(
                 out,
-                "<p class=\"cluster-card__example\">Example — {location}</p>",
+                "<p class=\"cluster-card__example\">Example — {location}{badge}</p>",
                 location = escape(&location),
             );
             out.push_str(&render_snippet_body(&source, start_line, language));
@@ -467,7 +559,7 @@ fn write_example(
         None => {
             let _ = write!(
                 out,
-                "<p class=\"cluster-card__example\">Example — {location}</p>\
+                "<p class=\"cluster-card__example\">Example — {location}{badge}</p>\
                  <p class=\"snippet-missing\">Source unavailable on disk.</p>",
                 location = escape(&location),
             );
@@ -518,8 +610,9 @@ fn write_also_item(out: &mut String, occ: &ReportOccurrence, snippets: &mut Snip
     let location = snippets.location(&occ.path, occ.start_byte);
     let _ = write!(
         out,
-        "<li class=\"{class}\">{location}<span class=\"also-loc\">{suffix}</span></li>",
+        "<li class=\"{class}\">{location}{badge}<span class=\"also-loc\">{suffix}</span></li>",
         location = escape(&location),
+        badge = diff_badge_markup(occ.in_diff),
     );
 }
 

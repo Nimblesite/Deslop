@@ -11,28 +11,25 @@ import { openCanonicalOccurrence } from "../../commands/register";
 import { canonicalOccurrenceForCluster } from "../../commands/treeMenus";
 import { ClusterNode } from "../../tree/providers";
 import { ReportCluster } from "../../types/report";
+import { wireCluster } from "../cluster.helpers";
+import { bucketSignals } from "../signals.helpers";
 
 function clusterWithRanges(
   id: string,
   occurrences: { path: string; start_byte: number; end_byte: number }[],
 ): ReportCluster {
-  return {
+  return wireCluster({
     id,
     weight: 10,
-    size: occurrences.length,
-    canonical_node_count: 4,
     bucket: "identical",
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+    signals: bucketSignals("identical"),
     occurrences: occurrences.map((o) => ({ ...o, hidden: false })),
-    occurrences_total: 0,
-    occurrences_truncated: false,
-    summary: "",
     interpretation: "interp",
-  };
+  });
 }
 
 function clusterNodeFor(c: ReportCluster): ClusterNode {
-  return new ClusterNode(c, 1, "mid");
+  return new ClusterNode(c, "mid");
 }
 
 suite("canonical file command", () => {

@@ -103,6 +103,9 @@ impl EmbeddingRefreshJob {
                 model_id: self.spec.model_id.clone(),
                 done,
                 total: self.total,
+                // One percentage engine ([METRICS-REPO]) — clients render
+                // this value and never divide `done` by `total`.
+                percent: crate::report_metrics::percent(done, self.total),
                 message,
             });
         }
@@ -175,12 +178,88 @@ pub(super) fn run_embedding_refresh(
         embedding,
     );
     match outcome {
-        Ok((_, report)) => Ok((job, report)),
+        Ok((_, report)) => admit_refresh_report(job, report),
         Err(error) => Err(FailedEmbeddingRefresh {
             job: Box::new(job),
             message: LiveError::from(error).to_string(),
         }),
     }
+}
+
+/// Admits a refreshed report only when the pass produced embeddings.
+///
+/// [LIVE-EMBEDDING-CONSENT] terminal-phase rule (GH #370): the terminal
+/// phase is a function of the embeddings the pass produced, never of
+/// whether the pipeline returned a report. A refresh that produced none
+/// is a typed failure — it must terminate `failed` with `done = 0` and
+/// leave the last good report untouched, not commit an embeddings-off
+/// snapshot announced as `complete`.
+///
+/// Two shapes of "produced none" reach here, and both are failures:
+///
+/// - **The provider rejected everything.** Provenance records
+///   `indexed = 0` against a non-zero `failed` — see [`rejection_message`].
+/// - **The pass never ran.** A refresh always carries an explicitly
+///   selected provider and runs under [`EmbeddingMode::Auto`], and
+///   `pipeline::run_embedding_pass` deliberately swallows a provider
+///   error in that mode ("continuing without Type-4 recall"), returning
+///   a report with **no** provenance at all. That is the right call for
+///   an automatic pass and the wrong one for a model the user chose: a
+///   provider that answered the selection probe and was gone by the time
+///   the refresh ran would otherwise commit an embeddings-off snapshot
+///   announced as `complete`. Absent provenance is therefore absent
+///   embeddings, never a silent success.
+///
+/// Pinned from both directions by
+/// `deslop-lsp/tests/embedding_failure_progress.rs`:
+/// `rejected_embedding_refresh_reports_failure_and_preserves_last_good_report`
+/// and `vanished_provider_refresh_reports_failure_and_preserves_last_good_report`.
+fn admit_refresh_report(
+    job: EmbeddingRefreshJob,
+    report: Report,
+) -> Result<(EmbeddingRefreshJob, Report), FailedEmbeddingRefresh> {
+    match no_embeddings_message(report.embedding_provenance.as_ref(), &job.spec) {
+        None => Ok((job, report)),
+        Some(message) => Err(FailedEmbeddingRefresh {
+            job: Box::new(job),
+            message,
+        }),
+    }
+}
+
+/// Returns the user-facing failure message when a refresh produced no
+/// embeddings, or `None` when it indexed at least one subtree.
+fn no_embeddings_message(
+    provenance: Option<&EmbeddingProvenance>,
+    spec: &EmbeddingSpec,
+) -> Option<String> {
+    let Some(provenance) = provenance else {
+        return Some(format!(
+            "Embedding refresh produced no embeddings: the {provider}/{model} pass \
+             did not run — the provider was unreachable or its model unavailable. \
+             The previous report is unchanged.",
+            provider = spec.provider_id,
+            model = spec.model_id,
+        ));
+    };
+    rejection_message(provenance)
+}
+
+/// Returns the user-facing failure message when the provider rejected
+/// every attempted subtree, or `None` when the pass indexed anything.
+fn rejection_message(provenance: &EmbeddingProvenance) -> Option<String> {
+    if provenance.indexed_subtrees > 0 || provenance.failed_subtrees == 0 {
+        return None;
+    }
+    Some(format!(
+        "Embedding refresh produced no embeddings: {provider}/{model} rejected \
+         all {failed} of {attempted} attempted subtrees. The previous report \
+         is unchanged.",
+        provider = provenance.provider_id,
+        model = provenance.model_id,
+        failed = provenance.failed_subtrees,
+        attempted = provenance.attempted_subtrees,
+    ))
 }
 
 /// Returns the queued progress message shown to clients.

@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">Which Deslop connection or command to use</title>
+  <desc id="description">A coding agent checks proposed code through MCP, a developer sees live findings through the editor, and CI scans saved code through the command line. All three use Deslop's shared analysis and report model.</desc>
+  <rect width="1600" height="1000" fill="#0b0d10"/>
+
+  <text x="86" y="92" fill="#ff8c85" font-family="JetBrains Mono, monospace" font-size="23" font-weight="700" letter-spacing="5">WHICH TOOL TO USE</text>
+  <text x="86" y="168" fill="#e8eaed" font-family="Inter, sans-serif" font-size="62" font-weight="800" letter-spacing="-2">Choose by what you are doing.</text>
+
+  <g transform="translate(86 246)">
+    <rect width="442" height="360" fill="#fafaf7"/>
+    <rect width="442" height="12" fill="#b3261e"/>
+    <text x="36" y="62" fill="#b3261e" font-family="JetBrains Mono, monospace" font-size="20" font-weight="700" letter-spacing="3">BEFORE WRITING</text>
+    <text x="36" y="128" fill="#14161a" font-family="Inter, sans-serif" font-size="43" font-weight="800">Coding agent</text>
+    <text x="36" y="188" fill="#55606b" font-family="Inter, sans-serif" font-size="24">Ask whether proposed code</text>
+    <text x="36" y="222" fill="#55606b" font-family="Inter, sans-serif" font-size="24">already exists.</text>
+    <rect x="36" y="268" width="370" height="56" fill="#f1efe8"/>
+    <text x="60" y="304" fill="#14161a" font-family="JetBrains Mono, monospace" font-size="20" font-weight="700">find-similar · MCP</text>
+  </g>
+
+  <g transform="translate(579 246)">
+    <rect width="442" height="360" fill="#fafaf7"/>
+    <rect width="442" height="12" fill="#0b5fff"/>
+    <text x="36" y="62" fill="#0b5fff" font-family="JetBrains Mono, monospace" font-size="20" font-weight="700" letter-spacing="3">WHILE EDITING</text>
+    <text x="36" y="128" fill="#14161a" font-family="Inter, sans-serif" font-size="43" font-weight="800">Developer</text>
+    <text x="36" y="188" fill="#55606b" font-family="Inter, sans-serif" font-size="24">See findings update as</text>
+    <text x="36" y="222" fill="#55606b" font-family="Inter, sans-serif" font-size="24">the source changes.</text>
+    <rect x="36" y="268" width="370" height="56" fill="#f1efe8"/>
+    <text x="60" y="304" fill="#14161a" font-family="JetBrains Mono, monospace" font-size="20" font-weight="700">editor views · LSP</text>
+  </g>
+
+  <g transform="translate(1072 246)">
+    <rect width="442" height="360" fill="#fafaf7"/>
+    <rect width="442" height="12" fill="#9a6700"/>
+    <text x="36" y="62" fill="#9a6700" font-family="JetBrains Mono, monospace" font-size="20" font-weight="700" letter-spacing="3">SAVED SOURCE</text>
+    <text x="36" y="128" fill="#14161a" font-family="Inter, sans-serif" font-size="43" font-weight="800">Terminal / CI</text>
+    <text x="36" y="188" fill="#55606b" font-family="Inter, sans-serif" font-size="24">Run one complete scan,</text>
+    <text x="36" y="222" fill="#55606b" font-family="Inter, sans-serif" font-size="24">write a report, then exit.</text>
+    <rect x="36" y="268" width="370" height="56" fill="#f1efe8"/>
+    <text x="60" y="304" fill="#14161a" font-family="JetBrains Mono, monospace" font-size="20" font-weight="700">deslop · CLI</text>
+  </g>
+
+  <path d="M307 606V688M800 606V688M1293 606V688" stroke="#9aa3ad" stroke-width="4"/>
+  <path d="M295 674L307 694L319 674M788 674L800 694L812 674M1281 674L1293 694L1305 674" fill="none" stroke="#9aa3ad" stroke-width="4"/>
+
+  <g transform="translate(86 704)">
+    <rect width="1428" height="174" fill="#13171c"/>
+    <rect width="18" height="174" fill="#b3261e"/>
+    <text x="56" y="58" fill="#ff8c85" font-family="JetBrains Mono, monospace" font-size="20" font-weight="700" letter-spacing="3">SAME ANALYSIS IMPLEMENTATION</text>
+    <text x="56" y="113" fill="#e8eaed" font-family="Inter, sans-serif" font-size="34" font-weight="760">Parse source  ·  compare code  ·  rank duplicate groups  ·  build the report</text>
+    <text x="56" y="150" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="21">Same labels and group IDs when root, version, configuration, and source state match.</text>
+  </g>
+
+  <text x="86" y="944" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="24">MCP and LSP carry requests and results. They do not contain separate matching rules.</text>
+</svg>

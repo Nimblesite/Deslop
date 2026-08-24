@@ -4,7 +4,7 @@
 
 ## Scope
 
-**This is the fallback after `[AUTOFIX-MERGE]`.** Leaf-gap Type-2 / constrained Type-3 clusters are now merged **mechanically** (no AI) by [autofix-extract-method-plan.md](autofix-extract-method-plan.md) Tier A — anti-unification derives parameter names mechanically. The AI path remains only for the residue `[AUTOFIX-MERGE-GATE]` routes to `AiOrHuman`: clusters with structural / control-flow drift (gaps not confined to leaf positions), Type-4 semantic clones, or cases where a generalising parameter **name** materially aids readability. Renamed-identifier Type-2 is no longer a reason to invoke AI.
+**This is the fallback after `[AUTOFIX-MERGE]`.** Leaf-gap Type-2 / constrained Type-3 clusters are now merged **mechanically** (no AI) by the shipped `[AUTOFIX-MERGE]` path ([autofix-extract.md](../specs/autofix-extract.md)) — anti-unification derives parameter names mechanically. The AI path remains only for the residue `[AUTOFIX-MERGE-GATE]` routes to `AiOrHuman`: clusters with structural / control-flow drift (gaps not confined to leaf positions), Type-4 semantic clones, or cases where a generalising parameter **name** materially aids readability. Renamed-identifier Type-2 is no longer a reason to invoke AI.
 
 Two MCP tools — `extract-method-plan` and `extract-method-apply` — handle that residue by combining a mechanical AST-derived scaffold with an AI-filled name slot. The AI picks a method name and one canonical name per parameter slot; Deslop synthesises the final `WorkspaceEdit` deterministically.
 
@@ -12,7 +12,7 @@ Non-goals: Type-2 via LSP `codeAction` (synchronous; AI round-trip is not), AI-g
 
 ## Hard dependencies
 
-1. **Type-1 path** ([autofix-extract-method-plan.md](autofix-extract-method-plan.md)) ships first. The slot-substitution layer extends the same emitter rather than forking it.
+1. **Type-1 path — shipped.** `[AUTOFIX-EXTRACT]` / `[AUTOFIX-MERGE]` / `[AUTOFIX-CONSOLIDATE]` are implemented ([autofix-extract.md](../specs/autofix-extract.md)). The slot-substitution layer extends the same emitter rather than forking it.
 2. **Issue [#42](https://github.com/Nimblesite/Deslop/issues/42) — shipped** (PR #63). The Type-1 / Type-2 split is the `[CLONE-BUCKETS-IDENTICAL]` byte-equivalence routing (no `kind_detail` field); the AI path detects renamed Type-2 as `NearlyIdentical` with `structural ≥ 0.99 ∧ token_jaccard ≥ 0.99` and non-byte-equivalent slices ([AUTOFIX-EXTRACT-AI-PRECONDITIONS]).
 3. `LanguageParser` slot-alignment method — takes N parse subtrees, returns `Option<SlotMapping>`. Same single extension point as parsing and Type-1 free-vars.
 
@@ -32,7 +32,7 @@ MCP wiring:
 
 ## Phases
 
-**Phase 0 — wait for Type-1.** No code lands until [autofix-extract-method-plan.md](autofix-extract-method-plan.md) Phase 5 is green.
+**Phase 0 — satisfied.** The mechanical Type-1 path shipped (`deslop-core::refactor`, [autofix-extract.md](../specs/autofix-extract.md)); this plan is unblocked.
 
 **Phase 1 — slot alignment for C#.** `LanguageParser::align_slots` plus E2E test with a fixture that has two methods differing only by identifier renames. Asserts a stable slot mapping, count, and per-slot candidate names.
 
@@ -64,7 +64,7 @@ MCP wiring:
 
 ## TODO
 
-- [ ] Block this plan on the Type-1 path landing ([autofix-extract-method-plan.md](autofix-extract-method-plan.md) Phase 5 green) and on issue [#42](https://github.com/Nimblesite/Deslop/issues/42).
+- [x] Blockers cleared: the mechanical Type-1 path shipped ([autofix-extract.md](../specs/autofix-extract.md)) and issue [#42](https://github.com/Nimblesite/Deslop/issues/42) shipped (PR #63).
 - [ ] Extend `LanguageParser` with `align_slots(occurrences) -> Option<SlotMapping>`. Update C# / Rust / Python implementations to compile (empty placeholder OK in the trait-change PR). Spec ID comment: `[AUTOFIX-EXTRACT-AI-NORTH-STAR]`.
 - [ ] Add `crates/deslop-core/src/refactor/scaffold.rs`. Spec ID comments throughout. E2E asserts JSON scaffold against a C# fixture golden.
 - [ ] Add `crates/deslop-core/src/refactor/slots.rs`. Spec ID comments. E2E covers slot-alignment success + arity-mismatch rejection.
@@ -74,4 +74,4 @@ MCP wiring:
 - [ ] Repeat slot-alignment + scaffold + apply + MCP E2E for Rust.
 - [ ] Repeat for Python.
 - [ ] Extend eligibility from Type-2 to slot-alignable Type-3. E2E covers both the success case and the arity-mismatch rejection. Spec ID comment: `[AUTOFIX-EXTRACT-AI-PRECONDITIONS]`.
-- [ ] Update [PLAN.md](PLAN.md) — move this plan to "Implemented" once Phase 6 is green.
+- [ ] Once Phase 6 is green, delete this file — shipped work lives in the spec and its tests, not in plans.

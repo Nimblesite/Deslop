@@ -2,7 +2,7 @@
 //!
 //! Suppresses clusters whose shape is fixed by a data declaration rather
 //! than by extractable duplicate logic, mirroring the Rust struct-field
-//! (#224) and Dart class-field (#169) filters for the ECMAScript family.
+//! and Dart class-field filters for the ECMAScript family.
 
 use tree_sitter::Node;
 
@@ -15,7 +15,7 @@ use super::{
 /// encode the structure of a value, not extractable logic. Two unrelated
 /// interfaces with the same field *shape* but different field *names*
 /// normalise to the same skeleton and would otherwise cluster as a top
-/// offender, exactly as renamed-field structs did for Rust (#224).
+/// offender, exactly as renamed-field structs did for Rust.
 ///
 /// Guarded like the Rust/Dart field filters: suppressed only when at least
 /// two members differ in raw bytes, so a *verbatim* copy-pasted interface

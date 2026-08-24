@@ -3,60 +3,30 @@
 
 import * as assert from "node:assert/strict";
 import { ReportStore } from "../../reportStore";
-import { Report, ReportCluster, ReportDelta, RepoMetrics } from "../../types/report";
+import { Report, ReportDelta } from "../../types/report";
 
-function metrics(overrides: Partial<RepoMetrics> = {}): RepoMetrics {
-  return {
-    analysed_loc: 0,
-    duplicated_loc: 0,
-    duplication_percent: 0,
-    clusters_total: 0,
-    duplicated_files: 0,
-    threshold: { percent: 0, breached: false, source: "none" },
-    per_file: [],
-    ...overrides,
-  };
-}
+import { cluster, delta, emptyReport, metrics, occurrence } from "./report-store.helpers";
 
-function emptyReport(overrides: Partial<Report> = {}): Report {
-  return {
-    tool_version: "tool-v1",
-    min_nodes: 30,
-    files_analysed: 0,
-    clusters_hidden: 0,
-    cache_stats: { hits: 0, misses: 0 },
-    metrics: metrics(),
-    schema_doc: "",
-    action_hints: [],
-    boilerplate_hints: [],
-    embedding_provenance: undefined,
-    clusters: [],
-    ...overrides,
-  };
-}
 
-function occurrence(path: string, startByte = 0, endByte = 10) {
-  return { path, start_byte: startByte, end_byte: endByte, hidden: false };
-}
+/** The recomputed metrics every applyDelta case asserts against. */
+const DELTA_METRICS = metrics({
+  analysed_loc: 9367,
+  duplicated_loc: 1046,
+  duplication_percent: 11.2,
+});
+const EMBEDDING_MODEL_ID = "nomic-embed-text";
 
-function cluster(
-  id: string,
-  weight: number,
-  occurrences: ReportCluster["occurrences"] = [],
-): ReportCluster {
-  return {
-    id,
-    weight,
-    size: Math.max(1, occurrences.length),
-    canonical_node_count: 0,
-    bucket: "identical",
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
-    occurrences,
-    occurrences_total: occurrences.length,
-    occurrences_truncated: false,
-    summary: "",
-    interpretation: "",
-  };
+/**
+ * Applies one delta and returns the resulting report. Every applyDelta
+ * case respelled the same apply-then-assert-it-exists preamble; Deslop
+ * scored the copies against this repo's own corpus. The `assert.ok` also
+ * narrows `Report | undefined` for the caller's own assertions.
+ */
+function applyAndRead(store: ReportStore, overrides: Partial<ReportDelta>): Report {
+  store.applyDelta(delta(overrides));
+  const out = store.current.report;
+  assert.ok(out, "report must exist after applyDelta");
+  return out;
 }
 
 suite("ReportStore", () => {
@@ -69,6 +39,46 @@ suite("ReportStore", () => {
     store.setSnapshot(emptyReport(), 7);
     assert.equal(fired, 1);
     assert.equal(store.current.generation, 7);
+  });
+
+  // RA-05: the wire generation is not a freshness token — out-of-order
+  // refresh completions can relabel it backward and then forward again
+  // (ABA). The store owns a strictly monotonic revision instead, and it
+  // refuses a generation rollback outright.
+  test("revision advances on every accepted mutation and generation rollback is rejected", () => {
+    const store = new ReportStore();
+    assert.equal(store.current.revision, 0, "a fresh store starts at revision 0");
+
+    assert.equal(store.setSnapshot(emptyReport({ clusters: [cluster("a", 5)] }), 3), true);
+    assert.equal(store.current.revision, 1, "an accepted snapshot bumps the revision");
+    assert.equal(store.current.generation, 3);
+
+    // A stale completion labelled with an older generation: rejected whole.
+    assert.equal(store.setSnapshot(emptyReport({ clusters: [cluster("stale", 9)] }), 2), false);
+    assert.equal(store.current.generation, 3, "the generation never rolls backward");
+    assert.equal(store.current.revision, 1, "a rejected snapshot must not bump the revision");
+    assert.equal(store.current.report?.clusters[0]?.id, "a", "the content stays untouched");
+
+    // The ABA relabel: same generation, different content — accepted, and
+    // only the revision records that the world changed.
+    assert.equal(store.setSnapshot(emptyReport({ clusters: [cluster("b", 4)] }), 3), true);
+    assert.equal(store.current.revision, 2, "a same-generation replacement still advances the revision");
+    assert.equal(store.current.generation, 3, "the generation label reads 3 again");
+    assert.equal(store.current.report?.clusters[0]?.id, "b");
+
+    const applied = store.applyDelta({
+      from_generation: 3,
+      to_generation: 4,
+      clusters_added: [cluster("c", 2)],
+      clusters_removed: [],
+      clusters_updated: [],
+      metrics: metrics(),
+      cache_stats: { hits: 0, misses: 0 },
+      tool_version: "tool-v2",
+    });
+    assert.equal(applied, true);
+    assert.equal(store.current.revision, 3, "an applied delta bumps the revision");
+    assert.equal(store.current.generation, 4);
   });
 
   // [PRINCIPLES-LIVE-IS-REACTIVE] [VSIX reactivity] An empty report may be a
@@ -111,41 +121,46 @@ suite("ReportStore", () => {
     store.onDidChange(() => {
       fired += 1;
     });
-    const delta: ReportDelta = {
-      from_generation: 0,
-      to_generation: 1,
-      clusters_added: [],
-      clusters_removed: [],
-      clusters_updated: [],
-      metrics: metrics(),
-      cache_stats: { hits: 0, misses: 0 },
-      tool_version: "v",
-    };
-    store.applyDelta(delta);
+    store.applyDelta(
+      delta({
+        from_generation: 0,
+        to_generation: 1,
+        tool_version: "v",
+      }),
+    );
     assert.equal(fired, 0);
   });
 
-  test("applyDelta adds, updates, removes, and re-sorts by weight", () => {
+  test("applyDelta adds, updates, removes, and orders by the engine's rank", () => {
+    // The engine restamps the whole ranking on every generation, so the
+    // delta's clusters arrive carrying their new ranks and the merge
+    // orders on those — never on a weight comparison of its own, which
+    // would have to guess the engine's tie-break
+    // ([VSIX-TOP-OFFENDERS-RANK-GLOBAL], [PRINCIPLES-ONE-CALCULATION]).
     const store = new ReportStore();
-    const a = cluster("a", 1);
-    const b = cluster("b", 2);
+    const a = cluster("a", 2, [], 1);
+    const b = cluster("b", 1, [], 2);
     store.setSnapshot(emptyReport({ clusters: [a, b] }), 1);
-    const delta: ReportDelta = {
-      from_generation: 1,
-      to_generation: 2,
-      clusters_added: [cluster("c", 10)],
-      clusters_removed: ["a"],
-      clusters_updated: [cluster("b", 5)],
-      metrics: metrics(),
-      cache_stats: { hits: 3, misses: 4 },
-      tool_version: "v2",
-    };
-    store.applyDelta(delta);
+    store.applyDelta(
+      delta({
+        clusters_added: [cluster("c", 10, [], 1)],
+        clusters_removed: ["a"],
+        clusters_updated: [cluster("b", 5, [], 2)],
+        cache_stats: { hits: 3, misses: 4 },
+        tool_version: "v2",
+      }),
+    );
     const out = store.current.report;
     assert.ok(out, "report must exist after applyDelta");
     assert.deepEqual(
       out.clusters.map((c) => c.id),
       ["c", "b"],
+      "the merged list follows the ranks the engine published, worst first",
+    );
+    assert.deepEqual(
+      out.clusters.map((c) => c.rank),
+      [1, 2],
+      "and each cluster keeps the rank it arrived with",
     );
     assert.equal(out.cache_stats.hits, 3);
     assert.equal(out.tool_version, "v2");
@@ -165,19 +180,7 @@ suite("ReportStore", () => {
       }),
       1,
     );
-    const delta: ReportDelta = {
-      from_generation: 1,
-      to_generation: 2,
-      clusters_added: [],
-      clusters_removed: [],
-      clusters_updated: [],
-      metrics: metrics({ analysed_loc: 9367, duplicated_loc: 1046, duplication_percent: 11.2 }),
-      cache_stats: { hits: 0, misses: 0 },
-      tool_version: "tool-v1",
-    };
-    store.applyDelta(delta);
-    const out = store.current.report;
-    assert.ok(out, "report must exist after applyDelta");
+    const out = applyAndRead(store, { metrics: DELTA_METRICS });
     assert.equal(out.metrics.duplication_percent, 11.2, "headline percent must follow the delta");
     assert.equal(out.metrics.analysed_loc, 9367, "analysed LOC must follow the delta");
     assert.equal(out.metrics.duplicated_loc, 1046, "duplicated LOC must follow the delta");
@@ -195,166 +198,20 @@ suite("ReportStore", () => {
     const store = new ReportStore();
     store.setSnapshot(emptyReport(), 1);
     assert.equal(store.current.report?.metrics.duplicated_loc, 0, "seed starts clean");
-    const delta: ReportDelta = {
-      from_generation: 1,
-      to_generation: 2,
+    const out = applyAndRead(store, {
       clusters_added: [
         cluster("71a9ee9", 6191, [
           occurrence("crates/osprey-codegen/src/collections.rs", 0, 10),
           occurrence("crates/osprey-codegen/src/strings.rs", 0, 10),
         ]),
       ],
-      clusters_removed: [],
-      clusters_updated: [],
-      metrics: metrics({ analysed_loc: 9367, duplicated_loc: 1046, duplication_percent: 11.2 }),
-      cache_stats: { hits: 0, misses: 0 },
-      tool_version: "tool-v1",
-    };
-    store.applyDelta(delta);
-    const out = store.current.report;
-    assert.ok(out, "report must exist after applyDelta");
+      metrics: DELTA_METRICS,
+    });
     assert.equal(out.metrics.duplicated_loc, 1046, "duplicated LOC must follow the delta off zero");
     assert.equal(out.metrics.duplication_percent, 11.2, "headline percent must reflect the delta");
     assert.equal(out.clusters.length, 1, "the delta's cluster must populate Top Offenders");
   });
 
-  test("visibleReport elides dirty-file occurrences and singleton clusters; canonical report keeps everything (#78, #117, #130)", () => {
-    const store = new ReportStore();
-    let fired = 0;
-    store.onDidChange(() => {
-      fired += 1;
-    });
-    store.setSnapshot(
-      emptyReport({
-        clusters: [
-          cluster("only-dirty", 30, [occurrence("/repo/Dirty.cs", 10, 20)]),
-          cluster("mixed-singleton", 25, [
-            occurrence("/repo/Dirty.cs", 30, 40),
-            occurrence("/repo/Clean.cs", 50, 60),
-          ]),
-          cluster("mixed-peers", 20, [
-            occurrence("/repo/Dirty.cs", 70, 80),
-            occurrence("/repo/CleanA.cs", 90, 100),
-            occurrence("/repo/CleanB.cs", 110, 120),
-          ]),
-          cluster("untouched", 10, [
-            occurrence("/repo/OtherA.cs", 130, 140),
-            occurrence("/repo/OtherB.cs", 150, 160),
-          ]),
-        ],
-      }),
-      7,
-    );
-
-    store.markFileDirty("/repo/Dirty.cs");
-
-    // Canonical report: untouched. Every cluster the LSP reported is still
-    // resolvable so commands can look them up by id ([VSIX-STATE-DIRTY]).
-    const canonical = store.current.report;
-    assert.ok(canonical, "canonical report must remain available after markFileDirty");
-    assert.equal(store.current.generation, 7, "markFileDirty must not fake a fresh LSP generation");
-    assert.deepEqual(
-      canonical.clusters.map((c) => c.id),
-      ["only-dirty", "mixed-singleton", "mixed-peers", "untouched"],
-      "canonical report keeps every cluster the LSP published",
-    );
-    assert.equal(
-      canonical.clusters.find((c) => c.id === "mixed-peers")?.occurrences.length,
-      3,
-      "canonical occurrences are not mutated by client-side dirty tracking",
-    );
-
-    // Visible projection: dirty-file occurrences elided; clusters with fewer
-    // than two remaining peers dropped (#117).
-    const visible = store.current.visibleReport;
-    assert.ok(visible, "visible projection must be derived once a report is loaded");
-    assert.deepEqual(
-      visible.clusters.map((c) => c.id),
-      ["mixed-peers", "untouched"],
-      "visible projection drops singleton-after-dirty clusters and keeps rank order",
-    );
-    assert.deepEqual(
-      visible.clusters[0]?.occurrences.map((o) => o.path),
-      ["/repo/CleanA.cs", "/repo/CleanB.cs"],
-      "visible cluster keeps clean peer occurrences outside the edited file",
-    );
-    assert.equal(visible.clusters[0]?.size, 2, "visible count is reduced after pruning stale offsets");
-    assert.equal(visible.clusters[0]?.occurrences_total, 2, "wire total is reduced with visible count");
-    assert.ok(
-      visible.clusters.every((c) => c.occurrences.length >= 2),
-      "visible projection must not leave a one-copy top offender",
-    );
-    assert.equal(visible.metrics.clusters_total, 2, "visible metrics reflect the visible cluster count");
-    assert.equal(fired, 2, "setSnapshot and markFileDirty both notify subscribers");
-  });
-
-  test("clearFileDirty re-exposes occurrences in the visible projection (#130)", () => {
-    const store = new ReportStore();
-    store.setSnapshot(
-      emptyReport({
-        clusters: [
-          cluster("c", 10, [
-            occurrence("/repo/Alpha.cs", 0, 10),
-            occurrence("/repo/Beta.cs", 0, 10),
-          ]),
-        ],
-      }),
-      1,
-    );
-    store.markFileDirty("/repo/Alpha.cs");
-    assert.equal(
-      store.current.visibleReport?.clusters.length,
-      0,
-      "after dirty: visible projection elides the now-singleton cluster",
-    );
-    store.clearFileDirty("/repo/Alpha.cs");
-    assert.equal(
-      store.current.visibleReport?.clusters.length,
-      1,
-      "clearFileDirty restores the visible projection to the canonical view",
-    );
-    assert.equal(
-      store.current.visibleReport?.clusters[0]?.occurrences.length,
-      2,
-      "both occurrences are visible again once the file is no longer dirty",
-    );
-  });
-
-  // Regression: #130 (VSIX-STATE-DIRTY). Editor-side dirty tracking must not
-  // [PRINCIPLES-LIVE-IS-REACTIVE] Dirty-file projection must not
-  // mutate the canonical report. Commands that resolve a cluster by id
-  // (compareWithCanonical, openCluster, openOccurrence, ...) read
-  // store.current.report and break the moment a 2-occurrence cluster loses one
-  // peer to an unsaved edit. The canonical report is owned by the LSP — only
-  // deslop/reportChanged retracts a cluster.
-  test("markFileDirty leaves the canonical report intact so cluster ids stay resolvable (#130)", () => {
-    const store = new ReportStore();
-    const onlyCluster = cluster("only-cluster", 30, [
-      occurrence("/repo/Alpha.cs", 10, 20),
-      occurrence("/repo/Beta.cs", 30, 40),
-    ]);
-    store.setSnapshot(emptyReport({ clusters: [onlyCluster] }), 1);
-
-    store.markFileDirty("/repo/Alpha.cs");
-
-    const canonical = store.current.report;
-    assert.ok(canonical, "canonical report must remain available after markFileDirty");
-    const found = canonical.clusters.find((x) => x.id === "only-cluster");
-    assert.ok(
-      found,
-      "cluster id must stay resolvable in canonical report after markFileDirty so compareWithCanonical / openCluster / openOccurrence keep working",
-    );
-    assert.equal(
-      found.occurrences.length,
-      2,
-      "canonical occurrences must not be mutated by client-side dirty tracking — only deslop/reportChanged writes the canonical report",
-    );
-    assert.equal(
-      store.current.generation,
-      1,
-      "markFileDirty must not fake a fresh LSP generation",
-    );
-  });
 
   test("dispose tears down emitters without throwing", () => {
     const store = new ReportStore();
@@ -367,14 +224,14 @@ suite("ReportStore", () => {
     store.onDidChange(() => {
       fired += 1;
     });
-    store.setPendingEmbeddingModel("nomic-embed-text");
-    assert.equal(store.current.pendingEmbeddingModel, "nomic-embed-text");
+    store.setPendingEmbeddingModel(EMBEDDING_MODEL_ID);
+    assert.equal(store.current.pendingEmbeddingModel, EMBEDDING_MODEL_ID);
     assert.equal(fired, 1);
   });
 
   test("setSnapshot clears any pending embedding model once a fresh report arrives", () => {
     const store = new ReportStore();
-    store.setPendingEmbeddingModel("nomic-embed-text");
+    store.setPendingEmbeddingModel(EMBEDDING_MODEL_ID);
     store.setSnapshot(emptyReport(), 1);
     assert.equal(store.current.pendingEmbeddingModel, null);
   });
@@ -388,20 +245,68 @@ suite("ReportStore", () => {
     store.setEmbeddingProgress({
       phase: "starting",
       provider_id: "ollama",
-      model_id: "nomic-embed-text",
+      model_id: EMBEDDING_MODEL_ID,
       done: 0,
       total: 200,
+      percent: 0,
       message: undefined,
     });
     assert.equal(fired, 1);
     assert.deepEqual(store.current.embeddingProgress, {
       phase: "starting",
       provider_id: "ollama",
-      model_id: "nomic-embed-text",
+      model_id: EMBEDDING_MODEL_ID,
       done: 0,
       total: 200,
+      percent: 0,
       message: undefined,
     });
+  });
+
+  // A healthy long-lived session may never receive a full snapshot — deltas
+  // alone carry it — and the retraction ledger used to be cleared only by one.
+  // Every delta cloned the whole accumulated history, so N removals cost O(N)
+  // retained ids and O(N²) copying over the session's life.
+  test("the retraction ledger stays bounded across a long delta-only session", () => {
+    const store = new ReportStore();
+    store.setSnapshot(emptyReport({ clusters: [cluster("seed", 1)] }), 1);
+
+    const churn = 2_000;
+    for (let index = 0; index < churn; index += 1) {
+      store.applyDelta({
+        from_generation: index + 1,
+        to_generation: index + 2,
+        clusters_added: [cluster(`c-${index}`, 1)],
+        // Remove the *previous* generation's cluster. Removing the one this
+        // delta adds would un-retract it in the same pass — an add is the
+        // server saying it found the cluster again.
+        clusters_removed: index === 0 ? [] : [`c-${index - 1}`],
+        clusters_updated: [],
+        metrics: metrics(),
+        cache_stats: { hits: 0, misses: 0 },
+        tool_version: "v",
+      });
+    }
+
+    const retracted = store.current.retractedClusters;
+    assert.ok(
+      retracted.size <= 256,
+      `${churn} unique removals must not retain ${retracted.size} ids`,
+    );
+    assert.ok(
+      retracted.has(`c-${churn - 2}`),
+      "the most recent retraction is the one an in-flight probe could still name",
+    );
+    assert.equal(
+      retracted.has("c-0"),
+      false,
+      "and the oldest is dropped first — no probe from 2000 generations ago is live",
+    );
+    assert.equal(
+      store.current.generation,
+      churn + 1,
+      "every delta must still have applied",
+    );
   });
 
   test("setEmbeddingProgress(null) clears the active progress state", () => {
@@ -409,9 +314,10 @@ suite("ReportStore", () => {
     store.setEmbeddingProgress({
       phase: "complete",
       provider_id: "ollama",
-      model_id: "nomic-embed-text",
+      model_id: EMBEDDING_MODEL_ID,
       done: 64,
       total: 64,
+      percent: 100,
       message: undefined,
     });
     store.setEmbeddingProgress(null);

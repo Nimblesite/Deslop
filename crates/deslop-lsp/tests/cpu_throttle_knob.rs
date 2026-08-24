@@ -8,14 +8,15 @@
 //! configuration is covered at unit test level inside the LSP crate
 //! but the CLI contract is owned here.
 
-mod common;
-
 use std::{
-    io::BufReader,
+    io::{BufRead, BufReader},
     process::{ChildStdin, ChildStdout, Command, Stdio},
-    sync::atomic::{AtomicI64, Ordering},
+    sync::{
+        atomic::{AtomicI64, Ordering},
+        mpsc,
+    },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{anyhow, Result};
@@ -25,15 +26,19 @@ use crate::common::*;
 
 static NEXT_ID: AtomicI64 = AtomicI64::new(120_000);
 
+/// Longest a startup log line may take to appear before the knob is
+/// considered unrecorded. A failure bound, never a synchronisation
+/// device: the assertion resolves the instant the line arrives.
+const STARTUP_LOG_TIMEOUT: Duration = Duration::from_secs(20);
+
 /// Audience: HUMAN. Issue #28. Positive invariant: when the LSP
 /// user passes `--worker-threads N`, the startup log line records
 /// the chosen value so the user can confirm the knob took effect
-/// by tailing the log. The log line goes to stderr; we scrape it
-/// briefly after spawn.
+/// by tailing the log. The log line goes to stderr; we read it.
 #[test]
 fn lsp_startup_log_records_the_worker_threads_knob() -> Result<()> {
     let workspace = tempfile::tempdir()?;
-    let child = Command::new(assert_cmd::cargo::cargo_bin("deslop-lsp"))
+    let mut child = Command::new(assert_cmd::cargo::cargo_bin("deslop-lsp"))
         .arg(workspace.path())
         .arg("--worker-threads")
         .arg("2")
@@ -43,24 +48,70 @@ fn lsp_startup_log_records_the_worker_threads_knob() -> Result<()> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
-
-    // Give the startup log line a moment to land, then kill and
-    // drain stderr through `wait_with_output` so the pipe closes
-    // cleanly and the tracing buffer reaches us.
-    thread::sleep(Duration::from_millis(1500));
-    #[allow(unused_mut)]
-    let mut handle = child;
-    let _ = handle.kill();
-    let output = handle.wait_with_output()?;
-    let stderr_buf = String::from_utf8_lossy(&output.stderr).into_owned();
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| anyhow!("child stderr missing"))?;
+    let observed = read_stderr_until(stderr, "worker_threads=2");
+    // Captured before the kill: a process that already exited on its own
+    // never got as far as logging, which is a different failure from one
+    // that ran and logged the wrong value. Empty stderr plus an early
+    // exit means the binary never started — say so instead of blaming
+    // the knob.
+    let early_exit = child.try_wait().ok().flatten();
+    let _kill = child.kill();
+    let _wait = child.wait();
 
     assert!(
-        stderr_buf.contains("worker_threads=2"),
+        observed.contains("worker_threads=2"),
         "startup log must record the honored worker_threads value so users can confirm \
-         the throttle knob took effect; stderr was:\n{stderr_buf}"
+         the throttle knob took effect; early_exit={early_exit:?} stderr was:\n{observed}"
     );
 
     Ok(())
+}
+
+/// Reads the child's stderr until `marker` appears or
+/// [`STARTUP_LOG_TIMEOUT`] elapses, returning everything seen.
+///
+/// The previous revision slept a flat 1500 ms, killed the child, and
+/// scraped `wait_with_output`. That is a race, not a wait: the assertion
+/// held only when the server happened to have flushed its startup log
+/// inside the nap, so under a loaded machine — a parallel `cargo test`
+/// is enough — the same binary passed and failed on back-to-back runs
+/// and reddened a fail-fast gate at random. CLAUDE.md's testing rules
+/// require determinism and forbid `sleep`, so the wait is now driven by
+/// the event itself.
+///
+/// The read runs on its own thread because the server stays alive and
+/// quiet after logging: a blocking `read_line` on the test thread would
+/// never return once the startup lines stop, which is the same undrained
+/// -pipe class of hang GH #370 removed from the shared harness.
+fn read_stderr_until(stderr: std::process::ChildStderr, marker: &str) -> String {
+    let (sender, receiver) = mpsc::channel();
+    let _reader = thread::spawn(move || {
+        let mut lines = BufReader::new(stderr).lines();
+        while let Some(Ok(line)) = lines.next() {
+            if sender.send(line).is_err() {
+                return;
+            }
+        }
+    });
+    let deadline = Instant::now()
+        .checked_add(STARTUP_LOG_TIMEOUT)
+        .unwrap_or_else(Instant::now);
+    let mut observed = String::new();
+    while let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
+        let Ok(line) = receiver.recv_timeout(remaining) else {
+            break;
+        };
+        observed.push_str(&line);
+        observed.push('\n');
+        if line.contains(marker) {
+            break;
+        }
+    }
+    observed
 }
 
 /// Audience: HUMAN. Issue #28. Positive invariant: the user-facing

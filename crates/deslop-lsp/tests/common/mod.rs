@@ -8,12 +8,15 @@
 
 #![allow(dead_code)]
 
+pub mod reports;
+
 use std::{
     fs,
     io::BufReader,
     path::{Path, PathBuf},
     process::{Child, ChildStderr, ChildStdin, ChildStdout, Stdio},
     sync::atomic::{AtomicI64, Ordering},
+    thread::JoinHandle,
     time::{Duration, Instant},
 };
 
@@ -212,10 +215,8 @@ impl Drop for KillOnDrop<'_> {
 /// armed — any later failure (handshake, request) still reaps the child.
 pub struct LspGuard {
     child: Child,
-    /// Held for the guard's whole lifetime, never read. Dropping the child's
-    /// piped stderr read end early stalls the heavily-logging LSP on a full
-    /// stderr pipe, so it stops servicing stdout and the test deadlocks.
-    _stderr: ChildStderr,
+    /// Continuously drained for the guard's whole lifetime (GH #370).
+    _stderr: StderrDrain,
 }
 
 impl Drop for LspGuard {
@@ -225,11 +226,48 @@ impl Drop for LspGuard {
     }
 }
 
+/// Reads a spawned LSP's stderr to EOF on a background thread, discarding
+/// it, and joins that thread on drop.
+///
+/// GH #370: the server logs every stage through `tracing` to stderr. A
+/// piped stderr that is merely *held open* still fills its fixed kernel
+/// pipe buffer, and the next `tracing` event then blocks its thread inside
+/// `Stderr::write_all` while holding the subscriber's stderr lock. Every
+/// other thread that logs — including the `tower-lsp` serve loop — queues
+/// behind that lock, so the server stops reading stdin and writing stdout
+/// altogether and the test waits forever on a response the server can no
+/// longer send. It is not a protocol defect: the terminal progress frame
+/// is produced, and the transport that would carry it is wedged.
+///
+/// The rejection paths hit it first because they log per failed subtree
+/// and per bisect retry, so they are the first to exceed the buffer.
+/// Keeping the pipe empty is the fix; keeping the handle open is not
+/// enough.
+pub struct StderrDrain(Option<JoinHandle<()>>);
+
+impl StderrDrain {
+    /// Starts draining `stderr`. The thread ends when the child exits and
+    /// closes the write end.
+    fn spawn(mut stderr: ChildStderr) -> Self {
+        Self(Some(std::thread::spawn(move || {
+            let _drained = std::io::copy(&mut stderr, &mut std::io::sink());
+        })))
+    }
+}
+
+impl Drop for StderrDrain {
+    fn drop(&mut self) {
+        if let Some(handle) = self.0.take() {
+            let _joined = handle.join();
+        }
+    }
+}
+
 /// Spawns the LSP against `workspace`, takes its stdin/stdout, and returns the
 /// process wrapped in an armed [`LspGuard`] alongside those handles. The guard
 /// is live before the caller runs the handshake, matching the spawn-then-guard
-/// ordering of the inline setup it replaces. The guard retains the child's
-/// stderr so the read end stays open for the whole test.
+/// ordering of the inline setup it replaces. The guard drains the child's
+/// stderr for the whole test — see [`StderrDrain`].
 pub fn spawn_lsp_guarded(
     workspace: &Path,
 ) -> Result<(LspGuard, ChildStdin, BufReader<ChildStdout>)> {
@@ -238,7 +276,7 @@ pub fn spawn_lsp_guarded(
     Ok((
         LspGuard {
             child,
-            _stderr: stderr,
+            _stderr: StderrDrain::spawn(stderr),
         },
         stdin,
         stdout,
@@ -279,6 +317,35 @@ pub fn cluster_count(frame: &serde_json::Value) -> usize {
         .pointer("/result/clusters")
         .and_then(serde_json::Value::as_array)
         .map_or(0, Vec::len)
+}
+
+/// Polls the real `deslop/reportGet` method until `predicate` accepts the
+/// returned report or `timeout` expires. The bounded poll waits on observable
+/// report state rather than assuming how long a cold or incremental pass takes.
+pub fn wait_for_report_matching(
+    stdin: &mut ChildStdin,
+    stdout: &mut BufReader<ChildStdout>,
+    timeout: Duration,
+    predicate: impl Fn(&Value) -> bool,
+) -> Result<Value> {
+    let deadline = Instant::now()
+        .checked_add(timeout)
+        .unwrap_or_else(Instant::now);
+    loop {
+        let frame = call(stdin, stdout, "deslop/reportGet", &json!({}))?;
+        let report = frame
+            .get("result")
+            .ok_or_else(|| anyhow!("reportGet returned no result: {frame}"))?;
+        if predicate(report) {
+            return Ok(report.clone());
+        }
+        if Instant::now() >= deadline {
+            return Err(anyhow!(
+                "report state did not converge within {timeout:?}: {report}"
+            ));
+        }
+        std::thread::sleep(POLL_INTERVAL);
+    }
 }
 
 /// Analysis must settle within this budget on any dev machine; the
@@ -354,4 +421,28 @@ pub fn rewrite_offer<'a>(actions: &'a [Value], title: &str) -> Result<&'a Value>
         "the offer carries the cluster id"
     );
     Ok(offer)
+}
+
+/// Reads `value[key]` without the `Index` impl.
+///
+/// `serde_json`'s `Index` panics on a type mismatch and trips
+/// `clippy::indexing_slicing`, so tests reach fields through this. A
+/// missing key yields `Value::Null` — identical to what `Index` returns
+/// — so an assertion against an absent field still fails loudly rather
+/// than being skipped.
+pub fn at<'a>(value: &'a Value, key: &str) -> &'a Value {
+    value.get(key).unwrap_or(&Value::Null)
+}
+
+/// Reads a nested path, one key per element.
+pub fn path<'a>(value: &'a Value, keys: &[&str]) -> &'a Value {
+    keys.iter().fold(value, |current, key| at(current, key))
+}
+
+/// Reads the `index`th element of a JSON array field.
+pub fn nth<'a>(value: &'a Value, key: &str, index: usize) -> &'a Value {
+    at(value, key)
+        .as_array()
+        .and_then(|items| items.get(index))
+        .unwrap_or(&Value::Null)
 }

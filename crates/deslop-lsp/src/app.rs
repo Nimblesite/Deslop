@@ -16,6 +16,15 @@ use deslop_core::{config::ClonePolicy, live::transport::IpcMode};
 
 use crate::backend::LspEmbeddingConfig;
 
+/// Startup flag setting the analysis worker-thread count.
+const WORKER_THREADS_FLAG: &str = "--worker-threads";
+/// Startup flag lowering the analysis threads' scheduling priority.
+const NICE_FLAG: &str = "--nice";
+/// Startup flag choosing the IPC transport (stdio or TCP).
+const IPC_TRANSPORT_FLAG: &str = "--ipc-transport";
+/// Startup flag restricting ranking to structural evidence.
+const RANKING_STRUCTURAL_ONLY_FLAG: &str = "--ranking-structural-only";
+
 /// Fully parsed startup configuration for the LSP app layer.
 #[derive(Debug, Clone)]
 pub struct LspStartup {
@@ -96,7 +105,7 @@ where
 {
     // Install the subscriber at the process boundary so diagnostics reach
     // stderr on *every* path — including argv parse errors that never reach
-    // the serve path (e.g. a rootless `deslop-lsp --stdio`, #201). Without
+    // the serve path (e.g. a rootless `deslop-lsp --stdio`). Without
     // this, `failure_exit`'s `tracing::error!` hits `NoSubscriber` and the
     // process exits 1 silently. `try_init` makes it idempotent.
     init_tracing();
@@ -117,7 +126,10 @@ where
     Fut: std::future::Future<Output = Result<()>>,
 {
     let _profile_guard = crate::profiling::LspProfileGuard::from_env();
+    #[cfg(unix)]
     apply_process_nice(startup.nice)?;
+    #[cfg(not(unix))]
+    apply_process_nice(startup.nice);
     if let Some(policy) = startup.ranking_structural_only {
         deslop_core::state::set_structural_only_override(policy);
     }
@@ -163,7 +175,7 @@ fn startup_from_args(args: &[String]) -> Result<LspStartup> {
 
 /// Reads the workspace root from the first positional (non-flag) argument.
 ///
-/// [#201] The client's transport flag (`--stdio`, injected by
+/// The client's transport flag (`--stdio`, injected by
 /// `vscode-languageclient`) and `--debug` are not paths. Treating one as
 /// the root pointed the file watcher at a path named `--stdio` and
 /// crash-looped the server. The workspace root is the first argument that
@@ -184,8 +196,8 @@ fn parse_workspace_root(args: &[String]) -> Result<PathBuf> {
 /// Reads the optional `--worker-threads` value, defaulting to Tokio behavior.
 fn parse_worker_threads(args: &[String]) -> Result<usize> {
     for (index, arg) in args.iter().enumerate() {
-        if arg == "--worker-threads" {
-            return parse_required_usize(args, index, "--worker-threads");
+        if arg == WORKER_THREADS_FLAG {
+            return parse_required_usize(args, index, WORKER_THREADS_FLAG);
         }
     }
     Ok(0)
@@ -194,8 +206,8 @@ fn parse_worker_threads(args: &[String]) -> Result<usize> {
 /// Reads the optional `--nice` value, defaulting to no priority change.
 fn parse_nice(args: &[String]) -> Result<i32> {
     for (index, arg) in args.iter().enumerate() {
-        if arg == "--nice" {
-            let nice = parse_required_i32(args, index, "--nice")?;
+        if arg == NICE_FLAG {
+            let nice = parse_required_i32(args, index, NICE_FLAG)?;
             if !(-20..=19).contains(&nice) {
                 return Err(anyhow!("--nice must be in the range -20..=19"));
             }
@@ -210,8 +222,8 @@ fn parse_nice(args: &[String]) -> Result<i32> {
 /// loopback on Windows).
 fn parse_ipc_mode(args: &[String]) -> Result<IpcMode> {
     for (index, arg) in args.iter().enumerate() {
-        if arg == "--ipc-transport" {
-            return match required_flag_value(args, index, "--ipc-transport")? {
+        if arg == IPC_TRANSPORT_FLAG {
+            return match required_flag_value(args, index, IPC_TRANSPORT_FLAG)? {
                 "unix" => Ok(IpcMode::Unix),
                 "tcp" => Ok(IpcMode::Tcp),
                 other => Err(anyhow!(
@@ -228,8 +240,8 @@ fn parse_ipc_mode(args: &[String]) -> Result<IpcMode> {
 /// `.deslop.toml`.
 fn parse_ranking_structural_only(args: &[String]) -> Result<Option<ClonePolicy>> {
     for (index, arg) in args.iter().enumerate() {
-        if arg == "--ranking-structural-only" {
-            let value = required_flag_value(args, index, "--ranking-structural-only")?;
+        if arg == RANKING_STRUCTURAL_ONLY_FLAG {
+            let value = required_flag_value(args, index, RANKING_STRUCTURAL_ONLY_FLAG)?;
             return value
                 .parse::<ClonePolicy>()
                 .map(Some)
@@ -261,7 +273,7 @@ fn reject_unsupported_startup_flags(args: &[String]) -> Result<()> {
     let mut index = 2;
     while let Some(arg) = args.get(index) {
         match arg.as_str() {
-            "--worker-threads" | "--nice" | "--ipc-transport" | "--ranking-structural-only" => {
+            WORKER_THREADS_FLAG | NICE_FLAG | IPC_TRANSPORT_FLAG | RANKING_STRUCTURAL_ONLY_FLAG => {
                 index = index.saturating_add(2);
             }
             "--debug" | "--stdio" => index = index.saturating_add(1),
@@ -279,7 +291,7 @@ fn reject_unsupported_startup_flags(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// Startup flags removed from the LSP command line by issue #83.
+/// Startup flags removed from the LSP command line by.
 const LEGACY_STARTUP_FLAGS: &[&str] = &[
     "--min-nodes",
     "--embeddings",
@@ -298,6 +310,7 @@ fn build_runtime(worker_threads: usize) -> Result<Runtime> {
 }
 
 /// Applies the user-requested process nice value when configured.
+#[cfg(unix)]
 fn apply_process_nice(nice: i32) -> Result<()> {
     if nice == 0 {
         return Ok(());
@@ -313,11 +326,12 @@ fn apply_process_nice_impl(nice: i32) -> Result<()> {
     Ok(())
 }
 
-/// Ignores `--nice` on non-Unix targets where POSIX priorities do not exist.
+/// Ignores `--nice` on targets where POSIX priorities do not exist.
 #[cfg(not(unix))]
-fn apply_process_nice_impl(nice: i32) -> Result<()> {
-    tracing::warn!(nice, "--nice is only supported on macOS/Linux");
-    Ok(())
+fn apply_process_nice(nice: i32) {
+    if nice != 0 {
+        tracing::warn!(nice, "--nice is only supported on macOS/Linux");
+    }
 }
 
 /// Initialises tracing diagnostics against `RUST_LOG`.

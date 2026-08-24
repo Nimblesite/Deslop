@@ -20,7 +20,7 @@ use super::{
 };
 use crate::ast::ByteRange;
 
-/// Detects **issue #115a**: every cluster occurrence is a Python
+/// Detects **a**: every cluster occurrence is a Python
 /// `class X(StrEnum)` (or `class X(str, Enum)`) declaration whose body
 /// consists only of a docstring and member assignments. Returning true
 /// drops the cluster — distinct enum vocabularies are not duplication.
@@ -31,29 +31,61 @@ pub(super) fn is_strenum_class_shape_cluster(snippets: &[Snippet<'_>]) -> bool {
     snippets.iter().all(is_strenum_class_snippet)
 }
 
-/// Returns true when `snippet` covers exactly one `class_definition`
-/// whose superclass list contains `StrEnum` (or `str` + `Enum`) and
-/// whose body is docstring + assignments only.
+/// Returns true when every `class_definition` the snippet covers is a
+/// `class X(StrEnum)` (or `class X(str, Enum)`) whose body is docstring
+/// + member assignments only.
+///
+/// **Every** class, not exactly one. This required a sole class, which
+/// held while a cluster occurrence was always a single declaration. It
+/// is no longer: an occurrence may span a whole module
+/// ([FUSION-SHARED-SUBTREE] widened which view wins), and both fixture
+/// modules here declare two enums apiece — so the filter found three
+/// classes, returned `None`, and silently stopped firing. A module
+/// whose declarations are *all* closed-discriminator enums is still
+/// enum scaffolding, and is no more extractable than one of them alone.
+/// A module mixing an enum with real logic still fails the `all`, so
+/// genuine duplication inside it is untouched.
 fn is_strenum_class_snippet(snippet: &Snippet<'_>) -> bool {
     let Some(tree) = parse_for(snippet) else {
         return false;
     };
     let range = trimmed_snippet_range(snippet).unwrap_or(snippet.range);
-    let Some(class) = sole_class_in_range(tree.root_node(), range) else {
-        return false;
-    };
-    class_has_strenum_base(class, snippet.source) && class_body_is_docstring_and_assignments(class)
+    let classes = classes_in_range(tree.root_node(), range);
+    if classes.is_empty() {
+        return enclosing_class(tree.root_node(), range).is_some_and(|class| {
+            class_has_strenum_base(class, snippet.source)
+                && class_body_is_docstring_and_assignments(class)
+        });
+    }
+    classes.iter().all(|class| {
+        class_has_strenum_base(*class, snippet.source)
+            && class_body_is_docstring_and_assignments(*class)
+    })
 }
 
-/// Walks `root` collecting `class_definition` nodes fully enclosed by
-/// `range` and returns the only one, or `None`.
-fn sole_class_in_range(root: Node<'_>, range: ByteRange) -> Option<Node<'_>> {
+/// The innermost `class_definition` whose span contains `range` — the
+/// inside-out counterpart of [`classes_in_range`]. A member window or a
+/// single member line covers no complete class of its own, yet it is
+/// the same closed discriminator seen narrower: three member-run
+/// families over two `StrEnum` bodies survived the whole-class filter
+/// exactly this way (`strenum_class_shapes_do_not_cluster`).
+fn enclosing_class(node: Node<'_>, range: ByteRange) -> Option<Node<'_>> {
+    if node.start_byte() > range.start || node.end_byte() < range.end {
+        return None;
+    }
+    let mut cursor = node.walk();
+    let inner = node
+        .named_children(&mut cursor)
+        .find_map(|child| enclosing_class(child, range));
+    inner.or_else(|| (node.kind() == "class_definition").then_some(node))
+}
+
+/// Walks `root` collecting every `class_definition` fully enclosed by
+/// `range`.
+fn classes_in_range(root: Node<'_>, range: ByteRange) -> Vec<Node<'_>> {
     let mut classes = Vec::new();
     collect_classes_in_range(root, range, &mut classes);
-    let [class] = classes.as_slice() else {
-        return None;
-    };
-    Some(*class)
+    classes
 }
 
 /// Walks the tree appending `class_definition` nodes fully contained in
@@ -142,7 +174,7 @@ fn expression_statement_inner_kind(node: Node<'_>) -> Option<&'static str> {
     Some(inner.kind())
 }
 
-/// Detects **issue #115b**: a cluster of Pydantic `BaseModel` subclasses
+/// Detects **b**: a cluster of Pydantic `BaseModel` subclasses
 /// where every member is a class whose every field is annotated `T | None`
 /// (or `Optional[T]`) with a `None` default. Returns true to drop the
 /// cluster — the `XUpdate` mirror is mandated by Pydantic's PATCH
@@ -185,7 +217,12 @@ fn partial_update_shape(snippet: &Snippet<'_>) -> Option<PartialUpdateShape> {
 /// contained by `range`, preferring the enclosing one when the range
 /// is a sub-class fingerprint.
 fn enclosing_or_sole_class(root: Node<'_>, range: ByteRange) -> Option<Node<'_>> {
-    enclosing_kind(root, range, &["class_definition"]).or_else(|| sole_class_in_range(root, range))
+    enclosing_kind(root, range, &["class_definition"]).or_else(|| {
+        let [class] = classes_in_range(root, range)[..] else {
+            return None;
+        };
+        Some(class)
+    })
 }
 
 /// Returns true when `class.superclasses` contains the bare identifier

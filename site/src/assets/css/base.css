@@ -1,5 +1,5 @@
 /*
- * Deslop — The Kinetic Manuscript
+ * Deslop website
  * Design system: docs/designs/designsystem.md
  * Obsidian tones, Crimson Executioner accent, tonal layering, no 1px dividers.
  */
@@ -61,7 +61,7 @@
   --max-width: 80rem;
   --content-width: 72ch;
   --sidebar-width: 15rem;
-  --header-height: 4.25rem;
+  --header-height: 4.5rem;
 
   /* Spacing — 4px grid */
   --space-1: 0.25rem;
@@ -87,12 +87,19 @@
   --font-head: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-body: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --type-label-sm: 0.75rem;
+  --type-label-md: 0.875rem;
+  --type-body-md: 0.9375rem;
+  /* Navigation scale — primary bar, then secondary nav surfaces, then group labels. */
+  --type-nav: 1rem;
+  --type-nav-secondary: var(--type-body-md);
+  --type-nav-label: 0.8125rem;
 
   /* Motion */
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur-fast: 120ms;
   --dur: 180ms;
-  --dur-slow: 500ms;
+  --dur-slow: 280ms;
 
   /* Shadows — tinted, never pure black */
   --shadow-sm: 0 10px 30px rgba(179, 38, 30, 0.12);
@@ -152,7 +159,7 @@ html { -webkit-text-size-adjust: 100%; }
 
 body {
   font-family: var(--font-body);
-  font-size: 0.9375rem;
+  font-size: var(--type-body-md);
   line-height: 1.5;
   color: var(--on-background);
   background: var(--background);
@@ -163,6 +170,11 @@ body {
 
 a { color: var(--on-surface-variant); text-decoration: none; transition: color var(--dur) var(--ease); }
 a:hover { color: var(--on-surface); }
+
+:where(a, button, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-head);
@@ -217,6 +229,7 @@ pre {
   background: color-mix(in srgb, var(--surface) 80%, transparent);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
+  box-shadow: 0 12px 32px rgba(14, 14, 14, 0.18);
 }
 
 .nav {
@@ -262,14 +275,13 @@ pre {
   gap: 0.375rem;
   padding: 0.15rem 0.5rem;
   font-family: var(--font-mono);
-  font-size: 0.625rem;
+  font-size: var(--type-label-sm);
   font-weight: 500;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--on-surface-muted, var(--on-surface-variant));
-  background: transparent;
-  border: 1px solid var(--outline-variant, rgba(255, 255, 255, 0.12));
-  border-radius: 999px;
+  background: var(--surface-container-high);
+  border-radius: var(--radius-sm);
   line-height: 1;
   user-select: none;
 }
@@ -289,6 +301,12 @@ pre {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
   .logo-badge__dot { animation: none; }
 }
 
@@ -302,7 +320,7 @@ pre {
 
 .nav-link {
   font-family: var(--font-mono);
-  font-size: 0.8125rem;
+  font-size: var(--type-nav);
   color: color-mix(in srgb, var(--on-surface) 60%, transparent);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
@@ -320,7 +338,7 @@ pre {
 .language-switcher { display: flex; align-items: center; }
 .lang-link {
   font-family: var(--font-mono);
-  font-size: 0.8125rem;
+  font-size: var(--type-nav-secondary);
   color: color-mix(in srgb, var(--on-surface) 60%, transparent);
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--outline-variant);
@@ -346,15 +364,6 @@ pre {
 [data-theme="dark"] .theme-icon-dark { display: none; }
 [data-theme="light"] .theme-icon-light { display: none; }
 [data-theme="light"] .theme-icon-dark { display: inline; }
-
-.site-header::after {
-  content: "";
-  display: block;
-  height: 1px;
-  width: 100%;
-  background: var(--surface-container-high);
-  box-shadow: 0 20px 40px rgba(14, 14, 14, 0.4);
-}
 
 /* ─────────── Mobile navigation drawer ─────────── */
 /* Off-canvas drawer pattern (see docs/designs/prose_mobile + landing_mobile).
@@ -421,8 +430,9 @@ body.menu-open .drawer-scrim { opacity: 1; visibility: visible; }
   .nav-links li { width: 100%; }
   .nav-link {
     display: block;
+    min-height: 3rem;
     padding: var(--space-3) var(--space-4);
-    font-size: 0.9375rem;
+    font-size: var(--type-nav);
     border-radius: var(--radius-sm);
   }
   .nav-link.active {
@@ -454,9 +464,9 @@ body.menu-open .drawer-scrim { opacity: 1; visibility: visible; }
   gap: var(--space-8);
   padding-bottom: var(--space-12);
 }
-.footer-section h3 {
+.footer-section h2 {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--type-label-sm);
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--secondary-fixed-dim);
@@ -465,7 +475,7 @@ body.menu-open .drawer-scrim { opacity: 1; visibility: visible; }
 .footer-section ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .footer-section a {
   font-family: var(--font-mono);
-  font-size: 0.8125rem;
+  font-size: var(--type-nav-secondary);
   color: color-mix(in srgb, var(--on-surface) 45%, transparent);
   text-decoration: none;
   transition: color var(--dur) var(--ease);
@@ -474,15 +484,11 @@ body.menu-open .drawer-scrim { opacity: 1; visibility: visible; }
 
 .footer-bottom {
   padding: var(--space-6) 0;
-  background: linear-gradient(to bottom, var(--surface-container-high) 0 1px, transparent 1px);
-  background-size: 100% 1px;
-  background-repeat: no-repeat;
-  background-position: top;
   text-align: left;
 }
 .footer-bottom p {
   font-family: var(--font-mono);
-  font-size: 0.6875rem;
+  font-size: var(--type-label-sm);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--primary-container);

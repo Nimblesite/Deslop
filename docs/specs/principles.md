@@ -2,29 +2,29 @@
 
 ### [PRINCIPLES-LIVE-IS-REACTIVE] Live = Reactive — non-negotiable
 
-**Every Deslop surface except the CLI is reactive end-to-end.** *Live* is not a marketing label — it is a hard invariant on every running surface: when an analysis pass produces a new report, every reader updates **immediately**, in the same microtask the change fires. Not on the next save. Not when the editor next refreshes. Not on a polling timer. Not when the user runs the CLI again. **Immediately.**
+Every Deslop surface except the CLI applies each new report in the same microtask that publishes the change.
 
 The reactive contract spans the whole product:
 
-- **The watcher → scheduler → pipeline path is reactive.** The `notify`-backed file watcher in `deslop-lsp` feeds the [LIVE-WATCHER] / [LIVE-SCHEDULER] debouncer, which calls `update_files`, produces a new report generation, and commits it to the in-memory live service. No surface polls — the pipeline pushes.
-- **The LSP wire is reactive.** The session fires `deslop/reportChanged` ([LIVE-NOTIFICATIONS]) for every observable change, removals included. There is no `pollReport` request.
-- **The MCP wire is reactive.** The MCP subscribes to the LSP over the local IPC endpoint ([MCP-NOTIFICATIONS]) and pushes change notifications to the agent immediately. An agent that calls `find-similar` one tick after a notification is reading the LSP's current in-memory snapshot.
-- **The VSIX is reactive.** Tree, decorations, bubble, status bar, code lenses, hovers, webviews — every surface is `@preact/signals`-driven over the single [VSIX-STATE] store. Updates settle transactionally. No surface holds its own cache. No surface schedules a refresh independent of a signal change. Enforced by [VSIX-REACTIVITY] and its acceptance test in [VSIX-REACTIVITY-INVARIANT].
-- **Future editor surfaces inherit the rule.** The JetBrains plugin, any Zed / Neovim / web-dashboard integration — every new client implements the same notification → store → signal → render path. There is no second-class "polls every N seconds" client.
+- **Watcher → scheduler → pipeline.** The `notify` watcher feeds [LIVE-WATCHER] / [LIVE-SCHEDULER], which calls `update_files` and publishes a report generation.
+- **LSP.** The session fires `deslop/reportChanged` ([LIVE-NOTIFICATIONS]) for every observable change, including removals; clients do not poll.
+- **MCP.** The MCP subscribes over local IPC ([MCP-NOTIFICATIONS]) and serves the LSP's current in-memory snapshot.
+- **VSIX.** Tree, decorations, bubble, status bar, code lenses, hovers, and webviews derive from the single [VSIX-STATE] store. [VSIX-REACTIVITY-INVARIANT] enforces transactional updates and forbids per-surface caches.
+- **Future clients.** Every editor integration implements the same notification → store → signal → render path.
 
-The **CLI is the only non-reactive surface in the product**, and that is by design: it is the cold-cache fallback for CI gates and one-shot audits, where reactivity has no meaning because the process exits before the caller reads the output. Anything that runs as a long-lived process is reactive. No exceptions.
+The CLI is the only non-reactive surface because it exits after a one-shot CI or audit run.
 
-**Stale UI is a correctness bug.** "The tree still shows clusters that were just deleted from the source" is not a polish issue — it is a failure of the brand promise ("tell the developer they're duplicating right now"). Bugs of this class are fixed at the same priority as wrong analysis output. Lint rules and cross-surface E2E tests enforce the invariant; see [VSIX-REACTIVITY-INVARIANT].
+Stale UI is a correctness bug and has the same priority as wrong analysis output. Lint rules and cross-surface E2E tests enforce [VSIX-REACTIVITY-INVARIANT].
 
 ### [PRINCIPLES-AUDIENCE-AGENT] Audience for the report: AI coding agents
 
-The report is not just for humans scanning a terminal — **the primary consumer is an AI coding agent using Deslop as a tool**. Design choices follow from that:
+AI coding agents are the primary report consumer, while human renderers use the same data:
 
 - Structured output is the product. JSON is the canonical format; the text renderer is a pretty-printer over the same data. Never emit information in text that isn't also in JSON.
 - Every cluster carries enough context for an agent to act without re-reading the whole repo: exact byte ranges, file paths, a canonical representative snippet, the reason signals fired (structural / LSH / embedding with scores), and a suggested refactor hint where one is reliably inferrable (e.g. "extract as shared function," "move to module X," "both call sites are in the same crate").
 - The report is strictly typed so agents can parse without heuristics. Persisted state that does not match the current shape is discarded and recreated.
 - No ANSI colour codes, no unicode box-drawing, no paging — the agent needs a clean stream. The `text` format is ASCII-only and line-oriented.
-- Per-cluster entries include a short natural-language `summary` field written for an agent reader ("3 near-identical copies of a 42-node `switch` block across `Foo.cs:120-180`, `Bar.cs:55-112`, and `Baz.cs:200-260`; structural=1.0, token_jaccard=0.97, embedding_cos=0.91 — safe to extract"). This is a synthesised description, not a log, and it's computed from the same signals the score uses.
+- Per-cluster entries include an agent-readable `summary` computed from the same locations and signals as the structured fields.
 
 See [OUTPUT-SCHEMA-JSON] for the JSON schema. The report format is a first-class interface — changes go through the same review bar as the ranking formula.
 
@@ -38,3 +38,50 @@ Deslop v1 is a batch CLI, but the architecture must not foreclose a future daemo
 - **File-watcher-driven incremental updates are a v2 feature — not v1.** v1 produces correct reports cheaply *because* the cache keys already support "this file didn't change, skip it." v2 wires a `notify`-based watcher to `deslop-core` and calls the existing incremental update path. v1 must ship with the cache keys and the incremental update function in place, even if the only caller is `main`.
 - **Byte ranges, not line numbers, are the source of truth** everywhere in the core. Line numbers are derived at render time. LSPs need byte offsets; computing them retroactively would be a rewrite.
 - **No process-global mutable state outside `src/state.rs`.** A daemon keeps multiple analyses live in one process — anything that assumes "one run, then exit" will bite later.
+
+### [PRINCIPLES-ONE-CALCULATION] Every figure is computed once, in the engine
+
+A *figure* is any number, label, verdict or ordering the product asserts about
+duplication: a percentage, a confidence, a severity band, an occurrence count, a
+rank, a threshold comparison, a classification, a plain-English reading of any of
+those. Every figure is computed exactly once, in `deslop-core`, and carried on the
+wire. No client — VS Code extension host, webview, JetBrains plugin, website, or
+future editor integration — may derive one.
+
+The reason is the accuracy contract, not tidiness. A client-side copy of a formula
+is a second engine that ships on its own release cadence: it drifts, and when it
+drifts the user is shown a figure the report never made. The failure is silent by
+construction — nothing crashes, the number is simply wrong. Two shipped instances of
+exactly this: the rank percentile, re-derived from array position so any filtered or
+projected list silently rebanded every cluster in it; and the folder duplication
+percentage, summed and divided in TypeScript beside an engine that had already
+computed it.
+
+What a client may do:
+
+- **Render one wire value.** Choosing decimal places, truncating a percentage to a
+  whole number for a narrow row, quantising one value to a glyph or a CSS width,
+  thousands separators. One value in, one presentation out.
+- **Look up a static label.** Bucket to colour token, language id to display name,
+  severity band to glyph. A lookup table is not a calculation.
+- **Run view mechanics.** Loop indices, spinner frames, path-segment splitting for a
+  tree, byte offsets to editor coordinates, and comparators or aggregates over a
+  *client-filtered* subset — the engine cannot see the user's active facet filter, so
+  ordering that subset is the client's job. Such keys must be built from engine values
+  and must never surface as a displayed figure: a displayed group figure is the
+  engine's value on the group's worst member, selected by the engine's rank, never a
+  maximum or a sum recomputed here.
+
+One named exception, so it cannot grow quietly: the Duplication webview tints a
+per-file / per-folder percentage on a three-step heat scale (`percentColor` in
+`webview-ui/src/duplication/main.tsx`). It classifies a wire value against UI-owned
+cut points, which the rule above otherwise forbids. It is allowed because it produces
+a colour and no figure, the engine has no duplication heat band to carry, and the row
+prints the exact percentage beside the tint. It is the only such site; a second one is
+a defect, and if the engine ever gains a heat band this moves onto it.
+
+What a client may never do: apply any other threshold constant, classify a value into
+bands, combine two wire values into a third that a user sees, or word a verdict about
+the evidence. Those arrive stamped — `rank`, `rank_band`, `shape`, `meets_fused_gate`,
+`evidence_verdict`, `occurrence_count`, `language`, `percent` — and are rendered
+verbatim.

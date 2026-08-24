@@ -18,15 +18,37 @@ use anyhow::{anyhow, bail, Context, Result};
 use deslop_core::{
     embedding::{test_support::StubProvider, EmbeddingMode},
     live::{
-        AnalysisSession, Clock, Debouncer, FindSimilarInput, FindSimilarRequest, LiveApi,
-        LiveError, LiveService, LiveWatcher, Scheduler,
+        live_exclusion, AnalysisSession, Clock, Debouncer, FindSimilarInput, FindSimilarRequest,
+        LiveApi, LiveError, LiveService, LiveWatcher, Scheduler,
     },
     pipeline::{run, EmbeddingSettings, PipelineConfig},
     EmbeddingProvider, EmbeddingSpec, ExclusionConfig, ProviderError,
 };
 
-mod common;
+use tokio::sync::{Semaphore, SemaphorePermit};
+
 use crate::common::*;
+
+/// Bounds how many of this file's live-loop tests run at once ([GH #361]).
+///
+/// Every test drives a whole session: a multi-threaded runtime, a
+/// blocking pool, a file watcher and a scheduler. `cargo test` runs all
+/// 22 concurrently, which oversubscribes the machine badly enough under
+/// `cargo llvm-cov` instrumentation that the `spawn_blocking` carrying an
+/// embedding refresh is not scheduled before its deadline — the work is
+/// starved, nothing hangs. Serial execution passes 22/22 where the
+/// default parallel run fails 2 to 4, and which tests fail varies with
+/// core count, which is how CI and a 14-core laptop disagreed.
+///
+/// The bound is stated here rather than left to core count or to a
+/// raised deadline: a deadline raise would still be timing-dependent,
+/// which `CLAUDE.md` bans outright.
+static LIVE_SLOTS: Semaphore = Semaphore::const_new(1);
+
+/// Holds a live-session slot for the lifetime of the returned permit.
+async fn live_slot() -> Option<SemaphorePermit<'static>> {
+    LIVE_SLOTS.acquire().await.ok()
+}
 
 /// Copies the `csharp-small` fixture into a fresh temp dir and builds an
 /// [`AnalysisSession`] over it at `min_nodes = 15` with a deterministic
@@ -72,7 +94,7 @@ async fn start_live_loop(
 )> {
     let session_lock = Arc::new(tokio::sync::Mutex::new(session));
     let owned_extensions = extensions.iter().map(|ext| (*ext).to_owned()).collect();
-    let exclusion = Arc::new(ExclusionConfig::empty());
+    let exclusion = live_exclusion(Arc::new(ExclusionConfig::empty()));
     let (watcher, watcher_rx) =
         LiveWatcher::start(scan_root, owned_extensions, exclusion, config_paths)
             .map_err(|err| anyhow!("watcher start: {err}"))?;
@@ -82,8 +104,9 @@ async fn start_live_loop(
     Ok((session_lock, watcher, scheduler, report_rx))
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_session_first_report_matches_batch_run() -> Result<()> {
+    let _slot = live_slot().await;
     let tmp = copy_fixture("csharp-small")?;
     let provider = Arc::new(StubProvider::new());
     let session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider.clone())
@@ -113,8 +136,9 @@ async fn live_session_first_report_matches_batch_run() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn analysis_session_new_surfaces_error_for_unreadable_config_path() -> Result<()> {
+    let _slot = live_slot().await;
     // Exercises the error-propagation arm of `AnalysisSession::new`
     // ([LIVE-STATE]): the `?` after `initialise_pipeline(...)` must
     // surface a failure from the underlying `PipelineSession::initialise`
@@ -144,8 +168,9 @@ async fn analysis_session_new_surfaces_error_for_unreadable_config_path() -> Res
 // after a `report_hide` edit reaches disk. Deslop.Live MUST react to
 // config edits the same way it reacts to source edits. No
 // developer-window reload, no manual rescan.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<()> {
+    let _slot = live_slot().await;
     let tmp = tempfile::tempdir().context("tempdir")?;
     // Canonicalise so notify-reported paths and our paths share a prefix.
     let scan_root = tmp.path().canonicalize().context("canonicalise root")?;
@@ -210,8 +235,9 @@ async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<
 // Drives the full live loop — [`LiveWatcher`] → [`Scheduler`] →
 // [`AnalysisSession`] → `report_changed` broadcast — and asserts the
 // newly-ignored tree is evicted from the corpus without a rescan.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_loop_evicts_newly_gitignored_tree_after_gitignore_edit() -> Result<()> {
+    let _slot = live_slot().await;
     let tmp = tempfile::tempdir().context("tempdir")?;
     // Canonicalise so notify-reported paths and our paths share a prefix.
     let scan_root = tmp.path().canonicalize().context("canonicalise root")?;
@@ -278,8 +304,9 @@ async fn live_loop_evicts_newly_gitignored_tree_after_gitignore_edit() -> Result
 // a scan-root-relative `report_hide = ["benchmarks/fixtures/**"]`,
 // the live report must drop the all-hidden cluster from
 // `report.clusters` and count it in `clusters_hidden`.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_analysis_session_honors_scan_root_relative_report_hide() -> Result<()> {
+    let _slot = live_slot().await;
     let tmp = tempfile::tempdir().context("tempdir")?;
     let scan_root = tmp.path();
     seed_hidden_fixture_pair(scan_root)?;
@@ -306,8 +333,9 @@ async fn live_analysis_session_honors_scan_root_relative_report_hide() -> Result
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn update_files_produces_non_empty_delta_when_a_file_changes() -> Result<()> {
+    let _slot = live_slot().await;
     let (tmp, mut session) = csharp_small_session()?;
     let target = tmp.path().join("Beta.cs");
     fs::write(
@@ -333,8 +361,9 @@ async fn update_files_produces_non_empty_delta_when_a_file_changes() -> Result<(
 // file was reported as an N-copy "identical" cluster and dominated Top
 // Offenders. This drives the incremental path (`apply_changes`) exactly as
 // the watcher does after the agent writes the files.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn issue_222_agent_worktree_copies_never_enter_live_report() -> Result<()> {
+    let _slot = live_slot().await;
     let (tmp, mut session) = csharp_small_session()?;
 
     // Three worktree checkouts, each byte-identical to the real Alpha.cs,
@@ -379,8 +408,9 @@ async fn issue_222_agent_worktree_copies_never_enter_live_report() -> Result<()>
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn find_similar_on_known_range_returns_expected_cluster() -> Result<()> {
+    let _slot = live_slot().await;
     let (tmp, session) = csharp_small_session()?;
     let report = session.report();
     let cluster = report
@@ -407,8 +437,9 @@ async fn find_similar_on_known_range_returns_expected_cluster() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn find_similar_on_unparseable_snippet_returns_unparseable_error() -> Result<()> {
+    let _slot = live_slot().await;
     let (_tmp, session) = csharp_small_session()?;
     let request = FindSimilarRequest {
         input: FindSimilarInput::Snippet {
@@ -434,8 +465,9 @@ async fn find_similar_on_unparseable_snippet_returns_unparseable_error() -> Resu
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn find_similar_on_below_min_nodes_snippet_returns_below_min_nodes_flag() -> Result<()> {
+    let _slot = live_slot().await;
     let tmp = copy_fixture("csharp-small")?;
     let provider = Arc::new(StubProvider::new());
     let session = AnalysisSession::new(tmp.path().to_path_buf(), 1_000, false, None, provider)
@@ -456,8 +488,9 @@ async fn find_similar_on_below_min_nodes_snippet_returns_below_min_nodes_flag() 
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn debouncer_coalesces_burst_and_flushes_at_cap() -> Result<()> {
+    let _slot = live_slot().await;
     let clock = Arc::new(MockClock::new(0));
     let mut debouncer = Debouncer::new(clock.clone());
     assert!(
@@ -494,8 +527,9 @@ async fn debouncer_coalesces_burst_and_flushes_at_cap() -> Result<()> {
 /// as a watcher event so the scheduler keeps re-analysing on every
 /// save, not just the first one. Without this guarantee the VSIX tree
 /// freezes after the first save in a session ([VSIX-REACTIVITY-TREE]).
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn watcher_emits_event_for_every_modification_of_the_same_path() -> Result<()> {
+    let _slot = live_slot().await;
     let tmp = tempfile::tempdir().context("tempdir")?;
     // FSEvents on macOS reports paths under the canonicalised root
     // (`/private/var/...` instead of `/var/...`). Canonicalise here so
@@ -505,7 +539,7 @@ async fn watcher_emits_event_for_every_modification_of_the_same_path() -> Result
     fs::write(&target, b"class A {}\n").context("seed file")?;
 
     let extensions = vec!["cs".to_owned()];
-    let exclusion = Arc::new(ExclusionConfig::empty());
+    let exclusion = live_exclusion(Arc::new(ExclusionConfig::empty()));
     let (_watcher_keep_alive, mut rx) =
         LiveWatcher::start(&root, extensions, exclusion, Vec::new())
             .map_err(|err| anyhow!("watcher start: {err}"))?;
@@ -546,8 +580,9 @@ async fn watcher_emits_event_for_every_modification_of_the_same_path() -> Result
 /// extension filter dropped the directory path and the channel stayed
 /// silent — leaving the contained files as phantom occurrences until a
 /// full restart. Drives the real watcher end to end.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn watcher_forwards_directory_removal_without_a_source_extension() -> Result<()> {
+    let _slot = live_slot().await;
     let tmp = tempfile::tempdir().context("tempdir")?;
     // macOS FSEvents reports under the canonicalised root; match the
     // existing watcher tests so event paths share a prefix.
@@ -557,7 +592,7 @@ async fn watcher_forwards_directory_removal_without_a_source_extension() -> Resu
     fs::write(nested.join("Sample.cs"), b"class A {}\n").context("seed file")?;
 
     let extensions = vec!["cs".to_owned()];
-    let exclusion = Arc::new(ExclusionConfig::empty());
+    let exclusion = live_exclusion(Arc::new(ExclusionConfig::empty()));
     let (_watcher_keep_alive, mut rx) =
         LiveWatcher::start(&root, extensions, exclusion, Vec::new())
             .map_err(|err| anyhow!("watcher start: {err}"))?;
@@ -609,8 +644,9 @@ async fn wait_for_event(
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_service_round_trip_covers_the_query_surface() -> Result<()> {
+    let _slot = live_slot().await;
     let tmp = copy_fixture("csharp-small")?;
     // PipelineSession canonicalises root at init ([#141 MCP-SAFETY])
     // so every reflected root is the canonical form. Tests compare
@@ -713,12 +749,24 @@ async fn exercise_session_config(
     assert!(!config.languages.is_empty());
     let request = FindSimilarRequest {
         input: FindSimilarInput::Snippet {
-            snippet: "namespace N { class C { void M(int x) { return; } } }".to_owned(),
+            // The corpus's own `Alpha.cs` — a snippet whose subtree
+            // digests exist in the workspace. Pins the content join:
+            // cluster ids are not derivable from pathless digests
+            // (gh #430), so any regression of the hash→occurrence→
+            // report join returns empty clusters here while the
+            // Windows TCP twin fails `mcp_tools_work_over_tcp_transport`.
+            snippet: fs::read_to_string(root.join("Alpha.cs")).context("read corpus Alpha.cs")?,
             language: "csharp".to_owned(),
         },
         max_results: Some(5),
     };
-    let _result = service.find_similar(&request).await?;
+    let result = service.find_similar(&request).await?;
+    assert!(
+        !result.clusters.is_empty(),
+        "find-similar on the corpus's own file must locate its clusters \
+         — an empty answer means the snippet-hash join went blind: \
+         {result:?}"
+    );
     let guard = session_lock.lock().await;
     assert_eq!(guard.root(), root, "root accessor should match");
     let generation = guard.generation();
@@ -789,7 +837,7 @@ async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
     let completed_clone = Arc::clone(&completed);
     let reporter: deslop_core::live::EmbeddingProgressReporter = Arc::new(move |event| {
         if event.phase == deslop_core::live::EmbeddingPhase::Complete {
-            completed_clone.notify_waiters();
+            completed_clone.notify_one();
         }
         if let Ok(mut lock) = events_clone.lock() {
             lock.push(event);
@@ -868,8 +916,9 @@ async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn embedding_refresh_keeps_latest_report_readable_while_provider_is_blocked() -> Result<()> {
+    let _slot = live_slot().await;
     // [LIVE-EMBEDDING-CONSENT] Selecting a model queues low-priority
     // embedding work. Query surfaces must keep serving the last
     // structural/token report while that work is still running.
@@ -888,7 +937,7 @@ async fn embedding_refresh_keeps_latest_report_readable_while_provider_is_blocke
     let completed_clone = Arc::clone(&completed);
     let reporter: deslop_core::live::EmbeddingProgressReporter = Arc::new(move |event| {
         if event.phase == deslop_core::live::EmbeddingPhase::Complete {
-            completed_clone.notify_waiters();
+            completed_clone.notify_one();
         }
         if let Ok(mut lock) = events_clone.lock() {
             lock.push(event);
@@ -956,8 +1005,9 @@ async fn exercise_path_resolution(service: &LiveService) -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn embedding_list_models_returns_empty_when_ollama_unreachable() -> Result<()> {
+    let _slot = live_slot().await;
     // [REMOVE-STUB] Production model listing must not include the stub
     // fallback. When Ollama is unreachable the list is empty and the
     // VSIX shows its "Ollama not detected" empty state.
@@ -1109,8 +1159,9 @@ impl EmbeddingProvider for CountingProvider {
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_session_initial_report_does_not_run_embeddings() -> Result<()> {
+    let _slot = live_slot().await;
     // [LIVE-EMBEDDING-CONSENT] Live startup must be deterministic-only
     // until a user-selected model crosses `embedding/setModel`.
     let tmp = copy_fixture("csharp-small")?;
@@ -1128,7 +1179,7 @@ async fn live_session_initial_report_does_not_run_embeddings() -> Result<()> {
     let completed_clone = Arc::clone(&completed);
     let reporter: deslop_core::live::EmbeddingProgressReporter = Arc::new(move |event| {
         if event.phase == deslop_core::live::EmbeddingPhase::Complete {
-            completed_clone.notify_waiters();
+            completed_clone.notify_one();
         }
     });
     {
@@ -1183,8 +1234,9 @@ async fn live_session_initial_report_does_not_run_embeddings() -> Result<()> {
 /// dedup logic counted unique vectors plus failed occurrences, so
 /// progress capped well below `total` and the editor's session panel
 /// froze at less than 100% even though the pass was finished.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn embedding_running_progress_reaches_total_with_duplicate_snippets() -> Result<()> {
+    let _slot = live_slot().await;
     let tmp = tempfile::tempdir().context("tempdir")?;
     let body = b"namespace Demo { public class Tally { public int Sum(int b) { \
         if (b < 0) { return 0; } int total = 0; \
@@ -1203,7 +1255,7 @@ async fn embedding_running_progress_reaches_total_with_duplicate_snippets() -> R
     let completed_clone = Arc::clone(&completed);
     let reporter: deslop_core::live::EmbeddingProgressReporter = Arc::new(move |event| {
         if event.phase == deslop_core::live::EmbeddingPhase::Complete {
-            completed_clone.notify_waiters();
+            completed_clone.notify_one();
         }
         if let Ok(mut lock) = events_clone.lock() {
             lock.push(event);
@@ -1247,8 +1299,9 @@ async fn embedding_running_progress_reaches_total_with_duplicate_snippets() -> R
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn deeply_nested_dart_change_is_skipped_without_crashing_the_session() -> Result<()> {
+    let _slot = live_slot().await;
     // #168: a pathologically deep file applied as a live change must be
     // dropped, never crash the long-lived server. Exercises the session's
     // apply_one_change skip arm on a ~2 MB tokio worker stack — the same
@@ -1295,8 +1348,9 @@ async fn deeply_nested_dart_change_is_skipped_without_crashing_the_session() -> 
 /// deletion. A directory `Remove` event carries the directory path
 /// (which has no source extension and matches no live leaf), so the
 /// session must evict by ancestor prefix — not by exact-leaf match.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn removing_a_directory_evicts_every_occurrence_under_it() -> Result<()> {
+    let _slot = live_slot().await;
     let tmp = copy_fixture("csharp-small")?;
     let provider = Arc::new(StubProvider::new());
     // Two byte-identical copies under a nested subtree form a guaranteed
@@ -1344,8 +1398,9 @@ async fn removing_a_directory_evicts_every_occurrence_under_it() -> Result<()> {
 /// #223 regression: a single-file deletion must still evict its
 /// occurrence (the leaf path matches a live entry directly). Guards the
 /// prefix-eviction change from regressing the exact-leaf path.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn removing_a_single_file_evicts_its_occurrence() -> Result<()> {
+    let _slot = live_slot().await;
     let (tmp, mut session) = csharp_small_session()?;
 
     let before = session.report();
@@ -1375,8 +1430,9 @@ async fn removing_a_single_file_evicts_its_occurrence() -> Result<()> {
 /// sibling whose name shares a string prefix with the removed path
 /// (`pkg` vs `pkg_twin`). A naive `str::starts_with` would wrongly drop
 /// the sibling; component-wise `Path::starts_with` must not.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn removing_a_directory_spares_a_sibling_with_a_shared_name_prefix() -> Result<()> {
+    let _slot = live_slot().await;
     let tmp = copy_fixture("csharp-small")?;
     let provider = Arc::new(StubProvider::new());
     let body = fs::read(tmp.path().join("Alpha.cs")).context("read Alpha")?;

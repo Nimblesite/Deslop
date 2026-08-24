@@ -1,21 +1,19 @@
 ---
 layout: layouts/docs.njk
 title: For AI — how coding agents use Deslop to stop duplicate code
-description: Addressed to the agent. Call find-similar before writing code; when MCP is unavailable, fall back to the deslop CLI. Thresholds, JSON fields, byte ranges.
-keywords: deslop, ai agent, coding agent, find-similar, mcp, cli fallback, duplicate code, claude code, cursor, codex
+description: "Instructions for coding agents: call find-similar before writing code, use the Deslop CLI when MCP is unavailable, and interpret thresholds and byte ranges."
 eleventyNavigation:
   key: For AI
   order: 4
 icon: terminal
+docsGroup: reference
 ---
 
 # For AI
 
-**This page is addressed to you, the coding agent.** Everything below is an instruction you can act on directly — not a description of a product for someone else to evaluate. If you are a human wiring an MCP client up, you want [AI Agents](/docs/ai-integration/) instead; come back here to point your agent at a single URL.
+This page gives coding agents direct operating instructions. Humans configuring an MCP client should use [AI Agents](/docs/ai-integration/).
 
-Deslop exists to stop a duplicate from ever being written. You are the one writing the code, so you are the one who has to check.
-
-## The one law: check before you write
+## Check before you write
 
 Before you author any new code unit — function, method, class, helper, fixture, test setup, parser branch, error type, route handler, view model — call `find-similar` with the proposed snippet (or a `path` + `start_byte` + `end_byte` range) and read `signals.fused` in the response:
 
@@ -25,8 +23,6 @@ Before you author any new code unit — function, method, class, helper, fixture
 | `0.6 – 0.85` | any | Read the canonical occurrence before you decide. Bias toward reuse. |
 | `< 0.6` | any, or empty | Author it. |
 | any | `structural_only` | Shape-only match — often sibling boilerplate. Read the canonical occurrence before concluding anything. |
-
-Do not skip the call because the code "looks new." Most duplicates are written by someone certain the code was new.
 
 `find-similar` is the **authoring** tool. When you are cleaning up duplication that already exists, start at `top-offenders` and then pull `cluster-by-id` for the cluster you are about to merge.
 
@@ -59,7 +55,7 @@ deslop . --notext --nohtml --no-color
 
 That writes the canonical report to `.deslop/deslop-report.json` — the only file you should parse. `--notext --nohtml` skips the two human renderers you do not need; `--no-color` keeps the stderr summary clean for a log.
 
-**Be honest with yourself about what this costs you.** There is no snippet query in the CLI — `find-similar` is an MCP tool, and the CLI cannot evaluate code you have not written yet. The CLI loop is therefore *catch immediately*, not *prevent*:
+The CLI has no snippet query: `find-similar` is an MCP tool, and the CLI cannot evaluate code you have not written yet. The fallback loop catches a duplicate immediately after it is written:
 
 1. Run `deslop .` once before you start, so you have a baseline.
 2. Before authoring, scan the baseline `clusters[]` for the file and the neighbouring files you are about to touch. If a cluster already covers the pattern you were going to add, reuse its canonical occurrence — that is the CLI's version of prevention, and it catches the common case.
@@ -76,41 +72,6 @@ If neither MCP nor the CLI is available, say so and stop. Do not guess.
 
 `deslop-report.json` is canonical and the **only** file you should parse — `.txt` and `.html` are renderers over it. Every report begins with an embedded `schema_doc` describing its own shape, so you do not need a separate reference to read the payload. Over MCP, call `schema-doc` **once** per session, never per response.
 
-```json
-{
-  "tool_version": "0.0.0-dev",
-  "schema_doc": "…inline description of every field…",
-  "metrics": {
-    "analysed_loc": 1832044,
-    "duplicated_loc": 48120,
-    "duplication_percent": 2.63,
-    "clusters_total": 142,
-    "duplicated_files": 318,
-    "threshold": { "percent": 5.0, "breached": false, "source": "config" }
-  },
-  "action_hints": [
-    { "pattern": "bucket=identical", "recommendation": "Identical code. Safe to extract — every copy is the same." }
-  ],
-  "clusters": [
-    {
-      "id": "0362505641efe3c7",
-      "weight": 2184.0,
-      "bucket": "nearly_identical",
-      "size": 3,
-      "canonical_node_count": 42,
-      "signals": { "structural": 1.0, "token_jaccard": 0.97, "embedding_cos": 0.91, "fused": 0.99 },
-      "summary": "3 near-identical copies of a 42-node method across UserRepository.cs:120-180, ProductRepository.cs:58-118, OrderRepository.cs:40-102 — safe to extract.",
-      "interpretation": "Nearly identical code. Review the locations — small differences may matter.",
-      "occurrences": [
-        { "path": "UserRepository.cs", "start_byte": 3104, "end_byte": 4820, "start_line": 120, "end_line": 180, "hidden": false }
-      ]
-    }
-  ]
-}
-```
-
-`summary` and `interpretation` are written for you: they state what was found, where, and — when the signals agree — whether it is safe to extract. Repository-level guidance is in the top-level `action_hints`, keyed by `bucket`, and is derived from the signals rather than guessed.
-
 | Field | How to act on it |
 | --- | --- |
 | `metrics.duplication_percent` | The repo-wide headline number a CI gate compares against. |
@@ -122,7 +83,7 @@ If neither MCP nor the CLI is available, say so and stop. Do not guess.
 
 ### Byte ranges, not line numbers
 
-Deslop's source of truth is `[start_byte, end_byte)`. Line numbers are derived at render time for humans. Slice by byte range when you edit — line-based edits drift as soon as surrounding code moves.
+Deslop's authoritative range is `[start_byte, end_byte)`. Line numbers are derived at render time for humans. Slice by byte range when you edit — line-based edits drift as soon as surrounding code moves.
 
 ### Cluster IDs are stable
 
@@ -138,7 +99,7 @@ If you are setting Deslop up rather than consuming it, three things decide almos
 
 To gate a build, use the [GitHub Action](/docs/github-action/); it wraps the same exit-code contract.
 
-## Rules you do not get to break
+## Operating rules
 
 - **Do not silence a finding to make it go away.** Widening the threshold, adding a `report_hide` pattern to bury your own code, or splitting a duplicate into trivially different shapes are all failures, not fixes.
 - **Do not treat a flag as noise until you have shown it is noise.** If Deslop reports it, read both occurrences first.

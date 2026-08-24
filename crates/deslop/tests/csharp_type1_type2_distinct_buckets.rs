@@ -10,7 +10,6 @@
 
 use anyhow::Result;
 
-mod common;
 use crate::common::*;
 
 fn cluster_interpretations(report: &serde_json::Value) -> Vec<String> {

@@ -1,5 +1,5 @@
 //! Mtime-based read freshness for live reports
-//! ([LIVE-CLUSTER-OFFSET-FRESHNESS], [Deslop#153], [Deslop#156]).
+//! ([LIVE-CLUSTER-OFFSET-FRESHNESS],,).
 //!
 //! The watcher-driven scheduler is asynchronous and debounced: when a
 //! file changes on disk there is a ~250 ms window before the

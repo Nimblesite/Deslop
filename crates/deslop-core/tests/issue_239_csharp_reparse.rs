@@ -16,7 +16,7 @@
 //! overshoots it by an order of magnitude while the cached path clears it
 //! several times over on debug, release, and coverage builds alike.
 
-mod common;
+use crate::common;
 
 use std::{fmt::Write as _, time::Instant};
 
@@ -168,6 +168,7 @@ fn cluster_over(id: &str, members: &[(deslop_core::state::FileId, ByteRange)]) -
             token_jaccard: 0.97,
             embedding_cos: 0.0,
         },
+        content: deslop_core::content::ContentEvidence::unmeasured(),
     }
 }
 

@@ -3,7 +3,7 @@
 //!
 //! Tests [CLONE-NOISE-PY-PYTEST-FIXTURE]
 
-mod common;
+use crate::common;
 
 use anyhow::Result;
 use common::ReportFixture;

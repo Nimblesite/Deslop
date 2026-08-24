@@ -181,48 +181,88 @@ fn collect_tokens_in_range(
     out: &mut Vec<&'static str>,
     language: Option<&str>,
 ) -> Option<()> {
+    let resolved = resolve_range_nodes(node, start, end)?;
+    for member in resolved {
+        emit_node_tokens(member, out, language);
+    }
+    Some(())
+}
+
+/// Resolves a fingerprint byte range to the nodes it spans: the exact
+/// node when one exists, else the contiguous child window a synthetic
+/// sibling range covers. Shared by the token stream extraction, the
+/// content-agreement walk ([FUSION-CONTENT-GATE]) and the shared-subtree
+/// overlap ([FUSION-SHARED-SUBTREE]) so all three signals always see
+/// the same code.
+pub(crate) fn resolve_range_nodes(
+    node: &NormalizedNode,
+    start: usize,
+    end: usize,
+) -> Option<Vec<&NormalizedNode>> {
     if node.byte_range.start == start && node.byte_range.end == end {
-        emit_node_tokens(node, out, language);
-        return Some(());
+        return Some(vec![node]);
     }
     if node.byte_range.start > start || node.byte_range.end < end {
         return None;
     }
-    if emit_child_window(node, start, end, out, language).is_some() {
-        return Some(());
+    if let Some(window) = matching_child_window(node, start, end) {
+        return Some(window);
     }
-    collect_descendant_tokens(node, start, end, out, language)
+    node.children
+        .iter()
+        .find_map(|child| resolve_range_nodes(child, start, end))
 }
 
-/// Searches descendants for the requested token range.
-fn collect_descendant_tokens(
+/// Normalisation-collapsed content frontier covered by `fingerprint`,
+/// in pre-order, as `(kind, byte range)` pairs. `None` when the range
+/// resolves to no node or sibling window. Feeds the content-agreement
+/// signal ([FUSION-CONTENT-GATE]) — the frontier positions are exactly
+/// where two shape-identical subtrees can still disagree in raw source
+/// content — and the literal-dominance measurement behind the
+/// language-agnostic data-table category ([CLONE-NOISE-LITERAL-TABLE]).
+#[must_use]
+pub(crate) fn collapsed_leaves(
+    root: &NormalizedNode,
+    fingerprint: &Fingerprint,
+) -> Option<Vec<(&'static str, crate::ast::ByteRange)>> {
+    let resolved = resolve_range_nodes(
+        root,
+        fingerprint.byte_range.start,
+        fingerprint.byte_range.end,
+    )?;
+    let mut out = Vec::new();
+    for member in resolved {
+        collect_collapsed_leaves(member, &mut out);
+    }
+    Some(out)
+}
+
+/// Pre-order walk collecting the content frontier as `(kind, range)`
+/// pairs: a collapsed node counts only when no collapsed descendant
+/// already carries its bytes. A collapsed non-leaf — a template string
+/// whose fragments and interpolated identifiers are collapsed children —
+/// spans those descendants, so emitting it too would re-test the same
+/// bytes a second time and manufacture a disagreeing "literal" at every
+/// interpolation whose identifier a Type-2 rename touched.
+fn collect_collapsed_leaves(
     node: &NormalizedNode,
-    start: usize,
-    end: usize,
-    out: &mut Vec<&'static str>,
-    language: Option<&str>,
-) -> Option<()> {
+    out: &mut Vec<(&'static str, crate::ast::ByteRange)>,
+) {
+    let frontier = out.len();
     for child in &node.children {
-        if collect_tokens_in_range(child, start, end, out, language).is_some() {
-            return Some(());
-        }
+        collect_collapsed_leaves(child, out);
     }
-    None
-}
-
-/// Emits tokens for a contiguous child window when the range is synthetic.
-fn emit_child_window(
-    node: &NormalizedNode,
-    start: usize,
-    end: usize,
-    out: &mut Vec<&'static str>,
-    language: Option<&str>,
-) -> Option<()> {
-    let window = matching_child_window(node, start, end)?;
-    for child in window {
-        emit_node_tokens(child, out, language);
+    // [PIPELINE-NORMALIZE-AST-OPERATOR] An operator leaf is a frontier
+    // position like any other collapsed leaf. Its kind already carries
+    // the token, so members that add and subtract disagree in the
+    // digest; the frontier position is what lets the content stage say
+    // *which* positions disagreed rather than only that the shapes did.
+    let collapsed = node.kind == crate::lang::shared::IDENTIFIER_KIND
+        || node.kind == crate::lang::shared::LITERAL_KIND
+        || crate::lang::shared::is_operator_kind(node.kind);
+    if collapsed && out.len() == frontier {
+        out.push((node.kind, node.byte_range));
     }
-    Some(())
 }
 
 /// Returns the contiguous children spanned by `[start, end)`.

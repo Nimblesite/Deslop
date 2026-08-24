@@ -44,6 +44,10 @@ export interface ReportState {
   /** Visible projection — canonical with dirty-file occurrences elided. Use for any rendered surface. */
   visibleReport: Report | null;
   generation: number;
+  /** Client-owned freshness token — see `ReportStore.revision`. */
+  revision: number;
+  /** Counts LSP server sessions — see `ReportStore.sessionEpoch`. */
+  sessionEpoch: number;
   lifecycle: LifecyclePhase;
   pendingEmbeddingModel: string | null;
   embeddingProgress: EmbeddingProgress | null;
@@ -51,16 +55,32 @@ export interface ReportState {
    * ([FACET-TOP-OFFENDERS-FILTER]) so the status bar and webviews slice
    * in lock-step with the tree. */
   facetFilter: FacetFilter;
+  /** Cluster ids a delta retracted since the last full snapshot. See
+   * `ReportStore.retractedClusters`. */
+  retractedClusters: ReadonlySet<string>;
 }
+
+/**
+ * Retractions kept before the oldest are dropped.
+ *
+ * Sized for concurrency, not for history: at most one probe is in flight per
+ * edit and the debounce coalesces edits, so a handful of generations' worth of
+ * removals is already far more than any live response can refer to. The cap
+ * exists so a long delta-only session cannot accumulate ids without bound.
+ */
+const MAX_RETRACTED_CLUSTERS = 256;
 
 export class ReportStore implements vscode.Disposable {
   private readonly _report = signal<Report | null>(null);
   private readonly _dirtyFiles = signal<ReadonlySet<string>>(new Set());
   private readonly _generation = signal<number>(0);
+  private readonly _revision = signal<number>(0);
+  private readonly _sessionEpoch = signal<number>(0);
   private readonly _lifecycle = signal<LifecyclePhase>({ kind: "starting" });
   private readonly _pendingEmbeddingModel = signal<string | null>(null);
   private readonly _embeddingProgress = signal<EmbeddingProgress | null>(null);
   private readonly _facetFilter = signal<FacetFilter>({ buckets: [], categories: [] });
+  private readonly _retractedClusters = signal<ReadonlySet<string>>(new Set());
 
   private readonly _visibleReport: ReadonlySignal<Report | null> = computed(() =>
     projectVisible(this._report.value, this._dirtyFiles.value),
@@ -73,6 +93,40 @@ export class ReportStore implements vscode.Disposable {
 
   /** Workspace facet-filter signal ([FACET-TOP-OFFENDERS-FILTER]). */
   readonly facetFilter: ReadonlySignal<FacetFilter> = this._facetFilter;
+  /**
+   * Client-owned freshness token: bumps on every *accepted* snapshot or
+   * delta, and never moves backward. The wire `generation` cannot serve as
+   * that token — concurrent refreshes can complete out of order and a
+   * fallback snapshot is labelled with its *initiating* notification's
+   * generation, so the label can read 3 → 2 → 3 while the content changes
+   * every time (ABA). An in-flight answer captured at generation 3 would
+   * see 3 again and wrongly conclude nothing moved. Anything that must
+   * discard stale async replies compares against this revision instead
+   * ([VSIX-STATE-DIRTY]).
+   */
+  readonly revision: ReadonlySignal<number> = this._revision;
+  /**
+   * Counts LSP server sessions: bumped by `resetForNewSession` when the
+   * client reconnects to a restarted server ([VSIX-STATE]). Generations
+   * only order snapshots *within* one session, so an async refresh must
+   * capture this epoch at dispatch and discard its completion when the
+   * epoch has moved — otherwise a request answered by the dead session
+   * can land its generation-100 snapshot after the reset and re-arm the
+   * rollback guard against the new session's generation 1.
+   */
+  readonly sessionEpoch: ReadonlySignal<number> = this._sessionEpoch;
+  /**
+   * Cluster ids a delta explicitly retracted since the last full snapshot
+   * ([VSIX-STATE-DIRTY]). Surfaces that may render a cluster the canonical
+   * report does not contain — the live bubble accepts LSP probe results
+   * found between rescans — need to tell two populations apart: a cluster
+   * the report has *never seen* (legitimate, the probe is the only evidence
+   * there is) from one the server *withdrew* (a phantom; re-rendering it
+   * paints back what the delta just cleared). Absence from `report.clusters`
+   * cannot distinguish them, so the retraction is recorded instead of
+   * being dropped on the floor.
+   */
+  readonly retractedClusters: ReadonlySignal<ReadonlySet<string>> = this._retractedClusters;
   /** Signal for direct use in effect() — re-renders only when lifecycle changes. */
   readonly lifecycle: ReadonlySignal<LifecyclePhase> = this._lifecycle;
   /** Signal for direct use in effect() — re-renders when embedding model pending changes. */
@@ -86,10 +140,13 @@ export class ReportStore implements vscode.Disposable {
       report: this._report.value,
       visibleReport: this._visibleReport.value,
       generation: this._generation.value,
+      revision: this._revision.value,
+      sessionEpoch: this._sessionEpoch.value,
       lifecycle: this._lifecycle.value,
       pendingEmbeddingModel: this._pendingEmbeddingModel.value,
       embeddingProgress: this._embeddingProgress.value,
       facetFilter: this._facetFilter.value,
+      retractedClusters: this._retractedClusters.value,
     };
   }
 
@@ -119,10 +176,25 @@ export class ReportStore implements vscode.Disposable {
     return { dispose: unsub };
   }
 
-  setSnapshot(report: Report, generation: number): void {
+  /**
+   * Replaces the canonical report. Returns `false` without mutating when
+   * `generation` is older than the store's current one: that snapshot is a
+   * stale completion from a refresh that lost the race, and accepting it
+   * would roll the content backward and re-arm the generation label for
+   * ABA against in-flight probes ([VSIX-STATE-DIRTY]). Every accepted
+   * snapshot bumps `revision`, so even a same-generation replacement
+   * invalidates answers dispatched before it.
+   */
+  setSnapshot(report: Report, generation: number): boolean {
+    if (generation < this._generation.value) return false;
     batch(() => {
       this._report.value = report;
       this._generation.value = generation;
+      this._revision.value += 1;
+      // A full snapshot re-states the whole corpus, so every earlier
+      // retraction is settled by it — a cluster still absent here is
+      // absent on the snapshot's own authority, not on a stale delta's.
+      this._retractedClusters.value = new Set();
       // A report with findings is self-evidently a completed analysis, so
       // it settles the lifecycle to "ready". An EMPTY report is ambiguous
       // — it may be a cache seed or a mid-scan snapshot — so the "ready"
@@ -133,6 +205,7 @@ export class ReportStore implements vscode.Disposable {
       this._pendingEmbeddingModel.value = null;
       this._embeddingProgress.value = null;
     });
+    return true;
   }
 
   /**
@@ -144,6 +217,14 @@ export class ReportStore implements vscode.Disposable {
    * never reached; merging it would leave clusters dropped in the skipped
    * generations behind as phantoms. The caller falls back to a full snapshot.
    */
+  /** Drops the oldest retractions once the ledger exceeds its cap. */
+  private pruneRetracted(retracted: Set<string>): void {
+    const excess = retracted.size - MAX_RETRACTED_CLUSTERS;
+    if (excess <= 0) return;
+    // Set iteration is insertion-ordered, so this drops the oldest first.
+    for (const id of Array.from(retracted).slice(0, excess)) retracted.delete(id);
+  }
+
   applyDelta(delta: ReportDelta): boolean {
     const current = this._report.value;
     if (!current) return false;
@@ -153,8 +234,26 @@ export class ReportStore implements vscode.Disposable {
     for (const id of delta.clusters_removed) byId.delete(id);
     for (const cluster of delta.clusters_updated) byId.set(cluster.id, cluster);
     for (const cluster of delta.clusters_added) byId.set(cluster.id, cluster);
-    const clusters = Array.from(byId.values()).sort((a, b) => b.weight - a.weight);
+    // Worst-first is the engine's ranking, restamped on every render and
+    // carried on each updated cluster, so the merged list is re-ordered
+    // by `rank` rather than by a weight comparison that would have to
+    // guess the engine's tie-break ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
+    const clusters = Array.from(byId.values()).sort((a, b) => a.rank - b.rank);
+    const retracted = new Set(this._retractedClusters.value);
+    for (const id of delta.clusters_removed) retracted.add(id);
+    // A later generation that re-states a cluster un-retracts it: the
+    // server has found it again, so the withdrawal no longer stands.
+    for (const cluster of delta.clusters_updated) retracted.delete(cluster.id);
+    for (const cluster of delta.clusters_added) retracted.delete(cluster.id);
+    // Bounded on purpose. A retraction only has to outlive the probes that
+    // were already in flight when it happened; correctness for anything older
+    // is `LiveBubble.hasMovedOn`, which compares the store revision and so
+    // cannot be defeated by a pruned id. Keeping the full history instead made
+    // a delta-only session — one that never receives a full snapshot to clear
+    // the ledger — retain O(N) ids and copy O(N²) of them over its lifetime.
+    this.pruneRetracted(retracted);
     batch(() => {
+      this._retractedClusters.value = retracted;
       this._report.value = {
         ...current,
         clusters,
@@ -167,6 +266,7 @@ export class ReportStore implements vscode.Disposable {
         tool_version: delta.tool_version,
       };
       this._generation.value = delta.to_generation;
+      this._revision.value += 1;
       // Same rule as setSnapshot: only a non-empty result settles the
       // lifecycle; an emptied report waits for the server's idle signal.
       if (clusters.length > 0) this._lifecycle.value = { kind: "ready" };
@@ -204,6 +304,30 @@ export class ReportStore implements vscode.Disposable {
     this._dirtyFiles.value = next;
   }
 
+  /**
+   * Atomically clears every server-derived field when a new LSP session
+   * begins ([VSIX-STATE]). Generations are per server session — a
+   * restarted server counts again from 1, so a store still holding the
+   * dead session's generation would reject every new snapshot via the
+   * rollback guard and pin the old report on screen forever. The
+   * revision bumps (it never rewinds) so async answers dispatched
+   * against the old session fail their revision comparison and are
+   * discarded. Dirty-file tracking survives: unsaved local edits are
+   * client state and outlive any server session.
+   */
+  resetForNewSession(): void {
+    batch(() => {
+      this._report.value = null;
+      this._generation.value = 0;
+      this._revision.value += 1;
+      this._sessionEpoch.value += 1;
+      this._retractedClusters.value = new Set();
+      this._lifecycle.value = { kind: "analysing" };
+      this._pendingEmbeddingModel.value = null;
+      this._embeddingProgress.value = null;
+    });
+  }
+
   setLifecycle(lifecycle: LifecyclePhase): void {
     this._lifecycle.value = lifecycle;
   }
@@ -234,13 +358,18 @@ function projectVisible(canonical: Report | null, dirty: ReadonlySet<string>): R
     }
     changed = true;
     if (kept.length < 2) continue;
-    const oldTotal = occurrenceTotal(cluster);
-    const nextTotal = Math.max(kept.length, oldTotal - removed);
+    // The projection is a view, not a measurement: it hides occurrences
+    // that live in an unsaved buffer, so the counts it carries are counts
+    // of that view. Derived once here and written to every count field
+    // together, so no surface can show the engine's total beside the
+    // projection's shorter list ([VSIX-REACTIVITY-DIRTY]).
+    const projectedCount = Math.max(kept.length, cluster.occurrence_count - removed);
     clusters.push({
       ...cluster,
-      size: nextTotal,
+      size: projectedCount,
       occurrences: kept,
-      ...(cluster.occurrences_total !== undefined && { occurrences_total: nextTotal }),
+      occurrence_count: projectedCount,
+      occurrences_total: projectedCount,
     });
   }
   if (!changed) return canonical;
@@ -260,14 +389,6 @@ function occurrenceIsDirty(occurrencePath: string, dirty: ReadonlySet<string>): 
     if (samePathOrSuffix(left, dirtyPath) || samePathOrSuffix(dirtyPath, left)) return true;
   }
   return false;
-}
-
-function occurrenceTotal(cluster: ReportCluster): number {
-  const total =
-    cluster.occurrences_total && cluster.occurrences_total > 0
-      ? cluster.occurrences_total
-      : cluster.size;
-  return Math.max(total, cluster.occurrences.length);
 }
 
 function samePathOrSuffix(left: string, right: string): boolean {

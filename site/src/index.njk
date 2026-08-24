@@ -14,7 +14,7 @@ description: "Find duplicate code in nine languages. Deslop ranks what to remove
   "applicationSubCategory": "Static Code Analysis",
   "operatingSystem": "macOS, Linux, Windows",
   "url": "https://deslop.live",
-  "downloadUrl": "https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live",
+  "downloadUrl": "https://marketplace.visualstudio.com/items?itemName=Nimblesite.deslop-live",
   "softwareHelp": "https://deslop.live/docs/",
   "license": "https://github.com/Nimblesite/Deslop/blob/main/LICENSE",
   "description": "Find duplicate code in C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, and Go. Deslop ranks the worst offenders first and tells coding agents when similar code already exists.",
@@ -23,11 +23,7 @@ description: "Find duplicate code in nine languages. Deslop ranks what to remove
     "Worst-first ranking with a canonical occurrence for comparison",
     "Live VS Code warnings and MCP similarity checks for coding agents"
   ],
-  "publisher": {
-    "@type": "Organization",
-    "name": "Nimblesite",
-    "url": "https://nimblesite.co"
-  },
+  "publisher": { "@id": "https://deslop.live/#organization" },
   "offers": {
     "@type": "Offer",
     "price": "0",
@@ -52,7 +48,7 @@ description: "Find duplicate code in nine languages. Deslop ranks what to remove
         <a href="vscode:extension/Nimblesite.deslop-live" class="btn-primary">Install Deslop for VS Code</a>
       </div>
       <p class="hero__sublede">
-        One extension bundles live editor warnings, MCP checks for agents, and the CLI.
+        One extension bundles <a href="/docs/vscode-cluster-panel/">live editor warnings</a>, <a href="/docs/ai-integration/">MCP checks for coding agents</a>, and the <a href="/docs/">CLI</a>.
       </p>
     </div>
 
@@ -75,7 +71,7 @@ description: "Find duplicate code in nine languages. Deslop ranks what to remove
     <figure class="showcase__figure">
       <img src="/assets/img/screenshot.webp"
            alt="The Deslop VS Code extension ranking duplicate-code clusters in a real workspace, showing a live warning and a side-by-side canonical comparison."
-           width="2560" height="1492" loading="eager" decoding="sync">
+           width="2560" height="1492" loading="lazy" decoding="async">
     </figure>
     <ol class="showcase__legend">
       <li class="showcase__cell">
@@ -95,6 +91,8 @@ description: "Find duplicate code in nine languages. Deslop ranks what to remove
       </li>
     </ol>
   </section>
+
+  {% include "partials/testimonials.njk" %}
 
   {% include "partials/editors.njk" %}
 

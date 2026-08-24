@@ -39,6 +39,30 @@ pub(crate) enum MockBehavior {
     /// Only aggregate (multi-input) embed requests are rejected; single-input
     /// retries succeed — exercises the bisect-and-retry path (#5).
     RejectMultiInputEmbeds,
+    /// Every real embed request returns finite-JSON values that overflow
+    /// `f32`. Exercises provider-output validation before cache/index use.
+    OverflowingEmbeddings,
+    /// Answers the provider-construction handshake — `GET /api/tags`
+    /// then the `POST /api/embed` dimension probe — and stops accepting
+    /// connections the moment that probe is answered, so every request
+    /// after construction fails at the transport.
+    ///
+    /// Models a provider that is reachable when the user selects it and
+    /// gone by the time the background refresh runs: the machine slept,
+    /// the container was recycled, the model was unloaded. Deterministic
+    /// because it ends on the construction handshake rather than on a
+    /// clock or a request count.
+    VanishAfterProviderHandshake,
+}
+
+/// Everything one mock instance needs to answer `/api/embed`: the
+/// failure behaviour plus the declared semantic ground truth.
+#[derive(Clone, Debug)]
+struct MockConfig {
+    /// How embed requests succeed or fail.
+    behavior: MockBehavior,
+    /// Declared behaviour-equivalence groups ([`MockOllama::spawn_semantic`]).
+    semantic_groups: Arc<Vec<Vec<String>>>,
 }
 
 /// In-process mock Ollama HTTP server that returns deterministic
@@ -54,6 +78,12 @@ pub(crate) struct MockOllama {
     stop: Arc<AtomicBool>,
     /// Largest `input` array length seen on an `/api/embed` call.
     max_embed_batch_len: Arc<AtomicUsize>,
+    /// Largest individual input, in Unicode scalar values, observed on a
+    /// real `/api/embed` request (the dimension probe is excluded).
+    max_embed_input_chars: Arc<AtomicUsize>,
+    /// Whether any real `/api/embed` request enabled provider-side
+    /// truncation. Accuracy tests require this to remain false.
+    embed_truncation_enabled: Arc<AtomicBool>,
     /// Background acceptor thread handle.
     handle: Option<JoinHandle<()>>,
 }
@@ -68,19 +98,61 @@ impl MockOllama {
 
     /// Spawns a mock that answers `/api/embed` according to `behavior`.
     pub(crate) fn spawn_with(behavior: MockBehavior) -> Result<Self> {
+        Self::spawn_configured(MockConfig {
+            behavior,
+            semantic_groups: Arc::new(Vec::new()),
+        })
+    }
+
+    /// Spawns a happy-path mock that additionally embeds a declared
+    /// semantic verdict: every snippet containing any marker of one
+    /// group receives a shared dominant component, so same-group
+    /// snippets measure a high cosine regardless of how differently
+    /// they are written. This is how a test states the ground truth a
+    /// real semantic model would report for behaviour-equivalent
+    /// implementations — content shingles cannot express "same
+    /// behaviour, different text", which is the entire Type-4 category
+    /// (`dart_issue_119_embedding_role_mismatch`). Unmarked snippets
+    /// keep the honest shingle vector (#369).
+    pub(crate) fn spawn_semantic(groups: &[&[&str]]) -> Result<Self> {
+        let owned = groups
+            .iter()
+            .map(|group| group.iter().map(ToString::to_string).collect())
+            .collect();
+        Self::spawn_configured(MockConfig {
+            behavior: MockBehavior::Happy,
+            semantic_groups: Arc::new(owned),
+        })
+    }
+
+    /// Spawns a mock that answers the provider-construction handshake
+    /// and is then unreachable
+    /// ([`MockBehavior::VanishAfterProviderHandshake`]).
+    pub(crate) fn spawn_vanishing_after_handshake() -> Result<Self> {
+        Self::spawn_with(MockBehavior::VanishAfterProviderHandshake)
+    }
+
+    /// Spawns the HTTP acceptor thread for one mock configuration.
+    fn spawn_configured(config: MockConfig) -> Result<Self> {
         let listener = TcpListener::bind("127.0.0.1:0")?;
         listener.set_nonblocking(true)?;
         let addr = listener.local_addr()?;
         let stop = Arc::new(AtomicBool::new(false));
         let max_embed_batch_len = Arc::new(AtomicUsize::new(0));
+        let max_embed_input_chars = Arc::new(AtomicUsize::new(0));
+        let embed_truncation_enabled = Arc::new(AtomicBool::new(false));
         let server_stop = Arc::clone(&stop);
         let server_max = Arc::clone(&max_embed_batch_len);
+        let server_max_input = Arc::clone(&max_embed_input_chars);
+        let server_truncation = Arc::clone(&embed_truncation_enabled);
         let handle = thread::spawn(move || {
             serve(
                 &listener,
                 server_stop.as_ref(),
                 server_max.as_ref(),
-                behavior,
+                server_max_input.as_ref(),
+                server_truncation.as_ref(),
+                &config,
             );
         });
         Ok(Self {
@@ -88,6 +160,8 @@ impl MockOllama {
             addr,
             stop,
             max_embed_batch_len,
+            max_embed_input_chars,
+            embed_truncation_enabled,
             handle: Some(handle),
         })
     }
@@ -101,6 +175,16 @@ impl MockOllama {
     /// Largest `input` batch length the mock has served so far.
     pub(crate) fn max_embed_batch_len(&self) -> usize {
         self.max_embed_batch_len.load(Ordering::SeqCst)
+    }
+
+    /// Largest real embedding input observed by the mock.
+    pub(crate) fn max_embed_input_chars(&self) -> usize {
+        self.max_embed_input_chars.load(Ordering::SeqCst)
+    }
+
+    /// Whether production asked Ollama to truncate any real input.
+    pub(crate) fn embed_truncation_enabled(&self) -> bool {
+        self.embed_truncation_enabled.load(Ordering::SeqCst)
     }
 }
 
@@ -118,7 +202,9 @@ fn serve(
     listener: &TcpListener,
     stop: &AtomicBool,
     max_embed_batch_len: &AtomicUsize,
-    behavior: MockBehavior,
+    max_embed_input_chars: &AtomicUsize,
+    embed_truncation_enabled: &AtomicBool,
+    config: &MockConfig,
 ) {
     while !stop.load(Ordering::SeqCst) {
         match listener.accept() {
@@ -126,7 +212,18 @@ fn serve(
                 // Switch accepted stream to blocking so read_request never gets
                 // WouldBlock on large (> 1 024 B) request bodies — issue #57.
                 let _ = stream.set_nonblocking(false);
-                handle_stream(stream, max_embed_batch_len, behavior);
+                let answered_probe = handle_stream(
+                    stream,
+                    max_embed_batch_len,
+                    max_embed_input_chars,
+                    embed_truncation_enabled,
+                    config,
+                );
+                if answered_probe
+                    && matches!(config.behavior, MockBehavior::VanishAfterProviderHandshake)
+                {
+                    return;
+                }
             }
             Err(error) if error.kind() == ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(5));
@@ -136,12 +233,28 @@ fn serve(
     }
 }
 
-fn handle_stream(mut stream: TcpStream, max_embed_batch_len: &AtomicUsize, behavior: MockBehavior) {
+/// Answers one request. Returns whether it was the `/api/embed`
+/// dimension probe — the last step of provider construction, which
+/// [`MockBehavior::VanishAfterProviderHandshake`] uses as its cue.
+fn handle_stream(
+    mut stream: TcpStream,
+    max_embed_batch_len: &AtomicUsize,
+    max_embed_input_chars: &AtomicUsize,
+    embed_truncation_enabled: &AtomicBool,
+    config: &MockConfig,
+) -> bool {
     let Ok(request) = read_request(&mut stream) else {
-        return;
+        return false;
     };
-    let response = response_for(&request, max_embed_batch_len, behavior);
+    let response = response_for(
+        &request,
+        max_embed_batch_len,
+        max_embed_input_chars,
+        embed_truncation_enabled,
+        config,
+    );
     let _ = stream.write_all(response.as_bytes());
+    request.path == "/api/embed" && is_dimension_probe(&request.body)
 }
 
 #[derive(Debug)]
@@ -218,7 +331,9 @@ fn request_path(headers: &str) -> String {
 fn response_for(
     request: &HttpRequest,
     max_embed_batch_len: &AtomicUsize,
-    behavior: MockBehavior,
+    max_embed_input_chars: &AtomicUsize,
+    embed_truncation_enabled: &AtomicBool,
+    config: &MockConfig,
 ) -> String {
     match request.path.as_str() {
         "/api/tags" => json_response("200 OK", &tags_body()),
@@ -227,27 +342,47 @@ fn response_for(
         // vector width even while real embeds are being rejected.
         "/api/embed" if is_dimension_probe(&request.body) => {
             let inputs = request_inputs(&request.body).unwrap_or_default();
-            let embeddings: Vec<Vec<f32>> = inputs.iter().map(|text| embed_vector(text)).collect();
+            let embeddings: Vec<Vec<f32>> = inputs
+                .iter()
+                .map(|text| embed_vector(text, &config.semantic_groups))
+                .collect();
             json_response("200 OK", &json!({ "embeddings": embeddings }))
         }
         "/api/embed" => {
-            record_embed_batch_len(&request.body, max_embed_batch_len);
-            embed_response(&request.body, behavior)
+            record_embed_request(
+                &request.body,
+                max_embed_batch_len,
+                max_embed_input_chars,
+                embed_truncation_enabled,
+            );
+            embed_response(&request.body, config)
         }
         _ => json_response("404 Not Found", &json!({ "error": "not found" })),
     }
 }
 
-fn embed_response(body: &str, behavior: MockBehavior) -> String {
+fn embed_response(body: &str, config: &MockConfig) -> String {
     let inputs = request_inputs(body).unwrap_or_default();
-    match behavior {
+    match config.behavior {
         MockBehavior::RejectAllEmbeds => context_length_error(),
         MockBehavior::RejectMultiInputEmbeds if inputs.len() > 1 => context_length_error(),
-        MockBehavior::Happy | MockBehavior::RejectMultiInputEmbeds => {
-            let embeddings: Vec<Vec<f32>> = inputs.iter().map(|text| embed_vector(text)).collect();
+        MockBehavior::OverflowingEmbeddings => overflowing_response(inputs.len()),
+        MockBehavior::Happy
+        | MockBehavior::RejectMultiInputEmbeds
+        | MockBehavior::VanishAfterProviderHandshake => {
+            let embeddings: Vec<Vec<f32>> = inputs
+                .iter()
+                .map(|text| embed_vector(text, &config.semantic_groups))
+                .collect();
             json_response("200 OK", &json!({ "embeddings": embeddings }))
         }
     }
+}
+
+/// Returns valid JSON numbers that cannot be represented by `f32`.
+fn overflowing_response(input_count: usize) -> String {
+    let embeddings = vec![vec![3.5e38_f64, 0.0, 0.0, 0.0]; input_count];
+    json_response("200 OK", &json!({ "embeddings": embeddings }))
 }
 
 fn context_length_error() -> String {
@@ -257,23 +392,34 @@ fn context_length_error() -> String {
     )
 }
 
-/// Returns a 4-lane deterministic vector seeded by `text` length and
-/// first byte. Stable across runs so cache round-trip tests keep
-/// converging.
-fn embed_vector(text: &str) -> Vec<f32> {
-    let len_bits = u16::try_from(text.len() & 0xffff).unwrap_or(0);
-    let len = f32::from(len_bits);
-    let first = f32::from(text.bytes().next().unwrap_or(0));
-    vec![len.sin(), first.cos(), 0.5_f32, -0.5_f32]
-}
+#[path = "mock_embedding_vector.rs"]
+mod mock_embedding_vector;
 
+use mock_embedding_vector::embed_vector;
+
+/// True when the body is the provider's one-input dimension probe.
 fn is_dimension_probe(body: &str) -> bool {
     request_inputs(body).is_some_and(|inputs| inputs == ["deslop"])
 }
 
-fn record_embed_batch_len(body: &str, max_embed_batch_len: &AtomicUsize) {
-    let len = request_inputs(body).map_or(0, |inputs| inputs.len());
-    let _previous = max_embed_batch_len.fetch_max(len, Ordering::SeqCst);
+fn record_embed_request(
+    body: &str,
+    max_embed_batch_len: &AtomicUsize,
+    max_embed_input_chars: &AtomicUsize,
+    embed_truncation_enabled: &AtomicBool,
+) {
+    let inputs = request_inputs(body).unwrap_or_default();
+    let _previous = max_embed_batch_len.fetch_max(inputs.len(), Ordering::SeqCst);
+    for input in inputs {
+        let _previous = max_embed_input_chars.fetch_max(input.chars().count(), Ordering::SeqCst);
+    }
+    let truncates = serde_json::from_str::<Value>(body)
+        .ok()
+        .and_then(|value| value.get("truncate").and_then(Value::as_bool))
+        .unwrap_or(false);
+    if truncates {
+        embed_truncation_enabled.store(true, Ordering::SeqCst);
+    }
 }
 
 fn request_inputs(body: &str) -> Option<Vec<String>> {

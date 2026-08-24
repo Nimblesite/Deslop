@@ -41,9 +41,11 @@ pub enum CoreError {
     ConfigParse {
         /// Config path that failed to parse.
         path: PathBuf,
-        /// Upstream TOML parse error.
+        /// Upstream TOML parse error. Boxed: it is 88 bytes, which alone
+        /// pushed `CoreError` to clippy's `result_large_err` threshold and
+        /// so widened every `Result<_, CoreError>` in the crate.
         #[source]
-        source: toml::de::Error,
+        source: Box<toml::de::Error>,
     },
 
     /// `[threshold] max_duplication_percent` in the exclusion config
@@ -64,9 +66,11 @@ pub enum CoreError {
         path: PathBuf,
         /// The offending pattern string.
         pattern: String,
-        /// Upstream error from `ignore::gitignore`.
+        /// Upstream error from `ignore::gitignore`. Boxed for the same
+        /// reason as [`CoreError::ConfigParse`]: 64 bytes inline, beside a
+        /// `PathBuf` and a `String`, is the widest variant this enum has.
         #[source]
-        source: ignore::Error,
+        source: Box<ignore::Error>,
     },
 
     /// Report JSON supplied via `--from-report` could not be parsed.
@@ -97,12 +101,39 @@ pub enum CoreError {
         path: PathBuf,
     },
 
+    /// A `--diff` input is not well-formed unified diff text
+    /// ([CLI-ARG-DIFF]). Carries the 1-indexed line of the diff text
+    /// (not of any source file) so the user can find the defect.
+    #[error("invalid unified diff at line {line}: {message}")]
+    DiffParse {
+        /// 1-indexed line within the diff text that failed to parse.
+        line: usize,
+        /// What the parser expected or refused.
+        message: String,
+    },
+
+    /// A `--diff` input parsed but does not byte-match the scanned
+    /// tree ([CLI-ARG-DIFF]): a context or added line disagrees with
+    /// the file content at its new-side line number. Tagging against a
+    /// stale diff would mislabel every downstream population, so the
+    /// run is refused.
+    #[error(
+        "diff does not match the scanned tree: {path} differs at line {line}; \
+         regenerate the diff against the analysed revision"
+    )]
+    DiffStale {
+        /// Scan-root-relative path of the mismatching file.
+        path: PathBuf,
+        /// 1-indexed new-side line number where the bytes disagree.
+        line: u64,
+    },
+
     /// A source file's AST nests deeper than
     /// [`crate::lang::shared::MAX_AST_DEPTH`]. Pathological or
     /// machine-generated nesting (e.g. thousands of nested collection
     /// literals) would overflow the pipeline's recursive tree walks, so
     /// the file is rejected and skipped rather than aborting the whole
-    /// run or crashing the long-lived LSP/MCP server (#168). Carries no
+    /// run or crashing the long-lived LSP/MCP server. Carries no
     /// path so it is safe to log as a structured field.
     #[error("{language} source nests deeper than the {limit}-level AST depth limit")]
     AstTooDeep {
@@ -112,3 +143,6 @@ pub enum CoreError {
         limit: usize,
     },
 }
+
+#[cfg(test)]
+mod tests;

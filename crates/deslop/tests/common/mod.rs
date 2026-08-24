@@ -11,6 +11,87 @@
 
 #![allow(dead_code)]
 
+/// Fused-signal bands and assertion vocabulary ([FUSED-THRESHOLD]).
+/// Suites that assert on `signals.fused` import it explicitly with
+/// `use crate::common::signals::*;` — a glob re-export here would be an
+/// unused import in every binary that never touches the vocabulary.
+/// The two-sided contract every noise-family pin is judged by: the
+/// family stays hidden while a real clone in the same run stays visible.
+pub(crate) mod negative_pin;
+
+pub(crate) mod signals;
+
+/// The deterministic mock-embedder runner. Imported explicitly with
+/// `use crate::common::embeddings::*;`, for the same reason as
+/// `signals`.
+pub(crate) mod embeddings;
+
+/// Report-verdict assertions: metric totals ([METRICS-REPO]) and the
+/// shape of an expected cluster. Imported explicitly with
+/// `use crate::common::verdict::*;`, for the same reason as `signals`.
+pub(crate) mod verdict;
+
+/// Exact `cache_stats` assertions and the strip-and-compare view of
+/// [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE]. Imported explicitly
+/// with `use crate::common::incremental::*;`, for the same reason as
+/// `signals`.
+pub(crate) mod incremental;
+
+/// The authored clone corpus, its cold ground truth, and the positive
+/// report-shape assertions both equivalence suites are judged by —
+/// the batch-process one and the live-session one. Imported explicitly
+/// with `use crate::common::clone_corpus::*;`, for the same reason as
+/// `signals`.
+pub(crate) mod clone_corpus;
+
+/// The `--rerun-add SRC=DST` spec vocabulary shared by every suite that
+/// mutates a tree between the initial analysis and the rerun. Imported
+/// explicitly with `use crate::common::rerun_ops::*;`, for the same
+/// reason as `signals`.
+pub(crate) mod rerun_ops;
+
+/// The six-language `incremental-multilang` fixture vocabulary. Imported
+/// explicitly with `use crate::common::multilang::*;`, for the same
+/// reason as `signals`.
+pub(crate) mod multilang;
+
+/// Warm-store scenarios over that fixture — the baseline, the targeted
+/// mutation, and the reuse accounting each mutation must produce.
+/// Imported explicitly with `use crate::common::multilang_warm::*;`, for
+/// the same reason as `signals`.
+pub(crate) mod multilang_warm;
+
+/// The GH #119 role-gate contract, asserted once for every language
+/// ([CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]). Imported explicitly with
+/// `use crate::common::role_gate::*;`, for the same reason as `signals`.
+pub(crate) mod role_gate;
+
+/// The committed `diff-scope` fixture's vocabulary — what the patch
+/// adds, and how to drive the CLI over it. Imported explicitly with
+/// `use crate::common::diff_scope::*;`, for the same reason as
+/// `signals`.
+pub(crate) mod diff_scope;
+
+/// The committed-golden comparison and its `DESLOP_BLESS` regeneration
+/// path ([PIPELINE-DETERMINISM]). Imported explicitly with
+/// `use crate::common::golden::*;`, for the same reason as `signals`.
+pub(crate) mod golden;
+
+/// The three-file seeded Rust corpus the store-accounting suites share.
+/// Imported explicitly with `use crate::common::seeded::*;`, for the
+/// same reason as `signals`.
+pub(crate) mod seeded;
+
+/// Reading the on-disk parse store and a run's tracing log. Imported
+/// explicitly with `use crate::common::store::*;`, for the same reason
+/// as `signals`.
+pub(crate) mod store;
+
+/// Building a corpus on disk before the tool runs. Imported explicitly
+/// with `use crate::common::corpora::*;`, for the same reason as
+/// `signals`.
+pub(crate) mod corpora;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -22,11 +103,25 @@ pub(crate) use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
 
-/// Absolute path to the named directory under `tests/fixtures`.
+/// Absolute path to the named directory under `tests/fixtures`, falling
+/// back to the `deslop-mcp` crate's fixture tree.
+///
+/// The fallback is the mirror of `deslop-mcp`'s `copied_fixture_named`,
+/// which resolves the other way. A corpus that proves a detection defect
+/// through the MCP surface proves the same defect through the CLI, and
+/// the two suites must read the *same* bytes: a second copy of the
+/// fixture would let one suite go green while the code it pins is still
+/// broken under the other.
 pub(crate) fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
+    let local = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
+        .join(name);
+    if local.is_dir() {
+        return local;
+    }
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../deslop-mcp/tests/fixtures")
         .join(name)
 }
 
@@ -51,6 +146,17 @@ pub(crate) fn deslop_cmd(scan_root: &Path, output_prefix: &Path) -> Result<Comma
         .arg(output_prefix)
         .arg("--no-incremental");
     Ok(cmd)
+}
+
+/// Writes two byte-identical source files (`a.<extension>`, `b.<extension>`)
+/// into a freshly created `dir`: the minimal corpus for a fully-duplicated
+/// repo, used to prove the duplication metric is language-agnostic.
+pub(crate) fn write_identical_pair(dir: &Path, extension: &str, source: &str) -> Result<()> {
+    fs::create_dir_all(dir)?;
+    for stem in ["a", "b"] {
+        fs::write(dir.join(format!("{stem}.{extension}")), source)?;
+    }
+    Ok(())
 }
 
 /// Runs `deslop <scan_root> <extra_args...> --output <tmp>/report` into a
@@ -211,10 +317,7 @@ pub(crate) fn assert_bucketed_clone(
         "{fixture_dir} renamed clone must reach structural identity: {report:#}"
     );
     if bucket == "structural_only" {
-        assert!(
-            signal(clone, "token_jaccard") < 0.05,
-            "{fixture_dir} structural_only routing needs a near-zero token signal: {report:#}"
-        );
+        signals::assert_structural_only_contract(clone, fixture_dir);
     } else {
         assert!(
             approx(signal(clone, "token_jaccard"), 1.0),
@@ -322,14 +425,6 @@ pub(crate) fn per_file_metrics(report: &Value) -> &[Value] {
         .unwrap_or_default()
 }
 
-/// Count of a cluster's non-hidden (live) occurrences.
-pub(crate) fn live_occurrences(cluster: &Value) -> usize {
-    occurrences(cluster)
-        .iter()
-        .filter(|occurrence| !field(occurrence, "hidden").as_bool().unwrap_or(false))
-        .count()
-}
-
 /// Line-set cardinality as the `u64` the wire metric uses.
 pub(crate) fn line_count(lines: &BTreeSet<u64>) -> u64 {
     u64::try_from(lines.len()).unwrap_or(u64::MAX)
@@ -369,13 +464,30 @@ pub(crate) fn visible_duplicated_loc(report: &Value) -> u64 {
         .sum()
 }
 
-/// Writes two byte-identical source files (`a.<extension>`, `b.<extension>`)
-/// into a freshly created `dir`: the minimal corpus for a fully-duplicated
-/// repo, used to prove the duplication metric is language-agnostic.
-pub(crate) fn write_identical_pair(dir: &Path, extension: &str, source: &str) -> Result<()> {
-    fs::create_dir_all(dir)?;
-    for stem in ["a", "b"] {
-        fs::write(dir.join(format!("{stem}.{extension}")), source)?;
-    }
-    Ok(())
+/// One `id [bucket] path Lstart-end, ...` line per visible cluster — the
+/// complete published surface a full-set regression asserts against, so a
+/// mis-scoped view cannot hide behind a marker-based spot check.
+pub(crate) fn visible_cluster_lines(report: &Value) -> Vec<String> {
+    clusters(report)
+        .iter()
+        .map(|cluster| {
+            let spans: Vec<String> = occurrences(cluster)
+                .iter()
+                .map(|occurrence| {
+                    format!(
+                        "{} L{}-{}",
+                        field(occurrence, "path").as_str().unwrap_or("?"),
+                        field(occurrence, "start_line").as_u64().unwrap_or(0),
+                        field(occurrence, "end_line").as_u64().unwrap_or(0),
+                    )
+                })
+                .collect();
+            format!(
+                "{} [{}] {}",
+                field(cluster, "id").as_str().unwrap_or("?"),
+                field(cluster, "bucket").as_str().unwrap_or("?"),
+                spans.join(", ")
+            )
+        })
+        .collect()
 }

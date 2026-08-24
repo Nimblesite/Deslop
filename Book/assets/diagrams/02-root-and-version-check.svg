@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">Why editor and agent results can differ</title>
+  <desc id="description">The editor and agent cannot agree when they use different repository roots or different Deslop releases. They are ready to compare findings when both values match.</desc>
+  <rect width="1600" height="1000" fill="#0b0d10"/>
+
+  <text x="86" y="92" fill="#ff8c85" font-family="JetBrains Mono, monospace" font-size="23" font-weight="700" letter-spacing="5">WHEN RESULTS DISAGREE</text>
+  <text x="86" y="168" fill="#e8eaed" font-family="Inter, sans-serif" font-size="58" font-weight="800" letter-spacing="-2">Why editor and agent results can differ</text>
+
+  <g transform="translate(86 248)">
+    <rect width="444" height="570" fill="#fafaf7"/>
+    <rect width="444" height="12" fill="#b3261e"/>
+    <text x="36" y="62" fill="#b3261e" font-family="JetBrains Mono, monospace" font-size="20" font-weight="700" letter-spacing="3">WRONG ROOT</text>
+    <text x="36" y="122" fill="#14161a" font-family="Inter, sans-serif" font-size="35" font-weight="800">Different repositories</text>
+
+    <rect x="36" y="166" width="372" height="96" fill="#f1efe8"/>
+    <text x="60" y="202" fill="#55606b" font-family="JetBrains Mono, monospace" font-size="17">EDITOR ROOT</text>
+    <text x="60" y="238" fill="#14161a" font-family="JetBrains Mono, monospace" font-size="21">/workshop/api</text>
+
+    <rect x="36" y="286" width="372" height="96" fill="#f1efe8"/>
+    <text x="60" y="322" fill="#55606b" font-family="JetBrains Mono, monospace" font-size="17">AGENT ROOT</text>
+    <text x="60" y="358" fill="#14161a" font-family="JetBrains Mono, monospace" font-size="21">/workshop/web</text>
+
+    <path d="M94 430L350 486M350 430L94 486" stroke="#b3261e" stroke-width="7"/>
+    <text x="36" y="534" fill="#b3261e" font-family="Inter, sans-serif" font-size="24" font-weight="800">Results cannot agree.</text>
+  </g>
+
+  <g transform="translate(578 248)">
+    <rect width="444" height="570" fill="#fafaf7"/>
+    <rect width="444" height="12" fill="#9a6700"/>
+    <text x="36" y="62" fill="#9a6700" font-family="JetBrains Mono, monospace" font-size="20" font-weight="700" letter-spacing="3">MIXED VERSION</text>
+    <text x="36" y="122" fill="#14161a" font-family="Inter, sans-serif" font-size="35" font-weight="800">One root, two releases</text>
+
+    <rect x="36" y="166" width="372" height="96" fill="#f1efe8"/>
+    <text x="60" y="202" fill="#55606b" font-family="JetBrains Mono, monospace" font-size="17">EDITOR SERVER</text>
+    <text x="60" y="238" fill="#14161a" font-family="JetBrains Mono, monospace" font-size="21">release A</text>
+
+    <rect x="36" y="286" width="372" height="96" fill="#f1efe8"/>
+    <text x="60" y="322" fill="#55606b" font-family="JetBrains Mono, monospace" font-size="17">AGENT CONNECTOR</text>
+    <text x="60" y="358" fill="#14161a" font-family="JetBrains Mono, monospace" font-size="21">release B</text>
+
+    <rect x="90" y="432" width="264" height="56" fill="#fff4cc"/>
+    <text x="125" y="467" fill="#9a6700" font-family="JetBrains Mono, monospace" font-size="19" font-weight="700">REPORT MAY DIFFER</text>
+    <text x="36" y="534" fill="#9a6700" font-family="Inter, sans-serif" font-size="24" font-weight="800">Update the older binary.</text>
+  </g>
+
+  <g transform="translate(1070 248)">
+    <rect width="444" height="570" fill="#13171c"/>
+    <rect width="444" height="12" fill="#1a7f37"/>
+    <text x="36" y="62" fill="#65d485" font-family="JetBrains Mono, monospace" font-size="20" font-weight="700" letter-spacing="3">READY</text>
+    <text x="36" y="122" fill="#e8eaed" font-family="Inter, sans-serif" font-size="35" font-weight="800">Same root and release</text>
+
+    <rect x="36" y="166" width="372" height="96" fill="#242a31"/>
+    <text x="60" y="202" fill="#9aa3ad" font-family="JetBrains Mono, monospace" font-size="17">REPOSITORY ROOT</text>
+    <text x="60" y="238" fill="#e8eaed" font-family="JetBrains Mono, monospace" font-size="21">exact path matches</text>
+
+    <rect x="36" y="286" width="372" height="96" fill="#242a31"/>
+    <text x="60" y="322" fill="#9aa3ad" font-family="JetBrains Mono, monospace" font-size="17">DESLOP VERSION</text>
+    <text x="60" y="358" fill="#e8eaed" font-family="JetBrains Mono, monospace" font-size="21">exact release matches</text>
+
+    <circle cx="222" cy="458" r="42" fill="#1a7f37"/>
+    <path d="M201 458L217 474L247 439" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="square"/>
+    <text x="36" y="534" fill="#65d485" font-family="Inter, sans-serif" font-size="24" font-weight="800">Now compare group IDs.</text>
+  </g>
+
+  <text x="86" y="902" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="23">If results still differ, compare configuration and source state before assuming detection is wrong.</text>
+  <text x="86" y="946" fill="#e8eaed" font-family="Inter, sans-serif" font-size="26" font-weight="760">Comparable results require the same root, version, configuration, and source.</text>
+</svg>

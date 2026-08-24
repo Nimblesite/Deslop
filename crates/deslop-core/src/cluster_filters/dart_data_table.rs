@@ -1,7 +1,7 @@
 //! Dart collection-literal data-table detection
 //! ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]).
 //!
-//! The class-field registry filter (#169, [`super::dart`]) only fires for
+//! The class-field registry filter ([`super::dart`]) only fires for
 //! runs of declarations inside a `class_body`. A top-level
 //! `List<Highlight> highlights = [ Highlight(...), Highlight(...), … ]`
 //! collection literal has no enclosing `class_body`, so those data tables

@@ -22,6 +22,10 @@ import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
 import { ResolvedBinary } from "../../binary";
+import { bucketSignals } from "../signals.helpers";
+import { occurrence, wireCluster } from "../cluster.helpers";
+
+const GROUP_BY_SETTING_KEY = "topOffenders.groupBy";
 
 function resolvedLsp(): ResolvedBinary {
   return {
@@ -34,22 +38,14 @@ function resolvedLsp(): ResolvedBinary {
 }
 
 function clusterAcross(dirtyPath: string, otherPath: string): ReportCluster {
-  return {
+  return wireCluster({
     id: "c1",
     weight: 5,
-    size: 2,
     canonical_node_count: 3,
     bucket: "identical",
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
-    occurrences: [
-      { path: dirtyPath, start_byte: 0, end_byte: 4, hidden: false },
-      { path: otherPath, start_byte: 0, end_byte: 4, hidden: false },
-    ],
-    occurrences_total: 2,
-    occurrences_truncated: false,
-    summary: "",
-    interpretation: "",
-  };
+    signals: bucketSignals("identical"),
+    occurrences: [occurrence(dirtyPath, 0, 4), occurrence(otherPath, 0, 4)],
+  });
 }
 
 function reportWith(clusters: ReportCluster[]): Report {
@@ -75,21 +71,21 @@ suite("extension activation glue", () => {
       vscode.workspace.getConfiguration("deslop");
     try {
       // Explicit known values exercise the folder/path/split-on arms.
-      await read().update("topOffenders.groupBy", "folder", vscode.ConfigurationTarget.Workspace);
+      await read().update(GROUP_BY_SETTING_KEY, "folder", vscode.ConfigurationTarget.Workspace);
       await read().update("topOffenders.sortBy", "path", vscode.ConfigurationTarget.Workspace);
       await read().update("topOffenders.splitByLanguage", true, vscode.ConfigurationTarget.Workspace);
-      assert.equal(read().get<string>("topOffenders.groupBy"), "folder");
+      assert.equal(read().get<string>(GROUP_BY_SETTING_KEY), "folder");
       syncTopOffendersContext();
 
       // Unknown grouping/sort fall back to the spec defaults — the function
       // must coerce rather than propagate the bad value.
-      await read().update("topOffenders.groupBy", "nonsense", vscode.ConfigurationTarget.Workspace);
+      await read().update(GROUP_BY_SETTING_KEY, "nonsense", vscode.ConfigurationTarget.Workspace);
       await read().update("topOffenders.sortBy", "nonsense", vscode.ConfigurationTarget.Workspace);
       await read().update("topOffenders.splitByLanguage", false, vscode.ConfigurationTarget.Workspace);
       syncTopOffendersContext();
-      assert.equal(read().get<string>("topOffenders.groupBy"), "nonsense", "raw config value is untouched");
+      assert.equal(read().get<string>(GROUP_BY_SETTING_KEY), "nonsense", "raw config value is untouched");
     } finally {
-      await read().update("topOffenders.groupBy", undefined, vscode.ConfigurationTarget.Workspace);
+      await read().update(GROUP_BY_SETTING_KEY, undefined, vscode.ConfigurationTarget.Workspace);
       await read().update("topOffenders.sortBy", undefined, vscode.ConfigurationTarget.Workspace);
       await read().update("topOffenders.splitByLanguage", undefined, vscode.ConfigurationTarget.Workspace);
     }

@@ -18,6 +18,8 @@ import {
   writeCacheIgnore,
 } from "../../gitignorePrompt";
 
+const EXISTING_TARGET_IGNORE = "target\n";
+
 /// Creates a throwaway directory that looks like a git repository, with
 /// optional `.gitignore` contents.
 function repo(gitignore?: string): string {
@@ -95,7 +97,7 @@ suite("cache gitignore consent", () => {
 
   test("withCacheIgnored preserves content and newline hygiene", () => {
     assert.equal(withCacheIgnored(""), `${CACHE_IGNORE_ENTRY}\n`);
-    assert.equal(withCacheIgnored("target\n"), `target\n${CACHE_IGNORE_ENTRY}\n`);
+    assert.equal(withCacheIgnored(EXISTING_TARGET_IGNORE), `target\n${CACHE_IGNORE_ENTRY}\n`);
     assert.equal(
       withCacheIgnored("target"),
       `target\n${CACHE_IGNORE_ENTRY}\n`,
@@ -114,7 +116,7 @@ suite("cache gitignore consent", () => {
 
   test("needsCacheIgnore tracks the .gitignore contents", () => {
     assert.equal(needsCacheIgnore(repo()), true, "no .gitignore at all");
-    assert.equal(needsCacheIgnore(repo("target\n")), true, "unrelated entries");
+    assert.equal(needsCacheIgnore(repo(EXISTING_TARGET_IGNORE)), true, "unrelated entries");
     assert.equal(needsCacheIgnore(repo(".deslop/\n")), false, "already ignored");
     assert.equal(
       needsCacheIgnore(repo(".deslop-cache/\n")),
@@ -124,7 +126,7 @@ suite("cache gitignore consent", () => {
   });
 
   test("needsCacheIgnore sees the repository from a workspace subfolder", () => {
-    const root = repo("target\n");
+    const root = repo(EXISTING_TARGET_IGNORE);
     const nested = path.join(root, "packages", "app");
     fs.mkdirSync(nested, { recursive: true });
     assert.equal(
@@ -159,12 +161,12 @@ suite("cache gitignore consent", () => {
   });
 
   test("dismissing the prompt is also treated as a No", async () => {
-    const root = repo("target\n");
+    const root = repo(EXISTING_TARGET_IGNORE);
     const context = fakeContext();
     const prompt = stubPrompt(undefined);
     try {
       assert.equal(await promptToIgnoreCache(context, root), false);
-      assert.equal(readIgnore(root), "target\n", "dismissal must not write");
+      assert.equal(readIgnore(root), EXISTING_TARGET_IGNORE, "dismissal must not write");
       assert.equal(context.workspaceState.get(DECLINED_KEY), true);
     } finally {
       prompt.restore();
@@ -172,13 +174,13 @@ suite("cache gitignore consent", () => {
   });
 
   test("a remembered No is never re-prompted", async () => {
-    const root = repo("target\n");
+    const root = repo(EXISTING_TARGET_IGNORE);
     const context = fakeContext({ [DECLINED_KEY]: true });
     const prompt = stubPrompt("Yes");
     try {
       assert.equal(await promptToIgnoreCache(context, root), false);
       assert.deepEqual(prompt.prompts, [], "must not ask a second time");
-      assert.equal(readIgnore(root), "target\n");
+      assert.equal(readIgnore(root), EXISTING_TARGET_IGNORE);
     } finally {
       prompt.restore();
     }

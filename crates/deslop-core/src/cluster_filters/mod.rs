@@ -7,52 +7,57 @@
 //! pipeline cannot tell apart but a human instantly would.
 //!
 //! Issues addressed:
-//! - **#69** — abstract method signatures cluster across every concrete
+//! - abstract method signatures cluster across every concrete
 //!   subclass that implements an `ABC`. The 37-node subtree is the
 //!   parameter list; identical-by-contract is not duplication.
-//! - **#70** — `_tool_call_response("write_file", {...}, "id")` and
+//! - `_tool_call_response("write_file", {...}, "id")` and
 //!   peers cluster when only string literal args vary. Test fixture
 //!   data, not duplication.
-//! - **#71** — REST endpoint tests cluster on the HTTP-call shape but
+//! - REST endpoint tests cluster on the HTTP-call shape but
 //!   the f-string templates encode different routes. Different routes
 //!   are different tests, not duplication.
-//! - **#72** — `monkeypatch.setenv("KEY", "VAL")` test scaffolding
+//! - `monkeypatch.setenv("KEY", "VAL")` test scaffolding
 //!   clusters because every two-setenv test looks the same after
 //!   normalisation. Scaffolding is not logic.
-//! - **#75** — every first-party Rust language plug-in implements the
+//! - every first-party Rust language plug-in implements the
 //!   same `LanguageParser` trait surface. The adapter shape is required
 //!   by the trait contract, not extractable business logic.
-//! - **#114** — tests can independently re-implement HS256/JWT signing
+//! - tests can independently re-implement HS256/JWT signing
 //!   to verify a production minter as a black box. Sharing the helper
 //!   would make the test check its own implementation.
-//! - **#126** — generator template literals that contain generated-file
+//! - generator template literals that contain generated-file
 //!   headers can cluster with the generated output. That relationship is
 //!   provenance, not duplicate implementation logic.
-//! - **#99** — pure Python assertion blocks in tests share AST shape and
+//! - pure Python assertion blocks in tests share AST shape and
 //!   token alphabet while intentionally checking different concrete values.
-//! - **#100** [CLONE-NOISE-PY-KWARGS-CTOR] — ORM/dataclass/Pydantic
+//! - [CLONE-NOISE-PY-KWARGS-CTOR] — ORM/dataclass/Pydantic
 //!   constructor calls with shared field shape but distinct field names
 //!   cluster after identifier normalisation. The constructor's purpose
 //!   IS to enumerate per-model fields; extraction is impossible.
-//! - **#105** [CLONE-NOISE-PY-MAPPED-COLUMN] — `SQLAlchemy`
+//! - [CLONE-NOISE-PY-MAPPED-COLUMN] — `SQLAlchemy`
 //!   `Mapped[T] = mapped_column(...)` declaration blocks across distinct
 //!   ORM model classes cluster via token Jaccard alone. Each block is a
 //!   different table schema.
-//! - **#107** [CLONE-NOISE-PY-DICT-ASSERT] — chained `assert X[k1][k2]`
+//! - [CLONE-NOISE-PY-DICT-ASSERT] — chained `assert X[k1][k2]`
 //!   assertions across unrelated pytest test functions share AST shape
 //!   but verify different response/payload contracts.
-//! - **#112** [CLONE-NOISE-PY-DICT-FIXTURE] — small nested dict literals
+//! - [CLONE-NOISE-PY-DICT-FIXTURE] — small nested dict literals
 //!   inside pytest test functions share AST shape across files but
 //!   encode unrelated request/response payloads.
-//! - **#121** — async `SQLAlchemy` row-building pytest fixtures repeat the
+//! - [CLONE-NOISE-PY-COLLECTION-SIBLING-CELLS] — two entries of one
+//!   collection literal instance admit as a structural pair at a
+//!   permissive `--min-nodes`. Cells of one record are its fields, not
+//!   extractable duplication; a byte-identical repeated entry still
+//!   surfaces.
+//! - async `SQLAlchemy` row-building pytest fixtures repeat the
 //!   same add/commit/refresh/return setup idiom by design.
-//! - **#150** — `mod e0001;` / `use foo::Bar;` top-level declarations
+//! - `mod e0001;` / `use foo::Bar;` top-level declarations
 //!   cluster across registries because Rust module statements cannot be
 //!   macro-generated. They are language scaffolding, not logic.
-//! - **#147** — `xs.iter().map(|x| x.field.as_str()).collect()` is a
+//! - `xs.iter.map(|x| x.field.as_str).collect` is a
 //!   pure language idiom that clusters across unrelated element types.
 //!   Extracting it would require a cross-crate trait, not deduplication.
-//! - **#176** [CLONE-NOISE-RUST-MATCH-DISPATCH] — runs of `match` arms in
+//! - [CLONE-NOISE-RUST-MATCH-DISPATCH] — runs of `match` arms in
 //!   a dispatch `match` collapse to one `<path>::<ident> => Ok(<call>(..))`
 //!   shape under Type-2 normalisation, so the sibling-window pass matches
 //!   one window of arms against another within the same `match`. A routing
@@ -73,64 +78,79 @@
 //!   is invisible to the analyser, so users suppress the FP via
 //!   `.deslop.toml` `[language.python] exclude = ["workspaces/.../*"]`
 //!   (the existing config exclude already supports this).
-//! - **#97**  [CLONE-NOISE-PY-PARAMETRIC-INVARIANT-TESTS] — `def
+//! - [CLONE-NOISE-PY-PARAMETRIC-INVARIANT-TESTS] — `def
 //!   test_register_<variant>()` tests that vary only by enum-member
 //!   access tokens are spec assertions, not extractable duplication.
-//! - **#154** [CLONE-NOISE-SIGNATURE-ONLY] — every cluster member's
+//! - [CLONE-NOISE-SIGNATURE-ONLY] — every cluster member's
 //!   matched subtree is the *signature* (parameter list, return type) of
 //!   a function, never the body. After normalisation these collapse to
 //!   identical shape but the bodies are unrelated. Token Jaccard cannot
 //!   refute the match because identifiers normalise away too.
-//! - **#104** [CLONE-NOISE-PY-MODULE-PREAMBLE] — a sibling-window
+//! - [CLONE-NOISE-PY-MODULE-PREAMBLE] — a sibling-window
 //!   fingerprint can span a run of >=2 module-level helper/fixture
 //!   definitions. Two test files whose preambles share that shape cluster
 //!   even though every helper body differs. Suppressed only when no two
 //!   members share identical bodies, so a verbatim/renamed copy survives.
-//! - **#169** — Dart const data registries (`static const Foo NAME =
+//! - Dart const data registries (`static const Foo NAME =
 //!   Foo(<distinct values>);` icon/colour/token tables) cluster via
 //!   sibling-window fingerprints over runs of field/const declarations.
 //!   They are un-refactorable data, not logic. Suppressed only when the
 //!   members differ in raw bytes (a verbatim copy survives) and none holds
 //!   a closure/lambda initialiser (logic-bearing fields keep clustering).
-//! - **#133** [CLONE-NOISE-PY-MODULE-CONSTANT-TABLE] — a Python module that
-//!   is just a run of module-level `NAME = <literal>` constant assignments
-//!   (SQL query strings, registry/config values) normalises to the same
-//!   subtree as any other such table after identifier/literal/comment
+//! - [CLONE-NOISE-CONSTANT-TABLE] — a range that is just a run of
+//!   module-level `NAME = <literal>` declarations (SQL query strings,
+//!   registry/config values, a test suite's data blobs) normalises to the
+//!   same subtree as any other such table after identifier/literal/comment
 //!   stripping, so two unrelated tables cluster at `structural=1.00`. A
 //!   table of distinct named constants is data, not extractable logic.
-//!   Suppressed only when the members differ in raw bytes (a verbatim copy
-//!   survives).
+//!   One rule, per-language only in the grammar of "a top-level constant
+//!   declaration": Python `NAME = <literal>` (#133) and Rust `const` /
+//!   `static` items (#362). Suppressed only when the members differ in raw
+//!   bytes (a verbatim copy survives).
 //!
 //! The filter is purely additive: it never re-routes a `nearly_identical`
 //! cluster as `identical`, only suppresses noise. Any cluster whose
 //! member sources cannot be parsed (missing language plug-in, partial
 //! source bytes) falls through unchanged.
 
+mod body_shape;
 mod calls;
+mod constant_table;
+mod contract_index;
 mod dart;
 mod dart_data_table;
 mod declaration_family;
 mod ecmascript;
+mod family;
+mod forwarding;
+mod override_marker;
+mod polymorphic;
 mod python;
 mod python_class_shapes;
-mod python_constants;
+mod python_collection_cells;
+mod python_dict_assert;
 mod python_idioms;
 mod python_module_preamble;
 mod python_orm;
 mod role_compat;
 mod rust;
 mod snippets;
+mod structural_families;
+mod verbatim_subgroup;
 
 use std::{
     collections::{BTreeSet, HashMap},
     hash::BuildHasher,
+    rc::Rc,
 };
 
 use tree_sitter::Node;
 
 pub(crate) use declaration_family::is_single_file_declaration_family;
-pub(crate) use snippets::ParseCache;
+pub use snippets::ParseCache;
 use snippets::{collect_snippets, parse_for, uniform_language, Snippet};
+pub(crate) use structural_families::split_structural_families;
+pub(crate) use verbatim_subgroup::split_noise_verbatim_families;
 
 use crate::{
     ast::ByteRange, clone_category::CloneCategory, fingerprint::Fingerprint, state::FileId,
@@ -146,9 +166,21 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
     cache: &ParseCache,
 ) -> bool {
     let Some(language) = uniform_language(members, file_languages) else {
+        cache.record_noise(
+            NoiseFilter::UniformLanguage,
+            members.len(),
+            false,
+            std::time::Duration::ZERO,
+        );
         return false;
     };
     let Some(snippets) = collect_snippets(members, sources, language, cache) else {
+        cache.record_noise(
+            NoiseFilter::CollectSnippets,
+            members.len(),
+            false,
+            std::time::Duration::ZERO,
+        );
         return false;
     };
     // Generic, language-agnostic noise checks run for every language (they
@@ -157,10 +189,67 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
     // than walking every Dart/C# cluster's CST through Python/Rust matchers
     // that can never match — that wasted walk dominated analysis time on
     // large codegen-heavy repos ([CLONE-NOISE-REPARSE-CACHE]).
-    is_polymorphic_signature_cluster(&snippets)
-        || is_signature_only_cluster(&snippets)
-        || calls::is_literal_variation_call_cluster(&snippets)
-        || language_specific_noise(language, &snippets)
+    // Short-circuit preserved exactly: each check runs only until one
+    // fires, and the counters record only what actually ran
+    // ([PERF-FLUTTER-TODO-OBSERVABILITY]).
+    let polymorphic =
+        || polymorphic::is_polymorphic_signature_cluster(&snippets, sources, file_languages, cache);
+    let signature_only = || is_signature_only_cluster(&snippets, cache);
+    let literal_calls = || calls::is_literal_variation_call_cluster(&snippets, cache);
+    let constant_table = || constant_table::is_constant_table_cluster(&snippets);
+    let language_specific = || language_specific_noise(language, &snippets, cache);
+    let checks: [(NoiseFilter, &dyn Fn() -> bool); 5] = [
+        (NoiseFilter::Polymorphic, &polymorphic),
+        (NoiseFilter::SignatureOnly, &signature_only),
+        (NoiseFilter::LiteralCalls, &literal_calls),
+        (NoiseFilter::ConstantTable, &constant_table),
+        (NoiseFilter::LanguageSpecific, &language_specific),
+    ];
+    for (filter, check) in checks {
+        let started = std::time::Instant::now();
+        let result = check();
+        cache.record_noise(filter, snippets.len(), result, started.elapsed());
+        if result {
+            return true;
+        }
+    }
+    false
+}
+
+/// One cluster-noise sub-check, for [`ParseCache`]'s aggregate counters
+/// ([PERF-FLUTTER-TODO-OBSERVABILITY]): which filter the corpus-scale
+/// time actually goes to, and which of them ever fire.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum NoiseFilter {
+    /// The uniform-language pre-gate.
+    UniformLanguage,
+    /// The snippet-collection pre-gate.
+    CollectSnippets,
+    /// The polymorphic-signature contract filter.
+    Polymorphic,
+    /// The signature-only filter.
+    SignatureOnly,
+    /// The literal-variation call filter.
+    LiteralCalls,
+    /// The constant-table filter.
+    ConstantTable,
+    /// The language-specific idiom filters.
+    LanguageSpecific,
+}
+
+impl NoiseFilter {
+    /// Stable label for the aggregate record.
+    pub(crate) const fn label(self) -> &'static str {
+        match self {
+            Self::UniformLanguage => "uniform_language",
+            Self::CollectSnippets => "collect_snippets",
+            Self::Polymorphic => "polymorphic",
+            Self::SignatureOnly => "signature_only",
+            Self::LiteralCalls => "literal_calls",
+            Self::ConstantTable => "constant_table",
+            Self::LanguageSpecific => "language_specific",
+        }
+    }
 }
 
 /// Classifies a cluster's [`CloneCategory`] ([RANK-CATEGORY]) by re-parsing
@@ -175,6 +264,7 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
 /// drops it per config rather than silently hiding it.
 pub(crate) fn classify_clone_category<S: BuildHasher>(
     members: &[Fingerprint],
+    literal_fraction: f64,
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
@@ -185,30 +275,49 @@ pub(crate) fn classify_clone_category<S: BuildHasher>(
     let Some(snippets) = collect_snippets(members, sources, language, cache) else {
         return CloneCategory::Logic;
     };
-    if is_data_table_cluster(language, &snippets) {
+    if is_data_table_cluster(language, literal_fraction, &snippets) {
         CloneCategory::DataTable
     } else {
         CloneCategory::Logic
     }
 }
 
-/// Dispatches data-table detection by language. Dart covers
-/// collection-literal data tables today ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]);
-/// other languages have no collection-literal table filter yet.
-fn is_data_table_cluster(language: &str, snippets: &[Snippet<'_>]) -> bool {
-    match language {
-        "dart" => dart_data_table::is_dart_collection_data_table_cluster(snippets),
-        _ => false,
-    }
+/// Dispatches data-table detection. The language-agnostic
+/// literal-dominance test ([CLONE-NOISE-LITERAL-TABLE]) covers
+/// pure value tables in every language; the Dart predicate additionally
+/// recognises collection literals of constructor rows
+/// ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]), whose identifier-heavy rows
+/// sit below the literal-dominance floor.
+fn is_data_table_cluster(language: &str, literal_fraction: f64, snippets: &[Snippet<'_>]) -> bool {
+    is_literal_dominated_table(literal_fraction, snippets)
+        || match language {
+            "dart" => dart_data_table::is_dart_collection_data_table_cluster(snippets),
+            _ => false,
+        }
+}
+
+/// Language-agnostic data-table test ([CLONE-NOISE-LITERAL-TABLE]): the
+/// cluster's normalised leaves are overwhelmingly literal positions —
+/// measured in the pipeline, where the normalised trees live — and at
+/// least two members differ in raw bytes. The verbatim escape hatch is
+/// the same #190 rule the Dart predicate applies: a byte-for-byte
+/// copied table is genuine duplication and stays `logic`.
+fn is_literal_dominated_table(literal_fraction: f64, snippets: &[Snippet<'_>]) -> bool {
+    literal_fraction >= crate::buckets::LITERAL_TABLE_MIN_FRACTION
+        && snippets.len() >= 2
+        && raw_snippet_texts_differ(snippets)
 }
 
 /// Language-specific idiom filters, dispatched by language so a cluster is
 /// only walked by matchers that can fire for it. C# has no idiom filter
-/// today; Dart suppresses const-data-registry field clusters (#169). Both
+/// today; Dart suppresses const-data-registry field clusters. Both
 /// also rely on the generic checks plus the fusion and report-hide gates.
-fn language_specific_noise(language: &str, snippets: &[Snippet<'_>]) -> bool {
+fn language_specific_noise(language: &str, snippets: &[Snippet<'_>], cache: &ParseCache) -> bool {
     match language {
-        "dart" => dart::is_dart_class_field_declaration_cluster(snippets),
+        "dart" => {
+            dart::is_dart_class_field_declaration_cluster(snippets, cache)
+                || dart::is_dart_widget_scaffold_cluster(snippets)
+        }
         "python" => python_noise(snippets),
         "rust" => rust_noise(snippets),
         "javascript" | "typescript" | "tsx" => {
@@ -218,7 +327,7 @@ fn language_specific_noise(language: &str, snippets: &[Snippet<'_>]) -> bool {
     }
 }
 
-/// All Python idiom noise filters (issues #96/#97/#99/#100/#104/#105/#107/
+/// All Python idiom noise filters (/
 /// #112/#114/#115/#121/#126/#133 and monkeypatch scaffolding).
 fn python_noise(snippets: &[Snippet<'_>]) -> bool {
     python_idioms::is_generated_template_output_cluster(snippets)
@@ -226,19 +335,19 @@ fn python_noise(snippets: &[Snippet<'_>]) -> bool {
         || python_idioms::is_monkeypatch_scaffolding_literal_cluster(snippets)
         || python_idioms::is_python_all_exports_cluster(snippets)
         || python::is_python_assertion_only_cluster(snippets)
-        || python::is_chained_dict_assert_cluster(snippets)
+        || python_dict_assert::is_chained_dict_assert_cluster(snippets)
         || python_orm::is_kwargs_only_constructor_cluster(snippets)
         || python_orm::is_sqlalchemy_mapped_column_cluster(snippets)
         || python::is_test_dict_literal_cluster(snippets)
         || python::is_pytest_fixture_boilerplate_cluster(snippets)
+        || python_collection_cells::is_collection_sibling_cell_cluster(snippets)
         || python_class_shapes::is_strenum_class_shape_cluster(snippets)
         || python_class_shapes::is_pydantic_partial_update_cluster(snippets)
         || python::is_parametric_invariant_test_cluster(snippets)
         || python_module_preamble::is_module_preamble_sequence_cluster(snippets)
-        || python_constants::is_module_constant_table_cluster(snippets)
 }
 
-/// All Rust idiom noise filters (issues #75/#147/#150/#176/#224).
+/// All Rust idiom noise filters.
 fn rust_noise(snippets: &[Snippet<'_>]) -> bool {
     rust::is_rust_language_parser_adapter_cluster(snippets)
         || rust::is_rust_top_level_decl_cluster(snippets)
@@ -249,7 +358,7 @@ fn rust_noise(snippets: &[Snippet<'_>]) -> bool {
 
 /// Decides whether an embedding-dominant `same_behavior` cluster pairs
 /// members of incompatible top-level roles — a class/type definition
-/// with a function/method (issue **#119**
+/// with a function/method (issue
 /// [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]). Returns `true` when the
 /// cluster should be hidden. The caller restricts this to the
 /// `same_behavior` bucket so deterministic Type-1/2/3 clusters are
@@ -353,7 +462,7 @@ pub(super) fn trim_ascii_start(bytes: &[u8]) -> &[u8] {
     bytes.get(first..).unwrap_or_default()
 }
 
-/// Detects **issue #154** [CLONE-NOISE-SIGNATURE-ONLY]: every cluster
+/// Detects **** [CLONE-NOISE-SIGNATURE-ONLY]: every cluster
 /// member's matched subtree sits entirely inside a function/method
 /// signature — it does not overlap the body. After identifier and
 /// literal normalisation, `fn check_foo(ctx: &mut Ctx)` collapses to
@@ -363,16 +472,27 @@ pub(super) fn trim_ascii_start(bytes: &[u8]) -> &[u8] {
 /// erases the distinguishing tokens too.
 ///
 /// We suppress these clusters only when at least two of the enclosing
-/// function bodies differ in raw source bytes. A real Type-2 clone
-/// where two functions share the same signature and body would have
-/// identical body bytes, so this check keeps genuine duplication.
-fn is_signature_only_cluster(snippets: &[Snippet<'_>]) -> bool {
+/// function bodies differ as normalised trees
+/// ([`body_shape::body_kind_stream`]). A real Type-1/Type-2 clone
+/// where two functions share the same signature and body — byte for
+/// byte or under a consistent rename — has equal streams, so genuine
+/// duplication keeps clustering.
+fn is_signature_only_cluster(snippets: &[Snippet<'_>], cache: &ParseCache) -> bool {
     if snippets.len() < 2 {
         return false;
     }
-    let shapes: Option<Vec<Vec<String>>> = snippets
+    let shapes: Option<Vec<Rc<Vec<body_shape::OwnedShapeToken>>>> = snippets
         .iter()
-        .map(snippet_body_shape_when_signature_only)
+        .map(|snippet| {
+            cache.signature_shape(snippet, || {
+                snippet_body_shape_when_signature_only(snippet).map(|stream| {
+                    stream
+                        .iter()
+                        .map(body_shape::OwnedShapeToken::from)
+                        .collect()
+                })
+            })
+        })
         .collect();
     let Some(shapes) = shapes else { return false };
     let Some(first) = shapes.first() else {
@@ -381,17 +501,18 @@ fn is_signature_only_cluster(snippets: &[Snippet<'_>]) -> bool {
     shapes.iter().any(|shape| shape != first)
 }
 
-/// Returns the enclosing function body's AST node-kind sequence when
-/// `snippet.range` lies entirely inside that function's signature
-/// (before the body) — the signature-only match condition for
-/// [CLONE-NOISE-SIGNATURE-ONLY]. The node-kind sequence is the
-/// flattened, ordered list of every named descendant's kind so two
-/// bodies that share AST shape (and differ only by literals/identifiers)
-/// compare equal — i.e. a legitimate near-miss cluster keeps clustering.
-/// Returns `None` when the snippet is not contained in a function, when
-/// the function has no `body` field, or when the range intersects the
-/// body in any way.
-fn snippet_body_shape_when_signature_only(snippet: &Snippet<'_>) -> Option<Vec<String>> {
+/// Returns the enclosing function body's normalised kind stream
+/// ([`body_shape::body_kind_stream`]) when `snippet.range` lies
+/// entirely inside that function's signature (before the body) — the
+/// signature-only match condition for [CLONE-NOISE-SIGNATURE-ONLY].
+/// Two bodies that share AST shape (and differ only by literals,
+/// identifiers, or comments) compare equal — i.e. a legitimate
+/// near-miss cluster keeps clustering. Returns `None` when the snippet
+/// is not contained in a function, when the function has no `body`
+/// field, or when the range intersects the body in any way.
+fn snippet_body_shape_when_signature_only<'src>(
+    snippet: &Snippet<'src>,
+) -> Option<Vec<body_shape::ShapeToken<'src>>> {
     let tree = parse_for(snippet)?;
     let function = enclosing_kind(
         tree.root_node(),
@@ -402,125 +523,22 @@ fn snippet_body_shape_when_signature_only(snippet: &Snippet<'_>) -> Option<Vec<S
     if snippet.range.end > body.start_byte() {
         return None;
     }
-    let mut kinds: Vec<String> = Vec::new();
-    collect_named_kinds(body, &mut kinds);
-    Some(kinds)
-}
-
-/// Pushes every named descendant's `kind` into `kinds` in source order.
-/// Used by [`snippet_body_shape_when_signature_only`] so cluster members
-/// whose bodies share AST shape compare equal regardless of literal or
-/// identifier divergence.
-fn collect_named_kinds(node: Node<'_>, kinds: &mut Vec<String>) {
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
-        kinds.push(child.kind().to_owned());
-        collect_named_kinds(child, kinds);
-    }
-}
-
-/// Detects **issue #69**: every cluster member is a function definition
-/// (signature or whole `def`) whose declared name is the same identifier
-/// and the members span at least two distinct files. That is the
-/// abstract/interface implementation pattern — the contract forces
-/// identity, no extraction is possible. We additionally require that
-/// the enclosing function bodies are not byte-equivalent so a genuine
-/// copy-pasted helper that happens to share a name (e.g. private
-/// `_helper` reused in two modules) still fires as a cluster.
-fn is_polymorphic_signature_cluster(snippets: &[Snippet<'_>]) -> bool {
-    let names: Option<Vec<&[u8]>> = snippets.iter().map(enclosing_function_name).collect();
-    let Some(names) = names else { return false };
-    let Some(first_name) = names.first() else {
-        return false;
-    };
-    if !names.iter().all(|name| name == first_name) {
-        return false;
-    }
-    if !spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id)) {
-        return false;
-    }
-    enclosing_function_bodies_differ(snippets)
-}
-
-/// Returns true when at least two cluster members' enclosing function
-/// bodies differ in raw source bytes — distinguishes polymorphism
-/// (different implementations of one signature) from genuinely
-/// duplicated helper functions that share a name.
-fn enclosing_function_bodies_differ(snippets: &[Snippet<'_>]) -> bool {
-    let bodies: Option<Vec<Vec<u8>>> = snippets
-        .iter()
-        .map(|snippet| {
-            let tree = parse_for(snippet)?;
-            let function = enclosing_kind(
-                tree.root_node(),
-                snippet.range,
-                function_kinds(snippet.language),
-            )?;
-            let body = function.child_by_field_name("body")?;
-            snippet
-                .source
-                .get(body.start_byte()..body.end_byte())
-                .map(<[u8]>::to_vec)
-        })
-        .collect();
-    let Some(bodies) = bodies else { return false };
-    let Some(first) = bodies.first() else {
-        return false;
-    };
-    bodies.iter().any(|body| body != first)
-}
-
-/// Returns the name of the `function_definition` (or `method_declaration`
-/// for C#) that contains `snippet.range`, when one exists.
-fn enclosing_function_name<'a>(snippet: &'a Snippet<'_>) -> Option<&'a [u8]> {
-    let tree = parse_for(snippet)?;
-    let function = enclosing_kind(
-        tree.root_node(),
-        snippet.range,
-        function_kinds(snippet.language),
-    )?;
-    let name_node = function_name_node(function)?;
-    snippet
-        .source
-        .get(name_node.start_byte()..name_node.end_byte())
-}
-
-/// Resolves the identifier node that names `function`. Python, C#, and
-/// Rust expose a direct `name` field on the function node. Dart instead
-/// nests it under `signature` — `function_signature.name` for a top-level
-/// `function_declaration`, and `method_signature → function_signature.name`
-/// for a `method_declaration`. Without this descent
-/// [`enclosing_function_name`] returns `None` for every Dart member, so
-/// the polymorphic-signature filter (#69) could never fire on Dart even
-/// though `function_kinds` lists its node kinds.
-fn function_name_node(function: Node<'_>) -> Option<Node<'_>> {
-    if let Some(name) = function.child_by_field_name("name") {
-        return Some(name);
-    }
-    let signature = function.child_by_field_name("signature")?;
-    if let Some(name) = signature.child_by_field_name("name") {
-        return Some(name);
-    }
-    let mut cursor = signature.walk();
-    let nested = signature
-        .named_children(&mut cursor)
-        .find_map(|child| child.child_by_field_name("name"));
-    nested
+    Some(body_shape::body_kind_stream(body, snippet.source))
 }
 
 /// Returns the set of tree-sitter node kinds that count as function
 /// declarations for the purpose of polymorphism detection.
-const fn function_kinds(language: &str) -> &'static [&'static str] {
+pub(super) const fn function_kinds(language: &str) -> &'static [&'static str] {
     match language.as_bytes() {
         b"python" => &["function_definition"],
         b"csharp" => &["method_declaration", "local_function_statement"],
         b"rust" => &["function_item"],
         // Dart `function_declaration`/`method_declaration` both expose a
-        // `body` field, so the signature-only filter (#154) can compare
+        // `body` field, so the signature-only filter can compare
         // bodies after a signature-only structural match.
         b"dart" => &["function_declaration", "method_declaration"],
         // JS/TS/TSX function forms that expose a `body` field, so the
-        // signature-only (#154) and polymorphic-signature (#69) filters can
+        // signature-only and polymorphic-signature filters can
         // compare bodies after a signature-only structural match — parity
         // with the other languages.
         b"javascript" | b"typescript" | b"tsx" => &[
@@ -531,17 +549,17 @@ const fn function_kinds(language: &str) -> &'static [&'static str] {
             "arrow_function",
         ],
         // PHP functions and class methods that expose a `body` field so the
-        // signature-only (#154) and polymorphic-signature (#69) filters can
+        // signature-only and polymorphic-signature filters can
         // compare bodies after a signature-only structural match.
         b"php" => &["function_definition", "method_declaration"],
         // F# `let`/`member` bindings both expose a `body` field so the
-        // signature-only (#154) and polymorphic-signature (#69) filters can
+        // signature-only and polymorphic-signature filters can
         // compare bodies after a signature-only structural match. Only
         // `method_or_prop_defn` carries a `name` field (members), so #69 is
         // limited to members; top-level `let` bindings still get #154.
         b"fsharp" => &["function_or_value_defn", "method_or_prop_defn"],
         // Go functions, methods, and closures all expose a `body` field so
-        // the signature-only (#154) and polymorphic-signature (#69) filters
+        // the signature-only and polymorphic-signature filters
         // can compare bodies after a signature-only structural match.
         b"go" => &["function_declaration", "method_declaration", "func_literal"],
         _ => &[],

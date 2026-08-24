@@ -1,4 +1,4 @@
-__file__ [0..337]
+__file__ [0..336]
   export_statement [0..336]
     function_declaration [7..336]
       __ident__ [16..22]

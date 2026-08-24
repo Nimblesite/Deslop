@@ -10,7 +10,6 @@
 
 use anyhow::Result;
 
-mod common;
 use crate::common::*;
 
 #[test]
@@ -75,13 +74,15 @@ fn typescript_enums_with_renamed_members_cluster() -> Result<()> {
 fn typescript_primitive_type_annotation_difference_still_clusters() -> Result<()> {
     // The two functions differ only in their primitive type annotations
     // (`string`/`number` vs `any`/`boolean`); `predefined_type` keywords
-    // normalise to one structural kind, so the bodies still match and the
-    // renamed clone is detected (as `structural_only` for this shape).
+    // normalise to one structural kind, so the bodies still match. Every
+    // name and literal agrees, so the content gate ([FUSION-CONTENT-GATE])
+    // confirms the pair as a genuine near-miss rather than the shape-only
+    // routing the token-layer fallback used to force.
     assert_bucketed_clone(
         "ts-type-keyword",
         10,
         &["render-a.ts", "render-b.ts"],
-        "structural_only",
+        "nearly_identical",
     )
 }
 

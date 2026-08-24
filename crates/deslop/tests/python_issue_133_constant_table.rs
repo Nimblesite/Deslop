@@ -1,4 +1,4 @@
-//! E2E regression for GH #133 [CLONE-NOISE-PY-MODULE-CONSTANT-TABLE].
+//! E2E regression for GH #133 [CLONE-NOISE-CONSTANT-TABLE].
 //!
 //! Two unrelated Python modules that are each just a run of module-level
 //! `NAME = <literal>` constant assignments — a table of SQL query strings
@@ -20,7 +20,6 @@ use std::{fs, path::Path};
 use anyhow::Result;
 use serde_json::Value;
 
-mod common;
 use crate::common::*;
 
 fn run_report(scan_root: &Path) -> Result<Value> {

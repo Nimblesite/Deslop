@@ -9,7 +9,7 @@
 
 use std::fmt::Write as _;
 
-use crate::report::{Report, ReportSignals};
+use crate::report::Report;
 
 /// Writes the collapsed footer holding all the run metadata.
 pub fn write_run_details(out: &mut String, report: &Report, escape: fn(&str) -> String) {
@@ -45,27 +45,19 @@ fn write_signals(out: &mut String, report: &Report, escape: fn(&str) -> String) 
     let _ = write!(
         out,
         "<h3>Per-group signals</h3><pre>{header}",
-        header = escape("group  structural  token_jaccard  embedding_cos  fused\n"),
+        header = escape(crate::render::signals::TABLE_HEADER),
     );
     for cluster in &report.clusters {
         let _ = writeln!(
             out,
             "{}",
-            escape(&format_signal_row(&cluster.id, cluster.signals)),
+            escape(&crate::render::signals::table_row(
+                &cluster.id,
+                cluster.signals
+            )),
         );
     }
     let _ = write!(out, "</pre>");
-}
-
-/// Formats one signal row for the run-details table.
-fn format_signal_row(id: &str, signals: ReportSignals) -> String {
-    format!(
-        "{id:<6}  {s:>10.2}  {j:>13.2}  {e:>13.2}  {f:>5.2}",
-        s = signals.structural,
-        j = signals.token_jaccard,
-        e = signals.embedding_cos,
-        f = signals.fused,
-    )
 }
 
 /// Agent-oriented action-hints playbook.
@@ -106,7 +98,7 @@ fn write_boilerplate_hints(out: &mut String, report: &Report, escape: fn(&str) -
 
 /// Embedded schema-doc markdown so agents can self-document the JSON
 /// schema without a second round-trip. Skipped when the report omits the
-/// `schema_doc` (the CLI drops it — it is served on demand, #110/#111), so a
+/// `schema_doc` (the CLI drops it — it is served on demand), so a
 /// human HTML report never carries an empty schema section.
 fn write_schema(out: &mut String, report: &Report, escape: fn(&str) -> String) {
     if report.schema_doc.is_empty() {
@@ -125,11 +117,13 @@ fn format_provenance(report: &Report) -> String {
         || "embeddings: off".to_owned(),
         |provenance| {
             format!(
-                "embeddings: {provider}/{model}@{version} ({dims}-d, indexed {indexed}/{attempted}, failures {failed})",
+                "embeddings: {provider}/{model}@{version} ({dims}-d, embedded {succeeded}/{attempted} \
+                 subtrees via {indexed} index points, failures {failed})",
                 provider = provenance.provider_id,
                 model = provenance.model_id,
                 version = provenance.model_version,
                 dims = provenance.dimensions,
+                succeeded = provenance.succeeded_subtrees,
                 indexed = provenance.indexed_subtrees,
                 failed = provenance.failed_subtrees,
                 attempted = provenance.attempted_subtrees,

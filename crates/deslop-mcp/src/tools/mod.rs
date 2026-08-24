@@ -3,7 +3,7 @@
 //! Each entry binds a [`ToolDefinition`] — schema + agent-facing
 //! description — to a dispatch function that forwards to the active
 //! [`McpBackend`]. The [MCP-AGENT-PROMPT-GUIDANCE] descriptions are
-//! authored for an LLM planner, not a human reader. Per issue #136,
+//! authored for an LLM planner, not a human reader. Per,
 //! every description is one-sentence-short (≤200 chars) so the full
 //! `tools/list` payload stays well under the wire budgets of stricter
 //! MCP clients (Codex's `rmcp_client` in particular). Long-form
@@ -45,7 +45,7 @@ pub struct ToolDefinition {
 }
 
 /// Static tool registry. `top-offenders` is the primary entry point.
-/// Descriptions stay ≤200 chars (issue #136) — detail belongs in the
+/// Descriptions stay ≤200 chars — detail belongs in the
 /// `deslop://schema` resource, not the `tools/list` payload.
 const TOOLS: [ToolDefinition; 13] = [
     ToolDefinition {
@@ -124,7 +124,7 @@ const TOOLS: [ToolDefinition; 13] = [
 /// fallback set when the engine is unreachable. `tools/list` must
 /// advertise this set so the `language` enum can never claim a language
 /// the runtime validator would reject under MCP/engine version skew
-/// (gh #255).
+///.
 #[must_use]
 pub fn advertised_languages(backend: &dyn McpBackend) -> Vec<String> {
     backend.session_config().map_or_else(
@@ -136,7 +136,7 @@ pub fn advertised_languages(backend: &dyn McpBackend) -> Vec<String> {
 /// Renders the tool registry into the JSON shape MCP's `tools/list`
 /// response expects. `languages` is the live engine's registered set
 /// (see [`advertised_languages`]); every schema `language` enum is
-/// rewritten to it so the advertised gate matches the validator (gh #255).
+/// rewritten to it so the advertised gate matches the validator.
 #[must_use]
 pub fn tools_list_payload(languages: &[String]) -> Value {
     debug!(language_count = languages.len(), "tools_list_advertised");
@@ -159,7 +159,7 @@ pub fn tools_list_payload(languages: &[String]) -> Value {
 /// live engine's registered set. Schemas ship a compile-time enum as a
 /// fallback; this override keeps the advertised gate in lock-step with
 /// the runtime validator so it can never reject a language the engine
-/// supports (gh #255).
+/// supports.
 fn apply_live_language_enum(tools: &mut [Value], languages: &[String]) {
     let enum_values: Vec<Value> = languages.iter().cloned().map(Value::from).collect();
     for tool in tools {
@@ -189,7 +189,7 @@ pub fn wrap_tool_result(payload: &Value) -> Value {
 /// The returned [`Value`] is passed through [`cap_tool_result`] so a
 /// pathological payload (multi-MB top-offenders on a huge monorepo)
 /// can never blow out a strict MCP client (Codex's `rmcp_client` in
-/// particular — see issue #136). The cap is silent on small results
+/// particular — see). The cap is silent on small results
 /// and adds a `truncated` flag plus pointer to `report-get` on large
 /// ones.
 ///
@@ -262,8 +262,8 @@ pub fn backend_to_rpc(err: crate::backend::BackendError) -> JsonRpcError {
 
 /// Builds the `-32004` error for a missing LSP, attaching a structured
 /// recovery payload so agents can decide whether to retry and where the
-/// on-disk fallback lives ([Deslop#157]). The numeric code and the
-/// human message ([Deslop#151]) are reproduced verbatim for wire
+/// on-disk fallback lives. The numeric code and the
+/// human message are reproduced verbatim for wire
 /// back-compat; only the previously-`null` `data` field is enriched.
 fn lsp_not_running_rpc(socket_path: &std::path::Path) -> JsonRpcError {
     let message = crate::backend::BackendError::LspNotRunning {

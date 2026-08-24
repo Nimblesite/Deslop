@@ -1,4 +1,4 @@
-use crate::support::*;
+use super::support::*;
 
 /// Writes `report_body` to `<tmp>/<file_name>`, runs the CLI in
 /// `--from-report` replay mode over it (adding `--no-color` when
@@ -36,7 +36,7 @@ fn from_report_preserves_current_empty_bucket_issue_85() -> Result<()> {
                 \"weight\": 1.0,\n\
                 \"size\": 2,\n\
                 \"canonical_node_count\": 8,\n\
-                \"signals\": {\"structural\": 1.0, \"token_jaccard\": 1.0, \"embedding_cos\": 0.0, \"fused\": 1.0},\n\
+                \"signals\": {\"structural\": 1.0, \"token_jaccard\": 1.0, \"embedding_cos\": 0.0, \"fused\": 1.0, \"agreement\": 1.0, \"rename_consistency\": 0.0, \"literal_fraction\": 0.0},\n\
                 \"bucket\": \"\",\n\
                 \"occurrences\": [],\n\
                 \"occurrences_total\": 0,\n\
@@ -71,6 +71,88 @@ fn from_report_preserves_current_empty_bucket_issue_85() -> Result<()> {
     Ok(())
 }
 
+// A report written before the content gate and per-occurrence embedding
+// coverage existed carries neither the `agreement` /
+// `rename_consistency` / `literal_fraction` signals nor
+// `succeeded_subtrees`. `--from-report` must replay it: the content
+// signals default to the unmeasured convention (full agreement, no
+// rename proof, no literal dominance — `ContentEvidence::unmeasured`),
+// and `succeeded_subtrees` is reconstructed from the
+// `attempted = succeeded + failed` invariant, so the replayed figures
+// stay honest instead of claiming a measured zero.
+#[test]
+fn from_report_replays_legacy_report_predating_content_signals() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let legacy_report = "{\n\
+              \"tool_version\": \"legacy\",\n\
+              \"min_nodes\": 30,\n\
+              \"files_analysed\": 2,\n\
+              \"clusters_hidden\": 0,\n\
+              \"cache_stats\": {\"hits\": 0, \"misses\": 2},\n\
+              \"metrics\": {\"analysed_loc\": 40, \"duplicated_loc\": 12, \"duplication_percent\": 30.0, \"clusters_total\": 1, \"duplicated_files\": 2, \"threshold\": {\"percent\": 0.0, \"breached\": false, \"source\": \"none\"}},\n\
+              \"schema_doc\": \"\",\n\
+              \"action_hints\": [],\n\
+              \"boilerplate_hints\": [],\n\
+              \"embedding_provenance\": {\"provider_id\": \"ollama\", \"model_id\": \"legacy-model\", \"model_version\": \"v1\", \"dimensions\": 4, \"attempted_subtrees\": 9, \"indexed_subtrees\": 5, \"failed_subtrees\": 2},\n\
+              \"clusters\": [{\n\
+                \"id\": \"legacy1\",\n\
+                \"weight\": 2.0,\n\
+                \"size\": 2,\n\
+                \"canonical_node_count\": 8,\n\
+                \"signals\": {\"structural\": 1.0, \"token_jaccard\": 1.0, \"embedding_cos\": 0.0, \"fused\": 1.0},\n\
+                \"bucket\": \"identical\",\n\
+                \"occurrences\": [{\"path\": \"a.cs\", \"start_byte\": 0, \"end_byte\": 6, \"hidden\": false}, {\"path\": \"b.cs\", \"start_byte\": 0, \"end_byte\": 6, \"hidden\": false}],\n\
+                \"occurrences_total\": 2,\n\
+                \"occurrences_truncated\": false,\n\
+                \"summary\": \"legacy cluster\",\n\
+                \"interpretation\": \"legacy cluster\"\n\
+              }]\n\
+              }\n";
+    let out = outputs_under(tmp.path());
+    replay_report(tmp.path(), "legacy.json", legacy_report, true)?;
+    let json = read_json_report(&out.json)?;
+    let cluster = json
+        .get("clusters")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|clusters| clusters.first())
+        .context("legacy cluster should survive --from-report")?;
+    let signal = |key: &str| {
+        cluster
+            .get("signals")
+            .and_then(|signals| signals.get(key))
+            .and_then(serde_json::Value::as_f64)
+    };
+    assert_eq!(
+        cluster.get("bucket").and_then(serde_json::Value::as_str),
+        Some("identical"),
+        "schema-carried bucket must be preserved on replay"
+    );
+    assert_eq!(signal("structural"), Some(1.0));
+    assert_eq!(signal("fused"), Some(1.0));
+    assert_eq!(
+        signal("agreement"),
+        Some(1.0),
+        "absent agreement is unmeasured, and unmeasured never demotes"
+    );
+    assert_eq!(signal("rename_consistency"), Some(0.0));
+    assert_eq!(signal("literal_fraction"), Some(0.0));
+    let provenance = json
+        .get("embedding_provenance")
+        .context("legacy embedding provenance should survive --from-report")?;
+    let coverage = |key: &str| provenance.get(key).and_then(serde_json::Value::as_u64);
+    assert_eq!(coverage("attempted_subtrees"), Some(9));
+    assert_eq!(coverage("failed_subtrees"), Some(2));
+    assert_eq!(
+        coverage("succeeded_subtrees"),
+        Some(7),
+        "succeeded is reconstructed from attempted = succeeded + failed"
+    );
+    assert_eq!(coverage("indexed_subtrees"), Some(5));
+    assert_eq!(metric_field(&json, "analysed_loc").as_u64(), Some(40));
+    assert_eq!(metric_field(&json, "duplicated_loc").as_u64(), Some(12));
+    Ok(())
+}
+
 // Implements [CLONE-BUCKETS-DUAL-LABEL]: `--from-report` must preserve a
 // schema-carried `same_behavior` bucket instead of re-routing from signals.
 #[test]
@@ -92,7 +174,7 @@ fn from_report_preserves_same_behavior_bucket_in_html() -> Result<()> {
                     \"weight\": 4.0,\n\
                     \"size\": 2,\n\
                     \"canonical_node_count\": 12,\n\
-                    \"signals\": {\"structural\": 0.0, \"token_jaccard\": 0.0, \"embedding_cos\": 0.9, \"fused\": 0.9},\n\
+                    \"signals\": {\"structural\": 0.0, \"token_jaccard\": 0.0, \"embedding_cos\": 0.9, \"fused\": 0.9, \"agreement\": 1.0, \"rename_consistency\": 0.0, \"literal_fraction\": 0.0},\n\
                     \"bucket\": \"same_behavior\",\n\
                     \"occurrences\": [{\"path\": \"missing.unknown\", \"start_byte\": 0, \"end_byte\": 0, \"hidden\": false}],\n\
                     \"occurrences_total\": 0,\n\

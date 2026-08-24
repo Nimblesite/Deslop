@@ -12,7 +12,7 @@ Stdio JSON-RPC 2.0 per the LSP base protocol. No TCP, no named pipes, no WebSock
 
 #### [LSP-NON-INTERFERENCE] Deslop is additive — it never touches the editor's standard features
 
-> **Hard invariant — non-negotiable.** Deslop's LSP is a *duplication linter*, **not** a language server. It MUST NOT register, intercept, override, suppress, or slow **any** standard language-intelligence request — **Go To Definition (`textDocument/definition`), Hover (`textDocument/hover`), Find References, Go To Implementation/Type Definition, Completion, Rename, Signature Help, Formatting, Document Highlight, Document/Workspace Symbols** — not one of them. Those belong **exclusively** to the editor's real language server (the Dart Analysis Server, OmniSharp/Roslyn, rust-analyzer, Pyright, …). Pressing **F12**, hovering, or invoking any built-in editor command in a Deslop-analysed file must behave **exactly** as it would with Deslop uninstalled.
+> **Hard invariant.** Deslop MUST NOT register, intercept, override, suppress, or slow standard language-intelligence requests, including definition, hover, references, implementation/type definition, completion, rename, signature help, formatting, highlights, and symbols. Those requests belong to the editor's language server.
 
 Deslop's only `initialize` capabilities are therefore **purely additive** — each one contributes a Deslop-owned surface that stacks on top of the editor's features without replacing any of them:
 
@@ -27,9 +27,9 @@ Deslop's only `initialize` capabilities are therefore **purely additive** — ea
 
 **Deslop deliberately does NOT advertise** `hoverProvider`, `definitionProvider`, `documentLinkProvider`, `referencesProvider`, `completionProvider`, `renameProvider`, or any other standard provider.
 
-**Why this is a hard rule, not a style preference.** When two providers answer the same request, VS Code (and every LSP client) *merges* their results and *waits for the slowest one before it can act*. A duplication analyser registered as a `definitionProvider` would (a) **pollute** F12 results with clone-peer locations that are not the symbol's definition, and (b) **hang** the editor's F12/hover spinner whenever its analysis is mid-pass — exactly the freeze reported on large Flutter monorepos on Windows, where uninstalling Deslop was the only fix. The cure is structural: Deslop simply never registers the standard providers, so it is physically incapable of intercepting or delaying them.
+LSP clients merge responses from multiple providers and wait for the slowest. Registering a standard provider would therefore add clone locations to unrelated results and could delay editor commands during analysis. Deslop avoids both failures by not registering those providers.
 
-Canonical-occurrence navigation is still one keystroke away — but always through Deslop-owned, non-conflicting surfaces, never by hijacking a standard key: the `deslop.jumpToNextOccurrence` code lens, the clone card's **Compare with canonical** command (`deslop.compareWithCanonical`), and the Top Offenders tree.
+Canonical-occurrence navigation uses Deslop-owned surfaces: the `deslop.jumpToNextOccurrence` code lens, `deslop.compareWithCanonical`, and the Top Offenders tree.
 
 ##### [LSP-NON-INTERFERENCE-NONBLOCKING] Even Deslop's own additive reads never block the editor
 
@@ -73,7 +73,7 @@ Each published diagnostic carries:
 - `range` — derived from `(start_byte, end_byte)` of the occurrence on this file, using the open buffer's line-index.
 - `severity` — per [LSP-SEVERITY].
 - `data` — `{ "cluster_id": <16-char cluster id>, "taxonomy": <academic label> }`. The cluster id (stable across runs, same one used in text/HTML reports) rides the machine-facing `data` so an agent can call `deslop/clusterById` without parsing the message ([LSP-AGENT-FRIENDLY]); `code` and `codeDescription` are left unset, and the cluster's `deslop://cluster/<id>` view is reached through [LSP-VIRTUAL-DOC].
-- `message` — `"<bucket title> × <count> — <action sentence>"`, the same human-readable, agent-readable line the other surfaces show ([PRINCIPLES-AUDIENCE-AGENT]).
+- `message` — `"<bucket title> × <count> — <action sentence> — <confidence explanation>"`, the same human-readable, agent-readable line the other surfaces show ([PRINCIPLES-AUDIENCE-AGENT]). The confidence explanation is `deslop-core::render::signals::plain_explanation` — `structural`, `jaccard`, `embedding`, `fused`, then the measured content evidence `agreement`, `rename`, `literal`, each to two decimal places ([FUSION-CONTENT-GATE]). It is the reason the bucket title is falsifiable: a corroborated Type-2 rename and an anchor-poor scaffolding family both render `structural 1.00`, and only the evidence tells them apart. Every surface renders it through that one function, so the Problems panel, the code lens, the Markdown report and the HTML footer can never describe the same numbers differently.
 - `source` — `"deslop"`.
 - `tags` — never `Unnecessary` or `Deprecated`; duplication isn't dead code.
 - `relatedInformation` — one entry per *other* occurrence of the cluster, with its `Location` and "occurrence N of M" label. This is what makes the Problems panel jumpable across occurrences.
@@ -104,10 +104,10 @@ Pull-based diagnostics only travel to the editor for files the client actively p
 At the first line of every clone occurrence, a code lens reading:
 
 ```
-●● 4 copies — structural 1.00 · jaccard 0.97 · embedding 0.91 — jump to next
+●● 4 copies — structural 1.00 · jaccard 0.97 · embedding 0.91 · fused 0.88 · agreement 0.62 · rename 0.94 · literal 0.11 — jump to next
 ```
 
-The leading glyph (`●●`) is a two-dot severity badge whose colour matches the diagnostic severity. It's Unicode, not ANSI — LSP clients render their own. The text carries the same signal breakdown that appears in the JSON report so a user reading inline has parity with an agent reading the JSON.
+The leading glyph (`●●`) is a two-dot severity badge whose colour matches the diagnostic severity. It's Unicode, not ANSI — LSP clients render their own. The signal breakdown is the same `render::signals::plain_explanation` the diagnostic message carries ([LSP-DIAGNOSTICS], [FUSION-CONTENT-GATE]) — all seven fields of the JSON report's `signals`, so a user reading inline has parity with an agent reading the JSON, and the lens and the Problems panel can never disagree. Plain text, never Markdown: a client renders a lens title verbatim, so a code span would show as a literal backtick.
 
 Clicking the lens runs the Deslop-owned `deslop.jumpToNextOccurrence` command, which cycles through the remaining occurrences, wrapping at the end. It deliberately does **not** route through `textDocument/definition` ([LSP-NON-INTERFERENCE]) — the code lens carries its own command so canonical navigation never touches the editor's Go To Definition. Shift-click runs `deslop.openCluster` (see [LSP-CUSTOM-METHODS]).
 

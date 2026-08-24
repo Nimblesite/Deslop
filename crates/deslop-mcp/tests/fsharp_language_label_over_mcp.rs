@@ -12,61 +12,12 @@
 
 #![cfg(unix)]
 
-use anyhow::{ensure, Result};
-use serde_json::{json, Value};
+use anyhow::Result;
 
-mod common;
-use common::{call_tool, copied_fixture_named, initialized_mcp, spawn_lsp_and_wait_for_socket};
-
-/// The `language` label of every returned cluster whose representative
-/// occurrence is a `.fs` file.
-fn fsharp_cluster_languages(page: &Value) -> Vec<String> {
-    page.get("clusters")
-        .and_then(Value::as_array)
-        .map(|clusters| {
-            clusters
-                .iter()
-                .filter(|cluster| first_occurrence_is_fsharp(cluster))
-                .filter_map(|cluster| cluster.get("language").and_then(Value::as_str))
-                .map(ToOwned::to_owned)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-/// True when a cluster's `first_occurrence.path` is a `.fs` file.
-fn first_occurrence_is_fsharp(cluster: &Value) -> bool {
-    cluster
-        .pointer("/first_occurrence/path")
-        .and_then(Value::as_str)
-        .and_then(|path| std::path::Path::new(path).extension()?.to_str())
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("fs"))
-}
+use crate::common;
+use common::language_label::assert_language_label_over_mcp;
 
 #[test]
 fn fsharp_clusters_report_fsharp_language_over_mcp() -> Result<()> {
-    let workspace = copied_fixture_named("fsharp-mcp")?;
-    let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
-
-    let mut mcp = initialized_mcp(workspace.path())?;
-    let page = call_tool(
-        &mut mcp,
-        "report-query",
-        &json!({ "offset": 0, "limit": 50 }),
-    )?;
-    let languages = fsharp_cluster_languages(&page);
-
-    ensure!(
-        !languages.is_empty(),
-        "fixture must surface at least one hand-written F# cluster so the \
-         language label is exercised: {page}"
-    );
-    for language in &languages {
-        ensure!(
-            language == "fsharp",
-            "issue #270: a cluster whose representative occurrence is a `.fs` \
-             file must report language=\"fsharp\", not {language:?}; full page: {page}"
-        );
-    }
-    Ok(())
+    assert_language_label_over_mcp("fsharp-mcp", "fs", "fsharp", "issue #270")
 }

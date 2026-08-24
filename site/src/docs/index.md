@@ -1,11 +1,12 @@
 ---
 layout: layouts/docs.njk
 title: Getting Started — Install Deslop and find duplicate code
-description: Install Deslop and find duplicate code across nine languages. The VS Code extension bundles live editor warnings, checks for coding agents, and the CLI in one install. Homebrew and Scoop for CLI-only.
+description: Install Deslop to find duplicate code in nine languages. Get live VS Code warnings, MCP checks for coding agents, and the CLI in one extension.
 eleventyNavigation:
   key: Getting Started
   order: 1
 icon: rocket_launch
+docsGroup: start
 ---
 
 # Getting Started
@@ -14,11 +15,9 @@ icon: rocket_launch
 
 The preferred way to install it is the **VS Code extension**. One install bundles all three surfaces: live editor warnings, the check agents call before writing code, and the CLI.
 
-> The **JetBrains plugin** (Rider first, then IntelliJ IDEA, PyCharm, WebStorm, RustRover, CLion) is in active development. Zed and Neovim are on the roadmap. Until those ship, the VSIX is the headline install, and the Homebrew tap / Scoop bucket are the CLI-only shortcuts.
-
 ## Install (preferred) — VS Code extension
 
-Install straight from the **VS Code Marketplace**. Nothing to download, no files to manage — pick whichever is closest to hand:
+Install from the **VS Code Marketplace**:
 
 - **In VS Code:** open **Extensions** (`⇧⌘X` / `Ctrl+Shift+X`), search **Deslop**, click **Install**.
 - **Command line:** `code --install-extension nimblesite.deslop-live`
@@ -39,7 +38,7 @@ The extension bundles native binaries for `darwin-arm64`, `darwin-x64`, `linux-x
 
 > **Offline or air-gapped?** Grab the `.vsix` from the [Releases page](/releases/) or the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest), then install it via **Extensions panel → `…` menu → Install from VSIX…**.
 
-## Install the CLI only (Homebrew / Scoop)
+## Install the CLI only (Homebrew / Scoop / curl)
 
 ### macOS / Linux (Homebrew)
 
@@ -59,6 +58,41 @@ deslop --version
 ```
 
 Bucket source: [github.com/Nimblesite/scoop-bucket](https://github.com/Nimblesite/scoop-bucket).
+
+### macOS / Linux (curl)
+
+No Homebrew? Pull the archive straight from the latest GitHub release. The snippet resolves the newest version, picks the right platform, verifies the published SHA-256 checksum, and installs the same three binaries the Homebrew formula ships (`deslop`, `deslop-lsp`, `deslop-mcp`). It is fail-closed: if the download or the checksum verification fails, nothing is extracted and nothing is installed:
+
+```bash
+(
+  set -euo pipefail
+  base="${DESLOP_RELEASE_BASE:-https://github.com/Nimblesite/Deslop/releases}"
+  tag="${DESLOP_TAG:-$(curl -fsSLI -o /dev/null -w '%{url_effective}' "${base}/latest")}"
+  tag="${tag##*/}"      # e.g. v1.2.3
+  version="${tag#v}"    # e.g. 1.2.3
+  case "$(uname -s)-$(uname -m)" in
+    Linux-x86_64)  platform=linux-x64 ;;
+    Linux-aarch64) platform=linux-arm64 ;;
+    Darwin-arm64)  platform=macos-arm64 ;;
+    Darwin-x86_64) platform=macos-x64 ;;
+    *) echo "unsupported platform: $(uname -s)-$(uname -m)" >&2; exit 1 ;;
+  esac
+  archive="deslop-${version}-${platform}.tar.gz"
+  workdir="$(mktemp -d)"
+  trap 'rm -rf "$workdir"' EXIT
+  cd "$workdir"
+  curl -fsSLO "${base}/download/${tag}/${archive}"
+  curl -fsSLO "${base}/download/${tag}/${archive}.sha256"
+  if command -v sha256sum >/dev/null; then sha256sum -c "${archive}.sha256"; else shasum -a 256 -c "${archive}.sha256"; fi
+  tar -xzf "$archive"
+  sudo install -m 755 "deslop-${version}-${platform}"/deslop{,-lsp,-mcp} /usr/local/bin/
+  deslop --version
+)
+```
+
+Prefer a user-local install? Swap the `sudo install` line for `mkdir -p ~/.local/bin && install -m 755 "deslop-${version}-${platform}"/deslop{,-lsp,-mcp} ~/.local/bin/` (no `sudo`) and make sure `~/.local/bin` is on your `PATH`.
+
+To pin a specific version instead of the latest, set `DESLOP_TAG=vX.Y.Z` in your environment before running the snippet.
 
 ### Direct download
 
@@ -141,11 +175,3 @@ max_duplication_percent = 5.0
 ```
 
 `--fail-over` overrides the config key; `--fail-over 0` fails on any duplication; `--no-fail-over` clears the gate for a single local run. The full [exit-code table](/docs/configuration/#exit-codes) is in the configuration reference, and the [GitHub Action](/docs/github-action/) wraps the same gate for CI.
-
-## What to do next
-
-1. Read [How It Works](/docs/how-it-works/) to understand the ranking formula and the live pipeline.
-2. Read [AI Agents](/docs/ai-integration/) to wire `deslop-mcp` into Claude Code, Cursor, Continue, or Codex — then point the agent itself at [For AI](/docs/for-ai/), the operating manual written for the machine, including what to do when MCP is unavailable.
-3. Read [VS Code](/docs/vscode-cluster-panel/) when you need the meaning of a panel label, score, or action.
-4. Read [Configuration and Reports](/docs/configuration/) for every `.deslop.toml` key, every CLI flag, the three report formats, and the exit codes.
-5. Check [Releases](/releases/) for the current VSIX, CLI archives, checksums, and changelog links.

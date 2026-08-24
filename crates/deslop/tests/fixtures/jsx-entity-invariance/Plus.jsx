@@ -1,9 +1,9 @@
-export function Plus({ first, second }) {
+export function Plus({ left, right }) {
   return (
     <span className="join">
-      <em>{first}</em>
+      <em>{left}</em>
       <b>plus</b>
-      <em>{second}</em>
+      <em>{right}</em>
     </span>
   );
 }

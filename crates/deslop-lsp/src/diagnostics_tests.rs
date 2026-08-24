@@ -3,6 +3,54 @@ use anyhow::{anyhow, Result};
 use deslop_core::report::ReportSignals;
 use tempfile::TempDir;
 
+const ALPHA_FILE: &str = "Alpha.cs";
+const A_CAPITAL_FILE: &str = "A.cs";
+const MAIN_FILE: &str = "Main.cs";
+const A_FILE: &str = "a.cs";
+const IDENTICAL_BUCKET: &str = "identical";
+const HELLO_SOURCE: &str = "hello\n";
+const PERFECT_SIGNAL: f64 = 1.0;
+const LIGHT_CLUSTER_WEIGHT: f64 = 1.0;
+const HEAVY_CLUSTER_WEIGHT: f64 = 100.0;
+const FIXTURE_END_BYTE: usize = 5;
+
+// [LSP-SEVERITY-BUCKET] Every bucket, the severity it must publish, and the
+// rationale that mapping pins.
+const BUCKET_SEVERITIES: [(&str, DiagnosticSeverity, &str); 4] = [
+    (
+        IDENTICAL_BUCKET,
+        DiagnosticSeverity::ERROR,
+        "Identical code → Error (no justification for bit-for-bit duplicates)",
+    ),
+    (
+        "nearly_identical",
+        DiagnosticSeverity::WARNING,
+        "NearlyIdentical → Warning",
+    ),
+    (
+        "loosely_similar",
+        DiagnosticSeverity::WARNING,
+        "LooselySimilar → Warning",
+    ),
+    (
+        "same_behavior",
+        DiagnosticSeverity::WARNING,
+        "SameBehavior → Warning",
+    ),
+];
+
+// [FUSION-CONTENT-GATE] #344: each measured axis a diagnostic built from the
+// `sample_cluster` signals must state, with the evidence that axis carries.
+const SAMPLE_EVIDENCE_AXES: [(&str, &str); 7] = [
+    ("structural 1.00", "structural axis"),
+    ("jaccard 0.90", "token axis"),
+    ("embedding 0.40", "embedding axis"),
+    ("fused 0.91", "fused confidence"),
+    ("agreement 0.58", "pooled byte agreement"),
+    ("rename 0.72", "Baker rename corroboration"),
+    ("literal 0.24", "literal share of the match"),
+];
+
 fn write_source(dir: &Path, name: &str, body: &str) -> Result<PathBuf> {
     let path = dir.join(name);
     std::fs::write(&path, body)?;
@@ -15,25 +63,26 @@ fn sample_cluster(
     occurrences: Vec<ReportOccurrence>,
     bucket: &str,
 ) -> ReportCluster {
-    ReportCluster {
-        id: id.to_owned(),
-        weight,
-        size: occurrences.len(),
-        canonical_node_count: 25,
-        signals: ReportSignals {
-            structural: 1.0,
-            token_jaccard: 0.9,
-            embedding_cos: 0.4,
-            fused: 2.2,
-        },
-        bucket: bucket.into(),
-        category: "logic".into(),
-        occurrences_total: occurrences.len(),
-        occurrences_truncated: false,
-        occurrences,
-        summary: "summary".into(),
-        interpretation: "interp".into(),
-    }
+    let signals = ReportSignals {
+        structural: PERFECT_SIGNAL,
+        token_jaccard: 0.9,
+        shape: PERFECT_SIGNAL,
+        embedding_cos: 0.4,
+        fused: 0.91,
+        agreement: 0.58,
+        rename_consistency: 0.72,
+        literal_fraction: 0.24,
+    };
+    let mut cluster = deslop_core::report_fixtures::fixture_cluster(id, occurrences);
+    cluster.weight = weight;
+    cluster.canonical_node_count = 25;
+    cluster.signals = signals;
+    bucket.clone_into(&mut cluster.bucket);
+    "csharp".clone_into(&mut cluster.language);
+    "summary".clone_into(&mut cluster.summary);
+    "interp".clone_into(&mut cluster.interpretation);
+    deslop_core::report_fixtures::restamp_fixture(&mut cluster);
+    cluster
 }
 
 fn occurrence(path: &str, start: usize, end: usize) -> ReportOccurrence {
@@ -44,6 +93,7 @@ fn occurrence(path: &str, start: usize, end: usize) -> ReportOccurrence {
         start_line: 1,
         end_line: 1,
         hidden: false,
+        in_diff: None,
     }
 }
 
@@ -54,36 +104,68 @@ fn file_report_total_occurrences(clusters: &[ReportCluster]) -> usize {
         .sum()
 }
 
+/// The nearly-identical, two-file cluster the message tests describe.
+fn two_file_cluster() -> ReportCluster {
+    sample_cluster(
+        "c",
+        HEAVY_CLUSTER_WEIGHT,
+        vec![occurrence(A_FILE, 0, 1), occurrence("b.cs", 0, 1)],
+        "nearly_identical",
+    )
+}
+
+/// Diagnostics published for a single-cluster report rooted at `path`.
+fn diagnostics_for(cluster: ReportCluster, path: &str, workspace: &Path) -> Vec<Diagnostic> {
+    let total_occurrences = file_report_total_occurrences(std::slice::from_ref(&cluster));
+    let file_report = FileReport {
+        path: PathBuf::from(path),
+        clusters: vec![cluster],
+        total_occurrences,
+    };
+    build_for_file(&file_report, workspace)
+}
+
+/// Reads the machine-readable cluster id out of a diagnostic's `data` payload.
+fn cluster_id_of(data: Option<&serde_json::Value>) -> Result<&str> {
+    data.and_then(|payload| payload.get("cluster_id"))
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| anyhow!("cluster id stored in diagnostic data"))
+}
+
+/// The hover must carry exactly one "Canonical" link, never an occurrence dump.
+fn assert_single_canonical_link(diagnostic: &Diagnostic, context: &str) -> Result<()> {
+    let related = diagnostic
+        .related_information
+        .as_ref()
+        .ok_or_else(|| anyhow!("related info for {context}"))?;
+    assert_eq!(
+        related.len(),
+        1,
+        "{context} must yield exactly 1 canonical link, not a full occurrence dump: {related:?}"
+    );
+    let canonical = related
+        .first()
+        .ok_or_else(|| anyhow!("canonical entry (len asserted above)"))?;
+    assert_eq!(
+        canonical.message, "Canonical",
+        "related label must be 'Canonical', not an indexed occurrence string: {}",
+        canonical.message
+    );
+    Ok(())
+}
+
 // [LSP-SEVERITY-BUCKET] Bucket → severity mapping.
 #[test]
 fn severity_for_maps_bucket_to_lsp_level() {
-    let identical = sample_cluster("a", 1.0, vec![occurrence("a.cs", 0, 1)], "identical");
-    assert_eq!(
-        severity_for(&identical),
-        DiagnosticSeverity::ERROR,
-        "Identical code → Error (no justification for bit-for-bit duplicates)"
-    );
-
-    let nearly = sample_cluster("b", 1.0, vec![occurrence("b.cs", 0, 1)], "nearly_identical");
-    assert_eq!(
-        severity_for(&nearly),
-        DiagnosticSeverity::WARNING,
-        "NearlyIdentical → Warning"
-    );
-
-    let loose = sample_cluster("c", 1.0, vec![occurrence("c.cs", 0, 1)], "loosely_similar");
-    assert_eq!(
-        severity_for(&loose),
-        DiagnosticSeverity::WARNING,
-        "LooselySimilar → Warning"
-    );
-
-    let behavior = sample_cluster("d", 1.0, vec![occurrence("d.cs", 0, 1)], "same_behavior");
-    assert_eq!(
-        severity_for(&behavior),
-        DiagnosticSeverity::WARNING,
-        "SameBehavior → Warning"
-    );
+    for (bucket, expected_severity, rationale) in BUCKET_SEVERITIES {
+        let cluster = sample_cluster(
+            bucket,
+            LIGHT_CLUSTER_WEIGHT,
+            vec![occurrence(A_FILE, 0, 1)],
+            bucket,
+        );
+        assert_eq!(severity_for(&cluster), expected_severity, "{rationale}");
+    }
 }
 
 #[test]
@@ -143,27 +225,16 @@ fn diagnostic_data_stores_cluster_id_for_machine_readers() -> Result<()> {
     let cluster = sample_cluster(
         "abc123",
         10.0,
-        vec![occurrence("Alpha.cs", 0, 5)],
-        "identical",
+        vec![occurrence(ALPHA_FILE, 0, FIXTURE_END_BYTE)],
+        IDENTICAL_BUCKET,
     );
-    let data = diagnostic_data(&cluster);
-    let id = data
-        .get("cluster_id")
-        .and_then(serde_json::Value::as_str)
-        .ok_or_else(|| anyhow!("cluster_id in diagnostic data"))?;
-    assert_eq!(id, "abc123");
+    assert_eq!(cluster_id_of(Some(&diagnostic_data(&cluster)))?, "abc123");
     Ok(())
 }
 
 #[test]
 fn diagnostic_message_shows_category_count_and_action() {
-    let cluster = sample_cluster(
-        "c",
-        100.0,
-        vec![occurrence("a.cs", 0, 1), occurrence("b.cs", 0, 1)],
-        "nearly_identical",
-    );
-    let message = diagnostic_message(&cluster);
+    let message = diagnostic_message(&two_file_cluster());
     assert!(message.contains(" — "), "joined with em dash: {message}");
     assert!(
         message.contains("Nearly identical code"),
@@ -179,23 +250,83 @@ fn diagnostic_message_shows_category_count_and_action() {
     );
 }
 
+// [FUSION-CONTENT-GATE] #344: the bucket title alone cannot tell a
+// corroborated Type-2 rename from an anchor-poor scaffolding family — both
+// render structural=1.00. The diagnostic must state the fused confidence and
+// the measured content evidence the gate scored, using the one shared
+// `render::signals` rendering.
+#[test]
+fn diagnostic_message_states_fused_confidence_and_measured_content_evidence() {
+    let cluster = two_file_cluster();
+    let message = diagnostic_message(&cluster);
+    assert!(
+        message.contains("Nearly identical code × 2"),
+        "the existing human label and count survive the addition: {message}"
+    );
+    for (evidence, axis) in SAMPLE_EVIDENCE_AXES {
+        assert!(message.contains(evidence), "{axis}: {message}");
+    }
+    assert!(
+        message.ends_with(&deslop_core::render::signals::plain_explanation(
+            cluster.signals
+        )),
+        "the explanation must be the shared render::signals rendering, never a \
+         second hand-rolled formatter: {message}"
+    );
+}
+
+// A cluster with different evidence must produce a different message — pins
+// that the text reads this cluster's signals, not a constant.
+#[test]
+fn diagnostic_message_tracks_each_clusters_own_evidence() {
+    let mut anchor_poor = sample_cluster(
+        "scaffolding",
+        HEAVY_CLUSTER_WEIGHT,
+        vec![occurrence(A_FILE, 0, 1), occurrence("b.cs", 0, 1)],
+        "structural_only",
+    );
+    anchor_poor.signals = ReportSignals {
+        structural: PERFECT_SIGNAL,
+        token_jaccard: 0.0,
+        shape: PERFECT_SIGNAL,
+        embedding_cos: 0.0,
+        fused: 0.33,
+        agreement: 0.04,
+        rename_consistency: 0.02,
+        literal_fraction: 0.77,
+    };
+    let message = diagnostic_message(&anchor_poor);
+    assert!(
+        message.contains("structural 1.00 · jaccard 0.00 · embedding 0.00"),
+        "shape-only support: {message}"
+    );
+    assert!(
+        message.contains("fused 0.33 · agreement 0.04 · rename 0.02 · literal 0.77"),
+        "anchor-poor evidence is what separates this from a real rename: {message}"
+    );
+    assert!(
+        !message.contains("agreement 0.58"),
+        "must not echo another cluster's evidence: {message}"
+    );
+}
+
 // [LSP-SEVERITY-BUCKET] Identical code → Error; canonical link present.
 #[test]
 fn build_for_file_emits_error_for_identical_cluster_with_canonical_link() -> Result<()> {
     let workspace = TempDir::new()?;
-    let primary_source = "alpha\nbeta\ngamma\n";
-    let secondary_source = "a\nbb\nccc\ndddd\n";
-    let _primary = write_source(workspace.path(), "Alpha.cs", primary_source)?;
-    let _secondary = write_source(workspace.path(), "Beta.cs", secondary_source)?;
-    let occurrences = vec![occurrence("Alpha.cs", 0, 5), occurrence("Beta.cs", 2, 5)];
-    let cluster = sample_cluster("cluster-1", 100.0, occurrences, "identical");
-    let total_occurrences: usize = file_report_total_occurrences(std::slice::from_ref(&cluster));
-    let file_report = FileReport {
-        path: PathBuf::from("Alpha.cs"),
-        clusters: vec![cluster],
-        total_occurrences,
-    };
-    let diagnostics = build_for_file(&file_report, workspace.path());
+    let _primary = write_source(workspace.path(), ALPHA_FILE, "alpha\nbeta\ngamma\n")?;
+    let _secondary = write_source(workspace.path(), "Beta.cs", "a\nbb\nccc\ndddd\n")?;
+    let occurrences = vec![
+        occurrence(ALPHA_FILE, 0, FIXTURE_END_BYTE),
+        occurrence("Beta.cs", 2, FIXTURE_END_BYTE),
+    ];
+    let cluster = sample_cluster(
+        "cluster-1",
+        HEAVY_CLUSTER_WEIGHT,
+        occurrences,
+        IDENTICAL_BUCKET,
+    );
+    let diagnostics = diagnostics_for(cluster, ALPHA_FILE, workspace.path());
     assert_eq!(
         diagnostics.len(),
         1,
@@ -205,6 +336,20 @@ fn build_for_file_emits_error_for_identical_cluster_with_canonical_link() -> Res
         .first()
         .ok_or_else(|| anyhow!("diagnostic present"))?;
     assert_eq!(diagnostic.source.as_deref(), Some("deslop"));
+    // [FUSION-CONTENT-GATE] #344: the evidence reaches the published
+    // Diagnostic, not merely the formatter.
+    assert!(
+        diagnostic
+            .message
+            .contains("fused 0.91 · agreement 0.58 · rename 0.72 · literal 0.24"),
+        "published diagnostic carries the fused score and content evidence: {}",
+        diagnostic.message
+    );
+    assert!(
+        diagnostic.message.starts_with("Identical code × 2 — "),
+        "the existing bucket title and count are still first: {}",
+        diagnostic.message
+    );
     assert_eq!(
         diagnostic.severity,
         Some(DiagnosticSeverity::ERROR),
@@ -214,28 +359,8 @@ fn build_for_file_emits_error_for_identical_cluster_with_canonical_link() -> Res
         diagnostic.code.is_none(),
         "cluster hash must not be visible as deslop(<id>) in editor hovers"
     );
-    let cluster_id = diagnostic
-        .data
-        .as_ref()
-        .and_then(|data| data.get("cluster_id"))
-        .and_then(serde_json::Value::as_str)
-        .ok_or_else(|| anyhow!("cluster id stored in diagnostic data"))?;
-    assert_eq!(cluster_id, "cluster-1");
-    let related = diagnostic
-        .related_information
-        .as_ref()
-        .ok_or_else(|| anyhow!("related info for Beta.cs"))?;
-    assert_eq!(
-        related.len(),
-        1,
-        "exactly one canonical link — not a full occurrence dump"
-    );
-    let canonical = related.first().ok_or_else(|| anyhow!("canonical entry"))?;
-    assert_eq!(
-        canonical.message, "Canonical",
-        "related label must be 'Canonical', not an indexed occurrence string: {}",
-        canonical.message
-    );
+    assert_eq!(cluster_id_of(diagnostic.data.as_ref())?, "cluster-1");
+    assert_single_canonical_link(diagnostic, "a two-occurrence identical cluster")?;
     assert_eq!(
         diagnostic.range.start.line, 0,
         "start on first line of Alpha.cs"
@@ -247,23 +372,15 @@ fn build_for_file_emits_error_for_identical_cluster_with_canonical_link() -> Res
 #[test]
 fn build_for_file_publishes_all_buckets_with_correct_severity() -> Result<()> {
     let workspace = TempDir::new()?;
-    let _primary = write_source(workspace.path(), "A.cs", "abc\n")?;
-    let buckets = [
-        ("identical", DiagnosticSeverity::ERROR),
-        ("nearly_identical", DiagnosticSeverity::WARNING),
-        ("loosely_similar", DiagnosticSeverity::WARNING),
-        ("same_behavior", DiagnosticSeverity::WARNING),
-    ];
-    for (bucket, expected_severity) in buckets {
-        let cluster = sample_cluster("c", 1.0, vec![occurrence("A.cs", 0, 2)], bucket);
-        let total_occurrences: usize =
-            file_report_total_occurrences(std::slice::from_ref(&cluster));
-        let file_report = FileReport {
-            path: PathBuf::from("A.cs"),
-            clusters: vec![cluster],
-            total_occurrences,
-        };
-        let diagnostics = build_for_file(&file_report, workspace.path());
+    let _primary = write_source(workspace.path(), A_CAPITAL_FILE, "abc\n")?;
+    for (bucket, expected_severity, rationale) in BUCKET_SEVERITIES {
+        let cluster = sample_cluster(
+            "c",
+            LIGHT_CLUSTER_WEIGHT,
+            vec![occurrence(A_CAPITAL_FILE, 0, 2)],
+            bucket,
+        );
+        let diagnostics = diagnostics_for(cluster, A_CAPITAL_FILE, workspace.path());
         assert_eq!(
             diagnostics.len(),
             1,
@@ -275,7 +392,7 @@ fn build_for_file_publishes_all_buckets_with_correct_severity() -> Result<()> {
         assert_eq!(
             diag.severity,
             Some(expected_severity),
-            "bucket '{bucket}' → {expected_severity:?}"
+            "bucket '{bucket}' → {expected_severity:?} ({rationale})"
         );
     }
     Ok(())
@@ -284,20 +401,14 @@ fn build_for_file_publishes_all_buckets_with_correct_severity() -> Result<()> {
 #[test]
 fn build_for_file_empty_related_info_becomes_none() -> Result<()> {
     let workspace = TempDir::new()?;
-    let _primary = write_source(workspace.path(), "Alpha.cs", "abcdef\n")?;
+    let _primary = write_source(workspace.path(), ALPHA_FILE, "abcdef\n")?;
     let cluster = sample_cluster(
         "solo",
-        100.0,
-        vec![occurrence("Alpha.cs", 0, 3)],
-        "identical",
+        HEAVY_CLUSTER_WEIGHT,
+        vec![occurrence(ALPHA_FILE, 0, 3)],
+        IDENTICAL_BUCKET,
     );
-    let total_occurrences: usize = file_report_total_occurrences(std::slice::from_ref(&cluster));
-    let file_report = FileReport {
-        path: PathBuf::from("Alpha.cs"),
-        clusters: vec![cluster],
-        total_occurrences,
-    };
-    let diagnostics = build_for_file(&file_report, workspace.path());
+    let diagnostics = diagnostics_for(cluster, ALPHA_FILE, workspace.path());
     assert_eq!(diagnostics.len(), 1);
     let diagnostic = diagnostics
         .first()
@@ -314,51 +425,25 @@ fn many_occurrences_produce_exactly_one_canonical_related_item() -> Result<()> {
     // The diagnostic hover must never dump a full occurrence list.
     // 38 occurrences → still exactly 1 "Canonical" related-info link.
     let workspace = TempDir::new()?;
-    let primary_source = "fn a() {}\n";
-    let _primary = write_source(workspace.path(), "Main.cs", primary_source)?;
-    let other_source = "fn b() {}\n";
-    let _other = write_source(workspace.path(), "Other.cs", other_source)?;
-    let mut occs = vec![occurrence("Main.cs", 0, 5)];
+    let _primary = write_source(workspace.path(), MAIN_FILE, "fn a() {}\n")?;
+    let _other = write_source(workspace.path(), "Other.cs", "fn b() {}\n")?;
+    let mut occs = vec![occurrence(MAIN_FILE, 0, FIXTURE_END_BYTE)];
     for _ in 0..37 {
         occs.push(occurrence("Other.cs", 0, 3));
     }
-    let cluster = sample_cluster("big", 100.0, occs, "identical");
-    let total_occurrences: usize = file_report_total_occurrences(std::slice::from_ref(&cluster));
-    let file_report = FileReport {
-        path: PathBuf::from("Main.cs"),
-        clusters: vec![cluster],
-        total_occurrences,
-    };
-    let diagnostics = build_for_file(&file_report, workspace.path());
+    let cluster = sample_cluster("big", HEAVY_CLUSTER_WEIGHT, occs, IDENTICAL_BUCKET);
+    let diagnostics = diagnostics_for(cluster, MAIN_FILE, workspace.path());
     let diagnostic = diagnostics.first().ok_or_else(|| anyhow!("diagnostic"))?;
-    let related = diagnostic
-        .related_information
-        .as_ref()
-        .ok_or_else(|| anyhow!("related info must be present"))?;
-    assert_eq!(
-        related.len(),
-        1,
-        "38 occurrences must yield exactly 1 canonical link, not {}: {related:?}",
-        related.len()
-    );
-    let canonical = related
-        .first()
-        .ok_or_else(|| anyhow!("related must have first entry (len asserted above)"))?;
-    assert_eq!(
-        canonical.message, "Canonical",
-        "related label must be 'Canonical': {}",
-        canonical.message
-    );
-    Ok(())
+    assert_single_canonical_link(diagnostic, "38 occurrences")
 }
 
 #[test]
 fn load_cached_source_reuses_cache_and_survives_missing_files() -> Result<()> {
     let workspace = TempDir::new()?;
-    let real = write_source(workspace.path(), "Real.cs", "hello\n")?;
+    let real = write_source(workspace.path(), "Real.cs", HELLO_SOURCE)?;
     let mut cache: HashMap<PathBuf, String> = HashMap::new();
     let first = load_cached_source(&real, &mut cache);
-    assert_eq!(first, "hello\n");
+    assert_eq!(first, HELLO_SOURCE);
     assert!(cache.contains_key(&real), "entry cached after first read");
     let missing = workspace.path().join("missing.cs");
     let body = load_cached_source(&missing, &mut cache);
@@ -367,6 +452,6 @@ fn load_cached_source_reuses_cache_and_survives_missing_files() -> Result<()> {
         "missing files fall back to empty string, not panic"
     );
     let second = load_cached_source(&real, &mut cache);
-    assert_eq!(second, "hello\n", "cached read returns same content");
+    assert_eq!(second, HELLO_SOURCE, "cached read returns same content");
     Ok(())
 }

@@ -33,7 +33,8 @@ can discover the tuning knobs without reading source. The help text exits `0`,
 writes to stdout, and must list at minimum the analysis knob (`--min-nodes`), the
 output-format suppressors (`--nojson`, `--notext`, `--nohtml`), the re-render path
 (`--from-report`), config discovery (`--config`), the cache opt-out
-(`--no-incremental`), the embedding flags
+(`--no-incremental`), the diff scope (`--diff`, `--only-changed`), the
+embedding flags
 (`--embeddings`, `--embedding-provider`, `--embedding-model`,
 `--embedding-endpoint`), and the terminal-UX flags (`--log-to-console`,
 `--log-level`, `--no-color`, `--technical`).
@@ -42,24 +43,47 @@ output-format suppressors (`--nojson`, `--notext`, `--nohtml`), the re-render pa
 The fingerprint cache is **on by default**
 ([pipeline.md §PIPELINE-INCREMENTAL](pipeline.md)): a bare `deslop .` populates
 `<scan-root>/.deslop/cache/fingerprints/` and a second run over an unchanged tree
-skips tree-sitter entirely. This matches the LSP, which has always run
-incrementally — a batch run is just "incremental starting from an empty cache".
-Cache invalidation is content-addressed, so a file edited while nothing was
+skips tree-sitter entirely. Cache invalidation is content-addressed, so a file edited while nothing was
 watching is re-parsed automatically and a warm run can never disagree with a cold
 one ([PIPELINE-INCREMENTAL-INVALIDATION]).
 
 `--no-incremental` turns the *fingerprint* cache off for one run: nothing is read,
-nothing is written, and `cache_stats` reports `{ hits: 0, misses: 0 }`. It exists
-for callers that must not have the scanned tree re-parsed from stored state. It
-does **not** disable the embedding cache ([fusion.md §FUSION-EMBED-PROVIDER](fusion.md)),
-which is a separate layer keyed on provider/model identity — a run with
-`--embeddings` on still writes `.deslop/cache/embeddings/`, because re-paying model
-inference is far more expensive than re-parsing. Pass `--embeddings off` (the
-default) for a run that writes nothing at all. `--no-incremental` is not needed for a
-genuinely read-only checkout — an unwritable cache directory already degrades to a
-full parse with a `warn!` and a complete report. Note that `--output` cannot
-redirect the cache: it always lands in the scan root, because the LSP and MCP must
-locate it from the scan root alone with no flags to consult.
+nothing is written, and `cache_stats` reports `{ hits: 0, misses: 0 }`. It does
+**not** disable the embedding cache ([fusion.md §FUSION-EMBED-PROVIDER](fusion.md)),
+a separate layer keyed on provider/model identity — pass `--embeddings off` (the
+default) for a run that writes nothing at all. A read-only checkout needs no flag:
+an unwritable cache directory degrades to a full parse with a `warn!` and a
+complete report. `--output` cannot redirect the cache; it stays at the scan root
+([pipeline.md §OUTPUT-DIR](pipeline.md)).
+
+### [CLI-ARG-DIFF] `--diff` unified-diff scope
+
+> **Status: shipped.** Pinned by `crates/deslop/tests/diff_scoped_reporting.rs`, `crates/deslop/tests/diff_scoped_ingest.rs` (stale, malformed and missing diffs, and the `--diff -` stdin form) and
+> `crates/deslop/tests/diff_ingest_refusals.rs`.
+
+`--diff <FILE|->` supplies a unified diff (`-` reads stdin) whose new-side added
+lines scope the report. The scan itself is unchanged — the whole tree is analysed
+so changed code still matches untouched helpers — but every occurrence and cluster
+is tagged against the diff ([pipeline.md §OUTPUT-SCHEMA-DIFF-TAGS](pipeline.md)).
+Ingestion, path resolution, and the working-tree verification that rejects a stale
+diff are owned by [pipeline.md §PIPELINE-DIFF-INGEST](pipeline.md). Conflicts with
+`--from-report` (exit `2`): a re-render has no tree to verify the diff against.
+
+### [CLI-ARG-ONLY-CHANGED] `--only-changed` filter
+
+> **Status: shipped.** Pinned by `crates/deslop/tests/diff_scoped_reporting.rs`.
+
+`--only-changed` (requires `--diff`, exit `2` without it) omits clusters that do
+not intersect the diff from every rendered format, counts them in
+`clusters_outside_diff`, and reroutes the `--fail-over` gate to the diff-scoped
+percentage ([pipeline.md §METRICS-DIFF-SCOPE](pipeline.md)) so legacy debt cannot
+fail a pre-merge check. The stderr summary switches to the delta form: newly
+introduced clones first, then cross-file matches into existing code, then the
+omitted count — three figures that reconcile, since every surviving cluster
+intersects the diff and is therefore one or the other. A filtered run whose body
+came out empty reports "no diff-affected duplication" with the omitted count; it
+must never claim the codebase is clean, which would contradict the legacy debt it
+just omitted.
 
 ### [CLI-INVOCATION-VERSION] Version output
 `deslop --version` prints the plain line `deslop <version>` followed by a newline

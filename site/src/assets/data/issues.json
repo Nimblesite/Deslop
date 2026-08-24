@@ -1,0 +1,4806 @@
+{
+  "meta": {
+    "repo": "Nimblesite/Deslop",
+    "published_at": "2026-08-24T12:15:57Z",
+    "published_at_long": "24th of August 2026, 12pm",
+    "source_url": "https://github.com/Nimblesite/Deslop/issues",
+    "method": "GitHub metadata: the Priority field, lane/* labels, explicit relationships, and cross-references. No AI enrichment.",
+    "planning_note": "Indicative only — not a schedule. Relative sequencing uses two parallel tracks per workstream, holds blocked work until every blocker finishes, and takes effort units from the Effort field (high 8, medium 4, low 2) or, when it is unset, the issue type: feature 8, bug 5, task 4."
+  },
+  "summary": {
+    "open": 120,
+    "verify": 17,
+    "showstoppers": 1,
+    "critical": 74,
+    "linked": 94,
+    "relationships": 147
+  },
+  "workstreams": [
+    {
+      "id": "accuracy",
+      "name": "Accuracy",
+      "description": "False positives, false negatives, and correctness of clone claims.",
+      "color": "#ff5449",
+      "count": 42,
+      "urgent": 38,
+      "verify": 9
+    },
+    {
+      "id": "detection",
+      "name": "Detection engine",
+      "description": "Parsing, matching, scoring, embeddings, and cluster formation.",
+      "color": "#ff8a65",
+      "count": 11,
+      "urgent": 4,
+      "verify": 4
+    },
+    {
+      "id": "performance",
+      "name": "Performance & live",
+      "description": "Incremental analysis, caches, memory, scheduling, and throughput.",
+      "color": "#ffd166",
+      "count": 8,
+      "urgent": 4,
+      "verify": 0
+    },
+    {
+      "id": "editor",
+      "name": "Editor experience",
+      "description": "VS Code, JetBrains, diagnostics, panels, hovers, and webviews.",
+      "color": "#9bcbff",
+      "count": 8,
+      "urgent": 2,
+      "verify": 0
+    },
+    {
+      "id": "integrations",
+      "name": "CLI, MCP & automation",
+      "description": "Command-line, MCP, actions, and agent-facing workflows.",
+      "color": "#8bd3c7",
+      "count": 15,
+      "urgent": 8,
+      "verify": 1
+    },
+    {
+      "id": "delivery",
+      "name": "Release & delivery",
+      "description": "Packaging, signing, releases, deployment, and platform contracts.",
+      "color": "#c6a0f6",
+      "count": 7,
+      "urgent": 3,
+      "verify": 0
+    },
+    {
+      "id": "reporting",
+      "name": "Reporting & metrics",
+      "description": "Human-readable reports, metrics, summaries, and documentation.",
+      "color": "#89b4fa",
+      "count": 11,
+      "urgent": 4,
+      "verify": 2
+    },
+    {
+      "id": "quality",
+      "name": "Quality system",
+      "description": "Tests, specifications, CI, fixtures, and repository health.",
+      "color": "#a6e3a1",
+      "count": 18,
+      "urgent": 12,
+      "verify": 1
+    },
+    {
+      "id": "unassigned",
+      "name": "Unassigned",
+      "description": "No lane/* label on the issue — triage owes it one.",
+      "color": "#8e8b8a",
+      "count": 0,
+      "urgent": 0,
+      "verify": 0
+    }
+  ],
+  "priorities": [
+    {
+      "id": "showstopper",
+      "rank": 1,
+      "name": "Showstopper",
+      "description": "reserved for regressions on main that haven't been released yet, or recent regressions in a release",
+      "color": "#ff5449",
+      "count": 1
+    },
+    {
+      "id": "critical",
+      "rank": 2,
+      "name": "Critical",
+      "description": "seriously impacting accuracy or the usefulness of the tool",
+      "color": "#f06292",
+      "count": 74
+    },
+    {
+      "id": "normal",
+      "rank": 3,
+      "name": "Normal",
+      "description": "a problem that impacts the usefulness of the tool",
+      "color": "#ffd166",
+      "count": 41
+    },
+    {
+      "id": "low",
+      "rank": 4,
+      "name": "Low",
+      "description": "AKA don't worry about it for now",
+      "color": "#a6e3a1",
+      "count": 0
+    },
+    {
+      "id": "unset",
+      "rank": 5,
+      "name": "No priority set",
+      "description": "No Priority value on the issue — triage owes it one.",
+      "color": "#8e8b8a",
+      "count": 4
+    }
+  ],
+  "issues": [
+    {
+      "number": 431,
+      "title": "Content gate fabricates token_jaccard = 1.0 for clusters that are not Merkle-identical (STRUCTURAL_SATURATION_FLOOR = 0.99)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/431",
+      "excerpt": "Where crates/deslop-core/src/buckets/gate.rs on main (42b2c92), lines 204-210, inside apply_content_gate: with pub const STRUCTURAL_SATURATION_FLOOR: f64 = 0.99; at line 78. The defect The comment above the correction states the justification: A shape-identical cluster routed…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        },
+        {
+          "name": "critical",
+          "color": "d93f0b",
+          "description": "Must fix soon; a release could still ship"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "abdushakoor12",
+          "avatar": "https://avatars.githubusercontent.com/u/60779242?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-22T10:32:12Z",
+      "updated_at": "2026-08-24T11:17:13Z",
+      "lifecycle": "active",
+      "priority": "showstopper",
+      "workstream": "accuracy",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 0,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 166,
+      "title": "Performance: CLI analysis is single-threaded and holds whole corpus in RAM (~9.5 GB / 9m44s on flutter/flutter)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/166",
+      "excerpt": "Summary Cold-cache CLI analysis is **single-threaded** and **holds the whole corpus + fingerprints in RAM**. On large real-world Dart codebases this means multi-minute runs and multi-GB memory. Measured while benchmarking the Dart implementation: | Repo | Dart files | Analysed…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/performance",
+          "color": "ffd166",
+          "description": "Incremental analysis, caches, memory, scheduling, throughput"
+        },
+        {
+          "name": "critical",
+          "color": "d93f0b",
+          "description": "Must fix soon; a release could still ship"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-06-01T10:35:42Z",
+      "updated_at": "2026-08-24T11:16:39Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "performance",
+      "inbound_links": 5,
+      "plan": {
+        "offset": 0,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 344,
+      "title": "Finish the fused rollout: content evidence on the wire, metrics weighting, missing surfaces, restore softened rename fixtures",
+      "url": "https://github.com/Nimblesite/Deslop/issues/344",
+      "excerpt": "Follow-up to the fusedhardening branch (Gap 1 fixed: Type-2 rename consistency measured and routed; gated fused now scales the report weight). Remaining rollout work from docs/plans/fused-score-rollout.md, Gaps 3–4: Wire (Gap 4).** ContentEvidence (agreement, rename_consistenc…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/detection",
+          "color": "ff8a65",
+          "description": "Parsing, matching, scoring, embeddings, and cluster formation"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-10T22:36:46Z",
+      "updated_at": "2026-08-23T05:59:53Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "detection",
+      "inbound_links": 5,
+      "plan": {
+        "offset": 0,
+        "effort_units": 4,
+        "track": 0
+      }
+    },
+    {
+      "number": 366,
+      "title": "MockOllama::embed_vector measures length residues, not content: ~88 embedding_cos assertions calibrate against sin(len) noise",
+      "url": "https://github.com/Nimblesite/Deslop/issues/366",
+      "excerpt": "The fake embedding server used in our tests gives almost any two pieces of code nearly the same \"meaning\" score — it mostly measures how long the text is and what its first character is. About 88 test assertions that look like they test embeddings are really passing or failing…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "ignored-test",
+          "color": "FBCA04",
+          "description": "Assertion is intact but #[ignore]d — not running in CI"
+        },
+        {
+          "name": "lane/quality",
+          "color": "a6e3a1",
+          "description": "Tests, specifications, CI, fixtures, repository health"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-14T10:12:23Z",
+      "updated_at": "2026-08-24T09:15:05Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "quality",
+      "inbound_links": 5,
+      "plan": {
+        "offset": 0,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 367,
+      "title": "Recall hole: nested sibling window subsumes the enclosing near-verbatim clone, content gate hides the remainder — ts-mixed-band pair renders zero clusters without embeddings",
+      "url": "https://github.com/Nimblesite/Deslop/issues/367",
+      "excerpt": "Zero visible clusters for a 380-node near-verbatim clone pair Scan ts-mixed-band/ledger_a.ts + ledger_c.ts alone, embeddings off (--min-nodes 12): settleLedger and settleQuarter are whole-function near-verbatim clones (identical bodies except (beta) parens, renamed function).…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        },
+        {
+          "name": "critical",
+          "color": "d93f0b",
+          "description": "Must fix soon; a release could still ship"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-14T10:36:31Z",
+      "updated_at": "2026-08-24T11:16:29Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 3,
+      "plan": {
+        "offset": 0,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 369,
+      "title": "CRITICAL: ts-mixed-band embedding recall — 3 tests ignored, fix has an O(N^2*D) blowup",
+      "url": "https://github.com/Nimblesite/Deslop/issues/369",
+      "excerpt": "Three tests are red on fused and are #[ignore]d to unblock the merge. **Assertions are intact** — run with -- --ignored. deslop::issue_343_sum_clamp_saturation::mid_band_cluster_confidence_never_exceeds_its_strongest_axis — cluster_count 2 != 1 deslop::pair_size_coherence::an_…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "ignored-test",
+          "color": "FBCA04",
+          "description": "Assertion is intact but #[ignore]d — not running in CI"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        },
+        {
+          "name": "critical",
+          "color": "d93f0b",
+          "description": "Must fix soon; a release could still ship"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-14T22:45:18Z",
+      "updated_at": "2026-08-24T11:16:31Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 6,
+      "plan": {
+        "offset": 5,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 382,
+      "title": "[PIPELINE-INCREMENTAL] Fingerprint cache keyed on lossy UTF-8: distinct files shared one entry and the report showed clone spans from the wrong file",
+      "url": "https://github.com/Nimblesite/Deslop/issues/382",
+      "excerpt": "FingerprintCache::path_for derived the incremental cache key from the **lossy decode** of the source, not the source bytes: from_utf8_lossy collapses every maximal invalid UTF-8 subsequence to a single U+FFFD. Two files that differ in bytes — and in byte *length* — therefore p…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "fixed-on-main",
+          "color": "68e63b",
+          "description": "waiting to be tested in a real release"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-16T11:20:26Z",
+      "updated_at": "2026-08-24T08:44:20Z",
+      "lifecycle": "verify",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 3,
+      "plan": {
+        "offset": 5,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 405,
+      "title": "🛑 QUARANTINED: maximal Type-2 rename below the literal-anchor floor reported as coincidence (fused = 0.0588)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/405",
+      "excerpt": "Tracking issue for section 0 of [docs/plans/fused-score-followups.md](https://github.com/Nimblesite/Deslop/blob/main/docs/plans/fused-score-followups.md) — the quarantine currently at the top of the fused-confidence TODO. Nothing else may be built on the crate until the replac…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "fixed-on-main",
+          "color": "68e63b",
+          "description": "waiting to be tested in a real release"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-18T10:17:51Z",
+      "updated_at": "2026-08-24T08:44:10Z",
+      "lifecycle": "verify",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 3,
+      "plan": {
+        "offset": 10,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 408,
+      "title": "STOP-class: spec and code promise Type-3 renamed near-miss recall that does not exist in any language",
+      "url": "https://github.com/Nimblesite/Deslop/issues/408",
+      "excerpt": "The disagreement crates/deslop-core/src/buckets.rs:270-279 and docs/specs/fusion.md both state that the renamed Type-3 near-miss is protected, and name csharp-type3 as the measured case: Measured against a genuine Type-3 clone whose identifiers are all renamed and whose bodies…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "fixed-on-main",
+          "color": "68e63b",
+          "description": "waiting to be tested in a real release"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-18T13:04:15Z",
+      "updated_at": "2026-08-24T08:43:59Z",
+      "lifecycle": "verify",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 3,
+      "plan": {
+        "offset": 10,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 412,
+      "title": "make test silently skips 30+ tests by name substring: --skip ollama_ --skip corpus_ match any test containing those strings",
+      "url": "https://github.com/Nimblesite/Deslop/issues/412",
+      "excerpt": "Defect The release gate (Makefile line 75, documented at 62 and 219) filters with: lcov --output-path lcov.info -- --skip ollama_ --skip corpus_ cargo's \\--skip\\ is a **substring match on the test name**, not a suite selector. Any test whose *name* contains \\ollama_\\ or \\corpu…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "ignored-test",
+          "color": "FBCA04",
+          "description": "Assertion is intact but #[ignore]d — not running in CI"
+        },
+        {
+          "name": "lane/quality",
+          "color": "a6e3a1",
+          "description": "Tests, specifications, CI, fixtures, repository health"
+        },
+        {
+          "name": "critical",
+          "color": "d93f0b",
+          "description": "Must fix soon; a release could still ship"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-18T21:43:42Z",
+      "updated_at": "2026-08-24T11:16:48Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "quality",
+      "inbound_links": 3,
+      "plan": {
+        "offset": 0,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 414,
+      "title": "corpus_flutter_dart breaches its own [CORPUS-CEILINGS]: wall 1014.7s > 900s, RSS 10177MB > 7168MB — hidden by the --skip corpus_ filter",
+      "url": "https://github.com/Nimblesite/Deslop/issues/414",
+      "excerpt": "Defect (on main) Running \\corpus_flutter_dart\\ (crates/deslop/tests/corpus_repos.rs, \\check_ceilings\\ at ~line 213, [CORPUS-CEILINGS] at ~407) on main fails both of its own resource ceilings: wall clock: **1014.7 s** measured vs **900 s** ceiling — a new breach peak RSS: **10,…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "lane/performance",
+          "color": "ffd166",
+          "description": "Incremental analysis, caches, memory, scheduling, throughput"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-18T21:44:07Z",
+      "updated_at": "2026-08-23T05:59:27Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "performance",
+      "inbound_links": 4,
+      "plan": {
+        "offset": 5,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 336,
+      "title": "False positive: numeric array literals rank #1 on dotnet/fsharp — data-table classification is Dart-only",
+      "url": "https://github.com/Nimblesite/Deslop/issues/336",
+      "excerpt": "Summary Scanning dotnet/fsharp @ v15.2.302 (ba48c78076ef15cdfef89d0001c538f3f130421b), the **top-ranked cluster in the entire report** is an integer array literal, classified category: \"logic\". CloneCategory::data exists (#190) but its only classifier is crates/deslop-core/src…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "fixed-on-main",
+          "color": "68e63b",
+          "description": "waiting to be tested in a real release"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-09T04:43:40Z",
+      "updated_at": "2026-08-24T08:45:07Z",
+      "lifecycle": "verify",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 15,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 358,
+      "title": "Python role gate over-suppresses: same-role behaviour-equivalent function pair never surfaces (false negative)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/358",
+      "excerpt": "Summary crates/deslop/tests/python_issue_119_embedding_role_mismatch.rs::same_role_function_pair_still_surfaces is **RED** and marked #[ignore] for the fused release (ollama-provider test via in-process MockOllama). This is a **false negative** — the class the accuracy bar tre…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "fixed-on-main",
+          "color": "68e63b",
+          "description": "waiting to be tested in a real release"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-12T21:28:37Z",
+      "updated_at": "2026-08-24T08:44:39Z",
+      "lifecycle": "verify",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 15,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 359,
+      "title": "Pre-existing accuracy defects carried through the `fused` review: content quorum, call-only literal suppression, ts-mixed-band recall, dict-assert RHS, six VSIX skips",
+      "url": "https://github.com/Nimblesite/Deslop/issues/359",
+      "excerpt": "Findings from the fused branch review that are **not** branch regressions — each was verified present and behaviourally identical on main. They are filed so they survive the branch review document, which is not committed to either branch. None is fixed by fused; none is made w…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        },
+        {
+          "name": "critical",
+          "color": "d93f0b",
+          "description": "Must fix soon; a release could still ship"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-12T21:35:25Z",
+      "updated_at": "2026-08-24T11:16:27Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 20,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 365,
+      "title": "Embedding presence disables the LSH-only corroboration floors: weaker evidence promotes a pair (false-positive channel)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/365",
+      "excerpt": "Defect survival_decision in crates/deslop-core/src/pair.rs applies the two LSH-only corroboration floors only when a pair has **neither** a structural anchor **nor** any embedding signal: Any non-zero embedding_cos — however small — switches both floors off. That inverts the e…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-14T10:12:07Z",
+      "updated_at": "2026-08-23T05:59:46Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 20,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 380,
+      "title": "[PIPELINE-INCREMENTAL] Cache partition keys on CARGO_PKG_VERSION, which is 0.0.0-dev in every local build: normalisation changes never invalidate the cache",
+      "url": "https://github.com/Nimblesite/Deslop/issues/380",
+      "excerpt": "crates/deslop-core/src/fpcache.rs:38 pins the tool version into the cache directory path: with the stated contract: Tool version pinned into the cache key so a deslop-core bump (grammar pins, normalisation rules, hashing changes) invalidates every previously-cached blob.",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-16T11:20:15Z",
+      "updated_at": "2026-08-23T05:59:41Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 25,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 387,
+      "title": "ts-mixed-band: renamed copy `ledger_c` never surfaces, and three different-evidence clusters all render fused = 1.00",
+      "url": "https://github.com/Nimblesite/Deslop/issues/387",
+      "excerpt": "crates/deslop/tests/fixtures/ts-mixed-band stages five TypeScript files: ledger_a (original), ledger_d/ledger_e (one parenthesis apart from it), ledger_c (a consistently renamed copy), and ledger_b (same shape, identifiers *and* every literal different). A scan on main at --mi…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        },
+        {
+          "name": "critical",
+          "color": "d93f0b",
+          "description": "Must fix soon; a release could still ship"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-16T22:33:52Z",
+      "updated_at": "2026-08-24T11:16:33Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 25,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 398,
+      "title": "ReportFixture forks one path into several FileIds, so same-file clusters test as cross-file",
+      "url": "https://github.com/Nimblesite/Deslop/issues/398",
+      "excerpt": "Defect ReportFixture forks one source path into several FileIds, so any cluster whose members share a path is presented to the production router as **cross-file**. Every cross-file predicate downstream reads it wrong. FileRegistry::register appends unconditionally — it has no…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/quality",
+          "color": "a6e3a1",
+          "description": "Tests, specifications, CI, fixtures, repository health"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-17T19:39:17Z",
+      "updated_at": "2026-08-23T05:59:36Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "quality",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 5,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 401,
+      "title": "Corpus precision check matches raw source text: check_boilerplate_not_ranked_first is unsound in both directions",
+      "url": "https://github.com/Nimblesite/Deslop/issues/401",
+      "excerpt": "The defect [crates/deslop/tests/corpus_repos.rs:320](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop/tests/corpus_repos.rs#L320) matches forbidden_top_shapes against **raw source text**: CLAUDE.md prohibits this outright — *\"No using text pattern matching on sourc…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "abdushakoor12",
+          "avatar": "https://avatars.githubusercontent.com/u/60779242?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-18T07:22:14Z",
+      "updated_at": "2026-08-23T05:59:34Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 30,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 284,
+      "title": "False-positive Type-3 cluster groups unrelated TDBIN test scenarios",
+      "url": "https://github.com/Nimblesite/Deslop/issues/284",
+      "excerpt": "Repository: Nimblesite/typeDiagram Commit: f9778f40ca0adf606a04b4881a865c9401de4343 Tool and full arguments: deslop . --output /tmp/typediagram-deslop-after-markdown-results --no-fail-over --nohtml --log-to-console --technical Relevant response: 3 Nearly identical code [Type-3…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-07-12T00:14:04Z",
+      "updated_at": "2026-08-23T06:00:02Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 4,
+      "plan": {
+        "offset": 35,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 79,
+      "title": "False positive: helper-call sites with literal arguments flagged as Type-2 clones",
+      "url": "https://github.com/Nimblesite/Deslop/issues/79",
+      "excerpt": "Summary \\top-offenders\\ flags clusters of identical-shape helper calls where every occurrence is just a one-liner invocation of an already-extracted helper, varying only in literal arguments. After identifier normalization these all look like \\_helper(STRING, DICT, STRING)\\ so…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-05-02T07:10:56Z",
+      "updated_at": "2026-08-23T06:00:12Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 3,
+      "plan": {
+        "offset": 35,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 103,
+      "title": "pytest patterns (monkeypatch.setenv chains, assert dict-access chains, fixture call-sites) cluster as duplication",
+      "url": "https://github.com/Nimblesite/Deslop/issues/103",
+      "excerpt": "Deslop reports normal test code as duplicates. On a Python repo full of pytest tests, once the real copy-paste duplicates are dealt with, most of the top findings are everyday test patterns — repeated environment-variable setup, repeated assertion lines, and calls to helper fu…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-05-02T09:14:15Z",
+      "updated_at": "2026-08-24T10:51:47Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 3,
+      "plan": {
+        "offset": 40,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 71,
+      "title": "False positive: same HTTP verb + status assertion across different endpoints",
+      "url": "https://github.com/Nimblesite/Deslop/issues/71",
+      "excerpt": "Summary Cluster **10e21c4d0874fc34** (8 copies) flags the HTTP DELETE + 204 assertion pattern as duplicate code: Why it's a false positive After identifier normalisation, both look identical: client.delete(f\"string/{X.Y}\", headers={...}) + assert resp.status_code == int. But t…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-05-02T05:06:27Z",
+      "updated_at": "2026-08-23T06:00:13Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 40,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 283,
+      "title": "False-positive Type-3 cluster conflates unrelated object-literal tables",
+      "url": "https://github.com/Nimblesite/Deslop/issues/283",
+      "excerpt": "Repository: Nimblesite/typeDiagram Commit: f9778f40ca0adf606a04b4881a865c9401de4343 Tool and full arguments: deslop . --output /tmp/typediagram-deslop-after-markdown-results --no-fail-over --nohtml --log-to-console --technical Relevant response: Found 522 groups of duplicated…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-07-12T00:13:05Z",
+      "updated_at": "2026-08-23T06:00:03Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 45,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 285,
+      "title": "False-positive Type-3 cluster groups unrelated TDBIN diagnostic tests by assertion idiom",
+      "url": "https://github.com/Nimblesite/Deslop/issues/285",
+      "excerpt": "Repository: Nimblesite/typeDiagram Commit: 5669cc1ec362ec12411e35f47bbc45d1e7a2ec6f Tool and arguments: Relevant response: Cluster members: packages/typediagram/test/converters/rust-tdbin.test.ts:293-296 packages/typediagram/test/converters/rust-tdbin.test.ts:298-301",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-07-12T01:31:19Z",
+      "updated_at": "2026-08-23T06:00:01Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 45,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 362,
+      "title": "[RANK-STRUCTURAL-ONLY] Two-file run of unrelated const declarations reports as the repo's #1 duplicate (344 LOC false positive)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/362",
+      "excerpt": "Summary deslop . on this repo ranks a **344-LOC cluster as the single largest duplication in the codebase**, and it is a false positive. It is the biggest single contributor to the repo's own duplication_percent. Reproduce Cluster f062e53bcb4e: | field | value | |---|---|",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-13T09:27:56Z",
+      "updated_at": "2026-08-23T05:59:18Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 50,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 421,
+      "title": "Sub-line dict-entry pair reported as structural_only cluster (docker_host.py L15 vs L15)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/421",
+      "excerpt": "On the python-issue-69-abstract-method fixture (present on main, not a branch regression), the report publishes a visible structural_only cluster whose two occurrences are two different byte ranges of the same line: docker_host.py L15 bytes 398..410 — the dict entry \"name\": name",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-21T01:28:00Z",
+      "updated_at": "2026-08-23T05:59:24Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 50,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 173,
+      "title": "VSIX showstopper: \"Open Cluster Details\" renders a blank panel on large/active repos — selection latches a volatile content-hash cluster id against a live, churning report (silent, no diagnostic)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/173",
+      "excerpt": "Summary On a large, actively-analyzed repository, the VSIX \"Open Cluster Details\" command almost always renders a blank panel reading \"No cluster selected.\" instead of the cluster the user clicked. The panel captures the cluster id at click time but is fed the latest live snap…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/editor",
+          "color": "9bcbff",
+          "description": "VS Code, JetBrains, diagnostics, panels, hovers, webviews"
+        },
+        {
+          "name": "critical",
+          "color": "d93f0b",
+          "description": "Must fix soon; a release could still ship"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-06-02T09:43:31Z",
+      "updated_at": "2026-08-24T11:16:43Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "editor",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 0,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 228,
+      "title": "VSIX DUPLICATION panel out of sync with live engine: stale cluster 31b089e ranked #1, absent from CLI + MCP",
+      "url": "https://github.com/Nimblesite/Deslop/issues/228",
+      "excerpt": "Defect: reactive UI shows a stale cluster ranking that diverges from the authoritative engine The VS Code **DUPLICATION** tree-view (LSP-broadcast) is displaying a cluster set / worst-first ranking that does **not** match the live engine. The reactive loop (watcher → scheduler…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/integrations",
+          "color": "8bd3c7",
+          "description": "CLI, MCP, actions, and agent-facing workflows"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-06-17T21:44:17Z",
+      "updated_at": "2026-08-23T06:00:08Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "integrations",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 0,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 263,
+      "title": "MCP find-similar snippet mode: language enum omits typescript/javascript despite engine support",
+      "url": "https://github.com/Nimblesite/Deslop/issues/263",
+      "excerpt": "Defect The \\find-similar\\ MCP tool's input schema restricts \\language\\ to \\csharp | rust | python | dart\\. The engine has supported JavaScript and TypeScript since 862ea36 (\"Add JavaScript and TypeScript clone detection\"), and path-based \\find-similar\\ queries over \\.ts\\ files…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "fixed-on-main",
+          "color": "68e63b",
+          "description": "waiting to be tested in a real release"
+        },
+        {
+          "name": "lane/integrations",
+          "color": "8bd3c7",
+          "description": "CLI, MCP, actions, and agent-facing workflows"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-07-02T14:51:54Z",
+      "updated_at": "2026-08-24T08:45:19Z",
+      "lifecycle": "verify",
+      "priority": "critical",
+      "workstream": "integrations",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 0,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 309,
+      "title": "find-similar returns empty for a verbatim copy of unclustered corpus code (first-copy prevention gap)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/309",
+      "excerpt": "Symptom find-similar (snippet mode, language: \"rust\") returns {\"below_min_nodes\": false, \"clusters\": [], \"total_occurrences\": 0} for a snippet that is a **byte-for-byte verbatim copy** of code already in the analysed corpus: the entire impl LanguageParser for FSharpParser bloc…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-07-26T09:57:49Z",
+      "updated_at": "2026-08-23T05:59:58Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 55,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 264,
+      "title": "find-similar snippet query misses a tracked structural cluster (recall false negative)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/264",
+      "excerpt": "Symptom A find-similar snippet query returned {\"clusters\": [], \"total_occurrences\": 0} for a Rust snippet that is near-verbatim identical to both occurrences of tracked cluster a59932844b88648e (the duplicated ReportFixture test scaffold). Corpus occurrences: crates/deslop-cor…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-07-03T12:53:06Z",
+      "updated_at": "2026-08-23T06:00:04Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 3,
+      "plan": {
+        "offset": 60,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 356,
+      "title": "Embeddings-on erases a four-file clone and moves a proven bucket: ANN bridges mutate structural components before measurement",
+      "url": "https://github.com/Nimblesite/Deslop/issues/356",
+      "excerpt": "Summary crates/deslop/tests/embedding_route_invariance.rs is **RED on both assertions** and has been marked #[ignore] so the fused release is not blocked. Both tests are ollama-provider tests (in-process MockOllama), so they fall under the release decision to skip ollama-depen…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "ignored-test",
+          "color": "FBCA04",
+          "description": "Assertion is intact but #[ignore]d — not running in CI"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-12T21:28:34Z",
+      "updated_at": "2026-08-23T05:59:50Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 55,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 370,
+      "title": "CRITICAL: deslop-lsp hangs indefinitely after a rejected embedding refresh (test ignored, ate the whole CI budget)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/370",
+      "excerpt": "One of our own tests hangs forever instead of failing. It's currently skipped so CI can pass. The hang points at a real product bug: when an embedding refresh is rejected, the language server never reports that it finished or failed — so an editor would sit on a spinner foreve…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "ignored-test",
+          "color": "FBCA04",
+          "description": "Assertion is intact but #[ignore]d — not running in CI"
+        },
+        {
+          "name": "lane/quality",
+          "color": "a6e3a1",
+          "description": "Tests, specifications, CI, fixtures, repository health"
+        },
+        {
+          "name": "critical",
+          "color": "d93f0b",
+          "description": "Must fix soon; a release could still ship"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-14T23:33:13Z",
+      "updated_at": "2026-08-24T11:16:45Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "quality",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 5,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 383,
+      "title": "[PIPELINE-INCREMENTAL] Analysis is not incremental: 78% of every run is LSH + pair evaluation, recomputed in full however little changed",
+      "url": "https://github.com/Nimblesite/Deslop/issues/383",
+      "excerpt": "deslop re-does the overwhelming majority of its work on every invocation regardless of how much of the corpus changed. The incremental cache ([PIPELINE-INCREMENTAL]) covers the parse stage only, and the parse stage is under a tenth of a run. The spec frames incremental analysi…",
+      "type": "Feature",
+      "labels": [
+        {
+          "name": "lane/detection",
+          "color": "ff8a65",
+          "description": "Parsing, matching, scoring, embeddings, and cluster formation"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-16T11:52:41Z",
+      "updated_at": "2026-08-23T05:59:39Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "detection",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 30,
+        "effort_units": 8,
+        "track": 0
+      }
+    },
+    {
+      "number": 389,
+      "title": "Straddling same-pair cluster escapes [PIPELINE-CLUSTER-SUBSUME] containment by 7 bytes (C# modifier ranges)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/389",
+      "excerpt": "Found while building the six-language incremental fixture (tests/fixtures/incremental-multilang), at --min-nodes 8, C# pair LedgerAlpha.cs/LedgerBeta.cs (byte-identical ReconcileEntries method inside differing files). The report carries **two** identical clusters over the same…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-17T00:02:00Z",
+      "updated_at": "2026-08-23T05:59:37Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 60,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 390,
+      "title": "LSH-only Type-3 recall is dead outside C#: [CLONE-BUCKETS-ROUTING] row 4 unimplemented",
+      "url": "https://github.com/Nimblesite/Deslop/issues/390",
+      "excerpt": "Defect buckets::classify_signals never implemented [CLONE-BUCKETS-ROUTING] row 4 — structural ≤ 0.01 ∧ token_jaccard ≥ 0.90 → NearlyIdentical (docs/specs/taxonomy.md, no language condition). The triple falls to the else-arm, LooselySimilar, which the renderer hides. report_ren…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "fixed-on-main",
+          "color": "68e63b",
+          "description": "waiting to be tested in a real release"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-17T10:04:05Z",
+      "updated_at": "2026-08-24T08:44:20Z",
+      "lifecycle": "verify",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 65,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 407,
+      "title": "False negative: a genuine Type-4 clone (recursive vs iterative sum) is dropped by MIN_COSINE — release gate now red",
+      "url": "https://github.com/Nimblesite/Deslop/issues/407",
+      "excerpt": "What is wrong crates/deslop/tests/fixtures/dart-issue-119-same-role/ holds a textbook Type-4 semantic clone: Both sum 1..limit. Different code, identical behaviour — exactly what the semantic axis exists to find. **It does not surface.** No embedding pair forms, so no cluster…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-18T12:10:37Z",
+      "updated_at": "2026-08-23T05:59:31Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 65,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 409,
+      "title": "literal_preservation is a blind count — it manufactures false negatives AND tolerates a false positive",
+      "url": "https://github.com/Nimblesite/Deslop/issues/409",
+      "excerpt": "The defect crates/deslop-core/src/content.rs:321: literal_preservation is a **bare count** of how many literal positions are byte-identical. It never asks why* a literal differs. So it treats these as the same evidence: \"OrderService\" → \"UserService\" — a label renamed alongsid…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-18T13:04:55Z",
+      "updated_at": "2026-08-23T05:59:30Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 70,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 410,
+      "title": "Rename anchor mass overshoots on short subtrees: a certified-perfect bijection caps at 0.667",
+      "url": "https://github.com/Nimblesite/Deslop/issues/410",
+      "excerpt": "Measurement request, not a threshold change RENAME_EVIDENCE_HALF_MASS = 4.0 discounts rename evidence by sample size: anchor_weight(n) = n / (n + 4.0). On a short subtree that caps a **perfect** rename proof below the promotion floor. The case crates/deslop/tests/fixtures/ts-q…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-18T13:04:57Z",
+      "updated_at": "2026-08-23T05:59:29Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 75,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 415,
+      "title": "fused_score_bounds.rs is fail-open: a report missing clusters/signals/fused passes the bound check vacuously",
+      "url": "https://github.com/Nimblesite/Deslop/issues/415",
+      "excerpt": "Defect (on main) \\crates/deslop/tests/fused_score_bounds.rs\\ (main, ~lines 27–52): the helper \\first_unbounded_fused\\ walks the report with \\?\\ at every step — let clusters = report.get(\"clusters\")?.as_array()?; ... .get(\"signals\")?.get(\"fused\")? ... and the caller treats \\Non…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/detection",
+          "color": "ff8a65",
+          "description": "Parsing, matching, scoring, embeddings, and cluster formation"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-18T21:44:18Z",
+      "updated_at": "2026-08-23T05:59:26Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "detection",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 0,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 428,
+      "title": "False negative: tokio stdout.rs / stderr.rs Type-2 rename is not reported (corpus type2_recall)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/428",
+      "excerpt": "What The first end-to-end run of the corpus gate after the harness repairs surfaces a **live false negative** on curated ground truth: Why it is a real duplicate corpus/tokio.json curates this pair as a hand-verified Type-2 rename. The two standard-stream handles are one modul…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "abdushakoor12",
+          "avatar": "https://avatars.githubusercontent.com/u/60779242?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-22T07:21:03Z",
+      "updated_at": "2026-08-23T05:59:21Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 70,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 429,
+      "title": "SHOWSTOPPER: Deslop cannot analyse flutter/flutter — killed at 30 min with no report, requirement is 600 s",
+      "url": "https://github.com/Nimblesite/Deslop/issues/429",
+      "excerpt": "Deslop cannot finish scanning the Flutter codebase. A full scan was killed after 30 minutes with no report produced at all — the target is under 10 minutes. Memory use also reached 14.6 GB, more than double its 7 GB limit. A tool that can't get through a mainstream open-source…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/performance",
+          "color": "ffd166",
+          "description": "Incremental analysis, caches, memory, scheduling, throughput"
+        },
+        {
+          "name": "critical",
+          "color": "d93f0b",
+          "description": "Must fix soon; a release could still ship"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-22T09:11:49Z",
+      "updated_at": "2026-08-24T11:16:41Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "performance",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 0,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 432,
+      "title": "Operator-only drift reaches the act-now tier under #408 graded structural overlap",
+      "url": "https://github.com/Nimblesite/Deslop/issues/432",
+      "excerpt": "Branch worktree-fused-score-followups at 3f71fcd. operator_drift_is_not_duplication::an_operator_only_difference_never_reaches_the_act_now_line and the_real_clone_outranks_every_operator_family fail: Root: #408 (42b2c92) made structural a graded subtree overlap. A pair differi…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-23T03:57:53Z",
+      "updated_at": "2026-08-23T05:59:18Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 75,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 167,
+      "title": "Dart grammar: experimental declarative-constructor syntax (`new name(...) : init`) produces ERROR nodes",
+      "url": "https://github.com/Nimblesite/Deslop/issues/167",
+      "excerpt": "Deslop cannot parse one very new piece of Dart syntax — a special short form for writing constructors — so those spots show up as unparsed in the scan. It only appears in the Dart team's own unreleased code, so almost no real user will hit it. Nothing crashes; the rest of the…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/quality",
+          "color": "a6e3a1",
+          "description": "Tests, specifications, CI, fixtures, repository health"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-06-01T10:35:44Z",
+      "updated_at": "2026-08-24T09:14:55Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "quality",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 10,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 252,
+      "title": "Deslop MCP transport closes on Codex tool calls",
+      "url": "https://github.com/Nimblesite/Deslop/issues/252",
+      "excerpt": "While starting VSIX dedup work in /Users/christianfindlay/Documents/Code/Deslop, the live Deslop MCP was reachable as a tool namespace but every query failed before returning data. Failed calls: deslop/schema-doc deslop/session-config deslop/top-offenders with n=12 max_occurre…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/integrations",
+          "color": "8bd3c7",
+          "description": "CLI, MCP, actions, and agent-facing workflows"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-06-30T11:02:18Z",
+      "updated_at": "2026-08-23T06:00:07Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "integrations",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 5,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 402,
+      "title": "Deslop MCP unavailable blocks required code-dedup workflow",
+      "url": "https://github.com/Nimblesite/Deslop/issues/402",
+      "excerpt": "The repository code-dedup skill requires live Deslop MCP tools (top-offenders, cluster-by-id, and find-similar) before any deduplication edits. In the current Codex session, the Too Many Cooks MCP is available, but no Deslop MCP tools or resources are exposed. This blocks safe…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/integrations",
+          "color": "8bd3c7",
+          "description": "CLI, MCP, actions, and agent-facing workflows"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-18T08:26:25Z",
+      "updated_at": "2026-08-23T05:59:33Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "integrations",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 10,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 276,
+      "title": "Structural: CLI and LSP/MCP run different engine builds → duplication gate is computed over a different corpus than the panel shows (contradictory pass/fail)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/276",
+      "excerpt": "Summary The deslop **CLI** (used as the CI gate) and the **LSP/MCP** engine (the editor's DUPLICATION panel) are built and versioned independently, and can run with **different language support**. On the *same repo* with the *same .deslop.toml*, the two surfaces analyse **diff…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/integrations",
+          "color": "8bd3c7",
+          "description": "CLI, MCP, actions, and agent-facing workflows"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-07-07T21:47:21Z",
+      "updated_at": "2026-08-23T06:00:04Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "integrations",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 5,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 262,
+      "title": "MCP find-similar cannot gate TypeScript/JavaScript code units in this repo (bundled engine predates JS/TS support)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/262",
+      "excerpt": "CLAUDE.md rule zero requires every agent to gate every new code unit through the live find-similar MCP tool — including the extension's TypeScript (clients/vscode/). The MCP bundled in the installed VSIX predates the JS/TS engine support merged in 862ea36: its find-similar lan…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/integrations",
+          "color": "8bd3c7",
+          "description": "CLI, MCP, actions, and agent-facing workflows"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-07-02T12:12:19Z",
+      "updated_at": "2026-08-23T06:00:06Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "integrations",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 10,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 289,
+      "title": "Ignored-path event storms still schedule a full refresh pass (~776 MB bounded transient per storm)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/289",
+      "excerpt": "Follow-up to #287, found while re-verifying the fix under an incident-scale hammer. Setup:** fixed deslop-lsp (post-#287 HEAD) against SharpLsp; four attack waves: (1) touch 487 gitignored files under editors/vscode/.vscode-test/, (2) create 300 clone .js files in gitignored r…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/quality",
+          "color": "a6e3a1",
+          "description": "Tests, specifications, CI, fixtures, repository health"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-07-23T22:40:02Z",
+      "updated_at": "2026-08-23T06:00:00Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "quality",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 10,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 292,
+      "title": "top-offenders transiently indexes ignored Playwright report assets",
+      "url": "https://github.com/Nimblesite/Deslop/issues/292",
+      "excerpt": "Deslop reported generated Playwright HTML/trace assets as the highest duplicate-code offenders while analysing Longplay. Exact tool call: Tool: mcp__deslop__top-offenders Arguments: {\"limit\":10} Relevant response excerpt: The returned highest-weight clusters contained occurren…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/integrations",
+          "color": "8bd3c7",
+          "description": "CLI, MCP, actions, and agent-facing workflows"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-07-24T01:20:42Z",
+      "updated_at": "2026-08-23T05:59:59Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "integrations",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 15,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 298,
+      "title": "Add `out/` (and `.vscode-test/`, `coverage/`) to built-in default excludes — VS Code / TS compile output",
+      "url": "https://github.com/Nimblesite/Deslop/issues/298",
+      "excerpt": "Summary Add **out/** to deslop's built-in default excludes (alongside dist, build, target, node_modules, .venv, __pycache__, .cargo). out/ is the canonical TypeScript compile output directory for **VS Code extensions** — it's what the official yo code extension generator and v…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/detection",
+          "color": "ff8a65",
+          "description": "Parsing, matching, scoring, embeddings, and cluster formation"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-07-25T04:43:44Z",
+      "updated_at": "2026-08-23T05:59:58Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "detection",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 5,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 312,
+      "title": "Flaky: refresh_command_re_evaluates_the_corpus_after_an_edit races the live watcher",
+      "url": "https://github.com/Nimblesite/Deslop/issues/312",
+      "excerpt": "One of our own tests passes on a developer machine but fails randomly on CI. The test edits a file and then asks Deslop to refresh its report, expecting the refresh to show the duplicate disappearing. But Deslop's background file watcher often updates the report first — so by…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/quality",
+          "color": "a6e3a1",
+          "description": "Tests, specifications, CI, fixtures, repository health"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-07-28T11:01:02Z",
+      "updated_at": "2026-08-24T09:15:00Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "quality",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 15,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 314,
+      "title": "LSP re-renders unchanged files and floods no-op notifications under editor/build churn",
+      "url": "https://github.com/Nimblesite/Deslop/issues/314",
+      "excerpt": "Production incident on Deslop Live 0.29.0 in the Basilisk workspace. Evidence from the VS Code Deslop log on 2026-08-01: 53 whole-corpus renders over roughly two hours; 24 consecutive renders from 09:46:34 to 09:51:44, each flattening about 262,000 fingerprints and evaluating…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/editor",
+          "color": "9bcbff",
+          "description": "VS Code, JetBrains, diagnostics, panels, hovers, webviews"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-01T00:00:01Z",
+      "updated_at": "2026-08-23T05:59:56Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "editor",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 0,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 316,
+      "title": "make deployment-verify is unrunnable on Windows checkouts: CRLF line endings and NTFS exec bits fail 3 of 4 node contract suites",
+      "url": "https://github.com/Nimblesite/Deslop/issues/316",
+      "excerpt": "Summary Three of the four node contract suites in make deployment-verify fail on a Windows checkout for environment reasons alone, with no source defect. They pass on CI (ubuntu, LF), so the release contract gate is effectively unavailable on the primary development platform.",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/delivery",
+          "color": "c6a0f6",
+          "description": "Packaging, signing, releases, deployment, platform contracts"
+        },
+        {
+          "name": "critical",
+          "color": "d93f0b",
+          "description": "Must fix soon; a release could still ship"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-01T15:38:59Z",
+      "updated_at": "2026-08-24T11:16:46Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "delivery",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 0,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 348,
+      "title": "Partial VSIX publish: one transient Marketplace timeout aborts the remaining platforms, leaving the extension published for some OSes and not others",
+      "url": "https://github.com/Nimblesite/Deslop/issues/348",
+      "excerpt": "The publish-marketplace job in .github/workflows/release.yml publishes five platform VSIXes in a for loop under set -euo pipefail, with no retry. A single transient Marketplace timeout therefore aborts the loop and leaves the extension **published for some platforms and not ot…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/delivery",
+          "color": "c6a0f6",
+          "description": "Packaging, signing, releases, deployment, platform contracts"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-11T09:58:16Z",
+      "updated_at": "2026-08-23T05:59:53Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "delivery",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 0,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 352,
+      "title": "cpu_throttle_knob LSP test is timing-dependent and carries a lint suppression",
+      "url": "https://github.com/Nimblesite/Deslop/issues/352",
+      "excerpt": "One of our own tests is unreliable: it waits a fixed 1.5 seconds for a program to write a startup line to its log, then kills it and checks the log. On a slow moment the line hasn't been written yet, so the test fails with an empty log. It also contains a linter suppression, w…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/quality",
+          "color": "a6e3a1",
+          "description": "Tests, specifications, CI, fixtures, repository health"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-11T23:36:59Z",
+      "updated_at": "2026-08-24T09:15:03Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "quality",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 15,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 355,
+      "title": "Dart single-file one-statement delegating method family surfaces as structural_only (regression of #197 on `fused`)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/355",
+      "excerpt": "Summary crates/deslop/tests/dart_issue_197_single_file_structural_only.rs::single_file_structural_only_method_families_do_not_top_the_report is **RED** and has been marked #[ignore] so it does not block the fused release. This issue tracks the reinstatement. This is a **branch…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "fixed-on-main",
+          "color": "68e63b",
+          "description": "waiting to be tested in a real release"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-12T21:27:30Z",
+      "updated_at": "2026-08-24T08:44:48Z",
+      "lifecycle": "verify",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 80,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 357,
+      "title": "Duplicate subtrees are not collapsed before ANN indexing (312 attempted / 312 indexed)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/357",
+      "excerpt": "Summary crates/deslop/tests/embedding_perf.rs::duplicate_subtree_embeddings_are_collapsed_before_ann is **RED** and marked #[ignore] for the fused release (ollama-provider test via in-process MockOllama). Reproduce The fixture is written so that many subtrees are byte-identica…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "ignored-test",
+          "color": "FBCA04",
+          "description": "Assertion is intact but #[ignore]d — not running in CI"
+        },
+        {
+          "name": "lane/quality",
+          "color": "a6e3a1",
+          "description": "Tests, specifications, CI, fixtures, repository health"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-12T21:28:36Z",
+      "updated_at": "2026-08-23T05:59:50Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "quality",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 20,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 363,
+      "title": "Canonical report context documents obsolete CLI defaults and ranking formula",
+      "url": "https://github.com/Nimblesite/Deslop/issues/363",
+      "excerpt": "Bug docs/specs/REPORTING-CONTEXT.md on main is the canonical agent-facing schema text served by schema-doc, but three instructions disagree with the main implementation: It states min-nodes = 15; crates/deslop/src/main.rs defaults --min-nodes to 30. It tells agents to use --fo…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "lane/reporting",
+          "color": "89b4fa",
+          "description": "Human-readable reports, metrics, summaries, documentation"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-13T20:19:34Z",
+      "updated_at": "2026-08-23T05:59:47Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "reporting",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 0,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 372,
+      "title": "cosine_similarity accumulates in f32: byte-identical snippets report 0.999998 instead of 1.0",
+      "url": "https://github.com/Nimblesite/Deslop/issues/372",
+      "excerpt": "CosinePoint::new L2-normalises into f32 and Point::distance dots the rounded components with f32 mul_add, so the error grows with vector width. Two byte-identical snippets — which share a single vector, since group_snippets_by_content collapses them — report embedding_cos = 0.…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "fixed-on-main",
+          "color": "68e63b",
+          "description": "waiting to be tested in a real release"
+        },
+        {
+          "name": "lane/reporting",
+          "color": "89b4fa",
+          "description": "Human-readable reports, metrics, summaries, documentation"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-15T00:23:17Z",
+      "updated_at": "2026-08-24T08:44:29Z",
+      "lifecycle": "verify",
+      "priority": "critical",
+      "workstream": "reporting",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 0,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 373,
+      "title": "Polymorphic-signature gate hides consistently-renamed Type-2 clones: a same-named helper copied across modules never surfaces (false negative)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/373",
+      "excerpt": "Summary is_polymorphic_signature_cluster (crates/deslop-core/src/cluster_filters/mod.rs) hides a cross-file cluster of same-named functions when their enclosing bodies differ in **raw source bytes**. The byte comparison stands in for \"different implementations\" — but a consist…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-15T07:22:30Z",
+      "updated_at": "2026-08-23T05:59:17Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 80,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 374,
+      "title": "Action self-test red on main: documented `uses:` pins stuck at v0.30.0 [ACTION-VERSION]",
+      "url": "https://github.com/Nimblesite/Deslop/issues/374",
+      "excerpt": "Action self-test is red on main: the three documented uses: pins still say v0.30.0 while the newest published release has moved on. Run: https://github.com/Nimblesite/Deslop/actions/runs/31856016104 Why it happened stamp-release-version.mjs stamps the *build*, not the commit —…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "fixed-on-main",
+          "color": "68e63b",
+          "description": "waiting to be tested in a real release"
+        },
+        {
+          "name": "lane/quality",
+          "color": "a6e3a1",
+          "description": "Tests, specifications, CI, fixtures, repository health"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-15T08:55:37Z",
+      "updated_at": "2026-08-24T11:17:15Z",
+      "lifecycle": "verify",
+      "priority": "critical",
+      "workstream": "quality",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 20,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 385,
+      "title": "duplication_percent excludes generated code from the numerator but keeps it in the denominator",
+      "url": "https://github.com/Nimblesite/Deslop/issues/385",
+      "excerpt": "duplication_percent = 100 × duplicated_loc / analysed_loc. A file recognised as machine-generated has its occurrences flagged hidden, and hidden occurrences are excluded from duplicated_loc. Its lines stay in analysed_loc. Numerator and denominator therefore describe different…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/reporting",
+          "color": "89b4fa",
+          "description": "Human-readable reports, metrics, summaries, documentation"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-16T12:20:19Z",
+      "updated_at": "2026-08-23T05:59:17Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "reporting",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 5,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 388,
+      "title": "Dependabot SECURITY PRs to main skip CI, dependency review, and CodeQL — the only class the actor skip can fire on",
+      "url": "https://github.com/Nimblesite/Deslop/issues/388",
+      "excerpt": "ci.yml and codeql.yml both short-circuit on the Dependabot actor: Each carries the same justification: *\"Dependabot PRs are swept into dependabot-upgrades and never merge to main directly, so the consolidation PR is where these run.\"* That justification does not apply to any P…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/delivery",
+          "color": "c6a0f6",
+          "description": "Packaging, signing, releases, deployment, platform contracts"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-16T22:51:37Z",
+      "updated_at": "2026-08-23T05:59:38Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "delivery",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 5,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 399,
+      "title": "CLI blames .deslop.toml for built-in noise suppression, even when no config file exists",
+      "url": "https://github.com/Nimblesite/Deslop/issues/399",
+      "excerpt": "Defect The CLI blames the user's .deslop.toml for clusters that built-in noise filters suppressed — including when no .deslop.toml exists anywhere. Reproduction Any fixture with no config file. Using one from this repo: That directory contains only checker_rules.rs, linter_rul…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "lane/integrations",
+          "color": "8bd3c7",
+          "description": "CLI, MCP, actions, and agent-facing workflows"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-17T19:39:40Z",
+      "updated_at": "2026-08-23T05:59:35Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "integrations",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 15,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 406,
+      "title": "Summary lies about WHY clusters were hidden — always blames .deslop.toml, even with no config anywhere",
+      "url": "https://github.com/Nimblesite/Deslop/issues/406",
+      "excerpt": "Measured crates/deslop/src/summary/body.rs:34 prints, unconditionally, whenever report.clusters_hidden > 0: It is emitted from a bare if report.clusters_hidden > 0 and never consults *why* anything was hidden. Most hiding has nothing to do with config. report::cluster_is_hidde…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "lane/reporting",
+          "color": "89b4fa",
+          "description": "Human-readable reports, metrics, summaries, documentation"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-18T12:01:50Z",
+      "updated_at": "2026-08-23T05:59:32Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "reporting",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 20,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 416,
+      "title": "dependency_reactivity.rs asserts on unwrap_or_default(): a missing count field reads as 0 and the < 4 bound passes vacuously",
+      "url": "https://github.com/Nimblesite/Deslop/issues/416",
+      "excerpt": "Defect (on main) \\crates/deslop-lsp/tests/dependency_reactivity.rs\\ (main, ~line 108–120): the assertion reads a count out of the notification JSON as .as_u64().unwrap_or_default() < 4 If the field is renamed, absent, or the notification shape changes, \\unwrap_or_default()\\ yi…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/performance",
+          "color": "ffd166",
+          "description": "Incremental analysis, caches, memory, scheduling, throughput"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-18T21:44:27Z",
+      "updated_at": "2026-08-23T05:59:25Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "performance",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 5,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 417,
+      "title": "C# Identical upgrade compares only method_declaration nodes, manufacturing false 'every copy is the same' claims",
+      "url": "https://github.com/Nimblesite/Deslop/issues/417",
+      "excerpt": "The defect report_render.rs upgrades a C# cluster to the identical bucket via a fallback, csharp_method_declarations_are_equivalent, when the raw slices are not byte-equivalent: it collects the method_declaration nodes fully contained in each member range, compares those, and…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "abdushakoor12",
+          "avatar": "https://avatars.githubusercontent.com/u/60779242?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-19T04:26:24Z",
+      "updated_at": "2026-08-23T05:59:25Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 85,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 423,
+      "title": "Go implicit interfaces are invisible to [CLONE-NOISE-POLYMORPHIC-CONTRACT], and body_shape misses selector_expression",
+      "url": "https://github.com/Nimblesite/Deslop/issues/423",
+      "excerpt": "Defect Two gaps, one root: the polymorphic-signature suppression cannot see a Go contract. 1. No lexical enclosing type [CLONE-NOISE-POLYMORPHIC-CONTRACT] (crates/deslop-core/src/cluster_filters/contract_index.rs) proves a subject method is contract-forced by resolving the *ne…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-21T12:28:30Z",
+      "updated_at": "2026-08-23T05:59:23Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 85,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 425,
+      "title": "find-similar answers \"nothing similar\" from an unbuilt live report instead of waiting for the first pass",
+      "url": "https://github.com/Nimblesite/Deslop/issues/425",
+      "excerpt": "Defect AnalysisSession::find_similar (crates/deslop-core/src/live/session.rs:527) answers from self.latest_report unconditionally. There is no readiness gate: before the first analysis pass commits, latest_report is empty, so the MCP and LSP surfaces return An empty result is…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-21T12:59:14Z",
+      "updated_at": "2026-08-23T05:59:22Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 90,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 427,
+      "title": "JavaScript reports the nested fragment where TypeScript reports the enclosing method pair (#408 not closed for JS)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/427",
+      "excerpt": "The javascript-type3 and typescript-type3 fixtures hold the *same* source shape — accumulate/aggregate with a full identifier rename plus one extra statement (running = running + 2;) in delta. The two languages elect different views. Measured at --min-nodes 8 --embeddings off:",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        },
+        {
+          "name": "critical",
+          "color": "d93f0b",
+          "description": "Must fix soon; a release could still ship"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "abdushakoor12",
+          "avatar": "https://avatars.githubusercontent.com/u/60779242?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-21T21:20:26Z",
+      "updated_at": "2026-08-24T11:16:35Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 90,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 430,
+      "title": "Cluster ids collide: the id is the smallest member digest, so unrelated clusters that share a normalised subtree are stamped the same",
+      "url": "https://github.com/Nimblesite/Deslop/issues/430",
+      "excerpt": "cluster_id_source in crates/deslop-core/src/cluster.rs derives a cluster's published id from the **smallest member digest alone**: The digest is the *normalised subtree* hash, so any two clusters whose members share a normalised subtree are stamped with the same id, no matter…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-22T10:12:06Z",
+      "updated_at": "2026-08-23T05:59:19Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 95,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 433,
+      "title": "Warm/mixed passes measure different content evidence than cold on identical corpus state",
+      "url": "https://github.com/Nimblesite/Deslop/issues/433",
+      "excerpt": "Branch worktree-fused-score-followups at 3f71fcd. lsh_only_nearmiss_recall::the_lsh_only_pair_keeps_its_verdict_across_the_persistence_matrix and both incremental_multilang_golden tests fail on [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE]: the same cluster, same id, same signal…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "lane/quality",
+          "color": "a6e3a1",
+          "description": "Tests, specifications, CI, fixtures, repository health"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-23T03:58:08Z",
+      "updated_at": "2026-08-23T05:59:18Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "quality",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 25,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 435,
+      "title": "issue_45_observability test is order-dependent in the suite run",
+      "url": "https://github.com/Nimblesite/Deslop/issues/435",
+      "excerpt": "Branch worktree-fused-score-followups at 3f71fcd. issue_45_observability::issue_45_pipeline_emits_stage_observability_events passes with --exact and fails in the full deslop-core suite run — the observability-event assertions are sensitive to sibling tests sharing the process…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/quality",
+          "color": "a6e3a1",
+          "description": "Tests, specifications, CI, fixtures, repository health"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-23T03:58:11Z",
+      "updated_at": "2026-08-23T05:59:17Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "quality",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 25,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 343,
+      "title": "PairScore::fused() still saturates outside the content-gate corners (sum-then-clamp)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/343",
+      "excerpt": "Requirement 2 of docs/root-cause-fusion.md (\"stop clamping away the top of the range\") is still unmet after #341 and the fusedhardening branch. PairScore::fused() (crates/deslop-core/src/pair.rs) remains structural + token_jaccard + embedding_cos, clamped to [0, 1]. The [FUSIO…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "fixed-on-main",
+          "color": "68e63b",
+          "description": "waiting to be tested in a real release"
+        },
+        {
+          "name": "lane/detection",
+          "color": "ff8a65",
+          "description": "Parsing, matching, scoring, embeddings, and cluster formation"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-10T22:36:21Z",
+      "updated_at": "2026-08-24T08:44:59Z",
+      "lifecycle": "verify",
+      "priority": "normal",
+      "workstream": "detection",
+      "inbound_links": 4,
+      "plan": {
+        "offset": 10,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 379,
+      "title": "[PIPELINE-INCREMENTAL] Fingerprint cache costs 119 MB on this repo to save 10% of run time, and never reclaims it",
+      "url": "https://github.com/Nimblesite/Deslop/issues/379",
+      "excerpt": "The incremental fingerprint cache ([PIPELINE-INCREMENTAL]) functions correctly — every hit is a hit, and cached and uncached runs produce identical reports. It costs far more disk than it saves time, and the disk it takes is never given back. What it costs .deslop/cache in thi…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/performance",
+          "color": "ffd166",
+          "description": "Incremental analysis, caches, memory, scheduling, throughput"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-16T11:20:12Z",
+      "updated_at": "2026-08-23T05:59:20Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "performance",
+      "inbound_links": 4,
+      "plan": {
+        "offset": 10,
+        "effort_units": 4,
+        "track": 0
+      }
+    },
+    {
+      "number": 381,
+      "title": "[ACTION-METADATA] GitHub action never persists .deslop/cache: every Marketplace run is a cold parse",
+      "url": "https://github.com/Nimblesite/Deslop/issues/381",
+      "excerpt": "action.yml never persists .deslop/cache. There is no actions/cache step, and no cache-related input — every Marketplace run of the action is a cold run, re-parsing the entire tree from scratch. The incremental cache ([PIPELINE-INCREMENTAL]) is default-on and already writes to…",
+      "type": "Feature",
+      "labels": [
+        {
+          "name": "lane/performance",
+          "color": "ffd166",
+          "description": "Incremental analysis, caches, memory, scheduling, throughput"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-16T11:20:17Z",
+      "updated_at": "2026-08-23T05:58:39Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "performance",
+      "inbound_links": 4,
+      "plan": {
+        "offset": 30,
+        "effort_units": 8,
+        "track": 0
+      }
+    },
+    {
+      "number": 364,
+      "title": "Diff-aware duplication scanning and changed-code delta filtering (--diff / --only-changed)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/364",
+      "excerpt": "We're using deslop in pre-merge review workflows and want to focus reports strictly on code touched in a diff. Running deslop over an existing repo flags all legacy duplicate clusters across untouched files. When reviewing a specific change, we usually only care about two things:",
+      "type": "Feature",
+      "labels": [
+        {
+          "name": "fixed-on-main",
+          "color": "68e63b",
+          "description": "waiting to be tested in a real release"
+        },
+        {
+          "name": "lane/detection",
+          "color": "ff8a65",
+          "description": "Parsing, matching, scoring, embeddings, and cluster formation"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-13T21:24:02Z",
+      "updated_at": "2026-08-24T08:44:39Z",
+      "lifecycle": "verify",
+      "priority": "normal",
+      "workstream": "detection",
+      "inbound_links": 7,
+      "plan": {
+        "offset": 38,
+        "effort_units": 8,
+        "track": 0
+      }
+    },
+    {
+      "number": 339,
+      "title": "F# clone pairs score token_jaccard from the issue-86 fallback signature — byte-offset luck, not token evidence",
+      "url": "https://github.com/Nimblesite/Deslop/issues/339",
+      "excerpt": "Summary For F# module-level clone pairs, the token stream backing the MinHash signature is empty/unresolvable, so build_signatures_with_languages falls back to the fingerprint-scoped signature from #86 (crates/deslop-core/src/pipeline/signatures.rs, fallback_signature: blake3…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "fixed-on-main",
+          "color": "68e63b",
+          "description": "waiting to be tested in a real release"
+        },
+        {
+          "name": "lane/detection",
+          "color": "ff8a65",
+          "description": "Parsing, matching, scoring, embeddings, and cluster formation"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-09T07:30:16Z",
+      "updated_at": "2026-08-24T08:45:07Z",
+      "lifecycle": "verify",
+      "priority": "normal",
+      "workstream": "detection",
+      "inbound_links": 3,
+      "plan": {
+        "offset": 15,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 345,
+      "title": "Doc/code drift around the fused confidence (REPORTING-CONTEXT, mcp.md top-offenders, embeddings default, SPEC.md, corpus gate)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/345",
+      "excerpt": "Drift catalogued in docs/plans/fused-score-rollout.md, Gap 5 — each row is a place the docs promise something the code does not do (or vice versa): 1. docs/specs/REPORTING-CONTEXT.md (shipped to every agent via schema_doc) says FUSED_THRESHOLD = 0.85 is what a pair needs \"to e…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/integrations",
+          "color": "8bd3c7",
+          "description": "CLI, MCP, actions, and agent-facing workflows"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-10T22:36:47Z",
+      "updated_at": "2026-08-24T08:45:26Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "integrations",
+      "inbound_links": 3,
+      "plan": {
+        "offset": 20,
+        "effort_units": 4,
+        "track": 0
+      }
+    },
+    {
+      "number": 347,
+      "title": "Corpus accuracy gate has never run: corpus.yml omits the typediagram install, so build.rs fails before any repository is scanned",
+      "url": "https://github.com/Nimblesite/Deslop/issues/347",
+      "excerpt": "The scheduled real-repository accuracy gate (.github/workflows/corpus.yml, [CORPUS-CI]) has **never produced a measurement**. It has run twice since the commit that introduced it and both runs failed identically, ~70 seconds in, before a single repository was scanned.",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "fixed-on-main",
+          "color": "68e63b",
+          "description": "waiting to be tested in a real release"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        },
+        {
+          "login": "abdushakoor12",
+          "avatar": "https://avatars.githubusercontent.com/u/60779242?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-11T09:46:52Z",
+      "updated_at": "2026-08-24T08:44:59Z",
+      "lifecycle": "verify",
+      "priority": "normal",
+      "workstream": "accuracy",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 95,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 394,
+      "title": "RA-07: no event-matrix regression test for the Dependabot security-gate repair",
+      "url": "https://github.com/Nimblesite/Deslop/issues/394",
+      "excerpt": "Split out of the worktree-fused-score-followups regression audit (RA-07, P3). The actor skips and stale comments are fixed, and scripts/test-release-workflow-contract.mjs covers the staging sweep. Nothing asserts the property the repair was for: a Dependabot **security** PR ta…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/delivery",
+          "color": "c6a0f6",
+          "description": "Packaging, signing, releases, deployment, platform contracts"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-17T11:51:00Z",
+      "updated_at": "2026-08-23T05:58:37Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "delivery",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 10,
+        "effort_units": 4,
+        "track": 0
+      }
+    },
+    {
+      "number": 422,
+      "title": "Corpus suite cannot run in the PR gate: minutes of wall time and >13 GB peak per repository (blocked on #166)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/422",
+      "excerpt": "Why this exists make test no longer selects any test by name (gh #412). The one suite that still must not run in the release gate is the real-repository corpus gate, and it needs a **stated, tracked reason** rather than a silent filter. This issue is that reason. Every #[ignor…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "ignored-test",
+          "color": "FBCA04",
+          "description": "Assertion is intact but #[ignore]d — not running in CI"
+        },
+        {
+          "name": "lane/quality",
+          "color": "a6e3a1",
+          "description": "Tests, specifications, CI, fixtures, repository health"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-21T09:47:03Z",
+      "updated_at": "2026-08-23T05:59:18Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "quality",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 30,
+        "effort_units": 4,
+        "track": 0
+      }
+    },
+    {
+      "number": 111,
+      "title": "Tool UX report from heavy MCP-driven dedup session: which tools were useful, which were useless, what blocked progress",
+      "url": "https://github.com/Nimblesite/Deslop/issues/111",
+      "excerpt": "This is feedback from a long agent-driven dedup session that killed 76 clusters (462→386, ~16%) and filed 6 false-positive issues (#98–#106). Roughly 30+ Deslop MCP calls across multiple /loop iterations. Tools that worked well (need to keep) cluster-by-id Essential. The inspe…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/integrations",
+          "color": "8bd3c7",
+          "description": "CLI, MCP, actions, and agent-facing workflows"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-05-02T21:41:31Z",
+      "updated_at": "2026-08-23T05:59:00Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "integrations",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 20,
+        "effort_units": 4,
+        "track": 1
+      }
+    },
+    {
+      "number": 129,
+      "title": "LSP diagnostics only show for open files — add 'always display' workspace mode",
+      "url": "https://github.com/Nimblesite/Deslop/issues/129",
+      "excerpt": "Problem Diagnostics for duplicate-code clusters are currently only visible in the editor's Problems panel **while the host file is open**. The moment the user closes the tab, the diagnostics for that file disappear. The Top Offenders tree still lists every offender, but the co…",
+      "type": "Feature",
+      "labels": [
+        {
+          "name": "lane/editor",
+          "color": "9bcbff",
+          "description": "VS Code, JetBrains, diagnostics, panels, hovers, webviews"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-05-03T21:39:17Z",
+      "updated_at": "2026-08-23T05:58:58Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "editor",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 5,
+        "effort_units": 8,
+        "track": 0
+      }
+    },
+    {
+      "number": 162,
+      "title": "Top Offenders: group/split panel by language (UI toggle + config) — Rust and Dart currently interleave",
+      "url": "https://github.com/Nimblesite/Deslop/issues/162",
+      "excerpt": "Problem The Top Offenders panel ranks clusters worst-first **globally**, so in a polyglot workspace clusters from different languages interleave with no separation. Today the panel mixes e.g. GrammarApi/tests/*.rs (Rust) and flutter_app/test/*.dart (Dart) under one flat list (…",
+      "type": "Feature",
+      "labels": [
+        {
+          "name": "lane/editor",
+          "color": "9bcbff",
+          "description": "VS Code, JetBrains, diagnostics, panels, hovers, webviews"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-05-31T11:10:13Z",
+      "updated_at": "2026-08-23T05:58:57Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "editor",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 5,
+        "effort_units": 8,
+        "track": 1
+      }
+    },
+    {
+      "number": 163,
+      "title": "HTML report: optionally divide duplicate groups into per-language sections",
+      "url": "https://github.com/Nimblesite/Deslop/issues/163",
+      "excerpt": "Problem The human HTML report ([OUTPUT-HUMAN-HTML], crates/deslop-core/src/render/html.rs) renders every cluster in a single flat <section><h2>Duplicate groups</h2> (render_clusters). In a polyglot repo, Rust and Dart groups interleave by rank with no separation, so a reader s…",
+      "type": "Feature",
+      "labels": [
+        {
+          "name": "lane/reporting",
+          "color": "89b4fa",
+          "description": "Human-readable reports, metrics, summaries, documentation"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-05-31T11:10:14Z",
+      "updated_at": "2026-08-23T05:58:56Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "reporting",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 5,
+        "effort_units": 8,
+        "track": 1
+      }
+    },
+    {
+      "number": 171,
+      "title": "VSIX: duplicate hover card (Compare / View cluster / Copy for AI) missing while a file is being edited — only the LSP diagnostic remains",
+      "url": "https://github.com/Nimblesite/Deslop/issues/171",
+      "excerpt": "While you are typing in a file, the popup that carries the clone actions — Compare, View cluster, Copy for AI — disappears. The red underline and its \"Identical code × N\" message stay. Save the file, and the popup comes back. So the duplicate is flagged exactly while you are e…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/editor",
+          "color": "9bcbff",
+          "description": "VS Code, JetBrains, diagnostics, panels, hovers, webviews"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-06-01T18:27:43Z",
+      "updated_at": "2026-08-24T09:14:57Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "editor",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 13,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 177,
+      "title": "Configurable severity model + diagnostics off by default",
+      "url": "https://github.com/Nimblesite/Deslop/issues/177",
+      "excerpt": "Summary Replace the hardcoded LSP diagnostic severity (Identical→Error, everything else →Warning) with a configurable **two-map severity model**, and make clone diagnostics **off by default**. Spec: [severity.md](docs/specs/severity.md) (new) · [lsp.md §LSP-SEVERITY](docs/spec…",
+      "type": "Feature",
+      "labels": [
+        {
+          "name": "lane/editor",
+          "color": "9bcbff",
+          "description": "VS Code, JetBrains, diagnostics, panels, hovers, webviews"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-06-04T11:05:26Z",
+      "updated_at": "2026-08-23T05:58:54Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "editor",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 13,
+        "effort_units": 8,
+        "track": 1
+      }
+    },
+    {
+      "number": 178,
+      "title": "Synchronise selected cluster across editor, Top Offenders, webview, and bubble",
+      "url": "https://github.com/Nimblesite/Deslop/issues/178",
+      "excerpt": "Summary Lock the editor caret, the Top Offenders panel, the cluster webview, and the live bubble onto a **single selected cluster** so they stay in sync. Spec: [vsix.md §VSIX-CLUSTER-SYNC](docs/specs/vsix.md) + [§VSIX-CLUSTER-SYNC-TESTS](docs/specs/vsix.md). Tracked in [PLAN.m…",
+      "type": "Feature",
+      "labels": [
+        {
+          "name": "lane/editor",
+          "color": "9bcbff",
+          "description": "VS Code, JetBrains, diagnostics, panels, hovers, webviews"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-06-04T11:05:42Z",
+      "updated_at": "2026-08-23T05:58:54Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "editor",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 18,
+        "effort_units": 8,
+        "track": 0
+      }
+    },
+    {
+      "number": 349,
+      "title": "CLI worst-offenders summary shows volatile rank #N as the only cluster handle (no stable slug)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/349",
+      "excerpt": "Summary The CLI worst-offenders summary is the last surface that still hands the user a **volatile rank as the only cluster handle**. The VSIX and MCP were fixed under #149 — the tree row label leads with the 7-hex slug (clusterSlug() in clients/vscode/src/types/report.ts:53),…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/integrations",
+          "color": "8bd3c7",
+          "description": "CLI, MCP, actions, and agent-facing workflows"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-11T21:25:08Z",
+      "updated_at": "2026-08-23T05:58:45Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "integrations",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 24,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 351,
+      "title": "add_embedding_pair discards measured cosines for structurally- and LSH-discovered pairs: false rendered figures and discovery-order false negatives",
+      "url": "https://github.com/Nimblesite/Deslop/issues/351",
+      "excerpt": "Where crates/deslop-core/src/pair/candidates.rs::add_embedding_pair (now quarantined with the mandated panic on branch fused). Defect The ANN pass hands over EmbeddingPairs carrying a **measured** cosine. Two match arms silently discarded that measurement whenever the pair was…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "fixed-on-main",
+          "color": "68e63b",
+          "description": "waiting to be tested in a real release"
+        },
+        {
+          "name": "lane/detection",
+          "color": "ff8a65",
+          "description": "Parsing, matching, scoring, embeddings, and cluster formation"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-11T23:00:37Z",
+      "updated_at": "2026-08-24T08:44:48Z",
+      "lifecycle": "verify",
+      "priority": "normal",
+      "workstream": "detection",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 20,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 393,
+      "title": "RA-06: Win32 path semantics for the VS Code user-data dir are never exercised on Windows",
+      "url": "https://github.com/Nimblesite/Deslop/issues/393",
+      "excerpt": "Split out of the worktree-fused-score-followups regression audit (RA-06, P2). The POSIX socket-path cap and the Windows no-cap rule in clients/vscode/scripts/vscode-test-user-data-dir.mjs are correct, and 23 script tests run through the Ubuntu make lint job. But the injected w…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/quality",
+          "color": "a6e3a1",
+          "description": "Tests, specifications, CI, fixtures, repository health"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-17T11:50:59Z",
+      "updated_at": "2026-08-23T05:58:38Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "quality",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 30,
+        "effort_units": 4,
+        "track": 1
+      }
+    },
+    {
+      "number": 397,
+      "title": "Drive repo duplication from 13.65% back to 12.5% — clusters the C#-only row-4 carve-out was hiding",
+      "url": "https://github.com/Nimblesite/Deslop/issues/397",
+      "excerpt": "Context [CLONE-BUCKETS-ROUTING] row 4 (structural ≤ 0.01 ∧ token_jaccard ≥ 0.90 → nearly_identical) was implemented for C# only, via a carve-out in report_render. Every other language's LSH-only Type-3 clone fell to loosely_similar, which the renderer hides — so real duplicati…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/detection",
+          "color": "ff8a65",
+          "description": "Parsing, matching, scoring, embeddings, and cluster formation"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-17T12:52:04Z",
+      "updated_at": "2026-08-23T05:59:19Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "detection",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 55,
+        "effort_units": 4,
+        "track": 0
+      }
+    },
+    {
+      "number": 411,
+      "title": "deslop-lsp writes no startup log when stderr is a pipe — which is what every real LSP client gives it",
+      "url": "https://github.com/Nimblesite/Deslop/issues/411",
+      "excerpt": "Measured deslop-lsp emits its startup log to stderr when stderr is a **regular file**, and emits **nothing** when stderr is a **pipe**. Same binary, same flags, same workspace, reproduced outside cargo: With stdin at EOF (< /dev/null) the process shuts down promptly and the fu…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/integrations",
+          "color": "8bd3c7",
+          "description": "CLI, MCP, actions, and agent-facing workflows"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-18T13:17:30Z",
+      "updated_at": "2026-08-23T05:58:35Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "integrations",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 24,
+        "effort_units": 4,
+        "track": 1
+      }
+    },
+    {
+      "number": 426,
+      "title": "Curate [CORPUS-SCOPE] bounds for flutter and fsharp",
+      "url": "https://github.com/Nimblesite/Deslop/issues/426",
+      "excerpt": "What is unfinished [CORPUS-SCOPE] requires every corpus/*.json manifest to carry expect_files_min and expect_clusters. Seven of nine now do, measured against the release binary at the pinned shas. flutter.json and fsharp.json do not. Why they are not curated Curating a bound m…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/performance",
+          "color": "ffd166",
+          "description": "Incremental analysis, caches, memory, scheduling, throughput"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-21T15:01:41Z",
+      "updated_at": "2026-08-23T05:59:17Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "performance",
+      "inbound_links": 1,
+      "plan": {
+        "offset": 10,
+        "effort_units": 4,
+        "track": 1
+      }
+    },
+    {
+      "number": 18,
+      "title": "VSIX tree context menu: Ignore This Duplicate",
+      "url": "https://github.com/Nimblesite/Deslop/issues/18",
+      "excerpt": "Summary Add a context-menu item for suppressing a noisy duplicate finding from the tree. Applies to deslop.cluster tree nodes. deslop.occurrence tree nodes. Behavior The command should help the user ignore either: the selected occurrence path/range; the whole cluster; or the f…",
+      "type": "Feature",
+      "labels": [
+        {
+          "name": "lane/reporting",
+          "color": "89b4fa",
+          "description": "Human-readable reports, metrics, summaries, documentation"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-04-22T05:57:10Z",
+      "updated_at": "2026-08-23T05:59:03Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "reporting",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 13,
+        "effort_units": 8,
+        "track": 1
+      }
+    },
+    {
+      "number": 22,
+      "title": "Investigate + extract shared logic between pipeline/session.rs and live/session.rs",
+      "url": "https://github.com/Nimblesite/Deslop/issues/22",
+      "excerpt": "Summary Deslop's own report flags large near-identical regions inside **both** [crates/deslop-core/src/pipeline/session.rs](crates/deslop-core/src/pipeline/session.rs) (499 LOC) and [crates/deslop-core/src/live/session.rs](crates/deslop-core/src/live/session.rs) (449 LOC). The…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/reporting",
+          "color": "89b4fa",
+          "description": "Human-readable reports, metrics, summaries, documentation"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-04-22T08:17:15Z",
+      "updated_at": "2026-08-23T05:59:02Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "reporting",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 21,
+        "effort_units": 4,
+        "track": 1
+      }
+    },
+    {
+      "number": 51,
+      "title": "Autofix — AI-assisted Extract Method for Type-2 / Type-3 (MCP tool pair, not a code action)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/51",
+      "excerpt": "Goal Ship two new MCP tools — extract-method-plan and extract-method-apply — that handle Type-2 (renamed identifiers) and slot-alignable Type-3 (small structural drift) clusters by combining a **mechanical AST-derived scaffold** with a **tightly bounded AI fill**. The AI never…",
+      "type": "Feature",
+      "labels": [
+        {
+          "name": "lane/integrations",
+          "color": "8bd3c7",
+          "description": "CLI, MCP, actions, and agent-facing workflows"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-04-25T08:20:13Z",
+      "updated_at": "2026-08-23T05:59:01Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "integrations",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 28,
+        "effort_units": 8,
+        "track": 1
+      }
+    },
+    {
+      "number": 109,
+      "title": "Tool usage report: which deslop MCP tools earn their keep, which don't, what's missing",
+      "url": "https://github.com/Nimblesite/Deslop/issues/109",
+      "excerpt": "Deslop MCP tool-usage report from a long multi-agent dedup session Workspace:** NimblesiteAgenticPlatform/agent-backend (Python, ~26k LOC, ~100 files) Session result:** 211 fix points shipped, 639 → 381 clusters (40% reduction), 21.3% → 18.4% duplication Tools available:** mcp…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/integrations",
+          "color": "8bd3c7",
+          "description": "CLI, MCP, actions, and agent-facing workflows"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-05-02T21:41:18Z",
+      "updated_at": "2026-08-23T05:59:01Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "integrations",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 29,
+        "effort_units": 4,
+        "track": 0
+      }
+    },
+    {
+      "number": 123,
+      "title": "After-action: dedup session report — what worked, what broke, what to fix first",
+      "url": "https://github.com/Nimblesite/Deslop/issues/123",
+      "excerpt": "Honest read on a real session I (LLM agent) ran a multi-hour dedup pass on a 26K-LOC Python codebase. End state: **9 real refactors landed**, **354 → ~70 clusters** (most of the drop was the embedding pass collapsing things, not real fixes), and **103 tests still green**. Here…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/reporting",
+          "color": "89b4fa",
+          "description": "Human-readable reports, metrics, summaries, documentation"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-05-02T23:12:27Z",
+      "updated_at": "2026-08-23T05:58:59Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "reporting",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 25,
+        "effort_units": 4,
+        "track": 0
+      }
+    },
+    {
+      "number": 159,
+      "title": "Replace Focused File panel with a codebase duplication summary report (overall + per-folder/file %)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/159",
+      "excerpt": "Summary Two related changes to the VSIX tree view, driven by real usage: 1. **Remove the _Focused File_ panel.** It provides no value in practice — it just shows the active file with little actionable signal and clutters the tree. 2. **Add a human-facing _duplication summary r…",
+      "type": "Feature",
+      "labels": [
+        {
+          "name": "lane/reporting",
+          "color": "89b4fa",
+          "description": "Human-readable reports, metrics, summaries, documentation"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-05-30T05:58:17Z",
+      "updated_at": "2026-08-23T05:58:58Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "reporting",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 25,
+        "effort_units": 8,
+        "track": 1
+      }
+    },
+    {
+      "number": 186,
+      "title": "Verify version in JetBrains after resolving the binary",
+      "url": "https://github.com/Nimblesite/Deslop/issues/186",
+      "excerpt": "TODO: JetBrains resolution finds the binary but should also verify its version. Part of bringing this repo onto the Shipwright deployment contract (https://github.com/Nimblesite/Shipwright). Plain TODO — not a security incident.",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/editor",
+          "color": "9bcbff",
+          "description": "VS Code, JetBrains, diagnostics, panels, hovers, webviews"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-06-05T21:37:07Z",
+      "updated_at": "2026-08-23T05:59:21Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "editor",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 21,
+        "effort_units": 4,
+        "track": 1
+      }
+    },
+    {
+      "number": 187,
+      "title": "Sign + notarize the macOS binaries",
+      "url": "https://github.com/Nimblesite/Deslop/issues/187",
+      "excerpt": "TODO: Developer ID sign (codesign --options runtime --timestamp) + notarize (xcrun notarytool submit --wait) + staple each macOS binary, then keep cosign provenance in addition. Binaries to sign: deslop deslop-lsp deslop-mcp macOS signing is a solved process — this is working…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/delivery",
+          "color": "c6a0f6",
+          "description": "Packaging, signing, releases, deployment, platform contracts"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-06-05T21:37:37Z",
+      "updated_at": "2026-08-23T05:59:20Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "delivery",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 5,
+        "effort_units": 4,
+        "track": 1
+      }
+    },
+    {
+      "number": 188,
+      "title": "Windows code signing — current position",
+      "url": "https://github.com/Nimblesite/Deslop/issues/188",
+      "excerpt": "Windows code signing — current position (Shipwright). Native Authenticode signing is **unsolved for now** — we have not forgotten it and intend to do it, but there's no good long-term answer yet (a fresh cert has zero SmartScreen reputation, which can't be bought; evaluating A…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/delivery",
+          "color": "c6a0f6",
+          "description": "Packaging, signing, releases, deployment, platform contracts"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-06-05T21:37:43Z",
+      "updated_at": "2026-08-23T05:59:20Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "delivery",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 9,
+        "effort_units": 4,
+        "track": 1
+      }
+    },
+    {
+      "number": 183,
+      "title": "Shipwright deployment-contract hardening checklist",
+      "url": "https://github.com/Nimblesite/Deslop/issues/183",
+      "excerpt": "Bring the release/IDE deployment into full conformity with the Shipwright contract. Version / resolution [ ] LSP implements the --version contract line — [SWR-VERSION-CLI-OUTPUT] [ ] DESLOP_BINARY_DIR override must **not** bypass exact version comparison — [SWR-IDE-RESOLUTION]",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/delivery",
+          "color": "c6a0f6",
+          "description": "Packaging, signing, releases, deployment, platform contracts"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-06-05T21:16:00Z",
+      "updated_at": "2026-08-23T05:59:22Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "delivery",
+      "inbound_links": 3,
+      "plan": {
+        "offset": 25,
+        "effort_units": 4,
+        "track": 0
+      }
+    },
+    {
+      "number": 250,
+      "title": "JetBrains Gradle Java target does not match 2024.3 platform spec",
+      "url": "https://github.com/Nimblesite/Deslop/issues/250",
+      "excerpt": "Spec violation docs/specs/jetbrains.md says the JetBrains plugin runs on the IntelliJ Platform **2024.3 platform line (build 243) and newer** and identifies that as the build baseline in [JETBRAINS-TARGET] / [JETBRAINS-LSP]. Code observed Both JetBrains Gradle modules compile…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "lane/quality",
+          "color": "a6e3a1",
+          "description": "Tests, specifications, CI, fixtures, repository health"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-06-28T22:33:55Z",
+      "updated_at": "2026-08-23T05:58:50Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "quality",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 34,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 286,
+      "title": "Feedback from an F# user",
+      "url": "https://github.com/Nimblesite/Deslop/issues/286",
+      "excerpt": "A user tried Deslop 0.25 (VS Code + Claude via MCP) on a 166,000-line F# codebase. With embeddings switched on, it genuinely earned its keep: it found near-copies that had drifted apart and contained real bugs. But everyday use broke down — a cache folder that swamped the repo…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/performance",
+          "color": "ffd166",
+          "description": "Incremental analysis, caches, memory, scheduling, throughput"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-07-15T01:58:26Z",
+      "updated_at": "2026-08-24T09:14:58Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "performance",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 14,
+        "effort_units": 4,
+        "track": 1
+      }
+    },
+    {
+      "number": 350,
+      "title": "Consolidation context-menu action is offered when preconditions already guarantee refusal",
+      "url": "https://github.com/Nimblesite/Deslop/issues/350",
+      "excerpt": "The right-click menu offers \"Consolidate identical duplicates into one canonical definition\" even when Deslop already knows the operation cannot be done. Clicking it just shows a warning — \"the canonical definition is private, the other modules couldn't see it\". An impossible…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/reporting",
+          "color": "89b4fa",
+          "description": "Human-readable reports, metrics, summaries, documentation"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-11T22:41:52Z",
+      "updated_at": "2026-08-24T09:15:02Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "reporting",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 29,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 360,
+      "title": "AI autofix plan targets nonexistent MCP modules and prescribes source-text substitution",
+      "url": "https://github.com/Nimblesite/Deslop/issues/360",
+      "excerpt": "Summary docs/plans/autofix-extract-ai-plan.md is stale against the current repository and prescribes an unsafe implementation strategy. This defect already exists on main; it is not a fused regression and should therefore be tracked here rather than block the branch review.",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "lane/integrations",
+          "color": "8bd3c7",
+          "description": "CLI, MCP, actions, and agent-facing workflows"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-12T21:44:12Z",
+      "updated_at": "2026-08-23T05:58:42Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "integrations",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 33,
+        "effort_units": 4,
+        "track": 0
+      }
+    },
+    {
+      "number": 371,
+      "title": "Ratchet the duplication threshold back down: ~415 redundant lines in pre-existing clusters",
+      "url": "https://github.com/Nimblesite/Deslop/issues/371",
+      "excerpt": ".deslop.toml max_duplication_percent was raised **12.2 -> 12.5** on 2026-08-15 — the first increase in the repo's history (26.5 -> 25.8 -> 20 -> 13 -> 12.2 before this). This issue tracks earning it back. Why it moved The fused branch adds ~13k lines, overwhelmingly coarse bla…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/detection",
+          "color": "ff8a65",
+          "description": "Parsing, matching, scoring, embeddings, and cluster formation"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-15T00:18:55Z",
+      "updated_at": "2026-08-23T05:59:21Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "detection",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 25,
+        "effort_units": 4,
+        "track": 1
+      }
+    },
+    {
+      "number": 391,
+      "title": "[CLONE-NOISE-RUST-LANGPARSER] filter is dead on main: stale 4-method trait-surface equality",
+      "url": "https://github.com/Nimblesite/Deslop/issues/391",
+      "excerpt": "[CLONE-NOISE-RUST-LANGPARSER] cannot fire on main: the filter tests set **equality** against a hard-coded 4-method trait surface that no plug-in has matched since LanguageParser grew. The defect crates/deslop-core/src/cluster_filters/rust.rs:137-144 (on main): crates/deslop-co…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "fixed-on-main",
+          "color": "68e63b",
+          "description": "waiting to be tested in a real release"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-17T10:13:31Z",
+      "updated_at": "2026-08-24T08:44:10Z",
+      "lifecycle": "verify",
+      "priority": "normal",
+      "workstream": "accuracy",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 100,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 395,
+      "title": "RA-08: fused-score-followups plan marks the same work both open and fixed",
+      "url": "https://github.com/Nimblesite/Deslop/issues/395",
+      "excerpt": "Split out of the worktree-fused-score-followups regression audit (RA-08, P3). docs/plans/fused-score-followups.md carries a status ledger that contradicts its own later sections: the ledger marks #345 partial, all six VSIX tests open and #339 pinned red, while later sections r…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/detection",
+          "color": "ff8a65",
+          "description": "Parsing, matching, scoring, embeddings, and cluster formation"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-17T11:51:01Z",
+      "updated_at": "2026-08-23T05:58:36Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "detection",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 29,
+        "effort_units": 4,
+        "track": 1
+      }
+    },
+    {
+      "number": 413,
+      "title": "clusters_total banner diverges from the report body: mixed 1-visible/N-hidden clusters are listed but not counted",
+      "url": "https://github.com/Nimblesite/Deslop/issues/413",
+      "excerpt": "Defect (on main) \\crates/deslop-core/src/report_metrics.rs\\ (main, line ~148 / ~216) counts a cluster into \\metrics.clusters_total\\ only when it has **≥ 2 visible occurrences** (\\visible_members >= 2\\). But [EXCLUSION-CONFIG] (\\docs/specs/exclusion.md\\) deliberately keeps a cl…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "fixed-on-main",
+          "color": "68e63b",
+          "description": "waiting to be tested in a real release"
+        },
+        {
+          "name": "lane/reporting",
+          "color": "89b4fa",
+          "description": "Human-readable reports, metrics, summaries, documentation"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-18T21:43:55Z",
+      "updated_at": "2026-08-24T08:43:59Z",
+      "lifecycle": "verify",
+      "priority": "normal",
+      "workstream": "reporting",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 33,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 434,
+      "title": "Verbatim intra-file cores of suppressed noise families now publish — spec decision needed",
+      "url": "https://github.com/Nimblesite/Deslop/issues/434",
+      "excerpt": "Branch worktree-fused-score-followups at 3f71fcd. [CLONE-NOISE-VERBATIM-SUBGROUP] (cluster_filters/verbatim_subgroup.rs) splits byte-identical families out of components the noise filters suppress. Consequence: the intra-file byte-identical cores of the #107/#72/literal-variat…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/quality",
+          "color": "a6e3a1",
+          "description": "Tests, specifications, CI, fixtures, repository health"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-23T03:58:10Z",
+      "updated_at": "2026-08-23T05:58:32Z",
+      "lifecycle": "active",
+      "priority": "normal",
+      "workstream": "quality",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 34,
+        "effort_units": 4,
+        "track": 1
+      }
+    },
+    {
+      "number": 439,
+      "title": "type2_recall is blind: the only curated Type-2 recall check passes with the curated duplicate deleted",
+      "url": "https://github.com/Nimblesite/Deslop/issues/439",
+      "excerpt": "The defect [crates/deslop-test-support/src/corpus_confidence.rs:357](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-test-support/src/corpus_confidence.rs#L357) — check_one_curated_type2 — is the only assertion guarding Type-2 rename recall on real-repository grou…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "abdushakoor12",
+          "avatar": "https://avatars.githubusercontent.com/u/60779242?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-23T07:01:31Z",
+      "updated_at": "2026-08-24T11:17:12Z",
+      "lifecycle": "active",
+      "priority": "unset",
+      "workstream": "accuracy",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 100,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 440,
+      "title": "Extension-host (out/**) coverage is unmeasurable: VS Code's desktop extension host ignores NODE_V8_COVERAGE on both injection channels",
+      "url": "https://github.com/Nimblesite/Deslop/issues/440",
+      "excerpt": "Branch worktree-fused-score-followups. vscode-test --coverage printed All files | 0 | 0 | 0 | 0 on every machine, and the CI coverage job never reached the VSIX check until the coverage-calculation stage was repaired today (artifact chmod + Windows lcov relocation) — so the .v…",
+      "type": "Task",
+      "labels": [
+        {
+          "name": "lane/quality",
+          "color": "a6e3a1",
+          "description": "Tests, specifications, CI, fixtures, repository health"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-23T08:13:28Z",
+      "updated_at": "2026-08-24T11:16:28Z",
+      "lifecycle": "active",
+      "priority": "unset",
+      "workstream": "quality",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 38,
+        "effort_units": 4,
+        "track": 1
+      }
+    },
+    {
+      "number": 441,
+      "title": "ensure_rfc8089_uri rejects all percent-encoding, so make ci is red in any checkout path containing a space",
+      "url": "https://github.com/Nimblesite/Deslop/issues/441",
+      "excerpt": "ensure_rfc8089_uri rejects every percent-encoding, so make ci is red in any checkout whose path contains a space. Symptom Cause crates/deslop-core/tests/refactor_merge.rs:241 The check is broader than the contract it enforces. It names exactly three defects — %3A, %5C, %3F — b…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "lane/quality",
+          "color": "a6e3a1",
+          "description": "Tests, specifications, CI, fixtures, repository health"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-24T09:19:51Z",
+      "updated_at": "2026-08-24T11:17:13Z",
+      "lifecycle": "active",
+      "priority": "unset",
+      "workstream": "quality",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 39,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 443,
+      "title": "Empty or unmeasured authored-content evidence scores agreement = 1.0 — indistinguishable from byte-proven agreement",
+      "url": "https://github.com/Nimblesite/Deslop/issues/443",
+      "excerpt": "Where crates/deslop-core/src/content/frontier.rs — key_set_jaccard returns 1.0 when the authored-content union is empty, and positional_agreement returns 1.0 when no position was measured (both by design, per their doc comments). crates/deslop-core/src/content.rs — two empty f…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        },
+        {
+          "name": "critical",
+          "color": "d93f0b",
+          "description": "Must fix soon; a release could still ship"
+        }
+      ],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-24T10:56:17Z",
+      "updated_at": "2026-08-24T11:17:12Z",
+      "lifecycle": "active",
+      "priority": "unset",
+      "workstream": "accuracy",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 105,
+        "effort_units": 5,
+        "track": 0
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source": 109,
+      "target": 79,
+      "kind": "reference"
+    },
+    {
+      "source": 123,
+      "target": 103,
+      "kind": "reference"
+    },
+    {
+      "source": 123,
+      "target": 111,
+      "kind": "reference"
+    },
+    {
+      "source": 162,
+      "target": 163,
+      "kind": "reference"
+    },
+    {
+      "source": 163,
+      "target": 162,
+      "kind": "reference"
+    },
+    {
+      "source": 166,
+      "target": 414,
+      "kind": "blocks"
+    },
+    {
+      "source": 166,
+      "target": 414,
+      "kind": "sub_issue"
+    },
+    {
+      "source": 166,
+      "target": 422,
+      "kind": "sub_issue"
+    },
+    {
+      "source": 166,
+      "target": 426,
+      "kind": "sub_issue"
+    },
+    {
+      "source": 166,
+      "target": 429,
+      "kind": "sub_issue"
+    },
+    {
+      "source": 173,
+      "target": 129,
+      "kind": "reference"
+    },
+    {
+      "source": 173,
+      "target": 171,
+      "kind": "reference"
+    },
+    {
+      "source": 173,
+      "target": 178,
+      "kind": "blocks"
+    },
+    {
+      "source": 178,
+      "target": 177,
+      "kind": "reference"
+    },
+    {
+      "source": 186,
+      "target": 183,
+      "kind": "blocks"
+    },
+    {
+      "source": 187,
+      "target": 183,
+      "kind": "blocks"
+    },
+    {
+      "source": 188,
+      "target": 183,
+      "kind": "blocks"
+    },
+    {
+      "source": 252,
+      "target": 402,
+      "kind": "blocks"
+    },
+    {
+      "source": 276,
+      "target": 228,
+      "kind": "reference"
+    },
+    {
+      "source": 276,
+      "target": 262,
+      "kind": "blocks"
+    },
+    {
+      "source": 276,
+      "target": 262,
+      "kind": "reference"
+    },
+    {
+      "source": 276,
+      "target": 263,
+      "kind": "reference"
+    },
+    {
+      "source": 285,
+      "target": 284,
+      "kind": "reference"
+    },
+    {
+      "source": 309,
+      "target": 264,
+      "kind": "blocks"
+    },
+    {
+      "source": 309,
+      "target": 264,
+      "kind": "reference"
+    },
+    {
+      "source": 316,
+      "target": 393,
+      "kind": "blocks"
+    },
+    {
+      "source": 339,
+      "target": 336,
+      "kind": "reference"
+    },
+    {
+      "source": 344,
+      "target": 71,
+      "kind": "blocks"
+    },
+    {
+      "source": 344,
+      "target": 79,
+      "kind": "blocks"
+    },
+    {
+      "source": 344,
+      "target": 103,
+      "kind": "blocks"
+    },
+    {
+      "source": 344,
+      "target": 283,
+      "kind": "blocks"
+    },
+    {
+      "source": 344,
+      "target": 284,
+      "kind": "blocks"
+    },
+    {
+      "source": 344,
+      "target": 285,
+      "kind": "blocks"
+    },
+    {
+      "source": 344,
+      "target": 362,
+      "kind": "blocks"
+    },
+    {
+      "source": 344,
+      "target": 421,
+      "kind": "blocks"
+    },
+    {
+      "source": 345,
+      "target": 343,
+      "kind": "reference"
+    },
+    {
+      "source": 347,
+      "target": 345,
+      "kind": "reference"
+    },
+    {
+      "source": 351,
+      "target": 339,
+      "kind": "reference"
+    },
+    {
+      "source": 351,
+      "target": 343,
+      "kind": "reference"
+    },
+    {
+      "source": 351,
+      "target": 344,
+      "kind": "reference"
+    },
+    {
+      "source": 352,
+      "target": 347,
+      "kind": "reference"
+    },
+    {
+      "source": 352,
+      "target": 411,
+      "kind": "blocks"
+    },
+    {
+      "source": 357,
+      "target": 351,
+      "kind": "reference"
+    },
+    {
+      "source": 359,
+      "target": 343,
+      "kind": "reference"
+    },
+    {
+      "source": 359,
+      "target": 367,
+      "kind": "sub_issue"
+    },
+    {
+      "source": 359,
+      "target": 387,
+      "kind": "sub_issue"
+    },
+    {
+      "source": 362,
+      "target": 397,
+      "kind": "blocks"
+    },
+    {
+      "source": 363,
+      "target": 345,
+      "kind": "reference"
+    },
+    {
+      "source": 365,
+      "target": 366,
+      "kind": "reference"
+    },
+    {
+      "source": 366,
+      "target": 356,
+      "kind": "blocks"
+    },
+    {
+      "source": 366,
+      "target": 369,
+      "kind": "blocks"
+    },
+    {
+      "source": 366,
+      "target": 407,
+      "kind": "blocks"
+    },
+    {
+      "source": 367,
+      "target": 359,
+      "kind": "reference"
+    },
+    {
+      "source": 367,
+      "target": 365,
+      "kind": "reference"
+    },
+    {
+      "source": 367,
+      "target": 366,
+      "kind": "reference"
+    },
+    {
+      "source": 367,
+      "target": 369,
+      "kind": "blocks"
+    },
+    {
+      "source": 367,
+      "target": 387,
+      "kind": "blocks"
+    },
+    {
+      "source": 367,
+      "target": 389,
+      "kind": "blocks"
+    },
+    {
+      "source": 369,
+      "target": 359,
+      "kind": "reference"
+    },
+    {
+      "source": 369,
+      "target": 365,
+      "kind": "reference"
+    },
+    {
+      "source": 369,
+      "target": 366,
+      "kind": "reference"
+    },
+    {
+      "source": 369,
+      "target": 366,
+      "kind": "sub_issue"
+    },
+    {
+      "source": 369,
+      "target": 367,
+      "kind": "reference"
+    },
+    {
+      "source": 370,
+      "target": 369,
+      "kind": "reference"
+    },
+    {
+      "source": 372,
+      "target": 369,
+      "kind": "reference"
+    },
+    {
+      "source": 373,
+      "target": 358,
+      "kind": "reference"
+    },
+    {
+      "source": 379,
+      "target": 380,
+      "kind": "reference"
+    },
+    {
+      "source": 379,
+      "target": 381,
+      "kind": "reference"
+    },
+    {
+      "source": 379,
+      "target": 382,
+      "kind": "reference"
+    },
+    {
+      "source": 380,
+      "target": 381,
+      "kind": "blocks"
+    },
+    {
+      "source": 380,
+      "target": 382,
+      "kind": "reference"
+    },
+    {
+      "source": 380,
+      "target": 383,
+      "kind": "blocks"
+    },
+    {
+      "source": 381,
+      "target": 349,
+      "kind": "reference"
+    },
+    {
+      "source": 381,
+      "target": 364,
+      "kind": "blocks"
+    },
+    {
+      "source": 381,
+      "target": 364,
+      "kind": "reference"
+    },
+    {
+      "source": 381,
+      "target": 379,
+      "kind": "reference"
+    },
+    {
+      "source": 381,
+      "target": 382,
+      "kind": "reference"
+    },
+    {
+      "source": 382,
+      "target": 364,
+      "kind": "reference"
+    },
+    {
+      "source": 382,
+      "target": 379,
+      "kind": "reference"
+    },
+    {
+      "source": 382,
+      "target": 380,
+      "kind": "reference"
+    },
+    {
+      "source": 383,
+      "target": 379,
+      "kind": "reference"
+    },
+    {
+      "source": 383,
+      "target": 379,
+      "kind": "sub_issue"
+    },
+    {
+      "source": 383,
+      "target": 381,
+      "kind": "reference"
+    },
+    {
+      "source": 383,
+      "target": 381,
+      "kind": "sub_issue"
+    },
+    {
+      "source": 387,
+      "target": 339,
+      "kind": "reference"
+    },
+    {
+      "source": 387,
+      "target": 343,
+      "kind": "reference"
+    },
+    {
+      "source": 387,
+      "target": 367,
+      "kind": "reference"
+    },
+    {
+      "source": 388,
+      "target": 394,
+      "kind": "blocks"
+    },
+    {
+      "source": 395,
+      "target": 339,
+      "kind": "reference"
+    },
+    {
+      "source": 395,
+      "target": 345,
+      "kind": "reference"
+    },
+    {
+      "source": 397,
+      "target": 390,
+      "kind": "reference"
+    },
+    {
+      "source": 399,
+      "target": 406,
+      "kind": "blocks"
+    },
+    {
+      "source": 401,
+      "target": 71,
+      "kind": "blocks"
+    },
+    {
+      "source": 401,
+      "target": 79,
+      "kind": "blocks"
+    },
+    {
+      "source": 401,
+      "target": 103,
+      "kind": "blocks"
+    },
+    {
+      "source": 401,
+      "target": 283,
+      "kind": "blocks"
+    },
+    {
+      "source": 401,
+      "target": 284,
+      "kind": "blocks"
+    },
+    {
+      "source": 401,
+      "target": 285,
+      "kind": "blocks"
+    },
+    {
+      "source": 401,
+      "target": 336,
+      "kind": "reference"
+    },
+    {
+      "source": 401,
+      "target": 347,
+      "kind": "reference"
+    },
+    {
+      "source": 401,
+      "target": 362,
+      "kind": "blocks"
+    },
+    {
+      "source": 401,
+      "target": 421,
+      "kind": "blocks"
+    },
+    {
+      "source": 405,
+      "target": 344,
+      "kind": "reference"
+    },
+    {
+      "source": 406,
+      "target": 369,
+      "kind": "reference"
+    },
+    {
+      "source": 407,
+      "target": 358,
+      "kind": "reference"
+    },
+    {
+      "source": 407,
+      "target": 366,
+      "kind": "reference"
+    },
+    {
+      "source": 407,
+      "target": 369,
+      "kind": "reference"
+    },
+    {
+      "source": 408,
+      "target": 344,
+      "kind": "reference"
+    },
+    {
+      "source": 408,
+      "target": 405,
+      "kind": "reference"
+    },
+    {
+      "source": 409,
+      "target": 344,
+      "kind": "reference"
+    },
+    {
+      "source": 409,
+      "target": 405,
+      "kind": "reference"
+    },
+    {
+      "source": 409,
+      "target": 408,
+      "kind": "reference"
+    },
+    {
+      "source": 409,
+      "target": 410,
+      "kind": "blocks"
+    },
+    {
+      "source": 410,
+      "target": 344,
+      "kind": "reference"
+    },
+    {
+      "source": 410,
+      "target": 405,
+      "kind": "reference"
+    },
+    {
+      "source": 410,
+      "target": 409,
+      "kind": "reference"
+    },
+    {
+      "source": 411,
+      "target": 370,
+      "kind": "reference"
+    },
+    {
+      "source": 412,
+      "target": 364,
+      "kind": "reference"
+    },
+    {
+      "source": 412,
+      "target": 401,
+      "kind": "blocks"
+    },
+    {
+      "source": 412,
+      "target": 414,
+      "kind": "blocks"
+    },
+    {
+      "source": 413,
+      "target": 364,
+      "kind": "reference"
+    },
+    {
+      "source": 414,
+      "target": 166,
+      "kind": "reference"
+    },
+    {
+      "source": 414,
+      "target": 412,
+      "kind": "reference"
+    },
+    {
+      "source": 415,
+      "target": 364,
+      "kind": "reference"
+    },
+    {
+      "source": 416,
+      "target": 364,
+      "kind": "reference"
+    },
+    {
+      "source": 422,
+      "target": 166,
+      "kind": "reference"
+    },
+    {
+      "source": 422,
+      "target": 412,
+      "kind": "reference"
+    },
+    {
+      "source": 425,
+      "target": 264,
+      "kind": "sub_issue"
+    },
+    {
+      "source": 425,
+      "target": 309,
+      "kind": "sub_issue"
+    },
+    {
+      "source": 426,
+      "target": 166,
+      "kind": "reference"
+    },
+    {
+      "source": 428,
+      "target": 166,
+      "kind": "reference"
+    },
+    {
+      "source": 429,
+      "target": 166,
+      "kind": "reference"
+    },
+    {
+      "source": 429,
+      "target": 414,
+      "kind": "reference"
+    },
+    {
+      "source": 430,
+      "target": 173,
+      "kind": "sub_issue"
+    },
+    {
+      "source": 431,
+      "target": 408,
+      "kind": "reference"
+    },
+    {
+      "source": 431,
+      "target": 432,
+      "kind": "sub_issue"
+    },
+    {
+      "source": 432,
+      "target": 408,
+      "kind": "reference"
+    },
+    {
+      "source": 434,
+      "target": 284,
+      "kind": "reference"
+    },
+    {
+      "source": 439,
+      "target": 398,
+      "kind": "reference"
+    },
+    {
+      "source": 439,
+      "target": 401,
+      "kind": "reference"
+    },
+    {
+      "source": 439,
+      "target": 412,
+      "kind": "reference"
+    },
+    {
+      "source": 439,
+      "target": 415,
+      "kind": "reference"
+    },
+    {
+      "source": 439,
+      "target": 422,
+      "kind": "reference"
+    },
+    {
+      "source": 439,
+      "target": 428,
+      "kind": "reference"
+    },
+    {
+      "source": 441,
+      "target": 394,
+      "kind": "reference"
+    },
+    {
+      "source": 443,
+      "target": 398,
+      "kind": "reference"
+    },
+    {
+      "source": 443,
+      "target": 431,
+      "kind": "reference"
+    }
+  ]
+}

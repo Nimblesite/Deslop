@@ -3,8 +3,6 @@
 //! `AnalysisSession`, gathers the in-memory inputs, and returns the
 //! mechanical plan — or a reasoned refusal, never a partial answer.
 
-mod common;
-
 use std::sync::Arc;
 
 use anyhow::{anyhow, ensure, Context, Result};

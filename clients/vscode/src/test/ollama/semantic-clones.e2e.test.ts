@@ -32,6 +32,8 @@ import { sleep } from "../suite/helpers";
 const EXT_ID = "nimblesite.deslop-live";
 const OLLAMA_ENDPOINT = "http://127.0.0.1:11434";
 const OLLAMA_MODEL = "nomic-embed-text";
+const OLLAMA_PROVIDER = "ollama";
+const DISABLED_PROVIDER = "off";
 const COS_FLOOR = 0.3;
 
 interface ExtensionExports {
@@ -108,7 +110,7 @@ async function seedInitialConfig(): Promise<void> {
   const cfg = vscode.workspace.getConfiguration("deslop");
   await cfg.update(
     "embedding.provider",
-    "ollama",
+    OLLAMA_PROVIDER,
     vscode.ConfigurationTarget.Global,
   );
   await cfg.update(
@@ -158,7 +160,7 @@ async function activateExtension(): Promise<ExtensionExports> {
 
 async function setProvider(
   client: LanguageClient,
-  providerId: "ollama" | "off",
+  providerId: typeof OLLAMA_PROVIDER | typeof DISABLED_PROVIDER,
 ): Promise<SetModelResponse | null> {
   // [REMOVE-STUB] Production accepts `ollama` and the pseudo-provider
   // `off` for disabling. There is no stub fallback any more.
@@ -166,8 +168,8 @@ async function setProvider(
     "deslop/embeddingSetModel",
     {
       provider_id: providerId,
-      model_id: providerId === "ollama" ? OLLAMA_MODEL : "off",
-      endpoint: providerId === "ollama" ? OLLAMA_ENDPOINT : null,
+      model_id: providerId === OLLAMA_PROVIDER ? OLLAMA_MODEL : DISABLED_PROVIDER,
+      endpoint: providerId === OLLAMA_PROVIDER ? OLLAMA_ENDPOINT : null,
     },
   );
 }
@@ -236,7 +238,7 @@ suite("ollama semantic clone detection (real Ollama)", () => {
       "LSP must have Ollama provenance after init",
     );
     ollamaProvenance = initialReport.embedding_provenance;
-    assert.equal(ollamaProvenance.provider_id, "ollama");
+    assert.equal(ollamaProvenance.provider_id, OLLAMA_PROVIDER);
     assert.equal(ollamaProvenance.model_id, OLLAMA_MODEL);
     assert.ok(ollamaProvenance.dimensions > 0, "dimensions must be positive");
   });
@@ -288,7 +290,7 @@ suite("ollama semantic clone detection (real Ollama)", () => {
       {},
     );
     const listedOllamaIds = listed
-      .filter((model) => model.provider_id === "ollama")
+      .filter((model) => model.provider_id === OLLAMA_PROVIDER)
       .map((model) => model.model_id);
     const installedBareIds = installedNames.map(
       (name) => name.split(":")[0] ?? name,
@@ -364,7 +366,7 @@ suite("ollama semantic clone detection (real Ollama)", () => {
     // [REMOVE-STUB] `embedding/setModel` returns `Option<EmbeddingProvenance>` —
     // the LSP acknowledges the queued swap with `null` and the new
     // provenance is observed via `reportGet` once the refresh commits.
-    await setProvider(client, "ollama");
+    await setProvider(client, OLLAMA_PROVIDER);
     // And the Type-4 cluster comes back.
     const report = await waitForReport(client, 60_000, (r) => {
       const c = crossFileType4Cluster(r);

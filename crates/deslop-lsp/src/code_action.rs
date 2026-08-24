@@ -135,7 +135,7 @@ pub fn resolved_action(
 /// response; a `disabled` field attached during `codeAction/resolve` is
 /// ignored, so without this message the user's click is a silent no-op.
 /// The `window/showMessage` warning carries the refusal reason instead
-/// (issue #282, [AUTOFIX-MERGE-CODE-ACTION]).
+/// (, [AUTOFIX-MERGE-CODE-ACTION]).
 pub async fn warn_if_refused(client: &Client, action: CodeAction) -> CodeAction {
     if let Some(disabled) = &action.disabled {
         let text = format!("Deslop can't apply '{}': {}", action.title, disabled.reason);

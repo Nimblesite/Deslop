@@ -3,12 +3,7 @@
 //! [`EmbeddingProvider`] based on the run's [`EmbeddingMode`], and
 //! returns the ANN-nearest-neighbour pairs plus report provenance.
 
-use std::{
-    collections::{HashMap, HashSet},
-    path::Path,
-    thread,
-    time::Duration,
-};
+use std::{collections::HashMap, path::Path, thread, time::Duration};
 
 use crate::{
     embedding::{
@@ -16,15 +11,16 @@ use crate::{
         EmbeddingSpec, ProviderError,
     },
     error::CoreError,
+    fingerprint::Fingerprint,
     report::EmbeddingProvenance,
+    state::FileId,
 };
 
 use super::{
     config::PipelineConfig,
-    corpus::FingerprintCorpus,
     embedding_batch::{
-        pairs_from_successful_embeddings, provenance_from, snippet_for, EmbeddingBatch,
-        PendingEmbedding,
+        pairs_from_successful_embeddings, provenance_from, snippet_for, vectors_by_fingerprint,
+        EmbeddingBatch, PendingEmbedding,
     },
     embedding_observability::{token_count, EmbeddingObserver},
 };
@@ -35,8 +31,26 @@ use super::{
 pub struct EmbeddingOutcome {
     /// ANN-nearest-neighbour pairs produced by the embedding pass.
     pub pairs: Vec<EmbeddingPair>,
+    /// Every successfully embedded vector, keyed by fingerprint index.
+    ///
+    /// Cluster materialisation measures `embedding_cos` between the
+    /// occurrences it actually renders, which needs the vectors — the
+    /// ANN pair list alone only covers the neighbours the index
+    /// surfaced. Empty when the pass was skipped or failed gracefully.
+    pub vectors: HashMap<usize, Vec<f32>>,
     /// Provenance to record in the rendered report.
     pub provenance: Option<EmbeddingProvenance>,
+}
+
+/// Borrowed view of the corpus consumed by the embedding pass: the
+/// flat fingerprint slice plus the per-file source bytes behind it.
+/// Borrowed straight from the session's canonical storage so the pass
+/// copies no corpus state ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
+pub struct CorpusView<'a> {
+    /// Every live fingerprint, flat, in corpus order.
+    pub fingerprints: &'a [Fingerprint],
+    /// Source bytes keyed by the file id each fingerprint references.
+    pub sources: &'a HashMap<FileId, Vec<u8>>,
 }
 
 /// Runs the embedding pass honouring `config.embedding.mode`:
@@ -54,7 +68,7 @@ pub struct EmbeddingOutcome {
 /// return an empty outcome.
 pub fn run_embedding_pass(
     config: &PipelineConfig<'_>,
-    corpus: &FingerprintCorpus,
+    corpus: &CorpusView<'_>,
 ) -> Result<EmbeddingOutcome, CoreError> {
     if matches!(config.embedding.mode, EmbeddingMode::Off) {
         return Ok(EmbeddingOutcome::default());
@@ -74,7 +88,7 @@ pub fn run_embedding_pass(
 /// and produces an empty outcome defensively.
 fn embed_corpus(
     config: &PipelineConfig<'_>,
-    corpus: &FingerprintCorpus,
+    corpus: &CorpusView<'_>,
 ) -> Result<EmbeddingOutcome, CoreError> {
     let Some(provider) = config.embedding.provider else {
         return Ok(EmbeddingOutcome::default());
@@ -102,16 +116,13 @@ fn embed_corpus(
         config.embedding.progress,
         &mut observer,
     );
-    let pairs = pairs_from_successful_embeddings(&corpus.fingerprints, &batch.vectors);
+    let pairs = pairs_from_successful_embeddings(corpus.fingerprints, &batch.vectors);
     observer.log_final(pairs.len(), batch.vectors.len(), batch.failures);
+    let provenance = provenance_from(spec, &batch);
     Ok(EmbeddingOutcome {
         pairs,
-        provenance: Some(provenance_from(
-            spec,
-            attempted_subtrees(corpus.fingerprints.len(), &batch),
-            batch.vectors.len(),
-            batch.failures,
-        )),
+        vectors: vectors_by_fingerprint(batch.vectors),
+        provenance: Some(provenance),
     })
 }
 
@@ -129,7 +140,7 @@ fn open_cache(scan_root: &Path, spec: &EmbeddingSpec) -> Result<EmbeddingCache, 
 fn compute_embeddings(
     provider: &dyn EmbeddingProvider,
     cache: &EmbeddingCache,
-    corpus: &FingerprintCorpus,
+    corpus: &CorpusView<'_>,
     dimensions: usize,
     batch_yield: Option<Duration>,
     progress: Option<&dyn Fn(usize)>,
@@ -166,88 +177,107 @@ fn compute_embeddings(
     batch
 }
 
-/// Walks the corpus once, loading cache hits and queuing unique misses.
-/// `max_input_chars` is the budget the provider declared for itself
-/// ([`EmbeddingProvider::max_input_chars`], #286) — never a constant of
-/// this pass's own.
+/// Walks the corpus once, grouping fingerprints by snippet content and
+/// routing each group whole: cache hit, oversized rejection, or one
+/// pending provider request. `max_input_chars` is the budget the provider
+/// declared for itself ([`EmbeddingProvider::max_input_chars`]) —
+/// never a constant of this pass's own.
+///
+/// The group is what the provider request and the ANN index point are
+/// both deduplicated to; its *members* never are, which is why the vector
+/// travels with the whole owner list. Byte-identical clones share one
+/// snippet by definition, so collapsing a group to its first member
+/// deletes the embedding evidence for exactly the pairs this tool exists
+/// to find, rendering `embedding_cos = 0.0` — measured-and-absent.
 fn lookup_phase(
-    corpus: &FingerprintCorpus,
+    corpus: &CorpusView<'_>,
     cache: &EmbeddingCache,
     batch: &mut EmbeddingBatch,
     observer: &mut EmbeddingObserver,
     max_input_chars: usize,
 ) -> Vec<PendingEmbedding> {
-    let mut indexed_hashes: HashSet<String> = HashSet::new();
-    let mut pending_positions: HashMap<String, usize> = HashMap::new();
     let mut pending: Vec<PendingEmbedding> = Vec::new();
-    for (index, fingerprint) in corpus.fingerprints.iter().enumerate() {
-        let snippet = snippet_for(fingerprint, &corpus.sources);
-        if snippet.chars().count() > max_input_chars {
-            record_oversized_input(batch, index, snippet, max_input_chars);
-            continue;
-        }
-        classify_snippet(
-            ClassifyContext {
-                index,
-                snippet,
-                cache,
-                batch,
-                observer,
-            },
-            &mut indexed_hashes,
-            &mut pending_positions,
-            &mut pending,
-        );
+    for group in group_snippets_by_content(corpus) {
+        route_snippet_group(group, cache, batch, observer, max_input_chars, &mut pending);
     }
     pending
 }
 
-/// Inputs for [`classify_snippet`].
-struct ClassifyContext<'a> {
-    /// Position of the fingerprint inside the corpus.
-    index: usize,
-    /// Source slice extracted for this fingerprint.
+/// Fingerprints sharing one exact source snippet.
+struct SnippetGroup {
+    /// Every fingerprint index whose source text is `snippet`, in
+    /// corpus order.
+    fingerprint_indices: Vec<usize>,
+    /// The shared source text.
     snippet: String,
-    /// Embedding cache consulted for warm-cache short-circuits.
-    cache: &'a EmbeddingCache,
-    /// Mutable batch where cache hits are recorded immediately.
-    batch: &'a mut EmbeddingBatch,
-    /// Pass-level observer updated on hit, miss, or duplicate.
-    observer: &'a mut EmbeddingObserver,
+    /// Stable content hash of `snippet`.
+    snippet_hash: String,
 }
 
-/// Routes one snippet onto cache-hit, dedup-merge, or queue-pending.
-fn classify_snippet(
-    ctx: ClassifyContext<'_>,
-    indexed_hashes: &mut HashSet<String>,
-    pending_positions: &mut HashMap<String, usize>,
+/// Groups corpus fingerprints by snippet content hash, preserving
+/// first-seen corpus order so downstream dispatch is deterministic.
+fn group_snippets_by_content(corpus: &CorpusView<'_>) -> Vec<SnippetGroup> {
+    let mut positions: HashMap<String, usize> = HashMap::new();
+    let mut groups: Vec<SnippetGroup> = Vec::new();
+    for (index, fingerprint) in corpus.fingerprints.iter().enumerate() {
+        let snippet = snippet_for(fingerprint, corpus.sources);
+        let snippet_hash = content_hash(&snippet);
+        if let Some(&position) = positions.get(&snippet_hash) {
+            extend_group(&mut groups, position, index);
+        } else {
+            let _previous = positions.insert(snippet_hash.clone(), groups.len());
+            groups.push(SnippetGroup {
+                fingerprint_indices: vec![index],
+                snippet,
+                snippet_hash,
+            });
+        }
+    }
+    groups
+}
+
+/// Appends one more owner to an existing snippet group.
+fn extend_group(groups: &mut [SnippetGroup], position: usize, fingerprint_index: usize) {
+    if let Some(group) = groups.get_mut(position) {
+        group.fingerprint_indices.push(fingerprint_index);
+    }
+}
+
+/// Routes one snippet group onto cache-hit, oversized-rejection, or
+/// queue-pending. Every route applies to the whole group.
+fn route_snippet_group(
+    group: SnippetGroup,
+    cache: &EmbeddingCache,
+    batch: &mut EmbeddingBatch,
+    observer: &mut EmbeddingObserver,
+    max_input_chars: usize,
     pending: &mut Vec<PendingEmbedding>,
 ) {
-    let snippet_hash = content_hash(&ctx.snippet);
-    if indexed_hashes.contains(&snippet_hash) {
-        ctx.observer.record_duplicate();
+    if group.snippet.chars().count() > max_input_chars {
+        record_oversized_input(batch, group, max_input_chars);
         return;
     }
-    if let Some(position) = pending_positions.get(&snippet_hash).copied() {
-        if let Some(queued) = pending.get_mut(position) {
-            queued.occurrences = queued.occurrences.saturating_add(1);
-        }
-        ctx.observer.record_duplicate();
+    observer.record_group(group.fingerprint_indices.len());
+    // The cache is a deserialisation boundary: its entries are bytes
+    // from disk, not values this process produced. `push_fresh_embedding`
+    // guarantees nothing non-finite is ever written, so this check costs
+    // one pass over a hit and can only fire on an entry that predates
+    // that guarantee or was corrupted underneath us. A rejected hit
+    // falls through to a fresh provider request, so the snippet is
+    // re-measured rather than dropped.
+    if let Some(cached) = cache
+        .get(&group.snippet)
+        .filter(|vector| is_finite_vector(vector))
+    {
+        batch.push(&group.fingerprint_indices, &cached);
+        observer.record_cache_hit();
         return;
     }
-    if let Some(cached) = ctx.cache.get(&ctx.snippet) {
-        let _inserted = indexed_hashes.insert(snippet_hash);
-        ctx.batch.push(ctx.index, cached, 1);
-        ctx.observer.record_cache_hit();
-        return;
-    }
-    ctx.observer.record_cache_miss();
-    let _previous = pending_positions.insert(snippet_hash.clone(), pending.len());
+    observer.record_cache_miss();
     pending.push(PendingEmbedding {
-        fingerprint_index: ctx.index,
-        snippet: ctx.snippet,
-        snippet_hash,
-        occurrences: 1,
+        fingerprint_indices: group.fingerprint_indices,
+        snippet: group.snippet,
+        snippet_hash: group.snippet_hash,
     });
 }
 
@@ -267,27 +297,12 @@ struct PendingDispatch<'a> {
     observer: &'a mut EmbeddingObserver,
 }
 
-/// Returns the provenance denominator for this embedding pass.
-fn attempted_subtrees(total_fingerprints: usize, batch: &EmbeddingBatch) -> usize {
-    if batch.failures == 0 {
-        return total_fingerprints;
-    }
-    batch.vectors.len().saturating_add(batch.failures)
-}
-
-/// Counts an oversized snippet as skipped before provider dispatch.
-fn record_oversized_input(
-    batch: &mut EmbeddingBatch,
-    fingerprint_index: usize,
-    snippet: String,
-    max_input_chars: usize,
-) {
-    let snippet_hash = content_hash(&snippet);
+/// Counts an oversized snippet group as skipped before provider dispatch.
+fn record_oversized_input(batch: &mut EmbeddingBatch, group: SnippetGroup, max_input_chars: usize) {
     let item = PendingEmbedding {
-        fingerprint_index,
-        snippet,
-        snippet_hash,
-        occurrences: 1,
+        fingerprint_indices: group.fingerprint_indices,
+        snippet: group.snippet,
+        snippet_hash: group.snippet_hash,
     };
     record_failed_pending(batch, &item, &format!("exceeds {max_input_chars} chars"));
 }
@@ -358,7 +373,7 @@ fn push_fresh_embeddings(
     dimensions: usize,
 ) {
     for (item, vector) in chunk.iter().zip(vectors) {
-        push_fresh_embedding(cache, batch, item, vector, dimensions);
+        push_fresh_embedding(cache, batch, item, &vector, dimensions);
     }
 }
 
@@ -412,12 +427,23 @@ fn maybe_yield_between_batches(
     }
 }
 
-/// Stores one successful provider vector when its dimensions match.
+/// Stores one successful provider vector when it is well-formed.
+///
+/// A vector must clear both gates before it reaches the cache, the ANN
+/// index, or a rendered signal. Dimension disagreement is the obvious
+/// one; finiteness is the quiet one. A response may be valid JSON and
+/// still overflow `f32` — `3.5e38` parses fine and becomes `inf`, whose
+/// normalization is `NaN`, and every comparison against `NaN` is false.
+/// Such a vector does not fail loudly downstream: it slips past the
+/// admission floors that are written as `cosine < MIN` and manufactures
+/// clusters out of malformed provider output. Rejecting at ingest is the
+/// only place the vector is still attributable to the request that
+/// produced it, so it is counted failed exactly like an oversized input.
 fn push_fresh_embedding(
     cache: &EmbeddingCache,
     batch: &mut EmbeddingBatch,
     item: &PendingEmbedding,
-    vector: Vec<f32>,
+    vector: &[f32],
     dimensions: usize,
 ) {
     if vector.len() != dimensions {
@@ -425,10 +451,20 @@ fn push_fresh_embedding(
         record_failed_pending(batch, item, &message);
         return;
     }
-    if let Err(error) = cache.store(&item.snippet, &vector) {
+    if !is_finite_vector(vector) {
+        let message = "non-finite vector component";
+        record_failed_pending(batch, item, &message);
+        return;
+    }
+    if let Err(error) = cache.store(&item.snippet, vector) {
         tracing::warn!(%error, content_hash = %item.snippet_hash, "embedding cache write failed");
     }
-    batch.push(item.fingerprint_index, vector, item.occurrences);
+    batch.push(&item.fingerprint_indices, vector);
+}
+
+/// Returns `true` when every component of `vector` is finite.
+fn is_finite_vector(vector: &[f32]) -> bool {
+    vector.iter().all(|value| value.is_finite())
 }
 
 /// Records every pending item in a failed provider batch.
@@ -442,16 +478,20 @@ fn record_failed_chunk<E: std::fmt::Display>(
     }
 }
 
-/// Records one failed pending embedding request.
+/// Records one failed pending embedding request. Every fingerprint that
+/// shared the rejected snippet is counted failed — anything less would
+/// under-report the failure figure by exactly the duplicate count.
 fn record_failed_pending<E: std::fmt::Display>(
     batch: &mut EmbeddingBatch,
     item: &PendingEmbedding,
     error: &E,
 ) {
-    batch.failures = batch.failures.saturating_add(item.occurrences);
+    batch.failures = batch
+        .failures
+        .saturating_add(item.fingerprint_indices.len());
     tracing::warn!(
         error = %error,
-        occurrences = item.occurrences,
+        occurrences = item.fingerprint_indices.len(),
         snippet_chars = item.snippet.chars().count(),
         content_hash = %item.snippet_hash,
         "embedding provider rejected subtree — skipping embedding signal"

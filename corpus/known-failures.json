@@ -1,36 +1,38 @@
 {
   "_what": "[CORPUS-BASELINE] Corpus checks that already fail, so scheduled CI can report them without blocking merges. This is a RATCHET, not an excuse list.",
-
   "_rules": [
     "Every entry names a tracked issue. No entry without one.",
     "Adding an entry is admitting a defect shipped. Fixing it and deleting the entry is the only correct exit.",
-    "Anything NOT listed here fails CI even in baseline mode — that is the regression gate.",
+    "Anything NOT listed here fails CI even in baseline mode \u2014 that is the regression gate.",
     "`make test-corpus` locally ignores this file entirely and fails on everything. Local runs stay honest.",
     "Check ids are rank-independent on purpose: #301 moves cluster ranks between runs, so a rank-bearing key would churn."
   ],
-
   "_checks": {
     "recall": "A hand-verified duplicate was not reported (false negative).",
+    "recall_quality": "[CORPUS-RECALL] A hand-verified byte-identical duplicate in `must_find` was reported, but not as what it is: demoted below the `identical` bucket, missing a shown occurrence, or ranked past the entry's `max_rank` ceiling. `recall` sees only whether some cluster spans the paths.",
+    "precision": "[CORPUS-PRECISION-CURATED] A pair a human confirmed is NOT duplication was shown as one cluster - a false positive on curated ground truth. Hidden clusters do not breach an entry: precision is what the report shows.",
     "boilerplate_rank": "Framework-mandated scaffolding ranked in the top N.",
     "data_table_rank": "A numeric data table ranked in the top N categorised as `logic`.",
     "memory": "Peak RSS exceeded the runner budget.",
     "wall": "Scan exceeded the wall-clock ceiling.",
-    "determinism": "Two identical scans disagreed."
+    "determinism": "Two identical scans disagreed.",
+    "fused_bounded_max": "A rendered confidence exceeded the strongest single axis it was computed from, which [FUSION-STRATEGY-BOUNDED-MAX] forbids \u2014 the sum-then-clamp saturation gh #343 removed, pinned as an exact per-cluster formula rather than as a distribution.",
+    "type2_gate_liveness": "A large same-shape population was demoted and not one visible cluster reached `nearly_identical` through the gate's own saturating-shape precondition ([FUSION-CONTENT-GATE]). A population-shape heuristic, not a recall assertion: it identifies no expected pair. `identical` does not count (decided by byte equivalence before the gate runs) and neither does a sub-floor token near-miss (classified by the ordinary Type-3 path without the gate judging it).",
+    "type2_recall": "A hand-verified Type-2 rename curated in the manifest's `must_find_type2` was not reported as a shown, gate-vouched `nearly_identical` cluster spanning its files. A hidden occurrence on either curated side is a miss: recall is what the report shows, not what it contains \u2014 a false negative on known rename ground truth ([CORPUS-RECALL]).",
+    "files_analysed": "[CORPUS-SCOPE] The scan analysed fewer files than the manifest's `expect_files_min` floor, or the manifest curates no floor at all. A scan that reached zero files renders clean, exits 0 and satisfies every other check in this suite, because each of them iterates a set that is empty (gh #342).",
+    "cluster_count_band": "[CORPUS-SCOPE] The rendered cluster count fell outside the manifest's `expect_clusters` band. Below it, detection stopped finding duplicates; above it, something started manufacturing them - repository-wide swings no per-cluster check can see."
   },
-
   "known_failures": {
-    "flutter": ["boilerplate_rank", "memory"],
-    "fsharp": ["data_table_rank", "memory"],
-    "nest": ["determinism"],
-    "jellyfin": ["determinism"]
+    "flutter": [
+      "memory"
+    ],
+    "fsharp": [
+      "memory"
+    ]
   },
-
   "_issues": {
-    "flutter/boilerplate_rank": 331,
     "flutter/memory": 166,
-    "fsharp/data_table_rank": 336,
-    "fsharp/memory": 166,
-    "nest/determinism": 301,
-    "jellyfin/determinism": 301
-  }
+    "fsharp/memory": 166
+  },
+  "ceilings": {}
 }

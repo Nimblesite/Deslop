@@ -1,11 +1,12 @@
 ---
 layout: layouts/docs.njk
 title: 工作原理 — tree-sitter AST、MinHash LSH、HNSW 嵌入
-description: Deslop 的流水线 —— tree-sitter 解析、AST 归一化、Merkle 指纹、MinHash + LSH、HNSW 嵌入、融合 0.85 阈值、最严重者优先的排名。响应式分析循环。
+description: Deslop 如何使用 tree-sitter AST、Merkle 指纹、MinHash LSH、可选 HNSW 嵌入与最严重者优先排名来检测重复代码。
 eleventyNavigation:
   key: 工作原理
   order: 2
 icon: account_tree
+docsGroup: trust
 lang: zh
 ---
 
@@ -39,7 +40,6 @@ discover → parse → normalize → fingerprint → cluster
 | [PHP](https://www.php.net/) | v1 |
 | [F#](https://fsharp.org/) | v1 |
 | [Go](https://go.dev/) | v1 |
-| Java | 路线图 |
 
 解析器产出一棵 AST。这条流水线上从不会有任何源代码级别的正则参与 —— 永远不会。
 
@@ -63,7 +63,7 @@ discover → parse → normalize → fingerprint → cluster
 
 ## LSH（近似匹配）
 
-对于**近乎相同的代码**（Type-3，结构相似但不完全相同），Deslop 为每棵子树构建一条宽度为 5 的归一化 AST 类型 k-gram 流，计算出一个 **128 值的 MinHash 签名**（Broder 1997），并将它们分组为 **32 个带、每带 4 行**，用于 [Indyk-Motwani 局部敏感哈希](https://en.wikipedia.org/wiki/Locality-sensitive_hashing)。候选配对就是发生碰撞的带；随后从完整签名的一致程度估计 Jaccard。SourcererCC 的词袋设计是灵感来源，但 Deslop 在归一化的 AST 类型而非原始源代码 token 上运行其 k-gram。实现位于 [`crates/deslop-core/src/lsh.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/lsh.rs) 与 [`crates/deslop-core/src/tokens.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/tokens.rs)。
+对于**近乎相同的代码**（Type-3，结构相似但不完全相同），Deslop 为每棵子树构建一条宽度为 5 的归一化 AST 类型 k-gram 流，计算出一个 **128 值的 MinHash 签名**（Broder 1997），并将它们分组为 **32 个带、每带 4 行**，用于 [Indyk-Motwani 局部敏感哈希](https://en.wikipedia.org/wiki/Locality-sensitive_hashing)。在同一带中发生碰撞的子树对构成候选配对；随后根据完整签名的一致程度估算 Jaccard 相似度。SourcererCC 的词袋设计是灵感来源，但 Deslop 在归一化的 AST 类型而非原始源代码词元上运行其 k-gram。实现位于 [`crates/deslop-core/src/lsh.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/lsh.rs) 与 [`crates/deslop-core/src/tokens.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/tokens.rs)。
 
 ## Embed（语义）
 
@@ -81,7 +81,11 @@ discover → parse → normalize → fingerprint → cluster
 | `token_jaccard` | 0..1 | 近乎相同的代码 [Type-3] —— MinHash 带碰撞 | `lsh.rs::band_collisions` + `tokens.rs` |
 | `embedding_cos` | 0..1 | 行为相同、代码不同 [Type-3/4] —— HNSW top-k | `embedding/pairs.rs` |
 
-依据集成式 LLM 2025 的发现（求平均有害；求和/取最大有益），融合得分为 `clamp(structural + token_jaccard + embedding_cos, 0, 1)`（[`pair.rs::PairScore::fused`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/pair.rs)）。当融合得分越过 `FUSED_THRESHOLD = 0.85` 时配对得以幸存。仅由 LSH 产生的配对还要承受一道更严格的信息含量下限（`token_jaccard ≥ 0.90` 且两端点均 ≥ 40 个 AST 节点），这样嘈杂的近似匹配就无法搭着 LSH 的便车混入簇中。除非 `.deslop.toml` 明确启用，否则跨语言配对会被丢弃。
+候选配对首先采用**有界最大值**——`max(structural, token_jaccard, embedding_cos)`，取值于 `[0,1]`（[`pair.rs::PairScore::bounded_fused`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/pair.rs)）。该值越过 `FUSED_THRESHOLD = 0.85` 时，配对才会保留。仅由 LSH 产生的配对还必须满足 `token_jaccard ≥ 0.90`，且两端均至少包含 40 个 AST 节点。
+
+报告渲染前，形状证据饱和的非完全相同簇会按 `max(embedding_cos, shape × content_confidence)` 经过内容门禁；其中内容置信度取原始内容一致度与折扣后的重命名一致性两者中的较高值（[`buckets/gate.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/buckets/gate.rs)）。这样，即使归一化后的形状完全一致，底层代码有差异时也不会显示为满置信度。逐字节相同的簇和形状证据未饱和的簇保留候选评分。
+
+除非 `.deslop.toml` 明确启用，否则跨语言配对会被丢弃。启用后，没有结构锚点的跨语言配对按 `0.10` 的下限准入；带结构锚点的配对仍使用 `0.85` 阈值。
 
 ## Rank（排名）
 
@@ -106,7 +110,7 @@ weight = clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes)
 文件监视器对编辑进行批处理（防抖，并设有硬上限，使格式化器的连发不会拖垮调度器），并通过 `PipelineSession::update_files` 重新运行流水线。最新报告被保留在内存中，随后 LSP 会：
 
 - 在 LSP 线路上广播 `deslop/reportChanged`，并且
-- 通过本地 IPC 端点提供运行中的语料，使得捆绑的 MCP 服务器无需重新解析即可应答 `find-similar`。macOS 与 Linux 使用 `.deslop/cache/deslop.sock`；Windows 使用通过 `.deslop/cache/deslop.port` 发现的 token 门控 TCP 回环端点。
+- 通过本地 IPC 端点提供运行中的语料，使得捆绑的 MCP 服务器无需重新解析即可应答 `find-similar`。macOS 与 Linux 使用 `.deslop/cache/deslop.sock`；Windows 使用通过 `.deslop/cache/deslop.port` 发现、由令牌保护的 TCP 回环端点。
 
 `.deslop/cache/live-report.json` 仅作为冷启动种子写入 —— 以便刚启动的 LSP 能在其首趟扫描运行期间应答查询 —— 而非在每次编辑时写入。
 

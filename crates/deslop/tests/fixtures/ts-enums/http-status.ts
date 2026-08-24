@@ -6,15 +6,24 @@ export enum HttpStatus {
   NotFound = 404,
 }
 
-export function describeStatus(status: HttpStatus): string {
-  switch (status) {
+export function describe(code: HttpStatus): string {
+  let label = "unknown";
+  let retries = 0;
+  switch (code) {
     case HttpStatus.Ok:
-      return "ok";
+      label = "accepted";
+      retries = retries + 1;
+      break;
     case HttpStatus.Created:
-      return "created";
+      label = "stored";
+      retries = retries + 2;
+      break;
     case HttpStatus.BadRequest:
-      return "bad request";
+      label = "rejected";
+      retries = retries + 3;
+      break;
     default:
-      return "unknown";
+      label = "unmapped";
   }
+  return label + retries;
 }

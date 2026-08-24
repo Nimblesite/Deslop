@@ -1,6 +1,6 @@
 ---
 layout: layouts/blog.njk
-title: "面向编码智能体的 MCP：在重复代码落地之前就拦住它"
+title: "面向编码智能体的 MCP：在重复代码落地之前发现它"
 date: 2026-06-12
 updated: 2026-06-12
 author: Christian Findlay
@@ -11,23 +11,22 @@ tags:
   - ai-coding-agents
   - duplicate-code
 category: engineering
-description: "Deslop 的实时 MCP + LSP 服务器如何让编码智能体在写代码之前调用 find-similar，在仓库仍在变化时就阻止重复代码。"
-keywords: "Model Context Protocol, MCP 服务器, AI 编码工具, 编码智能体, 重复代码, 代码重复, 重复代码分析, 技术债务, AI 生成代码, LSP 服务器, find-similar"
+description: "Deslop 的实时 MCP 与 LSP 服务器如何让编码智能体在写代码前调用 find-similar，并在仓库变化过程中发现重复逻辑。"
 excerpt: "MCP 为编码智能体提供工具。Deslop 为它们提供实时的仓库记忆：在写代码之前调用 find-similar，然后复用已经存在的代码。"
-heroImage: "/assets/img/blog/live-mcp-lsp-duplicate-code-prevention-header.png"
+heroImage: "/assets/img/blog/live-mcp-lsp-duplicate-code-prevention-header.webp"
 heroImageWidth: "1600"
 heroImageHeight: "900"
-heroImageAlt: "页头图片，展示一个实时的 MCP 与 LSP 边车在重复代码到达仓库之前将其拦截。"
-ogImage: "/assets/img/blog/live-mcp-lsp-duplicate-code-prevention-og.png"
+heroImageAlt: "页头图片，展示一个实时的 MCP 与 LSP 边车在重复代码到达仓库之前检查它。"
+ogImage: "/assets/img/blog/live-mcp-lsp-duplicate-code-prevention-og.jpg"
 ogImageWidth: "1200"
 ogImageHeight: "630"
-ogImageAlt: "Deslop 实时 MCP 与 LSP 边车在重复代码落地之前将其阻止。"
+ogImageAlt: "Deslop 实时 MCP 与 LSP 边车在重复代码落地之前检查它。"
 lang: zh
 ---
 
 等到重复代码出现在 CI 中时，智能体早已把它写好，拉取请求里也已经包含了它，而审查者不得不追问：为什么同一条规则如今存在于两个地方。
 
-Deslop 把这项检查提前了。当编码智能体准备添加一个 mapper、校验器、widget 或测试辅助函数时，它可以向实时的工作区询问：这样的结构是否已经存在。
+Deslop 把这项检查提前了。当编码智能体准备添加映射器、校验器、组件或测试辅助函数时，它可以向实时工作区询问：这样的结构是否已经存在。
 
 ## MCP 如今是智能体的工具层
 
@@ -43,7 +42,7 @@ Deslop 对 MCP 的使用刻意保持专注：在智能体正在决定写什么�
 
 一个 MCP 服务器可以暴露一个工具。但这并不意味着这个工具是新鲜的、廉价的，或者可以频繁安全地调用。
 
-对重复代码预防而言，新鲜度就是产品的全部。AI 编码智能体会快速修改文件。人类会在编辑器里改动另一个文件。格式化工具会运行。测试生成器会添加一个 fixture。会话开始时跑出的一次性 CLI 报告，在第一次编辑之后就已经过时了。
+对重复代码预防而言，数据必须及时更新。AI 编码智能体会快速修改文件，人类可能同时在编辑器里改动另一个文件，格式化工具会运行，测试生成器也会添加测试夹具。会话开始时生成的一次性 CLI 报告，在第一次编辑之后就已经过时了。
 
 Deslop 的架构被刻意拆分开来：
 
@@ -98,11 +97,11 @@ Deslop 的 MCP 界面按最严重优先的顺序返回重复的簇，并附带�
 - 克隆分桶，例如完全相同的代码或近乎相同的代码，
 - 排名分数，
 - 各次出现的路径和字节范围，
-- 在可用时提供的结构、token 和嵌入（embedding）信号，
+- 在可用时提供的结构、词元和嵌入信号，
 - 一段解读文字，
 - 行动提示。
 
-这份报告刻意以 JSON 为先。人类可读的文本视图和 HTML 视图，都是同一套 schema 的渲染结果，而不是另一份真相。文档中的[输出格式](/zh/docs/configuration/#report-output)页面解释了消费方的契约，而[工作原理](/zh/docs/how-it-works/)则解释了解析、归一化、指纹、聚簇和排名这条流水线。
+这份报告以 JSON 为权威格式。人类可读的文本视图和 HTML 视图都由同一套数据结构渲染而来。文档中的[输出格式](/zh/docs/configuration/#report-output)解释了消费方契约，[工作原理](/zh/docs/how-it-works/)则解释了解析、归一化、指纹、聚簇和排名流水线。
 
 MCP 工具还带有一个出现次数预算。真实的仓库里，一个簇可能有几十处位置，把每一次出现都倾倒进智能体的上下文窗口并无益处。诸如 `top-offenders`、`report-for-file`、`report-for-range` 和 `find-similar` 这样的 Deslop 工具都接受一个 `max_occurrences` 预算，好让结果保持有用，而不至于沦为一场刷屏。当智能体确实需要完整的簇时，它可以再用 `cluster-by-id` 跟进。
 
@@ -122,15 +121,15 @@ Deslop 使用一个实时引擎。LSP 拥有分析会话并监视工作区。MCP
 
 当编码智能体不再只是演示时，实时路径新增了几项真正重要的特性。
 
-**外部 MCP 客户端使用 VSIX 打包的二进制文件。** Claude Code、Claude Desktop、Cursor、Continue、Codex 以及其他外部 MCP 客户端，都应当指向已安装的 VS Code 扩展内部打包的 `deslop-mcp` 二进制文件——除非用户是通过 Homebrew 或 Scoop 安装的 CLI。这样可以避免本地的 `target/release` 二进制文件与扩展的线协议契约（wire contract）发生漂移。配置步骤见 [AI 集成](/zh/docs/ai-integration/)。
+**外部 MCP 客户端使用 VSIX 打包的二进制文件。** Claude Code、Claude Desktop、Cursor、Continue、Codex 以及其他外部 MCP 客户端，都应当指向已安装的 VS Code 扩展内部打包的 `deslop-mcp` 二进制文件——除非用户是通过 Homebrew 或 Scoop 安装的 CLI。这样可以避免本地的 `target/release` 二进制文件与扩展的通信协议约定发生漂移。配置步骤见 [AI 集成](/zh/docs/ai-integration/)。
 
-**Windows 不再需要 Unix 套接字。** 在类 Unix 系统上，LSP 暴露一个本地的 Unix 套接字。在 Windows 上，Deslop 则使用一个由令牌把关的 TCP 回环端点，其信息发布在 `.deslop/cache/deslop.port` 中，这样 MCP 和 LSP 依然讲同一套 JSON-RPC 协议，而无需假装 Windows 拥有 Unix 套接字。其实现描述见实时规范中的 [TCP 回环传输](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/live.md#live-ipc-tcp)。
+**Windows 不再需要 Unix 套接字。** 在类 Unix 系统上，LSP 暴露一个本地 Unix 套接字。在 Windows 上，Deslop 使用由令牌保护的 TCP 回环端点，其信息发布在 `.deslop/cache/deslop.port` 中。这样 MCP 和 LSP 依然使用同一套 JSON-RPC 协议。实现细节见实时规范中的 [TCP 回环传输](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/live.md#live-ipc-tcp)。
 
 **编辑器和智能体共享同一份报告。** VSIX 通过编辑器 UI 呈现各个簇，而 MCP 工具则把同样的实时数据暴露给智能体。[VS Code 簇面板文档](/zh/docs/vscode-cluster-panel/)介绍了面向人类的一侧。MCP 工具则覆盖面向智能体的一侧。重要的特性在于：两者读取的是同一个引擎。
 
 ## 该在你的智能体指令里写什么
 
-如果你的仓库使用 Deslop，最好的指令是直接而机械的：
+如果你的仓库使用 Deslop，智能体指令应当直接而明确：
 
 ```text
 Before writing any new function, class, helper, widget, mapper, repository,
@@ -142,27 +141,3 @@ another copy.
 这条指令比“避免重复”要有力得多。它点明了工具、时机，以及期望的动作。
 
 对于已经维护着 `AGENTS.md`、`CLAUDE.md` 或同等的编码智能体指令文件的团队来说，这正是 Deslop 该待的地方。这个工具最有价值的时刻，是在智能体写代码之前，而不是在审查者追问同一条校验规则为何出现在四个文件里之后。
-
-## 常见问题
-
-### 面向编码智能体的 MCP 服务器是什么？
-
-一个 MCP 服务器通过 Model Context Protocol 向 AI 应用暴露工具和资源。在编码工作流中，这可能意味着代码库查询、文档查询、issue 访问、构建动作或仓库分析。Deslop 的 MCP 服务器暴露的是重复代码分析工具，以 `find-similar` 为首。
-
-### 为什么 Deslop 还需要一个 LSP 服务器？
-
-因为重复代码预防有两类受众。人类需要通过 LSP 获得编辑器反馈：诊断、悬浮提示、code lens 以及导航。智能体则需要通过 MCP 获得可调用的工具。一个实时的 LSP 进程，同时也是监视工作区、让报告保持最新的合适归属者。
-
-### 为什么不干脆在提交拉取请求之前跑一下 CLI？
-
-CLI 对于 CI 和一次性审计依然有用。但对预防而言，它来得太晚了。一旦重复已经进入拉取请求，智能体就已经耗费了上下文，代码审查也已经开始。`find-similar` 属于生成之前。
-
-### 这会取代代码审查吗？
-
-不会。Deslop 报告的是证据：簇 id、位置、分数和信号。是否抽取、复用，还是接受这处重复，仍然由人类或智能体来决定。区别在于，这个决定发生在代码还新鲜的时候。
-
-### 这只关乎逐字的复制粘贴吗？
-
-不是。完全相同的重复是最容易的情形。Deslop 以解析器为先的流水线，同样被设计用来捕捉经过重命名的结构和近似重复的结构。克隆的分类法在[研究背景](/zh/docs/research-background/)以及经典综述论文 [Comparison and Evaluation of Code Clone Detection Techniques and Tools](https://www.cs.usask.ca/~croy/papers/2009/RCK_SCP_Clones.pdf) 中有所讨论。
-
-MCP 给智能体一双手。LSP 给编辑器一双眼睛。Deslop 两者兼用，好让重复代码能在预防成本唯一低廉的那个点上被拦住：在第二份副本落地之前。

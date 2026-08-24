@@ -26,7 +26,6 @@
 use anyhow::Result;
 use serde_json::Value;
 
-mod common;
 use crate::common::*;
 
 /// Path components of a reported occurrence path, split on both

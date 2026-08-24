@@ -1,146 +1,67 @@
-//! E2E regression for GH #119 [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH].
+//! E2E regression for GH #119 [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH] on
+//! Python.
 //!
-//! The embedding pass can pair two snippets that share a topic
-//! vocabulary but live in structurally incompatible constructs — a
-//! reusable helper *class* and a constructor-storage *test method*.
-//! Such a pair reaches `structural=0.00`, `embedding_cos>=0.80`, and
-//! surfaces as "Same behavior, different code" even though a class
-//! definition and a function/method have no safe shared extraction.
+//! The embedding pass can pair two snippets that share a topic vocabulary
+//! but live in structurally incompatible constructs — a reusable helper
+//! *class* and a constructor-storage *test method*. Such a pair reaches
+//! `structural=0.00`, `embedding_cos>=0.80`, and would surface as "Same
+//! behavior, different code" even though a class definition and a
+//! function have no safe shared extraction.
 //!
-//! The fix requires an embedding-dominant `same_behavior` cluster to be
-//! role/context compatible (all classes, or all functions) before
-//! surfacing. A class-def paired with a function/method is suppressed.
-//! Two genuinely behaviour-equivalent functions (same role) that the
-//! embedding correctly pairs must still surface.
+//! The contract itself lives in [`crate::common::role_gate`], which every
+//! language's suite shares: a per-suite copy would let one language drift
+//! into asserting less than another, which is how a gate comes to be
+//! covered in four places and enforced in none. What is Python-specific
+//! is here — the fixtures, and the source markers that name each role.
 //!
 //! Determinism: the in-process [`MockOllama`] embeds each snippet to a
-//! 4-lane vector seeded by its byte length and first byte, so two
-//! snippets of equal length give cosine ~= 1.0. The fixtures are tuned
-//! so the cross-role and same-role pairs both clear the embedding gate
-//! while structural overlap stays at zero.
+//! signed feature hash of its distinct 5-byte shingles (GH #369, replacing
+//! the length-residue vector of GH #366), so cosine tracks *lexical*
+//! overlap and the near-identical role-mismatch pair clears the embedding
+//! floor on that alone. The same-role pair is genuinely Type-4 — same
+//! behaviour, different text — which no content statistic can measure, so
+//! the test declares that ground truth with
+//! [`MockOllama::spawn_semantic`]: snippets naming either function are
+//! behaviour-equivalent, which lifts their cosine above the floor while
+//! unrelated snippets keep their honest shingle cosine.
 
-#[path = "cli/mock_ollama.rs"]
-mod mock_ollama;
-
-use std::{fs, path::Path};
-
+use crate::mock_ollama::MockOllama;
 use anyhow::Result;
-use mock_ollama::MockOllama;
-use serde_json::Value;
 
-mod common;
-use crate::common::*;
+use crate::common::role_gate::*;
 
-/// Runs the CLI against a private copy of `fixture_root` with the
-/// deterministic mock Ollama
-/// wired in via `--embeddings required`, returning the parsed JSON.
-fn run_report(fixture_root: &Path) -> Result<Value> {
-    let server = MockOllama::spawn()?;
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    // `--embeddings required` writes `.deslop/cache/embeddings/` into the
-    // *scan root* ([OUTPUT-DIR]); `--no-incremental` gates only the
-    // fingerprint layer. Scan a copy so the fixture stays pristine.
-    let scan_root = &tmp.path().join("src");
-    seed(fixture_root, scan_root)?;
-    let _assertion = deslop_cmd(scan_root, &output)?
-        .args([
-            "--min-nodes",
-            "5",
-            "--embeddings",
-            "required",
-            "--embedding-provider",
-            "ollama",
-            "--embedding-model",
-            "nomic-embed-text",
-            "--embedding-endpoint",
-            server.endpoint(),
-        ])
-        .assert()
-        .success();
-    let body = fs::read_to_string(output.with_extension("json"))?;
-    Ok(serde_json::from_str(&body)?)
-}
-
-fn bucket(cluster: &Value) -> &str {
-    cluster.get("bucket").and_then(Value::as_str).unwrap_or("")
-}
-
-/// Returns visible clusters that pair the helper class with the test
-/// function. Either occurrence covering the class keyword and another
-/// covering the test function body is the role-mismatch signature.
-fn class_function_role_pairs(report: &Value, scan_root: &Path) -> Result<Vec<Vec<String>>> {
-    let mut offenders = Vec::new();
-    for cluster in clusters(report) {
-        let texts = occurrence_texts(scan_root, cluster)?;
-        let touches_class = texts.iter().any(|text| text.contains("alpha = 0"));
-        let touches_function = texts.iter().any(|text| text.contains("saved.bind"));
-        if touches_class && touches_function {
-            offenders.push(texts);
-        }
-    }
-    Ok(offenders)
-}
+/// Source text unique to the Python helper-class body in the
+/// role-mismatch fixture.
+const PYTHON_CLASS_MARKER: &str = "alpha = 0";
+/// Source text unique to the Python test-function body it must not pair
+/// with.
+const PYTHON_FUNCTION_MARKER: &str = "saved.bind";
 
 // GH #119 acceptance: an embedding-dominant pair whose members have
-// different top-level roles (a `class` definition and a function body)
-// must NOT surface. The cluster is suppressed into `clusters_hidden`.
+// different top-level roles must NOT surface.
 #[test]
 fn class_function_role_mismatch_does_not_surface() -> Result<()> {
-    let scan_root = fixture("python-issue-119-role-mismatch");
-    let report = run_report(&scan_root)?;
-    let offenders = class_function_role_pairs(&report, &scan_root)?;
-    assert!(
-        offenders.is_empty(),
-        "a helper class paired with a test function by the embedding pass \
-         must not surface as duplication — there is no safe cross-role \
-         extraction: {offenders:#?}"
-    );
-    assert!(
-        clusters_hidden(&report) >= 1,
-        "the role-incompatible embedding pair must be counted in \
-         clusters_hidden, got {}",
-        clusters_hidden(&report)
-    );
-    assert!(
-        clusters(&report)
-            .iter()
-            .all(|cluster| bucket(cluster) != "same_behavior"),
-        "no same_behavior cluster may remain visible for the role-mismatch \
-         fixture: {:#?}",
-        clusters(&report)
-    );
-    Ok(())
+    let server = MockOllama::spawn()?;
+    assert_role_mismatch_is_suppressed(
+        "python-issue-119-role-mismatch",
+        "Python",
+        server.endpoint(),
+        PYTHON_CLASS_MARKER,
+        PYTHON_FUNCTION_MARKER,
+    )
 }
 
 // GH #119 guard against over-suppression: two genuinely behaviour-
-// equivalent FUNCTIONS (recursive vs iterative sum) that the embedding
-// pass pairs share one top-level role, so the role gate must NOT hide
-// them. They must still surface as "Same behavior, different code".
+// equivalent FUNCTIONS (recursive vs iterative sum) share one top-level
+// role, so the role gate must NOT hide them.
 #[test]
 fn same_role_function_pair_still_surfaces() -> Result<()> {
-    let scan_root = fixture("python-issue-119-same-role");
-    let report = run_report(&scan_root)?;
-    let same_behavior: Vec<&Value> = clusters(&report)
-        .iter()
-        .filter(|cluster| bucket(cluster) == "same_behavior")
-        .collect();
-    assert!(
-        !same_behavior.is_empty(),
-        "two same-role behaviour-equivalent functions must still surface as \
-         same_behavior — the role gate must not over-suppress: {:#?}",
-        clusters(&report)
-    );
-    let pairs_both_functions = same_behavior.iter().try_fold(false, |found, cluster| {
-        let texts = occurrence_texts(&scan_root, cluster)?;
-        let touches_recursive = texts.iter().any(|text| text.contains("total_recursive"));
-        let touches_iterative = texts.iter().any(|text| text.contains("while index"));
-        Ok::<bool, anyhow::Error>(found || (touches_recursive && touches_iterative))
-    })?;
-    assert!(
-        pairs_both_functions,
-        "the surviving same_behavior cluster must pair the recursive and \
-         iterative functions: {same_behavior:#?}"
-    );
-    Ok(())
+    let server = MockOllama::spawn_semantic(&[&["total_recursive", "total_iterative"]])?;
+    assert_same_role_pair_surfaces(
+        "python-issue-119-same-role",
+        "Python",
+        server.endpoint(),
+        "total_recursive",
+        "while index",
+    )
 }

@@ -5,9 +5,6 @@
 #[path = "cli/support.rs"]
 mod support;
 
-#[path = "cli/mock_ollama.rs"]
-mod mock_ollama;
-
 #[path = "cli/bucket_groups.rs"]
 mod bucket_groups;
 #[path = "cli/cache_and_debug.rs"]

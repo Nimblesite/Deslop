@@ -4,11 +4,11 @@
 //! language itself rather than by the program under analysis.
 //!
 //! Issues addressed (see parent `mod.rs` header):
-//! - **#75**  [CLONE-NOISE-RUST-LANGPARSER] — every first-party Rust
+//! - [CLONE-NOISE-RUST-LANGPARSER] — every first-party Rust
 //!   language plug-in implements the same `LanguageParser` trait surface.
-//! - **#150** [CLONE-NOISE-RUST-DECL] — every member is a single `mod
+//! - [CLONE-NOISE-RUST-DECL] — every member is a single `mod
 //!   NAME;` or `use ...;` statement.
-//! - **#147** [CLONE-NOISE-RUST-ITER-COLLECT] — every member is the
+//! - [CLONE-NOISE-RUST-ITER-COLLECT] — every member is the
 //!   `<expr>.iter().map(|x| x.<field>.<method>(...)).collect()` chain.
 
 use std::collections::BTreeSet;
@@ -21,11 +21,12 @@ use super::{
 };
 use crate::ast::ByteRange;
 
-/// Detects **issue #75**: the Rust source files that implement the
-/// first-party language plug-ins all carry the same `LanguageParser`
-/// adapter surface. Each implementation has language-specific constants
-/// and grammar functions, but the trait contract forces the same method
-/// outline, so the cluster is not actionable duplication.
+/// Detects [CLONE-NOISE-RUST-LANGPARSER]: the Rust source files that
+/// implement the first-party language plug-ins all carry the same
+/// `LanguageParser` adapter surface. Each implementation has
+/// language-specific constants and grammar functions, but the trait
+/// contract forces the same method outline, so the cluster is not
+/// actionable duplication.
 pub(super) fn is_rust_language_parser_adapter_cluster(snippets: &[Snippet<'_>]) -> bool {
     if !is_multi_member_language_cluster(snippets, "rust") {
         return false;
@@ -41,15 +42,12 @@ pub(super) fn is_rust_language_parser_adapter_cluster(snippets: &[Snippet<'_>]) 
     let Some(first) = shapes.first() else {
         return false;
     };
-    let expected_methods = language_parser_method_names();
-    first.trait_name == b"LanguageParser"
-        && first.methods == expected_methods
-        && shapes
-            .iter()
-            .all(|shape| shape.trait_name == first.trait_name && shape.methods == expected_methods)
-        && shapes
-            .iter()
-            .any(|shape| shape.impl_source != first.impl_source)
+    let required_methods = language_parser_core_methods();
+    shapes.iter().all(|shape| {
+        shape.trait_name == b"LanguageParser" && required_methods.is_subset(&shape.methods)
+    }) && shapes
+        .iter()
+        .any(|shape| shape.impl_source != first.impl_source)
 }
 
 /// Parsed shape of one Rust `impl Trait for Type` block.
@@ -62,7 +60,11 @@ struct RustImplShape {
     impl_source: Vec<u8>,
 }
 
-/// Returns the `LanguageParser` impl contained in `snippet.range`.
+/// Returns the `LanguageParser` impl contained in — or enclosing —
+/// `snippet.range`. A sibling-window member (issue #339) spans a run
+/// of trait methods *inside* the impl's declaration list rather than
+/// the impl item itself, so when no impl lies within the range the
+/// impl that owns the window carries the contract shape.
 fn rust_language_parser_impl_shape(snippet: &Snippet<'_>) -> Option<RustImplShape> {
     let tree = parse_for(snippet)?;
     let mut shapes = Vec::new();
@@ -70,6 +72,16 @@ fn rust_language_parser_impl_shape(snippet: &Snippet<'_>) -> Option<RustImplShap
     shapes
         .into_iter()
         .find(|shape| shape.trait_name == b"LanguageParser")
+        .or_else(|| enclosing_rust_impl_shape(tree.root_node(), snippet))
+}
+
+/// Resolves the innermost `impl` block enclosing the member's trimmed
+/// range and returns its shape when it is a `LanguageParser` impl.
+fn enclosing_rust_impl_shape(root: Node<'_>, snippet: &Snippet<'_>) -> Option<RustImplShape> {
+    let range = trimmed_snippet_range(snippet)?;
+    let node = enclosing_kind(root, range, &["impl_item"])?;
+    rust_impl_shape_from_node(node, snippet.source)
+        .filter(|shape| shape.trait_name == b"LanguageParser")
 }
 
 /// Recursively collects Rust impl blocks fully contained in `range`.
@@ -96,15 +108,16 @@ fn collect_rust_impl_shapes(
     }
 }
 
-/// Extracts trait header and direct method names from one Rust impl node.
+/// Extracts trait header and direct method names from one Rust impl
+/// node. The trait name comes from the `trait` field of the CST — a
+/// text scan for `impl … for …` misreads generic parameters, `where`
+/// clauses, and paths such as `lang::LanguageParser`.
 fn rust_impl_shape_from_node(node: Node<'_>, source: &[u8]) -> Option<RustImplShape> {
     let impl_source = source.get(node.start_byte()..node.end_byte())?;
-    let header = impl_source.split(|byte| *byte == b'{').next()?;
-    let header = std::str::from_utf8(header).ok()?.trim();
-    let rest = header.strip_prefix("impl ")?;
-    let (trait_name, _implementor) = rest.split_once(" for ")?;
+    let trait_node = node.child_by_field_name("trait")?;
+    let trait_name = source.get(trait_node.start_byte()..trait_node.end_byte())?;
     Some(RustImplShape {
-        trait_name: trait_name.trim().as_bytes().to_vec(),
+        trait_name: trait_name.to_vec(),
         methods: rust_impl_method_names(node, source),
         impl_source: impl_source.to_vec(),
     })
@@ -133,8 +146,13 @@ fn collect_rust_function_names(node: Node<'_>, source: &[u8], out: &mut BTreeSet
     }
 }
 
-/// Required `LanguageParser` trait surface.
-fn language_parser_method_names() -> BTreeSet<Vec<u8>> {
+/// Core `LanguageParser` methods every first-party plug-in must
+/// override. The trait also carries optional refactoring hooks that
+/// each plug-in overrides differently, so the adapter test is a
+/// *subset* relation: requiring set equality pinned the filter to one
+/// historical trait revision and silently stopped matching the moment
+/// the trait grew (issue #391, [CLONE-NOISE-RUST-LANGPARSER]).
+fn language_parser_core_methods() -> BTreeSet<Vec<u8>> {
     BTreeSet::from([
         b"id".to_vec(),
         b"file_extensions".to_vec(),
@@ -143,7 +161,7 @@ fn language_parser_method_names() -> BTreeSet<Vec<u8>> {
     ])
 }
 
-/// Detects **issue #150**: clusters whose every member is a single Rust
+/// Detects ****: clusters whose every member is a single Rust
 /// top-level declaration that has no body (`mod NAME;`, `use ...;`,
 /// `pub use ...;`). Module declarations cannot be macro-generated in
 /// Rust, so the cluster is not actionable.
@@ -158,7 +176,7 @@ pub(super) fn is_rust_top_level_decl_cluster(snippets: &[Snippet<'_>]) -> bool {
     decl_identifiers_differ(&signatures)
 }
 
-/// Detects **issue #147**: every cluster member contains the
+/// Detects ****: every cluster member contains the
 /// `.iter().map(|x| x.field.method()).collect()` idiom and the cluster
 /// spans at least two distinct source files.
 pub(super) fn is_rust_iter_collect_idiom_cluster(snippets: &[Snippet<'_>]) -> bool {
@@ -396,7 +414,7 @@ fn closure_body_matches_field_method(body: Node<'_>, source: &[u8], closure_arg:
     field_expression_projects_closure_arg(field_value, source, closure_arg)
 }
 
-/// Detects **issue #176** [CLONE-NOISE-RUST-MATCH-DISPATCH]: clusters
+/// Detects **** [CLONE-NOISE-RUST-MATCH-DISPATCH]: clusters
 /// whose every member is a run of `match` arms inside one dispatch
 /// `match`. Each arm routes a distinct pattern (command key) to a
 /// distinct handler, so after identifier and literal normalisation every
@@ -498,7 +516,7 @@ fn field_expression_projects_closure_arg(
         .is_some_and(|field| field.kind() == "field_identifier")
 }
 
-/// Detects **issue #224** [CLONE-NOISE-RUST-STRUCT-FIELDS]: clusters whose
+/// Detects **** [CLONE-NOISE-RUST-STRUCT-FIELDS]: clusters whose
 /// every member covers only Rust struct field declarations. A field list
 /// encodes a data model's *shape*, not extractable duplicate logic — after
 /// identifier, type, and literal normalisation `pub a: Option<String>`
@@ -506,7 +524,7 @@ fn field_expression_projects_closure_arg(
 /// field runs (and whole structs that are nothing but such fields) cluster as
 /// `structural_only`. No refactor removes them, yet they dominate the
 /// duplication metric on serde-heavy repos. This is the Rust counterpart of
-/// the Dart class-field filter (#169).
+/// the Dart class-field filter.
 ///
 /// Guarded by `raw_snippet_texts_differ` exactly like the Dart filter: a
 /// byte-identical copy-pasted struct still surfaces as genuine duplication
@@ -554,8 +572,20 @@ fn struct_body_in_range_is_all_fields(struct_item: Node<'_>, range: ByteRange) -
 
 /// Returns true when every named child of `container` that `range` covers is a
 /// whole struct whose in-range body is only field declarations, or a leading
-/// attribute sibling — and at least one field is covered. Any function, impl,
-/// or other item keeps the cluster.
+/// attribute, import, or comment sibling — and at least one field is covered.
+/// Any function, impl, or other item keeps the cluster.
+///
+/// `use_declaration` is on that list because a sibling window over a data
+/// model starts where the file starts. `host.rs` and `manifest.rs` in the
+/// #224 fixture hold nothing but distinct serde structs, and the elected
+/// window opened on their shared `use serde::{Deserialize, Serialize};` —
+/// one non-struct sibling, and the whole 125-node view escaped the filter
+/// and published `structural_only` across both files. An import is already
+/// boilerplate in its own right ([CLONE-NOISE-RUST-DECL]), so a run of
+/// distinct field structs does not stop being a data model because one sits
+/// above it. The `saw_field` requirement is what keeps this from
+/// swallowing an import-only window, and `raw_snippet_texts_differ` still
+/// lets a byte-identical copy-pasted struct through.
 fn range_covers_only_field_structs(container: Node<'_>, range: ByteRange) -> bool {
     let mut cursor = container.walk();
     let mut saw_field = false;
@@ -575,7 +605,7 @@ fn range_covers_only_field_structs(container: Node<'_>, range: ByteRange) -> boo
                     saw_field = true;
                 }
             }
-            "attribute_item" => {}
+            "attribute_item" | "use_declaration" => {}
             kind if kind.ends_with("comment") => {}
             _ => return false,
         }
