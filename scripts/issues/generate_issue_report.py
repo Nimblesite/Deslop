@@ -75,6 +75,8 @@ class RawIssue(TypedDict):
     blocking_numbers: NotRequired[list[int]]
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 from scripts.issues.rules import (
     DEFAULT_EFFORT_UNITS,
     EFFORT_FIELD,
