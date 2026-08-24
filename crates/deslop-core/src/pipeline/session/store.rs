@@ -19,7 +19,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::{
-    ast::NormalizedNode, fingerprint::Fingerprint, fpcache::CachedFile, lsh::Signature,
+    fingerprint::Fingerprint, lsh::Signature,
     state::FileId,
 };
 
@@ -27,18 +27,18 @@ use crate::{
 /// key, and how many fingerprint (and, positionally 1:1, signature)
 /// records it owns.
 #[derive(Debug)]
-struct StoreEntry {
+pub(super) struct StoreEntry {
     /// Session-scoped id of the file this entry describes.
-    file_id: FileId,
+    pub(super) file_id: FileId,
     /// Workspace-relative sort key. A property of workspace *state*,
     /// never of edit history ([PIPELINE-DETERMINISM]): [`FileId`]s are
     /// append-only, so id order would re-shuffle identical source after
     /// a delete + re-add and move rendered ranges and metrics. The id
     /// is only a tie-breaker so a pathological duplicate registration
     /// cannot make the order ambiguous.
-    path_key: PathBuf,
+    pub(super) path_key: PathBuf,
     /// Number of fingerprints this file contributes to the flat slices.
-    fingerprint_count: usize,
+    pub(super) fingerprint_count: usize,
 }
 
 impl StoreEntry {
@@ -56,29 +56,54 @@ impl StoreEntry {
 pub(super) struct CorpusStore {
     /// Per-file spans in ascending [`StoreEntry::sort_key`] order.
     entries: Vec<StoreEntry>,
-    /// One normalised tree per entry, in entry order. Kept because
-    /// downstream token extraction and content evidence walk it.
-    trees: Vec<NormalizedNode>,
     /// Every live fingerprint, flattened in entry order.
     fingerprints: Vec<Fingerprint>,
     /// One `MinHash` signature per fingerprint, positionally 1:1
-    /// ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
-    signatures: Vec<Signature>,
+    /// ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]), stored as contiguous
+    /// segments — one per corpus-build shard, in shard (sorted-path)
+    /// order — so a parallel build never merges the multi-GB
+    /// population into one vector
+    /// ([PERF-FLUTTER-TODO-MEMORY]).
+    signatures: Vec<Vec<Signature>>,
 }
 
 impl CorpusStore {
+    /// Takes the corpus loop's finished flat vectors as this store's
+    /// body. The vectors are already in canonical order and exact-sized
+    /// ([PERF-FLUTTER-TODO-MEMORY]); `files` presizes the entry list,
+    /// which the change pass appends to.
+    pub(super) fn from_flat_parts(
+        entries: Vec<StoreEntry>,
+        fingerprints: Vec<Fingerprint>,
+        signatures: Vec<Vec<Signature>>,
+    ) -> Self {
+        Self {
+            entries,
+            fingerprints,
+            signatures,
+        }
+    }
+
     /// Inserts — or, for a live file, replaces — `file_id`'s records,
     /// keeping the flat storage in ascending sort-key order. The 1:1
     /// fingerprint/signature binding holds by construction because both
     /// splice from the same [`CachedFile`] at the same offset.
-    pub(super) fn upsert(&mut self, file_id: FileId, path_key: PathBuf, cached: CachedFile) {
+    pub(super) fn upsert(
+        &mut self,
+        file_id: FileId,
+        path_key: PathBuf,
+        cached: crate::fpcache::CachedFile,
+    ) {
         let _replaced = self.remove(file_id);
         let position = self
             .entries
             .partition_point(|entry| entry.sort_key() < (&path_key, file_id));
         let offset = self.record_offset(position);
-        let CachedFile {
-            tree,
+        // The normalised tree is dropped here — the store holds no
+        // trees ([PERF-FLUTTER-TODO-MEMORY]); measurement stages
+        // re-materialise from sources.
+        let crate::fpcache::CachedFile {
+            tree: _tree,
             fingerprints,
             signatures,
         } = cached;
@@ -88,8 +113,10 @@ impl CorpusStore {
             fingerprint_count: fingerprints.len(),
         };
         drop(self.fingerprints.splice(offset..offset, fingerprints));
-        drop(self.signatures.splice(offset..offset, signatures));
-        self.trees.insert(position, tree);
+        // An incremental upsert splices into the file's owning segment;
+        // a file whose segment is unknown (first live edit on a
+        // segment store) appends a fresh one in sort position.
+        self.splice_signatures(offset, signatures);
         self.entries.insert(position, entry);
     }
 
@@ -105,9 +132,8 @@ impl CorpusStore {
             .get(position)
             .map_or(0, |entry| entry.fingerprint_count);
         let span = offset..offset.saturating_add(count);
-        drop(self.fingerprints.drain(span.clone()));
-        drop(self.signatures.drain(span));
-        let _tree = self.trees.remove(position);
+        drop(self.fingerprints.drain(span));
+        self.drain_signatures(offset, count);
         let _entry = self.entries.remove(position);
         true
     }
@@ -117,15 +143,32 @@ impl CorpusStore {
         &self.fingerprints
     }
 
-    /// One signature per fingerprint, positionally 1:1 with
-    /// [`Self::fingerprints`].
-    pub(super) fn signatures(&self) -> &[Signature] {
-        &self.signatures
+    /// The signature population as an indexed view over the segments.
+    /// The view borrows this store.
+    pub(super) fn signatures(&self) -> crate::lsh::SignatureIndex<'_> {
+        crate::lsh::SignatureIndex::from_segments(
+            self.signatures.iter().map(|segment| segment.as_slice()),
+        )
     }
 
-    /// Every live normalised tree, in the same path order.
-    pub(super) fn trees(&self) -> &[NormalizedNode] {
-        &self.trees
+    /// Drops `count` signatures at flat `offset` — a contiguous run
+    /// inside one segment, because a file's records never straddle
+    /// segments.
+    fn drain_signatures(&mut self, offset: usize, count: usize) {
+        if count == 0 {
+            return;
+        }
+        let mut cursor = 0_usize;
+        for segment in &mut self.signatures {
+            let end = cursor.saturating_add(segment.len());
+            if offset < end {
+                let within = offset.saturating_sub(cursor);
+                let stop = within.saturating_add(count).min(segment.len());
+                drop(segment.drain(within..stop));
+                return;
+            }
+            cursor = end;
+        }
     }
 
     /// Total fingerprints across every live file.
@@ -133,9 +176,27 @@ impl CorpusStore {
         self.fingerprints.len()
     }
 
-    /// The normalised tree of `file_id`, if the file is live.
-    pub(super) fn tree_for(&self, file_id: FileId) -> Option<&NormalizedNode> {
-        self.trees.get(self.position_of(file_id)?)
+    /// Splices a file's signatures at the flat `offset`. A file's
+    /// records are contiguous inside one segment (upserts always land
+    /// on file boundaries), so the owning segment splits, receives the
+    /// records, and re-appends its tail — one pass, index space intact.
+    fn splice_signatures(&mut self, offset: usize, incoming: Vec<Signature>) {
+        if incoming.is_empty() {
+            return;
+        }
+        let mut cursor = 0_usize;
+        for segment in &mut self.signatures {
+            let end = cursor.saturating_add(segment.len());
+            if offset <= end {
+                let within = offset.saturating_sub(cursor).min(segment.len());
+                let tail = segment.split_off(within);
+                segment.extend(incoming);
+                segment.extend(tail);
+                return;
+            }
+            cursor = end;
+        }
+        self.signatures.push(incoming);
     }
 
     /// Entry position of `file_id`, if the file is live.

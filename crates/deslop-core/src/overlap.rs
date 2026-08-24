@@ -62,17 +62,17 @@ use view::{build_view, EndpointView};
 /// rescue population holds millions of *distinct* endpoints, and retaining
 /// every view was a large share of the stage's memory. Past the cap the
 /// view is rebuilt per use — identical values, bounded residence.
-const ENDPOINT_VIEW_MEMO_MAX: usize = 4_096;
+const ENDPOINT_VIEW_MEMO_MAX: usize = 1_024;
 
 /// Most exact-overlap results one measurer retains. The memo exists so a
 /// structural pair appearing at many byte offsets costs one alignment;
 /// past the cap a repeat pair re-measures — identical value, bounded
 /// residence.
-const EXACT_RESULT_MEMO_MAX: usize = 32_768;
+const EXACT_RESULT_MEMO_MAX: usize = 16_384;
 
 /// Most below-floor bounds one measurer retains, for the same reason as
 /// [`EXACT_RESULT_MEMO_MAX`].
-const BOUND_RESULT_MEMO_MAX: usize = 32_768;
+const BOUND_RESULT_MEMO_MAX: usize = 16_384;
 
 use crate::{
     ast::NormalizedNode, fingerprint::Fingerprint, observe::bump, pair::SHARED_SUBTREE_MIN_OVERLAP,

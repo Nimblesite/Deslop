@@ -89,7 +89,7 @@ fn single_file_merge_plan(
     let Some(file_root) = pipeline.subtree_at_range(file_id, full_range) else {
         return Ok(refusal(cluster, "normalised tree unavailable".to_owned()));
     };
-    merge::compute_merge_plan(cluster, source, file_root, &absolute, parser.as_ref())
+    merge::compute_merge_plan(cluster, source, &file_root, &absolute, parser.as_ref())
         .map_err(|refactor::RefactorError::Core(error)| LiveError::Core(error))
 }
 

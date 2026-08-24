@@ -88,7 +88,7 @@ pub(super) fn is_polymorphic_signature_cluster<S: BuildHasher>(
     }
     let subjects: Option<Vec<Rc<OwnedSubject>>> = snippets
         .iter()
-        .map(|snippet| cache.subject(snippet, || subject_of(snippet)))
+        .map(|snippet| cache.subject(snippet, || subject_of(snippet, cache)))
         .collect();
     let Some(subjects) = subjects else {
         return false;
@@ -140,23 +140,24 @@ fn shape_digest(stream: &[ShapeToken<'_>]) -> [u8; 32] {
 
 /// Resolves one member's subject function and everything the decision
 /// reads from it, in a single parse — memoised per `(file, range)` in
-/// the cache by the caller ([PERF-FLUTTER-TODO-CORPUS]).
-fn subject_of(snippet: &Snippet<'_>) -> Option<OwnedSubject> {
+/// the cache by the caller ([PERF-FLUTTER-TODO-CORPUS]). The body
+/// digest is memoised one level up, by the *function's* range, because
+/// sibling members inside one function share the whole-body walk.
+fn subject_of(snippet: &Snippet<'_>, cache: &ParseCache) -> Option<OwnedSubject> {
     let tree = parse_for(snippet)?;
     let function = polymorphic_subject(tree.root_node(), snippet)?;
     let name_node = function_name_node(function)?;
+    let body = function.child_by_field_name("body")?;
+    let digest = cache.body_digest(
+        (snippet.file_id, function.start_byte(), function.end_byte()),
+        || shape_digest(&body_kind_stream(body, snippet.source)),
+    );
     Some(OwnedSubject {
         name: snippet.source.get(name_node.byte_range())?.to_vec(),
         bases: enclosing_container(function)
             .map(|container| declared_bases(container, snippet.source))
             .unwrap_or_default(),
-        shape_digest: {
-            let stream = body_kind_stream(
-                function.child_by_field_name("body")?,
-                snippet.source,
-            );
-            shape_digest(&stream)
-        },
+        shape_digest: digest,
         overrides: carries_override_marker(function, snippet.language, snippet.source),
     })
 }

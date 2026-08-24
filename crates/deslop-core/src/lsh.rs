@@ -37,6 +37,71 @@ const EMPTY_HASH_SENTINEL: u64 = u64::MAX;
 /// per-call allocation in the hot loop.
 pub type Signature = [u64; SIGNATURE_LEN];
 
+/// A borrowed, positionally-indexed view over a signature population
+/// stored as contiguous segments ([PERF-FLUTTER-TODO-MEMORY]).
+///
+/// A corpus-scale build parses files in parallel shards; requiring one
+/// contiguous signature vector would force an ordered merge that
+/// momentarily holds the whole multi-GB population twice. Segments —
+/// each shard's signatures, concatenated in shard order — give the same
+/// positional index space (`0..len`) with zero merging, and every
+/// consumer reads through this view.
+pub struct SignatureIndex<'a> {
+    /// The segments, in index order. Owned reference list so a view can
+    /// be built from a locally assembled set of segment slices.
+    segments: Vec<&'a [Signature]>,
+    /// Cumulative start offset per segment; `offsets[k]` is the global
+    /// index where segment `k` begins.
+    offsets: Vec<usize>,
+}
+
+impl std::fmt::Debug for SignatureIndex<'_> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SignatureIndex")
+            .field("signatures", &self.len())
+            .finish()
+    }
+}
+
+impl<'a> SignatureIndex<'a> {
+    /// Builds the view over `segments`, precomputing the offsets.
+    #[must_use]
+    pub fn from_segments(segments: impl IntoIterator<Item = &'a [Signature]>) -> Self {
+        let segments: Vec<&'a [Signature]> = segments.into_iter().collect();
+        let mut offsets = Vec::with_capacity(segments.len().saturating_add(1));
+        let mut running = 0_usize;
+        offsets.push(0);
+        for segment in &segments {
+            running = running.saturating_add(segment.len());
+            offsets.push(running);
+        }
+        Self { segments, offsets }
+    }
+
+    /// Total signatures across every segment.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.offsets.last().copied().unwrap_or(0)
+    }
+
+    /// Whether the population is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// The signature at global `index`, or `None` past the end.
+    #[must_use]
+    pub fn get(&self, index: usize) -> Option<&Signature> {
+        let segment = self.offsets.partition_point(|&start| start <= index).saturating_sub(1);
+        let start = self.offsets.get(segment).copied().unwrap_or(0);
+        self.segments
+            .get(segment)
+            .and_then(|slice| slice.get(index.saturating_sub(start)))
+    }
+}
+
 /// Computes a [`Signature`] for a set of k-grams of normalised node kinds.
 /// Deterministic: given the same input it always returns the same output,
 /// across processes and architectures.
@@ -95,12 +160,17 @@ pub fn estimate_jaccard(left: &Signature, right: &Signature) -> f64 {
 ///
 /// Emission order is deterministic: bands ascending, runs in sorted order,
 /// each run's pairs from its smallest member outward.
-pub fn for_each_band_collision(signatures: &[Signature], emit: &mut dyn FnMut(usize, usize)) {
+pub fn for_each_band_collision(
+    signatures: &SignatureIndex<'_>,
+    emit: &mut dyn FnMut(usize, usize),
+) {
     let mut tagged: Vec<(u64, u32)> = Vec::with_capacity(signatures.len());
     for band in 0..BANDS {
         tagged.clear();
-        for (index, signature) in signatures.iter().enumerate() {
-            let key = band_key(signature, band);
+        for index in 0..signatures.len() {
+            let key = signatures
+                .get(index)
+                .map_or([0_u8; 32], |signature| band_key(signature, band));
             tagged.push((truncated_band_hash(&key), index_to_tag(index)));
         }
         tagged.sort_unstable();
@@ -110,7 +180,7 @@ pub fn for_each_band_collision(signatures: &[Signature], emit: &mut dyn FnMut(us
 
 /// Emits the star pairs of every equal-hash run in one band's sorted tags.
 fn emit_run_pairs(
-    signatures: &[Signature],
+    signatures: &SignatureIndex<'_>,
     band: usize,
     tagged: &[(u64, u32)],
     emit: &mut dyn FnMut(usize, usize),
@@ -143,7 +213,7 @@ fn emit_run_pairs(
 /// full key so two equal keys separated by a colliding third still pair —
 /// exactness cannot depend on hash luck.
 fn emit_one_run(
-    signatures: &[Signature],
+    signatures: &SignatureIndex<'_>,
     band: usize,
     tagged: &[(u64, u32)],
     start: usize,
@@ -162,7 +232,7 @@ fn emit_one_run(
 
 /// True when adjacent members of the run disagree on the full band key.
 fn run_keys_split(
-    signatures: &[Signature],
+    signatures: &SignatureIndex<'_>,
     band: usize,
     tagged: &[(u64, u32)],
     start: usize,
@@ -184,7 +254,7 @@ fn run_keys_split(
 /// Regroups a key-collided run by full band key and emits each group's
 /// star pairs.
 fn emit_regrouped_run(
-    signatures: &[Signature],
+    signatures: &SignatureIndex<'_>,
     band: usize,
     tagged: &[(u64, u32)],
     start: usize,
@@ -232,7 +302,7 @@ fn emit_sorted_star(members: &[usize], emit: &mut dyn FnMut(usize, usize)) {
 }
 
 /// The band key of signature `index`, tolerating an out-of-range index.
-fn band_key_at(signatures: &[Signature], band: usize, index: u32) -> [u8; 32] {
+fn band_key_at(signatures: &SignatureIndex<'_>, band: usize, index: u32) -> [u8; 32] {
     signatures
         .get(index_as_usize(index))
         .map_or([0_u8; 32], |signature| band_key(signature, band))
@@ -360,11 +430,11 @@ mod streaming_tests {
             }
             let _stored = seen.insert(truncated, candidate);
         }
-        if fills.len() < 2 {
+        let [first_fill, second_fill] = fills.as_slice() else {
             return;
-        }
-        let left = seeded(fills[0], 2, fills[0]);
-        let right = seeded(fills[1], 2, fills[1]);
+        };
+        let left = seeded(*first_fill, 2, *first_fill);
+        let right = seeded(*second_fill, 2, *second_fill);
         let signatures = [left, right];
         let mut pairs = Vec::new();
         for_each_band_collision(&signatures, &mut |l, r| pairs.push((l, r)));
@@ -380,9 +450,9 @@ mod streaming_tests {
     #[test]
     fn a_pair_colliding_in_every_band_emits_once_per_band() {
         let signatures = [seeded(5, 0, 13), seeded(5, 0, 13)];
-        let mut count = 0_u32;
+        let mut count = 0_u64;
         for_each_band_collision(&signatures, &mut |_left, _right| count = count.saturating_add(1));
-        assert_eq!(count, BANDS as u32, "identical signatures collide in every band");
+        assert_eq!(count, BANDS as u64, "identical signatures collide in every band");
     }
 }
 
@@ -418,16 +488,21 @@ fn index_as_usize(index: u32) -> usize {
 
 /// [`crate::pair::LshPairs`] adapter over the streaming band source —
 /// the render pass's LSH leg, without materialising the pair list.
-#[derive(Debug)]
 pub struct BandCollisionSource<'a> {
     /// The signatures whose band collisions are streamed.
-    signatures: &'a [Signature],
+    signatures: &'a SignatureIndex<'a>,
+}
+
+impl std::fmt::Debug for BandCollisionSource<'_> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("BandCollisionSource")
+    }
 }
 
 impl<'a> BandCollisionSource<'a> {
     /// Wraps `signatures` for streaming.
     #[must_use]
-    pub const fn new(signatures: &'a [Signature]) -> Self {
+    pub const fn new(signatures: &'a SignatureIndex<'a>) -> Self {
         Self { signatures }
     }
 }

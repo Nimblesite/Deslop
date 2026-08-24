@@ -28,7 +28,7 @@ use super::{
 use crate::{
     embedding::EmbeddingPair,
     fingerprint::{ranges_overlap, Fingerprint},
-    lsh::{estimate_jaccard, Signature},
+    lsh::{estimate_jaccard, Signature, SignatureIndex},
     state::FileId,
 };
 
@@ -76,7 +76,7 @@ impl LshPairs for &[(usize, usize)] {
 #[must_use]
 pub fn candidate_pairs(
     fingerprints: &[Fingerprint],
-    signatures: &[Signature],
+    signatures: &SignatureIndex<'_>,
     lsh_pairs: &dyn LshPairs,
     embedding_pairs: &[EmbeddingPair],
 ) -> Vec<CandidatePair> {
@@ -97,7 +97,7 @@ pub fn candidate_pairs(
 #[must_use]
 pub fn candidate_pairs_for_language_policy<S: BuildHasher>(
     fingerprints: &[Fingerprint],
-    signatures: &[Signature],
+    signatures: &SignatureIndex<'_>,
     lsh_pairs: &dyn LshPairs,
     embedding_pairs: &[EmbeddingPair],
     cross_language_signatures: Option<&[Signature]>,
@@ -113,7 +113,16 @@ pub fn candidate_pairs_for_language_policy<S: BuildHasher>(
         allow_cross_language,
     );
     if allow_cross_language {
-        let alias_space = cross_language_signatures.unwrap_or(signatures);
+        // The audit space is the explicit cross-language signature list
+        // when the pass built one, else the per-language space itself.
+        let built;
+        let alias_space = match cross_language_signatures {
+            Some(space) => {
+                built = SignatureIndex::from_segments([space]);
+                &built
+            }
+            None => signatures,
+        };
         add_cross_language_signature_pairs(&mut pairs, fingerprints, alias_space, file_languages);
     }
     pairs
@@ -123,7 +132,7 @@ pub fn candidate_pairs_for_language_policy<S: BuildHasher>(
 /// `file_languages == None` skips the language policy entirely.
 fn build_candidates<S: BuildHasher>(
     fingerprints: &[Fingerprint],
-    signatures: &[Signature],
+    signatures: &SignatureIndex<'_>,
     lsh_pairs: &dyn LshPairs,
     embedding_pairs: &[EmbeddingPair],
     file_languages: Option<&HashMap<FileId, &'static str, S>>,
@@ -135,43 +144,82 @@ fn build_candidates<S: BuildHasher>(
         file_languages,
         allow_cross_language,
     );
+    tracing::info!(rss_mib = crate::observe::resident_mib(), "pairs: pre-structural");
     builder.add_structural_pairs();
+    tracing::info!(
+        rss_mib = crate::observe::resident_mib(),
+        kept = builder.kept.len(),
+        "pairs: post-structural"
+    );
     builder.merge_embedding_pairs(embedding_pairs);
     let mut lsh_scanned = 0_u64;
     lsh_pairs.for_each(&mut |left, right| {
         lsh_scanned = lsh_scanned.saturating_add(1);
         builder.add_discovered_pair(left, right, 0.0, 0.0);
     });
-    tracing::debug!(
+    tracing::info!(
+        rss_mib = crate::observe::resident_mib(),
+        kept = builder.kept.len(),
         lsh_scanned,
-        retained = builder.kept.len(),
-        "LSH pairs streamed through admission"
+        "pairs: post-lsh"
     );
-    let mut pairs: Vec<CandidatePair> = builder.kept.into_values().collect();
-    pairs.sort_unstable_by_key(|pair| (pair.left, pair.right));
-    pairs
+    let resolved = builder.resolve_duplicates();
+    tracing::info!(
+        rss_mib = crate::observe::resident_mib(),
+        resolved = resolved.len(),
+        "pairs: post-resolve"
+    );
+    resolved
 }
 
-/// Insertion-time admission state: the retained pair map plus the
+/// The ordered pair key packed as one `u64`: high half the lower
+/// index, low half the higher ([PERF-FLUTTER-TODO-MEMORY]).
+fn packed_key(key: (usize, usize)) -> u64 {
+    let (left, right) = key;
+    (u64::try_from(left).unwrap_or(u64::MAX) << 32)
+        | u64::try_from(right).unwrap_or(0xFFFF_FFFF)
+}
+
+/// Insertion-time admission state: the retained pair list plus the
 /// lookups a pair's verdict needs.
+///
+/// The retained population is a flat `Vec` — no payload map, no
+/// per-insert membership test: on a corpus-scale run (4M+ retained
+/// pairs) a `HashMap<(usize, usize), CandidatePair>` costs several GB
+/// once entry slack and rehash doubling are counted. Duplicate keys
+/// (several bands, or the structural/embedding passes, can emit one
+/// pair) are resolved once after collection
+/// ([PERF-FLUTTER-TODO-MEMORY]).
 struct PairBuilder<'corpus, S: BuildHasher> {
     /// Fingerprints the pair endpoints index into.
     fingerprints: &'corpus [Fingerprint],
     /// Signatures for the token-Jaccard axis.
-    signatures: &'corpus [Signature],
+    signatures: &'corpus SignatureIndex<'corpus>,
     /// Language policy lookup; `None` admits every language pair.
     file_languages: Option<&'corpus HashMap<FileId, &'static str, S>>,
     /// Whether explicit cross-language comparison is allowed.
     allow_cross_language: bool,
-    /// The retained, gated pair set keyed on the ordered index pair.
-    kept: HashMap<(usize, usize), CandidatePair>,
+    /// The retained, gated pairs, at most one entry per key: a slim
+    /// packed-key set refuses the re-emission a pair suffers every time
+    /// it collides in another band (a retained pair averages a dozen
+    /// emissions on a corpus-scale run — pushing every one of them
+    /// again is gigabytes of dead entries). The rare cross-pass
+    /// duplicate (structural versus LSH versus embedding) is still
+    /// possible when the first pass's copy was gate-refused, and is
+    /// resolved once after collection by
+    /// [`PairBuilder::resolve_duplicates`].
+    kept: Vec<CandidatePair>,
+    /// Packed ordered keys of `kept` — membership only, no payloads:
+    /// under a tenth of the payload map's cost
+    /// ([PERF-FLUTTER-TODO-MEMORY]).
+    kept_keys: std::collections::HashSet<u64>,
 }
 
 impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
     /// Builder over one corpus view.
     fn new(
         fingerprints: &'corpus [Fingerprint],
-        signatures: &'corpus [Signature],
+        signatures: &'corpus SignatureIndex<'corpus>,
         file_languages: Option<&'corpus HashMap<FileId, &'static str, S>>,
         allow_cross_language: bool,
     ) -> Self {
@@ -180,27 +228,48 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
             signatures,
             file_languages,
             allow_cross_language,
-            kept: HashMap::new(),
+            kept: Vec::new(),
+            kept_keys: std::collections::HashSet::new(),
         }
     }
 
     /// Adds the structural (Merkle) star pairs: the canonical member of
-    /// each bucket paired with every other member — `O(n)` per bucket,
-    /// the same topology the LSH pass uses.
+    /// each bucket paired with every other member — `O(n log n)` over
+    /// one flat `(hash, index)` array, the same topology the LSH pass
+    /// uses.
+    ///
+    /// The historical `HashMap<hash, Vec<index>>` populated one tiny
+    /// heap vector per distinct hash — millions of small allocations on
+    /// a corpus-scale run, which the allocator strands in per-size
+    /// arenas long after the map dies. One sortable array is a single
+    /// large allocation the allocator returns whole
+    /// ([PERF-FLUTTER-TODO-MEMORY]); the emitted pair set is identical
+    /// because each bucket's star is (minimum index, each other) in
+    /// index order either way.
     fn add_structural_pairs(&mut self) {
-        let mut by_hash: HashMap<[u8; 32], Vec<usize>> = HashMap::new();
-        for (index, fingerprint) in self.fingerprints.iter().enumerate() {
-            by_hash.entry(fingerprint.hash).or_default().push(index);
-        }
-        for bucket in by_hash.values() {
-            let mut sorted = bucket.clone();
-            sorted.sort_unstable();
-            let Some(canonical) = sorted.first().copied() else {
-                continue;
+        let mut tagged: Vec<([u8; 32], usize)> = self
+            .fingerprints
+            .iter()
+            .enumerate()
+            .map(|(index, fingerprint)| (fingerprint.hash, index))
+            .collect();
+        tagged.sort_unstable();
+        let mut run_start = 0_usize;
+        while let Some((run_hash, _)) = tagged.get(run_start).copied() {
+            let run_end = tagged
+                .get(run_start.saturating_add(1)..)
+                .unwrap_or(&[])
+                .iter()
+                .position(|(hash, _)| *hash != run_hash)
+                .map_or(tagged.len(), |offset| run_start.saturating_add(1).saturating_add(offset));
+            let run = tagged.get(run_start..run_end).unwrap_or(&[]);
+            let Some(canonical) = run.first().map(|(_, index)| *index) else {
+                break;
             };
-            for other in sorted.iter().skip(1) {
+            for (_, other) in run.iter().skip(1) {
                 self.add_discovered_pair(canonical, *other, 1.0, 0.0);
             }
+            run_start = run_end;
         }
     }
 
@@ -212,13 +281,37 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
     /// pair is admitted on its own evidence, not on a stub.
     fn merge_embedding_pairs(&mut self, embedding_pairs: &[EmbeddingPair]) {
         for pair in embedding_pairs {
-            let key = order(pair.left, pair.right);
-            if let Some(existing) = self.kept.get_mut(&key) {
-                existing.score.embedding_cos = existing.score.embedding_cos.max(pair.cosine);
-                continue;
-            }
             self.add_discovered_pair(pair.left, pair.right, 0.0, pair.cosine);
         }
+    }
+
+    /// Collapses duplicate keys, keeping for each the strongest
+    /// evidence: highest `structural`, then highest `embedding_cos`
+    /// ([REPAIR-COSINE-MERGE] gh #351). This is exactly the historical
+    /// first-write-wins map's outcome — the structural pass inserted
+    /// `1.0` first, the embedding pass recorded its cosine into
+    /// whatever existed, and later LSH re-emissions of the same key
+    /// were ignored — reproduced without a resident key map
+    /// ([PERF-FLUTTER-TODO-MEMORY]).
+    fn resolve_duplicates(mut self) -> Vec<CandidatePair> {
+        drop(std::mem::take(&mut self.kept_keys));
+        self.kept.sort_unstable_by_key(|pair| (pair.left, pair.right));
+        // In place: a second vector would momentarily hold the whole
+        // population twice ([PERF-FLUTTER-TODO-MEMORY]).
+        self.kept.dedup_by(|kept, next| {
+            // Removal happens only for equal keys — a `true` for any
+            // adjacent pair would delete a *different* pair.
+            let same_key = (kept.left, kept.right) == (next.left, next.right);
+            if same_key
+                && (next.score.structural, next.score.embedding_cos)
+                    > (kept.score.structural, kept.score.embedding_cos)
+            {
+                std::mem::swap(kept, next);
+            }
+            same_key
+        });
+        self.kept.shrink_to_fit();
+        self.kept
     }
 
     /// Constructs, policy-adjusts, gates, and conditionally retains the
@@ -226,14 +319,14 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
     /// structural-axis value and `cosine` as its embedding axis.
     fn add_discovered_pair(&mut self, left: usize, right: usize, structural: f64, cosine: f64) {
         let key = order(left, right);
-        if self.kept.contains_key(&key) {
+        if !self.kept_keys.insert(packed_key(key)) {
             return;
         }
         let Some(pair) = self.construct_pair(key, structural, cosine) else {
             return;
         };
         if self.gate(&pair) {
-            let _previous = self.kept.insert(key, pair);
+            self.kept.push(pair);
         }
     }
 
@@ -307,7 +400,7 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
 fn add_cross_language_signature_pairs<S: BuildHasher>(
     pairs: &mut Vec<CandidatePair>,
     fingerprints: &[Fingerprint],
-    signatures: &[Signature],
+    signatures: &SignatureIndex<'_>,
     file_languages: &HashMap<FileId, &'static str, S>,
 ) {
     let existing: std::collections::BTreeSet<(usize, usize)> =
@@ -414,7 +507,7 @@ fn endpoint_node_counts(fingerprints: &[Fingerprint], left: usize, right: usize)
 /// Looks up both signatures and returns their estimated Jaccard. Returns
 /// 0.0 when either signature is missing, which cannot happen in practice
 /// because the pipeline always produces one signature per fingerprint.
-fn jaccard_for(signatures: &[Signature], left: usize, right: usize) -> f64 {
+fn jaccard_for(signatures: &SignatureIndex<'_>, left: usize, right: usize) -> f64 {
     let Some(left_signature) = signatures.get(left) else {
         return 0.0;
     };

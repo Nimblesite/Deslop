@@ -14,7 +14,7 @@ use std::{collections::HashMap, path::PathBuf, time::Instant};
 
 use crate::{
     cluster::{build_ranked_fused_clusters, ClusterBuildInputs},
-    cluster_filters::{split_noise_verbatim_families, split_structural_families},
+    cluster_filters::{split_noise_verbatim_families, split_structural_families, ParseCache},
     error::CoreError,
     lsh::BandCollisionSource,
     overlap::apply_shared_subtree_rescue,
@@ -52,44 +52,46 @@ impl PipelineSession {
         // construction — no materialised pair vector, no per-pair
         // candidate objects for pairs the survival gate refuses.
         let mut ledger = StageLedger::default();
+        // One parse cache for the whole render: the noise split, the
+        // ranked build, and the report materialisation all key member
+        // analyses by `(file, range)`, so sharing the cache makes each
+        // analysis a single computation per run
+        // ([PERF-FLUTTER-TODO-CORPUS]).
+        let parse_cache = ParseCache::new();
         let stage_started = Instant::now();
-        let lsh_source = BandCollisionSource::new(signatures);
-        let cross_language_signatures =
-            self.exclusion.allows_cross_language_comparison().then(|| {
-                build_cross_language_signatures(
-                    fingerprints,
-                    self.store.trees(),
-                    &self.file_languages,
-                )
-            });
-        tracing::debug!(signatures = signatures.len(), "streaming LSH band collisions");
-        let view = CorpusView {
-            fingerprints,
-            sources: &self.sources,
+        let lsh_source = BandCollisionSource::new(&signatures);
+        // [PERF-FLUTTER-TODO-MEMORY] The normalised trees are
+        // re-materialised from sources only when a consumer needs them
+        // — after the LSH/pair stage whose allocations are the run's
+        // other memory peak, so the tree population and the pair
+        // population never coincide. The cross-language audit mode
+        // reads trees before pairing; the default path defers to the
+        // rescue below.
+        let (trees, cross_language_signatures, mut pairs, embedding_outcome) =
+            self.build_candidate_pairs(config, fingerprints, &signatures, &lsh_source)?;
+        ledger.record("candidate_pairs", signatures.len(), pairs.len(), stage_started);
+        // Trees for every measurement stage, materialised once, now that
+        // the pair-construction allocations are behind us.
+        let trees = match trees {
+            Some(already) => already,
+            None => self.materialize_trees()?,
         };
-        let embedding_outcome = run_embedding_pass(config, &view)?;
-        let mut pairs = candidate_pairs_for_language_policy(
-            fingerprints,
-            signatures,
-            &lsh_source,
-            &embedding_outcome.pairs,
-            cross_language_signatures.as_deref(),
-            &self.file_languages,
-            self.exclusion.allows_cross_language_comparison(),
-        );
-        let pair_input = signatures.len();
-        ledger.record("candidate_pairs", pair_input, pairs.len(), stage_started);
         // [FUSION-SHARED-SUBTREE] (gh #408): measure the structural
         // overlap the anchor axis discards before survival drops the
         // enclosing Type-3 pair and leaves only its fragment views.
         let rescue_input = pairs.len();
         let stage_started = Instant::now();
-        apply_shared_subtree_rescue(&mut pairs, fingerprints, self.store.trees());
+        apply_shared_subtree_rescue(&mut pairs, fingerprints, &trees);
         ledger.record("shared_subtree_rescue", rescue_input, pairs.len(), stage_started);
         let rescue_output = pairs.len();
         let stage_started = Instant::now();
         let fused_clusters = cluster_by_transitive_closure(&pairs);
         ledger.record("transitive_closure", rescue_output, fused_clusters.len(), stage_started);
+        // The surviving discovery edges moved into the components, so
+        // the flat pair list's last use is behind us — ~600 MB of
+        // candidate pairs on a corpus-scale run, freed before the
+        // memory-hungry measurement stages ([PERF-FLUTTER-TODO-MEMORY]).
+        drop(pairs);
         // [PIPELINE-CLUSTER-ELECT] Transitive closure treats a token
         // band collision like a shared subtree, so one such edge welds
         // two structural families into a component that agrees with
@@ -114,10 +116,11 @@ impl PipelineSession {
         let stage_started = Instant::now();
         let noise_input = fused_clusters.len();
         let fused_clusters = split_noise_verbatim_families(
-            fused_clusters,
+            &fused_clusters,
             fingerprints,
             &self.sources,
             &self.file_languages,
+            &parse_cache,
         );
         ledger.record(
             "noise_verbatim_split",
@@ -129,12 +132,17 @@ impl PipelineSession {
         // cross-language space compares any pair when the audit mode is
         // on; the per-language space is exact otherwise. Mixing spaces
         // inside one cluster mean would average incomparable values.
-        let measurement_signatures = cross_language_signatures.as_deref().unwrap_or(signatures);
+        let built_alias_space =
+            cross_language_signatures.as_deref().map(|space| {
+                crate::lsh::SignatureIndex::from_segments([space])
+            });
+        let measurement_signatures = built_alias_space.as_ref().unwrap_or(&signatures);
         let clusters = self.ranked_clusters(
             fingerprints,
             measurement_signatures,
             &embedding_outcome.vectors,
             &fused_clusters,
+            &trees,
             &mut ledger,
         );
         tracing::info!(
@@ -144,6 +152,7 @@ impl PipelineSession {
         );
         ledger.log_summary();
         Ok(render_report(ReportInputs {
+            parse_cache: &parse_cache,
             clusters: &clusters,
             registry: &self.registry,
             file_languages: &self.file_languages,
@@ -160,14 +169,148 @@ impl PipelineSession {
         }))
     }
 
+    /// The LSH/pair construction half of the render: materialises trees
+    /// (early only in cross-language audit mode), builds the candidate
+    /// pairs.
+    fn build_candidate_pairs(
+        &self,
+        config: &PipelineConfig<'_>,
+        fingerprints: &[crate::fingerprint::Fingerprint],
+        signatures: &crate::lsh::SignatureIndex<'_>,
+        lsh_source: &BandCollisionSource<'_>,
+    ) -> Result<
+        (
+            Vec<crate::ast::NormalizedNode>,
+            Option<Vec<crate::lsh::Signature>>,
+            Vec<crate::pair::CandidatePair>,
+            crate::pipeline::EmbeddingPassOutcome,
+        ),
+        crate::CoreError,
+    > {
+        // [PERF-FLUTTER-TODO-MEMORY] Trees are re-materialised from
+        // sources only when a consumer needs them — after the LSH/pair
+        // stage whose allocations are the run's other memory peak, so
+        // the tree population and the pair population never coincide.
+        // The cross-language audit mode reads trees before pairing; the
+        // default path defers to the rescue in `render`.
+        let trees = self
+            .exclusion
+            .allows_cross_language_comparison()
+            .then(|| self.materialize_trees())
+            .transpose()?;
+        let cross_language_signatures = trees.as_ref().map(|trees| {
+            build_cross_language_signatures(fingerprints, trees.as_slice(), &self.file_languages)
+        });
+        tracing::debug!(signatures = signatures.len(), "streaming LSH band collisions");
+        let view = CorpusView {
+            fingerprints,
+            sources: &self.sources,
+        };
+        let embedding_outcome = run_embedding_pass(config, &view)?;
+        let pairs = candidate_pairs_for_language_policy(
+            fingerprints,
+            signatures,
+            lsh_source,
+            &embedding_outcome.pairs,
+            cross_language_signatures.as_deref(),
+            &self.file_languages,
+            self.exclusion.allows_cross_language_comparison(),
+        );
+        Ok((trees, cross_language_signatures, pairs, embedding_outcome))
+    }
+
+    /// Re-parses every held source into a normalised tree population,
+    /// in parallel, deterministically ordered by file id
+    /// ([PERF-FLUTTER-TODO-MEMORY]). The store retains no trees, so the
+    /// measurement stages materialise exactly one population at the
+    /// moment they need it — after the pair-construction allocations
+    /// have peaked — instead of holding gigabytes beside the signature
+    /// list for the whole scan. Parsing is a pure function of the held
+    /// bytes, so every tree is identical to the one the corpus build
+    /// produced and dropped.
+    fn materialize_trees(&self) -> Result<Vec<crate::ast::NormalizedNode>, crate::CoreError> {
+        let started = Instant::now();
+        let mut jobs: Vec<(FileId, &'static str, &[u8])> = self
+            .sources
+            .iter()
+            .filter_map(|(file_id, source)| {
+                let language = self.file_languages.get(file_id).copied()?;
+                Some((*file_id, language, source.as_slice()))
+            })
+            .collect();
+        jobs.sort_unstable_by_key(|(file_id, _, _)| *file_id);
+        let workers = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+        // `chunks_mut` demands a non-zero size — an empty corpus has no
+        // jobs at all, and even one job must yield a whole shard.
+        let shard = jobs.len().div_ceil(workers).max(1);
+        let mut slots: Vec<Option<crate::ast::NormalizedNode>> = Vec::with_capacity(jobs.len());
+        for _ in 0..jobs.len() {
+            slots.push(None);
+        }
+        let join_result = std::thread::scope(|scope| {
+            let mut handles = Vec::with_capacity(workers);
+            for (slot_base, chunk) in slots.chunks_mut(shard).enumerate() {
+                let jobs = &jobs;
+                let parsers = &self.parsers;
+                let base = slot_base.saturating_mul(shard);
+                handles.push(scope.spawn(move || {
+                    for (offset, slot) in chunk.iter_mut().enumerate() {
+                        let index = base.saturating_add(offset);
+                        let Some((file_id, language, source)) = jobs.get(index).copied() else {
+                            continue;
+                        };
+                        let Some(parser) = parsers
+                            .iter()
+                            .find(|parser| parser.id() == language)
+                        else {
+                            continue;
+                        };
+                        *slot = Some(parser.parse_and_normalize(source, file_id)?);
+                    }
+                    Ok(())
+                }));
+            }
+            let mut outcomes = Vec::with_capacity(handles.len());
+            for handle in handles {
+                // A panicked parse worker must fail the render, never
+                // silently omit its files.
+                let joined = handle.join().map_err(|_| crate::CoreError::ParseFailed {
+                    language: "unknown",
+                });
+                outcomes.push(joined);
+            }
+            outcomes
+                .into_iter()
+                .collect::<Result<Result<(), crate::CoreError>, crate::CoreError>>()
+                .and_then(std::convert::identity)
+        });
+        join_result?;
+        // Every job had a registered parser and parseable source (both
+        // proven during the corpus build), so every slot is filled; a
+        // `None` would mean a file vanished between stages.
+        let mut trees: Vec<crate::ast::NormalizedNode> = Vec::with_capacity(jobs.len());
+        for slot in slots {
+            trees.push(slot.ok_or(crate::CoreError::ParseFailed {
+                language: "unknown",
+            })?);
+        }
+        tracing::info!(
+            files = trees.len(),
+            elapsed_ms = crate::observe::elapsed_ms(started),
+            "normalised trees materialised"
+        );
+        Ok(trees)
+    }
+
     /// Builds the ranked clusters from the fused ones and records the
     /// `ranked_build` stage row.
     fn ranked_clusters(
         &self,
         fingerprints: &[crate::fingerprint::Fingerprint],
-        signatures: &[crate::lsh::Signature],
+        signatures: &crate::lsh::SignatureIndex<'_>,
         embedding_vectors: &std::collections::HashMap<usize, Vec<f32>>,
         fused_clusters: &[crate::pair::FusedCluster],
+        trees: &[crate::ast::NormalizedNode],
         ledger: &mut StageLedger,
     ) -> Vec<crate::cluster::Cluster> {
         // [PIPELINE-DETERMINISM] (gh #430) Workspace-relative path per
@@ -190,7 +333,7 @@ impl PipelineSession {
             signatures,
             embedding_vectors,
             fused_clusters,
-            trees: self.store.trees(),
+            trees,
             sources: &self.sources,
             file_languages: &self.file_languages,
             file_paths: &file_paths,
@@ -240,16 +383,18 @@ impl StageLedger {
         output: usize,
         started: Instant,
     ) {
+        let elapsed_ms = crate::observe::elapsed_ms(started);
         tracing::info!(
             stage,
             input,
             output,
-            elapsed_ms = crate::observe::elapsed_ms(started),
+            elapsed_ms,
+            rss_mib = crate::observe::resident_mib(),
             "cluster stage complete"
         );
         self.rows.push(StageRow {
             stage,
-            elapsed_ms: crate::observe::elapsed_ms(started),
+            elapsed_ms,
             input,
             output,
         });

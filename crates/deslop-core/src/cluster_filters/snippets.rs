@@ -37,16 +37,35 @@ pub(crate) struct Snippet<'a> {
     tree: Option<Rc<tree_sitter::Tree>>,
 }
 
+/// How many source bytes the cached CST population may cover
+/// ([PERF-FLUTTER-TODO-MEMORY]). A tree-sitter tree costs roughly forty
+/// times its source in resident memory, so caching every file of a
+/// corpus-scale run is multi-GB — on the Flutter corpus the unbounded
+/// cache alone held ~3.2 GB. The budget keeps the covered working set
+/// (the files the current clusters actually reference, which arrive
+/// with strong locality because components form around files) resident
+/// while the long tail re-parses on demand.
+pub(crate) const PARSE_TREE_SOURCE_BUDGET_BYTES: usize = 16 * 1024 * 1024;
+
 /// Per-report cache of parsed tree-sitter CSTs keyed by file. A file is
-/// parsed at most once per report regardless of how many clusters
-/// reference it. Without this, a large generated file — e.g. a 30k-line
-/// FFI binding clustered hundreds of ways — would be re-parsed once per
-/// cluster and dominate analysis time ([CLONE-NOISE-REPARSE-CACHE]).
+/// parsed at most once per *resident window* regardless of how many
+/// clusters reference it — the population is bounded by
+/// [`PARSE_TREE_SOURCE_BUDGET_BYTES`] with LRU eviction, so a file can
+/// be re-parsed after eviction. Without the cache at all, a large
+/// generated file — e.g. a 30k-line FFI binding clustered hundreds of
+/// ways — would be re-parsed once per cluster and dominate analysis
+/// time ([CLONE-NOISE-REPARSE-CACHE], [PERF-FLUTTER-TODO-MEMORY]).
 #[derive(Default)]
-pub(crate) struct ParseCache {
+pub struct ParseCache {
     /// Lazily-populated map from file id to its parsed CST (or `None`
-    /// when the language has no grammar / parsing failed).
+    /// when the language has no grammar / parsing failed). Bounded by
+    /// [`PARSE_TREE_SOURCE_BUDGET_BYTES`] with true-LRU eviction.
     trees: RefCell<HashMap<FileId, Option<Rc<tree_sitter::Tree>>>>,
+    /// LRU order of the cached trees: `(file, source bytes)`, most
+    /// recently used at the back.
+    tree_order: RefCell<std::collections::VecDeque<(FileId, usize)>>,
+    /// Sum of the ordered entries' source bytes.
+    tree_bytes: std::cell::Cell<usize>,
     /// Lazily-built corpus-wide contract index per language
     /// ([CLONE-NOISE-POLYMORPHIC-CONTRACT]). Built only when a cluster
     /// reaches the contract question, so a report with no same-named
@@ -79,6 +98,13 @@ pub(crate) struct ParseCache {
     signature_shapes: RefCell<HashMap<SnippetKey, Option<Rc<Vec<OwnedShapeToken>>>>>,
     /// Polymorphic subject per member range.
     subjects: RefCell<HashMap<SnippetKey, Option<Rc<OwnedSubject>>>>,
+    /// Body-shape digest per enclosing **function** range. Cluster
+    /// members nest inside one function (a class of many methods, a
+    /// file of many fields), and the digest walk is over the whole
+    /// enclosing body — keying by the function collapses every member
+    /// of one giant generated function to a single walk
+    /// ([PERF-FLUTTER-TODO-CORPUS]).
+    body_digests: RefCell<HashMap<SnippetKey, [u8; 32]>>,
 }
 
 /// Identity of one member across caches: the file, plus the byte range
@@ -109,6 +135,8 @@ const SIGNATURE_SHAPE_MEMO_MAX: usize = 65_536;
 /// a name, bases), so the cap is set against the corpus member
 /// population rather than a fraction of it.
 const SUBJECT_MEMO_MAX: usize = 524_288;
+/// Cap for the function body-digest cells.
+const BODY_DIGEST_MEMO_MAX: usize = 262_144;
 
 /// Shared get-or-compute for one memo map: returns the memoised value,
 /// computing and (within the cap) storing it on a miss. `None` results
@@ -201,10 +229,18 @@ impl FieldKinds {
     }
 }
 
+impl std::fmt::Debug for ParseCache {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // The caches are large interior state; identity is all any
+        // Debug consumer needs.
+        formatter.write_str("ParseCache")
+    }
+}
+
 impl ParseCache {
     /// Creates an empty cache scoped to one report render.
     #[must_use]
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 
@@ -266,6 +302,25 @@ impl ParseCache {
             SUBJECT_MEMO_MAX,
             compute,
         )
+    }
+
+    /// The body-shape digest for the function covering `(file, start,
+    /// end)`, memoised by the function's own range so sibling members
+    /// of one function share the walk.
+    pub(crate) fn body_digest(
+        &self,
+        key: SnippetKey,
+        compute: impl FnOnce() -> [u8; 32],
+    ) -> [u8; 32] {
+        let mut map = self.body_digests.borrow_mut();
+        if let Some(hit) = map.get(&key) {
+            return *hit;
+        }
+        let digest = compute();
+        if map.len() < BODY_DIGEST_MEMO_MAX {
+            let _previous = map.insert(key, digest);
+        }
+        digest
     }
 
     /// Records one cluster-noise sub-check outcome
@@ -333,14 +388,48 @@ impl ParseCache {
         source: &[u8],
     ) -> Option<Rc<tree_sitter::Tree>> {
         if let Some(cached) = self.trees.borrow().get(&file_id) {
+            self.touch_tree(file_id);
             return cached.clone();
         }
         let parsed = grammar_for(language)
             .as_ref()
             .and_then(|grammar| parse_source(language, grammar, source).ok())
             .map(Rc::new);
-        let _previous = self.trees.borrow_mut().insert(file_id, parsed.clone());
+        self.insert_tree(file_id, source.len(), parsed.clone());
         parsed
+    }
+
+    /// Moves `file_id`'s entry to the back of the LRU order.
+    fn touch_tree(&self, file_id: FileId) {
+        let mut order = self.tree_order.borrow_mut();
+        if let Some(position) = order.iter().position(|(id, _)| *id == file_id) {
+            if let Some(entry) = order.remove(position) {
+                order.push_back(entry);
+            }
+        }
+    }
+
+    /// Records a freshly parsed tree and evicts least-recently-used
+    /// entries until the covered source fits the budget.
+    fn insert_tree(&self, file_id: FileId, bytes: usize, tree: Option<Rc<tree_sitter::Tree>>) {
+        let _previous = self.trees.borrow_mut().insert(file_id, tree);
+        let mut order = self.tree_order.borrow_mut();
+        order.push_back((file_id, bytes));
+        self.tree_bytes.set(self.tree_bytes.get().saturating_add(bytes));
+        while self.tree_bytes.get() > PARSE_TREE_SOURCE_BUDGET_BYTES {
+            let Some((evict_id, evict_bytes)) = order.pop_front() else {
+                break;
+            };
+            if evict_id == file_id {
+                // The insert itself overshot the budget: keep the new
+                // entry (a single giant file is a legitimate working
+                // set) and stop.
+                order.push_front((evict_id, evict_bytes));
+                break;
+            }
+            let _evicted = self.trees.borrow_mut().remove(&evict_id);
+            self.tree_bytes.set(self.tree_bytes.get().saturating_sub(evict_bytes));
+        }
     }
 
     /// Returns the corpus-wide contract index for `language`, building it

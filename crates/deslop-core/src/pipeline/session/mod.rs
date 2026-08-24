@@ -443,26 +443,43 @@ impl PipelineSession {
     }
 }
 
-/// Moves the freshly-parsed per-file bundles into the canonical flat
-/// store, feeding them in ascending `(relative path, id)` order so
-/// every insert is an append ([PIPELINE-DETERMINISM]).
+/// Takes the corpus loop's flat record vectors as the store — they
+/// were built directly in canonical ascending `(path, file id)` order
+/// ([PIPELINE-DETERMINISM], [PERF-FLUTTER-TODO-MEMORY]), so the store
+/// is a move, not a rebuild.
 fn build_store(
     corpus: &mut FingerprintCorpus,
     files: &[DiscoveredFile],
     root: &Path,
 ) -> CorpusStore {
-    let mut keys: Vec<(PathBuf, FileId)> = files
-        .iter()
-        .map(|file| (store::relative_path_key(&file.path, root), file.file_id))
-        .collect();
-    keys.sort_unstable();
-    let mut built = CorpusStore::default();
-    for (path_key, file_id) in keys {
-        if let Some(cached) = corpus.per_file.remove(&file_id) {
-            built.upsert(file_id, path_key, cached);
-        }
+    // Entries in the corpus loop's processed order (ascending
+    // `(path, file id)`); `processed` is a subsequence of the same
+    // ordering over the discovery list, so one zip walks both.
+    let mut ordered: Vec<&DiscoveredFile> = files.iter().collect();
+    ordered.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then(left.file_id.cmp(&right.file_id))
+    });
+    let mut processed = std::mem::take(&mut corpus.per_file).into_iter().peekable();
+    let mut entries = Vec::with_capacity(ordered.len());
+    for discovered in ordered {
+        let Some((file_id, count)) = processed.next_if(|&(id, _)| id == discovered.file_id) else {
+            // Not processed (no parser, or skipped as too deep) —
+            // no records, no entry.
+            continue;
+        };
+        entries.push(store::StoreEntry {
+            file_id,
+            path_key: store::relative_path_key(&discovered.path, root),
+            fingerprint_count: count,
+        });
     }
-    built
+    CorpusStore::from_flat_parts(
+        entries,
+        std::mem::take(&mut corpus.fingerprints),
+        std::mem::take(&mut corpus.signatures),
+    )
 }
 
 /// True when a change to `path` re-scopes the corpus rather than

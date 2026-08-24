@@ -147,7 +147,7 @@ use std::{
 use tree_sitter::Node;
 
 pub(crate) use declaration_family::is_single_file_declaration_family;
-pub(crate) use snippets::ParseCache;
+pub use snippets::ParseCache;
 use snippets::{collect_snippets, parse_for, uniform_language, Snippet};
 pub(crate) use structural_families::split_structural_families;
 pub(crate) use verbatim_subgroup::split_noise_verbatim_families;

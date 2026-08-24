@@ -122,7 +122,16 @@ fn a_panicked_shard_poisons_the_whole_rescue() {
                 .map(|payload| {
                     scope.spawn(move || match payload {
                         Ok(value) => value,
-                        Err(message) => panic!("{message}"),
+                        // The codebase's sanctioned deliberate-panic
+                        // spelling (see observability.rs): an assert
+                        // that can never hold.
+                        Err(message) => {
+                            assert_eq!(
+                                1, 2,
+                                "poison the shard on purpose: {message}"
+                            );
+                            0
+                        }
                     })
                 })
                 .collect();
@@ -184,7 +193,7 @@ mod shard_equivalence_tests {
     //! may change which thread computes a value but never the value
     //! (`docs/performance-branch-review.md`, "parallel rescue").
 
-    use std::{collections::HashMap, path::PathBuf};
+    use std::path::PathBuf;
 
     use super::{apply_shared_subtree_rescue, MIN_SHARD_WORK};
     use crate::{
@@ -288,7 +297,6 @@ mod shard_equivalence_tests {
             "every eligible pair is identical, so measurement must agree across all of them: \
              {measured} of {pair_count} measured"
         );
-        let _ = HashMap::<FileId, ()>::new();
         Ok(())
     }
 }

@@ -45,7 +45,29 @@ pub struct CorpusBuildStats {
     signature: Duration,
 }
 
+impl CorpusBuildState {
+    /// Folds one shard's counters and timers into this state
+    /// ([PERF-FLUTTER-TODO-CORPUS] parallel corpus build).
+    pub fn absorb(&mut self, other: &Self) {
+        self.stats.absorb(&other.stats);
+    }
+}
+
 impl CorpusBuildStats {
+    /// Folds one shard's counters into this state.
+    pub fn absorb(&mut self, other: &Self) {
+        self.signatures_built = self.signatures_built.saturating_add(other.signatures_built);
+        self.signatures_reused = self.signatures_reused.saturating_add(other.signatures_reused);
+        self.exact_fingerprints = self.exact_fingerprints.saturating_add(other.exact_fingerprints);
+        self.sibling_fingerprints = self
+            .sibling_fingerprints
+            .saturating_add(other.sibling_fingerprints);
+        self.read = self.read.saturating_add(other.read);
+        self.parse = self.parse.saturating_add(other.parse);
+        self.fingerprint = self.fingerprint.saturating_add(other.fingerprint);
+        self.signature = self.signature.saturating_add(other.signature);
+    }
+
     /// Records `count` signatures constructed from token streams.
     pub fn add_built(&mut self, count: usize) {
         self.signatures_built = self.signatures_built.saturating_add(saturated(count));

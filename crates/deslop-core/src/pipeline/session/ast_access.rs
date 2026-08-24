@@ -25,10 +25,25 @@ impl PipelineSession {
     /// Smallest normalised subtree of `file_id` covering `range`, or
     /// `None` when the file is unknown or the range lies outside the
     /// parse root ([AUTOFIX-MERGE]).
-    #[must_use]
-    pub fn subtree_at_range(&self, file_id: FileId, range: ByteRange) -> Option<&NormalizedNode> {
-        self.store
-            .tree_for(file_id)
-            .and_then(|tree| tree.smallest_covering(range))
+    ///
+    /// The tree is re-parsed from the held source on demand: the store
+    /// deliberately retains no normalised trees
+    /// ([PERF-FLUTTER-TODO-MEMORY]) and the merge path asks for one
+    /// subtree of one file at a time, so a single-file parse costs
+    /// microseconds where retaining every corpus tree would cost
+    /// gigabytes.
+    pub fn subtree_at_range(
+        &self,
+        file_id: FileId,
+        range: ByteRange,
+    ) -> Option<NormalizedNode> {
+        let source = self.sources.get(&file_id).map(Vec::as_slice)?;
+        let language = self.file_languages.get(&file_id).copied()?;
+        let parser = self
+            .parsers
+            .iter()
+            .find(|parser| parser.id() == language)?;
+        let tree = parser.parse_and_normalize(source, file_id).ok()?;
+        tree.smallest_covering(range).cloned()
     }
 }

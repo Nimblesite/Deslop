@@ -77,6 +77,7 @@ pub use embedding::{
 };
 pub use error::CoreError;
 pub use pipeline::{debug_ast_dump, run, EmbeddingSettings, PipelineConfig, PipelineSession};
+pub use cluster_filters::ParseCache;
 pub use report::{render_report, EmbeddingProvenance, Report, ReportInputs};
 pub use report_boilerplate::{ReportBoilerplateHint, ReportBoilerplateOccurrence};
 pub use report_metrics::{

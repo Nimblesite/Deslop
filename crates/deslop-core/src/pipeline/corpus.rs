@@ -46,11 +46,24 @@ pub struct FingerprintCorpus {
     /// read the exact bytes referenced by a fingerprint without
     /// re-reading the file once per subtree.
     pub sources: HashMap<FileId, Vec<u8>>,
-    /// Per-file cached parse + fingerprint bundle keyed by
-    /// [`FileId`]. The session moves these into its canonical flat
-    /// store in workspace-relative-path order
-    /// ([PIPELINE-DETERMINISM]); nothing re-flattens per render.
-    pub per_file: HashMap<FileId, CachedFile>,
+    /// Every fingerprint, flat, in ascending `(path, file id)` order —
+    /// the store's exact final layout, built directly by the corpus
+    /// loop ([PERF-FLUTTER-TODO-MEMORY]). The historical per-file map
+    /// doubled the whole record population during the store build
+    /// (per-file buffers beside the flat vectors), which on a
+    /// corpus-scale run peaked multi-GB above the resident set.
+    pub fingerprints: Vec<Fingerprint>,
+    /// One signature per fingerprint, positionally 1:1, stored as one
+    /// contiguous segment **per file** in absorb order — no merge, no
+    /// second copy, whatever the parallelism
+    /// ([PERF-FLUTTER-TODO-MEMORY]). The normalised trees are
+    /// deliberately **not** retained: their only later consumers
+    /// re-materialise them from `sources`.
+    pub signatures: Vec<Vec<crate::lsh::Signature>>,
+    /// `(file id, fingerprint count)` per **processed** file, in the
+    /// same ascending `(path, file id)` order — the store's entry list,
+    /// which the session zips with the sorted discovery list.
+    pub per_file: Vec<(FileId, usize)>,
     /// Per-run incremental-cache hit/miss counters
     /// ([PIPELINE-INCREMENTAL]).
     pub cache_stats: CacheStats,
@@ -78,73 +91,367 @@ pub fn fingerprint_corpus(
 ) -> Result<FingerprintCorpus, CoreError> {
     let min_nodes_usize = usize::try_from(config.min_nodes).unwrap_or(usize::MAX);
     let mut corpus = FingerprintCorpus::default();
-    let mut build = CorpusBuildState::default();
-    let mut live_blobs = LiveBlobs::default();
+    let build = CorpusBuildState::default();
     let cache_base = crate::paths::cache_dir(&config.root);
-    let mut caches: HashMap<&'static str, FingerprintCache> = HashMap::new();
     let started = Instant::now();
     let mut fingerprints_running: usize = 0;
-    for (position, discovered) in files.iter().enumerate() {
-        let Some(parser) = parser_for_language(parsers, discovered.language) else {
-            continue;
-        };
-        let read_started = Instant::now();
-        let source = read_source(&discovered.path)?;
-        build.stats.add_read(read_started.elapsed());
-        if config.incremental {
-            live_blobs.record(discovered.language, &source);
-        }
-        let cache = if config.incremental {
-            fingerprint_cache_for(
-                &mut caches,
-                &cache_base,
-                discovered.language,
-                config.min_nodes,
-            )
-        } else {
-            None
-        };
-        let processed = match load_or_parse_file(
-            cache,
-            parser,
-            &source,
-            discovered.file_id,
-            min_nodes_usize,
-            &mut corpus.cache_stats,
-            &mut build,
-        ) {
-            Ok(processed) => processed,
-            // A single pathologically deep file is skipped, not fatal: it
-            // would otherwise overflow the recursive walks and abort the
-            // whole batch run. Genuine parser errors still propagate.
-            Err(CoreError::AstTooDeep { language, limit }) => {
-                log_skip_too_deep(language, limit);
-                continue;
+    // [PERF-FLUTTER-TODO-MEMORY] Ascending `(path, file id)` — the
+    // store's canonical order ([PIPELINE-DETERMINISM]) — computed
+    // *before* parsing so each file's records append directly onto the
+    // flat vectors. No per-file map, no second copy, no re-flatten.
+    let mut ordered: Vec<&DiscoveredFile> = files.iter().collect();
+    ordered.sort_by(|left, right| left.path.cmp(&right.path).then(left.file_id.cmp(&right.file_id)));
+    // [PERF-FLUTTER-TODO-CORPUS] A cold, non-incremental build parses
+    // and folds each file independently — the dominant wall cost
+    // (parse + fingerprint + signature, ~80 s on the Flutter corpus) —
+    // so it runs sharded over the ordered file list and the shards
+    // merge back in order. Determinism is unchanged: the merge order
+    // is the sorted order either way, and every per-file product is a
+    // pure function of the file's bytes. Incremental builds stay
+    // serial because their cache reads and writes share mutable state.
+    let mut pass_state = PassState {
+        build,
+        ..PassState::default()
+    };
+    if config.incremental {
+        let ordered_work =
+            serial_file_work(&ordered, parsers, &cache_base, config, min_nodes_usize, &mut pass_state)?;
+        for (position, work) in ordered_work.into_iter().enumerate() {
+            if let Some(file_work) = work {
+                absorb_file_work(
+                    &mut corpus,
+                    &mut fingerprints_running,
+                    position,
+                    files.len(),
+                    file_work,
+                    started,
+                );
             }
-            Err(other) => return Err(other),
+        }
+    } else {
+        let mut shard_state = PassState::default();
+        let mut target = AbsorbTarget {
+            corpus: &mut corpus,
+            fingerprints_running,
+            files_total: files.len(),
+            started,
         };
-        corpus
-            .boilerplate_ranges
-            .extend(collect_import_boilerplate_ranges(
-                &processed.tree,
-                discovered.language,
-            ));
-        let lines = count_analysed_lines(&source);
-        fingerprints_running = fingerprints_running.saturating_add(processed.fingerprints.len());
-        let _previous_lines = corpus.analysed_lines.insert(discovered.file_id, lines);
-        let _previous = corpus.per_file.insert(discovered.file_id, processed);
-        let _previous_source = corpus.sources.insert(discovered.file_id, source);
-        log_corpus_progress(position, files.len(), fingerprints_running, started);
+        parallel_file_work(
+            &ordered,
+            parsers,
+            &cache_base,
+            config,
+            min_nodes_usize,
+            &mut shard_state,
+            &mut target,
+        )?;
+        pass_state.build.absorb(&shard_state.build);
+        pass_state.cache_stats.hits = pass_state
+            .cache_stats
+            .hits
+            .saturating_add(shard_state.cache_stats.hits);
+        pass_state.cache_stats.misses = pass_state
+            .cache_stats
+            .misses
+            .saturating_add(shard_state.cache_stats.misses);
+        fingerprints_running = target.fingerprints_running;
     }
-    log_corpus_built(files.len(), fingerprints_running, &corpus, &build, started);
+    corpus.cache_stats.hits = corpus.cache_stats.hits.saturating_add(pass_state.cache_stats.hits);
+    corpus.cache_stats.misses = corpus
+        .cache_stats
+        .misses
+        .saturating_add(pass_state.cache_stats.misses);
+    log_corpus_built(files.len(), fingerprints_running, &corpus, &pass_state.build, started);
     // [PIPELINE-INCREMENTAL-RETENTION] A full pass is the one moment
     // the live blob set is exactly known, so retention runs here —
     // never on a single-file change pass, and never when the store is
     // disabled (the opt-out must leave the store untouched).
     if config.incremental {
-        sweep_store(&cache_base, &live_blobs, config.min_nodes);
+        sweep_store(&cache_base, &pass_state.blobs, config.min_nodes);
     }
     Ok(corpus)
+}
+
+/// The serial (incremental) path: cache reads and writes share mutable
+/// state, so one file at a time.
+fn serial_file_work(
+    ordered: &[&DiscoveredFile],
+    parsers: &[Box<dyn LanguageParser>],
+    cache_base: &std::path::Path,
+    config: &PipelineConfig<'_>,
+    min_nodes_usize: usize,
+    state: &mut PassState,
+) -> Result<Vec<Option<FileWork>>, CoreError> {
+    let mut work: Vec<Option<FileWork>> = Vec::with_capacity(ordered.len());
+    for discovered in ordered {
+        work.push(process_one_file(
+            discovered,
+            parsers,
+            cache_base,
+            config.incremental,
+            config.min_nodes,
+            min_nodes_usize,
+            state,
+        )?);
+    }
+    Ok(work)
+}
+
+/// The cold-path sharded build: files are independent, so workers own
+/// disjoint ordered slices and stream each file's records through a
+/// bounded queue to the main thread, which absorbs them in shard order
+/// — deterministic, and never holding more than a few files' records
+/// outside the flat vectors.
+/// Everything the ordered merge folds each shard's records into.
+struct AbsorbTarget<'a> {
+    /// The corpus under construction.
+    corpus: &'a mut FingerprintCorpus,
+    /// Running fingerprint total for progress records.
+    fingerprints_running: usize,
+    /// Files in the pass, for progress records.
+    files_total: usize,
+    /// Pass start, for progress records.
+    started: Instant,
+}
+
+impl AbsorbTarget<'_> {
+    /// Folds one file's products in, logging progress.
+    fn absorb(&mut self, position: usize, work: FileWork) {
+        self.fingerprints_running = self
+            .fingerprints_running
+            .saturating_add(work.fingerprints.len());
+        let _previous_lines = self
+            .corpus
+            .analysed_lines
+            .insert(work.file_id, work.lines);
+        self.corpus.per_file.push((work.file_id, work.fingerprints.len()));
+        self.corpus.boilerplate_ranges.extend(work.boilerplate);
+        let _previous_source = self.corpus.sources.insert(work.file_id, work.source);
+        log_corpus_progress(
+            position,
+            self.files_total,
+            self.fingerprints_running,
+            self.started,
+        );
+        // Fingerprints extend the flat vector; the file's signatures
+        // become their own segment — moved, never copied.
+        let FileWork {
+            fingerprints, signatures, ..
+        } = work;
+        self.corpus.fingerprints.extend(fingerprints);
+        self.corpus.signatures.push(signatures);
+    }
+}
+
+/// The cold-path sharded build: workers own disjoint ordered slices and
+/// return their per-file records; the main thread then merges the
+/// shards in order into corpus vectors pre-sized to the exact total, so
+/// the merge never reallocates and each shard's records exist exactly
+/// once at any moment ([PERF-FLUTTER-TODO-MEMORY]).
+fn parallel_file_work(
+    ordered: &[&DiscoveredFile],
+    parsers: &[Box<dyn LanguageParser>],
+    cache_base: &std::path::Path,
+    config: &PipelineConfig<'_>,
+    min_nodes_usize: usize,
+    state_out: &mut PassState,
+    target: &mut AbsorbTarget<'_>,
+) -> Result<(), CoreError> {
+    let workers = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+    let shard_size = ordered.len().div_ceil(workers).max(1);
+    let incremental = config.incremental;
+    let min_nodes_config = config.min_nodes;
+    let mut shards: Vec<Vec<Option<FileWork>>> = Vec::with_capacity(workers);
+    let joined = std::thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(workers);
+        for chunk in ordered.chunks(shard_size) {
+            let cache_path = cache_base;
+            handles.push(scope.spawn(move || {
+                let mut shard_files: Vec<Option<FileWork>> = Vec::with_capacity(chunk.len());
+                // The cold path has no cache and no live-blob
+                // retention, so this shard state stays empty.
+                let mut state = PassState::default();
+                for discovered in chunk {
+                    let outcome = process_one_file(
+                        discovered,
+                        parsers,
+                        cache_path,
+                        incremental,
+                        min_nodes_config,
+                        min_nodes_usize,
+                        &mut state,
+                    );
+                    match outcome {
+                        Ok(one) => shard_files.push(one),
+                        // A pathologically deep file is skipped, not
+                        // fatal; genuine errors fail the shard.
+                        Err(CoreError::AstTooDeep { language, limit }) => {
+                            log_skip_too_deep(language, limit);
+                            shard_files.push(None);
+                        }
+                        // A failed shard fails the build; its
+                        // counters die with it.
+                        Err(other) => return Err(other),
+                    }
+                }
+                Ok((shard_files, state))
+            }));
+        }
+        for handle in handles {
+            // A panicked parse worker must fail the build, never
+            // silently drop its files.
+            let (shard_files, state) = handle
+                .join()
+                .map_err(|_| CoreError::ParseFailed {
+                    language: "unknown",
+                })??;
+            shards.push(shard_files);
+            state_out.build.absorb(&state.build);
+            state_out.cache_stats.hits = state_out
+                .cache_stats
+                .hits
+                .saturating_add(state.cache_stats.hits);
+            state_out.cache_stats.misses = state_out
+                .cache_stats
+                .misses
+                .saturating_add(state.cache_stats.misses);
+        }
+        Ok(())
+    });
+    joined?;
+    // Exact capacity for the flat fingerprint vector from the counted
+    // records; signatures are per-file segments and need no reserve.
+    // The ordered merge moves each file's products in, one shard at a
+    // time, freeing as it goes.
+    let fingerprint_total: usize = shards
+        .iter()
+        .flatten()
+        .map(|work| work.as_ref().map_or(0, |one| one.fingerprints.len()))
+        .sum();
+    target.corpus.fingerprints.reserve_exact(fingerprint_total);
+    let mut position = 0_usize;
+    for shard in shards {
+        for work in shard {
+            if let Some(one) = work {
+                target.absorb(position, one);
+            }
+            position = position.saturating_add(1);
+        }
+    }
+    Ok(())
+}
+
+/// One processed file's products, before they merge into the corpus.
+struct FileWork {
+    /// The file's id.
+    file_id: FileId,
+    /// Its language id.
+    language: &'static str,
+    /// Its source bytes (moved into `sources` on absorb).
+    source: Vec<u8>,
+    /// Boilerplate-filtered fingerprints.
+    fingerprints: Vec<Fingerprint>,
+    /// One signature per fingerprint.
+    signatures: Vec<crate::lsh::Signature>,
+    /// Import/prologue boilerplate ranges.
+    boilerplate: Vec<crate::boilerplate::BoilerplateRange>,
+    /// Physical line count.
+    lines: u64,
+}
+
+/// The mutable state a file-processing pass accumulates: build
+/// counters, cache statistics, live-blob retention, and the per-language
+/// cache handles. Bundled so the pass functions carry one `&mut`
+/// instead of four.
+#[derive(Default)]
+struct PassState {
+    /// Per-language incremental caches, opened on first use.
+    caches: HashMap<&'static str, FingerprintCache>,
+    /// Corpus-build counters and timers.
+    build: CorpusBuildState,
+    /// Incremental cache hit/miss counters.
+    cache_stats: CacheStats,
+    /// Live blob retention (incremental builds only).
+    blobs: LiveBlobs,
+}
+
+/// Reads, parses, and folds one file, returning its products or `None`
+/// when it has no parser registered. The incremental cache participates
+/// only on incremental builds (the cold path passes `None`).
+fn process_one_file(
+    discovered: &DiscoveredFile,
+    parsers: &[Box<dyn LanguageParser>],
+    cache_base: &std::path::Path,
+    incremental: bool,
+    min_nodes_config: u32,
+    min_nodes: usize,
+    state: &mut PassState,
+) -> Result<Option<FileWork>, CoreError> {
+    let Some(parser) = parser_for_language(parsers, discovered.language) else {
+        return Ok(None);
+    };
+    let read_started = Instant::now();
+    let source = read_source(&discovered.path)?;
+    state.build.stats.add_read(read_started.elapsed());
+    if incremental {
+        state.blobs.record(discovered.language, &source);
+    }
+    let cache = if incremental {
+        Some(fingerprint_cache_for(
+            &mut state.caches,
+            cache_base,
+            discovered.language,
+            min_nodes_config,
+        ))
+    } else {
+        None
+    }
+    .flatten();
+    let processed = load_or_parse_file(
+        cache,
+        parser,
+        &source,
+        discovered.file_id,
+        min_nodes,
+        &mut state.cache_stats,
+        &mut state.build,
+    )?;
+    let boilerplate = collect_import_boilerplate_ranges(&processed.tree, discovered.language);
+    let lines = count_analysed_lines(&source);
+    let crate::fpcache::CachedFile {
+        tree: _tree,
+        fingerprints,
+        signatures,
+    } = processed;
+    Ok(Some(FileWork {
+        file_id: discovered.file_id,
+        language: discovered.language,
+        source,
+        fingerprints,
+        signatures,
+        boilerplate,
+        lines,
+    }))
+}
+
+/// Folds one file's products into the corpus and logs progress.
+fn absorb_file_work(
+    corpus: &mut FingerprintCorpus,
+    fingerprints_running: &mut usize,
+    position: usize,
+    files_total: usize,
+    work: FileWork,
+    started: Instant,
+) {
+    *fingerprints_running = fingerprints_running.saturating_add(work.fingerprints.len());
+    let _previous_lines = corpus.analysed_lines.insert(work.file_id, work.lines);
+    corpus.per_file.push((work.file_id, work.fingerprints.len()));
+    corpus.fingerprints.extend(work.fingerprints);
+    corpus.signatures.push(work.signatures);
+    corpus.boilerplate_ranges.extend(work.boilerplate);
+    let _previous_source = corpus.sources.insert(work.file_id, work.source);
+    let _ = work.language;
+    log_corpus_progress(position, files_total, *fingerprints_running, started);
 }
 
 /// One fixed-interval corpus-build progress record
@@ -187,6 +494,15 @@ fn log_corpus_built(
         fingerprint_ms = build.stats.fingerprint_ms(),
         signature_ms = build.stats.signature_ms(),
         elapsed_ms = crate::observe::elapsed_ms(started),
+        rss_mib = crate::observe::resident_mib(),
+        signature_mib = corpus
+            .signatures
+            .iter()
+            .map(std::vec::Vec::len)
+            .sum::<usize>()
+            .saturating_mul(1024)
+            / (1024 * 1024),
+        source_mib = corpus.sources.values().map(std::vec::Vec::len).sum::<usize>() / (1024 * 1024),
         "fingerprint corpus built",
     );
 }

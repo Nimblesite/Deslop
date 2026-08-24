@@ -14,7 +14,7 @@ use std::{collections::HashMap, hash::BuildHasher};
 use crate::{
     embedding::cosine_similarity,
     fingerprint::Fingerprint,
-    lsh::{estimate_jaccard, Signature},
+    lsh::{estimate_jaccard, SignatureIndex},
     overlap::OverlapMeasurer,
     pair::PairScore,
 };
@@ -36,7 +36,7 @@ use crate::{
 pub(super) fn measured_signals<S: BuildHasher>(
     occurrence_indices: &[usize],
     fingerprints: &[Fingerprint],
-    signatures: &[Signature],
+    signatures: &SignatureIndex<'_>,
     embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     overlap: &mut OverlapMeasurer<'_>,
 ) -> PairScore {
@@ -74,7 +74,7 @@ impl SignalTotals {
         left: usize,
         right: usize,
         fingerprints: &[Fingerprint],
-        signatures: &[Signature],
+        signatures: &SignatureIndex<'_>,
         embedding_vectors: &HashMap<usize, Vec<f32>, S>,
         overlap: &mut OverlapMeasurer<'_>,
     ) {

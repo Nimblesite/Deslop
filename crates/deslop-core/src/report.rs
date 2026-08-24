@@ -199,6 +199,11 @@ pub struct ReportInputs<'a, S: BuildHasher> {
     /// ([OUTPUT-SCHEMA-DIFF-TAGS]) and `metrics.diff`
     /// ([METRICS-DIFF-SCOPE]); `None` leaves every diff field absent.
     pub diff: Option<&'a crate::diff_scope::DiffScope>,
+    /// The run-shared parse cache ([PERF-FLUTTER-TODO-CORPUS]): the
+    /// same `(file, range)` member analyses the noise split already
+    /// computed, reused here for the hidden/category/role checks so a
+    /// corpus-scale render never recomputes them.
+    pub parse_cache: &'a crate::cluster_filters::ParseCache,
 }
 
 /// Converts the internal representation into a report ready for
@@ -207,17 +212,51 @@ pub struct ReportInputs<'a, S: BuildHasher> {
 /// whose every member is hidden is dropped into `clusters_hidden`
 /// instead of `clusters`.
 #[must_use]
+/// # Panics
+///
+/// Only on an internal invariant: every cluster handed in must
+/// materialise into its slot (`order` covers exactly the input range,
+/// so a panic here means a cluster vanished mid-render — a defect, not
+/// an input condition).
 pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
-    // Parse each source file at most once for the whole render, shared
-    // across every cluster's noise/role checks ([CLONE-NOISE-REPARSE-CACHE]).
-    let parse_cache = ParseCache::new();
+    // The cache arrives from the pipeline: one parse per file and one
+    // member analysis per `(file, range)` for the whole run
+    // ([CLONE-NOISE-REPARSE-CACHE], [PERF-FLUTTER-TODO-CORPUS]).
+    let parse_cache = inputs.parse_cache;
     let report_sources = ReportSources::new(inputs.sources);
     let policy = inputs.exclusion.ranking_policy();
-    let materialised: Vec<(ReportCluster, bool)> = inputs
-        .clusters
-        .iter()
-        .map(|cluster| materialise_cluster(cluster, &inputs, &report_sources, &parse_cache, policy))
-        .collect();
+    // [PERF-FLUTTER-TODO-MEMORY] Materialise in minimum-member-file
+    // order so each file's clusters arrive together and the bounded
+    // [`ParseCache`](crate::cluster_filters::ParseCache) tree LRU stays
+    // hot; results land at their input position, so the report is
+    // byte-identical to a straight in-order map.
+    let mut order: Vec<usize> = (0..inputs.clusters.len()).collect();
+    order.sort_by_key(|&index| inputs.clusters.get(index).and_then(|cluster| {
+        cluster
+            .members
+            .iter()
+            .map(|member| member.file_id)
+            .min()
+    }));
+    let mut slots: Vec<Option<(ReportCluster, bool)>> =
+        (0..inputs.clusters.len()).map(|_| None).collect();
+    for index in order {
+        let Some(cluster) = inputs.clusters.get(index) else {
+            continue;
+        };
+        let built = materialise_cluster(cluster, &inputs, &report_sources, parse_cache, policy);
+        if let Some(slot) = slots.get_mut(index) {
+            *slot = Some(built);
+        }
+    }
+    let materialised: Vec<(ReportCluster, bool)> = slots.into_iter().flatten().collect();
+    // The order covered exactly `0..len`, so every slot is filled; a
+    // short collect would mean a cluster vanished mid-render.
+    assert_eq!(
+        materialised.len(),
+        inputs.clusters.len(),
+        "every cluster must materialise into its slot"
+    );
     let clusters_hidden = materialised.iter().filter(|(_, hidden)| *hidden).count();
     // The metric must count the same clusters the report renders, so it
     // sees only the survivors of `materialise_cluster` — never a cluster
