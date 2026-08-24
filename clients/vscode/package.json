@@ -591,7 +591,7 @@
     "@vscode/vsce": "^3.9.2",
     "c8": "^12.0.0",
     "esbuild": "^0.28.2",
-    "eslint": "^10.8.1",
+    "eslint": "^10.9.0",
     "glob": "^13.0.6",
     "istanbul-lib-coverage": "^3.2.2",
     "mocha": "^11.8.0",
