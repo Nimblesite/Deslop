@@ -1,17 +1,9 @@
-const PRIORITY_COLORS = {
-  verify_release: "#68e63b",
-  release_blocker: "#ff5449",
-  accuracy_critical: "#ff8a65",
-  critical: "#ffd166",
-  assurance: "#c6a0f6",
-  defect: "#9bcbff",
-  feature: "#8bd3c7",
-  task: "#8e8b8a",
-};
+// Priority option ids from the GitHub Priority issue field — see scripts/issues/rules.py.
+export const SHOWSTOPPER = "showstopper";
+export const CRITICAL = "critical";
 
-export function priorityColor(issueOrPriority) {
-  const key = typeof issueOrPriority === "string" ? issueOrPriority : issueOrPriority.priority;
-  return PRIORITY_COLORS[key] || PRIORITY_COLORS.task;
+export function priorityMap(report) {
+  return new Map(report.priorities.map((priority) => [priority.id, priority]));
 }
 
 export function streamMap(report) {

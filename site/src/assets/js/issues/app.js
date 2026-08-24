@@ -1,5 +1,5 @@
 import { clear, element, labelChip, publicationStamp } from "./dom.js";
-import { allLabels, filteredIssues, priorityColor, relatedIssues, streamMap } from "./model.js";
+import { allLabels, filteredIssues, priorityMap, relatedIssues, streamMap } from "./model.js";
 import { renderNetwork } from "./graph.js";
 import { renderBoard, renderQueue, renderRunway, renderStatistics } from "./views.js";
 
@@ -129,11 +129,12 @@ function drawerFacts(issue, streams) {
 }
 
 function drawerPriority(issue) {
+  const priority = priorityMap(report).get(issue.priority);
   const block = element("div", { className: "drawer-priority" }, [
-    element("strong", { text: issue.priority_name }),
-    element("span", { text: issue.priority_reason }),
+    element("strong", { text: priority.name }),
+    element("span", { text: priority.description }),
   ]);
-  block.style.setProperty("--priority-color", priorityColor(issue));
+  block.style.setProperty("--priority-color", priority.color);
   return block;
 }
 

@@ -103,7 +103,14 @@ gh issue create --title "<imperative one-liner>" --body-file /tmp/deslop-issue.m
 gh issue edit <n> --type <Bug|Feature|Task>   # fallback if the flag is rejected: gh api graphql updateIssueIssueType
 ```
 
-4. Add labels when they apply: `bug` for bugs; domain labels `false-positive`, `false-negative`, `spec-violation`, `ignored-test`. `false-negative`/`false-positive` hard-route the issue to the accuracy lane in the atlas.
+4. Set the Priority field and the lane — both drive the published atlas:
+
+```
+scripts/issues/set_priority.sh <n> <showstopper|critical|normal|low>   # Priority is a field, not a label
+gh issue edit <n> --add-label lane/<accuracy|detection|performance|editor|integrations|delivery|reporting|quality>
+```
+
+   Add domain labels where they apply: `false-positive`, `false-negative`, `spec-violation`, `ignored-test`. Severity is never a label — the `showstopper` and `critical` labels are deleted.
 5. Post screenshot images if possible (see Screenshots section above).
 
 ## Backfilling existing issues
@@ -119,4 +126,4 @@ Four artifacts must stay in sync — change one, change all:
 | `.agents/skills/log-issue/SKILL.md` (this file) | Canonical structure; AI files any issue type with it |
 | `.github/ISSUE_TEMPLATE/issue.yml` | Web form for humans filing any issue type; same sections, same order; Steps To Reproduce is optional and marked bugs-only there — agents still keep the heading with type-appropriate content |
 | `.agents/skills/triage/SKILL.md` | Reads these sections when enriching tickets |
-| `scripts/issues/generate_issue_report.py` | Excerpt = TL;DR section; headings are parsed |
+| `scripts/issues/generate_issue_report.py`, `scripts/issues/rules.py` | Excerpt = TL;DR section; headings are parsed; Priority ladder and lane ids mirror GitHub |

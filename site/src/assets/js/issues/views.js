@@ -1,5 +1,5 @@
 import { clear, element, emptyState, labelChip } from "./dom.js";
-import { priorityColor, streamMap, visibleRelationships } from "./model.js";
+import { CRITICAL, SHOWSTOPPER, priorityMap, streamMap, visibleRelationships } from "./model.js";
 
 function cardLabels(issue) {
   return element("div", { className: "card-labels" }, issue.labels.map(labelChip));
@@ -19,14 +19,13 @@ function issueCard(issue, streams, onSelect) {
 }
 
 function boardLane(priority, issues, streams, onSelect) {
-  const color = priorityColor(priority.id);
   const lane = element("section", { className: "board-lane", attrs: { "data-priority": priority.id } });
   const head = element("header", { className: "board-lane__head" }, [
-    element("span", { className: "board-lane__order", text: `${String(priority.rank + 1).padStart(2, "0")} · ${issues.length} issues` }),
+    element("span", { className: "board-lane__order", text: `${String(priority.rank).padStart(2, "0")} · ${issues.length} issues` }),
     element("h3", { text: priority.name }),
     element("p", { text: priority.description }),
   ]);
-  head.style.setProperty("--lane-color", color);
+  head.style.setProperty("--lane-color", priority.color);
   const list = element("div", { className: "board-list" }, issues.map((issue) => issueCard(issue, streams, onSelect)));
   lane.append(head, list);
   return lane;
@@ -50,8 +49,8 @@ function statisticsValues(report, issues) {
   return {
     open: issues.length,
     verify: issues.filter((issue) => issue.lifecycle === "verify").length,
-    release_blockers: issues.filter((issue) => issue.priority === "release_blocker").length,
-    accuracy_critical: issues.filter((issue) => issue.priority === "accuracy_critical").length,
+    showstoppers: issues.filter((issue) => issue.priority === SHOWSTOPPER).length,
+    critical: issues.filter((issue) => issue.priority === CRITICAL).length,
     linked: linked.size,
   };
 }
@@ -70,8 +69,8 @@ export function renderStatistics(container, report, issues) {
   const summary = element("section", { className: "atlas-summary", attrs: { "aria-label": "Backlog summary" } }, [
     summaryCard("Open backlog", values.open, "open", "open issues"),
     summaryCard("Release verification", values.verify, "verify", "believed fixed on main", "summary-card--verify"),
-    summaryCard("Stop the line", values.release_blockers, "release_blockers", "showstoppers", "summary-card--blocker"),
-    summaryCard("Accuracy critical", values.accuracy_critical, "accuracy_critical", "correctness risks"),
+    summaryCard("Showstoppers", values.showstoppers, "showstoppers", "unreleased regressions", "summary-card--blocker"),
+    summaryCard("Critical", values.critical, "critical", "accuracy or usefulness at risk"),
     summaryCard("Connected work", values.linked, "linked", "linked issues"),
   ]);
   const note = element("aside", { className: "verification-note" }, [
@@ -138,14 +137,14 @@ function barPosition(issue, bounds) {
   return { start: `${start}%`, duration: `${duration}%` };
 }
 
-function runwayIssue(issue, bounds, steps, onSelect) {
+function runwayIssue(issue, bounds, steps, onSelect, priority) {
   const track = element("div", { className: "runway-track" });
-  const bar = element("button", { className: "runway-bar", text: `#${issue.number} · ${issue.title}`, attrs: { type: "button", title: `${issue.plan.effort_units} default effort units · ${issue.priority_name}` } });
+  const bar = element("button", { className: "runway-bar", text: `#${issue.number} · ${issue.title}`, attrs: { type: "button", title: `${issue.plan.effort_units} default effort units · ${priority.name}` } });
   const position = barPosition(issue, bounds);
   track.style.setProperty("--steps", steps);
   bar.style.setProperty("--start", position.start);
   bar.style.setProperty("--duration", position.duration);
-  bar.style.setProperty("--bar-color", priorityColor(issue));
+  bar.style.setProperty("--bar-color", priority.color);
   bar.addEventListener("click", () => onSelect(issue));
   track.append(bar);
   return element("div", { className: "runway-row", attrs: { "data-issue": issue.number } }, [
@@ -155,11 +154,12 @@ function runwayIssue(issue, bounds, steps, onSelect) {
 }
 
 function appendStreamRows(grid, report, issues, bounds, steps, onSelect) {
+  const priorities = priorityMap(report);
   for (const stream of report.workstreams) {
     const streamIssues = issues.filter((issue) => issue.workstream === stream.id);
     if (!streamIssues.length) continue;
     grid.append(streamHeader(stream, streamIssues.length, steps));
-    for (const issue of streamIssues) grid.append(runwayIssue(issue, bounds, steps, onSelect));
+    for (const issue of streamIssues) grid.append(runwayIssue(issue, bounds, steps, onSelect, priorities.get(issue.priority)));
   }
 }
 
@@ -185,11 +185,11 @@ function labelCell(issue) {
   return element("div", { className: "queue-labels" }, labels);
 }
 
-function queueRow(issue, streams, onSelect) {
+function queueRow(issue, streams, priorities, onSelect) {
   const row = element("tr", { attrs: { tabindex: "0", "data-issue": issue.number } }, [
     element("td", { text: `#${issue.number}` }),
     element("td", { className: "issue-table__title", text: issue.title }),
-    element("td", { text: issue.priority_name }),
+    element("td", { text: priorities.get(issue.priority).name }),
     element("td", { text: streams.get(issue.workstream).name }),
     element("td", {}, [labelCell(issue)]),
   ]);
@@ -210,7 +210,8 @@ export function renderQueue(container, report, issues, onSelect) {
   if (!issues.length) return container.append(emptyState());
   const streams = streamMap(report);
   const table = element("table", { className: "issue-table" });
-  const body = element("tbody", {}, issues.map((issue) => queueRow(issue, streams, onSelect)));
+  const priorities = priorityMap(report);
+  const body = element("tbody", {}, issues.map((issue) => queueRow(issue, streams, priorities, onSelect)));
   table.append(tableHead(), body);
   container.append(element("div", { className: "queue-wrap", attrs: { id: "panel-queue", role: "tabpanel", "aria-labelledby": "tab-queue", "data-view-panel": "queue" } }, [table]));
 }

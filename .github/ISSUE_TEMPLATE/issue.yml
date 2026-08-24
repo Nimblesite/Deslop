@@ -20,7 +20,8 @@
 # - STEPS TO REPRODUCE IS BUG-ONLY: it is optional here and says so in its
 #   description. Humans filing features or tasks skip it; the log-issue skill
 #   keeps the heading in agent-filed bodies with type-appropriate content.
-# - No `labels:` are auto-applied — triage sets the issue type and labels.
+# - No `labels:` are auto-applied — triage sets the issue type, the Priority
+#   field, the lane/* label, and any domain labels.
 
 name: Issue report
 description: Report a bug, request a feature, or file a task
