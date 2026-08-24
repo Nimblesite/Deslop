@@ -5,11 +5,10 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync, copyFileSync, chmodSync } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { runContractSuite } from "../lib/contract-harness.mjs";
+import { repoRoot } from "../lib/repo-root.mjs";
 
-const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const verifyManifest = join(repoRoot, "scripts/deployment/verify-deployment-manifest.mjs");
 const verifyBinaries = join(repoRoot, "scripts/deployment/verify-deployment-binaries.mjs");
 const verifyJetBrains = join(repoRoot, "scripts/deployment/verify-jetbrains-package.mjs");

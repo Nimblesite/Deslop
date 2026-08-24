@@ -7,11 +7,11 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { runContractSuite } from "../lib/contract-harness.mjs";
+import { repoRoot } from "../lib/repo-root.mjs";
+import { valuesAfter } from "../actions/action-yaml.mjs";
 
-const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const workflowPath = resolve(repoRoot, ".github/workflows/release.yml");
 const deployWorkflowPath = resolve(repoRoot, ".github/workflows/deploy-pages.yml");
 const dependabotWorkflowPath = resolve(repoRoot, ".github/workflows/dependabot-automerge.yml");
@@ -211,13 +211,16 @@ function substitute(text, open, close, resolve) {
 // Value of the first double-quoted argument on the first line starting with
 // `prefix`, e.g. `dist/$stage` from `Compress-Archive -Path "dist/$stage" …`.
 function quotedValueAfter(step, prefix) {
-  const line = step
-    .split("\n")
-    .map((candidate) => candidate.trim())
-    .find((candidate) => candidate.startsWith(prefix));
-  if (line === undefined) throw new Error(`missing workflow assignment: ${prefix}`);
-  const value = line.slice(prefix.length);
+  const [value] = valuesAfter(step, prefix);
+  if (value === undefined) throw new Error(`missing workflow assignment: ${prefix}`);
   return value.slice(0, value.indexOf('"'));
+}
+
+// The ref off the front of `uses: owner/action@ref  # comment`. Split on the
+// two characters that can separate it from a trailing comment — never a
+// pattern match over the YAML.
+function firstWord(value) {
+  return value.split(" ")[0].split("\t")[0];
 }
 
 function releaseBuildsPlatformSpecificVsixArtifacts() {
@@ -372,11 +375,7 @@ function assertEqual(actual, expected, message) {
 // same ref. Counting alone would pass a workflow whose retry step drifted a
 // major behind the attempt it retries.
 function assertUniformRef(value, prefix, count, message) {
-  const refs = value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith(prefix))
-    .map((line) => line.slice(prefix.length).split(/\s/u, 1)[0]);
+  const refs = valuesAfter(value, prefix).map(firstWord);
   if (refs.length !== count) throw new Error(`${message}; found ${refs.length}`);
   const distinct = [...new Set(refs)];
   if (distinct.length !== 1) {

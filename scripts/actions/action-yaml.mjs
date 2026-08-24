@@ -114,20 +114,33 @@ export function stepBody(action, stepName) {
 }
 
 /**
- * Every value declared for a repeated mapping key, in file order. Hand-scanned
- * like the rest of this module: the build matrix that names one
- * `vsix_target:` per platform is read this way rather than pattern-matched.
+ * The remainder of every line that opens with `prefix`, in file order. The one
+ * line scanner the contract suites share: collecting matrix legs, pinned
+ * action refs and shell assignments are the same walk with different tails.
  *
  * @param {string} source the workflow or action YAML
- * @param {string} key the mapping key whose values to collect
- * @returns {string[]} each declared value, trimmed
+ * @param {string} prefix the line opening to match, leading space ignored
+ * @returns {string[]} what follows `prefix` on each matching line, untrimmed
  */
-export function mappingValues(source, key) {
-  const marker = key + ":";
+export function valuesAfter(source, prefix) {
   return source
     .split("\n")
     .map((line) => line.trim())
-    .filter((line) => line.startsWith(marker))
-    .map((line) => line.slice(marker.length).trim())
+    .filter((line) => line.startsWith(prefix))
+    .map((line) => line.slice(prefix.length));
+}
+
+/**
+ * Every value declared for a repeated mapping key, in file order — the build
+ * matrix that names one `vsix_target:` per platform is read this way rather
+ * than pattern-matched.
+ *
+ * @param {string} source the workflow or action YAML
+ * @param {string} key the mapping key whose values to collect
+ * @returns {string[]} each declared value, trimmed, empty declarations dropped
+ */
+export function mappingValues(source, key) {
+  return valuesAfter(source, key + ":")
+    .map((value) => value.trim())
     .filter((value) => value !== "");
 }

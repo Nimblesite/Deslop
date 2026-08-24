@@ -12,9 +12,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
-const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+import { repoRoot } from "../lib/repo-root.mjs";
+
 const makefile = readFileSync(resolve(repoRoot, "Makefile"), "utf8").split("\n");
 const ciWorkflow = readFileSync(resolve(repoRoot, ".github/workflows/ci.yml"), "utf8").split("\n");
 

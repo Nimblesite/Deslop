@@ -144,10 +144,10 @@ function requireToken(tool) {
 
 /** Reads `--tool <vsce|ovsx>`; the platform set is not a caller's choice. */
 function parseTool(argv) {
-  const tool = TOOLS[argv[argv.indexOf("--tool") + 1]];
-  if (argv[0] !== "--tool" || tool === undefined) {
+  const name = argv[1];
+  if (argv[0] !== "--tool" || !Object.hasOwn(TOOLS, name)) {
     console.error("usage: node scripts/release/publish-vsixes.mjs --tool <vsce|ovsx>");
     process.exit(1);
   }
-  return tool;
+  return TOOLS[name];
 }

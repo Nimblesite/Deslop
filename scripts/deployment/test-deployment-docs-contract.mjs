@@ -9,11 +9,10 @@
 
 import { readFileSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { runContractSuite } from "../lib/contract-harness.mjs";
+import { repoRoot } from "../lib/repo-root.mjs";
 
-const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const workflow = readFileSync(resolve(repoRoot, ".github/workflows/release.yml"), "utf8");
 
 // VS Code appends the target triple to the extension directory for any VSIX

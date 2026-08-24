@@ -18,13 +18,12 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { mappingValues, stepBody } from "../actions/action-yaml.mjs";
 import { runContractSuite } from "../lib/contract-harness.mjs";
+import { repoRoot } from "../lib/repo-root.mjs";
 import { VSIX_ARTIFACT_PREFIX, VSIX_MATRIX_KEY, VSIX_PLATFORMS } from "./vsix-platforms.mjs";
 
-const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const workflow = readFileSync(resolve(repoRoot, ".github/workflows/release.yml"), "utf8");
 
 // The publish steps are `set -euo pipefail` plus a node call — no globstar,
@@ -46,6 +45,7 @@ const MISCOUNTED_PLATFORMS = [
   `${VSIX_PLATFORMS[0]}-stray`,
 ];
 const NO_FAILURE = "none-of-the-platforms";
+const SUITE_RUNNER = "node scripts/release/test-release-publish-contract.mjs";
 
 // Records every publish invocation, then fails any package whose path carries
 // FAIL_TARGET. Everything else publishes instantly.
@@ -77,6 +77,7 @@ const tests = [
   anIncompleteArtifactSetPublishesNothing,
   aHyphenatedTagPublishesAsAPrerelease,
   declaredPlatformsMatchTheBuildMatrix,
+  thisSuiteRunsInTheDeploymentVerifyTarget,
 ];
 
 runContractSuite(tests, "release publish contract");
@@ -179,6 +180,17 @@ function declaredPlatformsMatchTheBuildMatrix() {
     JSON.stringify(matrix) === JSON.stringify([...VSIX_PLATFORMS].sort()),
     `scripts/release/vsix-platforms.mjs declares [${VSIX_PLATFORMS.join(", ")}] but the build ` +
       `matrix produces [${matrix.join(", ")}]`,
+  );
+}
+
+// A contract nobody runs proves nothing: a merge on this branch dropped this
+// suite from `make deployment-verify` and every assertion above went quiet
+// without a single red test.
+function thisSuiteRunsInTheDeploymentVerifyTarget() {
+  const makefile = readFileSync(resolve(repoRoot, "Makefile"), "utf8");
+  assert.ok(
+    makefile.includes(SUITE_RUNNER),
+    `the Makefile no longer runs \`${SUITE_RUNNER}\`; this contract would stop being checked`,
   );
 }
 
