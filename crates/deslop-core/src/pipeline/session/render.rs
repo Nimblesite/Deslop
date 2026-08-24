@@ -67,8 +67,12 @@ impl PipelineSession {
         // population never coincide. The cross-language audit mode
         // reads trees before pairing; the default path defers to the
         // rescue below.
-        let (trees, cross_language_signatures, mut pairs, embedding_outcome) =
-            self.build_candidate_pairs(config, fingerprints, &signatures, &lsh_source)?;
+        let PairingOutcome {
+            trees,
+            cross_language_signatures,
+            pairs: mut pairs,
+            embedding_outcome,
+        } = self.build_candidate_pairs(config, fingerprints, &signatures, &lsh_source)?;
         ledger.record("candidate_pairs", signatures.len(), pairs.len(), stage_started);
         // Trees for every measurement stage, materialised once, now that
         // the pair-construction allocations are behind us — unless the
@@ -179,15 +183,7 @@ impl PipelineSession {
         fingerprints: &[crate::fingerprint::Fingerprint],
         signatures: &crate::lsh::SignatureIndex<'_>,
         lsh_source: &BandCollisionSource<'_>,
-    ) -> Result<
-        (
-            Option<Vec<crate::ast::NormalizedNode>>,
-            Option<Vec<crate::lsh::Signature>>,
-            Vec<crate::pair::CandidatePair>,
-            crate::pipeline::embedding_pass::EmbeddingOutcome,
-        ),
-        crate::CoreError,
-    > {
+    ) -> Result<PairingOutcome, crate::CoreError> {
         // [PERF-FLUTTER-TODO-MEMORY] Trees are re-materialised from
         // sources only when a consumer needs them — after the LSH/pair
         // stage whose allocations are the run's other memory peak, so
@@ -217,7 +213,12 @@ impl PipelineSession {
             &self.file_languages,
             self.exclusion.allows_cross_language_comparison(),
         );
-        Ok((trees, cross_language_signatures, pairs, embedding_outcome))
+        Ok(PairingOutcome {
+            trees,
+            cross_language_signatures,
+            pairs,
+            embedding_outcome,
+        })
     }
 
     /// Re-parses every held source into a normalised tree population,
@@ -342,6 +343,21 @@ impl PipelineSession {
         ledger.record("ranked_build", ranked_input, clusters.len(), started);
         clusters
     }
+}
+
+/// Everything the LSH/pair-construction half of a render produces for
+/// the measurement stages ([PERF-FLUTTER-TODO-MEMORY]).
+struct PairingOutcome {
+    /// Re-materialised normalised trees, when the cross-language audit
+    /// needed them before pairing; otherwise `None` and the caller
+    /// materialises them after pair construction.
+    trees: Option<Vec<crate::ast::NormalizedNode>>,
+    /// Cross-language alias signatures, audit mode only.
+    cross_language_signatures: Option<Vec<crate::lsh::Signature>>,
+    /// The admission-gated candidate pairs.
+    pairs: Vec<crate::pair::CandidatePair>,
+    /// The embedding pass outcome (empty when embeddings are off).
+    embedding_outcome: crate::pipeline::embedding_pass::EmbeddingOutcome,
 }
 
 /// One bounded cluster-stage boundary record

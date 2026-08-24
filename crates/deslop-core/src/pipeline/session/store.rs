@@ -155,20 +155,25 @@ impl CorpusStore {
     /// inside one segment, because a file's records never straddle
     /// segments.
     fn drain_signatures(&mut self, offset: usize, count: usize) {
-        if count == 0 {
-            return;
+        if let Some((segment, within)) = self.segment_mut_holding(offset) {
+            let stop = within.saturating_add(count).min(segment.len());
+            drop(segment.drain(within..stop));
         }
+    }
+
+    /// The segment containing flat `offset`, and the offset within it.
+    /// A file's records are contiguous inside one segment — upserts and
+    /// removals always land on file boundaries.
+    fn segment_mut_holding(&mut self, offset: usize) -> Option<(&mut Vec<Signature>, usize)> {
         let mut cursor = 0_usize;
         for segment in &mut self.signatures {
             let end = cursor.saturating_add(segment.len());
             if offset < end {
-                let within = offset.saturating_sub(cursor);
-                let stop = within.saturating_add(count).min(segment.len());
-                drop(segment.drain(within..stop));
-                return;
+                return Some((segment, offset.saturating_sub(cursor)));
             }
             cursor = end;
         }
+        None
     }
 
     /// Total fingerprints across every live file.
@@ -184,19 +189,16 @@ impl CorpusStore {
         if incoming.is_empty() {
             return;
         }
-        let mut cursor = 0_usize;
-        for segment in &mut self.signatures {
-            let end = cursor.saturating_add(segment.len());
-            if offset <= end {
-                let within = offset.saturating_sub(cursor).min(segment.len());
+        match self.segment_mut_holding(offset) {
+            Some((segment, within)) => {
                 let tail = segment.split_off(within);
                 segment.extend(incoming);
                 segment.extend(tail);
-                return;
             }
-            cursor = end;
+            // Past every segment: a brand-new file at the end of the
+            // sort order takes a fresh segment.
+            None => self.signatures.push(incoming),
         }
-        self.signatures.push(incoming);
     }
 
     /// Entry position of `file_id`, if the file is live.
