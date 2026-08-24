@@ -195,7 +195,7 @@ mod shard_equivalence_tests {
 
     use std::path::PathBuf;
 
-    use super::{apply_shared_subtree_rescue, MIN_SHARD_WORK};
+    use super::{apply_shared_subtree_rescue, run_shard, MIN_SHARD_WORK};
     use crate::{
         ast::NormalizedNode,
         fingerprint::Fingerprint,
@@ -253,11 +253,14 @@ mod shard_equivalence_tests {
         }
     }
 
-    /// Twice [`MIN_SHARD_WORK`] pairs — enough for at least two shards
-    /// on every machine — must measure identically to running the same
-    /// population serially in halves below the shard threshold. Every
-    /// eligible pair mutates identically and no pair is skipped by
-    /// either path.
+    /// Twice [`MIN_SHARD_WORK`] pairs must measure identically whether
+    /// the population runs through the (thread-pooling) entry point or
+    /// one `run_shard` over the whole list — the serial reference a
+    /// worker computes. Shard boundaries are pinned separately: two
+    /// disjoint `run_shard` calls over the halves must reproduce the
+    /// whole-list values, and their merged tallies must account for
+    /// every pair. A blind rescue (zero measured) fails, it does not
+    /// pass vacuously.
     #[test]
     fn sharded_rescue_matches_serial_outcomes() -> Result<(), String> {
         let pair_count = MIN_SHARD_WORK.saturating_mul(2);
@@ -269,15 +272,15 @@ mod shard_equivalence_tests {
         let nodes = left.1.node_count;
         let fingerprints = [left.1.clone(), right.1.clone()];
         let trees = [left.0, right.0];
+        let fixture = || (0..pair_count).map(|_| eligible_pair(nodes)).collect::<Vec<_>>();
 
-        let mut sharded: Vec<CandidatePair> = (0..pair_count).map(|_| eligible_pair(nodes)).collect();
+        // The threaded entry point — whichever core count routes it.
+        let mut sharded = fixture();
         apply_shared_subtree_rescue(&mut sharded, &fingerprints, &trees);
 
-        let serial_halves = MIN_SHARD_WORK / 2;
-        let mut serial: Vec<CandidatePair> = (0..pair_count).map(|_| eligible_pair(nodes)).collect();
-        let (head, tail) = serial.split_at_mut(serial_halves);
-        apply_shared_subtree_rescue(head, &fingerprints, &trees);
-        apply_shared_subtree_rescue(tail, &fingerprints, &trees);
+        // The serial reference: one measurer, one tally, every pair.
+        let mut serial = fixture();
+        let (serial_tally, serial_stats) = run_shard(&mut serial, &fingerprints, &trees);
 
         for (index, (shard_pair, serial_pair)) in sharded.iter().zip(&serial).enumerate() {
             assert!(
@@ -287,15 +290,63 @@ mod shard_equivalence_tests {
                 shard_pair.shared_subtree_overlap,
                 serial_pair.shared_subtree_overlap
             );
+            assert!(
+                shard_pair.shared_subtree_overlap > 0.0,
+                "pair {index}: the fixture is a real near-duplicate — a rescue that measures \
+                 nothing is blind, and overlap was {}",
+                shard_pair.shared_subtree_overlap
+            );
         }
-        let measured = sharded
-            .iter()
-            .filter(|pair| pair.shared_subtree_overlap > 0.0)
-            .count();
-        assert!(
-            measured == pair_count || measured == 0,
-            "every eligible pair is identical, so measurement must agree across all of them: \
-             {measured} of {pair_count} measured"
+
+        // Shard boundaries change nothing: halves measured as separate
+        // shards reproduce the whole-list values exactly.
+        let mut halved = fixture();
+        let midpoint = pair_count / 2;
+        let (head, tail) = halved.split_at_mut(midpoint);
+        let (head_tally, head_stats) = run_shard(head, &fingerprints, &trees);
+        let (tail_tally, tail_stats) = run_shard(tail, &fingerprints, &trees);
+        for (index, (half_pair, serial_pair)) in halved.iter().zip(&serial).enumerate() {
+            assert!(
+                (half_pair.shared_subtree_overlap - serial_pair.shared_subtree_overlap).abs()
+                    < f64::EPSILON,
+                "pair {index}: shard-split overlap {} must equal whole-list {}",
+                half_pair.shared_subtree_overlap,
+                serial_pair.shared_subtree_overlap
+            );
+        }
+
+        // The merged shard counters account for every pair, exactly as
+        // the module contract promises: absorb halves, compare to the
+        // whole-list tally, and check the stats fold.
+        let mut merged = head_tally;
+        merged.absorb(&tail_tally);
+        assert_eq!(
+            merged.scanned, serial_tally.scanned,
+            "merged shard tallies must count every scanned pair"
+        );
+        assert_eq!(
+            merged.eligible, serial_tally.eligible,
+            "merged shard tallies must count every eligible pair"
+        );
+        assert_eq!(
+            merged.cross_file, serial_tally.cross_file,
+            "merged shard tallies must count every cross-file pair"
+        );
+        assert_eq!(
+            merged.measured, serial_tally.measured,
+            "merged shard tallies must count every measured pair"
+        );
+        let u64_count = u64::try_from(pair_count).unwrap_or(u64::MAX);
+        assert_eq!(
+            merged.measured, u64_count,
+            "every fixture pair is eligible and cross-file: all {pair_count} must be measured, \
+             got {}",
+            merged.measured
+        );
+        let folded_stats = head_stats.add(tail_stats);
+        assert_eq!(
+            folded_stats.alignments, serial_stats.alignments,
+            "merged measurement stats must fold to the whole-list stats"
         );
         Ok(())
     }

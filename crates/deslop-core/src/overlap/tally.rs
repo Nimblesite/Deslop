@@ -35,20 +35,20 @@ const RESCUE_PROGRESS_INTERVAL: u64 = 50_000;
 #[derive(Debug, Clone)]
 pub(super) struct RescueTally {
     /// Candidate pairs examined, whatever became of them.
-    scanned: u64,
+    pub(super) scanned: u64,
     /// Pairs the fused threshold would drop despite token corroboration.
-    eligible: u64,
+    pub(super) eligible: u64,
     /// Eligible pairs whose endpoints live in different files — the
     /// population handed to the measurer.
-    cross_file: u64,
+    pub(super) cross_file: u64,
     /// Cross-file pairs the measurer answered, from any route.
-    measured: u64,
+    pub(super) measured: u64,
     /// Measured pairs whose overlap cleared
     /// [`crate::pair::SHARED_SUBTREE_MIN_OVERLAP`] — the pairs the
     /// rescue actually admits. Distinct from `measured`, which counts
     /// every pair the route looked at: conflating the two reports a
     /// rescue population that never existed.
-    rescued: u64,
+    pub(super) rescued: u64,
     /// Stage start, for the throughput a reader needs to tell slow from
     /// stuck.
     started: Instant,

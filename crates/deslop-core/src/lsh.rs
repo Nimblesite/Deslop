@@ -86,6 +86,19 @@ impl<'a> SignatureIndex<'a> {
         Self::from_segments([slice])
     }
 
+    /// Fills `tagged` with `(band hash, index tag)` for every
+    /// signature in index order — the per-band pass of
+    /// [`for_each_band_collision`], walking each segment as a slice.
+    fn fill_band_tags(&self, band: usize, tagged: &mut Vec<(u64, u32)>) {
+        for (segment, start) in self.segments.iter().zip(&self.offsets) {
+            for (within, signature) in segment.iter().enumerate() {
+                let key = band_key(signature, band);
+                let index = start.saturating_add(within);
+                tagged.push((truncated_band_hash(&key), index_to_tag(index)));
+            }
+        }
+    }
+
     /// Total signatures across every segment.
     #[must_use]
     pub fn len(&self) -> usize {
@@ -174,12 +187,7 @@ pub fn for_each_band_collision(
     let mut tagged: Vec<(u64, u32)> = Vec::with_capacity(signatures.len());
     for band in 0..BANDS {
         tagged.clear();
-        for index in 0..signatures.len() {
-            let key = signatures
-                .get(index)
-                .map_or([0_u8; 32], |signature| band_key(signature, band));
-            tagged.push((truncated_band_hash(&key), index_to_tag(index)));
-        }
+        signatures.fill_band_tags(band, &mut tagged);
         tagged.sort_unstable();
         emit_run_pairs(signatures, band, &tagged, emit);
     }
@@ -417,40 +425,38 @@ mod streaming_tests {
     }
 
     /// A truncated sort hash colliding across different full keys must
-    /// not pair the different-key signatures; exact equal keys separated
-    /// by the collider still pair via the regroup.
+    /// not pair the different-key signatures; exact equal keys
+    /// separated by the collider still pair via the regroup. The
+    /// collision is constructed, not hunted: the emitter's run logic
+    /// keys off the truncated sort hash in `tagged`, so a synthetic run
+    /// with equal sort hashes over signatures with different full band
+    /// keys exercises the split-and-regroup path deterministically — a
+    /// brute-force search of 64-bit hashes would pass without ever
+    /// seeing a collision.
     #[test]
     fn truncated_hash_collisions_never_manufacture_pairs() {
-        // Three signatures whose band-2 keys all truncate to the same
-        // sort hash but differ in full bytes: find real fills whose
-        // truncated hashes agree by brute force, keeping the search
-        // bounded. If none collide in a bounded sweep the test still
-        // pins the no-false-pair property over distinct keys.
-        let mut fills: Vec<u64> = Vec::new();
-        let mut seen: std::collections::HashMap<u64, u64> = std::collections::HashMap::new();
-        for candidate in 0..200_000_u64 {
-            let signature = seeded(candidate, 2, candidate);
-            let key = super::band_key(&signature, 2);
-            let truncated = super::truncated_band_hash(&key);
-            if let Some(prior) = seen.get(&truncated) {
-                fills.push(*prior);
-                fills.push(candidate);
-                break;
-            }
-            let _stored = seen.insert(truncated, candidate);
-        }
-        let [first_fill, second_fill] = fills.as_slice() else {
-            return;
-        };
-        let left = seeded(*first_fill, 2, *first_fill);
-        let right = seeded(*second_fill, 2, *second_fill);
-        let signatures = [left, right];
-        let mut pairs = Vec::new();
+        // Two clones (identical full band-0 keys) separated by one
+        // unrelated signature whose full key differs, all merged into
+        // one run by an equal truncated sort hash.
+        let clone_key = seeded(1, 0, 7);
+        let unrelated = seeded(2, 3, 9);
+        let signatures = [clone_key, unrelated, clone_key];
         let index = SignatureIndex::from_slice(&signatures);
-        for_each_band_collision(&index, &mut |l, r| pairs.push((l, r)));
-        assert!(
-            pairs.is_empty(),
-            "two signatures with different full band keys must never pair, even              when their truncated sort hashes collide: {pairs:?}"
+        const COLLIDING_SORT_HASH: u64 = 42;
+        let tagged = [
+            (COLLIDING_SORT_HASH, super::index_to_tag(0)),
+            (COLLIDING_SORT_HASH, super::index_to_tag(1)),
+            (COLLIDING_SORT_HASH, super::index_to_tag(2)),
+        ];
+        let mut pairs = Vec::new();
+        super::emit_one_run(&index, 0, &tagged, 0, tagged.len(), &mut |left, right| {
+            pairs.push((left, right));
+        });
+        assert_eq!(
+            pairs,
+            vec![(0, 2)],
+            "the collider-separated clones (0, 2) must pair through the regroup; \
+            the unrelated signature (1) must never pair across the collision"
         );
     }
 

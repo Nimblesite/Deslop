@@ -226,7 +226,7 @@ This list defines the required outcomes. It deliberately does not prescribe impl
 ### Definition of done [PERF-FLUTTER-TODO-DONE]
 
 - [ ] Complete a cold, non-incremental analysis of the pinned Flutter corpus in less than 600 seconds.
-- [ ] Keep peak process memory at or below the corpus ceiling of 1 gig
+- [ ] Keep peak process memory at or below the executable corpus ceiling of 1 gig (`max_peak_rss_mb` in `corpus/flutter.json`) — the one number the gate enforces.
 - [ ] Complete every pipeline stage, including clustering, ranking, and report rendering, without timeout or termination.
 - [ ] Produce the expected JSON report and all requested output formats.
 - [ ] Preserve every curated Flutter `must_find` result.

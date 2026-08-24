@@ -30,6 +30,8 @@ mod embedding_pass_observability;
 mod issue_117;
 #[path = "issue_121_pytest_fixture_boilerplate.rs"]
 mod issue_121_pytest_fixture_boilerplate;
+#[path = "pair_evidence_merge.rs"]
+mod pair_evidence_merge;
 #[path = "issue_124_node_count.rs"]
 mod issue_124_node_count;
 #[path = "issue_239_csharp_reparse.rs"]

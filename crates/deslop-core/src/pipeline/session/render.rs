@@ -70,7 +70,7 @@ impl PipelineSession {
         let PairingOutcome {
             trees,
             cross_language_signatures,
-            pairs: mut pairs,
+            mut pairs,
             embedding_outcome,
         } = self.build_candidate_pairs(config, fingerprints, &signatures, &lsh_source)?;
         ledger.record("candidate_pairs", signatures.len(), pairs.len(), stage_started);

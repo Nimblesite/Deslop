@@ -148,7 +148,7 @@ fn build_candidates<S: BuildHasher>(
     builder.add_structural_pairs();
     tracing::info!(
         rss_mib = crate::observe::resident_mib(),
-        kept = builder.kept.len(),
+        arrivals = builder.arrivals.len(),
         "pairs: post-structural"
     );
     builder.merge_embedding_pairs(embedding_pairs);
@@ -159,11 +159,11 @@ fn build_candidates<S: BuildHasher>(
     });
     tracing::info!(
         rss_mib = crate::observe::resident_mib(),
-        kept = builder.kept.len(),
+        arrivals = builder.arrivals.len(),
         lsh_scanned,
         "pairs: post-lsh"
     );
-    let resolved = builder.resolve_duplicates();
+    let resolved = builder.resolve_into_kept();
     tracing::info!(
         rss_mib = crate::observe::resident_mib(),
         resolved = resolved.len(),
@@ -178,6 +178,14 @@ fn packed_key(key: (usize, usize)) -> u64 {
     let (left, right) = key;
     (u64::try_from(left).unwrap_or(u64::MAX) << 32)
         | u64::try_from(right).unwrap_or(0xFFFF_FFFF)
+}
+
+/// The inverse of [`packed_key`]: the ordered index pair a row's packed
+/// key carries.
+fn unpack_key(key: u64) -> (usize, usize) {
+    let high = usize::try_from(key >> 32).unwrap_or(usize::MAX);
+    let low = usize::try_from(key & 0xFFFF_FFFF).unwrap_or(usize::MAX);
+    (high, low)
 }
 
 /// Insertion-time admission state: the retained pair list plus the
@@ -199,20 +207,33 @@ struct PairBuilder<'corpus, S: BuildHasher> {
     file_languages: Option<&'corpus HashMap<FileId, &'static str, S>>,
     /// Whether explicit cross-language comparison is allowed.
     allow_cross_language: bool,
-    /// The retained, gated pairs, at most one entry per key: a slim
-    /// packed-key set refuses the re-emission a pair suffers every time
-    /// it collides in another band (a retained pair averages a dozen
-    /// emissions on a corpus-scale run — pushing every one of them
-    /// again is gigabytes of dead entries). The rare cross-pass
-    /// duplicate (structural versus LSH versus embedding) is still
-    /// possible when the first pass's copy was gate-refused, and is
-    /// resolved once after collection by
-    /// [`PairBuilder::resolve_duplicates`].
-    kept: Vec<CandidatePair>,
-    /// Packed ordered keys of `kept` — membership only, no payloads:
-    /// under a tenth of the payload map's cost
-    /// ([PERF-FLUTTER-TODO-MEMORY]).
-    kept_keys: std::collections::HashSet<u64>,
+    /// One slim row per discovery arrival
+    /// ([PERF-FLUTTER-TODO-MEMORY]): 24 bytes against a
+    /// `CandidatePair`'s hundred-odd, so every pass's evidence can be
+    /// recorded — a first-seen key set that refused later arrivals
+    /// dropped stronger evidence and hid real duplicates
+    /// (`docs/performance-branch-review.md`). The rows fold into one
+    /// gated candidate per key in [`PairBuilder::resolve_into_kept`].
+    arrivals: Vec<Arrival>,
+    /// Packed keys already carried by a row — refuses the re-emission a
+    /// pair suffers every time it collides in another band (a retained
+    /// pair averages a dozen zero-evidence emissions on a corpus-scale
+    /// run) while still admitting evidence-bearing arrivals of a seen
+    /// key, whose cosine merges into the fold.
+    arrival_keys: std::collections::HashSet<u64>,
+}
+
+/// One discovery of one pair: the packed ordered key plus the evidence
+/// axes that arrival carried. Everything else a candidate needs is
+/// key-invariant, constructed once on the merged evidence after the
+/// fold ([REPAIR-COSINE-MERGE], gh #351).
+struct Arrival {
+    /// Packed ordered pair key; see [`packed_key`].
+    key: u64,
+    /// Structural axis: `1.0` from the Merkle pass, `0.0` otherwise.
+    structural: f64,
+    /// Embedding axis: the cosine this arrival measured, `0.0` if none.
+    cosine: f64,
 }
 
 impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
@@ -228,8 +249,8 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
             signatures,
             file_languages,
             allow_cross_language,
-            kept: Vec::new(),
-            kept_keys: std::collections::HashSet::new(),
+            arrivals: Vec::new(),
+            arrival_keys: std::collections::HashSet::new(),
         }
     }
 
@@ -285,49 +306,62 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
         }
     }
 
-    /// Collapses duplicate keys, keeping for each the strongest
-    /// evidence: highest `structural`, then highest `embedding_cos`
-    /// ([REPAIR-COSINE-MERGE] gh #351). This is exactly the historical
-    /// first-write-wins map's outcome — the structural pass inserted
-    /// `1.0` first, the embedding pass recorded its cosine into
-    /// whatever existed, and later LSH re-emissions of the same key
-    /// were ignored — reproduced without a resident key map
-    /// ([PERF-FLUTTER-TODO-MEMORY]).
-    fn resolve_duplicates(mut self) -> Vec<CandidatePair> {
-        drop(std::mem::take(&mut self.kept_keys));
-        self.kept.sort_unstable_by_key(|pair| (pair.left, pair.right));
-        // In place: a second vector would momentarily hold the whole
-        // population twice ([PERF-FLUTTER-TODO-MEMORY]).
-        self.kept.dedup_by(|kept, next| {
-            // Removal happens only for equal keys — a `true` for any
-            // adjacent pair would delete a *different* pair.
-            let same_key = (kept.left, kept.right) == (next.left, next.right);
-            if same_key
-                && (next.score.structural, next.score.embedding_cos)
-                    > (kept.score.structural, kept.score.embedding_cos)
-            {
-                std::mem::swap(kept, next);
+    /// Folds the arrival rows into one candidate per key
+    /// ([REPAIR-COSINE-MERGE], gh #351): each axis takes the maximum
+    /// over the key's arrivals — the Merkle pass contributes the
+    /// structural axis, every embedding arrival contributes its
+    /// cosine, whichever pass reached the pair first is telemetry. The
+    /// construction gate then runs once, on the merged evidence, so
+    /// neither ordering of duplicate discoveries can drop a pair the
+    /// merged evidence admits. Kept pairs leave in key order.
+    fn resolve_into_kept(mut self) -> Vec<CandidatePair> {
+        drop(std::mem::take(&mut self.arrival_keys));
+        self.arrivals.sort_unstable_by_key(|row| row.key);
+        let mut kept: Vec<CandidatePair> = Vec::with_capacity(self.arrivals.len());
+        let mut index = 0_usize;
+        while let Some(first) = self.arrivals.get(index) {
+            let (mut structural, mut cosine) = (first.structural, first.cosine);
+            let mut next = index.saturating_add(1);
+            while let Some(later) = self.arrivals.get(next) {
+                if later.key != first.key {
+                    break;
+                }
+                structural = structural.max(later.structural);
+                cosine = cosine.max(later.cosine);
+                next = next.saturating_add(1);
             }
-            same_key
-        });
-        self.kept.shrink_to_fit();
-        self.kept
+            index = next;
+            let Some(pair) = self.construct_pair(unpack_key(first.key), structural, cosine) else {
+                continue;
+            };
+            if self.gate(&pair) {
+                kept.push(pair);
+            }
+        }
+        kept.shrink_to_fit();
+        kept
     }
 
-    /// Constructs, policy-adjusts, gates, and conditionally retains the
-    /// pair `(left, right)` discovered with `structural` as its
-    /// structural-axis value and `cosine` as its embedding axis.
+    /// Records the discovery of `(left, right)` with `structural` as
+    /// its structural-axis value and `cosine` as its embedding axis. A
+    /// zero-evidence arrival of an already-carried key is skipped (the
+    /// band-collision bulk); evidence-bearing arrivals are always
+    /// recorded so the fold can take the per-axis maximum.
     fn add_discovered_pair(&mut self, left: usize, right: usize, structural: f64, cosine: f64) {
-        let key = order(left, right);
-        if !self.kept_keys.insert(packed_key(key)) {
+        let key = packed_key(order(left, right));
+        let evidence_bearing = structural > 0.0 || cosine > 0.0;
+        let newly_carried = self.arrival_keys.insert(key);
+        // A zero-evidence arrival of an already-carried key adds no
+        // axis the fold could raise — skip it. An evidence-bearing one
+        // always records, seen key or not.
+        if !evidence_bearing && !newly_carried {
             return;
         }
-        let Some(pair) = self.construct_pair(key, structural, cosine) else {
-            return;
-        };
-        if self.gate(&pair) {
-            self.kept.push(pair);
-        }
+        self.arrivals.push(Arrival {
+            key,
+            structural,
+            cosine,
+        });
     }
 
     /// Builds the candidate for `key` with its score axes filled in, or

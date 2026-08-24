@@ -135,6 +135,7 @@ pub fn fingerprint_corpus(
             fingerprints_running,
             files_total: files.len(),
             started,
+            segment_open: false,
         };
         parallel_file_work(
             &ordered,
@@ -212,6 +213,12 @@ struct AbsorbTarget<'a> {
     files_total: usize,
     /// Pass start, for progress records.
     started: Instant,
+    /// Whether the corpus's last signature segment is still open for
+    /// the current shard — one segment per shard, extended in place,
+    /// keeps the segment count (and so every `SignatureIndex` lookup's
+    /// search) tiny without any merge copy
+    /// ([PERF-FLUTTER-TODO-MEMORY]).
+    segment_open: bool,
 }
 
 impl AbsorbTarget<'_> {
@@ -234,12 +241,24 @@ impl AbsorbTarget<'_> {
             self.started,
         );
         // Fingerprints extend the flat vector; the file's signatures
-        // become their own segment — moved, never copied.
+        // extend the shard's open segment — moved, never copied.
         let FileWork {
             fingerprints, signatures, ..
         } = work;
         self.corpus.fingerprints.extend(fingerprints);
-        self.corpus.signatures.push(signatures);
+        match (self.corpus.signatures.last_mut(), self.segment_open) {
+            (Some(segment), true) => segment.extend(signatures),
+            _ => {
+                self.corpus.signatures.push(signatures);
+                self.segment_open = true;
+            }
+        }
+    }
+
+    /// Closes the open segment: the next absorbed file opens a fresh
+    /// one. Called once per shard boundary.
+    fn close_segment(&mut self) {
+        self.segment_open = false;
     }
 }
 
@@ -337,6 +356,7 @@ fn parallel_file_work(
             }
             position = position.saturating_add(1);
         }
+        target.close_segment();
     }
     Ok(())
 }
