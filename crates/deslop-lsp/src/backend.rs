@@ -75,7 +75,7 @@ impl Default for LspEmbeddingConfig {
 /// [`ProviderRegistry`] for the requested provider. When the provider
 /// is unreachable, we install [`NoopProvider`] and downgrade the mode
 /// to `Off` so the editor keeps working without semantic recall — the
-/// LSP must never crash-loop VS Code per issue #35. The log level
+/// LSP must never crash-loop VS Code per. The log level
 /// reflects intent: `error` when the user opted into `Required` and
 /// `warn` when `Auto` silently degraded.
 fn resolve_startup_provider(
@@ -223,10 +223,11 @@ impl LspBackend {
         // ([LSP-NON-INTERFERENCE]).
         let root = session.root().to_path_buf();
         let report_snapshot = session.report_snapshot_handle();
+        let exclusion = session.exclusion_handle();
         let session = Arc::new(Mutex::new(session));
         let service = Arc::new(LiveService::new(Arc::clone(&session)));
         let (watcher, scheduler) =
-            crate::file_watch::start(&root, None, Arc::clone(&session), client.clone())?;
+            crate::file_watch::start(&root, None, Arc::clone(&session), exclusion, client.clone())?;
         let report_changed = scheduler.report_changed_sender();
         let ipc = crate::ipc::IpcServer::start(
             &root,
@@ -401,7 +402,7 @@ impl LanguageServer for LspBackend {
         // in-flight cold pass (or a settled scan) without a window reload
         // ([VSIX reactivity]).
         crate::cache_seed::push_initial_state(&self.client, &self.cold_pass_active).await;
-        // [CI-DESLOP] GH #194: the threshold is a CLI-only gate; its sole
+        // [CI-DESLOP]: the threshold is a CLI-only gate; its sole
         // live-surface effect is one non-blocking warning when the budget
         // is smashed. Nothing else in the editor changes.
         crate::threshold_warning::push_threshold_warning(&self.client, &self.service).await;

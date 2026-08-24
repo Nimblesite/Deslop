@@ -31,7 +31,13 @@ pub const REPORT_SCHEMA_DOC: &str = "deslop/reportSchemaDoc";
 /// Mirrors [`Report::truncate_for_wire`] but for a single cluster
 /// (used by `report/forFile` + `report/forRange`).
 fn truncate_cluster_for_wire(cluster: &mut ReportCluster) {
-    cluster.occurrences_total = occurrence_count(cluster);
+    // `evidence_verdict` deliberately survives the blanking: it is a
+    // measured reading of signals the client can no longer recompute
+    // once the occurrence list is capped, and re-deriving it client-side
+    // is what the one-calculation rule forbids.
+    let count = occurrence_count(cluster);
+    cluster.occurrences_total = count;
+    cluster.occurrence_count = count;
     if cluster.occurrences.len() > LIVE_WIRE_OCCURRENCE_CAP {
         cluster.occurrences.truncate(LIVE_WIRE_OCCURRENCE_CAP);
         cluster.occurrences_truncated = true;

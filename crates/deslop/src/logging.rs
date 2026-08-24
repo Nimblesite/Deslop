@@ -2,14 +2,13 @@
 //!
 //! The CLI's stderr is reserved for the human-readable preamble +
 //! summary (see [`crate::summary`]); log lines go to a timestamped
-//! file next to the report output by default. `--log-to-console`
-//! bounces them back onto stderr, and `--log-level` filters both
-//! sinks.
+//! file under the report directory's `logs/` subdirectory by default
+//! ([OUTPUT-DIR]). `--log-to-console` bounces them back onto stderr,
+//! and `--log-level` filters both sinks.
 //!
-//! The log file name is `deslop-<yyyymmddTHHMMSS>.log`, placed in
-//! the same directory as the rendered report. The timestamp comes
-//! from `SystemTime::now()` formatted manually so we do not pull in
-//! the `time` crate for one line of formatting.
+//! The log file name is `deslop-<unix-seconds>.log`. The timestamp
+//! comes from `SystemTime::now()` formatted manually so we do not pull
+//! in the `time` crate for one line of formatting.
 
 use std::{
     fs, io,

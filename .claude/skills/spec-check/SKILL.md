@@ -59,7 +59,7 @@ Search for markdown files that contain spec sections with IDs. Look in these loc
 - `PLAN.md`
 - `specs/*.md`
 
-For this repo specifically, the spec files live under [docs/specs/](docs/specs/) (e.g., [docs/specs/SPEC.md](docs/specs/SPEC.md), [docs/specs/live.md](docs/specs/live.md), [docs/specs/lsp.md](docs/specs/lsp.md), [docs/specs/mcp.md](docs/specs/mcp.md), [docs/specs/vsix.md](docs/specs/vsix.md), etc.) and the plan lives at [docs/plans/PLAN.md](docs/plans/PLAN.md).
+For this repo specifically, the spec files live under [docs/specs/](../../../docs/specs/) (e.g., [docs/specs/SPEC.md](../../../docs/specs/SPEC.md), [docs/specs/live.md](../../../docs/specs/live.md), [docs/specs/lsp.md](../../../docs/specs/lsp.md), [docs/specs/mcp.md](../../../docs/specs/mcp.md), [docs/specs/vsix.md](../../../docs/specs/vsix.md), etc.) and the plans live under [docs/plans/](../../../docs/plans/), one file per work stream.
 
 Use Glob to find candidate files, then use Grep to confirm they contain spec IDs.
 

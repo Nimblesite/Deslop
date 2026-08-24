@@ -11,62 +11,25 @@
 //! once.  A wrong `HashMap` mapping contaminates token streams; the
 //! cross-file Type-3 assertion catches that.
 
-use std::{fs, path::Path, path::PathBuf};
-
 use anyhow::Result;
 
-mod common;
 use crate::common::*;
 
-fn json_output(tmp: &Path) -> PathBuf {
-    tmp.join("report.json")
-}
-
+/// Drives the `deslop` binary over the named fixture at `min_nodes` and
+/// returns the parsed JSON report, asserting the process exited cleanly.
 fn run_cli(fixture_name: &str, min_nodes: u32) -> Result<serde_json::Value> {
     let tmp = tempfile::tempdir()?;
-    let out = json_output(tmp.path());
-    let _assertion = deslop_cmd(&fixture(fixture_name), &tmp.path().join("report"))?
-        .arg("--min-nodes")
-        .arg(min_nodes.to_string())
+    let output = tmp.path().join("report");
+    let min_nodes = min_nodes.to_string();
+    let _assertion = deslop_cmd(&fixture(fixture_name), &output)?
+        .args(["--min-nodes", min_nodes.as_str()])
         .assert()
         .success();
-    let json = fs::read_to_string(&out)?;
-    Ok(serde_json::from_str(&json)?)
+    load_json(&output.with_extension("json"))
 }
 
-fn clusters(report: &serde_json::Value) -> Vec<&serde_json::Value> {
-    report
-        .pointer("/clusters")
-        .and_then(serde_json::Value::as_array)
-        .map(|v| v.iter().collect())
-        .unwrap_or_default()
-}
-
-fn signal(cluster: &serde_json::Value, key: &str) -> f64 {
-    cluster
-        .pointer(&format!("/signals/{key}"))
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or(f64::NAN)
-}
-
-fn occurrence_files(cluster: &serde_json::Value) -> Vec<String> {
-    cluster
-        .pointer("/occurrences")
-        .and_then(serde_json::Value::as_array)
-        .map(|occ| {
-            occ.iter()
-                .filter_map(|o| {
-                    o.get("path").and_then(serde_json::Value::as_str).map(|p| {
-                        Path::new(p)
-                            .file_name()
-                            .map_or_else(|| p.to_owned(), |n| n.to_string_lossy().into_owned())
-                    })
-                })
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
+/// True only within one float ulp of `1.0` — a saturated signal, never a
+/// merely high one.
 fn is_exact_one(value: f64) -> bool {
     (value - 1.0).abs() <= f64::EPSILON
 }
@@ -86,7 +49,6 @@ fn python_type2_clone_has_token_jaccard_of_one() -> Result<()> {
     );
     let top = clusters
         .first()
-        .copied()
         .ok_or_else(|| anyhow::anyhow!("python-small must produce at least one cluster"))?;
     let token_jaccard = signal(top, "token_jaccard");
     assert!(
@@ -116,26 +78,15 @@ fn python_type2_clone_has_token_jaccard_of_one() -> Result<()> {
 //   Bug 1: minhash_signature (XOF) produces valid signature values —
 //          a broken implementation (garbage output) would produce
 //          near-zero Jaccard on shared k-gram sets.
-//   Bug 2: build_signatures_with_languages uses the correct tree per
-//          file (HashMap index).  A wrong mapping would give each
+//   Bug 2: signatures_for_file builds each file's signatures against
+//          that file's own tree.  A wrong tree would give each
 //          fingerprint the wrong token stream, scrambling all Jaccard
 //          values and collapsing the cross-file cluster.
 #[test]
 fn python_multi_file_corpus_produces_cross_file_cluster_with_positive_token_jaccard() -> Result<()>
 {
     let report = run_cli("python-type3", 8)?;
-    let clusters = clusters(&report);
-    let cross_file = clusters.iter().find(|cluster| {
-        let files: std::collections::BTreeSet<String> =
-            occurrence_files(cluster).into_iter().collect();
-        files.contains("alpha.py") && files.contains("beta.py")
-    });
-    let Some(cluster) = cross_file else {
-        anyhow::bail!(
-            "python-type3 must produce a cross-file cluster spanning alpha.py and beta.py; \
-             got clusters: {clusters:#?}"
-        );
-    };
+    let cluster = expect_cluster_spanning(&report, &["alpha.py", "beta.py"])?;
     let token_jaccard = signal(cluster, "token_jaccard");
     assert!(
         token_jaccard > 0.0,
@@ -158,11 +109,11 @@ fn python_token_jaccard_is_deterministic_across_runs() -> Result<()> {
     let run2 = run_cli("python-small", 10)?;
     let jaccards1: Vec<u64> = clusters(&run1)
         .iter()
-        .map(|c| signal(c, "token_jaccard").to_bits())
+        .map(|cluster| signal(cluster, "token_jaccard").to_bits())
         .collect();
     let jaccards2: Vec<u64> = clusters(&run2)
         .iter()
-        .map(|c| signal(c, "token_jaccard").to_bits())
+        .map(|cluster| signal(cluster, "token_jaccard").to_bits())
         .collect();
     assert!(
         !jaccards1.is_empty(),

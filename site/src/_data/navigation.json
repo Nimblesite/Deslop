@@ -1,42 +1,170 @@
 {
   "main": [
-    { "text": "Docs", "i18nKey": "nav.docs", "url": "/docs/" },
-    { "text": "Blog", "i18nKey": "nav.blog", "url": "/blog/" },
-    { "text": "Releases", "i18nKey": "nav.releases", "url": "/releases/" },
-    { "text": "GitHub", "url": "https://github.com/Nimblesite/Deslop", "external": true }
+    {
+      "text": "Docs",
+      "i18nKey": "nav.docs",
+      "url": "/docs/"
+    },
+    {
+      "text": "Blog",
+      "i18nKey": "nav.blog",
+      "url": "/blog/"
+    },
+    {
+      "text": "GitHub",
+      "url": "https://github.com/Nimblesite/Deslop",
+      "external": true
+    }
+  ],
+  "docsGroups": [
+    {
+      "id": "start",
+      "i18nKey": "docsNav.start"
+    },
+    {
+      "id": "guides",
+      "i18nKey": "docsNav.guides"
+    },
+    {
+      "id": "reference",
+      "i18nKey": "docsNav.reference"
+    },
+    {
+      "id": "trust",
+      "i18nKey": "docsNav.trust"
+    }
+  ],
+  "docsExtras": [
+    {
+      "group": "reference",
+      "i18nKey": "nav.releases",
+      "url": "/releases/",
+      "icon": "new_releases"
+    },
+    {
+      "group": "trust",
+      "i18nKey": "docsNav.interactiveGraph",
+      "url": "/issues/",
+      "icon": "hub",
+      "noLangPrefix": true
+    },
+    {
+      "group": "trust",
+      "i18nKey": "docsNav.issuePlanner",
+      "url": "/issues/planner/",
+      "icon": "view_timeline",
+      "noLangPrefix": true
+    }
   ],
   "footer": [
     {
       "title": "Product",
       "i18nKey": "footer.product",
       "items": [
-        { "text": "Getting Started", "i18nKey": "footer.gettingStarted", "url": "/docs/" },
-        { "text": "How It Works", "i18nKey": "footer.howItWorks", "url": "/docs/how-it-works/" },
-        { "text": "AI Integration", "i18nKey": "footer.aiIntegration", "url": "/docs/ai-integration/" },
-        { "text": "For AI", "i18nKey": "footer.forAI", "url": "/docs/for-ai/" },
-        { "text": "Output Formats", "i18nKey": "footer.outputFormats", "url": "/docs/output-formats/" },
-        { "text": "Configuration", "i18nKey": "footer.configuration", "url": "/docs/configuration/" },
-        { "text": "VS Code Cluster Panel", "i18nKey": "footer.clusterPanel", "url": "/docs/vscode-cluster-panel/" },
-        { "text": "Releases", "i18nKey": "footer.releases", "url": "/releases/" }
+        {
+          "text": "Getting Started",
+          "i18nKey": "footer.gettingStarted",
+          "url": "/docs/"
+        },
+        {
+          "text": "How It Works",
+          "i18nKey": "footer.howItWorks",
+          "url": "/docs/how-it-works/"
+        },
+        {
+          "text": "AI Agents",
+          "i18nKey": "footer.aiIntegration",
+          "url": "/docs/ai-integration/"
+        },
+        {
+          "text": "For AI",
+          "i18nKey": "footer.forAI",
+          "url": "/docs/for-ai/"
+        },
+        {
+          "text": "VS Code",
+          "i18nKey": "footer.clusterPanel",
+          "url": "/docs/vscode-cluster-panel/"
+        },
+        {
+          "text": "Configuration",
+          "i18nKey": "footer.configuration",
+          "url": "/docs/configuration/"
+        },
+        {
+          "text": "GitHub Action",
+          "i18nKey": "footer.githubAction",
+          "url": "/docs/github-action/"
+        },
+        {
+          "text": "Research",
+          "i18nKey": "footer.research",
+          "url": "/docs/research-background/"
+        },
+        {
+          "text": "Releases",
+          "i18nKey": "footer.releases",
+          "url": "/releases/"
+        },
+        {
+          "text": "Issue graph",
+          "i18nKey": "docsNav.interactiveGraph",
+          "url": "/issues/",
+          "noLangPrefix": true
+        },
+        {
+          "text": "Issue planner",
+          "i18nKey": "docsNav.issuePlanner",
+          "url": "/issues/planner/",
+          "noLangPrefix": true
+        }
       ]
     },
     {
       "title": "Install",
       "i18nKey": "footer.install",
       "items": [
-        { "text": "VS Code Marketplace", "i18nKey": "footer.vscodeMarketplace", "url": "https://marketplace.visualstudio.com/items?itemName=Nimblesite.deslop-live" },
-        { "text": "Open VSX Registry", "i18nKey": "footer.openVsx", "url": "https://open-vsx.org/extension/Nimblesite/deslop-live" },
-        { "text": "Releases", "i18nKey": "footer.releases", "url": "/releases/" }
+        {
+          "text": "VS Code Marketplace",
+          "i18nKey": "footer.vscodeMarketplace",
+          "url": "https://marketplace.visualstudio.com/items?itemName=Nimblesite.deslop-live"
+        },
+        {
+          "text": "Open VSX Registry",
+          "i18nKey": "footer.openVsx",
+          "url": "https://open-vsx.org/extension/Nimblesite/deslop-live"
+        },
+        {
+          "text": "Releases",
+          "i18nKey": "footer.releases",
+          "url": "/releases/"
+        }
       ]
     },
     {
       "title": "Community",
       "i18nKey": "footer.community",
       "items": [
-        { "text": "Discord", "i18nKey": "footer.discord", "url": "https://discord.gg/HUrTkEVR" },
-        { "text": "GitHub", "url": "https://github.com/Nimblesite/Deslop" },
-        { "text": "GitHub Releases", "i18nKey": "footer.githubReleases", "url": "https://github.com/Nimblesite/Deslop/releases" },
-        { "text": "RSS", "i18nKey": "footer.rss", "url": "/feed.xml", "noLangPrefix": true }
+        {
+          "text": "Discord",
+          "i18nKey": "footer.discord",
+          "url": "https://discord.gg/HUrTkEVR"
+        },
+        {
+          "text": "GitHub",
+          "url": "https://github.com/Nimblesite/Deslop"
+        },
+        {
+          "text": "GitHub Releases",
+          "i18nKey": "footer.githubReleases",
+          "url": "https://github.com/Nimblesite/Deslop/releases"
+        },
+        {
+          "text": "RSS",
+          "i18nKey": "footer.rss",
+          "url": "/feed.xml",
+          "noLangPrefix": true
+        }
       ]
     }
   ]

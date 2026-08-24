@@ -116,6 +116,14 @@ struct SchedulerTaskState {
     analysis_state: BroadcastSender<AnalysisState>,
     /// Shared clock used for tick timestamps.
     clock: Arc<dyn Clock>,
+    /// Generation carried by the last `report/changed` this scheduler
+    /// sent. `None` until the first one goes out. Reads through
+    /// [`LiveApi`](crate::live::LiveApi) refresh the session
+    /// out-of-band and can advance the generation without announcing
+    /// it, so "did this pass change anything" is the wrong question —
+    /// the right one is "do subscribers already know about this
+    /// generation" ([LIVE-SCHEDULER-NOOP]).
+    last_announced_generation: Option<u64>,
 }
 
 impl SchedulerTaskState {
@@ -135,11 +143,16 @@ impl SchedulerTaskState {
             report_changed,
             analysis_state,
             clock,
+            last_announced_generation: None,
         }
     }
 
     /// Top-level event loop.
     async fn run(mut self) {
+        // `initialize` / `reportGet` hand every subscriber this
+        // generation before the first watcher event can land, so it is
+        // not news and must not be re-announced ([LIVE-SCHEDULER-NOOP]).
+        self.last_announced_generation = Some(self.session.lock().await.generation());
         let mut tick = time::interval(Duration::from_millis(50));
         loop {
             tokio::select! {
@@ -172,7 +185,9 @@ impl SchedulerTaskState {
         let outcome = self.run_pass(&changed).await;
         match outcome {
             Ok(notification) => {
-                broadcast_report_changed(&self.report_changed, notification);
+                if let Some(notification) = notification {
+                    broadcast_report_changed(&self.report_changed, notification);
+                }
                 broadcast_state(&self.analysis_state, AnalysisState::Idle);
             }
             Err(message) => {
@@ -183,15 +198,40 @@ impl SchedulerTaskState {
 
     /// Runs a single `apply_changes` pass and translates the result
     /// into a wire notification.
-    async fn run_pass(&mut self, changed: &[PathBuf]) -> Result<ReportChangedNotification, String> {
+    ///
+    /// Returns `None` when subscribers already hold this generation
+    /// ([LIVE-SCHEDULER-NOOP]) — announcing it only makes the panel,
+    /// the diagnostics publisher and the MCP round-trip `reportDelta`
+    /// → `reportGet` to re-fetch identical bytes. One production LSP
+    /// served 281 such `reportGet` calls in two hours of build churn
+    ///.
+    ///
+    /// The baseline is the last generation *announced*, never the one
+    /// this pass happened to start from, so a generation an
+    /// out-of-band read published silently still reaches subscribers
+    /// here rather than being mistaken for a no-op.
+    async fn run_pass(
+        &mut self,
+        changed: &[PathBuf],
+    ) -> Result<Option<ReportChangedNotification>, String> {
         let mut guard = self.session.lock().await;
         let delta = guard
             .apply_changes(changed)
             .map_err(|err| err.to_string())?;
         let generation = guard.generation();
-        Ok(ReportChangedNotification {
+        drop(guard);
+        if self.last_announced_generation == Some(generation) {
+            tracing::debug!(
+                generation,
+                paths = changed.len(),
+                "no-op pass; nothing broadcast"
+            );
+            return Ok(None);
+        }
+        self.last_announced_generation = Some(generation);
+        Ok(Some(ReportChangedNotification {
             generation,
             summary: ChangeSummary::from_delta(&delta),
-        })
+        }))
     }
 }

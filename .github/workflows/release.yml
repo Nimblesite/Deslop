@@ -43,10 +43,10 @@ jobs:
       # release artifact verification; without stamping it here the
       # binary version verifier would fail the very next build.
       - name: Stamp release version
-        run: node scripts/stamp-release-version.mjs "${{ steps.extract.outputs.version }}"
+        run: node scripts/release/stamp-release-version.mjs "${{ steps.extract.outputs.version }}"
 
       - name: Validate deployment manifest
-        run: node scripts/verify-deployment-manifest.mjs shipwright.json
+        run: node scripts/deployment/verify-deployment-manifest.mjs shipwright.json
 
   # Change-sensitive release classifier (proposed Shipwright spec SWR-REL-CHANGES).
   # Diffs the pushed tag against the prior v* release and decides which surfaces
@@ -73,7 +73,7 @@ jobs:
           fetch-depth: 0
       - name: Classify changed surfaces vs prior release
         id: classify
-        run: python3 scripts/release-changes.py --head "${{ github.ref_name }}"
+        run: python3 scripts/release/release-changes.py --head "${{ github.ref_name }}"
 
   build:
     name: Build (${{ matrix.artifact_name }})
@@ -139,7 +139,7 @@ jobs:
         run: npm install -g typediagram@0.11.0
 
       - name: Stamp release version
-        run: node scripts/stamp-release-version.mjs "${{ needs.version.outputs.version }}"
+        run: node scripts/release/stamp-release-version.mjs "${{ needs.version.outputs.version }}"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -198,7 +198,7 @@ jobs:
             windows-x64) _platform=win32-x64 ;;
             *) echo "unknown artifact ${{ matrix.artifact_name }}"; exit 1 ;;
           esac
-          node scripts/verify-deployment-binaries.mjs shipwright.json "target/${{ matrix.target }}/release" "$_platform"
+          node scripts/deployment/verify-deployment-binaries.mjs shipwright.json "target/${{ matrix.target }}/release" "$_platform"
 
       - name: Package archive (unix)
         if: matrix.os != 'windows-latest'
@@ -334,7 +334,7 @@ jobs:
       # verifies its bundled binary against) to the tag version. The Gradle plugin
       # version is passed via -PdeslopVersion so the zip filenames match.
       - name: Stamp release version
-        run: node scripts/stamp-release-version.mjs "${{ needs.version.outputs.version }}"
+        run: node scripts/release/stamp-release-version.mjs "${{ needs.version.outputs.version }}"
 
       - uses: actions/download-artifact@v8
         with:
@@ -372,7 +372,7 @@ jobs:
             -PdeslopVersion="${{ needs.version.outputs.version }}"
 
       - name: Verify the plugin package
-        run: node scripts/verify-jetbrains-package.mjs
+        run: node scripts/deployment/verify-jetbrains-package.mjs
 
       - name: Upload JetBrains plugin
         uses: actions/upload-artifact@v7
@@ -436,6 +436,7 @@ jobs:
     permissions:
       actions: write
       contents: read
+      issues: read
       pages: write
       id-token: write
     uses: ./.github/workflows/deploy-pages.yml
@@ -584,7 +585,8 @@ jobs:
             "architecture": {
               "64bit": {
                 "url": "${base}/${win_zip}",
-                "hash": "${win_sha}"
+                "hash": "${win_sha}",
+                "extract_dir": "deslop-${version}-windows-x64"
               }
             },
             "bin": [
@@ -598,7 +600,8 @@ jobs:
             "autoupdate": {
               "architecture": {
                 "64bit": {
-                  "url": "${base}/deslop-\$version-windows-x64.zip"
+                  "url": "https://github.com/${{ github.repository }}/releases/download/v\$version/deslop-\$version-windows-x64.zip",
+                  "extract_dir": "deslop-\$version-windows-x64"
                 }
               }
             }

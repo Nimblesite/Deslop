@@ -1,4 +1,4 @@
-use crate::support::*;
+use super::support::*;
 use std::fmt::Write as _;
 
 #[test]
@@ -56,7 +56,49 @@ fn prints_help_and_mentions_min_nodes_flag() -> Result<()> {
         .stdout(contains("--log-to-console"))
         .stdout(contains("--log-level"))
         .stdout(contains("--no-color"))
-        .stdout(contains("--technical"));
+        .stdout(contains("--technical"))
+        .stdout(contains("--diff"))
+        .stdout(contains("--only-changed"));
+    Ok(())
+}
+
+// [CLI-ARG-ONLY-CHANGED] scopes by a diff, so it demands one.
+#[test]
+fn only_changed_without_diff_is_a_usage_error() -> Result<()> {
+    let output = Command::cargo_bin("deslop")?
+        .args([".", "--only-changed"])
+        .output()?;
+    assert_eq!(output.status.code(), Some(2), "clap rejections exit 2");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("--diff"),
+        "rejection must point at the missing --diff: {stderr}"
+    );
+    Ok(())
+}
+
+// [CLI-ARG-DIFF] conflicts: `--from-report` skips analysis (nothing to
+// verify a diff against) and the `--rerun-*` flags are the live-loop
+// surface, which carries no diff tags — combining them would silently
+// emit a second, untagged report over the tagged one.
+#[test]
+fn diff_conflicts_with_from_report_and_rerun_flags() -> Result<()> {
+    for conflicting in [
+        vec!["--from-report", "report.json"],
+        vec!["--rerun-touch", "some.rs"],
+        vec!["--rerun-remove", "some.rs"],
+        vec!["--rerun-add", "a.rs=b.rs"],
+    ] {
+        let output = Command::cargo_bin("deslop")?
+            .args([".", "--diff", "change.patch"])
+            .args(&conflicting)
+            .output()?;
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "--diff with {conflicting:?} must be rejected as a usage error"
+        );
+    }
     Ok(())
 }
 
@@ -80,7 +122,7 @@ fn accepts_path_argument_without_panicking() -> Result<()> {
 fn default_run_emits_all_three_formats() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let json = fs::read_to_string(&out.json)?;
     assert!(json.contains("\"schema_doc\""), "schema_doc missing");
@@ -129,7 +171,7 @@ fn default_run_emits_all_three_formats() -> Result<()> {
 fn cli_json_report_omits_inline_schema_doc() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let json = fs::read_to_string(&out.json)?;
     let value: Value = serde_json::from_str(&json)?;
@@ -208,7 +250,7 @@ fn wrap_clone_in_class(class: &str, body: &str) -> String {
 fn suppression_flags_leave_only_enabled_formats() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd
         .args(["--min-nodes", "8", "--nojson", "--nohtml"])
         .assert()
@@ -224,7 +266,7 @@ fn suppression_flags_leave_only_enabled_formats() -> Result<()> {
 #[test]
 fn suppressing_every_format_is_an_error() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd
         .args(["--nojson", "--notext", "--nohtml"])
         .assert()
@@ -240,7 +282,7 @@ fn suppressing_every_format_is_an_error() -> Result<()> {
 #[test]
 fn suppressing_every_format_exits_with_usage_code() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd
         .args(["--nojson", "--notext", "--nohtml"])
         .assert()
@@ -256,7 +298,7 @@ fn suppressing_every_format_exits_with_usage_code() -> Result<()> {
 fn from_report_rerenders_without_analysing() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut first = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut first = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = first
         .args(["--min-nodes", "8", "--notext", "--nohtml"])
         .assert()

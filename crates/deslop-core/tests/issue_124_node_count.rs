@@ -1,21 +1,48 @@
 //! Regression coverage for GH #124 Type-4 node-count ranking inflation.
+//!
+//! The fixture no longer declares a signal triple: under
+//! [FUSION-CLUSTER-SIGNALS] a cluster's signals are measured between the
+//! occurrences the report renders, so the fixture must supply the
+//! evidence that produces them — identical Merkle hashes for the exact
+//! pair, partially agreeing `MinHash` signatures for the Type-4 pair, and
+//! embedding vectors only where the pass actually produced them.
 
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Context, Result};
 use deslop_core::{
     ast::ByteRange,
-    cluster::{build_ranked_fused_clusters, Cluster},
+    cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs},
     fingerprint::Fingerprint,
-    pair::{FusedCluster, PairScore},
+    lsh::{Signature, SignatureIndex, SIGNATURE_LEN},
+    pair::FusedCluster,
     state::{FileId, FileRegistry},
 };
 
+/// Positions the Type-4 signatures agree on: 46/128 == 0.359375.
+const TYPE4_AGREEMENTS: usize = 46;
+/// Measured Jaccard the Type-4 signature pair must yield.
+const TYPE4_JACCARD: f64 = 0.359_375;
+/// Cosine the Type-4 embedding vectors encode.
+const TYPE4_COSINE: f64 = 0.94;
+/// Float slack for measured signal comparisons (`f32` vector arithmetic).
+const SIGNAL_TOLERANCE: f64 = 1e-5;
+
 #[test]
 fn issue_124_type4_node_count_does_not_dominate_refactor_ranking() -> Result<()> {
-    let (fingerprints, fused_clusters) = type4_weight_fixture();
+    let fixture = type4_weight_fixture();
 
-    let clusters = build_ranked_fused_clusters(&fingerprints, &fused_clusters);
+    let signature_index = SignatureIndex::from_slice(&fixture.signatures);
+    let clusters = build_ranked_fused_clusters(&ClusterBuildInputs {
+        fingerprints: &fixture.fingerprints,
+        signatures: &signature_index,
+        embedding_vectors: &fixture.vectors,
+        fused_clusters: &fixture.fused_clusters,
+        trees: &[],
+        sources: &HashMap::new(),
+        file_languages: &HashMap::new(),
+        file_paths: &HashMap::new(),
+    });
     assert_eq!(
         clusters.len(),
         2,
@@ -61,42 +88,106 @@ fn issue_124_type4_node_count_does_not_dominate_refactor_ranking() -> Result<()>
         "issue #124: the actionable exact duplicate should be ranked first"
     );
 
+    assert_measured_signals(semantic, exact);
+
     Ok(())
 }
 
-fn type4_weight_fixture() -> (Vec<Fingerprint>, Vec<FusedCluster>) {
+/// [FUSION-CLUSTER-SIGNALS]: every rendered signal is measured between
+/// the rendered occurrences, so each one must equal the evidence the
+/// fixture supplied — not a discovery-edge average.
+fn assert_measured_signals(semantic: &Cluster, exact: &Cluster) {
+    assert!(
+        semantic.signals.structural.abs() < f64::EPSILON,
+        "Type-4 members carry different Merkle hashes, so measured structural is exactly 0.0; got {}",
+        semantic.signals.structural
+    );
+    assert!(
+        (semantic.signals.token_jaccard - TYPE4_JACCARD).abs() < SIGNAL_TOLERANCE,
+        "Type-4 token signal must be the MinHash estimate of the two rendered signatures ({TYPE4_JACCARD}); got {}",
+        semantic.signals.token_jaccard
+    );
+    assert!(
+        (semantic.signals.embedding_cos - TYPE4_COSINE).abs() < SIGNAL_TOLERANCE,
+        "Type-4 cosine must be measured between the two rendered vectors ({TYPE4_COSINE}); got {}",
+        semantic.signals.embedding_cos
+    );
+    assert!(
+        (exact.signals.structural - 1.0).abs() < f64::EPSILON,
+        "byte-identical members must measure structural exactly 1.0; got {}",
+        exact.signals.structural
+    );
+    assert!(
+        (exact.signals.token_jaccard - 1.0).abs() < f64::EPSILON,
+        "identical signatures must measure Jaccard exactly 1.0; got {}",
+        exact.signals.token_jaccard
+    );
+    assert!(
+        exact.signals.embedding_cos.abs() < f64::EPSILON,
+        "the exact pair has no vectors, so its cosine is unmeasured and renders 0.0 — never a stand-in value; got {}",
+        exact.signals.embedding_cos
+    );
+}
+
+/// Everything `build_ranked_fused_clusters` needs to measure the fixture.
+struct Type4Fixture {
+    /// Corpus fingerprints, indexed by fused-cluster member index.
+    fingerprints: Vec<Fingerprint>,
+    /// `MinHash` signatures parallel to `fingerprints`.
+    signatures: Vec<Signature>,
+    /// Embedding vectors by fingerprint index; absent where the pass
+    /// produced none.
+    vectors: HashMap<usize, Vec<f32>>,
+    /// Transitive-closure output under measurement.
+    fused_clusters: Vec<FusedCluster>,
+}
+
+fn type4_weight_fixture() -> Type4Fixture {
     let mut registry = FileRegistry::new();
     let semantic_left = registry.register(PathBuf::from("fly.py"));
     let semantic_right = registry.register(PathBuf::from("docker_host.py"));
     let exact_left = registry.register(PathBuf::from("auth_a.py"));
     let exact_right = registry.register(PathBuf::from("auth_b.py"));
 
-    let fingerprints = vec![
-        fingerprint(semantic_left, 1, 814, 0, 900),
-        fingerprint(semantic_right, 2, 814, 1_000, 1_900),
-        fingerprint(exact_left, 3, 182, 2_000, 2_200),
-        fingerprint(exact_right, 4, 182, 2_300, 2_500),
-    ];
-    let fused_clusters = vec![
-        FusedCluster {
-            members: vec![0, 1],
-            mean_score: PairScore {
-                structural: 0.02,
-                token_jaccard: 0.36,
-                embedding_cos: 0.94,
+    Type4Fixture {
+        fingerprints: vec![
+            fingerprint(semantic_left, 1, 814, 0, 900),
+            fingerprint(semantic_right, 2, 814, 1_000, 1_900),
+            // An exact duplicate is exact: both occurrences hash alike.
+            fingerprint(exact_left, 3, 182, 2_000, 2_200),
+            fingerprint(exact_right, 3, 182, 2_300, 2_500),
+        ],
+        signatures: vec![
+            signature(11, SIGNATURE_LEN, 0),
+            signature(11, TYPE4_AGREEMENTS, 97),
+            signature(23, SIGNATURE_LEN, 0),
+            signature(23, SIGNATURE_LEN, 0),
+        ],
+        // Only the Type-4 pair was embedded; the exact pair was found
+        // structurally, with no vectors to measure.
+        vectors: HashMap::from([(0, vec![1.0, 0.0]), (1, vec![0.94, 0.341_174_44])]),
+        fused_clusters: vec![
+            FusedCluster {
+                members: vec![0, 1],
+                edges: Vec::new(),
             },
-        },
-        FusedCluster {
-            members: vec![2, 3],
-            mean_score: PairScore {
-                structural: 1.0,
-                token_jaccard: 1.0,
-                embedding_cos: 0.0,
+            FusedCluster {
+                members: vec![2, 3],
+                edges: Vec::new(),
             },
-        },
-    ];
+        ],
+    }
+}
 
-    (fingerprints, fused_clusters)
+/// Builds a signature of `base` values whose tail past `agreements` is
+/// overwritten with `filler`, so two signatures sharing `base` agree on
+/// exactly `agreements` of [`SIGNATURE_LEN`] positions.
+fn signature(base: u64, agreements: usize, filler: u64) -> Signature {
+    let mut signature = [base; SIGNATURE_LEN];
+    for slot in signature.iter_mut().skip(agreements) {
+        *slot = filler;
+    }
+    signature
 }
 
 fn fingerprint(

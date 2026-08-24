@@ -5,7 +5,57 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
+use deslop_test_support::enclosure::{strictly_encloses, Span};
+
+/// The enclosure spans of one rendered cluster.
+fn spans(cluster: &deslop_core::report::ReportCluster) -> Result<Vec<Span>> {
+    cluster
+        .occurrences
+        .iter()
+        .map(|occurrence| {
+            Ok(Span::new(
+                occurrence.path.to_string_lossy(),
+                u64::try_from(occurrence.start_byte)?,
+                u64::try_from(occurrence.end_byte)?,
+            ))
+        })
+        .collect()
+}
+
+/// [PIPELINE-CLUSTER-EXACT]: asserts the refactor suites planned from the
+/// *enclosing* view of the duplication.
+///
+/// This is what makes a refactor golden provably correct rather than
+/// merely code-agreeing. One physical duplication yields two candidate
+/// clusters — the whole duplicated body, and the per-statement clones
+/// nested inside it — and the nested view ranks heavier because it
+/// carries one occurrence per statement. Planning from it would extract
+/// a single statement, leave the rest duplicated, and stamp the *nested*
+/// cluster's id into the emitted helper name that every golden pins. A
+/// golden blessed in that state records the wrong region under a name
+/// that looks equally plausible, so no byte comparison can catch it.
+pub(crate) fn assert_planned_from_enclosing_view(
+    report: &deslop_core::report::Report,
+    chosen: &deslop_core::report::ReportCluster,
+) -> Result<()> {
+    let planned = spans(chosen)?;
+    ensure!(
+        !planned.is_empty(),
+        "the planned cluster must render occurrences"
+    );
+    for other in &report.clusters {
+        ensure!(
+            other.id == chosen.id || !strictly_encloses(&spans(other)?, &planned),
+            "cluster {chosen} is a nested view of {other}; the refactor must \
+             plan from the enclosing duplication, and the golden name embeds \
+             the id of whichever cluster it planned from",
+            chosen = chosen.id,
+            other = other.id,
+        );
+    }
+    Ok(())
+}
 
 /// First cross-file `identical` cluster in the ranked report — the
 /// consolidation suites' shared finder ([AUTOFIX-CONSOLIDATE-SURFACE]).
@@ -32,29 +82,28 @@ pub(crate) fn cross_file_identical_cluster(
 /// A synthetic report cluster over explicit occurrences — full control
 /// of the precondition-relevant fields for the refactor suites.
 /// Signals are proven-Identical; the caller picks the bucket label.
+///
+/// The content-evidence fields carry `ContentEvidence::unmeasured()`
+/// — full pooled agreement, no rename proof, no literal dominance —
+/// because no measurement pass ever ran over a hand-built cluster, and
+/// [FUSION-CONTENT-GATE]'s contract is that a missing measurement never
+/// demotes. Zeroes here would read as "measured, and found nothing" and
+/// would make every refusal in `refactor_extract_negative.rs` pass
+/// through the content gate instead of through the rule each case was
+/// written to pin ([AUTOFIX-EXTRACT-PRECONDITIONS], gh #344).
 pub(crate) fn synthetic_report_cluster(
     occurrences: Vec<deslop_core::report::ReportOccurrence>,
     bucket: &str,
 ) -> deslop_core::report::ReportCluster {
-    deslop_core::report::ReportCluster {
-        id: "abcdef0123456789".to_owned(),
-        weight: 1.0,
-        size: occurrences.len(),
-        canonical_node_count: 40,
-        signals: deslop_core::report::ReportSignals {
-            structural: 1.0,
-            token_jaccard: 1.0,
-            embedding_cos: 0.0,
-            fused: 1.0,
-        },
-        bucket: bucket.to_owned(),
-        category: "logic".to_owned(),
-        occurrences_total: occurrences.len(),
-        occurrences,
-        occurrences_truncated: false,
-        summary: String::new(),
-        interpretation: String::new(),
-    }
+    let mut cluster =
+        deslop_core::report_fixtures::fixture_cluster("abcdef0123456789", occurrences);
+    cluster.canonical_node_count = 40;
+    bucket.clone_into(&mut cluster.bucket);
+    // No parse pass ran over a hand-built cluster, so its language is
+    // the engine's own unresolvable label rather than a re-derivation
+    // from the fixture's file names.
+    "unknown".clone_into(&mut cluster.language);
+    cluster
 }
 
 /// One report occurrence over `[start, end)` of `file_name`.
@@ -70,6 +119,7 @@ pub(crate) fn report_occurrence(
         start_line: 0,
         end_line: 0,
         hidden,
+        in_diff: None,
     }
 }
 

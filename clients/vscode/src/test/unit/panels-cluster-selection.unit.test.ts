@@ -13,6 +13,11 @@ import { ReportStore } from "../../reportStore";
 import { anchorForClusterId, clusterPanelFeed, resolveAnchoredCluster } from "../../clusterSelection";
 import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
+import { bucketSignals } from "../signals.helpers";
+import { wireCluster } from "../cluster.helpers";
+
+const PRIMARY_CLUSTER_ID = "aaaaaaaa";
+const TEST_THIRTY = 30;
 
 interface PostedMessage {
   kind?: string;
@@ -79,19 +84,14 @@ function occ(filePath: string, startByte: number, endByte: number): ReportOccurr
 }
 
 function clusterOf(id: string, weight: number, occurrences: ReportOccurrence[]): ReportCluster {
-  return {
+  return wireCluster({
     id,
     weight,
-    size: occurrences.length,
     canonical_node_count: 0,
     bucket: "identical",
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+    signals: bucketSignals("identical"),
     occurrences,
-    occurrences_total: occurrences.length,
-    occurrences_truncated: false,
-    summary: "",
-    interpretation: "",
-  };
+  });
 }
 
 function reportOf(clusters: ReportCluster[]): Report {
@@ -124,27 +124,27 @@ function withClusterPanel(
 }
 
 suite("cluster detail panel selection (#173)", () => {
-  const groupOccurrences = [occ("/repo/Alpha.cs", 10, 20), occ("/repo/Beta.cs", 30, 40)];
+  const groupOccurrences = [occ("/repo/Alpha.cs", 10, 20), occ("/repo/Beta.cs", TEST_THIRTY, 40)];
   const otherOccurrences = [occ("/repo/Gamma.cs", 0, 9), occ("/repo/Delta.cs", 0, 9)];
 
   test("re-resolves the selected cluster when its content-hash id churns across a re-analysis", () => {
     const store = new ReportStore();
     // The opened duplicate group's canonical occurrence is Alpha.cs:10-20.
     store.setSnapshot(
-      reportOf([clusterOf("aaaaaaaa", 30, groupOccurrences), clusterOf("cccccccc", 5, otherOccurrences)]),
+      reportOf([clusterOf(PRIMARY_CLUSTER_ID, TEST_THIRTY, groupOccurrences), clusterOf("cccccccc", 5, otherOccurrences)]),
       1,
     );
 
-    withClusterPanel(store, "aaaaaaaa", (fake) => {
+    withClusterPanel(store, PRIMARY_CLUSTER_ID, (fake) => {
       // After the webview mounts, the panel selects the opened cluster and the
       // cluster is present in the snapshot it was given.
       assert.equal(
         lastOfKind(fake.messages, "select/cluster")?.id,
-        "aaaaaaaa",
+        PRIMARY_CLUSTER_ID,
         "panel must select the opened cluster once the webview is ready",
       );
       assert.ok(
-        lastOfKind(fake.messages, "report/snapshot")?.report?.clusters.some((c) => c.id === "aaaaaaaa"),
+        lastOfKind(fake.messages, "report/snapshot")?.report?.clusters.some((c) => c.id === PRIMARY_CLUSTER_ID),
         "opened cluster must be present in the first snapshot the panel receives",
       );
 
@@ -152,7 +152,7 @@ suite("cluster detail panel selection (#173)", () => {
       // normalised hash shifted, so the wire id churns aaaaaaaa -> bbbbbbbb. The
       // canonical occurrence (Alpha.cs:10-20) is unchanged.
       store.setSnapshot(
-        reportOf([clusterOf("bbbbbbbb", 30, groupOccurrences), clusterOf("cccccccc", 5, otherOccurrences)]),
+        reportOf([clusterOf("bbbbbbbb", TEST_THIRTY, groupOccurrences), clusterOf("cccccccc", 5, otherOccurrences)]),
         2,
       );
 
@@ -175,7 +175,7 @@ suite("cluster detail panel selection (#173)", () => {
 
   test("keeps the opened cluster visible when an unsaved edit would elide it from the projection", () => {
     const store = new ReportStore();
-    store.setSnapshot(reportOf([clusterOf("dddddddd", 30, groupOccurrences)]), 1);
+    store.setSnapshot(reportOf([clusterOf("dddddddd", TEST_THIRTY, groupOccurrences)]), 1);
 
     withClusterPanel(store, "dddddddd", (fake) => {
       // Editing Alpha.cs drops the cluster below two visible occurrences, so the
@@ -200,7 +200,7 @@ suite("cluster detail panel selection (#173)", () => {
 
   test("clears the selection and surfaces the dead id when the cluster leaves the report entirely", () => {
     const store = new ReportStore();
-    store.setSnapshot(reportOf([clusterOf("eeeeeeee", 30, groupOccurrences)]), 1);
+    store.setSnapshot(reportOf([clusterOf("eeeeeeee", TEST_THIRTY, groupOccurrences)]), 1);
 
     withClusterPanel(store, "eeeeeeee", (fake) => {
       // The duplication is resolved — the cluster is gone from the next report.
@@ -219,7 +219,7 @@ suite("cluster detail panel selection (#173)", () => {
 
   test("does not re-push the feed on embedding-progress, lifecycle, or pending-model ticks (VSIX-PERF)", () => {
     const store = new ReportStore();
-    store.setSnapshot(reportOf([clusterOf("ffffffff", 30, groupOccurrences)]), 1);
+    store.setSnapshot(reportOf([clusterOf("ffffffff", TEST_THIRTY, groupOccurrences)]), 1);
 
     withClusterPanel(store, "ffffffff", (fake) => {
       const afterReady = fake.messages.length;
@@ -233,6 +233,7 @@ suite("cluster detail panel selection (#173)", () => {
         model_id: "nomic-embed-text",
         done: 0,
         total: 10,
+        percent: 0,
         message: undefined,
       });
       store.setLifecycle({ kind: "analysing" });
@@ -244,7 +245,7 @@ suite("cluster detail panel selection (#173)", () => {
       );
 
       // A genuine report change still re-pushes.
-      store.setSnapshot(reportOf([clusterOf("ffffffff", 30, groupOccurrences)]), 2);
+      store.setSnapshot(reportOf([clusterOf("ffffffff", TEST_THIRTY, groupOccurrences)]), 2);
       assert.ok(
         fake.messages.length > afterReady,
         "a report change re-pushes the feed",
@@ -253,13 +254,13 @@ suite("cluster detail panel selection (#173)", () => {
   });
 
   test("resolveAnchoredCluster falls back to the id when the canonical occurrence has moved", () => {
-    const report = reportOf([clusterOf("aaaaaaaa", 30, [occ("/repo/Alpha.cs", 99, 110)])]);
-    const anchor = anchorForClusterId(reportOf([clusterOf("aaaaaaaa", 30, groupOccurrences)]), "aaaaaaaa");
+    const report = reportOf([clusterOf(PRIMARY_CLUSTER_ID, TEST_THIRTY, [occ("/repo/Alpha.cs", 99, 110)])]);
+    const anchor = anchorForClusterId(reportOf([clusterOf(PRIMARY_CLUSTER_ID, TEST_THIRTY, groupOccurrences)]), PRIMARY_CLUSTER_ID);
     // The anchored occurrence (Alpha.cs:10-20) is gone, but the id survives — the
     // id fallback keeps the selection rather than blanking the panel.
-    assert.equal(resolveAnchoredCluster(report, anchor)?.id, "aaaaaaaa");
+    assert.equal(resolveAnchoredCluster(report, anchor)?.id, PRIMARY_CLUSTER_ID);
     assert.equal(resolveAnchoredCluster(null, anchor), undefined);
     const feed = clusterPanelFeed(report, report, anchor);
-    assert.equal(feed.selectedId, "aaaaaaaa");
+    assert.equal(feed.selectedId, PRIMARY_CLUSTER_ID);
   });
 });

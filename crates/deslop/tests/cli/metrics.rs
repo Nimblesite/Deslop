@@ -1,4 +1,4 @@
-use crate::support::*;
+use super::support::*;
 
 /// Writes the cross-file clone-pair fixture into a fresh temp dir, runs
 /// `deslop` with the given `--min-nodes` value, asserts the run

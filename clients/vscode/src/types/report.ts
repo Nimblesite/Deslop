@@ -7,7 +7,6 @@ import type {
   Report as WireReport,
   ReportCluster as WireReportCluster,
   ReportOccurrence as WireReportOccurrence,
-  ReportSignals,
 } from "./wire-generated";
 
 export type {
@@ -54,25 +53,17 @@ export function clusterSlug(cluster: ReportCluster): string {
   return cluster.id.slice(0, SLUG_LENGTH);
 }
 
+/** The cluster's occurrence count, exactly as the engine computed it
+ * (`deslop_core::report::occurrence_count`). There is one counting
+ * formula and it lives in Rust: the live wire truncates the carried
+ * occurrence list, so a count re-derived here would silently disagree
+ * with the report on every large cluster. */
 export function occurrenceCount(cluster: ReportCluster): number {
-  const total =
-    cluster.occurrences_total && cluster.occurrences_total > 0
-      ? cluster.occurrences_total
-      : cluster.size;
-  return Math.max(total, cluster.occurrences.length);
-}
-
-/** Count to display in compact surfaces (hover, decoration). Uses the
- * authoritative total when present; falls back to the visible slice length
- * so we never show a count higher than the occurrences the caller can act on. */
-export function visibleOccurrenceCount(cluster: ReportCluster): number {
-  return cluster.occurrences_total && cluster.occurrences_total > 0
-    ? cluster.occurrences_total
-    : cluster.occurrences.length;
+  return cluster.occurrence_count;
 }
 
 // Wire-format models generated from `docs/models/live-ipc.td` by
-// `scripts/typediagram-gen.mjs`. Re-exported here so the historical
+// `scripts/typediagram/generate.mjs`. Re-exported here so the historical
 // `clients/vscode/src/types/report` import path keeps resolving for
 // every consumer. The generated source is gitignored; `make
 // typediagram-gen` (chained into `make vsix-build`) regenerates it.
@@ -122,12 +113,33 @@ export function severityLabel(severity: Severity): string {
   return SEVERITY_LABELS[severity];
 }
 
-export function severityOf(weightPercentile: number): Severity {
-  if (weightPercentile >= 0.99) return "worst";
-  if (weightPercentile >= 0.9) return "top10";
-  if (weightPercentile >= 0.5) return "mid";
-  return "faint";
+/** The cluster's severity band as the engine stamped it
+ * ([SEVERITY-BAND]). The band classifies the cluster's rank percentile,
+ * which is a calculation, so it is computed once in
+ * `report_weight::rank_band` and carried on the wire. A report written
+ * before the field existed carries an empty string and reads as the
+ * tail band. */
+export function clusterBand(cluster: ReportCluster): Severity {
+  return SEVERITIES.find((band) => band === cluster.rank_band) ?? "faint";
 }
+
+// [SEVERITY-DESLOP-MAP] The Deslop severity level — the *other* visual
+// channel, and the one that answers "how alarming is this kind of
+// duplicate?". It is a function of the bucket alone, never of the ranking:
+// per [SEVERITY-COLOR] colour carries the bucket and glyph density carries
+// the weight percentile, and the two are orthogonal by design. A faint
+// identical clone is a red `○`; a high-impact shape-only family is a grey
+// `●●`. Collapsing them into one channel is what let a demoted family wear
+// the loudest paint in the editor.
+export type DeslopSeverity = "error" | "warning" | "information" | "hint";
+
+/** Every Deslop severity level, loudest first. */
+export const DESLOP_SEVERITIES: readonly DeslopSeverity[] = [
+  "error",
+  "warning",
+  "information",
+  "hint",
+] as const;
 
 // ---------------------------------------------------------------------------
 // Canonical clone buckets — mirrors deslop-core::buckets.
@@ -144,8 +156,10 @@ export type Bucket =
   | "loosely_similar"
   | "same_behavior";
 
+export const IDENTICAL_BUCKET_VALUE: Bucket = "identical";
+
 export const BUCKETS: readonly Bucket[] = [
-  "identical",
+  IDENTICAL_BUCKET_VALUE,
   "nearly_identical",
   "structural_only",
   "loosely_similar",
@@ -174,7 +188,7 @@ const LABELS: Record<Bucket, BucketLabels> = {
     hybridTitle: "Identical code [Type-1/2]",
     actionSentence: "Safe to extract — every copy is the same.",
     taxonomyLabel: "Type-1 or Type-2 exact clone",
-    cssSuffix: "identical",
+    cssSuffix: IDENTICAL_BUCKET_VALUE,
     aiMatch: false,
   },
   nearly_identical: {
@@ -217,38 +231,19 @@ export function bucketLabels(bucket: Bucket): BucketLabels {
   return LABELS[bucket];
 }
 
-// Routing from signal triple onto a canonical bucket. Must match
-// deslop-core::buckets::classify_signals byte-for-byte; the
-// Deslop core owns the routing table in [CLONE-BUCKETS-ROUTING].
-export function classifyCluster(signals: ReportSignals): Bucket {
-  if (signals.structural >= 0.99 && signals.token_jaccard >= 0.99) {
-    return "identical";
-  }
-  if (signals.embedding_cos >= 0.8 && signals.structural < 0.5) {
-    return "same_behavior";
-  }
-  // [RANK-STRUCTURAL-ONLY]: shape is the only positive evidence.
-  // Ceilings mirror deslop-core::buckets::STRUCTURAL_ONLY_MAX_SUPPORT.
-  if (
-    signals.structural >= 0.99 &&
-    signals.token_jaccard < 0.05 &&
-    signals.embedding_cos < 0.05
-  ) {
-    return "structural_only";
-  }
-  if (
-    signals.structural >= 0.99 ||
-    (signals.structural > 0.0 && signals.token_jaccard >= 0.95) ||
-    (signals.structural <= 0.01 && signals.token_jaccard >= 0.9)
-  ) {
-    return "nearly_identical";
-  }
-  return "loosely_similar";
-}
-
-// Resolves a cluster's bucket, preferring the JSON-carried wire label
-// (schema v4) and falling back to re-routing from signals for older
-// v3 reports loaded via --from-report.
+// [CLONE-BUCKETS-ROUTING] The engine owns the routing and is the only
+// place it can be decided. `deslop-core::report_render::report_bucket_kind`
+// weighs four inputs — the *raw* signal triple, measured `ContentEvidence`,
+// raw-source byte-equivalence, and the member spread — and the triple that
+// reaches this client is the *post-gate projection* of that decision:
+// `content_gated_signals` overwrites `token_jaccard` to 1.0 for a
+// shape-identical near miss (#232) and rewrites `fused`. Re-running the
+// engine's raw-signal table over rendered signals is therefore a category
+// error, and every arm that tried it shipped a defect: a proven rename read
+// back as byte-identical ("Safe to extract — every copy is the same" about
+// code whose identifiers all differ), a content-gated family promoted to
+// act-now, and two low-structural arms the engine never had. The UI reads
+// the engine's label and never manufactures one.
 export function resolveBucket(cluster: ReportCluster): Bucket {
   if (
     cluster.bucket &&
@@ -256,7 +251,24 @@ export function resolveBucket(cluster: ReportCluster): Bucket {
   ) {
     return cluster.bucket as Bucket;
   }
-  return classifyCluster(cluster.signals);
+  // A report carrying no engine label carries no verdict. `loosely_similar`
+  // is the only honest destination: it is the sole bucket whose action
+  // sentence claims nothing beyond "treat as a hint", so an unlabelled
+  // cluster can never be repainted as something to act on.
+  return "loosely_similar";
+}
+
+// Buckets the engine considers actionable. A surface that withholds one of
+// these is a false negative; a surface that paints anything else with them
+// is a false positive. Exported so the live bubble, the tree, and the tests
+// share one definition ([VSIX-LIVE-BUBBLE]).
+export const ACT_NOW_BUCKETS: readonly Bucket[] = [
+  IDENTICAL_BUCKET_VALUE,
+  "nearly_identical",
+] as const;
+
+export function isActNow(bucket: Bucket): boolean {
+  return ACT_NOW_BUCKETS.includes(bucket);
 }
 
 // ---------------------------------------------------------------------------
@@ -269,7 +281,9 @@ export function resolveBucket(cluster: ReportCluster): Bucket {
 // Wire label carried in JSON `cluster.category`.
 export type Category = "logic" | "data";
 
-export const CATEGORIES: readonly Category[] = ["logic", "data"] as const;
+export const DATA_CATEGORY_VALUE: Category = "data";
+
+export const CATEGORIES: readonly Category[] = ["logic", DATA_CATEGORY_VALUE] as const;
 
 export interface CategoryLabels {
   // Plain title for facet surfaces (filter QuickPick, webview category
@@ -294,7 +308,7 @@ export function categoryLabels(category: Category): CategoryLabels {
 // "logic" for absent or unknown values — mirrors
 // deslop-core::clone_category::from_wire_label.
 export function resolveCategory(cluster: ReportCluster): Category {
-  return cluster.category === "data" ? "data" : "logic";
+  return cluster.category === DATA_CATEGORY_VALUE ? DATA_CATEGORY_VALUE : "logic";
 }
 
 /** A sanitized facet filter: only registry-known values survive. */
@@ -348,5 +362,3 @@ export function clusterInterpretation(cluster: ReportCluster): string {
     ? cluster.interpretation
     : bucketLabels(resolveBucket(cluster)).actionSentence;
 }
-
-export const FUSED_THRESHOLD = 0.85;

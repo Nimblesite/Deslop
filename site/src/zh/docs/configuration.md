@@ -1,18 +1,18 @@
 ---
 layout: layouts/docs.njk
-title: 配置参考 — .deslop.toml 与命令行参数
-description: 一处汇总 Deslop 的全部可调项 — .deslop.toml 的各个区段（exclude、report_hide、threshold、ranking、analysis、report）、无法关闭的内置规则、每一个命令行参数，以及它们之间的优先级。
-keywords: deslop, 配置, .deslop.toml, 命令行参数, exclude, report_hide, 阈值, 排名, ci 门禁, 重复代码
+title: 配置与报告 — .deslop.toml、命令行参数、JSON 输出
+description: 使用 .deslop.toml 和 CLI 参数配置 Deslop。查看排除项、阈值、排名、分析设置、JSON/HTML/文本报告与退出码。
 eleventyNavigation:
   key: 配置
   order: 6
 icon: tune
+docsGroup: reference
 lang: zh
 ---
 
-# 配置参考
+# 配置与报告
 
-Deslop 有两种配置方式：
+Deslop 从两处读取设置，并在每次运行中写出三份报告：
 
 - **`.deslop.toml`** — 与代码放在一起、并纳入版本管理的文件。项目级策略写在这里：跳过什么、隐藏什么、何时让 CI 失败。
 - **命令行参数** — 单次运行的覆盖项。参数始终优先于对应的配置键。
@@ -23,7 +23,7 @@ Deslop 有两种配置方式：
 
 ### 文件位置
 
-Deslop 会在**扫描根目录**（你指向的目录）旁查找 `.deslop.toml`。用 `--config` 可以指向别处：
+Deslop 会在**扫描根目录**（你指向的目录）中查找 `.deslop.toml`。用 `--config` 可以指向别处：
 
 ```bash
 deslop .                          # 若存在则使用 ./.deslop.toml
@@ -35,6 +35,8 @@ deslop ./src --config ci.toml     # 显式指定配置，文件名任意
 ### 格式
 
 TOML 格式：一个共享的 `[defaults]` 区段，外加可选的按语言覆盖区段和四个行为区段。模式是**带 gitignore 语义的 glob 模式**，**相对扫描根目录**解析 — 无论仓库在磁盘上位于何处，`subdir/**` 都匹配 `<扫描根>/subdir/...`。
+
+<span id="exclude-vs-report-hide"></span>
 
 ### `exclude` 与 `report_hide` — 核心区别
 
@@ -74,7 +76,7 @@ imports = "report"
 
 ## `[language.<name>]`
 
-按语言的覆盖区段。名称是解析器的语言 id：`csharp`、`rust`、`python`、`dart`、`javascript`、`typescript` 或 `tsx`。这里的模式**扩展**默认值 — 永不替换 — 因此一个 `.cs` 文件会同时针对 `defaults.exclude` **加上** `language.csharp.exclude` 进行测试。
+按语言的覆盖区段。名称是解析器的语言 id：`csharp`、`rust`、`python`、`dart`、`javascript`、`typescript`、`tsx`、`php`、`fsharp` 或 `go`。这里的模式**扩展**默认值 — 永不替换 — 因此一个 `.cs` 文件会同时针对 `defaults.exclude` **加上** `language.csharp.exclude` 进行测试。
 
 ```toml
 [language.csharp]
@@ -89,6 +91,8 @@ imports = "report"
 
 每个覆盖区段都接受与 `[defaults]` 相同的三个键：`exclude`、`report_hide` 和 `boilerplate.imports`。
 
+<span id="threshold"></span>
+
 ## `[threshold]` — CI 门禁
 
 ```toml
@@ -100,7 +104,7 @@ max_duplication_percent = 20
 | --- | --- | --- | --- |
 | `max_duplication_percent` | 浮点数 | `0.0`–`100.0` | 当全仓库的 `duplication_percent` 超过此值时，`deslop` 以 **`3`** 退出并使 CI 失败。 |
 
-这是**唯一**需要显式启用的失败路径。没有 `[threshold]` 区段（且没有 `--fail-over`）时，无论发现多少重复，`deslop` 始终以 `0` 退出。命令行 `--fail-over` 参数会覆盖此键；`--no-fail-over` 会在单次运行中清除它。参见[输出格式 → 退出码](/zh/docs/output-formats/#exit-codes)。
+这是**唯一**需要显式启用的失败路径。没有 `[threshold]` 区段（且没有 `--fail-over`）时，无论发现多少重复，`deslop` 始终以 `0` 退出。命令行 `--fail-over` 参数会覆盖此键；`--no-fail-over` 会在单次运行中清除它。参见下文的[退出码](#exit-codes)。
 
 ## `[analysis]`
 
@@ -144,6 +148,8 @@ structural_only_weight = 0.15
 | `structural_only_weight` | 浮点数 | `0.15` | `structural_only = "demote"` 时所乘的系数。必须在 `(0.0, 1.0]` 内。 |
 
 系数 `0.0` 会被拒绝（被降权的簇绝不能被静默抹除），大于 `1.0` 的值同样被拒绝（那会*提升*被降权的类别）。VS Code 扩展可以从其设置覆盖 `structural_only`；编辑器设置优先于文件。
+
+<span id="built-in-rules"></span>
 
 ## 内置规则（始终生效）
 
@@ -232,11 +238,11 @@ structural_only = "ignore"
 | `--log-to-console` | 关 | 将日志发往 stderr，而非带时间戳的 `deslop-<timestamp>.log` 文件。 |
 | `--log-level <LEVEL>` | `info` | `error` \| `warn` \| `info` \| `debug` \| `trace`。被 `RUST_LOG` 覆盖。 |
 | `--no-color` | 关 | 关闭 stderr 前导与摘要中的颜色。 |
-| `--incremental` | 关 | 启用 `<root>/.deslop-cache/` 下的磁盘指纹缓存。下次运行时未改动的文件会跳过解析。 |
+| `--no-incremental` | 关 | 禁止读写 `<root>/.deslop/cache/` 下的磁盘指纹缓存和嵌入缓存。报告和日志仍会正常写出。 |
 
 ### 开发与模拟参数
 
-这些参数绕过或重放流水线，不属于常规使用：`--from-report <FILE>` 将已有的 JSON 报告重新渲染为 `.txt`/`.html`；`--debug-ast <FILE>` 打印单个文件的规范化 AST 后退出；`--rerun-touch`、`--rerun-remove` 和 `--rerun-add` 通过增量会话重放文件变更，以演练实时更新路径。
+这些参数绕过或重放流水线，不属于常规使用：`--from-report <FILE>` 将已有的 JSON 报告重新渲染为 `.txt`/`.html`；`--debug-ast <FILE>` 打印单个文件的归一化 AST 后退出；`--rerun-touch`、`--rerun-remove` 和 `--rerun-add` 通过增量会话重放文件变更，以演练实时更新路径。
 
 ## 优先级与环境
 
@@ -250,3 +256,73 @@ structural_only = "ignore"
 
 - **`RUST_LOG`** — 以标准 `tracing` 过滤器语法覆盖 `--log-level`。
 - **`NO_COLOR`** — 即使没有 `--no-color` 也关闭颜色。当 stderr 不是终端时也会自动抑制颜色。
+
+<span id="report-output"></span>
+
+## 报告输出
+
+每次运行都会生成三种报告。JSON 才是产品本身；文本和 HTML 是基于同一份数据的渲染器。TXT 或 HTML 中不会出现任何 JSON 里没有的结论。
+
+### JSON — 规范格式
+
+`deslop-report.json` 是智能体读取的内容，也是 schema 消费方应当解析的内容。逐字段的完整结构参见[面向 AI → 读取 JSON](/zh/docs/for-ai/#read-the-json)。
+
+保证：
+
+- schema 中标记为 `optional` 的字段可能缺失。标记为 `required` 的字段始终存在。
+- 簇按 `weight` 降序排序。`clusters[0]` 始终是最严重的重复。
+- UTF-8。无 BOM。LF 行尾。
+
+### TXT — 终端格式
+
+`deslop-report.txt` 是 ASCII、按行组织、刻意保持朴素的格式。没有 ANSI 颜色，没有 Unicode 框线字符，没有分页转义码。可以无意外地通过管道送入 `head`、`grep`、`awk`。
+
+```
+deslop 0.0.0-dev -- 840 file(s), 142 cluster(s), 0 hidden
+repo: 2.6% duplicated (48120 / 1832044 LOC, 142 clusters across 318 files)
+embeddings: off
+-- action hints --
+  [identical] Extract the shared code into one definition and call it from every duplicate site.
+#1 [0362505641efe3c7] weight=1252.80 size=3 nodes=58
+  3 near-identical copies — safe to extract.
+  :: Nearly identical across UserRepository.cs, ProductRepository.cs, OrderRepository.cs.
+```
+
+每个簇都是一个带编号的代码块 — `#1` 是最严重的重复 — 包含其权重、大小和节点数，随后是一段通俗易懂的摘要和一行解读。簇按最严重者优先列出。这种格式可以在每一种终端、每一次 SSH 会话和每一份 CI 日志中保持完好。
+
+### HTML — 可移植格式
+
+`deslop-report.html` 是单个文件。所有 CSS 均已内联。无网络请求。把它放进 CI 工件、用邮件发送、在飞机上打开 — 它都能渲染。
+
+HTML 渲染器使用与 JSON 和 TXT 相同的排名和相同的簇摘要。它额外提供：
+
+- 语法高亮的示例代码片段，过长的片段和额外的出现位置会折叠进可展开的开关中
+- 每个重复组上的「AI 匹配」徽章和影响力标签
+- 在可折叠的「运行详情」页脚中，每组一张信号表（结构 / 词元 / 嵌入 / 融合）
+
+它不会额外提供：JSON 中没有的评分、超出 `summary` 字段的评论，或指向外部服务的链接。
+
+### 文件写到哪里
+
+Deslop 写出的一切都会进入被扫描项目根目录下的单个 `.deslop/` 目录，或你通过 `--output` 传入的前缀。若只想生成 JSON 报告，请抑制另外两种格式：
+
+```bash
+deslop . --notext --nohtml      # 写入 .deslop/deslop-report.json
+```
+
+诊断信息与报告是分开的。默认情况下，诊断信息通过带结构化字段的 `tracing` 写入一个带时间戳的日志文件（`.deslop/logs/deslop-<timestamp>.log`）；传入 `--log-to-console` 可改为将其发送到 `stderr`。人类可读的前言和摘要始终输出到 `stderr`。
+
+<span id="exit-codes"></span>
+
+## 退出码
+
+| 退出码 | 含义 |
+| --- | --- |
+| `0` | 已完成。重复低于阈值，或未设置阈值。 |
+| `1` | 运行时错误 — 扫描路径不存在、分析失败、I/O 错误，或一个标记为 `required` 的嵌入提供方无法访问。 |
+| `2` | 用法错误 — 未知标志，或超出范围 / 非有限的阈值，在运行开始前即被拒绝。 |
+| `3` | **阈值被突破。** 完整报告仍会写入磁盘，以便呈现这些重复。 |
+
+失败通过这些退出码和 `stderr` 上的结构化错误呈现。
+
+退出码 `3` 是 **CI 门禁**。它只在你主动启用时才会触发 — 通过传入 `--fail-over <percent>`，或设置 `[threshold] max_duplication_percent`。详见[基于重复阈值设置 CI 门禁](/zh/docs/#gate-ci-on-a-duplication-threshold)的演练，或直接使用 [GitHub Action](/zh/docs/github-action/)。

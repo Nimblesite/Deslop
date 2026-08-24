@@ -5,21 +5,31 @@
 // `<select>` and grouping surface to derive from this registry instead
 // of hand-listing values.
 
+const JAVASCRIPT_LANGUAGE_ID = "javascript";
+const FSHARP_LANGUAGE_ID = "fsharp";
+
 const EXTENSION_LANGUAGE: Record<string, string> = {
   cs: "csharp",
   rs: "rust",
   py: "python",
   dart: "dart",
-  js: "javascript",
-  mjs: "javascript",
-  cjs: "javascript",
-  jsx: "javascript",
+  js: JAVASCRIPT_LANGUAGE_ID,
+  mjs: JAVASCRIPT_LANGUAGE_ID,
+  cjs: JAVASCRIPT_LANGUAGE_ID,
+  jsx: JAVASCRIPT_LANGUAGE_ID,
   ts: "typescript",
   tsx: "tsx",
-  fs: "fsharp",
-  fsx: "fsharp",
+  fs: FSHARP_LANGUAGE_ID,
+  fsx: FSHARP_LANGUAGE_ID,
   php: "php",
+  go: "go",
 };
+
+/** Every source extension the registry resolves, without the leading dot,
+ * in registry order. Derived from the one extension map so activation
+ * events and file filters can be checked against it rather than
+ * re-listing extensions per surface ([FACET-MODEL], #170/#198). */
+export const SOURCE_EXTENSIONS: readonly string[] = Object.keys(EXTENSION_LANGUAGE);
 
 /** Language id for a file path, derived from its extension. Unknown
  * extensions map to `"unknown"`. */
@@ -39,6 +49,7 @@ const LANGUAGE_DISPLAY: Record<string, string> = {
   tsx: "TSX",
   fsharp: "F#",
   php: "PHP",
+  go: "Go",
 };
 
 /** Human display name for a language id used in group headings and
@@ -65,10 +76,11 @@ export const ANALYSED_LANGUAGE_IDS: readonly string[] = [
   "rust",
   "python",
   "dart",
-  "javascript",
+  JAVASCRIPT_LANGUAGE_ID,
   "javascriptreact",
   "typescript",
   "typescriptreact",
-  "fsharp",
+  FSHARP_LANGUAGE_ID,
   "php",
+  "go",
 ];

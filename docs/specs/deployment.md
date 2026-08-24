@@ -96,6 +96,17 @@ For Deslop's migration issues, mismatch behavior is:
 Errors must include product/extension version, component id, expected version,
 found version or `not found`, candidate path/source, and the next action.
 
+A version probe that never replies is **inconclusive, not a mismatch**. Every
+bundled binary in a freshly installed package is on its first execution, and
+macOS validates an unsigned multi-megabyte binary before running it
+(Gatekeeper / `syspolicyd`) — hundreds of milliseconds, and more on a loaded
+machine. A host that reports that stall as a version mismatch fails the very
+first activation after install, with an error naming a cause that is not true.
+Hosts must therefore retry a timed-out probe once on a budget wide enough for
+first-exec validation before concluding anything, and keep the warm budget
+tight so a genuinely hung binary is still caught quickly. Only a probe that
+replies with the wrong id/version is a mismatch.
+
 ### [DEPLOY-VSIX-PACKAGE] VSIX package contract
 
 Each platform-specific VSIX artifact must be built with `vsce package --target`
@@ -119,7 +130,7 @@ Claude Desktop, Codex, Cursor, Continue — must reference `deslop-mcp` by an
 **absolute path into the unpacked VSIX**:
 
 ```
-~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/<platform>/deslop-mcp
+~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop-mcp
 ```
 
 The unpacked VSIX is the canonical distribution surface per [DEPLOY-VSIX-PACKAGE].
@@ -171,6 +182,10 @@ If the package bundles native helpers under plugin-root `bin/<platform>/`, each
 helper must be listed in the manifest. Startup failure must surface through a
 JetBrains notification or Event Log entry with the same expected/found/path
 details required by [DEPLOY-RESOLVER].
+
+### [DEPLOY-DOCS-INSTALLER-FAILCLOSED] Published curl installer fails closed
+
+The curl installer snippet on the docs pages (`site/src/docs/index.md`, `site/src/zh/docs/index.md`) is a published contract: when version resolution, either download, or SHA-256 verification fails, nothing may be extracted and nothing may be installed. The snippet therefore runs entirely inside one subshell under `set -euo pipefail`, downloads into a `mktemp -d` work directory removed by an `EXIT` trap, and only reaches `tar` and `install` after the checksum check passes. The subshell's exit status must not be tested by the surrounding command (no trailing `&& …`): bash 3.2 — the `/bin/bash` macOS ships — disables `set -e` inside a subshell whose status is tested, which silently reopens the fail-open path. `DESLOP_TAG` pins a release; `DESLOP_RELEASE_BASE` overrides the release mirror and doubles as the offline test seam. The no-sudo alternative creates `~/.local/bin` before installing. Both locales stay functionally identical; comments are the only translated lines. Enforced by `scripts/deployment/installer-snippet.test.mjs` (a `make lint` gate), which runs the exact published snippets against a local fixture release and proves a bad checksum yields a non-zero exit with no extraction, no install, and no leaked work directory.
 
 ### [DEPLOY-CI-GATES] CI and release gates
 

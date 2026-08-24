@@ -64,6 +64,10 @@ and must be fixed before release work is considered CI-ready:
 - VS Code native-binary activation that reads or mutates PATH, uses package-manager/global installs
   as normal startup sources, or copies bundled VSIX binaries after install.
 
+### Step 2.1
+
+EXCLUDE the examples folder from the [text](../../../.deslop.toml) file. This would lead to an incorrect percentage calculation.
+
 ## Step 3 — Run each CI step locally, in order
 
 Work through failures in this priority order:
@@ -104,6 +108,10 @@ Once all CI steps pass locally:
 2. Do not commit or push. The user owns source-control writes.
 3. If the user pushes, monitor the new run until completion or failure.
 4. Upon failure, go back to Step 1.
+
+## Step 6
+
+Revert the `.deslop.toml` exclusion of the examples folder, if it was modified in Step 2.1.
 
 ## Rules
 

@@ -9,138 +9,63 @@
 //! safe shared extraction.
 //!
 //! This proves the role-compatibility gate is wired for Dart's grammar:
-//! the gate re-parses each member and resolves its enclosing construct via
-//! the Dart `class_declaration` / `function_declaration` node kinds. Dart
-//! previously bypassed every re-parse filter (`grammar_for` had no Dart
-//! arm), so this gate could never engage. A class-def paired with a
-//! function is now suppressed, while two genuinely behaviour-equivalent
-//! Dart functions (same role) still surface.
+//! the gate re-parses each member and resolves its enclosing construct
+//! via the Dart `class_declaration` / `function_declaration` node kinds.
+//! Dart previously bypassed every re-parse filter (`grammar_for` had no
+//! Dart arm), so the gate could never engage.
+//!
+//! The contract itself lives in [`crate::common::role_gate`], which every
+//! language's suite shares: a per-suite copy would let one language drift
+//! into asserting less than another, which is how a gate comes to be
+//! covered in four places and enforced in none. What is Dart-specific is
+//! here — the fixtures, and the source markers that name each role.
 //!
 //! Determinism: the in-process [`MockOllama`] embeds each snippet to a
-//! 4-lane vector seeded by its byte length and first byte, so the
-//! cross-role and same-role pairs both clear the embedding gate while
-//! structural overlap stays at zero.
+//! signed feature hash of its distinct 5-byte shingles (GH #369), so the
+//! near-identical role-mismatch pair clears the embedding floor on its
+//! own lexical overlap. The same-role pair is genuinely Type-4 — same
+//! behaviour, different text — which no content statistic can measure, so
+//! the test declares that ground truth with
+//! [`MockOllama::spawn_semantic`]: snippets naming either function are
+//! behaviour-equivalent, which lifts their cosine above the floor while
+//! unrelated snippets keep their honest shingle cosine.
 
-#[path = "cli/mock_ollama.rs"]
-mod mock_ollama;
-
-use std::{fs, path::Path};
-
+use crate::mock_ollama::MockOllama;
 use anyhow::Result;
-use mock_ollama::MockOllama;
-use serde_json::Value;
 
-mod common;
-use crate::common::*;
+use crate::common::role_gate::*;
 
-/// Runs the CLI against `scan_root` with the deterministic mock Ollama
-/// wired in via `--embeddings required`, returning the parsed JSON.
-fn run_report(scan_root: &Path) -> Result<Value> {
-    let server = MockOllama::spawn()?;
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let mut cmd = deslop_cmd(scan_root, &output)?;
-    let _assertion = cmd
-        .args([
-            "--min-nodes",
-            "5",
-            "--embeddings",
-            "required",
-            "--embedding-provider",
-            "ollama",
-            "--embedding-model",
-            "nomic-embed-text",
-            "--embedding-endpoint",
-            server.endpoint(),
-        ])
-        .assert()
-        .success();
-    let body = fs::read_to_string(output.with_extension("json"))?;
-    Ok(serde_json::from_str(&body)?)
-}
-
-fn bucket(cluster: &Value) -> &str {
-    cluster.get("bucket").and_then(Value::as_str).unwrap_or("")
-}
-
-/// Returns visible clusters that pair the Dart class with the top-level
-/// function. An occurrence covering a class field (`alpha = 0`) plus
-/// another covering the function body (`saved.bind`) is the role-mismatch
-/// signature.
-fn class_function_role_pairs(report: &Value, scan_root: &Path) -> Result<Vec<Vec<String>>> {
-    let mut offenders = Vec::new();
-    for cluster in clusters(report) {
-        let texts = occurrence_texts(scan_root, cluster)?;
-        let touches_class = texts.iter().any(|text| text.contains("alpha = 0"));
-        let touches_function = texts.iter().any(|text| text.contains("saved.bind"));
-        if touches_class && touches_function {
-            offenders.push(texts);
-        }
-    }
-    Ok(offenders)
-}
+/// Source text unique to the Dart class body in the role-mismatch
+/// fixture, and to the top-level function body it must not pair with.
+const DART_CLASS_MARKER: &str = "alpha = 0";
+/// Source text unique to the Dart top-level function body.
+const DART_FUNCTION_MARKER: &str = "saved.bind";
 
 // GH #119 acceptance on Dart: an embedding-dominant pair whose members
-// have different top-level roles (a Dart `class` definition and a
-// top-level function body) must NOT surface. The cluster is suppressed
-// into `clusters_hidden`.
+// have different top-level roles must NOT surface.
 #[test]
 fn dart_class_function_role_mismatch_does_not_surface() -> Result<()> {
-    let scan_root = fixture("dart-issue-119-role-mismatch");
-    let report = run_report(&scan_root)?;
-    let offenders = class_function_role_pairs(&report, &scan_root)?;
-    assert!(
-        offenders.is_empty(),
-        "a Dart class paired with a top-level function by the embedding pass \
-         must not surface as duplication — there is no safe cross-role \
-         extraction: {offenders:#?}"
-    );
-    assert!(
-        clusters_hidden(&report) >= 1,
-        "the role-incompatible embedding pair must be counted in \
-         clusters_hidden, got {}",
-        clusters_hidden(&report)
-    );
-    assert!(
-        clusters(&report)
-            .iter()
-            .all(|cluster| bucket(cluster) != "same_behavior"),
-        "no same_behavior cluster may remain visible for the Dart role-mismatch \
-         fixture: {:#?}",
-        clusters(&report)
-    );
-    Ok(())
+    let server = MockOllama::spawn()?;
+    assert_role_mismatch_is_suppressed(
+        "dart-issue-119-role-mismatch",
+        "Dart",
+        server.endpoint(),
+        DART_CLASS_MARKER,
+        DART_FUNCTION_MARKER,
+    )
 }
 
 // GH #119 guard against over-suppression on Dart: two genuinely
-// behaviour-equivalent FUNCTIONS (recursive vs iterative sum) that the
-// embedding pass pairs share one top-level role, so the role gate must
-// NOT hide them. They must still surface as "Same behavior, different
-// code".
+// behaviour-equivalent FUNCTIONS (recursive vs iterative sum) share one
+// top-level role, so the role gate must NOT hide them.
 #[test]
 fn dart_same_role_function_pair_still_surfaces() -> Result<()> {
-    let scan_root = fixture("dart-issue-119-same-role");
-    let report = run_report(&scan_root)?;
-    let same_behavior: Vec<&Value> = clusters(&report)
-        .iter()
-        .filter(|cluster| bucket(cluster) == "same_behavior")
-        .collect();
-    assert!(
-        !same_behavior.is_empty(),
-        "two same-role behaviour-equivalent Dart functions must still surface as \
-         same_behavior — the role gate must not over-suppress: {:#?}",
-        clusters(&report)
-    );
-    let pairs_both_functions = same_behavior.iter().try_fold(false, |found, cluster| {
-        let texts = occurrence_texts(&scan_root, cluster)?;
-        let touches_recursive = texts.iter().any(|text| text.contains("totalRecursive"));
-        let touches_iterative = texts.iter().any(|text| text.contains("while (index"));
-        Ok::<bool, anyhow::Error>(found || (touches_recursive && touches_iterative))
-    })?;
-    assert!(
-        pairs_both_functions,
-        "the surviving same_behavior cluster must pair the recursive and \
-         iterative Dart functions: {same_behavior:#?}"
-    );
-    Ok(())
+    let server = MockOllama::spawn_semantic(&[&["totalRecursive", "totalIterative"]])?;
+    assert_same_role_pair_surfaces(
+        "dart-issue-119-same-role",
+        "Dart",
+        server.endpoint(),
+        "totalRecursive",
+        "while (index",
+    )
 }

@@ -5,8 +5,6 @@
 //! `deslop://schema`, `deslop://report`, `deslop://cluster/<id>` — and
 //! returns a structured JSON-RPC error on malformed input.
 
-mod common;
-
 use std::{path::Path, thread, time::Duration};
 
 use anyhow::{anyhow, Result};

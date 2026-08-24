@@ -5,15 +5,17 @@
 //! `MinHash` signature over k-grams of normalised node kinds and splits the
 //! signature into `BANDS × ROWS_PER_BAND` bands; pairs of fingerprints
 //! sharing at least one identical band are returned as candidate Type-3
-//! clones. Jaccard similarity is estimated from the full signatures.
+//! clones ([`banding`]). Jaccard similarity is estimated from the full
+//! signatures.
 //!
-//! All hashing uses `blake3` so two different processes produce identical
-//! signatures given the same input — a prerequisite for caching per
-//! [PRINCIPLES-LONG-RUNNING-DAEMON].
+//! `MinHash` signature construction uses `blake3` so two different processes
+//! produce identical signatures given the same input — a prerequisite for
+//! caching per [PRINCIPLES-LONG-RUNNING-DAEMON]. Band keys preserve their four
+//! rows directly because those rows already fill the 32-byte bucket key.
 
-use std::collections::HashMap;
+mod banding;
 
-use blake3::Hasher;
+pub use banding::{for_each_band_collision, BandCollisionSource};
 
 /// Signature length. Product of [`BANDS`] and [`ROWS_PER_BAND`]; a 128-length
 /// signature gives a band-collision probability curve that starts rising
@@ -36,6 +38,140 @@ const EMPTY_HASH_SENTINEL: u64 = u64::MAX;
 /// per-call allocation in the hot loop.
 pub type Signature = [u64; SIGNATURE_LEN];
 
+/// The all-zero signature — the neutral fill for
+/// [`SignatureLookup::read_into`] buffers.
+pub const ZEROED_SIGNATURE: Signature = [0; SIGNATURE_LEN];
+
+/// A borrowed, positionally-indexed view over a signature population
+/// stored as contiguous segments ([PERF-FLUTTER-TODO-MEMORY]).
+///
+/// A corpus-scale build parses files in parallel shards; requiring one
+/// contiguous signature vector would force an ordered merge that
+/// momentarily holds the whole multi-GB population twice. Segments —
+/// each shard's signatures, concatenated in shard order — give the same
+/// positional index space (`0..len`) with zero merging, and every
+/// consumer reads through this view.
+pub struct SignatureIndex<'a> {
+    /// The segments, in index order. Owned reference list so a view can
+    /// be built from a locally assembled set of segment slices.
+    /// Read directly by the [`banding`] pass, which walks segments as
+    /// slices.
+    segments: Vec<&'a [Signature]>,
+    /// Cumulative start offset per segment; `offsets[k]` is the global
+    /// index where segment `k` begins.
+    offsets: Vec<usize>,
+}
+
+impl std::fmt::Debug for SignatureIndex<'_> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SignatureIndex")
+            .field("signatures", &self.len())
+            .finish()
+    }
+}
+
+impl<'a> SignatureIndex<'a> {
+    /// Builds the view over `segments`, precomputing the offsets.
+    #[must_use]
+    pub fn from_segments(segments: impl IntoIterator<Item = &'a [Signature]>) -> Self {
+        let segments: Vec<&'a [Signature]> = segments.into_iter().collect();
+        let mut offsets = Vec::with_capacity(segments.len().saturating_add(1));
+        let mut running = 0_usize;
+        offsets.push(0);
+        for segment in &segments {
+            running = running.saturating_add(segment.len());
+            offsets.push(running);
+        }
+        Self { segments, offsets }
+    }
+
+    /// Builds the view over a single contiguous slice — the natural
+    /// shape for tests and small corpora with no sharding.
+    #[must_use]
+    pub fn from_slice(slice: &'a [Signature]) -> Self {
+        Self::from_segments([slice])
+    }
+
+    /// Total signatures across every segment.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.offsets.last().copied().unwrap_or(0)
+    }
+
+    /// Whether the population is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// The signature at global `index`, or `None` past the end.
+    #[must_use]
+    pub fn get(&self, index: usize) -> Option<&Signature> {
+        let segment = self
+            .offsets
+            .partition_point(|&start| start <= index)
+            .saturating_sub(1);
+        let start = self.offsets.get(segment).copied().unwrap_or(0);
+        self.segments
+            .get(segment)
+            .and_then(|slice| slice.get(index.saturating_sub(start)))
+    }
+}
+
+/// Random-access signature reads over a population, whatever backs it
+/// ([PERF-FLUTTER-TODO-MEMORY]). Today every implementor is a resident
+/// segment view; the indirection is the seam a future non-resident
+/// backing would implement — with the caveat that the banding and
+/// pair-gate consumers read the population ~10⁸ times on a
+/// corpus-scale run, so any such backing must serve reads at memory
+/// speed. Reads fill a caller buffer — a non-resident lookup could not
+/// lend a reference.
+pub trait SignatureLookup: Sync {
+    /// The type's name, for `Debug`.
+    fn kind(&self) -> &'static str {
+        "SignatureLookup"
+    }
+
+    /// Total signatures in the population.
+    fn len(&self) -> usize;
+
+    /// Whether the population is empty.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Reads the signature at `index` into `out`; returns whether it
+    /// existed. `out` is left untouched when it did not.
+    fn read_into(&self, index: usize, out: &mut Signature) -> bool;
+}
+
+impl std::fmt::Debug for dyn SignatureLookup + '_ {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.kind())
+    }
+}
+
+impl SignatureLookup for SignatureIndex<'_> {
+    fn kind(&self) -> &'static str {
+        "SignatureIndex"
+    }
+
+    fn len(&self) -> usize {
+        SignatureIndex::len(self)
+    }
+
+    fn read_into(&self, index: usize, out: &mut Signature) -> bool {
+        match self.get(index) {
+            Some(signature) => {
+                out.copy_from_slice(signature);
+                true
+            }
+            None => false,
+        }
+    }
+}
+
 /// Computes a [`Signature`] for a set of k-grams of normalised node kinds.
 /// Deterministic: given the same input it always returns the same output,
 /// across processes and architectures.
@@ -48,7 +184,7 @@ pub fn minhash_signature(kgrams: &[&[&'static str]]) -> Signature {
     let mut expanded = [0u8; SIGNATURE_LEN * 8];
     for gram in kgrams {
         let gram_bytes = kgram_bytes(gram);
-        let mut hasher = Hasher::new();
+        let mut hasher = blake3::Hasher::new();
         let _ = hasher.update(&gram_bytes);
         hasher.finalize_xof().fill(&mut expanded);
         for (slot, chunk) in signature.iter_mut().zip(expanded.chunks_exact(8)) {
@@ -76,67 +212,6 @@ pub fn estimate_jaccard(left: &Signature, right: &Signature) -> f64 {
         }
     }
     f64::from(agreements) / f64::from(u32::try_from(SIGNATURE_LEN).unwrap_or(u32::MAX))
-}
-
-/// Returns pair indices `(i, j)` with `i < j` whose signatures collide in at
-/// least one band. Deterministic output order: sorted ascending by `(i, j)`.
-#[must_use]
-pub fn band_collisions(signatures: &[Signature]) -> Vec<(usize, usize)> {
-    let mut buckets: HashMap<[u8; 32], Vec<usize>> = HashMap::new();
-    for (index, signature) in signatures.iter().enumerate() {
-        for band in 0..BANDS {
-            let key = band_key(signature, band);
-            buckets.entry(key).or_default().push(index);
-        }
-    }
-    collect_pairs(&buckets)
-}
-
-/// Extracts deduplicated pairs from LSH buckets using a star topology per
-/// bucket (the canonical member is paired with every other), matching the
-/// structural-pass strategy in [`crate::pair::collect_structural_pairs`].
-/// This keeps the LSH pair count linear in bucket size, which matters for
-/// popular bands on large corpora where a single bucket can hold
-/// thousands of fingerprints.
-fn collect_pairs(buckets: &HashMap<[u8; 32], Vec<usize>>) -> Vec<(usize, usize)> {
-    let mut pairs: Vec<(usize, usize)> = Vec::new();
-    for members in buckets.values() {
-        if members.len() < 2 {
-            continue;
-        }
-        let mut sorted = members.clone();
-        sorted.sort_unstable();
-        let Some(canonical) = sorted.first().copied() else {
-            continue;
-        };
-        for other in sorted.iter().skip(1) {
-            pairs.push(ordered_pair(canonical, *other));
-        }
-    }
-    pairs.sort_unstable();
-    pairs.dedup();
-    pairs
-}
-
-/// Normalises a pair so the smaller index is first. Keeps the downstream
-/// candidate set symmetric without extra bookkeeping. `usize::min`
-/// and `usize::max` are branch-free CPU intrinsics, so this reads
-/// cleanly in the coverage report.
-fn ordered_pair(a: usize, b: usize) -> (usize, usize) {
-    (a.min(b), a.max(b))
-}
-
-/// Hashes one band of a signature into a stable 32-byte key used as a
-/// `HashMap` bucket.
-fn band_key(signature: &Signature, band: usize) -> [u8; 32] {
-    let mut hasher = Hasher::new();
-    let start = band.saturating_mul(ROWS_PER_BAND);
-    for offset in 0..ROWS_PER_BAND {
-        let slot_index = start.saturating_add(offset);
-        let value = signature.get(slot_index).copied().unwrap_or(0);
-        let _ = hasher.update(&value.to_le_bytes());
-    }
-    hasher.finalize().into()
 }
 
 /// Flattens a k-gram into a byte buffer with a nul separator so

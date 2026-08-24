@@ -32,6 +32,7 @@ pub fn is_import_boilerplate_carrier(language: &str, kind: &str) -> bool {
         "rust" => rust_carrier(kind),
         "dart" => dart_carrier(kind),
         "javascript" | "typescript" | "tsx" => ecmascript_carrier(kind),
+        "go" => go_carrier(kind),
         _ => false,
     }
 }
@@ -121,7 +122,7 @@ fn rust_carrier(kind: &str) -> bool {
 /// Dart import/export/part directives. `import_or_export` is the umbrella
 /// node wrapping `library_import`, `library_export`, and `part`/`part of`
 /// directives — all top-level scaffolding, never duplicate logic
-/// (issues #96 / #150 / #155 carried over to Dart export-barrel files).
+/// (carried over to Dart export-barrel files).
 fn dart_carrier(kind: &str) -> bool {
     matches!(kind, "import_or_export")
 }
@@ -133,6 +134,14 @@ fn dart_carrier(kind: &str) -> bool {
 /// const`) that must never be suppressed.
 fn ecmascript_carrier(kind: &str) -> bool {
     matches!(kind, "import_statement")
+}
+
+/// Go package-header and import carriers. A `package_clause` and an
+/// `import_declaration` (including the grouped `import (...)` form wrapping
+/// an `import_spec_list`) are file prologue, never duplicate logic — the Go
+/// analogue of C# `using` directives.
+fn go_carrier(kind: &str) -> bool {
+    matches!(kind, "package_clause" | "import_declaration")
 }
 
 /// Language-specific wrappers whose children encode prologue-only syntax.

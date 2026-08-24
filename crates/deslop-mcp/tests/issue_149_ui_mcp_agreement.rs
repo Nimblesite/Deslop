@@ -16,7 +16,7 @@ use std::{
 use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
-mod common;
+use crate::common;
 use common::{initialized_mcp, lsp_workspace_with_socket, structured_content, McpHandle};
 
 /// Lower bound for the slug shared with `clusterSlug()` in the VSIX

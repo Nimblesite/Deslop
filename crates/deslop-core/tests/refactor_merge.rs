@@ -1,125 +1,176 @@
 //! E2E coverage for the mechanical call-site merge ([AUTOFIX-MERGE],
 //! [AUTOFIX-MERGE-GATE], [AUTOFIX-MERGE-ANTIUNIFY],
-//! [AUTOFIX-MERGE-SAFETY], [AUTOFIX-MERGE-NAMES]).
+//! [AUTOFIX-MERGE-NAMES], [AUTOFIX-MERGE-MCP], [AUTOFIX-MERGE-DEFAULTS]).
 //!
 //! Drives the real pipeline over merge fixtures, computes the
-//! `MergePlan` through the public API, applies the wire
-//! `WorkspaceEdit`, and asserts the result against a golden. Negative
-//! fixtures (control-flow drift, type conflicts) must route to
-//! `ai_or_human` with a reason — never a partial plan.
-
-mod common;
+//! `MergePlan` through the public API, applies the wire `WorkspaceEdit`
+//! as an LSP host would, and asserts the result against a golden shared
+//! with the LSP code-action suite. The fixtures a merge must *decline*
+//! live in `refactor_merge_refusals.rs`.
 
 use std::fs;
 
-use anyhow::{anyhow, ensure, Context, Result};
-use deslop_core::{
-    ast::ByteRange,
-    refactor::{self, merge},
-    wire_generated::{MergePlan, MergeVerdict},
-};
+use anyhow::{ensure, Context, Result};
+use deslop_core::wire_generated::{MergeParameter, MergePlan, MergeVerdict};
 use serde_json::Value;
 
 use crate::common::{
-    clusters::{report_occurrence, synthetic_report_cluster},
-    fixture, refactor_golden as golden, refactor_pipeline_session as session,
+    fixture,
+    merge::{
+        assert_merge_golden, first_mechanical, merge_plans, merge_plans_under, synthetic_merge_plan,
+    },
 };
 
-/// Computes merge plans for every cluster of a single-file fixture and
-/// returns them in rank order.
-fn merge_plans(fixture_name: &str, file_name: &str) -> Result<Vec<MergePlan>> {
-    let root = fixture(fixture_name);
-    let (session, report) = session(&root)?;
-    let absolute = root.join(file_name);
-    let file_id = session
-        .file_id_for(&absolute)
-        .context("fixture file registered")?;
-    let source = session
-        .source_bytes_for(file_id)
-        .context("source retrievable")?
-        .to_vec();
-    let file_root = session
-        .subtree_at_range(
-            file_id,
-            ByteRange {
-                start: 0,
-                end: source.len(),
-            },
-        )
-        .context("file root retrievable")?;
-    let parser = refactor::parser_for_path(&absolute).context("parser registered for fixture")?;
+/// One leaf-gap fixture whose top cluster must merge mechanically.
+/// Every language asserts the same shape — only these values differ, so
+/// a language that regressed would otherwise be a copy of its siblings.
+struct LeafgapCase {
+    /// Fixture directory under `tests/fixtures`.
+    fixture: &'static str,
+    /// The single source file inside that fixture.
+    file: &'static str,
+    /// Language the plan must record.
+    language: &'static str,
+    /// Helper-name prefix, in the language's casing convention.
+    helper_prefix: &'static str,
+    /// Declared parameter types, in declaration order.
+    parameter_types: &'static [&'static str],
+    /// Golden holding the applied buffer.
+    golden: &'static str,
+    /// Statements the duplicated bodies share verbatim; the merge must
+    /// leave each behind exactly once.
+    duplicated_statements: &'static [&'static str],
+}
+
+/// The C# leaf gap: a typed context parameter plus two literal holes,
+/// behind a `PascalCase` helper. The census omits the two leaf gaps
+/// (`"standard"`/`"premium"`, `100`/`250`) because they differ by
+/// construction and become parameters.
+const CSHARP_LEAFGAP: LeafgapCase = LeafgapCase {
+    fixture: "csharp-merge-leafgap",
+    file: "RateLimits.cs",
+    language: "csharp",
+    helper_prefix: "MergedFromCluster_",
+    parameter_types: &["RatePolicy", "string", "int"],
+    golden: "RateLimits.merged.cs",
+    duplicated_statements: &[
+        "policy.SetCeiling(label, ceiling);",
+        "policy.EnableAlerts(label);",
+        "policy.Audit(label, ceiling);",
+        "policy.Flush(label);",
+        "policy.Seal(ceiling);",
+        "policy.Commit();",
+    ],
+};
+
+/// The Rust leaf gap: a `snake_case` helper whose declared types must be
+/// real enough for `rustc` to accept the merged file.
+const RUST_LEAFGAP: LeafgapCase = LeafgapCase {
+    fixture: "rust-merge-leafgap",
+    file: "pricing.rs",
+    language: "rust",
+    helper_prefix: "merged_from_cluster_",
+    parameter_types: &["&mut Vec<(String, i64)>", "&'static str", "i64"],
+    golden: "pricing.merged.rs",
+    duplicated_statements: &[
+        "book.push((label.to_owned(), ceiling));",
+        "book.push((label.to_uppercase(), ceiling * 2));",
+        "book.push((label.to_lowercase(), ceiling + 7));",
+        "book.push((label.trim().to_owned(), ceiling - 1));",
+        "book.push((label.repeat(2), ceiling / 2));",
+        "book.sort();",
+    ],
+};
+
+/// The Dart leaf gap: a `lowerCamel` helper pinned by its golden, since
+/// CI has no Dart compiler.
+const DART_LEAFGAP: LeafgapCase = LeafgapCase {
+    fixture: "dart-merge-leafgap",
+    file: "pricing.dart",
+    language: "dart",
+    helper_prefix: "mergedFromCluster_",
+    parameter_types: &["List<String>", "String", "int"],
+    golden: "pricing.merged.dart",
+    duplicated_statements: &[
+        "book.add(label);",
+        "book.add(label.toUpperCase());",
+        "book.add(label.toLowerCase());",
+        "book.add(label.trim());",
+        "book.add(ceiling.toString());",
+        "book.sort();",
+    ],
+};
+
+/// The first mechanical plan of a single-file fixture.
+fn mechanical_plan(fixture_name: &str, file_name: &str) -> Result<MergePlan> {
+    first_mechanical(merge_plans(fixture_name, file_name)?)
+}
+
+/// Projects one field out of every helper parameter, in declaration
+/// order.
+fn map_parameters<'plan, Field>(
+    plan: &'plan MergePlan,
+    project: impl FnMut(&'plan MergeParameter) -> Field,
+) -> Vec<Field> {
+    plan.parameters.iter().map(project).collect()
+}
+
+/// The `(declared type, name)` pair of every helper parameter.
+fn parameter_signature(plan: &MergePlan) -> Vec<(&str, &str)> {
+    map_parameters(plan, |parameter| {
+        (parameter.type_name.as_str(), parameter.name.as_str())
+    })
+}
+
+/// The document URI the plan's wire `WorkspaceEdit` edits.
+fn edit_uri(plan: &MergePlan) -> Result<&str> {
+    plan.workspace_edit
+        .as_ref()
+        .context("wire edit present")?
+        .pointer("/documentChanges/0/textDocument/uri")
+        .and_then(Value::as_str)
+        .context("edit uri present")
+}
+
+/// Computes the fixture's first mechanical plan, asserts the shape every
+/// leaf-gap plan must record, then applies the wire edit and asserts the
+/// statement census plus the golden. Returns both so a language can
+/// assert its own extras.
+fn assert_leafgap_merge(case: &LeafgapCase) -> Result<(MergePlan, String)> {
+    let plan = mechanical_plan(case.fixture, case.file)?;
+    assert_plan_shape(&plan, case)?;
+    let applied = assert_merge_golden(
+        &plan,
+        case.fixture,
+        case.file,
+        case.golden,
+        case.duplicated_statements,
+    )?;
+    Ok((plan, applied))
+}
+
+/// The language, the deterministic helper name (the casing convention
+/// applied to the first six cluster-id characters), and the declared
+/// parameter types.
+fn assert_plan_shape(plan: &MergePlan, case: &LeafgapCase) -> Result<()> {
     ensure!(
-        !report.clusters.is_empty(),
-        "{fixture_name} must produce clusters"
+        plan.language == case.language,
+        "language recorded, got {}",
+        plan.language
     );
-    report
-        .clusters
-        .iter()
-        .map(|cluster| {
-            merge::compute_merge_plan(cluster, &source, file_root, &absolute, parser.as_ref())
-                .map_err(|error| anyhow!("merge plan failed: {error}"))
-        })
-        .collect()
-}
-
-/// The first mechanical plan in rank order; errors list every
-/// refusal reason so a failing fixture explains itself.
-fn first_mechanical(plans: Vec<MergePlan>) -> Result<MergePlan> {
-    let reasons: Vec<String> = plans
-        .iter()
-        .map(|plan| match &plan.verdict {
-            MergeVerdict::Mechanical => format!("{}: mechanical", plan.cluster_id),
-            MergeVerdict::AiOrHuman { reason } => format!("{}: {reason}", plan.cluster_id),
-        })
-        .collect();
-    plans
-        .into_iter()
-        .find(|plan| matches!(plan.verdict, MergeVerdict::Mechanical))
-        .ok_or_else(|| anyhow!("no mechanical plan; verdicts:\n{}", reasons.join("\n")))
-}
-
-/// Applies a wire `WorkspaceEdit` (documentChanges form) to an ASCII
-/// buffer, mirroring an LSP host.
-fn apply_workspace_edit(source: &str, edit: &Value) -> Result<String> {
-    ensure!(source.is_ascii(), "fixture must stay ASCII for offset math");
-    let edits = edit
-        .pointer("/documentChanges/0/edits")
-        .and_then(Value::as_array)
-        .context("documentChanges edits present")?;
-    let mut buffer = source.to_owned();
-    for entry in edits {
-        let start = byte_offset(source, entry.pointer("/range/start").context("start")?)?;
-        let end = byte_offset(source, entry.pointer("/range/end").context("end")?)?;
-        let new_text = entry
-            .pointer("/newText")
-            .and_then(Value::as_str)
-            .context("newText")?;
-        ensure!(start <= end && end <= buffer.len(), "edit range in bounds");
-        buffer.replace_range(start..end, new_text);
-    }
-    Ok(buffer)
-}
-
-/// ASCII line/character → byte offset against the original buffer.
-fn byte_offset(source: &str, position: &Value) -> Result<usize> {
-    let line = position
-        .pointer("/line")
-        .and_then(Value::as_u64)
-        .context("line")?;
-    let character = position
-        .pointer("/character")
-        .and_then(Value::as_u64)
-        .context("character")?;
-    let line_start = source
-        .split_inclusive('\n')
-        .scan(0_usize, |offset, text| {
-            let start = *offset;
-            *offset = offset.saturating_add(text.len());
-            Some(start)
-        })
-        .nth(usize::try_from(line).context("line fits")?)
-        .context("line exists")?;
-    Ok(line_start.saturating_add(usize::try_from(character).context("char fits")?))
+    let cluster_prefix = plan.cluster_id.get(..6).unwrap_or_default();
+    let expected_name = format!("{}{cluster_prefix}", case.helper_prefix);
+    ensure!(
+        plan.helper_name == expected_name,
+        "deterministic helper name {expected_name} expected, got {}",
+        plan.helper_name
+    );
+    let types = map_parameters(plan, |parameter| parameter.type_name.as_str());
+    ensure!(
+        types.as_slice() == case.parameter_types,
+        "declared parameter types, got {types:?}"
+    );
+    Ok(())
 }
 
 /// [AUTOFIX-MERGE]: the leaf-gap fixture merges mechanically — typed
@@ -127,125 +178,110 @@ fn byte_offset(source: &str, position: &Value) -> Result<usize> {
 /// renames, and a golden applied buffer.
 #[test]
 fn csharp_leafgap_cluster_merges_to_golden() -> Result<()> {
-    let plans = merge_plans("csharp-merge-leafgap", "RateLimits.cs")?;
-    let plan = first_mechanical(plans)?;
-
-    ensure!(plan.language == "csharp", "language recorded");
-    let expected_name = format!(
-        "MergedFromCluster_{}",
-        plan.cluster_id.get(..6).unwrap_or_default()
-    );
-    ensure!(
-        plan.helper_name == expected_name,
-        "deterministic helper name, got {}",
-        plan.helper_name
-    );
-    let signature: Vec<(String, String)> = plan
-        .parameters
-        .iter()
-        .map(|parameter| (parameter.type_name.clone(), parameter.name.clone()))
-        .collect();
-    ensure!(
-        signature
-            == vec![
-                ("RatePolicy".to_owned(), "policy".to_owned()),
-                ("string".to_owned(), "arg0".to_owned()),
-                ("int".to_owned(), "arg1".to_owned()),
-            ],
-        "typed parameter list (context + holes), got {signature:?}"
-    );
-    let site_args: Vec<Vec<String>> = plan
-        .parameters
-        .iter()
-        .map(|parameter| parameter.per_site_arguments.clone())
-        .collect();
-    ensure!(
-        site_args
-            == vec![
-                vec!["policy".to_owned(), "policy".to_owned()],
-                vec!["\"standard\"".to_owned(), "\"premium\"".to_owned()],
-                vec!["100".to_owned(), "250".to_owned()],
-            ],
-        "per-site argument lists, got {site_args:?}"
-    );
+    let (plan, _applied) = assert_leafgap_merge(&CSHARP_LEAFGAP)?;
+    assert_rate_limits_signature(&plan)?;
     ensure!(
         plan.helper_body.contains("var label = arg0;")
             && plan.helper_body.contains("var ceiling = arg1;"),
         "holes spliced with parameter names:\n{}",
         plan.helper_body
     );
-
-    let root = fixture("csharp-merge-leafgap");
-    let source = fs::read_to_string(root.join("RateLimits.cs"))?;
-    let edit = plan.workspace_edit.as_ref().context("wire edit present")?;
-    let uri = edit
-        .pointer("/documentChanges/0/textDocument/uri")
-        .and_then(Value::as_str)
-        .context("edit uri present")?;
+    let uri = edit_uri(&plan)?;
     ensure!(
         uri.starts_with("file://") && uri.ends_with("/RateLimits.cs"),
         "edit targets the fixture file, got {uri}"
     );
-    let applied = apply_workspace_edit(&source, edit)?;
-    let golden_path = golden("RateLimits.merged.cs");
-    if std::env::var_os("DESLOP_BLESS").is_some() {
-        fs::write(&golden_path, &applied).context("blessing golden")?;
-    }
-    let expected = fs::read_to_string(&golden_path).context("golden")?;
+    Ok(())
+}
+
+/// The C# leaf-gap signature: the typed context parameter followed by
+/// the two literal holes, and the concrete argument every call site
+/// passes for each.
+fn assert_rate_limits_signature(plan: &MergePlan) -> Result<()> {
+    let signature = parameter_signature(plan);
     ensure!(
-        applied == expected,
-        "applied merge must match golden.\n--- applied ---\n{applied}"
+        signature
+            == [
+                ("RatePolicy", "policy"),
+                ("string", "arg0"),
+                ("int", "arg1")
+            ],
+        "typed parameter list (context + holes), got {signature:?}"
+    );
+    let site_arguments = map_parameters(plan, |parameter| parameter.per_site_arguments.clone());
+    ensure!(
+        site_arguments
+            == [
+                ["policy", "policy"],
+                ["\"standard\"", "\"premium\""],
+                ["100", "250"],
+            ],
+        "per-site argument lists, got {site_arguments:?}"
     );
     Ok(())
+}
+
+/// Asserts the RFC 8089 shape every wire `WorkspaceEdit` URI must have
+/// (issue #290): an empty authority and exactly three slashes, a
+/// forward-slash separated path ending at `tail`, and — because fixture
+/// paths are entirely unreserved — no percent-encoding whatsoever.
+fn ensure_rfc8089_uri(plan: &MergePlan, tail: &str) -> Result<()> {
+    let uri = edit_uri(plan)?;
+    let path = uri
+        .strip_prefix("file:///")
+        .with_context(|| format!("empty authority plus a rooted path expected, got {uri}"))?;
+    ensure!(
+        !path.starts_with('/'),
+        "exactly three slashes — a fourth leaves an empty first path segment, got {uri}"
+    );
+    ensure!(
+        path.ends_with(tail),
+        "forward-slash separated path ending at {tail} expected, got {uri}"
+    );
+    ensure!(
+        !uri.contains('%'),
+        "an unreserved path needs no percent-encoding — `%3A` is an \
+         encoded drive colon, `%5C` a backslash separator, `%3F` a \
+         leaked verbatim marker, got {uri}"
+    );
+    Ok(())
+}
+
+/// [AUTOFIX-MERGE-MCP] (issue #290): the wire `WorkspaceEdit` names the
+/// edited file with an RFC 8089 `file:///` URI on every platform.
+/// Windows absolute paths must render as `file:///C:/…`, not with a
+/// percent-encoded drive colon or backslash separators, or LSP and MCP
+/// clients cannot resolve the document.
+#[test]
+fn wire_edit_uri_is_rfc8089_for_the_platform_absolute_path() -> Result<()> {
+    let plan = mechanical_plan(CSHARP_LEAFGAP.fixture, CSHARP_LEAFGAP.file)?;
+    ensure_rfc8089_uri(
+        &plan,
+        "/deslop/tests/fixtures/csharp-merge-leafgap/RateLimits.cs",
+    )
+}
+
+/// [AUTOFIX-MERGE-MCP] (issue #290): the same URI contract holds for a
+/// canonicalised root, which is the shape the shipping servers address
+/// plans with — `deslop-mcp` canonicalises `--root` at startup, and on
+/// Windows `fs::canonicalize` returns the verbatim `\\?\C:\…` form. The
+/// verbatim marker must not survive into the URI.
+#[test]
+fn wire_edit_uri_is_rfc8089_for_a_canonicalised_absolute_path() -> Result<()> {
+    let root = fs::canonicalize(fixture(CSHARP_LEAFGAP.fixture)).context("canonical fixture")?;
+    let plan = first_mechanical(merge_plans_under(&root, CSHARP_LEAFGAP.file)?)?;
+    ensure_rfc8089_uri(&plan, "/csharp-merge-leafgap/RateLimits.cs")
 }
 
 /// Determinism: recomputing the plan yields identical JSON.
 #[test]
 fn csharp_leafgap_plan_is_deterministic() -> Result<()> {
-    let first = first_mechanical(merge_plans("csharp-merge-leafgap", "RateLimits.cs")?)?;
-    let second = first_mechanical(merge_plans("csharp-merge-leafgap", "RateLimits.cs")?)?;
+    let first = mechanical_plan(CSHARP_LEAFGAP.fixture, CSHARP_LEAFGAP.file)?;
+    let second = mechanical_plan(CSHARP_LEAFGAP.fixture, CSHARP_LEAFGAP.file)?;
     ensure!(
         serde_json::to_string(&first)? == serde_json::to_string(&second)?,
         "same cluster and source must produce identical plans"
     );
-    Ok(())
-}
-
-/// Control-flow drift routes to `ai_or_human` with a structural reason
-/// ([AUTOFIX-MERGE-GATE] step 2) — never a partial plan.
-#[test]
-fn structural_drift_routes_to_ai_or_human() -> Result<()> {
-    let plans = merge_plans("csharp-merge-drift", "DriftLimits.cs")?;
-    ensure!(!plans.is_empty(), "drift fixture produces clusters");
-    for plan in plans {
-        let MergeVerdict::AiOrHuman { reason } = plan.verdict else {
-            return Err(anyhow!(
-                "drifted cluster {} must not merge",
-                plan.cluster_id
-            ));
-        };
-        ensure!(!reason.is_empty(), "refusal carries a reason");
-        ensure!(
-            plan.workspace_edit.is_none(),
-            "refusals carry no workspace edit"
-        );
-    }
-    Ok(())
-}
-
-/// A slot whose literals disagree on type routes to `ai_or_human`
-/// ([AUTOFIX-MERGE-SAFETY] D) — no `object` guessing.
-#[test]
-fn literal_type_conflict_routes_to_ai_or_human() -> Result<()> {
-    let plans = merge_plans("csharp-merge-typeconflict", "MixedDefaults.cs")?;
-    ensure!(!plans.is_empty(), "type-conflict fixture produces clusters");
-    for plan in plans {
-        ensure!(
-            matches!(plan.verdict, MergeVerdict::AiOrHuman { .. }),
-            "type-conflicting cluster {} must not merge",
-            plan.cluster_id
-        );
-    }
     Ok(())
 }
 
@@ -254,46 +290,15 @@ fn literal_type_conflict_routes_to_ai_or_human() -> Result<()> {
 /// parameters are real types, not placeholders.
 #[test]
 fn rust_leafgap_merges_and_compiles() -> Result<()> {
-    let plans = merge_plans("rust-merge-leafgap", "pricing.rs")?;
-    let plan = first_mechanical(plans)?;
-    ensure!(plan.language == "rust", "language recorded");
-    ensure!(
-        plan.helper_name
-            == format!(
-                "merged_from_cluster_{}",
-                plan.cluster_id.get(..6).unwrap_or_default()
-            ),
-        "snake_case deterministic helper name, got {}",
-        plan.helper_name
-    );
-    let types: Vec<&str> = plan
-        .parameters
-        .iter()
-        .map(|parameter| parameter.type_name.as_str())
-        .collect();
-    ensure!(
-        types == ["&mut Vec<(String, i64)>", "&'static str", "i64"],
-        "declared parameter types, got {types:?}"
-    );
+    let (_plan, applied) = assert_leafgap_merge(&RUST_LEAFGAP)?;
+    ensure_merged_rust_compiles(&applied)
+}
 
-    let root = fixture("rust-merge-leafgap");
-    let source = fs::read_to_string(root.join("pricing.rs"))?;
-    let edit = plan.workspace_edit.as_ref().context("wire edit present")?;
-    let applied = apply_workspace_edit(&source, edit)?;
-
-    let golden_path = golden("pricing.merged.rs");
-    if std::env::var_os("DESLOP_BLESS").is_some() {
-        fs::write(&golden_path, &applied).context("blessing golden")?;
-    }
-    let expected = fs::read_to_string(&golden_path).context("golden")?;
-    ensure!(
-        applied == expected,
-        "applied merge must match golden.\n--- applied ---\n{applied}"
-    );
-
+/// Type-checks a merged Rust buffer in a scratch directory.
+fn ensure_merged_rust_compiles(applied: &str) -> Result<()> {
     let staging = tempfile::tempdir()?;
-    let merged_file = staging.path().join("pricing.rs");
-    fs::write(&merged_file, &applied)?;
+    let merged_file = staging.path().join(RUST_LEAFGAP.file);
+    fs::write(&merged_file, applied)?;
     let output = std::process::Command::new("rustc")
         .args([
             "--edition",
@@ -319,78 +324,7 @@ fn rust_leafgap_merges_and_compiles() -> Result<()> {
 /// the emitted shape).
 #[test]
 fn dart_leafgap_merges_to_golden() -> Result<()> {
-    let plans = merge_plans("dart-merge-leafgap", "pricing.dart")?;
-    let plan = first_mechanical(plans)?;
-    ensure!(plan.language == "dart", "language recorded");
-    ensure!(
-        plan.helper_name
-            == format!(
-                "mergedFromCluster_{}",
-                plan.cluster_id.get(..6).unwrap_or_default()
-            ),
-        "lowerCamel deterministic helper name, got {}",
-        plan.helper_name
-    );
-    let types: Vec<&str> = plan
-        .parameters
-        .iter()
-        .map(|parameter| parameter.type_name.as_str())
-        .collect();
-    ensure!(
-        types == ["List<String>", "String", "int"],
-        "declared parameter types, got {types:?}"
-    );
-
-    let root = fixture("dart-merge-leafgap");
-    let source = fs::read_to_string(root.join("pricing.dart"))?;
-    let edit = plan.workspace_edit.as_ref().context("wire edit present")?;
-    let applied = apply_workspace_edit(&source, edit)?;
-    let golden_path = golden("pricing.merged.dart");
-    if std::env::var_os("DESLOP_BLESS").is_some() {
-        fs::write(&golden_path, &applied).context("blessing golden")?;
-    }
-    let expected = fs::read_to_string(&golden_path).context("golden")?;
-    ensure!(
-        applied == expected,
-        "applied merge must match golden.\n--- applied ---\n{applied}"
-    );
-    Ok(())
-}
-
-/// [AUTOFIX-ZERO-RISK]: Python merges always refuse in v1 — strict
-/// type checking cannot be detected yet, and without it there is no
-/// compiler backstop.
-#[test]
-fn python_merge_always_refuses() -> Result<()> {
-    let plans = merge_plans("python-extract-type1", "metrics.py")?;
-    for plan in plans {
-        let MergeVerdict::AiOrHuman { reason } = plan.verdict else {
-            return Err(anyhow!("python cluster {} must refuse", plan.cluster_id));
-        };
-        ensure!(
-            reason.contains("python"),
-            "the reason names the language gate, got {reason}"
-        );
-    }
-    Ok(())
-}
-
-/// Asserts that at least one plan of a fixture refuses with a reason
-/// containing `needle`, and that no plan is mechanical.
-fn assert_all_refused_with(fixture_name: &str, file_name: &str, needle: &str) -> Result<()> {
-    let plans = merge_plans(fixture_name, file_name)?;
-    ensure!(!plans.is_empty(), "{fixture_name} produces clusters");
-    let mut matched = false;
-    for plan in plans {
-        let MergeVerdict::AiOrHuman { reason } = plan.verdict else {
-            return Err(anyhow!(
-                "{fixture_name}: cluster {} must refuse",
-                plan.cluster_id
-            ));
-        };
-        matched = matched || reason.contains(needle);
-    }
-    ensure!(matched, "{fixture_name}: some refusal names `{needle}`");
+    let _merged = assert_leafgap_merge(&DART_LEAFGAP)?;
     Ok(())
 }
 
@@ -399,13 +333,8 @@ fn assert_all_refused_with(fixture_name: &str, file_name: &str, needle: &str) ->
 /// only parameters are the typed context ones.
 #[test]
 fn consistent_renames_lift_without_parameters() -> Result<()> {
-    let plans = merge_plans("csharp-merge-rename", "RateMath.cs")?;
-    let plan = first_mechanical(plans)?;
-    let names: Vec<&str> = plan
-        .parameters
-        .iter()
-        .map(|parameter| parameter.name.as_str())
-        .collect();
+    let plan = mechanical_plan("csharp-merge-rename", "RateMath.cs")?;
+    let names = map_parameters(&plan, |parameter| parameter.name.as_str());
     ensure!(
         names == ["amounts", "taxRate"],
         "only context parameters survive a pure rename, got {names:?}"
@@ -418,30 +347,12 @@ fn consistent_renames_lift_without_parameters() -> Result<()> {
     Ok(())
 }
 
-/// [AUTOFIX-MERGE-SAFETY] B: a `return` crossing the boundary refuses.
-#[test]
-fn boundary_crossing_return_refuses() -> Result<()> {
-    assert_all_refused_with("csharp-merge-return", "EarlyExit.cs", "transfers control")
-}
-
-/// [AUTOFIX-MERGE-SAFETY] B: a local declared inside the span and read
-/// after it refuses.
-#[test]
-fn declared_inside_read_after_refuses() -> Result<()> {
-    assert_all_refused_with("csharp-merge-readafter", "Prefix.cs", "read after")
-}
-
 /// [AUTOFIX-MERGE-SAFETY] D: a free identifier hole with a unified
 /// declared type becomes a typed positional parameter.
 #[test]
 fn free_identifier_hole_becomes_typed_parameter() -> Result<()> {
-    let plans = merge_plans("csharp-merge-identhole", "Router.cs")?;
-    let plan = first_mechanical(plans)?;
-    let signature: Vec<(&str, &str)> = plan
-        .parameters
-        .iter()
-        .map(|parameter| (parameter.type_name.as_str(), parameter.name.as_str()))
-        .collect();
+    let plan = mechanical_plan("csharp-merge-identhole", "Router.cs")?;
+    let signature = parameter_signature(&plan);
     ensure!(
         signature == [("RatePolicy", "policy"), ("int", "arg0")],
         "typed positional identifier parameter, got {signature:?}"
@@ -459,39 +370,6 @@ fn free_identifier_hole_becomes_typed_parameter() -> Result<()> {
     Ok(())
 }
 
-/// [AUTOFIX-MERGE-SAFETY] D: a hole identifier written inside the span
-/// refuses — call-time evaluation would change behaviour.
-#[test]
-fn written_hole_identifier_refuses() -> Result<()> {
-    assert_all_refused_with("csharp-merge-writtenhole", "Mutator.cs", "written inside")
-}
-
-/// [AUTOFIX-MERGE-SAFETY] / extract rule 7 (#280): a *context* free
-/// variable (identical at every site, so never a hole) written inside
-/// the span refuses — the helper's by-value parameter copy would
-/// absorb the mutation and every caller's variable would keep its old
-/// value.
-#[test]
-fn written_context_variable_refuses() -> Result<()> {
-    assert_all_refused_with(
-        "csharp-merge-writtencontext",
-        "Accumulator.cs",
-        "written inside",
-    )
-}
-
-/// Same context-write refusal through the Dart tables — the only
-/// coverage of Dart's `write_kinds` (Dart has no Tier-1 emitter, so an
-/// extract-path Dart test would be vacuous).
-#[test]
-fn dart_written_context_variable_refuses() -> Result<()> {
-    assert_all_refused_with(
-        "dart-merge-writtencontext",
-        "accumulator.dart",
-        "written inside",
-    )
-}
-
 /// [AUTOFIX-MERGE-DEFAULTS]: a trailing slot shared by all-but-one of
 /// three sites gains a default and the matching calls elide it. The
 /// three-sibling family is hidden by the ranked report (#197), so the
@@ -499,40 +377,27 @@ fn dart_written_context_variable_refuses() -> Result<()> {
 #[test]
 fn three_site_merge_defaults_trailing_parameter() -> Result<()> {
     let root = fixture("csharp-merge-defaults");
-    let (session, _report) = session(&root)?;
-    let absolute = root.join("Tiers.cs");
-    let file_id = session.file_id_for(&absolute).context("file id")?;
-    let source = session
-        .source_bytes_for(file_id)
-        .context("source")?
-        .to_vec();
-    let text = String::from_utf8(source.clone())?;
-    let spans: Vec<(usize, usize)> = ["\"bronze\"", "\"silver\"", "\"gold\""]
-        .iter()
-        .map(|label| span_for_body(&text, label))
-        .collect::<Result<_>>()?;
-    let occurrences: Vec<deslop_core::report::ReportOccurrence> = spans
-        .iter()
-        .map(|span| report_occurrence("Tiers.cs", *span, false))
-        .collect();
-    let cluster = synthetic_report_cluster(occurrences, "nearly_identical");
-    let file_root = session
-        .subtree_at_range(
-            file_id,
-            ByteRange {
-                start: 0,
-                end: source.len(),
-            },
-        )
-        .context("file root")?;
-    let parser = refactor::parser_for_path(&absolute).context("parser")?;
-    let plan = merge::compute_merge_plan(&cluster, &source, file_root, &absolute, parser.as_ref())
-        .map_err(|error| anyhow!("merge failed: {error}"))?;
+    let tiers = ["\"bronze\"", "\"silver\"", "\"gold\""];
+    let plan = synthetic_merge_plan(&root, "Tiers.cs", &tiers, span_for_body)?;
     ensure!(
         matches!(plan.verdict, MergeVerdict::Mechanical),
         "the three-site fixture merges mechanically, got {:?}",
         plan.verdict
     );
+    assert_trailing_default(&plan)?;
+    let edit = plan.workspace_edit.as_ref().context("edit present")?;
+    let rendered = edit.to_string();
+    ensure!(
+        rendered.contains("MergedFromCluster_") && rendered.contains("= 100"),
+        "the helper renders the default"
+    );
+    Ok(())
+}
+
+/// The trailing parameter of the three-site plan: it defaults to the
+/// modal value, is optional, and the two sites that pass that value
+/// elide it.
+fn assert_trailing_default(plan: &MergePlan) -> Result<()> {
     let ceiling = plan
         .parameters
         .last()
@@ -541,17 +406,7 @@ fn three_site_merge_defaults_trailing_parameter() -> Result<()> {
         ceiling.default_value.as_deref() == Some("100") && !ceiling.is_required,
         "trailing slot defaults to the modal value, got {ceiling:?}"
     );
-    let edit = plan.workspace_edit.as_ref().context("edit present")?;
-    let rendered = edit.to_string();
-    ensure!(
-        rendered.contains("MergedFromCluster_") && rendered.contains("= 100"),
-        "the helper renders the default"
-    );
-    let elided = plan
-        .parameters
-        .last()
-        .map(|parameter| parameter.per_site_arguments.clone())
-        .unwrap_or_default();
+    let elided = &ceiling.per_site_arguments;
     ensure!(
         elided
             .iter()
@@ -576,79 +431,6 @@ fn span_for_body(text: &str, label: &str) -> Result<(usize, usize)> {
         .and_then(|tail| tail.find("policy.Commit();"))
         .map(|offset| {
             anchor
-                .saturating_add(offset)
-                .saturating_add("policy.Commit();".len())
-        })
-        .context("body end")?;
-    Ok((start, end))
-}
-
-/// The residual byte proof: operator drift outside the holes refuses
-/// even though the normalised skeletons match.
-#[test]
-fn operator_drift_refuses_via_residual_proof() -> Result<()> {
-    assert_all_refused_with(
-        "csharp-merge-operatordrift",
-        "Drift.cs",
-        "not byte-equivalent",
-    )
-}
-
-/// [AUTOFIX-MERGE-GATE] 4b/4c: too many differing leaves refuse.
-#[test]
-fn too_many_holes_refuse() -> Result<()> {
-    let root = fixture("csharp-merge-manyholes");
-    let (session, _report) = session(&root)?;
-    let absolute = root.join("Sprawl.cs");
-    let file_id = session.file_id_for(&absolute).context("file id")?;
-    let source = session
-        .source_bytes_for(file_id)
-        .context("source")?
-        .to_vec();
-    let text = String::from_utf8(source.clone())?;
-    let spans: Vec<(usize, usize)> = ["\"a1\"", "\"a2\""]
-        .iter()
-        .map(|anchor| sprawl_body_span(&text, anchor))
-        .collect::<Result<_>>()?;
-    let occurrences: Vec<deslop_core::report::ReportOccurrence> = spans
-        .iter()
-        .map(|span| report_occurrence("Sprawl.cs", *span, false))
-        .collect();
-    let cluster = synthetic_report_cluster(occurrences, "nearly_identical");
-    let file_root = session
-        .subtree_at_range(
-            file_id,
-            ByteRange {
-                start: 0,
-                end: source.len(),
-            },
-        )
-        .context("file root")?;
-    let parser = refactor::parser_for_path(&absolute).context("parser")?;
-    let plan = merge::compute_merge_plan(&cluster, &source, file_root, &absolute, parser.as_ref())
-        .map_err(|error| anyhow!("merge failed: {error}"))?;
-    let MergeVerdict::AiOrHuman { reason } = plan.verdict else {
-        return Err(anyhow!("twelve distinct substitutions must refuse"));
-    };
-    ensure!(
-        reason.contains("exceed the budget"),
-        "the substitution budget names itself, got {reason}"
-    );
-    Ok(())
-}
-
-/// The statement span of one `Sprawl.cs` method body.
-fn sprawl_body_span(text: &str, anchor: &str) -> Result<(usize, usize)> {
-    let position = text.find(anchor).context("anchor present")?;
-    let start = text
-        .get(..position)
-        .and_then(|head| head.rfind("policy.Set("))
-        .context("body start")?;
-    let end = text
-        .get(position..)
-        .and_then(|tail| tail.find("policy.Commit();"))
-        .map(|offset| {
-            position
                 .saturating_add(offset)
                 .saturating_add("policy.Commit();".len())
         })

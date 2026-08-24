@@ -37,9 +37,38 @@ import { ReportStore } from "../../reportStore";
 import { activateExtension } from "../suite/helpers";
 import { ClusterNode, OccurrenceNode } from "../../tree/providers";
 import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
+import { bucketSignals, signalsWith } from "../signals.helpers";
+import { wireCluster } from "../cluster.helpers";
+
+const UTF8_ENCODING = "utf8";
+const IDENTICAL_BUCKET = "identical";
+const TEST_SOURCE_PATH = "src/foo.cs";
+const FILE_A_NAME = "A.cs";
+const FILE_B_NAME = "B.cs";
+const TEST_TEN = 10;
+const TEST_TWENTY = 20;
+const DEFAULT_CLUSTER_WEIGHT = TEST_TEN;
+const DEFAULT_OCCURRENCE_END_BYTE = 50;
+const CYCLE_OCCURRENCE_END_BYTE = 16;
+const CYCLE_CLUSTER_ID = "c-cycle";
+const REFRESH_REPORT_COMMAND = "deslop.refreshReport";
+const OPEN_CLUSTER_COMMAND = "deslop.openCluster";
+const MARKDOWN_LANGUAGE = "markdown";
+const CODE_FENCE = "```";
+const TEST_TWO = 2;
+const TEST_THREE = 3;
+const PAIR_COUNT = TEST_TWO;
+const TWO_CHARACTER_OFFSET = TEST_TWO;
+const THIRD_OCCURRENCE_INDEX = TEST_TWO;
+const REPORT_GET_CALL_COUNT = TEST_TWO;
+const THIRD_LINE_INDEX = TEST_TWO;
+const SHORT_OCCURRENCE_END_BYTE = TEST_THREE;
+const CPU_WORK_MILLISECONDS = TEST_THREE;
+const THREE_LINE_COUNT = TEST_THREE;
+const THIRD_RANK = TEST_THREE;
 
 async function findDiffTab(): Promise<vscode.TabInputTextDiff> {
-  for (let i = 0; i < 20; i += 1) {
+  for (let i = 0; i < TEST_TWENTY; i += 1) {
     for (const group of vscode.window.tabGroups.all) {
       for (const tab of group.tabs) {
         if (tab.input instanceof vscode.TabInputTextDiff) return tab.input;
@@ -68,50 +97,48 @@ async function commandsEventuallyInclude(...ids: string[]): Promise<string[]> {
 }
 
 function cluster(id: string, paths: string[]): ReportCluster {
-  return {
+  return wireCluster({
     id,
-    weight: 10,
-    size: 2,
-    canonical_node_count: 4,
-    bucket: "identical",
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+    weight: DEFAULT_CLUSTER_WEIGHT,
+    size: PAIR_COUNT,
+    bucket: IDENTICAL_BUCKET,
+    signals: bucketSignals(IDENTICAL_BUCKET),
     occurrences: paths.map((p) => ({
       path: p,
       start_byte: 0,
-      end_byte: 50,
+      end_byte: DEFAULT_OCCURRENCE_END_BYTE,
       hidden: false,
     })),
-    occurrences_total: 0,
-    occurrences_truncated: false,
-    summary: "",
     interpretation: "interp",
-  };
+  });
 }
 
 function clusterWithRanges(
   id: string,
   occurrences: { path: string; start_byte: number; end_byte: number }[],
+  rank = 1,
 ): ReportCluster {
-  return {
+  return wireCluster({
     id,
-    weight: 10,
-    size: occurrences.length,
-    canonical_node_count: 4,
-    bucket: "identical",
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+    rank,
+    weight: DEFAULT_CLUSTER_WEIGHT,
+    bucket: IDENTICAL_BUCKET,
+    signals: bucketSignals(IDENTICAL_BUCKET),
     occurrences: occurrences.map((o) => ({ ...o, hidden: false })),
-    occurrences_total: 0,
-    occurrences_truncated: false,
-    summary: "",
     interpretation: "interp",
-  };
+  });
 }
 
 function report(clusters: ReportCluster[]): Report {
   return reportWithClusters(
     clusters,
     { schema_doc: "# docs" },
-    { analysed_loc: 10, duplicated_loc: 5, duplication_percent: 50, duplicated_files: 1 },
+    {
+      analysed_loc: TEST_TEN,
+      duplicated_loc: 5,
+      duplication_percent: 50,
+      duplicated_files: 1,
+    },
   );
 }
 
@@ -144,21 +171,21 @@ suite("register command implementations", () => {
 
   test("activation keeps VSIX commands separate from namespaced LSP commands", async () => {
     const commands = await commandsEventuallyInclude(
-      "deslop.refreshReport",
-      "deslop.openCluster",
+      REFRESH_REPORT_COMMAND,
+      OPEN_CLUSTER_COMMAND,
       "deslop.lsp.refreshReport",
       "deslop.lsp.openCluster",
     );
     assert.equal(
-      commands.filter((command) => command === "deslop.refreshReport").length,
+      commands.filter((command) => command === REFRESH_REPORT_COMMAND).length,
       1,
     );
     assert.equal(
-      commands.filter((command) => command === "deslop.openCluster").length,
+      commands.filter((command) => command === OPEN_CLUSTER_COMMAND).length,
       1,
     );
-    assert.ok(commands.includes("deslop.refreshReport"));
-    assert.ok(commands.includes("deslop.openCluster"));
+    assert.ok(commands.includes(REFRESH_REPORT_COMMAND));
+    assert.ok(commands.includes(OPEN_CLUSTER_COMMAND));
     assert.ok(commands.includes("deslop.lsp.refreshReport"));
     assert.ok(commands.includes("deslop.lsp.openCluster"));
   });
@@ -184,11 +211,11 @@ suite("register command implementations", () => {
   test("openOccurrence opens the referenced file at the byte range", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-occ-"));
     const file = path.join(dir, "occ.txt");
-    fs.writeFileSync(file, "hello\nworld\n", "utf8");
+    fs.writeFileSync(file, "hello\nworld\n", UTF8_ENCODING);
     await openOccurrence({
       path: file,
       start_byte: 0,
-      end_byte: 3,
+      end_byte: SHORT_OCCURRENCE_END_BYTE,
       hidden: false,
     });
     fs.rmSync(dir, { recursive: true, force: true });
@@ -201,8 +228,8 @@ suite("register command implementations", () => {
     });
     const editor = await vscode.window.showTextDocument(doc);
     editor.selection = new vscode.Selection(
-      new vscode.Position(0, 2),
-      new vscode.Position(0, 2),
+      new vscode.Position(0, TWO_CHARACTER_OFFSET),
+      new vscode.Position(0, TWO_CHARACTER_OFFSET),
     );
     const store = new ReportStore();
     store.setSnapshot(
@@ -214,37 +241,37 @@ suite("register command implementations", () => {
 
   test("jumpToNextOccurrence uses code-lens cluster id and occurrence index deterministically", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-lens-jump-"));
-    const fileA = path.join(dir, "A.cs");
-    const fileB = path.join(dir, "B.cs");
+    const fileA = path.join(dir, FILE_A_NAME);
+    const fileB = path.join(dir, FILE_B_NAME);
     const fileC = path.join(dir, "C.cs");
-    fs.writeFileSync(fileA, "public class A { int x = 1; }\n", "utf8");
-    fs.writeFileSync(fileB, "public class B { int y = 2; }\n", "utf8");
-    fs.writeFileSync(fileC, "public class C { int z = 3; }\n", "utf8");
+    fs.writeFileSync(fileA, "public class A { int x = 1; }\n", UTF8_ENCODING);
+    fs.writeFileSync(fileB, "public class B { int y = 2; }\n", UTF8_ENCODING);
+    fs.writeFileSync(fileC, "public class C { int z = 3; }\n", UTF8_ENCODING);
     const store = new ReportStore();
     store.setSnapshot(
       report([
-        clusterWithRanges("c-cycle", [
-          { path: fileA, start_byte: 0, end_byte: 16 },
-          { path: fileB, start_byte: 0, end_byte: 16 },
-          { path: fileC, start_byte: 0, end_byte: 16 },
+        clusterWithRanges(CYCLE_CLUSTER_ID, [
+          { path: fileA, start_byte: 0, end_byte: CYCLE_OCCURRENCE_END_BYTE },
+          { path: fileB, start_byte: 0, end_byte: CYCLE_OCCURRENCE_END_BYTE },
+          { path: fileC, start_byte: 0, end_byte: CYCLE_OCCURRENCE_END_BYTE },
         ]),
       ]),
       0,
     );
 
-    await jumpToNextOccurrence(store, "c-cycle", 0);
+    await jumpToNextOccurrence(store, CYCLE_CLUSTER_ID, 0);
     let editor = vscode.window.activeTextEditor;
     assert.equal(editor?.document.uri.fsPath, fileB);
     assert.match(editor?.document.getText() ?? "", /public class B/);
     assert.equal(editor?.selection.start.line, 0);
     assert.equal(editor?.selection.start.character, 0);
-    assert.equal(editor?.selection.end.character, 16);
+    assert.equal(editor?.selection.end.character, CYCLE_OCCURRENCE_END_BYTE);
 
-    await jumpToNextOccurrence(store, "c-cycle", 2);
+    await jumpToNextOccurrence(store, CYCLE_CLUSTER_ID, THIRD_OCCURRENCE_INDEX);
     editor = vscode.window.activeTextEditor;
     assert.equal(editor?.document.uri.fsPath, fileA);
     assert.match(editor?.document.getText() ?? "", /public class A/);
-    assert.equal(editor?.selection.end.character, 16);
+    assert.equal(editor?.selection.end.character, CYCLE_OCCURRENCE_END_BYTE);
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
@@ -268,20 +295,20 @@ suite("register command implementations", () => {
 
   test("compareWithCanonical opens a diff whose two sides are distinct resources with the matching occurrence bytes", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-cmp-"));
-    const fileA = path.join(dir, "A.cs");
-    const fileB = path.join(dir, "B.cs");
+    const fileA = path.join(dir, FILE_A_NAME);
+    const fileB = path.join(dir, FILE_B_NAME);
     // Left side: bytes 0..16 of A.cs == "public class A {"
     // Right side: bytes 0..16 of B.cs == "public class B {"
     // Distinct files, distinct content — exercises the cross-file diff path.
-    fs.writeFileSync(fileA, "public class A { int x = 1; }\n", "utf8");
-    fs.writeFileSync(fileB, "public class B { int y = 2; }\n", "utf8");
+    fs.writeFileSync(fileA, "public class A { int x = 1; }\n", UTF8_ENCODING);
+    fs.writeFileSync(fileB, "public class B { int y = 2; }\n", UTF8_ENCODING);
 
     const store = new ReportStore();
     store.setSnapshot(
       report([
         clusterWithRanges("c-diff", [
-          { path: fileA, start_byte: 0, end_byte: 16 },
-          { path: fileB, start_byte: 0, end_byte: 16 },
+          { path: fileA, start_byte: 0, end_byte: CYCLE_OCCURRENCE_END_BYTE },
+          { path: fileB, start_byte: 0, end_byte: CYCLE_OCCURRENCE_END_BYTE },
         ]),
       ]),
       0,
@@ -377,7 +404,12 @@ suite("register command implementations", () => {
 
   test("compare provider renders a friendly fallback for a stale occurrence file", async () => {
     const uri = buildCompareUri(
-      { path: "missing-deslop-compare-file.cs", start_byte: 0, end_byte: 20, hidden: false },
+      {
+        path: "missing-deslop-compare-file.cs",
+        start_byte: 0,
+        end_byte: TEST_TWENTY,
+        hidden: false,
+      },
       "a",
       "stale-cluster",
     );
@@ -390,23 +422,23 @@ suite("register command implementations", () => {
   });
 
   test("openSchemaDoc prefers packaged docs over a stale snapshot", async () => {
-    const expected = fs.readFileSync(packagedSchemaDocPath(), "utf8");
+    const expected = fs.readFileSync(packagedSchemaDocPath(), UTF8_ENCODING);
     const store = new ReportStore();
     store.setSnapshot(report([]), 0);
     await openSchemaDoc(fakeCtx(), store);
     const active = vscode.window.activeTextEditor;
     assert.ok(active, "schema doc editor should be active");
-    assert.equal(active.document.languageId, "markdown");
+    assert.equal(active.document.languageId, MARKDOWN_LANGUAGE);
     assert.equal(active.document.getText(), expected);
     assert.doesNotMatch(active.document.getText(), /# docs/);
   });
 
   test("openSchemaDoc reads the packaged fallback when schema_doc is absent", async () => {
-    const expected = fs.readFileSync(packagedSchemaDocPath(), "utf8");
+    const expected = fs.readFileSync(packagedSchemaDocPath(), UTF8_ENCODING);
     await openSchemaDoc(fakeCtx(), new ReportStore());
     const active = vscode.window.activeTextEditor;
     assert.ok(active, "packaged schema doc editor should be active");
-    assert.equal(active.document.languageId, "markdown");
+    assert.equal(active.document.languageId, MARKDOWN_LANGUAGE);
     assert.equal(active.document.getText(), expected);
   });
 
@@ -416,7 +448,7 @@ suite("register command implementations", () => {
         assert.equal(method, "deslop/cpuReport");
         return Promise.resolve({
           current_phase: "idle",
-          handler_counts: { "deslop/reportGet": 2, hover: 1 },
+          handler_counts: { "deslop/reportGet": REPORT_GET_CALL_COUNT, hover: 1 },
           in_flight: {
             pending_watcher_events: 0,
             pending_embed_requests: 0,
@@ -425,9 +457,9 @@ suite("register command implementations", () => {
           last_100_phases: [
             {
               phase: "report_rendering",
-              started_at_ms: 10,
-              duration_ms: 3,
-              cpu_ms: 3,
+              started_at_ms: TEST_TEN,
+              duration_ms: CPU_WORK_MILLISECONDS,
+              cpu_ms: CPU_WORK_MILLISECONDS,
               files_touched: ["src/Alpha.cs"],
             },
           ],
@@ -436,7 +468,7 @@ suite("register command implementations", () => {
     }) as unknown as LanguageClient);
     const active = vscode.window.activeTextEditor;
     assert.ok(active, "CPU report editor should be active");
-    assert.equal(active.document.languageId, "markdown");
+    assert.equal(active.document.languageId, MARKDOWN_LANGUAGE);
     const text = active.document.getText();
     assert.match(text, /# Deslop CPU Report/);
     assert.match(text, /Current phase: idle/);
@@ -463,16 +495,16 @@ suite("register command implementations", () => {
 
 function occurrence(overrides: Partial<ReportOccurrence> = {}): ReportOccurrence {
   return {
-    path: "src/foo.cs",
+    path: TEST_SOURCE_PATH,
     start_byte: 0,
-    end_byte: 50,
+    end_byte: DEFAULT_OCCURRENCE_END_BYTE,
     hidden: false,
     ...overrides,
   };
 }
 
-function clusterNodeFor(c: ReportCluster, rank = 1): ClusterNode {
-  return new ClusterNode(c, rank, "mid");
+function clusterNodeFor(c: ReportCluster): ClusterNode {
+  return new ClusterNode(c, "mid");
 }
 
 function occurrenceNodeFor(o: ReportOccurrence): OccurrenceNode {
@@ -482,25 +514,25 @@ function occurrenceNodeFor(o: ReportOccurrence): OccurrenceNode {
 suite("tree menu renderers", () => {
   test("clusterLocationsText surfaces bucket + count header with one row per occurrence", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-menu-"));
-    const fileA = path.join(dir, "A.cs");
-    const fileB = path.join(dir, "B.cs");
-    fs.writeFileSync(fileA, "public class A { }\n", "utf8");
-    fs.writeFileSync(fileB, "public class B { }\n", "utf8");
+    const fileA = path.join(dir, FILE_A_NAME);
+    const fileB = path.join(dir, FILE_B_NAME);
+    fs.writeFileSync(fileA, "public class A { }\n", UTF8_ENCODING);
+    fs.writeFileSync(fileB, "public class B { }\n", UTF8_ENCODING);
 
     const c = clusterWithRanges("c-x", [
-      { path: fileA, start_byte: 0, end_byte: 10 },
-      { path: fileB, start_byte: 0, end_byte: 10 },
+      { path: fileA, start_byte: 0, end_byte: TEST_TEN },
+      { path: fileB, start_byte: 0, end_byte: TEST_TEN },
     ]);
-    c.bucket = "identical";
+    c.bucket = IDENTICAL_BUCKET;
 
     const text = clusterLocationsText(c);
     const lines = text.split("\n");
-    assert.equal(lines.length, 3, "header + 2 occurrences");
+    assert.equal(lines.length, THREE_LINE_COUNT, "header + 2 occurrences");
     assert.match(lines[0] ?? "", /^cluster c-x/);
     assert.match(lines[0] ?? "", /Identical code/);
     assert.match(lines[0] ?? "", /2 occurrences/);
     assert.match(lines[1] ?? "", /A\.cs:1:1$/);
-    assert.match(lines[2] ?? "", /B\.cs:1:1$/);
+    assert.match(lines[THIRD_LINE_INDEX] ?? "", /B\.cs:1:1$/);
     assert.ok(!text.includes("start_byte"));
     assert.ok(!text.includes(".."), "human copy must not include byte ranges");
 
@@ -509,15 +541,15 @@ suite("tree menu renderers", () => {
 
   test("aiPayloadForCluster encodes id, bucket, rank, signals, and byte ranges", () => {
     const c = clusterWithRanges("c-ai", [
-      { path: "src/foo.cs", start_byte: 10, end_byte: 200 },
+      { path: TEST_SOURCE_PATH, start_byte: DEFAULT_CLUSTER_WEIGHT, end_byte: 200 },
     ]);
     c.bucket = "same_behavior";
-    c.signals = {
+    c.signals = signalsWith("same_behavior", {
       structural: 0.1,
       token_jaccard: 0.2,
       embedding_cos: 0.9,
       fused: 0.85,
-    };
+    });
 
     const text = aiPayloadForCluster(c, 7);
     assert.match(text, /cluster_id: c-ai/);
@@ -538,9 +570,9 @@ suite("tree menu renderers", () => {
     // The canonical full id is preserved on its own line for unambiguous
     // tooling round-trip.
     const c = clusterWithRanges("1802186da488862f", [
-      { path: "src/foo.cs", start_byte: 0, end_byte: 10 },
+      { path: TEST_SOURCE_PATH, start_byte: 0, end_byte: DEFAULT_CLUSTER_WEIGHT },
     ]);
-    const text = aiPayloadForCluster(c, 3);
+    const text = aiPayloadForCluster(c, THIRD_RANK);
     const lines = text.split("\n");
     const slugIndex = lines.findIndex((line) => /^slug: 1802186\b/.test(line));
     const clusterIdIndex = lines.findIndex((line) =>
@@ -571,7 +603,7 @@ suite("tree menu renderers", () => {
 
   test("aiPayloadForOccurrence includes parent cluster metadata when available", () => {
     const c = clusterWithRanges("c-occ", [
-      { path: "src/foo.cs", start_byte: 0, end_byte: 50 },
+      { path: TEST_SOURCE_PATH, start_byte: 0, end_byte: DEFAULT_OCCURRENCE_END_BYTE },
       { path: "src/bar.cs", start_byte: 5, end_byte: 80 },
     ]);
     c.bucket = "nearly_identical";
@@ -601,12 +633,12 @@ suite("tree menu renderers", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-snip-"));
     const file = path.join(dir, "snippet.cs");
     const source = "public class Snippet { int x = 1; }\n";
-    fs.writeFileSync(file, source, "utf8");
+    fs.writeFileSync(file, source, UTF8_ENCODING);
 
     const text = sourceSnippetText({
       path: file,
       start_byte: 0,
-      end_byte: 20,
+      end_byte: TEST_TWENTY,
       hidden: false,
     });
 
@@ -614,7 +646,43 @@ suite("tree menu renderers", () => {
     assert.match(firstLine, /^.+:1:1$/);
     assert.ok(!/\bbytes?\b/i.test(firstLine), `human header leaked bytes: ${firstLine}`);
     assert.ok(text.includes("public class Snippet"), "fenced block carries the bytes");
-    assert.ok(text.endsWith("```"));
+    assert.ok(text.endsWith(CODE_FENCE));
+
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  // [FACET-MODEL] Copy Source Snippet used to carry a second, private
+  // extension map that never learned F#, PHP or Go, so those occurrences
+  // copied out as a bare ``` fence — unhighlighted in a PR and untyped for
+  // an AI agent. The tag now comes from `types/languages`.
+  test("sourceSnippetText fence tag comes from the shared language registry", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-fence-"));
+    const expected: ReadonlyArray<readonly [string, string]> = [
+      ["main.go", "go"],
+      ["Model.php", "php"],
+      ["Tests.fs", "fsharp"],
+      ["Widget.dart", "dart"],
+      ["App.tsx", "tsx"],
+      ["notes.txt", ""],
+      ["Makefile", ""],
+    ];
+
+    for (const [name, tag] of expected) {
+      const file = path.join(dir, name);
+      fs.writeFileSync(file, "value\n", UTF8_ENCODING);
+      const text = sourceSnippetText({
+        path: file,
+        start_byte: 0,
+        end_byte: 5,
+        hidden: false,
+      });
+      assert.equal(
+        text.split("\n")[1],
+        CODE_FENCE + tag,
+        `${name} must open its fence with "${tag}" so the snippet highlights when pasted`,
+      );
+      assert.ok(text.includes("value"), `${name} snippet must carry the source bytes`);
+    }
 
     fs.rmSync(dir, { recursive: true, force: true });
   });
@@ -628,7 +696,7 @@ suite("tree menu renderers", () => {
 
   test("clusterIdForTreeNode resolves parent cluster id for occurrence nodes", () => {
     const c = clusterWithRanges("c-parent", [
-      { path: "src/foo.cs", start_byte: 100, end_byte: 120 },
+      { path: TEST_SOURCE_PATH, start_byte: 100, end_byte: 120 },
     ]);
     const store = new ReportStore();
     store.setSnapshot(report([c]), 0);
@@ -657,12 +725,12 @@ suite("tree menu handlers", () => {
   test("copyHumanLocation copies path:line:column for the occurrence", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-hloc-"));
     const file = path.join(dir, "hum.cs");
-    fs.writeFileSync(file, "line-a\nline-b\n", "utf8");
+    fs.writeFileSync(file, "line-a\nline-b\n", UTF8_ENCODING);
 
     const node = occurrenceNodeFor({
       path: file,
       start_byte: 0,
-      end_byte: 3,
+      end_byte: SHORT_OCCURRENCE_END_BYTE,
       hidden: false,
     });
     await copyHumanLocation(node);
@@ -674,36 +742,38 @@ suite("tree menu handlers", () => {
 
   test("copyClusterLocations writes the header + every occurrence line to the clipboard", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-cloc-"));
-    const fileA = path.join(dir, "A.cs");
-    const fileB = path.join(dir, "B.cs");
-    fs.writeFileSync(fileA, "A\n", "utf8");
-    fs.writeFileSync(fileB, "B\n", "utf8");
+    const fileA = path.join(dir, FILE_A_NAME);
+    const fileB = path.join(dir, FILE_B_NAME);
+    fs.writeFileSync(fileA, "A\n", UTF8_ENCODING);
+    fs.writeFileSync(fileB, "B\n", UTF8_ENCODING);
     const c = clusterWithRanges("c-copy", [
       { path: fileA, start_byte: 0, end_byte: 1 },
       { path: fileB, start_byte: 0, end_byte: 1 },
     ]);
-    c.bucket = "identical";
+    c.bucket = IDENTICAL_BUCKET;
 
     await copyClusterLocations(clusterNodeFor(c));
     const clipboard = await vscode.env.clipboard.readText();
     const lines = clipboard.split("\n");
     assert.match(lines[0] ?? "", /cluster c-copy/);
-    assert.equal(lines.length, 3);
+    assert.equal(lines.length, THREE_LINE_COUNT);
     assert.match(lines[1] ?? "", /A\.cs:1:1$/);
-    assert.match(lines[2] ?? "", /B\.cs:1:1$/);
+    assert.match(lines[THIRD_LINE_INDEX] ?? "", /B\.cs:1:1$/);
 
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
   test("copyContextForAI cluster node writes the AI payload to the clipboard", async () => {
-    const c = clusterWithRanges("c-ctx", [
-      { path: "src/foo.cs", start_byte: 0, end_byte: 50 },
-    ]);
+    const c = clusterWithRanges(
+      "c-ctx",
+      [{ path: TEST_SOURCE_PATH, start_byte: 0, end_byte: DEFAULT_OCCURRENCE_END_BYTE }],
+      THIRD_RANK,
+    );
     c.bucket = "nearly_identical";
     const store = new ReportStore();
     store.setSnapshot(report([c]), 0);
 
-    await copyContextForAI(clusterNodeFor(c, 3), store);
+    await copyContextForAI(clusterNodeFor(c), store);
     const clipboard = await vscode.env.clipboard.readText();
     assert.match(clipboard, /cluster_id: c-ctx/);
     assert.match(clipboard, /rank: 3/);
@@ -712,9 +782,9 @@ suite("tree menu handlers", () => {
 
   test("copyContextForAI occurrence node writes occurrence + parent fields to the clipboard", async () => {
     const c = clusterWithRanges("c-occ-ctx", [
-      { path: "src/foo.cs", start_byte: 0, end_byte: 9 },
+      { path: TEST_SOURCE_PATH, start_byte: 0, end_byte: 9 },
     ]);
-    c.bucket = "identical";
+    c.bucket = IDENTICAL_BUCKET;
     const store = new ReportStore();
     store.setSnapshot(report([c]), 0);
 
@@ -730,14 +800,14 @@ suite("tree menu handlers", () => {
   test("copySourceSnippet copies the fenced source block to the clipboard", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-snip2-"));
     const file = path.join(dir, "src.py");
-    fs.writeFileSync(file, "def hi(): return 42\n", "utf8");
+    fs.writeFileSync(file, "def hi(): return 42\n", UTF8_ENCODING);
 
     await copySourceSnippet(
       occurrenceNodeFor({ path: file, start_byte: 0, end_byte: 8, hidden: false }),
     );
     const clipboard = await vscode.env.clipboard.readText();
     assert.match(clipboard, /```python\ndef hi\(/);
-    assert.ok(clipboard.endsWith("```"));
+    assert.ok(clipboard.endsWith(CODE_FENCE));
 
     fs.rmSync(dir, { recursive: true, force: true });
   });
@@ -755,7 +825,7 @@ suite("tree menu handlers", () => {
   test("revealOccurrenceInExplorer calls revealInExplorer for an existing file", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-rev-"));
     const file = path.join(dir, "reveal.cs");
-    fs.writeFileSync(file, "x\n", "utf8");
+    fs.writeFileSync(file, "x\n", UTF8_ENCODING);
     const node = occurrenceNodeFor({
       path: file,
       start_byte: 0,
@@ -770,12 +840,12 @@ suite("tree menu handlers", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-all-"));
     const files = ["a", "b"].map((name) => {
       const p = path.join(dir, `${name}.cs`);
-      fs.writeFileSync(p, `// ${name}\n`, "utf8");
+      fs.writeFileSync(p, `// ${name}\n`, UTF8_ENCODING);
       return p;
     });
     const c = clusterWithRanges(
       "c-open-all",
-      files.map((p) => ({ path: p, start_byte: 0, end_byte: 3 })),
+      files.map((p) => ({ path: p, start_byte: 0, end_byte: SHORT_OCCURRENCE_END_BYTE })),
     );
     await openAllOccurrences(clusterNodeFor(c));
     fs.rmSync(dir, { recursive: true, force: true });

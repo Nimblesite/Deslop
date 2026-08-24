@@ -400,6 +400,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "blake3",
+ "deslop-core",
+ "deslop-test-support",
  "futures",
  "getrandom 0.4.3",
  "ignore",
@@ -417,6 +419,7 @@ dependencies = [
  "tree-sitter-c-sharp",
  "tree-sitter-dart",
  "tree-sitter-fsharp",
+ "tree-sitter-go",
  "tree-sitter-javascript",
  "tree-sitter-php",
  "tree-sitter-python",
@@ -474,7 +477,10 @@ version = "0.0.0-dev"
 dependencies = [
  "anyhow",
  "assert_cmd",
+ "deslop-core",
  "serde_json",
+ "toml",
+ "tree-sitter",
 ]
 
 [[package]]
@@ -2002,6 +2008,16 @@ name = "tree-sitter-fsharp"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b069005841682d258b95e9ee8cb0c0a0f16b77318ff56000504169c80690c67b"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-go"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8560a4d2f835cc0d4d2c2e03cbd0dde2f6114b43bc491164238d333e28b16ea"
 dependencies = [
  "cc",
  "tree-sitter-language",

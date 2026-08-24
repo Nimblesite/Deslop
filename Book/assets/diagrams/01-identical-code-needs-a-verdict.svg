@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">What to do with a large identical duplicate group</title>
+  <desc id="description">Three identical sections of source code lead to five possible decisions: reuse an existing implementation, move the code, delete redundant code, generate required output, or retain the copies with a recorded reason.</desc>
+  <rect width="1600" height="1000" fill="#0b0d10"/>
+
+  <text x="86" y="96" fill="#ff8c85" font-family="JetBrains Mono, monospace" font-size="23" font-weight="700" letter-spacing="5">IDENTICAL CODE</text>
+  <text x="86" y="172" fill="#e8eaed" font-family="Inter, sans-serif" font-size="52" font-weight="780" letter-spacing="-2">Deslop has proved that the source is repeated.</text>
+  <text x="86" y="226" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="27">The developer must still choose what happens to the copies.</text>
+
+  <g transform="translate(86 310)">
+    <g transform="translate(0 0)">
+      <rect width="316" height="386" fill="#fafaf7"/>
+      <rect width="12" height="386" fill="#b3261e"/>
+      <text x="24" y="27" fill="#b3261e" font-family="JetBrains Mono, monospace" font-size="14" font-weight="700">01 · SAME SOURCE</text>
+      <rect x="42" y="98" width="124" height="12" fill="#14161a"/>
+      <rect x="42" y="138" width="226" height="10" fill="#55606b"/>
+      <rect x="42" y="172" width="184" height="10" fill="#55606b"/>
+      <rect x="42" y="206" width="208" height="10" fill="#55606b"/>
+      <rect x="42" y="240" width="144" height="10" fill="#55606b"/>
+      <rect x="42" y="274" width="226" height="10" fill="#55606b"/>
+      <rect x="42" y="326" width="90" height="10" fill="#0b5fff"/>
+    </g>
+    <g transform="translate(46 40)">
+      <rect width="316" height="386" fill="#f1efe8"/>
+      <rect width="12" height="386" fill="#b3261e"/>
+      <text x="24" y="27" fill="#b3261e" font-family="JetBrains Mono, monospace" font-size="14" font-weight="700">02 · SAME SOURCE</text>
+      <rect x="42" y="98" width="124" height="12" fill="#14161a"/>
+      <rect x="42" y="138" width="226" height="10" fill="#55606b"/>
+      <rect x="42" y="172" width="184" height="10" fill="#55606b"/>
+      <rect x="42" y="206" width="208" height="10" fill="#55606b"/>
+      <rect x="42" y="240" width="144" height="10" fill="#55606b"/>
+      <rect x="42" y="274" width="226" height="10" fill="#55606b"/>
+      <rect x="42" y="326" width="90" height="10" fill="#0b5fff"/>
+    </g>
+    <g transform="translate(92 80)">
+      <rect width="316" height="386" fill="#ffffff"/>
+      <rect width="12" height="386" fill="#b3261e"/>
+      <text x="42" y="56" fill="#b3261e" font-family="JetBrains Mono, monospace" font-size="18" font-weight="700">OCCURRENCE 03</text>
+      <rect x="42" y="98" width="124" height="12" fill="#14161a"/>
+      <rect x="42" y="138" width="226" height="10" fill="#55606b"/>
+      <rect x="42" y="172" width="184" height="10" fill="#55606b"/>
+      <rect x="42" y="206" width="208" height="10" fill="#55606b"/>
+      <rect x="42" y="240" width="144" height="10" fill="#55606b"/>
+      <rect x="42" y="274" width="226" height="10" fill="#55606b"/>
+      <rect x="42" y="326" width="90" height="10" fill="#0b5fff"/>
+    </g>
+  </g>
+
+  <path d="M548 540H700" stroke="#b3261e" stroke-width="8"/>
+  <path d="M676 516L704 540L676 564" fill="none" stroke="#b3261e" stroke-width="8"/>
+  <text x="562" y="500" fill="#ff8c85" font-family="JetBrains Mono, monospace" font-size="18" font-weight="700">CHOOSE ACTION</text>
+
+  <g transform="translate(726 310)">
+    <text x="0" y="34" fill="#6aa8ff" font-family="JetBrains Mono, monospace" font-size="20" font-weight="700" letter-spacing="3">POSSIBLE DECISIONS</text>
+
+    <rect y="68" width="788" height="68" fill="#191e25"/>
+    <rect y="68" width="12" height="68" fill="#0b5fff"/>
+    <text x="38" y="112" fill="#e8eaed" font-family="Inter, sans-serif" font-size="25" font-weight="700">Reuse the existing implementation</text>
+
+    <rect y="152" width="788" height="68" fill="#13171c"/>
+    <rect y="152" width="12" height="68" fill="#0b5fff"/>
+    <text x="38" y="196" fill="#e8eaed" font-family="Inter, sans-serif" font-size="25" font-weight="700">Move the code to a shared module</text>
+
+    <rect y="236" width="788" height="68" fill="#191e25"/>
+    <rect y="236" width="12" height="68" fill="#b3261e"/>
+    <text x="38" y="280" fill="#e8eaed" font-family="Inter, sans-serif" font-size="25" font-weight="700">Delete the redundant code</text>
+
+    <rect y="320" width="788" height="68" fill="#13171c"/>
+    <rect y="320" width="12" height="68" fill="#4ac26b"/>
+    <text x="38" y="364" fill="#e8eaed" font-family="Inter, sans-serif" font-size="25" font-weight="700">Generate required repeated output</text>
+
+    <rect y="404" width="788" height="68" fill="#191e25"/>
+    <rect y="404" width="12" height="68" fill="#d4a72c"/>
+    <text x="38" y="448" fill="#e8eaed" font-family="Inter, sans-serif" font-size="25" font-weight="700">Retain it and record the technical reason</text>
+  </g>
+
+  <path d="M86 846H1514" stroke="#55606b" stroke-width="3"/>
+  <text x="86" y="914" fill="#e8eaed" font-family="Inter, sans-serif" font-size="27" font-weight="700">Review the group even if the team disagrees about DRY.</text>
+</svg>

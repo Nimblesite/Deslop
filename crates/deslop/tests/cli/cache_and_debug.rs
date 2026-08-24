@@ -1,16 +1,14 @@
-use crate::support::*;
+use super::support::*;
+use deslop_core::lang::shared::OPERATOR_KIND_PREFIX;
 use std::fmt::Write as _;
 
-/// Runs an `--incremental` pass over `scan_root`, writing `<prefix>.json`
-/// (and siblings), asserts the process succeeded, and returns the JSON
-/// report body as a string. Centralises the seed-already-present
-/// run-and-read shape shared by the cache tests.
+/// Runs a default (cache-on, [PIPELINE-INCREMENTAL]) pass over
+/// `scan_root`, writing `<prefix>.json` (and siblings), asserts the
+/// process succeeded, and returns the JSON report body as a string.
+/// Centralises the run-and-read shape shared by the cache tests.
 fn run_incremental_pass(scan_root: &Path, output_prefix: &Path) -> Result<String> {
     let mut cmd = deslop_command(scan_root, output_prefix)?;
-    let _assertion = cmd
-        .args(["--min-nodes", "8", "--incremental"])
-        .assert()
-        .success();
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     Ok(fs::read_to_string(with_ext(output_prefix, "json"))?)
 }
 
@@ -18,7 +16,7 @@ fn run_incremental_pass(scan_root: &Path, output_prefix: &Path) -> Result<String
 fn output_path_with_missing_parent_is_created() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let base = tmp.path().join("a").join("b").join("c").join("report");
-    let mut cmd = deslop_command(&fixture("csharp-small"), &base)?;
+    let mut cmd = fixture_command("csharp-small", &base)?;
     let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     assert!(
         base.with_extension("json").exists(),
@@ -39,7 +37,7 @@ fn report_hide_drops_cluster_when_all_members_hidden() -> Result<()> {
     let out = outputs_under(tmp.path());
     let config = tmp.path().join("deslop.toml");
     fs::write(&config, "[defaults]\nreport_hide = [\"**/*.cs\"]\n")?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd
         .args(["--min-nodes", "8", "--config"])
         .arg(&config)
@@ -84,7 +82,7 @@ fn incremental_cache_hits_on_second_run() -> Result<()> {
         first_json.contains("\"misses\": 2"),
         "first run must register two misses: {first_json}"
     );
-    let cache_dir = scan_root.join(".deslop-cache").join("fingerprints");
+    let cache_dir = scan_root.join(".deslop/cache").join("fingerprints");
     assert!(
         cache_dir.is_dir(),
         "fingerprint cache directory missing: {}",
@@ -114,12 +112,12 @@ fn incremental_cache_hits_on_second_run() -> Result<()> {
     Ok(())
 }
 
-// Implements [PIPELINE-INCREMENTAL] default-off: without
-// `--incremental` the cache is neither read nor written. Stats read
-// as a clean no-cache run (both counters zero) and no blobs land on
-// disk — analysing a read-only checkout must never mutate it.
+// Implements [PIPELINE-INCREMENTAL] default-on: incremental analysis is
+// the first-class path, so a bare run populates the cache. Stats show
+// the cache was consulted (every file a miss on a cold tree) and blobs
+// land under `.deslop/cache/fingerprints/`.
 #[test]
-fn default_run_skips_the_cache() -> Result<()> {
+fn default_run_uses_the_cache() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
@@ -127,19 +125,48 @@ fn default_run_skips_the_cache() -> Result<()> {
     let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let json = fs::read_to_string(tmp.path().join("report.json"))?;
     assert!(
+        json.contains("\"misses\": 2"),
+        "a bare run must consult the cache and miss on a cold tree: {json}"
+    );
+    assert!(
+        scan_root
+            .join(".deslop/cache")
+            .join("fingerprints")
+            .is_dir(),
+        "a bare run must populate the fingerprint cache",
+    );
+    Ok(())
+}
+
+// Implements [PIPELINE-INCREMENTAL] opt-out: `--no-incremental` leaves
+// the cache neither read nor written. Stats read as a clean no-cache
+// run (both counters zero) and no blobs land on disk, so a caller who
+// must not mutate the tree has an explicit way to say so.
+#[test]
+fn no_incremental_flag_skips_the_cache() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd
+        .args(["--min-nodes", "8", "--no-incremental"])
+        .assert()
+        .success();
+    let json = fs::read_to_string(tmp.path().join("report.json"))?;
+    assert!(
         json.contains("\"hits\": 0"),
-        "default run must record zero hits: {json}"
+        "--no-incremental must record zero hits: {json}"
     );
     assert!(
         json.contains("\"misses\": 0"),
-        "default run must not increment misses either: {json}"
+        "--no-incremental must not increment misses either: {json}"
     );
     assert!(
         !scan_root
-            .join(".deslop-cache")
+            .join(".deslop/cache")
             .join("fingerprints")
             .exists(),
-        "default run must not populate the fingerprint cache",
+        "--no-incremental must not populate the fingerprint cache",
     );
     Ok(())
 }
@@ -153,7 +180,7 @@ fn corrupt_cache_entry_degrades_to_miss() -> Result<()> {
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
     let _first_json = run_incremental_pass(&scan_root, &tmp.path().join("first"))?;
-    let fingerprints_root = scan_root.join(".deslop-cache").join("fingerprints");
+    let fingerprints_root = scan_root.join(".deslop/cache").join("fingerprints");
     for language_dir in fs::read_dir(&fingerprints_root)? {
         let language_path = language_dir?.path();
         for version_dir in fs::read_dir(&language_path)? {
@@ -180,8 +207,8 @@ fn corrupt_cache_entry_degrades_to_miss() -> Result<()> {
 }
 
 // Implements [PIPELINE-INCREMENTAL] help-text exposure: the
-// `--incremental` opt-in must be documented so users can discover
-// the cache without reading the source.
+// `--no-incremental` opt-out must be documented so users can discover
+// how to turn the cache off without reading the source.
 #[test]
 fn help_text_documents_incremental_flag() -> Result<()> {
     let mut cmd = Command::cargo_bin("deslop")?;
@@ -189,8 +216,67 @@ fn help_text_documents_incremental_flag() -> Result<()> {
         .arg("--help")
         .assert()
         .success()
-        .stdout(contains("--incremental"));
+        .stdout(contains("--no-incremental"));
     Ok(())
+}
+
+// Implements [PIPELINE-INCREMENTAL] content-addressed invalidation —
+// the property that makes a cache-on-by-default CLI safe. The cache key
+// *is* the file's content hash, so a file edited while nothing was
+// watching is unaddressable in the old entry and must be re-parsed,
+// while its untouched neighbour still hits. Corpus membership always
+// comes from a fresh discovery walk, so the run can never serve a
+// snapshot of a tree that no longer exists on disk.
+#[test]
+fn offline_edit_invalidates_only_the_changed_file() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let _cold = run_incremental_pass(&scan_root, &tmp.path().join("cold"))?;
+    let warm = run_incremental_pass(&scan_root, &tmp.path().join("warm"))?;
+    assert!(
+        warm.contains("\"hits\": 2") && warm.contains("\"misses\": 0"),
+        "an unchanged tree must hit for every file: {warm}"
+    );
+    // Edit one file with no watcher running, exactly as an agent or a
+    // `git checkout` would while the LSP is stopped.
+    let edited = scan_root.join("Alpha.cs");
+    let source = fs::read_to_string(&edited)?;
+    fs::write(
+        &edited,
+        format!("{source}\n// edited with nothing watching\n"),
+    )?;
+    let after = run_incremental_pass(&scan_root, &tmp.path().join("after"))?;
+    assert!(
+        after.contains("\"misses\": 1"),
+        "the edited file must miss and be re-parsed from disk: {after}"
+    );
+    assert!(
+        after.contains("\"hits\": 1"),
+        "the untouched file must still hit: {after}"
+    );
+    // A run against a wiped cache must agree with the warm run — the
+    // cache is an accelerator, never a source of truth.
+    fs::remove_dir_all(scan_root.join(".deslop").join("cache"))?;
+    let rebuilt = run_incremental_pass(&scan_root, &tmp.path().join("rebuilt"))?;
+    assert!(
+        rebuilt.contains("\"misses\": 2") && rebuilt.contains("\"hits\": 0"),
+        "a wiped cache must re-parse everything: {rebuilt}"
+    );
+    assert_eq!(
+        cluster_count(&rebuilt)?,
+        cluster_count(&after)?,
+        "cold and warm runs must produce the same clusters",
+    );
+    Ok(())
+}
+
+/// Number of clusters in a rendered JSON report body.
+fn cluster_count(json: &str) -> Result<usize> {
+    Ok(serde_json::from_str::<Value>(json)?
+        .get("clusters")
+        .and_then(Value::as_array)
+        .map_or(0, Vec::len))
 }
 
 // Implements [PIPELINE-INCREMENTAL] cache-write degradation: when
@@ -211,7 +297,7 @@ fn cache_write_failure_is_degraded_not_fatal() -> Result<()> {
         let _bytes = fs::copy(entry.path(), scan_root.join(entry.file_name()))?;
     }
     let locked_dir = scan_root
-        .join(".deslop-cache")
+        .join(".deslop/cache")
         .join("fingerprints")
         .join("csharp")
         .join(env!("CARGO_PKG_VERSION"))
@@ -221,10 +307,7 @@ fn cache_write_failure_is_degraded_not_fatal() -> Result<()> {
     perms.set_mode(0o555);
     fs::set_permissions(&locked_dir, perms)?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .args(["--min-nodes", "8", "--incremental"])
-        .assert()
-        .success();
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let mut restore = fs::metadata(&locked_dir)?.permissions();
     restore.set_mode(0o755);
     fs::set_permissions(&locked_dir, restore)?;
@@ -236,7 +319,7 @@ fn cache_write_failure_is_degraded_not_fatal() -> Result<()> {
     Ok(())
 }
 
-// Implements the P6 "perf pass" target in PLAN.md. The user-facing
+// Perf regression guard [PERF-BUDGET-TYPE12]. The user-facing
 // budget is <30 s on 100K-LOC C# with no embeddings. We can't assert
 // on wallclock directly from `cargo test` (coverage instrumentation
 // triples debug runtime), so this test exercises the pipeline on a
@@ -295,16 +378,16 @@ fn synthetic_corpus_scale_smoke_test() -> Result<()> {
     Ok(())
 }
 
-// Implements the [BUG-FIXTURE] workflow from CLAUDE.md: every bug
-// reproduced into `tests/fixtures/bug-*/` becomes a permanent e2e
-// test. This is the seed example — an empty C# class body used to
-// be silently dropped before the sibling-window fingerprint pass
-// existed; the cluster test below pins that behaviour so the bug
-// cannot regress.
+// Implements the fixture-per-bug workflow from
+// `.claude/skills/fix-bug/SKILL.md`: every bug reproduced into
+// `tests/fixtures/bug-*/` becomes a permanent e2e test. This is the
+// seed example — an empty C# class body used to be silently dropped
+// before the sibling-window fingerprint pass existed; the assertion
+// below pins that behaviour so the bug cannot regress.
 #[test]
 fn bug_fixture_walks_trivial_class_body_without_panicking() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = deslop_command(&fixture("bug-empty-class"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("bug-empty-class", &tmp.path().join("report"))?;
     let _assertion = cmd.args(["--min-nodes", "4"]).assert().success();
     let json = fs::read_to_string(tmp.path().join("report.json"))?;
     assert!(
@@ -314,17 +397,32 @@ fn bug_fixture_walks_trivial_class_body_without_panicking() -> Result<()> {
     Ok(())
 }
 
-// Implements [PIPELINE-NORMALIZE-AST] golden guard: `--debug-ast`
-// on a hand-picked per-language fixture must match the committed
-// expected dump byte-for-byte. Any drift in the grammar version,
-// the `normalise_kind` match arms, or the child-ordering policy
-// will trip this test — which is exactly what we want, because
-// any of those changes silently alters the fingerprint and
+// Implements [PIPELINE-NORMALIZE-AST] golden guard, in two halves.
+//
+// **Unchanged**: `--debug-ast` on a hand-picked per-language fixture
+// must match the committed expected dump byte-for-byte. Any drift in
+// the grammar version, the `normalise_kind` match arms, or the
+// child-ordering policy trips this — which is exactly what we want,
+// because any of those changes silently alters the fingerprint and
 // invalidates every user's cache.
+//
+// **Correct**: the committed dump must also satisfy the normalisation
+// contract on its own terms (`assert_dump_is_correct`). Equality alone
+// only proves the tool still agrees with a file the tool wrote, so a
+// wrong expectation is self-certifying: every one of these goldens
+// recorded `__file__` spanning trivia the normaliser had already
+// dropped — 759 bytes of comments in Go, 52 in F#, the trailing
+// newline in all eleven — and the byte-for-byte check called it
+// expected for as long as the fixtures existed. Regenerating a golden
+// is therefore never the remedy on its own; the new dump has to be
+// shown correct, and these invariants are what show it.
 //
 // Each fixture exercises identifier collapse, literal collapse,
 // comment drop, and the language-specific structural forms most
 // likely to shift between grammar patch releases.
+//
+// See `crates/deslop/tests/fixtures/AST-GOLDEN-README.md` before
+// regenerating any of these files.
 fn assert_ast_golden(fixture_dir: &str, sample_name: &str) -> Result<()> {
     let source = fixture(fixture_dir).join(sample_name);
     let expected_path = fixture(fixture_dir).join("Sample.expected.ast");
@@ -342,12 +440,165 @@ fn assert_ast_golden(fixture_dir: &str, sample_name: &str) -> Result<()> {
     assert_eq!(
         actual,
         expected,
-        "AST dump drifted from {}. If this is intentional, regenerate with \
-         `cargo run -q -- --debug-ast {}` and commit the updated .expected.ast.",
+        "AST dump drifted from {}. Regenerating is NOT the default remedy — \
+         prove the new dump satisfies the contract first; the committed file \
+         is only a golden while it is correct.\n\
+         If the new dump IS correct, the normalised tree has changed meaning \
+         while the parse store's blob layout has not, so **bump \
+         `fpcache::blob::SEMANTIC_EPOCH`** in the same change \
+         ([PIPELINE-INCREMENTAL-INTEGRITY]). Blobs are addressed by \
+         `(language, tool_version, min_nodes, source_hash)` and the workspace \
+         version is the permanently-reused `0.0.0-dev`, so without that bump \
+         every already-stored tree stays addressable and a warm run serves \
+         the pre-change normalisation — the one way a warm report can differ \
+         from the cold report of the same tree.",
         expected_path.display(),
-        source.display(),
     );
+    assert_dump_is_correct(&expected, &fs::read(&source)?, fixture_dir);
     Ok(())
+}
+
+/// One line of a `--debug-ast` dump: `<indent><kind> [start..end]`.
+struct DumpNode {
+    depth: usize,
+    kind: String,
+    start: u64,
+    end: u64,
+}
+
+/// [PIPELINE-NORMALIZE-AST] Asserts the committed dump is *correct*, not
+/// merely unchanged.
+///
+/// Byte-for-byte equality alone cannot say a golden is right: regenerating
+/// the file promotes whatever the current build emits to "expected". That
+/// is precisely how `__file__` came to claim 759 bytes of dropped Go
+/// comments and 52 of F# — wrong in the tree for as long as the fixtures
+/// existed, and invisible because the only check compared the tool against
+/// a file the tool wrote. These invariants come from the contract instead,
+/// so a regenerated dump that re-admits trivia fails here even though it
+/// matches the committed bytes exactly.
+fn assert_dump_is_correct(dump: &str, source: &[u8], label: &str) {
+    let source_len = u64::try_from(source.len()).unwrap_or(u64::MAX);
+    let nodes: Vec<DumpNode> = dump.lines().filter_map(parse_dump_line).collect();
+    assert!(!nodes.is_empty(), "{label}: dump has no nodes");
+    for node in &nodes {
+        assert!(
+            node.start < node.end && node.end <= source_len,
+            "{label}: {} [{}..{}] is not a valid range over {source_len} bytes",
+            node.kind,
+            node.start,
+            node.end,
+        );
+        assert!(
+            !node.kind.contains("comment"),
+            "{label}: comment node {} survived normalisation",
+            node.kind,
+        );
+    }
+    assert_root_spans_retained_children(&nodes, label);
+    assert_ranges_nest(&nodes, label);
+    assert_operators_carry_their_token(&nodes, source, label);
+}
+
+/// [PIPELINE-NORMALIZE-AST-OPERATOR] Every operator leaf must be named
+/// by the token it stands for, and its name must be the bytes it spans.
+///
+/// This is what stops the golden from being self-certifying on the one
+/// axis that matters most here. A dump full of a shared `__op__`
+/// placeholder is byte-for-byte stable and completely wrong: it records
+/// a tree in which `alpha + beta` and `alpha - beta` are the same
+/// subtree, and regenerating the file would promote that to "expected"
+/// exactly as it once promoted the dropped Go comments. Reading the
+/// name back out of the source proves the leaf discriminates, and it
+/// proves it against the fixture rather than against the tool.
+fn assert_operators_carry_their_token(nodes: &[DumpNode], source: &[u8], label: &str) {
+    let operators = nodes
+        .iter()
+        .filter(|node| node.kind.starts_with(OPERATOR_KIND_PREFIX));
+    for node in operators {
+        let range = usize::try_from(node.start)
+            .ok()
+            .zip(usize::try_from(node.end).ok());
+        let spanned = range
+            .and_then(|(start, end)| source.get(start..end))
+            .map(String::from_utf8_lossy)
+            .unwrap_or_default();
+        assert_eq!(
+            node.kind,
+            format!("{OPERATOR_KIND_PREFIX}{spanned}"),
+            "{label}: operator leaf `{}` at [{}..{}] spans `{spanned}`. An \
+             operator leaf named anything but its own token cannot tell `+` \
+             from `-`, and every signal taken from the digest inherits that",
+            node.kind,
+            node.start,
+            node.end,
+        );
+    }
+}
+
+/// Splits `<indent><kind> [start..end]`; indent is two spaces per level.
+/// Returns `None` for a blank or malformed line so the caller's other
+/// invariants still run over the lines that did parse.
+fn parse_dump_line(line: &str) -> Option<DumpNode> {
+    let body = line.trim_start_matches(' ');
+    let open = body.rfind(" [")?;
+    let span = body.get(open.saturating_add(2)..)?;
+    let (start, end) = span.trim_end_matches(']').split_once("..")?;
+    Some(DumpNode {
+        depth: line.len().saturating_sub(body.len()) / 2,
+        kind: body[..open].to_owned(),
+        start: start.parse().ok()?,
+        end: end.parse().ok()?,
+    })
+}
+
+/// The synthetic root must span exactly what normalisation kept. Tree-sitter's
+/// parse root also covers leading and trailing trivia the normaliser dropped,
+/// so inheriting it reports bytes contributing zero nodes to any match.
+fn assert_root_spans_retained_children(nodes: &[DumpNode], label: &str) {
+    let Some(root) = nodes.first() else { return };
+    assert_eq!(root.kind, "__file__", "{label}: root must be __file__");
+    let child_depth = root.depth.saturating_add(1);
+    let children = nodes.iter().filter(|node| node.depth == child_depth);
+    let spans: Vec<(u64, u64)> = children.map(|node| (node.start, node.end)).collect();
+    let (Some(start), Some(end)) = (
+        spans.iter().map(|span| span.0).min(),
+        spans.iter().map(|span| span.1).max(),
+    ) else {
+        return;
+    };
+    assert_eq!(
+        (root.start, root.end),
+        (start, end),
+        "{label}: __file__ [{}..{}] must span exactly the retained children \
+         [{start}..{end}] — the difference is dropped trivia being reported \
+         as duplicated code",
+        root.start,
+        root.end,
+    );
+}
+
+/// Every node sits inside its nearest shallower ancestor.
+fn assert_ranges_nest(nodes: &[DumpNode], label: &str) {
+    let mut ancestors: Vec<&DumpNode> = Vec::new();
+    for node in nodes {
+        while ancestors.last().is_some_and(|top| top.depth >= node.depth) {
+            let _popped = ancestors.pop();
+        }
+        if let Some(parent) = ancestors.last() {
+            assert!(
+                node.start >= parent.start && node.end <= parent.end,
+                "{label}: {} [{}..{}] escapes parent {} [{}..{}]",
+                node.kind,
+                node.start,
+                node.end,
+                parent.kind,
+                parent.start,
+                parent.end,
+            );
+        }
+        ancestors.push(node);
+    }
 }
 
 #[test]
@@ -420,6 +671,28 @@ fn debug_ast_dump_matches_committed_golden_php() -> Result<()> {
 #[test]
 fn debug_ast_dump_matches_committed_golden_fsharp() -> Result<()> {
     assert_ast_golden("ast-golden-fsharp", "Sample.fs")
+}
+
+// [LANG-CAND-GO] golden: Sample.go exercises identifier collapse
+// (`identifier`, `field_identifier`, `type_identifier`,
+// `package_identifier` in a qualified type, `blank_identifier`, and
+// `label_name`), literal collapse (int, float, imaginary, rune,
+// interpreted + raw strings with escape sequences, `true`, `false`,
+// `nil`, `iota`), line / block comment drop, and the Go structural
+// forms most likely to shift between grammar patch releases (struct,
+// method with receiver, labeled loop, expression switch, composite
+// literal). It also pins the shapes that are Go's alone and appear in no
+// other golden: `interface_type` with method specs, struct field tags,
+// `type_parameter_list` on both a generic type and a generic function,
+// `variadic_parameter_declaration`, directional `channel_type`s,
+// `go_statement`, `defer_statement`, `send_statement`,
+// `select_statement` with communication and default arms,
+// `type_switch_statement` with multi-type / interface / nil cases,
+// `range_clause` over a channel, and `generic_type` instantiation. Any
+// grammar bump or `normalise_kind` edit trips this byte-for-byte check.
+#[test]
+fn debug_ast_dump_matches_committed_golden_go() -> Result<()> {
+    assert_ast_golden("ast-golden-go", "Sample.go")
 }
 
 // [LANG-CAND-JAVASCRIPT] golden: Sample.jsx proves the plain JavaScript

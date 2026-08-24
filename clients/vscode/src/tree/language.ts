@@ -1,16 +1,22 @@
 // Per-language split for the Top Offenders tree
-// ([VSIX-TOP-OFFENDERS-LANGUAGE-GROUP]). `languageForPath` mirrors the
-// core `language_for_path()` in crates/deslop-core/src/render/html.rs so
-// the VSIX and the HTML report agree on language ids.
+// ([VSIX-TOP-OFFENDERS-LANGUAGE-GROUP]). The language id is the
+// engine's: it comes from the parser registry that actually parsed the
+// file ([PIPELINE-LANG-TRAIT]) and rides on the cluster, so the tree
+// cannot group a file into a language the analysis never used.
 
 import { ReportCluster } from "../types/report";
-import { languageForPath } from "../types/languages";
-import { representativePath } from "./paths";
 
 // The registry itself lives in the vscode-free `types/languages` module
 // so the webview bundles can share it; re-exported here so existing
 // tree-side import sites keep resolving.
 export { languageDisplayName, languageForPath } from "../types/languages";
+
+/** The cluster's language id as the engine stamped it. An empty value
+ * — a report written before the field existed — reads as the engine's
+ * own unresolvable label rather than being re-derived from a path. */
+export function clusterLanguage(cluster: ReportCluster): string {
+  return cluster.language || "unknown";
+}
 
 /** Reads the persisted split-by-language toggle. Defaults off; unknown
  * values are treated as off — never throws. */
@@ -29,7 +35,7 @@ export function groupByLanguage(
   const order: string[] = [];
   const buckets = new Map<string, ReportCluster[]>();
   for (const cluster of clusters) {
-    const language = languageForPath(representativePath(cluster));
+    const language = clusterLanguage(cluster);
     let bucket = buckets.get(language);
     if (!bucket) {
       bucket = [];

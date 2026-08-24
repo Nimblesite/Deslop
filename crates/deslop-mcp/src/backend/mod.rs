@@ -3,7 +3,7 @@
 //! The MCP server is a transport adapter; the backend holds no analysis
 //! state of its own. This file ships one concrete implementation,
 //! [`LiveBackend`], which delegates every read and compute call to the
-//! running LSP via the `.deslop-cache/deslop.sock` Unix socket — the
+//! running LSP via the `.deslop/cache/deslop.sock` Unix socket — the
 //! LSP's in-memory `latest_report` is the single source of truth.
 //! ([MCP-WHY-LIVE], [MCP-IPC-CLIENT], [MCP-CAPABILITIES]).
 
@@ -55,7 +55,7 @@ pub enum BackendError {
     /// The LSP server is not running — neither its IPC socket nor the
     /// TCP discovery record beside it answered ([MCP-IPC-DISCOVERY]).
     /// Includes the absolute socket path so users hit by `--root .`
-    /// resolving against the wrong cwd ([Deslop#151]) can immediately
+    /// resolving against the wrong cwd can immediately
     /// see the directory mismatch instead of guessing.
     #[error(
         "LSP is not running — start deslop-lsp to enable this tool. MCP looked for the IPC socket at {socket_path:?} and the TCP discovery record `deslop.port` beside it. If a deslop-lsp process is running elsewhere, MCP was launched against a different --root than the LSP."

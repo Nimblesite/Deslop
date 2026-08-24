@@ -1,6 +1,6 @@
 //! Module-preamble sibling-window filter for Python test files.
 //!
-//! Issue **#104** [CLONE-NOISE-PY-MODULE-PREAMBLE]: the sibling-window
+//! Issue [CLONE-NOISE-PY-MODULE-PREAMBLE]: the sibling-window
 //! fingerprinter emits a fingerprint over a contiguous run of >=2
 //! module-level definitions. A test module that opens with several small
 //! helpers/fixtures therefore matches any other test module whose
@@ -37,7 +37,7 @@ const PREAMBLE_KINDS: &[&str] = &["function_definition", "decorated_definition"]
 /// Returns true when every member's matched range spans a run of >=2
 /// sibling top-level definitions and no two members share identical
 /// definition bodies — the coincidental-preamble-shape signature of
-/// issue **#104**. Returns false (keeps the cluster) when any member is
+/// issue. Returns false (keeps the cluster) when any member is
 /// not such a multi-definition run, or when two members are body
 /// equivalent (a genuine copy that must still surface).
 pub(super) fn is_module_preamble_sequence_cluster(snippets: &[Snippet<'_>]) -> bool {

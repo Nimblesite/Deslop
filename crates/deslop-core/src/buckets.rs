@@ -25,6 +25,20 @@
 
 use crate::report::{ReportCluster, ReportSignals};
 
+/// [FUSION-CONTENT-GATE] floors and the fused-confidence correction.
+mod gate;
+/// The shape-identical routing tail shared by renderer and subsumption.
+mod routing;
+
+pub use gate::{
+    content_gated_signals, content_support, has_saturating_shape_evidence, lacks_content_support,
+    CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR, LITERAL_TABLE_MIN_FRACTION,
+    RENAME_CONSISTENCY_DISCOUNT, SATURATING_TOKEN_FLOOR, STRUCTURAL_SATURATION_FLOOR,
+};
+pub(crate) use routing::{
+    is_demoted_tier, measured_kind, route_shape_identical, spans_multiple_files,
+};
+
 /// Canonical bucket identity. The enum is the one source of truth;
 /// every human / agent label attaches to one of these variants via
 /// [`bucket_labels`].
@@ -36,7 +50,7 @@ pub enum ClusterKind {
     /// Type-3 near-miss: same shape with small structural or token
     /// differences that may be semantically meaningful.
     NearlyIdentical,
-    /// Structural-only match ([RANK-STRUCTURAL-ONLY], #134/#154/#197):
+    /// Structural-only match ([RANK-STRUCTURAL-ONLY]):
     /// the normalized AST shape is the only positive evidence — no
     /// token overlap, no semantic support. Usually a sibling
     /// boilerplate family (REST CRUD, settings getters, builders);
@@ -212,7 +226,7 @@ fn kind_from_wire_label(label: &str) -> Option<ClusterKind> {
 pub const STRUCTURAL_ONLY_MAX_SUPPORT: f64 = 0.05;
 
 /// Single source of truth for the structural-only evidence test
-/// ([RANK-STRUCTURAL-ONLY], #134/#197): the structural fingerprint is
+/// ([RANK-STRUCTURAL-ONLY]): the structural fingerprint is
 /// the only positive support. Shared by the bucket routing and the
 /// ranking demotion so a cluster labelled `structural_only` is always
 /// the cluster the `[ranking]` policy demotes — the label and the
@@ -229,15 +243,100 @@ pub fn is_structural_only_signals(signals: ReportSignals) -> bool {
 pub fn classify_signals(signals: ReportSignals) -> ClusterKind {
     if signals.structural >= 0.99 && signals.token_jaccard >= 0.99 {
         ClusterKind::Identical
-    } else if signals.embedding_cos >= 0.80 && signals.structural < 0.50 {
+    } else if signals.embedding_cos >= crate::pair::EMBEDDING_SUPPORT_FLOOR
+        && signals.structural < 0.50
+    {
         ClusterKind::SameBehavior
     } else if is_structural_only_signals(signals) {
         ClusterKind::StructuralOnly
-    } else if signals.structural >= 0.99
-        || (signals.structural >= 0.20 && signals.token_jaccard >= 0.95)
+    } else if is_token_carried_nearmiss(signals)
+        || is_shape_corroborated_nearmiss(signals)
+        || signals.structural >= 0.99
     {
+        // [CLONE-BUCKETS-ROUTING] rows 4, 4b and 5 share this
+        // destination: the token-carried near-miss
+        // ([`is_token_carried_nearmiss`]), the shared-subtree
+        // near-miss ([`is_shape_corroborated_nearmiss`],
+        // [FUSION-SHARED-SUBTREE]) and the shape-saturating
+        // near-miss. Kept as one arm because all three routes produce
+        // the identical bucket — the named predicates are what keep
+        // the rows legible and greppable.
         ClusterKind::NearlyIdentical
     } else {
         ClusterKind::LooselySimilar
     }
 }
+
+/// [CLONE-BUCKETS-ROUTING] row 4: a cluster whose token overlap clears
+/// [`LSH_ONLY_NEARMISS_MIN_JACCARD`] without a saturating shape is a
+/// genuine Type-3 near-miss, in **every** language.
+///
+/// A cluster only reaches the renderer with this token evidence by
+/// surviving `pair::survival_decision`, which admits a
+/// structurally-unanchored pair only above the same Jaccard floor and
+/// above the endpoint node-count floor — the pipeline has already ruled
+/// out low-information token noise, which is why this row is a signal
+/// test and needs no language, size, or spread condition. Routing it
+/// anywhere else means the pipeline admitted a pair as real duplication
+/// and the renderer then discarded it: previously it fell to
+/// [`ClusterKind::LooselySimilar`], which the renderer hides, so a fully
+/// duplicated pair reported zero duplication in every language except
+/// the one a report-render carve-out special-cased (gh #390). Pinned by
+/// `crates/deslop/tests/lsh_only_nearmiss_recall.rs`.
+///
+/// There is deliberately no upper `structural` condition: `structural`
+/// is now the measured shared-subtree overlap
+/// ([FUSION-SHARED-SUBTREE]), and additional shape evidence must never
+/// *hide* a cluster the token axis already carries. The old
+/// `structural <= 0.01` leg predates the overlap measurement, when any
+/// non-zero value meant a Merkle anchor; clusters below
+/// [`crate::pair::SHARED_SUBTREE_MIN_OVERLAP`] keep the anchor-free
+/// demotion guard (`routing::route_anchor_free`) exactly as before.
+#[must_use]
+pub fn is_token_carried_nearmiss(signals: ReportSignals) -> bool {
+    signals.token_jaccard >= LSH_ONLY_NEARMISS_MIN_JACCARD
+}
+
+/// [CLONE-BUCKETS-ROUTING] row 4b ([FUSION-SHARED-SUBTREE], gh #408): a
+/// cluster whose measured shared-subtree overlap clears the admission
+/// floor **and** whose token axis independently corroborates it is a
+/// Type-3 near-miss even below the LSH-only token floor. This is the
+/// render-side twin of `pair::shared_subtree_rescued` — the same two
+/// floors that admit the pair route the cluster, so the pipeline can
+/// never admit a shared-subtree near-miss the renderer then hides.
+/// Pinned by `crates/deslop/tests/type3_enclosing_method.rs` in all
+/// five fixture languages.
+#[must_use]
+pub fn is_shape_corroborated_nearmiss(signals: ReportSignals) -> bool {
+    signals.structural >= crate::pair::SHARED_SUBTREE_MIN_OVERLAP && corroborates_shape(signals)
+}
+
+/// The independent evidence a shared-subtree near-miss must carry
+/// besides its shape ([FUSION-SHARED-SUBTREE]).
+///
+/// Either measured axis will do, and requiring the token one
+/// specifically was a hole. Normalisation makes scaffolding
+/// Merkle-identical across unrelated files, so shape alone must never
+/// admit — but the *point* is corroboration by an axis that does not
+/// read the normalised tree, and the embedding axis qualifies exactly
+/// as the token axis does. Requiring tokens specifically dropped a pair
+/// measuring `structural = 0.91` **and** `embedding_cos = 0.91` to
+/// `loosely_similar`, which the renderer hides, purely because its
+/// `token_jaccard` was 0.55 — two strong independent signals agreeing,
+/// and the report showed nothing (`issue_119_role_gate_exercised`).
+/// A `while` loop and a `for` loop over one accumulator chain are the
+/// case: identical statements, different loop keyword, so the k-gram
+/// set diverges far more than either the shape or the meaning does.
+fn corroborates_shape(signals: ReportSignals) -> bool {
+    signals.token_jaccard >= crate::pair::SHARED_SUBTREE_MIN_JACCARD
+        || signals.embedding_cos >= crate::pair::EMBEDDING_SUPPORT_FLOOR
+}
+
+/// Token overlap an anchor-free cluster must clear to count as a
+/// Type-3 near-miss ([CLONE-BUCKETS-ROUTING] row 4). **Is**
+/// [`crate::pair::LSH_ONLY_MIN_JACCARD`], not a copy of its value: the
+/// pair layer admits an LSH-only candidate at exactly this floor, so a
+/// lower value here would hide clusters the pipeline admitted and a
+/// higher one would reject them after admission. Naming it separately
+/// keeps the routing row greppable while leaving one number to change.
+pub const LSH_ONLY_NEARMISS_MIN_JACCARD: f64 = crate::pair::LSH_ONLY_MIN_JACCARD;

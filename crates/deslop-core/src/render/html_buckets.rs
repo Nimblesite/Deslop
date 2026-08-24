@@ -1,5 +1,5 @@
 //! Bucket-group expanders and CSS-only facet controls for the HTML
-//! report ([FACET-HTML], issue #257).
+//! report ([FACET-HTML]).
 //!
 //! Cluster cards are grouped into one collapsible `<details>` per clone
 //! bucket so the reader is never forced to scroll one flat page, and a
@@ -134,7 +134,37 @@ fn facet_chips(clusters: &[ReportCluster]) -> Vec<FacetChip> {
             hide_target: format!(".cluster-card.cat-{}", category.wire_label()),
         }));
     }
+    chips.extend(diff_chips(clusters));
     chips
+}
+
+/// Diff-membership facet axis ([OUTPUT-SCHEMA-DIFF-TAGS]): the
+/// CSS-only "only diff-affected" toggle. Contributes only when a
+/// `--diff` run rendered both touched and untouched cards — one
+/// population is nothing to filter, and a no-diff run leaves zero
+/// facet traces so its page stays byte-identical.
+fn diff_chips(clusters: &[ReportCluster]) -> Vec<FacetChip> {
+    let touched = clusters
+        .iter()
+        .any(|cluster| cluster.intersects_diff == Some(true));
+    let untouched = clusters
+        .iter()
+        .any(|cluster| cluster.intersects_diff == Some(false));
+    if !(touched && untouched) {
+        return Vec::new();
+    }
+    vec![
+        FacetChip {
+            input_class: "facet-diff-touched".to_owned(),
+            label: "Touched by diff",
+            hide_target: ".cluster-card.in-diff".to_owned(),
+        },
+        FacetChip {
+            input_class: "facet-diff-untouched".to_owned(),
+            label: "Untouched by diff",
+            hide_target: ".cluster-card:not(.in-diff)".to_owned(),
+        },
+    ]
 }
 
 /// Writes the facet controls: one visually-hidden checkbox per chip

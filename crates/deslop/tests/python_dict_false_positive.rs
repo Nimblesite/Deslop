@@ -20,7 +20,6 @@ use std::fs;
 
 use anyhow::Result;
 
-mod common;
 use crate::common::*;
 
 fn run_cli_on_fixture(fixture_name: &str) -> Result<serde_json::Value> {

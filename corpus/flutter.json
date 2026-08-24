@@ -1,0 +1,48 @@
+{
+  "name": "flutter",
+  "language": "dart",
+  "url": "https://github.com/flutter/flutter.git",
+  "tag": "3.38.9",
+  "sha": "67323de285b00232883f53b84095eb72be97d35c",
+  "why": "Largest widely-used Dart codebase. Heavy framework boilerplate makes it the sharpest available precision test, and its size is what exposes resource behaviour.",
+  "ceilings": {
+    "max_wall_seconds": 700,
+    "max_peak_rss_mb": 9000,
+    "rationale": "Ceilings tolerated for now, enforced by the corpus harness [PERF-FLUTTER-TODO-GATE]: sized above this repository's current measured scan so the gate catches regressions. These figures live here and only here — any document that needs them points at this manifest instead of restating them. Tighten by re-deriving from a fresh measured scan; ceilings are always a function of the repository's own size."
+  },
+  "must_find": [
+    {
+      "why": "137 byte-identical lines: the entire _DropSliderValueIndicatorPathPainter class, copy-pasted between the slider and range-slider implementations.",
+      "verified": "diff of slider_parts.dart:836-972 against range_slider_parts.dart:1513-1649 is empty",
+      "files": [
+        "packages/flutter/lib/src/material/slider_parts.dart",
+        "packages/flutter/lib/src/material/range_slider_parts.dart"
+      ]
+    },
+    {
+      "why": "116 byte-identical lines: the _InputPadding render-object widget, duplicated between button.dart and button_style_button.dart.",
+      "verified": "diff of button.dart:447-562 against button_style_button.dart:635-750 is empty",
+      "files": [
+        "packages/flutter/lib/src/material/button.dart",
+        "packages/flutter/lib/src/material/button_style_button.dart"
+      ]
+    },
+    {
+      "why": "21 byte-identical lines of ButtonStyle getters shared by two button variants.",
+      "verified": "diff of text_button.dart:634-654 against filled_button.dart:733-753 is empty",
+      "files": [
+        "packages/flutter/lib/src/material/text_button.dart",
+        "packages/flutter/lib/src/material/filled_button.dart"
+      ]
+    }
+  ],
+  "must_not_rank_first": {
+    "why": "Flutter mandates that every StatefulWidget declare its own createState(), and every StatelessWidget its own build(). These shapes cannot be extracted or merged, so they must never outrank genuine copy-paste. Tracked by issue #331. Each entry is a base-type name, matched against the AST heritage clause of the declaration the ranked occurrence belongs to - never against source text, which fired on comments and missed wrapped clauses (issue #401).",
+    "issue": 331,
+    "forbidden_top_supertypes": [
+      "StatefulWidget",
+      "StatelessWidget"
+    ],
+    "top_n": 5
+  }
+}

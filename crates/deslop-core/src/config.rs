@@ -20,7 +20,7 @@
 use std::{
     collections::HashMap,
     fs,
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
@@ -28,87 +28,23 @@ use serde::Deserialize;
 
 use crate::{
     error::CoreError,
-    report_metrics::{validate_threshold_percent, ThresholdSource, ThresholdSummary},
+    report_metrics::{ThresholdSource, ThresholdSummary},
 };
+
+pub(crate) use builtin::has_generated_header;
+use builtin::{built_in_report_hidden, corpus_built_in_excluded};
+use ranking::resolve_ranking_policy;
+pub use ranking::{
+    ClonePolicy, RankingPolicy, DEFAULT_DATA_CLONE_WEIGHT, DEFAULT_STRUCTURAL_ONLY_WEIGHT,
+};
+use raw::{resolve_threshold, PersistedProcessing, RawConfig};
+
+mod builtin;
+mod ranking;
+mod raw;
 
 /// Default configuration file name searched for next to the scan root.
 pub const DEFAULT_CONFIG_FILENAME: &str = ".deslop.toml";
-
-/// Directory components that are always excluded from discovery.
-///
-/// `.cargo` covers Cargo's vendored registry / git checkout caches
-/// ([#142]) — even when the surrounding repo points discovery at
-/// the user's home directory by accident, the boilerplate generated
-/// code under `.cargo/git/checkouts/...` and
-/// `.cargo/registry/src/...` never enters the report.
-///
-/// `.git` and `.claude` cover working-tree copies that look like source
-/// but are not actionable duplication ([#222]). Claude Code agent
-/// workflows create full git worktrees under `.claude/worktrees/<id>/`;
-/// each is another checkout of the same repo, so without this exclusion
-/// every file is reported as N identical "copies". The initial walk's
-/// hidden-dir filter skips dot-dirs, but the live watcher
-/// (`live/watcher.rs`) and incremental update (`pipeline/session/change.rs`)
-/// have no hidden filter and rely solely on this component list, so the
-/// exclusion must live here to cover all three discovery paths.
-///
-/// `.dart_tool` and `.pub-cache` cover the Dart/Flutter toolchain's own
-/// caches: `.dart_tool/` holds `package_config.json`, `build_runner`
-/// outputs, and per-package generated `.dart`; `.pub-cache/` is a
-/// vendored copy of every dependency's source. On a large Flutter
-/// monorepo a hot build churns thousands of `.dart` files under
-/// `.dart_tool/`; because the live watcher has no `.gitignore` filter,
-/// excluding them here is what keeps that churn from monopolising the
-/// session and starving the editor's responsiveness.
-const BUILTIN_EXCLUDE_COMPONENTS: &[&str] = &[
-    "node_modules",
-    "target",
-    "dist",
-    "build",
-    ".venv",
-    "__pycache__",
-    ".cargo",
-    ".git",
-    ".claude",
-    ".dart_tool",
-    ".pub-cache",
-];
-
-/// Directory components that are always analysed but hidden from summaries.
-const BUILTIN_REPORT_HIDE_COMPONENTS: &[&str] = &["generated"];
-
-/// Non-actionable path component pairs hidden from summaries.
-const BUILTIN_REPORT_HIDE_COMPONENT_PAIRS: &[(&str, &str)] = &[
-    ("alembic", "versions"),
-    ("test", "fixtures"),
-    ("tests", "fixtures"),
-];
-
-/// File suffixes that are always analysed but hidden from summaries.
-const BUILTIN_REPORT_HIDE_SUFFIXES: &[&str] = &[
-    ".g.cs",
-    ".generated.cs",
-    ".designer.cs",
-    ".pb.cs",
-    ".openapi.cs",
-    ".generated.py",
-    "_generated.py",
-    // Dart code generators (issue #95). `.g.dart` covers source_gen
-    // (json_serializable, retrofit, drift, hive, …); the rest cover
-    // freezed, auto_route, injectable, flutter_gen, mockito, and the
-    // protoc Dart plugin. All carry "GENERATED CODE - DO NOT MODIFY".
-    ".g.dart",
-    ".freezed.dart",
-    ".gr.dart",
-    ".config.dart",
-    ".gen.dart",
-    ".mocks.dart",
-    ".pb.dart",
-    ".pbenum.dart",
-    ".pbjson.dart",
-    ".pbserver.dart",
-    ".pbgrpc.dart",
-];
 
 /// Import/prologue boilerplate reporting mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -126,245 +62,6 @@ impl BoilerplateImportsMode {
     pub const fn reports_hints(self) -> bool {
         matches!(self, Self::Report)
     }
-}
-
-/// How a demotable clone class is ranked. One shared three-way policy
-/// serves both `[ranking]` knobs: `data_clones` for `data`-category
-/// clusters ([RANK-CATEGORY]) and `structural_only` for shape-only
-/// evidence clusters ([RANK-STRUCTURAL-ONLY]). Both default to
-/// [`Self::Demote`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ClonePolicy {
-    /// Down-weight matching clusters by the class's weight multiplier
-    /// so they rank below comparable full-evidence clones but stay in
-    /// the report, labelled. The default.
-    #[default]
-    Demote,
-    /// Drop matching clusters from the report entirely (counted in
-    /// `clusters_hidden`).
-    Ignore,
-    /// Rank matching clusters at full weight.
-    Keep,
-}
-
-impl std::str::FromStr for ClonePolicy {
-    type Err = String;
-
-    /// Parses the CLI/editor-settings spelling of a policy
-    /// ([VSIX-SETTINGS-RANKING]): `demote`, `ignore`, or `keep`.
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "demote" => Ok(Self::Demote),
-            "ignore" => Ok(Self::Ignore),
-            "keep" => Ok(Self::Keep),
-            other => Err(format!("expected demote|ignore|keep, got {other:?}")),
-        }
-    }
-}
-
-/// Default `data_clone_weight` multiplier in [`ClonePolicy::Demote`]
-/// ([RANK-CATEGORY]). Kept above zero so a pathologically large verbatim
-/// data blob can still rise rather than being silently zeroed.
-pub const DEFAULT_DATA_CLONE_WEIGHT: f64 = 0.15;
-
-/// Default `structural_only_weight` multiplier in
-/// [`ClonePolicy::Demote`] ([RANK-STRUCTURAL-ONLY]). Matches the data
-/// default: shape-only families sink below comparable token- or
-/// semantics-supported clones, but a pathologically large family can
-/// still rise rather than being silently zeroed.
-pub const DEFAULT_STRUCTURAL_ONLY_WEIGHT: f64 = 0.15;
-
-/// Compiled `[ranking]` policy ([RANK-CATEGORY],
-/// [RANK-STRUCTURAL-ONLY]). Carries the validated demote multipliers so
-/// callers never re-validate at render time.
-#[derive(Debug, Clone, Copy)]
-pub struct RankingPolicy {
-    /// Selected three-way data-clone policy.
-    data_clones: ClonePolicy,
-    /// Validated data multiplier; finite and strictly inside `(0.0, 1.0]`.
-    data_clone_weight: f64,
-    /// Selected three-way structural-only policy.
-    structural_only: ClonePolicy,
-    /// Validated structural-only multiplier; finite and strictly inside
-    /// `(0.0, 1.0]`.
-    structural_only_weight: f64,
-}
-
-impl Default for RankingPolicy {
-    fn default() -> Self {
-        Self {
-            data_clones: ClonePolicy::Demote,
-            data_clone_weight: DEFAULT_DATA_CLONE_WEIGHT,
-            structural_only: ClonePolicy::Demote,
-            structural_only_weight: DEFAULT_STRUCTURAL_ONLY_WEIGHT,
-        }
-    }
-}
-
-impl RankingPolicy {
-    /// Returns the selected data-clone policy.
-    #[must_use]
-    pub const fn data_clones(self) -> ClonePolicy {
-        self.data_clones
-    }
-
-    /// Returns the selected structural-only policy.
-    #[must_use]
-    pub const fn structural_only(self) -> ClonePolicy {
-        self.structural_only
-    }
-
-    /// Multiplier applied to a `data`-category cluster's ranking weight
-    /// ([RANK-CATEGORY]). `1.0` for [`ClonePolicy::Keep`] (no demotion);
-    /// the validated `data_clone_weight` for [`ClonePolicy::Demote`].
-    /// [`ClonePolicy::Ignore`] never reweighs — those clusters are
-    /// dropped — so it reports `1.0` for completeness.
-    #[must_use]
-    pub fn data_weight_multiplier(self) -> f64 {
-        multiplier_for(self.data_clones, self.data_clone_weight)
-    }
-
-    /// Multiplier applied to a structural-only cluster's ranking weight
-    /// ([RANK-STRUCTURAL-ONLY]); same `demote`/`ignore`/`keep`
-    /// semantics as [`Self::data_weight_multiplier`].
-    #[must_use]
-    pub fn structural_only_weight_multiplier(self) -> f64 {
-        multiplier_for(self.structural_only, self.structural_only_weight)
-    }
-
-    /// True when `data`-category clusters must be dropped from the report
-    /// entirely rather than demoted.
-    #[must_use]
-    pub fn drops_data_clusters(self) -> bool {
-        matches!(self.data_clones, ClonePolicy::Ignore)
-    }
-
-    /// True when structural-only clusters must be dropped from the
-    /// report entirely rather than demoted ([RANK-STRUCTURAL-ONLY]).
-    #[must_use]
-    pub fn drops_structural_only(self) -> bool {
-        matches!(self.structural_only, ClonePolicy::Ignore)
-    }
-
-    /// Applies the process-wide [RANK-STRUCTURAL-ONLY] override from
-    /// [`crate::state`], when one was recorded at startup. The
-    /// editor-settings channel ([VSIX-SETTINGS-RANKING]) wins over
-    /// `.deslop.toml`.
-    #[must_use]
-    fn with_global_override(mut self) -> Self {
-        if let Some(policy) = crate::state::structural_only_override() {
-            self.structural_only = policy;
-        }
-        self
-    }
-}
-
-/// Shared demote/ignore/keep → multiplier mapping for one policy knob.
-fn multiplier_for(policy: ClonePolicy, demote_weight: f64) -> f64 {
-    match policy {
-        ClonePolicy::Demote => demote_weight,
-        ClonePolicy::Keep | ClonePolicy::Ignore => 1.0,
-    }
-}
-
-/// Raw on-disk TOML shape. Kept separate from [`ExclusionConfig`] so the
-/// runtime type can carry compiled matchers instead of raw pattern strings.
-#[derive(Debug, Default, Clone, Deserialize)]
-struct RawConfig {
-    /// Shared patterns applied to every language.
-    #[serde(default)]
-    defaults: RawSection,
-    /// Per-language pattern overlays, keyed by the parser's language id
-    /// (e.g. `csharp`, `rust`, `python`). Patterns extend `defaults`.
-    #[serde(default)]
-    language: HashMap<String, RawSection>,
-    /// Opt-in CI gate per [EXIT-CODES]. Populated when a user adds a
-    /// `[threshold]` block to `.deslop.toml`.
-    #[serde(default)]
-    threshold: Option<RawThreshold>,
-    /// Analysis-wide behavior toggles.
-    #[serde(default)]
-    analysis: RawAnalysis,
-    /// Report-rendering toggles.
-    #[serde(default)]
-    report: RawReport,
-    /// Clone-category ranking policy ([RANK-CATEGORY]).
-    #[serde(default)]
-    ranking: RawRanking,
-}
-
-/// Raw on-disk shape of the `[ranking]` section ([RANK-CATEGORY],
-/// [RANK-STRUCTURAL-ONLY]).
-#[derive(Debug, Default, Clone, Deserialize)]
-struct RawRanking {
-    /// How `data`-category clusters are ranked. `None` means the key was
-    /// not set, so the [`ClonePolicy`] default (`demote`) applies.
-    #[serde(default)]
-    data_clones: Option<ClonePolicy>,
-    /// Data demote multiplier. `None` means inherit
-    /// [`DEFAULT_DATA_CLONE_WEIGHT`].
-    #[serde(default)]
-    data_clone_weight: Option<f64>,
-    /// How structural-only clusters are ranked. `None` means the key
-    /// was not set, so the [`ClonePolicy`] default (`demote`) applies.
-    #[serde(default)]
-    structural_only: Option<ClonePolicy>,
-    /// Structural-only demote multiplier. `None` means inherit
-    /// [`DEFAULT_STRUCTURAL_ONLY_WEIGHT`].
-    #[serde(default)]
-    structural_only_weight: Option<f64>,
-}
-
-/// Raw on-disk shape of the `[analysis]` section.
-#[derive(Debug, Default, Clone, Deserialize)]
-struct RawAnalysis {
-    /// Whether candidate pairs may span different parser language ids.
-    #[serde(default)]
-    allow_cross_language_comparison: bool,
-}
-
-/// Raw on-disk shape of the `[report]` section.
-#[derive(Debug, Default, Clone, Deserialize)]
-struct RawReport {
-    /// Whether the human HTML report divides clusters into per-language
-    /// sections ([OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS]). Off by default;
-    /// the CLI `--split-by-language` flag also enables it.
-    #[serde(default)]
-    split_by_language: bool,
-}
-
-/// Raw on-disk shape of the `[threshold]` section.
-#[derive(Debug, Default, Clone, Deserialize)]
-struct RawThreshold {
-    /// Percentage above which the analysis run exits `3` per
-    /// [EXIT-CODES]. `None` means "key not set" — the gate is off.
-    #[serde(default)]
-    max_duplication_percent: Option<f64>,
-}
-
-/// One TOML section — shared shape across `[defaults]` and
-/// `[language.<name>]`.
-#[derive(Debug, Default, Clone, Deserialize)]
-struct RawSection {
-    /// Patterns whose matches are dropped in [`crate::discover`].
-    #[serde(default)]
-    exclude: Vec<String>,
-    /// Patterns whose matches are analysed normally but hidden from the
-    /// rendered report.
-    #[serde(default)]
-    report_hide: Vec<String>,
-    /// Import/prologue boilerplate policy for this section.
-    #[serde(default)]
-    boilerplate: RawBoilerplate,
-}
-
-/// Raw `[*.boilerplate]` subsection.
-#[derive(Debug, Default, Clone, Deserialize)]
-struct RawBoilerplate {
-    /// Import/prologue handling. `None` means inherit/default suppress.
-    #[serde(default)]
-    imports: Option<BoilerplateImportsMode>,
 }
 
 /// Compiled exclusion configuration ready for matching. Built by merging
@@ -395,6 +92,13 @@ pub struct ExclusionConfig {
     /// ([CONFIG-CROSS-LANGUAGE]). Defaults off to keep reports focused
     /// on same-language refactoring.
     allow_cross_language_comparison: bool,
+    /// Whether third-party library source inside the corpus is analysed
+    /// ([CONFIG-EXCLUDE-DEPENDENCIES]). Defaults off.
+    include_dependencies: bool,
+    /// Whether analysis may consult and fill the on-disk parse store
+    /// ([CONFIG-INCREMENTAL-OPTOUT]). Defaults to
+    /// [`PersistedProcessing::Enabled`].
+    incremental: PersistedProcessing,
     /// Whether the HTML report splits clusters into per-language
     /// sections ([OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS]). Defaults off.
     split_by_language: bool,
@@ -428,6 +132,8 @@ impl ExclusionConfig {
             default_boilerplate_imports: BoilerplateImportsMode::Suppress,
             fail_over_percent: None,
             allow_cross_language_comparison: false,
+            include_dependencies: false,
+            incremental: PersistedProcessing::Enabled,
             split_by_language: false,
             ranking_policy: RankingPolicy::default().with_global_override(),
         }
@@ -463,7 +169,7 @@ impl ExclusionConfig {
         })?;
         let raw: RawConfig = toml::from_str(&source).map_err(|err| CoreError::ConfigParse {
             path: path.to_path_buf(),
-            source: err,
+            source: Box::new(err),
         })?;
         Self::compile(path, scan_root, &raw)
     }
@@ -518,14 +224,21 @@ impl ExclusionConfig {
             default_boilerplate_imports,
             fail_over_percent,
             allow_cross_language_comparison: raw.analysis.allow_cross_language_comparison,
+            include_dependencies: raw.analysis.include_dependencies,
+            incremental: PersistedProcessing::from_key(raw.analysis.incremental),
             split_by_language: raw.report.split_by_language,
             ranking_policy,
         })
     }
 
     /// Returns a copy of this config bound to `scan_root`.
+    ///
+    /// Binding the root is required for accurate built-in exclusion: it is
+    /// what confines [`corpus_built_in_excluded`] to the analysed corpus
+    /// instead of the whole filesystem path. Watcher call sites that
+    /// build an [`ExclusionConfig::empty`] must bind their root here.
     #[must_use]
-    fn with_scan_root(mut self, scan_root: &Path) -> Self {
+    pub fn with_scan_root(mut self, scan_root: &Path) -> Self {
         self.scan_root = Some(scan_root.to_path_buf());
         self
     }
@@ -548,6 +261,17 @@ impl ExclusionConfig {
     #[must_use]
     pub const fn allows_cross_language_comparison(&self) -> bool {
         self.allow_cross_language_comparison
+    }
+
+    /// Returns whether analysis may consult and fill the on-disk parse
+    /// store ([CONFIG-INCREMENTAL-OPTOUT]). `false` is the config-file
+    /// escape hatch: it overrides whatever the invocation requested, on
+    /// every surface, so persisted processing can always be turned off
+    /// without touching a flag. Pinned by
+    /// `signature_reuse.rs::config_file_opt_out_disables_persisted_processing`.
+    #[must_use]
+    pub fn incremental_enabled(&self) -> bool {
+        self.incremental == PersistedProcessing::Enabled
     }
 
     /// Returns whether the HTML report should divide clusters into
@@ -576,7 +300,7 @@ impl ExclusionConfig {
     /// match how [`crate::discover`] walks the tree.
     #[must_use]
     pub fn is_excluded(&self, path: &Path, language: Option<&str>) -> bool {
-        if built_in_excluded(path) {
+        if corpus_built_in_excluded(path, self.scan_root.as_deref(), self.include_dependencies) {
             return true;
         }
         if matches(&self.default_exclude, path) {
@@ -618,108 +342,6 @@ impl ExclusionConfig {
     }
 }
 
-/// Returns true when a path is in a built-in ignored dependency or build tree.
-fn built_in_excluded(path: &Path) -> bool {
-    path_components(path).any(|component| {
-        BUILTIN_EXCLUDE_COMPONENTS
-            .iter()
-            .any(|ignored| component == *ignored)
-    })
-}
-
-/// Returns true when built-in generated-code rules hide a path from summaries.
-fn built_in_report_hidden(path: &Path, scan_root: Option<&Path>) -> bool {
-    has_hidden_component(path)
-        || has_hidden_component_pair(path, scan_root)
-        || has_hidden_suffix(path)
-}
-
-/// Returns true when the path has a generated-code directory component.
-fn has_hidden_component(path: &Path) -> bool {
-    path_components(path).any(|component| {
-        BUILTIN_REPORT_HIDE_COMPONENTS
-            .iter()
-            .any(|hidden| component == *hidden)
-    })
-}
-
-/// Returns true when the path contains a generated-code component pair.
-fn has_hidden_component_pair(path: &Path, scan_root: Option<&Path>) -> bool {
-    let components: Vec<String> = path_components(path).collect();
-    BUILTIN_REPORT_HIDE_COMPONENT_PAIRS.iter().any(|pair| {
-        contains_component_pair(&components, *pair)
-            && !scan_root_contains_component_pair(scan_root, *pair)
-    })
-}
-
-/// Returns true when the scan root itself is inside a hidden component
-/// pair. In that case the user intentionally asked to analyse that
-/// corpus, so the built-in dogfood hide rule must not erase every
-/// positive fixture cluster.
-fn scan_root_contains_component_pair(scan_root: Option<&Path>, pair: (&str, &str)) -> bool {
-    let Some(root) = scan_root else {
-        return false;
-    };
-    let components: Vec<String> = path_components(root).collect();
-    contains_component_pair(&components, pair)
-}
-
-/// Returns true when adjacent path components match `pair`.
-fn contains_component_pair(components: &[String], pair: (&str, &str)) -> bool {
-    components
-        .windows(2)
-        .any(|window| matches!(window, [first, second] if first == pair.0 && second == pair.1))
-}
-
-/// Recognises the unambiguous machine-generated banners build tools emit
-/// in a file's head — `@generated` (linguist convention), `GENERATED CODE`
-/// (`build_runner` / `source_gen`), `AUTO[- ]GENERATED` (ffigen),
-/// `Autogenerated` (jnigen), and `automatically generated` (Flutter/Dart
-/// localizations, intl messages, #165). Catches generators that emit no stable file
-/// suffix, e.g. ffigen/jnigen FFI bindings, so they join the suffix list in
-/// being hidden from the ranked report ([EXCLUSION-CONFIG], #95). Scans only
-/// the first kilobyte so a stray phrase deep in hand-written source cannot
-/// trip it, and matches ASCII-case-insensitively without allocating.
-#[must_use]
-pub(crate) fn has_generated_header(source: &[u8]) -> bool {
-    const MARKERS: &[&[u8]] = &[
-        b"@generated",
-        b"generated code",
-        b"auto generated",
-        b"auto-generated",
-        b"autogenerated",
-        // Flutter/Dart codegen (generated localizations, intl messages) and
-        // a wide class of generators emit "automatically generated … do not
-        // edit". Without this marker these dominated worst-offenders on a
-        // stock Flutter analysis (#165).
-        b"automatically generated",
-    ];
-    let head = source.get(..source.len().min(1024)).unwrap_or(source);
-    MARKERS.iter().any(|marker| {
-        head.windows(marker.len())
-            .any(|window| window.eq_ignore_ascii_case(marker))
-    })
-}
-
-/// Returns true when the path's file name has a generated-code suffix.
-fn has_hidden_suffix(path: &Path) -> bool {
-    let Some(file_name) = path.file_name().and_then(std::ffi::OsStr::to_str) else {
-        return false;
-    };
-    let lower = file_name.to_ascii_lowercase();
-    BUILTIN_REPORT_HIDE_SUFFIXES
-        .iter()
-        .any(|suffix| lower.ends_with(suffix))
-}
-
-/// Returns lowercase normal path components for case-insensitive matching.
-fn path_components(path: &Path) -> impl Iterator<Item = String> + '_ {
-    path.components().filter_map(|component| match component {
-        Component::Normal(value) => value.to_str().map(str::to_ascii_lowercase),
-        _ => None,
-    })
-}
-
 /// Returns `true` when `matcher` classifies `path` as ignored (i.e., the
 /// pattern matched). Directories are matched as files here because we
 /// only ever feed per-file paths to [`ExclusionConfig::is_excluded`].
@@ -729,7 +351,7 @@ fn matches(matcher: &Gitignore, path: &Path) -> bool {
 
 /// Builds the canonical set of config paths that should trigger a live
 /// exclusion reload — `<root>/.deslop.toml` plus the explicit override
-/// (if any) ([LIVE-CONFIG-LIVE], #139).
+/// (if any) ([LIVE-CONFIG-LIVE]).
 #[must_use]
 pub fn watched_config_paths(root: &Path, override_path: Option<&Path>) -> Vec<PathBuf> {
     let default = root.join(DEFAULT_CONFIG_FILENAME);
@@ -763,8 +385,17 @@ fn canonicalise_or_clone(path: &Path) -> PathBuf {
 /// matcher. The builder is rooted at the scan root when known so user
 /// patterns are scan-root-relative — `subdir/**` matches
 /// `<scan_root>/subdir/...` regardless of where the scan root sits on
-/// disk (#138). With no scan root the matcher falls back to `/` so
+/// disk. With no scan root the matcher falls back to `/` so
 /// absolute-path callers still get the original behaviour.
+///
+/// Unclosed character classes are rejected here even though
+/// `GitignoreBuilder` began allowing them in `ignore` 0.4.31 to match Git,
+/// which reads a dangling `[` literally. That leniency is right for the
+/// `.gitignore` files Git owns ([`crate::discover`] keeps it) and wrong for
+/// `.deslop.toml`, which only Deslop reads: `exclude = ["[unclosed"]` is a
+/// typo, and silently compiling it into a literal filename match excludes
+/// nothing while looking like it worked. Config errors are reported, never
+/// no-opped ([EXCLUSION-CONFIG]).
 fn build_matcher(
     source: &Path,
     scan_root: Option<&Path>,
@@ -772,19 +403,20 @@ fn build_matcher(
 ) -> Result<Gitignore, CoreError> {
     let root = scan_root.unwrap_or_else(|| Path::new("/"));
     let mut builder = GitignoreBuilder::new(root);
+    let _ = builder.allow_unclosed_class(false);
     for pattern in patterns {
         if let Err(err) = builder.add_line(None, pattern) {
             return Err(CoreError::ConfigPattern {
                 path: source.to_path_buf(),
                 pattern: pattern.clone(),
-                source: err,
+                source: Box::new(err),
             });
         }
     }
     builder.build().map_err(|err| CoreError::ConfigPattern {
         path: source.to_path_buf(),
         pattern: String::new(),
-        source: err,
+        source: Box::new(err),
     })
 }
 
@@ -792,82 +424,4 @@ fn build_matcher(
 /// anything.
 fn empty_matcher() -> Gitignore {
     Gitignore::empty()
-}
-
-/// Validates and returns the `[threshold] max_duplication_percent`
-/// value from the raw config, or `None` when the section is absent.
-fn resolve_threshold(
-    source: &std::path::Path,
-    raw: Option<&RawThreshold>,
-) -> Result<Option<f64>, CoreError> {
-    let Some(percent) = raw.and_then(|block| block.max_duplication_percent) else {
-        return Ok(None);
-    };
-    validate_threshold_percent(percent)
-        .map(Some)
-        .map_err(|msg| CoreError::ConfigThreshold {
-            path: source.to_path_buf(),
-            message: msg,
-        })
-}
-
-/// Validates and compiles the `[ranking]` section into a [`RankingPolicy`]
-/// ([RANK-CATEGORY], [RANK-STRUCTURAL-ONLY]). Both knobs default to
-/// `demote` with their class default weight; an explicit weight must be
-/// finite and strictly inside `(0.0, 1.0]` or the load fails with a
-/// `ConfigThreshold`-style error.
-fn resolve_ranking_policy(source: &Path, raw: &RawRanking) -> Result<RankingPolicy, CoreError> {
-    let data_clone_weight = resolve_clone_weight(
-        source,
-        raw.data_clone_weight,
-        "data_clone_weight",
-        DEFAULT_DATA_CLONE_WEIGHT,
-    )?;
-    let structural_only_weight = resolve_clone_weight(
-        source,
-        raw.structural_only_weight,
-        "structural_only_weight",
-        DEFAULT_STRUCTURAL_ONLY_WEIGHT,
-    )?;
-    Ok(RankingPolicy {
-        data_clones: raw.data_clones.unwrap_or_default(),
-        data_clone_weight,
-        structural_only: raw.structural_only.unwrap_or_default(),
-        structural_only_weight,
-    })
-}
-
-/// Validates one optional `[ranking]` weight, inheriting `default`
-/// when the key is absent and failing the load with a
-/// `ConfigThreshold`-style error otherwise.
-fn resolve_clone_weight(
-    source: &Path,
-    raw: Option<f64>,
-    key: &str,
-    default: f64,
-) -> Result<f64, CoreError> {
-    let Some(weight) = raw else {
-        return Ok(default);
-    };
-    validate_clone_weight(weight, key).map_err(|message| CoreError::ConfigThreshold {
-        path: source.to_path_buf(),
-        message,
-    })
-}
-
-/// Returns `weight` when it is a finite multiplier strictly inside
-/// `(0.0, 1.0]`, else a diagnostic explaining the rejection. Zero is
-/// rejected so a demoted cluster can never be silently erased; values above
-/// `1.0` would *promote* the demoted class, defeating the policy
-/// ([RANK-CATEGORY], [RANK-STRUCTURAL-ONLY]).
-fn validate_clone_weight(weight: f64, key: &str) -> Result<f64, String> {
-    if !weight.is_finite() {
-        return Err(format!("{key} must be finite, got {weight}"));
-    }
-    if weight <= 0.0 || weight > 1.0 {
-        return Err(format!(
-            "{key} must be in the range (0.0, 1.0], got {weight}"
-        ));
-    }
-    Ok(weight)
 }

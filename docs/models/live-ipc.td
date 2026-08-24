@@ -1,7 +1,7 @@
 typeDiagram
 
 # [LIVE-IPC-TCP] On-disk discovery record for the TCP loopback IPC
-# transport. Written to `.deslop-cache/deslop.port` by deslop-lsp when
+# transport. Written to `.deslop/cache/deslop.port` by deslop-lsp when
 # TCP carries the IPC protocol (default on Windows, opt-in elsewhere via
 # `--ipc-transport tcp`); read by deslop-mcp to locate and authenticate
 # against the live server ([MCP-IPC-DISCOVERY]).
@@ -93,6 +93,7 @@ type EmbeddingProgress {
   model_id: String
   done: Int
   total: Int
+  percent: Float
   message: Option<String>
 }
 
@@ -132,6 +133,13 @@ type FileMetric {
   duplication_percent: Float
 }
 
+type DiffMetrics {
+  added_loc: Int
+  duplicated_added_loc: Int
+  duplication_percent: Float
+  threshold: ThresholdSummary
+}
+
 type RepoMetrics {
   analysed_loc: Int
   duplicated_loc: Int
@@ -140,6 +148,8 @@ type RepoMetrics {
   duplicated_files: Int
   threshold: ThresholdSummary
   per_file: List<FileMetric>
+  folders: List<FileMetric>
+  diff: Option<DiffMetrics>
 }
 
 type ReportBoilerplateOccurrence {
@@ -167,6 +177,7 @@ type EmbeddingProvenance {
   model_version: String
   dimensions: Int
   attempted_subtrees: Int
+  succeeded_subtrees: Int
   indexed_subtrees: Int
   failed_subtrees: Int
 }
@@ -174,8 +185,12 @@ type EmbeddingProvenance {
 type ReportSignals {
   structural: Float
   token_jaccard: Float
+  shape: Float
   embedding_cos: Float
   fused: Float
+  agreement: Float
+  rename_consistency: Float
+  literal_fraction: Float
 }
 
 type ReportOccurrence {
@@ -185,21 +200,30 @@ type ReportOccurrence {
   start_line: Int
   end_line: Int
   hidden: Bool
+  in_diff: Option<Bool>
 }
 
 type ReportCluster {
   id: String
+  rank: Int
+  rank_band: String
   weight: Float
   size: Int
   canonical_node_count: Int
   signals: ReportSignals
   bucket: String
   category: String
+  language: String
+  meets_fused_gate: Bool
+  evidence_verdict: String
   occurrences: List<ReportOccurrence>
   occurrences_total: Int
+  occurrence_count: Int
   occurrences_truncated: Bool
   summary: String
   interpretation: String
+  intersects_diff: Option<Bool>
+  is_newly_introduced: Option<Bool>
 }
 
 type Report {
@@ -214,6 +238,7 @@ type Report {
   boilerplate_hints: List<ReportBoilerplateHint>
   embedding_provenance: Option<EmbeddingProvenance>
   clusters: List<ReportCluster>
+  clusters_outside_diff: Option<Int>
 }
 
 type ReportDelta {

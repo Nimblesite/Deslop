@@ -1,0 +1,139 @@
+name: Corpus accuracy
+
+# [CORPUS-CI] Deliberately NOT triggered by `pull_request`. The corpus suite is currently
+# red on tracked defects (#166, #301, #331, #336), so it must never sit in the
+# merge path. It reports; it does not gate.
+#
+# Failures already recorded in `corpus/known-failures.json` are printed and
+# pass. Anything NOT recorded there fails this workflow — that is the
+# regression gate, and a red run here is a signal to investigate, not a
+# blocked merge.
+on:
+  schedule:
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+    inputs:
+      full:
+        description: "Run the whole corpus, including flutter + fsharp (needs >16 GB RAM and ~20 min; expect OOM on standard runners)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  corpus:
+    name: Corpus (standard runners)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # See ci job — typediagram is required by deslop-core's build.rs, so
+      # without it the corpus suite dies before scanning a single repository
+      # (gh #347: both runs since the gate landed failed at ~70s here).
+      # Keep the pin in sync with ci.yml per the dependency-sync rule.
+      - name: Install typediagram
+        run: npm install -g typediagram@0.11.0
+
+      # The harness measures peak RSS with `/usr/bin/time`, which is a separate
+      # package on Ubuntu — the shell's `time` keyword is not it and cannot
+      # report memory. Without this the first scan dies on spawn.
+      - name: Ensure GNU time is installed
+        run: |
+          command -v /usr/bin/time >/dev/null \
+            || sudo apt-get install -y --no-install-recommends time
+
+      - name: Record runner capacity
+        run: |
+          echo "### Runner" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          free -h >> "$GITHUB_STEP_SUMMARY"
+          nproc | sed 's/^/cores: /' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      # Clones are pinned by SHA, so the cache key only has to track the
+      # manifests. A moved upstream tag is caught by fetch-corpus.mjs anyway.
+      - name: Cache corpus clones
+        uses: actions/cache@v4
+        with:
+          path: .corpus
+          key: corpus-${{ hashFiles('corpus/*.json') }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run corpus suite
+        id: corpus
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          if [ "${{ inputs.full }}" = "true" ]; then
+            make test-corpus-ci \
+              CORPUS_REPOS="flutter jellyfin tokio django react nest laravel hugo fsharp" \
+              CORPUS_TESTS="corpus_" 2>&1 | tee corpus-output.txt
+          else
+            echo "PARTIAL=1" >> "$GITHUB_ENV"
+            make test-corpus-ci 2>&1 | tee corpus-output.txt
+          fi
+
+      - name: Publish report
+        if: always()
+        run: |
+          {
+            echo "### Measurements"
+            echo ""
+            echo "| repo | files | LOC | clusters | dup% | wall | peak RSS |"
+            echo "|---|---|---|---|---|---|---|"
+            grep -oE '^[a-z]+ \[[a-z#]+\]: files=[0-9]+ loc=[0-9]+ clusters=[0-9]+ dup=[0-9.]+% wall=[0-9.]+s peak_rss=[0-9]+MB' corpus-output.txt \
+              | sed -E 's/^([a-z]+) \[[a-z#]+\]: files=([0-9]+) loc=([0-9]+) clusters=([0-9]+) dup=([0-9.]+)% wall=([0-9.]+)s peak_rss=([0-9]+)MB/| \1 | \2 | \3 | \4 | \5% | \6s | \7 MB |/' \
+              || echo "| (no measurements parsed) | | | | | | |"
+
+            echo ""
+            echo "### Known defects (tracked, not blocking)"
+            echo ""
+            grep -F '[KNOWN]' corpus-output.txt | sed 's/^/- /' || echo "- none"
+
+            echo ""
+            echo "### NEW failures (regressions — investigate)"
+            echo ""
+            grep -F '[NEW]' corpus-output.txt | sed 's/^/- /' || echo "- none"
+
+            echo ""
+            echo "### Possibly fixed (confirm, then delete from corpus/known-failures.json)"
+            echo ""
+            grep -F '[FIXED?]' corpus-output.txt | sed 's/^/- /' || echo "- none"
+
+            if [ "${PARTIAL:-0}" = "1" ]; then
+              echo ""
+              echo "> **Scheduled runs cover a slice, not the corpus.** Only \`tokio\` (control)"
+              echo "> and \`nest\` (reproduces #301) are scanned, to keep clone + scan around a"
+              echo "> minute. Precision defects #331 (Dart) and #336 (F#) are **not** gated here:"
+              echo "> those repositories peak above 13 GB (#166). Re-run with \`full\`, or use"
+              echo "> \`make test-corpus\` locally, for the whole corpus."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail on regressions only
+        if: always()
+        run: |
+          if grep -qF '[NEW]' corpus-output.txt; then
+            echo "::error::Corpus suite found failures not present in corpus/known-failures.json"
+            grep -F '[NEW]' corpus-output.txt
+            exit 1
+          fi
+          if [ "${{ steps.corpus.outcome }}" = "failure" ] && ! grep -qF '[KNOWN]' corpus-output.txt; then
+            echo "::error::Corpus suite failed before reaching any check (build, clone, or harness error)"
+            tail -40 corpus-output.txt
+            exit 1
+          fi
+          echo "No regressions. Known defects reported in the job summary."

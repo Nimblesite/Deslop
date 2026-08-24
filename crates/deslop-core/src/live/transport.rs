@@ -3,13 +3,13 @@
 //!
 //! Two transports carry the same line-delimited JSON-RPC protocol:
 //!
-//! - **Unix domain socket** `.deslop-cache/deslop.sock` — the default
+//! - **Unix domain socket** `.deslop/cache/deslop.sock` — the default
 //!   wherever Unix sockets exist. Behaviour is unchanged from the
 //!   original [LIVE-IPC-SOCKET] design.
 //! - **TCP loopback** `127.0.0.1:<os-assigned port>` — the default on
 //!   Windows (no Unix sockets) and opt-in elsewhere via
 //!   `deslop-lsp --ipc-transport tcp`. The bound port and a
-//!   per-session secret are published in `.deslop-cache/deslop.port`
+//!   per-session secret are published in `.deslop/cache/deslop.port`
 //!   ([`IpcEndpointFile`]). Clients present the secret as the first
 //!   line of every connection, so the analysis server stays closed to
 //!   other local processes and a stale discovery record colliding with
@@ -27,27 +27,23 @@ use std::{
 
 pub use crate::wire_generated::IpcEndpointFile;
 
-/// File name of the Unix-domain IPC socket under `.deslop-cache`.
+/// File name of the Unix-domain IPC socket under the cache directory.
 pub const IPC_SOCKET_FILE_NAME: &str = "deslop.sock";
 
-/// File name of the TCP endpoint discovery record under `.deslop-cache`.
+/// File name of the TCP endpoint discovery record under the cache
+/// directory.
 pub const IPC_PORT_FILE_NAME: &str = "deslop.port";
 
 /// Absolute path of the Unix-domain socket for `root`.
 #[must_use]
 pub fn socket_path(root: &Path) -> PathBuf {
-    cache_dir(root).join(IPC_SOCKET_FILE_NAME)
+    crate::paths::cache_dir(root).join(IPC_SOCKET_FILE_NAME)
 }
 
 /// Absolute path of the TCP endpoint discovery record for `root`.
 #[must_use]
 pub fn port_file_path(root: &Path) -> PathBuf {
-    cache_dir(root).join(IPC_PORT_FILE_NAME)
-}
-
-/// Workspace cache directory hosting both IPC endpoint artifacts.
-fn cache_dir(root: &Path) -> PathBuf {
-    root.join(crate::embedding::cache::DEFAULT_CACHE_DIR_NAME)
+    crate::paths::cache_dir(root).join(IPC_PORT_FILE_NAME)
 }
 
 /// Which transport the IPC server binds ([LIVE-IPC-TCP]).
@@ -100,7 +96,7 @@ pub struct IpcConnection {
 }
 
 impl IpcServerListener {
-    /// Binds `transport` under `root`, creating `.deslop-cache`,
+    /// Binds `transport` under `root`, creating `.deslop/cache`,
     /// clearing stale endpoint artifacts of both transports, and
     /// publishing the TCP discovery record when applicable.
     ///
@@ -111,7 +107,7 @@ impl IpcServerListener {
     /// [`IpcMode::Unix`] on a platform without Unix sockets fails
     /// with [`std::io::ErrorKind::Unsupported`].
     pub fn bind(root: &Path, transport: IpcMode) -> std::io::Result<Self> {
-        std::fs::create_dir_all(cache_dir(root))?;
+        std::fs::create_dir_all(crate::paths::cache_dir(root))?;
         match transport {
             IpcMode::Unix => bind_unix(root),
             IpcMode::Tcp => bind_tcp(root),
@@ -207,21 +203,20 @@ fn write_port_file(root: &Path, port: u16, token: &str) -> std::io::Result<()> {
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
     let path = port_file_path(root);
     std::fs::write(&path, payload)?;
-    restrict_to_owner(&path)
+    // Owner-only permissions are a Unix concept. Windows ACLs on the
+    // workspace already scope the record to the user, so there is nothing
+    // to tighten — and no stub that only ever succeeds, which is a function
+    // whose `Result` tells the caller nothing.
+    #[cfg(unix)]
+    restrict_to_owner(&path)?;
+    Ok(())
 }
 
-/// Tightens the discovery record to owner-only where Unix permissions
-/// exist; Windows workspace ACLs already scope the file to the user.
+/// Tightens the discovery record to owner-only.
 #[cfg(unix)]
 fn restrict_to_owner(path: &Path) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
-}
-
-/// Windows ACLs on the workspace already scope the record to the user.
-#[cfg(not(unix))]
-fn restrict_to_owner(_path: &Path) -> std::io::Result<()> {
-    Ok(())
 }
 
 /// Per-session hex token derived from OS entropy. The token only
@@ -229,7 +224,7 @@ fn restrict_to_owner(_path: &Path) -> std::io::Result<()> {
 /// plain equality check at the server suffices.
 fn generate_token() -> std::io::Result<String> {
     let mut seed = [0_u8; 16];
-    getrandom::getrandom(&mut seed).map_err(std::io::Error::other)?;
+    getrandom::fill(&mut seed).map_err(std::io::Error::other)?;
     Ok(blake3::hash(&seed).to_hex().to_string())
 }
 

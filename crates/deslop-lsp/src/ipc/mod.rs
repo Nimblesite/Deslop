@@ -3,8 +3,8 @@
 //!
 //! The LSP exposes the live in-memory analysis state to the MCP server
 //! through [`deslop_core::live::transport`]: a Unix domain socket at
-//! `.deslop-cache/deslop.sock` by default, or TCP loopback (published
-//! in `.deslop-cache/deslop.port`) on Windows and under
+//! `.deslop/cache/deslop.sock` by default, or TCP loopback (published
+//! in `.deslop/cache/deslop.port`) on Windows and under
 //! `--ipc-transport tcp` ([MCP-IPC-CLIENT]). No on-disk cache is
 //! involved on the read path. Methods served:
 //!
@@ -40,7 +40,14 @@ use deslop_core::live::{
 use serde_json::{json, Value};
 use tokio::{runtime::Handle, sync::broadcast};
 
-/// IPC server bound under the workspace's `.deslop-cache`.
+/// Envelope field declaring the JSON-RPC protocol version.
+const JSON_RPC_FIELD: &str = "jsonrpc";
+/// The only JSON-RPC protocol version this transport speaks.
+const JSON_RPC_VERSION: &str = "2.0";
+/// Envelope field carrying a request's correlation id.
+const ID_FIELD: &str = "id";
+
+/// IPC server bound under the workspace's `.deslop/cache`.
 ///
 /// Dropping this value removes the endpoint artifacts (socket file or
 /// TCP discovery record) from the filesystem.
@@ -189,7 +196,7 @@ fn respond(
     report_changed: &broadcast::Sender<ReportChangedNotification>,
     handle: &Handle,
 ) {
-    let id = request.get("id").cloned().unwrap_or(Value::Null);
+    let id = request.get(ID_FIELD).cloned().unwrap_or(Value::Null);
     let method = request.get("method").and_then(Value::as_str).unwrap_or("");
     if method == "report/subscribe" {
         run_subscribe_loop(writer, &id, service, report_changed, handle);
@@ -256,7 +263,7 @@ fn write_frame(stream: &mut IpcStream, value: &Value) -> std::io::Result<()> {
 /// envelope (no `id`).
 fn subscribe_notification_frame(notification: &ReportChangedNotification) -> Value {
     json!({
-        "jsonrpc": "2.0",
+        (JSON_RPC_FIELD): JSON_RPC_VERSION,
         "method": "report/changed",
         "params": notification,
     })
@@ -265,16 +272,16 @@ fn subscribe_notification_frame(notification: &ReportChangedNotification) -> Val
 /// Wraps a `Result<Value, Value>` into a JSON-RPC 2.0 response envelope.
 fn json_rpc_response(id: &Value, result: Result<Value, Value>) -> Value {
     match result {
-        Ok(value) => json!({"jsonrpc": "2.0", "id": id, "result": value}),
-        Err(error) => json!({"jsonrpc": "2.0", "id": id, "error": error}),
+        Ok(value) => json!({(JSON_RPC_FIELD): JSON_RPC_VERSION, (ID_FIELD): id, "result": value}),
+        Err(error) => json!({(JSON_RPC_FIELD): JSON_RPC_VERSION, (ID_FIELD): id, "error": error}),
     }
 }
 
 /// Returns a JSON-RPC parse-error response (id unknown).
 fn parse_error() -> Value {
     json!({
-        "jsonrpc": "2.0",
-        "id": Value::Null,
+        (JSON_RPC_FIELD): JSON_RPC_VERSION,
+        (ID_FIELD): Value::Null,
         "error": {"code": -32700, "message": "parse error"},
     })
 }

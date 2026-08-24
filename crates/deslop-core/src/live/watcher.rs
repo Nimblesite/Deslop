@@ -8,7 +8,7 @@
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 use notify::{
@@ -18,6 +18,33 @@ use notify::{
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
 use crate::{config::ExclusionConfig, discover::is_ignore_rule_path};
+
+/// Exclusion policy shared between the analysis session and the live
+/// watcher ([CONFIG-EXCLUDE-DEPENDENCIES], [LIVE-CONFIG-LIVE]).
+///
+/// The watcher decides what reaches the scheduler, the session decides
+/// what reaches the corpus. Handing each its own config lets them
+/// disagree: a workspace opted into dependency analysis had its cold
+/// scan read `node_modules`, while the watcher — started with an empty
+/// config — filtered every new dependency file out before scheduling, so
+/// the live report silently stopped matching the batch report for the
+/// same corpus. One handle, swapped in place, cannot drift.
+pub type LiveExclusion = Arc<RwLock<Arc<ExclusionConfig>>>;
+
+/// Wraps a resolved config in a fresh [`LiveExclusion`] handle.
+#[must_use]
+pub fn live_exclusion(exclusion: Arc<ExclusionConfig>) -> LiveExclusion {
+    Arc::new(RwLock::new(exclusion))
+}
+
+/// Replaces the policy behind `handle`, so the watcher's next decision
+/// uses it. Both sides move together or the corpus definitions diverge.
+pub fn publish_exclusion(handle: &LiveExclusion, exclusion: Arc<ExclusionConfig>) {
+    let mut guard = handle
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    *guard = exclusion;
+}
 
 /// Default channel capacity for the watcher → scheduler bridge.
 /// Sized for short bursts of saves; the scheduler's debouncer
@@ -43,13 +70,13 @@ impl LiveWatcher {
     /// `config_paths` lists exact filesystem paths that bypass the
     /// extension filter — used so `.deslop.toml` (and any explicit
     /// override) reaches the scheduler as a first-class live change
-    /// ([LIVE-WATCHER], #139). Each entry is canonicalised before
+    /// ([LIVE-WATCHER]). Each entry is canonicalised before
     /// comparison so notify-reported paths line up on macOS
     /// (`/private/var/...` vs `/var/...`).
     pub fn start(
         root: &Path,
         extensions: Vec<String>,
-        exclusion: Arc<ExclusionConfig>,
+        exclusion: LiveExclusion,
         config_paths: Vec<PathBuf>,
     ) -> Result<(Self, Receiver<PathBuf>), notify::Error> {
         let (tx, rx) = mpsc::channel::<PathBuf>(CHANNEL_CAPACITY);
@@ -81,11 +108,14 @@ struct WatcherHandler {
     sender: Sender<PathBuf>,
     /// Allowed lowercase extensions (no leading `.`).
     allowed: HashSet<String>,
-    /// Exclusion config consulted before forwarding.
-    exclusion: Arc<ExclusionConfig>,
+    /// Exclusion policy consulted before forwarding. Shared with the
+    /// session so a `.deslop.toml` edit re-scopes both sides at once —
+    /// the watcher and the cold scan must never disagree about what the
+    /// corpus contains ([CONFIG-EXCLUDE-DEPENDENCIES]).
+    exclusion: LiveExclusion,
     /// Canonical paths that bypass the extension/exclusion filter and
     /// reach the scheduler directly — `.deslop.toml` plus any explicit
-    /// override path ([LIVE-WATCHER], #139).
+    /// override path ([LIVE-WATCHER]).
     watched_config_paths: HashSet<PathBuf>,
 }
 
@@ -128,7 +158,7 @@ impl WatcherHandler {
     /// Removals bypass the extension and exclusion filters: a removed
     /// directory has no source extension yet may be an ancestor of live
     /// files, and a previously-admitted path that an exclusion now
-    /// matches must still be evictable ([LIVE-WATCHER], #223). The
+    /// matches must still be evictable ([LIVE-WATCHER]). The
     /// session re-checks existence and ownership before mutating any
     /// map, so forwarding a removal it does not track is a cheap no-op.
     fn forward_one(&self, path: PathBuf, is_removal: bool) {
@@ -151,15 +181,24 @@ impl WatcherHandler {
         if !path_matches_filter(&path, &self.allowed) {
             return;
         }
-        if self.exclusion.is_excluded(&path, None) {
+        if self.current_exclusion().is_excluded(&path, None) {
             return;
         }
         let _result = self.sender.try_send(path);
     }
 
+    /// Reads the currently-published exclusion policy.
+    fn current_exclusion(&self) -> Arc<ExclusionConfig> {
+        let guard = self
+            .exclusion
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Arc::clone(&guard)
+    }
+
     /// Returns `true` when `path` (or its canonical form) matches a
     /// watched config path. Used to bypass the extension filter for
-    /// `.deslop.toml` ([LIVE-WATCHER], #139).
+    /// `.deslop.toml` ([LIVE-WATCHER]).
     fn is_watched_config_path(&self, path: &Path) -> bool {
         if self.watched_config_paths.contains(path) {
             return true;

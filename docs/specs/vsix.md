@@ -1,26 +1,26 @@
 # VSIX — the VS Code extension
 
-The VSIX is the **polished reference client** for the Deslop daemon. Every other editor can wire up the LSP ([lsp.md](lsp.md)) and get a competent experience; the VSIX is where we prove what a genuinely beautiful duplication-surfacing UI looks like.
+The VSIX is the reference client for the Deslop daemon. Other editors can integrate through the LSP ([lsp.md](lsp.md)).
 
 Distribution: one platform-specific `.vsix` per VS Code target attached to each GitHub Release — see [.github/workflows/release.yml](../../.github/workflows/release.yml). Extension id: `nimblesite.deslop-live`. Install via `code --install-extension deslop-live-X.Y.Z-<target>.vsix`, or from the Marketplace/OpenVSX once we set up publisher accounts.
 
 ### [VSIX-PRINCIPLES] UX principles
 
-1. **In your face the moment you duplicate.** When the user types code that matches an existing cluster, the editor tells them **immediately** via the live-bubble ([VSIX-LIVE-BUBBLE]) — not on save, not on CI, not in a panel they have to open. This is the product's defining moment. Every other UX decision is subordinate to making it land cleanly.
+1. **Immediate duplicate feedback.** When typed code matches an existing cluster, [VSIX-LIVE-BUBBLE] appears without waiting for save, CI, or an opened panel.
 2. **Silent when the code is clean.** If there are no clusters overlapping the current file, no UI elements appear on that file. The activity bar badge disappears. The editor is untouched. Loudness is reserved for real duplication.
 3. **The worst offender is always one click away.** The activity bar icon always jumps to cluster `#1` of the live report. The user never navigates through menus to find duplication hotspots.
 4. **Every surface speaks the same schema.** Tree view, hover, code lens, status bar, bubble, webview — all render the same `Report` the JSON file carries. Humans and agents read the same truth.
 5. **Never block an edit.** The daemon is a sidecar; analysis runs asynchronously; UI updates ride notifications. A typing pause of 250 ms triggers re-analysis, not every keystroke.
-6. **Legible, not decorative.** No animated icons, no gradient flourishes that obscure content. Density is high but scannable — the user is hunting for duplication, not admiring chrome. Severity is communicated by colour ramp + glyph, nothing else.
+6. **Legible, not decorative.** No animated icons or gradients that obscure content. Severity uses a colour ramp and glyph.
 7. **Human-readable before machine-readable.** The VSIX is for developers working in an editor, so ordinary UI labels use friendly file names, line numbers, and columns. Byte offsets are valid in the JSON/AI report and wire schema, but the tree, webviews, bubbles, hovers, status bar, and command titles must not expose raw byte markers as the primary location text.
 8. **Reactive end-to-end.** Every surface — tree, decorations, bubble, code lens, status bar, hovers, webviews, badges — derives from `@preact/signals` over the single [VSIX-STATE] store. `deslop/reportChanged` updates settle in one microtask across every surface. Stale UI is a correctness bug per [VSIX-REACTIVITY-INVARIANT], not a polish issue.
 
 ### [VSIX-LIVE-BUBBLE] Live duplication bubble — the flagship UX
 
-This is the feature. The VSIX is the first tool that tells a developer **"you are duplicating code right now"** while the code is still under their cursor. Every other surface (tree view, webview, code lens, status bar) is supporting cast; the bubble is the lead.
+The bubble reports duplication while the edited code remains under the cursor.
 
 **When it fires.**
-After every coalesced buffer edit ([LIVE-WATCHER] debounce = 250 ms), the VSIX issues `duplicates/findSimilar` on the range the user most recently touched. If a cluster comes back with fused score ≥ `FUSED_THRESHOLD` (0.85, same as the offline report), the bubble appears anchored to the bottom-right of the duplicated range. If nothing matches, no bubble — silence is the signal that the code is novel.
+After every coalesced buffer edit ([LIVE-WATCHER] debounce = 250 ms), the VSIX issues `duplicates/findSimilar` on the range the user most recently touched. The bubble appears, anchored to the bottom-right of the duplicated range, when a returned cluster passes **either** gate: its bucket is act-now ([CLONE-BUCKETS]), or the engine's own `meets_fused_gate` flag says its rendered confidence reached `FUSED_THRESHOLD` (0.85, same as the offline report). The client reads the flag rather than carrying the constant ([PRINCIPLES-ONE-CALCULATION](principles.md#principles-one-calculation)). Two gates, because the two populations carry different evidence — an act-now bucket is the engine's own verdict, reached with content evidence and byte proof this client never sees, and [FUSION-CONTENT-GATE] deliberately pushes a proven rename's rendered confidence *below* 0.85, so re-testing an act-now cluster against the cutoff withholds precisely the findings this surface exists to show ([REPORTING-CONTEXT] "filter on `bucket`, not on `fused`"). Below the act-now bands no such verdict stands behind the cluster and the confidence cutoff is the right gate. If nothing matches, no bubble — silence is the signal that the code is novel.
 
 **What it looks like.**
 A compact floating widget (VS Code `InlayHint` + `Webview`-backed overlay, rendered by a single `DecorationType` whose `after.contentText` is an HTML-safe Unicode glyph, with a hover-triggered richer webview for detail). Anatomy, from left to right:
@@ -28,7 +28,7 @@ A compact floating widget (VS Code `InlayHint` + `Webview`-backed overlay, rende
 - **Severity dot** — colour mapped to the cluster's Deslop severity per [severity.md §SEVERITY-COLOR](severity.md#severity-color): red (`error`), amber (`warning`), blue (`information`), grey (`hint`). Defaults: `Identical` → red, the rest amber / blue / grey. Colour comes from the always-on Deslop-severity map, **not** the diagnostic map — the bubble is fully coloured even when diagnostics are off (`deslop.diagnostics.enabled = false`, the default). The bubble is never hidden by a severity setting; only the dirty projection ([VSIX-STATE-DIRTY]) and silence-when-clean remove it.
 - **Short verdict** — one of: `DUPLICATE` (structural = 1.0), `NEAR-MISS` (token jaccard ≥ 0.90, structural < 1.0), `SEMANTIC MATCH` (embedding cos ≥ 0.90). One word, uppercase, so the user sees it without reading.
 - **Count + location** — `× 4 • UserService.cs:230`. The canonical occurrence of the cluster, linkified to jump on click.
-- **Signal strip** — three 8-pixel bars for structural / jaccard / embedding. Bright = high, dim = low. Lets the user distinguish "identical copy" from "semantic near-miss" at a glance.
+- **Signal strip** — three 8-pixel bars for **shape / semantic / confidence**. Bright = high, dim = low. Lets the user distinguish "identical copy" from "semantic near-miss" at a glance. The three bars are *not* the raw signal triple: `structural` and `token_jaccard` are two views of one normalised representation — "summing them says nothing beyond 'the shapes matched'" (`deslop-core::buckets::content_gated_signals`) — so drawing both spends two slots on one piece of evidence. The shape bar takes the stronger of the two; the third bar draws the content-gated `fused`, which is the only value separating a verbatim copy from a proven rename once the #232 correction has set both shape views to 1.0. The full block `█` is reserved for an exact `1.0`, so proof reads differently from near-proof at a glance.
 - **Action chevron** — click expands the bubble into a webview-backed card with interpretation, all occurrences, action hints, and a `Compare` button that opens VS Code's diff view against the canonical occurrence.
 
 **How it's rendered.**
@@ -155,13 +155,13 @@ Root rows are the top-level folders of the workspace; each folder is a real tree
 
 Because each cluster is single-language ([CONFIG-CROSS-LANGUAGE]) and languages overwhelmingly live in separate directory trees, folder mode already separates most languages without an explicit language split. Each folder row's grey description carries its rolled-up worst weight and the count of files beneath it that contain duplication.
 
-Folder rows, their child folders, and the files within them sort per [VSIX-TOP-OFFENDERS-SORT]. The default — impact — sorts by max cluster weight desc (a folder's worst cluster), sum-of-weights desc tiebreaker, then path `localeCompare`. Global rank ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]) is unchanged: rank #1 is still the repo's worst cluster, wherever it sits in the tree.
+Folder rows, their child folders, and the files within them sort per [VSIX-TOP-OFFENDERS-SORT]. The default — impact — sorts by the weight of the row's worst cluster desc, sum-of-weights desc tiebreaker, then path `localeCompare`. The row's worst cluster is the one with the lowest engine `rank` beneath it, and the weight shown is that cluster's own `weight`: a group figure is a selection of an engine value, never a maximum recomputed in the client ([PRINCIPLES-ONE-CALCULATION](principles.md#principles-one-calculation)). The summed weight is an ordering tiebreak only and is never displayed. Global rank ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]) is unchanged: rank #1 is still the repo's worst cluster, wherever it sits in the tree.
 
 #### [VSIX-TOP-OFFENDERS-CLUSTER-ID] Cluster slug leads the row, rank never does
 
 The bold label on every cluster row leads with the cluster slug — the first 7 hex chars of `cluster.id`. The slug is stable across runs, deltas, snapshots, and grouping modes; it is the single identifier humans and AI agents can quote between sessions. The same slug is used by the LSP hover bubble ([VSIX-HOVER-SHARED]), via the shared `clusterSlug()` helper, so the UI never shows two different short forms of the same id.
 
-The volatile rank (`#N`) is never the leading element of the label. Rendering rank as if it were an id has shipped two incidents (the LSP hover regression tracked in `docs/plans/cluster-slug-vs-rank.md`, and the Top Offenders tree regression that produced this section). Both humans and — critically — AI agents reading the rendered tree treat the leading element as the row's identity; using rank there means the "identity" changes on every snapshot, which silently breaks cross-message references in agent transcripts.
+The volatile rank (`#N`) is never the leading element of the label. Rendering rank as if it were an id has shipped two incidents (the LSP hover regression tracked in Deslop#149, and the Top Offenders tree regression that produced this section). Both humans and — critically — AI agents reading the rendered tree treat the leading element as the row's identity; using rank there means the "identity" changes on every snapshot, which silently breaks cross-message references in agent transcripts.
 
 Rules:
 
@@ -172,7 +172,9 @@ Rules:
 
 #### [VSIX-TOP-OFFENDERS-RANK-GLOBAL] Global rank #N
 
-The rank #N attached to a cluster row is the cluster's position in the report's worst-first list. It does **not** change between modes, and it is **not** re-numbered within a file or within a bucket group. This keeps cross-file impact comparable at a glance — rank #1 is always the worst cluster in the repo, regardless of which lens the user picked.
+The rank #N attached to a cluster row is the `rank` the engine stamped on the cluster ([SEVERITY-BAND](severity.md#severity-band)) — its position in the report's worst-first list. It does **not** change between modes, and it is **not** re-numbered within a file or within a bucket group. This keeps cross-file impact comparable at a glance — rank #1 is always the worst cluster in the repo, regardless of which lens the user picked.
+
+The tree reads the field; it never numbers rows from their array position. Numbering locally is only correct while the list the client holds is the whole report, and it is not: facet filters and the dirty-file projection both shorten it ([PRINCIPLES-ONE-CALCULATION](principles.md#principles-one-calculation)).
 
 Rank lives in the grey description, not the bold label. The bold label leads with the stable cluster slug ([VSIX-TOP-OFFENDERS-CLUSTER-ID]).
 
@@ -223,7 +225,7 @@ Diagnostics are off by default ([severity.md §SEVERITY-DIAGNOSTICS-GATE](severi
 The **Duplication** tree (`deslop.metrics`) replaces the former Focused File panel and answers one question at a glance: *how duplicated is this codebase, and where?* It renders from the last analysed snapshot's repo metrics (`Report.metrics`, [METRICS-REPO]) and refreshes on `deslop/reportChanged`.
 
 - **Headline row** — the overall duplication percentage (`duplication_percent`) as the bold label, with the grey description carrying `analysed_loc`, `duplicated_loc`, `clusters_total`, and `duplicated_files` in plain language. When `metrics.threshold.breached`, the row shows a warning glyph and names the gate it crossed. Activating the row opens the [webview-runtime.md §VSIX-METRICS-REPORT](webview-runtime.md#vsix-metrics-report) webview.
-- **Per-folder → per-file breakdown** — below the headline, a tree of folders (rolled up from `metrics.per_file` by path prefix, summing numerator and denominator so each folder percentage is exact) expanding to the files within, each row showing its own duplication percentage in the grey description. Worst-first by percentage, path `localeCompare` tiebreaker; rows with zero duplication are omitted from display. Single-child folder chains are path-compressed, matching folder mode.
+- **Per-folder → per-file breakdown** — below the headline, a tree of folders expanding to the files within, each row showing its own duplication percentage in the grey description. The tree *structure* is derived from `metrics.per_file` paths; every *figure* — folder and file alike — is read verbatim from the engine's `metrics.folders` / `metrics.per_file` rows ([METRICS-REPO]). The extension performs **no arithmetic**: recomputing a percentage or re-summing LOC in the VSIX is prohibited. Worst-first by percentage, path `localeCompare` tiebreaker; rows with zero duplication are omitted from display. Single-child folder chains are path-compressed, matching folder mode. Activating a file row opens that file in an editor; because `metrics.per_file[].path` is scan-root-relative ([METRICS-REPO]), the row resolves it against the workspace before opening, and its `resourceUri` — which drives the file icon and theme decorations — carries the same resolved URI.
 - **Clean / empty** — when there is no duplication, the panel shows a single "No duplication detected" row, honouring [VSIX-PRINCIPLES] principle 2.
 
 #### Duplication report webview
@@ -403,7 +405,7 @@ Exposed under `deslop.*` in VS Code settings:
 | `deslop.embedding.model` | `nomic-embed-text` | Selected via picker; this is the persisted value. |
 | `deslop.embedding.endpoint` | `http://127.0.0.1:11434` | Ollama endpoint. Loopback-only by default. |
 | `deslop.embedding.mode` | `off` | Fresh live sessions do not run embeddings until the picker persists `auto` after model selection. |
-| `deslop.incremental` | `true` | Mirrors `--incremental`. Always-on in the daemon shell; off for CLI compatibility. |
+| `deslop.incremental` | `true` | Mirrors the CLI's `--no-incremental` opt-out. On everywhere by default ([PIPELINE-INCREMENTAL]). |
 | `deslop.showAllLenses` | `false` | Show code lenses below the 50th-percentile threshold. |
 | `deslop.diagnostics.enabled` | `false` | Master gate — clone diagnostics are **off by default**. Flip via the prominent Top Offenders toggle ([VSIX-SEVERITY-CONTROL]). See [severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate). |
 | `deslop.severity.{identical,nearlyIdentical,structuralOnly,looselySimilar,sameBehavior}` | `error · warning · hint · information · hint` | Always-on **colour** map for bubble / tree / lens / gutter — one key per bucket from `ClusterKind::all()`. Values `"error" \| "warning" \| "information" \| "hint"`. See [severity.md §SEVERITY-DESLOP-MAP](severity.md#severity-deslop-map). |
@@ -423,6 +425,34 @@ The extension posts VS Code notifications sparingly:
 - On embedding model switch → info toast confirming the new provenance.
 - On first activation ever → info toast `Deslop is watching this workspace. Open the Duplicate Clusters view to see the report.` — one-time per workspace, dismissible forever.
 - No toasts for ordinary re-analysis. That's what the status bar is for.
+
+### [VSIX-CACHE-IGNORE] Keeping the analysis cache out of the user's repository
+
+Deslop writes its cache into `<workspace>/.deslop/cache/` — fingerprints, one
+blob per embedded subtree, the live report, and the IPC endpoint records. On a
+large workspace that is hundreds of thousands of files: gh #286 reported 700 MB
+across 150,000+ files, "95% of the files in the repo by count". Deslop's own
+`.gitignore` has carried `.deslop/cache/` since day one, which is precisely why
+the pollution was invisible to this project.
+
+On activation the extension offers to fix it, and the consent rule is absolute:
+
+- The prompt is `Ignore deslop files from git?` with `Yes` / `No`.
+- On `Yes`, and only on `Yes`, `.deslop/cache/` is appended to the `.gitignore`
+  beside the cache, creating the file when absent and preserving every existing
+  rule.
+- On `No` — or on dismissal — nothing is written and the answer is recorded in
+  workspace state, so the question is never asked again.
+- Nothing is asked when the workspace is outside a git working tree, when the
+  entry is already present, or when no folder is open.
+
+A user's `.gitignore` is tracked source: it lands in their next commit and
+changes what their whole team sees. The cache directory is Deslop's to write;
+that file is not. Writing it unprompted would be the extension committing on the
+user's behalf, so the write is gated on an explicit answer and never inferred.
+The repository is located by walking up from the workspace root, because a
+workspace is frequently a subfolder of the repository (a monorepo package, or
+`src/` opened directly) and those users are polluted just the same.
 
 ### [VSIX-MCP-INTEGRATION] MCP integration for in-VS-Code agents
 

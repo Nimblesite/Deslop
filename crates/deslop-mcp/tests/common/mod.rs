@@ -11,6 +11,10 @@
 
 #![allow(dead_code)]
 
+/// The per-cluster `language` label contract over `report-query`,
+/// shared by every language whose label regressed.
+pub mod language_label;
+
 use std::{
     fs,
     io::{BufRead, BufReader, Write},
@@ -30,13 +34,13 @@ pub const SOCKET_TIMEOUT: Duration = Duration::from_secs(20);
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 /// Copies the C# MCP fixture into a writable temp dir so the LSP can
-/// write to `.deslop-cache/`.
+/// write to `.deslop/cache/`.
 pub fn copied_fixture() -> Result<TempDir> {
     copied_fixture_named("csharp-mcp")
 }
 
 /// Copies the named fixture directory into a writable temp dir so the
-/// LSP can write to `.deslop-cache/`. Looks in this crate's
+/// LSP can write to `.deslop/cache/`. Looks in this crate's
 /// `tests/fixtures/<name>` first, then falls back to the workspace-shared
 /// root under `crates/deslop/tests/fixtures/<name>` so MCP wire tests
 /// reuse the refactor fixtures instead of duplicating them.
@@ -53,7 +57,7 @@ pub fn copied_fixture_named(name: &str) -> Result<TempDir> {
     };
     let dst = TempDir::new()?;
     copy_dir(&src, dst.path())?;
-    let cache = dst.path().join(".deslop-cache");
+    let cache = dst.path().join(".deslop/cache");
     if cache.exists() {
         fs::remove_dir_all(&cache).context("clear cache dir")?;
     }
@@ -152,7 +156,7 @@ pub fn wait_for_path(path: &Path, timeout: Duration) -> Result<()> {
 pub fn spawn_lsp_and_wait_for_socket(root: &Path) -> Result<ChildKillOnDrop> {
     let lsp = spawn_lsp_and_initialize(root)?;
     let guard = ChildKillOnDrop(lsp);
-    let socket = root.join(".deslop-cache/deslop.sock");
+    let socket = root.join(".deslop/cache/deslop.sock");
     wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
     Ok(guard)
 }
@@ -165,7 +169,7 @@ pub fn spawn_lsp_and_wait_for_socket(root: &Path) -> Result<ChildKillOnDrop> {
 pub fn lsp_workspace_with_socket() -> Result<(TempDir, ChildKillOnDrop, PathBuf)> {
     let workspace = copied_fixture()?;
     let guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
+    let socket = workspace.path().join(".deslop/cache/deslop.sock");
     Ok((workspace, guard, socket))
 }
 
@@ -248,7 +252,7 @@ impl Drop for ChildKillOnDrop {
 }
 
 /// Workspace-relative path of the live-report state file the LSP publishes.
-pub const LIVE_REPORT_STATE_FILE: &str = ".deslop-cache/live-report.json";
+pub const LIVE_REPORT_STATE_FILE: &str = ".deslop/cache/live-report.json";
 
 /// Waits for the LSP to publish its live-report state file under `workspace`,
 /// then returns an initialized MCP handle — the standard preamble shared by
@@ -359,11 +363,11 @@ pub fn error_and_message(response: &Value) -> Result<(Value, String)> {
 }
 
 /// Canonicalises `workspace` and returns the absolute
-/// `.deslop-cache/deslop.sock` path string the MCP backend connects to.
+/// `.deslop/cache/deslop.sock` path string the MCP backend connects to.
 pub fn expected_socket_fragment(workspace: &Path) -> Result<String> {
     let canonical = std::fs::canonicalize(workspace)?;
     Ok(canonical
-        .join(".deslop-cache")
+        .join(".deslop/cache")
         .join("deslop.sock")
         .display()
         .to_string())

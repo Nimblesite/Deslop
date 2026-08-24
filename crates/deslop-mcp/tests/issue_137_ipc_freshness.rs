@@ -13,7 +13,7 @@ use std::{fs, time::Duration};
 use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
-mod common;
+use crate::common;
 use common::{
     cluster_ids, copied_fixture, initialized_mcp, lsp_workspace_with_socket,
     spawn_lsp_and_wait_for_socket, structured_content, wait_for_path, McpHandle, SOCKET_TIMEOUT,
@@ -134,7 +134,7 @@ fn t2_issue_137_report_hide_visible_via_mcp_after_lsp_reanalysis() -> Result<()>
 fn t6_seed_cache_does_not_advance_on_incremental_edits() -> Result<()> {
     let workspace = copied_fixture()?;
     let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
-    let state_file = workspace.path().join(".deslop-cache/live-report.json");
+    let state_file = workspace.path().join(".deslop/cache/live-report.json");
     wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for seed cache")?;
     // Let the initial-pass write settle before sampling mtime.
     std::thread::sleep(Duration::from_millis(200));

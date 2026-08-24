@@ -22,14 +22,13 @@
 //!   `format_string_eval` stays structural, so `$"{a}"` and `$"{b}"` still
 //!   match through the collapsed identifiers while a plain string reduces to
 //!   a constant `__literal__` subtree (parity with the Dart string
-//!   treatment, [LANG-CAND-DART-RESULT]).
+//!   treatment in [`super::dart`]).
 //! - `line_comment`, `block_comment`, and `xml_doc` are dropped as trivia.
 //! - All other named node kinds pass through unchanged.
 //!
 //! The F# idioms the normaliser deliberately keeps structural — active
 //! patterns, computation expressions (`async`/`seq`/`task`), pipelines
-//! (`|>`), units of measure, and quotations — are catalogued in
-//! `docs/plans/LANG-ROADMAP.md` under `[LANG-CAND-FSHARP]`, cross-checked
+//! (`|>`), units of measure, and quotations — were cross-checked
 //! against the F# language reference
 //! (<https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/>)
 //! and the grammar's `node-types.json`.

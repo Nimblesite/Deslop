@@ -4,6 +4,17 @@ pub(crate) use predicates::str::contains;
 pub(crate) use serde_json::Value;
 pub(crate) use std::{fs, path::Path, path::PathBuf};
 
+/// Shared CLI flag selecting the minimum AST node count.
+pub(crate) const MIN_NODES_FLAG: &str = "--min-nodes";
+/// Shared small-fixture node-count value.
+pub(crate) const MIN_NODES_VALUE: &str = "8";
+/// Shared CLI flag disabling ANSI colour sequences.
+pub(crate) const NO_COLOR_FLAG: &str = "--no-color";
+/// Shared output stem used by CLI integration tests.
+pub(crate) const REPORT_OUTPUT_STEM: &str = "report";
+/// Canonical small C# fixture name.
+pub(crate) const CSHARP_SMALL_FIXTURE: &str = "csharp-small";
+
 pub(crate) fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -24,7 +35,7 @@ pub(crate) struct RunOutputs {
 
 /// Renders the three output paths for an `--output <dir>/report` layout.
 pub(crate) fn outputs_under(dir: &Path) -> RunOutputs {
-    let base = dir.join("report");
+    let base = dir.join(REPORT_OUTPUT_STEM);
     RunOutputs {
         json: with_ext(&base, "json"),
         txt: with_ext(&base, "txt"),
@@ -35,6 +46,22 @@ pub(crate) fn outputs_under(dir: &Path) -> RunOutputs {
 pub(crate) fn deslop_command(scan_root: &Path, output_prefix: &Path) -> Result<Command> {
     let mut cmd = Command::cargo_bin("deslop")?;
     let _cmd = cmd.arg(scan_root).arg("--output").arg(output_prefix);
+    Ok(cmd)
+}
+
+/// Builds a command scanning the shared fixture `name`, with the
+/// fingerprint cache disabled.
+///
+/// The cache is on by default ([PIPELINE-INCREMENTAL]) and always lands
+/// in the *scan root* ([OUTPUT-DIR]) — `--output` cannot redirect it,
+/// because the LSP and MCP have to find it from the scan root alone.
+/// A fixture directory is checked into the repo and shared by the whole
+/// suite, so running a test must never write into one. Tests that
+/// actually exercise the cache seed a mutable scan root with
+/// [`seed_scan_root`] instead of reaching for a fixture directly.
+pub(crate) fn fixture_command(name: &str, output_prefix: &Path) -> Result<Command> {
+    let mut cmd = deslop_command(&fixture(name), output_prefix)?;
+    let _cmd = cmd.arg("--no-incremental");
     Ok(cmd)
 }
 
@@ -51,16 +78,30 @@ pub(crate) fn seed_scan_root(src: &Path, dst: &Path) -> Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
+        // Source files only. A fixture directory can pick up a nested
+        // `.deslop/` output directory ([OUTPUT-DIR]) from a stray run, and
+        // `fs::copy` on a directory fails outright — seeding must not be
+        // hostage to whatever else happens to be sitting there.
+        if !entry.file_type()?.is_file() {
+            continue;
+        }
         let _bytes = fs::copy(entry.path(), dst.join(entry.file_name()))?;
     }
     Ok(())
 }
 
-/// Collects every `deslop-*.log` file sitting in `dir`. The default
-/// logging path writes a timestamped file next to the report; tests
-/// need to locate it without hardcoding the stamp.
-pub(crate) fn find_timestamped_logs(dir: &Path) -> Result<Vec<PathBuf>> {
-    let matches = fs::read_dir(dir)?
+/// Collects every `deslop-*.log` file the CLI wrote for reports based
+/// in `report_dir`. Logs land in that directory's `logs/` subdirectory
+/// ([OUTPUT-DIR]); tests need to locate them without hardcoding the
+/// timestamp. An absent `logs/` means no log file was written — exactly
+/// what `--log-to-console` must produce — so it yields an empty vec
+/// instead of an error.
+pub(crate) fn find_timestamped_logs(report_dir: &Path) -> Result<Vec<PathBuf>> {
+    let logs_dir = report_dir.join("logs");
+    if !logs_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let matches = fs::read_dir(&logs_dir)?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
         .filter(|path| {

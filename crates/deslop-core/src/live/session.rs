@@ -6,11 +6,13 @@
 //! — nothing else holds mutable analysis state.
 
 use std::{
+    collections::HashSet,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
 
 use crate::{
+    config::ExclusionConfig,
     delta::ReportDelta,
     embedding::{EmbeddingMode, EmbeddingProvider},
     lang::LanguageParser,
@@ -19,16 +21,18 @@ use crate::{
 };
 
 use super::{
+    cache_seed_key::CacheSeedKey,
     cluster_lookup::resolve_cluster_by_id_prefix,
     embedding_refresh::{CommittedEmbeddingRefresh, EmbeddingRefreshInput, EmbeddingRefreshJob},
     errors::LiveError,
     freshness::FreshnessTracker,
     session_helpers::{
-        append_ollama_models, cluster_matches_any_hash, cluster_overlaps_range,
-        cluster_touches_path, collapse_overlapping_clusters_for_range, earliest_byte_for_path,
-        initialise_pipeline, live_batch_yield, parse_and_hash_snippet, persist_state_file,
-        truncate, try_load_cached_report,
+        append_ollama_models, cluster_overlaps_range, cluster_touches_path,
+        collapse_overlapping_clusters_for_range, earliest_byte_for_path, initialise_pipeline,
+        live_batch_yield, parse_and_hash_snippet, persist_state_file, truncate,
+        try_load_cached_report,
     },
+    watcher::{live_exclusion, publish_exclusion, LiveExclusion},
     wire::{
         EmbeddingModelInfo, EmbeddingProgress, FileReport, FindSimilarInput, FindSimilarRequest,
         FindSimilarResult, SessionConfig,
@@ -100,8 +104,13 @@ pub struct AnalysisSession {
     embedding_progress_reporter: Option<EmbeddingProgressReporter>,
     /// Monotonic id for queued embedding refreshes.
     embedding_refresh_revision: u64,
+    /// Exclusion policy shared with the live watcher. Republished
+    /// whenever the pipeline resolves or reloads its config so the
+    /// watcher's ingest gate and the corpus definition never disagree
+    /// ([CONFIG-EXCLUDE-DEPENDENCIES]).
+    exclusion: LiveExclusion,
     /// Mtime ledger consulted before every IPC read
-    /// ([LIVE-CLUSTER-OFFSET-FRESHNESS], [Deslop#153], [Deslop#156]). Refreshed
+    /// ([LIVE-CLUSTER-OFFSET-FRESHNESS]). Refreshed
     /// after every analysis pass so a stale-mtime read forces a
     /// synchronous `apply_changes` ahead of serving the response.
     freshness: FreshnessTracker,
@@ -175,7 +184,7 @@ impl AnalysisSession {
     }
 
     /// [LIVE-CACHE-SEED] Constructs a session from
-    /// `{root}/.deslop-cache/live-report.json` so query methods can
+    /// `{root}/.deslop/cache/live-report.json` so query methods can
     /// answer instantly while the background full pass runs. Returns
     /// `None` if the cache file is missing or corrupt. Callers must
     /// follow up with [`Self::install_pipeline`] when the
@@ -188,7 +197,17 @@ impl AnalysisSession {
         embedding_provider: Arc<dyn EmbeddingProvider>,
         mode: EmbeddingMode,
     ) -> Option<Self> {
-        let report = try_load_cached_report(&root)?;
+        // [LIVE-CACHE-SEED-KEY] A seed is served as an answer, so it
+        // must have been computed by a run with the same identity.
+        let key = CacheSeedKey::new(
+            &root,
+            min_nodes,
+            incremental,
+            config_path.as_deref(),
+            mode,
+            &embedding_provider.spec(),
+        );
+        let report = try_load_cached_report(&root, &key)?;
         let cluster_count = report.clusters.len();
         let session = Self::finalise(SessionInit {
             root,
@@ -220,9 +239,10 @@ impl AnalysisSession {
     ) -> Result<Arc<Report>, LiveError> {
         let previous_report = Arc::clone(&self.latest_report);
         self.pipeline = Some(pipeline);
+        self.republish_exclusion();
         self.generation = self.generation.saturating_add(1);
         self.publish_report(Arc::new(report));
-        // [LIVE-CLUSTER-OFFSET-FRESHNESS] / [Deslop#153] Record the on-disk mtime
+        // [LIVE-CLUSTER-OFFSET-FRESHNESS] / Record the on-disk mtime
         // of every file in the freshly-installed report so the next
         // read does not falsely refire a refresh.
         self.freshness
@@ -297,6 +317,10 @@ impl AnalysisSession {
         let mut freshness = FreshnessTracker::new();
         freshness.record_from_report(&init.root, &init.report);
         let latest_report = Arc::new(init.report);
+        let exclusion = live_exclusion(init.pipeline.as_ref().map_or_else(
+            || Arc::new(ExclusionConfig::empty().with_scan_root(&init.root)),
+            PipelineSession::exclusion_handle,
+        ));
         Self {
             root: init.root,
             min_nodes: init.min_nodes,
@@ -311,6 +335,7 @@ impl AnalysisSession {
             config_path: init.config_path,
             embedding_progress_reporter: None,
             embedding_refresh_revision: 0,
+            exclusion,
             freshness,
         }
     }
@@ -345,6 +370,25 @@ impl AnalysisSession {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         *guard = report;
+    }
+
+    /// Returns the exclusion handle the live watcher must filter with.
+    ///
+    /// The watcher and the corpus apply one policy. Starting the watcher
+    /// with its own config let an opted-in dependency tree be scanned
+    /// cold and then ignored live ([CONFIG-EXCLUDE-DEPENDENCIES]).
+    #[must_use]
+    pub fn exclusion_handle(&self) -> LiveExclusion {
+        Arc::clone(&self.exclusion)
+    }
+
+    /// Republishes the pipeline's resolved exclusion policy to the
+    /// watcher. Called after any pass that may have reloaded config, so
+    /// a `.deslop.toml` edit re-scopes ingest with no restart.
+    fn republish_exclusion(&self) {
+        if let Some(pipeline) = self.pipeline.as_ref() {
+            publish_exclusion(&self.exclusion, pipeline.exclusion_handle());
+        }
     }
 
     /// Returns a clone of the lock-free report-snapshot handle. The LSP
@@ -386,7 +430,7 @@ impl AnalysisSession {
     /// [`crate::PipelineSession::update_files`], which reloads the
     /// exclusion config and re-evaluates the existing corpus against
     /// it — dropping newly-excluded files and re-discovering newly
-    /// re-included ones ([LIVE-CONFIG-LIVE], #139, #189).
+    /// re-included ones ([LIVE-CONFIG-LIVE]).
     ///
     /// # Errors
     ///
@@ -404,8 +448,22 @@ impl AnalysisSession {
         }
         let previous = Arc::clone(&self.latest_report);
         let prev_generation = self.generation;
-        let next = self.run_pipeline(changed)?;
+        let Some(next) = self.run_pipeline(changed)? else {
+            // Nothing analysed moved, so the report cannot have changed.
+            // Publishing a new generation here would wake every subscriber
+            // — panel, diagnostics, MCP — to re-fetch an identical report
+            //. Report no delta against the generation we kept.
+            return Ok(ReportDelta::between(
+                Some((prev_generation, &previous)),
+                prev_generation,
+                &previous,
+            ));
+        };
         self.generation = self.generation.saturating_add(1);
+        // `update_files` reloads the exclusion config when a watched
+        // config path moved, so the watcher's copy is refreshed on the
+        // same pass rather than one edit later.
+        self.republish_exclusion();
         let next_arc = Arc::new(next);
         self.publish_report(Arc::clone(&next_arc));
         // [LIVE-CLUSTER-OFFSET-FRESHNESS] Refresh the mtime ledger so a follow-up
@@ -423,7 +481,7 @@ impl AnalysisSession {
         ))
     }
 
-    /// [LIVE-CLUSTER-OFFSET-FRESHNESS] / [Deslop#153] / [Deslop#156].
+    /// [LIVE-CLUSTER-OFFSET-FRESHNESS] / /.
     ///
     /// Detects files whose on-disk mtime is newer than what the
     /// analyser last observed, and runs a synchronous
@@ -494,10 +552,18 @@ impl AnalysisSession {
             languages: self.parser_ids(),
             embedding_provenance: self.latest_report.embedding_provenance.clone(),
             exclusion_config_path: self.config_path.clone(),
-            cache_root: self
-                .root
-                .join(crate::embedding::cache::DEFAULT_CACHE_DIR_NAME),
-            incremental: self.incremental,
+            cache_root: crate::paths::cache_dir(&self.root),
+            // [CONFIG-INCREMENTAL-OPTOUT] The surfaced value is the
+            // *effective* mode — the request gated by the live config —
+            // never the raw request: a session asked to persist under
+            // `[analysis] incremental = false` runs every pass uncached,
+            // and reporting `true` here made the config surface claim a
+            // store no pass consults. Before the first pipeline exists
+            // nothing has run, so the request is the only honest answer.
+            incremental: self
+                .pipeline
+                .as_ref()
+                .map_or(self.incremental, PipelineSession::effective_incremental),
         }
     }
 
@@ -521,7 +587,7 @@ impl AnalysisSession {
         report_for_range_in(&self.latest_report, path, start_byte, end_byte)
     }
 
-    /// Looks up a cluster by its stable id ([Deslop#149]).
+    /// Looks up a cluster by its stable id.
     ///
     /// Accepts either the full 16-hex canonical id or any prefix of at
     /// least 7 hex characters — the same slug the VSIX shows in hover
@@ -564,6 +630,18 @@ impl AnalysisSession {
         job
     }
 
+    /// Whether `job` is still the latest selected-model request.
+    ///
+    /// Both terminal announcements are gated on this. A superseded job
+    /// must stay silent in **either** direction: announcing its
+    /// `complete` would publish a verdict for a model the user has
+    /// already replaced, and announcing its `failed` would overwrite the
+    /// newer job's verdict with a stale failure, since clients carry one
+    /// embedding-progress signal rather than one per revision.
+    pub(super) fn embedding_refresh_is_current(&self, job: &EmbeddingRefreshJob) -> bool {
+        job.revision == self.embedding_refresh_revision
+    }
+
     /// Commits a completed embedding refresh when it is still the
     /// latest selected-model request.
     pub(super) fn commit_embedding_refresh(
@@ -571,7 +649,7 @@ impl AnalysisSession {
         job: &EmbeddingRefreshJob,
         report: Report,
     ) -> Option<CommittedEmbeddingRefresh> {
-        if job.revision != self.embedding_refresh_revision {
+        if !self.embedding_refresh_is_current(job) {
             return None;
         }
         let previous_generation = self.generation;
@@ -632,7 +710,9 @@ impl AnalysisSession {
 
     /// Runs the underlying pipeline. Caller guarantees `pipeline` is
     /// `Some` — [`Self::apply_changes`] short-circuits otherwise.
-    fn run_pipeline(&mut self, changed: &[PathBuf]) -> Result<Report, LiveError> {
+    /// [LIVE-SCHEDULER-NOOP] [`None`] means the pass touched no analysed
+    /// file, so the previous report still stands.
+    fn run_pipeline(&mut self, changed: &[PathBuf]) -> Result<Option<Report>, LiveError> {
         let pipeline = self.pipeline.as_mut().ok_or(LiveError::AnalysisNotReady)?;
         let embedding = EmbeddingSettings {
             mode: self.embedding_mode,
@@ -678,7 +758,7 @@ impl AnalysisSession {
                 total_occurrences: 0,
             });
         }
-        let mut clusters = self.clusters_matching_hashes(&snippet_hashes);
+        let mut clusters = self.clusters_at_subtree_hashes(&snippet_hashes);
         truncate(&mut clusters, max_results);
         let total_occurrences: usize = clusters.iter().map(crate::report::occurrence_count).sum();
         Ok(FindSimilarResult {
@@ -688,12 +768,33 @@ impl AnalysisSession {
         })
     }
 
-    /// Returns clusters whose stable id matches one of `snippet_hashes`.
-    fn clusters_matching_hashes(&self, snippet_hashes: &[[u8; 32]]) -> Vec<ReportCluster> {
+    /// Returns the report clusters whose occurrences carry any of
+    /// `snippet_hashes` — the content join behind snippet `find_similar`.
+    ///
+    /// A snippet has no workspace identity, so it can only be located
+    /// by content: each hash resolves to the live fingerprints that
+    /// carry it, their ranges are joined to the report through
+    /// [`report_for_range_in`] (the same lookup the open-range variant
+    /// uses), and the surviving clusters keep report order with no
+    /// duplicates. The public cluster id cannot take part: since gh
+    /// #430 it mixes the members' paths, so it is not derivable from a
+    /// pathless snippet's digests at all.
+    fn clusters_at_subtree_hashes(&self, snippet_hashes: &[[u8; 32]]) -> Vec<ReportCluster> {
+        let Some(pipeline) = self.pipeline.as_ref() else {
+            return Vec::new();
+        };
+        let matched_ids: HashSet<String> = pipeline
+            .subtree_occurrences(snippet_hashes)
+            .iter()
+            .flat_map(|(path, range)| {
+                report_for_range_in(&self.latest_report, path, range.start, range.end)
+            })
+            .map(|cluster| cluster.id)
+            .collect();
         self.latest_report
             .clusters
             .iter()
-            .filter(|cluster| cluster_matches_any_hash(cluster, snippet_hashes))
+            .filter(|cluster| matched_ids.contains(&cluster.id))
             .cloned()
             .collect()
     }
@@ -716,12 +817,31 @@ impl AnalysisSession {
     }
 
     /// [LIVE-SEED-CACHE] Persists the current report snapshot to
-    /// `{root}/.deslop-cache/live-report.json` so the next LSP startup
+    /// `{root}/.deslop/cache/live-report.json` so the next LSP startup
     /// has a fast warm-start. Called only on initial-pass and
     /// cold-pass install — never on per-keystroke incremental updates.
     /// Best-effort: failures are logged but never propagated.
     fn write_state_file(&self) {
-        persist_state_file(&self.root, self.latest_report.as_ref(), self.generation);
+        persist_state_file(
+            &self.root,
+            self.latest_report.as_ref(),
+            self.generation,
+            &self.cache_seed_key(),
+        );
+    }
+
+    /// [LIVE-CACHE-SEED-KEY] The identity of this session's analysis
+    /// settings, recorded beside the state file so the next startup can
+    /// tell a re-usable seed from an incompatible one.
+    fn cache_seed_key(&self) -> CacheSeedKey {
+        CacheSeedKey::new(
+            &self.root,
+            self.min_nodes,
+            self.incremental,
+            self.config_path.as_deref(),
+            self.embedding_mode,
+            &self.embedding_provider.spec(),
+        )
     }
 
     /// Asserts `path` is under the workspace root.
@@ -808,7 +928,7 @@ pub fn read_report_snapshot(handle: &RwLock<Arc<Report>>) -> Arc<Report> {
 /// cache-seed window before the background pipeline installs. Deriving from
 /// the parser registry (not a hand-maintained extension map) keeps the seeded
 /// language set from drifting when a language is added ([PIPELINE-LANG-TRAIT],
-/// GH #270).
+///).
 fn languages_from_report_occurrences(report: &Report) -> Vec<String> {
     let mut seen: std::collections::BTreeSet<&'static str> = std::collections::BTreeSet::new();
     for cluster in &report.clusters {

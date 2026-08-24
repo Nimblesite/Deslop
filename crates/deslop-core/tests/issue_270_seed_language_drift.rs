@@ -10,7 +10,7 @@
 //! `php`, exactly the recurring #170/#198 → fsharp/php class of bug.
 //!
 //! Black-box against the public `deslop_core::live` surface: build a session
-//! over a PHP fixture (which persists `.deslop-cache/live-report.json`), then
+//! over a PHP fixture (which persists `.deslop/cache/live-report.json`), then
 //! seed a fresh session from that cache and assert `php` survives.
 
 #![cfg(feature = "live")]
@@ -24,7 +24,6 @@ use deslop_core::{
     EmbeddingProvider,
 };
 
-mod common;
 use crate::common::copy_fixture;
 
 #[test]
@@ -33,7 +32,7 @@ fn seeded_session_reports_php_in_languages() -> Result<()> {
     let root = tmp.path().to_path_buf();
     let provider: Arc<dyn EmbeddingProvider> = Arc::new(StubProvider::new());
 
-    // Cold pass over the PHP fixture persists `.deslop-cache/live-report.json`.
+    // Cold pass over the PHP fixture persists `.deslop/cache/live-report.json`.
     let _session = AnalysisSession::new(root.clone(), 10, false, None, Arc::clone(&provider))
         .context("cold-pass session")?;
 

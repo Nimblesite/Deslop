@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Deslop analysis engine — AST fingerprinting, clustering, ranking, live incremental re-analysis. The shared core behind the LSP, MCP, and CLI surfaces."
+autotests = false
 
 [features]
 default = []
@@ -30,6 +31,7 @@ tree-sitter-typescript.workspace = true
 tree-sitter-javascript.workspace = true
 tree-sitter-php.workspace = true
 tree-sitter-fsharp.workspace = true
+tree-sitter-go.workspace = true
 ignore.workspace = true
 blake3.workspace = true
 ureq.workspace = true
@@ -48,8 +50,18 @@ nix = { version = "0.31", default-features = false, features = ["signal"] }
 
 [dev-dependencies]
 anyhow.workspace = true
+# Self-dependency so this crate's own integration tests see the
+# `test-support` gated modules (`report_fixtures`, `embedding::test_support`)
+# the same way the other crates' dev-dependencies do. Cargo resolves it to
+# this very crate; it adds no build unit.
+deslop-core = { path = ".", features = ["test-support"] }
+deslop-test-support = { path = "../deslop-test-support" }
 tokio = { workspace = true }
 tempfile.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "suite"
+path = "tests/suite.rs"

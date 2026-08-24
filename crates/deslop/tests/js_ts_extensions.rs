@@ -12,17 +12,28 @@
 use std::{collections::BTreeSet, ffi::OsStr, path::Path};
 
 use anyhow::Result;
+use serde_json::Value;
 
-mod common;
 use crate::common::*;
+
+/// Asserts discovery reached every file the fixture holds. Without it a
+/// "these do not cluster" verdict could pass vacuously on a parser that
+/// silently dropped one side.
+fn assert_files_analysed(report: &Value, expected: u64, why: &str) {
+    assert_eq!(
+        field(report, "files_analysed").as_u64(),
+        Some(expected),
+        "{why}: {report:#}"
+    );
+}
 
 #[test]
 fn javascript_family_clusters_across_js_mjs_and_cjs_extensions() -> Result<()> {
     let report = run_report(&fixture("js-mjs-cjs-family"), 8)?;
-    assert_eq!(
-        field(&report, "files_analysed").as_u64(),
-        Some(3),
-        "every .js/.mjs/.cjs file must be discovered and analysed: {report:#}"
+    assert_files_analysed(
+        &report,
+        3,
+        "every .js/.mjs/.cjs file must be discovered and analysed",
     );
     // All three extensions carry the same reconciliation routine; because
     // they are one language they cluster together into a single family.
@@ -35,14 +46,14 @@ fn javascript_family_clusters_across_js_mjs_and_cjs_extensions() -> Result<()> {
 
 #[test]
 fn js_and_jsx_cluster_as_the_same_javascript_language() -> Result<()> {
-    let report = run_report(&fixture("js-jsx-family"), 10)?;
     // A `.jsx` file and a `.js` file carrying the same logic are both the
     // `javascript` language, so the same-language filter lets them cluster.
-    let clone = expect_cluster_spanning(&report, &["BadgeList.jsx", "useBadge.js"])?;
-    assert_eq!(cluster_bucket(clone), "identical");
-    assert!(approx(signal(clone, "structural"), 1.0));
-    assert!(approx(signal(clone, "token_jaccard"), 1.0));
-    Ok(())
+    assert_bucketed_clone(
+        "js-jsx-family",
+        10,
+        &["BadgeList.jsx", "useBadge.js"],
+        "identical",
+    )
 }
 
 #[test]
@@ -51,11 +62,7 @@ fn ts_and_tsx_clone_does_not_cluster_by_default() -> Result<()> {
     // Guard against a vacuous pass: both files must actually be analysed, so
     // "no clusters" proves the language boundary held rather than a parser
     // silently dropping one of them.
-    assert_eq!(
-        field(&report, "files_analysed").as_u64(),
-        Some(2),
-        "both the .ts and .tsx file must be analysed: {report:#}"
-    );
+    assert_files_analysed(&report, 2, "both the .ts and .tsx file must be analysed");
     // One `.ts` file and one `.tsx` file that are near-identical must NOT
     // cluster: `typescript` and `tsx` are separate languages and cross-
     // language comparison is off by default.

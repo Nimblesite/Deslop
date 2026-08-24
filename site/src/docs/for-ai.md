@@ -1,164 +1,108 @@
 ---
 layout: layouts/docs.njk
-title: For AI — configure, gate CI, and read Deslop reports (agent guide)
-description: The operating manual for AI coding agents using Deslop — call find-similar before writing code, configure .deslop.toml, gate CI on a duplication threshold with exit code 3, and parse the canonical JSON report.
+title: For AI — how coding agents use Deslop to stop duplicate code
+description: "Instructions for coding agents: call find-similar before writing code, use the Deslop CLI when MCP is unavailable, and interpret thresholds and byte ranges."
 eleventyNavigation:
   key: For AI
   order: 4
 icon: terminal
+docsGroup: reference
 ---
 
 # For AI
 
-This page is the operating manual for **AI coding agents** — Claude Code, Cursor, GitHub Copilot, Continue, Codex — and the humans configuring them. It is deliberately directive: how to configure Deslop, what to exclude, how to gate CI, and how to parse the report. For wiring `deslop-mcp` into your client, read [AI Integration](/docs/ai-integration/) first.
+This page gives coding agents direct operating instructions. Humans configuring an MCP client should use [AI Agents](/docs/ai-integration/).
 
-## The one law: call `find-similar` before you write code
+## Check before you write
 
-Deslop earns its keep through **prevention**, not cleanup. Before you author any new function, method, class, helper, fixture, or test setup, call the `find-similar` MCP tool with the proposed snippet (or its byte range) and read the response:
+Before you author any new code unit — function, method, class, helper, fixture, test setup, parser branch, error type, route handler, view model — call `find-similar` with the proposed snippet (or a `path` + `start_byte` + `end_byte` range) and read `signals.fused` in the response:
 
-- `signals.fused ≥ 0.85`, or bucket `identical` / `nearly_identical` → **do not write the copy.** Reuse the canonical occurrence the tool returns; extract a shared helper if needed.
-- `signals.fused < 0.6`, or an empty response → proceed with authoring.
-- `0.6 ≤ fused < 0.85` → read the canonical occurrence and bias toward reuse.
-
-`find-similar` is for **authoring**. When you are *cleaning up* existing duplicates, start with `top-offenders`, then `cluster-by-id` for the cluster you will merge. The paste-ready rule block for your project's `AGENTS.md` / `CLAUDE.md` is in the [agent recipe](https://github.com/Nimblesite/Deslop/blob/main/docs/snippets/agents-md-recipe.md).
-
-| Tool | When to call it |
-| --- | --- |
-| `find-similar` | **Before** writing new code — does an equivalent already exist? |
-| `top-offenders` | Worst clusters in the workspace, worst first. Start cleanup here. |
-| `cluster-by-id` | Full member list + signals for one cluster you are about to merge. |
-| `report-for-file` / `report-for-range` | Clusters touching a specific file or selection. |
-| `schema-doc` | Authoritative JSON schema. Call **once** per session, not per response. |
-
-## Configure with `.deslop.toml`
-
-Deslop reads `.deslop.toml` from the scan root (or the path passed to `--config`). No file is required — Deslop ships conservative built-in defaults. Every section and key is optional; omit what you do not need.
-
-```toml
-# Shared rules, applied to every language.
-[defaults]
-exclude     = ["vendor/**", "third_party/**"]    # dropped before parsing — never analysed
-report_hide = ["**/*.generated.cs", "**/*.g.cs"] # analysed, but hidden from the ranked report
-
-# Per-language overlays, keyed by the parser language id:
-# csharp, rust, python, dart. Overlays EXTEND [defaults]; they never replace it.
-[language.csharp]
-report_hide = ["**/Migrations/**/*.cs"]
-
-[language.rust]
-exclude = ["**/target/**"]
-
-# Opt-in CI gate. Exceeding this exits 3. See "Run in CI" below.
-[threshold]
-max_duplication_percent = 5.0
-
-# Analysis behaviour.
-[analysis]
-allow_cross_language_comparison = false  # true → compare clones across languages (ports, generated clients)
-
-# Report rendering.
-[report]
-split_by_language = false  # true → one HTML section per language
-```
-
-**Keys must live under a section.** A bare top-level `exclude = [...]` with no `[defaults]` header is silently ignored. Per-language sections are additive: a `.rs` file is matched against `defaults.exclude ∪ language.rust.exclude`.
-
-## What to exclude
-
-Two tiers, with different semantics. Choose by intent:
-
-| Key | Effect | Use for |
+| `signals.fused` | Bucket | What you do |
 | --- | --- | --- |
-| `exclude` | File is dropped during discovery — never parsed, never counted in `analysed_loc`, never in any cluster. | Vendored / third-party code you do not own and do not want analysed at all. |
-| `report_hide` | File **is** analysed and can anchor a cluster, but each occurrence is flagged `hidden: true`. A cluster whose members are *all* hidden drops out of the ranking; a cluster with one visible member stays, so you still see "hand-written code duplicates generated code." | Generated output you still want to detect hand-written copies of. |
+| `≥ 0.85` | `identical` / `nearly_identical` | **Do not write the copy.** Reuse the canonical occurrence the tool returns. Extract a shared helper if neither call site fits as-is. |
+| `0.6 – 0.85` | any | Read the canonical occurrence before you decide. Bias toward reuse. |
+| `< 0.6` | any, or empty | Author it. |
+| any | `structural_only` | Shape-only match — often sibling boilerplate. Read the canonical occurrence before concluding anything. |
 
-**Built-in defaults already cover the common cases — do not re-add them.** Excluded by default: `node_modules`, `target`, `dist`, `build`, `.venv`, `__pycache__`, `.cargo`. Report-hidden by default: any path with a `generated` component, Alembic migrations under `alembic/versions`, and the suffixes `*.g.cs`, `*.generated.cs`, `*.designer.cs`, `*.pb.cs`, `*.openapi.cs`, `*.generated.py`, `_generated.py`, `*_pb2.py`, `*_pb2_grpc.py`. Add only project-specific patterns on top.
+`find-similar` is the **authoring** tool. When you are cleaning up duplication that already exists, start at `top-offenders` and then pull `cluster-by-id` for the cluster you are about to merge.
 
-Globs are gitignore-style and matched against paths relative to the config file.
+The paste-ready rule block for a project's `AGENTS.md` / `CLAUDE.md` is in the [agent recipe](https://github.com/Nimblesite/Deslop/blob/main/docs/snippets/agents-md-recipe.md).
 
-## Run in CI
+## If the MCP server is unavailable, use the CLI
 
-`deslop` exits `0` regardless of how much duplication it finds — unless you opt into a gate. Then it exits `3` when the repo-wide `duplication_percent` exceeds your ceiling. Two ways; the flag wins over the config key:
+**Do not skip the check because a tool call failed, and do not fall back to memory.** A duplicate that lands because the gate was down is the exact failure Deslop exists to prevent. Work down this ladder.
+
+### 1. Diagnose which failure you have
+
+| What you see | What it means |
+| --- | --- |
+| `LSP is not running — start deslop-lsp to enable this tool.` | The MCP server is wired correctly, but the editor server that holds the live analysis is not up. The error names the absolute socket path it tried. |
+| The same error, and a `deslop-lsp` **is** running | MCP was launched against a different `--root` than the LSP. Compare the socket path in the error against the workspace you are editing. |
+| No `find-similar` tool exists at all | No MCP server is configured for this session. |
+| The tool call times out or the transport errors | Treat it as unavailable and drop to the CLI. |
+
+### 2. Try to restore the live path
+
+If the workspace is open in an editor with the Deslop extension, the editor server starts on its own — open a supported source file and retry the tool call. If MCP and the LSP disagree about the root, the fix is the MCP client's `--root` argument, not a workaround.
+
+### 3. Otherwise, drop to the CLI
+
+The `deslop` CLI runs the identical pipeline and emits the identical JSON schema. Run it from the repository root:
 
 ```bash
-deslop . --fail-over 5.0   # exit 3 when duplication_percent > 5.0
+deslop . --notext --nohtml --no-color
 ```
 
-```toml
-# .deslop.toml — shared by local runs, CI, and agents
-[threshold]
-max_duplication_percent = 5.0
-```
+That writes the canonical report to `.deslop/deslop-report.json` — the only file you should parse. `--notext --nohtml` skips the two human renderers you do not need; `--no-color` keeps the stderr summary clean for a log.
 
-`--fail-over 0` fails on any duplication. `--no-fail-over` clears the gate for a single local run. The value must be a finite number in `[0.0, 100.0]`; anything else exits `2`.
+The CLI has no snippet query: `find-similar` is an MCP tool, and the CLI cannot evaluate code you have not written yet. The fallback loop catches a duplicate immediately after it is written:
 
-### Exit codes
+1. Run `deslop .` once before you start, so you have a baseline.
+2. Before authoring, scan the baseline `clusters[]` for the file and the neighbouring files you are about to touch. If a cluster already covers the pattern you were going to add, reuse its canonical occurrence — that is the CLI's version of prevention, and it catches the common case.
+3. Write the change.
+4. Re-run `deslop . --notext --nohtml`. The fingerprint cache is on by default, so this re-parses only the files you actually touched — the cost is proportional to your change, not to the repository. Run it per change, not per session.
+5. Search `clusters[].occurrences[]` for the path you just wrote. If your new code appears in a cluster whose `signals.fused ≥ 0.85`, you just wrote a duplicate. Collapse it now, while the change is still in your working set.
+6. Re-run and confirm the cluster is gone or smaller.
 
-| Code | Meaning |
-| --- | --- |
-| `0` | Succeeded; within threshold, or no threshold set. |
-| `1` | Runtime error — bad scan path, parse/I-O failure, or an unreachable `required` embedding provider. Never a panic. |
-| `2` | Usage error — unknown flag, or an out-of-range / non-finite threshold. |
-| `3` | **Threshold breached.** The full report is still written to disk so the offenders can be surfaced. |
+A run exits `3` when repo-wide duplication crosses a configured ceiling; the report is still written on a breach, so parse it either way. Full table in [Exit codes](/docs/configuration/#exit-codes).
 
-### GitHub Actions
+If neither MCP nor the CLI is available, say so and stop. Do not guess.
 
-```yaml
-name: deslop
-on: [push, pull_request]
-jobs:
-  duplication-gate:
-    runs-on: ubuntu-latest
-    env:
-      DESLOP_VERSION: "0.1.0"   # pin the tool version — see the Releases page
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install the Deslop CLI
-        run: |
-          curl -sSfL "https://github.com/Nimblesite/Deslop/releases/download/v${DESLOP_VERSION}/deslop-${DESLOP_VERSION}-linux-x64.tar.gz" | tar -xz
-          echo "$PWD/deslop-${DESLOP_VERSION}-linux-x64" >> "$GITHUB_PATH"
-      - name: Gate on duplication
-        run: deslop . --fail-over 5.0   # or omit --fail-over to use [threshold] in .deslop.toml
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: deslop-report
-          path: deslop-report.html
-```
+## Read the JSON
 
-A non-zero exit fails the step. The `if: always()` upload keeps `deslop-report.html` even on a breach so a human can browse the offenders.
-
-## Read the reports
-
-`deslop-report.json` is canonical and the **only** file you should parse — `.txt` and `.html` are renderers over it. Call `schema-doc` once for the authoritative schema, and see [Output Formats](/docs/output-formats/) for the full shape. The decision-relevant slice:
-
-```json
-{
-  "metrics": {
-    "duplication_percent": 2.63,
-    "threshold": { "percent": 5.0, "breached": false, "source": "config" }
-  },
-  "clusters": [
-    {
-      "id": "0362505641efe3c7",
-      "weight": 1252.8,
-      "size": 3,
-      "bucket": "identical",
-      "signals": { "structural": 1.0, "token_jaccard": 0.98, "embedding_cos": 0.0, "fused": 0.99 },
-      "occurrences": [ { "path": "src/UserRepository.cs", "start_line": 12, "end_line": 41, "hidden": false } ],
-      "summary": "3 near-identical copies — safe to extract."
-    }
-  ]
-}
-```
+`deslop-report.json` is canonical and the **only** file you should parse — `.txt` and `.html` are renderers over it. Every report begins with an embedded `schema_doc` describing its own shape, so you do not need a separate reference to read the payload. Over MCP, call `schema-doc` **once** per session, never per response.
 
 | Field | How to act on it |
 | --- | --- |
-| `metrics.duplication_percent` | The repo-wide headline number the CI gate compares against. |
+| `metrics.duplication_percent` | The repo-wide headline number a CI gate compares against. |
 | `metrics.threshold.breached` | `true` → the run exited `3` and the gate failed. `source` is `cli`, `config`, or `none`. |
-| `clusters` | Sorted by `weight` **descending** — `clusters[0]` is always the worst offender. Work top-down. |
-| `bucket` | `identical` / `nearly_identical` → extract a shared definition. `structural_only` → only the code shape matches (no token or semantic evidence) — verify it is a real duplicate before extracting; demoted in ranking by default. `loosely_similar` → parametrise the difference. `same_behavior` → reconcile two implementations of one behaviour (needs `--embeddings`). |
-| `signals.fused` | Unit-bounded confidence. `≥ 0.85` is the act-now line, the same threshold as the `find-similar` law above. |
-| `occurrences[].hidden` | `true` marks a `report_hide` match — a hand-written clone of generated code. |
+| `clusters` | Sorted by `weight` **descending** — `clusters[0]` is always the worst offender. Work top-down; do not start in the middle. |
+| `bucket` | `identical` / `nearly_identical` → extract a shared definition. `structural_only` → shape matched with no token or semantic evidence; verify it is a real duplicate before extracting. `loosely_similar` → parametrise the difference. `same_behavior` → reconcile two implementations of one behaviour (requires embeddings). |
+| `signals.fused` | Unit-bounded confidence. `≥ 0.85` is the act-now line — the same threshold as the law above. |
+| `occurrences[].hidden` | `true` marks a `report_hide` match — usually a hand-written clone of generated code. |
 
-Do not silence findings by widening the threshold, marking code `hidden`, or splitting it into trivially different shapes. If Deslop flags it, treat it as a real signal until you have shown otherwise.
+### Byte ranges, not line numbers
+
+Deslop's authoritative range is `[start_byte, end_byte)`. Line numbers are derived at render time for humans. Slice by byte range when you edit — line-based edits drift as soon as surrounding code moves.
+
+### Cluster IDs are stable
+
+A cluster ID is the first 8 bytes of the cluster's smallest-member BLAKE3 hash, rendered as 16 hex characters (e.g. `0362505641efe3c7`). It carries no timestamp, so the same repository analysed by the same binary twice produces the same IDs. Reference a cluster by ID across runs, in issues, and in your own notes — not by rank, which is a render-time position and moves as the repository changes.
+
+## Configuring a repository
+
+If you are setting Deslop up rather than consuming it, three things decide almost everything, and all are in the [Configuration reference](/docs/configuration/):
+
+- **[`exclude` vs `report_hide`](/docs/configuration/#exclude-vs-report_hide--the-core-idea)** — `exclude` drops a file before analysis; `report_hide` analyses it but keeps it out of the headline, so "hand-written code duplicates generated code" still surfaces.
+- **[Built-in rules](/docs/configuration/#built-in-rules-always-on)** — `node_modules`, `target`, `dist`, generated-code suffixes and banners are already covered. Do not re-add them.
+- **[`[threshold]`](/docs/configuration/#threshold--the-ci-gate)** — the opt-in CI gate. Commit the ceiling so local runs, CI, and agents share one number.
+
+To gate a build, use the [GitHub Action](/docs/github-action/); it wraps the same exit-code contract.
+
+## Operating rules
+
+- **Do not silence a finding to make it go away.** Widening the threshold, adding a `report_hide` pattern to bury your own code, or splitting a duplicate into trivially different shapes are all failures, not fixes.
+- **Do not treat a flag as noise until you have shown it is noise.** If Deslop reports it, read both occurrences first.
+- **Do not merge a `same_behavior` match blindly.** That bucket comes from semantic embeddings. Read both locations; the code looks different for a reason often enough to matter.
+- **Some duplication is deliberate.** Test fixtures and bootstrapping code are the usual honest exceptions. Accepting a duplicate is a legitimate outcome — accepting it silently is not. Say which cluster you accepted and why.
+- **Deslop does not rewrite your code.** It finds, ranks, compares, and prevents. The extraction is yours to write, and yours to get right.

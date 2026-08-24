@@ -5,6 +5,8 @@ import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { activateExtension, sleep } from "./helpers";
 
+const POST_COMMAND_SETTLE_MS = 200;
+
 // [VSIX-COMMANDS]
 suite("commands", () => {
   suiteSetup(async () => {
@@ -15,16 +17,16 @@ suite("commands", () => {
 
   test("openReport + openReport again reveals the existing panel", async () => {
     await vscode.commands.executeCommand("deslop.openReport");
-    await sleep(200);
+    await sleep(POST_COMMAND_SETTLE_MS);
     await vscode.commands.executeCommand("deslop.openReport");
-    await sleep(200);
+    await sleep(POST_COMMAND_SETTLE_MS);
   });
 
   test("openWorstCluster twice reveals the cluster panel", async () => {
     await vscode.commands.executeCommand("deslop.openWorstCluster");
-    await sleep(200);
+    await sleep(POST_COMMAND_SETTLE_MS);
     await vscode.commands.executeCommand("deslop.openWorstCluster");
-    await sleep(200);
+    await sleep(POST_COMMAND_SETTLE_MS);
   });
 
   test("openCluster with a bad id does not throw", async () => {
@@ -40,7 +42,7 @@ suite("commands", () => {
       start_byte: 0,
       end_byte: 10,
     });
-    await sleep(200);
+    await sleep(POST_COMMAND_SETTLE_MS);
     const active = vscode.window.activeTextEditor;
     assert.ok(active, "an editor should be open");
   });
@@ -91,6 +93,6 @@ suite("commands", () => {
     // The command shows a modal; we don't need to dismiss it — when the
     // extension-host test session ends VS Code tears all windows down.
     vscode.commands.executeCommand("deslop.revealActiveBinary");
-    await sleep(200);
+    await sleep(POST_COMMAND_SETTLE_MS);
   });
 });

@@ -6,14 +6,20 @@
 //! occurrence slices because the report-level byte-equivalence upgrade
 //! can prove equivalence of contained C# methods rather than of the
 //! raw slices ([CLONE-BUCKETS-IDENTICAL]).
+//!
+//! Rule 1 also has a content half ([`content_refusal`]): a shape match
+//! is not evidence of duplication, so a cluster whose measured content
+//! evidence does not vouch for it never reaches any of these actions
+//! ([FUSION-CONTENT-GATE], gh #344).
 
 use tree_sitter::Node;
 
 use crate::{
     ast::ByteRange,
-    buckets::{classify, ClusterKind},
+    buckets::{classify, lacks_content_support, ClusterKind},
     cluster_filters::enclosing_kind,
     refactor::tables::ScopeKinds,
+    render::signals::unvouched_content_reason,
     report::ReportCluster,
     report_render::canonicalise_whitespace,
 };
@@ -49,7 +55,7 @@ impl OccurrenceScope<'_> {
 /// byte-equivalence proof on the effective spans
 /// ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 1), because the nested-cluster
 /// collapse keeps the outer Type-2 view of the renamed-methods case
-/// ([PIPELINE-CLUSTER-EXACT] #50).
+/// ([PIPELINE-CLUSTER-EXACT]).
 const EXACT_BUCKETS: [ClusterKind; 3] = [
     ClusterKind::Identical,
     ClusterKind::NearlyIdentical,
@@ -86,21 +92,51 @@ pub fn eligible_ranges(cluster: &ReportCluster) -> Option<Vec<ByteRange>> {
 /// visible, untruncated occurrences spanning ≥2 files. The
 /// consolidation engine's gates decide the rest at resolve time, so a
 /// candidate that ultimately refuses surfaces its reason instead of
-/// silently offering nothing (issue #277).
+/// silently offering nothing.
 #[must_use]
 pub fn consolidation_candidate(cluster: &ReportCluster) -> bool {
     visible_exact_occurrences(cluster).is_some()
         && crate::report::distinct_visible_path_count(cluster) >= 2
 }
 
+/// The content-evidence half of rule 1
+/// ([AUTOFIX-EXTRACT-PRECONDITIONS], [FUSION-CONTENT-GATE]): the reason
+/// this cluster's shape match is not evidence of duplication, or `None`
+/// when the measured evidence vouches for it.
+///
+/// An exact-structural bucket says the *shapes* matched. It cannot say
+/// the code matched: `structural` and `token_jaccard` are two views of
+/// one normalised representation, so an anchor-poor scaffolding family
+/// and a corroborated Type-2 rename both render `1.00 / 1.00`. Every
+/// action behind this module folds N sites into one shared definition,
+/// so acting on the first rewrites unrelated code — the merge engine
+/// anti-unifies it, and the consolidation offer deletes all but one
+/// copy outright. The measured content evidence is the only signal that
+/// separates the two, so it decides here rather than downstream.
+///
+/// [`ClusterKind::Identical`] is exempt: [CLONE-BUCKETS-IDENTICAL]
+/// awarded that bucket on raw-source byte equality, which is strictly
+/// stronger evidence than the collapsed-leaf measurement — the same
+/// exemption [`crate::buckets::content_gated_signals`] makes.
+#[must_use]
+pub fn content_refusal(cluster: &ReportCluster) -> Option<String> {
+    let unvouched =
+        classify(cluster) != ClusterKind::Identical && lacks_content_support(cluster.signals);
+    unvouched.then(|| unvouched_content_reason(cluster.signals))
+}
+
 /// The visible occurrences of an exact-structural, untruncated cluster
-/// — the pre-screen [`eligible_ranges`] and [`consolidation_candidate`]
-/// share. `None` when the bucket or wire truncation disqualifies the
-/// cluster outright.
+/// whose measured content evidence vouches for it — the pre-screen
+/// [`eligible_ranges`] and [`consolidation_candidate`] share. `None`
+/// when the bucket, wire truncation, or [`content_refusal`]
+/// disqualifies the cluster outright.
 fn visible_exact_occurrences(
     cluster: &ReportCluster,
 ) -> Option<Vec<&crate::report::ReportOccurrence>> {
-    if !EXACT_BUCKETS.contains(&classify(cluster)) || cluster.occurrences_truncated {
+    if !EXACT_BUCKETS.contains(&classify(cluster))
+        || cluster.occurrences_truncated
+        || content_refusal(cluster).is_some()
+    {
         return None;
     }
     Some(

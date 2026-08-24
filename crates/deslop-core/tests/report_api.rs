@@ -87,32 +87,47 @@ fn sample_report() -> Report {
             model_version: "v1".to_owned(),
             dimensions: 3,
             attempted_subtrees: 0,
+            succeeded_subtrees: 0,
             indexed_subtrees: 0,
             failed_subtrees: 0,
         }),
         clusters: vec![sample_cluster()],
+        clusters_outside_diff: None,
     }
 }
 
 fn sample_cluster() -> ReportCluster {
+    let signals = ReportSignals {
+        structural: 1.0,
+        token_jaccard: 1.0,
+        shape: 1.0,
+        embedding_cos: 0.0,
+        fused: 1.0,
+        agreement: 0.0,
+        rename_consistency: 0.0,
+        literal_fraction: 0.0,
+    };
     ReportCluster {
         id: "abcdef".to_owned(),
+        rank: 1,
+        rank_band: "faint".to_owned(),
         weight: 1.0,
         size: 3,
         canonical_node_count: 12,
-        signals: ReportSignals {
-            structural: 1.0,
-            token_jaccard: 1.0,
-            embedding_cos: 0.0,
-            fused: 1.0,
-        },
+        signals,
         bucket: "identical".to_owned(),
         category: "logic".to_owned(),
+        language: "rust".to_owned(),
+        meets_fused_gate: true,
+        evidence_verdict: deslop_core::render::signals::content_evidence_verdict(signals),
         occurrences: sample_occurrences(),
         occurrences_total: 0,
+        occurrence_count: 3,
         occurrences_truncated: false,
         summary: "summary".to_owned(),
         interpretation: "interpretation".to_owned(),
+        intersects_diff: None,
+        is_newly_introduced: None,
     }
 }
 
@@ -127,6 +142,7 @@ fn sample_occurrences() -> Vec<ReportOccurrence> {
                 start_line: i64::try_from(index.saturating_add(1)).unwrap_or(i64::MAX),
                 end_line: i64::try_from(index.saturating_add(1)).unwrap_or(i64::MAX),
                 hidden: false,
+                in_diff: None,
             }
         })
         .collect()

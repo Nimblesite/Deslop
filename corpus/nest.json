@@ -1,0 +1,39 @@
+{
+  "name": "nest",
+  "language": "typescript",
+  "url": "https://github.com/nestjs/nest.git",
+  "tag": "v11.1.28",
+  "sha": "dfaa376170168d12d9d28bcfe137a9bacce579a3",
+  "why": "Mainstream TypeScript framework; decorator-heavy with many sibling modules.",
+  "ceilings": {
+    "max_wall_seconds": 900,
+    "max_peak_rss_mb": 2048,
+    "rationale": "2048 MB, sized to this corpus: ceilings are a function of the repository's own size, never of the CI runner hosting the test. The wall ceiling is deliberately loose - it exists to catch a hang, not to police throughput."
+  },
+  "must_find": [],
+  "must_find_status": "NOT YET CURATED. No recall assertion runs for this repository until duplicates here are hand-verified by diffing the reported ranges. An empty list asserts nothing - it must never be read as evidence that recall is good.",
+  "must_find_type2": [
+    {
+      "why": "The two shutdown lifecycle hooks are the same module written twice. Same imports, same callOperator over iterate/filter/map/toArray, same callXHook body: shift the module class host, spread controllers + providers + injectables + middlewares, await the non-transient batch then the transient batch, then call the module class instance behind an isDependencyTreeStatic guard. Only the hook symbols differ.",
+      "verified": "diff of before-app-shutdown.hook.ts against on-app-shutdown.hook.ts is a pure rename - BeforeApplicationShutdown/OnApplicationShutdown, hasBeforeApplicationShutdownHook/hasOnAppShutdownHook, callBeforeAppShutdownHook/callAppShutdownHook, beforeApplicationShutdown/onApplicationShutdown - plus explanatory comments, one Promise<void> vs Promise<any> return annotation, and the line wrapping those longer names force. No statement is added, removed or reordered.",
+      "files": [
+        "packages/core/hooks/before-app-shutdown.hook.ts",
+        "packages/core/hooks/on-app-shutdown.hook.ts"
+      ]
+    },
+    {
+      "why": "The built-in HTTP exception classes are one class body stamped out once per status code. Each extends HttpException, destructures extractDescriptionAndOptionsFrom(descriptionOrOptions), and calls super(HttpException.createBody(objectOrError, description!, HttpStatus.X), HttpStatus.X, httpExceptionOptions).",
+      "verified": "diff of bad-request.exception.ts against not-found.exception.ts changes only the class name, the HttpStatus member (BAD_REQUEST/NOT_FOUND), the default message literal ('Bad Request'/'Not Found') and the doc prose naming them. Every statement is identical in the same order. Sixteen further sibling files in the same directory repeat the same body.",
+      "files": [
+        "packages/common/exceptions/bad-request.exception.ts",
+        "packages/common/exceptions/not-found.exception.ts"
+      ]
+    }
+  ],
+  "must_find_type2_status": "CURATED. Both entries were hand-verified by diffing the two files and confirming the only differences are renamed identifiers and literals - Type-2 by definition, and not byte-identical, so neither can reach the `identical` bucket. A miss on either is a false negative on proven ground truth.",
+  "expect_files_min": 1290,
+  "expect_clusters": {
+    "min": 550,
+    "max": 2230
+  }
+}

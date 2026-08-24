@@ -6,7 +6,6 @@ use std::{fs, path::Path};
 use anyhow::{anyhow, Result};
 use serde_json::Value;
 
-mod common;
 use crate::common::*;
 
 fn run_report(scan_root: &Path) -> Result<Value> {

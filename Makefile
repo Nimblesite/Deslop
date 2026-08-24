@@ -2,14 +2,14 @@
 # =============================================================================
 # Standard Makefile — Deslop
 # Cross-platform: Linux, macOS, Windows (via GNU Make)
-# Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
+# Rust CLI. See docs/specs/SPEC.md and docs/repo-index.md.
 #
 # Targets prefixed with `_` are INTERNAL: hidden from the IDE make task list,
 # invoked only by other targets or by CI. The public targets below are the
 # human entry points and are the only ones `make help` lists.
 # =============================================================================
 
-.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
+.PHONY: build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify compile-release-tests coverage coverage-run coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-webview-coverage _vsix-webview-coverage-check _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
 
 _JETBRAINS_DIR := clients/jetbrains
 
@@ -37,6 +37,18 @@ endif
 # ---------------------------------------------------------------------------
 _COVERAGE_THRESHOLDS_FILE := coverage-thresholds.json
 
+# ---------------------------------------------------------------------------
+# [TEST-SELECTION] The cargo features every required test command enables.
+# One definition, because a second copy is how a test stops being compiled
+# without anyone noticing: `deslop-lsp/profiling` was off in every gate, so
+# `profile_dir_writes_non_empty_firefox_profile_on_shutdown` was absent
+# rather than skipped, and `--all-features` linting found two `missing_docs`
+# violations in code no ordinary run had ever compiled.
+# `deslop-lsp/tests/observability_heartbeat.rs` asserts each feature here is
+# live, so dropping one fails the suite instead of silently deleting a test.
+# ---------------------------------------------------------------------------
+_TEST_FEATURES := deslop-core/live,deslop-lsp/profiling
+
 # =============================================================================
 # Standard Targets
 # =============================================================================
@@ -54,26 +66,43 @@ build:
 ##                  .td spec or the generator script itself.
 typediagram-gen:
 	@echo "==> typediagram-gen: regenerating IPC models from docs/models/live-ipc.td"
-	node scripts/typediagram-gen.mjs
+	node scripts/typediagram/generate.mjs
 
 ## test: Fail-fast tests + coverage + per-crate threshold enforcement.
 ##       See REPO-STANDARDS-SPEC [TEST-RULES] and [COVERAGE-THRESHOLDS-JSON].
-##       Does NOT require Ollama — tests whose names contain `ollama_`
-##       are filtered out via `--skip ollama_`. `make ci-ollama` runs
-##       the Ollama-gated tests explicitly against a live daemon.
+##       [TEST-SELECTION] Runs every test in the workspace. Nothing is
+##       selected by name: `cargo test --skip` matches a substring of the
+##       *test name*, so `--skip ollama_ --skip corpus_` silently dropped
+##       the corpus gate's own self-tests and the mock-Ollama suites
+##       (gh #412). The Rust embedding tests are hermetic — they drive an
+##       in-process mock server or a deliberately dead endpoint and need no
+##       daemon. [TEST-SELECTION-SKIP] The suites that must not run here say
+##       so at their own declaration, with `#[ignore = ".."]`: the reason is
+##       printed on every run and `skip_policy_contract` holds it to the
+##       policy. `#[ignore]` still compiles and lints the target — skipping
+##       costs coverage of a test's execution, never of its compilation.
 ##       The `--ignore-filename-regex` list lives in
 ##       `coverage-thresholds.json` under `.rust.ignore_filename_regex`
 ##       (single source of truth). Per-crate thresholds live under
 ##       `.rust.crates.<crate>`; `_coverage_check` enforces each one
 ##       independently — no workspace roll-up masking.
+##       [CI-RELEASE-BUILD] `--release` matches the profile every other
+##       gate runs on. The duplication gate, the deployment gates and the
+##       whole VSIX E2E suite all exercise `target/release`, so a
+##       debug-profile test run gates release artifacts on code it never
+##       executed.
+##       [CI-RELEASE-BUILD] Coverage is **not** measured here, and that is
+##       the point. `cargo llvm-cov` compiles into `target/llvm-cov-target`
+##       because an instrumented artifact can never share a fingerprint
+##       with an uninstrumented one, so a coverage run reuses nothing from
+##       `target/release` and rebuilds the whole workspace. Measured on CI
+##       run 32542178321: 21m24s compiling, 1m34s running. Coverage moved
+##       to `make coverage`, which owns its own cache and runs in parallel,
+##       so this target is a cache hit against the release build every
+##       other gate already uses and the suite reports in minutes.
 test: _delete-path-binaries typediagram-gen
-	@echo "==> Testing (fail-fast + coverage + per-crate threshold)..."
-	rustup component add llvm-tools-preview 2>/dev/null || true
-	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
-	 cargo llvm-cov --workspace --all-targets --features deslop-core/live \
-	    --ignore-filename-regex "$$_rust_ignore" \
-	    --lcov --output-path lcov.info -- --skip ollama_
-	@$(MAKE) _coverage_check RUST_LCOV=lcov.info
+	@echo "==> Testing (fail-fast, release profile)..."
+	cargo test --release --workspace --all-targets --features $(_TEST_FEATURES)
 
 _coverage_check:
 	@_lcov="$${RUST_LCOV:-lcov.info}"; \
@@ -134,18 +163,41 @@ _coverage_check:
 ##       Also enforces the taxonomy content gate
 ##       ([CLONE-BUCKETS-DUAL-LABEL]): every product-facing `Type-N`
 ##       mention in site/src and examples must co-locate a canonical
-##       bucket label.
+##       bucket label. [TEST-SELECTION]: the release gate may not select
+##       tests by name substring, and [TEST-SELECTION-SKIP]: every `#[ignore]`
+##       must carry a category, an issue, a spec id and a plan. It also proves
+##       the composite-action step scanner still finds every `run` body, since
+##       the shell-injection gate in `deployment-verify` reads through it.
+##       clippy runs `--all-targets`, which now covers the corpus suite too: `#[ignore]`
+##       keeps it compiled and linted where `required-features` had removed
+##       it from the build entirely. Commit 77bcbaed5 left it uncompilable
+##       for exactly that reason.
 ##       Depends on typediagram-gen so the wire-generated module exists
 ##       before clippy parses the workspace on a fresh checkout.
-lint: typediagram-gen
+lint: _ci-analyze _ci-contract-tests
+
+# _ci-analyze: Read-only analyzers only. CI runs this before the build; test
+#   harness self-tests live in _ci-contract-tests and run in the test phase.
+_ci-analyze: typediagram-gen
 	@echo "==> Linting..."
-	cargo clippy --release --all-targets --workspace -- -D warnings
-	@bash scripts/taxonomy-gate.sh
-	@echo "==> VSIX stub-provider packaging gate (unit)..."
-	@node --test clients/vscode/scripts/stub-gate.test.mjs
+	cargo clippy --release --all-targets --workspace --features $(_TEST_FEATURES) -- -D warnings
+	@bash scripts/repository/taxonomy-gate.sh
+	@node scripts/actions/verify-env-path-writes.mjs
+
+# _ci-contract-tests: Test the repository's Node-based gates exactly once.
+_ci-contract-tests:
+	@echo "==> VSIX harness + packaging script gates (unit)..."
+	@node --test clients/vscode/scripts/*.test.mjs
 	@echo "==> PATH/env injection gate ([ACTION-ENVPATH])..."
-	@node --test scripts/verify-env-path-writes.test.mjs
-	@node scripts/verify-env-path-writes.mjs
+	@node --test scripts/actions/verify-env-path-writes.test.mjs
+	@echo "==> Composite-action step scanner proof ([ACTION-TESTS])..."
+	@node --test scripts/actions/action-yaml.test.mjs
+	@echo "==> Docs installer snippet fail-closed gate ([DEPLOY-DOCS-INSTALLER-FAILCLOSED])..."
+	@node --test scripts/deployment/installer-snippet.test.mjs
+	@echo "==> Duplication-gate provenance gate ([CI-DESLOP])..."
+	@node --test scripts/repository/dup-gate-source.test.mjs
+	@echo "==> Test-selection gate ([TEST-SELECTION])..."
+	@node --test scripts/repository/test-selection.test.mjs
 
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
 ##      Depends on typediagram-gen because rustfmt walks the module tree
@@ -165,24 +217,24 @@ clean:
 	$(RM) lcov.info
 	$(RM) .deslop-cache
 
-## ci: fmt + lint + Rust test + build + deployment-verify + VSIX coverage +
-##     VSIX E2E + webview coverage + HTML-report CSS (Playwright). Full CI
-##     simulation mirroring the .github/workflows/ci.yml vsix job. Runs every
-##     non-Ollama test suite, Rust and VSIX, and enforces per-crate + VSIX +
-##     webview coverage thresholds. `_vsix-coverage` runs the unit + E2E suite
-##     under c8 ([VSIX-TESTING-COVERAGE]); `_vsix-test` re-runs the same E2E
-##     against the packaged bundle without coverage. Ollama-gated suites run
-##     via `make ci-ollama`.
+## ci: [CI-RELEASE-BUILD] The three phases `.github/workflows/ci.yml` runs,
+##     in the same order and over the same artifacts, so a green `make ci`
+##     locally means exactly what a green pipeline means:
+##
+##       1. `_ci-build` — every release artifact, compiled once: the
+##          workspace, every release test binary, and the VSIX bundle with
+##          those same binaries staged into it. This is the only phase that
+##          compiles anything.
+##       2. `_ci-gate` — the gates that read those artifacts (duplication,
+##          deployment manifest). Cheap, and they fail before a suite runs.
+##       3. `_ci-test` — the Rust suite, the VSIX suites and coverage, in
+##          parallel, executing what phase 1 built.
+##
+##     Ollama-gated suites are excluded; they run via `make ci-ollama`.
 ci:
-	@$(MAKE) fmt CHECK=1
-	@$(MAKE) lint
-	@$(MAKE) test
-	@$(MAKE) build
-	@$(MAKE) deployment-verify
-	@$(MAKE) _vsix-coverage
-	@$(MAKE) _vsix-test
-	@$(MAKE) _vsix-webview-coverage
-	@$(MAKE) _vsix-playwright-html
+	@$(MAKE) _ci-build
+	@$(MAKE) _ci-gate
+	@$(MAKE) _ci-test
 
 ## setup: Post-create dev environment setup (used by devcontainer).
 ##        Version pin for `typediagram` must match `.github/workflows/ci.yml`
@@ -200,15 +252,162 @@ setup:
 # Repo-Specific Targets
 # =============================================================================
 
-## test-ollama: Run every Ollama-gated test — Rust `ollama_*` tests and
-##              the VSIX `.vscode-test-ollama.mjs` suite — that
-##              `make test`/`make ci` filter out. Requires a local Ollama
-##              daemon on 127.0.0.1:11434 with `nomic-embed-text` pulled.
+## compile-release-tests: [CI-RELEASE-BUILD] Every release test binary,
+##                        compiled but not executed. One home for the command,
+##                        called by `make ci`'s build phase and by the CI
+##                        `build` job, so the artifacts the test phase runs
+##                        are the artifacts the build phase produced. Without
+##                        it a test job restores a target directory holding no
+##                        test artifacts and recompiles all of them: CI run
+##                        32542178321 spent 21m24s doing exactly that in front
+##                        of a suite that runs in 1m34s.
+compile-release-tests: typediagram-gen
+	@echo "==> Compiling release test binaries (no run)..."
+	cargo test --release --workspace --all-targets --features $(_TEST_FEATURES) --no-run
+
+# _ci-build: [CI-RELEASE-BUILD] Phase 1 of `make ci` — every release artifact
+#   the later phases consume, produced exactly once. Mirrors the CI `build`
+#   job step for step. Nothing after this phase is allowed to compile.
+_ci-build:
+	@$(MAKE) fmt CHECK=1
+	@$(MAKE) lint
+	@$(MAKE) build
+	@$(MAKE) compile-release-tests
+	@$(MAKE) _vsix-build
+	@$(MAKE) _vsix-stage-bundled-binaries
+
+# _ci-gate: Phase 2 — the gates that only read phase 1's artifacts. They are
+#   seconds of work against a report, so they run before any suite: a
+#   duplication or deployment regression should not wait behind the tests.
+_ci-gate:
+	@$(MAKE) dup-gate
+	@$(MAKE) deployment-verify
+
+# _ci-test: Phase 3 — run every suite exactly once, instrumented for coverage.
+#   `coverage-report` is deliberately excluded: it is phase 4 and runs only
+#   after all collectors complete.
+_ci-test:
+	@$(MAKE) -j2 _ci-test-rust _ci-test-vsix
+
+# _ci-test-rust: The Rust half of phase 3.
+_ci-test-rust:
+	@$(MAKE) coverage-run
+
+# _ci-test-vsix: The VSIX half of phase 3 — extension-host and webview
+#   coverage collection plus the standalone HTML-report Playwright check.
+_ci-test-vsix:
+	@$(MAKE) _vsix-coverage
+	@$(MAKE) _vsix-webview-coverage
+	@$(MAKE) _vsix-playwright-html
+
+## test-shard: [TEST-SELECTION] One optional slice of the release suite for
+##             local diagnosis. `make test` remains the whole
+##             suite and is what a developer runs. The split is over test
+##             *binaries*, never test names — `cargo test --skip` matches a
+##             substring of the name and silently dropped whole suites that
+##             way (gh #412) — and `test-shards.test.mjs` proves the union of
+##             the shards is the whole set for every shard count CI uses.
+##             [TEST-ONE-BINARY] Each crate's suites are modules of one
+##             binary, so the partition is over 13 binaries rather than the
+##             200 that preceded it, and the bulk of the runtime sits in
+##             `deslop`'s. libtest already runs that binary's tests across
+##             every core, so a shard is worth having for the crates it can
+##             actually separate, not for balance.
+##             Usage: `make test-shard SHARD=1 SHARDS=4`.
+test-shard: _delete-path-binaries typediagram-gen
+	@echo "==> Testing shard $(SHARD)/$(SHARDS) (fail-fast, release profile)..."
+	@node scripts/repository/test-shards.mjs --shard $(SHARD) --of $(SHARDS) --features $(_TEST_FEATURES)
+
+## coverage: [CI-RELEASE-BUILD] [COVERAGE-THRESHOLDS-JSON] Instrumented
+##           release run + per-crate threshold enforcement. Split out of
+##           `make test` because llvm-cov's instrumented target directory
+##           shares nothing with `target/release`: bundling them made every
+##           test run pay a 21-minute cold compile of the whole workspace
+##           for a suite that executes in 94 seconds. Thresholds live in
+##           `coverage-thresholds.json` and `_coverage_check` enforces each
+##           crate independently — no workspace roll-up masking. The
+##           `--ignore-filename-regex` list has the same single source.
+##           Carries `_delete-path-binaries` for the same reason `test`
+##           does: this target runs the suite, and a Deslop binary leaked
+##           onto PATH would shadow the built one.
+coverage: coverage-run coverage-report
+
+coverage-run: _delete-path-binaries typediagram-gen
+	@echo "==> Coverage test collection (instrumented release)..."
+	rustup component add llvm-tools-preview 2>/dev/null || true
+	cargo llvm-cov --release --workspace --all-targets --features $(_TEST_FEATURES) --no-report
+
+coverage-report:
+	@echo "==> Coverage calculation and threshold enforcement..."
+	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
+	 cargo llvm-cov --release --features $(_TEST_FEATURES) report \
+	    --ignore-filename-regex "$$_rust_ignore" \
+	    --lcov --output-path lcov.info
+	@$(MAKE) _coverage_check RUST_LCOV=lcov.info
+
+## test-ollama: [TEST-SELECTION] The VSIX `.vscode-test-ollama.mjs` suite —
+##              the only tests that need a real daemon on 127.0.0.1:11434
+##              with `nomic-embed-text` pulled. The Rust embedding suites are
+##              hermetic (mock server / dead endpoint) and run in `make test`;
+##              they were never daemon-gated, only name-filtered (gh #412).
 test-ollama: _vsix-test-ollama
-	cargo test --release --workspace ollama_
 
 ## ci-ollama: `make ci` plus `make test-ollama`.
 ci-ollama: ci test-ollama
+
+## test-corpus: [CORPUS-*] Accuracy + resource suite against real public repos
+##              pinned by `corpus/*.json`. Clones into git-ignored `.corpus/`
+##              first (re-runs are free once cloned). [TEST-SELECTION-SKIP]
+##              Every test in the suite is `#[ignore]`d as
+##              [SKIP-TOO-LARGE-FOR-CI] (gh #422) — it needs the network and
+##              measures wall time and peak memory, which are
+##              runner-dependent — so `--ignored` is what selects it here,
+##              scoped to Cargo's dedicated `corpus_repos` test target.
+##              `make test`/`make ci` still compile and lint the target. Run
+##              this when touching the pipeline.
+test-corpus:
+	node scripts/corpus/fetch-corpus.mjs
+	cargo build --release --bin deslop
+	cargo test --release -p deslop --test corpus_repos -- --ignored --nocapture --test-threads=1
+
+## test-corpus-ci: `make test-corpus` in baseline mode — failures already
+##                 recorded in `corpus/known-failures.json` are reported but
+##                 do not fail the run; anything new does. Used by the
+##                 scheduled corpus workflow so tracked defects stay visible
+##                 without blocking. Local `make test-corpus` ignores the
+##                 baseline and stays strictly red.
+test-corpus-ci: export DESLOP_CORPUS_BASELINE = 1
+test-corpus-ci:
+	node scripts/corpus/fetch-corpus.mjs $(CORPUS_REPOS)
+	cargo build --release --bin deslop
+	@fail=0; for t in $(CORPUS_TESTS); do \
+	   cargo test --release -p deslop --test corpus_repos -- --ignored --exact --nocapture --test-threads=1 $$t || fail=1; \
+	 done; \
+	 if [ $$fail -ne 0 ]; then echo "==> corpus: NEW failures (see [NEW] lines above)"; fi; \
+	 exit $$fail
+
+# Scheduled CI runs a deliberately small slice: clone + scan inside ~1 minute.
+# `tokio` is the fastest corpus and the only one that has ever been stable
+# across runs, so it is the control; `nest` is the cheapest repository that
+# still reproduces the determinism defect (#301).
+#
+# Precision defects (#331 Dart, #336 F#) are NOT covered here — those repos
+# peak above 13 GB (#166) and take minutes to scan. Run the full suite with
+# `make test-corpus` locally, or dispatch the workflow with `full`.
+CORPUS_REPOS ?= tokio nest
+CORPUS_TESTS ?= corpus_repos::corpus_tokio_rust corpus_repos::corpus_nest_typescript corpus_repos::corpus_determinism_nest_typescript
+
+# [CI-DESLOP] Self-hosted duplication gate. Runs the release binary built by
+#   `build` against this repo, so the gate is always the CURRENT detector, never
+#   a released or PATH-installed one. Reads `[threshold] max_duplication_percent`
+#   from `.deslop.toml` — the single source of truth — and exits 3 when repo-wide
+#   duplication climbs past it. `make ci` runs this, so a green local run means a
+#   green gate in CI; the workflow calls this same target rather than repeating
+#   the command, so the two can never drift.
+## dup-gate: Fail when this repo's own duplication exceeds .deslop.toml.
+dup-gate: build
+	@echo "==> Duplication gate (.deslop.toml [threshold])..."
+	./target/release/deslop . --no-color
 
 # [DEPLOY-CI-GATES] CI/release deployment-drift gate: manifest schema, binary
 #   version contracts, release-workflow gates, and the verifier proof suite.
@@ -217,15 +416,20 @@ ci-ollama: ci test-ollama
 ##                    binaries and plugin zips violating each Shipwright
 ##                    contract rule and asserts every verifier rejects them.
 ##                    Without this, a silently-broken verifier could let a
-##                    drifted binary ship.
+##                    drifted binary ship. The action diff-gate proof runs the
+##                    action's own step body against the freshly built CLI in
+##                    both gate directions — the self-test's runner leg cannot,
+##                    since it installs a published release ([ACTION-GATE]).
 deployment-verify: build
-	node scripts/verify-deployment-manifest.mjs shipwright.json
-	node scripts/verify-deployment-binaries.mjs shipwright.json target/release
-	node scripts/verify-release-workflow-gates.mjs .github/workflows/release.yml
-	node scripts/test-release-workflow-contract.mjs
-	node scripts/test-release-version-stamping.mjs
-	node scripts/test-verifiers.mjs
-	node scripts/test-action-contract.mjs
+	node scripts/deployment/verify-deployment-manifest.mjs shipwright.json
+	node scripts/deployment/verify-deployment-binaries.mjs shipwright.json target/release
+	node scripts/release/verify-release-workflow-gates.mjs .github/workflows/release.yml
+	node scripts/release/test-release-workflow-contract.mjs
+	node scripts/deployment/test-deployment-docs-contract.mjs
+	node scripts/release/test-release-version-stamping.mjs
+	node scripts/deployment/test-verifiers.mjs
+	node scripts/actions/test-action-contract.mjs
+	node scripts/actions/test-action-diff-gate.mjs
 
 # _kill-deslop-processes: SIGTERM (then SIGKILL on holdouts) every running
 #   `deslop-lsp` and `deslop-mcp` process so a stale child from a previous
@@ -323,10 +527,12 @@ _vsix-test: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-
 _vsix-test-ollama: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-binaries
 	cd clients/vscode && npm run test:ollama
 
-# _vsix-coverage: Run VS Code E2E + enforce the VSIX coverage threshold.
-#   Threshold lives in the repo-root coverage-thresholds.json.
+# _vsix-coverage: Run the VS Code suite (extension host). No coverage is
+#   collected for out/**: the desktop extension host ignores
+#   NODE_V8_COVERAGE for plain-Mocha suites (gh #440). The webview leg is
+#   measured by _vsix-webview-coverage below.
 _vsix-coverage: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-binaries
-	cd clients/vscode && npm run coverage
+	cd clients/vscode && npm run coverage:collect
 
 # _vsix-playwright-html: Render the standalone HTML report from a fixture repo
 #   with the real deslop CLI, then assert in a headless browser (Playwright)
@@ -340,14 +546,17 @@ _vsix-playwright-html: _vsix-install
 	cd clients/vscode && npx playwright install --with-deps chromium && npm run test:playwright:html
 
 # _vsix-webview-coverage: Drive the webview bundle in a real browser (Playwright)
-#   with V8 coverage on, map executed ranges back to webview-ui/src via inline
-#   sourcemaps, and enforce .vsix.webview_threshold from coverage-thresholds.json.
+#   with V8 coverage on and map executed ranges back to webview-ui/src. Threshold
+#   calculation is deferred to _vsix-webview-coverage-check.
 #   The webview is invisible to the vscode-test c8 pass (extension host only);
 #   this closes that blind spot (#254). The script rebuilds the production
 #   bundle in a finally, so a coverage build is never left staged for packaging
 #   — even if the Playwright run or mapping fails.
 _vsix-webview-coverage: _vsix-install
 	cd clients/vscode && npx playwright install --with-deps chromium && npm run coverage:webview
+
+_vsix-webview-coverage-check:
+	cd clients/vscode && npm run coverage:webview:check
 
 ## vsix-package: Build the .vsix artifact (does not publish).
 ##               Stages the host-platform deslop-lsp + deslop-mcp + deslop
@@ -452,12 +661,12 @@ _jetbrains-verify:
 
 # _jetbrains-package: CI/release packaging gate — build the JetBrains plugin zip
 #   (single LSP4IJ artifact), verify project/structure, and assert the packaged
-#   artifact via scripts/verify-jetbrains-package.mjs. Headless (no IDE install);
+#   artifact via scripts/deployment/verify-jetbrains-package.mjs. Headless (no IDE install);
 #   invoked by .github/workflows/ci.yml. Local devs use android-studio-rebuild or
 #   android-studio-rebuild-reinstall to actually load the plugin into the IDE.
 _jetbrains-package: _jetbrains-build
 	@$(MAKE) _jetbrains-verify
-	node scripts/verify-jetbrains-package.mjs
+	node scripts/deployment/verify-jetbrains-package.mjs
 
 # _jetbrains-test: Run the JetBrains tests via the wrapper — the shared-module
 #   resolver/descriptor/panel tests plus the LSP4IJ surface's reactive-wiring tests.
@@ -561,6 +770,8 @@ help:
 	@echo "  typediagram-gen        - Regenerate wire-format IPC models from docs/models/*.td"
 	@echo "  deployment-verify      - Validate deployment manifest and built binary contracts"
 	@echo "  test-ollama            - Ollama-gated Rust + VSIX tests (never in CI)"
+	@echo "  test-corpus            - Accuracy + resource gate against pinned real repositories"
+	@echo "  test-corpus-ci         - test-corpus in baseline mode (reports tracked defects)"
 	@echo "  ci-ollama              - make ci plus make test-ollama"
 	@echo "  vsix-package           - Build the platform-specific .vsix artifact + deployment gate"
 	@echo "  vsix-rebuild           - Nuke + rebuild + repackage + install the VSIX from scratch"

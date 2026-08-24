@@ -1,11 +1,12 @@
 ---
 layout: layouts/docs.njk
 title: How It Works — Tree-sitter ASTs, MinHash LSH, HNSW embeddings
-description: Deslop's pipeline — tree-sitter parse, AST normalization, Merkle fingerprints, MinHash + LSH, HNSW embeddings, fused 0.85 threshold, worst-offenders ranking. Reactive analysis loop.
+description: How Deslop detects duplicate code with tree-sitter ASTs, Merkle fingerprints, MinHash LSH, optional HNSW embeddings, and worst-first ranking.
 eleventyNavigation:
   key: How It Works
   order: 2
 icon: account_tree
+docsGroup: trust
 ---
 
 # How It Works
@@ -37,7 +38,7 @@ Each language ships a grammar via tree-sitter:
 | [TypeScript](https://www.typescriptlang.org/) / TSX | v1 |
 | [PHP](https://www.php.net/) | v1 |
 | [F#](https://fsharp.org/) | v1 |
-| Go | roadmap |
+| [Go](https://go.dev/) | v1 |
 
 A parser produces an AST. No source-level regex touches this pipeline — ever.
 
@@ -61,7 +62,7 @@ Identical Merkle hashes across files or within the same file form an **identical
 
 ## LSH (near-miss)
 
-For **nearly identical code** (Type-3, structurally similar but not identical), Deslop builds a 5-wide k-gram stream of normalized AST kinds per subtree, computes a **128-value MinHash signature** (Broder 1997), and groups them into **32 bands of 4 rows** for [Indyk-Motwani locality-sensitive hashing](https://en.wikipedia.org/wiki/Locality-sensitive_hashing). Candidate pairs are bands that collide; Jaccard is then estimated from full-signature agreement. SourcererCC's bag-of-tokens design is the inspiration, but Deslop runs its k-grams over normalized AST kinds rather than raw source tokens. Implementation lives in [`crates/deslop-core/src/lsh.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/lsh.rs) and [`crates/deslop-core/src/tokens.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/tokens.rs).
+For **nearly identical code** (Type-3, structurally similar but not identical), Deslop builds a 5-wide k-gram stream of normalized AST kinds per subtree, computes a **128-value MinHash signature** (Broder 1997), and groups them into **32 bands of 4 rows** for [Indyk-Motwani locality-sensitive hashing](https://en.wikipedia.org/wiki/Locality-sensitive_hashing). Subtree pairs that collide in a band become candidates; Jaccard is then estimated from full-signature agreement. SourcererCC's bag-of-tokens design is the inspiration, but Deslop runs its k-grams over normalized AST kinds rather than raw source tokens. Implementation lives in [`crates/deslop-core/src/lsh.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/lsh.rs) and [`crates/deslop-core/src/tokens.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/tokens.rs).
 
 ## Embed (semantic)
 
@@ -79,7 +80,11 @@ Each candidate pair gets three independent scores:
 | `token_jaccard` | 0..1 | Nearly identical code [Type-3] — MinHash band collisions | `lsh.rs::band_collisions` + `tokens.rs` |
 | `embedding_cos` | 0..1 | Same behavior, different code [Type-3/4] — HNSW top-k | `embedding/pairs.rs` |
 
-Per the ensemble-LLM 2025 finding (averaging hurts; sum/max help), the fused score is `clamp(structural + token_jaccard + embedding_cos, 0, 1)` ([`pair.rs::PairScore::fused`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/pair.rs)). Pairs survive when the fused score crosses `FUSED_THRESHOLD = 0.85`. LSH-only pairs carry a stricter information-content floor (`token_jaccard ≥ 0.90` and both endpoints ≥ 40 AST nodes) so noisy near-misses can't ride the LSH bus into a cluster. Cross-language pairs are dropped unless `.deslop.toml` opts in.
+Candidate admission starts with the **bounded max** — `max(structural, token_jaccard, embedding_cos)` in `[0,1]` ([`pair.rs::PairScore::bounded_fused`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/pair.rs)). Pairs survive when that value crosses `FUSED_THRESHOLD = 0.85`. LSH-only pairs also require `token_jaccard ≥ 0.90` and at least 40 AST nodes at both endpoints.
+
+Before rendering, a non-identical cluster with saturated shape evidence is content-gated as `max(embedding_cos, shape × content_confidence)`, where content confidence is the stronger of raw agreement and discounted rename consistency ([`buckets/gate.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/buckets/gate.rs)). This prevents a perfect normalized shape from rendering as perfect confidence when the underlying code differs. Byte-identical and non-saturating clusters keep their candidate score.
+
+Cross-language pairs are dropped unless `.deslop.toml` opts in. With that option enabled, a cross-language pair with no structural anchor is admitted at a `0.10` floor; structurally anchored pairs keep the `0.85` threshold.
 
 ## Rank
 
@@ -93,13 +98,9 @@ Bigger fragments count more (`clone_node_count`). More copies count more (`clust
 
 ## Render
 
-Three renderers read the same materialized view:
+Three renderers read the same materialized view: canonical **JSON** for agents, line-oriented **TXT** for terminals, and standalone **HTML** for humans. Agents consume the JSON; humans read the TXT in the terminal or open the HTML in a browser. Every claim the TXT or HTML makes is also present in the JSON.
 
-- **JSON** — canonical and strictly typed. Carries the embedded `schema_doc`, `action_hints`, repo-wide `metrics`, and `embedding_provenance`.
-- **TXT** — ASCII, line-oriented, no ANSI. Pipeable into `head`, `grep`, `awk`.
-- **HTML** — standalone, inlined CSS, zero network dependencies. It embeds source snippets with tree-sitter-driven syntax highlighting; when a file's source is no longer available, the card falls back to a path-only summary without snippets.
-
-Agents consume JSON. Humans read TXT in the terminal or open the HTML in a browser. Every claim the TXT or HTML makes is also present in the JSON.
+The shape of each, and the exit codes a run returns, are in [Report output](/docs/configuration/#report-output).
 
 ## Live = reactive
 
@@ -108,8 +109,8 @@ Everything above also runs incrementally inside the LSP server (`crates/deslop-c
 A file watcher batches edits (debounced, with a hard cap so a formatter burst can't starve the scheduler) and re-runs the pipeline through `PipelineSession::update_files`. The fresh report is held in memory, and the LSP then:
 
 - broadcasts `deslop/reportChanged` over the LSP wire, and
-- serves the running corpus over a local IPC endpoint, so the bundled MCP server answers `find-similar` without re-parsing. macOS and Linux use `.deslop-cache/deslop.sock`; Windows uses token-gated TCP loopback discovered through `.deslop-cache/deslop.port`.
+- serves the running corpus over a local IPC endpoint, so the bundled MCP server answers `find-similar` without re-parsing. macOS and Linux use `.deslop/cache/deslop.sock`; Windows uses token-gated TCP loopback discovered through `.deslop/cache/deslop.port`.
 
-`.deslop-cache/live-report.json` is written only as a cold-start seed — so a freshly launched LSP can answer queries while its first pass runs — not on every edit.
+`.deslop/cache/live-report.json` is written only as a cold-start seed — so a freshly launched LSP can answer queries while its first pass runs — not on every edit.
 
 Every VS Code surface — bubble, Top Offenders tree, status bar, hover, code lens — and every agent MCP query reads from that same in-memory report. The CLI is the cold-cache fallback for CI gates.

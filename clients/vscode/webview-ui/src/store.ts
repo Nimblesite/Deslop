@@ -14,9 +14,8 @@ import {
   type Report,
   type ReportCluster,
   type Severity,
-  severityOf,
+  clusterBand,
 } from "../../src/types/report";
-import { languageForPath } from "../../src/types/languages";
 
 export type Filters = {
   language: string | null;
@@ -45,15 +44,14 @@ export const lastUpdatedAt = signal<number>(0);
 
 export const clusters = computed<ReportCluster[]>(() => report.value?.clusters ?? []);
 
+// [SEVERITY-BAND] The band is the engine's: it classifies the cluster's
+// rank percentile, which is a calculation, so it is computed once in
+// `report_weight::rank_band` and carried on the wire. This panel used to
+// re-derive it from array position, which rebanded every cluster the
+// moment the list it saw was filtered or projected.
 export const severityByClusterId = computed<Map<string, Severity>>(() => {
-  const list = clusters.value;
-  const total = list.length;
   const out = new Map<string, Severity>();
-  list.forEach((cluster, i) => {
-    const rank = i + 1;
-    const pct = total <= 1 ? 0 : 1 - (rank - 1) / (total - 1);
-    out.set(cluster.id, severityOf(pct));
-  });
+  for (const cluster of clusters.value) out.set(cluster.id, clusterBand(cluster));
   return out;
 });
 
@@ -70,9 +68,10 @@ export const filteredClusters = computed<ReportCluster[]>(() => {
   // Base slice: the workspace facet filter, shared with the tree and
   // status bar; the webview's own selects refine it below.
   return applyFacetFilter(clusters.value, facetFilter.value).filter((cluster) => {
-    if (language && !cluster.occurrences.some((o) => languageForPath(o.path) === language)) {
-      return false;
-    }
+    // The language is the engine's, stamped from the parser registry
+    // that actually parsed the file ([PIPELINE-LANG-TRAIT]); this filter
+    // never re-derives one from a path extension.
+    if (language && cluster.language !== language) return false;
     if (severity && byId.get(cluster.id) !== severity) return false;
     if (bucket && resolveBucket(cluster) !== bucket) return false;
     if (category && resolveCategory(cluster) !== category) return false;

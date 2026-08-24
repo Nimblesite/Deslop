@@ -56,16 +56,23 @@ Fields:
 
 | Field | Meaning |
 |---|---|
-| `#N` | Rank. `#1` is the worst offender. |
+| `#N` / `rank` | Rank. `#1` is the worst offender. One-based over the whole report, stamped by the engine — never re-number it from a filtered list. |
+| `rank_band` | The rank's percentile band: `worst` (top 1%) · `top10` · `mid` (top 50%) · `faint`. Drives glyph density on visual surfaces. Computed by the engine; do not re-derive a percentile. |
 | `[abc123…]` | Stable 16-char cluster id (hex). Same clone across runs → same id. |
 | `weight` | Ranking score: `node_count × (cluster_size − 1) × log2(1 + total_spanned_bytes)`. Higher = more impact. |
 | `size` | How many copies of this subtree exist. `size=20` means the same pattern appears 20 times. |
+| `occurrence_count` | The authoritative display count of a cluster's occurrences. Live-wire responses cap `occurrences[]`, so this is the number to show — never `occurrences.length`. |
+| `language` | The language id the parser registry resolved for the cluster (`csharp`, `rust`, `python`, `dart`, `javascript`, `typescript`, `tsx`, `php`, `fsharp`, `go`, or `unknown`). Group and filter on this rather than on a file extension. |
+| `meets_fused_gate` | Whether `signals.fused` clears the engine's reportable confidence line. Read this instead of comparing `fused` to a threshold of your own. |
+| `evidence_verdict` | One plain-English sentence reading the shape score against the measured content evidence — why confidence stayed, fell, or came from the embedding pass. Engine-authored; render it verbatim. |
 | `nodes` | AST node count of one canonical copy. Bigger subtree = more meaningful clone. |
 | `path:line:column` | Human-readable occurrence location in text/HTML/hover summaries. JSON keeps `start_byte` / `end_byte` for machine navigation. |
 | `structural` | `[0, 1]`. `1.0` = exact Merkle hash match. `0.0` = no exact structural match (found via LSH only). |
 | `token_jaccard` | `[0, 1]`. Estimated Jaccard of normalized k-gram token sets. |
+| `shape` | `[0, 1]`. The shape reading: the stronger of `structural` and `token_jaccard`. Those two are views of one normalised representation, so the max is what "the shape matched" means — take this field rather than computing the max. |
 | `embedding_cos` | `[0, 1]` cosine similarity from the semantic-embedding pass, or `0.00` if that pass was disabled for this run. |
-| `embedding_provenance.indexed_subtrees` | Count of unique successful subtree embeddings fed into ANN. Lower than `attempted_subtrees` when duplicate snippets collapse before indexing. |
+| `embedding_provenance.succeeded_subtrees` | Occurrences that obtained a vector. Together with `failed_subtrees` this accounts for every `attempted_subtrees`, so a reader can confirm nothing vanished silently. |
+| `embedding_provenance.indexed_subtrees` | Count of unique successful subtree embeddings fed into ANN. Lower than `succeeded_subtrees` when duplicate snippets collapse before indexing. It counts index points, not occurrences — do not read it as coverage. |
 | `embedding_provenance.failed_subtrees` | Count of subtree embeddings the provider rejected. Rejected subtrees are excluded from embedding ANN rather than substituted with zero vectors. |
 | `boilerplate_hints[]` | Optional low-severity import/prologue hygiene hints emitted only when `.deslop.toml` sets `boilerplate.imports = "report"`. These carry suppressed byte ranges but are not clone clusters and do not affect `weight` or metrics. |
 
@@ -97,7 +104,8 @@ The report header carries one honest number: `metrics.duplication_percent = 100 
 ## Thresholds (typical defaults)
 
 - `min-nodes = 15` — smaller subtrees are excluded to cut noise. The header of the report will state the value actually used.
-- `FUSED_THRESHOLD = 0.85` — a pair must score ≥ this on the fused signal (combination of `structural`, `token_jaccard`, `embedding_cos`) to enter a cluster.
+- `FUSED_THRESHOLD = 0.85` — the **default admission** bar. A same-language *pair* must reach it on `PairScore::bounded_fused` — the strongest single axis of `structural`, `token_jaccard`, `embedding_cos`, bounded to `[0,1]` ([FUSION-STRATEGY-BOUNDED-MAX]) — to enter a cluster. It is a per-pair value (`CandidatePair::fused_min_score`), not a global constant: explicit **cross-language** candidates with **no structural anchor** (`structural <= 0.0` — LSH and direct-signature matches) lower it to `CROSS_LANGUAGE_MIN_JACCARD` (0.10) so a lower-overlap port can surface at all; a structurally anchored cross-language pair keeps the default 0.85 assigned by `finalise_pairs`. Do not write a regression test asserting that nothing below 0.85 was admitted — a cross-language audit legitimately admits far below it.
+- `signals.fused` on a rendered cluster is **not** that quantity, despite the shared name. It is the *rendered confidence*: shape evidence scaled by measured content evidence ([FUSION-CONTENT-GATE]), so a proven Type-2 rename legitimately renders **below** 0.85 while still routing to an act-now bucket. Do not filter reported clusters on `fused >= FUSED_THRESHOLD` — that discards findings the engine already admitted and vouched for. Filter on `bucket` instead, which is the engine's verdict.
 - `LSH_ONLY_MIN_JACCARD = 0.90` and `LSH_ONLY_MIN_NODE_COUNT = 40` — extra gates for LSH-only candidates (no structural anchor), to keep tiny trivial windows from mega-clustering.
 - Cross-language comparison is off by default. Enable `[analysis] allow_cross_language_comparison = true` only when intentionally auditing ports, generated clients, or semantic equivalents across ecosystems.
 
@@ -120,4 +128,5 @@ The report header carries one honest number: `metrics.duplication_percent = 100 
 ## Tool metadata
 
 - Tool: `deslop`. The report header states the tool version.
-- The text report is a pretty-printer over the canonical JSON schema. For machine consumption prefer `--format json`, which includes full `occurrences[]` arrays, per-cluster `signals { structural, token_jaccard, embedding_cos, fused }`, and an agent-oriented `summary` string per cluster.
+- The text report is a pretty-printer over the canonical JSON schema. For machine consumption prefer `--format json`, which includes full `occurrences[]` arrays, per-cluster `signals { structural, token_jaccard, shape, embedding_cos, fused, agreement, rename_consistency, literal_fraction }`, and an agent-oriented `summary` string per cluster.
+- **Every figure is stated, not implied.** Rank, band, occurrence count, language, the fused-gate verdict, the shape reading and the evidence sentence are all carried on the cluster because they are the engine's answers. Recomputing one from the other fields is how a consumer ends up disagreeing with the report it is quoting.

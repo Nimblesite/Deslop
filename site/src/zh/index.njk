@@ -1,8 +1,7 @@
 ---
 layout: layouts/base.njk
-title: Deslop — 面向 AI 智能体的实时 MCP + LSP 重复代码服务器
-description: 实时 LSP + MCP 重复代码服务器。向 Claude Code、Cursor、Copilot、Continue 和 Codex 实时流式推送克隆信号——find-similar 在复制粘贴落地前就将其预防。
-keywords: deslop, 重复代码, 代码克隆检测, AI 代码重复, LLM 重复代码, MCP server, LSP server, claude code, cursor, copilot, continue, codex, tree-sitter, AST 克隆检测, find-similar, VS Code 扩展, JetBrains 插件, 代码去重, 复制粘贴检测器
+title: "在 9 种编程语言中查找重复代码 | Deslop"
+description: "在九种编程语言中查找重复代码。Deslop 按影响程度排列最值得移除的重复，并在编码智能体写出另一个副本前告诉它已有相似代码。"
 permalink: /zh/
 lang: zh
 ---
@@ -17,23 +16,16 @@ lang: zh
   "applicationSubCategory": "Static Code Analysis",
   "operatingSystem": "macOS, Linux, Windows",
   "url": "https://deslop.live",
-  "downloadUrl": "https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live",
-  "softwareHelp": "https://deslop.live/docs/",
+  "downloadUrl": "https://marketplace.visualstudio.com/items?itemName=Nimblesite.deslop-live",
+  "softwareHelp": "https://deslop.live/zh/docs/",
   "license": "https://github.com/Nimblesite/Deslop/blob/main/LICENSE",
-  "description": "面向 AI 编码智能体的实时 LSP + MCP 重复代码服务器。在代码编写过程中向 Claude Code、Cursor、Copilot、Continue 和 Codex 实时流式推送克隆信号。tree-sitter 解析、AST 指纹、MinHash LSH、HNSW 嵌入。",
+  "description": "在 C#、Rust、Python、Dart、JavaScript、TypeScript/TSX、PHP、F# 和 Go 中查找重复代码。Deslop 把最严重的问题排在前面，并在相似代码已经存在时告诉编码智能体。",
   "featureList": [
-    "配备响应式文件监视器的实时 LSP 服务器",
-    "以 find-similar 为核心的 MCP 服务器——智能体在编写新代码前所发起的调用；其余工具均为只读且按需调用",
-    "面向 C#、Rust、Python、Dart、JavaScript、TypeScript、PHP、F# 的 tree-sitter 解析",
-    "覆盖全部五类的克隆检测：完全相同的代码 [Type-1/2]、几乎相同的代码 [Type-3]、形状相同但内容不同 [structural-only]、松散相似的代码 [weak LSH]、行为相同但代码不同 [Type-4]",
-    "捆绑 LSP、MCP 服务器与 CLI 的 VS Code 扩展",
-    "JetBrains 插件正在积极开发中（Rider、IntelliJ、PyCharm、WebStorm、RustRover、CLion）"
+    "检测 C#、Rust、Python、Dart、JavaScript、TypeScript/TSX、PHP、F# 和 Go 中的重复代码",
+    "按影响程度排列重复代码，并提供用于比较的规范出现位置",
+    "VS Code 实时警告与面向编码智能体的 MCP 相似性检查"
   ],
-  "publisher": {
-    "@type": "Organization",
-    "name": "Nimblesite",
-    "url": "https://nimblesite.co"
-  },
+  "publisher": { "@id": "https://deslop.live/#organization" },
   "offers": {
     "@type": "Offer",
     "price": "0",
@@ -46,132 +38,63 @@ lang: zh
 <div class="home">
   <section class="hero">
     <div class="hero__left">
-      <div class="eyebrow-chip"><span>实时 MCP + LSP · 预防复制粘贴 · 每次编辑即响应</span></div>
+      <div class="eyebrow-chip"><span>实时重复代码分析</span></div>
       <h1>
-        你的智能体正要复制粘贴。
-        <em>Deslop 告诉它别这么做。</em>
+        查找重复代码
+        <em>覆盖九种编程语言。</em>
       </h1>
       <p class="hero__lede">
-        Deslop 是一个运行在你工作区中的<strong>实时 LSP + MCP 服务器</strong>。它在<em>代码编写过程中</em>向 <strong>Claude Code、Cursor、Copilot、Continue、Codex</strong>——以及你的编辑器——实时流式推送重复代码信号。智能体在编写新函数<em>之前</em>就调用 <code>find-similar</code>。如果该模式已经存在，它便复用规范实现。复制粘贴从未发生。
+        Deslop 可在 <strong>C#、Rust、Python、Dart、JavaScript、TypeScript/TSX、PHP、F# 和 Go</strong> 中查找重复函数和反复出现的源代码。它按影响程度排列最值得移除的重复，并在相似代码已经存在时告诉你的编码智能体。
       </p>
       <div class="hero__cta">
-        <a href="https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live" class="btn-primary" target="_blank" rel="noopener noreferrer">从 VS Code Marketplace 安装</a>
-        <div class="install-chip">
-          <code>code --install-extension nimblesite.deslop-live</code>
-          <button aria-label="复制安装命令">
-            <span class="material-symbols-outlined">content_copy</span>
-          </button>
-        </div>
+        <a href="vscode:extension/Nimblesite.deslop-live" class="btn-primary">为 VS Code 安装 Deslop</a>
       </div>
       <p class="hero__sublede">
-        <strong>VSIX 是让你一次性获得全部能力的唯一安装方式</strong>——实时气泡、LSP 服务器、MCP 服务器，以及 <code>deslop</code> CLI 都在同一个捆绑包中。JetBrains 插件（Rider、IntelliJ、PyCharm、WebStorm、RustRover、CLion）正在积极开发中；Zed 与 Neovim 在路线图上。只想要 CLI？<code>brew install nimblesite/tap/deslop</code> 或 <code>scoop install deslop</code>（在添加 <a href="https://github.com/Nimblesite/scoop-bucket" target="_blank" rel="noopener noreferrer">Nimblesite bucket</a> 之后）。{% if releases.latest %} 当前稳定版：<a href="/zh/releases/">{{ releases.latest.tag }}</a>。{% else %} 发布工件可在 <a href="/zh/releases/">发布页</a> 查看。{% endif %}
+        一个扩展即可获得<a href="/zh/docs/vscode-cluster-panel/">实时编辑器警告</a>、<a href="/zh/docs/ai-integration/">面向编码智能体的 MCP 检查</a>和 <a href="/zh/docs/">CLI</a>。
       </p>
     </div>
 
     <div class="hero__right">
-      <div class="report-card">
-        <div class="report-chrome">
-          <div class="report-chrome__dots"><span></span><span></span><span></span></div>
-          <span class="report-chrome__path">deslop-mcp · live · claude-code</span>
-        </div>
-        <pre class="report-body"><span class="muted">→ 智能体: <span class="ok">find-similar</span> { path: "auth/middleware.ts", range: L42–L71 }</span>
-<span class="muted">← deslop: 正在流式推送克隆簇…</span>
-<div class="cluster">
-  <div class="cluster__head">
-    <span class="cluster__title">几乎相同的代码 [Type-3]</span>
-    <span class="cluster__cost">fused 0.94</span>
-  </div>
-  <div class="cluster__files">
-    <span>src/utils/legacy_auth.ts</span><span>L104–L176</span>
-    <span>src/middleware/auth.ts</span><span>L12–L84</span>
-  </div>
-</div>
-<div class="cluster cluster--low">
-  <div class="cluster__head">
-    <span class="cluster__title">行为相同，代码不同 [Type-4]</span>
-    <span class="cluster__cost">embed 0.82</span>
-  </div>
-  <div class="cluster__files">
-    <span>src/db/connection.rs</span><span>L40–L55</span>
-    <span>src/db/pool.rs</span><span>L12–L27</span>
-  </div>
-</div>
-<span class="muted">智能体决策: <strong>复用 `legacy_auth.verify()`</strong> · 未产生复制粘贴</span>
-<div class="report-footer">实时 LSP · 文件监视器 · 防抖 · 每次文件变更响应式触发</div></pre>
-      </div>
-    </div>
-  </section>
-
-  <section class="bento">
-    <div class="bento__grid">
-      <div class="bento__cell">
-        <span class="bento__label">响应式监视器</span>
-        <div class="bento__row">
-          <span class="bento__value">每次编辑</span>
-          <span class="bento__icon material-symbols-outlined">bolt</span>
-        </div>
-      </div>
-
-      <div class="bento__cell">
-        <span class="bento__label">支持语言</span>
-        <div class="bento__row">
-          <span class="bento__value">C# · Rust · Python · Dart · JS · TS · PHP · F#</span>
-          <span class="bento__icon material-symbols-outlined">code</span>
-        </div>
-      </div>
-
-      <div class="bento__cell bento__cell--recess bento__cell--wide-2">
-        <div class="bento__top">
-          <span class="bento__label">基石工具</span>
-          <span class="bento__critical">预防</span>
-        </div>
-        <div>
-          <div class="bento__offender">find-similar</div>
-          <p class="bento__blurb">智能体在编写代码<em>之前</em>，将拟用代码片段与实时语料库进行匹配。既有模式胜出。没有重复落地。</p>
-        </div>
-      </div>
-
-      <div class="bento__cell bento__cell--panorama bento__cell--wide-4">
-        <div class="bento__panorama-inner">
-          <div>
-            <span class="bento__label">监视器 → 编辑器 → 智能体</span>
-            <span class="bento__value bento__value--hero">1<span class="unit">份报告</span></span>
-          </div>
-          <p class="bento__panorama-note">每次变更增量解析。一份内存中的报告通过 <code>deslop/reportChanged</code> 同时扇出到每一个编辑器界面和 MCP 客户端。陈旧的 UI 是一个正确性缺陷。</p>
-        </div>
-      </div>
+      <figure class="product-shot">
+        <img src="/assets/img/deslop-report.png"
+             alt="真实的 Deslop 报告正在查找重复的 C# 代码，并显示重复组和示例源代码。"
+             width="1280" height="760" decoding="async">
+        <figcaption>由 C# 测试代码生成的真实 Deslop 输出：重复组、匹配的源代码和另一个出现位置。</figcaption>
+      </figure>
     </div>
   </section>
 
   <section class="showcase">
     <div class="showcase__head">
       <div class="eyebrow-chip"><span>在你的编辑器中</span></div>
-      <h2 class="showcase__title">一份实时报告，三个界面。</h2>
-      <p class="showcase__lede">VS Code 扩展捆绑了 LSP 与 MCP 服务器，并将运行中的分析就地渲染——侧边栏中以最严重优先排序的克隆簇、光标处的实时克隆警告，以及与规范副本的并排差异对比。驱动你编辑器的智能体通过 MCP 读取的是同一份报告。</p>
+      <h2 class="showcase__title">先看最值得移除的重复。</h2>
+      <p class="showcase__lede">重复代码簇按影响程度排序，并以一个规范副本作为比较锚点。你的编辑器和编码智能体读取同一份实时分析。</p>
     </div>
     <figure class="showcase__figure">
       <img src="/assets/img/screenshot.webp"
-           alt="Deslop VS Code 扩展正在分析实时工作区：侧边栏中以最严重优先排序的 Top Offenders 树与按目录划分的 Duplication 占比，编辑器中带有 Compare、View cluster 与 Copy for AI 操作的实时克隆警告，以及与规范出现位置的并排 Compare 差异对比。"
+           alt="Deslop VS Code 扩展正在真实工作区中排列重复代码簇，并显示实时警告和并排的规范副本比较。"
            width="2560" height="1492" loading="lazy" decoding="async">
     </figure>
     <ol class="showcase__legend">
       <li class="showcase__cell">
         <span class="showcase__pos">左 · 侧边栏</span>
-        <strong>Top Offenders、Duplication、Session</strong>
-        <p>Top Offenders 以最严重优先对每个克隆簇排序——id、严重程度、人类可读的分桶。Duplication 按目录逐层拆解整个仓库，每个节点都标注重复占比。Session 显示运行中的服务器与嵌入模型选择器。</p>
+        <strong>最严重的问题优先</strong>
+        <p>影响最大的重复代码簇始终排在顶部。</p>
       </li>
       <li class="showcase__cell">
         <span class="showcase__pos">中 · 编辑器</span>
-        <strong>实时克隆警告</strong>
-        <p>LSP 在你输入时为重复片段加下划线，标出用作锚点的规范副本，并在发现结果上直接提供 <em>Compare with canonical</em>、<em>View cluster</em> 与 <em>Copy for AI</em>。</p>
+        <strong>实时重复警告</strong>
+        <p>比较匹配项、打开代码簇，或复制上下文供 AI 使用。</p>
       </li>
       <li class="showcase__cell">
         <span class="showcase__pos">右 · 差异对比</span>
-        <strong>与规范副本比较</strong>
-        <p>VS Code 原生的并排编辑器将当前出现位置与规范副本逐行对齐，让你在提取共享辅助函数之前先确认重复确实存在。</p>
+        <strong>规范副本比较</strong>
+        <p>重构前并排检查两个副本。</p>
       </li>
     </ol>
   </section>
+
+  {% include "partials/testimonials.njk" %}
 
   {% include "partials/editors.njk" %}
 

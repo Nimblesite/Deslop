@@ -1,29 +1,30 @@
 ---
 layout: layouts/docs.njk
-title: 快速开始 — 安装 Deslop 的实时 LSP + MCP 服务器
-description: 安装 Deslop —— 面向 AI 智能体的实时 LSP + MCP 重复代码服务器。VS Code VSIX 一次安装即捆绑 LSP、MCP 与 CLI。仅需 CLI 可使用 Homebrew 和 Scoop。
+title: 快速开始 — 安装 Deslop 并查找重复代码
+description: 安装 Deslop，在九种编程语言中查找重复代码。一个 VS Code 扩展即可获得实时警告、面向编码智能体的 MCP 检查和 CLI。
 eleventyNavigation:
   key: 快速开始
   order: 1
 icon: rocket_launch
+docsGroup: start
 lang: zh
 ---
 
 # 快速开始
 
-Deslop 是一个**实时重复代码分析服务器** —— LSP + MCP，运行于你的工作区，在*代码正被编写时*将实时的克隆信号流式传输到 Claude Code、Cursor、Copilot、Continue、Codex 以及你的编辑器。安装它的首选方式是 **VS Code 扩展** —— 该扩展一次安装即捆绑 LSP 服务器、MCP 服务器**以及** CLI。
+**Deslop 在九种编程语言中查找重复代码，按影响程度排列最值得移除的重复，并在相似代码已经存在时告诉你的编码智能体。** 它运行于你的工作区，并随你的输入实时更新 —— Claude Code、Cursor、Copilot、Continue、Codex 以及你的编辑器读取的都是同一份实时分析。
 
-> **JetBrains 插件**（先支持 Rider，随后是 IntelliJ IDEA、PyCharm、WebStorm、RustRover、CLion）正在积极开发中。Zed 与 Neovim 已列入路线图。在它们发布之前，VSIX 是首要安装方式，而 Homebrew tap / Scoop bucket 则是仅需 CLI 时的快捷方式。
+安装它的首选方式是 **VS Code 扩展**。一次安装即可获得全部三个接口面：实时编辑器警告、智能体写代码前所做的那次检查，以及 CLI。
 
 ## 安装（首选） —— VS Code 扩展
 
-直接从 **VS Code Marketplace** 安装。无需下载，无需管理文件 —— 挑选离你最近的方式即可：
+从 **VS Code Marketplace** 安装：
 
 - **在 VS Code 中：** 打开**扩展**（`⇧⌘X` / `Ctrl+Shift+X`），搜索 **Deslop**，点击**安装**。
 - **命令行：** `code --install-extension nimblesite.deslop-live`
 - **浏览器：** 打开 [Deslop.live Marketplace 页面](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live) 并点击**安装**。
 
-随后打开一个受支持的源文件（`.cs`、`.rs`、`.py`、`.dart`、`.js`、`.mjs`、`.cjs`、`.jsx`、`.ts` 或 `.tsx`）。实时气泡会立即生效，并且随着文件监视器触发，**Top Offenders** 树状视图会随之填充。
+随后打开一个受支持的源文件（`.cs`、`.rs`、`.py`、`.dart`、`.js`、`.mjs`、`.cjs`、`.jsx`、`.ts`、`.tsx`、`.php`、`.fs`、`.fsx` 或 `.go`）。实时气泡会立即生效，并且随着文件监视器触发，**Top Offenders** 树状视图会随之填充。
 
 该扩展捆绑了面向 `darwin-arm64`、`darwin-x64`、`linux-x64`、`linux-arm64` 和 `win32-x64` 的原生二进制文件 —— 系统会自动为你选择正确的那一个。
 
@@ -38,7 +39,7 @@ Deslop 是一个**实时重复代码分析服务器** —— LSP + MCP，运行�
 
 > **离线或隔离网络环境？** 从[发布页](/zh/releases/)或[最新的 GitHub release](https://github.com/Nimblesite/Deslop/releases/latest) 获取 `.vsix`，并通过**扩展面板 → `…` 菜单 → 从 VSIX 安装…**进行安装。
 
-## 仅安装 CLI（Homebrew / Scoop）
+## 仅安装 CLI（Homebrew / Scoop / curl）
 
 ### macOS / Linux（Homebrew）
 
@@ -47,7 +48,7 @@ brew install nimblesite/tap/deslop
 deslop --version
 ```
 
-Tap 源：[github.com/Nimblesite/homebrew-tap](https://github.com/Nimblesite/homebrew-tap)。
+Homebrew 配方源：[github.com/Nimblesite/homebrew-tap](https://github.com/Nimblesite/homebrew-tap)。
 
 ### Windows（Scoop）
 
@@ -59,6 +60,41 @@ deslop --version
 
 Bucket 源：[github.com/Nimblesite/scoop-bucket](https://github.com/Nimblesite/scoop-bucket)。
 
+### macOS / Linux（curl）
+
+没有 Homebrew？直接从最新的 GitHub 发布版拉取归档文件。以下脚本会解析最新版本号，选择对应平台，校验官方发布的 SHA-256 校验和，并安装与 Homebrew 配方相同的三个二进制文件（`deslop`、`deslop-lsp`、`deslop-mcp`）。脚本采用失败即终止的方式：下载或校验和验证失败时，不会解压也不会安装任何内容：
+
+```bash
+(
+  set -euo pipefail
+  base="${DESLOP_RELEASE_BASE:-https://github.com/Nimblesite/Deslop/releases}"
+  tag="${DESLOP_TAG:-$(curl -fsSLI -o /dev/null -w '%{url_effective}' "${base}/latest")}"
+  tag="${tag##*/}"      # 例如 v1.2.3
+  version="${tag#v}"    # 例如 1.2.3
+  case "$(uname -s)-$(uname -m)" in
+    Linux-x86_64)  platform=linux-x64 ;;
+    Linux-aarch64) platform=linux-arm64 ;;
+    Darwin-arm64)  platform=macos-arm64 ;;
+    Darwin-x86_64) platform=macos-x64 ;;
+    *) echo "unsupported platform: $(uname -s)-$(uname -m)" >&2; exit 1 ;;
+  esac
+  archive="deslop-${version}-${platform}.tar.gz"
+  workdir="$(mktemp -d)"
+  trap 'rm -rf "$workdir"' EXIT
+  cd "$workdir"
+  curl -fsSLO "${base}/download/${tag}/${archive}"
+  curl -fsSLO "${base}/download/${tag}/${archive}.sha256"
+  if command -v sha256sum >/dev/null; then sha256sum -c "${archive}.sha256"; else shasum -a 256 -c "${archive}.sha256"; fi
+  tar -xzf "$archive"
+  sudo install -m 755 "deslop-${version}-${platform}"/deslop{,-lsp,-mcp} /usr/local/bin/
+  deslop --version
+)
+```
+
+若想安装到用户目录，可将 `sudo install` 那一行换成 `mkdir -p ~/.local/bin && install -m 755 "deslop-${version}-${platform}"/deslop{,-lsp,-mcp} ~/.local/bin/`（无需 `sudo`），并确保 `~/.local/bin` 在你的 `PATH` 中。
+
+若要固定某个特定版本而非最新版，可在运行脚本前于环境中设置 `DESLOP_TAG=vX.Y.Z`。
+
 ### 直接下载
 
 从[发布页](/zh/releases/)或[最新的 GitHub release](https://github.com/Nimblesite/Deslop/releases/latest) 获取对应平台的归档文件，并将二进制文件放入你的 `PATH`。
@@ -69,13 +105,18 @@ Bucket 源：[github.com/Nimblesite/scoop-bucket](https://github.com/Nimblesite/
 deslop .
 ```
 
-这会扫描当前目录、写入三份报告，并将最严重的簇打印到你的终端：
+这会扫描当前目录、写入三份报告，并将最严重的簇打印到你的终端。Deslop 写出的所有内容都会放进被扫描项目根目录下的同一个 `.deslop/` 目录——把 `.deslop/` 加入你的 `.gitignore` 即可：
 
 ```
-deslop-report.json   # canonical, agent-consumable
-deslop-report.txt    # line-oriented plain text
-deslop-report.html   # standalone, human-readable
+.deslop/
+  deslop-report.json   # 权威格式，供智能体读取
+  deslop-report.txt    # 按行组织的纯文本
+  deslop-report.html   # 独立文件，供人阅读
+  logs/                # 按时间戳命名的运行日志
+  cache/               # 指纹与嵌入缓存；可安全删除
 ```
+
+使用 `--output <prefix>` 可以把报告（及其日志）改写到别处。
 
 ## 调整阈值
 
@@ -89,7 +130,7 @@ deslop . --min-nodes 20
 
 ## 启用语义检测 —— 行为相同、代码不同（Type-4）
 
-结构与 token 通道是确定性的，无需联网即可运行。行为相同的匹配（Type-4） —— 行为相同、语法不同 —— 需要嵌入（向量嵌入）。嵌入**默认关闭**：
+结构与词元通道是确定性的，无需联网即可运行。行为相同的匹配（Type-4） —— 行为相同、语法不同 —— 需要嵌入（向量嵌入）。嵌入**默认关闭**：
 
 ```bash
 deslop . --embeddings auto
@@ -127,7 +168,7 @@ report_hide = [
 默认情况下，无论发现多少重复，`deslop` 都会以 `0` 退出 —— 它只报告，不评判，因此绝不会破坏一个你并未要求它把关的构建。一旦选择启用门禁，当全仓库范围的重复超过你的上限时，它会以 `3` 退出（使构建失败）。可以传入一个标志用于一次性运行，或将上限提交入库，让本地运行、CI 与智能体共享同一个数值：
 
 ```bash
-deslop . --fail-over 5.0          # exit 3 if more than 5% of analysed LOC is duplicated
+deslop . --fail-over 5.0          # 已分析 LOC 中的重复超过 5% 时以 3 退出
 ```
 
 ```toml
@@ -136,13 +177,4 @@ deslop . --fail-over 5.0          # exit 3 if more than 5% of analysed LOC is du
 max_duplication_percent = 5.0
 ```
 
-`--fail-over` 会覆盖配置键；`--fail-over 0` 在任何重复时都会失败；`--no-fail-over` 会为单次本地运行清除门禁。完整的退出码对照表见 [输出格式](/zh/docs/output-formats/#exit-codes)，一个可直接粘贴的 GitHub Actions 作业见 [面向 AI](/zh/docs/for-ai/#run-in-ci)。
-
-## 下一步做什么
-
-1. 阅读 [工作原理](/zh/docs/how-it-works/)，理解排名公式与实时流水线。
-2. 阅读 [AI 集成](/zh/docs/ai-integration/)，将 `deslop-mcp` 接入 Claude Code、Claude Desktop、Cursor、Continue 或 Codex。
-3. 在自行解析 JSON 之前，先阅读 [输出格式](/zh/docs/output-formats/)。
-4. 当你需要了解某个面板标签、评分或操作的含义时，阅读 [VS Code 簇面板](/zh/docs/vscode-cluster-panel/)。
-5. 如果你是（或正在配置）一个编码智能体，阅读 [面向 AI](/zh/docs/for-ai/) —— 这是关于 `.deslop.toml`、CI 门禁与解析 JSON 报告的操作手册。
-6. 查看[发布](/zh/releases/)以获取当前 VSIX、CLI 归档、校验和与变更日志链接。
+`--fail-over` 会覆盖配置键；`--fail-over 0` 在任何重复时都会失败；`--no-fail-over` 会为单次本地运行清除门禁。完整的[退出码对照表](/zh/docs/configuration/#exit-codes)在配置参考中，而 [GitHub Action](/zh/docs/github-action/) 为 CI 封装了同一套门禁。

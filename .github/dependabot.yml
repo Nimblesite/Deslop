@@ -2,23 +2,26 @@
 # Dependabot — supply-chain defense without PR spam, and without burning CI on
 # `main` for routine bumps. Portfolio standard ([GITHUB-DEPENDABOT]).
 #
-# How this kills the spam:
+# How this kills the spam — EVERY bump ends up on the `dependabot-upgrades`
+# STAGING branch, swept there automatically by
+# .github/workflows/dependabot-automerge.yml (latest bump clobbers previous):
 #   * VERSION updates -> `target-branch: dependabot-upgrades`. Every routine bump
-#     PR is opened against the long-lived `dependabot-upgrades` STAGING branch,
-#     never against main. ci.yml / codeql.yml only trigger on
-#     `pull_request: [main]` (the filter matches the PR *base*), so these staging
-#     PRs run NO build/test/CodeQL. They are auto-merged into the staging branch
-#     by .github/workflows/dependabot-automerge.yml. When you want the batch in
-#     main you open ONE `dependabot-upgrades -> main` PR and CI runs exactly once.
-#   * SECURITY updates -> still raised automatically against `main`, untouched by
-#     this file. Per GitHub docs, `target-branch` only redirects *version*
-#     updates; security updates always use the repo's default branch. So a real
-#     CVE still opens a PR against main where you see it and CI runs. That channel
-#     is governed by the repo's "Dependabot security updates" setting, NOT here.
-#   * groups with no `update-types` filter -> each ecosystem collapses ALL bumps
-#     (patch, minor AND major) into ONE grouped PR per run. Majors no longer need
-#     their own review PR because nothing reaches main unattended — review happens
-#     once, at the consolidation PR.
+#     PR is opened against the staging branch, never against main. ci.yml /
+#     codeql.yml only trigger on `pull_request: [main]` (the filter matches the
+#     PR *base*), so these staging PRs run NO build/test/CodeQL.
+#   * SECURITY updates -> GitHub IGNORES `target-branch` for these and always
+#     opens them against the repo's default branch (`main`). They are handled by
+#     a human, deliberately — the sweep's base filter is `dependabot-upgrades`
+#     only (see the BASE FILTER note in dependabot-automerge.yml and
+#     [GITHUB-DEPENDABOT]) — and because they are the ONLY Dependabot PRs that
+#     ever reach a `pull_request: [main]` workflow, ci.yml and codeql.yml carry
+#     no actor short-circuit: a security PR gets the full build/test matrix,
+#     dependency review, and CodeQL, like any human PR to main.
+#   * groups -> each ecosystem collapses ALL version bumps (patch, minor AND
+#     major) into ONE PR, and a parallel `*-security` group (`applies-to:
+#     security-updates`) collapses CVE bumps the same way. Majors no longer need
+#     their own review PR because nothing reaches main unattended — review
+#     happens once, at the `dependabot-upgrades -> main` consolidation PR.
 #   * interval: weekly -> one grouped PR per ecosystem each week, not fifty.
 #
 # Ecosystems present in THIS repo: github-actions (workflows), cargo (workspace
@@ -58,6 +61,10 @@ updates:
     labels: ["dependencies"]
     groups:
       cargo:
+        applies-to: version-updates
+        patterns: ["*"]
+      cargo-security:
+        applies-to: security-updates
         patterns: ["*"]
 
   # npm / Node — the three package.json roots (no root-level package.json).
@@ -71,8 +78,19 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     labels: ["dependencies"]
+    ignore:
+      # @types/vscode must track engines.vscode (clients/vscode/package.json):
+      # vsce refuses to package when the types outrun the engine. Patches stay
+      # inside the `~` pin; minor/major moves are made by hand, together with
+      # the engine bump.
+      - dependency-name: "@types/vscode"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
     groups:
       npm:
+        applies-to: version-updates
+        patterns: ["*"]
+      npm-security:
+        applies-to: security-updates
         patterns: ["*"]
 
   # Gradle — the JetBrains IntelliJ-Platform plugin (clients/jetbrains).
@@ -85,4 +103,8 @@ updates:
     labels: ["dependencies"]
     groups:
       gradle:
+        applies-to: version-updates
+        patterns: ["*"]
+      gradle-security:
+        applies-to: security-updates
         patterns: ["*"]

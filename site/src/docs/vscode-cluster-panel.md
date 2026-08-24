@@ -1,11 +1,12 @@
 ---
 layout: layouts/docs.njk
-title: VS Code Cluster Panel — Reading a Deslop clone cluster
-description: Field guide for the Deslop VS Code cluster detail panel, including cluster ids, ranking, signals, occurrences, and comparison actions.
+title: VS Code — Reading a duplicate-code cluster in the editor
+description: Use the Deslop VS Code extension to review Top Offenders, inspect live duplicate warnings and cluster signals, and compare canonical occurrences.
 eleventyNavigation:
-  key: VS Code Cluster Panel
-  order: 7
+  key: VS Code
+  order: 5
 icon: account_tree
+docsGroup: guides
 ---
 
 # VS Code Cluster Panel
@@ -25,7 +26,7 @@ The cluster panel is the detailed view behind a Deslop duplicate-code finding. I
 
 Three surfaces are visible, and all of them read the same live report:
 
-- **The sidebar (left)** stacks three views. **Top Offenders** is the worst-first ranked list of every clone cluster in the workspace — each row shows the cluster id, a severity dot, and a plain-English bucket ("Identical code", "Nearly identical code"), and expands to its occurrences; cluster `#1` is the single highest-impact offender, always one click away. **Duplication** drills the tree workspace → folder → file with a duplication percentage on every node — the same repo-wide number a [CI gate](/docs/output-formats/#exit-codes) fails on. **Session** shows the running server: the embedding-model picker (the semantic *same behavior, different code* pass, off until you choose a model), the cache size, the file count, and the live analysis State.
+- **The sidebar (left)** stacks three views. **Top Offenders** is the worst-first ranked list of every clone cluster in the workspace — each row shows the cluster id, a severity dot, and a plain-English bucket ("Identical code", "Nearly identical code"), and expands to its occurrences; cluster `#1` is the single highest-impact offender, always one click away. **Duplication** drills the tree workspace → folder → file with a duplication percentage on every node — the same repo-wide number a [CI gate](/docs/configuration/#exit-codes) fails on. **Session** shows the running server: the embedding-model picker (the semantic *same behavior, different code* pass, off until you choose a model), the cache size, the file count, and the live analysis State.
 - **The editor (centre)** is where the LSP draws the finding inline. The duplicated span is underlined as you type, and a message states the bucket and the copy count — *"Identical code × 3 — Safe to extract — every copy is the same."* — then names the **canonical** occurrence used as the comparison anchor. Three actions sit on the finding: **Compare with canonical**, **View cluster**, and **Copy for AI** (the AI-ready context block, available on every Deslop surface).
 - **The Compare diff (right)** is VS Code's native side-by-side editor, opened by **Compare with canonical**: this occurrence on the left, the canonical on the right, with matching rows aligned so you can confirm the duplication before extracting a shared helper.
 
@@ -69,11 +70,11 @@ Weight is not a percentage and it is not a CI gate. Use repository duplication p
 
 ## Size
 
-Size is the number of cloned AST members represented by the cluster. A larger size usually means the duplicated unit is a bigger structural fragment.
+Size is the number of raw clone members combined into the cluster before overlapping same-file members are collapsed. It does not measure fragment length.
 
 ## Occurrence Count
 
-The occurrence count is the number of editor locations in this cluster. It may be larger than the number of rows shown, because Deslop caps how many occurrences a single very large cluster sends to the panel.
+Occurrence count is the authoritative number of editor locations after overlapping same-file members are collapsed. It can exceed the rows shown when a large cluster is truncated for display.
 
 ## Canonical
 
@@ -83,7 +84,7 @@ Canonical does not mean "best" or "source of truth." It is just a stable anchor 
 
 ## Signals
 
-Signals explain why the locations were grouped. Scores are shown from `0.00` to `1.00`; higher means that signal saw stronger similarity.
+Signals explain why the locations were grouped. Scores are shown from `0.00` to `1.00`; higher means that signal saw stronger similarity. The first four are confidence; the three under Content Evidence are what Deslop measured inside the matched code.
 
 ## Structural
 
@@ -101,7 +102,25 @@ Embeddings are off in a fresh live session until a model is selected.
 
 ## Fused
 
-`fused` is Deslop's combined clone score. It joins structural, token, and embedding evidence and is the score used to decide whether a pair is reportable.
+`fused` is Deslop's combined clone score. It joins structural, token, and embedding evidence and is the score used to decide whether a pair is reportable. A shape match is discounted by the content evidence below, so `fused` can sit far under a perfect structural score.
+
+## Content Evidence
+
+Shape alone cannot tell a renamed copy from unrelated code that happens to share a skeleton. Two clusters can both score `structural 1.00` and `jaccard 1.00` while one is a genuine duplicate and the other is sibling boilerplate — the same `if/else` skeleton around entirely different code. Content Evidence is what Deslop measured inside the match, and it is what discounts the shape score into the fused confidence.
+
+The panel prints a plain-English reading of the two together under the bars, so you do not have to do the arithmetic: it names the shape score, the measured agreement, and the confidence they produced.
+
+## Agreement
+
+`agreement` is how much of the matched content the locations genuinely share, byte for byte. Low agreement under a high shape score means the skeleton lined up but the code inside it did not.
+
+## Rename Consistency
+
+`rename` is whether one consistent identifier renaming explains every difference between the locations. This is what tells a real renamed copy apart from unrelated code that merely shares a shape: a cluster with `agreement 0.10` and `rename 1.00` is the same code with different names, and worth extracting.
+
+## Literal Fraction
+
+`literal` is how much of the match is literal data rather than logic. A match that is mostly literals is a data table, not a function worth extracting.
 
 ## Occurrences
 

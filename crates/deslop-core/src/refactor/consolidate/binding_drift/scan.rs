@@ -1,7 +1,7 @@
 //! AST scanning for the binding-drift gate: parse artefacts, name
 //! collection, and the tree walks the proof engine in [`super`] builds
 //! on. Pure queries — every refusal decision stays in the parent
-//! module. ([AUTOFIX-CONSOLIDATE-GATE], issue #279)
+//! module. ([AUTOFIX-CONSOLIDATE-GATE])
 
 use std::{collections::BTreeSet, path::PathBuf};
 

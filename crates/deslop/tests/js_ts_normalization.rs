@@ -9,7 +9,6 @@
 
 use anyhow::Result;
 
-mod common;
 use crate::common::*;
 
 #[test]
@@ -31,18 +30,18 @@ fn javascript_clone_is_invariant_to_quotes_comments_literals_and_renames() -> Re
 
 #[test]
 fn typescript_token_layer_is_invariant_to_quotes_comments_literals_and_renames() -> Result<()> {
-    let report = run_report(&fixture("ts-comment-literal-invariance"), 12)?;
     // Both pairs are rename-invariant at the token level; the difference is
     // that here the interface + async/arrow program node is distinctive
     // enough that the token-LSH pass independently surfaces the pair, so the
     // recorded token signal is carried and the clone is `nearly_identical`
     // (versus the JS pair above, which the token pass never pairs, leaving it
     // `structural_only`).
-    let clone = expect_cluster_spanning(&report, &["orders.ts", "shipments.ts"])?;
-    assert_eq!(cluster_bucket(clone), "nearly_identical");
-    assert!(approx(signal(clone, "structural"), 1.0));
-    assert!(approx(signal(clone, "token_jaccard"), 1.0));
-    Ok(())
+    assert_bucketed_clone(
+        "ts-comment-literal-invariance",
+        12,
+        &["orders.ts", "shipments.ts"],
+        "nearly_identical",
+    )
 }
 
 #[test]

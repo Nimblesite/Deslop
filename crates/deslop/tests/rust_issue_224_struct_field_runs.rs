@@ -17,7 +17,6 @@
 //! still surface — the raw-bytes-differ escape hatch that keeps genuine
 //! copy-paste visible.
 
-mod common;
 use crate::common::*;
 
 /// `min-nodes` low enough to admit the per-struct and field-run subtrees the

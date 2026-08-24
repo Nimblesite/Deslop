@@ -24,11 +24,10 @@ use std::{path::Path, sync::Arc};
 use deslop_core::{
     config::watched_config_paths,
     live::{
-        AnalysisSession, AnalysisState, LiveError, LiveWatcher, ReportChangedNotification,
-        Scheduler,
+        AnalysisSession, AnalysisState, LiveError, LiveExclusion, LiveWatcher,
+        ReportChangedNotification, Scheduler,
     },
     pipeline::watched_source_extensions,
-    ExclusionConfig,
 };
 use tokio::sync::{broadcast::Receiver, Mutex};
 use tower_lsp::{lsp_types::MessageType, Client};
@@ -37,6 +36,14 @@ use crate::notifications::{AnalysisStateLspNotification, ReportChangedLspNotific
 
 /// Starts the filesystem watcher + scheduler for `root` and spawns
 /// the background task that forwards change broadcasts to `client`.
+///
+/// `exclusion` is the session's own policy handle, not a fresh config:
+/// the watcher decides what reaches the scheduler and the session
+/// decides what reaches the corpus, so two independently-built configs
+/// let the live report disagree with the batch report over the same
+/// files ([CONFIG-EXCLUDE-DEPENDENCIES]). Built-in artefact directories
+/// stay excluded through that shared policy — the dependency opt-in
+/// widens the corpus, it does not disable exclusion.
 ///
 /// The returned `(LiveWatcher, Scheduler)` must be kept alive for the
 /// duration of the server — dropping either stops the analysis loop.
@@ -49,13 +56,13 @@ pub fn start(
     root: &Path,
     config_path: Option<&Path>,
     session: Arc<Mutex<AnalysisSession>>,
+    exclusion: LiveExclusion,
     client: Client,
 ) -> Result<(LiveWatcher, Scheduler), LiveError> {
     let extensions: Vec<String> = watched_source_extensions()
         .into_iter()
         .map(str::to_owned)
         .collect();
-    let exclusion = Arc::new(ExclusionConfig::empty());
     let config_paths = watched_config_paths(root, config_path);
     let (watcher, watcher_rx) =
         LiveWatcher::start(root, extensions, exclusion, config_paths.clone()).map_err(|err| {

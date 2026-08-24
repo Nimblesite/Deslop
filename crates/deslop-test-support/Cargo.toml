@@ -11,7 +11,10 @@ publish = false
 [dependencies]
 anyhow.workspace = true
 assert_cmd.workspace = true
+deslop-core = { path = "../deslop-core" }
 serde_json.workspace = true
+toml.workspace = true
+tree-sitter.workspace = true
 
 [lints]
 workspace = true
