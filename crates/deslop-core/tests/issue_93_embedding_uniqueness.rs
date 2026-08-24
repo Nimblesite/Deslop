@@ -19,7 +19,7 @@ use deslop_core::{
     cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs},
     embedding::EmbeddingPair,
     fingerprint::Fingerprint,
-    lsh::{Signature, SIGNATURE_LEN},
+    lsh::{SIGNATURE_LEN, Signature, SignatureIndex},
     pair::{
         candidate_pairs, cluster_by_transitive_closure, FusedCluster, LSH_ONLY_MIN_JACCARD,
         LSH_ONLY_MIN_NODE_COUNT,

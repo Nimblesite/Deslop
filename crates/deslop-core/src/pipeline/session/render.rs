@@ -71,7 +71,8 @@ impl PipelineSession {
             self.build_candidate_pairs(config, fingerprints, &signatures, &lsh_source)?;
         ledger.record("candidate_pairs", signatures.len(), pairs.len(), stage_started);
         // Trees for every measurement stage, materialised once, now that
-        // the pair-construction allocations are behind us.
+        // the pair-construction allocations are behind us — unless the
+        // cross-language audit already materialised them above.
         let trees = match trees {
             Some(already) => already,
             None => self.materialize_trees()?,
@@ -180,10 +181,10 @@ impl PipelineSession {
         lsh_source: &BandCollisionSource<'_>,
     ) -> Result<
         (
-            Vec<crate::ast::NormalizedNode>,
+            Option<Vec<crate::ast::NormalizedNode>>,
             Option<Vec<crate::lsh::Signature>>,
             Vec<crate::pair::CandidatePair>,
-            crate::pipeline::EmbeddingPassOutcome,
+            crate::pipeline::embedding_pass::EmbeddingOutcome,
         ),
         crate::CoreError,
     > {

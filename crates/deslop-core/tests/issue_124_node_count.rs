@@ -14,7 +14,7 @@ use deslop_core::{
     ast::ByteRange,
     cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs},
     fingerprint::Fingerprint,
-    lsh::{Signature, SIGNATURE_LEN},
+    lsh::{SIGNATURE_LEN, Signature, SignatureIndex},
     pair::FusedCluster,
     state::{FileId, FileRegistry},
 };
@@ -32,9 +32,10 @@ const SIGNAL_TOLERANCE: f64 = 1e-5;
 fn issue_124_type4_node_count_does_not_dominate_refactor_ranking() -> Result<()> {
     let fixture = type4_weight_fixture();
 
+    let signature_index = SignatureIndex::from_slice(&fixture.signatures);
     let clusters = build_ranked_fused_clusters(&ClusterBuildInputs {
         fingerprints: &fixture.fingerprints,
-        signatures: &fixture.signatures,
+        signatures: &signature_index,
         embedding_vectors: &fixture.vectors,
         fused_clusters: &fixture.fused_clusters,
         trees: &[],

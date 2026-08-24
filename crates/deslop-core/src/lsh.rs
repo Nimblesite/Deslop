@@ -79,6 +79,13 @@ impl<'a> SignatureIndex<'a> {
         Self { segments, offsets }
     }
 
+    /// Builds the view over a single contiguous slice — the natural
+    /// shape for tests and small corpora with no sharding.
+    #[must_use]
+    pub fn from_slice(slice: &'a [Signature]) -> Self {
+        Self::from_segments([slice])
+    }
+
     /// Total signatures across every segment.
     #[must_use]
     pub fn len(&self) -> usize {

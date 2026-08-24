@@ -8,7 +8,7 @@ use deslop_core::{
     cluster::{build_ranked_fused_clusters, ClusterBuildInputs},
     embedding::EmbeddingPair,
     fingerprint::Fingerprint,
-    lsh::{Signature, SIGNATURE_LEN},
+    lsh::{SIGNATURE_LEN, Signature, SignatureIndex},
     pair::{candidate_pairs, cluster_by_transitive_closure, FUSED_THRESHOLD, LSH_ONLY_MIN_JACCARD},
     state::{FileId, FileRegistry},
 };
@@ -23,7 +23,8 @@ fn issue_91_embedding_only_pair_survives_when_lsh_misses_match() -> Result<()> {
         cosine: 0.99,
     }];
 
-    let candidates = candidate_pairs(&fingerprints, &signatures, &lsh_pairs, &embedding_pairs);
+    let signature_index = SignatureIndex::from_slice(&signatures);
+    let candidates = candidate_pairs(&fingerprints, &signature_index, &lsh_pairs, &embedding_pairs);
     assert_eq!(candidates.len(), 1, "expected one fused candidate pair");
     let candidate = *candidates.first().context("one candidate pair expected")?;
     assert_eq!((candidate.left, candidate.right), (0, 1));
@@ -63,7 +64,7 @@ fn issue_91_embedding_only_pair_survives_when_lsh_misses_match() -> Result<()> {
     let vectors = HashMap::from([(0, vec![1.0, 0.0]), (1, vec![0.99, 0.141_067_36])]);
     let rendered = build_ranked_fused_clusters(&ClusterBuildInputs {
         fingerprints: &fingerprints,
-        signatures: &signatures,
+        signatures: &signature_index,
         embedding_vectors: &vectors,
         fused_clusters: &clusters,
         trees: &[],
