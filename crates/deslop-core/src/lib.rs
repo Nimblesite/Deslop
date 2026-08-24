@@ -36,7 +36,6 @@ pub mod live;
 pub mod lsh;
 pub mod observe;
 pub mod overlap;
-pub mod signature_arena;
 pub mod pair;
 pub mod paths;
 pub mod pipeline;
