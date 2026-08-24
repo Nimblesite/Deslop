@@ -28,7 +28,7 @@ use super::{
 use crate::{
     embedding::EmbeddingPair,
     fingerprint::{ranges_overlap, Fingerprint},
-    lsh::{estimate_jaccard, Signature, SignatureIndex},
+    lsh::{estimate_jaccard, Signature, SignatureIndex, SignatureLookup},
     state::FileId,
 };
 
@@ -76,7 +76,7 @@ impl LshPairs for &[(usize, usize)] {
 #[must_use]
 pub fn candidate_pairs(
     fingerprints: &[Fingerprint],
-    signatures: &SignatureIndex<'_>,
+    signatures: &dyn SignatureLookup,
     lsh_pairs: &dyn LshPairs,
     embedding_pairs: &[EmbeddingPair],
 ) -> Vec<CandidatePair> {
@@ -97,7 +97,7 @@ pub fn candidate_pairs(
 #[must_use]
 pub fn candidate_pairs_for_language_policy<S: BuildHasher>(
     fingerprints: &[Fingerprint],
-    signatures: &SignatureIndex<'_>,
+    signatures: &dyn SignatureLookup,
     lsh_pairs: &dyn LshPairs,
     embedding_pairs: &[EmbeddingPair],
     cross_language_signatures: Option<&[Signature]>,
@@ -116,7 +116,7 @@ pub fn candidate_pairs_for_language_policy<S: BuildHasher>(
         // The audit space is the explicit cross-language signature list
         // when the pass built one, else the per-language space itself.
         let built;
-        let alias_space = match cross_language_signatures {
+        let alias_space: &dyn SignatureLookup = match cross_language_signatures {
             Some(space) => {
                 built = SignatureIndex::from_segments([space]);
                 &built
@@ -132,7 +132,7 @@ pub fn candidate_pairs_for_language_policy<S: BuildHasher>(
 /// `file_languages == None` skips the language policy entirely.
 fn build_candidates<S: BuildHasher>(
     fingerprints: &[Fingerprint],
-    signatures: &SignatureIndex<'_>,
+    signatures: &dyn SignatureLookup,
     lsh_pairs: &dyn LshPairs,
     embedding_pairs: &[EmbeddingPair],
     file_languages: Option<&HashMap<FileId, &'static str, S>>,
@@ -148,22 +148,23 @@ fn build_candidates<S: BuildHasher>(
     builder.add_structural_pairs();
     tracing::info!(
         rss_mib = crate::observe::resident_mib(),
-        arrivals = builder.arrivals.len(),
+        evidence = builder.evidence.len(),
         "pairs: post-structural"
     );
     builder.merge_embedding_pairs(embedding_pairs);
+    builder.flush_evidence();
     let mut lsh_scanned = 0_u64;
     lsh_pairs.for_each(&mut |left, right| {
         lsh_scanned = lsh_scanned.saturating_add(1);
-        builder.add_discovered_pair(left, right, 0.0, 0.0);
+        builder.add_zero_evidence(left, right);
     });
     tracing::info!(
         rss_mib = crate::observe::resident_mib(),
-        arrivals = builder.arrivals.len(),
+        kept = builder.kept.len(),
         lsh_scanned,
         "pairs: post-lsh"
     );
-    let resolved = builder.resolve_into_kept();
+    let resolved = builder.finish();
     tracing::info!(
         rss_mib = crate::observe::resident_mib(),
         resolved = resolved.len(),
@@ -202,45 +203,34 @@ struct PairBuilder<'corpus, S: BuildHasher> {
     /// Fingerprints the pair endpoints index into.
     fingerprints: &'corpus [Fingerprint],
     /// Signatures for the token-Jaccard axis.
-    signatures: &'corpus SignatureIndex<'corpus>,
+    signatures: &'corpus dyn SignatureLookup,
     /// Language policy lookup; `None` admits every language pair.
     file_languages: Option<&'corpus HashMap<FileId, &'static str, S>>,
     /// Whether explicit cross-language comparison is allowed.
     allow_cross_language: bool,
-    /// One slim row per discovery arrival
-    /// ([PERF-FLUTTER-TODO-MEMORY]): 24 bytes against a
-    /// `CandidatePair`'s hundred-odd, so every pass's evidence can be
-    /// recorded — a first-seen key set that refused later arrivals
-    /// dropped stronger evidence and hid real duplicates
-    /// (`docs/performance-branch-review.md`). The rows fold into one
-    /// gated candidate per key in [`PairBuilder::resolve_into_kept`].
-    arrivals: Vec<Arrival>,
-    /// Packed keys already carried by a row — refuses the re-emission a
-    /// pair suffers every time it collides in another band (a retained
-    /// pair averages a dozen zero-evidence emissions on a corpus-scale
-    /// run) while still admitting evidence-bearing arrivals of a seen
-    /// key, whose cosine merges into the fold.
-    arrival_keys: std::collections::HashSet<u64>,
-}
-
-/// One discovery of one pair: the packed ordered key plus the evidence
-/// axes that arrival carried. Everything else a candidate needs is
-/// key-invariant, constructed once on the merged evidence after the
-/// fold ([REPAIR-COSINE-MERGE], gh #351).
-struct Arrival {
-    /// Packed ordered pair key; see [`packed_key`].
-    key: u64,
-    /// Structural axis: `1.0` from the Merkle pass, `0.0` otherwise.
-    structural: f64,
-    /// Embedding axis: the cosine this arrival measured, `0.0` if none.
-    cosine: f64,
+    /// The gated, retained pairs ([PERF-FLUTTER-TODO-MEMORY]).
+    kept: Vec<CandidatePair>,
+    /// Merged evidence for every evidence-bearing key
+    /// ([REPAIR-COSINE-MERGE], gh #351): the structural axis from the
+    /// Merkle pass and the strongest cosine from the embedding pass,
+    /// per axis — whichever pass reached the pair first is telemetry.
+    /// The LSH bulk carries no evidence and arrives after both passes,
+    /// so it never needs a row here
+    /// (`docs/performance-branch-review.md`, "first-seen pair
+    /// deduplication drops stronger evidence").
+    evidence: HashMap<u64, (f64, f64)>,
+    /// Packed keys already carried by `kept` — refuses the re-emission
+    /// a pair suffers every time it collides in another band (a
+    /// retained pair averages a dozen emissions on a corpus-scale run
+    /// — pushing every one again is gigabytes of dead entries).
+    kept_keys: std::collections::HashSet<u64>,
 }
 
 impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
     /// Builder over one corpus view.
     fn new(
         fingerprints: &'corpus [Fingerprint],
-        signatures: &'corpus SignatureIndex<'corpus>,
+        signatures: &'corpus dyn SignatureLookup,
         file_languages: Option<&'corpus HashMap<FileId, &'static str, S>>,
         allow_cross_language: bool,
     ) -> Self {
@@ -249,8 +239,9 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
             signatures,
             file_languages,
             allow_cross_language,
-            arrivals: Vec::new(),
-            arrival_keys: std::collections::HashSet::new(),
+            kept: Vec::new(),
+            evidence: HashMap::new(),
+            kept_keys: std::collections::HashSet::new(),
         }
     }
 
@@ -288,7 +279,7 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
                 break;
             };
             for (_, other) in run.iter().skip(1) {
-                self.add_discovered_pair(canonical, *other, 1.0, 0.0);
+                self.add_evidence(canonical, *other, 1.0, 0.0);
             }
             run_start = run_end;
         }
@@ -302,66 +293,58 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
     /// pair is admitted on its own evidence, not on a stub.
     fn merge_embedding_pairs(&mut self, embedding_pairs: &[EmbeddingPair]) {
         for pair in embedding_pairs {
-            self.add_discovered_pair(pair.left, pair.right, 0.0, pair.cosine);
+            self.add_evidence(pair.left, pair.right, 0.0, pair.cosine);
         }
     }
 
-    /// Folds the arrival rows into one candidate per key
-    /// ([REPAIR-COSINE-MERGE], gh #351): each axis takes the maximum
-    /// over the key's arrivals — the Merkle pass contributes the
-    /// structural axis, every embedding arrival contributes its
-    /// cosine, whichever pass reached the pair first is telemetry. The
-    /// construction gate then runs once, on the merged evidence, so
-    /// neither ordering of duplicate discoveries can drop a pair the
-    /// merged evidence admits. Kept pairs leave in key order.
-    fn resolve_into_kept(mut self) -> Vec<CandidatePair> {
-        drop(std::mem::take(&mut self.arrival_keys));
-        self.arrivals.sort_unstable_by_key(|row| row.key);
-        let mut kept: Vec<CandidatePair> = Vec::with_capacity(self.arrivals.len());
-        let mut index = 0_usize;
-        while let Some(first) = self.arrivals.get(index) {
-            let (mut structural, mut cosine) = (first.structural, first.cosine);
-            let mut next = index.saturating_add(1);
-            while let Some(later) = self.arrivals.get(next) {
-                if later.key != first.key {
-                    break;
-                }
-                structural = structural.max(later.structural);
-                cosine = cosine.max(later.cosine);
-                next = next.saturating_add(1);
-            }
-            index = next;
-            let Some(pair) = self.construct_pair(unpack_key(first.key), structural, cosine) else {
+    /// Finishes the build: releases the key set and returns the kept
+    /// pairs in deterministic key order.
+    fn finish(mut self) -> Vec<CandidatePair> {
+        drop(std::mem::take(&mut self.kept_keys));
+        self.kept.sort_unstable_by_key(|pair| (pair.left, pair.right));
+        self.kept.shrink_to_fit();
+        self.kept
+    }
+
+    /// Records evidence-bearing discovery of `(left, right)`: the
+    /// structural axis and the cosine merge per axis into the key's
+    /// row, so no arrival order can drop the stronger evidence.
+    fn add_evidence(&mut self, left: usize, right: usize, structural: f64, cosine: f64) {
+        let key = packed_key(order(left, right));
+        let row = self.evidence.entry(key).or_insert((0.0, 0.0));
+        row.0 = row.0.max(structural);
+        row.1 = row.1.max(cosine);
+    }
+
+    /// Constructs, gates, and retains every evidence-bearing key on its
+    /// merged evidence, then records the key as carried — including
+    /// refused ones, whose zero-evidence re-discovery is monotone
+    /// weaker and can never change the verdict.
+    fn flush_evidence(&mut self) {
+        for (key, (structural, cosine)) in std::mem::take(&mut self.evidence) {
+            let _carried = self.kept_keys.insert(key);
+            let Some(pair) = self.construct_pair(unpack_key(key), structural, cosine) else {
                 continue;
             };
             if self.gate(&pair) {
-                kept.push(pair);
+                self.kept.push(pair);
             }
         }
-        kept.shrink_to_fit();
-        kept
     }
 
-    /// Records the discovery of `(left, right)` with `structural` as
-    /// its structural-axis value and `cosine` as its embedding axis. A
-    /// zero-evidence arrival of an already-carried key is skipped (the
-    /// band-collision bulk); evidence-bearing arrivals are always
-    /// recorded so the fold can take the per-axis maximum.
-    fn add_discovered_pair(&mut self, left: usize, right: usize, structural: f64, cosine: f64) {
+    /// A zero-evidence (LSH band-collision) discovery: construct, gate,
+    /// and retain only if the key is not already carried.
+    fn add_zero_evidence(&mut self, left: usize, right: usize) {
         let key = packed_key(order(left, right));
-        let evidence_bearing = structural > 0.0 || cosine > 0.0;
-        let newly_carried = self.arrival_keys.insert(key);
-        // A zero-evidence arrival of an already-carried key adds no
-        // axis the fold could raise — skip it. An evidence-bearing one
-        // always records, seen key or not.
-        if !evidence_bearing && !newly_carried {
+        if !self.kept_keys.insert(key) {
             return;
         }
-        self.arrivals.push(Arrival {
-            key,
-            structural,
-            cosine,
-        });
+        let Some(pair) = self.construct_pair((left, right), 0.0, 0.0) else {
+            return;
+        };
+        if self.gate(&pair) {
+            self.kept.push(pair);
+        }
     }
 
     /// Builds the candidate for `key` with its score axes filled in, or
@@ -434,7 +417,7 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
 fn add_cross_language_signature_pairs<S: BuildHasher>(
     pairs: &mut Vec<CandidatePair>,
     fingerprints: &[Fingerprint],
-    signatures: &SignatureIndex<'_>,
+    signatures: &dyn SignatureLookup,
     file_languages: &HashMap<FileId, &'static str, S>,
 ) {
     let existing: std::collections::BTreeSet<(usize, usize)> =
@@ -541,14 +524,16 @@ fn endpoint_node_counts(fingerprints: &[Fingerprint], left: usize, right: usize)
 /// Looks up both signatures and returns their estimated Jaccard. Returns
 /// 0.0 when either signature is missing, which cannot happen in practice
 /// because the pipeline always produces one signature per fingerprint.
-fn jaccard_for(signatures: &SignatureIndex<'_>, left: usize, right: usize) -> f64 {
-    let Some(left_signature) = signatures.get(left) else {
+fn jaccard_for(signatures: &dyn SignatureLookup, left: usize, right: usize) -> f64 {
+    let mut left_signature = crate::lsh::ZEROED_SIGNATURE;
+    let mut right_signature = crate::lsh::ZEROED_SIGNATURE;
+    if !signatures.read_into(left, &mut left_signature) {
         return 0.0;
-    };
-    let Some(right_signature) = signatures.get(right) else {
+    }
+    if !signatures.read_into(right, &mut right_signature) {
         return 0.0;
-    };
-    estimate_jaccard(left_signature, right_signature)
+    }
+    estimate_jaccard(&left_signature, &right_signature)
 }
 
 /// Puts the smaller index first. Pair keys are order-insensitive.

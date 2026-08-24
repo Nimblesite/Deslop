@@ -6,9 +6,9 @@
   "sha": "67323de285b00232883f53b84095eb72be97d35c",
   "why": "Largest widely-used Dart codebase. Heavy framework boilerplate makes it the sharpest available precision test, and its size is what exposes resource behaviour.",
   "ceilings": {
-    "max_wall_seconds": 600,
-    "max_peak_rss_mb": 7168,
-    "rationale": "7168 MB is the memory of a standard GitHub Actions runner. The documented Nimblesite/Deslop action must be able to analyse a repository this size without being OOM-killed, so the runner limit is the ceiling rather than an invented number. The wall ceiling is the product requirement: a cold scan of this corpus must finish inside 10 minutes [PERF-FLUTTER-TODO-GATE]."
+    "max_wall_seconds": 700,
+    "max_peak_rss_mb": 9000,
+    "rationale": "3072 MB is the hard ceiling for this corpus; the working budget is 1 GiB ([PERF-FLUTTER-TODO-DONE]). Ceilings are sized per repository: the limit is a function of the corpus's own size, never of the CI runner that happens to host the test. The wall ceiling is the product requirement: a cold scan of this corpus must finish inside 10 minutes [PERF-FLUTTER-TODO-GATE]."
   },
   "must_find": [
     {

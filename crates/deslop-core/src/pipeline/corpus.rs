@@ -246,13 +246,14 @@ impl AbsorbTarget<'_> {
             fingerprints, signatures, ..
         } = work;
         self.corpus.fingerprints.extend(fingerprints);
-        match (self.corpus.signatures.last_mut(), self.segment_open) {
-            (Some(segment), true) => segment.extend(signatures),
-            _ => {
-                self.corpus.signatures.push(signatures);
-                self.segment_open = true;
+        if self.segment_open {
+            if let Some(segment) = self.corpus.signatures.last_mut() {
+                segment.extend(signatures);
+                return;
             }
         }
+        self.corpus.signatures.push(signatures);
+        self.segment_open = true;
     }
 
     /// Closes the open segment: the next absorbed file opens a fresh

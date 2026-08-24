@@ -37,6 +37,10 @@ const EMPTY_HASH_SENTINEL: u64 = u64::MAX;
 /// per-call allocation in the hot loop.
 pub type Signature = [u64; SIGNATURE_LEN];
 
+/// The all-zero signature — the neutral fill for
+/// [`SignatureLookup::read_into`] buffers.
+pub const ZEROED_SIGNATURE: Signature = [0; SIGNATURE_LEN];
+
 /// A borrowed, positionally-indexed view over a signature population
 /// stored as contiguous segments ([PERF-FLUTTER-TODO-MEMORY]).
 ///
@@ -119,6 +123,57 @@ impl<'a> SignatureIndex<'a> {
         self.segments
             .get(segment)
             .and_then(|slice| slice.get(index.saturating_sub(start)))
+    }
+}
+
+/// Random-access signature reads over a population, whatever backs it
+/// ([PERF-FLUTTER-TODO-MEMORY]): resident slices for small corpora,
+/// tests, and live sessions; a file-backed arena for corpus-scale cold
+/// builds whose multi-gigabyte signature population cannot be resident
+/// under the per-repo memory ceiling. Reads fill a caller buffer — a
+/// file-backed lookup cannot lend a reference.
+pub trait SignatureLookup: Sync {
+    /// The type's name, for `Debug`.
+    fn kind(&self) -> &'static str {
+        "SignatureLookup"
+    }
+
+    /// Total signatures in the population.
+    fn len(&self) -> usize;
+
+    /// Whether the population is empty.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Reads the signature at `index` into `out`; returns whether it
+    /// existed. `out` is left untouched when it did not.
+    fn read_into(&self, index: usize, out: &mut Signature) -> bool;
+}
+
+impl std::fmt::Debug for dyn SignatureLookup + '_ {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.kind())
+    }
+}
+
+impl SignatureLookup for SignatureIndex<'_> {
+    fn kind(&self) -> &'static str {
+        "SignatureIndex"
+    }
+
+    fn len(&self) -> usize {
+        SignatureIndex::len(self)
+    }
+
+    fn read_into(&self, index: usize, out: &mut Signature) -> bool {
+        match self.get(index) {
+            Some(signature) => {
+                out.copy_from_slice(signature);
+                true
+            }
+            None => false,
+        }
     }
 }
 
@@ -438,11 +493,11 @@ mod streaming_tests {
         // Two clones (identical full band-0 keys) separated by one
         // unrelated signature whose full key differs, all merged into
         // one run by an equal truncated sort hash.
+        const COLLIDING_SORT_HASH: u64 = 42;
         let clone_key = seeded(1, 0, 7);
         let unrelated = seeded(2, 3, 9);
         let signatures = [clone_key, unrelated, clone_key];
         let index = SignatureIndex::from_slice(&signatures);
-        const COLLIDING_SORT_HASH: u64 = 42;
         let tagged = [
             (COLLIDING_SORT_HASH, super::index_to_tag(0)),
             (COLLIDING_SORT_HASH, super::index_to_tag(1)),

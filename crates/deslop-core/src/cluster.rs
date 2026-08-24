@@ -19,7 +19,7 @@ use crate::{
     ast::{ByteRange, NormalizedNode},
     content::{attach_content_evidence, ContentEvidence},
     fingerprint::Fingerprint,
-    lsh::SignatureIndex,
+    lsh::SignatureLookup,
     overlap::OverlapMeasurer,
     pair::{FusedCluster, PairScore},
     state::FileId,
@@ -96,7 +96,7 @@ pub struct ClusterBuildInputs<'a, S: BuildHasher, H: BuildHasher, L: BuildHasher
     /// Every live fingerprint, flat, in corpus order.
     pub fingerprints: &'a [Fingerprint],
     /// Per-fingerprint `MinHash` signatures, positionally aligned.
-    pub signatures: &'a SignatureIndex<'a>,
+    pub signatures: &'a dyn SignatureLookup,
     /// Embedding vectors by corpus index ([FUSION-CLUSTER-SIGNALS]).
     pub embedding_vectors: &'a HashMap<usize, Vec<f32>, S>,
     /// Transitive-closure components to rehydrate.
@@ -238,7 +238,7 @@ fn signal_worker_count(clusters: usize) -> usize {
 }
 
 /// Most workers the signal build will use, whatever the core count.
-const SIGNAL_SHARD_MAX_WORKERS: usize = 10;
+const SIGNAL_SHARD_MAX_WORKERS: usize = 14;
 
 /// Wall time the ranked build spent per substage, accumulated across
 /// every cluster so the signal event can attribute the stage

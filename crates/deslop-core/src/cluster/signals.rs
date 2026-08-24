@@ -14,7 +14,7 @@ use std::{collections::HashMap, hash::BuildHasher};
 use crate::{
     embedding::cosine_similarity,
     fingerprint::Fingerprint,
-    lsh::{estimate_jaccard, SignatureIndex},
+    lsh::{estimate_jaccard, SignatureLookup},
     overlap::OverlapMeasurer,
     pair::PairScore,
 };
@@ -36,7 +36,7 @@ use crate::{
 pub(super) fn measured_signals<S: BuildHasher>(
     occurrence_indices: &[usize],
     fingerprints: &[Fingerprint],
-    signatures: &SignatureIndex<'_>,
+    signatures: &dyn SignatureLookup,
     embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     overlap: &mut OverlapMeasurer<'_>,
 ) -> PairScore {
@@ -74,7 +74,7 @@ impl SignalTotals {
         left: usize,
         right: usize,
         fingerprints: &[Fingerprint],
-        signatures: &SignatureIndex<'_>,
+        signatures: &dyn SignatureLookup,
         embedding_vectors: &HashMap<usize, Vec<f32>, S>,
         overlap: &mut OverlapMeasurer<'_>,
     ) {
@@ -84,9 +84,11 @@ impl SignalTotals {
             // shared-subtree overlap ([FUSION-SHARED-SUBTREE]).
             self.structural.add(overlap.overlap(left_fp, right_fp));
         }
-        if let (Some(left_sig), Some(right_sig)) = (signatures.get(left), signatures.get(right)) {
+        let mut left_sig = crate::lsh::ZEROED_SIGNATURE;
+        let mut right_sig = crate::lsh::ZEROED_SIGNATURE;
+        if signatures.read_into(left, &mut left_sig) && signatures.read_into(right, &mut right_sig) {
             self.token_jaccard
-                .add(estimate_jaccard(left_sig, right_sig));
+                .add(estimate_jaccard(&left_sig, &right_sig));
         }
         if let (Some(left_vec), Some(right_vec)) =
             (embedding_vectors.get(&left), embedding_vectors.get(&right))

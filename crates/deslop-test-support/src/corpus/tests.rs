@@ -55,7 +55,7 @@ fn a_gnu_peak_is_read_as_kbytes() -> Result<()> {
     let parsed = peak_rss_mb(stderr)?;
     assert_eq!(
         parsed, 7168,
-        "7340032 kbytes is 7168 MB, the runner ceiling"
+        "7340032 kbytes is 7168 MB"
     );
     Ok(())
 }
@@ -67,7 +67,7 @@ fn a_bsd_peak_is_read_as_bytes() -> Result<()> {
     let parsed = peak_rss_mb(stderr)?;
     assert_eq!(
         parsed, 7168,
-        "7516192768 bytes is 7168 MB, the runner ceiling"
+        "7516192768 bytes is 7168 MB"
     );
     Ok(())
 }

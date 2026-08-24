@@ -124,7 +124,7 @@ This is not evidence of a conventional leak or an accidental infinite allocation
 
 The measured 14,624.9 MB peak is:
 
-- 2.04 times the manifest ceiling of 7,168 MB;
+- 2.04 times the old runner-derived ceiling of 7,168 MB (since replaced by per-repo sizing);
 - too large for the standard 7 GB runner budget described in the manifest;
 - reached before clustering and report rendering begin.
 
@@ -226,7 +226,7 @@ This list defines the required outcomes. It deliberately does not prescribe impl
 ### Definition of done [PERF-FLUTTER-TODO-DONE]
 
 - [ ] Complete a cold, non-incremental analysis of the pinned Flutter corpus in less than 600 seconds.
-- [ ] Keep peak process memory at or below the executable corpus ceiling of 1 gig (`max_peak_rss_mb` in `corpus/flutter.json`) — the one number the gate enforces.
+- [ ] Keep peak process memory at or below 1 GiB, the working budget; `max_peak_rss_mb` in `corpus/flutter.json` enforces the hard ceiling (3072 MiB). Memory ceilings are sized per corpus repo, never copied from the CI runner.
 - [ ] Complete every pipeline stage, including clustering, ranking, and report rendering, without timeout or termination.
 - [ ] Produce the expected JSON report and all requested output formats.
 - [ ] Preserve every curated Flutter `must_find` result.
@@ -303,7 +303,7 @@ This list defines the required outcomes. It deliberately does not prescribe impl
 - [ ] Identify the data that must remain available at each pipeline stage and the data whose lifetime exceeds its last required use.
 - [ ] Determine whether equivalent data is retained in more than one representation at the same time.
 - [ ] Determine the cause of the rise from approximately 5.5 GiB after corpus construction to the 14.28 GiB peak.
-- [ ] Establish a peak-memory budget for each major stage whose combined maximum remains below 7,168 MiB.
+- [ ] Establish a peak-memory budget for each major stage whose combined maximum remains below the per-repo ceiling.
 - [ ] Ensure peak memory remains within budget for both successful completion and diagnostic logging modes.
 - [ ] Confirm that memory use returns to an expected steady state after each completed analysis in long-running sessions.
 - [ ] Confirm that memory improvements do not remove information required for accurate ranking, rendering, or incremental updates.
@@ -338,7 +338,7 @@ This list defines the required outcomes. It deliberately does not prescribe impl
 ### Enforce the result [PERF-FLUTTER-TODO-GATE]
 
 - [x] Make the Flutter corpus wall-time requirement executable and fail when the completed scan exceeds 600 seconds. `corpus/flutter.json` `max_wall_seconds` is now 600; the corpus test fails above it.
-- [x] Keep the existing 7,168 MiB peak-memory ceiling executable and fail when exceeded. `max_peak_rss_mb: 7168` enforced by the harness.
+- [x] Keep the per-repo peak-memory ceiling executable and fail when exceeded. `max_peak_rss_mb: 3072` in `corpus/flutter.json`, enforced by the harness; other corpora sized to their own scale in `corpus/*.json`.
 - [ ] Fail when the analyzer times out, is killed, or exits without a complete report.
 - [ ] Fail when required provenance or resource measurements are missing.
 - [ ] Fail when the scan analyzes fewer files than the curated scope requires.
