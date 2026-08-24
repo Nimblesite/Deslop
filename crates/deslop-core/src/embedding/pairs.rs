@@ -164,8 +164,17 @@ fn ann_embedding_pairs(embeddings: &[Vec<f32>]) -> Vec<EmbeddingPair> {
 /// because `group_snippets_by_content` collapses them, reported
 /// `0.999998` instead of `1.0`, and near-threshold pairs could be admitted
 /// or dropped on rounding alone. GH #372.
+///
+/// A vector compared with itself returns the analytic `1.0` bit-exactly:
+/// computing it as `dot / (norm * norm)` can land one ULP away because
+/// `sqrt` rounds and squaring the rounded root does not reproduce the
+/// norm-square. Byte-identical snippets share one vector, and the
+/// rendered figure is pinned at exactly `1.0` ([FUSION-EMBED-PROVIDER]).
 #[must_use]
 pub fn cosine_similarity(left: &[f32], right: &[f32]) -> f64 {
+    if left == right {
+        return if norm(left) > 0.0 { 1.0 } else { 0.0 };
+    }
     cosine_from_parts(left, right, norm(left) * norm(right))
 }
 
@@ -317,17 +326,40 @@ mod tests {
     /// [FUSION-EMBED-PROVIDER] A vector is perfectly similar to itself. Two
     /// byte-identical snippets share one vector (`group_snippets_by_content`
     /// collapses them), so this is exactly the figure the report renders for
-    /// an identical clone pair — it must be `1.0`, not `0.999998`. GH #372.
+    /// an identical clone pair — it must be `1.0`, not `0.999998` and not one
+    /// ULP below it. Bit-exact, not within epsilon: the JSON figure an agent
+    /// reads is pinned at the analytic value ([FUSION-EMBED-PROVIDER], GH #372).
     #[test]
     fn identical_vectors_have_cosine_similarity_of_exactly_one() {
+        // Bit-exact via `to_bits` ([cluster::signals] precedent): the
+        // assertion is *the point* — one ULP below 1.0 is a wrong figure.
         for width in WIDTHS {
             let vector = ramp(width);
-            let cosine = cosine_similarity(&vector, &vector);
-            assert!(
-                (cosine - 1.0).abs() < f64::EPSILON,
-                "a vector of width {width} must be perfectly similar to itself, got {cosine:.17}",
+            assert_eq!(
+                cosine_similarity(&vector, &vector).to_bits(),
+                1.0_f64.to_bits(),
+                "a vector of width {width} must be perfectly similar to itself",
             );
         }
+        // Norm-squares that are not perfect squares: `sqrt` rounds, squaring
+        // the rounded root does not reproduce the norm-square, and the naive
+        // `dot / (norm * norm)` lands one ULP below 1.0. Measured failing
+        // before the self-similarity fast path.
+        let two_lane = [1.0_f32, 2.0];
+        assert_eq!(
+            cosine_similarity(&two_lane, &two_lane).to_bits(),
+            1.0_f64.to_bits(),
+            "norm-square 5.0 must not lose a ULP through sqrt-then-square",
+        );
+        let uniform = vec![1.0_f32; 128];
+        assert_eq!(
+            cosine_similarity(&uniform, &uniform).to_bits(),
+            1.0_f64.to_bits(),
+            "a uniform vector must not lose a ULP through sqrt-then-square",
+        );
+        // The degenerate equal case keeps the zero-norm rule.
+        let zero = [0.0_f32, 0.0];
+        assert_eq!(cosine_similarity(&zero, &zero).to_bits(), 0.0_f64.to_bits());
     }
 
     /// Tolerance for a rescale, where bit-exactness is unachievable in any

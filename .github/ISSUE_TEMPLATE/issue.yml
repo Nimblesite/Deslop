@@ -1,0 +1,139 @@
+# Issue template for the Deslop repository — the human-facing web form for
+# ANY issue type: bug, feature request, or task.
+# Renders at https://github.com/Nimblesite/Deslop/issues/new?template=issue.yml
+#
+# HOW TO EDIT THIS FILE
+# - This is a GitHub issue form (https://docs.github.com/en/communities/using-templates-for-your-issues/pulling-issue-forms-into-your-repository).
+# - Each item under `body:` becomes one input on the form, top to bottom.
+# - Instructions for editors of this template live in these comments (#).
+# - Instructions for people filing the issue go in the `placeholder:` text
+#   or the field `description:`, which is shown above the input.
+# - AI agents do NOT see this form: they file issues via `gh issue create`
+#   following `.agents/skills/log-issue/SKILL.md`, which mirrors these sections
+#   for every issue type (Bug/Feature/Task). The two must agree — same
+#   sections, same order:
+#   TL;DR → Details → Steps To Reproduce → Details (for AI) →
+#   Acceptance Criteria (for AI) → Screenshots.
+# - GitHub renders each field as a `### <label>` heading, which the issue
+#   atlas script (`scripts/issues/generate_issue_report.py`) parses — the
+#   TL;DR section becomes the site excerpt. Do not rename or reorder labels.
+# - STEPS TO REPRODUCE IS BUG-ONLY: it is optional here and says so in its
+#   description. Humans filing features or tasks skip it; the log-issue skill
+#   keeps the heading in agent-filed bodies with type-appropriate content.
+# - No `labels:` are auto-applied — triage sets the issue type and labels.
+
+name: Issue report
+description: Report a bug, request a feature, or file a task
+body:
+  # TL;DR — the one-liner a maintainer reads first. Becomes the site excerpt.
+  - type: textarea
+    id: tldr
+    attributes:
+      label: TL;DR
+      description: One or two sentences a human can act on without reading anything else.
+      placeholder: |
+        Bug: "A 3-line getter/setter pair was reported as a duplicate cluster even though the two occurrences are in different languages."
+        Feature: "Add a --since <commit> flag so reports cover only code changed since a given commit."
+        Task: "Delete the legacy renderer — nothing calls it since 0.20."
+    validations:
+      required: true
+
+  # Details — the human narrative. Two to three paragraphs.
+  # Content varies by type; the description says so.
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Two to three paragraphs for humans. Bug — what did you expect, what happened instead, and why is that wrong? Feature — the capability wanted and why. Task — what needs doing and why now.
+      placeholder: |
+        Bug: paragraph 1 — what you were doing when the bug appeared; paragraph 2 — what the tool reported and what the correct output was; paragraph 3 (optional) — which pipeline stage you suspect (parse, normalize, fingerprint, cluster, rank, render).
+
+        Feature: the workflow today without the capability, where it hurts, and what "done" looks like.
+
+        Task: the current state being cleaned up and why it matters now.
+    validations:
+      required: true
+
+  # Steps To Reproduce — BUGS ONLY. Optional: features and tasks skip it.
+  # The label stays "Steps To Reproduce" (parsed heading) — do not rename.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps To Reproduce
+      description: 'Bugs only — you do NOT need to fill this in for feature requests or tasks. Leave it empty. For bugs, give exact steps using the CLI or the VSIX extension, so anyone can reproduce from a clean clone.'
+      placeholder: |
+        Leave empty for features and tasks.
+
+        Bugs — CLI:
+          git clone <fixture repo URL> && cd <repo>
+          deslop . --output /tmp/deslop
+          open /tmp/deslop-report.html
+
+        Bugs — VSIX:
+          1. Open the fixture repo in VS Code with the Deslop Live extension installed.
+          2. Run the analysis command.
+          3. Observe the reported cluster.
+
+        Include the fixture repo URL, or attach the smallest sample files that trigger it.
+    validations:
+      required: false
+
+  # Details (for AI) — machine-consumable facts.
+  # Everything an agent needs to triage without reading prose: versions, flags,
+  # cluster ids, report paths. Rendered as a code block so it stays copyable.
+  - type: textarea
+    id: ai-details
+    attributes:
+      label: Details (for AI)
+      description: Structured facts for automated triage. Optional for humans; paste verbatim command lines and key output lines if you have them.
+      render: shell
+      placeholder: |
+        # environment
+        deslop --version: 0.x.y
+        os: <macOS / Windows / Linux + version>
+        surface: cli | vsix
+        vsix version: 0.x.y (if applicable)
+
+        # invocation
+        command: deslop . --output /tmp/deslop --min-nodes 30
+
+        # evidence
+        cluster id: <id from the report>
+        occurrence count: <n>
+        files involved:
+          - path/to/first/file.ext
+        report paths:
+          - /tmp/deslop-report.json
+        key output:
+          <paste the exact offending lines from the report or logs>
+    validations:
+      required: false
+
+  # Acceptance Criteria (for AI) — the testable assertions that define "fixed"
+  # (bugs) or "done" (features/tasks). Optional for humans filing the form;
+  # mandatory in the AI path (log-issue skill).
+  - type: textarea
+    id: ai-acceptance
+    attributes:
+      label: Acceptance Criteria (for AI)
+      description: Testable assertions that define "fixed" or "done". Each line should be checkable without human judgement. Optional.
+      placeholder: |
+        Bug: "Running deslop on <fixture> reports cluster <id> with exactly 2 occurrences: <file A> and <file B>."
+        Feature: "`deslop --since <commit>` reports only clusters with at least one occurrence in files changed since <commit>."
+        Task: "`rg legacy_renderer` returns no matches outside fixtures."
+    validations:
+      required: false
+
+  # Screenshots — visual evidence. Agents filing via the log-issue skill should
+  # post screenshot images here when possible (embed hosted URLs; gh cannot
+  # upload GitHub user-content assets, so local files wait for web-UI attach).
+  # Drag-and-drop into this field uploads images on the web form.
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Drag images into this field — the rendered HTML report, the VS Code panel, mockups for a feature, or the offending output. Optional.
+      placeholder: |
+        Drag and drop screenshot images here. A picture of the wrong cluster in the HTML report or the VS Code panel is worth a thousand pasted lines.
+    validations:
+      required: false

@@ -62,11 +62,7 @@ class RawIssue(TypedDict):
     blocking_numbers: NotRequired[list[int]]
 
 
-class WorkstreamRule(TypedDict):
-    name: str
-    description: str
-    color: str
-    keywords: tuple[str, ...]
+from scripts.issues.rules import PRIORITIES, WORKSTREAMS, WorkstreamRule
 
 
 class LabelData(TypedDict):
@@ -152,69 +148,6 @@ class ReportData(TypedDict):
     priorities: list[PriorityData]
     issues: list[IssueData]
     relationships: list[RelationshipData]
-
-
-WORKSTREAMS: dict[str, WorkstreamRule] = {
-    "accuracy": {
-        "name": "Accuracy",
-        "description": "False positives, false negatives, and correctness of clone claims.",
-        "color": "#ff5449",
-        "keywords": ("false positive", "false negative", "accuracy", "incorrect", "lies"),
-    },
-    "detection": {
-        "name": "Detection engine",
-        "description": "Parsing, matching, scoring, embeddings, and cluster formation.",
-        "color": "#ff8a65",
-        "keywords": ("clone", "bucket", "fingerprint", "lsh", "embedding", "tree sitter", "parser", "fused", "rename"),
-    },
-    "performance": {
-        "name": "Performance & live",
-        "description": "Incremental analysis, caches, memory, scheduling, and throughput.",
-        "color": "#ffd166",
-        "keywords": ("performance", "incremental", "cache", "memory", "rss", "slow", "scheduler", "reactiv", "watcher"),
-    },
-    "editor": {
-        "name": "Editor experience",
-        "description": "VS Code, JetBrains, diagnostics, panels, hovers, and webviews.",
-        "color": "#9bcbff",
-        "keywords": ("vsix", "vs code", "vscode", "jetbrains", "webview", "panel", "hover", "diagnostic", "editor"),
-    },
-    "integrations": {
-        "name": "CLI, MCP & automation",
-        "description": "Command-line, MCP, actions, and agent-facing workflows.",
-        "color": "#8bd3c7",
-        "keywords": ("mcp", "cli", "find similar", "top offenders", "github action", "autofix", "tool"),
-    },
-    "delivery": {
-        "name": "Release & delivery",
-        "description": "Packaging, signing, releases, deployment, and platform contracts.",
-        "color": "#c6a0f6",
-        "keywords": ("release", "shipwright", "deploy", "publish", "sign", "notar", "marketplace", "dependabot", "codeql"),
-    },
-    "reporting": {
-        "name": "Reporting & metrics",
-        "description": "Human-readable reports, metrics, summaries, and documentation.",
-        "color": "#89b4fa",
-        "keywords": ("report", "summary", "metric", "percentage", "documentation", "docs", "context"),
-    },
-    "quality": {
-        "name": "Quality system",
-        "description": "Tests, specifications, CI, fixtures, and repository health.",
-        "color": "#a6e3a1",
-        "keywords": ("test", "spec", "fixture", "coverage", "ci", "flaky", "ignored", "tech debt"),
-    },
-}
-
-PRIORITIES: dict[str, tuple[int, str, str]] = {
-    "verify_release": (0, "Verify next release", "To the best of our knowledge, fixed on main; verify in the next release before closing."),
-    "release_blocker": (1, "Stop the line", "An unresolved showstopper blocks safe delivery."),
-    "accuracy_critical": (2, "Protect accuracy", "Critical correctness risk to duplicate detection."),
-    "critical": (3, "Critical path", "Serious user or delivery impact; tackle soon."),
-    "assurance": (4, "Restore assurance", "A spec or ignored-test gap weakens confidence in the system."),
-    "defect": (5, "Fix defects", "Open bug without a higher-severity signal."),
-    "feature": (6, "Planned product work", "Feature work after correctness and release risk."),
-    "task": (7, "Maintenance & tasks", "Task or unclassified work after higher-priority queues."),
-}
 
 
 def parse_args() -> argparse.Namespace:
@@ -327,20 +260,71 @@ def workstream_for(item: RawIssue) -> str:
     return best if scores[best] else "quality"
 
 
-def plain_excerpt(body: str | None) -> str:
+# Canonical TL;DR section marker — matches `## TL;DR` from the log-bug skill and
+# `### TL;DR` from the GitHub issue form (.github/ISSUE_TEMPLATE/issue.yml).
+TLDR_HEADING = "tldr"
+EXCERPT_SOFT_LIMIT = 260
+EXCERPT_HARD_LIMIT = 280
+
+
+def readable_line(raw_line: str) -> str:
+    """Strip markdown decoration from one body line."""
+    return raw_line.strip().lstrip("#>*- ").replace("`", "")
+
+
+def normalized_heading(line: str) -> str:
+    """Alphanumeric-only, lowercased heading text (``## TL;DR`` -> ``tldr``)."""
+    return "".join(character for character in line.lstrip("#").strip().lower() if character.isalnum())
+
+
+def tldr_lines(body: str | None) -> list[str] | None:
+    """Readable lines of the canonical TL;DR section, or None when absent."""
+    collected: list[str] | None = None
+    in_code = False
+    for raw_line in (body or "").splitlines():
+        stripped = raw_line.strip()
+        if stripped.startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code:
+            continue
+        is_heading = stripped.startswith("#")
+        if collected is not None and is_heading:
+            break
+        if is_heading:
+            if normalized_heading(stripped) == TLDR_HEADING:
+                collected = []
+            continue
+        line = readable_line(raw_line)
+        if collected is not None and line and not line.startswith("!["):
+            collected.append(line)
+    return collected
+
+
+def body_lines(body: str | None) -> list[str]:
+    """Readable lines from the whole body, capped near the excerpt limit."""
     lines: list[str] = []
     in_code = False
     for raw_line in (body or "").splitlines():
         if raw_line.strip().startswith("```"):
             in_code = not in_code
             continue
-        line = raw_line.strip().lstrip("#>*- ").replace("`", "")
+        line = readable_line(raw_line)
         if line and not in_code and not line.startswith("!["):
             lines.append(line)
-        if sum(len(value) for value in lines) > 260:
+        if sum(len(value) for value in lines) > EXCERPT_SOFT_LIMIT:
             break
+    return lines
+
+
+def plain_excerpt(body: str | None) -> str:
+    """Excerpt for the issue atlas: the TL;DR section when the canonical
+    structure is present, otherwise the leading readable body lines."""
+    lines = tldr_lines(body)
+    if lines is None:
+        lines = body_lines(body)
     excerpt = " ".join(lines)
-    return excerpt[:277].rstrip() + "…" if len(excerpt) > 280 else excerpt
+    return excerpt[:EXCERPT_HARD_LIMIT - 3].rstrip() + "…" if len(excerpt) > EXCERPT_HARD_LIMIT else excerpt
 
 
 def relationship_edges(issues: list[RawIssue]) -> list[RelationshipData]:

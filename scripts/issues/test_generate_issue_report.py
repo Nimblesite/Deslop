@@ -12,12 +12,24 @@ from scripts.issues.generate_issue_report import (
     extract_references,
     lifecycle_for,
     long_publication_time,
+    plain_excerpt,
     populate_relationships,
     priority_for,
     workstream_for,
 )
 
 PUBLISHED_AT = datetime(2026, 8, 21, 10, 0, tzinfo=timezone.utc)
+
+# Canonical issue section headings — must agree with `.agents/skills/log-issue/SKILL.md`
+# and `.github/ISSUE_TEMPLATE/issue.yml`.
+HEADING_TLDR_AGENT = "## TL;DR"
+HEADING_TLDR_FORM = "### TL;DR"
+HEADING_DETAILS = "## Details"
+HEADING_DETAILS_AI = "## Details (for AI)"
+HEADING_ACCEPTANCE_AI = "## Acceptance Criteria (for AI)"
+
+TLDR_SUMMARY = "Getter pair reported as one cluster across two languages."
+DETAILS_NARRATIVE = "Long human narrative that must never reach the excerpt. " * 40
 
 
 def issue(
@@ -50,15 +62,18 @@ def issue(
 
 class IssueReportTests(unittest.TestCase):
     def test_generator_has_no_ai_integration(self) -> None:
-        source = (Path(__file__).parent / "generate_issue_report.py").read_text(encoding="utf-8")
-        tree = ast.parse(source)
-        imported = {node.names[0].name.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.Import)}
-        imported |= {node.module.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module}
-        allowed = {"argparse", "collections", "datetime", "json", "os", "pathlib", "subprocess", "sys", "typing"}
-
-        self.assertLessEqual(imported, allowed)
-        for provider in ("openai", "anthropic", "gemini", "ollama"):
-            self.assertNotIn(provider, source.lower())
+        sources = {
+            path: (Path(__file__).parent / path).read_text(encoding="utf-8")
+            for path in ("generate_issue_report.py", "rules.py")
+        }
+        allowed = {"argparse", "collections", "datetime", "json", "os", "pathlib", "scripts", "subprocess", "sys", "typing"}
+        for path, source in sources.items():
+            tree = ast.parse(source)
+            imported = {node.names[0].name.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.Import)}
+            imported |= {node.module.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module}
+            self.assertLessEqual(imported, allowed, path)
+            for provider in ("openai", "anthropic", "gemini", "ollama"):
+                self.assertNotIn(provider, source.lower(), path)
 
     def test_pages_deploy_always_generates_fresh_issue_data(self) -> None:
         root = Path(__file__).resolve().parents[2]
@@ -195,6 +210,34 @@ class IssueReportTests(unittest.TestCase):
         self.assertIn("No AI enrichment", report["meta"]["method"])
         repeated = build_report(issues, "Nimblesite/Deslop", PUBLISHED_AT)
         self.assertEqual(report["issues"], repeated["issues"])
+
+    def test_excerpt_prefers_canonical_tldr_section(self) -> None:
+        body = "\n".join([
+            HEADING_TLDR_AGENT,
+            TLDR_SUMMARY,
+            "",
+            HEADING_DETAILS,
+            DETAILS_NARRATIVE,
+            "",
+            HEADING_DETAILS_AI,
+            "cluster id: 123",
+        ])
+
+        self.assertEqual(plain_excerpt(body), TLDR_SUMMARY)
+
+    def test_excerpt_reads_form_heading_levels_and_stops_at_next_section(self) -> None:
+        body = "\n".join([HEADING_TLDR_FORM, "Form-filed summary.", "", HEADING_DETAILS, "Ignored narrative."])
+
+        self.assertEqual(plain_excerpt(body), "Form-filed summary.")
+
+    def test_excerpt_falls_back_to_plain_body_without_tldr(self) -> None:
+        self.assertEqual(plain_excerpt("Plain old body line."), "Plain old body line.")
+        self.assertEqual(plain_excerpt(None), "")
+
+    def test_excerpt_skips_code_fences_inside_tldr_section(self) -> None:
+        body = "\n".join([HEADING_TLDR_AGENT, "```", "deslop . --output /tmp/deslop", "```", "Real summary."])
+
+        self.assertEqual(plain_excerpt(body), "Real summary.")
 
     def test_publication_timestamp_is_full_utc_and_long_formatted(self) -> None:
         published_at = datetime(2026, 9, 14, 22, 0, tzinfo=timezone.utc)

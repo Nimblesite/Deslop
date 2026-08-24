@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Grep, Glob
 
 # Issue Triage
 
-Triage every open issue (or only `$ARGUMENTS` if given). Read-only on code; writes go to GitHub only. Never close an issue, never remove a label you cannot justify in the comment trail, never edit issue bodies written by others.
+Triage every open issue (or only `$ARGUMENTS` if given). Read-only on code; writes go to GitHub only. Never close an issue, never remove a label you cannot justify in the comment trail, never edit issue bodies except through the log-issue backfill, which preserves all information.
 
 Every triaged issue must also land in the **correct published work lane** (Step 4): the site's lanes are derived mechanically from GitHub data by `scripts/issues/generate_issue_report.py`, and triage owns making that derivation come out right — checking it is not optional.
 
@@ -82,6 +82,8 @@ A ticket is thin if a dev could not start work from it alone. For each, investig
 - Affected files with paths and line numbers.
 - Suspected root cause and the spec ID (`[GROUP-TOPIC]`) it violates.
 - Repro: exact command or failing-test name, expected vs actual.
+
+Structure enrichment comments with the canonical section names defined in the log-issue skill (`.agents/skills/log-issue/SKILL.md` — "Canonical issue body") so humans and agents read issues and comments the same way; do not restate the section list here. That skill also owns the plain-language rule for human sections — apply it to enrichment comments too. The issue atlas excerpt (`plain_excerpt` in `scripts/issues/generate_issue_report.py`) is drawn from the `## TL;DR` section — a backfill changes the site card text, so a missing or empty TL;DR on an open issue is a triage finding.
 
 If investigation uncovers a **new** accuracy defect, the CLAUDE.md quarantine rule applies — stop triage and follow it.
 
