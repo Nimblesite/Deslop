@@ -179,12 +179,25 @@ erased:
    Between the two, the legacy signal routing stands: real-world sibling
    families (the #197 REST settings surface measures 0.72–0.80) keep their
    demoted verdict.
-5. **Token-signal correction.** A shape-identical cluster shares one Merkle
-   hash, so its members' normalised k-gram sets are equal by construction;
-   for clusters routed `identical` / `nearly_identical` a lower rendered
+5. **Token-signal correction.** A cluster whose members all carry **one**
+   Merkle hash has normalised k-gram sets that are equal by construction;
+   for such clusters routed `identical` / `nearly_identical` a lower rendered
    `token_jaccard` is a fallback-signature artifact and is corrected to 1.0
    (the GH #232 argument). `structural_only` keeps its unscored signal —
    absent token support is that bucket's defining signature.
+
+   The correction is scoped by that digest equality, tested directly on the
+   members, and by nothing else (gh #431). No reading of `structural` can
+   stand in for it: since [FUSION-SHARED-SUBTREE] the axis grades subtree
+   *overlap*, so it saturates by ratio as well as by hash equality, and every
+   value below saturation means the subtrees provably differ. Scoping the
+   correction to `content_gate.structural_saturation_floor` — a near-miss
+   **routing** tolerance — published `token_jaccard = 1.0`, and the `shape`
+   reading derived from it, across the whole `[0.99, 1.0)` band on no
+   evidence: the rendered signals then no longer reproduced the rendered
+   `fused`, which is computed before the correction. Routing tolerance is not
+   proof of identity. Pinned by
+   `crates/deslop/tests/content_gate_signal_honesty.rs`.
 6. **Ranking.** The content-gated `fused` scales the final report weight as a
    continuous factor alongside the [RANK-CATEGORY] and
    [RANK-STRUCTURAL-ONLY] bucket multipliers: at equal geometry a byte-proven
