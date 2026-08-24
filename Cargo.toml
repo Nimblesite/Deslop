@@ -63,6 +63,15 @@ unused_results = "deny"
 trivial_casts = "deny"
 trivial_numeric_casts = "deny"
 elided_lifetimes_in_paths = "deny"
+# Redundant-syntax family ([LINT-DENY-REDUNDANT-SYNTAX]): none of these
+# sit in `rust_2018_idioms`, `nonstandard_style`, or the individually
+# denied `unused` lints, so without explicit denies they surface as
+# warnings (e.g. rust-analyzer severity 4) instead of errors.
+non_shorthand_field_patterns = "deny"
+bindings_with_variant_name = "deny"
+unused_parens = "deny"
+unused_braces = "deny"
+redundant_semicolons = "deny"
 future_incompatible = { level = "deny", priority = -1 }
 nonstandard_style = { level = "deny", priority = -1 }
 rust_2018_idioms = { level = "deny", priority = -1 }

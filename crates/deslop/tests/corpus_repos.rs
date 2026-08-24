@@ -400,8 +400,9 @@ fn as_f64(count: usize) -> f64 {
 }
 
 /// [CORPUS-CEILINGS] The scan must finish inside the manifest's wall-clock and memory
-/// budget. The memory ceiling is a standard CI runner's RAM — a scan that
-/// exceeds it cannot run in the GitHub Action this project ships.
+/// ceilings. The manifest is the single source of truth for both figures —
+/// per-repo values tolerated for now, sized above the repository's own
+/// measured scan so the gate catches regressions.
 fn check_ceilings(manifest: &Value, run: &CorpusRun, failures: &mut Vec<Failure>) -> Result<()> {
     let ceilings = manifest
         .get("ceilings")

@@ -19,7 +19,7 @@ use deslop_core::{
     ast::ByteRange,
     cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs},
     fingerprint::Fingerprint,
-    lsh::Signature,
+    lsh::{Signature, SignatureIndex},
     pair::{FusedCluster, FusedEdge},
     state::{FileId, FileRegistry},
 };
@@ -47,6 +47,7 @@ fn member(file_id: FileId, start: usize, end: usize) -> Fingerprint {
 /// mean two tests disagreeing about what the stage was actually fed.
 fn ranked_with_edges(members: &[Fingerprint], edges: Vec<FusedEdge>) -> Vec<Cluster> {
     let signatures: Vec<Signature> = members.iter().map(|_| [11_u64; 128]).collect();
+    let signature_index = SignatureIndex::from_slice(&signatures);
     let fused = [FusedCluster {
         members: (0..members.len()).collect(),
         edges,
@@ -54,7 +55,7 @@ fn ranked_with_edges(members: &[Fingerprint], edges: Vec<FusedEdge>) -> Vec<Clus
     let vectors: HashMap<usize, Vec<f32>> = HashMap::new();
     build_ranked_fused_clusters(&ClusterBuildInputs {
         fingerprints: members,
-        signatures: &signatures,
+        signatures: &signature_index,
         embedding_vectors: &vectors,
         fused_clusters: &fused,
         trees: &[],

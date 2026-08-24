@@ -24,7 +24,11 @@ pub(super) struct EndpointView {
     pub(super) postorder: Vec<PostNode>,
     /// Total nodes excluding the synthetic root.
     pub(super) total: usize,
-    /// Creditable subtrees for the large-tree fallback, largest first.
+    /// Creditable subtrees (≥ [`super::SHARED_SUBTREE_MIN_CREDIT_NODES`]
+    /// nodes), largest-first — the large-tree fallback's population.
+    /// Always built: any endpoint may pair with one past
+    /// [`super::ALIGNMENT_MAX_NODES`], and the fallback reads both
+    /// sides' entries.
     pub(super) entries: Vec<Fingerprint>,
     /// Node-kind multiset, excluding the synthetic root, for the
     /// admission upper bound ([FUSION-SHARED-SUBTREE-BOUND]).
@@ -81,16 +85,12 @@ pub(super) fn build_view(
     let root = tree_index.get(&endpoint.file_id)?;
     let members = resolve_range_nodes(root, endpoint.byte_range.start, endpoint.byte_range.end)?;
     let mut postorder: Vec<PostNode> = Vec::new();
-    let mut entries: Vec<Fingerprint> = Vec::new();
     for member in &members {
         push_postorder(member, &mut postorder);
-        entries.extend(collect_fingerprints(
-            member,
-            SHARED_SUBTREE_MIN_CREDIT_NODES,
-        ));
     }
     let total = postorder.len();
     let kind_counts = count_kinds(&postorder);
+    let entries = creditable_entries(&members);
     // Synthetic window root: aligns the members as ordered siblings so
     // a multi-node sibling window is one tree for the alignment. It
     // matches its counterpart at zero cost, so the distance is exactly
@@ -99,18 +99,36 @@ pub(super) fn build_view(
         kind: "__window__",
         leftmost: 1,
     });
-    entries.sort_by(|left, right| {
-        right
-            .node_count
-            .cmp(&left.node_count)
-            .then(left.byte_range.start.cmp(&right.byte_range.start))
-    });
     Some(EndpointView {
         postorder,
         total,
         entries,
         kind_counts,
     })
+}
+
+/// The creditable-subtree collection for a resolved endpoint. Built for
+/// **every** endpoint: the large-tree fallback is selected by the
+/// *pair's* larger side, so an endpoint at or under
+/// [`super::ALIGNMENT_MAX_NODES`] still needs its entries when it pairs
+/// with one past the cap — gating on the individual endpoint's size
+/// starved `credit_shared_nodes` of the small side and silently dropped
+/// real rescues (`a_small_endpoint_still_gets_credit_against_a_large_one`).
+fn creditable_entries(members: &[&NormalizedNode]) -> Vec<Fingerprint> {
+    let mut entries = Vec::new();
+    for member in members {
+        entries.extend(collect_fingerprints(
+            member,
+            SHARED_SUBTREE_MIN_CREDIT_NODES,
+        ));
+    }
+    entries.sort_by(|left, right| {
+        right
+            .node_count
+            .cmp(&left.node_count)
+            .then(left.byte_range.start.cmp(&right.byte_range.start))
+    });
+    entries
 }
 
 /// Kind-multiset of a post-order sequence ([FUSION-SHARED-SUBTREE-BOUND]).
