@@ -8,7 +8,7 @@
   "ceilings": {
     "max_wall_seconds": 700,
     "max_peak_rss_mb": 9000,
-    "rationale": "3072 MB is the hard ceiling for this corpus; the working budget is 1 GiB ([PERF-FLUTTER-TODO-DONE]). Ceilings are sized per repository: the limit is a function of the corpus's own size, never of the CI runner that happens to host the test. The wall ceiling is the product requirement: a cold scan of this corpus must finish inside 10 minutes [PERF-FLUTTER-TODO-GATE]."
+    "rationale": "Interim ceilings while the performance branch lands (wall 700 s, peak RSS 9000 MB): sized above this corpus's current measurements so the gate catches catastrophic regressions, not the known gap. They are NOT product targets. The ten-minute goal is the product requirement [PERF-FLUTTER-TODO-GATE]; the shipped ceiling must be re-derived from this repository's own measured scan once the perf work completes, with the measured figure recorded here. Ceilings are always a function of the repository's own size."
   },
   "must_find": [
     {

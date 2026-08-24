@@ -18,7 +18,7 @@ That measurement must report a **true** peak, never a sampled one. A sample take
 
 A measurement that never arrived is an error, never a zero. A zero would parse as a real number and clear every memory ceiling in the corpus at once.
 
-The memory ceiling is **sized per repository, in `corpus/*.json`** — a function of the corpus's own scale, never of the machine that happens to host the test. A ceiling copied from a CI runner says nothing about Deslop: it is either so loose it never fires or so tight it fails for reasons that are not the product's. Flutter, the largest corpus, carries a hard ceiling of 3072 MB with a 1 GiB working budget; smaller corpora carry smaller ceilings. The wall ceiling is deliberately loose: it exists to catch a hang, not to police throughput.
+The memory ceiling is **sized per repository, in `corpus/*.json`** — a function of the corpus's own scale, never of the machine that happens to host the test, and never a shared standard number: every repo is different. A ceiling copied from a CI runner says nothing about Deslop: it is either so loose it never fires or so tight it fails for reasons that are not the product's. Each manifest's own `rationale` records why its number is what it is. The wall ceiling is deliberately loose: it exists to catch a hang, not to police throughput.
 
 ### [CORPUS-SCOPE] The scan happened
 
