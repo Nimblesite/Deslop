@@ -9,6 +9,14 @@ allowed-tools: Bash, Read, Grep, Glob
 
 File a Deslop issue on GitHub — bug, feature, or task — so a human can read it in seconds and an AI can act on it without asking questions. `gh issue create` and `gh issue edit --body-file` (backfill only) are the sole exceptions to the no-git rule in AGENTS.md. Never close issues.
 
+## PRs NEVER close issues — no closing keywords, ever
+
+AGENTS.md: "NEVER CLOSE GH ISSUES, EVEN WITH PR COMMENTS!" GitHub auto-closes an issue the moment a merged PR (or a commit that reaches the default branch) contains a closing keyword: `Fixes #n`, `Closes #n`, `Resolves #n`, `Fixed #n`, `Closed #n` — in the PR body, PR title, or commit message, in any case form. Issues close only through the release-verification process, never by a PR.
+
+- Never write a closing keyword against an issue number in any PR body, title, or commit message — write "works on #n", "changes #n", or reference the issue bare (`#n`) instead.
+- Before pushing or opening any PR, scan its body and commit messages for `fixes|closes|resolves` followed by `#` — if present, rewrite the wording and reopen the edit.
+- If a PR is found carrying a closing keyword against an open issue, that is a defect: remove the keyword from the PR body immediately (`gh pr edit <pr> --body`) and check the issue is still open (`gh issue reopen <n>` if the keyword already fired).
+
 ## Human sections are for humans — MINIMAL JARGON
 
 TL;DR, Details, and Steps To Reproduce are read by humans. Write them in plain language a new user understands without knowing Deslop's internals. This is a hard rule, not a style preference.

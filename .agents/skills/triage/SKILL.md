@@ -9,6 +9,8 @@ allowed-tools: Bash, Read, Grep, Glob
 
 Triage every open issue (or only `$ARGUMENTS` if given). Read-only on code; writes go to GitHub only. Never close an issue, never remove a label you cannot justify in the comment trail, never edit issue bodies except through the log-issue backfill, which preserves all information.
 
+**PRs NEVER close issues.** Beyond never closing issues yourself, triage must prevent GitHub from doing it: any open PR whose body, title, or commits carry a closing keyword (`Fixes/Closes/Resolves/Fixed/Closed #n`) referencing an issue will auto-close it on merge. During every triage run, scan open PR bodies (`gh pr list --state open --json number,body,title`) for those keywords; on a hit, remove the keyword from the PR body (`gh pr edit <pr> --body`) and flag it in the final report. Issues close only through release verification — see the log-issue skill for the full rule.
+
 Every triaged issue must also land in the **correct published work lane** (Step 4): the site's lanes are derived mechanically from GitHub data by `scripts/issues/generate_issue_report.py`, and triage owns making that derivation come out right — checking it is not optional.
 
 **Comment voice — applies to every comment posted.** Comments are mechanical triage records attached to the ticket, not replies to the reporter. Never address anyone: no "you", no "thanks for reporting", no "could you confirm", no greetings or sign-offs. State facts about the defect and the code in impersonal declaratives. Where information is missing, record what is missing as a fact ("Repro command not specified"), never as a request.

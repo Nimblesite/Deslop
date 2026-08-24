@@ -42,6 +42,18 @@ class RawDependencySummary(TypedDict):
     total_blocking: NotRequired[int]
 
 
+class RawFieldOption(TypedDict):
+    id: int
+    name: str
+    color: str
+
+
+class RawFieldValue(TypedDict):
+    issue_field_name: str
+    data_type: str
+    single_select_option: NotRequired[RawFieldOption | None]
+
+
 class RawIssue(TypedDict):
     number: int
     title: str
@@ -52,6 +64,7 @@ class RawIssue(TypedDict):
     state: NotRequired[str]
     labels: list[RawLabel]
     type: RawNamedValue | None
+    issue_field_values: NotRequired[list[RawFieldValue]]
     assignees: list[RawUser]
     milestone: RawNamedValue | None
     pull_request: NotRequired[object]
@@ -62,7 +75,21 @@ class RawIssue(TypedDict):
     blocking_numbers: NotRequired[list[int]]
 
 
-from scripts.issues.rules import PRIORITIES, WORKSTREAMS, WorkstreamRule
+from scripts.issues.rules import (
+    DEFAULT_EFFORT_UNITS,
+    EFFORT_FIELD,
+    EFFORT_UNITS,
+    LANE_LABEL_PREFIX,
+    PRIORITIES,
+    PRIORITY_FIELD,
+    PRIORITY_UNSET,
+    PriorityRule,
+    TYPE_EFFORT_UNITS,
+    UNASSIGNED_LANE,
+    URGENT_RANK,
+    WORKSTREAMS,
+    WorkstreamRule,
+)
 
 
 class LabelData(TypedDict):
@@ -95,9 +122,6 @@ class IssueData(TypedDict):
     updated_at: str
     lifecycle: str
     priority: str
-    priority_rank: int
-    priority_name: str
-    priority_reason: str
     workstream: str
     inbound_links: int
     plan: NotRequired[PlanData]
@@ -112,8 +136,8 @@ class RelationshipData(TypedDict):
 class SummaryData(TypedDict):
     open: int
     verify: int
-    release_blockers: int
-    accuracy_critical: int
+    showstoppers: int
+    critical: int
     linked: int
     relationships: int
 
@@ -125,11 +149,8 @@ class WorkstreamData(WorkstreamRule):
     verify: int
 
 
-class PriorityData(TypedDict):
+class PriorityData(PriorityRule):
     id: str
-    rank: int
-    name: str
-    description: str
     count: int
 
 
@@ -222,42 +243,33 @@ def lifecycle_for(labels: set[str]) -> str:
     return "active"
 
 
-def priority_for(labels: set[str], issue_type: str) -> tuple[str, int, str, str]:
-    if "fixed-on-main" in labels:
-        key = "verify_release"
-    elif "showstopper" in labels:
-        key = "release_blocker"
-    elif "critical" in labels and labels & {"false-negative", "false-positive"}:
-        key = "accuracy_critical"
-    elif "critical" in labels:
-        key = "critical"
-    elif labels & {"ignored-test", "spec-violation"}:
-        key = "assurance"
-    else:
-        key = {"Bug": "defect", "Feature": "feature"}.get(issue_type, "task")
-    rank, name, reason = PRIORITIES[key]
-    return key, rank, name, reason
+def field_option(item: RawIssue, field: str) -> str | None:
+    """Name of the single-select option set on one GitHub issue field."""
+    for value in item.get("issue_field_values") or []:
+        option = value.get("single_select_option") if value.get("issue_field_name") == field else None
+        if option:
+            return option["name"]
+    return None
 
 
-def normalized_words(text: str) -> str:
-    punctuation = "`~!@#$%^&*()_+-={}[]|\\:;\"'<>,.?/\n\r\t"
-    return " ".join(text.lower().translate(str.maketrans(punctuation, " " * len(punctuation))).split())
+def priority_for(item: RawIssue) -> str:
+    """The issue's Priority field option. Unknown options are a rules drift, not a default."""
+    option = field_option(item, PRIORITY_FIELD)
+    if option is None:
+        return PRIORITY_UNSET
+    if option not in PRIORITIES:
+        raise ValueError(f"issue #{item['number']}: unknown {PRIORITY_FIELD} option {option!r} — update scripts/issues/rules.py")
+    return option
 
 
-def workstream_score(item: RawIssue, stream: WorkstreamRule) -> int:
-    title = normalized_words(item.get("title", ""))
-    body = normalized_words((item.get("body") or "")[:1600])
-    labels = " ".join(sorted(label_names(item)))
-    return sum(4 for term in stream["keywords"] if term in title) + sum(1 for term in stream["keywords"] if term in body) + sum(3 for term in stream["keywords"] if term in labels)
+def priority_rank(issue: IssueData) -> int:
+    return PRIORITIES[issue["priority"]]["rank"]
 
 
 def workstream_for(item: RawIssue) -> str:
-    labels = label_names(item)
-    if labels & {"false-negative", "false-positive"}:
-        return "accuracy"
-    scores = {key: workstream_score(item, value) for key, value in WORKSTREAMS.items()}
-    best = max(scores.items(), key=lambda entry: entry[1])[0]
-    return best if scores[best] else "quality"
+    """The issue's lane, taken from its `lane/<id>` label."""
+    lanes = {name.removeprefix(LANE_LABEL_PREFIX) for name in label_names(item) if name.startswith(LANE_LABEL_PREFIX)}
+    return next((lane for lane in WORKSTREAMS if lane in lanes), UNASSIGNED_LANE)
 
 
 # Canonical TL;DR section marker — matches `## TL;DR` from the log-bug skill and
@@ -355,33 +367,27 @@ def compact_assignees(item: RawIssue) -> list[AssigneeData]:
 
 
 def compact_issue(item: RawIssue, inbound_count: int) -> IssueData:
-    labels = label_names(item)
-    issue_type = issue_type_name(item)
     milestone = item.get("milestone")
-    priority, rank, priority_name, priority_reason = priority_for(labels, issue_type)
     return {
         "number": item["number"], "title": item["title"], "url": item["html_url"],
-        "excerpt": plain_excerpt(item.get("body", "")), "type": issue_type,
+        "excerpt": plain_excerpt(item.get("body", "")), "type": issue_type_name(item),
         "labels": compact_labels(item), "assignees": compact_assignees(item),
         "milestone": milestone["name"] if milestone else None,
         "created_at": item["created_at"], "updated_at": item["updated_at"],
-        "lifecycle": lifecycle_for(labels), "priority": priority, "priority_rank": rank,
-        "priority_name": priority_name, "priority_reason": priority_reason,
+        "lifecycle": lifecycle_for(label_names(item)), "priority": priority_for(item),
         "workstream": workstream_for(item), "inbound_links": inbound_count,
     }
 
 
-def effort_for(issue: IssueData) -> int:
-    if issue["lifecycle"] == "verify":
-        return 2
-    if issue["priority"] == "release_blocker":
-        return 3
-    if issue["priority"] in {"accuracy_critical", "critical"}:
-        return 4
-    return {"Feature": 8, "Task": 4, "Bug": 5}.get(issue["type"], 4)
+def effort_for(item: RawIssue) -> int:
+    """Runway units: the Effort field where a human set it, else the type default."""
+    option = field_option(item, EFFORT_FIELD)
+    if option in EFFORT_UNITS:
+        return EFFORT_UNITS[option]
+    return TYPE_EFFORT_UNITS.get(issue_type_name(item), DEFAULT_EFFORT_UNITS)
 
 
-def sequence_issues(issues: list[IssueData], relationships: list[RelationshipData]) -> None:
+def sequence_issues(issues: list[IssueData], relationships: list[RelationshipData], efforts: dict[int, int]) -> None:
     """Lay issues onto two parallel tracks per workstream.
 
     `sort_issues` already guarantees a blocker is ordered before the work it
@@ -401,7 +407,7 @@ def sequence_issues(issues: list[IssueData], relationships: list[RelationshipDat
         ready = max((finish[number] for number in blockers[issue["number"]] if number in finish), default=0)
         track = min(range(2), key=lambda index: max(availability[issue["workstream"]][index], ready))
         offset = max(availability[issue["workstream"]][track], ready)
-        effort = effort_for(issue)
+        effort = efforts[issue["number"]]
         availability[issue["workstream"]][track] = offset + effort
         finish[issue["number"]] = offset + effort
         issue["plan"] = {"offset": offset, "effort_units": effort, "track": track}
@@ -415,7 +421,7 @@ def sort_issues(issues: list[IssueData], relationships: list[RelationshipData]) 
         if edge["kind"] == "blocks" and edge["source"] in remaining and edge["target"] in remaining:
             blockers[edge["target"]].add(edge["source"])
     ordered: list[IssueData] = []
-    key: Callable[[IssueData], tuple[int, int, str, int]] = lambda item: (item["priority_rank"], -item["inbound_links"], item["created_at"], item["number"])
+    key: Callable[[IssueData], tuple[int, int, str, int]] = lambda item: (priority_rank(item), -item["inbound_links"], item["created_at"], item["number"])
     while remaining:
         ready = [by_number[number] for number in remaining if not blockers[number] & remaining]
         selected = min(ready or [by_number[number] for number in remaining], key=key)
@@ -428,37 +434,36 @@ def summarize(issues: list[IssueData], relationships: list[RelationshipData]) ->
     priorities = Counter(item["priority"] for item in issues)
     linked = {edge["source"] for edge in relationships} | {edge["target"] for edge in relationships}
     return {
-        "open": len(issues), "verify": priorities["verify_release"],
-        "release_blockers": priorities["release_blocker"],
-        "accuracy_critical": priorities["accuracy_critical"],
+        "open": len(issues), "verify": sum(1 for item in issues if item["lifecycle"] == "verify"),
+        "showstoppers": priorities["showstopper"], "critical": priorities["critical"],
         "linked": len(linked), "relationships": len(relationships),
     }
 
 
 def workstream_data(issues: list[IssueData]) -> list[WorkstreamData]:
     counts = Counter(item["workstream"] for item in issues)
-    urgent = Counter(item["workstream"] for item in issues if item["priority_rank"] <= 3)
+    urgent = Counter(item["workstream"] for item in issues if priority_rank(item) <= URGENT_RANK)
     verify = Counter(item["workstream"] for item in issues if item["lifecycle"] == "verify")
     return [{"id": key, **value, "count": counts[key], "urgent": urgent[key], "verify": verify[key]} for key, value in WORKSTREAMS.items()]
 
 
 def priority_data(issues: list[IssueData]) -> list[PriorityData]:
     counts = Counter(item["priority"] for item in issues)
-    return [{"id": key, "rank": value[0], "name": value[1], "description": value[2], "count": counts[key]} for key, value in PRIORITIES.items()]
+    return [{"id": key, **value, "count": counts[key]} for key, value in PRIORITIES.items()]
 
 
 def build_report(raw_issues: list[RawIssue], repo: str, published_at: datetime) -> ReportData:
     relationships = relationship_edges(raw_issues)
     inbound = Counter(edge["target"] for edge in relationships)
     issues = sort_issues([compact_issue(item, inbound[item["number"]]) for item in raw_issues], relationships)
-    sequence_issues(issues, relationships)
+    sequence_issues(issues, relationships, {item["number"]: effort_for(item) for item in raw_issues})
     return {
         "meta": {
             "repo": repo, "published_at": published_at.isoformat().replace("+00:00", "Z"),
             "published_at_long": long_publication_time(published_at),
             "source_url": f"https://github.com/{repo}/issues",
-            "method": "GitHub metadata, explicit relationships, cross-references, and documented keyword rules. No AI enrichment.",
-            "planning_note": "Indicative only — not a schedule. Relative sequencing uses two parallel tracks per workstream, holds blocked work until every blocker finishes, and applies default effort units: verify 2, showstopper 3, critical 4, bug 5, task 4, feature 8.",
+            "method": "GitHub metadata: the Priority field, lane/* labels, explicit relationships, and cross-references. No AI enrichment.",
+            "planning_note": "Indicative only — not a schedule. Relative sequencing uses two parallel tracks per workstream, holds blocked work until every blocker finishes, and takes effort units from the Effort field (high 8, medium 4, low 2) or, when it is unset, the issue type: feature 8, bug 5, task 4.",
         },
         "summary": summarize(issues, relationships), "workstreams": workstream_data(issues),
         "priorities": priority_data(issues), "issues": issues, "relationships": relationships,
