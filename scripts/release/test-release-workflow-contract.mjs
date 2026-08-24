@@ -9,6 +9,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { assertExcludes, assertIncludes } from "./contract-assertions.mjs";
+
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const workflowPath = resolve(repoRoot, ".github/workflows/release.yml");
 const deployWorkflowPath = resolve(repoRoot, ".github/workflows/deploy-pages.yml");
@@ -328,20 +330,12 @@ function assertAbsent(pattern, message) {
   if (pattern.test(workflow)) throw new Error(message);
 }
 
-function assertExcludes(value, unexpected, message) {
-  if (value.includes(unexpected)) throw new Error(message);
-}
-
 function assertSectionAbsent(section, pattern, message) {
   if (pattern.test(section)) throw new Error(message);
 }
 
 function assertPresent(pattern, message) {
   if (!pattern.test(workflow)) throw new Error(message);
-}
-
-function assertIncludes(value, expected, message) {
-  if (!value.includes(expected)) throw new Error(message);
 }
 
 function assertEqual(actual, expected, message) {

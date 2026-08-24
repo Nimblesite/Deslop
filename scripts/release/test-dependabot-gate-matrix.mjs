@@ -28,6 +28,8 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 
+import { assertExcludes, assertIncludes } from "./contract-assertions.mjs";
+
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 
 // The four gates a pull request against `main` must clear. `ci.yml`'s build and
@@ -197,6 +199,14 @@ function everyEcosystemTargetsTheStagingBranch() {
 function theSweepIsTheOnlyActorGatedJobAndStagingOnly() {
   const parsed = loadWorkflow(SWEEP_WORKFLOW);
   assertNoPullRequestTarget(parsed);
+  assertSweepTriggersStagingOnly(parsed);
+  assertSweepRequiresDependabotActorAndSourceBranch(parsed);
+}
+
+// The base filter is what keeps the sweep invisible to humans, and it is also
+// what keeps it away from the security bump the tests above just proved must
+// clear every gate.
+function assertSweepTriggersStagingOnly(parsed) {
   const bases = pullRequestBases(parsed, SWEEP_WORKFLOW);
   assertIncludes(bases, STAGING_BRANCH, `${SWEEP_WORKFLOW} must fire on bumps opened against ${STAGING_BRANCH}`);
   assertExcludes(
@@ -206,22 +216,26 @@ function theSweepIsTheOnlyActorGatedJobAndStagingOnly() {
       `if:-skipped job still reports a skipped check on every human PR, and sweeping a security bump would strip ` +
       `it of the gates it is required to clear`,
   );
+}
+
+// Both halves of the actor-AND-source gate. `github.actor` alone is not enough:
+// it is the account that triggered the run, so a human `@dependabot recreate`
+// comment or a re-run can carry the bot's name onto a branch the bot did not
+// raise. The `dependabot/*` source-branch requirement is what pins the sweep to
+// branches Dependabot actually owns.
+function assertSweepRequiresDependabotActorAndSourceBranch(parsed) {
   const actorGates = authorReferences(parsed).map(({ expression }) => expression);
-  if (!actorGates.some((expression) => expression.includes(`github.actor == 'dependabot[bot]'`))) {
-    throw new Error(
-      `${SWEEP_WORKFLOW} must still refuse to act for any actor but Dependabot; found actor gates: ${JSON.stringify(actorGates)}`,
-    );
-  }
-  // The second half of the actor-AND-source gate. `github.actor` alone is not
-  // enough: it is the account that triggered the run, so a human `@dependabot
-  // recreate` comment or a re-run can carry the bot's name onto a branch the
-  // bot did not raise. The `dependabot/*` source-branch requirement is what
-  // pins the sweep to branches Dependabot actually owns.
-  if (!actorGates.some((expression) => expression.includes(`startsWith(github.head_ref, 'dependabot/')`))) {
-    throw new Error(
-      `${SWEEP_WORKFLOW} must still require a \`dependabot/*\` source branch — the second half of the ` +
-        `actor-AND-source gate; found actor gates: ${JSON.stringify(actorGates)}`,
-    );
+  const required = [
+    { fragment: `github.actor == 'dependabot[bot]'`, why: "refuse to act for any actor but Dependabot" },
+    { fragment: `startsWith(github.head_ref, 'dependabot/')`, why: "require a `dependabot/*` source branch" },
+  ];
+  for (const { fragment, why } of required) {
+    if (!actorGates.some((expression) => expression.includes(fragment))) {
+      throw new Error(
+        `${SWEEP_WORKFLOW} must still ${why} — \`${fragment}\` is absent; found actor gates: ` +
+          JSON.stringify(actorGates),
+      );
+    }
   }
 }
 
@@ -296,12 +310,3 @@ function* interpolations(scalar, path) {
   }
 }
 
-// ---------------------------------------------------------------- assertions
-
-function assertIncludes(values, wanted, message) {
-  if (!values.includes(wanted)) throw new Error(`${message} (found: ${JSON.stringify(values)})`);
-}
-
-function assertExcludes(values, unwanted, message) {
-  if (values.includes(unwanted)) throw new Error(`${message} (found: ${JSON.stringify(values)})`);
-}
