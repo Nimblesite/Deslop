@@ -22,35 +22,86 @@ const CANARY_SAMPLE_STRIDE: usize = 7_919;
 /// Stride between synthetic two-statement sibling-window fingerprints.
 const CANARY_WINDOW_STRIDE: usize = 997;
 
+/// Byte offsets inside one canary statement, relative to its start. The
+/// statement's shape is fixed, so every node boundary is a named offset
+/// rather than a literal at the construction site.
+const CALL_START: usize = 2;
+/// End of the callee identifier.
+const CALLEE_END: usize = 10;
+/// Start of the argument list.
+const ARGS_START: usize = 12;
+/// Start of the first argument identifier.
+const FIRST_ARG_START: usize = 13;
+/// End of the first argument identifier.
+const FIRST_ARG_END: usize = 20;
+/// Start of the second argument identifier.
+const SECOND_ARG_START: usize = 22;
+/// End of the second argument identifier.
+const SECOND_ARG_END: usize = 30;
+/// End of the call, and of its argument list.
+const CALL_END: usize = 54;
+/// End of the whole statement.
+const STATEMENT_END: usize = 56;
+
+/// The argument list of one canary statement starting at `start`.
+fn canary_arguments(file_id: FileId, start: usize) -> NormalizedNode {
+    let first_start = start.saturating_add(FIRST_ARG_START);
+    let second_start = start.saturating_add(SECOND_ARG_START);
+    node(
+        file_id,
+        "argument_list",
+        start.saturating_add(ARGS_START),
+        start.saturating_add(CALL_END),
+        vec![
+            node(
+                file_id,
+                "__ident__",
+                first_start,
+                start.saturating_add(FIRST_ARG_END),
+                vec![],
+            ),
+            node(
+                file_id,
+                "__ident__",
+                second_start,
+                start.saturating_add(SECOND_ARG_END),
+                vec![],
+            ),
+        ],
+    )
+}
+
+/// The call subtree of one canary statement starting at `start`.
+fn canary_call(file_id: FileId, start: usize) -> NormalizedNode {
+    let call_start = start.saturating_add(CALL_START);
+    node(
+        file_id,
+        "call",
+        call_start,
+        start.saturating_add(CALL_END),
+        vec![
+            node(
+                file_id,
+                "__ident__",
+                call_start,
+                start.saturating_add(CALLEE_END),
+                vec![],
+            ),
+            canary_arguments(file_id, start),
+        ],
+    )
+}
+
 /// One canary statement: 6 named nodes, so its kind stream passes
 /// `KGRAM_WIDTH` and produces a token-derived (non-fallback) signature.
 fn canary_statement(file_id: FileId, index: usize) -> NormalizedNode {
     let start = index.saturating_mul(CANARY_STATEMENT_SPAN);
-    let arguments = node(
-        file_id,
-        "argument_list",
-        start + 12,
-        start + 54,
-        vec![
-            node(file_id, "__ident__", start + 13, start + 20, vec![]),
-            node(file_id, "__ident__", start + 22, start + 30, vec![]),
-        ],
-    );
     node(
         file_id,
         "expression_statement",
         start,
-        start + 56,
-        vec![node(
-            file_id,
-            "call",
-            start + 2,
-            start + 54,
-            vec![
-                node(file_id, "__ident__", start + 2, start + 10, vec![]),
-                arguments,
-            ],
-        )],
+        start.saturating_add(STATEMENT_END),
+        vec![canary_call(file_id, start)],
     )
 }
 
@@ -83,7 +134,7 @@ fn fold_scales_to_a_corpus_shaped_population_and_stays_byte_faithful() {
                 file_id,
                 byte_range: ByteRange {
                     start,
-                    end: start + 56,
+                    end: start.saturating_add(STATEMENT_END),
                 },
                 node_count: 6,
             }
@@ -95,7 +146,7 @@ fn fold_scales_to_a_corpus_shaped_population_and_stays_byte_faithful() {
         let end = index
             .saturating_add(1)
             .saturating_mul(CANARY_STATEMENT_SPAN)
-            + 56;
+            .saturating_add(STATEMENT_END);
         fingerprints.push(Fingerprint {
             hash: [2; 32],
             file_id,
@@ -120,8 +171,7 @@ fn fold_scales_to_a_corpus_shaped_population_and_stays_byte_faithful() {
         .unwrap_or(crate::lsh::ZEROED_SIGNATURE);
     let first_fallback = fingerprints
         .first()
-        .map(fallback_signature)
-        .unwrap_or(crate::lsh::ZEROED_SIGNATURE);
+        .map_or(crate::lsh::ZEROED_SIGNATURE, fallback_signature);
     assert_ne!(
         first, first_fallback,
         "the canary statement stream passes KGRAM_WIDTH, so its \
