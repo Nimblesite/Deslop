@@ -50,7 +50,7 @@ pub(super) enum ShapeToken<'src> {
 /// [`ParseCache`](super::snippets::ParseCache) beyond the source
 /// borrow. Identical comparison semantics — conversions are lossless.
 #[derive(PartialEq, Eq, Clone)]
-pub(super) enum OwnedShapeToken {
+pub(crate) enum OwnedShapeToken {
     /// A node's grammar kind id.
     Kind(u16),
     /// The bytes of an identifier the body reaches for.

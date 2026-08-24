@@ -13,7 +13,7 @@ use tree_sitter::Node;
 use std::rc::Rc;
 
 use super::{
-    body_shape::{body_kind_stream, OwnedShapeToken},
+    body_shape::{body_kind_stream, ShapeToken},
     contract_index::{declared_bases, enclosing_container, function_name_node},
     enclosing_kind, function_kinds,
     override_marker::carries_override_marker,
@@ -25,14 +25,23 @@ use crate::{ast::ByteRange, state::FileId};
 /// owned form so [`ParseCache`] can memoise it by `(file, range)`
 /// beyond the source borrow ([PERF-FLUTTER-TODO-CORPUS]). Field
 /// comparison semantics are unchanged from the borrowed original.
-pub(super) struct OwnedSubject {
+pub(crate) struct OwnedSubject {
     /// The subject function's declared name.
     pub(super) name: Vec<u8>,
     /// Simple names of the bases the subject's enclosing type declares,
     /// empty for a free function.
     pub(super) bases: Vec<Vec<u8>>,
-    /// The subject body's shape, carrying collaborator identity.
-    pub(super) shape: Vec<OwnedShapeToken>,
+    /// blake3 digest of the subject body's shape stream. The decision
+    /// only ever asks whether two streams are *unequal*; a digest keeps
+    /// that exact for unequal streams (different bodies, different
+    /// digests, with overwhelming probability) and can only ever err by
+    /// calling two different bodies equal — the direction that keeps a
+    /// cluster visible rather than hiding a real one. Storing the digest
+    /// instead of the stream shrinks the memoised cell from megabytes
+    /// (a giant generated function's full token stream) to ~32 bytes,
+    /// which is what keeps the corpus-scale memo resident at all
+    /// ([PERF-FLUTTER-TODO-CORPUS]).
+    pub(super) shape_digest: [u8; 32],
     /// Whether the language's own override marker qualifies the subject,
     /// which proves a contract declares it even when that contract is
     /// outside the scan ([`carries_override_marker`]).
@@ -71,6 +80,12 @@ pub(super) fn is_polymorphic_signature_cluster<S: BuildHasher>(
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
 ) -> bool {
+    // The file-spread gate is pure and needs no subjects, so it runs
+    // before the per-member resolution — same verdict, far fewer
+    // resolutions ([PERF-FLUTTER-TODO-CORPUS]).
+    if !spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id)) {
+        return false;
+    }
     let subjects: Option<Vec<Rc<OwnedSubject>>> = snippets
         .iter()
         .map(|snippet| cache.subject(snippet, || subject_of(snippet)))
@@ -84,10 +99,10 @@ pub(super) fn is_polymorphic_signature_cluster<S: BuildHasher>(
     if !subjects.iter().all(|subject| subject.name == first.name) {
         return false;
     }
-    if !spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id)) {
-        return false;
-    }
-    if !subjects.iter().any(|subject| subject.shape != first.shape) {
+    if !subjects
+        .iter()
+        .any(|subject| subject.shape_digest != first.shape_digest)
+    {
         return false;
     }
     let Some(language) = snippets.first().map(|snippet| snippet.language) else {
@@ -97,6 +112,30 @@ pub(super) fn is_polymorphic_signature_cluster<S: BuildHasher>(
     subjects.iter().all(|subject| {
         subject.overrides || contracts.declares(&subject.bases, &subject.name)
     })
+}
+
+/// blake3 digest of a body-shape stream: `Kind` as two bytes, `Symbol`
+/// bytes length-prefixed, `Close` as one byte — a canonical encoding of
+/// the comparison the stream itself carried.
+fn shape_digest(stream: &[ShapeToken<'_>]) -> [u8; 32] {
+    let mut hasher = blake3::Hasher::new();
+    for token in stream {
+        match token {
+            ShapeToken::Kind(kind) => {
+                let bytes = kind.to_le_bytes();
+                let _ = hasher.update(&bytes);
+            }
+            ShapeToken::Symbol(bytes) => {
+                let length = u32::try_from(bytes.len()).unwrap_or(u32::MAX);
+                let _ = hasher.update(&length.to_le_bytes());
+                let _ = hasher.update(bytes);
+            }
+            ShapeToken::Close => {
+                let _ = hasher.update(&[0]);
+            }
+        }
+    }
+    *hasher.finalize().as_bytes()
 }
 
 /// Resolves one member's subject function and everything the decision
@@ -111,10 +150,13 @@ fn subject_of(snippet: &Snippet<'_>) -> Option<OwnedSubject> {
         bases: enclosing_container(function)
             .map(|container| declared_bases(container, snippet.source))
             .unwrap_or_default(),
-        shape: body_kind_stream(function.child_by_field_name("body")?, snippet.source)
-            .iter()
-            .map(OwnedShapeToken::from)
-            .collect(),
+        shape_digest: {
+            let stream = body_kind_stream(
+                function.child_by_field_name("body")?,
+                snippet.source,
+            );
+            shape_digest(&stream)
+        },
         overrides: carries_override_marker(function, snippet.language, snippet.source),
     })
 }

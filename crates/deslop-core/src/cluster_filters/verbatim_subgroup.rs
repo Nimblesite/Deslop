@@ -51,16 +51,32 @@ pub(crate) fn split_noise_verbatim_families<S: BuildHasher>(
     file_languages: &HashMap<FileId, &'static str, S>,
 ) -> Vec<FusedCluster> {
     let cache = ParseCache::new();
-    let out = fused_clusters
-        .into_iter()
-        .flat_map(|fused| {
-            split_one(&fused, fingerprints, sources, file_languages, &cache)
-                .unwrap_or_else(|| vec![fused])
-        })
-        .collect();
+    let started = std::time::Instant::now();
+    let total = fused_clusters.len();
+    let mut out = Vec::with_capacity(total);
+    for (index, fused) in fused_clusters.into_iter().enumerate() {
+        if index % NOISE_PROGRESS_INTERVAL == 0 && index > 0 {
+            tracing::info!(
+                stage = "noise_verbatim_split",
+                clusters_done = index,
+                clusters_total = total,
+                elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+                "noise split progress"
+            );
+            cache.log_noise_totals("noise_verbatim_split_progress");
+        }
+        match split_one(&fused, fingerprints, sources, file_languages, &cache) {
+            Some(split) => out.extend(split),
+            None => out.push(fused),
+        }
+    }
     cache.log_noise_totals("noise_verbatim_split");
     out
 }
+
+/// Clusters between noise-split progress records — bounded, so the
+/// per-run log stays small ([PERF-FLUTTER-TODO-OBSERVABILITY]).
+const NOISE_PROGRESS_INTERVAL: usize = 5_000;
 
 /// The replacement clusters for one component, or `None` to keep it as
 /// it is. `None` covers every cheap case first — a component with no

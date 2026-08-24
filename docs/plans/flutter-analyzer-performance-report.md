@@ -342,7 +342,7 @@ This list defines the required outcomes. It deliberately does not prescribe impl
 - [ ] Fail when the analyzer times out, is killed, or exits without a complete report.
 - [ ] Fail when required provenance or resource measurements are missing.
 - [ ] Fail when the scan analyzes fewer files than the curated scope requires.
-- [ ] Define and enforce a valid Flutter cluster-count range after a trustworthy full report completes.
+- [ ] Define and enforce a reasonable Flutter cluster-count range once the full report completes — there is no single trustworthy count; the gate bands the visible-cluster total (e.g. within ±20% of the captured baseline artifact) purely to catch a scoring collapse, never to pin an exact figure.
 - [ ] Keep performance failures distinct from accuracy, scope, and determinism failures in test output.
 - [x] Ensure the gate measures the release artifact users receive. Harness resolves `target/release/deslop` and fails fast when missing.
 - [x] Ensure the gate cannot silently pass with absent or zero resource measurements. `peak_rss_mb` is a hard parse — a missing measurement fails the run.

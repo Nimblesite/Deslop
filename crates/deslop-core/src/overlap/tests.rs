@@ -718,3 +718,61 @@ fn the_rescue_path_agrees_with_the_exact_measure_on_admission() -> Result<(), St
     }
     Ok(())
 }
+
+// [FUSION-SHARED-SUBTREE] Mixed-size boundary: the fallback is selected
+// by the LARGER endpoint's node count, but its credit walk reads BOTH
+// endpoints' creditable-entry lists. A small endpoint whose whole body
+// is a subtree also nested inside the large endpoint must still be
+// credited — building entries only for endpoints past
+// [`ALIGNMENT_MAX_NODES`] leaves the small side empty, the credit at
+// zero, and a real rescue silently dropped (review:
+// docs/performance-branch-review.md, "mixed-size overlap fallback").
+#[test]
+fn a_small_endpoint_still_gets_credit_against_a_large_one() -> Result<(), String> {
+    // Calibrated against the Rust grammar's node yield (~7 nodes per
+    // `inner = inner + n;` statement) so the block alone stays under
+    // the alignment cap while the host passes it.
+    const BLOCK_STATEMENTS: usize = 100;
+    const HOST_STATEMENTS: usize = 15;
+    const MIN_EXPECTED_SHARED_NODES: usize = 690;
+    let block = boost_block(BLOCK_STATEMENTS);
+    let small_source = rider_function(&block);
+    let large_source = host_function(HOST_STATEMENTS, &block);
+    let mut registry = FileRegistry::new();
+    let small_id = registry.register(PathBuf::from("small.rs"));
+    let large_id = registry.register(PathBuf::from("large.rs"));
+    let small = parse(&small_source, small_id)?;
+    let large = parse(&large_source, large_id)?;
+    assert!(
+        small.whole.node_count <= ALIGNMENT_MAX_NODES,
+        "the fixture's small endpoint must stay at or under the alignment cap, got {}",
+        small.whole.node_count
+    );
+    assert!(
+        large.whole.node_count > ALIGNMENT_MAX_NODES,
+        "the fixture's large endpoint must exceed the alignment cap so the pair \
+         selects the fallback, got {}",
+        large.whole.node_count
+    );
+    let trees = [small.tree, large.tree];
+    let index = trees
+        .iter()
+        .map(|tree| (tree.file_id, tree))
+        .collect::<std::collections::HashMap<FileId, &NormalizedNode>>();
+    let small_view = build_view(&index, &small.whole).ok_or("the small endpoint resolves")?;
+    let large_view = build_view(&index, &large.whole).ok_or("the large endpoint resolves")?;
+    let credited = credit_shared_nodes(&small_view, &large_view);
+    assert!(
+        credited >= MIN_EXPECTED_SHARED_NODES,
+        "the small endpoint's body block is nested in the large endpoint, so \
+         the fallback must credit nearly all of it, got {credited}"
+    );
+    let mut measurer = OverlapMeasurer::new(&trees);
+    let overlap = measurer.overlap(&small.whole, &large.whole);
+    assert!(
+        overlap >= crate::pair::SHARED_SUBTREE_MIN_OVERLAP,
+        "the duplicated block is nearly all of the larger endpoint, so the pair \
+         must clear the admission floor, got {overlap}"
+    );
+    Ok(())
+}

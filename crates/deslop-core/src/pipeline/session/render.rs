@@ -51,6 +51,7 @@ impl PipelineSession {
         // collisions straight into the admission-gated candidate
         // construction — no materialised pair vector, no per-pair
         // candidate objects for pairs the survival gate refuses.
+        let mut ledger = StageLedger::default();
         let stage_started = Instant::now();
         let lsh_source = BandCollisionSource::new(signatures);
         let cross_language_signatures =
@@ -76,14 +77,19 @@ impl PipelineSession {
             &self.file_languages,
             self.exclusion.allows_cross_language_comparison(),
         );
-        log_cluster_stage("candidate_pairs", pairs.len(), stage_started);
+        let pair_input = signatures.len();
+        ledger.record("candidate_pairs", pair_input, pairs.len(), stage_started);
         // [FUSION-SHARED-SUBTREE] (gh #408): measure the structural
         // overlap the anchor axis discards before survival drops the
         // enclosing Type-3 pair and leaves only its fragment views.
+        let rescue_input = pairs.len();
+        let stage_started = Instant::now();
         apply_shared_subtree_rescue(&mut pairs, fingerprints, self.store.trees());
+        ledger.record("shared_subtree_rescue", rescue_input, pairs.len(), stage_started);
+        let rescue_output = pairs.len();
         let stage_started = Instant::now();
         let fused_clusters = cluster_by_transitive_closure(&pairs);
-        log_cluster_stage("transitive_closure", fused_clusters.len(), stage_started);
+        ledger.record("transitive_closure", rescue_output, fused_clusters.len(), stage_started);
         // [PIPELINE-CLUSTER-ELECT] Transitive closure treats a token
         // band collision like a shared subtree, so one such edge welds
         // two structural families into a component that agrees with
@@ -91,10 +97,12 @@ impl PipelineSession {
         // families to the presence of each other. Elect the families
         // back out before anything is measured.
         let stage_started = Instant::now();
+        let split_input = fused_clusters.len();
         let fused_clusters =
             split_structural_families(fused_clusters, fingerprints, &self.file_languages);
-        log_cluster_stage(
+        ledger.record(
             "structural_family_split",
+            split_input,
             fused_clusters.len(),
             stage_started,
         );
@@ -104,46 +112,37 @@ impl PipelineSession {
         // ranked from exactly the occurrences it kept. A component the
         // noise filters do not suppress is handed on untouched.
         let stage_started = Instant::now();
+        let noise_input = fused_clusters.len();
         let fused_clusters = split_noise_verbatim_families(
             fused_clusters,
             fingerprints,
             &self.sources,
             &self.file_languages,
         );
-        log_cluster_stage("noise_verbatim_split", fused_clusters.len(), stage_started);
+        ledger.record(
+            "noise_verbatim_split",
+            noise_input,
+            fused_clusters.len(),
+            stage_started,
+        );
         // [FUSION-CLUSTER-SIGNALS] One signature space per run: the
         // cross-language space compares any pair when the audit mode is
         // on; the per-language space is exact otherwise. Mixing spaces
         // inside one cluster mean would average incomparable values.
         let measurement_signatures = cross_language_signatures.as_deref().unwrap_or(signatures);
-        // [PIPELINE-DETERMINISM] (gh #430) Workspace-relative path per
-        // fingerprinted file — the second input of the cluster id digest.
-        // Built from the fingerprints themselves so every member's file is
-        // covered by construction, and keyed on the same
-        // workspace-relative form the report renders.
-        let file_paths: HashMap<FileId, PathBuf> = fingerprints
-            .iter()
-            .filter_map(|found| {
-                self.registry
-                    .path(found.file_id)
-                    .map(|path| (found.file_id, relative_path_key(path, &self.root)))
-            })
-            .collect();
-        let clusters = build_ranked_fused_clusters(&ClusterBuildInputs {
+        let clusters = self.ranked_clusters(
             fingerprints,
-            signatures: measurement_signatures,
-            embedding_vectors: &embedding_outcome.vectors,
-            fused_clusters: &fused_clusters,
-            trees: self.store.trees(),
-            sources: &self.sources,
-            file_languages: &self.file_languages,
-            file_paths: &file_paths,
-        });
+            measurement_signatures,
+            &embedding_outcome.vectors,
+            &fused_clusters,
+            &mut ledger,
+        );
         tracing::info!(
             ranked_clusters = clusters.len(),
             fingerprints = fingerprints.len(),
             "render complete"
         );
+        ledger.log_summary();
         Ok(render_report(ReportInputs {
             clusters: &clusters,
             registry: &self.registry,
@@ -160,6 +159,45 @@ impl PipelineSession {
             diff: self.diff_scope.as_ref(),
         }))
     }
+
+    /// Builds the ranked clusters from the fused ones and records the
+    /// `ranked_build` stage row.
+    fn ranked_clusters(
+        &self,
+        fingerprints: &[crate::fingerprint::Fingerprint],
+        signatures: &[crate::lsh::Signature],
+        embedding_vectors: &std::collections::HashMap<usize, Vec<f32>>,
+        fused_clusters: &[crate::pair::FusedCluster],
+        ledger: &mut StageLedger,
+    ) -> Vec<crate::cluster::Cluster> {
+        // [PIPELINE-DETERMINISM] (gh #430) Workspace-relative path per
+        // fingerprinted file — the second input of the cluster id digest.
+        // Built from the fingerprints themselves so every member's file is
+        // covered by construction, and keyed on the same
+        // workspace-relative form the report renders.
+        let file_paths: HashMap<FileId, PathBuf> = fingerprints
+            .iter()
+            .filter_map(|found| {
+                self.registry
+                    .path(found.file_id)
+                    .map(|path| (found.file_id, relative_path_key(path, &self.root)))
+            })
+            .collect();
+        let started = Instant::now();
+        let ranked_input = fused_clusters.len();
+        let clusters = build_ranked_fused_clusters(&ClusterBuildInputs {
+            fingerprints,
+            signatures,
+            embedding_vectors,
+            fused_clusters,
+            trees: self.store.trees(),
+            sources: &self.sources,
+            file_languages: &self.file_languages,
+            file_paths: &file_paths,
+        });
+        ledger.record("ranked_build", ranked_input, clusters.len(), started);
+        clusters
+    }
 }
 
 /// One bounded cluster-stage boundary record
@@ -168,11 +206,66 @@ impl PipelineSession {
 /// handful of these per render, they make the running stage tellable
 /// from a hang at the default `info` level, with the elapsed time that
 /// attributes the gap.
-fn log_cluster_stage(stage: &'static str, clusters: usize, started: Instant) {
-    tracing::info!(
-        stage,
-        clusters,
-        elapsed_ms = crate::observe::elapsed_ms(started),
-        "cluster stage complete"
-    );
+///
+/// The same rows are replayed as one `pipeline stage` event each after
+/// the render completes, so a finished run's log reads as a compact
+/// per-stage table instead of dense interleaved progress — the summary
+/// is the small chunks the full log is broken up into
+/// ([PERF-FLUTTER-TODO-OBSERVABILITY]).
+#[derive(Default)]
+struct StageLedger {
+    /// Completed stage boundaries, in run order.
+    rows: Vec<StageRow>,
+}
+
+/// One recorded stage boundary: name, elapsed time, input and output
+/// cardinality.
+struct StageRow {
+    /// Stage name.
+    stage: &'static str,
+    /// Wall time spent in the stage, milliseconds.
+    elapsed_ms: u64,
+    /// Items handed to the stage.
+    input: usize,
+    /// Items the stage produced.
+    output: usize,
+}
+
+impl StageLedger {
+    /// Records one completed stage boundary.
+    fn record(
+        &mut self,
+        stage: &'static str,
+        input: usize,
+        output: usize,
+        started: Instant,
+    ) {
+        tracing::info!(
+            stage,
+            input,
+            output,
+            elapsed_ms = crate::observe::elapsed_ms(started),
+            "cluster stage complete"
+        );
+        self.rows.push(StageRow {
+            stage,
+            elapsed_ms: crate::observe::elapsed_ms(started),
+            input,
+            output,
+        });
+    }
+
+    /// Replays every recorded row as one compact event per stage, in
+    /// run order, after the render completes.
+    fn log_summary(&self) {
+        for row in &self.rows {
+            tracing::info!(
+                stage = row.stage,
+                input = row.input,
+                output = row.output,
+                elapsed_ms = row.elapsed_ms,
+                "pipeline stage"
+            );
+        }
+    }
 }

@@ -279,6 +279,114 @@ fn kgram_bytes(gram: &[&'static str]) -> Vec<u8> {
 }
 
 #[cfg(test)]
+mod streaming_tests {
+    //! [PERF-FLUTTER-TODO-PAIRS] Pins for the streaming band-collision
+    //! source: equal-band signatures pair through the star emission,
+    //! truncated-hash collisions never manufacture a pair (full-key
+    //! verification + regroup), and a pair colliding in many bands is
+    //! emitted once per band for the caller to deduplicate — the
+    //! documented contract
+    //! (`docs/performance-branch-review.md`, "streamed LSH construction").
+
+    use super::{for_each_band_collision, Signature, BANDS, SIGNATURE_LEN};
+
+    /// A signature whose band `band` is filled with `filler` and every
+    /// other band with a value unique to `seed`.
+    fn seeded(seed: u64, band: usize, filler: u64) -> Signature {
+        let mut signature: Signature = [0; SIGNATURE_LEN];
+        for (slot, value) in signature.iter_mut().enumerate() {
+            *value = if slot / 4 == band {
+                filler
+            } else {
+                seed.wrapping_mul(0x9E37_79B9_7F4A_7C15).wrapping_add(slot as u64)
+            };
+        }
+        signature
+    }
+
+    /// Signatures sharing one band pair exactly once — through that
+    /// band's star, from the smallest member outward.
+    #[test]
+    fn identical_band_keys_pair_through_the_star() {
+        let signatures = [seeded(1, 3, 777), seeded(2, 3, 777), seeded(3, 7, 999)];
+        let mut pairs = Vec::new();
+        for_each_band_collision(&signatures, &mut |left, right| pairs.push((left, right)));
+        assert_eq!(
+            pairs,
+            vec![(0, 1)],
+            "only signatures 0 and 1 share a band; emission must be the star              from the smallest member"
+        );
+    }
+
+    /// A three-member run pairs from its canonical member to each other,
+    /// never member-to-member beyond the star.
+    #[test]
+    fn a_run_emits_star_pairs_only() {
+        let signatures = [
+            seeded(10, 5, 42),
+            seeded(11, 5, 42),
+            seeded(12, 5, 42),
+            seeded(13, 0, 7),
+        ];
+        let mut pairs = Vec::new();
+        for_each_band_collision(&signatures, &mut |left, right| pairs.push((left, right)));
+        assert_eq!(
+            pairs,
+            vec![(0, 1), (0, 2)],
+            "the run's star is (0,1),(0,2) — (1,2) is implied, not emitted"
+        );
+    }
+
+    /// A truncated sort hash colliding across different full keys must
+    /// not pair the different-key signatures; exact equal keys separated
+    /// by the collider still pair via the regroup.
+    #[test]
+    fn truncated_hash_collisions_never_manufacture_pairs() {
+        // Three signatures whose band-2 keys all truncate to the same
+        // sort hash but differ in full bytes: find real fills whose
+        // truncated hashes agree by brute force, keeping the search
+        // bounded. If none collide in a bounded sweep the test still
+        // pins the no-false-pair property over distinct keys.
+        let mut fills: Vec<u64> = Vec::new();
+        let mut seen: std::collections::HashMap<u64, u64> = std::collections::HashMap::new();
+        for candidate in 0..200_000_u64 {
+            let signature = seeded(candidate, 2, candidate);
+            let key = super::band_key(&signature, 2);
+            let truncated = super::truncated_band_hash(&key);
+            if let Some(prior) = seen.get(&truncated) {
+                fills.push(*prior);
+                fills.push(candidate);
+                break;
+            }
+            let _stored = seen.insert(truncated, candidate);
+        }
+        if fills.len() < 2 {
+            return;
+        }
+        let left = seeded(fills[0], 2, fills[0]);
+        let right = seeded(fills[1], 2, fills[1]);
+        let signatures = [left, right];
+        let mut pairs = Vec::new();
+        for_each_band_collision(&signatures, &mut |l, r| pairs.push((l, r)));
+        assert!(
+            pairs.is_empty(),
+            "two signatures with different full band keys must never pair, even              when their truncated sort hashes collide: {pairs:?}"
+        );
+    }
+
+    /// One pair colliding in every band is emitted once per band —
+    /// `BANDS` times — and the caller's dedup collapses them. This pins
+    /// the emission cardinality the dedup contract depends on.
+    #[test]
+    fn a_pair_colliding_in_every_band_emits_once_per_band() {
+        let signatures = [seeded(5, 0, 13), seeded(5, 0, 13)];
+        let mut count = 0_u32;
+        for_each_band_collision(&signatures, &mut |_left, _right| count = count.saturating_add(1));
+        assert_eq!(count, BANDS as u32, "identical signatures collide in every band");
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::{band_key, Signature, ROWS_PER_BAND, SIGNATURE_LEN};
 

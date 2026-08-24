@@ -52,7 +52,7 @@ fn is_literal_variation_call_set(calls: Option<Vec<Rc<CallShape>>>) -> bool {
 
 /// Distilled view of a call expression used to compare cluster members.
 #[derive(Clone)]
-pub(super) struct CallShape {
+pub(crate) struct CallShape {
     /// Concrete callee string. Captured from raw source so identifier
     /// text the normalised AST collapses is preserved.
     callee: Vec<u8>,

@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 
-use super::{alignment::PostNode, ALIGNMENT_MAX_NODES, SHARED_SUBTREE_MIN_CREDIT_NODES};
+use super::{alignment::PostNode, SHARED_SUBTREE_MIN_CREDIT_NODES};
 use crate::{
     ast::NormalizedNode,
     fingerprint::{collect_fingerprints, Fingerprint},
@@ -24,11 +24,11 @@ pub(super) struct EndpointView {
     pub(super) postorder: Vec<PostNode>,
     /// Total nodes excluding the synthetic root.
     pub(super) total: usize,
-    /// Creditable subtrees for the large-tree fallback, largest first.
-    /// Built only when `total` passes [`super::ALIGNMENT_MAX_NODES`] —
-    /// the only population that ever consumes them — so the vast
-    /// majority of views never pay for the collection
-    /// ([PERF-FLUTTER-TODO-MEMORY]).
+    /// Creditable subtrees (≥ [`super::SHARED_SUBTREE_MIN_CREDIT_NODES`]
+    /// nodes), largest-first — the large-tree fallback's population.
+    /// Always built: any endpoint may pair with one past
+    /// [`super::ALIGNMENT_MAX_NODES`], and the fallback reads both
+    /// sides' entries.
     pub(super) entries: Vec<Fingerprint>,
     /// Node-kind multiset, excluding the synthetic root, for the
     /// admission upper bound ([FUSION-SHARED-SUBTREE-BOUND]).
@@ -90,7 +90,7 @@ pub(super) fn build_view(
     }
     let total = postorder.len();
     let kind_counts = count_kinds(&postorder);
-    let entries = creditable_entries(&members, total);
+    let entries = creditable_entries(&members);
     // Synthetic window root: aligns the members as ordered siblings so
     // a multi-node sibling window is one tree for the alignment. It
     // matches its counterpart at zero cost, so the distance is exactly
@@ -107,13 +107,14 @@ pub(super) fn build_view(
     })
 }
 
-/// The creditable-subtree collection for a resolved endpoint, built only
-/// for endpoints past [`super::ALIGNMENT_MAX_NODES`] — the large-tree
-/// fallback's exclusive population.
-fn creditable_entries(members: &[&NormalizedNode], total: usize) -> Vec<Fingerprint> {
-    if total <= ALIGNMENT_MAX_NODES {
-        return Vec::new();
-    }
+/// The creditable-subtree collection for a resolved endpoint. Built for
+/// **every** endpoint: the large-tree fallback is selected by the
+/// *pair's* larger side, so an endpoint at or under
+/// [`super::ALIGNMENT_MAX_NODES`] still needs its entries when it pairs
+/// with one past the cap — gating on the individual endpoint's size
+/// starved `credit_shared_nodes` of the small side and silently dropped
+/// real rescues (`a_small_endpoint_still_gets_credit_against_a_large_one`).
+fn creditable_entries(members: &[&NormalizedNode]) -> Vec<Fingerprint> {
     let mut entries = Vec::new();
     for member in members {
         entries.extend(collect_fingerprints(

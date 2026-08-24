@@ -105,8 +105,10 @@ const CALL_SHAPE_MEMO_MAX: usize = 131_072;
 const CALL_SEQUENCE_MEMO_MAX: usize = 65_536;
 /// Cap for the signature-only body streams.
 const SIGNATURE_SHAPE_MEMO_MAX: usize = 65_536;
-/// Cap for the polymorphic subject cells.
-const SUBJECT_MEMO_MAX: usize = 65_536;
+/// Cap for the polymorphic subject cells. Cells are small (a digest,
+/// a name, bases), so the cap is set against the corpus member
+/// population rather than a fraction of it.
+const SUBJECT_MEMO_MAX: usize = 524_288;
 
 /// Shared get-or-compute for one memo map: returns the memoised value,
 /// computing and (within the cap) storing it on a miss. `None` results
