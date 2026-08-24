@@ -250,7 +250,7 @@ jobs:
         run: npm install -g typediagram@0.11.0
 
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@v2.86.4
+        uses: taiki-e/install-action@v2.86.5
         with:
           tool: cargo-llvm-cov
 
