@@ -424,9 +424,14 @@ trait, so each adapter carries an identical method outline (`id`,
 `file_extensions`, `grammar`, `parse_and_normalize`) even though the bodies
 differ entirely; the shape is mandated by the trait contract, not extractable
 logic. A cluster is suppressed when it spans at least two files, every member is
-an `impl LanguageParser for …` block whose directly declared methods match that
-canonical set, and at least two members' impl bodies differ in raw bytes. The
-byte-divergence guard keeps a verbatim-copied impl visible.
+an `impl LanguageParser for …` block — or a window inside one, the enclosing
+impl carrying the contract shape for sibling-window members (gh #339) — whose
+directly declared methods **include** that canonical set, and at least two
+members' impl bodies differ in raw bytes. The subset relation, not set
+equality, is load-bearing: the trait grows methods over time and no plug-in
+overrides every default, so an equality test pins the filter to one
+historical trait revision and silently stops matching every impl (gh #391).
+The byte-divergence guard keeps a verbatim-copied impl visible.
 
 ### [CLONE-NOISE-RUST-DECL] Bodiless top-level declarations
 Bodiless Rust top-level declarations — `mod NAME;`, `use …;`, `pub use …;` —

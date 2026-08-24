@@ -10,11 +10,14 @@ use thiserror::Error;
 /// How aggressively the pipeline should run the embedding pass.
 ///
 /// - `Off`: skip embeddings entirely; fused scores rely on the two
-///   deterministic signals. Default for tests / CI where no provider
-///   is available.
-/// - `Auto`: probe the provider. If reachable, run embeddings. If not,
-///   `tracing::warn!` and continue with two signals. This is the
-///   user-facing default.
+///   deterministic signals. The shipped CLI default ([FUSION-SIGNALS-
+///   THREE-LAYER]): the batch tool must produce a report on a machine
+///   that has no reachable provider, and a first run must never block
+///   on one.
+/// - `Auto`: probe the provider. If reachable, run embeddings; if not,
+///   `tracing::warn!` and continue with two signals. The recommended
+///   mode for interactive surfaces (VSIX/LSP) where a local provider
+///   is expected and the recall it buys is worth probing for.
 /// - `Required`: probe the provider. Fail hard when it is not
 ///   reachable. For CI runs that mandate Type-4 recall.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

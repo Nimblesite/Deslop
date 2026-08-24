@@ -1,5 +1,5 @@
 import { clear, element, emptyState, labelChip, publicationStamp, svgElement } from "./dom.js";
-import { priorityColor, streamMap, visibleRelationships } from "./model.js";
+import { SHOWSTOPPER, priorityMap, streamMap, visibleRelationships } from "./model.js";
 
 const WIDTH = 1200;
 const HEIGHT = 720;
@@ -90,7 +90,7 @@ function nodeClass(issue) {
   return classes.join(" ");
 }
 
-function createNode(position, stream, onSelect, tooltip) {
+function createNode(position, stream, priority, onSelect, tooltip) {
   const issue = position.issue;
   const radius = nodeRadius(issue);
   const fixedOnMain = issue.labels.find((label) => label.name === "fixed-on-main");
@@ -111,19 +111,19 @@ function createNode(position, stream, onSelect, tooltip) {
   const ring = svgElement("circle", { r: radius + 4, class: "graph-node__ring" });
   const dot = svgElement("circle", { r: radius, class: "graph-node__dot", fill: stream.color });
   const label = textNode(String(issue.number), 0, 0.5, "graph-node__label");
-  if (!fixedOnMain && issue.priority !== "release_blocker") ring.style.display = "none";
-  if (issue.priority === "release_blocker") ring.style.stroke = priorityColor(issue);
+  if (!fixedOnMain && issue.priority !== SHOWSTOPPER) ring.style.display = "none";
+  if (issue.priority === SHOWSTOPPER) ring.style.stroke = priority.color;
   group.append(hitTarget, ring, dot, label);
-  bindNodeEvents(group, issue, onSelect, tooltip);
+  bindNodeEvents(group, issue, priority, onSelect, tooltip);
   return group;
 }
 
-function bindNodeEvents(node, issue, onSelect, tooltip) {
+function bindNodeEvents(node, issue, priority, onSelect, tooltip) {
   node.addEventListener("click", (event) => { event.stopPropagation(); node.focus(); onSelect(issue); });
   node.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") onSelect(issue);
   });
-  node.addEventListener("pointerenter", (event) => showTooltip(tooltip, issue, event));
+  node.addEventListener("pointerenter", (event) => showTooltip(tooltip, issue, priority, event));
   node.addEventListener("pointermove", (event) => placeTooltip(tooltip, event));
   node.addEventListener("pointerleave", () => tooltip.classList.remove("is-visible"));
 }
@@ -135,13 +135,13 @@ function tooltipAssignee(assignee) {
   return element("span", { className: "graph-tooltip__assignee" }, children);
 }
 
-function showTooltip(tooltip, issue, event) {
+function showTooltip(tooltip, issue, priority, event) {
   clear(tooltip);
   const assignees = issue.assignees.length
     ? element("div", { className: "graph-tooltip__assignees" }, issue.assignees.map(tooltipAssignee))
     : element("span", { className: "graph-tooltip__unassigned", text: "Unassigned" });
   tooltip.append(
-    element("div", { className: "graph-tooltip__head" }, [element("span", { text: `#${issue.number} · ${issue.priority_name}` }), assignees]),
+    element("div", { className: "graph-tooltip__head" }, [element("span", { text: `#${issue.number} · ${priority.name}` }), assignees]),
     element("strong", { className: "graph-tooltip__title", text: issue.title }),
   );
   if (issue.labels.length) tooltip.append(element("div", { className: "graph-tooltip__labels" }, issue.labels.map(labelChip)));
@@ -159,8 +159,9 @@ function placeTooltip(tooltip, event) {
 
 function appendNodes(layer, report, positions, onSelect, tooltip) {
   const streams = streamMap(report);
+  const priorities = priorityMap(report);
   for (const position of positions.values()) {
-    layer.append(createNode(position, streams.get(position.issue.workstream), onSelect, tooltip));
+    layer.append(createNode(position, streams.get(position.issue.workstream), priorities.get(position.issue.priority), onSelect, tooltip));
   }
 }
 

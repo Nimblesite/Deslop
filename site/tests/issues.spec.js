@@ -2,6 +2,11 @@ import { expect, test } from "@playwright/test";
 
 const DOCS_LINK_COUNT = 12;
 
+// The org-level Priority field options and lane labels — see scripts/issues/rules.py.
+const PRIORITY_LADDER = ["showstopper", "critical", "normal", "low", "unset"];
+const LANE_LABEL_PREFIX = "lane/";
+const UNASSIGNED_LANE = "unassigned";
+
 test.describe("documentation navigation", () => {
   test("keeps releases and issue tools inside the docs menu", async ({ page }) => {
     await page.goto("/docs/vscode-cluster-panel/");
@@ -301,9 +306,14 @@ test.describe("issue atlas", () => {
     const nodes = page.locator(".graph-node");
     expect(await nodes.count()).toBeGreaterThan(0);
     await expect(nodes.first()).toHaveClass(/graph-node--verify/);
+    const number = Number(await nodes.first().getAttribute("data-issue"));
     await nodes.first().click();
+    const report = await page.evaluate(async () => (await fetch("/assets/data/issues.json")).json());
+    const issue = report.issues.find((candidate) => candidate.number === number);
+    const priority = report.priorities.find((candidate) => candidate.id === issue.priority);
     await expect(page.locator(".drawer-kicker")).toContainText("verify next release");
-    await expect(page.locator(".drawer-priority")).toContainText("Verify next release");
+    await expect(page.locator(".drawer-priority")).toContainText(priority.name);
+    await expect(page.locator(".drawer-priority")).toContainText(priority.description);
   });
 
   test("searches by issue number without losing context", async ({ page }) => {
@@ -401,6 +411,29 @@ test.describe("issue planner document", () => {
     await page.getByRole("tab", { name: "Runway" }).click();
     await expect(page.locator("[data-view-panel=runway] .runway-bar").first()).toBeVisible();
     await expect(page.locator("[data-view-panel]")).toHaveCount(1);
+  });
+
+  test("boards issues by the GitHub Priority field, showstoppers first", async ({ page }) => {
+    const report = await page.evaluate(async () => (await fetch("/assets/data/issues.json")).json());
+    const populated = report.priorities.filter((priority) => priority.count > 0);
+
+    expect(report.priorities.map((priority) => priority.id)).toEqual(PRIORITY_LADDER);
+    expect(report.priorities.map((priority) => priority.rank)).toEqual([1, 2, 3, 4, 5]);
+    expect(report.issues.every((issue) => PRIORITY_LADDER.includes(issue.priority))).toBe(true);
+    await expect(page.locator(".board-lane")).toHaveCount(populated.length);
+    await expect(page.locator(".board-lane h3")).toHaveText(populated.map((priority) => priority.name));
+    await expect(page.locator(".board-lane").first()).toHaveAttribute("data-priority", populated[0].id);
+    await expect(page.locator(".board-lane__order").first()).toContainText(String(populated[0].rank).padStart(2, "0"));
+  });
+
+  test("lanes every issue by its lane/* label", async ({ page }) => {
+    const report = await page.evaluate(async () => (await fetch("/assets/data/issues.json")).json());
+
+    expect(report.workstreams.map((stream) => stream.id)).toContain(UNASSIGNED_LANE);
+    for (const issue of report.issues) {
+      const lane = issue.labels.map((label) => label.name).find((name) => name.startsWith(LANE_LABEL_PREFIX));
+      expect(issue.workstream).toBe(lane ? lane.slice(LANE_LABEL_PREFIX.length) : UNASSIGNED_LANE);
+    }
   });
 
   test("renders GitHub label colors with readable text", async ({ page }) => {
