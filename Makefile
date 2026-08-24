@@ -9,7 +9,7 @@
 # human entry points and are the only ones `make help` lists.
 # =============================================================================
 
-.PHONY: build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify compile-release-tests coverage coverage-run coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-webview-coverage _vsix-webview-coverage-check _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
+.PHONY: build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify _repo-script-deps compile-release-tests coverage coverage-run coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-webview-coverage _vsix-webview-coverage-check _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
 
 _JETBRAINS_DIR := clients/jetbrains
 
@@ -420,16 +420,30 @@ dup-gate: build
 ##                    action's own step body against the freshly built CLI in
 ##                    both gate directions — the self-test's runner leg cannot,
 ##                    since it installs a published release ([ACTION-GATE]).
-deployment-verify: build
+deployment-verify: build _repo-script-deps
 	node scripts/deployment/verify-deployment-manifest.mjs shipwright.json
 	node scripts/deployment/verify-deployment-binaries.mjs shipwright.json target/release
 	node scripts/release/verify-release-workflow-gates.mjs .github/workflows/release.yml
 	node scripts/release/test-release-workflow-contract.mjs
+	node scripts/release/test-dependabot-gate-matrix.mjs
 	node scripts/deployment/test-deployment-docs-contract.mjs
 	node scripts/release/test-release-version-stamping.mjs
 	node scripts/deployment/test-verifiers.mjs
 	node scripts/actions/test-action-contract.mjs
 	node scripts/actions/test-action-diff-gate.mjs
+
+# _repo-script-deps: Install the repo-root devDependencies the Node contract
+#   suites under scripts/ import (`yaml`, so workflow gates are asserted against
+#   a real parse, never a text match). Root package.json is private and ships
+#   nothing — the VSIX remains the only distribution.
+#   Keyed on npm's own `node_modules/.package-lock.json`, which it rewrites on
+#   every install: a mere `-d node_modules` test would skip the install after a
+#   lockfile bump and run the suite against the stale parser.
+_repo-script-deps:
+	@if [ ! -f node_modules/.package-lock.json ] \
+	   || [ package-lock.json -nt node_modules/.package-lock.json ]; then \
+	  echo "==> Installing repo-root script dependencies..."; npm ci; \
+	fi
 
 # _kill-deslop-processes: SIGTERM (then SIGKILL on holdouts) every running
 #   `deslop-lsp` and `deslop-mcp` process so a stale child from a previous

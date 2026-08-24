@@ -187,10 +187,27 @@ on drift. Coverage floors are owned by `coverage-thresholds.json`
   can only be narrowed to Dependabot by a job-level `if:`, and GitHub reports an
   `if:`-skipped job as a `skipped` check run, so subscribing to PRs against
   `main` hangs a dead check on every human PR — one that by construction can
-  never run. Security updates are the cost of that filter: GitHub ignores
+  never run.
+- **[GITHUB-DEPENDABOT-SECURITY-GATES] Security bumps clear every gate** —
+  security updates are the cost of that base filter: GitHub ignores
   `target-branch` for them and always opens them against `main`, where they are
-  merged or retargeted by a human rather than swept, still gated by the
-  `security` dependency-review job in `ci.yml`.
+  merged or retargeted by a human rather than swept. They are therefore the one
+  Dependabot PR class that reaches `main`, and they must clear exactly what a
+  human PR clears: the `ci.yml` build/test matrix (reached through the `changes`
+  classifier, which every heavy job in that workflow keys off), the `security`
+  dependency-review job ([GITHUB-DEP-REVIEW]), CodeQL
+  ([GITHUB-CODE-SCANNING]), and the Action self-test ([ACTION-TESTS]).
+  No gate may excuse itself by consulting who opened the pull request. An actor
+  short-circuit inverts the intent exactly: it cannot fire on a routine bump,
+  because those target `dependabot-upgrades` and never trigger these `main`-only
+  workflows, and it always fires on the security bump — the one PR opened
+  because of a known vulnerability. A skipped job reports as a *passing*
+  required check, so the result is an all-green merge with no build, no tests,
+  no dependency review and no CodeQL. The gates that need more than the
+  read-only token a Dependabot-triggered run receives must raise it with an
+  explicit job-level `permissions:` block, or they fail on exactly this PR class
+  and nowhere else. Pinned by `scripts/release/test-dependabot-gate-matrix.mjs`,
+  which asserts the two-PR-class matrix against a real YAML parse.
 - **[SWR-SEC-ACTION-PINNING] Action SHA pinning** — security-critical workflows
   pin third-party GitHub Actions to a full 40-character commit SHA with a trailing
   `# vX.Y.Z` comment, because a floating tag can be re-pointed at malicious code
