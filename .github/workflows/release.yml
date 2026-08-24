@@ -634,11 +634,12 @@ jobs:
     # The VSIX changes on a rust (bundled binaries re-stamped) or vscode change.
     if: ${{ !cancelled() && (needs.changes.outputs.full == 'true' || needs.changes.outputs.vscode == 'true') && needs.release.result == 'success' }}
     runs-on: ubuntu-latest
-    # TIMEOUT EXCEPTION: the retrying publisher absorbs Marketplace request
-    # timeouts that take ~3 minutes each to surface (issue #348); 30 minutes
-    # covers retries on several flaky platforms while still bounding a dead
+    # TIMEOUT EXCEPTION: a hung Marketplace request takes ~3 minutes to
+    # surface (issue #348) and all five platforms publish in sequence, so the
+    # old 10-minute budget could kill the job before it named the platforms it
+    # never reached. 20 minutes covers the worst case and still bounds a dead
     # registry.
-    timeout-minutes: 30
+    timeout-minutes: 20
     # Passwordless publish via Microsoft Entra ID OIDC: the release environment
     # gives the GitHub OIDC subject a stable
     # repo:OWNER/REPO:environment:release shape for Entra federation.
@@ -647,8 +648,10 @@ jobs:
       contents: read
       id-token: write
     steps:
-      # The publish loop lives in scripts/publish-vsixes.mjs, so the job needs
-      # the tagged source checked out alongside the downloaded artifacts.
+      # The publish loop lives in scripts/release/publish-vsixes.mjs, so the job
+      # needs the tagged source checked out. This must stay ahead of
+      # download-artifact: checkout cleans the workspace it lands in, and would
+      # wipe artifacts/ if it ran second.
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
@@ -667,13 +670,15 @@ jobs:
 
       # One publish per platform-specific VSIX — vsce silently uses only the
       # first when several are globbed into a single call. The loop, the
-      # per-platform retry, the completeness check, and the --pre-release
-      # handling for hyphenated tags live in scripts/publish-vsixes.mjs,
-      # shared with publish-openvsx so one flaky upload can neither suppress
-      # the remaining platforms nor let the two registries drift apart
-      # (issue #348, [DEPLOY-PUBLISH-COMPLETE]). The short-lived Marketplace
-      # token is minted from the Entra OIDC session and passed to vsce through
-      # VSCE_PAT; no PAT secret is stored. See docs/specs/release.md.
+      # completeness check, and the --pre-release handling for hyphenated tags
+      # live in scripts/release/publish-vsixes.mjs, shared with publish-openvsx
+      # so one failed upload can neither suppress the remaining platforms nor
+      # let the two registries drift apart (issue #348,
+      # [DEPLOY-PUBLISH-COMPLETE]). There is no retry: --skip-duplicate makes
+      # this job idempotent, so re-running it is the retry. The short-lived
+      # Marketplace token is minted from the Entra OIDC session and passed to
+      # vsce through VSCE_PAT; no PAT secret is stored. See
+      # docs/specs/release.md.
       - name: Publish each platform VSIX (Entra OIDC, no PAT)
         run: |
           set -euo pipefail
@@ -682,7 +687,7 @@ jobs:
             --query accessToken -o tsv)"
           echo "::add-mask::${VSCE_PAT}"
           export VSCE_PAT
-          node scripts/publish-vsixes.mjs --tool vsce --expected 5
+          node scripts/release/publish-vsixes.mjs --tool vsce
 
   publish-openvsx:
     name: Publish VSIX to Open VSX
@@ -690,16 +695,19 @@ jobs:
     # The VSIX changes on a rust (bundled binaries re-stamped) or vscode change.
     if: ${{ !cancelled() && (needs.changes.outputs.full == 'true' || needs.changes.outputs.vscode == 'true') && needs.release.result == 'success' }}
     runs-on: ubuntu-latest
-    # TIMEOUT EXCEPTION: same retry budget as publish-marketplace (issue #348).
-    timeout-minutes: 30
+    # TIMEOUT EXCEPTION: same worst-case budget as publish-marketplace, for
+    # the same reason (issue #348).
+    timeout-minutes: 20
     # Open VSX has no OIDC trusted-publishing path today, so this uses a
     # separate Open VSX token scoped to the protected release environment.
     environment: release
     permissions:
       contents: read
     steps:
-      # The publish loop lives in scripts/publish-vsixes.mjs, so the job needs
-      # the tagged source checked out alongside the downloaded artifacts.
+      # The publish loop lives in scripts/release/publish-vsixes.mjs, so the job
+      # needs the tagged source checked out. This must stay ahead of
+      # download-artifact: checkout cleans the workspace it lands in, and would
+      # wipe artifacts/ if it ran second.
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
@@ -710,12 +718,12 @@ jobs:
         with:
           path: artifacts/
 
-      # Same shared publisher as publish-marketplace: per-platform retry and a
-      # fail-naming-the-missing-platforms completeness check, so this job
+      # Same shared publisher as publish-marketplace: every platform attempted
+      # and a failure naming the ones missing from the registry, so this job
       # carries the identical guarantee (issue #348, [DEPLOY-PUBLISH-COMPLETE]).
       - name: Publish each platform VSIX to Open VSX
         env:
           OVSX_PAT: ${{ secrets.OPEN_VSX_PAT }}
         run: |
           set -euo pipefail
-          node scripts/publish-vsixes.mjs --tool ovsx --expected 5
+          node scripts/release/publish-vsixes.mjs --tool ovsx

@@ -5,6 +5,8 @@ import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { runContractSuite } from "../lib/contract-harness.mjs";
+
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const stamper = join(repoRoot, "scripts/release/stamp-release-version.mjs");
 const version = "9.8.7-test.1";

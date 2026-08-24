@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 
-import { check } from "./action-contract-harness.mjs";
+import { check } from "../lib/contract-harness.mjs";
 import { runBodies } from "./action-yaml.mjs";
 import { resolveVersion } from "./action-resolve-artifact.mjs";
 import { actionPinDocs, readActionPins, PIN_PLACEHOLDER } from "../release/stamp-release-version.mjs";

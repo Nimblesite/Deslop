@@ -11,6 +11,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { runContractSuite } from "../lib/contract-harness.mjs";
+
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const workflow = readFileSync(resolve(repoRoot, ".github/workflows/release.yml"), "utf8");
 

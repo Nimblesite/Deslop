@@ -1,8 +1,9 @@
-// The one reader of composite-action YAML the action suite shares.
+// The one reader of action and workflow YAML the contract suites share.
 // [ACTION-TESTS]
 //
-// Both the static contract checks and the branch-executed gate proof need a
-// step's shell body out of action.yml. A second copy of the block scanner
+// The static contract checks, the branch-executed gate proof, and the release
+// publish contract all need a step's shell body out of an action.yml or a
+// workflow file — the step grammar is the same in both. A second copy of the block scanner
 // would let the two drift on exactly the steps that decide whether a guard is
 // under test at all, so the scanner lives here and is imported.
 //
@@ -110,4 +111,23 @@ export function stepBody(action, stepName) {
   const step = runBodies(action).find((candidate) => candidate.name === stepName);
   assert.ok(step, `action.yml lost its "${stepName}" run step`);
   return step.body;
+}
+
+/**
+ * Every value declared for a repeated mapping key, in file order. Hand-scanned
+ * like the rest of this module: the build matrix that names one
+ * `vsix_target:` per platform is read this way rather than pattern-matched.
+ *
+ * @param {string} source the workflow or action YAML
+ * @param {string} key the mapping key whose values to collect
+ * @returns {string[]} each declared value, trimmed
+ */
+export function mappingValues(source, key) {
+  const marker = key + ":";
+  return source
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith(marker))
+    .map((line) => line.slice(marker.length).trim())
+    .filter((value) => value !== "");
 }
