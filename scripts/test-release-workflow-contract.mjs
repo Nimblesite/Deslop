@@ -9,6 +9,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { runContractSuite } from "./contract-suite.mjs";
+
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const workflowPath = resolve(repoRoot, ".github/workflows/release.yml");
 const deployWorkflowPath = resolve(repoRoot, ".github/workflows/deploy-pages.yml");
@@ -45,23 +47,7 @@ const SCOOP_TEST_VERSION = "9.8.7";
 const SCOOP_TEST_SHA256 = "d713ca72419bc535e6c64605381255e544553356290b900b6c3f1eed21bee735";
 const SCOOP_TEST_REPOSITORY = "Nimblesite/Deslop";
 
-let failed = 0;
-for (const test of tests) {
-  try {
-    test();
-    console.log(`ok ${test.name}`);
-  } catch (error) {
-    failed++;
-    console.error(`not ok ${test.name}`);
-    console.error(`  ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
-if (failed > 0) {
-  console.error(`\n${failed} release workflow contract test(s) failed`);
-  process.exit(1);
-}
-console.log(`\n${tests.length} release workflow contract tests passed`);
+runContractSuite(tests, "release workflow contract");
 
 function releaseBuildsTaggedSourceWithoutPostTagVersionCommit() {
   const versionJob = sectionBetween("  version:", "  build:");
