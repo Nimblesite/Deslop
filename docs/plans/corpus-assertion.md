@@ -132,7 +132,7 @@ The target state: **every repository, every run, asserts every row below.** Ids 
 
   **Neither bound is the measurement.** A measurement is only what this detector reports today, and today's detector has known defects — `[PIPELINE-CLUSTER-ELECT]` moved tokio from 2,155 clusters to 2,568 in a single commit on this branch. Curating an hour earlier would have pinned 2,155 and left the corpus gate defending a false negative. So both bounds are loose rails sized to the failure each catches: `expect_files_min` at ~75% of measured `files_analysed`, `expect_clusters` from half the measured count to double it. See `[CORPUS-SCOPE]` in the spec for why those sizes and not tighter ones.
 
-  flutter and fsharp are **not** curated, tracked as #426 and blocked on #166: both already fail the `memory` check for exceeding the 7168 MB runner ceiling, so measuring a bound for them spends twenty minutes to produce a number nothing in CI reads. `every_manifest_curates_a_non_vacuous_scan_scope` is `#[ignore]`d citing #426 with its assertions intact.
+  flutter and fsharp are **not** curated, tracked as #426 and blocked on #166: both already fail the `memory` check for exceeding their per-repo ceilings, so measuring a bound for them spends twenty minutes to produce a number nothing in CI reads. `every_manifest_curates_a_non_vacuous_scan_scope` is `#[ignore]`d citing #426 with its assertions intact.
 
   Re-measured after the family-election fix landed, never before it. django's earlier figure of 9,268 clusters was taken with the welding binary and is withdrawn; its `files_analysed` of 2,835 reproduced exactly, which is the expected result — the fix is downstream of discovery.
 

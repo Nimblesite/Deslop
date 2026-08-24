@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use deslop_core::{
     ast::ByteRange,
     fingerprint::Fingerprint,
-    lsh::{Signature, SIGNATURE_LEN},
+    lsh::{Signature, SignatureIndex, SIGNATURE_LEN},
     pair::{
         candidate_pairs_for_language_policy, CandidatePair, CROSS_LANGUAGE_MIN_JACCARD,
         FUSED_THRESHOLD,
@@ -55,10 +55,11 @@ fn policy_pairs(
     languages: &HashMap<FileId, &'static str>,
     allow_cross_language: bool,
 ) -> Vec<CandidatePair> {
+    let signature_index = SignatureIndex::from_slice(signatures);
     candidate_pairs_for_language_policy(
         fingerprints,
-        signatures,
-        lsh_pairs,
+        &signature_index,
+        &lsh_pairs,
         &[],
         None,
         languages,

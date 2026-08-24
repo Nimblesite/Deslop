@@ -7,8 +7,8 @@
   "why": "Reference Python web framework; large, mature, heavily reviewed for duplication.",
   "ceilings": {
     "max_wall_seconds": 900,
-    "max_peak_rss_mb": 7168,
-    "rationale": "7168 MB is the memory of a standard GitHub Actions runner. The documented Nimblesite/Deslop action must be able to analyse a repository this size without being OOM-killed, so the runner limit is the ceiling rather than an invented number. The wall ceiling is deliberately loose - it exists to catch a hang, not to police throughput."
+    "max_peak_rss_mb": 2048,
+    "rationale": "2048 MB, sized to this corpus: ceilings are a function of the repository's own size, never of the CI runner hosting the test. The wall ceiling is deliberately loose - it exists to catch a hang, not to police throughput."
   },
   "must_find": [],
   "must_find_status": "NOT YET CURATED. No recall assertion runs for this repository until duplicates here are hand-verified by diffing the reported ranges. An empty list asserts nothing - it must never be read as evidence that recall is good.",

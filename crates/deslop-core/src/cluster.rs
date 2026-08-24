@@ -19,7 +19,7 @@ use crate::{
     ast::{ByteRange, NormalizedNode},
     content::{attach_content_evidence, ContentEvidence},
     fingerprint::Fingerprint,
-    lsh::Signature,
+    lsh::SignatureLookup,
     overlap::OverlapMeasurer,
     pair::{FusedCluster, PairScore},
     state::FileId,
@@ -96,7 +96,7 @@ pub struct ClusterBuildInputs<'a, S: BuildHasher, H: BuildHasher, L: BuildHasher
     /// Every live fingerprint, flat, in corpus order.
     pub fingerprints: &'a [Fingerprint],
     /// Per-fingerprint `MinHash` signatures, positionally aligned.
-    pub signatures: &'a [Signature],
+    pub signatures: &'a dyn SignatureLookup,
     /// Embedding vectors by corpus index ([FUSION-CLUSTER-SIGNALS]).
     pub embedding_vectors: &'a HashMap<usize, Vec<f32>, S>,
     /// Transitive-closure components to rehydrate.
@@ -117,7 +117,11 @@ pub struct ClusterBuildInputs<'a, S: BuildHasher, H: BuildHasher, L: BuildHasher
 /// references fingerprint indices; this materialises the full [`Cluster`]
 /// so ranking and rendering need not know how the cluster was discovered.
 #[must_use]
-pub fn build_ranked_fused_clusters<S: BuildHasher, H: BuildHasher, L: BuildHasher>(
+pub fn build_ranked_fused_clusters<
+    S: BuildHasher + Sync,
+    H: BuildHasher + Sync,
+    L: BuildHasher + Sync,
+>(
     inputs: &ClusterBuildInputs<'_, S, H, L>,
 ) -> Vec<Cluster> {
     let mut clusters = reportable_clusters(
@@ -146,23 +150,97 @@ pub fn build_ranked_fused_clusters<S: BuildHasher, H: BuildHasher, L: BuildHashe
     collapsed
 }
 
-/// Materialises every fused cluster that remains reportable. One
-/// [`OverlapMeasurer`] serves the whole build so an occurrence shared
-/// by several clusters is inventoried once ([FUSION-SHARED-SUBTREE]).
-fn reportable_clusters<S: BuildHasher, H: BuildHasher, L: BuildHasher>(
+/// Fewest fused clusters worth sharding the signal build across
+/// threads — below this the spawn cost outweighs the measurement.
+const SIGNAL_SHARD_MIN_CLUSTERS: usize = 256;
+
+/// Materialises every fused cluster that remains reportable.
+///
+/// A corpus-scale run pays for this stage in the O(k²) per-cluster pair
+/// measurement ([FUSION-CLUSTER-SIGNALS]): one 877-member scaffold
+/// cluster measures 384k pairs, most of them full tree alignments.
+/// Clusters are independent, every measurement is a pure function of
+/// the corpus, and each occurrence belongs to exactly one component —
+/// so the build runs sharded over the cluster list with one
+/// [`OverlapMeasurer`] per worker, and results merge in input order
+/// ([PERF-FLUTTER-TODO-PAIRS]). Threads change who computes a value,
+/// never the value: the same pairs feed the same measurer arithmetic.
+fn reportable_clusters<S: BuildHasher + Sync, H: BuildHasher + Sync, L: BuildHasher + Sync>(
     inputs: &ClusterBuildInputs<'_, S, H, L>,
-    scopes: &DeclarationScopes<'_, impl BuildHasher>,
+    scopes: &DeclarationScopes<'_, impl BuildHasher + Sync>,
 ) -> Vec<Cluster> {
-    let mut overlap = OverlapMeasurer::new(inputs.trees);
+    let workers = signal_worker_count(inputs.fused_clusters.len());
+    if workers <= 1 {
+        let mut overlap = OverlapMeasurer::new(inputs.trees);
+        let mut spent = BuildSpent::default();
+        let clusters = inputs
+            .fused_clusters
+            .iter()
+            .filter_map(|fused| {
+                build_fused_cluster(inputs, fused, &mut overlap, scopes, &mut spent)
+            })
+            .collect();
+        log_signal_measurement(overlap.stats(), &spent);
+        return clusters;
+    }
+    let shard_size = inputs.fused_clusters.len().div_ceil(workers);
+    let mut shards: Vec<Vec<Cluster>> = Vec::with_capacity(workers);
+    let mut totals = crate::overlap::MeasureStats::default();
     let mut spent = BuildSpent::default();
-    let clusters = inputs
-        .fused_clusters
-        .iter()
-        .filter_map(|fused| build_fused_cluster(inputs, fused, &mut overlap, scopes, &mut spent))
-        .collect();
-    log_signal_measurement(overlap.stats(), &spent);
+    std::thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(workers);
+        for chunk in inputs.fused_clusters.chunks(shard_size) {
+            handles.push(scope.spawn(move || {
+                let mut overlap = OverlapMeasurer::new(inputs.trees);
+                let mut shard_spent = BuildSpent::default();
+                let built: Vec<Cluster> = chunk
+                    .iter()
+                    .filter_map(|fused| {
+                        build_fused_cluster(inputs, fused, &mut overlap, scopes, &mut shard_spent)
+                    })
+                    .collect();
+                (built, overlap.stats(), shard_spent)
+            }));
+        }
+        for handle in handles {
+            // A panicked signal worker must poison the build, never
+            // silently drop its clusters — the same contract the rescue
+            // shards follow.
+            match handle.join() {
+                Ok((built, stats, shard_spent)) => {
+                    shards.push(built);
+                    totals = totals.add(stats);
+                    spent.absorb(&shard_spent);
+                }
+                Err(panic) => std::panic::resume_unwind(panic),
+            }
+        }
+    });
+    log_signal_measurement(totals, &spent);
+    let mut clusters = Vec::with_capacity(inputs.fused_clusters.len());
+    for shard in shards {
+        clusters.extend(shard);
+    }
     clusters
 }
+
+/// Worker count for the sharded signal build: available parallelism,
+/// capped so every shard carries whole clusters worth of work.
+fn signal_worker_count(clusters: usize) -> usize {
+    if clusters < SIGNAL_SHARD_MIN_CLUSTERS {
+        return 1;
+    }
+    // Capped below full parallelism: each worker carries its own
+    // measurer with memo populations, and a corpus-scale run's memory
+    // ceiling buys more from one fewer worker than the wall loses
+    // ([PERF-FLUTTER-TODO-MEMORY]).
+    std::thread::available_parallelism()
+        .map_or(1, std::num::NonZeroUsize::get)
+        .min(SIGNAL_SHARD_MAX_WORKERS)
+}
+
+/// Most workers the signal build will use, whatever the core count.
+const SIGNAL_SHARD_MAX_WORKERS: usize = 14;
 
 /// Wall time the ranked build spent per substage, accumulated across
 /// every cluster so the signal event can attribute the stage
@@ -175,6 +253,15 @@ struct BuildSpent {
     signals: std::time::Duration,
     /// Cluster materialisation (weight, id, member copies).
     materialize: std::time::Duration,
+}
+
+impl BuildSpent {
+    /// Folds one shard's substage times into the run total.
+    fn absorb(&mut self, other: &Self) {
+        self.collapse = self.collapse.saturating_add(other.collapse);
+        self.signals = self.signals.saturating_add(other.signals);
+        self.materialize = self.materialize.saturating_add(other.materialize);
+    }
 }
 
 /// Emits the cluster-signal overlap measurement counters and substage
@@ -226,7 +313,7 @@ fn weight_summary(clusters: &[Cluster]) -> (f64, f64) {
 /// location; those groups are artifacts, not duplicates, and are
 /// dropped before ranking. Signals are measured **after** the collapse
 /// so they describe exactly the occurrences the report shows.
-fn build_fused_cluster<S: BuildHasher, H: BuildHasher, L: BuildHasher>(
+fn build_fused_cluster<S: BuildHasher + Sync, H: BuildHasher + Sync, L: BuildHasher + Sync>(
     inputs: &ClusterBuildInputs<'_, S, H, L>,
     fused: &FusedCluster,
     overlap: &mut OverlapMeasurer<'_>,

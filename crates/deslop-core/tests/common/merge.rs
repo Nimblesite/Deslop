@@ -58,7 +58,7 @@ pub(crate) fn synthetic_merge_plan(
         )
         .context("file root")?;
     let parser = refactor::parser_for_path(&absolute).context("parser")?;
-    merge::compute_merge_plan(&cluster, &source, file_root, &absolute, parser.as_ref())
+    merge::compute_merge_plan(&cluster, &source, &file_root, &absolute, parser.as_ref())
         .map_err(|error| anyhow!("merge failed: {error}"))
 }
 
@@ -116,7 +116,7 @@ pub(crate) fn merge_plans_under(root: &Path, file_name: &str) -> Result<Vec<Merg
         .clusters
         .iter()
         .map(|cluster| {
-            merge::compute_merge_plan(cluster, &source, file_root, &absolute, parser.as_ref())
+            merge::compute_merge_plan(cluster, &source, &file_root, &absolute, parser.as_ref())
                 .map_err(|error| anyhow!("merge plan failed: {error}"))
         })
         .collect()

@@ -396,6 +396,12 @@ fn normalise_children(
             children.push(child_node);
         }
     }
+    // [PERF-FLUTTER-TODO-MEMORY] A corpus-scale run retains every
+    // normalised tree for the whole scan, and `Vec`'s doubling growth
+    // leaves up to half the child buffers as slack. Tightening each
+    // list to its exact length trades a per-node memcpy for a large
+    // share of the corpus's resident bytes.
+    children.shrink_to_fit();
     Ok(children)
 }
 

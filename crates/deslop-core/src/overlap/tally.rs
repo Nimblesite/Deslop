@@ -32,23 +32,23 @@ const RESCUE_PROGRESS_INTERVAL: u64 = 50_000;
 /// eligibility test is too loose or because the corpus genuinely has that
 /// many cross-file near-misses. Separating scanned from eligible from
 /// cross-file from measured from rescued answers that from one record.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct RescueTally {
     /// Candidate pairs examined, whatever became of them.
-    scanned: u64,
+    pub(super) scanned: u64,
     /// Pairs the fused threshold would drop despite token corroboration.
-    eligible: u64,
+    pub(super) eligible: u64,
     /// Eligible pairs whose endpoints live in different files — the
     /// population handed to the measurer.
-    cross_file: u64,
+    pub(super) cross_file: u64,
     /// Cross-file pairs the measurer answered, from any route.
-    measured: u64,
+    pub(super) measured: u64,
     /// Measured pairs whose overlap cleared
     /// [`crate::pair::SHARED_SUBTREE_MIN_OVERLAP`] — the pairs the
     /// rescue actually admits. Distinct from `measured`, which counts
     /// every pair the route looked at: conflating the two reports a
     /// rescue population that never existed.
-    rescued: u64,
+    pub(super) rescued: u64,
     /// Stage start, for the throughput a reader needs to tell slow from
     /// stuck.
     started: Instant,
@@ -92,6 +92,17 @@ impl RescueTally {
         if self.measured.checked_rem(RESCUE_PROGRESS_INTERVAL) == Some(0) {
             self.report("shared-subtree rescue in progress", measure);
         }
+    }
+
+    /// Folds another tally's counts into this one. The stage clock stays
+    /// this tally's own — shard tallies share the pass start, so the
+    /// merged elapsed time is the pass's ([PERF-FLUTTER-TODO-RESCUE]).
+    pub(super) fn absorb(&mut self, other: &RescueTally) {
+        self.scanned = self.scanned.saturating_add(other.scanned);
+        self.eligible = self.eligible.saturating_add(other.eligible);
+        self.cross_file = self.cross_file.saturating_add(other.cross_file);
+        self.measured = self.measured.saturating_add(other.measured);
+        self.rescued = self.rescued.saturating_add(other.rescued);
     }
 
     /// Emits the pass's totals. Always emitted, including when the stage
