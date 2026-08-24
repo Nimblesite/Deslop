@@ -44,7 +44,8 @@ fn issue_93_embedding_pass_recalls_lsh_missed_clusters_and_credits_every_cosine(
         },
     ];
 
-    let candidates = candidate_pairs(&fingerprints, &signatures, &lsh_pairs, &embedding_pairs);
+    let signature_index = SignatureIndex::from_slice(&signatures);
+    let candidates = candidate_pairs(&fingerprints, &signature_index, &lsh_pairs, &embedding_pairs);
     assert_eq!(
         candidates.len(),
         2,
@@ -135,9 +136,10 @@ fn assert_rendered_signals_are_measured(
         (2, vec![1.0, 0.0]),
         (3, vec![0.98, 0.198_997_49]),
     ]);
+    let signature_index = SignatureIndex::from_slice(signatures);
     let rendered = build_ranked_fused_clusters(&ClusterBuildInputs {
         fingerprints,
-        signatures,
+        signatures: &signature_index,
         embedding_vectors: &vectors,
         fused_clusters: clusters,
         trees: &[],

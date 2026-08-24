@@ -365,7 +365,7 @@ mod streaming_tests {
     //! documented contract
     //! (`docs/performance-branch-review.md`, "streamed LSH construction").
 
-    use super::{for_each_band_collision, Signature, BANDS, SIGNATURE_LEN};
+    use super::{for_each_band_collision, Signature, SignatureIndex, BANDS, SIGNATURE_LEN};
 
     /// A signature whose band `band` is filled with `filler` and every
     /// other band with a value unique to `seed`.
@@ -387,7 +387,8 @@ mod streaming_tests {
     fn identical_band_keys_pair_through_the_star() {
         let signatures = [seeded(1, 3, 777), seeded(2, 3, 777), seeded(3, 7, 999)];
         let mut pairs = Vec::new();
-        for_each_band_collision(&signatures, &mut |left, right| pairs.push((left, right)));
+        let index = SignatureIndex::from_slice(&signatures);
+        for_each_band_collision(&index, &mut |left, right| pairs.push((left, right)));
         assert_eq!(
             pairs,
             vec![(0, 1)],
@@ -406,7 +407,8 @@ mod streaming_tests {
             seeded(13, 0, 7),
         ];
         let mut pairs = Vec::new();
-        for_each_band_collision(&signatures, &mut |left, right| pairs.push((left, right)));
+        let index = SignatureIndex::from_slice(&signatures);
+        for_each_band_collision(&index, &mut |left, right| pairs.push((left, right)));
         assert_eq!(
             pairs,
             vec![(0, 1), (0, 2)],
@@ -444,7 +446,8 @@ mod streaming_tests {
         let right = seeded(*second_fill, 2, *second_fill);
         let signatures = [left, right];
         let mut pairs = Vec::new();
-        for_each_band_collision(&signatures, &mut |l, r| pairs.push((l, r)));
+        let index = SignatureIndex::from_slice(&signatures);
+        for_each_band_collision(&index, &mut |l, r| pairs.push((l, r)));
         assert!(
             pairs.is_empty(),
             "two signatures with different full band keys must never pair, even              when their truncated sort hashes collide: {pairs:?}"
@@ -458,7 +461,8 @@ mod streaming_tests {
     fn a_pair_colliding_in_every_band_emits_once_per_band() {
         let signatures = [seeded(5, 0, 13), seeded(5, 0, 13)];
         let mut count = 0_u64;
-        for_each_band_collision(&signatures, &mut |_left, _right| count = count.saturating_add(1));
+        let index = SignatureIndex::from_slice(&signatures);
+        for_each_band_collision(&index, &mut |_left, _right| count = count.saturating_add(1));
         assert_eq!(count, BANDS as u64, "identical signatures collide in every band");
     }
 }

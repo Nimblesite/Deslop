@@ -147,7 +147,7 @@ impl CorpusStore {
     /// The view borrows this store.
     pub(super) fn signatures(&self) -> crate::lsh::SignatureIndex<'_> {
         crate::lsh::SignatureIndex::from_segments(
-            self.signatures.iter().map(|segment| segment.as_slice()),
+            self.signatures.iter().map(std::vec::Vec::as_slice),
         )
     }
 

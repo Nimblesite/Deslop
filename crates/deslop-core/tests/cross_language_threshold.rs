@@ -55,9 +55,10 @@ fn policy_pairs(
     languages: &HashMap<FileId, &'static str>,
     allow_cross_language: bool,
 ) -> Vec<CandidatePair> {
+    let signature_index = SignatureIndex::from_slice(signatures);
     candidate_pairs_for_language_policy(
         fingerprints,
-        signatures,
+        &signature_index,
         &lsh_pairs,
         &[],
         None,
