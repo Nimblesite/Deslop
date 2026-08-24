@@ -72,10 +72,8 @@ fn construction_gate_matches_survival_at_zero_overlap() {
                                     min_jaccard,
                                     fused_min,
                                 );
-                                let survives = matches!(
-                                    survival_decision(&candidate),
-                                    PairSurvival::Survived
-                                );
+                                let survives =
+                                    matches!(survival_decision(&candidate), PairSurvival::Survived);
                                 assert_eq!(
                                     construction_survives(&candidate),
                                     survives,
@@ -112,8 +110,7 @@ fn refused_pairs_reenter_only_through_the_rescue_route() {
         FUSED_THRESHOLD,
     );
     assert!(
-        !construction_survives(&eligible)
-            && super::rescue_eligible(&eligible),
+        !construction_survives(&eligible) && super::rescue_eligible(&eligible),
         "a below-floor, token-corroborated pair must be refused at \
          construction and admitted to measurement"
     );

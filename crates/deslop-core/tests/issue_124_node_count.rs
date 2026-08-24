@@ -14,7 +14,7 @@ use deslop_core::{
     ast::ByteRange,
     cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs},
     fingerprint::Fingerprint,
-    lsh::{SIGNATURE_LEN, Signature, SignatureIndex},
+    lsh::{Signature, SignatureIndex, SIGNATURE_LEN},
     pair::FusedCluster,
     state::{FileId, FileRegistry},
 };

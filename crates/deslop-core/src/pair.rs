@@ -446,4 +446,3 @@ fn shared_subtree_rescued(pair: &CandidatePair, score: PairScore) -> bool {
 fn endpoints_are_size_coherent((smaller, larger): (usize, usize)) -> bool {
     larger <= smaller.saturating_mul(MAX_ENDPOINT_NODE_RATIO)
 }
-

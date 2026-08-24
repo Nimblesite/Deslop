@@ -15,7 +15,7 @@ use deslop_core::{
     ast::ByteRange,
     embedding::EmbeddingPair,
     fingerprint::Fingerprint,
-    lsh::{SIGNATURE_LEN, Signature, SignatureIndex},
+    lsh::{Signature, SignatureIndex, SIGNATURE_LEN},
     pair::candidate_pairs,
     state::{FileId, FileRegistry},
 };
@@ -41,10 +41,7 @@ fn fixture(structural_clone: bool) -> (Vec<Fingerprint>, Vec<Signature>) {
         [9_u8; 32]
     };
     (
-        vec![
-            fingerprint(left, left_hash),
-            fingerprint(right, right_hash),
-        ],
+        vec![fingerprint(left, left_hash), fingerprint(right, right_hash)],
         // Identical signatures: token Jaccard 1.0 either way, isolating
         // the structural/embedding axes under test.
         vec![[0; SIGNATURE_LEN], [0; SIGNATURE_LEN]],

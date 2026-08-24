@@ -16,18 +16,14 @@ use super::{
     same_language_indexes,
 };
 use crate::{
-    embedding::EmbeddingPair,
-    fingerprint::Fingerprint,
-    lsh::SignatureLookup,
-    state::FileId,
+    embedding::EmbeddingPair, fingerprint::Fingerprint, lsh::SignatureLookup, state::FileId,
 };
 
 /// The ordered pair key packed as one `u64`: high half the lower
 /// index, low half the higher ([PERF-FLUTTER-TODO-MEMORY]).
 fn packed_key(key: (usize, usize)) -> u64 {
     let (left, right) = key;
-    (u64::try_from(left).unwrap_or(u64::MAX) << 32)
-        | u64::try_from(right).unwrap_or(0xFFFF_FFFF)
+    (u64::try_from(left).unwrap_or(u64::MAX) << 32) | u64::try_from(right).unwrap_or(0xFFFF_FFFF)
 }
 
 /// The inverse of [`packed_key`]: the ordered index pair a row's packed
@@ -122,7 +118,9 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
                 .unwrap_or(&[])
                 .iter()
                 .position(|(hash, _)| *hash != run_hash)
-                .map_or(tagged.len(), |offset| run_start.saturating_add(1).saturating_add(offset));
+                .map_or(tagged.len(), |offset| {
+                    run_start.saturating_add(1).saturating_add(offset)
+                });
             let run = tagged.get(run_start..run_end).unwrap_or(&[]);
             let Some(canonical) = run.first().map(|(_, index)| *index) else {
                 break;
@@ -150,7 +148,8 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
     /// pairs in deterministic key order.
     pub(super) fn finish(mut self) -> Vec<CandidatePair> {
         drop(std::mem::take(&mut self.kept_keys));
-        self.kept.sort_unstable_by_key(|pair| (pair.left, pair.right));
+        self.kept
+            .sort_unstable_by_key(|pair| (pair.left, pair.right));
         self.kept.shrink_to_fit();
         self.kept
     }

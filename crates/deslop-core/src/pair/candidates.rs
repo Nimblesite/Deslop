@@ -16,14 +16,9 @@
 //! The retained population is what the memory budget scales with now —
 //! not the raw LSH pair volume.
 
-use std::{
-    collections::HashMap,
-    hash::BuildHasher,
-};
+use std::{collections::HashMap, hash::BuildHasher};
 
-use super::{
-    CandidatePair, PairScore, CROSS_LANGUAGE_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT,
-};
+use super::{CandidatePair, PairScore, CROSS_LANGUAGE_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT};
 use crate::{
     embedding::EmbeddingPair,
     fingerprint::{ranges_overlap, Fingerprint},
@@ -148,7 +143,10 @@ fn build_candidates<S: BuildHasher>(
         file_languages,
         allow_cross_language,
     );
-    tracing::info!(rss_mib = crate::observe::resident_mib(), "pairs: pre-structural");
+    tracing::info!(
+        rss_mib = crate::observe::resident_mib(),
+        "pairs: pre-structural"
+    );
     builder.add_structural_pairs();
     tracing::info!(
         rss_mib = crate::observe::resident_mib(),
@@ -185,8 +183,7 @@ fn add_cross_language_signature_pairs<S: BuildHasher>(
     signatures: &dyn SignatureLookup,
     file_languages: &HashMap<FileId, &'static str, S>,
 ) {
-    let existing: std::collections::BTreeSet<(usize, usize)> =
-        pairs.iter().map(pair_key).collect();
+    let existing: std::collections::BTreeSet<(usize, usize)> = pairs.iter().map(pair_key).collect();
     let limit = fingerprints.len().min(signatures.len());
     let mut additions = Vec::new();
     for left in 0..limit {

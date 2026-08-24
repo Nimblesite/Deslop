@@ -67,10 +67,9 @@ fn emit_run_pairs(
             .unwrap_or(&[])
             .iter()
             .position(|&(hash, _)| hash != run_hash)
-            .map_or(
-                tagged.len(),
-                |offset| run_start.saturating_add(1).saturating_add(offset),
-            );
+            .map_or(tagged.len(), |offset| {
+                run_start.saturating_add(1).saturating_add(offset)
+            });
         emit_one_run(signatures, band, tagged, run_start, run_end, emit);
         if run_end >= tagged.len() {
             break;
@@ -265,7 +264,8 @@ mod streaming_tests {
             *value = if slot / 4 == band {
                 filler
             } else {
-                seed.wrapping_mul(0x9E37_79B9_7F4A_7C15).wrapping_add(slot as u64)
+                seed.wrapping_mul(0x9E37_79B9_7F4A_7C15)
+                    .wrapping_add(slot as u64)
             };
         }
         signature
@@ -351,7 +351,10 @@ mod streaming_tests {
         let mut count = 0_u64;
         let index = SignatureIndex::from_slice(&signatures);
         for_each_band_collision(&index, &mut |_left, _right| count = count.saturating_add(1));
-        assert_eq!(count, BANDS as u64, "identical signatures collide in every band");
+        assert_eq!(
+            count, BANDS as u64,
+            "identical signatures collide in every band"
+        );
     }
 }
 

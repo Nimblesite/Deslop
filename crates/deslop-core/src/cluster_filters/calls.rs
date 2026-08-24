@@ -6,9 +6,7 @@ use tree_sitter::Node;
 
 use std::rc::Rc;
 
-use super::{
-    enclosing_kind, parse_for, snippets::CallSequence, ParseCache, Snippet,
-};
+use super::{enclosing_kind, parse_for, snippets::CallSequence, ParseCache, Snippet};
 use crate::ast::ByteRange;
 
 use args::collect_argument_shapes;
@@ -125,16 +123,11 @@ fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>], cache: &ParseCac
     let Some(cells) = cells else {
         return false;
     };
-    if !cells
-        .iter()
-        .all(|cell| cell.all_statements_have_call)
-    {
+    if !cells.iter().all(|cell| cell.all_statements_have_call) {
         return false;
     }
-    let sequences: Option<Vec<&[CallShape]>> = cells
-        .iter()
-        .map(|cell| cell.shapes.as_deref())
-        .collect();
+    let sequences: Option<Vec<&[CallShape]>> =
+        cells.iter().map(|cell| cell.shapes.as_deref()).collect();
     let Some(sequences) = sequences else {
         return false;
     };

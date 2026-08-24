@@ -30,7 +30,8 @@ use crate::{fingerprint::Fingerprint, pair::FusedCluster, state::FileId};
 
 use super::{
     family::{families_by, restrict},
-    is_noise_pattern, snippets::ParseCache,
+    is_noise_pattern,
+    snippets::ParseCache,
 };
 
 /// Smallest byte-identical family worth keeping: one lone occurrence is
@@ -63,16 +64,14 @@ pub(crate) fn split_noise_verbatim_families<S: BuildHasher>(
     // `Option<FileId>` keys: `None` sorts first, which no real cluster
     // produces (every member resolves), so the order is total.
     order.sort_by_key(|&index| {
-        fused_clusters
-            .get(index)
-            .and_then(|fused| {
-                fused
-                    .members
-                    .iter()
-                    .filter_map(|&member| fingerprints.get(member))
-                    .map(|found| found.file_id)
-                    .min()
-            })
+        fused_clusters.get(index).and_then(|fused| {
+            fused
+                .members
+                .iter()
+                .filter_map(|&member| fingerprints.get(member))
+                .map(|found| found.file_id)
+                .min()
+        })
     });
     // One slot per input cluster; a split writes its families as a
     // run, an untouched cluster writes itself, both in input position.

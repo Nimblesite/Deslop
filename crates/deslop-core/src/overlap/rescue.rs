@@ -67,10 +67,7 @@ pub fn apply_shared_subtree_rescue(
 /// candidates from the analysis while the report still rendered — an
 /// incomplete scan masquerading as a complete one
 /// (`a_panicked_shard_poisons_the_whole_rescue`).
-fn join_all_pushing<T: Send>(
-    handles: Vec<std::thread::ScopedJoinHandle<'_, T>>,
-    out: &mut Vec<T>,
-) {
+fn join_all_pushing<T: Send>(handles: Vec<std::thread::ScopedJoinHandle<'_, T>>, out: &mut Vec<T>) {
     for handle in handles {
         match handle.join() {
             Ok(shard) => out.push(shard),
@@ -126,10 +123,7 @@ fn a_panicked_shard_poisons_the_whole_rescue() {
                         // spelling (see observability.rs): an assert
                         // that can never hold.
                         Err(message) => {
-                            assert_eq!(
-                                1, 2,
-                                "poison the shard on purpose: {message}"
-                            );
+                            assert_eq!(1, 2, "poison the shard on purpose: {message}");
                             0
                         }
                     })
@@ -153,8 +147,7 @@ fn worker_count(pairs: usize) -> usize {
     if pairs < MIN_SHARD_WORK {
         return 1;
     }
-    let available = std::thread::available_parallelism()
-        .map_or(1, std::num::NonZeroUsize::get);
+    let available = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
     available.min(pairs / MIN_SHARD_WORK).max(1)
 }
 
@@ -199,9 +192,11 @@ mod shard_equivalence_tests {
     use crate::{
         ast::NormalizedNode,
         fingerprint::Fingerprint,
-        pair::{CandidatePair, PairScore, FUSED_THRESHOLD, LSH_ONLY_MIN_JACCARD,
-            LSH_ONLY_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_JACCARD},
         lang::LanguageParser,
+        pair::{
+            CandidatePair, PairScore, FUSED_THRESHOLD, LSH_ONLY_MIN_JACCARD,
+            LSH_ONLY_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_JACCARD,
+        },
         state::{FileId, FileRegistry},
     };
 
@@ -221,7 +216,10 @@ mod shard_equivalence_tests {
 
     /// Total nodes in a subtree, including the root.
     fn count_nodes(node: &NormalizedNode) -> usize {
-        node.children.iter().map(count_nodes).fold(1, usize::saturating_add)
+        node.children
+            .iter()
+            .map(count_nodes)
+            .fold(1, usize::saturating_add)
     }
 
     /// A wide function past every gate: well over the LSH-only floor
@@ -272,7 +270,11 @@ mod shard_equivalence_tests {
         let nodes = left.1.node_count;
         let fingerprints = [left.1.clone(), right.1.clone()];
         let trees = [left.0, right.0];
-        let fixture = || (0..pair_count).map(|_| eligible_pair(nodes)).collect::<Vec<_>>();
+        let fixture = || {
+            (0..pair_count)
+                .map(|_| eligible_pair(nodes))
+                .collect::<Vec<_>>()
+        };
 
         // The threaded entry point — whichever core count routes it.
         let mut sharded = fixture();

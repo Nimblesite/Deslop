@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use deslop_core::{
     ast::ByteRange,
     fingerprint::Fingerprint,
-    lsh::{SIGNATURE_LEN, Signature, SignatureIndex},
+    lsh::{Signature, SignatureIndex, SIGNATURE_LEN},
     pair::{
         candidate_pairs_for_language_policy, CandidatePair, CROSS_LANGUAGE_MIN_JACCARD,
         FUSED_THRESHOLD,

@@ -74,11 +74,10 @@ impl AbsorbTarget<'_> {
         self.fingerprints_running = self
             .fingerprints_running
             .saturating_add(work.fingerprints.len());
-        let _previous_lines = self
-            .corpus
-            .analysed_lines
-            .insert(work.file_id, work.lines);
-        self.corpus.per_file.push((work.file_id, work.fingerprints.len()));
+        let _previous_lines = self.corpus.analysed_lines.insert(work.file_id, work.lines);
+        self.corpus
+            .per_file
+            .push((work.file_id, work.fingerprints.len()));
         self.corpus.boilerplate_ranges.extend(work.boilerplate);
         let _previous_source = self.corpus.sources.insert(work.file_id, work.source);
         log_corpus_progress(
@@ -90,7 +89,9 @@ impl AbsorbTarget<'_> {
         // Fingerprints extend the flat vector; the file's signatures
         // extend the shard's open segment — moved, never copied.
         let FileWork {
-            fingerprints, signatures, ..
+            fingerprints,
+            signatures,
+            ..
         } = work;
         self.corpus.fingerprints.extend(fingerprints);
         if self.segment_open {
@@ -167,11 +168,9 @@ pub(super) fn parallel_file_work(
         for handle in handles {
             // A panicked parse worker must fail the build, never
             // silently drop its files.
-            let (shard_files, state) = handle
-                .join()
-                .map_err(|_| CoreError::ParseFailed {
-                    language: "unknown",
-                })??;
+            let (shard_files, state) = handle.join().map_err(|_| CoreError::ParseFailed {
+                language: "unknown",
+            })??;
             shards.push(shard_files);
             state_out.build.absorb(&state.build);
             state_out.cache_stats.hits = state_out
@@ -313,7 +312,9 @@ pub(super) fn absorb_file_work(
 ) {
     *fingerprints_running = fingerprints_running.saturating_add(work.fingerprints.len());
     let _previous_lines = corpus.analysed_lines.insert(work.file_id, work.lines);
-    corpus.per_file.push((work.file_id, work.fingerprints.len()));
+    corpus
+        .per_file
+        .push((work.file_id, work.fingerprints.len()));
     corpus.fingerprints.extend(work.fingerprints);
     corpus.signatures.push(work.signatures);
     corpus.boilerplate_ranges.extend(work.boilerplate);

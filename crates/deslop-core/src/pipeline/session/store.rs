@@ -18,10 +18,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::{
-    fingerprint::Fingerprint, lsh::Signature,
-    state::FileId,
-};
+use crate::{fingerprint::Fingerprint, lsh::Signature, state::FileId};
 
 /// One live file's span of the flat storage: its identity, its sort
 /// key, and how many fingerprint (and, positionally 1:1, signature)
@@ -285,7 +282,11 @@ mod segment_tests {
         (registry, ids)
     }
 
-    fn records(marker: u8, count: usize, file_id: FileId) -> (Vec<Fingerprint>, Vec<crate::lsh::Signature>) {
+    fn records(
+        marker: u8,
+        count: usize,
+        file_id: FileId,
+    ) -> (Vec<Fingerprint>, Vec<crate::lsh::Signature>) {
         let fingerprints = (0..count)
             .map(|index| Fingerprint {
                 hash: [marker; 32],
@@ -357,7 +358,8 @@ mod segment_tests {
                 // The deliberate-failure pattern: an assertion message
                 // with mismatched operands, never a raw panic.
                 assert_eq!(
-                    index, usize::MAX,
+                    index,
+                    usize::MAX,
                     "index {index}: signature missing while fingerprint exists"
                 );
                 continue;
@@ -383,17 +385,29 @@ mod segment_tests {
         assert_eq!(store.fingerprint_count(), 6, "three files of two records");
 
         // Beginning: a.rs grows from two records to three.
-        store.upsert(id_at(&ids, 0)?, PathBuf::from("a.rs"), cached(marker_at(0), 3, id_at(&ids, 0)?));
+        store.upsert(
+            id_at(&ids, 0)?,
+            PathBuf::from("a.rs"),
+            cached(marker_at(0), 3, id_at(&ids, 0)?),
+        );
         assert_eq!(store.fingerprint_count(), 7, "beginning file +1 record");
         assert_aligned(&store);
 
         // Middle: b.rs shrinks from two records to one.
-        store.upsert(id_at(&ids, 1)?, PathBuf::from("b.rs"), cached(marker_at(1), 1, id_at(&ids, 1)?));
+        store.upsert(
+            id_at(&ids, 1)?,
+            PathBuf::from("b.rs"),
+            cached(marker_at(1), 1, id_at(&ids, 1)?),
+        );
         assert_eq!(store.fingerprint_count(), 6, "middle file -1 record");
         assert_aligned(&store);
 
         // End: c.rs grows from two records to five.
-        store.upsert(id_at(&ids, 2)?, PathBuf::from("c.rs"), cached(marker_at(2), 5, id_at(&ids, 2)?));
+        store.upsert(
+            id_at(&ids, 2)?,
+            PathBuf::from("c.rs"),
+            cached(marker_at(2), 5, id_at(&ids, 2)?),
+        );
         assert_eq!(store.fingerprint_count(), 9, "end file +3 records");
         assert_aligned(&store);
         Ok(())
@@ -407,18 +421,33 @@ mod segment_tests {
         let mut store = store;
 
         assert!(store.remove(id_at(&ids, 0)?), "beginning file present");
-        assert_eq!(store.fingerprint_count(), 4, "beginning file's two records drained");
+        assert_eq!(
+            store.fingerprint_count(),
+            4,
+            "beginning file's two records drained"
+        );
         assert_aligned(&store);
 
         assert!(store.remove(id_at(&ids, 1)?), "middle file present");
-        assert_eq!(store.fingerprint_count(), 2, "middle file's two records drained");
+        assert_eq!(
+            store.fingerprint_count(),
+            2,
+            "middle file's two records drained"
+        );
         assert_aligned(&store);
 
         assert!(store.remove(id_at(&ids, 2)?), "end file present");
-        assert_eq!(store.fingerprint_count(), 0, "end file's two records drained");
+        assert_eq!(
+            store.fingerprint_count(),
+            0,
+            "end file's two records drained"
+        );
         assert_aligned(&store);
 
-        assert!(!store.remove(id_at(&ids, 2)?), "a second removal finds nothing");
+        assert!(
+            !store.remove(id_at(&ids, 2)?),
+            "a second removal finds nothing"
+        );
         Ok(())
     }
 

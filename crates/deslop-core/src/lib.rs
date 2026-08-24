@@ -64,6 +64,7 @@ pub mod wire_generated;
 
 pub use buckets::{bucket_labels, classify, classify_signals, BucketLabels, ClusterKind};
 pub use clone_category::CloneCategory;
+pub use cluster_filters::ParseCache;
 pub use config::{
     BoilerplateImportsMode, ClonePolicy, ExclusionConfig, RankingPolicy, DEFAULT_CONFIG_FILENAME,
 };
@@ -77,7 +78,6 @@ pub use embedding::{
 };
 pub use error::CoreError;
 pub use pipeline::{debug_ast_dump, run, EmbeddingSettings, PipelineConfig, PipelineSession};
-pub use cluster_filters::ParseCache;
 pub use report::{render_report, EmbeddingProvenance, Report, ReportInputs};
 pub use report_boilerplate::{ReportBoilerplateHint, ReportBoilerplateOccurrence};
 pub use report_metrics::{

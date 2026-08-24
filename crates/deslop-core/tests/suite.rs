@@ -30,8 +30,6 @@ mod embedding_pass_observability;
 mod issue_117;
 #[path = "issue_121_pytest_fixture_boilerplate.rs"]
 mod issue_121_pytest_fixture_boilerplate;
-#[path = "pair_evidence_merge.rs"]
-mod pair_evidence_merge;
 #[path = "issue_124_node_count.rs"]
 mod issue_124_node_count;
 #[path = "issue_239_csharp_reparse.rs"]
@@ -66,6 +64,8 @@ mod live_merge_plan;
 mod live_session_status;
 #[path = "pair_admission_bounded_max.rs"]
 mod pair_admission_bounded_max;
+#[path = "pair_evidence_merge.rs"]
+mod pair_evidence_merge;
 #[path = "refactor_ast_access.rs"]
 mod refactor_ast_access;
 #[path = "refactor_consolidate.rs"]

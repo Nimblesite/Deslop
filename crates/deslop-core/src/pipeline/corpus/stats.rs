@@ -57,8 +57,12 @@ impl CorpusBuildStats {
     /// Folds one shard's counters into this state.
     pub fn absorb(&mut self, other: &Self) {
         self.signatures_built = self.signatures_built.saturating_add(other.signatures_built);
-        self.signatures_reused = self.signatures_reused.saturating_add(other.signatures_reused);
-        self.exact_fingerprints = self.exact_fingerprints.saturating_add(other.exact_fingerprints);
+        self.signatures_reused = self
+            .signatures_reused
+            .saturating_add(other.signatures_reused);
+        self.exact_fingerprints = self
+            .exact_fingerprints
+            .saturating_add(other.exact_fingerprints);
         self.sibling_fingerprints = self
             .sibling_fingerprints
             .saturating_add(other.sibling_fingerprints);

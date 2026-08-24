@@ -126,7 +126,11 @@ fn fingerprint_corpus_with_workers(
     // *before* parsing so each file's records append directly onto the
     // flat vectors. No per-file map, no second copy, no re-flatten.
     let mut ordered: Vec<&DiscoveredFile> = files.iter().collect();
-    ordered.sort_by(|left, right| left.path.cmp(&right.path).then(left.file_id.cmp(&right.file_id)));
+    ordered.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then(left.file_id.cmp(&right.file_id))
+    });
     // [PERF-FLUTTER-TODO-CORPUS] A cold, non-incremental build parses
     // and folds each file independently — the dominant wall cost
     // (parse + fingerprint + signature, ~80 s on the Flutter corpus) —
@@ -140,8 +144,14 @@ fn fingerprint_corpus_with_workers(
         ..PassState::default()
     };
     if config.incremental {
-        let ordered_work =
-            serial_file_work(&ordered, parsers, &cache_base, config, min_nodes_usize, &mut pass_state)?;
+        let ordered_work = serial_file_work(
+            &ordered,
+            parsers,
+            &cache_base,
+            config,
+            min_nodes_usize,
+            &mut pass_state,
+        )?;
         for (position, work) in ordered_work.into_iter().enumerate() {
             if let Some(file_work) = work {
                 absorb_file_work(
@@ -183,12 +193,21 @@ fn fingerprint_corpus_with_workers(
             .saturating_add(shard_state.cache_stats.misses);
         fingerprints_running = target.fingerprints_running;
     }
-    corpus.cache_stats.hits = corpus.cache_stats.hits.saturating_add(pass_state.cache_stats.hits);
+    corpus.cache_stats.hits = corpus
+        .cache_stats
+        .hits
+        .saturating_add(pass_state.cache_stats.hits);
     corpus.cache_stats.misses = corpus
         .cache_stats
         .misses
         .saturating_add(pass_state.cache_stats.misses);
-    log_corpus_built(files.len(), fingerprints_running, &corpus, &pass_state.build, started);
+    log_corpus_built(
+        files.len(),
+        fingerprints_running,
+        &corpus,
+        &pass_state.build,
+        started,
+    );
     // [PIPELINE-INCREMENTAL-RETENTION] A full pass is the one moment
     // the live blob set is exactly known, so retention runs here —
     // never on a single-file change pass, and never when the store is
@@ -247,7 +266,12 @@ fn log_corpus_built(
             .sum::<usize>()
             .saturating_mul(1024)
             / (1024 * 1024),
-        source_mib = corpus.sources.values().map(std::vec::Vec::len).sum::<usize>() / (1024 * 1024),
+        source_mib = corpus
+            .sources
+            .values()
+            .map(std::vec::Vec::len)
+            .sum::<usize>()
+            / (1024 * 1024),
         "fingerprint corpus built",
     );
 }
@@ -443,4 +467,3 @@ pub fn read_source(path: &Path) -> Result<Vec<u8>, CoreError> {
         source,
     })
 }
-

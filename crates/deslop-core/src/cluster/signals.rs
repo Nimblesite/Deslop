@@ -86,7 +86,8 @@ impl SignalTotals {
         }
         let mut left_sig = crate::lsh::ZEROED_SIGNATURE;
         let mut right_sig = crate::lsh::ZEROED_SIGNATURE;
-        if signatures.read_into(left, &mut left_sig) && signatures.read_into(right, &mut right_sig) {
+        if signatures.read_into(left, &mut left_sig) && signatures.read_into(right, &mut right_sig)
+        {
             self.token_jaccard
                 .add(estimate_jaccard(&left_sig, &right_sig));
         }

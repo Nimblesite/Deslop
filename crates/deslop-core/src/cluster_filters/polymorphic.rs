@@ -109,9 +109,9 @@ pub(super) fn is_polymorphic_signature_cluster<S: BuildHasher>(
         return false;
     };
     let contracts = cache.contracts(sources, file_languages, language);
-    subjects.iter().all(|subject| {
-        subject.overrides || contracts.declares(&subject.bases, &subject.name)
-    })
+    subjects
+        .iter()
+        .all(|subject| subject.overrides || contracts.declares(&subject.bases, &subject.name))
 }
 
 /// blake3 digest of a body-shape stream: `Kind` as two bytes, `Symbol`

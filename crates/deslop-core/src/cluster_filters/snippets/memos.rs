@@ -6,8 +6,8 @@
 
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use super::super::{calls::CallShape, polymorphic::OwnedSubject};
 use super::super::body_shape::OwnedShapeToken;
+use super::super::{calls::CallShape, polymorphic::OwnedSubject};
 use super::{CallSequence, ParseCache, Snippet, SnippetKey};
 
 /// Most cells each cache may retain. Beyond the cap a value is

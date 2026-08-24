@@ -53,10 +53,7 @@ fn repo_target_release() -> std::path::PathBuf {
 fn a_gnu_peak_is_read_as_kbytes() -> Result<()> {
     let stderr = "\tMaximum resident set size (kbytes): 7340032\n";
     let parsed = peak_rss_mb(stderr)?;
-    assert_eq!(
-        parsed, 7168,
-        "7340032 kbytes is 7168 MB"
-    );
+    assert_eq!(parsed, 7168, "7340032 kbytes is 7168 MB");
     Ok(())
 }
 
@@ -65,10 +62,7 @@ fn a_gnu_peak_is_read_as_kbytes() -> Result<()> {
 fn a_bsd_peak_is_read_as_bytes() -> Result<()> {
     let stderr = "         7516192768  maximum resident set size\n";
     let parsed = peak_rss_mb(stderr)?;
-    assert_eq!(
-        parsed, 7168,
-        "7516192768 bytes is 7168 MB"
-    );
+    assert_eq!(parsed, 7168, "7516192768 bytes is 7168 MB");
     Ok(())
 }
 

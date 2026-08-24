@@ -73,7 +73,12 @@ impl PipelineSession {
             mut pairs,
             embedding_outcome,
         } = self.build_candidate_pairs(config, fingerprints, &signatures, &lsh_source)?;
-        ledger.record("candidate_pairs", signatures.len(), pairs.len(), stage_started);
+        ledger.record(
+            "candidate_pairs",
+            signatures.len(),
+            pairs.len(),
+            stage_started,
+        );
         // Trees for every measurement stage, materialised once, now that
         // the pair-construction allocations are behind us — unless the
         // cross-language audit already materialised them above.
@@ -87,11 +92,21 @@ impl PipelineSession {
         let rescue_input = pairs.len();
         let stage_started = Instant::now();
         apply_shared_subtree_rescue(&mut pairs, fingerprints, &trees);
-        ledger.record("shared_subtree_rescue", rescue_input, pairs.len(), stage_started);
+        ledger.record(
+            "shared_subtree_rescue",
+            rescue_input,
+            pairs.len(),
+            stage_started,
+        );
         let rescue_output = pairs.len();
         let stage_started = Instant::now();
         let fused_clusters = cluster_by_transitive_closure(&pairs);
-        ledger.record("transitive_closure", rescue_output, fused_clusters.len(), stage_started);
+        ledger.record(
+            "transitive_closure",
+            rescue_output,
+            fused_clusters.len(),
+            stage_started,
+        );
         // The surviving discovery edges moved into the components, so
         // the flat pair list's last use is behind us — ~600 MB of
         // candidate pairs on a corpus-scale run, freed before the
@@ -137,10 +152,9 @@ impl PipelineSession {
         // cross-language space compares any pair when the audit mode is
         // on; the per-language space is exact otherwise. Mixing spaces
         // inside one cluster mean would average incomparable values.
-        let built_alias_space =
-            cross_language_signatures.as_deref().map(|space| {
-                crate::lsh::SignatureIndex::from_segments([space])
-            });
+        let built_alias_space = cross_language_signatures
+            .as_deref()
+            .map(|space| crate::lsh::SignatureIndex::from_segments([space]));
         let measurement_signatures = built_alias_space.as_ref().unwrap_or(&signatures);
         let clusters = self.ranked_clusters(
             fingerprints,
@@ -198,7 +212,10 @@ impl PipelineSession {
         let cross_language_signatures = trees.as_ref().map(|trees| {
             build_cross_language_signatures(fingerprints, trees.as_slice(), &self.file_languages)
         });
-        tracing::debug!(signatures = signatures.len(), "streaming LSH band collisions");
+        tracing::debug!(
+            signatures = signatures.len(),
+            "streaming LSH band collisions"
+        );
         let view = CorpusView {
             fingerprints,
             sources: &self.sources,
@@ -261,9 +278,7 @@ impl PipelineSession {
                         let Some((file_id, language, source)) = jobs.get(index).copied() else {
                             continue;
                         };
-                        let Some(parser) = parsers
-                            .iter()
-                            .find(|parser| parser.id() == language)
+                        let Some(parser) = parsers.iter().find(|parser| parser.id() == language)
                         else {
                             continue;
                         };
@@ -393,13 +408,7 @@ struct StageRow {
 
 impl StageLedger {
     /// Records one completed stage boundary.
-    fn record(
-        &mut self,
-        stage: &'static str,
-        input: usize,
-        output: usize,
-        started: Instant,
-    ) {
+    fn record(&mut self, stage: &'static str, input: usize, output: usize, started: Instant) {
         let elapsed_ms = crate::observe::elapsed_ms(started);
         tracing::info!(
             stage,

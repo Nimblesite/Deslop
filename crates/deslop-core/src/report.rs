@@ -231,13 +231,12 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
     // hot; results land at their input position, so the report is
     // byte-identical to a straight in-order map.
     let mut order: Vec<usize> = (0..inputs.clusters.len()).collect();
-    order.sort_by_key(|&index| inputs.clusters.get(index).and_then(|cluster| {
-        cluster
-            .members
-            .iter()
-            .map(|member| member.file_id)
-            .min()
-    }));
+    order.sort_by_key(|&index| {
+        inputs
+            .clusters
+            .get(index)
+            .and_then(|cluster| cluster.members.iter().map(|member| member.file_id).min())
+    });
     let mut slots: Vec<Option<(ReportCluster, bool)>> =
         (0..inputs.clusters.len()).map(|_| None).collect();
     for index in order {

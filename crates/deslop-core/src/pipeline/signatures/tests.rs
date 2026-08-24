@@ -11,9 +11,7 @@ use super::*;
 use crate::{
     ast::ByteRange,
     fingerprint::{collect_non_boilerplate_fingerprints, Fingerprint},
-    lang::{
-        shared::FILE_KIND, LanguageParser,
-    },
+    lang::{shared::FILE_KIND, LanguageParser},
     sibling::collect_non_boilerplate_sibling_fingerprints,
     state::{FileId, FileRegistry},
 };
@@ -54,9 +52,7 @@ fn node(
 
 /// A python file-shaped root over `children`.
 fn file_root(file_id: FileId, children: Vec<NormalizedNode>) -> NormalizedNode {
-    let end = children
-        .last()
-        .map_or(0, |last| last.byte_range.end);
+    let end = children.last().map_or(0, |last| last.byte_range.end);
     node(file_id, FILE_KIND, 0, end, children)
 }
 
@@ -146,7 +142,11 @@ fn window_fingerprint(
 
 /// The fingerprint population the corpus build produces for `tree`:
 /// exact-node fingerprints followed by sibling-window fingerprints.
-fn corpus_fingerprints(tree: &NormalizedNode, language: &str, min_nodes: usize) -> Vec<Fingerprint> {
+fn corpus_fingerprints(
+    tree: &NormalizedNode,
+    language: &str,
+    min_nodes: usize,
+) -> Vec<Fingerprint> {
     let mut fingerprints = collect_non_boilerplate_fingerprints(tree, min_nodes, language);
     fingerprints.extend(collect_non_boilerplate_sibling_fingerprints(
         tree, min_nodes, language,

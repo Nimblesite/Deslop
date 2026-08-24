@@ -81,7 +81,10 @@ fn fold_scales_to_a_corpus_shaped_population_and_stays_byte_faithful() {
             Fingerprint {
                 hash: [1; 32],
                 file_id,
-                byte_range: ByteRange { start, end: start + 56 },
+                byte_range: ByteRange {
+                    start,
+                    end: start + 56,
+                },
                 node_count: 6,
             }
         })
@@ -89,7 +92,10 @@ fn fold_scales_to_a_corpus_shaped_population_and_stays_byte_faithful() {
     let exact_population = fingerprints.len();
     for index in (0..CANARY_STATEMENTS.saturating_sub(1)).step_by(CANARY_WINDOW_STRIDE) {
         let start = index.saturating_mul(CANARY_STATEMENT_SPAN);
-        let end = index.saturating_add(1).saturating_mul(CANARY_STATEMENT_SPAN) + 56;
+        let end = index
+            .saturating_add(1)
+            .saturating_mul(CANARY_STATEMENT_SPAN)
+            + 56;
         fingerprints.push(Fingerprint {
             hash: [2; 32],
             file_id,
@@ -108,7 +114,10 @@ fn fold_scales_to_a_corpus_shaped_population_and_stays_byte_faithful() {
     // Every statement is the same normalised kind stream at a different
     // offset, so every exact-node signature must equal the first — the
     // offset invariance that makes token evidence measure tokens.
-    let first = folded.first().copied().unwrap_or(crate::lsh::ZEROED_SIGNATURE);
+    let first = folded
+        .first()
+        .copied()
+        .unwrap_or(crate::lsh::ZEROED_SIGNATURE);
     let first_fallback = fingerprints
         .first()
         .map(fallback_signature)

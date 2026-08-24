@@ -79,10 +79,7 @@ type Positions = HashMap<(usize, usize), Vec<usize>>;
 fn positions_for(fingerprints: &[Fingerprint]) -> Positions {
     let mut positions: Positions = HashMap::with_capacity(fingerprints.len());
     for (index, fingerprint) in fingerprints.iter().enumerate() {
-        let key = (
-            fingerprint.byte_range.start,
-            fingerprint.byte_range.end,
-        );
+        let key = (fingerprint.byte_range.start, fingerprint.byte_range.end);
         positions.entry(key).or_default().push(index);
     }
     positions
@@ -202,10 +199,7 @@ fn emit_window_members(
             let Some(last) = frame.node.children.get(end.saturating_sub(1)) else {
                 break;
             };
-            let range = (
-                first.byte_range.start,
-                last.byte_range.end,
-            );
+            let range = (first.byte_range.start, last.byte_range.end);
             // A well-formed window spans bytes forward. Positionally
             // unordered children (impossible in a real parse) produce
             // inverted ranges the top-down resolver can never resolve —

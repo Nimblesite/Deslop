@@ -166,11 +166,21 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
     cache: &ParseCache,
 ) -> bool {
     let Some(language) = uniform_language(members, file_languages) else {
-        cache.record_noise(NoiseFilter::UniformLanguage, members.len(), false, std::time::Duration::ZERO);
+        cache.record_noise(
+            NoiseFilter::UniformLanguage,
+            members.len(),
+            false,
+            std::time::Duration::ZERO,
+        );
         return false;
     };
     let Some(snippets) = collect_snippets(members, sources, language, cache) else {
-        cache.record_noise(NoiseFilter::CollectSnippets, members.len(), false, std::time::Duration::ZERO);
+        cache.record_noise(
+            NoiseFilter::CollectSnippets,
+            members.len(),
+            false,
+            std::time::Duration::ZERO,
+        );
         return false;
     };
     // Generic, language-agnostic noise checks run for every language (they
@@ -182,9 +192,8 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
     // Short-circuit preserved exactly: each check runs only until one
     // fires, and the counters record only what actually ran
     // ([PERF-FLUTTER-TODO-OBSERVABILITY]).
-    let polymorphic = || {
-        polymorphic::is_polymorphic_signature_cluster(&snippets, sources, file_languages, cache)
-    };
+    let polymorphic =
+        || polymorphic::is_polymorphic_signature_cluster(&snippets, sources, file_languages, cache);
     let signature_only = || is_signature_only_cluster(&snippets, cache);
     let literal_calls = || calls::is_literal_variation_call_cluster(&snippets, cache);
     let constant_table = || constant_table::is_constant_table_cluster(&snippets);

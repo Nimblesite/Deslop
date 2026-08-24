@@ -19,7 +19,7 @@ use deslop_core::{
     cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs},
     embedding::EmbeddingPair,
     fingerprint::Fingerprint,
-    lsh::{SIGNATURE_LEN, Signature, SignatureIndex},
+    lsh::{Signature, SignatureIndex, SIGNATURE_LEN},
     pair::{
         candidate_pairs, cluster_by_transitive_closure, FusedCluster, LSH_ONLY_MIN_JACCARD,
         LSH_ONLY_MIN_NODE_COUNT,
@@ -45,7 +45,12 @@ fn issue_93_embedding_pass_recalls_lsh_missed_clusters_and_credits_every_cosine(
     ];
 
     let signature_index = SignatureIndex::from_slice(&signatures);
-    let candidates = candidate_pairs(&fingerprints, &signature_index, &lsh_pairs, &embedding_pairs);
+    let candidates = candidate_pairs(
+        &fingerprints,
+        &signature_index,
+        &lsh_pairs,
+        &embedding_pairs,
+    );
     assert_eq!(
         candidates.len(),
         2,

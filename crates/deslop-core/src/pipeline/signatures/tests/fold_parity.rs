@@ -268,7 +268,11 @@ fn repeated_token_streams_produce_byte_identical_signatures() -> Result<(), Stri
     );
     assert_eq!(
         first_signatures.as_slice(),
-        [top_down_signature(&first_tree, &first_window, Some("fsharp"))],
+        [top_down_signature(
+            &first_tree,
+            &first_window,
+            Some("fsharp")
+        )],
         "the fold's signature must be byte-identical to an independent top-down \
          construction of the same stream"
     );

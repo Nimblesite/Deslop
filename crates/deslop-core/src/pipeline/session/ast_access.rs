@@ -32,17 +32,10 @@ impl PipelineSession {
     /// subtree of one file at a time, so a single-file parse costs
     /// microseconds where retaining every corpus tree would cost
     /// gigabytes.
-    pub fn subtree_at_range(
-        &self,
-        file_id: FileId,
-        range: ByteRange,
-    ) -> Option<NormalizedNode> {
+    pub fn subtree_at_range(&self, file_id: FileId, range: ByteRange) -> Option<NormalizedNode> {
         let source = self.sources.get(&file_id).map(Vec::as_slice)?;
         let language = self.file_languages.get(&file_id).copied()?;
-        let parser = self
-            .parsers
-            .iter()
-            .find(|parser| parser.id() == language)?;
+        let parser = self.parsers.iter().find(|parser| parser.id() == language)?;
         let tree = parser.parse_and_normalize(source, file_id).ok()?;
         tree.smallest_covering(range).cloned()
     }

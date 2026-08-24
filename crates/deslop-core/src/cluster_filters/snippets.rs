@@ -10,11 +10,9 @@
 
 use std::{cell::RefCell, collections::HashMap, hash::BuildHasher, rc::Rc};
 
-use super::{calls::CallShape, contract_index::ContractIndex, polymorphic::OwnedSubject};
 use super::body_shape::OwnedShapeToken;
-use crate::{
-    ast::ByteRange, fingerprint::Fingerprint, lang::shared::parse_source, state::FileId,
-};
+use super::{calls::CallShape, contract_index::ContractIndex, polymorphic::OwnedSubject};
+use crate::{ast::ByteRange, fingerprint::Fingerprint, lang::shared::parse_source, state::FileId};
 
 /// Bounded per-range memo cells for [`ParseCache`]
 /// ([PERF-FLUTTER-TODO-MEMORY]).
@@ -232,8 +230,12 @@ impl ParseCache {
     /// Emits the aggregate cluster-noise counters once per pass. Sorted
     /// by label so the record is deterministic.
     pub(crate) fn log_noise_totals(&self, stage: &'static str) {
-        let mut rows: Vec<(&'static str, NoiseCounters)> =
-            self.noise.borrow().iter().map(|(label, counters)| (*label, *counters)).collect();
+        let mut rows: Vec<(&'static str, NoiseCounters)> = self
+            .noise
+            .borrow()
+            .iter()
+            .map(|(label, counters)| (*label, *counters))
+            .collect();
         rows.sort_unstable_by_key(|(label, _)| *label);
         for (label, counters) in rows {
             tracing::info!(
@@ -303,7 +305,8 @@ impl ParseCache {
         let _previous = self.trees.borrow_mut().insert(file_id, tree);
         let mut order = self.tree_order.borrow_mut();
         order.push_back((file_id, bytes));
-        self.tree_bytes.set(self.tree_bytes.get().saturating_add(bytes));
+        self.tree_bytes
+            .set(self.tree_bytes.get().saturating_add(bytes));
         while self.tree_bytes.get() > PARSE_TREE_SOURCE_BUDGET_BYTES {
             let Some((evict_id, evict_bytes)) = order.pop_front() else {
                 break;
@@ -316,7 +319,8 @@ impl ParseCache {
                 break;
             }
             let _evicted = self.trees.borrow_mut().remove(&evict_id);
-            self.tree_bytes.set(self.tree_bytes.get().saturating_sub(evict_bytes));
+            self.tree_bytes
+                .set(self.tree_bytes.get().saturating_sub(evict_bytes));
         }
     }
 
@@ -412,7 +416,6 @@ fn grammar_for(language: &str) -> Option<tree_sitter::Language> {
         _ => None,
     }
 }
-
 
 /// Folds the shape-defining kind membership of `node`'s subtree into
 /// `kinds` — the single walk that replaces four per-kind walks.

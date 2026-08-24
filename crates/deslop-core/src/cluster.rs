@@ -176,7 +176,9 @@ fn reportable_clusters<S: BuildHasher + Sync, H: BuildHasher + Sync, L: BuildHas
         let clusters = inputs
             .fused_clusters
             .iter()
-            .filter_map(|fused| build_fused_cluster(inputs, fused, &mut overlap, scopes, &mut spent))
+            .filter_map(|fused| {
+                build_fused_cluster(inputs, fused, &mut overlap, scopes, &mut spent)
+            })
             .collect();
         log_signal_measurement(overlap.stats(), &spent);
         return clusters;

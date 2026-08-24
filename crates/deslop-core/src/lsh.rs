@@ -108,7 +108,10 @@ impl<'a> SignatureIndex<'a> {
     /// The signature at global `index`, or `None` past the end.
     #[must_use]
     pub fn get(&self, index: usize) -> Option<&Signature> {
-        let segment = self.offsets.partition_point(|&start| start <= index).saturating_sub(1);
+        let segment = self
+            .offsets
+            .partition_point(|&start| start <= index)
+            .saturating_sub(1);
         let start = self.offsets.get(segment).copied().unwrap_or(0);
         self.segments
             .get(segment)

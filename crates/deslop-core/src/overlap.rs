@@ -162,9 +162,7 @@ impl MeasureStats {
             bound_hits: self.bound_hits.saturating_add(other.bound_hits),
             bound_skips: self.bound_skips.saturating_add(other.bound_skips),
             alignments: self.alignments.saturating_add(other.alignments),
-            credit_fallbacks: self
-                .credit_fallbacks
-                .saturating_add(other.credit_fallbacks),
+            credit_fallbacks: self.credit_fallbacks.saturating_add(other.credit_fallbacks),
             unresolved: self.unresolved.saturating_add(other.unresolved),
         }
     }
@@ -200,7 +198,6 @@ impl<'corpus> OverlapMeasurer<'corpus> {
     pub const fn stats(&self) -> MeasureStats {
         self.stats
     }
-
 
     /// Shared-subtree overlap between two endpoints in `[0, 1]`.
     ///
