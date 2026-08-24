@@ -1,12 +1,12 @@
 // Tests for first-class release/test version stamping.
 
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
-const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+import { runContractSuite } from "../lib/contract-harness.mjs";
+import { repoRoot } from "../lib/repo-root.mjs";
+
 const stamper = join(repoRoot, "scripts/release/stamp-release-version.mjs");
 const version = "9.8.7-test.1";
 // Mirrors stamp-release-version.mjs. The doc pages come after README.md so the
@@ -27,26 +27,7 @@ const tests = [
   stamperRejectsInvalidVersion,
 ];
 
-let failed = 0;
-for (const test of tests) {
-  const work = mkdtempSync(join(tmpdir(), "deslop-version-stamp-"));
-  try {
-    test(work);
-    console.log(`ok ${test.name}`);
-  } catch (error) {
-    failed++;
-    console.error(`not ok ${test.name}`);
-    console.error(`  ${error instanceof Error ? error.message : String(error)}`);
-  } finally {
-    rmSync(work, { recursive: true, force: true });
-  }
-}
-
-if (failed > 0) {
-  console.error(`\n${failed} release version stamping test(s) failed`);
-  process.exit(1);
-}
-console.log(`\n${tests.length} release version stamping tests passed`);
+runContractSuite(tests, "release version stamping", "deslop-version-stamp-");
 
 function sourceProjectsUseVersionPlaceholder() {
   const placeholder = "0.0.0-dev";

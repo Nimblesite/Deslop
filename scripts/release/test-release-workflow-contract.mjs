@@ -7,9 +7,11 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
-const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+import { runContractSuite } from "../lib/contract-harness.mjs";
+import { repoRoot } from "../lib/repo-root.mjs";
+import { valuesAfter } from "../actions/action-yaml.mjs";
+
 const workflowPath = resolve(repoRoot, ".github/workflows/release.yml");
 const deployWorkflowPath = resolve(repoRoot, ".github/workflows/deploy-pages.yml");
 const dependabotWorkflowPath = resolve(repoRoot, ".github/workflows/dependabot-automerge.yml");
@@ -45,23 +47,7 @@ const SCOOP_TEST_VERSION = "9.8.7";
 const SCOOP_TEST_SHA256 = "d713ca72419bc535e6c64605381255e544553356290b900b6c3f1eed21bee735";
 const SCOOP_TEST_REPOSITORY = "Nimblesite/Deslop";
 
-let failed = 0;
-for (const test of tests) {
-  try {
-    test();
-    console.log(`ok ${test.name}`);
-  } catch (error) {
-    failed++;
-    console.error(`not ok ${test.name}`);
-    console.error(`  ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
-if (failed > 0) {
-  console.error(`\n${failed} release workflow contract test(s) failed`);
-  process.exit(1);
-}
-console.log(`\n${tests.length} release workflow contract tests passed`);
+runContractSuite(tests, "release workflow contract");
 
 function releaseBuildsTaggedSourceWithoutPostTagVersionCommit() {
   const versionJob = sectionBetween("  version:", "  build:");
@@ -225,13 +211,16 @@ function substitute(text, open, close, resolve) {
 // Value of the first double-quoted argument on the first line starting with
 // `prefix`, e.g. `dist/$stage` from `Compress-Archive -Path "dist/$stage" …`.
 function quotedValueAfter(step, prefix) {
-  const line = step
-    .split("\n")
-    .map((candidate) => candidate.trim())
-    .find((candidate) => candidate.startsWith(prefix));
-  if (line === undefined) throw new Error(`missing workflow assignment: ${prefix}`);
-  const value = line.slice(prefix.length);
+  const [value] = valuesAfter(step, prefix);
+  if (value === undefined) throw new Error(`missing workflow assignment: ${prefix}`);
   return value.slice(0, value.indexOf('"'));
+}
+
+// The ref off the front of `uses: owner/action@ref  # comment`. Split on the
+// two characters that can separate it from a trailing comment — never a
+// pattern match over the YAML.
+function firstWord(value) {
+  return value.split(" ")[0].split("\t")[0];
 }
 
 function releaseBuildsPlatformSpecificVsixArtifacts() {
@@ -386,11 +375,7 @@ function assertEqual(actual, expected, message) {
 // same ref. Counting alone would pass a workflow whose retry step drifted a
 // major behind the attempt it retries.
 function assertUniformRef(value, prefix, count, message) {
-  const refs = value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith(prefix))
-    .map((line) => line.slice(prefix.length).split(/\s/u, 1)[0]);
+  const refs = valuesAfter(value, prefix).map(firstWord);
   if (refs.length !== count) throw new Error(`${message}; found ${refs.length}`);
   const distinct = [...new Set(refs)];
   if (distinct.length !== 1) {

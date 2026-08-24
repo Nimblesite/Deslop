@@ -223,6 +223,20 @@ than `v*` so a bare major alias can never re-fire the pipeline — see
   does not currently support OIDC trusted publishing, so the protected
   `release` environment must provide a separate `OPEN_VSX_PAT` token. Re-runs
   also use `--skip-duplicate`.
+- **Publish completeness** ([DEPLOY-PUBLISH-COMPLETE]) — both registry jobs
+  delegate the loop to `scripts/release/publish-vsixes.mjs`, one implementation
+  so the registries cannot drift apart. It attempts every platform even when one
+  fails, then fails the job naming the platforms that never reached the registry
+  — aborting on the first failure never prevented the partial release, it only
+  hid which platforms were missing (issue #348). It publishes nothing unless the
+  artifact directories name exactly the platforms in
+  `scripts/release/vsix-platforms.mjs` — identity, not count, because five
+  VSIXes that are not the five expected platforms is the same partial release.
+  That list and the build matrix's `vsix_target` legs are asserted equal, so a
+  sixth platform fails in CI rather than at release time. There is deliberately
+  no retry: `--skip-duplicate` makes every publish idempotent, so re-running the
+  job is the retry. `scripts/release/test-release-publish-contract.mjs` executes
+  both publish steps against a scripted registry failure.
 - **Homebrew tap** — `publish-homebrew` renders `Formula/deslop.rb` and pushes
   to `Nimblesite/homebrew-tap` (secret `HOMEBREW_TAP_TOKEN`).
 - **Scoop bucket** — `publish-scoop` renders `bucket/deslop.json` and pushes to
