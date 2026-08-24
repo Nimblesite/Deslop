@@ -89,6 +89,20 @@ pub fn fingerprint_corpus(
     parsers: &[Box<dyn LanguageParser>],
     config: &PipelineConfig<'_>,
 ) -> Result<FingerprintCorpus, CoreError> {
+    let workers = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+    fingerprint_corpus_with_workers(files, parsers, config, workers)
+}
+
+/// [`fingerprint_corpus`] with the cold-path worker count injected —
+/// the seam that lets the shard-merge parity pin hold the corpus
+/// output independent of machine parallelism
+/// ([PERF-FLUTTER-TODO-CORPUS], `cold_corpus_is_identical_for_any_worker_count`).
+fn fingerprint_corpus_with_workers(
+    files: &[DiscoveredFile],
+    parsers: &[Box<dyn LanguageParser>],
+    config: &PipelineConfig<'_>,
+    workers: usize,
+) -> Result<FingerprintCorpus, CoreError> {
     let min_nodes_usize = usize::try_from(config.min_nodes).unwrap_or(usize::MAX);
     let mut corpus = FingerprintCorpus::default();
     let build = CorpusBuildState::default();
@@ -142,9 +156,9 @@ pub fn fingerprint_corpus(
             parsers,
             &cache_base,
             config,
-            min_nodes_usize,
             &mut shard_state,
             &mut target,
+            workers,
         )?;
         pass_state.build.absorb(&shard_state.build);
         pass_state.cache_stats.hits = pass_state
@@ -273,12 +287,12 @@ fn parallel_file_work(
     parsers: &[Box<dyn LanguageParser>],
     cache_base: &std::path::Path,
     config: &PipelineConfig<'_>,
-    min_nodes_usize: usize,
     state_out: &mut PassState,
     target: &mut AbsorbTarget<'_>,
+    workers: usize,
 ) -> Result<(), CoreError> {
-    let workers = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
-    let shard_size = ordered.len().div_ceil(workers).max(1);
+    let min_nodes_usize = usize::try_from(config.min_nodes).unwrap_or(usize::MAX);
+    let shard_size = ordered.len().div_ceil(workers.max(1)).max(1);
     let incremental = config.incremental;
     let min_nodes_config = config.min_nodes;
     let mut shards: Vec<Vec<Option<FileWork>>> = Vec::with_capacity(workers);

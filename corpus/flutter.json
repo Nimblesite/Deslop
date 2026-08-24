@@ -8,7 +8,7 @@
   "ceilings": {
     "max_wall_seconds": 700,
     "max_peak_rss_mb": 9000,
-    "rationale": "Interim ceilings while the performance branch lands (wall 700 s, peak RSS 9000 MB): sized above this corpus's current measurements so the gate catches catastrophic regressions, not the known gap. They are NOT product targets. The ten-minute goal is the product requirement [PERF-FLUTTER-TODO-GATE]; the shipped ceiling must be re-derived from this repository's own measured scan once the perf work completes, with the measured figure recorded here. Ceilings are always a function of the repository's own size."
+    "rationale": "Ceilings tolerated for now, enforced by the corpus harness [PERF-FLUTTER-TODO-GATE]: sized above this repository's current measured scan so the gate catches regressions. These figures live here and only here — any document that needs them points at this manifest instead of restating them. Tighten by re-deriving from a fresh measured scan; ceilings are always a function of the repository's own size."
   },
   "must_find": [
     {
