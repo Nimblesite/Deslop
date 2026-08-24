@@ -1,6 +1,10 @@
 // @ts-check
 // Basilisk/Forge-style: @vscode/test-cli drives a real VS Code, runs the
-// unit + E2E suites compiled under out/, emits c8+lcov coverage over out/.
+// unit + E2E suites compiled under out/. Coverage is NOT collected here:
+// the desktop extension host ignores NODE_V8_COVERAGE on every injection
+// channel for plain-Mocha extensionTestsPath suites, so `--coverage` could
+// only ever print `All files | 0` — gh #440. The webview floor is measured
+// by scripts/webview-coverage.mjs.
 import { defineConfig } from "@vscode/test-cli";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -57,13 +61,4 @@ export default defineConfig({
       },
     },
   ],
-  coverage: {
-    includeAll: true,
-    include: ["**/out/**/*.js"],
-    exclude: [
-      "**/out/test/**",
-      "**/out/logging.js",
-    ],
-    reporter: ["text", "text-summary", "json-summary", "lcov"],
-  },
 });

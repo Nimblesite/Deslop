@@ -5,9 +5,17 @@ on:
   pull_request:
     branches: [main]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+# TEMP-UNBLOCK: the concurrency block is suspended until zombie run
+# 32620898314 clears — its coverage job is queued on the starved
+# linux-x64 label, queue time does not count toward timeout-minutes,
+# and cancel-in-progress cannot cancel a QUEUED run, only an in-progress
+# one. Every new PR run therefore sat pending with 0 jobs. Restore this
+# block as soon as that run is gone. Concurrency is read from the
+# workflow file at each run's triggering commit, so only runs created
+# while it is suspended are ungated.
+# concurrency:
+#   group: ${{ github.workflow }}-${{ github.ref }}
+#   cancel-in-progress: true
 
 jobs:
   # Path classifier — decides whether the heavy Rust / VSIX / JetBrains / Windows
@@ -85,15 +93,12 @@ jobs:
     name: Format + analyzers + build release
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    # The Nimblesite-provisioned 8-core runner (label `linux-x64`, 32 GB,
-    # group Default). GitHub's largest *free* Linux runner is the 4-core
-    # `ubuntu-latest`, so the machine beyond that is org-provisioned. The
-    # old queue-forever was a label problem: `ubuntu-latest-16-cores`
-    # matches no runner this org provisions — `linux-x64` is copied from
-    # the org runner page. [TEST-ONE-BINARY] already cut the compile to
-    # ~1m02s by linking once instead of 193 times; the doubled cores buy
-    # margin against the 10-minute cap below.
-    runs-on: linux-x64
+    # HOSTED RUNNER: every org-provisioned label tried here starved —
+    # `linux-x64` queued 16m+ per runner, `Medium` 20m+ with none
+    # arriving (runs 32620898314, 32622436702). Hosted `ubuntu-latest`
+    # starts in seconds and [TEST-ONE-BINARY] already cut the compile to
+    # ~1m02s by linking once instead of 193 times.
+    runs-on: ubuntu-latest
     # The compile is the bulk of the job: 20m1s on run 32548446084 with
     # four cores, which a 25-minute cap cancelled mid-gate and took every
     # downstream shard, the VSIX job and the JetBrains gate with it. The
@@ -331,10 +336,11 @@ jobs:
     name: Calculate coverage + thresholds
     needs: [changes, rust-tests, repository-tests, windows, vsix, jetbrains, site]
     if: always() && needs.changes.outputs.code == 'true'
-    # The Nimblesite-provisioned 8-core runner (`linux-x64`), same as
-    # `build`: this job's cold instrumented release build is ~21 minutes
-    # on four cores.
-    runs-on: linux-x64
+    # HOSTED RUNNER: same starvation as `build` — org labels `linux-x64`
+    # and `Medium` never picked a runner up. Hosted `ubuntu-latest`:
+    # cold instrumented release build is ~21 minutes on four cores,
+    # inside the 40-minute cap below.
+    runs-on: ubuntu-latest
     # TIMEOUT EXCEPTION: a cold instrumented release build of the whole
     # workspace is ~21 minutes on a cache miss.
     timeout-minutes: 40
@@ -360,10 +366,14 @@ jobs:
       # [CI-COVERAGE-ONCE] `merge-multiple: true` is load-bearing: a
       # single-path upload zips the directory's *contents* at the zip
       # root, and the default `merge-multiple: false` extracts them
-      # under `path/<artifact-name>/` — one directory too deep, which
-      # made every report step below search an empty target dir and
-      # fail with `not found object files` on every run since the job
-      # was created.
+      # under `path/<artifact-name>/` — one directory too deep.
+      #
+      # The restore also strips the executable bit: download-artifact's
+      # implementation does not preserve unix modes from the zip, and
+      # cargo-llvm-cov collects object files by filtering executables —
+      # every restored test binary at 0644 reads as "not found object
+      # files". chmod re-marks them; the hoist below is a self-heal in
+      # case a restore ever lands nested despite merge-multiple.
       - name: Restore raw Rust coverage
         uses: actions/download-artifact@v8
         with:
@@ -371,11 +381,27 @@ jobs:
           path: target/llvm-cov-target
           merge-multiple: true
 
-      - name: Restore raw Windows Rust coverage
+      - name: Normalize raw Rust coverage layout
+        run: |
+          test -d target/llvm-cov-target/release || {
+            echo "release/ missing at expected depth; searching"
+            find target/llvm-cov-target -maxdepth 3 -type d -name release
+            for nested in target/llvm-cov-target/*/; do
+              if [ -d "${nested}release" ]; then
+                echo "hoisting ${nested}release -> target/llvm-cov-target/"
+                mv "${nested}"* target/llvm-cov-target/
+              fi
+            done
+          }
+          ls target/llvm-cov-target/release | head -5
+          find target/llvm-cov-target -maxdepth 2 -name '*.profraw' | head -3
+          find target/llvm-cov-target/release -type f -exec chmod u+x {} +
+
+      - name: Restore Windows Rust coverage report
         uses: actions/download-artifact@v8
         with:
-          name: windows-rust-coverage-raw
-          path: target/windows-llvm-cov
+          name: windows-rust-coverage
+          path: .
           merge-multiple: true
 
       - name: Restore VSIX coverage
@@ -394,14 +420,6 @@ jobs:
 
       - name: Calculate Rust coverage
         run: make coverage-report
-
-      - name: Calculate Windows Rust coverage
-        env:
-          CARGO_LLVM_COV_TARGET_DIR: target/windows-llvm-cov
-        run: >-
-          cargo llvm-cov --release
-          --features deslop-core/live,deslop-lsp/profiling report
-          --lcov --output-path windows-lcov.info
 
       - name: Enforce VSIX coverage
         run: make _vsix-coverage-check
@@ -479,13 +497,22 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --release -p deslop-mcp --test tcp_transport --features deslop-core/live
 
-      - name: Upload raw Windows Rust coverage
+      # The Windows lcov is calculated HERE, not in the coverage job:
+      # the instrumented PE/PDB binaries can only be read by a Windows
+      # llvm-cov, and shipping the 300MB target dir to a Linux runner
+      # only produced "not recognized as a valid object file" on every
+      # run. The coverage job consumes the finished report.
+      - name: Calculate Windows Rust coverage
+        env:
+          CARGO_LLVM_COV_TARGET_DIR: target/windows-llvm-cov
+        run: cargo llvm-cov --release --features deslop-core/live,deslop-lsp/profiling report --lcov --output-path windows-lcov.info
+
+      - name: Upload Windows Rust coverage report
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: windows-rust-coverage-raw
-          path: target/windows-llvm-cov
-          include-hidden-files: true
+          name: windows-rust-coverage
+          path: windows-lcov.info
           retention-days: 1
 
   # [CI-RELEASE-BUILD] Runs in parallel with `ci`. `_vsix-build`'s
@@ -756,3 +783,27 @@ jobs:
         with:
           fail-on-severity: high
           comment-summary-in-pr: on-failure
+
+  # The branch ruleset requires a status context literally named "CI" —
+  # the old monolithic job's name. The split into named jobs orphaned it
+  # (every merge since then has violated the rule). This gate restores the
+  # context: it succeeds only when every job in the workflow succeeded or
+  # was skipped (a skip satisfies branch protection, same as the path-
+  # gated heavy jobs).
+  ci:
+    name: CI
+    needs: [changes, security, build, rust-tests, repository-tests, windows, vsix, jetbrains, site, coverage]
+    if: always() && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Enforce every job's conclusion
+        run: |
+          results='${{ toJSON(needs.*.result) }}'
+          echo "Job conclusions: $results"
+          for result in $(echo "$results" | tr -d '[]"' | tr ',' ' '); do
+            case "$result" in
+              success|skipped) ;;
+              *) echo "FAIL: a required job ended '$result'"; exit 1 ;;
+            esac
+          done
