@@ -3,8 +3,7 @@
 // violates one Shipwright contract rule so verifier failures have bite.
 
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, copyFileSync, chmodSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync, copyFileSync, chmodSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -38,26 +37,7 @@ const cases = [
   releaseWorkflowAcceptsRepoWorkflow,
 ];
 
-let failed = 0;
-for (const test of cases) {
-  const work = mkdtempSync(join(tmpdir(), "deslop-verifier-"));
-  try {
-    test(work);
-    console.log(`ok ${test.name}`);
-  } catch (error) {
-    failed++;
-    console.error(`not ok ${test.name}`);
-    console.error(`  ${error instanceof Error ? error.message : String(error)}`);
-  } finally {
-    rmSync(work, { recursive: true, force: true });
-  }
-}
-
-if (failed > 0) {
-  console.error(`\n${failed} verifier proof test(s) failed`);
-  process.exit(1);
-}
-console.log(`\n${cases.length} verifier proof tests passed`);
+runContractSuite(cases, "verifier proof", "deslop-verifier-");
 
 function manifestRejectsMissingProductId(work) {
   const path = join(work, "missing-product.json");
