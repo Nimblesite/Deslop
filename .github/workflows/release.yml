@@ -634,12 +634,7 @@ jobs:
     # The VSIX changes on a rust (bundled binaries re-stamped) or vscode change.
     if: ${{ !cancelled() && (needs.changes.outputs.full == 'true' || needs.changes.outputs.vscode == 'true') && needs.release.result == 'success' }}
     runs-on: ubuntu-latest
-    # TIMEOUT EXCEPTION: a hung Marketplace request takes ~3 minutes to
-    # surface (issue #348) and all five platforms publish in sequence, so the
-    # old 10-minute budget could kill the job before it named the platforms it
-    # never reached. 20 minutes covers the worst case and still bounds a dead
-    # registry.
-    timeout-minutes: 20
+    timeout-minutes: 10
     # Passwordless publish via Microsoft Entra ID OIDC: the release environment
     # gives the GitHub OIDC subject a stable
     # repo:OWNER/REPO:environment:release shape for Entra federation.
@@ -648,10 +643,8 @@ jobs:
       contents: read
       id-token: write
     steps:
-      # The publish loop lives in scripts/release/publish-vsixes.mjs, so the job
-      # needs the tagged source checked out. This must stay ahead of
-      # download-artifact: checkout cleans the workspace it lands in, and would
-      # wipe artifacts/ if it ran second.
+      # publish-vsixes.mjs needs the tagged source. Must stay ahead of
+      # download-artifact, which checkout would otherwise wipe.
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
@@ -668,16 +661,13 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
 
-      # One publish per platform-specific VSIX — vsce silently uses only the
-      # first when several are globbed into a single call. The loop, the
-      # completeness check, and the --pre-release handling for hyphenated tags
-      # live in scripts/release/publish-vsixes.mjs, shared with publish-openvsx
-      # so one failed upload can neither suppress the remaining platforms nor
-      # let the two registries drift apart (issue #348,
-      # [DEPLOY-PUBLISH-COMPLETE]). There is no retry: --skip-duplicate makes
-      # this job idempotent, so re-running it is the retry. The short-lived
-      # Marketplace token is minted from the Entra OIDC session and passed to
-      # vsce through VSCE_PAT; no PAT secret is stored. See
+      # One `vsce publish` per platform-specific VSIX — vsce silently uses only
+      # the first when several are globbed into a single call. The loop, the
+      # completeness check and the prerelease flag live in
+      # scripts/release/publish-vsixes.mjs, shared with publish-openvsx so the
+      # two registries cannot drift apart ([DEPLOY-PUBLISH-COMPLETE]). The
+      # short-lived Marketplace token is minted from the Entra OIDC session and
+      # passed to vsce through VSCE_PAT; no PAT secret is stored. See
       # docs/specs/release.md.
       - name: Publish each platform VSIX (Entra OIDC, no PAT)
         run: |
@@ -695,19 +685,15 @@ jobs:
     # The VSIX changes on a rust (bundled binaries re-stamped) or vscode change.
     if: ${{ !cancelled() && (needs.changes.outputs.full == 'true' || needs.changes.outputs.vscode == 'true') && needs.release.result == 'success' }}
     runs-on: ubuntu-latest
-    # TIMEOUT EXCEPTION: same worst-case budget as publish-marketplace, for
-    # the same reason (issue #348).
-    timeout-minutes: 20
+    timeout-minutes: 10
     # Open VSX has no OIDC trusted-publishing path today, so this uses a
     # separate Open VSX token scoped to the protected release environment.
     environment: release
     permissions:
       contents: read
     steps:
-      # The publish loop lives in scripts/release/publish-vsixes.mjs, so the job
-      # needs the tagged source checked out. This must stay ahead of
-      # download-artifact: checkout cleans the workspace it lands in, and would
-      # wipe artifacts/ if it ran second.
+      # publish-vsixes.mjs needs the tagged source. Must stay ahead of
+      # download-artifact, which checkout would otherwise wipe.
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
@@ -718,9 +704,6 @@ jobs:
         with:
           path: artifacts/
 
-      # Same shared publisher as publish-marketplace: every platform attempted
-      # and a failure naming the ones missing from the registry, so this job
-      # carries the identical guarantee (issue #348, [DEPLOY-PUBLISH-COMPLETE]).
       - name: Publish each platform VSIX to Open VSX
         env:
           OVSX_PAT: ${{ secrets.OPEN_VSX_PAT }}

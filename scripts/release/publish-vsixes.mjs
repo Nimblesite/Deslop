@@ -1,18 +1,13 @@
 // [DEPLOY-PUBLISH-COMPLETE] Publishes every platform VSIX under artifacts/ to
 // one registry, attempting all of them and failing afterwards — naming the
-// platforms that never reached the registry. Shared by publish-marketplace
-// and publish-openvsx so the two registries cannot drift apart.
+// platforms that never reached it. Shared by publish-marketplace and
+// publish-openvsx so the two registries cannot drift apart.
 //
 // Issue #348: a `set -e` loop aborted after the first Marketplace timeout, so
 // v0.31.0 reached darwin-arm64 only and nothing in the run named the four
 // platforms it skipped. Aborting does not prevent a partial release — the
 // earlier platforms are already live — it only hides which ones are missing.
-// There is deliberately no retry here: --skip-duplicate makes the whole job
-// idempotent, so re-running it is the retry, with a human deciding whether
-// the registry is healthy enough to be worth another attempt.
-//
-// Pinned by scripts/release/test-release-publish-contract.mjs, which executes
-// the workflow's own publish steps against a scripted registry timeout.
+// See docs/specs/release.md; pinned by test-release-publish-contract.mjs.
 
 import { spawnSync } from "node:child_process";
 import { readdirSync } from "node:fs";

@@ -1,16 +1,9 @@
 // Release publish completeness contract ([DEPLOY-PUBLISH-COMPLETE], issue #348).
 //
-// v0.31.0 shipped from a run where one Marketplace timeout aborted the publish
-// loop after 2 of 5 platform VSIXes were attempted: darwin-arm64 got v0.31.0,
-// darwin-x64 timed out, and linux-arm64/linux-x64/win32-x64 were never
-// attempted at all — while Open VSX, whose loop happened to succeed, served
-// all five. Until a manual re-run the two registries disagreed about what the
-// current release was, and nothing in the run named the missing platforms.
-//
 // These tests execute the release workflow's own publish `run:` blocks in a
 // sandbox: five fake platform VSIX artifacts, a stub `npx` scripted to fail
-// the way the Marketplace did, and a stub `az` for the token mint. Both
-// registries are held to the same contract:
+// the way the Marketplace did in v0.31.0, and a stub `az` for the token mint.
+// Both registries are held to the same contract:
 //   - a failing platform must not stop the other four from being attempted,
 //     and the job must fail naming the platform that never reached the
 //     registry;
@@ -20,6 +13,7 @@
 //   - an artifact set that is not exactly the expected platforms publishes
 //     nothing at all, rather than shipping the subset that did upload.
 
+import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -28,7 +22,7 @@ import { fileURLToPath } from "node:url";
 
 import { mappingValues, stepBody } from "../actions/action-yaml.mjs";
 import { runContractSuite } from "../lib/contract-harness.mjs";
-import { VSIX_MATRIX_KEY, VSIX_PLATFORMS } from "./vsix-platforms.mjs";
+import { VSIX_ARTIFACT_PREFIX, VSIX_MATRIX_KEY, VSIX_PLATFORMS } from "./vsix-platforms.mjs";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const workflow = readFileSync(resolve(repoRoot, ".github/workflows/release.yml"), "utf8");
@@ -39,12 +33,18 @@ const SHELL = "bash";
 const MARKETPLACE_STEP = "Publish each platform VSIX (Entra OIDC, no PAT)";
 const OPENVSX_STEP = "Publish each platform VSIX to Open VSX";
 const FAILING_PLATFORM = "darwin-x64";
+const MARKETPLACE = "Marketplace";
+const OPEN_VSX = "Open VSX";
 const TEST_VERSION = "9.9.9";
 const RELEASE_TAG = `v${TEST_VERSION}`;
 const PRERELEASE_TAG = `v${TEST_VERSION}-rc.1`;
-// Count-preserving corruption: still five artifact directories, but win32-x64
-// never uploaded and a stray one took its place.
-const MISCOUNTED_PLATFORMS = [...VSIX_PLATFORMS.filter((p) => p !== "win32-x64"), "linux-x64-stray"];
+// Count-preserving corruption: still five artifact directories, but one
+// platform never uploaded and a stray one took its place.
+const UNUPLOADED_PLATFORM = "win32-x64";
+const MISCOUNTED_PLATFORMS = [
+  ...VSIX_PLATFORMS.filter((platform) => platform !== UNUPLOADED_PLATFORM),
+  `${VSIX_PLATFORMS[0]}-stray`,
+];
 const NO_FAILURE = "none-of-the-platforms";
 
 // Records every publish invocation, then fails any package whose path carries
@@ -82,19 +82,19 @@ const tests = [
 runContractSuite(tests, "release publish contract");
 
 function marketplaceAttemptsEveryPlatformExactlyOnceWhenOneFails() {
-  assertNamesTheMissingPlatform(marketplaceScenario(FAILING_PLATFORM), "Marketplace");
+  assertNamesTheMissingPlatform(marketplaceScenario(FAILING_PLATFORM), MARKETPLACE);
 }
 
 function openvsxAttemptsEveryPlatformExactlyOnceWhenOneFails() {
-  assertNamesTheMissingPlatform(openvsxScenario(FAILING_PLATFORM), "Open VSX");
+  assertNamesTheMissingPlatform(openvsxScenario(FAILING_PLATFORM), OPEN_VSX);
 }
 
 function marketplacePublishesEveryPlatformAgainstAHealthyRegistry() {
-  assertPublishesEveryPlatform(marketplaceScenario(NO_FAILURE), "Marketplace");
+  assertPublishesEveryPlatform(marketplaceScenario(NO_FAILURE), MARKETPLACE);
 }
 
 function openvsxPublishesEveryPlatformAgainstAHealthyRegistry() {
-  assertPublishesEveryPlatform(openvsxScenario(NO_FAILURE), "Open VSX");
+  assertPublishesEveryPlatform(openvsxScenario(NO_FAILURE), OPEN_VSX);
 }
 
 // One platform never reaches the registry. The other four must still be
@@ -103,14 +103,14 @@ function openvsxPublishesEveryPlatformAgainstAHealthyRegistry() {
 // v0.31.0 run could not answer.
 function assertNamesTheMissingPlatform(scenario, registry) {
   for (const platform of VSIX_PLATFORMS) {
-    assert(
+    assert.ok(
       scenario.attempts[platform] === 1,
       `${registry}: ${platform} was attempted ${scenario.attempts[platform]} times, expected exactly 1; ` +
         `one failing platform must neither suppress the others nor be retried ` +
         `(attempts: ${JSON.stringify(scenario.attempts)})`,
     );
   }
-  assert(
+  assert.ok(
     scenario.status !== 0,
     `${registry}: a publish that leaves ${FAILING_PLATFORM} off the registry must fail the job`,
   );
@@ -122,15 +122,15 @@ function assertNamesTheMissingPlatform(scenario, registry) {
 // published — the success line is the record the next release is audited from.
 function assertPublishesEveryPlatform(scenario, registry) {
   for (const platform of VSIX_PLATFORMS) {
-    assert(
+    assert.ok(
       scenario.attempts[platform] === 1,
       `${registry}: ${platform} was attempted ${scenario.attempts[platform]} times, expected exactly 1 ` +
         `(attempts: ${JSON.stringify(scenario.attempts)})`,
     );
   }
-  assert(scenario.status === 0, `${registry}: a healthy publish must exit 0; output:\n${scenario.output}`);
+  assert.ok(scenario.status === 0, `${registry}: a healthy publish must exit 0; output:\n${scenario.output}`);
   for (const platform of VSIX_PLATFORMS) {
-    assert(
+    assert.ok(
       scenario.output.includes(platform),
       `${registry}: the success report must name ${platform}; output:\n${scenario.output}`,
     );
@@ -147,22 +147,22 @@ function anIncompleteArtifactSetPublishesNothing() {
     failTarget: NO_FAILURE,
     platforms: MISCOUNTED_PLATFORMS,
   });
-  assert(
+  assert.ok(
     scenario.invocations.length === 0,
-    `an artifact set missing win32-x64 must publish nothing, but ${scenario.invocations.length} ` +
+    `an artifact set missing ${UNUPLOADED_PLATFORM} must publish nothing, but ${scenario.invocations.length} ` +
       `publish call(s) ran: ${scenario.invocations.join(" | ")}`,
   );
-  assert(scenario.status !== 0, "an incomplete artifact set must fail the job");
-  assertErrorNames(scenario, "win32-x64", "Marketplace");
+  assert.ok(scenario.status !== 0, "an incomplete artifact set must fail the job");
+  assertErrorNames(scenario, UNUPLOADED_PLATFORM, MARKETPLACE);
 }
 
 // A hyphenated tag is a prerelease: the Marketplace rejects a SemVer suffix in
 // the version field, so the flag is the only channel that carries it.
 function aHyphenatedTagPublishesAsAPrerelease() {
   const scenario = marketplaceScenario(NO_FAILURE, PRERELEASE_TAG);
-  assert(scenario.status === 0, `a prerelease tag must publish; output:\n${scenario.output}`);
+  assert.ok(scenario.status === 0, `a prerelease tag must publish; output:\n${scenario.output}`);
   for (const invocation of scenario.invocations) {
-    assert(
+    assert.ok(
       invocation.includes("--pre-release"),
       `tag ${PRERELEASE_TAG} must publish with --pre-release; got: ${invocation}`,
     );
@@ -174,8 +174,8 @@ function aHyphenatedTagPublishesAsAPrerelease() {
 // otherwise surface at release time, as a five-of-six release.
 function declaredPlatformsMatchTheBuildMatrix() {
   const matrix = [...new Set(mappingValues(workflow, VSIX_MATRIX_KEY))].sort();
-  assert(matrix.length >= 1, "the build matrix declares no vsix_target entries");
-  assert(
+  assert.ok(matrix.length >= 1, `the build matrix declares no ${VSIX_MATRIX_KEY} entries`);
+  assert.ok(
     JSON.stringify(matrix) === JSON.stringify([...VSIX_PLATFORMS].sort()),
     `scripts/release/vsix-platforms.mjs declares [${VSIX_PLATFORMS.join(", ")}] but the build ` +
       `matrix produces [${matrix.join(", ")}]`,
@@ -186,7 +186,7 @@ function assertErrorNames(scenario, platform, registry) {
   const namingLine = scenario.output
     .split("\n")
     .find((line) => line.toLowerCase().includes("error") && line.includes(platform));
-  assert(
+  assert.ok(
     namingLine !== undefined,
     `${registry}: the failure must name ${platform} as missing from the registry; output:\n${scenario.output}`,
   );
@@ -194,7 +194,7 @@ function assertErrorNames(scenario, platform, registry) {
 
 function assertEveryInvocationSkipsDuplicates(scenario, registry) {
   for (const invocation of scenario.invocations) {
-    assert(
+    assert.ok(
       invocation.includes("--skip-duplicate"),
       `${registry}: every publish must stay idempotent via --skip-duplicate; got: ${invocation}`,
     );
@@ -240,7 +240,7 @@ function runPublishStep({ runBlock, failTarget, tag = RELEASE_TAG, extraEnv = {}
 // symlinks need privileges) so the block may delegate to repository scripts.
 function buildSandbox(sandbox, platforms) {
   for (const platform of platforms) {
-    const artifactDir = join(sandbox, "artifacts", `vsix-${platform}`);
+    const artifactDir = join(sandbox, "artifacts", `${VSIX_ARTIFACT_PREFIX}${platform}`);
     mkdirSync(artifactDir, { recursive: true });
     writeFileSync(join(artifactDir, `deslop-live-${TEST_VERSION}-${platform}.vsix`), "stub vsix");
   }
@@ -280,8 +280,4 @@ function publishRunBlock(stepName) {
     throw new Error(`"${stepName}" contains unexpanded \${{ }} expressions; the sandbox cannot execute it`);
   }
   return script;
-}
-
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
 }

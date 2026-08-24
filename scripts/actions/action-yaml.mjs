@@ -1,10 +1,10 @@
 // The one reader of action and workflow YAML the contract suites share.
 // [ACTION-TESTS]
 //
-// The static contract checks, the branch-executed gate proof, and the release
-// publish contract all need a step's shell body out of an action.yml or a
-// workflow file — the step grammar is the same in both. A second copy of the block scanner
-// would let the two drift on exactly the steps that decide whether a guard is
+// The static contract checks, the branch-executed gate proof and the release
+// publish contract all need a step's shell body — the step grammar is the same
+// in an action.yml and a workflow. A second copy of the block scanner
+// would let them drift on exactly the steps that decide whether a guard is
 // under test at all, so the scanner lives here and is imported.
 //
 // Hand-scanned rather than regex-matched: this repo prohibits regex over
