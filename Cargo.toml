@@ -38,7 +38,7 @@ tree-sitter-javascript = "=0.25.0"
 tree-sitter-php = "=0.24.2"
 tree-sitter-fsharp = "=0.3.11"
 ignore = "=0.4.33"
-blake3 = "=1.8.6"
+blake3 = "=1.8.7"
 getrandom = "=0.4.3"
 ureq = { version = "=3.4.0", default-features = false, features = ["json"] }
 instant-distance = "=0.6.1"
