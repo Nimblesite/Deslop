@@ -8,7 +8,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { leadingSpaces, runBodies, stepBody } from "./action-yaml.mjs";
+import { leadingSpaces, mappingValues, runBodies, stepBody, valuesAfter } from "./action-yaml.mjs";
 
 /** A composite action with a block body, a `uses:` step, and a one-line body. */
 const ACTION = [
@@ -91,4 +91,57 @@ test("the real action.yml parses into steps with non-empty bodies", () => {
   for (const step of steps) {
     assert.ok(step.body.trim().length > 0, `${step.name} produced an empty body`);
   }
+});
+
+// A build matrix repeats one key per leg. The release publish contract reads
+// the platform list this way, so a scanner that returned nothing would let
+// the platform list and the matrix silently disagree.
+const MATRIX = [
+  "    strategy:",
+  "      matrix:",
+  "        include:",
+  "          - os: ubuntu-latest",
+  "            vsix_target: linux-x64",
+  "          - os: macos-latest",
+  "            vsix_target: darwin-arm64",
+  "          - os: windows-latest",
+  "            vsix_target: win32-x64",
+  "  vsix_target_note: not-a-target",
+].join("\n");
+
+test("every value of a repeated mapping key is collected, in file order", () => {
+  assert.deepEqual(mappingValues(MATRIX, "vsix_target"), [
+    "linux-x64",
+    "darwin-arm64",
+    "win32-x64",
+  ]);
+});
+
+test("a longer key that merely starts with the wanted one is not collected", () => {
+  assert.ok(!mappingValues(MATRIX, "vsix_target").includes("not-a-target"));
+});
+
+test("a key that appears nowhere yields nothing rather than throwing", () => {
+  assert.deepEqual(mappingValues(MATRIX, "no_such_key"), []);
+});
+
+test("a declared-but-empty value is not reported as a value", () => {
+  assert.deepEqual(mappingValues("  vsix_target:\n  vsix_target: linux-x64", "vsix_target"), [
+    "linux-x64",
+  ]);
+});
+
+// The shared line scanner returns the tail untrimmed: the pinned-ref check
+// slices a version off the front of it, and trimming here would hide a value
+// that is nothing but spaces from the callers that reject one.
+test("the tail of every matching line is returned, indentation ignored", () => {
+  assert.deepEqual(valuesAfter(MATRIX, "vsix_target:"), [
+    " linux-x64",
+    " darwin-arm64",
+    " win32-x64",
+  ]);
+});
+
+test("a line whose prefix appears later than the start is not matched", () => {
+  assert.deepEqual(valuesAfter("run: echo vsix_target: linux-x64", "vsix_target:"), []);
 });

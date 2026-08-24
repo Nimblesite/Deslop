@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
 
-import { check, expectThrows } from "./action-contract-harness.mjs";
+import { check, expectThrows } from "../lib/contract-harness.mjs";
 import { releaseArtifact, resolveRelease, resolveVersion } from "./action-resolve-artifact.mjs";
 import { expectedDigest, verifyChecksum } from "./action-verify-checksum.mjs";
 import { readOutputs } from "./action-read-outputs.mjs";
