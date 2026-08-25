@@ -87,6 +87,8 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 
 ## Documentation
 
+- Specs are for HUMANS first and foremost. If you have to add jargon, add a separate "For AI" section
+- On the point above, MAKE SPECS READABLE TO HUMANs. Less jargon
 - Each spec section must have a unique, heirarchical non-numeric spec Id
 - Spec ids must be cross referenced across tests, code specs and plans
 - Code, specs, and tests MUST agree. Where they don't, 🛑 STOP and report the issue to the user

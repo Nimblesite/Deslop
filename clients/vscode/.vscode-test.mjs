@@ -61,4 +61,17 @@ export default defineConfig({
       },
     },
   ],
+
+  // [VSIX-TESTING-COVERAGE] Extension-host line coverage. `@vscode/test-cli`
+  // sets `NODE_V8_COVERAGE` on the VS Code it launches and converts the raw V8
+  // output with c8 itself, so the host does report coverage — the earlier
+  // "no measurable channel" reading (gh #440) came from hand-rolling that
+  // injection instead of using the runner's own. Scoped to the extension's
+  // compiled output, which sourcemaps back to `src/**.ts`; `includeAll` counts
+  // a module no test ever loads against the floor rather than hiding it.
+  coverage: {
+    include: ["src/**/*.ts", "dist/extension.js"],
+    exclude: ["src/test/**"],
+    reporter: ["text-summary", "json-summary"],
+  },
 });

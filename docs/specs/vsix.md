@@ -480,17 +480,12 @@ Users who run an agent *outside* VS Code (e.g. Claude Code CLI in a terminal) ca
 
 Tests run in CI on every platform shipped in [VSIX-BUNDLE] via GitHub Actions `vscode-test` matrix. Per CLAUDE.md, these are coarse end-to-end tests, not unit tests.
 
-#### [VSIX-TESTING-COVERAGE] Extension-host coverage gate
+#### [VSIX-TESTING-COVERAGE] Extension-host suite run
 
-`make _vsix-coverage` (`npm run coverage`) runs the full unit + E2E suite
-under `@vscode/test-cli` with c8 line coverage over the tsc output in
-`out/**`, then enforces `.vsix.default_threshold` from the repo-root
-`coverage-thresholds.json` (1% rounding slack, ratchet-up-only) via
-`scripts/check-coverage.mjs`. The c8 config uses `includeAll` so every
-non-test `out/**` module counts toward the floor whether or not a test loads
-it — an unexercised module drags the total down rather than hiding.
+`make _vsix-coverage` (`npm run coverage:collect`) runs the full unit + E2E suite under `@vscode/test-cli`. No line coverage is collected over `out/**`: the desktop extension host ignores `NODE_V8_COVERAGE` for plain-Mocha `extensionTestsPath` suites (gh #440), so the repo-root `coverage-thresholds.json` carries no extension-host floor — only `.vsix.webview_threshold`. The suite is a pass/fail gate here, not a coverage gate.
 
-`make _vsix-test` (`npm test`) re-runs the same suite against the packaged
-bundle without coverage, so the shipped artifact stays E2E-validated. The
-webview bundle has its own gate: [webview-runtime.md
-§VSIX-WEBVIEW-COVERAGE](webview-runtime.md#vsix-webview-coverage).
+`make _vsix-test` (`npm test`) re-runs the same suite against the packaged bundle, so the shipped artifact stays E2E-validated. The webview bundle has its own gate: [webview-runtime.md §VSIX-WEBVIEW-COVERAGE](webview-runtime.md#vsix-webview-coverage).
+
+##### [VSIX-SUITE-EXECUTES] A suite that did not run is not a pass
+
+`vscode-test` globs `out/**/*.test.js`. An uncompiled `out/` matches nothing, so Mocha prints `0 passing` and exits 0 — a green light over a suite that never ran. npm fires `pre<name>` only for the exact script name, so every script that invokes `vscode-test` directly carries its own `pre<name>` hook running `npm run compile`; a script that merely delegates to one of those inherits its hook. Pinned by `clients/vscode/scripts/suite-compiles.test.mjs`, which enumerates the runner-invoking scripts out of `package.json` and refuses an empty set.
