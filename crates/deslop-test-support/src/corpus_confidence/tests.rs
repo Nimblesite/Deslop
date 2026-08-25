@@ -3,7 +3,7 @@
 //! checks ([CORPUS-BASELINE], [CORPUS-RECALL]).
 
 use super::*;
-use serde_json::json;
+use serde_json::{json, Map};
 
 /// The single reported failure, or `None` when there is not exactly one.
 /// Returning an `Option` keeps the assertions in the tests, where their
@@ -116,6 +116,9 @@ const CURATED_MIN_NODES: u64 = 300;
 /// The whole-module view of a curated pair, as tokio renders it today.
 const MODULE_NODES: u64 = 348;
 
+/// The rendered field carrying a cluster's extent, as [CORPUS-RECALL] reads it.
+const CANONICAL_NODE_COUNT: &str = "canonical_node_count";
+
 /// One cluster whose occurrences carry the given rendered paths, at the
 /// extent a credible whole-module rename carries. [`sized`] overrides it.
 fn spanning(bucket: &str, structural: f64, token: f64, files: &[&str]) -> Value {
@@ -125,7 +128,7 @@ fn spanning(bucket: &str, structural: f64, token: f64, files: &[&str]) -> Value 
         .collect();
     json!({
         "bucket": bucket,
-        "canonical_node_count": MODULE_NODES,
+        CANONICAL_NODE_COUNT: MODULE_NODES,
         "signals": {
             "structural": structural,
             "token_jaccard": token,
@@ -138,9 +141,13 @@ fn spanning(bucket: &str, structural: f64, token: f64, files: &[&str]) -> Value 
 
 /// The same cluster reported at `nodes` instead, so a case can vary the
 /// extent alone and leave every other rendered field identical.
-fn sized(mut cluster: Value, nodes: u64) -> Value {
-    cluster["canonical_node_count"] = json!(nodes);
-    cluster
+fn sized(cluster: Value, nodes: u64) -> Value {
+    let mut fields = match cluster {
+        Value::Object(fields) => fields,
+        _ => Map::new(),
+    };
+    let _replaced = fields.insert(CANONICAL_NODE_COUNT.to_owned(), json!(nodes));
+    Value::Object(fields)
 }
 
 /// A manifest curating one hand-verified Type-2 pair, with the extent
