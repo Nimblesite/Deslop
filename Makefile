@@ -9,7 +9,7 @@
 # human entry points and are the only ones `make help` lists.
 # =============================================================================
 
-.PHONY: build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify compile-release-tests coverage coverage-run coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-webview-coverage _vsix-webview-coverage-check _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
+.PHONY: build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify compile-release-tests coverage coverage-run coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-coverage-check _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
 
 _JETBRAINS_DIR := clients/jetbrains
 
@@ -528,12 +528,14 @@ _vsix-test: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-
 _vsix-test-ollama: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-binaries
 	cd clients/vscode && npm run test:ollama
 
-# _vsix-coverage: Run the VS Code suite (extension host). No coverage is
-#   collected for out/**: the desktop extension host ignores
-#   NODE_V8_COVERAGE for plain-Mocha suites (gh #440). The webview leg is
-#   measured by _vsix-webview-coverage below.
+# _vsix-coverage: Run the VS Code suite (extension host) and measure it. The
+#   desktop host writes no V8 profile for extension code (gh #440), so the
+#   counters are compiled into the modules and dumped from inside the host —
+#   see clients/vscode/scripts/extension-coverage.mjs. One suite execution
+#   yields both the pass/fail result and the coverage summary. The webview leg
+#   is measured by _vsix-webview-coverage below.
 _vsix-coverage: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-binaries
-	cd clients/vscode && npm run coverage:collect
+	cd clients/vscode && npm run coverage:extension
 
 # _vsix-playwright-html: Render the standalone HTML report from a fixture repo
 #   with the real deslop CLI, then assert in a headless browser (Playwright)
@@ -548,7 +550,7 @@ _vsix-playwright-html: _vsix-install
 
 # _vsix-webview-coverage: Drive the webview bundle in a real browser (Playwright)
 #   with V8 coverage on and map executed ranges back to webview-ui/src. Threshold
-#   calculation is deferred to _vsix-webview-coverage-check.
+#   calculation is deferred to _vsix-coverage-check.
 #   The webview is invisible to the vscode-test c8 pass (extension host only);
 #   this closes that blind spot (#254). The script rebuilds the production
 #   bundle in a finally, so a coverage build is never left staged for packaging
@@ -556,7 +558,8 @@ _vsix-playwright-html: _vsix-install
 _vsix-webview-coverage: _vsix-install
 	cd clients/vscode && npx playwright install --with-deps chromium && npm run coverage:webview
 
-_vsix-webview-coverage-check:
+_vsix-coverage-check:
+	cd clients/vscode && npm run coverage:extension:check
 	cd clients/vscode && npm run coverage:webview:check
 
 ## vsix-package: Build the .vsix artifact (does not publish).

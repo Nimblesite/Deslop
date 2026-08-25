@@ -480,11 +480,17 @@ Users who run an agent *outside* VS Code (e.g. Claude Code CLI in a terminal) ca
 
 Tests run in CI on every platform shipped in [VSIX-BUNDLE] via GitHub Actions `vscode-test` matrix. Per CLAUDE.md, these are coarse end-to-end tests, not unit tests.
 
-#### [VSIX-TESTING-COVERAGE] Extension-host suite run
+#### [VSIX-TESTING-COVERAGE] Extension-host coverage gate
 
-`make _vsix-coverage` (`npm run coverage:collect`) runs the full unit + E2E suite under `@vscode/test-cli`. No line coverage is collected over `out/**`: the desktop extension host ignores `NODE_V8_COVERAGE` for plain-Mocha `extensionTestsPath` suites (gh #440), so the repo-root `coverage-thresholds.json` carries no extension-host floor — only `.vsix.webview_threshold`. The suite is a pass/fail gate here, not a coverage gate.
+`make _vsix-coverage` (`npm run coverage:extension`) compiles the suite, instruments every compiled module, runs the full unit + E2E suite under `@vscode/test-cli`, and writes `coverage/extension/coverage-summary.json`. `make _vsix-coverage-check` enforces `.vsix.extension_threshold` from the repo-root `coverage-thresholds.json` with the same **+1% rounding slack** and ratchet-up-only discipline as every other floor.
 
-`make _vsix-test` (`npm test`) re-runs the same suite against the packaged bundle, so the shipped artifact stays E2E-validated. The webview bundle has its own gate: [webview-runtime.md §VSIX-WEBVIEW-COVERAGE](webview-runtime.md#vsix-webview-coverage).
+**The counters live in the code, not in the process.** The desktop extension host writes no V8 profile for extension code — a raw `NODE_V8_COVERAGE` run captures VS Code's main process and nothing of ours (gh #440). That is a property of the host, not of the injection channel, so no amount of re-aiming c8 recovers it. `scripts/instrument-out.mjs` therefore compiles Istanbul counters into each module and `src/test/coverage-dump.ts` writes the accumulated table from inside the host on exit. The migration to `vscode.tests.createTestController` that gh #440 proposed is not required for this.
+
+**The measured artifact is `out/**`, not `dist/extension.js`.** The extension ships as the bundle, but the suites import modules directly (`../../decorations/...`), which resolves to the separate `tsc` copy — so the bundle observes almost none of the suite's work. Measuring it scored 57.98% against 87.56% for `out/**`. The two copies cannot be merged: different toolchains produce different statement maps, and combining them would total tables that do not describe the same code. Measuring `out/**` alone therefore under-reports by whatever only the bundle's activation path executes, which is the safe direction — the number can never claim coverage no test produced.
+
+**The denominator is every compiled module**, taken from the instrumentation baseline rather than from whatever loaded at runtime, so a module no test touches scores 0% instead of vanishing and inflating the total. The run fails if the module set in the report differs from the set instrumented, if the host writes no table at all, or if the table it writes is empty — a broken harness cannot pass by default.
+
+`make _vsix-test` (`npm test`) re-runs the same suite uninstrumented against the packaged bundle, so the shipped artifact stays E2E-validated. The webview bundle has its own gate: [webview-runtime.md §VSIX-WEBVIEW-COVERAGE](webview-runtime.md#vsix-webview-coverage).
 
 ##### [VSIX-SUITE-EXECUTES] A suite that did not run is not a pass
 

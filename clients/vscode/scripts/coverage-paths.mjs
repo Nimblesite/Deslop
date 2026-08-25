@@ -15,6 +15,26 @@ export const repoRoot = resolve(vsixRoot, "..", "..");
 /** The single source of truth for every coverage floor. */
 export const thresholdsPath = resolve(repoRoot, "coverage-thresholds.json");
 
+/**
+ * The VSIX coverage gates, keyed by CLI flag. One entry per measured surface.
+ * Every `.vsix` floor in coverage-thresholds.json must be claimed by a gate
+ * here and every gate must name a floor that exists — an unclaimed floor is a
+ * number nothing enforces, which is how `projects{}` sat in that file for so
+ * long declaring a 95% VSIX threshold that no code ever read.
+ */
+export const COVERAGE_GATES = {
+  "--extension": {
+    thresholdKey: "extension_threshold",
+    coverageDir: "extension",
+    label: "Extension-host",
+  },
+  "--webview": {
+    thresholdKey: "webview_threshold",
+    coverageDir: "webview",
+    label: "Webview",
+  },
+};
+
 /** Parse the repo-root coverage-thresholds.json. */
 export function loadThresholds() {
   return JSON.parse(readFileSync(thresholdsPath, "utf8"));

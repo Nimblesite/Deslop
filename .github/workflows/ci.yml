@@ -421,8 +421,8 @@ jobs:
       - name: Calculate Rust coverage
         run: make coverage-report
 
-      - name: Enforce webview coverage
-        run: make _vsix-webview-coverage-check
+      - name: Enforce VSIX coverage (extension host + webview)
+        run: make _vsix-coverage-check
 
       - name: Calculate repository-script coverage
         run: npx --yes c8@12.0.0 report --temp-directory coverage/repository/raw --reporter=json-summary --reports-dir coverage/repository
@@ -594,9 +594,9 @@ jobs:
       - name: _vsix-build
         run: make _vsix-build
 
-      # The extension suite executes once under coverage. Thresholds are
+      # The extension suite executes once, instrumented. Thresholds are
       # calculated by the final coverage job, after every test job completes.
-      - name: _vsix-coverage (extension suite collection)
+      - name: _vsix-coverage (extension suite + coverage collection)
         run: xvfb-run -a dbus-run-session -- make _vsix-coverage
 
       # Renders the standalone HTML report (the artifact every "Open HTML
