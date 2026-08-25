@@ -74,6 +74,17 @@ Seven open false-positive issues (#71 #79 #103 #283 #284 #285 #336) all say *"th
 
 [CORPUS-CI] sizes the scheduled slice to finish in about a minute. The summary is supposed to name what was skipped. Nothing asserts it does, so a three-repo run reads as a nine-repo pass.
 
+### L9. 🛑 #439 — `type2_recall` curates paths but not extent
+
+`check_one_curated_type2` asks two questions: does a visible cluster span the curated files, and is it gate-vouched. Neither says the cluster *is* the curated duplicate. A curated entry claims "these two files are one module written twice"; any cluster touching both files satisfies it, however small.
+
+Measured on tokio. At `7bb29d4`, deleting the curated 395-node whole-module rename from the report leaves the check green — a 31-node `as_raw_fd` accessor family spanning both curated files *and eleven unrelated ones* answers for it. At `7332719` the same pair was reported only as a 39-node fragment ranked 1628 of 2155, a finding no user scrolls to, and the check was green there too. A recall check that cannot tell the module from a five-line boilerplate sprawl is not measuring recall.
+
+**How the skip ends.** `[CORPUS-RECALL]` gains a required `min_nodes` per curated entry, and the judge compares it against the cluster's `canonical_node_count`. An entry that curates no extent must fail rather than pass on a path overlap — the stance [CORPUS-SCOPE] already takes on a missing `expect_files_min` — otherwise #439 reopens the next time a manifest grows an entry. `min_nodes` is a floor, not a pin: the legitimate whole-module view of the tokio pair measured 348 and 395 nodes on two builds of the same pinned commit, so the correct extent moves while the two orders of magnitude separating it from the fragments do not.
+
+- [ ] **#439** teach `check_one_curated_type2` the extent predicate; three pins in `corpus_confidence/tests/curated.rs` are `#[ignore]`d against it and return when it lands.
+- [ ] Curate a measured `min_nodes` into the three existing entries (`nest.json` ×2, `tokio.json` ×1). Needs a clone-and-scan per repository, so it lands with item F.
+
 ## Part 2 — Assert a fuckload
 
 The target state: **every repository, every run, asserts every row below.** Ids are rank-independent per [CORPUS-BASELINE].

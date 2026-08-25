@@ -6,6 +6,23 @@ use super::*;
 /// The pair every case below curates.
 const PAIR: [&str; 2] = ["src/a.ts", "src/b.ts"];
 
+/// gh #439 witness 1 — the extent of the `as_raw_fd` accessor family
+/// that satisfied this check on tokio while the curated 134-line module
+/// rename was absent from the report entirely.
+const ACCESSOR_NODES: u64 = 31;
+
+/// gh #439 witness 2 — the extent of the fragment tokio reported for
+/// the curated pair at rank 1628 of 2155, before the
+/// [PIPELINE-CLUSTER-ELECT] weld fix moved the whole-module view to
+/// rank 78. The check was green on both.
+const FRAGMENT_NODES: u64 = 39;
+
+/// The unrelated files the accessor family also spans. Five lines of
+/// platform boilerplate repeated across a repository reach the curated
+/// pair's two files *and* a dozen others; the curated rename reaches
+/// only its own. Spanning is not the same claim as being the duplicate.
+const SPRAWL: [&str; 3] = ["src/net/tcp.ts", "src/net/udp.ts", "src/process/unix.ts"];
+
 /// Judges the curated `PAIR` against a report of `clusters`.
 fn judge(clusters: &[Value]) -> Vec<Failure> {
     let mut failures = Vec::new();
@@ -120,5 +137,101 @@ fn an_empty_curated_list_asserts_nothing() {
     assert!(
         failures.is_empty(),
         "no curated entries means no recall assertion, pass or fail: {failures:?}"
+    );
+}
+
+#[test]
+#[ignore = "[SKIP-UNFINISHED] GH #439 [CORPUS-RECALL] \
+     docs/plans/corpus-assertion.md — `check_one_curated_type2` compares curated paths but \
+     not curated extent, so the judge cannot yet fail a cluster too small to be the \
+     curated duplicate. Run via `-- --ignored`."]
+fn a_boilerplate_family_spanning_the_curated_pair_is_not_the_curated_rename() {
+    // gh #439. Measured on tokio at 7bb29d4: delete the curated 395-node
+    // module rename from the report and this check stays green, satisfied
+    // by a 31-node `as_raw_fd` accessor family spanning both curated files
+    // and eleven unrelated `net/`/`process/` ones. The curated claim is
+    // "the two standard-stream handles are one module written twice"; five
+    // lines of platform boilerplate is not evidence for it. A check that
+    // passes with its ground truth deleted asserts nothing.
+    let sprawl: Vec<&str> = PAIR.iter().chain(SPRAWL.iter()).copied().collect();
+    let accessor = sized(
+        spanning("nearly_identical", 1.0, 1.0, &sprawl),
+        ACCESSOR_NODES,
+    );
+    assert_only_failure(
+        &judge(std::slice::from_ref(&accessor)),
+        "type2_recall",
+        "a boilerplate family far below the curated extent is not the curated rename",
+        "extent",
+        "the detail must say the reported cluster is too small to be the curated duplicate",
+    );
+
+    // Same paths, same bucket, same signals, same visibility — extent is
+    // the only variable, so the case cannot pass for an unrelated reason.
+    let module = sized(accessor, CURATED_MIN_NODES);
+    assert!(
+        judge(&[module]).is_empty(),
+        "the identical cluster at the curated extent is recall: only the extent may decide this"
+    );
+}
+
+#[test]
+#[ignore = "[SKIP-UNFINISHED] GH #439 [CORPUS-RECALL] \
+     docs/plans/corpus-assertion.md — `check_one_curated_type2` compares curated paths but \
+     not curated extent, so the judge cannot yet fail a cluster too small to be the \
+     curated duplicate. Run via `-- --ignored`."]
+fn a_fragment_far_below_the_curated_extent_is_not_the_curated_rename() {
+    // gh #439 witness 2. At 7332719 tokio reported the curated pair as a
+    // 39-node fragment ranked 1628 of 2155 — a finding no user scrolls to
+    // — and this check was green. One commit later the same pair is the
+    // 348-node whole-module view. Recall that cannot tell those apart is
+    // not measuring recall.
+    let fragment = sized(
+        spanning("nearly_identical", 1.0, 1.0, &PAIR),
+        FRAGMENT_NODES,
+    );
+    assert_only_failure(
+        &judge(&[fragment]),
+        "type2_recall",
+        "a fragment of the curated duplicate is not the curated duplicate",
+        "extent",
+        "the detail must say the reported cluster is too small to be the curated duplicate",
+    );
+
+    assert!(
+        judge(&[spanning("nearly_identical", 1.0, 1.0, &PAIR)]).is_empty(),
+        "the whole-module view of the same pair is recall"
+    );
+}
+
+#[test]
+#[ignore = "[SKIP-UNFINISHED] GH #439 [CORPUS-RECALL] \
+     docs/plans/corpus-assertion.md — `check_one_curated_type2` compares curated paths but \
+     not curated extent, so the judge cannot yet fail a cluster too small to be the \
+     curated duplicate. Run via `-- --ignored`."]
+fn an_entry_curating_no_extent_asserts_nothing_and_must_fail() {
+    // [CORPUS-RECALL] the same stance [CORPUS-SCOPE] takes on a missing
+    // `expect_files_min`: an entry that curates no extent cannot tell the
+    // module from the fragment, so it must fail rather than pass on the
+    // strength of a path overlap. Otherwise gh #439 reopens itself the
+    // next time a manifest adds an entry.
+    let uncurated = json!({
+        "must_find_type2": [{
+            "files": PAIR,
+            "why": "hand-verified rename pair that forgot to curate its extent",
+        }]
+    });
+    let mut failures = Vec::new();
+    check_type2_curated_recall(
+        &uncurated,
+        &report(&[spanning("nearly_identical", 1.0, 1.0, &PAIR)]),
+        &mut failures,
+    );
+    assert_only_failure(
+        &failures,
+        "type2_recall",
+        "an entry curating no extent must fail, not pass vacuously",
+        "min_nodes",
+        "the detail must name the missing curation",
     );
 }

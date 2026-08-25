@@ -154,11 +154,17 @@ pub const RENAME_CONSISTENCY_DISCOUNT: f64 = 0.9;
 /// Byte-equivalence-proven [`ClusterKind::Identical`] clusters keep
 /// their saturated confidence, and clusters discovered without an exact
 /// shape match (LSH / embedding paths) keep the existing fusion.
+///
+/// `members_share_one_digest` is the renderer's answer to "do all of
+/// this cluster's members carry the same normalised-subtree hash" — the
+/// only fact that licenses the token-axis correction below, and one the
+/// signal triple cannot supply on its own (gh #431).
 #[must_use]
 pub fn content_gated_signals(
     signals: ReportSignals,
     content: ContentEvidence,
     kind: ClusterKind,
+    members_share_one_digest: bool,
 ) -> ReportSignals {
     // #344: the measured content evidence is stamped on **every** path,
     // including the two that leave the confidence untouched. A reader
@@ -172,7 +178,12 @@ pub fn content_gated_signals(
     if kind == ClusterKind::Identical || !has_saturating_shape_evidence(signals) {
         return stamp_shape(signals);
     }
-    stamp_shape(apply_content_gate(signals, content, kind))
+    stamp_shape(apply_content_gate(
+        signals,
+        content,
+        kind,
+        members_share_one_digest,
+    ))
 }
 
 /// Scales a saturated shape match by the measured content evidence —
@@ -182,6 +193,7 @@ fn apply_content_gate(
     signals: ReportSignals,
     content: ContentEvidence,
     kind: ClusterKind,
+    members_share_one_digest: bool,
 ) -> ReportSignals {
     let content_confidence = content
         .agreement
@@ -190,20 +202,28 @@ fn apply_content_gate(
         .embedding_cos
         .max(signals.shape_score() * content_confidence)
         .clamp(0.0, 1.0);
-    // A shape-identical cluster routed `NearlyIdentical` shares one
-    // Merkle hash, so the members' normalised kind streams are equal by
-    // construction and the true token Jaccard is 1.0 — the same
-    // argument the byte-equivalence upgrade applies to `Identical`. A
-    // lower rendered value is a fingerprint-scoped fallback-signature
-    // artifact, not evidence, so it is corrected here. The
-    // `structural` guard scopes the correction to clusters the Merkle
-    // argument actually covers — a mixed LSH-glued cluster keeps its
-    // estimated value. `StructuralOnly` keeps its unscored signal:
-    // absent token support is that bucket's defining signature
-    // ([RANK-STRUCTURAL-ONLY]).
-    let token_jaccard = if kind == ClusterKind::NearlyIdentical
-        && signals.structural >= STRUCTURAL_SATURATION_FLOOR
-    {
+    // A `NearlyIdentical` cluster whose members all carry **one**
+    // normalised-subtree digest has equal kind streams by construction,
+    // so the true token Jaccard is 1.0 — the same argument the
+    // byte-equivalence upgrade applies to `Identical`. A lower rendered
+    // value there is a fingerprint-scoped fallback-signature artifact,
+    // not evidence, so it is corrected here.
+    //
+    // The guard is the digest equality the argument names, passed in by
+    // the renderer, and not a `structural` reading (gh #431). Since #408
+    // that axis grades shared-subtree *overlap*
+    // ([FUSION-SHARED-SUBTREE]): every value below saturation means the
+    // subtrees provably differ, so no digest is shared and the argument
+    // covers none of them, while saturation itself is reachable by
+    // ratio — `shared == larger` — without digest equality. Scoping the
+    // correction to `STRUCTURAL_SATURATION_FLOOR` therefore published
+    // `token_jaccard = 1.0`, and a `shape` derived from it, for the
+    // whole `[0.99, 1.0)` band on no evidence at all: a near-miss
+    // *routing* tolerance is not proof of identity. A mixed LSH-glued
+    // cluster keeps its estimated value. `StructuralOnly` keeps its
+    // unscored signal: absent token support is that bucket's defining
+    // signature ([RANK-STRUCTURAL-ONLY]).
+    let token_jaccard = if kind == ClusterKind::NearlyIdentical && members_share_one_digest {
         1.0
     } else {
         signals.token_jaccard

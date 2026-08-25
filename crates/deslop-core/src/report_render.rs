@@ -166,6 +166,7 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         proven_identical_signals(raw_signals, kind),
         cluster.content,
         kind,
+        members_share_one_digest(&cluster.members),
     );
     let summary = summarise(
         cluster.members.len(),
@@ -371,6 +372,24 @@ fn proven_identical_signals(signals: ReportSignals, kind: ClusterKind) -> Report
         embedding_cos: signals.embedding_cos,
     }
     .into()
+}
+
+/// True when every member of the cluster carries the same
+/// normalised-subtree digest ([FUSION-CONTENT-GATE], gh #431).
+///
+/// This is the Merkle fact the token-axis correction in
+/// [`crate::buckets::content_gated_signals`] rests on: one shared digest
+/// means the members' normalised kind streams are equal by
+/// construction, whatever a `MinHash` estimate over a fallback signature
+/// reported. Nothing in the rendered signal triple can stand in for it —
+/// `structural` grades subtree *overlap* ([FUSION-SHARED-SUBTREE]), so
+/// it saturates by ratio as well as by digest equality and reads high
+/// for members that provably differ.
+fn members_share_one_digest(members: &[Fingerprint]) -> bool {
+    let mut hashes = members.iter().map(|member| member.hash);
+    hashes
+        .next()
+        .is_some_and(|first| hashes.all(|hash| hash == first))
 }
 
 /// Routes the signal triple into the report bucket and is the *single

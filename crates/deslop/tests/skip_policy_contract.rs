@@ -68,7 +68,11 @@ const TEST_TARGET_KIND: &str = "test";
 /// behaviour. The twenty-two gh #432–#435 entries are the fused-score follow-ups'
 /// own accuracy pins, skipped in flight per
 /// `docs/plans/fused-score-followups.md` — each returns when its issue lands.
-const CURATED_SKIPS: [(&str, &str, u32); 37] = [
+/// The three gh #439 entries are the same bargain for curated recall: they pin
+/// that `type2_recall` cannot tell the curated module from a fragment spanning
+/// the same paths, and return when the extent predicate lands
+/// (`docs/plans/corpus-assertion.md` § L9).
+const CURATED_SKIPS: [(&str, &str, u32); 40] = [
     (
         "crates/deslop-core/tests/embedding_pass_observability.rs",
         "issue_94_embedding_pass_emits_batch_observability_events",
@@ -108,6 +112,21 @@ const CURATED_SKIPS: [(&str, &str, u32); 37] = [
         "crates/deslop-lsp/tests/state_file_and_ipc.rs",
         "issue_73_lsp_report_get_uses_prestaged_live_report_cache",
         433,
+    ),
+    (
+        "crates/deslop-test-support/src/corpus_confidence/tests/curated.rs",
+        "a_boilerplate_family_spanning_the_curated_pair_is_not_the_curated_rename",
+        439,
+    ),
+    (
+        "crates/deslop-test-support/src/corpus_confidence/tests/curated.rs",
+        "a_fragment_far_below_the_curated_extent_is_not_the_curated_rename",
+        439,
+    ),
+    (
+        "crates/deslop-test-support/src/corpus_confidence/tests/curated.rs",
+        "an_entry_curating_no_extent_asserts_nothing_and_must_fail",
+        439,
     ),
     (
         "crates/deslop/tests/corpus_manifest_contract.rs",
