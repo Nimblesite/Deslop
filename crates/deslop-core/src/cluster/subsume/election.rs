@@ -244,7 +244,11 @@ fn has_overturn_mass(cluster: &Cluster) -> bool {
 }
 
 /// Node floor for [`has_overturn_mass`] — see its measurement table.
-const VERBATIM_OVERTURN_MIN_NODES: usize = 16;
+/// Shared with [PIPELINE-CLUSTER-ELECT-CONTAINER]
+/// (`crate::cluster_filters`), which asks the same question one stage
+/// earlier: whether an enclosed family has the standing of copied
+/// blocks rather than idiom lines.
+pub(crate) const VERBATIM_OVERTURN_MIN_NODES: usize = 16;
 
 /// The second exception to "the encloser wins": a nested view with
 /// strictly **more occurrences** than the view enclosing it is not

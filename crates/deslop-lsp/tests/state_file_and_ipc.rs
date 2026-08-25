@@ -34,6 +34,12 @@ use common::{
 };
 
 const STATE_FILE: &str = ".deslop/cache/live-report.json";
+
+/// The run-identity key written beside the state file
+/// ([LIVE-CACHE-SEED-KEY]). A seed is served as an answer, so the
+/// loader refuses a report whose recorded key is absent or does not
+/// describe the run asking for it.
+const SEED_KEY_FILE: &str = ".deslop/cache/live-report.key";
 const ANALYSIS_TIMEOUT: Duration = Duration::from_secs(15);
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
 
@@ -80,10 +86,6 @@ fn state_file_exists_after_initialize() -> Result<()> {
 /// the LSP must answer `reportGet` from that cache instead of blocking
 /// startup on a cold full pass.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #433 [LIVE-SEED-CACHE] \
-     docs/plans/fused-score-followups.md — the staged cached report is superseded because \
-     the fresh pass measures different content evidence than the cold pass that wrote it. \
-     Run via `-- --ignored`."]
 fn issue_73_lsp_report_get_uses_prestaged_live_report_cache() -> Result<()> {
     let (_workspace, _state_path, _guard, mut stdin, mut stdout) =
         seeded_workspace_ready(&cached_report_bytes()?)?;
@@ -130,10 +132,6 @@ fn issue_73_lsp_report_get_uses_prestaged_live_report_cache() -> Result<()> {
 /// edits.
 #[cfg(unix)]
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #433 [LIVE-SEED-CACHE] \
-     docs/plans/fused-score-followups.md — the cached state serves fresh-pass content \
-     evidence, not the cold evidence the state file was written with. \
-     Run via `-- --ignored`."]
 fn current_state_file_loads_and_incremental_updates_continue() -> Result<()> {
     let cached_bytes = cached_report_bytes()?;
     let (workspace, state_path, _guard, mut stdin, mut stdout) =
@@ -455,10 +453,6 @@ fn ipc_socket_returns_method_not_found_for_unknown_method() -> Result<()> {
 /// This drives the deferred-refresh path end-to-end (the prior seed tests
 /// only assert the fast cached serve, then exit before the cold pass runs).
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #433 [LIVE-SEED-CACHE] \
-     docs/plans/fused-score-followups.md — the seeded cache no longer serves first because \
-     the cold pass that replaces it measures different content evidence than the seed. \
-     Run via `-- --ignored`."]
 fn issue_73_cold_pass_commits_and_replaces_the_seed_after_seeded_startup() -> Result<()> {
     let (_workspace, _state_path, _guard, mut stdin, mut stdout) =
         seeded_workspace_ready(&cached_report_bytes()?)?;
@@ -527,6 +521,20 @@ fn fixture_socket_ready(
 /// stdin/stdout for follow-up `call`s. Every startup-with-persisted-state test
 /// shares this setup; what varies is the staged bytes and which post-handshake
 /// reads they assert.
+/// Stages `state` as the workspace's cached live report and starts the
+/// LSP against it, returning once the handshake completes.
+///
+/// [LIVE-CACHE-SEED-KEY] made the seed loader refuse a report whose
+/// sibling run-identity key is absent or foreign, so a bare
+/// hand-written state file no longer models a cache the contract
+/// serves — it models the stale-seed defect the key exists to close.
+/// The staging therefore prewarms first: one real LSP run against this
+/// exact workspace writes the state file *and* its key, that server is
+/// shut down, and only the report bytes are replaced with `state`. The
+/// key still describes the run identity — root, settings, tool
+/// version — which is all it records; a seed is an ordinary earlier
+/// generation, and the sentinel cluster it now carries is how the
+/// tests observe it being served.
 fn seeded_workspace_ready(
     state: &[u8],
 ) -> Result<(
@@ -538,10 +546,13 @@ fn seeded_workspace_ready(
 )> {
     let workspace = copy_fixture("csharp-small")?;
     let state_path = workspace.path().join(STATE_FILE);
-    let parent = state_path
-        .parent()
-        .ok_or_else(|| anyhow!("state path must have parent: {}", state_path.display()))?;
-    fs::create_dir_all(parent)?;
+    {
+        let (prewarm, mut stdin, mut stdout) = spawn_lsp_guarded(workspace.path())?;
+        let _init = handshake(&mut stdin, &mut stdout)?;
+        wait_for_file(&workspace.path().join(SEED_KEY_FILE), ANALYSIS_TIMEOUT)?;
+        wait_for_file(&state_path, ANALYSIS_TIMEOUT)?;
+        drop(prewarm);
+    }
     fs::write(&state_path, state)?;
     let (guard, mut stdin, mut stdout) = spawn_lsp_guarded(workspace.path())?;
     let _init = handshake(&mut stdin, &mut stdout)?;

@@ -184,7 +184,7 @@ mod shard_equivalence_tests {
     //! byte-identical pair outcomes and counters as the serial path:
     //! every measurement is a pure function of the corpus, so sharding
     //! may change which thread computes a value but never the value
-    //! (`docs/performance-branch-review.md`, "parallel rescue").
+    //! (`docs/release-audit.md`, "parallel rescue").
 
     use std::path::PathBuf;
 

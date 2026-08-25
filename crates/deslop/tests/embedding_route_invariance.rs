@@ -94,20 +94,6 @@ fn published(report: &serde_json::Value) -> Published {
 /// C# Type-3 near-miss carve-out, and every other cosine-reading
 /// filter.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #356 [FUSION-CLUSTER-SIGNALS] \
-            docs/plans/embedding-accuracy-plan.md — RED ON PURPOSE — \
-            the surviving half of #356, and a measured false negative, not a flake. \
-            `ts-mixed-band`: ledger_a/ledger_b are one Merkle class (fingerprints 93+277, \
-            `structural = 1.00`) and publish `structural_only` with embeddings off. With \
-            them on the ANN pass adds nine cosine-0.98 whole-file-root edges that chain all \
-            five ledgers into ONE 11-member component; the mean over its rendered pairs is \
-            `structural = 0.60, token_jaccard = 0.76, cos = 0.57`, which routes \
-            `loosely_similar`, which `report::cluster_is_hidden` drops. The proven pair is \
-            destroyed by a mean that describes none of its members — Merkle equality is \
-            bimodal (1.0 or 0.0), so 0.60 is 6 proven pairs plus 4 unproven ones, not a \
-            weak match. Fixing it means transitive closure must stop dissolving a proven \
-            equivalence class into a weaker component, which moves assertions across the \
-            suite and is not this change. Assertions are intact — run with `-- --ignored`."]
 fn embeddings_on_reports_every_file_set_embeddings_off_reported() -> Result<()> {
     for (corpus, min_nodes) in CORPORA {
         let cold = without_embeddings(corpus, min_nodes)?;

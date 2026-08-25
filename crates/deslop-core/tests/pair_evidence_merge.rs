@@ -1,5 +1,5 @@
 //! [PERF-FLUTTER-TODO-PAIRS] Evidence-merge pins for the streamed pair
-//! builder (`docs/performance-branch-review.md`, "first-seen pair
+//! builder (`docs/release-audit.md`, "first-seen pair
 //! deduplication drops stronger evidence"). A pair discovered by more
 //! than one pass must carry the merged evidence of every discovery:
 //! the structural axis from the Merkle pass and the strongest cosine

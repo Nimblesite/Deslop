@@ -49,6 +49,11 @@ use crate::{fingerprint::Fingerprint, pair::FusedCluster, state::FileId};
 
 use super::family::{families_by, restrict};
 
+/// [PIPELINE-CLUSTER-ELECT-CONTAINER] — election of concatenation
+/// members out of a welded component.
+mod containers;
+use containers::elect_out_containers;
+
 /// Smallest family worth reporting on its own: one lone occurrence is
 /// not a duplicate of anything.
 const MIN_FAMILY_MEMBERS: usize = 2;
@@ -82,6 +87,43 @@ fn split_one<S: BuildHasher>(
     if !speaks_one_language(&fused.members, fingerprints, file_languages) {
         return None;
     }
+    trace_component(fused, fingerprints);
+    let elected = elect_out_containers(fused, fingerprints);
+    let subject = elected.as_ref().unwrap_or(fused);
+    match (split_welds(subject, fingerprints), elected) {
+        (Some(parts), _) => Some(parts),
+        (None, Some(pruned)) => Some(vec![pruned]),
+        (None, None) => None,
+    }
+}
+
+/// Emits the component's member spans at `trace`, so a surprising
+/// election is traceable without re-running the pipeline. Byte offsets
+/// and node counts only — never source text ([PRINCIPLES-LOGGING]).
+fn trace_component(fused: &FusedCluster, fingerprints: &[Fingerprint]) {
+    if !tracing::enabled!(tracing::Level::TRACE) {
+        return;
+    }
+    let spans: Vec<String> = fused
+        .members
+        .iter()
+        .filter_map(|index| fingerprints.get(*index))
+        .map(|member| {
+            format!(
+                "{:?}:{}..{}@{}",
+                member.file_id, member.byte_range.start, member.byte_range.end, member.node_count
+            )
+        })
+        .collect();
+    tracing::trace!(
+        members = spans.join(","),
+        "family split considering component"
+    );
+}
+
+/// The component split into one cluster per disjoint region, or `None`
+/// when it covers a single region and holds no weld.
+fn split_welds(fused: &FusedCluster, fingerprints: &[Fingerprint]) -> Option<Vec<FusedCluster>> {
     let families = families_by(&fused.members, |index| {
         fingerprints.get(index).map(|member| member.hash)
     });

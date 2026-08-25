@@ -61,7 +61,7 @@ pub(super) struct PairBuilder<'corpus, S: BuildHasher> {
     /// per axis — whichever pass reached the pair first is telemetry.
     /// The LSH bulk carries no evidence and arrives after both passes,
     /// so it never needs a row here
-    /// (`docs/performance-branch-review.md`, "first-seen pair
+    /// (`docs/release-audit.md`, "first-seen pair
     /// deduplication drops stronger evidence").
     pub(super) evidence: HashMap<u64, (f64, f64)>,
     /// Packed keys already carried by `kept` — refuses the re-emission

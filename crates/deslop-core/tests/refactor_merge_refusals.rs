@@ -116,16 +116,33 @@ fn dart_written_context_variable_refuses() -> Result<()> {
     )
 }
 
-/// The residual byte proof: operator drift outside the holes refuses
-/// even though the normalised skeletons match.
+/// Operator drift never reaches the merge gate as one cluster any
+/// more: [PIPELINE-NORMALIZE-AST-OPERATOR] hashes `+` and `-` as
+/// different subtrees, so the sign-inverted methods stop clustering
+/// and the report publishes only the byte-identical statement tail
+/// they share — whose merge correctly refuses toward the verbatim
+/// extract action. The residual byte proof itself is pinned by
+/// [`comment_drift_refuses_via_residual_proof`], on drift the
+/// normalised skeleton genuinely cannot see.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #432 [FUSED-THRESHOLD] \
-     docs/plans/fused-score-followups.md — the drifted pair is no longer admitted at any \
-     floor, so the residual byte-proof path has no reachable cluster to refuse. \
-     Run via `-- --ignored`."]
-fn operator_drift_refuses_via_residual_proof() -> Result<()> {
+fn operator_drift_publishes_only_its_verbatim_tail() -> Result<()> {
     assert_all_refused_with(
         "csharp-merge-operatordrift",
+        "Drift.cs",
+        "byte-identical Type-1",
+    )
+}
+
+/// The residual byte proof ([AUTOFIX-MERGE-GATE]): a comment inside
+/// one body is invisible to the normalised skeleton and is not a
+/// hole, so only the byte-level residual check can rule the merge
+/// out. The two methods differ in exactly one literal (a consistent
+/// hole) and one comment; without the residual proof this pair would
+/// merge mechanically and the comment would be silently dropped.
+#[test]
+fn comment_drift_refuses_via_residual_proof() -> Result<()> {
+    assert_all_refused_with(
+        "csharp-merge-commentdrift",
         "Drift.cs",
         "not byte-equivalent",
     )

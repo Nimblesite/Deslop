@@ -13,6 +13,14 @@ use common::{
 use serde_json::Value;
 
 const REPORT_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// The control cluster's rendered confidence. Two of its four members
+/// are byte-identical and two are certified whole-file renames, so the
+/// cluster is not byte-proven as a whole: `fused = 1.0` stays reserved
+/// for byte proof, and a certified rename prices at
+/// `RENAME_CONSISTENCY_DISCOUNT (0.9) x shape (1.0)` — the fused
+/// contract in `docs/plans/fused-score-followups.md` § The contract.
+const CERTIFIED_RENAME_FUSED: f64 = 0.9;
 const ORIGINAL_CONFIG: &[u8] = b"[defaults]\nexclude = []\n";
 const SOURCE_LAYOUT: [(&str, &str, &str); 4] = [
     ("move/tax_alpha.ts", "ts-type2-loop", "tax_alpha.ts"),
@@ -29,10 +37,6 @@ const SOURCE_LAYOUT: [(&str, &str, &str); 4] = [
 /// unchanged corpus must not let append-only file-registration history alter
 /// cluster identity, ranges, ranking, or repository metrics.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #433 [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE] \
-     docs/plans/fused-score-followups.md — the report served after the exclusion cycle \
-     carries warm-pass content evidence where the batch cold run carries cold evidence. \
-     Run via `-- --ignored`."]
 fn config_exclusion_cycle_preserves_the_complete_report() -> Result<()> {
     run_exclusion_cycle("move/**")?;
     run_exclusion_cycle("stay/**")?;
@@ -131,8 +135,14 @@ fn assert_clean_control(report: &Value) -> Result<()> {
     );
     assert_eq!(
         json_path(cluster, &["signals", "fused"]),
-        1.0,
+        CERTIFIED_RENAME_FUSED,
         "{cluster:#}"
+    );
+    assert_eq!(
+        json_path(cluster, &["signals", "rename_consistency"]),
+        1.0,
+        "the discount is earned by a certified rename, not by weak \
+         evidence: {cluster:#}"
     );
     assert_eq!(
         json_path(report, &["metrics", "clusters_total"]),

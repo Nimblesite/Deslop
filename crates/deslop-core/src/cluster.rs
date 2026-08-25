@@ -35,6 +35,7 @@ mod subsume;
 use scope::DeclarationScopes;
 use signals::measured_signals;
 use subsume::collapse_cross_cluster_overlap;
+pub(crate) use subsume::VERBATIM_OVERTURN_MIN_NODES;
 
 /// A set of fingerprints that share the same hash, i.e. a detected
 /// (structural) clone cluster.

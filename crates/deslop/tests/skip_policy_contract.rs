@@ -68,46 +68,11 @@ const TEST_TARGET_KIND: &str = "test";
 /// behaviour. The twenty-two gh #432–#435 entries are the fused-score follow-ups'
 /// own accuracy pins, skipped in flight per
 /// `docs/plans/fused-score-followups.md` — each returns when its issue lands.
-const CURATED_SKIPS: [(&str, &str, u32); 37] = [
-    (
-        "crates/deslop-core/tests/embedding_pass_observability.rs",
-        "issue_94_embedding_pass_emits_batch_observability_events",
-        435,
-    ),
-    (
-        "crates/deslop-core/tests/issue_45_observability.rs",
-        "issue_45_pipeline_emits_stage_observability_events",
-        435,
-    ),
-    (
-        "crates/deslop-core/tests/refactor_merge_refusals.rs",
-        "operator_drift_refuses_via_residual_proof",
-        432,
-    ),
-    (
-        "crates/deslop-lsp/tests/history_determinism.rs",
-        "config_exclusion_cycle_preserves_the_complete_report",
-        433,
-    ),
+const CURATED_SKIPS: [(&str, &str, u32); 26] = [
     (
         "crates/deslop-lsp/tests/lsp_embedding_determinism.rs",
         "lsp_embedding_refresh_is_bounded_and_reproducible",
         369,
-    ),
-    (
-        "crates/deslop-lsp/tests/state_file_and_ipc.rs",
-        "current_state_file_loads_and_incremental_updates_continue",
-        433,
-    ),
-    (
-        "crates/deslop-lsp/tests/state_file_and_ipc.rs",
-        "issue_73_cold_pass_commits_and_replaces_the_seed_after_seeded_startup",
-        433,
-    ),
-    (
-        "crates/deslop-lsp/tests/state_file_and_ipc.rs",
-        "issue_73_lsp_report_get_uses_prestaged_live_report_cache",
-        433,
     ),
     (
         "crates/deslop/tests/corpus_manifest_contract.rs",
@@ -160,11 +125,6 @@ const CURATED_SKIPS: [(&str, &str, u32); 37] = [
         "crates/deslop/tests/corpus_repos.rs",
         "corpus_tokio_rust",
         422,
-    ),
-    (
-        "crates/deslop/tests/embedding_route_invariance.rs",
-        "embeddings_on_reports_every_file_set_embeddings_off_reported",
-        356,
     ),
     (
         "crates/deslop/tests/incremental_multilang_golden.rs",
@@ -227,24 +187,9 @@ const CURATED_SKIPS: [(&str, &str, u32); 37] = [
         434,
     ),
     (
-        "crates/deslop/tests/rank_structural_only_policy.rs",
-        "keep_policy_restores_full_weight_ranking",
-        432,
-    ),
-    (
-        "crates/deslop/tests/rank_structural_only_policy.rs",
-        "unit_weight_neutralises_demotion",
-        432,
-    ),
-    (
         "crates/deslop/tests/report_golden.rs",
         "cold_report_matches_committed_golden_byte_for_byte",
         432,
-    ),
-    (
-        "crates/deslop/tests/ts_issue_284_produce_then_assert.rs",
-        "produce_then_assert_scenarios_are_suppressed_while_a_real_clone_survives",
-        434,
     ),
 ];
 

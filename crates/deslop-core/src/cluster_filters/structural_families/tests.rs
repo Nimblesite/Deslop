@@ -34,6 +34,11 @@ const PRODUCT_HASH: u8 = 2;
 /// A third distinct tree, so a component can hold three families.
 const QUOTIENT_HASH: u8 = 3;
 
+/// A fourth distinct tree, so two enclosing views can be digest
+/// singletons — the two API classes of `rank_structural_only_policy`,
+/// which hold different method counts and so never share a hash.
+const REMAINDER_HASH: u8 = 4;
+
 /// Nodes per member. Well clear of any floor; the pass never reads it.
 const NODE_COUNT: usize = 40;
 
@@ -426,3 +431,5 @@ fn a_component_with_an_unresolved_language_is_left_whole() {
          component cannot be shown to speak one and must not be split"
     );
 }
+
+mod container_tests;
