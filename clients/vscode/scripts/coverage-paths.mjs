@@ -71,3 +71,29 @@ export function enforceLineThreshold(pct, target, label) {
   console.log(`OK: ${pct.toFixed(1)}% + 1% slack >= ${target}%`);
   return 0;
 }
+
+/**
+ * [VSIX-TESTING-COVERAGE-RESTORE] The exit code for one extension-host coverage run,
+ * from how collection ended and how the clean recompile that restores
+ * `out/**` ended.
+ *
+ * Both are terminal. A restore failure on its own must still fail the
+ * command: exiting 0 there leaves instrumented modules staged in `out/**`
+ * for `vsix-package` to ship and for every non-coverage suite to run
+ * against — a green gate over code nobody measured. When collection failed
+ * too, that failure is reported first because it explains the run, and the
+ * restore failure is kept as context rather than dropped.
+ *
+ * @param {{failure?: string, restore: number, stagedPath: string}} run
+ * @returns {{code: number, reason: string}}
+ */
+export function coverageRunExit({ failure, restore, stagedPath }) {
+  const staged = `the clean recompile failed (${restore}); instrumented ${stagedPath} is still staged`;
+  if (failure !== undefined && failure !== "") {
+    return {
+      code: 1,
+      reason: restore === 0 ? `FAIL: ${failure}` : `FAIL: ${failure}; also ${staged}`,
+    };
+  }
+  return restore === 0 ? { code: 0, reason: "" } : { code: 1, reason: `FAIL: ${staged}` };
+}

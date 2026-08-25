@@ -116,7 +116,7 @@ fn a_padded_window_over_the_same_files_is_a_container() {
 // much of the encloser it covers: four byte-equal one-line asserts are
 // most of a small test helper, and electing them out republishes the
 // noise family their umbrella suppresses (`python-issue-71`,
-// [CLONE-NOISE-LITERAL-CALLS]).
+// [CLONE-NOISE-LITERAL-VARIATION-CALLS]).
 #[test]
 fn an_idiom_sized_family_does_not_unseat_its_umbrella() {
     let idiom_nodes = VERBATIM_OVERTURN_MIN_NODES - 1;
@@ -162,5 +162,54 @@ fn a_window_wholly_containing_the_enclosed_family_is_kept() {
         "every occurrence of the nested shape sits inside a window \
          occurrence, so the window is the duplication and the shapes \
          are its fine structure"
+    );
+}
+
+/// Index of the 300-byte encloser the self-overlapping family must not
+/// be able to elect out.
+const ENCLOSER_MEMBER: usize = 4;
+
+// [PIPELINE-CLUSTER-ELECT-CONTAINER] The share test is a *coverage*
+// claim — `is_container`'s own contract says the enclosed occurrences
+// must "supply at least 2/3 of its bytes". Summing their lengths is
+// only that measure while they are disjoint. A self-overlapping family
+// — a shape that repeats at sliding offsets, the same geometry
+// `family_overflows` already refuses to grant the no-overflow exemption
+// to — is counted once per occurrence, so three 100-byte occurrences
+// spanning 150 real bytes read as 300 and any encloser up to 450 bytes
+// long is elected out on bytes it never lost. Here the encloser spans
+// 300 bytes, of which the family covers 10..160 — half — leaving 140
+// bytes of its own code. `an_encloser_with_code_of_its_own_is_not_a_container`
+// keeps exactly that view when the family is disjoint; overlap must not
+// be able to delete it.
+#[test]
+fn an_encloser_is_not_a_container_of_a_family_that_overlaps_itself() {
+    let fingerprints = placed_corpus(&[
+        (SUM_HASH, 0, 10, 110),
+        (SUM_HASH, 0, 20, 120),
+        (SUM_HASH, 0, 60, 160),
+        (SUM_HASH, 1, 10, 110),
+        (PRODUCT_HASH, 0, 0, 300),
+        (PRODUCT_HASH, 1, 400, 700),
+    ]);
+
+    let elected = elect(vec![component(6)], &fingerprints);
+
+    assert_eq!(
+        member_lists(&elected),
+        vec![vec![0, 1, 2, 3, 4, 5]],
+        "the overlapping shapes cover 150 of the encloser's 300 bytes, \
+         not 300 — the encloser keeps 140 bytes of its own code, is not a \
+         concatenation of them, and their ranges overlap its own, so this \
+         is one duplication fingerprinted at two depths and the pass must \
+         leave it whole for [PIPELINE-CLUSTER-SUBSUME] to elect between"
+    );
+    assert!(
+        elected
+            .iter()
+            .any(|cluster| cluster.members.contains(&ENCLOSER_MEMBER)),
+        "the encloser was deleted from the report — summing the overlapping \
+         occurrences credited the family with 300 of its 300 bytes when it \
+         covers 150, so the share test elected out a real finding"
     );
 }

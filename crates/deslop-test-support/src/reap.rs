@@ -46,7 +46,10 @@ pub fn reap_with_stdin(child: &mut Child, stdin: ChildStdin) -> Option<ExitStatu
 /// calling this (or use [`reap_with_stdin`]).
 pub fn reap(child: &mut Child) -> Option<ExitStatus> {
     drop(child.stdin.take());
-    wait_until(child, Instant::now() + REAP_TIMEOUT).or_else(|| force(child))
+    let deadline = Instant::now()
+        .checked_add(REAP_TIMEOUT)
+        .unwrap_or_else(Instant::now);
+    wait_until(child, deadline).or_else(|| force(child))
 }
 
 /// Polls `child` until it exits or `deadline` passes.

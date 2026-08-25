@@ -206,12 +206,8 @@ async fn execute_command_handlers_run_in_process_for_coverage() -> Result<()> {
     assert_open_cluster_invalid_id(&mut service, &mut socket).await?;
     assert_unknown_command(&mut service, &mut socket).await?;
     assert_refresh_report_command(&mut service, &mut socket).await?;
-    assert_refresh_after_edit_notifies_report_changed(
-        &mut service,
-        &mut socket,
-        workspace.path(),
-    )
-    .await?;
+    assert_refresh_after_edit_notifies_report_changed(&mut service, &mut socket, workspace.path())
+        .await?;
     Ok(())
 }
 
@@ -528,7 +524,9 @@ async fn assert_refresh_after_edit_notifies_report_changed(
         "{REPORT_CHANGED} must name the generation it advanced to: {changed}"
     );
     assert_eq!(
-        changed.pointer(NOTIFIED_REMOVED_POINTER).and_then(Value::as_u64),
+        changed
+            .pointer(NOTIFIED_REMOVED_POINTER)
+            .and_then(Value::as_u64),
         Some(removed),
         "{REPORT_CHANGED} summary must agree with the command result: {changed}"
     );

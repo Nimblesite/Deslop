@@ -63,35 +63,22 @@ const TEST_TARGET_KIND: &str = "test";
 /// Ordered by file then test name, matching `ignored_tests()`. The eleven
 /// `corpus_repos` entries are the real-repository gate (gh #422, blocked on
 /// the memory work in #166); `corpus_manifest_contract` is the curation those
-/// same two oversized repositories block (gh #426); the three embedding
-/// entries are red on purpose against unfinished fusion and embedding
-/// behaviour. The twenty-two gh #432–#435 entries are the fused-score follow-ups'
-/// own accuracy pins, skipped in flight per
-/// `docs/plans/fused-score-followups.md` — each returns when its issue lands.
-/// The three gh #439 entries are the same bargain for curated recall: they pin
-/// that `type2_recall` cannot tell the curated module from a fragment spanning
-/// the same paths, and return when the extent predicate lands
-/// (`docs/plans/corpus-assertion.md` § L9).
-const CURATED_SKIPS: [(&str, &str, u32); 40] = [
+/// same two oversized repositories block (gh #426); the two gh #369 entries
+/// are red on purpose against unfinished fusion and embedding behaviour. The
+/// eleven gh #432–#434 entries are the fused-score follow-ups' own accuracy
+/// pins, skipped in flight per `docs/plans/fused-score-followups.md` — each
+/// returns when its issue lands. The three gh #439 entries are the same
+/// bargain for curated recall: they pin that `type2_recall` cannot tell the
+/// curated module from a fragment spanning the same paths, and return when
+/// the extent predicate lands (`docs/plans/corpus-assertion.md` § L9).
+///
+/// Those counts are prose, and prose drifts. [`SKIPS_PER_ISSUE`] is what
+/// stops it drifting silently.
+const CURATED_SKIPS: [(&str, &str, u32); 28] = [
     (
         "crates/deslop-lsp/tests/lsp_embedding_determinism.rs",
         "lsp_embedding_refresh_is_bounded_and_reproducible",
         369,
-    ),
-    (
-        "crates/deslop-lsp/tests/state_file_and_ipc.rs",
-        "current_state_file_loads_and_incremental_updates_continue",
-        433,
-    ),
-    (
-        "crates/deslop-lsp/tests/state_file_and_ipc.rs",
-        "issue_73_cold_pass_commits_and_replaces_the_seed_after_seeded_startup",
-        433,
-    ),
-    (
-        "crates/deslop-lsp/tests/state_file_and_ipc.rs",
-        "issue_73_lsp_report_get_uses_prestaged_live_report_cache",
-        433,
     ),
     (
         "crates/deslop-test-support/src/corpus_confidence/tests/curated.rs",
@@ -196,11 +183,6 @@ const CURATED_SKIPS: [(&str, &str, u32); 40] = [
         432,
     ),
     (
-        "crates/deslop/tests/polymorphic_gate_hides_rename_clone.rs",
-        "hidden_group_summary_names_the_hider_not_the_users_config",
-        434,
-    ),
-    (
         "crates/deslop/tests/python_issue_107_chained_dict_assert.rs",
         "chained_dict_assertions_are_suppressed_while_a_real_clone_survives",
         434,
@@ -226,6 +208,70 @@ const CURATED_SKIPS: [(&str, &str, u32); 40] = [
         432,
     ),
 ];
+
+/// How many curated skips each tracking issue owns.
+///
+/// The compiler checks the declared length of [`CURATED_SKIPS`]; the
+/// breakdown above it was only a sentence, and it went stale — twenty-two gh
+/// #432–#435 entries when the registry held nine across #432–#434 and none
+/// for #435. That is a wrong answer to the question a reader is actually
+/// asking: which plan still owns this block of silence, and how much of it.
+const SKIPS_PER_ISSUE: [(u32, usize); 7] = [
+    (369, 2),
+    (422, 11),
+    (426, 1),
+    (432, 3),
+    (433, 4),
+    (434, 4),
+    (439, 3),
+];
+
+/// How many skips each issue owns, counted from the registry itself.
+fn skips_by_issue() -> BTreeMap<u32, usize> {
+    CURATED_SKIPS
+        .iter()
+        .map(|(_, _, issue)| (*issue, skips_owned_by(*issue)))
+        .collect()
+}
+
+/// The registry rows credited to one tracking issue.
+fn skips_owned_by(issue: u32) -> usize {
+    CURATED_SKIPS
+        .iter()
+        .filter(|(_, _, owner)| *owner == issue)
+        .count()
+}
+
+/// [TEST-SELECTION-SKIP] The registry agrees with what it says about itself.
+/// A per-issue count is the one number the array's declared length cannot
+/// check, which is why it is the one that drifted.
+#[test]
+fn every_tracking_issue_owns_the_number_of_skips_the_registry_declares() {
+    let counted = skips_by_issue();
+    let declared: BTreeMap<u32, usize> = SKIPS_PER_ISSUE.iter().copied().collect();
+    assert_eq!(
+        counted, declared,
+        "SKIPS_PER_ISSUE disagrees with CURATED_SKIPS. A skip was added, deleted, \
+         or changed hands: correct the breakdown, never the tally it describes."
+    );
+    assert_eq!(
+        declared.len(),
+        SKIPS_PER_ISSUE.len(),
+        "two rows of SKIPS_PER_ISSUE name the same issue, so one of them was never read"
+    );
+    assert_eq!(
+        CURATED_SKIPS.len(),
+        CURATED_SKIPS
+            .iter()
+            .filter(|(_, _, issue)| declared.contains_key(issue))
+            .count(),
+        "SKIPS_PER_ISSUE omits a tracking issue that CURATED_SKIPS credits"
+    );
+    assert!(
+        !counted.values().any(|owned| *owned == 0),
+        "an issue is credited with no skips at all, so it owns nothing and should be deleted"
+    );
+}
 
 /// `(file, test)` of every curated skip, for set comparison.
 fn curated() -> Vec<(String, String)> {

@@ -24,13 +24,10 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
 
 import { repoRoot } from "../lib/repo-root.mjs";
-
-const makefile = readFileSync(resolve(repoRoot, "Makefile"), "utf8").split("\n");
+import { makefileLines as makefile, recipeBlocks } from "../lib/makefile.mjs";
 
 // The package and dedicated Cargo test target that own the real-repository
 // corpus suite.
@@ -52,20 +49,14 @@ const EXACT_FLAG = "--exact";
 // nothing and reach no network.
 const BANNED_NAME_FILTERS = ["ollama_", "corpus_"];
 
-// Recipe lines of a make target — every block declaring it, because a target
-// may be declared twice (once to export an environment variable, once for the
-// recipe). Everything from each declaration up to the next line starting in
-// column 0. Line-exact, no pattern matching.
+// Every block declaring a make target, joined — a target may be declared twice
+// (once to export an environment variable, once for the recipe), and reading
+// only the first would miss half of what runs. `recipeBlocks` is shared with
+// the other Makefile gates ([CI-DESLOP], [CI-COVERAGE-ISOLATION]).
 function recipe(target) {
-  const blocks = [];
-  makefile.forEach((line, index) => {
-    if (!line.startsWith(`${target}:`)) return;
-    const rest = makefile.slice(index + 1);
-    const end = rest.findIndex((next) => next.length > 0 && !next.startsWith("\t") && !next.startsWith(" "));
-    blocks.push((end < 0 ? rest : rest.slice(0, end)).join("\n"));
-  });
+  const blocks = recipeBlocks(target);
   assert.ok(blocks.length > 0, `Makefile no longer declares a \`${target}\` target`);
-  return blocks.join("\n");
+  return blocks.map(({ body }) => body).join("\n");
 }
 
 // The right-hand side of a make variable, as words. `?=` and `=` both count;

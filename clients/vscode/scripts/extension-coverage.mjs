@@ -25,10 +25,16 @@
 // whether or not a test loads it — so the percentage answers "how much of the
 // extension is tested", not "how much of what happened to load is tested".
 
-import { readFileSync, readdirSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import {
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+  mkdirSync,
+  rmSync,
+} from "node:fs";
 import { resolve, relative } from "node:path";
 import libCoverage from "istanbul-lib-coverage";
-import { runTool, vsixRoot } from "./coverage-paths.mjs";
+import { coverageRunExit, runTool, vsixRoot } from "./coverage-paths.mjs";
 
 const outRoot = resolve(vsixRoot, "out");
 const outDir = resolve(vsixRoot, "coverage", "extension");
@@ -49,14 +55,17 @@ function collect() {
   status = runTool("node", ["./scripts/instrument-out.mjs"]);
   if (status !== 0) throw new StepFailed(`instrumentation failed (${status})`);
   status = runTool("npx", ["vscode-test"], { [COVERAGE_DIR_ENV]: rawDir });
-  if (status !== 0) throw new StepFailed(`the extension suite failed (${status})`);
+  if (status !== 0)
+    throw new StepFailed(`the extension suite failed (${status})`);
 }
 
 function readBaseline() {
   try {
     return JSON.parse(readFileSync(baselinePath, "utf8"));
   } catch (err) {
-    console.error(`FAIL: no instrumentation baseline at ${baselinePath}: ${err?.message ?? err}`);
+    console.error(
+      `FAIL: no instrumentation baseline at ${baselinePath}: ${err?.message ?? err}`,
+    );
     process.exit(1);
   }
 }
@@ -66,7 +75,9 @@ function buildMap(baseline) {
   const map = libCoverage.createCoverageMap({});
   map.merge(baseline);
   let dumps = 0;
-  for (const name of readdirSync(rawDir).filter((file) => file.endsWith(".json"))) {
+  for (const name of readdirSync(rawDir).filter((file) =>
+    file.endsWith(".json"),
+  )) {
     map.merge(JSON.parse(readFileSync(resolve(rawDir, name), "utf8")));
     dumps += 1;
   }
@@ -78,18 +89,30 @@ function buildMap(baseline) {
 }
 
 let failure;
+let restore = 0;
 try {
   collect();
 } catch (err) {
   failure = err;
 } finally {
-  // Never leave instrumented output staged for packaging or for the
-  // non-coverage suites — recompile clean on every path.
-  runTool("npm", ["run", "compile"]);
+  // [VSIX-TESTING-COVERAGE-RESTORE] Never leave instrumented output staged for packaging or for the
+  // non-coverage suites — recompile clean on every path. The status is
+  // kept, not discarded: a silent failure here exits 0 with instrumented
+  // modules still in out/**, which `vsix-package` would then ship and
+  // every non-coverage suite would then run against.
+  restore = runTool("npm", ["run", "compile"]);
 }
-if (failure) {
-  console.error(`FAIL: ${failure.message}`);
-  process.exit(1);
+const outcome = coverageRunExit({
+  failure: failure?.message,
+  restore,
+  // The instrumented artifact is `out/**`, which the restore compile
+  // overwrites — not the coverage report directory. Naming the wrong path
+  // here sends a reader to a directory that was never instrumented.
+  stagedPath: outRoot,
+});
+if (outcome.code !== 0) {
+  console.error(outcome.reason);
+  process.exit(outcome.code);
 }
 
 const baseline = readBaseline();
@@ -115,7 +138,10 @@ const perFile = [];
 for (const file of map.files()) {
   const fileSummary = map.fileCoverageFor(file).toSummary();
   totalSummary.merge(fileSummary);
-  perFile.push([relative(outRoot, file).replace(/\.js$/, ".ts"), fileSummary.lines.pct]);
+  perFile.push([
+    relative(outRoot, file).replace(/\.js$/, ".ts"),
+    fileSummary.lines.pct,
+  ]);
 }
 
 mkdirSync(outDir, { recursive: true });
@@ -125,12 +151,17 @@ writeFileSync(
 );
 
 perFile.sort((a, b) => a[1] - b[1]);
-console.log(`\nExtension-host line coverage by file (${perFile.length} modules):`);
-for (const [file, pct] of perFile) console.log(`  ${pct.toFixed(1).padStart(6)}%  ${file}`);
+console.log(
+  `\nExtension-host line coverage by file (${perFile.length} modules):`,
+);
+for (const [file, pct] of perFile)
+  console.log(`  ${pct.toFixed(1).padStart(6)}%  ${file}`);
 
 const pct = Number(totalSummary.toJSON().lines.pct);
 if (perFile.length === 0 || !Number.isFinite(pct)) {
-  console.error("FAIL: no extension coverage was mapped — the harness is broken, not passing by default");
+  console.error(
+    "FAIL: no extension coverage was mapped — the harness is broken, not passing by default",
+  );
   process.exit(1);
 }
 console.log("");

@@ -492,6 +492,14 @@ Tests run in CI on every platform shipped in [VSIX-BUNDLE] via GitHub Actions `v
 
 `make _vsix-test` (`npm test`) re-runs the same suite uninstrumented against the packaged bundle, so the shipped artifact stays E2E-validated. The webview bundle has its own gate: [webview-runtime.md §VSIX-WEBVIEW-COVERAGE](webview-runtime.md#vsix-webview-coverage).
 
+##### [VSIX-TESTING-COVERAGE-RESTORE] The instrumented tree is never left behind
+
+Instrumentation is written **into** `out/**`, so the run recompiles that tree clean in a `finally` — on the passing path and on every failing one. That recompile is a gate, not a courtesy: `vsix-package` ships whatever is in `out/**`, and `make _vsix-test` runs against it, so a run that fails to restore and still exits `0` hands a green light to a packaged extension full of coverage counters.
+
+The rule is therefore: **a failed restore fails the command, on its own.** When collection also failed, that failure is reported first — it explains the run — and the restore failure is kept alongside it rather than dropped. The diagnostic names `out/**`, the tree actually left instrumented.
+
+The decision lives once, in `coverageRunExit` (`scripts/coverage-paths.mjs`), and is pinned twice: `scripts/extension-coverage.test.mjs` holds the four-way table, and `scripts/extension-coverage-contract.test.mjs` drives `scripts/extension-coverage.mjs` as a process with its tools stubbed and asserts the exit code and the message. Measured against the defect it replaces — the restore status discarded — the same black-box run exits `0` with the instrumented tree still staged.
+
 ##### [VSIX-SUITE-EXECUTES] A suite that did not run is not a pass
 
 `vscode-test` globs `out/**/*.test.js`. An uncompiled `out/` matches nothing, so Mocha prints `0 passing` and exits 0 — a green light over a suite that never ran. npm fires `pre<name>` only for the exact script name, so every script that invokes `vscode-test` directly carries its own `pre<name>` hook running `npm run compile`; a script that merely delegates to one of those inherits its hook. Pinned by `clients/vscode/scripts/suite-compiles.test.mjs`, which enumerates the runner-invoking scripts out of `package.json` and refuses an empty set.

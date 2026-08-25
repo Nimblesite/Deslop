@@ -4,7 +4,19 @@ Supersedes `regression-audit-v0.32.0.md` (release regressions against `f92300e` 
 
 **Method.** Every claim below is measured at HEAD, not read off a prior document. Where the two source documents disagreed with the measurement, the measurement wins and the correction is stated inline.
 
-**Measured baseline.** Whole workspace, release profile, all targets: **13 targets, 1,169 passed, 0 failed, 26 ignored**. The 26 ignored are exactly the `CURATED_SKIPS` registry in `crates/deslop/tests/skip_policy_contract.rs` — 11 corpus repositories (#422), 14 in the `deslop` suite, 1 in the `deslop-lsp` suite (#369). Every one of the 14 was executed with `-- --ignored` and is red for the reason its skip declares.
+**Measured baseline.** Whole workspace, release profile, all targets: **13 targets, 0 failed**. Every ignored test is a row of the `CURATED_SKIPS` registry in `crates/deslop/tests/skip_policy_contract.rs`, and the registry now holds **28** rows — read straight out of the array, not off an older sweep:
+
+| issue | rows | what is skipped |
+|---|---|---|
+| #422 | 11 | the cloned corpus repositories (`corpus_repos.rs`) — too large for CI |
+| #434 | 4 | the Python noise pins in § 1 |
+| #433 | 4 | the three multilingual incremental goldens and `lsh_only_nearmiss_recall` |
+| #439 | 3 | the curated-extent contract in `deslop-test-support` |
+| #432 | 3 | both operator-drift pins and `report_golden` |
+| #369 | 2 | the two embedding pins |
+| #426 | 1 | the corpus manifest scope contract |
+
+By crate: 24 in `deslop`, 3 in `deslop-test-support`, 1 in `deslop-lsp`. Every non-corpus row was executed with `-- --ignored` and is red for the reason its skip declares.
 
 ## Verdict: not ready for release
 
@@ -18,19 +30,39 @@ Four fixtures that asserted **zero clusters** at v0.32.0 now publish. Measured w
 
 | fixture | mn | what publishes | dup% | `duplicated_loc` | `clusters_hidden` |
 |---|---|---|---|---|---|
-| `python-issue-71-rest-endpoint-shape` | 4 | **`nearly_identical` ×4, ranked #1** — all in `test_endpoints.py` | 70.18 | 40 | **0** |
-| `python-issue-70-test-data-variation` | 8 | `structural_only` ×4 — all in `test_write_file_calls.py` | 57.14 | 28 | **0** |
-| `python-issue-72-monkeypatch-setenv` | 4 | `structural_only` ×3 — all in `test_fly_host.py` | 67.39 | 31 | 3 |
-| `python-issue-107-chained-dict-assert` | 4 | 3 × `identical` ×2, one same-file pair per test file | 45.83 | 22 | 4 |
+| `python-issue-71-rest-endpoint-shape` | 4 | **one `nearly_identical` family, 4 occurrences, ranked #1** — all in `test_endpoints.py` | 70.18 | 40 | **0** |
+| `python-issue-70-test-data-variation` | 8 | one `structural_only` family, 4 occurrences — all in `test_write_file_calls.py` | 57.14 | 28 | **0** |
+| `python-issue-72-monkeypatch-setenv` | 4 | one `structural_only` family, 3 occurrences — all in `test_fly_host.py` | 67.39 | 31 | 3 |
+| `python-issue-107-chained-dict-assert` | 4 | three `identical` clusters, one same-file pair per test file | 45.83 | 22 | 4 |
 
 The control clone each fixture stages is 16 duplicated lines. Every row above counts the family on top of it, so `--fail-over` trips on scaffolding.
+
+> **Read the "what publishes" column as families, not cluster counts.** Every row except `python-issue-107` is **one** cluster with that many occurrences; the control clone is the other. Re-measured at HEAD with the release CLI: `#71` → 2 clusters / 0 hidden / 70.2%, `#70` → 2 / 0 / 57.1%, `#72` → 2 / 3 / 67.4%, `#107` → 4 / 4 / 45.8%, `#69` → 0 / 5 / 0.0%. The figures below are confirmed, not restated.
+
+**Root cause of the `#70` / `#71` half, measured.** `[CLONE-NOISE-LITERAL-VARIATION-CALLS]` is the filter that should suppress these, and it never fires because `cluster_filters/calls.rs::every_covered_statement_has_call` returns `false`: each `test_delete_*` body ends in `assert resp.status_code == 204`, a statement carrying **no call**, so the whole-function occurrence fails the covered-statement precondition before any literal comparison happens. That precondition exists for a real reason — `rename_needs_an_anchor` pins it, and a call-free statement beside a varying call *can* be authored work worth extracting — so this is a spec arbitration, not a threshold to loosen: an assertion on the value the varying call returned is part of the idiom, while an authored computation is not, and the filter cannot currently tell them apart.
 
 **Correction to the standing framing.** `docs/plans/fused-score-followups.md` attributes all four to `[CLONE-NOISE-VERBATIM-SUBGROUP]` republishing "the intra-file byte-identical core" of a suppressed family. The measurement says these are **two different defects**:
 
 - On `python-issue-70` and `python-issue-71`, `clusters_hidden == 0`. Nothing was suppressed and then republished — **the noise filter never fired at all**, and what publishes is not byte-identical (`structural_only` / `nearly_identical`). The verbatim-subgroup rule does not explain these two.
 - On `python-issue-72` and `python-issue-107`, a suppression decision *was* taken (3 and 4 hidden) and same-file cores publish alongside it. That is the verbatim-subgroup escape as described.
 
-A fifth pin, `polymorphic_gate_hides_rename_clone`, is a third thing again: `python-issue-69-abstract-method` publishes nothing (0 clusters, 5 hidden), and the failure is the **wording** — the summary says "hidden by built-in noise filters or report policy" in a scan root with no `.deslop.toml`, blaming the user's config for Deslop's own filters.
+A fifth pin, `polymorphic_gate_hides_rename_clone`, was a third thing again: `python-issue-69-abstract-method` publishes nothing (0 clusters, 5 hidden), and the failure was the **wording** — the summary blamed "your .deslop.toml config" in a scan root with no such file. **That one is now fixed and the pin runs in `make test`:** the summary names Deslop's own filters, so its `#[ignore]` and `CURATED_SKIPS` row are gone.
+
+**Which of these are regressions from the release commit — measured against `f92300e`, not inferred.** The four pins are not equivalent, and only two of them are regressions:
+
+| pin | fixture at `f92300e` | test at `f92300e` | verdict |
+|---|---|---|---|
+| `python-issue-70` | **did not exist** | did not exist | new pin on this branch — not a regression |
+| `python-issue-71` | **did not exist** | did not exist | new pin on this branch — not a regression |
+| `python-issue-72` | present, **byte-identical to HEAD** | green, not `#[ignore]`d, asserted `cluster_count == 0` | **regression** |
+| `python-issue-107` | present, **byte-identical to HEAD** | green, not `#[ignore]`d, asserted `clusters == 0` and `duplicated_loc == 0` | **regression** |
+
+The two regressions were reproduced with the release CLI on the *baseline* file set — only the files that existed at `f92300e`, with the control clones this branch added left out — so nothing but the detector changed:
+
+- **`#72`**: `test_fly_host.py` alone. `files_analysed 1`, and the stage ledger shows **every noise filter at `fired=0`**, including `literal_calls`. One `structural_only` cluster publishes with three occurrences (lines 1–5, 8–12, 15–19) — the three `monkeypatch.setenv` scaffolding functions. `v0.32.0` suppressed this family; HEAD does not fire on it at all. The cause is the same `every_covered_statement_has_call` precondition measured above: each body ends `explicit_host_id = "fly-1"` and `assert explicit_host_id == "fly-1"`, two statements carrying no call.
+- **`#107`**: the three pytest modules alone. The ledger reads `structural_family_split 15 → 15`, then `noise_verbatim_split` **15 → 22** — the split is the only stage that adds clusters — and three survive ranking as `identical`. Each is a *pair of adjacent one-line assertions inside a single function*, e.g. `assert data["model_config"]["provider"] == "openai"` with `assert data["model_config"]["model"] == "gpt-4o"`. Those two lines are not byte-identical, so a pass documented as grouping "by the exact source bytes" is publishing them under a bucket that claims byte-identity.
+
+Both pins were `#[ignore]`d on this branch rather than fixed. **The `#[ignore]`s have been removed**: `make test` is now red on `chained_dict_assertions_are_suppressed_while_a_real_clone_survives` and `monkeypatch_setenv_chains_are_suppressed_while_a_real_clone_survives`, which is the correct state for a shipped defect. A skip is a bargain about unfinished work; it is not a way to stop a regression failing.
 
 `[CLONE-NOISE-VERBATIM-SUBGROUP]` exists to close a real false negative (a proven copy vanishing because one shape-compatible stranger joined its cluster). Both directions are real defects; the spec arbitration was never resolved, and the pins were skipped instead of restated. Whichever way it lands, `duplicated_loc` must not count a family the report suppresses.
 
@@ -103,8 +135,8 @@ These are measured disagreements between code and the documents that describe it
 - [ ] **#434 — fix `python-issue-70` and `python-issue-71`, where the noise filter records no suppression at all** (`clusters_hidden == 0`) and the family publishes `structural_only` ×4 / `nearly_identical` ×4-ranked-first. This is not the verbatim-subgroup escape and needs its own root cause.
 - [ ] **#434 — fix the verbatim-subgroup escape on `python-issue-72` and `python-issue-107`**, where suppression is counted and same-file cores publish anyway.
 - [ ] **#434 — `duplicated_loc` must not count a family the report suppresses**, whichever way the arbitration lands.
-- [ ] **#434 — the hidden-group summary must name Deslop's own filters**, not "report policy", in a scan root with no `.deslop.toml` (`polymorphic_gate_hides_rename_clone`).
-- [ ] **Restate the five #434 pins against the decided spec and delete their `CURATED_SKIPS` rows.**
+- [x] **#434 — the hidden-group summary names Deslop's own filters** in a scan root with no `.deslop.toml`. `hidden_group_summary_names_the_hider_not_the_users_config` is un-skipped and green in `make test`.
+- [ ] **Restate the two remaining #434 pins (`#70`, `#71`) against the decided spec and delete their `CURATED_SKIPS` rows.**
 
 ## Accuracy — after the release
 

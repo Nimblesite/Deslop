@@ -40,9 +40,9 @@ fn plain_version_is_handled_before_server_startup() -> Result<()> {
 
     let mut stdout = Vec::new();
     let mut runner_called = false;
-    run_process_result([PROGRAM_NAME, VERSION_FLAG], &mut stdout, |_| {
+    let _code = run_process_result([PROGRAM_NAME, VERSION_FLAG], &mut stdout, |_| {
         runner_called = true;
-        Ok(())
+        Ok(ExitCode::SUCCESS)
     })?;
     assert!(!runner_called, "version preflight must not run the server");
     assert_eq!(String::from_utf8(stdout)?, expected_plain_version());
@@ -54,8 +54,8 @@ fn plain_version_is_handled_before_server_startup() -> Result<()> {
 #[test]
 fn json_version_is_handled_before_server_startup() -> Result<()> {
     let mut stdout = Vec::new();
-    run_process_result([PROGRAM_NAME, VERSION_FLAG, "--json"], &mut stdout, |_| {
-        Err(anyhow!(
+    let _code = run_process_result([PROGRAM_NAME, VERSION_FLAG, "--json"], &mut stdout, |_| {
+        Err::<ExitCode, _>(anyhow!(
             "server runner must not be called for version output"
         ))
     })?;
@@ -137,12 +137,12 @@ fn serve_action_applies_documented_defaults() -> Result<()> {
 fn process_result_dispatches_serve_action_to_runner() -> Result<()> {
     let mut stdout = Vec::new();
     let mut observed: Option<LspStartup> = None;
-    run_process_result(
+    let _code = run_process_result(
         [PROGRAM_NAME, "/tmp/deslop-runner", "--worker-threads", "2"],
         &mut stdout,
         |startup| {
             observed = Some(startup);
-            Ok(())
+            Ok(ExitCode::SUCCESS)
         },
     )?;
 
@@ -161,12 +161,12 @@ fn process_result_dispatches_serve_action_to_runner() -> Result<()> {
 #[test]
 fn process_exit_code_reflects_runner_result() {
     let success = run_process([PROGRAM_NAME, "/tmp/deslop-ok"], Vec::<u8>::new(), |_| {
-        Ok(())
+        Ok(ExitCode::SUCCESS)
     });
     assert_eq!(success, ExitCode::SUCCESS);
 
     let failure = run_process([PROGRAM_NAME, "/tmp/deslop-fail"], Vec::<u8>::new(), |_| {
-        Err(anyhow!("server exploded"))
+        Err::<ExitCode, _>(anyhow!("server exploded"))
     });
     assert_eq!(failure, ExitCode::from(1));
 }
@@ -224,7 +224,7 @@ fn startup_dispatch_propagates_async_server_error() -> Result<()> {
     let error = run_startup_with(
         startup,
         |_workspace_root, _min_nodes, _embedding, _ipc_mode| {
-            std::future::ready(Err(anyhow!("async server failed")))
+            std::future::ready(Err::<(), _>(anyhow!("async server failed")))
         },
     )
     .err()

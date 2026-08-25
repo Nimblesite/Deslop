@@ -140,26 +140,39 @@ pub fn initialize_request() -> Result<(i64, String)> {
     )
 }
 
-/// Builds a JSON-RPC request envelope.
+/// Builds a JSON-RPC request envelope. A `Null` `params` is left out of
+/// the frame rather than serialised: JSON-RPC 2.0 allows `params` to be
+/// omitted but requires it to be an array or an object when present, so a
+/// literal `null` is rejected by the server (`-32602 Unexpected params`)
+/// on every no-argument method, `shutdown` included. Sending what a real
+/// editor sends is what makes an assertion on the reply mean anything.
 pub fn request(method: &str, params: &serde_json::Value) -> Result<(i64, String)> {
     let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
-    let payload = serde_json::json!({
+    let mut payload = serde_json::json!({
         "jsonrpc": "2.0",
         "id": id,
         "method": method,
-        "params": params
     });
+    insert_params(&mut payload, params);
     Ok((id, serde_json::to_string(&payload)?))
 }
 
-/// Builds a JSON-RPC notification.
+/// Builds a JSON-RPC notification, omitting a `Null` `params` for the same
+/// reason [`request`] does.
 pub fn notification(method: &str, params: &serde_json::Value) -> Result<String> {
-    let payload = serde_json::json!({
+    let mut payload = serde_json::json!({
         "jsonrpc": "2.0",
         "method": method,
-        "params": params
     });
+    insert_params(&mut payload, params);
     Ok(serde_json::to_string(&payload)?)
+}
+
+/// Adds `params` to `payload` unless it is `Null`.
+fn insert_params(payload: &mut serde_json::Value, params: &serde_json::Value) {
+    if let (Some(object), false) = (payload.as_object_mut(), params.is_null()) {
+        let _replaced = object.insert("params".to_owned(), params.clone());
+    }
 }
 
 /// Drives `initialize` + `initialized` and returns the server response.
@@ -360,6 +373,27 @@ pub const ANALYSIS_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Poll cadence while waiting for the first analysis pass.
 pub const POLL_INTERVAL: Duration = Duration::from_millis(50);
+
+/// Waits up to `timeout` for `child` to end, returning `None` when it is
+/// still running. Shared by every suite that asserts on how the server
+/// terminates ([LSP-LIFECYCLE]).
+///
+/// # Errors
+///
+/// Returns `Err` when the child cannot be waited on.
+pub fn wait_for_exit(
+    child: &mut Child,
+    timeout: Duration,
+) -> Result<Option<std::process::ExitStatus>> {
+    let start = Instant::now();
+    while start.elapsed() < timeout {
+        if let Some(status) = child.try_wait()? {
+            return Ok(Some(status));
+        }
+        std::thread::sleep(POLL_INTERVAL);
+    }
+    child.try_wait().map_err(Into::into)
+}
 
 /// Builds a `textDocument/codeAction` params payload for `uri` covering
 /// the zero-indexed `line` span.

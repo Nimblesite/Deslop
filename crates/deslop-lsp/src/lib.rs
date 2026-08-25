@@ -27,4 +27,4 @@ pub mod server;
 mod threshold_warning;
 
 pub use backend::LspBackend;
-pub use server::run_stdio;
+pub use server::{run_stdio, ServeEnd};

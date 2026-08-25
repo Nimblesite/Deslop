@@ -2,7 +2,7 @@
 
 One defect family: **a consistently-renamed real duplicate never reaches the report.** Two mechanisms lose it — the token signature drops the pair before it clusters (#367, and its downstream #369/#370), and the noise filters hide the cluster after it forms (#373). Every fix below is a *replacement*: the defective code is deleted, not guarded, not thresholded, not wrapped.
 
-Supersedes `docs/plans/embedding-accuracy-plan.md`, which covered only the embedding half. Nothing references it; it is deleted as part of step 0.
+Supersedes `docs/plans/embedding-accuracy-plan.md`, which covered only the embedding half. Nothing references it, and step 0 deletes it — until step 0 lands, the file is still in the tree.
 
 ## Measured at HEAD `8dc3d1f47`
 
@@ -12,6 +12,8 @@ Supersedes `docs/plans/embedding-accuracy-plan.md`, which covered only the embed
 | #373 | Same-named `normalize_records` helper copied into two Python modules, locals renamed | `Found 0 groups`, `clusters_hidden: 1`. Log: `structural=1.0 token_jaccard=1.0 rename_consistency=0.94` — a textbook Type-2, hidden by the noise filter. |
 | #369 | 3 `#[ignore]`d tests in tree | `pair_size_coherence:124`, `issue_343_sum_clamp_saturation:89`, `lsp_embedding_determinism:36` |
 | #370 | 1 `#[ignore]`d test in tree | `embedding_failure_progress:32` — hangs >14 min on the rejected-refresh path |
+
+> **The bracketed IDs below are proposed, not registered.** `[FUSION-SIGNALS-TOKEN-MULTISET]`, `[CLONE-NOISE-COPY-PROOF]` and `[LIVE-EMBEDDING-REFRESH-TERMINAL]` name work this plan has not landed: no section in `docs/specs/` defines them and no code or test cites them, which is correct while the behaviour they would describe does not exist. Checklist item 8 registers them, and until it does none of them is a spec reference — do not cite them from code, tests, or another spec.
 
 ## Fix 1 — [FUSION-SIGNALS-TOKEN-MULTISET] (#367, root cause)
 

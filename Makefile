@@ -198,6 +198,8 @@ _ci-contract-tests:
 	@node --test scripts/repository/dup-gate-source.test.mjs
 	@echo "==> Test-selection gate ([TEST-SELECTION])..."
 	@node --test scripts/repository/test-selection.test.mjs
+	@echo "==> Coverage-isolation gate ([CI-COVERAGE-ISOLATION])..."
+	@node --test scripts/repository/coverage-isolation.test.mjs
 
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
 ##      Depends on typediagram-gen because rustfmt walks the module tree
@@ -327,6 +329,22 @@ test-shard: _delete-path-binaries typediagram-gen
 ##           `coverage-thresholds.json` and `_coverage_check` enforces each
 ##           crate independently — no workspace roll-up masking. The
 ##           `--ignore-filename-regex` list has the same single source.
+##
+##           [CI-COVERAGE-ISOLATION] The explicit `clean --workspace` is not
+##           tidiness. `--no-report`
+##           leaves both the raw profiles and the previous build's objects in
+##           place, and `report` maps the merged profile against every object
+##           it finds. An object from an earlier build carries an older
+##           coverage mapping of the same file, so its line table is unioned
+##           with the current one and the file is credited with lines it no
+##           longer has — all of them unexecuted. Measured on this tree:
+##           `app.rs` is 193 lines and 99.5% covered, and a single stale
+##           object made it 362 lines and 53.0%, dragging `deslop-lsp` from
+##           94.0% to 85.1% and the workspace from 94.5% to 92.6%. Cleaning
+##           profiles alone (`--profraw-only`) does not fix it — the stale
+##           object survives. `--workspace` drops only this repository's
+##           artifacts, so third-party dependencies stay cached and the
+##           honest number costs about a minute.
 ##           Carries `_delete-path-binaries` for the same reason `test`
 ##           does: this target runs the suite, and a Deslop binary leaked
 ##           onto PATH would shadow the built one.
@@ -335,6 +353,7 @@ coverage: coverage-run coverage-report
 coverage-run: _delete-path-binaries typediagram-gen
 	@echo "==> Coverage test collection (instrumented release)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
+	cargo llvm-cov clean --workspace
 	cargo llvm-cov --release --workspace --all-targets --features $(_TEST_FEATURES) --no-report
 
 coverage-report:

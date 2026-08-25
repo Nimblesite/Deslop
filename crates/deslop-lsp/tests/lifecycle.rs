@@ -50,8 +50,10 @@ const EXIT_CODE_AFTER_SHUTDOWN: i32 = 0;
 /// termination — the client tore the session down out of order.
 const EXIT_CODE_WITHOUT_SHUTDOWN: i32 = 1;
 
-/// The two base-protocol methods under test, named once.
+/// The base-protocol request that stops the server accepting work.
 const SHUTDOWN: &str = "shutdown";
+
+/// The base-protocol notification that ends the process.
 const EXIT: &str = "exit";
 
 /// [LSP-LIFECYCLE] `shutdown` answers and leaves the process running.
@@ -68,7 +70,9 @@ fn shutdown_answers_without_ending_the_process() -> Result<()> {
         "shutdown must answer in band before the process ends: {response}"
     );
 
-    let deadline = Instant::now() + STILL_ALIVE_WINDOW;
+    let deadline = Instant::now()
+        .checked_add(STILL_ALIVE_WINDOW)
+        .unwrap_or_else(Instant::now);
     while Instant::now() < deadline {
         assert!(
             child.try_wait()?.is_none(),

@@ -194,22 +194,45 @@ fn concatenates(
 }
 
 /// How many `family` occurrences `container` strictly encloses, and
-/// the bytes they claim between them.
+/// the bytes they cover between them.
+///
+/// The share test in [`is_container`] is a *coverage* claim, so this is
+/// the **union** extent, never the sum of the occurrence lengths. A
+/// family that overlaps itself — a shape repeating at sliding offsets,
+/// the same geometry [`family_overflows`] already refuses the
+/// no-overflow exemption to — would otherwise claim one byte once per
+/// occurrence and elect out an encloser that still holds code of its
+/// own, deleting a real finding from the report. Pinned by
+/// `an_encloser_is_not_a_container_of_a_family_that_overlaps_itself`.
 fn enclosed_extent(
     container: &Fingerprint,
     family: &[usize],
     fingerprints: &[Fingerprint],
 ) -> (usize, usize) {
-    family
+    let mut spans: Vec<(usize, usize)> = family
         .iter()
         .filter_map(|index| fingerprints.get(*index))
         .filter(|occurrence| strictly_inside(occurrence, container))
-        .fold((0_usize, 0_usize), |(count, bytes), occurrence| {
+        .map(|occurrence| (occurrence.byte_range.start, occurrence.byte_range.end))
+        .collect();
+    spans.sort_unstable();
+    (spans.len(), covered_bytes(&spans))
+}
+
+/// Bytes covered by `spans`, counting a byte two of them share once.
+/// `spans` must be sorted by start, which is what lets one running
+/// reach stand in for every span already folded.
+fn covered_bytes(spans: &[(usize, usize)]) -> usize {
+    spans
+        .iter()
+        .fold((0_usize, 0_usize), |(covered, reach), (start, end)| {
+            let from = (*start).max(reach);
             (
-                count.saturating_add(1),
-                bytes.saturating_add(occurrence.byte_range.len()),
+                covered.saturating_add(end.saturating_sub(from)),
+                reach.max(*end),
             )
         })
+        .0
 }
 
 /// True when `family` has an occurrence no occurrence of `own_family`

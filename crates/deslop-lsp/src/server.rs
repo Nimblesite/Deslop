@@ -6,9 +6,15 @@
 
 use std::{
     path::PathBuf,
+    process::ExitCode,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     task::{Context, Poll},
 };
 
+use tokio::sync::Notify;
 use tower::Service;
 use tower_lsp::{
     jsonrpc::{Request, Response},
@@ -32,6 +38,104 @@ const NO_PARAM_METHODS: &[&str] = &[
     custom_methods::REPORT_SCHEMA_DOC,
     custom_methods::CPU_REPORT,
 ];
+
+/// The LSP base-protocol method that stops the server accepting work.
+const SHUTDOWN_METHOD: &str = "shutdown";
+
+/// The LSP base-protocol notification that ends the process.
+const EXIT_METHOD: &str = "exit";
+
+/// [LSP-LIFECYCLE] Why the serve loop ended. The base protocol fixes a
+/// different process exit code for each, and editors read it: an orderly
+/// teardown is a success, an `exit` with no `shutdown` before it is the
+/// client tearing the session down out of order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServeEnd {
+    /// `exit` arrived after `shutdown` — the orderly teardown.
+    ExitAfterShutdown,
+    /// `exit` arrived with no preceding `shutdown`.
+    ExitWithoutShutdown,
+    /// The client went away without saying anything, closing stdin. Not a
+    /// server fault, so not a failure.
+    ClientVanished,
+}
+
+impl ServeEnd {
+    /// The process exit code the base protocol requires for this ending.
+    #[must_use]
+    pub fn exit_code(self) -> ExitCode {
+        match self {
+            Self::ExitAfterShutdown | Self::ClientVanished => ExitCode::SUCCESS,
+            Self::ExitWithoutShutdown => ExitCode::from(1),
+        }
+    }
+}
+
+/// Lifecycle messages seen on the wire, shared between the middleware that
+/// observes them and the caller that reports the ending.
+#[derive(Debug, Clone, Default)]
+struct Lifecycle {
+    /// Set once the client has sent `shutdown`.
+    shutdown: Arc<AtomicBool>,
+    /// Set once the client has sent `exit`.
+    exit: Arc<AtomicBool>,
+    /// Raised the moment `exit` is seen, so the serve loop can end without
+    /// waiting for a message the client is not going to send.
+    exited: Arc<Notify>,
+}
+
+impl Lifecycle {
+    /// Records `method` when it is one of the two lifecycle messages.
+    fn observe(&self, method: &str) {
+        match method {
+            SHUTDOWN_METHOD => self.shutdown.store(true, Ordering::SeqCst),
+            EXIT_METHOD => {
+                self.exit.store(true, Ordering::SeqCst);
+                self.exited.notify_one();
+            }
+            _ => (),
+        }
+    }
+
+    /// How the serve loop ended, read once it has returned.
+    fn end(&self) -> ServeEnd {
+        match (
+            self.exit.load(Ordering::SeqCst),
+            self.shutdown.load(Ordering::SeqCst),
+        ) {
+            (true, true) => ServeEnd::ExitAfterShutdown,
+            (true, false) => ServeEnd::ExitWithoutShutdown,
+            (false, _) => ServeEnd::ClientVanished,
+        }
+    }
+}
+
+/// Service adapter that records the base-protocol lifecycle as it passes.
+#[derive(Debug)]
+struct WatchLifecycle<S> {
+    /// Wrapped service that handles the message.
+    inner: S,
+    /// Shared state the caller reads after the serve loop ends.
+    lifecycle: Lifecycle,
+}
+
+impl<S> Service<Request> for WatchLifecycle<S>
+where
+    S: Service<Request, Response = Option<Response>, Error = ExitedError>,
+{
+    type Response = Option<Response>;
+    type Error = ExitedError;
+    type Future = S::Future;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: Request) -> Self::Future {
+        self.lifecycle.observe(req.method());
+        self.inner.call(req)
+    }
+}
 
 /// Service adapter that injects an empty-object `params` value on
 /// selected custom methods when the incoming request omitted it.
@@ -95,6 +199,9 @@ fn report_init_failure(error: &deslop_core::live::LiveError) -> ! {
 /// Boots the LSP server over stdio. Used by the binary entry point
 /// and by E2E tests that drive the binary as a black box.
 ///
+/// Returns how the serve loop ended so the process can report the exit
+/// code the base protocol requires ([LSP-LIFECYCLE]).
+///
 /// # Errors
 ///
 /// Returns `Err` when the backend fails to construct.
@@ -103,7 +210,7 @@ pub async fn run_stdio(
     min_nodes: u32,
     embedding: LspEmbeddingConfig,
     ipc_mode: deslop_core::live::transport::IpcMode,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<ServeEnd> {
     tracing::info!(
         workspace_root = %workspace_root.display(),
         exists = workspace_root.exists(),
@@ -160,8 +267,38 @@ pub async fn run_stdio(
     .finish();
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
-    Server::new(stdin, stdout, socket)
-        .serve(NormaliseParams::new(service))
-        .await;
-    Ok(())
+    let lifecycle = Lifecycle::default();
+    let serving = Server::new(stdin, stdout, socket).serve(WatchLifecycle {
+        inner: NormaliseParams::new(service),
+        lifecycle: lifecycle.clone(),
+    });
+    serve_until_exit(serving, &lifecycle.exited).await;
+    let end = lifecycle.end();
+    tracing::info!(?end, "serve loop ended");
+    Ok(end)
+}
+
+/// Serves until the transport ends or the client sends `exit`.
+///
+/// tower-lsp's read loop only notices that the server has exited when the
+/// *next* message arrives, and after `exit` the base protocol tells the
+/// client there is nothing left to send. Waiting on the transport alone
+/// therefore parks forever on a client that did exactly what it was told,
+/// and the process outlives every editor window that opened it
+/// ([LSP-LIFECYCLE]).
+///
+/// `biased` keeps the transport first, so the `exit` message is fully
+/// handled — tower-lsp cancels pending work and closes the client inside
+/// the same synchronous `call` that raises this signal — before the loop
+/// is allowed to end.
+async fn serve_until_exit<F>(serving: F, exited: &Notify)
+where
+    F: std::future::Future<Output = ()>,
+{
+    tokio::pin!(serving);
+    tokio::select! {
+        biased;
+        () = &mut serving => (),
+        () = exited.notified() => (),
+    }
 }
