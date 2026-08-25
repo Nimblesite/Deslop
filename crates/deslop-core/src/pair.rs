@@ -13,11 +13,18 @@
 //! Pair scores go into the final report (see [PRINCIPLES-AUDIENCE-AGENT])
 //! so agent consumers can tell **why** each cluster was flagged.
 
-use std::collections::{BTreeMap, BTreeSet};
+use crate::fingerprint::Fingerprint;
 
 /// Candidate-pair construction helpers kept separate from closure clustering.
 mod candidates;
-pub use candidates::{candidate_pairs, candidate_pairs_for_language_policy};
+pub use candidates::{candidate_pairs, candidate_pairs_for_language_policy, LshPairs};
+
+/// Transitive-closure clustering over surviving pairs.
+mod closure;
+pub use closure::cluster_by_transitive_closure;
+
+#[cfg(test)]
+mod gate_parity_tests;
 
 /// Minimum fused score required before a pair enters a cluster. The
 /// threshold is calibrated against a unit-bounded fused confidence:
@@ -363,6 +370,63 @@ fn survival_decision(pair: &CandidatePair) -> PairSurvival {
     PairSurvival::Survived
 }
 
+/// The insertion-time half of [`survival_decision`]
+/// ([PERF-FLUTTER-TODO-PAIRS]): whether the pair survives when its
+/// shared-subtree overlap is still unknown (`0.0`). Used by candidate
+/// construction to refuse dead pairs before they are retained — the
+/// arithmetic is the same function of the same axes, so a pair kept here
+/// is exactly a pair the closure keeps, and a pair refused here is
+/// exactly one the closure would drop (unless the rescue can still
+/// admit it, which [`rescue_eligible`] covers separately).
+pub(crate) fn construction_survives(pair: &CandidatePair) -> bool {
+    let score = pair.score.finite();
+    if score.bounded_fused() < pair.fused_min_score {
+        return false;
+    }
+    if score.structural <= 0.0 && !endpoints_are_size_coherent(pair.endpoint_node_counts) {
+        return false;
+    }
+    let lsh_only = score.structural <= 0.0 && score.embedding_cos <= 0.0;
+    if lsh_only && score.token_jaccard < pair.lsh_only_min_jaccard {
+        return false;
+    }
+    if lsh_only && pair.lsh_only_node_floor < LSH_ONLY_MIN_NODE_COUNT {
+        return false;
+    }
+    true
+}
+
+/// True for a pair worth measuring: dropped below its fused floor on a
+/// zero structural anchor, yet carrying the token corroboration and
+/// endpoint substance the rescue route requires
+/// ([FUSION-SHARED-SUBTREE]). Shared with the rescue pass so the
+/// construction gate and the measurer can never disagree about which
+/// pairs are rescue candidates.
+pub(crate) fn rescue_eligible(pair: &CandidatePair) -> bool {
+    let score = pair.score.finite();
+    score.structural <= 0.0
+        && score.bounded_fused() < pair.fused_min_score
+        && score.token_jaccard >= SHARED_SUBTREE_MIN_JACCARD
+        && pair.endpoint_node_counts.0 >= SHARED_SUBTREE_MIN_NODE_COUNT
+}
+
+/// True when the pair's endpoints live in different files.
+///
+/// The rescue is deliberately cross-file only. Every clone this route
+/// exists to recover is a copy *between* files ([FUSION-SHARED-SUBTREE],
+/// gh #408), and admitting same-file pairs on shape overlap is the
+/// #197 in-file sibling-family shape, which the report already spends a
+/// dedicated proof suppressing. It is also what keeps a single-file
+/// corpus intact: same-file rescues union that file's subtrees into one
+/// transitive component, and the same-file overlap collapse then
+/// reduces it to a single logical location, which is dropped below
+/// `MIN_REPORTABLE_MEMBERS` — so the file's real duplication
+/// disappeared entirely rather than being reported
+/// (`issue_119_role_gate_exercised`).
+pub(crate) fn crosses_files(left: &Fingerprint, right: &Fingerprint) -> bool {
+    left.file_id != right.file_id
+}
+
 /// [FUSION-SHARED-SUBTREE] admission: a pair below the fused threshold
 /// still enters clustering when its measured shared-subtree overlap
 /// clears [`SHARED_SUBTREE_MIN_OVERLAP`], the independent token axis
@@ -381,101 +445,4 @@ fn shared_subtree_rescued(pair: &CandidatePair, score: PairScore) -> bool {
 /// code ([PAIR-SIZE-COHERENCE]). See [`MAX_ENDPOINT_NODE_RATIO`].
 fn endpoints_are_size_coherent((smaller, larger): (usize, usize)) -> bool {
     larger <= smaller.saturating_mul(MAX_ENDPOINT_NODE_RATIO)
-}
-
-/// Filters `pairs` by the fused threshold and returns the connected
-/// components as [`FusedCluster`]s. Members inside each cluster are sorted
-/// ascending so the final output is deterministic.
-#[must_use]
-pub fn cluster_by_transitive_closure(pairs: &[CandidatePair]) -> Vec<FusedCluster> {
-    let (stats, surviving) = SurvivalStats::collect(pairs);
-    stats.log(pairs.len());
-    if surviving.is_empty() {
-        return Vec::new();
-    }
-    let mut parents: BTreeMap<usize, usize> = BTreeMap::new();
-    for pair in &surviving {
-        let _left = ensure_root(&mut parents, pair.left);
-        let _right = ensure_root(&mut parents, pair.right);
-        union(&mut parents, pair.left, pair.right);
-    }
-    build_clusters(&mut parents, &surviving)
-}
-
-/// Groups members by union-find root, attaching each surviving edge to
-/// the component it glued together.
-fn build_clusters(
-    parents: &mut BTreeMap<usize, usize>,
-    surviving: &[&CandidatePair],
-) -> Vec<FusedCluster> {
-    let mut groups: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
-    let members: Vec<usize> = parents.keys().copied().collect();
-    for member in members {
-        let root = find(parents, member);
-        let _inserted = groups.entry(root).or_default().insert(member);
-    }
-    let mut edges: BTreeMap<usize, Vec<FusedEdge>> = BTreeMap::new();
-    for pair in surviving {
-        let root = find(parents, pair.left);
-        edges.entry(root).or_default().push(FusedEdge {
-            left: pair.left,
-            right: pair.right,
-            // The overlap is admission evidence for the pair it was
-            // measured on ([FUSION-SHARED-SUBTREE]), so the edge
-            // carries it. This is what lets the same-file collapse
-            // elect the *enclosing* method of a Type-3 near-miss over
-            // the windows nested inside it: the same insertion costs
-            // proportionally less over the wider context, so the
-            // enclosing pair's overlap outranks every sub-window's —
-            // and outranks their token estimates, which reward the
-            // window precisely for excluding the difference.
-            strength: pair
-                .score
-                .finite()
-                .bounded_fused()
-                .max(pair.shared_subtree_overlap),
-        });
-    }
-    groups
-        .into_iter()
-        .map(|(root, members)| FusedCluster {
-            members: members.into_iter().collect(),
-            edges: edges.remove(&root).unwrap_or_default(),
-        })
-        .collect()
-}
-
-/// Ensures `id` has a parent entry (itself) in the union-find.
-fn ensure_root(parents: &mut BTreeMap<usize, usize>, id: usize) -> usize {
-    *parents.entry(id).or_insert(id)
-}
-
-/// Iterative union-find with path compression. Iterative so the
-/// recursion depth cannot overflow the stack on corpora with long
-/// equivalence chains (≥17K fingerprints observed on real C# repos).
-fn find(parents: &mut BTreeMap<usize, usize>, id: usize) -> usize {
-    let mut current = id;
-    let mut path: Vec<usize> = Vec::new();
-    loop {
-        let parent = parents.get(&current).copied().unwrap_or(current);
-        if parent == current {
-            break;
-        }
-        path.push(current);
-        current = parent;
-    }
-    for node in path {
-        let _previous = parents.insert(node, current);
-    }
-    current
-}
-
-/// Union-find union.
-fn union(parents: &mut BTreeMap<usize, usize>, a: usize, b: usize) {
-    let root_a = find(parents, a);
-    let root_b = find(parents, b);
-    if root_a == root_b {
-        return;
-    }
-    let _previous = parents.insert(root_a, root_b);
 }

@@ -1,18 +1,64 @@
-use std::{
-    collections::{BTreeSet, HashMap},
-    hash::BuildHasher,
-};
+//! Candidate pair construction, streamed and admission-gated
+//! ([FUSION-STRATEGY-BOUNDED-MAX], [PERF-FLUTTER-TODO-PAIRS]).
+//!
+//! The historical construction materialised every unique pair the three
+//! discovery sources surface — on the Flutter corpus, ~50 million
+//! `CandidatePair` values plus the score maps that produced them,
+//! gigabytes held simultaneously — and only then handed the whole list to
+//! `cluster_by_transitive_closure`, which dropped almost all of it. The
+//! construction below applies the same survival decision at insertion
+//! time ([`super::construction_survives`], the identical arithmetic the
+//! closure runs, evaluated with the shared-subtree overlap still
+//! unknown): a pair that would be dropped, and cannot be rescued, never
+//! enters the retained set. A pair that *can* be rescued is retained for
+//! the measurement pass, exactly as before.
+//!
+//! The retained population is what the memory budget scales with now —
+//! not the raw LSH pair volume.
 
-use super::{
-    CandidatePair, PairScore, CROSS_LANGUAGE_MIN_JACCARD, FUSED_THRESHOLD, LSH_ONLY_MIN_JACCARD,
-    LSH_ONLY_MIN_NODE_COUNT,
-};
+use std::{collections::HashMap, hash::BuildHasher};
+
+use super::{CandidatePair, PairScore, CROSS_LANGUAGE_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT};
 use crate::{
     embedding::EmbeddingPair,
     fingerprint::{ranges_overlap, Fingerprint},
-    lsh::{estimate_jaccard, Signature},
+    lsh::{estimate_jaccard, Signature, SignatureIndex, SignatureLookup},
     state::FileId,
 };
+
+use builder::PairBuilder;
+
+/// The insertion-time admission builder ([PERF-FLUTTER-TODO-PAIRS]).
+mod builder;
+
+/// A source of LSH band-collision pairs. Abstract so the batch render can
+/// stream straight out of the band sort ([`crate::lsh::for_each_band_collision`])
+/// while tests and small corpora can pass a materialised list.
+pub trait LshPairs {
+    /// Invokes `emit` for every collision pair `(i, j)`, `i < j`, in a
+    /// deterministic order.
+    fn for_each(&self, emit: &mut dyn FnMut(usize, usize));
+}
+
+impl LshPairs for [(usize, usize)] {
+    fn for_each(&self, emit: &mut dyn FnMut(usize, usize)) {
+        for &(left, right) in self {
+            emit(left, right);
+        }
+    }
+}
+
+impl LshPairs for Vec<(usize, usize)> {
+    fn for_each(&self, emit: &mut dyn FnMut(usize, usize)) {
+        self.as_slice().for_each(emit);
+    }
+}
+
+impl LshPairs for &[(usize, usize)] {
+    fn for_each(&self, emit: &mut dyn FnMut(usize, usize)) {
+        (**self).for_each(emit);
+    }
+}
 
 /// Returns candidate pairs unioning:
 ///
@@ -20,191 +66,166 @@ use crate::{
 ///   (`structural = 1.0`),
 /// - every LSH band collision (`structural = 0.0`),
 /// - every ANN top-k neighbour surfaced by the embedding pass (pair
-///   enters with its `embedding_cos` populated).
+///   enters with its `embedding_cos` populated),
 ///
-/// Pair scores include the token Jaccard estimate regardless of how the
-/// pair was discovered. When `embedding_pairs` is empty (no provider
-/// or `--embeddings=off`) the output matches the pre-P5 behaviour
+/// each admitted through [`construction_survives`] before it is
+/// retained. When `embedding_pairs` is empty (no provider or
+/// `--embeddings=off`) the surviving set matches the pre-P5 behaviour
 /// exactly.
 #[must_use]
 pub fn candidate_pairs(
     fingerprints: &[Fingerprint],
-    signatures: &[Signature],
-    lsh_pairs: &[(usize, usize)],
+    signatures: &dyn SignatureLookup,
+    lsh_pairs: &dyn LshPairs,
     embedding_pairs: &[EmbeddingPair],
 ) -> Vec<CandidatePair> {
-    let mut scores: HashMap<(usize, usize), f64> = HashMap::new();
-    let mut cosines: HashMap<(usize, usize), f64> = HashMap::new();
-    collect_structural_pairs(fingerprints, &mut scores);
-    add_lsh_pairs(lsh_pairs, &mut scores);
-    add_embedding_pairs(embedding_pairs, &mut scores, &mut cosines);
-    finalise_pairs(fingerprints, signatures, scores, &cosines)
+    build_candidates::<std::hash::RandomState>(
+        fingerprints,
+        signatures,
+        lsh_pairs,
+        embedding_pairs,
+        None,
+        false,
+    )
 }
 
-/// Returns candidate pairs, optionally dropping cross-language endpoints
-/// before transitive closure per [CONFIG-CROSS-LANGUAGE].
+/// Returns candidate pairs under the [CONFIG-CROSS-LANGUAGE] policy,
+/// streamed and gated as [`candidate_pairs`] documents. The explicit
+/// cross-language audit path (`allow_cross_language`) additionally
+/// compares the cross-language signature space directly.
 #[must_use]
 pub fn candidate_pairs_for_language_policy<S: BuildHasher>(
     fingerprints: &[Fingerprint],
-    signatures: &[Signature],
-    lsh_pairs: &[(usize, usize)],
+    signatures: &dyn SignatureLookup,
+    lsh_pairs: &dyn LshPairs,
     embedding_pairs: &[EmbeddingPair],
     cross_language_signatures: Option<&[Signature]>,
     file_languages: &HashMap<FileId, &'static str, S>,
     allow_cross_language: bool,
 ) -> Vec<CandidatePair> {
-    let mut pairs = candidate_pairs(fingerprints, signatures, lsh_pairs, embedding_pairs);
+    let mut pairs = build_candidates(
+        fingerprints,
+        signatures,
+        lsh_pairs,
+        embedding_pairs,
+        Some(file_languages),
+        allow_cross_language,
+    );
     if allow_cross_language {
-        add_cross_language_signature_pairs(
-            &mut pairs,
-            fingerprints,
-            cross_language_signatures.unwrap_or(signatures),
-            file_languages,
-        );
-        pairs.sort_unstable_by_key(|pair| (pair.left, pair.right));
-        return pairs
-            .into_iter()
-            .map(|pair| cross_language_opt_in_pair(pair, fingerprints, file_languages))
-            .collect();
+        // The audit space is the explicit cross-language signature list
+        // when the pass built one, else the per-language space itself.
+        let built;
+        let alias_space: &dyn SignatureLookup = match cross_language_signatures {
+            Some(space) => {
+                built = SignatureIndex::from_segments([space]);
+                &built
+            }
+            None => signatures,
+        };
+        add_cross_language_signature_pairs(&mut pairs, fingerprints, alias_space, file_languages);
     }
     pairs
-        .into_iter()
-        .filter(|pair| same_language_pair(pair, fingerprints, file_languages))
-        .collect()
 }
 
-/// Explicit cross-language opt-in keeps LSH candidates subject to the
-/// Jaccard/fused gates, but not the same-language low-node-count guard.
-fn cross_language_opt_in_pair<S: BuildHasher>(
-    mut pair: CandidatePair,
+/// The streamed, gated construction core shared by both entry points.
+/// `file_languages == None` skips the language policy entirely.
+fn build_candidates<S: BuildHasher>(
     fingerprints: &[Fingerprint],
-    file_languages: &HashMap<FileId, &'static str, S>,
-) -> CandidatePair {
-    if pair.score.structural <= 0.0 && !same_language_pair(&pair, fingerprints, file_languages) {
-        pair.lsh_only_node_floor = pair.lsh_only_node_floor.max(LSH_ONLY_MIN_NODE_COUNT);
-        pair.lsh_only_min_jaccard = CROSS_LANGUAGE_MIN_JACCARD;
-        pair.fused_min_score = CROSS_LANGUAGE_MIN_JACCARD;
-    }
-    pair
+    signatures: &dyn SignatureLookup,
+    lsh_pairs: &dyn LshPairs,
+    embedding_pairs: &[EmbeddingPair],
+    file_languages: Option<&HashMap<FileId, &'static str, S>>,
+    allow_cross_language: bool,
+) -> Vec<CandidatePair> {
+    let mut builder = PairBuilder::new(
+        fingerprints,
+        signatures,
+        file_languages,
+        allow_cross_language,
+    );
+    tracing::info!(
+        rss_mib = crate::observe::resident_mib(),
+        "pairs: pre-structural"
+    );
+    builder.add_structural_pairs();
+    tracing::info!(
+        rss_mib = crate::observe::resident_mib(),
+        evidence = builder.evidence.len(),
+        "pairs: post-structural"
+    );
+    builder.merge_embedding_pairs(embedding_pairs);
+    builder.flush_evidence();
+    let mut lsh_scanned = 0_u64;
+    lsh_pairs.for_each(&mut |left, right| {
+        lsh_scanned = lsh_scanned.saturating_add(1);
+        builder.add_zero_evidence(left, right);
+    });
+    tracing::info!(
+        rss_mib = crate::observe::resident_mib(),
+        kept = builder.kept.len(),
+        lsh_scanned,
+        "pairs: post-lsh"
+    );
+    let resolved = builder.finish();
+    tracing::info!(
+        rss_mib = crate::observe::resident_mib(),
+        resolved = resolved.len(),
+        "pairs: post-resolve"
+    );
+    resolved
 }
 
-/// Adds direct signature matches for explicit cross-language audits.
+/// Adds direct signature matches for explicit cross-language audits —
+/// the opt-in O(n²) comparison space, gated like every other source.
 fn add_cross_language_signature_pairs<S: BuildHasher>(
     pairs: &mut Vec<CandidatePair>,
     fingerprints: &[Fingerprint],
-    signatures: &[Signature],
+    signatures: &dyn SignatureLookup,
     file_languages: &HashMap<FileId, &'static str, S>,
 ) {
-    let mut existing: BTreeSet<(usize, usize)> = pairs.iter().map(pair_key).collect();
+    let existing: std::collections::BTreeSet<(usize, usize)> = pairs.iter().map(pair_key).collect();
     let limit = fingerprints.len().min(signatures.len());
+    let mut additions = Vec::new();
     for left in 0..limit {
-        add_cross_language_signature_pairs_for_left(
-            pairs,
-            &mut existing,
-            fingerprints,
-            signatures,
-            file_languages,
-            left,
-            limit,
-        );
+        for right in (left.saturating_add(1))..limit {
+            let key = order(left, right);
+            if existing.contains(&key)
+                || same_language_indexes(left, right, fingerprints, file_languages)
+            {
+                continue;
+            }
+            let token_jaccard = jaccard_for(signatures, left, right);
+            if token_jaccard < CROSS_LANGUAGE_MIN_JACCARD {
+                continue;
+            }
+            let endpoint_node_counts = endpoint_node_counts(fingerprints, left, right);
+            additions.push(CandidatePair {
+                left,
+                right,
+                endpoint_node_counts,
+                lsh_only_node_floor: endpoint_node_counts.0.max(LSH_ONLY_MIN_NODE_COUNT),
+                lsh_only_min_jaccard: CROSS_LANGUAGE_MIN_JACCARD,
+                fused_min_score: CROSS_LANGUAGE_MIN_JACCARD,
+                shared_subtree_overlap: 0.0,
+                score: PairScore {
+                    structural: 0.0,
+                    token_jaccard,
+                    embedding_cos: 0.0,
+                },
+            });
+        }
     }
+    pairs.extend(additions);
+    pairs.sort_unstable_by_key(|pair| (pair.left, pair.right));
+    pairs.dedup_by_key(|pair| (pair.left, pair.right));
 }
 
-/// Adds direct cross-language signature matches for one left endpoint.
-fn add_cross_language_signature_pairs_for_left<S: BuildHasher>(
-    pairs: &mut Vec<CandidatePair>,
-    existing: &mut BTreeSet<(usize, usize)>,
-    fingerprints: &[Fingerprint],
-    signatures: &[Signature],
-    file_languages: &HashMap<FileId, &'static str, S>,
-    left: usize,
-    limit: usize,
-) {
-    for right in (left.saturating_add(1))..limit {
-        maybe_add_cross_language_signature_pair(
-            pairs,
-            existing,
-            fingerprints,
-            signatures,
-            file_languages,
-            left,
-            right,
-        );
-    }
-}
-
-/// Adds one direct cross-language signature pair when it is above threshold.
-fn maybe_add_cross_language_signature_pair<S: BuildHasher>(
-    pairs: &mut Vec<CandidatePair>,
-    existing: &mut BTreeSet<(usize, usize)>,
-    fingerprints: &[Fingerprint],
-    signatures: &[Signature],
-    file_languages: &HashMap<FileId, &'static str, S>,
-    left: usize,
-    right: usize,
-) {
-    let key = order(left, right);
-    if existing.contains(&key) || same_language_indexes(left, right, fingerprints, file_languages) {
-        return;
-    }
-    let Some(left_signature) = signatures.get(left) else {
-        return;
-    };
-    let Some(right_signature) = signatures.get(right) else {
-        return;
-    };
-    let token_jaccard = estimate_jaccard(left_signature, right_signature);
-    if token_jaccard < CROSS_LANGUAGE_MIN_JACCARD {
-        return;
-    }
-    pairs.push(cross_language_signature_pair(
-        fingerprints,
-        left,
-        right,
-        token_jaccard,
-    ));
-    let _inserted = existing.insert(key);
-}
-
-/// Builds an LSH-only candidate from direct cross-language signature evidence.
-fn cross_language_signature_pair(
-    fingerprints: &[Fingerprint],
-    left: usize,
-    right: usize,
-    token_jaccard: f64,
-) -> CandidatePair {
-    let endpoint_node_counts = endpoint_node_counts(fingerprints, left, right);
-    CandidatePair {
-        left,
-        right,
-        endpoint_node_counts,
-        lsh_only_node_floor: endpoint_node_counts.0.max(LSH_ONLY_MIN_NODE_COUNT),
-        lsh_only_min_jaccard: CROSS_LANGUAGE_MIN_JACCARD,
-        fused_min_score: CROSS_LANGUAGE_MIN_JACCARD,
-        shared_subtree_overlap: 0.0,
-        score: PairScore {
-            structural: 0.0,
-            token_jaccard,
-            embedding_cos: 0.0,
-        },
-    }
-}
-
-/// Returns a pair's order-insensitive key.
+/// A pair's order-insensitive key.
 fn pair_key(pair: &CandidatePair) -> (usize, usize) {
     order(pair.left, pair.right)
 }
 
-/// Returns true when both pair endpoints resolve to the same language id.
-fn same_language_pair<S: BuildHasher>(
-    pair: &CandidatePair,
-    fingerprints: &[Fingerprint],
-    file_languages: &HashMap<FileId, &'static str, S>,
-) -> bool {
-    same_language_indexes(pair.left, pair.right, fingerprints, file_languages)
-}
-
-/// Returns true when both fingerprint indexes resolve to the same language id.
+/// True when both fingerprint indexes resolve to the same language id.
 fn same_language_indexes<S: BuildHasher>(
     left_index: usize,
     right_index: usize,
@@ -226,117 +247,13 @@ fn same_language_indexes<S: BuildHasher>(
     }
 }
 
-/// Populates `scores` with `1.0` for every structural (Merkle-hash) pair.
-///
-/// Uses a **star topology** per bucket rather than a full N² enumeration:
-/// the canonical member of the bucket is paired with every other member,
-/// which is `O(n)` per bucket and still produces the same connected
-/// component under transitive closure. For a bucket of `2_000` clones this
-/// is `2_000` pairs instead of `2_000_000` — critical on large
-/// generated-code corpora.
-fn collect_structural_pairs(
-    fingerprints: &[Fingerprint],
-    scores: &mut HashMap<(usize, usize), f64>,
-) {
-    let mut by_hash: HashMap<[u8; 32], Vec<usize>> = HashMap::new();
-    for (index, fingerprint) in fingerprints.iter().enumerate() {
-        by_hash.entry(fingerprint.hash).or_default().push(index);
+/// True when the pair's endpoints live in different files — the rescue
+/// route's scope ([FUSION-SHARED-SUBTREE]).
+fn pair_crosses_files(pair: &CandidatePair, fingerprints: &[Fingerprint]) -> bool {
+    match (fingerprints.get(pair.left), fingerprints.get(pair.right)) {
+        (Some(left), Some(right)) => left.file_id != right.file_id,
+        _ => false,
     }
-    for bucket in by_hash.values() {
-        collect_structural_bucket(bucket, scores);
-    }
-}
-
-/// Adds structural pairs for one Merkle bucket.
-fn collect_structural_bucket(bucket: &[usize], scores: &mut HashMap<(usize, usize), f64>) {
-    let mut sorted = bucket.to_vec();
-    sorted.sort_unstable();
-    let Some(canonical) = sorted.first().copied() else {
-        return;
-    };
-    for other in sorted.iter().skip(1) {
-        let key = order(canonical, *other);
-        let _previous = scores.insert(key, 1.0_f64);
-    }
-}
-
-/// Adds LSH-only pairs. Pairs already present (from the structural pass)
-/// keep their existing score — structural evidence dominates token
-/// evidence when both fire.
-fn add_lsh_pairs(lsh_pairs: &[(usize, usize)], scores: &mut HashMap<(usize, usize), f64>) {
-    for &(a, b) in lsh_pairs {
-        let key = order(a, b);
-        let _previous = scores.entry(key).or_insert(0.0_f64);
-    }
-}
-
-/// Adds embedding ANN pairs, merging the measured cosine into every pair
-/// whether or not the structural or LSH passes already surfaced it.
-///
-/// A cosine the ANN pass measured is evidence about the *pair*; the pass
-/// that happened to reach it first is telemetry. Discarding it on overlap
-/// made discovery order decide what the user saw: a structurally-found
-/// byte-identical pair rendered `embedding_cos = 0.0` — indistinguishable
-/// from "measured and found unrelated" — and a cross-file pair LSH also
-/// surfaced lost the cosine that keeps it out of `lsh_only`, hiding a
-/// cluster that the very same pair, discovered by ANN alone, showed.
-///
-/// Pairs new to the map enter at structural `0.0`; existing structural
-/// scores are never overwritten, since structural evidence dominates when
-/// both fire. [`record_cosine`] keeps the maximum, so re-entry is
-/// idempotent and order-independent.
-fn add_embedding_pairs(
-    embedding_pairs: &[EmbeddingPair],
-    scores: &mut HashMap<(usize, usize), f64>,
-    cosines: &mut HashMap<(usize, usize), f64>,
-) {
-    for pair in embedding_pairs {
-        let key = order(pair.left, pair.right);
-        let _structural = scores.entry(key).or_insert(0.0_f64);
-        record_cosine(key, pair.cosine, cosines);
-    }
-}
-
-/// Keeps the highest cosine seen for a pair.
-fn record_cosine(key: (usize, usize), cosine: f64, cosines: &mut HashMap<(usize, usize), f64>) {
-    let _entry = cosines
-        .entry(key)
-        .and_modify(|current| *current = current.max(cosine))
-        .or_insert(cosine);
-}
-
-/// Converts raw `(left, right) → structural_score` map into a sorted
-/// [`CandidatePair`] list with token Jaccard filled in from the signatures
-/// and the minimum endpoint node count attached for downstream filtering.
-fn finalise_pairs(
-    fingerprints: &[Fingerprint],
-    signatures: &[Signature],
-    scores: HashMap<(usize, usize), f64>,
-    cosines: &HashMap<(usize, usize), f64>,
-) -> Vec<CandidatePair> {
-    let mut pairs: Vec<CandidatePair> = scores
-        .into_iter()
-        .map(|((left, right), structural)| {
-            let endpoint_node_counts = endpoint_node_counts(fingerprints, left, right);
-            CandidatePair {
-                left,
-                right,
-                endpoint_node_counts,
-                lsh_only_node_floor: endpoint_node_counts.0,
-                lsh_only_min_jaccard: LSH_ONLY_MIN_JACCARD,
-                fused_min_score: FUSED_THRESHOLD,
-                shared_subtree_overlap: 0.0,
-                score: PairScore {
-                    structural,
-                    token_jaccard: jaccard_for(signatures, left, right),
-                    embedding_cos: cosines.get(&(left, right)).copied().unwrap_or(0.0),
-                },
-            }
-        })
-        .filter(|pair| candidate_ranges_are_valid(pair, fingerprints))
-        .collect();
-    pairs.sort_unstable_by_key(|pair| (pair.left, pair.right));
-    pairs
 }
 
 /// Keeps non-structural candidates from connecting nested same-file ranges.
@@ -369,14 +286,16 @@ fn endpoint_node_counts(fingerprints: &[Fingerprint], left: usize, right: usize)
 /// Looks up both signatures and returns their estimated Jaccard. Returns
 /// 0.0 when either signature is missing, which cannot happen in practice
 /// because the pipeline always produces one signature per fingerprint.
-fn jaccard_for(signatures: &[Signature], left: usize, right: usize) -> f64 {
-    let Some(left_signature) = signatures.get(left) else {
+fn jaccard_for(signatures: &dyn SignatureLookup, left: usize, right: usize) -> f64 {
+    let mut left_signature = crate::lsh::ZEROED_SIGNATURE;
+    let mut right_signature = crate::lsh::ZEROED_SIGNATURE;
+    if !signatures.read_into(left, &mut left_signature) {
         return 0.0;
-    };
-    let Some(right_signature) = signatures.get(right) else {
+    }
+    if !signatures.read_into(right, &mut right_signature) {
         return 0.0;
-    };
-    estimate_jaccard(left_signature, right_signature)
+    }
+    estimate_jaccard(&left_signature, &right_signature)
 }
 
 /// Puts the smaller index first. Pair keys are order-insensitive.

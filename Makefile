@@ -425,6 +425,7 @@ deployment-verify: build
 	node scripts/deployment/verify-deployment-binaries.mjs shipwright.json target/release
 	node scripts/release/verify-release-workflow-gates.mjs .github/workflows/release.yml
 	node scripts/release/test-release-workflow-contract.mjs
+	node scripts/release/test-release-publish-contract.mjs
 	node scripts/deployment/test-deployment-docs-contract.mjs
 	node scripts/release/test-release-version-stamping.mjs
 	node scripts/deployment/test-verifiers.mjs

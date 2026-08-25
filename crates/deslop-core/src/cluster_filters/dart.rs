@@ -3,8 +3,7 @@
 use tree_sitter::Node;
 
 use super::{
-    enclosing_kind, node_contains_kind, node_intersects_range, parse_for, raw_snippet_texts_differ,
-    Snippet,
+    enclosing_kind, node_intersects_range, parse_for, raw_snippet_texts_differ, ParseCache, Snippet,
 };
 
 /// Superclass markers of Flutter's mandated widget-declaration scaffold
@@ -95,9 +94,14 @@ fn is_contained_widget_scaffold_class(node: Node<'_>, snippet: &Snippet<'_>) -> 
 /// suppressed when at least two members differ in raw bytes, so a *verbatim*
 /// copy-pasted field block still surfaces as genuine duplication rather than
 /// being mistaken for a registry of distinct entries.
-pub(super) fn is_dart_class_field_declaration_cluster(snippets: &[Snippet<'_>]) -> bool {
+pub(super) fn is_dart_class_field_declaration_cluster(
+    snippets: &[Snippet<'_>],
+    cache: &ParseCache,
+) -> bool {
     snippets.len() >= 2
-        && snippets.iter().all(covers_only_field_declarations)
+        && snippets
+            .iter()
+            .all(|snippet| covers_only_field_declarations(snippet, cache))
         && raw_snippet_texts_differ(snippets)
 }
 
@@ -105,7 +109,7 @@ pub(super) fn is_dart_class_field_declaration_cluster(snippets: &[Snippet<'_>]) 
 /// every class member it covers is a field/const declaration. Method,
 /// getter, and setter members carry a `function_body`, so a snippet that
 /// covers any of them falls through and keeps clustering.
-fn covers_only_field_declarations(snippet: &Snippet<'_>) -> bool {
+fn covers_only_field_declarations(snippet: &Snippet<'_>, cache: &ParseCache) -> bool {
     let Some(tree) = parse_for(snippet) else {
         return false;
     };
@@ -119,7 +123,7 @@ fn covers_only_field_declarations(snippet: &Snippet<'_>) -> bool {
         if !node_intersects_range(member, snippet.range) {
             continue;
         }
-        if !is_field_member(member) {
+        if !is_field_member(member, snippet.file_id, cache) {
             return false;
         }
         covered = covered.saturating_add(1);
@@ -144,9 +148,9 @@ fn covers_only_field_declarations(snippet: &Snippet<'_>) -> bool {
 /// consistent with #169; only an embedded `function_expression` body marks
 /// a field as logic. The far rarer "table of free-function calls" shape is
 /// accepted collateral.
-fn is_field_member(member: Node<'_>) -> bool {
-    !node_contains_kind(member, "function_body")
-        && !node_contains_kind(member, "function_expression")
-        && (node_contains_kind(member, "static_final_declaration_list")
-            || node_contains_kind(member, "initialized_identifier_list"))
+fn is_field_member(member: Node<'_>, file_id: crate::state::FileId, cache: &ParseCache) -> bool {
+    let kinds = cache.dart_field_kinds(file_id, member);
+    !kinds.has_body()
+        && !kinds.has_function_expression()
+        && (kinds.has_static_final_list() || kinds.has_initialized_identifier_list())
 }

@@ -18,8 +18,8 @@ repository = "https://github.com/Nimblesite/Deslop"
 
 [workspace.dependencies]
 anyhow = "=1.0.104"
-thiserror = "=2.0.19"
-clap = { version = "=4.6.5", features = ["derive"] }
+thiserror = "=2.0.20"
+clap = { version = "=4.6.6", features = ["derive"] }
 tracing = "=0.1.44"
 tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
 serde = { version = "=1.0.229", features = ["derive"] }
@@ -28,7 +28,7 @@ toml = "=1.1.4"
 assert_cmd = "=2.2.2"
 predicates = "=3.1.4"
 tempfile = "=3.27.0"
-tree-sitter = "=0.26.11"
+tree-sitter = "=0.26.12"
 tree-sitter-c-sharp = "=0.23.5"
 tree-sitter-rust = "=0.24.2"
 tree-sitter-python = "=0.25.0"
@@ -39,16 +39,16 @@ tree-sitter-php = "=0.24.2"
 tree-sitter-fsharp = "=0.3.11"
 tree-sitter-go = "=0.25.0"
 ignore = "=0.4.33"
-blake3 = "=1.8.6"
+blake3 = "=1.8.7"
 getrandom = "=0.4.3"
-ureq = { version = "=3.3.0", default-features = false, features = ["json"] }
+ureq = { version = "=3.4.0", default-features = false, features = ["json"] }
 instant-distance = "=0.6.1"
 notify = "=8.2.0"
 tokio = { version = "=1.53.1", features = ["rt-multi-thread", "macros", "sync", "io-util", "io-std", "time"] }
 tower = { version = "=0.5.3", default-features = false }
 tower-lsp = "=0.20.0"
-futures = "=0.3.33"
-async-trait = "=0.1.91"
+futures = "=0.3.34"
+async-trait = "=0.1.92"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
@@ -63,6 +63,15 @@ unused_results = "deny"
 trivial_casts = "deny"
 trivial_numeric_casts = "deny"
 elided_lifetimes_in_paths = "deny"
+# Redundant-syntax family ([LINT-DENY-REDUNDANT-SYNTAX]): none of these
+# sit in `rust_2018_idioms`, `nonstandard_style`, or the individually
+# denied `unused` lints, so without explicit denies they surface as
+# warnings (e.g. rust-analyzer severity 4) instead of errors.
+non_shorthand_field_patterns = "deny"
+bindings_with_variant_name = "deny"
+unused_parens = "deny"
+unused_braces = "deny"
+redundant_semicolons = "deny"
 future_incompatible = { level = "deny", priority = -1 }
 nonstandard_style = { level = "deny", priority = -1 }
 rust_2018_idioms = { level = "deny", priority = -1 }

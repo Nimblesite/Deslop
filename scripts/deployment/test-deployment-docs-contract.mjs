@@ -9,9 +9,10 @@
 
 import { readFileSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
-const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+import { runContractSuite } from "../lib/contract-harness.mjs";
+import { repoRoot } from "../lib/repo-root.mjs";
+
 const workflow = readFileSync(resolve(repoRoot, ".github/workflows/release.yml"), "utf8");
 
 // VS Code appends the target triple to the extension directory for any VSIX
@@ -26,23 +27,7 @@ const tests = [
   installerSnippetContractRunsWhereverTheSnippetCanChange,
 ];
 
-let failed = 0;
-for (const test of tests) {
-  try {
-    test();
-    console.log(`ok ${test.name}`);
-  } catch (error) {
-    failed++;
-    console.error(`not ok ${test.name}`);
-    console.error(`  ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
-if (failed > 0) {
-  console.error(`\n${failed} deployment docs contract test(s) failed`);
-  process.exit(1);
-}
-console.log(`\n${tests.length} deployment docs contract tests passed`);
+runContractSuite(tests, "deployment docs contract");
 
 // The premise of the second test. If the release workflow ever stops publishing
 // per-target VSIXes, VS Code would drop the suffix and the un-suffixed path in

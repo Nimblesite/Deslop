@@ -27,9 +27,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
-const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+import { repoRoot } from "../lib/repo-root.mjs";
+
 const makefile = readFileSync(resolve(repoRoot, "Makefile"), "utf8").split("\n");
 
 // The package and dedicated Cargo test target that own the real-repository

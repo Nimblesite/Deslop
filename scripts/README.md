@@ -9,6 +9,7 @@ Scripts are grouped by the surface they support. Keep executable logic out of th
 | `corpus/` | Corpus acquisition and verification |
 | `deployment/` | Package, binary, manifest, installer, and documentation verification |
 | `issues/` | Typed GitHub issue-report generation and tests |
+| `lib/` | Helpers shared across surfaces, such as the contract-test harness |
 | `release/` | Version stamping, change classification, and release-workflow contracts |
 | `repository/` | Repository-wide content and duplication gates |
 | `typediagram/` | TypeDiagram generation and post-processing |
