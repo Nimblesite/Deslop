@@ -84,6 +84,12 @@ suite("extension activation glue", () => {
         `${handle} must be a read-through getter, not a copied value`,
       );
       assert.equal(descriptor?.value, undefined, `${handle} must not be a data property`);
+      // Read through it. The VALUE is activation-dependent and deliberately
+      // unasserted, but the getter must run without throwing and must answer
+      // consistently within a turn — a getter that cannot be read is not a
+      // read-through view, and descriptor inspection alone never executes it.
+      const first = api[handle];
+      assert.equal(api[handle], first, `${handle} must read through to one live value`);
     }
     assert.ok(!("then" in api), "currentApi returns a plain snapshot, not a thenable");
   });

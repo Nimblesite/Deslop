@@ -35,7 +35,7 @@ fn virtual_document_schema_returns_non_empty_markdown() -> Result<()> {
             || body.contains("Deslop"),
         "expected markdown-ish schema body; got: {body}"
     );
-    let _ = child.kill();
+    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
     Ok(())
 }
 
@@ -67,7 +67,7 @@ fn virtual_document_report_returns_canonical_text() -> Result<()> {
         body.contains("\nrepo: ") && body.contains("\n-- action hints --\n"),
         "expected canonical report sections from render_text; got: {body}"
     );
-    let _ = child.kill();
+    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
     Ok(())
 }
 
@@ -95,7 +95,7 @@ fn virtual_document_cluster_returns_cluster_markdown() -> Result<()> {
         body.contains(':') && (body.contains(".cs") || body.contains("bytes")),
         "cluster markdown must carry occurrence locations; got: {body}"
     );
-    let _ = child.kill();
+    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
     Ok(())
 }
 
@@ -120,7 +120,7 @@ fn virtual_document_rejects_malformed_uri_with_invalid_params() -> Result<()> {
         Some(-32_602),
         "malformed uri must return JSON-RPC invalid params; got: {response}"
     );
-    let _ = child.kill();
+    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
     Ok(())
 }
 
@@ -140,7 +140,7 @@ fn virtual_document_rejects_unknown_cluster_id() -> Result<()> {
         response.get("error").is_some(),
         "unknown cluster id must surface an error, not a fallback string: {response}"
     );
-    let _ = child.kill();
+    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
     Ok(())
 }
 

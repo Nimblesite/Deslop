@@ -1,8 +1,8 @@
 {
   "meta": {
     "repo": "Nimblesite/Deslop",
-    "published_at": "2026-08-25T20:20:39Z",
-    "published_at_long": "25th of August 2026, 8pm",
+    "published_at": "2026-08-25T21:30:33Z",
+    "published_at_long": "25th of August 2026, 9pm",
     "source_url": "https://github.com/Nimblesite/Deslop/issues",
     "method": "GitHub metadata: the Priority field, lane/* labels, explicit relationships, and cross-references. No AI enrichment.",
     "planning_note": "Indicative only — not a schedule. Relative sequencing uses two parallel tracks per workstream, holds blocked work until every blocker finishes, and takes effort units from the Effort field (high 8, medium 4, low 2) or, when it is unset, the issue type: feature 8, bug 5, task 4."
@@ -172,7 +172,7 @@
       ],
       "milestone": null,
       "created_at": "2026-08-22T10:32:12Z",
-      "updated_at": "2026-08-24T11:17:13Z",
+      "updated_at": "2026-08-25T21:05:23Z",
       "lifecycle": "active",
       "priority": "showstopper",
       "workstream": "accuracy",
@@ -2592,7 +2592,7 @@
       ],
       "milestone": null,
       "created_at": "2026-08-21T21:20:26Z",
-      "updated_at": "2026-08-24T11:16:35Z",
+      "updated_at": "2026-08-25T21:05:28Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "accuracy",
@@ -3936,7 +3936,7 @@
       ],
       "milestone": null,
       "created_at": "2026-08-23T07:01:31Z",
-      "updated_at": "2026-08-24T11:17:12Z",
+      "updated_at": "2026-08-25T21:05:32Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "accuracy",
@@ -3951,7 +3951,7 @@
       "number": 440,
       "title": "Extension-host (out/**) coverage is unmeasurable: VS Code's desktop extension host ignores NODE_V8_COVERAGE on both injection channels",
       "url": "https://github.com/Nimblesite/Deslop/issues/440",
-      "excerpt": "Branch worktree-fused-score-followups. vscode-test --coverage printed All files | 0 | 0 | 0 | 0 on every machine, and the CI coverage job never reached the VSIX check until the coverage-calculation stage was repaired today (artifact chmod + Windows lcov relocation) — so the .v…",
+      "excerpt": "",
       "type": "Task",
       "labels": [
         {
@@ -3963,7 +3963,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-23T08:13:28Z",
-      "updated_at": "2026-08-24T11:16:28Z",
+      "updated_at": "2026-08-25T20:42:16Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "quality",

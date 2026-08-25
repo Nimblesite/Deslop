@@ -199,20 +199,27 @@ pub fn call_capturing(
     recv_response(stdout, id)
 }
 
-/// RAII guard that kills and reaps the spawned LSP child when it drops, so a
-/// failing assertion never leaks the process.
-pub struct KillOnDrop<'a>(pub &'a mut Child);
+/// RAII guard that closes the spawned LSP child's stdin and reaps it when it
+/// drops, so a failing assertion never leaks the process — and never signals
+/// one, which would discard everything the child executed
+/// (`deslop_test_support::reap`).
+pub struct ReapOnDrop<'a>(pub &'a mut Child);
 
-impl Drop for KillOnDrop<'_> {
+impl Drop for ReapOnDrop<'_> {
     fn drop(&mut self) {
-        let _kill = self.0.kill();
-        let _wait = self.0.wait();
+        let _status = deslop_test_support::reap::reap(self.0);
     }
 }
 
-/// Owning RAII guard: holds the spawned LSP child and kills it on drop. Unlike
-/// [`KillOnDrop`] it owns the process, so a helper can return the guard already
+/// Owning RAII guard: holds the spawned LSP child and reaps it on drop. Unlike
+/// [`ReapOnDrop`] it owns the process, so a helper can return the guard already
 /// armed — any later failure (handshake, request) still reaps the child.
+///
+/// Reaping means closing stdin and waiting, never signalling: a signalled
+/// child writes no coverage profile, so a `kill` here silently deletes every
+/// line the server executed (`deslop_test_support::reap`). The caller's own
+/// [`ChildStdin`] drops before this guard does, so the child already has EOF
+/// by the time it is waited on.
 pub struct LspGuard {
     child: Child,
     /// Continuously drained for the guard's whole lifetime (GH #370).
@@ -221,8 +228,7 @@ pub struct LspGuard {
 
 impl Drop for LspGuard {
     fn drop(&mut self) {
-        let _kill = self.child.kill();
-        let _wait = self.child.wait();
+        let _status = deslop_test_support::reap::reap(&mut self.child);
     }
 }
 

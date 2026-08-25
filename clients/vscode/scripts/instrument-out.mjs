@@ -11,9 +11,12 @@
 // honest number.
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from "node:fs";
-import { resolve, join } from "node:path";
+import { resolve, join, relative } from "node:path";
 import { createInstrumenter } from "istanbul-lib-instrument";
 import { vsixRoot } from "./coverage-paths.mjs";
+
+/// The global the counters accumulate into, shared with src/test/coverage-dump.ts.
+const COVERAGE_VARIABLE = "__coverage__";
 
 const outRoot = resolve(vsixRoot, "out");
 const testDir = resolve(outRoot, "test");
@@ -35,7 +38,7 @@ function* compiledModules(dir) {
 const instrumenter = createInstrumenter({
   esModules: false,
   produceSourceMap: true,
-  coverageVariable: "__coverage__",
+  coverageVariable: COVERAGE_VARIABLE,
   compact: false,
 });
 
@@ -43,7 +46,14 @@ const baseline = {};
 let count = 0;
 for (const file of compiledModules(outRoot)) {
   const code = readFileSync(file, "utf8");
-  if (code.includes("__coverage__")) continue; // already instrumented
+  if (code.includes(COVERAGE_VARIABLE)) {
+    // Skipping would drop the module from the baseline, and the baseline is
+    // the denominator — a silently omitted module inflates the score instead
+    // of scoring zero. The collector always recompiles first, so this means
+    // stale output, not a re-run.
+    console.error(`FAIL: ${relative(vsixRoot, file)} is already instrumented — recompile first`);
+    process.exit(1);
+  }
   let inputSourceMap;
   try {
     inputSourceMap = JSON.parse(readFileSync(`${file}.map`, "utf8"));

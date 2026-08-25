@@ -59,8 +59,7 @@ fn lsp_startup_log_records_the_worker_threads_knob() -> Result<()> {
     // exit means the binary never started — say so instead of blaming
     // the knob.
     let early_exit = child.try_wait().ok().flatten();
-    let _kill = child.kill();
-    let _wait = child.wait();
+    let _status = deslop_test_support::reap::reap(&mut child);
 
     assert!(
         observed.contains("worker_threads=2"),

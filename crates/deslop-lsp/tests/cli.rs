@@ -95,7 +95,7 @@ fn initialize_reports_server_info_version() -> Result<()> {
         expected_version()
     );
     let _shutdown = call(&mut stdin, &mut stdout, "shutdown", &Value::Null)?;
-    let _ = child.kill();
+    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
     Ok(())
 }
 
@@ -165,7 +165,7 @@ fn report_after_start(workspace: &Path) -> Result<Value> {
     let _init = handshake(&mut stdin, &mut stdout)?;
     let response = call(&mut stdin, &mut stdout, "deslop/reportGet", &Value::Null)?;
     let _shutdown = call(&mut stdin, &mut stdout, "shutdown", &Value::Null)?;
-    let _ = child.kill();
+    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
     response
         .get("result")
         .cloned()

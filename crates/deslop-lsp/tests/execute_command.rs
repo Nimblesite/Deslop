@@ -4,6 +4,7 @@
 //! client-bound `window/showDocument` requests so command handlers run
 //! through the same transport a real editor uses.
 
+use std::path::Path;
 use std::process::{ChildStdin, ChildStdout};
 
 use anyhow::{anyhow, Result};
@@ -22,6 +23,7 @@ use deslop_lsp::{
     commands::{
         OPEN_CLUSTER, OPEN_REPORT, PICK_EMBEDDING_MODEL, REFRESH_REPORT, TOGGLE_INCREMENTAL,
     },
+    notifications::REPORT_CHANGED,
     LspBackend,
 };
 
@@ -29,6 +31,14 @@ const EXECUTE_COMMAND: &str = "workspace/executeCommand";
 const COMMAND_FIELD: &str = "command";
 const RESULT_COMMAND_POINTER: &str = "/result/command";
 const PROVIDER_ID_FIELD: &str = "provider_id";
+/// The `csharp-small` file whose deletion retires the fixture's only cluster.
+const BETA_FILE: &str = "Beta.cs";
+/// Count of clusters the refresh response reports as removed.
+const CLUSTERS_REMOVED_POINTER: &str = "/clustersRemoved";
+/// Generation the pushed notification advanced to.
+const NOTIFIED_GENERATION_POINTER: &str = "/params/generation";
+/// Removed-cluster count carried by the pushed notification's summary.
+const NOTIFIED_REMOVED_POINTER: &str = "/params/summary/clusters_removed";
 
 #[test]
 fn execute_command_provider_advertises_and_opens_virtual_documents() -> Result<()> {
@@ -75,7 +85,7 @@ fn execute_command_provider_advertises_and_opens_virtual_documents() -> Result<(
         Some(true)
     );
 
-    let _ = child.kill();
+    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
     Ok(())
 }
 
@@ -177,7 +187,7 @@ fn execute_command_dispatches_refresh_models_and_incremental_toggle() -> Result<
         );
     }
 
-    let _ = child.kill();
+    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
     Ok(())
 }
 
@@ -196,6 +206,12 @@ async fn execute_command_handlers_run_in_process_for_coverage() -> Result<()> {
     assert_open_cluster_invalid_id(&mut service, &mut socket).await?;
     assert_unknown_command(&mut service, &mut socket).await?;
     assert_refresh_report_command(&mut service, &mut socket).await?;
+    assert_refresh_after_edit_notifies_report_changed(
+        &mut service,
+        &mut socket,
+        workspace.path(),
+    )
+    .await?;
     Ok(())
 }
 
@@ -471,6 +487,65 @@ async fn assert_refresh_report_command(
     assert!(response.pointer("/generation").is_some());
     assert!(response.pointer("/clustersAdded").is_some());
     Ok(())
+}
+
+/// [LSP-COMMANDS] [LIVE-NOTIFICATIONS] [PRINCIPLES-LIVE-IS-REACTIVE]
+/// `assert_refresh_report_command` above proves a no-change refresh stays
+/// silent. This proves the other half: a refresh whose delta actually retires
+/// a cluster must push `deslop/reportChanged`, naming the generation it
+/// advanced to and reporting the same removal count the command result does.
+/// Without this the notification could be unwired entirely and every existing
+/// assertion would still pass, because an empty delta returns before it.
+async fn assert_refresh_after_edit_notifies_report_changed(
+    service: &mut LspService<LspBackend>,
+    socket: &mut ClientSocket,
+    workspace_root: &Path,
+) -> Result<()> {
+    std::fs::remove_file(workspace_root.join(BETA_FILE))?;
+    let (response, during_call) =
+        execute_in_process(service, socket, json!({ (COMMAND_FIELD): REFRESH_REPORT })).await?;
+    let mut client_frames = during_call;
+    client_frames.extend(drain_client_frames(socket));
+    let removed = response
+        .pointer(CLUSTERS_REMOVED_POINTER)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("refresh reported no removal count: {response}"))?;
+    assert!(
+        removed > 0,
+        "deleting {BETA_FILE} must retire the fixture's cluster: {response}"
+    );
+    let changed = client_frames
+        .iter()
+        .find(|frame| frame.get("method").and_then(Value::as_str) == Some(REPORT_CHANGED))
+        .ok_or_else(|| {
+            anyhow!("a refresh that removed {removed} cluster(s) pushed no {REPORT_CHANGED}: {client_frames:?}")
+        })?;
+    assert!(
+        changed
+            .pointer(NOTIFIED_GENERATION_POINTER)
+            .and_then(Value::as_u64)
+            .is_some_and(|generation| generation > 0),
+        "{REPORT_CHANGED} must name the generation it advanced to: {changed}"
+    );
+    assert_eq!(
+        changed.pointer(NOTIFIED_REMOVED_POINTER).and_then(Value::as_u64),
+        Some(removed),
+        "{REPORT_CHANGED} summary must agree with the command result: {changed}"
+    );
+    Ok(())
+}
+
+/// Collects every client-bound frame already queued on `socket` without
+/// blocking. `call_service_with_client` returns the instant the response
+/// resolves, so a notification the handler pushed just before returning is
+/// still sitting in the client channel; polling it out here observes the push
+/// without a sleep or a timeout.
+fn drain_client_frames(socket: &mut ClientSocket) -> Vec<Value> {
+    let mut frames = Vec::new();
+    while let Some(Some(request)) = socket.next().now_or_never() {
+        frames.push(client_request_frame(&request));
+    }
+    frames
 }
 
 fn advertised_commands(response: &Value) -> Result<Vec<String>> {
