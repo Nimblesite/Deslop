@@ -431,7 +431,9 @@ impl ReportFixture {
     /// Renders `clusters` through the production report pipeline.
     pub(crate) fn render(&self, clusters: &[Cluster]) -> deslop_core::Report {
         let exclusion = ExclusionConfig::empty();
+        let parse_cache = deslop_core::ParseCache::new();
         render_report(ReportInputs {
+            parse_cache: &parse_cache,
             clusters,
             registry: &self.registry,
             file_languages: &self.file_languages,

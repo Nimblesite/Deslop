@@ -14,7 +14,9 @@
 
 import { readdirSync, readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
+
+import { repoRoot } from "../lib/repo-root.mjs";
 
 /** Environment files the runner replays into the next step. */
 const SINKS = ["GITHUB_PATH", "GITHUB_ENV"];
@@ -35,7 +37,6 @@ const TRUSTED = new Set([
   "RUNNER_WORKSPACE",
 ]);
 
-const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const WORKFLOW_DIR = resolve(repoRoot, ".github/workflows");
 
 /**

@@ -20,7 +20,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-import { check, total } from "./action-contract-harness.mjs";
+import { check, total } from "../lib/contract-harness.mjs";
 import { firstRustFile, writeCopyPatch } from "./action-copy-patch.mjs";
 import { readOutputs } from "./action-read-outputs.mjs";
 import { stepBody } from "./action-yaml.mjs";

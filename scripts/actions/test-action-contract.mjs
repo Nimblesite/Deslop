@@ -15,7 +15,7 @@ import "./action-contract-shape-checks.mjs";
 
 import assert from "node:assert/strict";
 
-import { total } from "./action-contract-harness.mjs";
+import { total } from "../lib/contract-harness.mjs";
 
 assert.ok(total() >= 39, `the suite ran ${total()} checks — a module stopped importing`);
 console.log(`\naction contract: ${total()} checks passed`);

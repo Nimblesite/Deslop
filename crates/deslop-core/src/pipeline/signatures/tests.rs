@@ -1,13 +1,25 @@
-//! Signature-layer unit tests: offset invariance of sibling-window
-//! signatures (#339), fingerprint-scoped fallbacks (#86), the
+//! Signature-layer unit tests: the bottom-up fold's byte-for-byte parity
+//! with the historical top-down construction
+//! ([PERF-FLUTTER-TODO-CORPUS]), offset invariance of sibling-window
+//! signatures (#339), fingerprint-scoped fallbacks (#86), and the
 //! architecture-independence pin for persisted fallback slots
-//! ([PIPELINE-INCREMENTAL-INTEGRITY]), and the stream-digest memo
-//! ([PIPELINE-SIGNATURE-MEMO]).
+//! ([PIPELINE-INCREMENTAL-INTEGRITY]).
 
 use std::path::PathBuf;
 
 use super::*;
-use crate::{ast::ByteRange, fingerprint::Fingerprint, lang::LanguageParser, state::FileRegistry};
+use crate::{
+    ast::ByteRange,
+    fingerprint::{collect_non_boilerplate_fingerprints, Fingerprint},
+    lang::{shared::FILE_KIND, LanguageParser},
+    sibling::collect_non_boilerplate_sibling_fingerprints,
+    state::{FileId, FileRegistry},
+};
+
+/// Corpus-scale complexity canary for the fold.
+mod canary;
+/// Byte-parity pins against the top-down construction.
+mod fold_parity;
 
 fn fingerprint(seed: u8, start: usize, end: usize) -> Fingerprint {
     let mut registry = FileRegistry::new();
@@ -18,6 +30,30 @@ fn fingerprint(seed: u8, start: usize, end: usize) -> Fingerprint {
         byte_range: ByteRange { start, end },
         node_count: 1,
     }
+}
+
+/// One synthetic normalised node: the shape the fold walks, without a
+/// parser in the way. Ranges are hand-placed so windows, wrappers and
+/// boilerplate subtrees are all constructible exactly.
+fn node(
+    file_id: FileId,
+    kind: &'static str,
+    start: usize,
+    end: usize,
+    children: Vec<NormalizedNode>,
+) -> NormalizedNode {
+    NormalizedNode {
+        kind,
+        children,
+        byte_range: ByteRange { start, end },
+        file_id,
+    }
+}
+
+/// A python file-shaped root over `children`.
+fn file_root(file_id: FileId, children: Vec<NormalizedNode>) -> NormalizedNode {
+    let end = children.last().map_or(0, |last| last.byte_range.end);
+    node(file_id, FILE_KIND, 0, end, children)
 }
 
 /// The duplicated region, verbatim in both files.
@@ -104,121 +140,92 @@ fn window_fingerprint(
     })
 }
 
-// #339 ([FUSION-SIGNALS-THREE-LAYER]). Isolated at the signature layer on
-// purpose: `content_gated_signals` overwrites a shape-identical cluster's
-// rendered `token_jaccard` to 1.0, so NO end-to-end assertion on a
-// rendered signal can distinguish real token evidence from the renderer
-// supplying the value. This is the only layer where the question is
-// answerable.
-//
-// A module rename shifts every byte offset in the second file. The window
-// itself is byte-for-byte unchanged, and the normalised kind stream it
-// produces is rename-invariant by construction, so the two signatures must
-// be equal. `fallback_signature` hashes `(hash, byte_range.start,
-// byte_range.end)`, so if the fingerprint falls through to it the two
-// signatures differ completely — and `token_jaccard` is then measuring
-// whether the copies happened to land at the same offset, not whether
-// their tokens agree.
-#[test]
-fn issue_339_sibling_window_signature_is_offset_invariant() -> Result<(), String> {
-    let mut registry = FileRegistry::new();
-    let short = registry.register(PathBuf::from("window_a.fs"));
-    let long = registry.register(PathBuf::from("window_b.fs"));
-
-    let short_source = format!("module ParseHelpers\n\n{SHARED_WINDOW}");
-    let long_source = format!("module ParseHelpersWithALongerName\n\n{SHARED_WINDOW}");
-    let short_tree = fsharp_tree(&short_source, short)?;
-    let long_tree = fsharp_tree(&long_source, long)?;
-    let short_window = window_fingerprint(&short_source, &short_tree, short)?;
-    let long_window = window_fingerprint(&long_source, &long_tree, long)?;
-
-    assert_ne!(
-        short_window.byte_range.start, long_window.byte_range.start,
-        "fixture: the rename must actually shift the window's offsets"
-    );
-    let short_len = short_window
-        .byte_range
-        .end
-        .checked_sub(short_window.byte_range.start);
-    let long_len = long_window
-        .byte_range
-        .end
-        .checked_sub(long_window.byte_range.start);
-    assert_eq!(
-        short_len, long_len,
-        "fixture: and must not change its length"
-    );
-
-    // One memo per file, deliberately: the equality assertion below
-    // must compare two independent constructions. A shared memo would
-    // hand the second file the first file's signature back and prove
-    // nothing about offset invariance.
-    let mut short_memo = SignatureMemo::default();
-    let mut long_memo = SignatureMemo::default();
-    let short_signatures = signatures_for_file(
-        &short_tree,
-        std::slice::from_ref(&short_window),
-        Some("fsharp"),
-        &mut short_memo,
-    );
-    let long_signatures = signatures_for_file(
-        &long_tree,
-        std::slice::from_ref(&long_window),
-        Some("fsharp"),
-        &mut long_memo,
-    );
-
-    let ([short_signature], [long_signature]) =
-        (short_signatures.as_slice(), long_signatures.as_slice())
-    else {
-        return Err(format!(
-            "expected one signature per fingerprint, got {} and {}",
-            short_signatures.len(),
-            long_signatures.len()
-        ));
-    };
-    assert_ne!(
-        *short_signature,
-        fallback_signature(&short_window),
-        "issue #339: the sibling-window signature must come from the resolved token \
-         stream, not the offset-seeded fallback — falling back means `token_jaccard` \
-         measures whether the copies landed at the same byte offset, not whether \
-         their tokens agree"
-    );
-    assert_ne!(
-        *long_signature,
-        fallback_signature(&long_window),
-        "issue #339: the shifted copy must not be the offset-seeded fallback either"
-    );
-    assert_eq!(
-        short_signature, long_signature,
-        "issue #339: two copies of one window must produce the same token signature \
-         regardless of the byte offset the rename shifted them to"
-    );
-    Ok(())
+/// The fingerprint population the corpus build produces for `tree`:
+/// exact-node fingerprints followed by sibling-window fingerprints.
+fn corpus_fingerprints(
+    tree: &NormalizedNode,
+    language: &str,
+    min_nodes: usize,
+) -> Vec<Fingerprint> {
+    let mut fingerprints = collect_non_boilerplate_fingerprints(tree, min_nodes, language);
+    fingerprints.extend(collect_non_boilerplate_sibling_fingerprints(
+        tree, min_nodes, language,
+    ));
+    fingerprints
 }
 
+// #86 / [PIPELINE-SIGNATURE-FALLBACK] A stream too short to hold a
+// k-gram falls back to the fingerprint-scoped signature, so unrelated
+// short streams never share one. Two such fingerprints over one tree
+// must therefore differ — and must both be fallback signatures.
 #[test]
-fn issue_86_empty_non_python_signatures_are_fingerprint_scoped() {
+fn too_short_streams_stay_fingerprint_scoped() {
+    let mut registry = FileRegistry::new();
+    let file_id = registry.register(PathBuf::from("short.py"));
+    let tree = file_root(
+        file_id,
+        vec![
+            node(
+                file_id,
+                "expression_statement",
+                0,
+                10,
+                vec![node(file_id, "__ident__", 0, 9, vec![])],
+            ),
+            node(
+                file_id,
+                "expression_statement",
+                10,
+                20,
+                vec![node(file_id, "__literal__", 10, 19, vec![])],
+            ),
+        ],
+    );
+    let short_a = fingerprint(1, 0, 10);
+    let short_b = fingerprint(2, 10, 20);
+    let expected_a = fallback_signature(&short_a);
+    let expected_b = fallback_signature(&short_b);
+    let produced = signatures_for_file(&tree, &[short_a, short_b], Some("python"));
+    assert_eq!(
+        produced.as_slice(),
+        [expected_a, expected_b],
+        "streams shorter than KGRAM_WIDTH must fall back to the \
+         fingerprint-scoped signature"
+    );
+    assert_ne!(
+        produced.first(),
+        produced.get(1),
+        "issue #86: unrelated empty token streams must not share a signature"
+    );
+}
+
+// #86: unresolvable ranges keep the fingerprint-scoped fallback too.
+#[test]
+fn issue_86_unresolvable_ranges_are_fingerprint_scoped() {
     let first = fingerprint(1, 0, 0);
     let second = fingerprint(2, 0, 0);
+    let mut registry = FileRegistry::new();
+    let file_id = registry.register(PathBuf::from("empty.rs"));
+    let tree = file_root(file_id, vec![]);
 
-    let first_rust = empty_signature(&first, Some("rust"));
-    let second_rust = empty_signature(&second, Some("rust"));
-    let first_unknown = empty_signature(&first, None);
-    let second_unknown = empty_signature(&second, None);
+    let expected_first = fallback_signature(&first);
+    let produced = signatures_for_file(&tree, &[first.clone(), second.clone()], Some("rust"));
+    let unknown_language = signatures_for_file(&tree, &[first, second], None);
 
     assert_ne!(
-        first_rust, second_rust,
+        produced.first(),
+        produced.get(1),
         "issue #86: unrelated empty Rust token streams must not share a legacy signature"
     );
     assert_ne!(
-        first_unknown, second_unknown,
-        "issue #86: unrelated empty unknown-language streams must not share a legacy signature"
+        unknown_language.first(),
+        unknown_language.get(1),
+        "issue #86: unrelated empty unknown-language streams must not share a legacy \
+         signature either"
     );
     assert_eq!(
-        first_rust,
-        empty_signature(&first, Some("rust")),
+        produced.first(),
+        Some(&expected_first),
         "fingerprint-scoped fallback must stay deterministic for the same fingerprint"
     );
 }
@@ -245,94 +252,5 @@ fn fallback_signature_slots_are_architecture_independent() {
          derivation changed semantics (bump the parse store's \
          SEMANTIC_EPOCH) or the input encoding became \
          architecture-dependent"
-    );
-}
-
-// [PIPELINE-SIGNATURE-MEMO] The capture test for the corpus-build
-// signature cost: on the Flutter material corpus, 90% of 285,510
-// fingerprints are sibling windows whose token streams repeat across
-// files, and rebuilding the `MinHash` for every repeat put 58 of the
-// corpus stage's 62 seconds into signature construction. One distinct
-// stream must cost one construction; every further occurrence must be
-// answered from the memo with a byte-identical signature.
-#[test]
-fn a_repeated_token_stream_costs_one_minhash_construction() -> Result<(), String> {
-    let mut registry = FileRegistry::new();
-    let first = registry.register(PathBuf::from("repeat_a.fs"));
-    let second = registry.register(PathBuf::from("repeat_b.fs"));
-
-    let first_source = format!(
-        "module RepeatFirst
-
-{SHARED_WINDOW}"
-    );
-    let second_source = format!(
-        "module RepeatSecondRenamed
-
-{SHARED_WINDOW}"
-    );
-    let first_tree = fsharp_tree(&first_source, first)?;
-    let second_tree = fsharp_tree(&second_source, second)?;
-    let first_window = window_fingerprint(&first_source, &first_tree, first)?;
-    let second_window = window_fingerprint(&second_source, &second_tree, second)?;
-
-    let mut shared_memo = SignatureMemo::default();
-    let first_signatures = signatures_for_file(
-        &first_tree,
-        std::slice::from_ref(&first_window),
-        Some("fsharp"),
-        &mut shared_memo,
-    );
-    let second_signatures = signatures_for_file(
-        &second_tree,
-        std::slice::from_ref(&second_window),
-        Some("fsharp"),
-        &mut shared_memo,
-    );
-
-    assert_eq!(
-        (shared_memo.misses(), shared_memo.hits()),
-        (1, 1),
-        "one distinct stream across two files must cost exactly one          MinHash construction and one memo answer — a second          construction means the memo key failed to collapse identical          streams, and the 90%-sibling-window corpus pays the whole          signature stage again"
-    );
-
-    let mut unmemoised = SignatureMemo::default();
-    let independent = signatures_for_file(
-        &second_tree,
-        std::slice::from_ref(&second_window),
-        Some("fsharp"),
-        &mut unmemoised,
-    );
-    assert_eq!(
-        (first_signatures.as_slice(), second_signatures.as_slice()),
-        (independent.as_slice(), independent.as_slice()),
-        "the memo answer must be byte-identical to an independent          construction of the same stream — anything else silently          rewrites token_jaccard for every repeated window"
-    );
-    assert_eq!(
-        (unmemoised.misses(), unmemoised.hits()),
-        (1, 0),
-        "fixture: the independent construction must itself be a fresh miss"
-    );
-    Ok(())
-}
-
-// [PIPELINE-SIGNATURE-MEMO] The fallback path is scoped to the
-// fingerprint's byte range on purpose (#86), so it must never enter
-// the stream memo: two unrelated too-short streams answering each
-// other from the memo would LSH-cluster through shared emptiness.
-#[test]
-fn too_short_streams_never_touch_the_memo() {
-    let mut memo = SignatureMemo::default();
-    let short_stream = fingerprint(3, 5, 9);
-    let produced = signature_for_tokens(&["a"; 4], &short_stream, Some("rust"), &mut memo);
-    assert_eq!(
-        produced,
-        fallback_signature(&short_stream),
-        "a stream shorter than KGRAM_WIDTH must fall back to the          fingerprint-scoped signature"
-    );
-    assert_eq!(
-        (memo.hits(), memo.misses()),
-        (0, 0),
-        "the fallback must never be memoised: its whole point is that          unrelated empty streams do not share a signature"
     );
 }

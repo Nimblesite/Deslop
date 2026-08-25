@@ -14,9 +14,10 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { arch, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
-const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+import { repoRoot } from "../lib/repo-root.mjs";
+
 const TAG = "v9.9.9";
 const VERSION = "9.9.9";
 const BINARIES = ["deslop", "deslop-lsp", "deslop-mcp"];

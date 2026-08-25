@@ -68,10 +68,11 @@ impl Corpus {
     /// Splits `component` against this corpus.
     fn split(&self, component: &FusedCluster) -> Vec<FusedCluster> {
         split_noise_verbatim_families(
-            vec![component.clone()],
+            std::slice::from_ref(component),
             &self.fingerprints,
             &self.sources,
             &self.languages,
+            &ParseCache::new(),
         )
     }
 }
@@ -114,7 +115,7 @@ fn a_suppressed_component_holding_a_copy_is_reduced_to_the_copy() {
         "members 0 and 1 are byte-identical constant tables; member 2 shares \
          only the shape normalisation leaves behind. The copy survives the \
          suppression its cluster-mate earned, and the stranger does not ride \
-         out with it"
+         out with it",
     );
 }
 

@@ -1,15 +1,17 @@
 ---
 name: triage
-description: Triage all open GitHub issues — correct the issue type (Bug/Feature/Task), apply severity labels (showstopper/critical), link related issues into attackable clusters, and add codebase-backed detail comments to thin tickets. Use when the user says "triage", "triage issues", or "clean up the backlog".
+description: Triage all open GitHub issues — correct the issue type (Bug/Feature/Task), set the Priority field and the lane/* label, link related issues into attackable clusters, and add codebase-backed detail comments to thin tickets. Use when the user says "triage", "triage issues", or "clean up the backlog".
 argument-hint: "[optional issue numbers to limit scope]"
 allowed-tools: Bash, Read, Grep, Glob
 ---
 
 # Issue Triage
 
-Triage every open issue (or only `$ARGUMENTS` if given). Read-only on code; writes go to GitHub only. Never close an issue, never remove a label you cannot justify in the comment trail, never edit issue bodies written by others.
+Triage every open issue (or only `$ARGUMENTS` if given). Read-only on code; writes go to GitHub only. Never close an issue, never remove a label you cannot justify in the comment trail, never edit issue bodies except through the log-issue backfill, which preserves all information.
 
-Every triaged issue must also land in the **correct published work lane** (Step 4): the site's lanes are derived mechanically from GitHub data by `scripts/issues/generate_issue_report.py`, and triage owns making that derivation come out right — checking it is not optional.
+**PRs NEVER close issues.** Beyond never closing issues yourself, triage must prevent GitHub from doing it: any open PR whose body, title, or commits carry a closing keyword (`Fixes/Closes/Resolves/Fixed/Closed #n`) referencing an issue will auto-close it on merge. During every triage run, scan open PR bodies (`gh pr list --state open --json number,body,title`) for those keywords; on a hit, remove the keyword from the PR body (`gh pr edit <pr> --body`) and flag it in the final report. Issues close only through release verification — see the log-issue skill for the full rule.
+
+The published atlas (`scripts/issues/generate_issue_report.py`) reads the Priority field and the `lane/*` label straight off each issue. Getting those two right (Steps 3 and 4) is what makes the site correct — there is no derivation to second-guess.
 
 **Comment voice — applies to every comment posted.** Comments are mechanical triage records attached to the ticket, not replies to the reporter. Never address anyone: no "you", no "thanks for reporting", no "could you confirm", no greetings or sign-offs. State facts about the defect and the code in impersonal declaratives. Where information is missing, record what is missing as a fact ("Repro command not specified"), never as a request.
 
@@ -27,43 +29,39 @@ gh issue list --state open --limit 200 --json number,title,body,labels,issueType
 
 Set with `gh issue edit <n> --type <Bug|Feature|Task>` (fallback if the flag is unavailable: `gh api graphql` with the `updateIssueIssueType` mutation; list type IDs via the org's `issueTypes`).
 
-## Step 3: Severity labels
+## Step 3: Priority — the GitHub Priority field, not a label
 
-- **showstopper** — cannot release: shipped detection reports wrong clusters/figures, main path panics, data loss. Every confirmed false-positive/false-negative in the release path is a showstopper by definition of the accuracy contract.
-- **critical** — must fix soon, but a release could ship: defect behind a flag, ignored test, spec drift with no wrong output yet.
-- Neither label for everything else.
+Priority is the org-level **Priority** issue field. The `showstopper` and `critical` labels are deleted; never re-create them. `gh issue edit` cannot set a field — use `scripts/issues/set_priority.sh <issue> <option>`.
 
-Note: replace the showstopper label with critical unless the issue would genuinely cause loss of trust. There is no point holding back a release when the issue is already in a released version.
+- **showstopper** — a regression on main that has not been released yet, or a recent regression in a release.
+- **critical** — seriously impacting accuracy or the usefulness of the tool. A confirmed false positive/negative already sitting in a release is critical, not showstopper: there is nothing left to hold back.
+- **normal** — a problem that impacts the usefulness of the tool.
+- **low** — don't worry about it for now.
 
-Also verify domain labels are right: `false-positive`, `false-negative`, `spec-violation`, `ignored-test`, `tech-debt`. An accuracy issue missing its `false-*` label is a triage defect — fix it. Apply with `gh issue edit <n> --add-label ...`.
+Every open issue carries exactly one value. An issue with none shows on the site as **No priority set** — a triage defect.
 
-`fixed-on-main` means fixed but **not yet verified in a release** — leave the issue open, keep its severity labels, and note in the cluster comment that it awaits release verification.
+Domain labels stay labels: `false-positive`, `false-negative`, `spec-violation`, `ignored-test`, `tech-debt`. An accuracy issue missing its `false-*` label is a triage defect — `gh issue edit <n> --add-label ...`.
+
+`fixed-on-main` means fixed but **not yet verified in a release** — leave the issue open, keep its Priority, and note in the cluster comment that it awaits release verification.
 
 **Apply `fixed-on-main` yourself when the evidence is strong.** If the reported defect is gone on `main` *and* a test covers it — the named failing test now passes, or a test asserting the corrected behaviour exists and is not `#[ignore]`d — add the label and comment the evidence: commit/PR that landed it, and the test name and path that pins it. The ticket then closes after release verification. Never apply it on code reading alone; no covering test means no label.
 
-**Severity flows up the dependency tree.** If a blocked issue is showstopper, its root-cause issue is at least showstopper too — a root can never be less severe than anything it blocks. After clustering (Step 5), re-walk each tree from the leaves and raise ancestors as needed.
+**Priority flows up the dependency tree.** A root cause is never lower-priority than anything it blocks. After clustering (Step 5), re-walk each tree from the leaves and raise ancestors as needed.
 
-## Step 4: Work-lane correctness — every triaged issue lands in the right bucket
+## Step 4: Lane — exactly one `lane/*` label
 
-The published lane is computed by `workstream_for` over the issue's own GitHub data — never by the triager, never by AI. The exact derivation:
+The published lane is the issue's `lane/<id>` label. Nothing is inferred from title or body.
 
-1. Labels `false-negative` / `false-positive` force the **accuracy** lane outright (scoring never runs).
-2. Otherwise, argmax over the eight lanes' keyword tables in `WORKSTREAMS` (`scripts/issues/generate_issue_report.py`): **4** points per keyword hit in the normalized title, **1** per hit in the first 1600 chars of the normalized body, **3** per hit in the label set (labels match raw with hyphens intact). Substring matching throughout. Ties break to the earliest lane in `WORKSTREAMS` order (accuracy, detection, performance, editor, integrations, delivery, reporting, quality); an all-zero score falls back to **quality**.
+- **lane/accuracy** — wrong clusters reported or missed.
+- **lane/detection** — parse, normalize, fingerprint, cluster, LSH, embeddings, fuse, rank.
+- **lane/performance** — incremental analysis, caches, memory, scheduling, throughput.
+- **lane/editor** — VSIX, JetBrains, panels, hovers, diagnostics.
+- **lane/integrations** — CLI, MCP, actions, agent tooling.
+- **lane/delivery** — packaging, signing, releases, deployment.
+- **lane/reporting** — rendered reports, metrics, docs.
+- **lane/quality** — tests, specs, CI, fixtures, repo health.
 
-The eight lanes: **accuracy** (wrong clusters reported/missed), **detection** (parse/normalize/fingerprint/cluster/LSH/embeddings/fuse/rank), **performance** (incremental, caches, memory, scheduling, throughput), **editor** (VSIX, JetBrains, panels, hovers, diagnostics), **integrations** (CLI, MCP, actions, agent tooling), **delivery** (packaging, signing, releases, deployment), **reporting** (rendered reports, metrics, docs), **quality** (tests, specs, CI, fixtures, repo health).
-
-For every issue touched in this run:
-
-- Judge the correct lane from the defect's substance — the pipeline stage or surface where the fix lands — not from the issue's vocabulary.
-- Verify the derivation, from the repo root:
-
-```
-gh api repos/Nimblesite/Deslop/issues/<n> > /tmp/issue-<n>.json
-python3 -c "import json; from scripts.issues.generate_issue_report import workstream_for; print(workstream_for(json.load(open('/tmp/issue-<n>.json'))))"
-```
-
-- Wrong lane? Correct it with the levers triage owns — labels. The current vocabulary scores: `false-positive`/`false-negative` hard-route **accuracy** (apply only on genuine accuracy defects — a false application misroutes with no keyword able to override it); `shipwright` scores 3 for **delivery**; `spec-violation` 3 and `ignored-test` 6 for **quality**; `tech-debt` scores 0 (the keyword is `tech debt`).
-- Never edit titles or bodies to steer a lane. A title keyword weighs 4, so most label combinations cannot beat a mis-scoring title (e.g. a performance defect whose title contains "report" derives **reporting**). When the labels cannot produce the correct lane, the rule itself is at fault: flag the issue # and the offending keyword in the final report as a `WORKSTREAMS` gap for the user — do not widen or hand-patch keyword lists during triage.
+Judge the lane by where the fix lands, not by the issue's vocabulary. Apply with `gh issue edit <n> --add-label lane/<id> --remove-label lane/<wrong>`; two lane labels or none is a triage defect, and none publishes the issue as **Unassigned**.
 
 ## Step 5: Cluster related issues
 
@@ -83,8 +81,10 @@ A ticket is thin if a dev could not start work from it alone. For each, investig
 - Suspected root cause and the spec ID (`[GROUP-TOPIC]`) it violates.
 - Repro: exact command or failing-test name, expected vs actual.
 
+Structure enrichment comments with the canonical section names defined in the log-issue skill (`.agents/skills/log-issue/SKILL.md` — "Canonical issue body") so humans and agents read issues and comments the same way; do not restate the section list here. That skill also owns the plain-language rule for human sections — apply it to enrichment comments too. The issue atlas excerpt (`plain_excerpt` in `scripts/issues/generate_issue_report.py`) is drawn from the `## TL;DR` section — a backfill changes the site card text, so a missing or empty TL;DR on an open issue is a triage finding.
+
 If investigation uncovers a **new** accuracy defect, the CLAUDE.md quarantine rule applies — stop triage and follow it.
 
 ## Step 7: Report
 
-End with a table: issue #, type set, labels added/removed, cluster, blocked-by, lane (derived → correct, and the action taken or `WORKSTREAMS` gap flagged), comment posted (y/n). List the root-cause issues separately as the recommended attack order. Flag anything you could not resolve (e.g. type API rejected, ambiguous severity, dependency API unavailable) for the user to decide.
+End with a table: issue #, type set, Priority set, lane label, other labels added/removed, cluster, blocked-by, comment posted (y/n). List the root-cause issues separately as the recommended attack order. Flag anything you could not resolve (e.g. type API rejected, ambiguous severity, dependency API unavailable) for the user to decide.

@@ -30,7 +30,8 @@ use crate::{fingerprint::Fingerprint, pair::FusedCluster, state::FileId};
 
 use super::{
     family::{families_by, restrict},
-    is_noise_pattern, ParseCache,
+    is_noise_pattern,
+    snippets::ParseCache,
 };
 
 /// Smallest byte-identical family worth keeping: one lone occurrence is
@@ -45,20 +46,69 @@ const MIN_FAMILY_MEMBERS: usize = 2;
 /// cluster's families are emitted in first-member order, so the pass is
 /// deterministic ([PIPELINE-DETERMINISM]).
 pub(crate) fn split_noise_verbatim_families<S: BuildHasher>(
-    fused_clusters: Vec<FusedCluster>,
+    fused_clusters: &[FusedCluster],
     fingerprints: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, S>,
+    cache: &ParseCache,
 ) -> Vec<FusedCluster> {
-    let cache = ParseCache::new();
-    fused_clusters
-        .into_iter()
-        .flat_map(|fused| {
-            split_one(&fused, fingerprints, sources, file_languages, &cache)
-                .unwrap_or_else(|| vec![fused])
+    let started = std::time::Instant::now();
+    let total = fused_clusters.len();
+    let mut out: Vec<FusedCluster> = Vec::with_capacity(total);
+    // [PERF-FLUTTER-TODO-MEMORY] Process in minimum-member-file order
+    // so each file's clusters arrive together and the bounded
+    // [`ParseCache`](super::snippets::ParseCache) tree LRU stays hot;
+    // results are written at each cluster's original position, so the
+    // emitted order — and therefore the report — is unchanged.
+    let mut order: Vec<usize> = (0..total).collect();
+    // `Option<FileId>` keys: `None` sorts first, which no real cluster
+    // produces (every member resolves), so the order is total.
+    order.sort_by_key(|&index| {
+        fused_clusters.get(index).and_then(|fused| {
+            fused
+                .members
+                .iter()
+                .filter_map(|&member| fingerprints.get(member))
+                .map(|found| found.file_id)
+                .min()
         })
-        .collect()
+    });
+    // One slot per input cluster; a split writes its families as a
+    // run, an untouched cluster writes itself, both in input position.
+    let mut slots: Vec<Option<Vec<FusedCluster>>> = (0..total).map(|_| None).collect();
+    let mut done = 0_usize;
+    for index in order {
+        if done % NOISE_PROGRESS_INTERVAL == 0 && done > 0 {
+            tracing::info!(
+                stage = "noise_verbatim_split",
+                clusters_done = done,
+                clusters_total = total,
+                elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+                "noise split progress"
+            );
+            cache.log_noise_totals("noise_verbatim_split_progress");
+        }
+        let Some(fused) = fused_clusters.get(index) else {
+            continue;
+        };
+        let fused = fused.clone();
+        let replacement = split_one(&fused, fingerprints, sources, file_languages, cache);
+        let slot = slots.get_mut(index);
+        if let Some(slot) = slot {
+            *slot = Some(replacement.unwrap_or_else(|| vec![fused]));
+        }
+        done = done.saturating_add(1);
+    }
+    for clusters in slots.into_iter().flatten() {
+        out.extend(clusters);
+    }
+    cache.log_noise_totals("noise_verbatim_split");
+    out
 }
+
+/// Clusters between noise-split progress records — bounded, so the
+/// per-run log stays small ([PERF-FLUTTER-TODO-OBSERVABILITY]).
+const NOISE_PROGRESS_INTERVAL: usize = 5_000;
 
 /// The replacement clusters for one component, or `None` to keep it as
 /// it is. `None` covers every cheap case first — a component with no
