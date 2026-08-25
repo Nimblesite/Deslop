@@ -44,6 +44,17 @@ use common::{
 use serde_json::{json, Value};
 
 const REPORT_TIMEOUT: Duration = Duration::from_secs(20);
+/// How long the refresh may go without emitting a single progress frame
+/// before the pass is called stalled.
+///
+/// The budget is on *silence*, not on the whole pass. A wall-clock ceiling
+/// measures the runner, not the server: the same refresh that finishes in
+/// seconds on a laptop was still at 192 of 1300 subtrees after 20s on an
+/// instrumented two-core CI runner, and the test failed for being slow rather
+/// than for being wrong. Silence is the real defect this guards — gh #370 was
+/// a refresh that hung for fourteen minutes — and a stall budget catches that
+/// the moment it starts instead of after a fixed wait.
+const PROGRESS_STALL_TIMEOUT: Duration = Duration::from_secs(20);
 const SET_MODEL: &str = "deslop/embeddingSetModel";
 const PROGRESS: &str = "deslop/embeddingProgress";
 const PROVIDER_ID: &str = "ollama";
@@ -191,27 +202,41 @@ fn assert_last_good_report_survived(
     Ok(())
 }
 
-fn wait_for_terminal_progress(
-    stdin: &mut ChildStdin,
-    stdout: &mut BufReader<ChildStdout>,
-    mut frames: Vec<Value>,
-) -> Result<Value> {
-    let deadline = Instant::now()
-        .checked_add(REPORT_TIMEOUT)
-        .unwrap_or_else(Instant::now);
-    loop {
-        if let Some(terminal) = frames.iter().find(|frame| {
+/// The `complete` or `failed` frame, once the refresh has emitted one.
+fn terminal_progress(frames: &[Value]) -> Option<Value> {
+    frames
+        .iter()
+        .find(|frame| {
             at(frame, "method") == PROGRESS
                 && matches!(
                     json_path(frame, &["params", "phase"]).as_str(),
                     Some("complete" | "failed")
                 )
-        }) {
-            return Ok(terminal.clone());
+        })
+        .cloned()
+}
+
+/// Deadline [`PROGRESS_STALL_TIMEOUT`] from now, saturating at now.
+fn stall_deadline() -> Instant {
+    Instant::now()
+        .checked_add(PROGRESS_STALL_TIMEOUT)
+        .unwrap_or_else(Instant::now)
+}
+
+fn wait_for_terminal_progress(
+    stdin: &mut ChildStdin,
+    stdout: &mut BufReader<ChildStdout>,
+    mut frames: Vec<Value>,
+) -> Result<Value> {
+    let mut deadline = stall_deadline();
+    loop {
+        if let Some(terminal) = terminal_progress(&frames) {
+            return Ok(terminal);
         }
         if Instant::now() >= deadline {
             return Err(anyhow!(
-                "no terminal embedding progress within {REPORT_TIMEOUT:?}: {frames:#?}"
+                "the embedding refresh emitted nothing for {PROGRESS_STALL_TIMEOUT:?} and \
+                 never reached a terminal phase: {frames:#?}"
             ));
         }
         let (response, emitted) = call_capturing(stdin, stdout, "deslop/reportGet", &json!({}))?;
@@ -219,6 +244,11 @@ fn wait_for_terminal_progress(
             return Err(anyhow!(
                 "reportGet returned no result while polling: {response:#}"
             ));
+        }
+        // A pass that is still emitting frames is still working, however slow
+        // the machine underneath it is. Only silence restarts the clock.
+        if !emitted.is_empty() {
+            deadline = stall_deadline();
         }
         frames.extend(emitted);
         std::thread::sleep(POLL_INTERVAL);

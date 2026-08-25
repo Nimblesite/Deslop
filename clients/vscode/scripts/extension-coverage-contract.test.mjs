@@ -20,7 +20,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  cpSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { delimiter, resolve } from "node:path";
 import { vsixRoot } from "./coverage-paths.mjs";
 
@@ -36,6 +43,8 @@ const STUBBED_TOOLS = ["npm", "node", "npx"];
 const CALL_LOG = "calls.log";
 /// The script must fail, not pass, when the tree is left instrumented.
 const EXPECTED_EXIT = 1;
+/// The npm script that copies the fixtures the suites open.
+const STAGE_FIXTURES = "stage-fixtures";
 
 /// Writes an executable stub for `tool` into `binDir`.
 ///
@@ -85,6 +94,36 @@ function runSandboxed() {
     },
   });
 }
+
+/// Reads the stub call log written by the sandboxed run.
+function callLog() {
+  return readFileSync(resolve(SANDBOX, "bin", CALL_LOG), "utf8");
+}
+
+// [VSIX-TESTING-COVERAGE] `npx vscode-test` bypasses the `pretest` hook, so the
+// script owns fixture staging itself. Without it the suites open
+// `out/test/fixtures/**` files that `tsc` never produces: green on a tree that
+// ran the suite before, red on a clean checkout.
+test("the suite is handed staged fixtures, after instrumentation", (t) => {
+  t.after(() => rmSync(SANDBOX, { recursive: true, force: true }));
+  runSandboxed();
+  const calls = callLog().split("\n");
+  const staged = calls.findIndex((line) => line === `npm run ${STAGE_FIXTURES}`);
+  const instrumented = calls.findIndex((line) => line.startsWith("node "));
+  const suite = calls.findIndex((line) => line.startsWith("npx vscode-test"));
+
+  assert.ok(staged >= 0, `the run never staged the fixtures:\n${callLog()}`);
+  assert.ok(suite >= 0, `the run never reached the suite:\n${callLog()}`);
+  assert.ok(
+    instrumented >= 0 && instrumented < staged,
+    `instrumentation must run before staging, or it can rewrite what was ` +
+      `staged:\n${callLog()}`,
+  );
+  assert.ok(
+    staged < suite,
+    `the fixtures must be on disk before the suite opens them:\n${callLog()}`,
+  );
+});
 
 test("a failed clean recompile fails the command and names the instrumented tree", (t) => {
   t.after(() => rmSync(SANDBOX, { recursive: true, force: true }));

@@ -295,6 +295,14 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "22.x"
+          # `_ci-contract-tests` installs the extension's dependencies: one of
+          # the VSIX script gates runs `extension-coverage.mjs` as a real
+          # process and it imports `istanbul-lib-coverage`. Caching the ~/.npm
+          # download store keeps that install to a few seconds.
+          cache: npm
+          cache-dependency-path: |
+            clients/vscode/package-lock.json
+            clients/vscode/webview-ui/package-lock.json
       - name: Install typediagram
         run: npm install -g typediagram@0.11.0
       - name: Restore release build

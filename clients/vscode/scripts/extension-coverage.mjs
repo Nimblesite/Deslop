@@ -42,6 +42,8 @@ const rawDir = resolve(outDir, "raw");
 const baselinePath = resolve(outDir, "baseline-out.json");
 /// Handed to the extension host so the dump hook knows where to write.
 const COVERAGE_DIR_ENV = "DESLOP_EXTENSION_COVERAGE_DIR";
+/// The npm script that copies `src/test/fixtures` into `out/test/fixtures`.
+const STAGE_FIXTURES_SCRIPT = "stage-fixtures";
 
 /// A step that failed. Thrown, never `process.exit`ed: an exit here would skip
 /// the restore in `finally` and leave instrumented output staged.
@@ -54,6 +56,14 @@ function collect() {
   if (status !== 0) throw new StepFailed(`compile failed (${status})`);
   status = runTool("node", ["./scripts/instrument-out.mjs"]);
   if (status !== 0) throw new StepFailed(`instrumentation failed (${status})`);
+  // The suites open real fixture files out of `out/test/fixtures`, which `tsc`
+  // does not produce — `stage-fixtures` copies them from `src/`, and the
+  // `pretest` hook that normally runs it only fires for `npm test`. This
+  // invokes `vscode-test` directly, so it must stage them itself. Skipping it
+  // passes on a working tree that ran the suite before and fails on a clean
+  // checkout, which is a gate that measures the disk, not the code.
+  status = runTool("npm", ["run", STAGE_FIXTURES_SCRIPT]);
+  if (status !== 0) throw new StepFailed(`fixture staging failed (${status})`);
   status = runTool("npx", ["vscode-test"], { [COVERAGE_DIR_ENV]: rawDir });
   if (status !== 0)
     throw new StepFailed(`the extension suite failed (${status})`);

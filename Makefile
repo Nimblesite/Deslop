@@ -9,7 +9,7 @@
 # human entry points and are the only ones `make help` lists.
 # =============================================================================
 
-.PHONY: build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify compile-release-tests coverage coverage-run coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-coverage-check _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
+.PHONY: build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify compile-release-tests coverage coverage-run coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-node-modules _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-coverage-check _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
 
 _JETBRAINS_DIR := clients/jetbrains
 
@@ -185,7 +185,18 @@ _ci-analyze: typediagram-gen
 	@node scripts/actions/verify-env-path-writes.mjs
 
 # _ci-contract-tests: Test the repository's Node-based gates exactly once.
-_ci-contract-tests:
+#
+#                     Carries `_vsix-node-modules` because the first group
+#                     below runs the extension's own scripts, and one of them
+#                     ([VSIX-TESTING-COVERAGE-RESTORE]) drives
+#                     `extension-coverage.mjs` as a real process — which
+#                     imports `istanbul-lib-coverage`. The CI job that runs
+#                     this target builds no VSIX, so without the dependencies
+#                     the gate dies on `ERR_MODULE_NOT_FOUND` and the contract
+#                     it exists to prove is never exercised. Declaring the
+#                     prerequisite here rather than in the workflow keeps the
+#                     target runnable from a clean checkout.
+_ci-contract-tests: _vsix-node-modules
 	@echo "==> VSIX harness + packaging script gates (unit)..."
 	@node --test clients/vscode/scripts/*.test.mjs
 	@echo "==> PATH/env injection gate ([ACTION-ENVPATH])..."
@@ -526,6 +537,17 @@ _delete-path-binaries:
 _vsix-install:
 	cd clients/vscode && npm install --no-audit --no-fund
 	cd clients/vscode/webview-ui && npm install --no-audit --no-fund
+
+# _vsix-node-modules: The extension's dependencies, installed only when they
+#                     are missing. `lint` reaches this through
+#                     `_ci-contract-tests`, and `npm install` can rewrite
+#                     `package-lock.json` — a lint target that mutates the tree
+#                     is not a lint target, and `make ci` would otherwise pay
+#                     for the same install twice. Present means present: a
+#                     deliberate refresh is `_vsix-install`.
+_vsix-node-modules:
+	@test -d clients/vscode/node_modules \
+	  || $(MAKE) _vsix-install
 
 # _vsix-build: Build deslop-lsp + deslop-mcp + VSIX bundle + webview UI.
 #   Depends on `_vsix-install` so a cold CI checkout has the webview-ui +
