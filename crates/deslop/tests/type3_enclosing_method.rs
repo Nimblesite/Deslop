@@ -34,6 +34,36 @@
 //! | `ts-type3-stmt` | 48 / 42 | 0.8067 | 0.875 |
 //! | `go-type3` | 53 / 48 | 0.7755 | 0.906 |
 //! | `python-type3` | 37 / 31 | 0.7429 | 0.842 |
+//! | `javascript-type3` | 52 / 45 | 0.8438 | 0.868 |
+//! | `typescript-type3` | 59 / 52 | 0.8438 | 0.857 |
+//!
+//! # The two ECMAScript rows (GH #427)
+//!
+//! `javascript-type3` and `typescript-type3` hold the same source shape
+//! as `ts-type3-stmt` — `accumulate`/`aggregate`, a full identifier
+//! rename plus one trailing `running = running + 2;` — and neither was
+//! pinned here, so both regressed unobserved. Each reported the nested
+//! `let running = 0; for (…)` run at lines 2-9 and dropped the method
+//! pair entirely.
+//!
+//! Admission was *not* the cause, which is what separates #427 from the
+//! five rows above. The rescue measures the enclosing pair on both
+//! fixtures — `left_nodes=52 right_nodes=45 token_jaccard=0.8438
+//! overlap=0.8679` for JavaScript — clearing
+//! `SHARED_SUBTREE_MIN_OVERLAP` 0.75 and `SHARED_SUBTREE_MIN_JACCARD`
+//! 0.65, so the pair enters clustering as `SurvivedSharedSubtree`. It
+//! was lost in the same-file overlap collapse, which ranks the views of
+//! one run by the cross-file edge each carries: the Merkle-equal
+//! fragment reads 1.00 *because* it excludes the inserted statement, and
+//! no honest graded overlap of the view containing that statement can
+//! outrank it.
+//!
+//! [PIPELINE-CLUSTER-EXACT-SCOPE] stops that contest inside one authored
+//! declaration. It reached TypeScript first because type annotations put
+//! a fingerprint boundary strictly inside the declaration; JavaScript has
+//! no such boundary, its widest member carries no enclosing declaration
+//! of its own, and the guard could not fire until it also covered a
+//! representative that *is* the declaration rather than one inside it.
 //!
 //! C# cleared the bar on tokens alone only because its
 //! `namespace`/`class` scaffolding dilutes the one-statement delta. The
@@ -235,5 +265,25 @@ fn ts_type3_one_inserted_statement_must_not_erase_the_method_pair() -> Result<()
         "ts-type3-stmt",
         &span("pointBoard.ts", 1, 12, 1, 12),
         &span("scoreBoard.ts", 1, 11, 1, 11),
+    )
+}
+
+#[test]
+
+fn javascript_type3_reports_the_enclosing_method_pair() -> Result<()> {
+    assert_enclosing_pair_visible(
+        "javascript-type3",
+        &span("delta.js", 1, 12, 1, 12),
+        &span("epsilon.js", 1, 11, 1, 11),
+    )
+}
+
+#[test]
+
+fn typescript_type3_reports_the_enclosing_method_pair() -> Result<()> {
+    assert_enclosing_pair_visible(
+        "typescript-type3",
+        &span("delta.ts", 1, 12, 1, 12),
+        &span("epsilon.ts", 1, 11, 1, 11),
     )
 }

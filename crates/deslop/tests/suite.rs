@@ -35,6 +35,8 @@ mod cli;
 mod cluster_id_uniqueness;
 #[path = "config_include_dependencies.rs"]
 mod config_include_dependencies;
+#[path = "content_gate_signal_honesty.rs"]
+mod content_gate_signal_honesty;
 #[path = "corpus_manifest_contract.rs"]
 mod corpus_manifest_contract;
 #[path = "cross_cluster_collapse.rs"]
