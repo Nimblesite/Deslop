@@ -18,6 +18,13 @@ const FILES: [&str; 2] = ["Alpha.cs", "Beta.cs"];
 const CLUSTERS_FIELD: &str = "clusters";
 const METRICS_FIELD: &str = "metrics";
 const FILES_ANALYSED_FIELD: &str = "files_analysed";
+const DUPLICATED_FILES_FIELD: &str = "duplicated_files";
+
+/// The duplicate population once `node_modules/pkg/Beta.cs` is rewritten
+/// to unrelated code: of the four seeded copies of the `csharp-small`
+/// pair, the three untouched files — `Alpha.cs`, `Beta.cs` and
+/// `node_modules/pkg/Alpha.cs` — remain one clone family.
+const DUPLICATED_FILES_AFTER_EDIT: u64 = 3;
 
 /// [PRINCIPLES-LIVE-IS-REACTIVE] `include_dependencies = true` governs the
 /// whole watcher → scheduler → report loop. A first-party edit proves the OS
@@ -88,7 +95,7 @@ fn opted_in_dependency_edit_refreshes_clusters_metrics_and_occurrences() -> Resu
     })?;
     assert_initial_report(&initial);
     assert_eq!(
-        json_path(&initial, &[METRICS_FIELD, "duplicated_files"]),
+        json_path(&initial, &[METRICS_FIELD, DUPLICATED_FILES_FIELD]),
         4,
         "{initial:#}"
     );
@@ -115,11 +122,9 @@ fn opted_in_dependency_edit_refreshes_clusters_metrics_and_occurrences() -> Resu
         "repo metrics stayed stale"
     );
     assert!(
-        json_path(&changed, &[METRICS_FIELD, "duplicated_files"])
-            .as_u64()
-            .unwrap_or_default()
-            < 4,
-        "the unrelated dependency must leave the duplicate population: {changed:#}"
+        dependency_left_duplicate_population(&changed),
+        "the rewritten dependency must leave the duplicate population while the three \
+         untouched copies stay in it: {changed:#}"
     );
     assert!(
         json_path(&changed, &[METRICS_FIELD, "duplication_percent"])
@@ -174,6 +179,43 @@ fn assert_changed_report(changed: &serde_json::Value, previous: &serde_json::Val
         at(changed, METRICS_FIELD),
         at(previous, METRICS_FIELD),
         "metrics must refresh"
+    );
+}
+
+/// True when `report` proves the rewritten dependency left the duplicate
+/// population while the three untouched copies stayed in it
+/// ([PRINCIPLES-LIVE-IS-REACTIVE], GH #416). Fail-closed: an absent or
+/// non-numeric `metrics.duplicated_files` compares as `Null`, so only the
+/// measured population of the surviving copies satisfies the verdict —
+/// never a report that stopped rendering the count, and never a blind
+/// detector's zero.
+fn dependency_left_duplicate_population(report: &serde_json::Value) -> bool {
+    json_path(report, &[METRICS_FIELD, DUPLICATED_FILES_FIELD]) == DUPLICATED_FILES_AFTER_EDIT
+}
+
+/// GH #416: the duplicate-population verdict must be fail-closed. A report
+/// that stops rendering `metrics.duplicated_files`, and a blind detector
+/// rendering zero, must both be rejected; only the measured population of
+/// the three surviving copies satisfies it.
+#[test]
+fn duplicate_population_verdict_rejects_absent_and_blind_counts() {
+    let absent = serde_json::json!({ METRICS_FIELD: {} });
+    assert!(
+        !dependency_left_duplicate_population(&absent),
+        "a report missing metrics.{DUPLICATED_FILES_FIELD} must never satisfy the verdict"
+    );
+    let blind = serde_json::json!({ METRICS_FIELD: { DUPLICATED_FILES_FIELD: 0 } });
+    assert!(
+        !dependency_left_duplicate_population(&blind),
+        "a blind detector rendering zero duplicated files must never satisfy the verdict"
+    );
+    let measured = serde_json::json!({
+        METRICS_FIELD: { DUPLICATED_FILES_FIELD: DUPLICATED_FILES_AFTER_EDIT }
+    });
+    assert!(
+        dependency_left_duplicate_population(&measured),
+        "the measured population of {DUPLICATED_FILES_AFTER_EDIT} surviving copies must \
+         satisfy the verdict"
     );
 }
 

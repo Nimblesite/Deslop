@@ -27,6 +27,10 @@ const DIAGNOSTIC: &str = "textDocument/diagnostic";
 const CODE_LENS: &str = "textDocument/codeLens";
 const EXECUTE_COMMAND: &str = "workspace/executeCommand";
 const REPORT_GET: &str = "deslop/reportGet";
+const REFRESH_REPORT_COMMAND: &str = "deslop.lsp.refreshReport";
+
+/// `csharp-small` is exactly the `Alpha.cs`/`Beta.cs` clone pair.
+const FIXTURE_FILE_COUNT: u64 = 2;
 
 /// Every standard language-intelligence capability that belongs to the
 /// editor's real language server and that Deslop must never advertise.
@@ -260,15 +264,35 @@ fn refresh_command_re_evaluates_the_corpus_after_an_edit() -> Result<()> {
         &mut stdin,
         &mut stdout,
         EXECUTE_COMMAND,
-        &json!({ "command": "deslop.lsp.refreshReport" }),
+        &json!({ "command": REFRESH_REPORT_COMMAND }),
     )?;
-    let removed = response
-        .pointer("/result/clustersRemoved")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("refresh response missing clustersRemoved: {response}"))?;
+    assert_eq!(
+        response.pointer("/result/command").and_then(Value::as_str),
+        Some(REFRESH_REPORT_COMMAND),
+        "the refresh response names Deslop's own verb: {response}"
+    );
+    // GH #312: the response's delta counts diff against whichever snapshot
+    // came immediately before, so they race the live watcher — on a busy
+    // machine the watcher drops the clone first and `clustersRemoved` is
+    // legitimately zero. The refresh re-runs analysis synchronously, so
+    // the end state is deterministic whichever side ran first: assert it
+    // instead of the delta.
+    let refreshed = call(&mut stdin, &mut stdout, REPORT_GET, &json!({}))?;
+    let clusters = refreshed
+        .pointer("/result/clusters")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("refreshed report missing clusters: {refreshed}"))?;
     assert!(
-        removed >= 1,
-        "editing Alpha.cs away from Beta.cs must drop the clone on refresh: {response}"
+        clusters.is_empty(),
+        "editing Alpha.cs away from Beta.cs must leave no clone in the refreshed \
+         report — the pre-edit pass above proved the pair was detected: {refreshed:#}"
+    );
+    assert_eq!(
+        refreshed
+            .pointer("/result/files_analysed")
+            .and_then(Value::as_u64),
+        Some(FIXTURE_FILE_COUNT),
+        "both fixture files stay analysed after the refresh: {refreshed:#}"
     );
     Ok(())
 }
