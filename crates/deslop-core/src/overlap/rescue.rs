@@ -31,6 +31,11 @@ use super::{tally::RescueTally, OverlapMeasurer};
 /// spawn costs more than the measurements.
 const MIN_SHARD_WORK: usize = 4_096;
 
+/// Candidate pairs per claimed chunk. Small enough that a worker which
+/// draws a run of expensive endpoints cannot hold the stage open, large
+/// enough that claiming a chunk costs nothing beside measuring it.
+const RESCUE_CHUNK_PAIRS: usize = 512;
+
 /// Measures shared-subtree overlap onto every rescue-eligible candidate
 /// pair, in parallel when the population justifies it.
 pub fn apply_shared_subtree_rescue(
@@ -49,96 +54,50 @@ pub fn apply_shared_subtree_rescue(
         tally.report_total(measurer.stats());
         return;
     }
-    let shard_size = pairs.len().div_ceil(workers);
-    let mut shards: Vec<(RescueTally, super::MeasureStats)> = Vec::with_capacity(workers);
-    std::thread::scope(|scope| {
-        let mut handles = Vec::with_capacity(workers);
-        for chunk in pairs.chunks_mut(shard_size) {
-            handles.push(scope.spawn(move || run_shard(chunk, fingerprints, trees)));
-        }
-        join_all_pushing(handles, &mut shards);
-    });
+    // [PERF-FLUTTER-TODO-RESCUE] Many small chunks handed out on
+    // demand, not one contiguous block per worker: a measurement's
+    // cost grows with its endpoint size, so contiguous blocks of a
+    // sorted candidate list leave one worker running long after the
+    // rest have finished (20.8 s against a 5.9 s balanced ideal on the
+    // Flutter framework slice). Each worker keeps one measurer across
+    // every chunk it claims, so the alignment memos still accumulate.
+    let (_measured, shards) = crate::shard::map_chunks(
+        pairs.chunks_mut(RESCUE_CHUNK_PAIRS),
+        workers,
+        || (RescueTally::new(), OverlapMeasurer::new(trees)),
+        |(tally, measurer), chunk| measure_chunk(chunk, fingerprints, measurer, tally),
+    );
     report_shards(&shards);
 }
 
-/// Joins every worker handle, pushing each shard result in spawn order.
-/// A panicked worker is re-raised on the caller (`resume_unwind`), never
-/// swallowed: dropping an `Err` join would silently omit that shard's
-/// candidates from the analysis while the report still rendered — an
-/// incomplete scan masquerading as a complete one
-/// (`a_panicked_shard_poisons_the_whole_rescue`).
-fn join_all_pushing<T: Send>(handles: Vec<std::thread::ScopedJoinHandle<'_, T>>, out: &mut Vec<T>) {
-    for handle in handles {
-        match handle.join() {
-            Ok(shard) => out.push(shard),
-            Err(panic) => std::panic::resume_unwind(panic),
-        }
-    }
-}
-
-/// Measures one shard of the candidate list with its own measurer.
-fn run_shard(
+/// Measures one claimed chunk onto the worker's own tally and measurer.
+fn measure_chunk(
     chunk: &mut [CandidatePair],
     fingerprints: &[Fingerprint],
-    trees: &[NormalizedNode],
-) -> (RescueTally, super::MeasureStats) {
-    let mut measurer = OverlapMeasurer::new(trees);
-    let mut tally = RescueTally::new();
+    measurer: &mut OverlapMeasurer<'_>,
+    tally: &mut RescueTally,
+) {
     for pair in chunk.iter_mut() {
         tally.scan();
-        measure_one(pair, fingerprints, &mut measurer, &mut tally);
+        measure_one(pair, fingerprints, measurer, tally);
     }
-    let stats = measurer.stats();
-    (tally, stats)
 }
 
 /// Emits the merged, deterministic totals for a sharded run.
-fn report_shards(shards: &[(RescueTally, super::MeasureStats)]) {
-    let Some((first, stats)) = shards.first() else {
+///
+/// Every counter merged here is additive, so the totals are the same
+/// whichever worker claimed which chunk ([PIPELINE-DETERMINISM]).
+fn report_shards(shards: &[(RescueTally, OverlapMeasurer<'_>)]) {
+    let Some((first, measurer)) = shards.first() else {
         return;
     };
     let mut merged = first.clone();
-    let mut totals = *stats;
-    for (tally, stats) in shards.iter().skip(1) {
+    let mut totals = measurer.stats();
+    for (tally, measurer) in shards.iter().skip(1) {
         merged.absorb(tally);
-        totals = totals.add(*stats);
+        totals = totals.add(measurer.stats());
     }
     merged.report_total(totals);
-}
-
-/// A panicked worker must poison the whole rescue rather than vanish:
-/// `join_all_pushing` re-raises the payload, so the scan fails loudly
-/// instead of reporting totals computed from the surviving shards only.
-#[test]
-fn a_panicked_shard_poisons_the_whole_rescue() {
-    let payloads = [Ok(1_u32), Err("shard exploded"), Ok(2_u32)];
-    let result = std::panic::catch_unwind(|| {
-        std::thread::scope(|scope| {
-            let handles: Vec<_> = payloads
-                .into_iter()
-                .map(|payload| {
-                    scope.spawn(move || match payload {
-                        Ok(value) => value,
-                        // The codebase's sanctioned deliberate-panic
-                        // spelling (see observability.rs): an assert
-                        // that can never hold.
-                        Err(message) => {
-                            assert_eq!(1, 2, "poison the shard on purpose: {message}");
-                            0
-                        }
-                    })
-                })
-                .collect();
-            let mut collected = Vec::new();
-            join_all_pushing(handles, &mut collected);
-            collected
-        })
-    });
-    assert!(
-        result.is_err(),
-        "the panicked shard's payload must propagate — a swallowed Err join \
-         would report an incomplete analysis as complete"
-    );
 }
 
 /// How many worker threads the rescue uses for `pairs` candidates:
@@ -188,7 +147,7 @@ mod shard_equivalence_tests {
 
     use std::path::PathBuf;
 
-    use super::{apply_shared_subtree_rescue, run_shard, MIN_SHARD_WORK};
+    use super::{apply_shared_subtree_rescue, measure_chunk, RescueTally, MIN_SHARD_WORK};
     use crate::{
         ast::NormalizedNode,
         fingerprint::Fingerprint,
@@ -199,6 +158,21 @@ mod shard_equivalence_tests {
         },
         state::{FileId, FileRegistry},
     };
+
+    /// One serial shard over `chunk`: the reference a single worker
+    /// computes, assembled from the very `measure_chunk` the workers
+    /// run so the reference can never drift from the live path.
+    fn run_shard(
+        chunk: &mut [CandidatePair],
+        fingerprints: &[Fingerprint],
+        trees: &[NormalizedNode],
+    ) -> (RescueTally, crate::overlap::MeasureStats) {
+        let mut measurer = crate::overlap::OverlapMeasurer::new(trees);
+        let mut tally = RescueTally::new();
+        measure_chunk(chunk, fingerprints, &mut measurer, &mut tally);
+        let stats = measurer.stats();
+        (tally, stats)
+    }
 
     /// Parses `source` as Rust and fingerprints its root.
     fn parse(source: &str, file_id: FileId) -> Result<(NormalizedNode, Fingerprint), String> {
