@@ -421,9 +421,6 @@ jobs:
       - name: Calculate Rust coverage
         run: make coverage-report
 
-      - name: Enforce VSIX coverage
-        run: make _vsix-coverage-check
-
       - name: Enforce webview coverage
         run: make _vsix-webview-coverage-check
 
