@@ -731,15 +731,22 @@ fn exits_when_launching_parent_disappears_with_stdio_open() -> Result<()> {
         json!(MCP_PROTOCOL_VERSION_DATE)
     );
 
+    // Checked before the kill, not after. After it, "the mcp is still alive"
+    // is the negation of the contract this test exists to prove, and it holds
+    // only while the mcp has not yet noticed — so a server that reacts
+    // promptly fails here, and one that reacts at all fails under contention.
+    // Observed once in a full-workspace run. Before the kill the same fact is
+    // certain, and it is the fact that matters: the exit below belongs to this
+    // process rather than to one that was already gone.
+    assert!(
+        pid_exists(mcp_pid)?,
+        "mcp must be alive when its parent is killed, or its exit proves nothing"
+    );
     child.child.kill()?;
     let parent_status = child.child.wait()?;
     assert!(
         !parent_status.success(),
         "launcher parent should be killed during orphan-exit test"
-    );
-    assert!(
-        pid_exists(mcp_pid)?,
-        "mcp must still be observable after parent kill"
     );
     let exited = wait_for_pid_exit(mcp_pid, Duration::from_secs(SHUTDOWN_TIMEOUT_SECS))?;
     if !exited {
@@ -748,6 +755,10 @@ fn exits_when_launching_parent_disappears_with_stdio_open() -> Result<()> {
     assert!(
         exited,
         "deslop-mcp must exit within 5s when its launching parent disappears"
+    );
+    assert!(
+        !pid_exists(mcp_pid)?,
+        "mcp pid must be gone once the orphan-exit wait has returned"
     );
     Ok(())
 }
