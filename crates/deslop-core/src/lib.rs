@@ -52,6 +52,7 @@ pub mod report_metrics;
 mod report_render;
 pub mod report_restamp;
 mod report_weight;
+mod shard;
 pub mod sibling;
 pub mod state;
 pub mod tokens;

@@ -186,7 +186,7 @@ fn boilerplate_keys(corpus: &FingerprintCorpus) -> Vec<(FileId, &'static str, us
 // the one-worker output pins the ordered shard merge end to end:
 // fingerprint order, the flattened signature population, per-file
 // entries, sources, line counts, and boilerplate ranges
-// (`docs/performance-branch-review.md`, "Large parallel paths lack
+// (`docs/release-audit.md`, "Large parallel paths lack
 // black-box parity coverage").
 #[test]
 fn cold_corpus_is_identical_for_any_worker_count() -> Result<(), String> {

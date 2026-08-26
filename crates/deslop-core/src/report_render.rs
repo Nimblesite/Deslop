@@ -347,8 +347,7 @@ pub(crate) fn summarise(
 const PROVEN_IDENTICAL_TOKEN_JACCARD_FLOOR: f64 = 0.99;
 
 /// Corrects the reported `token_jaccard` for clusters the byte-equivalence
-/// upgrade in [`report_bucket_kind`] routed to [`ClusterKind::Identical`]
-///.
+/// upgrade in [`report_bucket_kind`] routed to [`ClusterKind::Identical`].
 ///
 /// A synthetic sibling-window fingerprint matches no single AST node, so the
 /// non-language signature path resolves it to a byte-offset-seeded fallback

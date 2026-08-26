@@ -9,7 +9,7 @@
 # human entry points and are the only ones `make help` lists.
 # =============================================================================
 
-.PHONY: build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify compile-release-tests coverage coverage-run coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-webview-coverage _vsix-webview-coverage-check _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
+.PHONY: build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify compile-release-tests coverage coverage-run coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-node-modules _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-coverage-check _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
 
 _JETBRAINS_DIR := clients/jetbrains
 
@@ -185,7 +185,18 @@ _ci-analyze: typediagram-gen
 	@node scripts/actions/verify-env-path-writes.mjs
 
 # _ci-contract-tests: Test the repository's Node-based gates exactly once.
-_ci-contract-tests:
+#
+#                     Carries `_vsix-node-modules` because the first group
+#                     below runs the extension's own scripts, and one of them
+#                     ([VSIX-TESTING-COVERAGE-RESTORE]) drives
+#                     `extension-coverage.mjs` as a real process — which
+#                     imports `istanbul-lib-coverage`. The CI job that runs
+#                     this target builds no VSIX, so without the dependencies
+#                     the gate dies on `ERR_MODULE_NOT_FOUND` and the contract
+#                     it exists to prove is never exercised. Declaring the
+#                     prerequisite here rather than in the workflow keeps the
+#                     target runnable from a clean checkout.
+_ci-contract-tests: _vsix-node-modules
 	@echo "==> VSIX harness + packaging script gates (unit)..."
 	@node --test clients/vscode/scripts/*.test.mjs
 	@echo "==> PATH/env injection gate ([ACTION-ENVPATH])..."
@@ -198,6 +209,8 @@ _ci-contract-tests:
 	@node --test scripts/repository/dup-gate-source.test.mjs
 	@echo "==> Test-selection gate ([TEST-SELECTION])..."
 	@node --test scripts/repository/test-selection.test.mjs
+	@echo "==> Coverage-isolation gate ([CI-COVERAGE-ISOLATION])..."
+	@node --test scripts/repository/coverage-isolation.test.mjs
 
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
 ##      Depends on typediagram-gen because rustfmt walks the module tree
@@ -327,6 +340,22 @@ test-shard: _delete-path-binaries typediagram-gen
 ##           `coverage-thresholds.json` and `_coverage_check` enforces each
 ##           crate independently — no workspace roll-up masking. The
 ##           `--ignore-filename-regex` list has the same single source.
+##
+##           [CI-COVERAGE-ISOLATION] The explicit `clean --workspace` is not
+##           tidiness. `--no-report`
+##           leaves both the raw profiles and the previous build's objects in
+##           place, and `report` maps the merged profile against every object
+##           it finds. An object from an earlier build carries an older
+##           coverage mapping of the same file, so its line table is unioned
+##           with the current one and the file is credited with lines it no
+##           longer has — all of them unexecuted. Measured on this tree:
+##           `app.rs` is 193 lines and 99.5% covered, and a single stale
+##           object made it 362 lines and 53.0%, dragging `deslop-lsp` from
+##           94.0% to 85.1% and the workspace from 94.5% to 92.6%. Cleaning
+##           profiles alone (`--profraw-only`) does not fix it — the stale
+##           object survives. `--workspace` drops only this repository's
+##           artifacts, so third-party dependencies stay cached and the
+##           honest number costs about a minute.
 ##           Carries `_delete-path-binaries` for the same reason `test`
 ##           does: this target runs the suite, and a Deslop binary leaked
 ##           onto PATH would shadow the built one.
@@ -335,6 +364,7 @@ coverage: coverage-run coverage-report
 coverage-run: _delete-path-binaries typediagram-gen
 	@echo "==> Coverage test collection (instrumented release)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
+	cargo llvm-cov clean --workspace
 	cargo llvm-cov --release --workspace --all-targets --features $(_TEST_FEATURES) --no-report
 
 coverage-report:
@@ -508,6 +538,21 @@ _vsix-install:
 	cd clients/vscode && npm install --no-audit --no-fund
 	cd clients/vscode/webview-ui && npm install --no-audit --no-fund
 
+# _vsix-node-modules: The extension's dependencies, materialised only when
+#                     they are missing. `lint` reaches this through
+#                     `_ci-contract-tests`, so it must not change anything a
+#                     reader would have to review: `npm ci` installs exactly
+#                     what `package-lock.json` names and never writes it back,
+#                     where `npm install` may resolve a newer tree and commit
+#                     that decision to the lockfile. A gate that can silently
+#                     move a dependency version is not a gate. Present means
+#                     present — a deliberate refresh is `_vsix-install`, and
+#                     the webview's own dependencies belong to the VSIX build,
+#                     not to these script gates.
+_vsix-node-modules:
+	@test -d clients/vscode/node_modules \
+	  || (cd clients/vscode && npm ci --no-audit --no-fund)
+
 # _vsix-build: Build deslop-lsp + deslop-mcp + VSIX bundle + webview UI.
 #   Depends on `_vsix-install` so a cold CI checkout has the webview-ui +
 #   extension Node deps needed for esbuild bundling, and on `typediagram-gen`
@@ -528,12 +573,14 @@ _vsix-test: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-
 _vsix-test-ollama: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-binaries
 	cd clients/vscode && npm run test:ollama
 
-# _vsix-coverage: Run the VS Code suite (extension host). No coverage is
-#   collected for out/**: the desktop extension host ignores
-#   NODE_V8_COVERAGE for plain-Mocha suites (gh #440). The webview leg is
-#   measured by _vsix-webview-coverage below.
+# _vsix-coverage: Run the VS Code suite (extension host) and measure it. The
+#   desktop host writes no V8 profile for extension code (gh #440), so the
+#   counters are compiled into the modules and dumped from inside the host —
+#   see clients/vscode/scripts/extension-coverage.mjs. One suite execution
+#   yields both the pass/fail result and the coverage summary. The webview leg
+#   is measured by _vsix-webview-coverage below.
 _vsix-coverage: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-binaries
-	cd clients/vscode && npm run coverage:collect
+	cd clients/vscode && npm run coverage:extension
 
 # _vsix-playwright-html: Render the standalone HTML report from a fixture repo
 #   with the real deslop CLI, then assert in a headless browser (Playwright)
@@ -548,7 +595,7 @@ _vsix-playwright-html: _vsix-install
 
 # _vsix-webview-coverage: Drive the webview bundle in a real browser (Playwright)
 #   with V8 coverage on and map executed ranges back to webview-ui/src. Threshold
-#   calculation is deferred to _vsix-webview-coverage-check.
+#   calculation is deferred to _vsix-coverage-check.
 #   The webview is invisible to the vscode-test c8 pass (extension host only);
 #   this closes that blind spot (#254). The script rebuilds the production
 #   bundle in a finally, so a coverage build is never left staged for packaging
@@ -556,7 +603,8 @@ _vsix-playwright-html: _vsix-install
 _vsix-webview-coverage: _vsix-install
 	cd clients/vscode && npx playwright install --with-deps chromium && npm run coverage:webview
 
-_vsix-webview-coverage-check:
+_vsix-coverage-check:
+	cd clients/vscode && npm run coverage:extension:check
 	cd clients/vscode && npm run coverage:webview:check
 
 ## vsix-package: Build the .vsix artifact (does not publish).

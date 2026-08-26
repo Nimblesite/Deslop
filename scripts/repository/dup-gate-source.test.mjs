@@ -14,8 +14,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { repoRoot } from "../lib/repo-root.mjs";
+import { recipeBlocks } from "../lib/makefile.mjs";
 
-const makefile = readFileSync(resolve(repoRoot, "Makefile"), "utf8").split("\n");
 const ciWorkflow = readFileSync(resolve(repoRoot, ".github/workflows/ci.yml"), "utf8").split("\n");
 
 // The one workflow allowed to install a published CLI: its whole purpose is
@@ -31,14 +31,14 @@ function stepValue(line) {
   return trimmed.startsWith("- ") ? trimmed.slice(2).trim() : trimmed;
 }
 
-// Recipe lines of a make target: everything from the target line up to the
-// next line that starts in column 0. Line-exact, no pattern matching.
+// The single block declaring a make target. `recipeBlocks` is shared with the
+// other Makefile gates ([TEST-SELECTION], [CI-COVERAGE-ISOLATION]); these two
+// targets are each declared once, and a second declaration would be a change
+// worth failing on rather than quietly merging.
 function recipe(target) {
-  const start = makefile.findIndex((line) => line.startsWith(`${target}:`));
-  assert.ok(start >= 0, `Makefile no longer declares a \`${target}\` target`);
-  const rest = makefile.slice(start + 1);
-  const end = rest.findIndex((line) => line.length > 0 && !line.startsWith("\t") && !line.startsWith(" "));
-  return { header: makefile[start], body: (end < 0 ? rest : rest.slice(0, end)).join("\n") };
+  const blocks = recipeBlocks(target);
+  assert.equal(blocks.length, 1, `Makefile must declare exactly one \`${target}\` recipe; found ${blocks.length}`);
+  return blocks[0];
 }
 
 test("[CI-DESLOP] the gate runs the binary this workspace builds", () => {

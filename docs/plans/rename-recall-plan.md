@@ -2,7 +2,7 @@
 
 One defect family: **a consistently-renamed real duplicate never reaches the report.** Two mechanisms lose it — the token signature drops the pair before it clusters (#367, and its downstream #369/#370), and the noise filters hide the cluster after it forms (#373). Every fix below is a *replacement*: the defective code is deleted, not guarded, not thresholded, not wrapped.
 
-Supersedes `docs/plans/embedding-accuracy-plan.md`, which covered only the embedding half. Nothing references it; it is deleted as part of step 0.
+Supersedes `docs/plans/embedding-accuracy-plan.md`, which covered only the embedding half. Nothing references it, and step 0 deletes it — until step 0 lands, the file is still in the tree.
 
 ## Measured at HEAD `8dc3d1f47`
 
@@ -13,6 +13,8 @@ Supersedes `docs/plans/embedding-accuracy-plan.md`, which covered only the embed
 | #369 | 3 `#[ignore]`d tests in tree | `pair_size_coherence:124`, `issue_343_sum_clamp_saturation:89`, `lsp_embedding_determinism:36` |
 | #370 | 1 `#[ignore]`d test in tree | `embedding_failure_progress:32` — hangs >14 min on the rejected-refresh path |
 
+> **The bracketed IDs below are proposed, not registered.** `[FUSION-SIGNALS-TOKEN-MULTISET]`, `[CLONE-NOISE-COPY-PROOF]` and `[LIVE-EMBEDDING-REFRESH-TERMINAL]` name work this plan has not landed: no section in `docs/specs/` defines them and no code or test cites them, which is correct while the behaviour they would describe does not exist. Checklist item 8 registers them, and until it does none of them is a spec reference — do not cite them from code, tests, or another spec.
+
 ## Fix 1 — [FUSION-SIGNALS-TOKEN-MULTISET] (#367, root cause)
 
 `crates/deslop-core/src/lsh.rs::minhash_signature` estimates Jaccard over the **set** of distinct k-grams. A repetitive body has a small distinct-gram set, so one inserted node displaces a large share of it: two functions 99.7% identical by node count measure `token_jaccard = 0.664`, `structural = 0` (the paren rehashes every ancestor Merkle), and `bounded_fused < FUSED_THRESHOLD` kills the pair. Nothing downstream can recover it.
@@ -20,12 +22,6 @@ Supersedes `docs/plans/embedding-accuracy-plan.md`, which covered only the embed
 **Delete** the set-of-distinct-grams feed into `minhash_signature` (`pipeline/signatures.rs::signature_for_tokens`). **Replace** with a multiset signature — each k-gram occurrence tagged with its per-type ordinal, so multiplicity carries weight and a single inserted node perturbs a handful of features instead of a whole feature class. `estimate_jaccard`, `BANDS`, `ROWS_PER_BAND`, `SIGNATURE_LEN` are unchanged; this is a feature-construction replacement, not a scoring one.
 
 **Not permitted:** lowering `FUSED_THRESHOLD` or `LSH_ONLY_MIN_JACCARD`. Validation runs both directions on the pinned corpus — recall on shape-changing Type-3, and zero new false positives on repetitive scaffolding.
-
-## Fix 2 — [CLONE-NOISE-COPY-PROOF] (#373)
-
-Every noise filter's escape hatch compares **raw source bytes**, so only a *verbatim* copy survives and every renamed copy is hidden. The module header at `cluster_filters/mod.rs:88` claims "a verbatim/renamed copy survives" — the code has never done the renamed half.
-
-**Delete** `enclosing_function_bodies_differ` (`cluster_filters/mod.rs:471`) and all seven `raw_snippet_texts_differ` call sites: `mod.rs:221`, `dart.rs:101`, `dart_data_table.rs:37`, `ecmascript.rs:27`, `python_constants.rs:33`, `rust.rs:422`, `rust.rs:517`. **Replace** with one predicate over the `ContentEvidence` the pipeline already measures (`content.rs` — `agreement`, `rename_consistency`, `literal_fraction`): a cluster whose identifier mapping is bijective and whose literals align is a *proven copy* and is never filtered as noise. `cluster_is_hidden` already holds `cluster.content`; thread it into `is_noise_pattern` rather than re-deriving anything. One predicate, seven call sites, no per-language variants.
 
 ## Fix 3 — [FUSION-EMBED-PROVIDER] (#369a)
 
@@ -50,6 +46,16 @@ Every noise filter's escape hatch compares **raw source bytes**, so only a *verb
 On the rejected-refresh path the server emits no terminal `deslop/embeddingProgress` frame, so the client blocks forever in the unbounded read — upstream of the test's 20 s timeout. This is a server defect, not a test defect.
 
 **Delete** the path that can exit without publishing a terminal frame. **Replace** with a refresh that publishes exactly one terminal frame (success *or* failure) on every exit, preserving the last-good report. Adding a client-side timeout to the test is prohibited — it would convert a hang into a green run over a server that still hangs in the editor.
+
+## Fix 2 — [CLONE-NOISE-COPY-PROOF] (#373)
+
+> Placed last so the `FUSION` sections sit adjacent, as the spec-ID rule
+> requires. Position is not order here — `Order and gates` below is, and it
+> says this fix is independent and may land first.
+
+Every noise filter's escape hatch compares **raw source bytes**, so only a *verbatim* copy survives and every renamed copy is hidden. The module header at `cluster_filters/mod.rs:88` claims "a verbatim/renamed copy survives" — the code has never done the renamed half.
+
+**Delete** `enclosing_function_bodies_differ` (`cluster_filters/mod.rs:471`) and all seven `raw_snippet_texts_differ` call sites: `mod.rs:221`, `dart.rs:101`, `dart_data_table.rs:37`, `ecmascript.rs:27`, `python_constants.rs:33`, `rust.rs:422`, `rust.rs:517`. **Replace** with one predicate over the `ContentEvidence` the pipeline already measures (`content.rs` — `agreement`, `rename_consistency`, `literal_fraction`): a cluster whose identifier mapping is bijective and whose literals align is a *proven copy* and is never filtered as noise. `cluster_is_hidden` already holds `cluster.content`; thread it into `is_noise_pattern` rather than re-deriving anything. One predicate, seven call sites, no per-language variants.
 
 ## Order and gates
 

@@ -1,19 +1,19 @@
 {
   "meta": {
     "repo": "Nimblesite/Deslop",
-    "published_at": "2026-08-24T12:15:57Z",
-    "published_at_long": "24th of August 2026, 12pm",
+    "published_at": "2026-08-25T21:30:33Z",
+    "published_at_long": "25th of August 2026, 9pm",
     "source_url": "https://github.com/Nimblesite/Deslop/issues",
     "method": "GitHub metadata: the Priority field, lane/* labels, explicit relationships, and cross-references. No AI enrichment.",
     "planning_note": "Indicative only — not a schedule. Relative sequencing uses two parallel tracks per workstream, holds blocked work until every blocker finishes, and takes effort units from the Effort field (high 8, medium 4, low 2) or, when it is unset, the issue type: feature 8, bug 5, task 4."
   },
   "summary": {
-    "open": 120,
+    "open": 121,
     "verify": 17,
     "showstoppers": 1,
-    "critical": 74,
-    "linked": 94,
-    "relationships": 147
+    "critical": 73,
+    "linked": 95,
+    "relationships": 149
   },
   "workstreams": [
     {
@@ -66,8 +66,8 @@
       "name": "Release & delivery",
       "description": "Packaging, signing, releases, deployment, and platform contracts.",
       "color": "#c6a0f6",
-      "count": 7,
-      "urgent": 3,
+      "count": 6,
+      "urgent": 2,
       "verify": 0
     },
     {
@@ -93,7 +93,7 @@
       "name": "Unassigned",
       "description": "No lane/* label on the issue — triage owes it one.",
       "color": "#8e8b8a",
-      "count": 0,
+      "count": 2,
       "urgent": 0,
       "verify": 0
     }
@@ -113,7 +113,7 @@
       "name": "Critical",
       "description": "seriously impacting accuracy or the usefulness of the tool",
       "color": "#f06292",
-      "count": 74
+      "count": 73
     },
     {
       "id": "normal",
@@ -137,7 +137,7 @@
       "name": "No priority set",
       "description": "No Priority value on the issue — triage owes it one.",
       "color": "#8e8b8a",
-      "count": 4
+      "count": 6
     }
   ],
   "issues": [
@@ -172,7 +172,7 @@
       ],
       "milestone": null,
       "created_at": "2026-08-22T10:32:12Z",
-      "updated_at": "2026-08-24T11:17:13Z",
+      "updated_at": "2026-08-25T21:05:23Z",
       "lifecycle": "active",
       "priority": "showstopper",
       "workstream": "accuracy",
@@ -280,6 +280,48 @@
       }
     },
     {
+      "number": 336,
+      "title": "False positive: numeric array literals rank #1 on dotnet/fsharp — data-table classification is Dart-only",
+      "url": "https://github.com/Nimblesite/Deslop/issues/336",
+      "excerpt": "Summary Scanning dotnet/fsharp @ v15.2.302 (ba48c78076ef15cdfef89d0001c538f3f130421b), the **top-ranked cluster in the entire report** is an integer array literal, classified category: \"logic\". CloneCategory::data exists (#190) but its only classifier is crates/deslop-core/src…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "fixed-on-main",
+          "color": "68e63b",
+          "description": "waiting to be tested in a real release"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-09T04:43:40Z",
+      "updated_at": "2026-08-24T08:45:07Z",
+      "lifecycle": "verify",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 3,
+      "plan": {
+        "offset": 0,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
       "number": 367,
       "title": "Recall hole: nested sibling window subsumes the enclosing near-verbatim clone, content gate hides the remainder — ts-mixed-band pair renders zero clusters without embeddings",
       "url": "https://github.com/Nimblesite/Deslop/issues/367",
@@ -321,9 +363,9 @@
       "workstream": "accuracy",
       "inbound_links": 3,
       "plan": {
-        "offset": 0,
+        "offset": 5,
         "effort_units": 5,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -373,7 +415,7 @@
       "workstream": "accuracy",
       "inbound_links": 6,
       "plan": {
-        "offset": 5,
+        "offset": 10,
         "effort_units": 5,
         "track": 0
       }
@@ -459,7 +501,7 @@
       "plan": {
         "offset": 10,
         "effort_units": 5,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -504,9 +546,9 @@
       "workstream": "accuracy",
       "inbound_links": 3,
       "plan": {
-        "offset": 10,
+        "offset": 15,
         "effort_units": 5,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -579,21 +621,63 @@
       }
     },
     {
-      "number": 336,
-      "title": "False positive: numeric array literals rank #1 on dotnet/fsharp — data-table classification is Dart-only",
-      "url": "https://github.com/Nimblesite/Deslop/issues/336",
-      "excerpt": "Summary Scanning dotnet/fsharp @ v15.2.302 (ba48c78076ef15cdfef89d0001c538f3f130421b), the **top-ranked cluster in the entire report** is an integer array literal, classified category: \"logic\". CloneCategory::data exists (#190) but its only classifier is crates/deslop-core/src…",
+      "number": 401,
+      "title": "Corpus precision check matches raw source text: check_boilerplate_not_ranked_first is unsound in both directions",
+      "url": "https://github.com/Nimblesite/Deslop/issues/401",
+      "excerpt": "The defect [crates/deslop/tests/corpus_repos.rs:320](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop/tests/corpus_repos.rs#L320) matches forbidden_top_shapes against **raw source text**: CLAUDE.md prohibits this outright — *\"No using text pattern matching on sourc…",
       "type": "Bug",
       "labels": [
+        {
+          "name": "spec-violation",
+          "color": "D73A4A",
+          "description": "Code logic does not match an approved spec section"
+        },
+        {
+          "name": "false-negative",
+          "color": "B60205",
+          "description": "A real duplicate is not reported"
+        },
         {
           "name": "false-positive",
           "color": "D93F0B",
           "description": "A reported cluster is not a real duplicate"
         },
         {
-          "name": "fixed-on-main",
-          "color": "68e63b",
-          "description": "waiting to be tested in a real release"
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "abdushakoor12",
+          "avatar": "https://avatars.githubusercontent.com/u/60779242?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-18T07:22:14Z",
+      "updated_at": "2026-08-23T05:59:34Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 3,
+      "plan": {
+        "offset": 15,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 284,
+      "title": "False-positive Type-3 cluster groups unrelated TDBIN test scenarios",
+      "url": "https://github.com/Nimblesite/Deslop/issues/284",
+      "excerpt": "Repository: Nimblesite/typeDiagram Commit: f9778f40ca0adf606a04b4881a865c9401de4343 Tool and full arguments: deslop . --output /tmp/typediagram-deslop-after-markdown-results --no-fail-over --nohtml --log-to-console --technical Relevant response: 3 Nearly identical code [Type-3…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
         },
         {
           "name": "lane/accuracy",
@@ -608,16 +692,201 @@
         }
       ],
       "milestone": null,
-      "created_at": "2026-08-09T04:43:40Z",
-      "updated_at": "2026-08-24T08:45:07Z",
-      "lifecycle": "verify",
+      "created_at": "2026-07-12T00:14:04Z",
+      "updated_at": "2026-08-23T06:00:02Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 4,
+      "plan": {
+        "offset": 20,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 79,
+      "title": "False positive: helper-call sites with literal arguments flagged as Type-2 clones",
+      "url": "https://github.com/Nimblesite/Deslop/issues/79",
+      "excerpt": "Summary \\top-offenders\\ flags clusters of identical-shape helper calls where every occurrence is just a one-liner invocation of an already-extracted helper, varying only in literal arguments. After identifier normalization these all look like \\_helper(STRING, DICT, STRING)\\ so…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-05-02T07:10:56Z",
+      "updated_at": "2026-08-23T06:00:12Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 3,
+      "plan": {
+        "offset": 20,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 103,
+      "title": "pytest patterns (monkeypatch.setenv chains, assert dict-access chains, fixture call-sites) cluster as duplication",
+      "url": "https://github.com/Nimblesite/Deslop/issues/103",
+      "excerpt": "Deslop reports normal test code as duplicates. On a Python repo full of pytest tests, once the real copy-paste duplicates are dealt with, most of the top findings are everyday test patterns — repeated environment-variable setup, repeated assertion lines, and calls to helper fu…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-05-02T09:14:15Z",
+      "updated_at": "2026-08-24T10:51:47Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 3,
+      "plan": {
+        "offset": 25,
+        "effort_units": 5,
+        "track": 0
+      }
+    },
+    {
+      "number": 71,
+      "title": "False positive: same HTTP verb + status assertion across different endpoints",
+      "url": "https://github.com/Nimblesite/Deslop/issues/71",
+      "excerpt": "Summary Cluster **10e21c4d0874fc34** (8 copies) flags the HTTP DELETE + 204 assertion pattern as duplicate code: Why it's a false positive After identifier normalisation, both look identical: client.delete(f\"string/{X.Y}\", headers={...}) + assert resp.status_code == int. But t…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-05-02T05:06:27Z",
+      "updated_at": "2026-08-23T06:00:13Z",
+      "lifecycle": "active",
       "priority": "critical",
       "workstream": "accuracy",
       "inbound_links": 2,
       "plan": {
-        "offset": 15,
+        "offset": 25,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 283,
+      "title": "False-positive Type-3 cluster conflates unrelated object-literal tables",
+      "url": "https://github.com/Nimblesite/Deslop/issues/283",
+      "excerpt": "Repository: Nimblesite/typeDiagram Commit: f9778f40ca0adf606a04b4881a865c9401de4343 Tool and full arguments: deslop . --output /tmp/typediagram-deslop-after-markdown-results --no-fail-over --nohtml --log-to-console --technical Relevant response: Found 522 groups of duplicated…",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-07-12T00:13:05Z",
+      "updated_at": "2026-08-23T06:00:03Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 30,
         "effort_units": 5,
         "track": 0
+      }
+    },
+    {
+      "number": 285,
+      "title": "False-positive Type-3 cluster groups unrelated TDBIN diagnostic tests by assertion idiom",
+      "url": "https://github.com/Nimblesite/Deslop/issues/285",
+      "excerpt": "Repository: Nimblesite/typeDiagram Commit: 5669cc1ec362ec12411e35f47bbc45d1e7a2ec6f Tool and arguments: Relevant response: Cluster members: packages/typediagram/test/converters/rust-tdbin.test.ts:293-296 packages/typediagram/test/converters/rust-tdbin.test.ts:298-301",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-07-12T01:31:19Z",
+      "updated_at": "2026-08-23T06:00:01Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 30,
+        "effort_units": 5,
+        "track": 1
       }
     },
     {
@@ -652,9 +921,9 @@
       "workstream": "accuracy",
       "inbound_links": 2,
       "plan": {
-        "offset": 15,
+        "offset": 35,
         "effort_units": 5,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -694,7 +963,44 @@
       "workstream": "accuracy",
       "inbound_links": 2,
       "plan": {
-        "offset": 20,
+        "offset": 35,
+        "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 362,
+      "title": "[RANK-STRUCTURAL-ONLY] Two-file run of unrelated const declarations reports as the repo's #1 duplicate (344 LOC false positive)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/362",
+      "excerpt": "Summary deslop . on this repo ranks a **344-LOC cluster as the single largest duplication in the codebase**, and it is a false positive. It is the biggest single contributor to the repo's own duplication_percent. Reproduce Cluster f062e53bcb4e: | field | value | |---|---|",
+      "type": "Bug",
+      "labels": [
+        {
+          "name": "false-positive",
+          "color": "D93F0B",
+          "description": "A reported cluster is not a real duplicate"
+        },
+        {
+          "name": "lane/accuracy",
+          "color": "ff5449",
+          "description": "False positives, false negatives, and clone-claim correctness"
+        }
+      ],
+      "assignees": [
+        {
+          "login": "MelbourneDeveloper",
+          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
+        }
+      ],
+      "milestone": null,
+      "created_at": "2026-08-13T09:27:56Z",
+      "updated_at": "2026-08-23T05:59:18Z",
+      "lifecycle": "active",
+      "priority": "critical",
+      "workstream": "accuracy",
+      "inbound_links": 2,
+      "plan": {
+        "offset": 40,
         "effort_units": 5,
         "track": 0
       }
@@ -726,7 +1032,7 @@
       "workstream": "accuracy",
       "inbound_links": 2,
       "plan": {
-        "offset": 20,
+        "offset": 40,
         "effort_units": 5,
         "track": 1
       }
@@ -763,7 +1069,7 @@
       "workstream": "accuracy",
       "inbound_links": 2,
       "plan": {
-        "offset": 25,
+        "offset": 45,
         "effort_units": 5,
         "track": 0
       }
@@ -810,7 +1116,7 @@
       "workstream": "accuracy",
       "inbound_links": 2,
       "plan": {
-        "offset": 25,
+        "offset": 45,
         "effort_units": 5,
         "track": 1
       }
@@ -838,312 +1144,6 @@
       "inbound_links": 2,
       "plan": {
         "offset": 5,
-        "effort_units": 5,
-        "track": 0
-      }
-    },
-    {
-      "number": 401,
-      "title": "Corpus precision check matches raw source text: check_boilerplate_not_ranked_first is unsound in both directions",
-      "url": "https://github.com/Nimblesite/Deslop/issues/401",
-      "excerpt": "The defect [crates/deslop/tests/corpus_repos.rs:320](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop/tests/corpus_repos.rs#L320) matches forbidden_top_shapes against **raw source text**: CLAUDE.md prohibits this outright — *\"No using text pattern matching on sourc…",
-      "type": "Bug",
-      "labels": [
-        {
-          "name": "spec-violation",
-          "color": "D73A4A",
-          "description": "Code logic does not match an approved spec section"
-        },
-        {
-          "name": "false-negative",
-          "color": "B60205",
-          "description": "A real duplicate is not reported"
-        },
-        {
-          "name": "false-positive",
-          "color": "D93F0B",
-          "description": "A reported cluster is not a real duplicate"
-        },
-        {
-          "name": "lane/accuracy",
-          "color": "ff5449",
-          "description": "False positives, false negatives, and clone-claim correctness"
-        }
-      ],
-      "assignees": [
-        {
-          "login": "abdushakoor12",
-          "avatar": "https://avatars.githubusercontent.com/u/60779242?v=4"
-        }
-      ],
-      "milestone": null,
-      "created_at": "2026-08-18T07:22:14Z",
-      "updated_at": "2026-08-23T05:59:34Z",
-      "lifecycle": "active",
-      "priority": "critical",
-      "workstream": "accuracy",
-      "inbound_links": 2,
-      "plan": {
-        "offset": 30,
-        "effort_units": 5,
-        "track": 0
-      }
-    },
-    {
-      "number": 284,
-      "title": "False-positive Type-3 cluster groups unrelated TDBIN test scenarios",
-      "url": "https://github.com/Nimblesite/Deslop/issues/284",
-      "excerpt": "Repository: Nimblesite/typeDiagram Commit: f9778f40ca0adf606a04b4881a865c9401de4343 Tool and full arguments: deslop . --output /tmp/typediagram-deslop-after-markdown-results --no-fail-over --nohtml --log-to-console --technical Relevant response: 3 Nearly identical code [Type-3…",
-      "type": "Bug",
-      "labels": [
-        {
-          "name": "false-positive",
-          "color": "D93F0B",
-          "description": "A reported cluster is not a real duplicate"
-        },
-        {
-          "name": "lane/accuracy",
-          "color": "ff5449",
-          "description": "False positives, false negatives, and clone-claim correctness"
-        }
-      ],
-      "assignees": [
-        {
-          "login": "MelbourneDeveloper",
-          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
-        }
-      ],
-      "milestone": null,
-      "created_at": "2026-07-12T00:14:04Z",
-      "updated_at": "2026-08-23T06:00:02Z",
-      "lifecycle": "active",
-      "priority": "critical",
-      "workstream": "accuracy",
-      "inbound_links": 4,
-      "plan": {
-        "offset": 35,
-        "effort_units": 5,
-        "track": 0
-      }
-    },
-    {
-      "number": 79,
-      "title": "False positive: helper-call sites with literal arguments flagged as Type-2 clones",
-      "url": "https://github.com/Nimblesite/Deslop/issues/79",
-      "excerpt": "Summary \\top-offenders\\ flags clusters of identical-shape helper calls where every occurrence is just a one-liner invocation of an already-extracted helper, varying only in literal arguments. After identifier normalization these all look like \\_helper(STRING, DICT, STRING)\\ so…",
-      "type": "Bug",
-      "labels": [
-        {
-          "name": "false-positive",
-          "color": "D93F0B",
-          "description": "A reported cluster is not a real duplicate"
-        },
-        {
-          "name": "lane/accuracy",
-          "color": "ff5449",
-          "description": "False positives, false negatives, and clone-claim correctness"
-        }
-      ],
-      "assignees": [
-        {
-          "login": "MelbourneDeveloper",
-          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
-        }
-      ],
-      "milestone": null,
-      "created_at": "2026-05-02T07:10:56Z",
-      "updated_at": "2026-08-23T06:00:12Z",
-      "lifecycle": "active",
-      "priority": "critical",
-      "workstream": "accuracy",
-      "inbound_links": 3,
-      "plan": {
-        "offset": 35,
-        "effort_units": 5,
-        "track": 1
-      }
-    },
-    {
-      "number": 103,
-      "title": "pytest patterns (monkeypatch.setenv chains, assert dict-access chains, fixture call-sites) cluster as duplication",
-      "url": "https://github.com/Nimblesite/Deslop/issues/103",
-      "excerpt": "Deslop reports normal test code as duplicates. On a Python repo full of pytest tests, once the real copy-paste duplicates are dealt with, most of the top findings are everyday test patterns — repeated environment-variable setup, repeated assertion lines, and calls to helper fu…",
-      "type": "Bug",
-      "labels": [
-        {
-          "name": "false-positive",
-          "color": "D93F0B",
-          "description": "A reported cluster is not a real duplicate"
-        },
-        {
-          "name": "lane/accuracy",
-          "color": "ff5449",
-          "description": "False positives, false negatives, and clone-claim correctness"
-        }
-      ],
-      "assignees": [
-        {
-          "login": "MelbourneDeveloper",
-          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
-        }
-      ],
-      "milestone": null,
-      "created_at": "2026-05-02T09:14:15Z",
-      "updated_at": "2026-08-24T10:51:47Z",
-      "lifecycle": "active",
-      "priority": "critical",
-      "workstream": "accuracy",
-      "inbound_links": 3,
-      "plan": {
-        "offset": 40,
-        "effort_units": 5,
-        "track": 0
-      }
-    },
-    {
-      "number": 71,
-      "title": "False positive: same HTTP verb + status assertion across different endpoints",
-      "url": "https://github.com/Nimblesite/Deslop/issues/71",
-      "excerpt": "Summary Cluster **10e21c4d0874fc34** (8 copies) flags the HTTP DELETE + 204 assertion pattern as duplicate code: Why it's a false positive After identifier normalisation, both look identical: client.delete(f\"string/{X.Y}\", headers={...}) + assert resp.status_code == int. But t…",
-      "type": "Bug",
-      "labels": [
-        {
-          "name": "false-positive",
-          "color": "D93F0B",
-          "description": "A reported cluster is not a real duplicate"
-        },
-        {
-          "name": "lane/accuracy",
-          "color": "ff5449",
-          "description": "False positives, false negatives, and clone-claim correctness"
-        }
-      ],
-      "assignees": [
-        {
-          "login": "MelbourneDeveloper",
-          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
-        }
-      ],
-      "milestone": null,
-      "created_at": "2026-05-02T05:06:27Z",
-      "updated_at": "2026-08-23T06:00:13Z",
-      "lifecycle": "active",
-      "priority": "critical",
-      "workstream": "accuracy",
-      "inbound_links": 2,
-      "plan": {
-        "offset": 40,
-        "effort_units": 5,
-        "track": 1
-      }
-    },
-    {
-      "number": 283,
-      "title": "False-positive Type-3 cluster conflates unrelated object-literal tables",
-      "url": "https://github.com/Nimblesite/Deslop/issues/283",
-      "excerpt": "Repository: Nimblesite/typeDiagram Commit: f9778f40ca0adf606a04b4881a865c9401de4343 Tool and full arguments: deslop . --output /tmp/typediagram-deslop-after-markdown-results --no-fail-over --nohtml --log-to-console --technical Relevant response: Found 522 groups of duplicated…",
-      "type": "Bug",
-      "labels": [
-        {
-          "name": "false-positive",
-          "color": "D93F0B",
-          "description": "A reported cluster is not a real duplicate"
-        },
-        {
-          "name": "lane/accuracy",
-          "color": "ff5449",
-          "description": "False positives, false negatives, and clone-claim correctness"
-        }
-      ],
-      "assignees": [
-        {
-          "login": "MelbourneDeveloper",
-          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
-        }
-      ],
-      "milestone": null,
-      "created_at": "2026-07-12T00:13:05Z",
-      "updated_at": "2026-08-23T06:00:03Z",
-      "lifecycle": "active",
-      "priority": "critical",
-      "workstream": "accuracy",
-      "inbound_links": 2,
-      "plan": {
-        "offset": 45,
-        "effort_units": 5,
-        "track": 0
-      }
-    },
-    {
-      "number": 285,
-      "title": "False-positive Type-3 cluster groups unrelated TDBIN diagnostic tests by assertion idiom",
-      "url": "https://github.com/Nimblesite/Deslop/issues/285",
-      "excerpt": "Repository: Nimblesite/typeDiagram Commit: 5669cc1ec362ec12411e35f47bbc45d1e7a2ec6f Tool and arguments: Relevant response: Cluster members: packages/typediagram/test/converters/rust-tdbin.test.ts:293-296 packages/typediagram/test/converters/rust-tdbin.test.ts:298-301",
-      "type": "Bug",
-      "labels": [
-        {
-          "name": "false-positive",
-          "color": "D93F0B",
-          "description": "A reported cluster is not a real duplicate"
-        },
-        {
-          "name": "lane/accuracy",
-          "color": "ff5449",
-          "description": "False positives, false negatives, and clone-claim correctness"
-        }
-      ],
-      "assignees": [
-        {
-          "login": "MelbourneDeveloper",
-          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
-        }
-      ],
-      "milestone": null,
-      "created_at": "2026-07-12T01:31:19Z",
-      "updated_at": "2026-08-23T06:00:01Z",
-      "lifecycle": "active",
-      "priority": "critical",
-      "workstream": "accuracy",
-      "inbound_links": 2,
-      "plan": {
-        "offset": 45,
-        "effort_units": 5,
-        "track": 1
-      }
-    },
-    {
-      "number": 362,
-      "title": "[RANK-STRUCTURAL-ONLY] Two-file run of unrelated const declarations reports as the repo's #1 duplicate (344 LOC false positive)",
-      "url": "https://github.com/Nimblesite/Deslop/issues/362",
-      "excerpt": "Summary deslop . on this repo ranks a **344-LOC cluster as the single largest duplication in the codebase**, and it is a false positive. It is the biggest single contributor to the repo's own duplication_percent. Reproduce Cluster f062e53bcb4e: | field | value | |---|---|",
-      "type": "Bug",
-      "labels": [
-        {
-          "name": "false-positive",
-          "color": "D93F0B",
-          "description": "A reported cluster is not a real duplicate"
-        },
-        {
-          "name": "lane/accuracy",
-          "color": "ff5449",
-          "description": "False positives, false negatives, and clone-claim correctness"
-        }
-      ],
-      "assignees": [
-        {
-          "login": "MelbourneDeveloper",
-          "avatar": "https://avatars.githubusercontent.com/u/16697547?v=4"
-        }
-      ],
-      "milestone": null,
-      "created_at": "2026-08-13T09:27:56Z",
-      "updated_at": "2026-08-23T05:59:18Z",
-      "lifecycle": "active",
-      "priority": "critical",
-      "workstream": "accuracy",
-      "inbound_links": 2,
-      "plan": {
-        "offset": 50,
         "effort_units": 5,
         "track": 0
       }
@@ -1182,7 +1182,7 @@
       "plan": {
         "offset": 50,
         "effort_units": 5,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -1303,9 +1303,9 @@
       "workstream": "accuracy",
       "inbound_links": 1,
       "plan": {
-        "offset": 55,
+        "offset": 50,
         "effort_units": 5,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -1335,7 +1335,7 @@
       "workstream": "accuracy",
       "inbound_links": 3,
       "plan": {
-        "offset": 60,
+        "offset": 55,
         "effort_units": 5,
         "track": 0
       }
@@ -1451,7 +1451,7 @@
       "workstream": "detection",
       "inbound_links": 1,
       "plan": {
-        "offset": 30,
+        "offset": 50,
         "effort_units": 8,
         "track": 0
       }
@@ -1490,7 +1490,7 @@
       "plan": {
         "offset": 60,
         "effort_units": 5,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -1530,9 +1530,9 @@
       "workstream": "accuracy",
       "inbound_links": 1,
       "plan": {
-        "offset": 65,
+        "offset": 60,
         "effort_units": 5,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -1564,7 +1564,7 @@
       "plan": {
         "offset": 65,
         "effort_units": 5,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -1604,9 +1604,9 @@
       "workstream": "accuracy",
       "inbound_links": 1,
       "plan": {
-        "offset": 70,
+        "offset": 65,
         "effort_units": 5,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -1641,7 +1641,7 @@
       "workstream": "accuracy",
       "inbound_links": 1,
       "plan": {
-        "offset": 75,
+        "offset": 70,
         "effort_units": 5,
         "track": 0
       }
@@ -1771,7 +1771,7 @@
       "plan": {
         "offset": 75,
         "effort_units": 5,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -2006,7 +2006,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-07-28T11:01:02Z",
-      "updated_at": "2026-08-24T09:15:00Z",
+      "updated_at": "2026-08-25T15:34:21Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "quality",
@@ -2077,33 +2077,6 @@
       }
     },
     {
-      "number": 348,
-      "title": "Partial VSIX publish: one transient Marketplace timeout aborts the remaining platforms, leaving the extension published for some OSes and not others",
-      "url": "https://github.com/Nimblesite/Deslop/issues/348",
-      "excerpt": "The publish-marketplace job in .github/workflows/release.yml publishes five platform VSIXes in a for loop under set -euo pipefail, with no retry. A single transient Marketplace timeout therefore aborts the loop and leaves the extension **published for some platforms and not ot…",
-      "type": "Bug",
-      "labels": [
-        {
-          "name": "lane/delivery",
-          "color": "c6a0f6",
-          "description": "Packaging, signing, releases, deployment, platform contracts"
-        }
-      ],
-      "assignees": [],
-      "milestone": null,
-      "created_at": "2026-08-11T09:58:16Z",
-      "updated_at": "2026-08-23T05:59:53Z",
-      "lifecycle": "active",
-      "priority": "critical",
-      "workstream": "delivery",
-      "inbound_links": 0,
-      "plan": {
-        "offset": 0,
-        "effort_units": 5,
-        "track": 1
-      }
-    },
-    {
       "number": 352,
       "title": "cpu_throttle_knob LSP test is timing-dependent and carries a lint suppression",
       "url": "https://github.com/Nimblesite/Deslop/issues/352",
@@ -2167,9 +2140,9 @@
       "workstream": "accuracy",
       "inbound_links": 0,
       "plan": {
-        "offset": 80,
+        "offset": 75,
         "effort_units": 5,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -2297,7 +2270,7 @@
       "plan": {
         "offset": 80,
         "effort_units": 5,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -2381,9 +2354,9 @@
       "workstream": "delivery",
       "inbound_links": 0,
       "plan": {
-        "offset": 5,
+        "offset": 0,
         "effort_units": 5,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -2466,7 +2439,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-18T21:44:27Z",
-      "updated_at": "2026-08-23T05:59:25Z",
+      "updated_at": "2026-08-25T15:34:19Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "performance",
@@ -2514,9 +2487,9 @@
       "workstream": "accuracy",
       "inbound_links": 0,
       "plan": {
-        "offset": 85,
+        "offset": 80,
         "effort_units": 5,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -2548,7 +2521,7 @@
       "plan": {
         "offset": 85,
         "effort_units": 5,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -2578,9 +2551,9 @@
       "workstream": "accuracy",
       "inbound_links": 0,
       "plan": {
-        "offset": 90,
+        "offset": 85,
         "effort_units": 5,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -2619,7 +2592,7 @@
       ],
       "milestone": null,
       "created_at": "2026-08-21T21:20:26Z",
-      "updated_at": "2026-08-24T11:16:35Z",
+      "updated_at": "2026-08-25T21:05:28Z",
       "lifecycle": "active",
       "priority": "critical",
       "workstream": "accuracy",
@@ -2627,7 +2600,7 @@
       "plan": {
         "offset": 90,
         "effort_units": 5,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -2662,9 +2635,9 @@
       "workstream": "accuracy",
       "inbound_links": 0,
       "plan": {
-        "offset": 95,
+        "offset": 90,
         "effort_units": 5,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -2822,7 +2795,7 @@
       "workstream": "performance",
       "inbound_links": 4,
       "plan": {
-        "offset": 30,
+        "offset": 50,
         "effort_units": 8,
         "track": 0
       }
@@ -2859,7 +2832,7 @@
       "workstream": "detection",
       "inbound_links": 7,
       "plan": {
-        "offset": 38,
+        "offset": 58,
         "effort_units": 8,
         "track": 0
       }
@@ -2971,7 +2944,7 @@
       "plan": {
         "offset": 95,
         "effort_units": 5,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -2996,7 +2969,7 @@
       "workstream": "delivery",
       "inbound_links": 2,
       "plan": {
-        "offset": 10,
+        "offset": 5,
         "effort_units": 4,
         "track": 0
       }
@@ -3330,9 +3303,9 @@
       "workstream": "detection",
       "inbound_links": 1,
       "plan": {
-        "offset": 55,
+        "offset": 45,
         "effort_units": 4,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -3629,7 +3602,7 @@
       "plan": {
         "offset": 9,
         "effort_units": 4,
-        "track": 1
+        "track": 0
       }
     },
     {
@@ -3799,7 +3772,7 @@
       "workstream": "detection",
       "inbound_links": 0,
       "plan": {
-        "offset": 25,
+        "offset": 49,
         "effort_units": 4,
         "track": 1
       }
@@ -3841,9 +3814,9 @@
       "workstream": "accuracy",
       "inbound_links": 0,
       "plan": {
-        "offset": 100,
+        "offset": 95,
         "effort_units": 5,
-        "track": 0
+        "track": 1
       }
     },
     {
@@ -3868,7 +3841,7 @@
       "workstream": "detection",
       "inbound_links": 0,
       "plan": {
-        "offset": 29,
+        "offset": 53,
         "effort_units": 4,
         "track": 1
       }
@@ -3963,7 +3936,7 @@
       ],
       "milestone": null,
       "created_at": "2026-08-23T07:01:31Z",
-      "updated_at": "2026-08-24T11:17:12Z",
+      "updated_at": "2026-08-25T21:05:32Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "accuracy",
@@ -3971,14 +3944,14 @@
       "plan": {
         "offset": 100,
         "effort_units": 5,
-        "track": 1
+        "track": 0
       }
     },
     {
       "number": 440,
       "title": "Extension-host (out/**) coverage is unmeasurable: VS Code's desktop extension host ignores NODE_V8_COVERAGE on both injection channels",
       "url": "https://github.com/Nimblesite/Deslop/issues/440",
-      "excerpt": "Branch worktree-fused-score-followups. vscode-test --coverage printed All files | 0 | 0 | 0 | 0 on every machine, and the CI coverage job never reached the VSIX check until the coverage-calculation stage was repaired today (artifact chmod + Windows lcov relocation) — so the .v…",
+      "excerpt": "",
       "type": "Task",
       "labels": [
         {
@@ -3990,7 +3963,7 @@
       "assignees": [],
       "milestone": null,
       "created_at": "2026-08-23T08:13:28Z",
-      "updated_at": "2026-08-24T11:16:28Z",
+      "updated_at": "2026-08-25T20:42:16Z",
       "lifecycle": "active",
       "priority": "unset",
       "workstream": "quality",
@@ -4060,9 +4033,51 @@
       "workstream": "accuracy",
       "inbound_links": 0,
       "plan": {
-        "offset": 105,
+        "offset": 100,
         "effort_units": 5,
+        "track": 1
+      }
+    },
+    {
+      "number": 451,
+      "title": "Feature: Automated/CLI false-positive reporting",
+      "url": "https://github.com/Nimblesite/Deslop/issues/451",
+      "excerpt": "Hey! As discussed on X, it would be useful for users to help drive false-positives and other improvements by being able to submit them from either the extension or a CLI to flag false positives or other issues. Given tools are often used in both private/company codebases as we…",
+      "type": "Unclassified",
+      "labels": [],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-25T11:17:24Z",
+      "updated_at": "2026-08-25T11:17:24Z",
+      "lifecycle": "active",
+      "priority": "unset",
+      "workstream": "unassigned",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 0,
+        "effort_units": 4,
         "track": 0
+      }
+    },
+    {
+      "number": 452,
+      "title": "Corpus data-table precision check counts characters in raw source text: unsound in both directions (surviving #401 arm)",
+      "url": "https://github.com/Nimblesite/Deslop/issues/452",
+      "excerpt": "The defect [crates/deslop/tests/corpus_repos.rs:355](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop/tests/corpus_repos.rs#L355) — check_data_tables_not_ranked_as_logic — judges whether a top-ranked cluster is a data table by counting character classes in **raw so…",
+      "type": "Unclassified",
+      "labels": [],
+      "assignees": [],
+      "milestone": null,
+      "created_at": "2026-08-25T12:58:02Z",
+      "updated_at": "2026-08-25T12:58:02Z",
+      "lifecycle": "active",
+      "priority": "unset",
+      "workstream": "unassigned",
+      "inbound_links": 0,
+      "plan": {
+        "offset": 0,
+        "effort_units": 4,
+        "track": 1
       }
     }
   ],
@@ -4800,6 +4815,16 @@
     {
       "source": 443,
       "target": 431,
+      "kind": "reference"
+    },
+    {
+      "source": 452,
+      "target": 336,
+      "kind": "reference"
+    },
+    {
+      "source": 452,
+      "target": 401,
       "kind": "reference"
     }
   ]

@@ -41,6 +41,8 @@ mod embedding_failure_progress;
 mod execute_command;
 #[path = "history_determinism.rs"]
 mod history_determinism;
+#[path = "lifecycle.rs"]
+mod lifecycle;
 #[path = "lsp_embedding_determinism.rs"]
 mod lsp_embedding_determinism;
 #[path = "lsp_workspace_scoping.rs"]

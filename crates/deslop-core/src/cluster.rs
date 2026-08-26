@@ -35,6 +35,7 @@ mod subsume;
 use scope::DeclarationScopes;
 use signals::measured_signals;
 use subsume::collapse_cross_cluster_overlap;
+pub(crate) use subsume::VERBATIM_OVERTURN_MIN_NODES;
 
 /// A set of fingerprints that share the same hash, i.e. a detected
 /// (structural) clone cluster.
@@ -154,6 +155,11 @@ pub fn build_ranked_fused_clusters<
 /// threads — below this the spawn cost outweighs the measurement.
 const SIGNAL_SHARD_MIN_CLUSTERS: usize = 256;
 
+/// Fused clusters per claimed chunk. Kept small because the cost of a
+/// chunk is dominated by its widest cluster: the fewer clusters share a
+/// chunk, the less an unlucky draw can hold the stage open.
+const SIGNAL_CHUNK_CLUSTERS: usize = 8;
+
 /// Materialises every fused cluster that remains reportable.
 ///
 /// A corpus-scale run pays for this stage in the O(k²) per-cluster pair
@@ -183,39 +189,34 @@ fn reportable_clusters<S: BuildHasher + Sync, H: BuildHasher + Sync, L: BuildHas
         log_signal_measurement(overlap.stats(), &spent);
         return clusters;
     }
-    let shard_size = inputs.fused_clusters.len().div_ceil(workers);
-    let mut shards: Vec<Vec<Cluster>> = Vec::with_capacity(workers);
+    // [PERF-FLUTTER-TODO-PAIRS] Many small chunks claimed on demand
+    // rather than one contiguous block per worker. A cluster's signal
+    // build is quadratic in its member count, so a handful of wide
+    // scaffold clusters dominate the stage and a contiguous split
+    // strands them on one worker (13.6 s against a 3.9 s balanced
+    // ideal on the Flutter framework slice). Each worker keeps one
+    // measurer across every chunk it claims, so the alignment memos
+    // still accumulate; results reassemble in cluster order, so the
+    // report is unchanged ([PIPELINE-DETERMINISM]).
+    let (shards, states) = crate::shard::map_chunks(
+        inputs.fused_clusters.chunks(SIGNAL_CHUNK_CLUSTERS),
+        workers,
+        || (OverlapMeasurer::new(inputs.trees), BuildSpent::default()),
+        |(overlap, shard_spent), chunk| {
+            chunk
+                .iter()
+                .filter_map(|fused| {
+                    build_fused_cluster(inputs, fused, overlap, scopes, shard_spent)
+                })
+                .collect::<Vec<Cluster>>()
+        },
+    );
     let mut totals = crate::overlap::MeasureStats::default();
     let mut spent = BuildSpent::default();
-    std::thread::scope(|scope| {
-        let mut handles = Vec::with_capacity(workers);
-        for chunk in inputs.fused_clusters.chunks(shard_size) {
-            handles.push(scope.spawn(move || {
-                let mut overlap = OverlapMeasurer::new(inputs.trees);
-                let mut shard_spent = BuildSpent::default();
-                let built: Vec<Cluster> = chunk
-                    .iter()
-                    .filter_map(|fused| {
-                        build_fused_cluster(inputs, fused, &mut overlap, scopes, &mut shard_spent)
-                    })
-                    .collect();
-                (built, overlap.stats(), shard_spent)
-            }));
-        }
-        for handle in handles {
-            // A panicked signal worker must poison the build, never
-            // silently drop its clusters — the same contract the rescue
-            // shards follow.
-            match handle.join() {
-                Ok((built, stats, shard_spent)) => {
-                    shards.push(built);
-                    totals = totals.add(stats);
-                    spent.absorb(&shard_spent);
-                }
-                Err(panic) => std::panic::resume_unwind(panic),
-            }
-        }
-    });
+    for (overlap, shard_spent) in &states {
+        totals = totals.add(overlap.stats());
+        spent.absorb(shard_spent);
+    }
     log_signal_measurement(totals, &spent);
     let mut clusters = Vec::with_capacity(inputs.fused_clusters.len());
     for shard in shards {

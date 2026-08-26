@@ -726,7 +726,7 @@ fn the_rescue_path_agrees_with_the_exact_measure_on_admission() -> Result<(), St
 // credited — building entries only for endpoints past
 // [`ALIGNMENT_MAX_NODES`] leaves the small side empty, the credit at
 // zero, and a real rescue silently dropped (review:
-// docs/performance-branch-review.md, "mixed-size overlap fallback").
+// docs/release-audit.md, "mixed-size overlap fallback").
 #[test]
 fn a_small_endpoint_still_gets_credit_against_a_large_one() -> Result<(), String> {
     // Calibrated against the Rust grammar's node yield (~7 nodes per

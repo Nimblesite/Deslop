@@ -174,6 +174,62 @@ impl CapturedEvent {
     }
 }
 
+/// Reports whether `metadata` belongs to the crate under observation.
+/// One predicate shared by the capture and the interest anchor, so the
+/// two can never disagree about which callsites stay enabled.
+fn observes_core_target(metadata: &Metadata<'_>) -> bool {
+    metadata.target().starts_with("deslop_core")
+}
+
+/// A process-global `tracing` default whose only job is to sit in the
+/// callsite registry so no `deslop_core` callsite can ever cache
+/// `Interest::never` ([PIPELINE-OBSERVABILITY-STAGES], gh #435).
+///
+/// `tracing`'s callsite interest is computed lazily on first hit,
+/// against the dispatchers registered at that instant, and cached
+/// process-wide. A sibling test's pipeline running concurrently — with
+/// no subscriber anywhere in the registry — can first-hit a callsite
+/// while a capture test's scoped `with_default` rebuild is in flight,
+/// caching `never` and silencing that `tracing::info!` for every later
+/// test in the process. Anchoring an always-enabled global default
+/// before the first capture makes every interest computation see at
+/// least one enabled dispatcher, so the poisoned state is unreachable.
+/// Threads without a scoped capture dispatch here and the event is
+/// discarded, exactly as `NoSubscriber` discarded it before.
+#[derive(Debug)]
+struct CallsiteInterestAnchor;
+
+impl Subscriber for CallsiteInterestAnchor {
+    fn enabled(&self, metadata: &Metadata<'_>) -> bool {
+        observes_core_target(metadata)
+    }
+
+    fn new_span(&self, _span: &Attributes<'_>) -> Id {
+        Id::from_u64(1)
+    }
+
+    fn record(&self, _span: &Id, _values: &Record<'_>) {}
+
+    fn record_follows_from(&self, _span: &Id, _follows: &Id) {}
+
+    fn event(&self, _event: &Event<'_>) {}
+
+    fn enter(&self, _span: &Id) {}
+
+    fn exit(&self, _span: &Id) {}
+}
+
+/// Installs [`CallsiteInterestAnchor`] as the process-global default
+/// exactly once. A later `set_global_default` from another harness
+/// would be refused by `tracing`, and that is fine — any enabled global
+/// keeps the interest cache honest; this one is only the guarantee.
+fn anchor_callsite_interest() {
+    static ANCHOR: std::sync::Once = std::sync::Once::new();
+    ANCHOR.call_once(|| {
+        let _already_set = tracing::subscriber::set_global_default(CallsiteInterestAnchor);
+    });
+}
+
 /// An in-process `tracing::Subscriber` that records `deslop_core` events.
 #[derive(Debug)]
 pub(crate) struct CaptureSubscriber {
@@ -183,13 +239,14 @@ pub(crate) struct CaptureSubscriber {
 impl CaptureSubscriber {
     /// Builds a subscriber that pushes into the shared `captured` buffer.
     pub(crate) fn new(captured: CapturedEvents) -> Self {
+        anchor_callsite_interest();
         Self { captured }
     }
 }
 
 impl Subscriber for CaptureSubscriber {
     fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-        metadata.target().starts_with("deslop_core")
+        observes_core_target(metadata)
     }
 
     fn new_span(&self, _span: &Attributes<'_>) -> Id {

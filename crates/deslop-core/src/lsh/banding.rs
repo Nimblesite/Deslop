@@ -251,7 +251,7 @@ mod streaming_tests {
     //! verification + regroup), and a pair colliding in many bands is
     //! emitted once per band for the caller to deduplicate — the
     //! documented contract
-    //! (`docs/performance-branch-review.md`, "streamed LSH construction").
+    //! (`docs/release-audit.md`, "streamed LSH construction").
 
     use super::super::{Signature, SignatureIndex, BANDS, SIGNATURE_LEN};
     use super::for_each_band_collision;

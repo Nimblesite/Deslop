@@ -31,10 +31,12 @@ static NEXT_ID: AtomicI64 = AtomicI64::new(90_000);
 fn report_get_handler_logs_elapsed_ms() -> Result<()> {
     let workspace = tempfile::tempdir()?;
     let mut child = spawn_logging_lsp(workspace.path())?;
-    let (_stdin, _reader) = boot_and_report_get(&mut child)?;
+    let (stdin, _reader) = boot_and_report_get(&mut child)?;
 
     thread::sleep(Duration::from_millis(400));
-    let _ = child.kill();
+    // EOF, never a signal: a signalled child never writes its coverage
+    // profile, so killing here deletes every line the server executed.
+    drop(stdin);
     let output = child.wait_with_output()?;
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
 
@@ -109,7 +111,8 @@ fn cpu_report_returns_structured_snapshot_after_report_get() -> Result<()> {
         "cpu report must expose pending watcher work even when it is zero: {result}"
     );
 
-    let _ = child.kill();
+    // EOF, never a signal: a signalled child writes no coverage profile.
+    drop(stdin);
     let _output = child.wait_with_output()?;
     Ok(())
 }

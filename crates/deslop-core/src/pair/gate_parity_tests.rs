@@ -4,7 +4,7 @@
 //! exactly the ones it would keep. These pins drive both functions
 //! over a matrix of signal triples, floors, and endpoint shapes so
 //! the two halves of the decision can never drift
-//! (`docs/performance-branch-review.md`, "admission parity").
+//! (`docs/release-audit.md`, "admission parity").
 
 use super::{
     construction_survives, survival_decision, CandidatePair, PairScore, PairSurvival,

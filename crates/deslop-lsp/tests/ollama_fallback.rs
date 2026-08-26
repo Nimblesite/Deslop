@@ -71,8 +71,9 @@ fn lsp_survives_when_configured_ollama_endpoint_is_unreachable() -> Result<()> {
 
     // Keep stdin alive until the test finishes so the kept-open handle is
     // what ends the liveness window, not an EOF-triggered clean shutdown.
-    drop(stdin);
-    let _ = child.kill();
+    // Closing it here is also what lets the server write its coverage
+    // profile — a signalled child writes none.
+    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
     Ok(())
 }
 
@@ -116,6 +117,6 @@ fn lsp_survives_when_required_ollama_endpoint_is_unreachable() -> Result<()> {
         "LSP must keep serving after an unreachable embeddingSetModel: {config}"
     );
 
-    let _ = child.kill();
+    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
     Ok(())
 }

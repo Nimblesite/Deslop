@@ -8,6 +8,28 @@ Crate: `crates/deslop-lsp`. Transport: JSON-RPC over stdio. Framework: `tower-ls
 
 Stdio JSON-RPC 2.0 per the LSP base protocol. No TCP, no named pipes, no WebSockets. The editor spawns the binary; the binary speaks LSP on stdin/stdout; `tracing` goes to stderr (picked up as the "server log" in the client). One process per workspace root.
 
+### [LSP-LIFECYCLE] How the server ends
+
+The base protocol gives an editor three ways to end a session, and Deslop honours all three.
+
+| What the client does | What the server does | Process exit code |
+|---|---|---|
+| `shutdown` | Answers, stops accepting new work, **keeps running** — the client still has to send `exit` | — |
+| `exit` after `shutdown` | Ends | `0` |
+| `exit` with no `shutdown` before it | Ends | `1` — the session was torn down out of order |
+| Closes stdin (crashed, force-quit) | Ends | `0` — a vanished client is not a server fault |
+
+A server that ignores `exit` outlives every editor window that opened it, and each abandoned process keeps its file watcher, its IPC socket, and its analysis threads. The machine then accumulates one live analyser per window the user has ever opened.
+
+Two things had to be true for this to work, and neither is automatic:
+
+- **The read loop has to stop on `exit`.** `tower-lsp` only notices that the server has exited when the *next* message arrives — and after `exit` the protocol tells the client there is nothing left to send. `server.rs` watches the wire for the two lifecycle methods and ends the loop on that signal instead of on a message that never comes.
+- **The process must not wait for stdin.** The stdio reader is a Tokio blocking task parked in a read that only returns at EOF, and dropping a runtime joins its blocking tasks. A client that says `exit` never closes stdin, so `app.rs` detaches the runtime rather than waiting on it.
+
+Pinned by `crates/deslop-lsp/tests/lifecycle.rs`, which drives the real binary and asserts every row of the table above, exit code included.
+
+**This is also what makes the crate measurable.** A signalled process never runs libc's `atexit` handlers, so LLVM's profile runtime never writes its `.profraw` and every line the server executed is discarded. Measured against this repository's own instrumented binary: `SIGKILL` and `SIGTERM` each produce zero profile files, a closed stdin produces one. The E2E harness therefore reaps servers by closing stdin and waiting (`deslop_test_support::reap`), never by signalling them — which moved `deslop-lsp` from 92.5% to 94.0% line coverage without a single new assertion, because that 1.5% was being deleted at teardown rather than never executed.
+
 ### [LSP-CAPABILITIES] Server capabilities
 
 #### [LSP-NON-INTERFERENCE] Deslop is additive — it never touches the editor's standard features

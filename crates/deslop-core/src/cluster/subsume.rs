@@ -59,6 +59,7 @@ use super::Cluster;
 
 /// Survivor election ([PIPELINE-CLUSTER-SUBSUME]).
 mod election;
+pub(crate) use election::VERBATIM_OVERTURN_MIN_NODES;
 use election::{covers_same_region, demoted, preferred_view, Preference};
 
 /// Collapses redundant clusters that cover the same physical bytes.

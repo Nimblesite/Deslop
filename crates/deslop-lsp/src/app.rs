@@ -82,15 +82,17 @@ where
 /// # Errors
 ///
 /// Returns argument, stdout, runtime, or server startup errors.
-pub fn run_process_result<I, S, W, R>(args: I, mut stdout: W, runner: R) -> Result<()>
+pub fn run_process_result<I, S, W, R>(args: I, mut stdout: W, runner: R) -> Result<ExitCode>
 where
     I: IntoIterator<Item = S>,
     S: Into<String>,
     W: Write,
-    R: FnOnce(LspStartup) -> Result<()>,
+    R: FnOnce(LspStartup) -> Result<ExitCode>,
 {
     match action_from_args(args)? {
-        LspAction::Version { output } => write_version(&mut stdout, &output),
+        LspAction::Version { output } => {
+            write_version(&mut stdout, &output).map(|()| ExitCode::SUCCESS)
+        }
         LspAction::Serve(startup) => runner(startup),
     }
 }
@@ -101,7 +103,7 @@ where
     I: IntoIterator<Item = S>,
     S: Into<String>,
     W: Write,
-    R: FnOnce(LspStartup) -> Result<()>,
+    R: FnOnce(LspStartup) -> Result<ExitCode>,
 {
     // Install the subscriber at the process boundary so diagnostics reach
     // stderr on *every* path — including argv parse errors that never reach
@@ -110,7 +112,7 @@ where
     // process exits 1 silently. `try_init` makes it idempotent.
     init_tracing();
     match run_process_result(args, stdout, runner) {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(code) => code,
         Err(error) => failure_exit(&error),
     }
 }
@@ -120,10 +122,10 @@ where
 /// # Errors
 ///
 /// Returns Tokio runtime construction or injected server errors.
-pub fn run_startup_with<F, Fut>(startup: LspStartup, server: F) -> Result<()>
+pub fn run_startup_with<F, Fut, T>(startup: LspStartup, server: F) -> Result<T>
 where
     F: FnOnce(PathBuf, u32, LspEmbeddingConfig, IpcMode) -> Fut,
-    Fut: std::future::Future<Output = Result<()>>,
+    Fut: std::future::Future<Output = Result<T>>,
 {
     let _profile_guard = crate::profiling::LspProfileGuard::from_env();
     #[cfg(unix)]
@@ -134,12 +136,21 @@ where
         deslop_core::state::set_structural_only_override(policy);
     }
     log_startup(&startup);
-    build_runtime(startup.worker_threads)?.block_on(server(
+    let runtime = build_runtime(startup.worker_threads)?;
+    let outcome = runtime.block_on(server(
         startup.workspace_root,
         startup.min_nodes,
         startup.embedding,
         startup.ipc_mode,
-    ))
+    ));
+    // The stdio reader is a `spawn_blocking` task parked inside a read that
+    // only returns at EOF, and dropping a runtime joins its blocking tasks.
+    // A client that says `exit` never closes stdin, so waiting here wedges
+    // the process in `Runtime::drop` forever — one abandoned analyser per
+    // editor window ever opened ([LSP-LIFECYCLE]). The serve loop has
+    // already finished by this point, so there is nothing left to wait for.
+    runtime.shutdown_background();
+    outcome
 }
 
 /// Collects argv into owned strings so all downstream parsing borrows one slice.

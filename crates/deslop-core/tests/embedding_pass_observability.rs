@@ -24,10 +24,6 @@ const VECTOR_DIMS: usize = 4;
 const SLOW_BATCH: usize = 2;
 
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #435 [PIPELINE-OBSERVABILITY-STAGES] \
-     docs/plans/fused-score-followups.md — order-dependent in the suite run (passes with \
-     `--exact`), the embedding-pass twin of the issue_45 capture; the event capture needs \
-     isolating from sibling tests sharing the process. Run via `-- --ignored`."]
 fn issue_94_embedding_pass_emits_batch_observability_events() -> Result<()> {
     let root = tempfile::tempdir().context("tempdir")?;
     write_issue_94_fixture(root.path()).context("write fixture")?;

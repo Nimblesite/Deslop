@@ -236,7 +236,7 @@ mod segment_tests {
     //! drain inside them. These pins mutate files at the beginning,
     //! middle, and end of a multi-segment population and assert the
     //! 1:1 fingerprint/signature positional alignment after every step
-    //! (`docs/performance-branch-review.md`, "segmented-store remove/
+    //! (`docs/release-audit.md`, "segmented-store remove/
     //! upsert logic has no changed test").
 
     use std::path::PathBuf;

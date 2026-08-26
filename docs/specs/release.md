@@ -123,6 +123,31 @@ on drift. Coverage floors are owned by `coverage-thresholds.json`
   exemption is `action-selftest.yml`, whose whole purpose is proving the
   published action works and which scans the `examples/` fixtures, never this
   tree. A gate running last month's binary would report last month's percentage.
+- **[CI-COVERAGE-ISOLATION] Coverage is collected against this build only** —
+  `make coverage-run` runs `cargo llvm-cov clean --workspace` before it
+  collects. Collection and reporting are two commands (`--no-report`, then
+  `report`), and neither deletes what the previous run left behind: the raw
+  `.profraw` profiles stay, and so do the instrumented object files. `report`
+  maps the merged profile against **every** object it finds, so an object from
+  an earlier build contributes its own, older line table for a source file that
+  has since changed. Those lines are unioned into the current file's total and
+  every one of them is unexecuted, because nothing ran that build.
+
+  The result is a wrong number that looks completely ordinary. Measured on this
+  repository: `crates/deslop-lsp/src/app.rs` is 193 lines and 99.5% covered, and
+  one stale object made it read as 362 lines and 53.0%, dragging `deslop-lsp`
+  from 94.0% to 85.1% and the workspace from 94.5% to 92.6% — a release-blocking
+  figure produced by a tree that was fine. It fails the other way too: a stale
+  object whose lines *did* execute credits coverage nobody measured.
+
+  Cleaning the profiles alone (`--profraw-only`) does not fix it — the stale
+  object is what carries the bogus line table. `--workspace` drops only this
+  repository's artifacts, so third-party dependency compilation stays cached and
+  the honest number costs about a minute. Contract-tested by
+  `scripts/repository/coverage-isolation.test.mjs`, which `make _ci-contract-tests`
+  runs: the clean must be present, must precede the collection, and must not be
+  narrowed to profiles.
+
 - **[TEST-SELECTION] No test is selected by name** — the release gate
   (`make test`) runs `cargo llvm-cov --workspace --all-targets` with no test
   filter at all. `cargo test --skip` matches a *substring of the test name*, so

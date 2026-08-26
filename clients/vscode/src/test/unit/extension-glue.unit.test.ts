@@ -52,15 +52,45 @@ function reportWith(clusters: ReportCluster[]): Report {
   return reportWithClusters(clusters, { files_analysed: 2 });
 }
 
+/// Every handle `currentApi()` publishes as a live view of module state.
+const LIVE_API_HANDLES = [
+  "client",
+  "resolvedLsp",
+  "resolvedMcp",
+  "mcpDefinition",
+  "reportStore",
+] as const;
+
 suite("extension activation glue", () => {
-  test("currentApi reflects the pre-activation module state", () => {
+  test("currentApi exposes every handle as a live read-through getter", () => {
     const api = currentApi();
-    // No activate() has run in this unit context, so the live handles are
-    // empty — but the read-through getters must still be wired.
-    assert.equal(api.client, undefined);
-    assert.equal(api.resolvedLsp, undefined);
-    assert.equal(api.resolvedMcp, undefined);
-    assert.equal(api.reportStore, undefined);
+    // Read-through is the contract: a caller holding `api` must observe
+    // activation as it happens, so every handle has to be an accessor over
+    // module state rather than a value copied at call time.
+    //
+    // Asserting those handles are `undefined` would assert something else
+    // entirely — that this module instance happens never to have been
+    // activated. That holds only because the extension host loads
+    // `dist/extension.js` while this suite imports the `out/` copy, so the two
+    // are different instances. It is an artifact of the build layout, not a
+    // contract, and it silently stops being true the moment both sides load
+    // the same module ([VSIX-TESTING-COVERAGE], gh #440).
+    for (const handle of LIVE_API_HANDLES) {
+      const descriptor = Object.getOwnPropertyDescriptor(api, handle);
+      assert.ok(descriptor, `currentApi() must expose ${handle}`);
+      assert.equal(
+        typeof descriptor?.get,
+        "function",
+        `${handle} must be a read-through getter, not a copied value`,
+      );
+      assert.equal(descriptor?.value, undefined, `${handle} must not be a data property`);
+      // Read through it. The VALUE is activation-dependent and deliberately
+      // unasserted, but the getter must run without throwing and must answer
+      // consistently within a turn — a getter that cannot be read is not a
+      // read-through view, and descriptor inspection alone never executes it.
+      const first = api[handle];
+      assert.equal(api[handle], first, `${handle} must read through to one live value`);
+    }
     assert.ok(!("then" in api), "currentApi returns a plain snapshot, not a thenable");
   });
 

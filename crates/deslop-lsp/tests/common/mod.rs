@@ -140,26 +140,39 @@ pub fn initialize_request() -> Result<(i64, String)> {
     )
 }
 
-/// Builds a JSON-RPC request envelope.
+/// Builds a JSON-RPC request envelope. A `Null` `params` is left out of
+/// the frame rather than serialised: JSON-RPC 2.0 allows `params` to be
+/// omitted but requires it to be an array or an object when present, so a
+/// literal `null` is rejected by the server (`-32602 Unexpected params`)
+/// on every no-argument method, `shutdown` included. Sending what a real
+/// editor sends is what makes an assertion on the reply mean anything.
 pub fn request(method: &str, params: &serde_json::Value) -> Result<(i64, String)> {
     let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
-    let payload = serde_json::json!({
+    let mut payload = serde_json::json!({
         "jsonrpc": "2.0",
         "id": id,
         "method": method,
-        "params": params
     });
+    insert_params(&mut payload, params);
     Ok((id, serde_json::to_string(&payload)?))
 }
 
-/// Builds a JSON-RPC notification.
+/// Builds a JSON-RPC notification, omitting a `Null` `params` for the same
+/// reason [`request`] does.
 pub fn notification(method: &str, params: &serde_json::Value) -> Result<String> {
-    let payload = serde_json::json!({
+    let mut payload = serde_json::json!({
         "jsonrpc": "2.0",
         "method": method,
-        "params": params
     });
+    insert_params(&mut payload, params);
     Ok(serde_json::to_string(&payload)?)
+}
+
+/// Adds `params` to `payload` unless it is `Null`.
+fn insert_params(payload: &mut serde_json::Value, params: &serde_json::Value) {
+    if let (Some(object), false) = (payload.as_object_mut(), params.is_null()) {
+        let _replaced = object.insert("params".to_owned(), params.clone());
+    }
 }
 
 /// Drives `initialize` + `initialized` and returns the server response.
@@ -199,20 +212,27 @@ pub fn call_capturing(
     recv_response(stdout, id)
 }
 
-/// RAII guard that kills and reaps the spawned LSP child when it drops, so a
-/// failing assertion never leaks the process.
-pub struct KillOnDrop<'a>(pub &'a mut Child);
+/// RAII guard that closes the spawned LSP child's stdin and reaps it when it
+/// drops, so a failing assertion never leaks the process — and never signals
+/// one, which would discard everything the child executed
+/// (`deslop_test_support::reap`).
+pub struct ReapOnDrop<'a>(pub &'a mut Child);
 
-impl Drop for KillOnDrop<'_> {
+impl Drop for ReapOnDrop<'_> {
     fn drop(&mut self) {
-        let _kill = self.0.kill();
-        let _wait = self.0.wait();
+        let _status = deslop_test_support::reap::reap(self.0);
     }
 }
 
-/// Owning RAII guard: holds the spawned LSP child and kills it on drop. Unlike
-/// [`KillOnDrop`] it owns the process, so a helper can return the guard already
+/// Owning RAII guard: holds the spawned LSP child and reaps it on drop. Unlike
+/// [`ReapOnDrop`] it owns the process, so a helper can return the guard already
 /// armed — any later failure (handshake, request) still reaps the child.
+///
+/// Reaping means closing stdin and waiting, never signalling: a signalled
+/// child writes no coverage profile, so a `kill` here silently deletes every
+/// line the server executed (`deslop_test_support::reap`). The caller's own
+/// [`ChildStdin`] drops before this guard does, so the child already has EOF
+/// by the time it is waited on.
 pub struct LspGuard {
     child: Child,
     /// Continuously drained for the guard's whole lifetime (GH #370).
@@ -221,8 +241,7 @@ pub struct LspGuard {
 
 impl Drop for LspGuard {
     fn drop(&mut self) {
-        let _kill = self.child.kill();
-        let _wait = self.child.wait();
+        let _status = deslop_test_support::reap::reap(&mut self.child);
     }
 }
 
@@ -354,6 +373,27 @@ pub const ANALYSIS_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Poll cadence while waiting for the first analysis pass.
 pub const POLL_INTERVAL: Duration = Duration::from_millis(50);
+
+/// Waits up to `timeout` for `child` to end, returning `None` when it is
+/// still running. Shared by every suite that asserts on how the server
+/// terminates ([LSP-LIFECYCLE]).
+///
+/// # Errors
+///
+/// Returns `Err` when the child cannot be waited on.
+pub fn wait_for_exit(
+    child: &mut Child,
+    timeout: Duration,
+) -> Result<Option<std::process::ExitStatus>> {
+    let start = Instant::now();
+    while start.elapsed() < timeout {
+        if let Some(status) = child.try_wait()? {
+            return Ok(Some(status));
+        }
+        std::thread::sleep(POLL_INTERVAL);
+    }
+    child.try_wait().map_err(Into::into)
+}
 
 /// Builds a `textDocument/codeAction` params payload for `uri` covering
 /// the zero-indexed `line` span.

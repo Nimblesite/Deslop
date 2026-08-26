@@ -482,15 +482,24 @@ Tests run in CI on every platform shipped in [VSIX-BUNDLE] via GitHub Actions `v
 
 #### [VSIX-TESTING-COVERAGE] Extension-host coverage gate
 
-`make _vsix-coverage` (`npm run coverage`) runs the full unit + E2E suite
-under `@vscode/test-cli` with c8 line coverage over the tsc output in
-`out/**`, then enforces `.vsix.default_threshold` from the repo-root
-`coverage-thresholds.json` (1% rounding slack, ratchet-up-only) via
-`scripts/check-coverage.mjs`. The c8 config uses `includeAll` so every
-non-test `out/**` module counts toward the floor whether or not a test loads
-it — an unexercised module drags the total down rather than hiding.
+`make _vsix-coverage` (`npm run coverage:extension`) compiles the suite, instruments every compiled module, runs the full unit + E2E suite under `@vscode/test-cli`, and writes `coverage/extension/coverage-summary.json`. `make _vsix-coverage-check` enforces `.vsix.extension_threshold` from the repo-root `coverage-thresholds.json` with the same **+1% rounding slack** and ratchet-up-only discipline as every other floor.
 
-`make _vsix-test` (`npm test`) re-runs the same suite against the packaged
-bundle without coverage, so the shipped artifact stays E2E-validated. The
-webview bundle has its own gate: [webview-runtime.md
-§VSIX-WEBVIEW-COVERAGE](webview-runtime.md#vsix-webview-coverage).
+**The counters live in the code, not in the process.** The desktop extension host writes no V8 profile for extension code — a raw `NODE_V8_COVERAGE` run captures VS Code's main process and nothing of ours (gh #440). That is a property of the host, not of the injection channel, so no amount of re-aiming c8 recovers it. `scripts/instrument-out.mjs` therefore compiles Istanbul counters into each module and `src/test/coverage-dump.ts` writes the accumulated table from inside the host on exit. The migration to `vscode.tests.createTestController` that gh #440 proposed is not required for this.
+
+**The measured artifact is `out/**`, not `dist/extension.js`.** The extension ships as the bundle, but the suites import modules directly (`../../decorations/...`), which resolves to the separate `tsc` copy — so the bundle observes almost none of the suite's work. Measuring it scored 57.98% against 87.56% for `out/**`. The two copies cannot be merged: different toolchains produce different statement maps, and combining them would total tables that do not describe the same code. Measuring `out/**` alone therefore under-reports by whatever only the bundle's activation path executes, which is the safe direction — the number can never claim coverage no test produced.
+
+**The denominator is every compiled module**, taken from the instrumentation baseline rather than from whatever loaded at runtime, so a module no test touches scores 0% instead of vanishing and inflating the total. The run fails if the module set in the report differs from the set instrumented, if the host writes no table at all, or if the table it writes is empty — a broken harness cannot pass by default.
+
+`make _vsix-test` (`npm test`) re-runs the same suite uninstrumented against the packaged bundle, so the shipped artifact stays E2E-validated. The webview bundle has its own gate: [webview-runtime.md §VSIX-WEBVIEW-COVERAGE](webview-runtime.md#vsix-webview-coverage).
+
+##### [VSIX-TESTING-COVERAGE-RESTORE] The instrumented tree is never left behind
+
+Instrumentation is written **into** `out/**`, so the run recompiles that tree clean in a `finally` — on the passing path and on every failing one. That recompile is a gate, not a courtesy: `vsix-package` ships whatever is in `out/**`, and `make _vsix-test` runs against it, so a run that fails to restore and still exits `0` hands a green light to a packaged extension full of coverage counters.
+
+The rule is therefore: **a failed restore fails the command, on its own.** When collection also failed, that failure is reported first — it explains the run — and the restore failure is kept alongside it rather than dropped. The diagnostic names `out/**`, the tree actually left instrumented.
+
+The decision lives once, in `coverageRunExit` (`scripts/coverage-paths.mjs`), and is pinned twice: `scripts/extension-coverage.test.mjs` holds the four-way table, and `scripts/extension-coverage-contract.test.mjs` drives `scripts/extension-coverage.mjs` as a process with its tools stubbed and asserts the exit code and the message. Measured against the defect it replaces — the restore status discarded — the same black-box run exits `0` with the instrumented tree still staged.
+
+##### [VSIX-SUITE-EXECUTES] A suite that did not run is not a pass
+
+`vscode-test` globs `out/**/*.test.js`. An uncompiled `out/` matches nothing, so Mocha prints `0 passing` and exits 0 — a green light over a suite that never ran. npm fires `pre<name>` only for the exact script name, so every script that invokes `vscode-test` directly carries its own `pre<name>` hook running `npm run compile`; a script that merely delegates to one of those inherits its hook. Pinned by `clients/vscode/scripts/suite-compiles.test.mjs`, which enumerates the runner-invoking scripts out of `package.json` and refuses an empty set.

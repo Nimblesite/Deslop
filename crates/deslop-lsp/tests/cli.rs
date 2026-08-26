@@ -5,9 +5,8 @@
 
 use std::{
     path::Path,
-    process::{Child, Command as StdCommand, ExitStatus, Stdio},
-    thread,
-    time::{Duration, Instant},
+    process::{Child, Command as StdCommand, Stdio},
+    time::Duration,
 };
 
 use anyhow::{anyhow, Result};
@@ -16,7 +15,7 @@ use serde_json::Value;
 
 use crate::common::{
     call, copy_fixture, handshake, notification, request, send_and_recv, spawn_lsp,
-    spawn_lsp_on_fixture, take_io, write_frame,
+    spawn_lsp_on_fixture, take_io, wait_for_exit, write_frame,
 };
 
 // Implements the Shipwright binary contract: every IDE-launched
@@ -95,7 +94,7 @@ fn initialize_reports_server_info_version() -> Result<()> {
         expected_version()
     );
     let _shutdown = call(&mut stdin, &mut stdout, "shutdown", &Value::Null)?;
-    let _ = child.kill();
+    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
     Ok(())
 }
 
@@ -165,7 +164,7 @@ fn report_after_start(workspace: &Path) -> Result<Value> {
     let _init = handshake(&mut stdin, &mut stdout)?;
     let response = call(&mut stdin, &mut stdout, "deslop/reportGet", &Value::Null)?;
     let _shutdown = call(&mut stdin, &mut stdout, "shutdown", &Value::Null)?;
-    let _ = child.kill();
+    let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
     response
         .get("result")
         .cloned()
@@ -205,17 +204,6 @@ fn spawn_fake_parent(workspace: &Path) -> Result<Child> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?)
-}
-
-fn wait_for_exit(child: &mut Child, timeout: Duration) -> Result<Option<ExitStatus>> {
-    let start = Instant::now();
-    while start.elapsed() < timeout {
-        if let Some(status) = child.try_wait()? {
-            return Ok(Some(status));
-        }
-        thread::sleep(Duration::from_millis(50));
-    }
-    child.try_wait().map_err(Into::into)
 }
 
 fn pointer<'a>(value: &'a Value, path: &str) -> Result<&'a str> {
