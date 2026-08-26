@@ -291,11 +291,10 @@ impl<'corpus> OverlapMeasurer<'corpus> {
         // strictly tighter and still sound, and costs microseconds
         // against the alignment's milliseconds
         // ([FUSION-SHARED-SUBTREE-BOUND-ORDER]). Computed second
-        // because the cheaper test already answers most pairs, and
-        // only for pairs the alignment will actually measure: it
-        // bounds an *ordered* alignment, and endpoints past
-        // `ALIGNMENT_MAX_NODES` are answered by the greedy credit
-        // fallback instead.
+        // because the cheaper test already answers most pairs. It
+        // covers endpoints past `ALIGNMENT_MAX_NODES` too: the credit
+        // fallback that answers those is itself a lower bound on the
+        // alignment, so the same upper bound dominates it.
         let ordered = self.order_bound_ratio(&left_view, &right_view);
         if ordered < SHARED_SUBTREE_MIN_OVERLAP {
             bump(&mut self.stats.order_skips);
@@ -322,8 +321,8 @@ impl<'corpus> OverlapMeasurer<'corpus> {
     /// the larger endpoint ([FUSION-SHARED-SUBTREE-BOUND-ORDER]).
     fn order_bound_ratio(&mut self, left: &EndpointView, right: &EndpointView) -> f64 {
         let larger = left.total.max(right.total);
-        if larger == 0 || larger > ALIGNMENT_MAX_NODES {
-            return 1.0;
+        if larger == 0 {
+            return 0.0;
         }
         let shared = subsequence::common_subsequence_len(
             left.postorder(),

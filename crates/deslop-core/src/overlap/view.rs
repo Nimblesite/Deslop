@@ -131,12 +131,12 @@ fn creditable_entries(members: &[&NormalizedNode]) -> Vec<Fingerprint> {
             SHARED_SUBTREE_MIN_CREDIT_NODES,
         ));
     }
-    entries.sort_by(|left, right| {
-        right
-            .node_count
-            .cmp(&left.node_count)
-            .then(left.byte_range.start.cmp(&right.byte_range.start))
-    });
+    // Byte order, widest first at a tie: the fallback walks both
+    // endpoints left to right and never looks backwards, so it needs
+    // its candidates in position order, and it should be offered a
+    // container before the subtrees nested inside it
+    // ([FUSION-SHARED-SUBTREE]).
+    entries.sort_by(super::credit::credit_order);
     entries
 }
 
