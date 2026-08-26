@@ -6,6 +6,7 @@
 
 use std::{
     path::PathBuf,
+    pin::Pin,
     process::ExitCode,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -14,7 +15,10 @@ use std::{
     task::{Context, Poll},
 };
 
-use tokio::sync::Notify;
+use tokio::{
+    io::{AsyncRead, ReadBuf},
+    sync::Notify,
+};
 use tower::Service;
 use tower_lsp::{
     jsonrpc::{Request, Response},
@@ -265,9 +269,12 @@ pub async fn run_stdio(
         custom_methods::virtual_document,
     )
     .finish();
-    let stdin = tokio::io::stdin();
-    let stdout = tokio::io::stdout();
     let lifecycle = Lifecycle::default();
+    let stdin = EndOnEof {
+        inner: tokio::io::stdin(),
+        ended: lifecycle.exited.clone(),
+    };
+    let stdout = tokio::io::stdout();
     let serving = Server::new(stdin, stdout, socket).serve(WatchLifecycle {
         inner: NormaliseParams::new(service),
         lifecycle: lifecycle.clone(),
@@ -302,3 +309,56 @@ where
         () = exited.notified() => (),
     }
 }
+
+/// A reader that raises `ended` the moment it reaches end of file.
+///
+/// [LSP-LIFECYCLE] Closing stdin is how a client that did not get to say
+/// anything says goodbye — it crashed, or the editor window went away. The
+/// base protocol treats that as `exit`, and so must this process.
+///
+/// tower-lsp's serve future does not resolve on end of file alone: it first
+/// lets the work already in flight finish. After `exit` that is right, since
+/// the client asked for an orderly stop and is still there to be answered.
+/// After the client has vanished it is the leak this module exists to
+/// prevent, because the work being waited on is unbounded — gh #370 was a
+/// refresh that ran for fourteen minutes, and nobody was left to read it.
+///
+/// The failure is invisible on a fast machine, where the pass is finished
+/// before the pipe closes, which is why it surfaced first as a CI timeout:
+/// the instrumented two-core runner held stdout open for the full
+/// two-minute ceiling. Raising the same signal `exit` raises ends the loop
+/// at once, and leaves the ending — and therefore the process exit code —
+/// classified as [`ServeEnd::ClientVanished`] rather than as an `exit`.
+struct EndOnEof<R> {
+    /// The reader being watched, normally the process's stdin.
+    inner: R,
+    /// Raised once, when `inner` first reports end of file.
+    ended: Arc<Notify>,
+}
+
+impl<R: AsyncRead + Unpin> AsyncRead for EndOnEof<R> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffer: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        let before = buffer.filled().len();
+        // Only a read that was *offered* room can report end of file by
+        // filling none. A caller that polls with a full buffer gets a ready,
+        // zero-filled read while the client is still very much there, and
+        // treating that as the client going away kills a live session.
+        let offered_room = buffer.remaining() > 0;
+        let polled = Pin::new(&mut self.inner).poll_read(context, buffer);
+        // A ready read that was offered room and filled none is end of file;
+        // one that filled bytes is ordinary traffic, and an error is not an
+        // ending this signal may claim.
+        if offered_room && matches!(polled, Poll::Ready(Ok(()))) && buffer.filled().len() == before
+        {
+            self.ended.notify_one();
+        }
+        polled
+    }
+}
+
+#[cfg(test)]
+mod tests;
