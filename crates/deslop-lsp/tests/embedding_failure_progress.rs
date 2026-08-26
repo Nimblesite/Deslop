@@ -55,6 +55,16 @@ const REPORT_TIMEOUT: Duration = Duration::from_secs(20);
 /// a refresh that hung for fourteen minutes — and a stall budget catches that
 /// the moment it starts instead of after a fixed wait.
 const PROGRESS_STALL_TIMEOUT: Duration = Duration::from_secs(20);
+/// Longest the whole refresh may run, however busy it looks.
+///
+/// A stall budget alone is not a bound: a pass that emits one frame every
+/// nineteen seconds resets the clock forever and never reaches a terminal
+/// phase, so the test hangs until the CI job is killed and reports nothing
+/// about the server. This backstop is deliberately far above any real pass —
+/// both cases here finish in about twelve seconds in release — so it never
+/// competes with [`PROGRESS_STALL_TIMEOUT`] for the diagnosis. It exists only
+/// so a trickle is named rather than waited on.
+const PROGRESS_TOTAL_CEILING: Duration = Duration::from_secs(600);
 const SET_MODEL: &str = "deslop/embeddingSetModel";
 const PROGRESS: &str = "deslop/embeddingProgress";
 const PROVIDER_ID: &str = "ollama";
@@ -216,11 +226,16 @@ fn terminal_progress(frames: &[Value]) -> Option<Value> {
         .cloned()
 }
 
-/// Deadline [`PROGRESS_STALL_TIMEOUT`] from now, saturating at now.
-fn stall_deadline() -> Instant {
+/// Deadline `window` from now, saturating at now.
+fn deadline_after(window: Duration) -> Instant {
     Instant::now()
-        .checked_add(PROGRESS_STALL_TIMEOUT)
+        .checked_add(window)
         .unwrap_or_else(Instant::now)
+}
+
+/// Deadline [`PROGRESS_STALL_TIMEOUT`] from now.
+fn stall_deadline() -> Instant {
+    deadline_after(PROGRESS_STALL_TIMEOUT)
 }
 
 fn wait_for_terminal_progress(
@@ -229,6 +244,7 @@ fn wait_for_terminal_progress(
     mut frames: Vec<Value>,
 ) -> Result<Value> {
     let mut deadline = stall_deadline();
+    let giving_up = deadline_after(PROGRESS_TOTAL_CEILING);
     loop {
         if let Some(terminal) = terminal_progress(&frames) {
             return Ok(terminal);
@@ -239,6 +255,12 @@ fn wait_for_terminal_progress(
                  never reached a terminal phase: {frames:#?}"
             ));
         }
+        if Instant::now() >= giving_up {
+            return Err(anyhow!(
+                "the embedding refresh kept emitting for {PROGRESS_TOTAL_CEILING:?} without \
+                 ever reaching a terminal phase: {frames:#?}"
+            ));
+        }
         let (response, emitted) = call_capturing(stdin, stdout, "deslop/reportGet", &json!({}))?;
         if response.get("result").is_none() {
             return Err(anyhow!(
@@ -246,7 +268,8 @@ fn wait_for_terminal_progress(
             ));
         }
         // A pass that is still emitting frames is still working, however slow
-        // the machine underneath it is. Only silence restarts the clock.
+        // the machine underneath it is, so every frame restarts the clock and
+        // only silence is left to run it down.
         if !emitted.is_empty() {
             deadline = stall_deadline();
         }

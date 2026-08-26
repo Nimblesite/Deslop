@@ -23,12 +23,6 @@ Supersedes `docs/plans/embedding-accuracy-plan.md`, which covered only the embed
 
 **Not permitted:** lowering `FUSED_THRESHOLD` or `LSH_ONLY_MIN_JACCARD`. Validation runs both directions on the pinned corpus — recall on shape-changing Type-3, and zero new false positives on repetitive scaffolding.
 
-## Fix 2 — [CLONE-NOISE-COPY-PROOF] (#373)
-
-Every noise filter's escape hatch compares **raw source bytes**, so only a *verbatim* copy survives and every renamed copy is hidden. The module header at `cluster_filters/mod.rs:88` claims "a verbatim/renamed copy survives" — the code has never done the renamed half.
-
-**Delete** `enclosing_function_bodies_differ` (`cluster_filters/mod.rs:471`) and all seven `raw_snippet_texts_differ` call sites: `mod.rs:221`, `dart.rs:101`, `dart_data_table.rs:37`, `ecmascript.rs:27`, `python_constants.rs:33`, `rust.rs:422`, `rust.rs:517`. **Replace** with one predicate over the `ContentEvidence` the pipeline already measures (`content.rs` — `agreement`, `rename_consistency`, `literal_fraction`): a cluster whose identifier mapping is bijective and whose literals align is a *proven copy* and is never filtered as noise. `cluster_is_hidden` already holds `cluster.content`; thread it into `is_noise_pattern` rather than re-deriving anything. One predicate, seven call sites, no per-language variants.
-
 ## Fix 3 — [FUSION-EMBED-PROVIDER] (#369a)
 
 `crates/deslop/tests/cli/mock_ollama.rs::embed_vector` returns `[sin(len), cos(first_byte), 0.5, -0.5]`: two constant lanes floor every cosine and `sin` aliases over length — a 67-byte and an 865-byte text score 0.99997. That manufactures the two embedding-only false positives #369 names.
@@ -52,6 +46,16 @@ Every noise filter's escape hatch compares **raw source bytes**, so only a *verb
 On the rejected-refresh path the server emits no terminal `deslop/embeddingProgress` frame, so the client blocks forever in the unbounded read — upstream of the test's 20 s timeout. This is a server defect, not a test defect.
 
 **Delete** the path that can exit without publishing a terminal frame. **Replace** with a refresh that publishes exactly one terminal frame (success *or* failure) on every exit, preserving the last-good report. Adding a client-side timeout to the test is prohibited — it would convert a hang into a green run over a server that still hangs in the editor.
+
+## Fix 2 — [CLONE-NOISE-COPY-PROOF] (#373)
+
+> Placed last so the `FUSION` sections sit adjacent, as the spec-ID rule
+> requires. Position is not order here — `Order and gates` below is, and it
+> says this fix is independent and may land first.
+
+Every noise filter's escape hatch compares **raw source bytes**, so only a *verbatim* copy survives and every renamed copy is hidden. The module header at `cluster_filters/mod.rs:88` claims "a verbatim/renamed copy survives" — the code has never done the renamed half.
+
+**Delete** `enclosing_function_bodies_differ` (`cluster_filters/mod.rs:471`) and all seven `raw_snippet_texts_differ` call sites: `mod.rs:221`, `dart.rs:101`, `dart_data_table.rs:37`, `ecmascript.rs:27`, `python_constants.rs:33`, `rust.rs:422`, `rust.rs:517`. **Replace** with one predicate over the `ContentEvidence` the pipeline already measures (`content.rs` — `agreement`, `rename_consistency`, `literal_fraction`): a cluster whose identifier mapping is bijective and whose literals align is a *proven copy* and is never filtered as noise. `cluster_is_hidden` already holds `cluster.content`; thread it into `is_noise_pattern` rather than re-deriving anything. One predicate, seven call sites, no per-language variants.
 
 ## Order and gates
 
