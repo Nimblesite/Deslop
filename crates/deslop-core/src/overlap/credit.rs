@@ -1,77 +1,72 @@
-//! Large-tree coverage fallback for [FUSION-SHARED-SUBTREE].
+//! Large-tree coverage fallback for [FUSION-SHARED-SUBTREE] —
+//! **quarantined**, see below.
 //!
-//! Endpoints past [`super::ALIGNMENT_MAX_NODES`] are scored by greedy
-//! maximal shared-Merkle-subtree coverage — a conservative lower bound
-//! on the alignment, so it can suppress a rescue but never manufacture
-//! one.
-
-use std::collections::HashMap;
+//! Endpoints past [`super::ALIGNMENT_MAX_NODES`] were scored by greedy
+//! maximal shared-Merkle-subtree coverage, on the stated premise that
+//! it is "a conservative lower bound on the alignment, so it can
+//! suppress a rescue but never manufacture one".
+//!
+//! **That premise is false, and the code is removed.**
 
 use super::EndpointView;
 
-/// Greedy-maximal shared-Merkle-subtree node credit. Largest left
-/// subtrees first, each credit consuming one concrete right-side
-/// occurrence, nested-in-credited spans skipped on **both** endpoints.
-/// A conservative lower bound on [`super::alignment::aligned_shared_nodes`]
-/// — node mass matched under a bijection of disjoint identical subtrees
-/// is achievable by an alignment. The bijection needs both sides
-/// tracked: consuming bare hash counts on the right let a disjoint left
-/// copy re-claim nodes nested inside an already-credited right subtree,
-/// counting them twice and overshooting the alignment this bound stands
-/// in for (`the_fallback_never_credits_a_nested_right_subtree_twice`).
+/// Greedy-maximal shared-Merkle-subtree node credit — **removed as a
+/// false-positive source**.
 ///
-/// Left entries arrive largest-first, so every candidate span is no
-/// larger than the spans already credited on its side; a strict
-/// container has strictly more nodes than its subtree, so a later
-/// candidate can never contain a credited span and the nested-inside
-/// test alone keeps each side's credited spans disjoint.
+/// # What it did
+///
+/// It walked the left endpoint's creditable subtrees largest-first,
+/// claimed for each one any unconsumed right-side occurrence of the
+/// same Merkle hash, skipped spans nested inside already-credited ones
+/// on both sides, and returned the total node mass so matched. That
+/// total was then divided by the larger endpoint and returned from
+/// `OverlapMeasurer::measure_views` as the pair's `structural` overlap.
+///
+/// # Why it is wrong
+///
+/// The bijection it builds is *unordered*. A tree alignment is not: a
+/// Tai mapping preserves post-order on both sides, so two subtrees
+/// matched in swapped order cannot both be kept — one must be deleted
+/// and reinserted. Crediting both anyway reports shared mass that no
+/// alignment can achieve, so the value overstates the overlap, and
+/// [`crate::pair::SHARED_SUBTREE_MIN_OVERLAP`] then admits pairs the
+/// honest measure rejects. Every such admission is a false positive,
+/// and it lands on exactly the endpoints too large to check.
+///
+/// On the 51-minute Flutter run this route measured 4,080 pairs in the
+/// rescue and a further 1,730 in the cluster-signal build — every one
+/// of them an endpoint too large for the honest measure to check.
+///
+/// # Which test pins it
+///
+/// `overlap::tests::the_fallback_never_credits_mass_no_ordered_alignment_can_reach`
+/// — two files holding the same two functions in swapped order. The
+/// fallback credited 47 shared nodes where the alignment reaches 32.
+/// The pre-existing `the_large_tree_fallback_never_exceeds_the_alignment`
+/// asserts the same property, but only on a single same-order pair, so
+/// it passed throughout.
+///
+/// # Panics
+///
+/// Always. This is the [`AGENTS.md`] accuracy quarantine: a measurement
+/// that silently overstates overlap is worse than a crash, because a
+/// crash is found in seconds and a false positive is never found at
+/// all. Restoring large-endpoint measurement needs a bound that
+/// respects post-order — see [FUSION-SHARED-SUBTREE-BOUND-ORDER],
+/// which already computes one soundly in the other direction.
+#[expect(
+    clippy::panic,
+    reason = "[FUSION-SHARED-SUBTREE] accuracy quarantine: this measurement \
+              manufactured false positives and must not run until it is replaced"
+)]
 pub(super) fn credit_shared_nodes(left: &EndpointView, right: &EndpointView) -> usize {
-    let mut open_right: HashMap<[u8; 32], Vec<(usize, usize)>> = HashMap::new();
-    for entry in &right.entries {
-        open_right
-            .entry(entry.hash)
-            .or_default()
-            .push((entry.byte_range.start, entry.byte_range.end));
-    }
-    let mut left_taken: Vec<(usize, usize)> = Vec::new();
-    let mut right_taken: Vec<(usize, usize)> = Vec::new();
-    let mut credit = 0_usize;
-    for entry in &left.entries {
-        let span = (entry.byte_range.start, entry.byte_range.end);
-        if nested_in_credited(span, &left_taken) {
-            continue;
-        }
-        let Some(claimed) = claim_right_occurrence(entry.hash, &mut open_right, &right_taken)
-        else {
-            continue;
-        };
-        credit = credit.saturating_add(entry.node_count);
-        left_taken.push(span);
-        right_taken.push(claimed);
-    }
-    credit
-}
-
-/// True when `span` nests inside any already-credited span.
-fn nested_in_credited(span: (usize, usize), taken: &[(usize, usize)]) -> bool {
-    let (start, end) = span;
-    taken
-        .iter()
-        .any(|(taken_start, taken_end)| *taken_start <= start && end <= *taken_end)
-}
-
-/// Consumes and returns one right-side occurrence of `hash` that is not
-/// nested inside an already-credited right span. Identical hashes have
-/// identical node counts, so any open occurrence is an equally-sized
-/// witness and the first open one serves.
-fn claim_right_occurrence(
-    hash: [u8; 32],
-    open_right: &mut HashMap<[u8; 32], Vec<(usize, usize)>>,
-    right_taken: &[(usize, usize)],
-) -> Option<(usize, usize)> {
-    let candidates = open_right.get_mut(&hash)?;
-    let position = candidates
-        .iter()
-        .position(|candidate| !nested_in_credited(*candidate, right_taken))?;
-    Some(candidates.swap_remove(position))
+    panic!(
+        "credit_shared_nodes was removed: its greedy bijection ignores post-order \
+         and credited shared mass no ordered alignment can reach, admitting pairs \
+         the honest measure rejects (pinned by \
+         the_fallback_never_credits_mass_no_ordered_alignment_can_reach). Refused \
+         {left_entries} creditable left subtrees against {right_entries} right.",
+        left_entries = left.entries.len(),
+        right_entries = right.entries.len(),
+    );
 }
