@@ -10,7 +10,7 @@ use std::{collections::HashMap, hash::BuildHasher};
 
 use tree_sitter::Node;
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 use super::{
     body_shape::{body_kind_stream, ShapeToken},
@@ -86,7 +86,7 @@ pub(super) fn is_polymorphic_signature_cluster<S: BuildHasher>(
     if !spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id)) {
         return false;
     }
-    let subjects: Option<Vec<Rc<OwnedSubject>>> = snippets
+    let subjects: Option<Vec<Arc<OwnedSubject>>> = snippets
         .iter()
         .map(|snippet| cache.subject(snippet, || subject_of(snippet, cache)))
         .collect();

@@ -4,11 +4,11 @@
 //! asks repeatedly per member range. Split from the parent module,
 //! which owns the cache type and the CST/LRU machinery.
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{collections::HashMap, sync::{Arc, Mutex}};
 
 use super::super::body_shape::OwnedShapeToken;
 use super::super::{calls::CallShape, polymorphic::OwnedSubject};
-use super::{CallSequence, ParseCache, Snippet, SnippetKey};
+use super::{locked, CallSequence, ParseCache, Snippet, SnippetKey};
 
 /// Most cells each cache may retain. Beyond the cap a value is
 /// recomputed on demand — results are identical, only reuse ends, so
@@ -31,16 +31,16 @@ const BODY_DIGEST_MEMO_MAX: usize = 262_144;
 /// are stored too — "no enclosing call" is as expensive to rederive as
 /// the value itself.
 fn memo_entry<T>(
-    map: &RefCell<HashMap<SnippetKey, Option<Rc<T>>>>,
+    map: &Mutex<HashMap<SnippetKey, Option<Arc<T>>>>,
     key: SnippetKey,
     cap: usize,
     compute: impl FnOnce() -> Option<T>,
-) -> Option<Rc<T>> {
-    if let Some(hit) = map.borrow().get(&key) {
+) -> Option<Arc<T>> {
+    if let Some(hit) = locked(map).get(&key) {
         return hit.clone();
     }
-    let computed = compute().map(Rc::new);
-    let mut map = map.borrow_mut();
+    let computed = compute().map(Arc::new);
+    let mut map = locked(map);
     if map.len() < cap {
         let _replaced = map.insert(key, computed.clone());
     }
@@ -54,7 +54,7 @@ impl ParseCache {
         &self,
         snippet: &Snippet<'_>,
         compute: impl FnOnce() -> Option<CallShape>,
-    ) -> Option<Rc<CallShape>> {
+    ) -> Option<Arc<CallShape>> {
         memo_entry(
             &self.call_shapes,
             (snippet.file_id, snippet.range.start, snippet.range.end),
@@ -69,7 +69,7 @@ impl ParseCache {
         &self,
         snippet: &Snippet<'_>,
         compute: impl FnOnce() -> Option<CallSequence>,
-    ) -> Option<Rc<CallSequence>> {
+    ) -> Option<Arc<CallSequence>> {
         memo_entry(
             &self.call_sequences,
             (snippet.file_id, snippet.range.start, snippet.range.end),
@@ -84,7 +84,7 @@ impl ParseCache {
         &self,
         snippet: &Snippet<'_>,
         compute: impl FnOnce() -> Option<Vec<OwnedShapeToken>>,
-    ) -> Option<Rc<Vec<OwnedShapeToken>>> {
+    ) -> Option<Arc<Vec<OwnedShapeToken>>> {
         memo_entry(
             &self.signature_shapes,
             (snippet.file_id, snippet.range.start, snippet.range.end),
@@ -99,7 +99,7 @@ impl ParseCache {
         &self,
         snippet: &Snippet<'_>,
         compute: impl FnOnce() -> Option<OwnedSubject>,
-    ) -> Option<Rc<OwnedSubject>> {
+    ) -> Option<Arc<OwnedSubject>> {
         memo_entry(
             &self.subjects,
             (snippet.file_id, snippet.range.start, snippet.range.end),
@@ -116,11 +116,14 @@ impl ParseCache {
         key: SnippetKey,
         compute: impl FnOnce() -> [u8; 32],
     ) -> [u8; 32] {
-        let mut map = self.body_digests.borrow_mut();
-        if let Some(hit) = map.get(&key) {
+        if let Some(hit) = locked(&self.body_digests).get(&key) {
             return *hit;
         }
+        // Computed outside the lock, like every other cell: the digest
+        // walks a whole function body, and holding the memo across it
+        // would serialise every worker in the sharded noise split.
         let digest = compute();
+        let mut map = locked(&self.body_digests);
         if map.len() < BODY_DIGEST_MEMO_MAX {
             let _previous = map.insert(key, digest);
         }

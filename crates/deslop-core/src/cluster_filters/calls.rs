@@ -4,7 +4,7 @@
 
 use tree_sitter::Node;
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 use super::{enclosing_kind, parse_for, snippets::CallSequence, ParseCache, Snippet};
 use crate::ast::ByteRange;
@@ -23,7 +23,7 @@ pub(super) fn is_literal_variation_call_cluster(
     snippets: &[Snippet<'_>],
     cache: &ParseCache,
 ) -> bool {
-    let calls: Option<Vec<Rc<CallShape>>> = snippets
+    let calls: Option<Vec<Arc<CallShape>>> = snippets
         .iter()
         .map(|snippet| cache.call_shape(snippet, || call_shape(snippet)))
         .collect();
@@ -35,7 +35,7 @@ pub(super) fn is_literal_variation_call_cluster(
 
 /// Applies the literal-variation rule to one comparable call per
 /// cluster member.
-fn is_literal_variation_call_set(calls: Option<Vec<Rc<CallShape>>>) -> bool {
+fn is_literal_variation_call_set(calls: Option<Vec<Arc<CallShape>>>) -> bool {
     let Some(calls) = calls else { return false };
     let Some(first) = calls.first() else {
         return false;
@@ -116,7 +116,7 @@ fn call_shape_from_node(call: Node<'_>, source: &[u8], language: &str) -> Option
 /// the case this distinguishes: one varying call, four invariant ones.
 /// Scaffolding has nothing left once the literals are removed.
 fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>], cache: &ParseCache) -> bool {
-    let cells: Option<Vec<Rc<CallSequence>>> = snippets
+    let cells: Option<Vec<Arc<CallSequence>>> = snippets
         .iter()
         .map(|snippet| cache.call_sequence(snippet, || Some(call_sequence(snippet))))
         .collect();

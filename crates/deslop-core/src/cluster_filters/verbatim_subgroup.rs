@@ -45,22 +45,64 @@ const MIN_FAMILY_MEMBERS: usize = 2;
 /// Ordering is preserved: clusters keep their input position and each
 /// cluster's families are emitted in first-member order, so the pass is
 /// deterministic ([PIPELINE-DETERMINISM]).
-pub(crate) fn split_noise_verbatim_families<S: BuildHasher>(
+///
+/// [PERF-FLUTTER-TODO-PAIRS] Every cluster is decided independently of
+/// every other, from the corpus alone, so the pass shards across the
+/// available cores. It was the run's last wholly serial stage — on the
+/// Flutter corpus it held one core for over five minutes while thirteen
+/// sat idle — and each worker owns its own [`ParseCache`], so a shared
+/// memo is never a shared mutation. Which worker decides which cluster
+/// changes nothing: results are written back at their input position
+/// and the noise counters are additive.
+pub(crate) fn split_noise_verbatim_families<S: BuildHasher + Sync>(
     fused_clusters: &[FusedCluster],
     fingerprints: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
 ) -> Vec<FusedCluster> {
-    let started = std::time::Instant::now();
-    let total = fused_clusters.len();
-    let mut out: Vec<FusedCluster> = Vec::with_capacity(total);
-    // [PERF-FLUTTER-TODO-MEMORY] Process in minimum-member-file order
-    // so each file's clusters arrive together and the bounded
-    // [`ParseCache`](super::snippets::ParseCache) tree LRU stays hot;
-    // results are written at each cluster's original position, so the
-    // emitted order — and therefore the report — is unchanged.
-    let mut order: Vec<usize> = (0..total).collect();
+    let inputs = SplitInputs {
+        fused_clusters,
+        fingerprints,
+        sources,
+        file_languages,
+    };
+    let order = file_locality_order(fused_clusters, fingerprints);
+    // One slot per input cluster; a split writes its families as a
+    // run, an untouched cluster writes itself, both in input position.
+    let mut slots: Vec<Option<Vec<FusedCluster>>> =
+        (0..fused_clusters.len()).map(|_| None).collect();
+    if worker_count(order.len()) <= 1 {
+        split_serially(&order, &inputs, cache, &mut slots);
+    } else {
+        split_across_workers(&order, &inputs, cache, &mut slots);
+    }
+    cache.log_noise_totals("noise_verbatim_split");
+    slots.into_iter().flatten().flatten().collect()
+}
+
+/// The corpus every cluster's decision reads, gathered so a worker
+/// carries one reference instead of four.
+#[derive(Clone, Copy)]
+struct SplitInputs<'corpus, S: BuildHasher> {
+    /// Clusters to decide, in input order.
+    fused_clusters: &'corpus [FusedCluster],
+    /// Fingerprints every member index resolves against.
+    fingerprints: &'corpus [Fingerprint],
+    /// Source bytes, for the byte-identical family grouping.
+    sources: &'corpus HashMap<FileId, Vec<u8>>,
+    /// Language per file, for the noise filters.
+    file_languages: &'corpus HashMap<FileId, &'static str, S>,
+}
+
+/// Cluster indices in minimum-member-file order.
+///
+/// [PERF-FLUTTER-TODO-MEMORY] Each file's clusters then arrive together
+/// and the bounded [`ParseCache`](super::snippets::ParseCache) tree LRU
+/// stays hot. Results are written at each cluster's original position,
+/// so the emitted order — and therefore the report — is unchanged.
+fn file_locality_order(fused_clusters: &[FusedCluster], fingerprints: &[Fingerprint]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..fused_clusters.len()).collect();
     // `Option<FileId>` keys: `None` sorts first, which no real cluster
     // produces (every member resolves), so the order is total.
     order.sort_by_key(|&index| {
@@ -73,37 +115,156 @@ pub(crate) fn split_noise_verbatim_families<S: BuildHasher>(
                 .min()
         })
     });
-    // One slot per input cluster; a split writes its families as a
-    // run, an untouched cluster writes itself, both in input position.
-    let mut slots: Vec<Option<Vec<FusedCluster>>> = (0..total).map(|_| None).collect();
-    let mut done = 0_usize;
-    for index in order {
-        if done % NOISE_PROGRESS_INTERVAL == 0 && done > 0 {
-            tracing::info!(
-                stage = "noise_verbatim_split",
-                clusters_done = done,
-                clusters_total = total,
-                elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
-                "noise split progress"
-            );
-            cache.log_noise_totals("noise_verbatim_split_progress");
+    order
+}
+
+/// Decides every cluster on this thread, against the caller's cache.
+fn split_serially<S: BuildHasher>(
+    order: &[usize],
+    inputs: &SplitInputs<'_, S>,
+    cache: &ParseCache,
+    slots: &mut [Option<Vec<FusedCluster>>],
+) {
+    let progress = Progress::new(order.len());
+    for &index in order {
+        if let Some((position, replacement)) = decide(index, inputs, cache) {
+            if let Some(slot) = slots.get_mut(position) {
+                *slot = Some(replacement);
+            }
         }
-        let Some(fused) = fused_clusters.get(index) else {
-            continue;
-        };
-        let fused = fused.clone();
-        let replacement = split_one(&fused, fingerprints, sources, file_languages, cache);
-        let slot = slots.get_mut(index);
-        if let Some(slot) = slot {
-            *slot = Some(replacement.unwrap_or_else(|| vec![fused]));
+        progress.advance(cache);
+    }
+}
+
+/// Decides every cluster across worker threads, all sharing one cache.
+///
+/// [PERF-FLUTTER-TODO-MEMORY] The cache is shared rather than cloned per
+/// worker, and that is the whole design: a per-worker cache multiplies
+/// the parse-tree budget by the core count (a 1.4 GB run became 4.1 GB)
+/// and starts every worker cold, so the memoised walks it exists to
+/// avoid are recomputed once per worker. Sharing keeps one tree
+/// population and one set of memos; the locks are held only around the
+/// map operations, never around the walks that fill them.
+fn split_across_workers<S: BuildHasher + Sync>(
+    order: &[usize],
+    inputs: &SplitInputs<'_, S>,
+    cache: &ParseCache,
+    slots: &mut [Option<Vec<FusedCluster>>],
+) {
+    let progress = Progress::new(order.len());
+    let (claimed, _states) = crate::shard::map_chunks(
+        order.chunks(NOISE_CHUNK_CLUSTERS),
+        worker_count(order.len()),
+        || (),
+        |(), chunk| decide_chunk(chunk, inputs, cache, &progress),
+    );
+    for (position, replacement) in claimed.into_iter().flatten() {
+        if let Some(slot) = slots.get_mut(position) {
+            *slot = Some(replacement);
         }
-        done = done.saturating_add(1);
     }
-    for clusters in slots.into_iter().flatten() {
-        out.extend(clusters);
+}
+
+/// Decides one claimed chunk against the worker's own cache.
+fn decide_chunk<S: BuildHasher>(
+    chunk: &[usize],
+    inputs: &SplitInputs<'_, S>,
+    cache: &ParseCache,
+    progress: &Progress,
+) -> Vec<(usize, Vec<FusedCluster>)> {
+    let mut decided = Vec::new();
+    for &index in chunk {
+        if let Some(outcome) = decide(index, inputs, cache) {
+            decided.push(outcome);
+        }
+        progress.advance(cache);
     }
-    cache.log_noise_totals("noise_verbatim_split");
-    out
+    decided
+}
+
+/// The replacement run for one cluster at its input position: the
+/// families it splits into, or the cluster itself unchanged.
+fn decide<S: BuildHasher>(
+    index: usize,
+    inputs: &SplitInputs<'_, S>,
+    cache: &ParseCache,
+) -> Option<(usize, Vec<FusedCluster>)> {
+    let fused = inputs.fused_clusters.get(index)?.clone();
+    let replacement = split_one(
+        &fused,
+        inputs.fingerprints,
+        inputs.sources,
+        inputs.file_languages,
+        cache,
+    );
+    Some((index, replacement.unwrap_or_else(|| vec![fused])))
+}
+
+/// Fewest clusters worth sharding the split at all — below this the
+/// thread spawn and the cold per-worker caches cost more than the
+/// decisions.
+const NOISE_SHARD_MIN_CLUSTERS: usize = 512;
+
+/// Clusters per claimed chunk. Large enough that a worker's tree LRU
+/// stays hot across a run of same-file clusters, small enough that one
+/// unlucky draw of wide clusters cannot hold the stage open.
+const NOISE_CHUNK_CLUSTERS: usize = 32;
+
+/// How many worker threads decide `clusters` clusters.
+fn worker_count(clusters: usize) -> usize {
+    if clusters < NOISE_SHARD_MIN_CLUSTERS {
+        return 1;
+    }
+    let available = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+    available
+        .min(clusters / NOISE_SHARD_MIN_CLUSTERS)
+        .max(1)
+}
+
+/// Fixed-interval progress for a stage that runs for minutes on a large
+/// corpus ([PERF-FLUTTER-TODO-OBSERVABILITY]).
+///
+/// Shared by every worker so the record counts the stage rather than
+/// one thread's share of it. Progress records are diagnostics, not
+/// report content: which worker happens to cross an interval boundary
+/// does not change a single byte of the output.
+struct Progress {
+    /// Clusters decided so far, across every worker.
+    done: std::sync::atomic::AtomicUsize,
+    /// Clusters the stage was handed.
+    total: usize,
+    /// When the stage started.
+    started: std::time::Instant,
+}
+
+impl Progress {
+    /// Opens a progress record over `total` clusters.
+    fn new(total: usize) -> Self {
+        Self {
+            done: std::sync::atomic::AtomicUsize::new(0),
+            total,
+            started: std::time::Instant::now(),
+        }
+    }
+
+    /// Counts one decided cluster, emitting a record on each interval.
+    fn advance(&self, cache: &ParseCache) {
+        let done = self
+            .done
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            .saturating_add(1);
+        if done % NOISE_PROGRESS_INTERVAL != 0 {
+            return;
+        }
+        tracing::info!(
+            stage = "noise_verbatim_split",
+            clusters_done = done,
+            clusters_total = self.total,
+            elapsed_ms = u64::try_from(self.started.elapsed().as_millis()).unwrap_or(u64::MAX),
+            "noise split progress"
+        );
+        cache.log_noise_totals("noise_verbatim_split_progress");
+    }
 }
 
 /// Clusters between noise-split progress records — bounded, so the

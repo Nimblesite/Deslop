@@ -53,7 +53,7 @@ mod tests;
 
 pub use rescue::apply_shared_subtree_rescue;
 
-use alignment::aligned_shared_nodes;
+use alignment::Aligner;
 use view::{build_view, EndpointView};
 
 /// Most endpoint views one measurer retains
@@ -149,6 +149,10 @@ pub struct OverlapMeasurer<'corpus> {
     bound_results: HashMap<PairKey, f64>,
     /// Aggregate counters ([PIPELINE-OBSERVABILITY-STAGES]).
     stats: MeasureStats,
+    /// Reusable alignment scratch ([PERF-FLUTTER-TODO-RESCUE]). Owned
+    /// by the measurer so every alignment a worker runs reuses one pair
+    /// of grids instead of allocating per keyroot pair.
+    aligner: Aligner,
 }
 
 impl MeasureStats {
@@ -190,6 +194,7 @@ impl<'corpus> OverlapMeasurer<'corpus> {
             exact_results: HashMap::new(),
             bound_results: HashMap::new(),
             stats: MeasureStats::default(),
+            aligner: Aligner::default(),
         }
     }
 
@@ -314,7 +319,7 @@ impl<'corpus> OverlapMeasurer<'corpus> {
             credit::credit_shared_nodes(left, right)
         } else {
             bump(&mut self.stats.alignments);
-            aligned_shared_nodes(left, right)
+            self.aligner.shared_nodes(left, right)
         };
         (lossless_count(shared) / lossless_count(larger)).clamp(0.0, 1.0)
     }

@@ -141,7 +141,7 @@ mod verbatim_subgroup;
 use std::{
     collections::{BTreeSet, HashMap},
     hash::BuildHasher,
-    rc::Rc,
+    sync::Arc,
 };
 
 use tree_sitter::Node;
@@ -481,7 +481,7 @@ fn is_signature_only_cluster(snippets: &[Snippet<'_>], cache: &ParseCache) -> bo
     if snippets.len() < 2 {
         return false;
     }
-    let shapes: Option<Vec<Rc<Vec<body_shape::OwnedShapeToken>>>> = snippets
+    let shapes: Option<Vec<Arc<Vec<body_shape::OwnedShapeToken>>>> = snippets
         .iter()
         .map(|snippet| {
             cache.signature_shape(snippet, || {
