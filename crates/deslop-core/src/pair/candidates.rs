@@ -287,15 +287,12 @@ fn endpoint_node_counts(fingerprints: &[Fingerprint], left: usize, right: usize)
 /// 0.0 when either signature is missing, which cannot happen in practice
 /// because the pipeline always produces one signature per fingerprint.
 fn jaccard_for(signatures: &dyn SignatureLookup, left: usize, right: usize) -> f64 {
-    let mut left_signature = crate::lsh::ZEROED_SIGNATURE;
-    let mut right_signature = crate::lsh::ZEROED_SIGNATURE;
-    if !signatures.read_into(left, &mut left_signature) {
-        return 0.0;
+    match (signatures.signature(left), signatures.signature(right)) {
+        (Some(left_signature), Some(right_signature)) => {
+            estimate_jaccard(left_signature, right_signature)
+        }
+        _ => 0.0,
     }
-    if !signatures.read_into(right, &mut right_signature) {
-        return 0.0;
-    }
-    estimate_jaccard(&left_signature, &right_signature)
 }
 
 /// Puts the smaller index first. Pair keys are order-insensitive.

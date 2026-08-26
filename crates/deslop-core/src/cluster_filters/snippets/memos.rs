@@ -4,7 +4,10 @@
 //! asks repeatedly per member range. Split from the parent module,
 //! which owns the cache type and the CST/LRU machinery.
 
-use std::{collections::HashMap, sync::{Arc, Mutex}};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use super::super::body_shape::OwnedShapeToken;
 use super::super::{calls::CallShape, polymorphic::OwnedSubject};

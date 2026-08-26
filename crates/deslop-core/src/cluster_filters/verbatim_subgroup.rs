@@ -101,7 +101,10 @@ struct SplitInputs<'corpus, S: BuildHasher> {
 /// and the bounded [`ParseCache`](super::snippets::ParseCache) tree LRU
 /// stays hot. Results are written at each cluster's original position,
 /// so the emitted order — and therefore the report — is unchanged.
-fn file_locality_order(fused_clusters: &[FusedCluster], fingerprints: &[Fingerprint]) -> Vec<usize> {
+fn file_locality_order(
+    fused_clusters: &[FusedCluster],
+    fingerprints: &[Fingerprint],
+) -> Vec<usize> {
     let mut order: Vec<usize> = (0..fused_clusters.len()).collect();
     // `Option<FileId>` keys: `None` sorts first, which no real cluster
     // produces (every member resolves), so the order is total.
@@ -216,9 +219,7 @@ fn worker_count(clusters: usize) -> usize {
         return 1;
     }
     let available = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
-    available
-        .min(clusters / NOISE_SHARD_MIN_CLUSTERS)
-        .max(1)
+    available.min(clusters / NOISE_SHARD_MIN_CLUSTERS).max(1)
 }
 
 /// Fixed-interval progress for a stage that runs for minutes on a large

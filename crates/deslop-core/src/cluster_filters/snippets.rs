@@ -21,6 +21,8 @@ use crate::{ast::ByteRange, fingerprint::Fingerprint, lang::shared::parse_source
 /// Bounded per-range memo cells for [`ParseCache`]
 /// ([PERF-FLUTTER-TODO-MEMORY]).
 mod memos;
+/// The bounded parse-tree store ([PERF-FLUTTER-TODO-MEMORY]).
+mod tree_store;
 
 /// One re-parsed cluster member: language, raw bytes, the byte range
 /// inside `source` that the fingerprint covered, and the originating
@@ -65,7 +67,7 @@ pub(crate) const PARSE_TREE_SOURCE_BUDGET_BYTES: usize = 16 * 1024 * 1024;
 pub struct ParseCache {
     /// Parsed CSTs with their LRU order, bounded by
     /// [`PARSE_TREE_SOURCE_BUDGET_BYTES`].
-    trees: Mutex<TreeStore>,
+    trees: Mutex<tree_store::TreeStore>,
     /// Lazily-built corpus-wide contract index per language
     /// ([CLONE-NOISE-POLYMORPHIC-CONTRACT]). Built only when a cluster
     /// reaches the contract question, so a report with no same-named
@@ -273,7 +275,7 @@ impl ParseCache {
         language: &'static str,
         source: &[u8],
     ) -> Option<Arc<tree_sitter::Tree>> {
-        if let Some(cached) = locked(&self.trees).hit(file_id) {
+        if let tree_store::Lookup::Remembered(cached) = locked(&self.trees).hit(file_id) {
             return cached;
         }
         // Parsed outside the lock: it is the expensive half, and holding
@@ -321,101 +323,6 @@ impl ParseCache {
         ));
         let _previous = memo.insert(language, Arc::clone(&built));
         built
-    }
-}
-
-/// The bounded CST cache: parsed trees with their last-use stamps and
-/// the source bytes they cover — under one lock, so the three can never
-/// disagree and no caller can take them in two different orders.
-///
-/// [PERF-FLUTTER-TODO-PAIRS] Recency is a stamp per entry rather than a
-/// position in an ordered queue. The queue made a cache *hit* cost a
-/// linear scan to move the entry to the back, and the noise split asks
-/// once per cluster member — tens of millions of scan steps on a large
-/// corpus, every one of them holding the lock every worker needs. A
-/// stamp is written in place, so a hit takes the lock for a single
-/// store. Eviction still picks the least recently used entry; only
-/// insertions pay to find it, and an insertion has already paid for a
-/// parse.
-#[derive(Default)]
-struct TreeStore {
-    /// Parsed CST per file, with its size and last-use stamp.
-    parsed: HashMap<FileId, TreeEntry>,
-    /// Sum of the entries' source bytes.
-    bytes: usize,
-    /// Monotonic use counter; the largest stamp is the most recent.
-    clock: u64,
-}
-
-/// One cached CST with what eviction needs to know about it.
-struct TreeEntry {
-    /// The parsed CST (`None` when the language has no grammar here or
-    /// parsing failed — as expensive to rederive as a real tree).
-    tree: Option<Arc<tree_sitter::Tree>>,
-    /// Source bytes this entry covers, for the budget.
-    bytes: usize,
-    /// Value of the store's clock when this entry was last used.
-    last_used: u64,
-}
-
-impl TreeStore {
-    /// The cached entry for `file_id`, stamped as most recently used.
-    /// The outer `Option` is "was it cached at all"; the inner one is
-    /// the cached verdict, which may itself be `None`.
-    fn hit(&mut self, file_id: FileId) -> Option<Option<Arc<tree_sitter::Tree>>> {
-        let stamp = self.tick();
-        let entry = self.parsed.get_mut(&file_id)?;
-        entry.last_used = stamp;
-        Some(entry.tree.clone())
-    }
-
-    /// Records a freshly parsed tree and evicts least-recently-used
-    /// entries until the covered source fits the budget.
-    fn insert(&mut self, file_id: FileId, bytes: usize, tree: Option<Arc<tree_sitter::Tree>>) {
-        let last_used = self.tick();
-        let replaced = self.parsed.insert(
-            file_id,
-            TreeEntry {
-                tree,
-                bytes,
-                last_used,
-            },
-        );
-        self.bytes = self
-            .bytes
-            .saturating_sub(replaced.map_or(0, |entry| entry.bytes))
-            .saturating_add(bytes);
-        while self.bytes > PARSE_TREE_SOURCE_BUDGET_BYTES {
-            // The just-inserted entry is never evicted: it is the most
-            // recently used, so a single file larger than the whole
-            // budget stays (a giant file is a legitimate working set)
-            // and the loop stops once nothing older is left.
-            let Some(stale) = self.least_recently_used() else {
-                break;
-            };
-            let Some(evicted) = self.parsed.remove(&stale) else {
-                break;
-            };
-            self.bytes = self.bytes.saturating_sub(evicted.bytes);
-        }
-    }
-
-    /// The next use stamp.
-    fn tick(&mut self) -> u64 {
-        self.clock = self.clock.saturating_add(1);
-        self.clock
-    }
-
-    /// The file holding the oldest stamp, or `None` when at most one
-    /// entry is left — the entry just inserted, which never evicts.
-    fn least_recently_used(&self) -> Option<FileId> {
-        if self.parsed.len() <= 1 {
-            return None;
-        }
-        self.parsed
-            .iter()
-            .min_by_key(|(_, entry)| entry.last_used)
-            .map(|(file_id, _)| *file_id)
     }
 }
 

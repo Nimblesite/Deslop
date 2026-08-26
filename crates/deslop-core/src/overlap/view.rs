@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 
-use super::{alignment::PostNode, SHARED_SUBTREE_MIN_CREDIT_NODES};
+use super::{alignment::PostNode, subsequence::KindPositions, SHARED_SUBTREE_MIN_CREDIT_NODES};
 use crate::{
     ast::NormalizedNode,
     fingerprint::{collect_fingerprints, Fingerprint},
@@ -33,6 +33,11 @@ pub(super) struct EndpointView {
     /// Node-kind multiset, excluding the synthetic root, for the
     /// admission upper bound ([FUSION-SHARED-SUBTREE-BOUND]).
     pub(super) kind_counts: HashMap<&'static str, usize>,
+    /// Post-order positions by kind, excluding the synthetic root, for
+    /// the ordered admission bound
+    /// ([FUSION-SHARED-SUBTREE-BOUND-ORDER]). Built with the view so an
+    /// endpoint appearing in many pairs is indexed once.
+    pub(super) kind_positions: KindPositions,
 }
 
 impl EndpointView {
@@ -51,6 +56,7 @@ impl EndpointView {
             .collect();
         let total = postorder.len();
         let kind_counts = count_kinds(&postorder);
+        let kind_positions = KindPositions::new(&postorder, total);
         postorder.push(PostNode {
             kind: "__window__",
             leftmost: 1,
@@ -60,6 +66,7 @@ impl EndpointView {
             total,
             entries: Vec::new(),
             kind_counts,
+            kind_positions,
         }
     }
 
@@ -90,6 +97,7 @@ pub(super) fn build_view(
     }
     let total = postorder.len();
     let kind_counts = count_kinds(&postorder);
+    let kind_positions = KindPositions::new(&postorder, total);
     let entries = creditable_entries(&members);
     // Synthetic window root: aligns the members as ordered siblings so
     // a multi-node sibling window is one tree for the alignment. It
@@ -104,6 +112,7 @@ pub(super) fn build_view(
         total,
         entries,
         kind_counts,
+        kind_positions,
     })
 }
 

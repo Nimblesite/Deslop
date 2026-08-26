@@ -16,11 +16,7 @@
 //! algorithm confirming itself.
 
 use super::{Aligner, PostNode};
-
-/// Node kinds the generated corpus draws from. Three is enough for a
-/// relabel to be distinguishable from a delete-plus-insert, and small
-/// enough that generated trees actually collide on kind.
-const KINDS: [&str; 3] = ["alpha", "beta", "gamma"];
+use crate::overlap::shapes::{forest_nodes, generate, postorder, Lcg, RefTree, SEED};
 
 /// Trees compared per generated case: every pair drawn from this many
 /// shapes, so the corpus is quadratic in it.
@@ -30,50 +26,6 @@ const GENERATED_SHAPES: usize = 60;
 /// exponential without memoisation, which is exactly what keeps it
 /// obviously correct; this bound is what keeps it fast.
 const MAX_GENERATED_NODES: usize = 9;
-
-/// Fixed LCG seed — the corpus is the same on every run and on every
-/// machine ([PIPELINE-DETERMINISM]).
-const SEED: u64 = 0x2545_F491_4F6C_DD1D;
-
-/// Knuth's LCG multiplier.
-const LCG_MULTIPLIER: u64 = 6_364_136_223_846_793_005;
-
-/// Knuth's LCG increment.
-const LCG_INCREMENT: u64 = 1_442_695_040_888_963_407;
-
-/// A tree in the shape the reference recurrence reads directly.
-#[derive(Debug, Clone)]
-struct RefTree {
-    /// Node kind.
-    kind: &'static str,
-    /// Ordered children.
-    children: Vec<RefTree>,
-}
-
-/// Deterministic value source for the generated corpus.
-struct Lcg(u64);
-
-impl Lcg {
-    /// Next value below `bound`, or zero when `bound` is zero.
-    fn below(&mut self, bound: usize) -> usize {
-        self.0 = self
-            .0
-            .wrapping_mul(LCG_MULTIPLIER)
-            .wrapping_add(LCG_INCREMENT);
-        let drawn = usize::try_from(self.0 >> 33).unwrap_or(0);
-        drawn.checked_rem(bound).unwrap_or(0)
-    }
-}
-
-/// Total nodes in a forest.
-fn forest_nodes(forest: &[RefTree]) -> usize {
-    forest
-        .iter()
-        .map(|tree| {
-            forest_nodes(&tree.children).saturating_add(1)
-        })
-        .fold(0, usize::saturating_add)
-}
 
 /// Ordered tree edit distance between two forests, by the textbook
 /// recurrence: delete the rightmost root, insert the rightmost root, or
@@ -106,54 +58,6 @@ fn promote(rest: &[RefTree], children: &[RefTree]) -> Vec<RefTree> {
     promoted
 }
 
-/// Appends `tree`'s post-order sequence to `out`, recording each node's
-/// 1-based leftmost-leaf index — the input the implementation reads.
-fn push_postorder(tree: &RefTree, out: &mut Vec<PostNode>) -> usize {
-    let mut leftmost = None;
-    for child in &tree.children {
-        let child_leftmost = push_postorder(child, out);
-        if leftmost.is_none() {
-            leftmost = Some(child_leftmost);
-        }
-    }
-    let own = leftmost.unwrap_or_else(|| out.len().saturating_add(1));
-    out.push(PostNode {
-        kind: tree.kind,
-        leftmost: own,
-    });
-    own
-}
-
-/// The post-order sequence of one tree.
-fn postorder(tree: &RefTree) -> Vec<PostNode> {
-    let mut out = Vec::new();
-    let _root = push_postorder(tree, &mut out);
-    out
-}
-
-/// One generated tree of at most `budget` nodes.
-fn generate(source: &mut Lcg, budget: usize) -> RefTree {
-    let kind = KINDS.get(source.below(KINDS.len())).copied().unwrap_or("");
-    let remaining = budget.saturating_sub(1);
-    let child_count = if remaining == 0 {
-        0
-    } else {
-        source.below(remaining.min(3).saturating_add(1))
-    };
-    let mut children = Vec::new();
-    let mut left = remaining;
-    for _ in 0..child_count {
-        if left == 0 {
-            break;
-        }
-        let share = source.below(left).saturating_add(1);
-        let child = generate(source, share);
-        left = left.saturating_sub(forest_nodes(std::slice::from_ref(&child)));
-        children.push(child);
-    }
-    RefTree { kind, children }
-}
-
 /// [FUSION-SHARED-SUBTREE] The keyroot-decomposed dynamic program must
 /// return exactly the textbook recurrence's distance, on every shape.
 ///
@@ -173,10 +77,8 @@ fn the_dynamic_program_matches_the_textbook_recurrence() {
     let mut non_trivial = 0_usize;
     for (left_index, left) in shapes.iter().enumerate() {
         for (right_index, right) in shapes.iter().enumerate() {
-            let expected = reference_distance(
-                std::slice::from_ref(left),
-                std::slice::from_ref(right),
-            );
+            let expected =
+                reference_distance(std::slice::from_ref(left), std::slice::from_ref(right));
             let (Some(left_sequence), Some(right_sequence)) =
                 (sequences.get(left_index), sequences.get(right_index))
             else {
@@ -258,7 +160,7 @@ fn a_reused_aligner_measures_what_a_fresh_one_does() {
     let mut sequences: Vec<Vec<PostNode>> = shapes.iter().map(postorder).collect();
     // Largest first, so every later pair reuses grids sized for a
     // bigger problem — the arrangement a stale cell survives.
-    sequences.sort_by(|left, right| right.len().cmp(&left.len()));
+    sequences.sort_by_key(|sequence| std::cmp::Reverse(sequence.len()));
     let mut reused = Aligner::default();
     let mut checked = 0_usize;
     let mut widths = std::collections::BTreeSet::new();

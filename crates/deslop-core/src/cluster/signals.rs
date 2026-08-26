@@ -14,7 +14,7 @@ use std::{collections::HashMap, hash::BuildHasher};
 use crate::{
     embedding::cosine_similarity,
     fingerprint::Fingerprint,
-    lsh::{estimate_jaccard, SignatureLookup},
+    lsh::{estimate_jaccard, Signature, SignatureLookup},
     overlap::OverlapMeasurer,
     pair::PairScore,
 };
@@ -33,6 +33,12 @@ use crate::{
 /// failure) is excluded from that signal's numerator and denominator
 /// both, so absence never masquerades as a measured 0.0 inside the
 /// mean.
+///
+/// The left occurrence is resolved once per row rather than once per
+/// pair ([PERF-FLUTTER-TODO-PAIRS]). A wide cluster measures hundreds
+/// of thousands of pairs against the same left side, and each
+/// resolution is a segment binary search plus a hash lookup; the pairs
+/// measured and the order they fold in are unchanged.
 pub(super) fn measured_signals<S: BuildHasher>(
     occurrence_indices: &[usize],
     fingerprints: &[Fingerprint],
@@ -40,20 +46,56 @@ pub(super) fn measured_signals<S: BuildHasher>(
     embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     overlap: &mut OverlapMeasurer<'_>,
 ) -> PairScore {
+    let corpus = SignalCorpus {
+        fingerprints,
+        signatures,
+        embedding_vectors,
+    };
     let mut totals = SignalTotals::default();
     for (position, &left) in occurrence_indices.iter().enumerate() {
+        let left_side = corpus.side(left);
         for &right in occurrence_indices.iter().skip(position.saturating_add(1)) {
-            totals.add_pair(
-                left,
-                right,
-                fingerprints,
-                signatures,
-                embedding_vectors,
-                overlap,
-            );
+            totals.add_pair(left_side, corpus.side(right), overlap);
         }
     }
     totals.means()
+}
+
+/// The corpus-wide sources one occurrence's signal inputs resolve from.
+struct SignalCorpus<'corpus, S> {
+    /// Every fingerprint, indexed by occurrence index.
+    fingerprints: &'corpus [Fingerprint],
+    /// The `MinHash` signature population.
+    signatures: &'corpus dyn SignatureLookup,
+    /// Embedding vectors by occurrence index, empty when embeddings are
+    /// off.
+    embedding_vectors: &'corpus HashMap<usize, Vec<f32>, S>,
+}
+
+impl<S: BuildHasher> SignalCorpus<'_, S> {
+    /// Resolves the three signal inputs for one occurrence. Each is
+    /// independently optional: a signal is measured only for the pairs
+    /// that have both of its inputs.
+    fn side(&self, index: usize) -> SignalSide<'_> {
+        SignalSide {
+            fingerprint: self.fingerprints.get(index),
+            signature: self.signatures.signature(index),
+            vector: self.embedding_vectors.get(&index),
+        }
+    }
+}
+
+/// One occurrence's borrowed signal inputs. Borrowed rather than
+/// copied: a [`Signature`] is a kilobyte, and copying one per pair cost
+/// the Flutter corpus 32 GB of memcpy in this stage alone.
+#[derive(Clone, Copy)]
+struct SignalSide<'corpus> {
+    /// The occurrence's fingerprint, for the structural axis.
+    fingerprint: Option<&'corpus Fingerprint>,
+    /// Its `MinHash` signature, for the token axis.
+    signature: Option<&'corpus Signature>,
+    /// Its embedding vector, for the cosine axis.
+    vector: Option<&'corpus Vec<f32>>,
 }
 
 /// Per-signal running sums over the measurable occurrence pairs.
@@ -69,31 +111,23 @@ struct SignalTotals {
 
 impl SignalTotals {
     /// Folds one occurrence pair into every signal it is measurable for.
-    fn add_pair<S: BuildHasher>(
+    fn add_pair(
         &mut self,
-        left: usize,
-        right: usize,
-        fingerprints: &[Fingerprint],
-        signatures: &dyn SignatureLookup,
-        embedding_vectors: &HashMap<usize, Vec<f32>, S>,
+        left: SignalSide<'_>,
+        right: SignalSide<'_>,
         overlap: &mut OverlapMeasurer<'_>,
     ) {
-        if let (Some(left_fp), Some(right_fp)) = (fingerprints.get(left), fingerprints.get(right)) {
+        if let (Some(left_fp), Some(right_fp)) = (left.fingerprint, right.fingerprint) {
             // Merkle equality short-circuits to 1.0 inside
             // `OverlapMeasurer::overlap`; a non-equal pair measures its
             // shared-subtree overlap ([FUSION-SHARED-SUBTREE]).
             self.structural.add(overlap.overlap(left_fp, right_fp));
         }
-        let mut left_sig = crate::lsh::ZEROED_SIGNATURE;
-        let mut right_sig = crate::lsh::ZEROED_SIGNATURE;
-        if signatures.read_into(left, &mut left_sig) && signatures.read_into(right, &mut right_sig)
-        {
+        if let (Some(left_sig), Some(right_sig)) = (left.signature, right.signature) {
             self.token_jaccard
-                .add(estimate_jaccard(&left_sig, &right_sig));
+                .add(estimate_jaccard(left_sig, right_sig));
         }
-        if let (Some(left_vec), Some(right_vec)) =
-            (embedding_vectors.get(&left), embedding_vectors.get(&right))
-        {
+        if let (Some(left_vec), Some(right_vec)) = (left.vector, right.vector) {
             self.embedding_cos
                 .add(cosine_similarity(left_vec, right_vec));
         }

@@ -231,7 +231,12 @@ fn forest_distance(span: ForestSpan<'_>, forest: &mut [u32], tree_dist: &mut [u3
             .saturating_sub(span.left_leaf)
             .saturating_add(1)
             .saturating_mul(span.forest_stride);
-        fill_row(span, row_at(span, left_index, left_leftmost, base), forest, tree_dist);
+        fill_row(
+            span,
+            row_at(span, left_index, left_leftmost, base),
+            forest,
+            tree_dist,
+        );
     }
 }
 
@@ -258,7 +263,10 @@ fn row_at(span: ForestSpan<'_>, left_index: usize, left_leftmost: usize, base: u
 /// only the borders carry over from the previous sub-problem.
 fn seed(span: ForestSpan<'_>, forest: &mut [u32]) {
     write(forest, 0, 0);
-    let rows = span.left_root.saturating_sub(span.left_leaf).saturating_add(2);
+    let rows = span
+        .left_root
+        .saturating_sub(span.left_leaf)
+        .saturating_add(2);
     for row in 1..rows {
         let slot = row.saturating_mul(span.forest_stride);
         write(forest, slot, small(row));
@@ -294,14 +302,28 @@ fn fill_row(span: ForestSpan<'_>, row: Row, forest: &mut [u32], tree_dist: &mut 
     ) else {
         return;
     };
+    let mut grids = Grids {
+        above,
+        earlier,
+        subtree,
+    };
     let mut previous = read(current, 0);
     for (offset, node) in nodes.iter().enumerate() {
-        previous = cell(row, Cursor { offset, node, previous }, Grids { above, earlier, subtree });
+        previous = cell(
+            row,
+            Cursor {
+                offset,
+                node,
+                previous,
+            },
+            &mut grids,
+        );
         write(current, offset.saturating_add(1), previous);
     }
 }
 
 /// One cell's position in a row, and the value just written to its left.
+#[derive(Clone, Copy)]
 struct Cursor<'seq> {
     /// Zero-based offset from the row's first measured column.
     offset: usize,
@@ -327,7 +349,7 @@ struct Grids<'grid> {
 /// The three Zhang–Shasha options: delete the left node, insert the
 /// right one, or — the third — relabel two whole subtrees against each
 /// other, or splice in an already-computed subtree distance.
-fn cell(row: Row, cursor: Cursor<'_>, grids: Grids<'_>) -> u32 {
+fn cell(row: Row, cursor: Cursor<'_>, grids: &mut Grids<'_>) -> u32 {
     let whole = row.left_whole && cursor.node.leftmost == row.right_leaf;
     let substitute = if whole {
         read(grids.above, cursor.offset)

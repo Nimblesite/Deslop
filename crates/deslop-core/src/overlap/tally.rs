@@ -129,6 +129,7 @@ impl RescueTally {
             exact_hits = measure.exact_hits,
             bound_hits = measure.bound_hits,
             bound_skips = measure.bound_skips,
+            order_skips = measure.order_skips,
             unresolved = measure.unresolved,
             elapsed_ms = elapsed_ms(self.started),
             message
