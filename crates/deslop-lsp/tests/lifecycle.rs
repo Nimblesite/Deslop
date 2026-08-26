@@ -20,7 +20,7 @@
 use std::{
     io::{copy, sink, BufReader},
     process::{ChildStdout, ExitStatus},
-    sync::mpsc::{channel, Receiver},
+    sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender},
     thread::{sleep, spawn},
     time::{Duration, Instant},
 };
@@ -190,32 +190,48 @@ fn ended_within(
     window: Duration,
 ) -> Result<ExitStatus> {
     let (closed, drained) = channel();
-    let reader = spawn(move || {
-        let mut stdout = stdout;
-        let _sent = closed.send(copy(&mut stdout, &mut sink()).map(|_bytes| ()));
-    });
+    let reader = spawn(move || drain_to_sink(stdout, &closed));
     let ended = ended_once_output_closed(child, &drained, window);
     if ended.is_err() {
-        // Killing closes the pipe, so a reader still blocked on a server
-        // that never finished is released and the join below cannot hang.
-        let _forced = child.kill();
-        let _reaped = child.wait();
+        force_end(child);
     }
-    let _joined = reader.join();
+    reader
+        .join()
+        .map_err(|_payload| anyhow!("the thread draining deslop-lsp's output panicked"))?;
     ended
+}
+
+/// Reads `stdout` to end of file and reports how that went, once.
+fn drain_to_sink(mut stdout: BufReader<ChildStdout>, closed: &Sender<std::io::Result<()>>) {
+    let _sent = closed.send(copy(&mut stdout, &mut sink()).map(|_bytes| ()));
+}
+
+/// Ends a server that would not end on its own.
+///
+/// Killing closes the pipe, which releases a reader still blocked on a
+/// server that never finished, so the join in [`ended_within`] cannot hang.
+fn force_end(child: &mut std::process::Child) {
+    let _forced = child.kill();
+    let _reaped = child.wait();
 }
 
 /// Waits for the reader to reach end of file, or says why it never did.
 fn output_closed(drained: &Receiver<std::io::Result<()>>) -> Result<()> {
-    drained
-        .recv_timeout(OUTPUT_CLOSE_CEILING)
-        .map_err(|_| {
-            anyhow!(
-                "deslop-lsp still held its output open {OUTPUT_CLOSE_CEILING:?} after the \
-                 client went away, so it never reached the end of its own input"
-            )
-        })?
-        .map_err(|error| anyhow!("reading deslop-lsp's output failed before it ended: {error}"))
+    match drained.recv_timeout(OUTPUT_CLOSE_CEILING) {
+        Ok(read) => read.map_err(|error| {
+            anyhow!("reading deslop-lsp's output failed before it ended: {error}")
+        }),
+        Err(RecvTimeoutError::Timeout) => Err(anyhow!(
+            "deslop-lsp still held its output open {OUTPUT_CLOSE_CEILING:?} after the \
+             client went away, so it never reached the end of its own input"
+        )),
+        // Blaming the server for a reader that died would be a false
+        // accusation, and this suite exists to make accusations that hold.
+        Err(RecvTimeoutError::Disconnected) => Err(anyhow!(
+            "the thread draining deslop-lsp's output ended without reporting, so this run \
+             proves nothing either way about the server"
+        )),
+    }
 }
 
 /// The exit status once the server has closed its output, or why it did not.

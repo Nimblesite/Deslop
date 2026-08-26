@@ -363,13 +363,31 @@ jobs:
       # above exists so a partial upload is still archived for diagnosis; it
       # must not also let this job publish a number. A wrong figure on the
       # gate that decides whether a release ships is worse than no figure.
+      #
+      # Every job named here hands this one an artifact it scores, so every
+      # one of them can hand it a partial artifact the same way: `windows`,
+      # `repository-tests` and `vsix` all upload under `always()` too. A
+      # guard that watched only `rust-tests` would have caught the failure
+      # that prompted it and none of the three beside it.
       - name: Refuse to score an incomplete collection
-        if: needs.rust-tests.result != 'success'
+        env:
+          RUST: ${{ needs.rust-tests.result }}
+          REPOSITORY: ${{ needs.repository-tests.result }}
+          WINDOWS: ${{ needs.windows.result }}
+          VSIX: ${{ needs.vsix.result }}
         run: |
-          echo "FAIL: rust-tests ended '${{ needs.rust-tests.result }}', so the raw profiles are"
-          echo "      a partial collection, not a measurement. Every percentage this job"
-          echo "      would print is wrong rather than low. Fix the failing test first."
-          exit 1
+          incomplete=""
+          for producer in RUST REPOSITORY WINDOWS VSIX; do
+            eval "outcome=\$$producer"
+            [ "$outcome" = "success" ] || incomplete="$incomplete $producer($outcome)"
+          done
+          if [ -n "$incomplete" ]; then
+            echo "FAIL: these coverage producers did not finish:$incomplete"
+            echo "      Their artifacts are a partial collection, not a measurement, and every"
+            echo "      percentage this job would print is wrong rather than low."
+            echo "      Fix the failing job first."
+            exit 1
+          fi
 
       - uses: actions/checkout@v7
 

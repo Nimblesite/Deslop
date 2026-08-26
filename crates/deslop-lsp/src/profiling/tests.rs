@@ -166,7 +166,11 @@ fn assert_authored_thread(thread: &Value, profile: &Value) -> Result<()> {
         "both stacks were sampled on thread {THREAD_ID}, and the surviving \
          thread must be that one: {profile}"
     );
-    assert_eq!(text_of(thread, THREAD_NAME_FIELD)?, THREAD_NAME, "{profile}");
+    assert_eq!(
+        text_of(thread, THREAD_NAME_FIELD)?,
+        THREAD_NAME,
+        "{profile}"
+    );
     Ok(())
 }
 
