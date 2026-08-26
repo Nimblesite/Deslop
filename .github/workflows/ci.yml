@@ -353,6 +353,24 @@ jobs:
     # workspace is ~21 minutes on a cache miss.
     timeout-minutes: 40
     steps:
+      # [COVERAGE-THRESHOLDS-JSON] A percentage is a measurement only when the
+      # run that produced it finished. `make test` is fail-fast by design, so
+      # one red test aborts collection and every test binary after it never
+      # executes — and never writes a profile. The threshold gate cannot tell
+      # that apart from untested code: run 32909315727 reported `deslop-mcp
+      # 0.0% FAIL` because `deslop-lsp`'s suite exited 101 first and
+      # `deslop-mcp`'s only Linux binary never ran at all. `if: always()`
+      # above exists so a partial upload is still archived for diagnosis; it
+      # must not also let this job publish a number. A wrong figure on the
+      # gate that decides whether a release ships is worse than no figure.
+      - name: Refuse to score an incomplete collection
+        if: needs.rust-tests.result != 'success'
+        run: |
+          echo "FAIL: rust-tests ended '${{ needs.rust-tests.result }}', so the raw profiles are"
+          echo "      a partial collection, not a measurement. Every percentage this job"
+          echo "      would print is wrong rather than low. Fix the failing test first."
+          exit 1
+
       - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable

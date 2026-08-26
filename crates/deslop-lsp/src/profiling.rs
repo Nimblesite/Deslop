@@ -280,6 +280,9 @@ fn add_no_sample_placeholder(profile: &mut Profile, process_handle: ProcessHandl
     );
 }
 
+#[cfg(all(feature = "profiling", unix, test))]
+mod tests;
+
 /// No-op profiler holder for default builds and non-Unix targets.
 #[cfg(not(all(feature = "profiling", unix)))]
 #[derive(Debug)]

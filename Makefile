@@ -538,16 +538,20 @@ _vsix-install:
 	cd clients/vscode && npm install --no-audit --no-fund
 	cd clients/vscode/webview-ui && npm install --no-audit --no-fund
 
-# _vsix-node-modules: The extension's dependencies, installed only when they
-#                     are missing. `lint` reaches this through
-#                     `_ci-contract-tests`, and `npm install` can rewrite
-#                     `package-lock.json` — a lint target that mutates the tree
-#                     is not a lint target, and `make ci` would otherwise pay
-#                     for the same install twice. Present means present: a
-#                     deliberate refresh is `_vsix-install`.
+# _vsix-node-modules: The extension's dependencies, materialised only when
+#                     they are missing. `lint` reaches this through
+#                     `_ci-contract-tests`, so it must not change anything a
+#                     reader would have to review: `npm ci` installs exactly
+#                     what `package-lock.json` names and never writes it back,
+#                     where `npm install` may resolve a newer tree and commit
+#                     that decision to the lockfile. A gate that can silently
+#                     move a dependency version is not a gate. Present means
+#                     present — a deliberate refresh is `_vsix-install`, and
+#                     the webview's own dependencies belong to the VSIX build,
+#                     not to these script gates.
 _vsix-node-modules:
 	@test -d clients/vscode/node_modules \
-	  || $(MAKE) _vsix-install
+	  || (cd clients/vscode && npm ci --no-audit --no-fund)
 
 # _vsix-build: Build deslop-lsp + deslop-mcp + VSIX bundle + webview UI.
 #   Depends on `_vsix-install` so a cold CI checkout has the webview-ui +

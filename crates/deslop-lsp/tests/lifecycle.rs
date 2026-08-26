@@ -18,8 +18,10 @@
 //! works is what makes this crate's coverage measurable at all.
 
 use std::{
-    process::ExitStatus,
-    thread::sleep,
+    io::{copy, sink, BufReader},
+    process::{ChildStdout, ExitStatus},
+    sync::mpsc::{channel, Receiver},
+    thread::{sleep, spawn},
     time::{Duration, Instant},
 };
 
@@ -34,9 +36,24 @@ use crate::common::{
 /// pass finishes well inside the windows below.
 const FIXTURE: &str = "csharp-small";
 
-/// Longest the server may take to end once it has been told to. A failure
-/// bound, never a synchronisation device: each assertion resolves the
-/// instant the process ends.
+/// Longest the server may take to end once it has been told to, measured
+/// from the moment it closed its own output. A failure bound, never a
+/// synchronisation device: each assertion resolves the instant the process
+/// ends.
+///
+/// It stays tight on purpose. Waiting for the analysis pass is
+/// [`OUTPUT_CLOSE_CEILING`]'s job; by the time that has resolved the serve
+/// loop has already seen the end of its input, and all that remains is the
+/// process leaving. That takes milliseconds or it never happens.
+///
+/// `closing_stdin_ends_the_process_successfully` once blew this bound on a
+/// two-core CI runner while the three `exit` cases passed, and slowness was
+/// the wrong reading: the client had stopped consuming stdout, so the server
+/// blocked writing the diagnostics for the pass it had already started, and
+/// its serve loop never reached the end of its input — the very leak
+/// [LSP-LIFECYCLE] exists to prevent, wearing a timeout as a disguise.
+/// Draining the output fixed it. Widening this instead would have bought
+/// the fix nothing and cost the suite the only signal that says `hung`.
 const EXIT_WINDOW: Duration = Duration::from_secs(15);
 
 /// How long `shutdown` alone must fail to end the process before the
@@ -56,6 +73,15 @@ const SHUTDOWN: &str = "shutdown";
 /// The base-protocol notification that ends the process.
 const EXIT: &str = "exit";
 
+/// Longest the server may hold its output open after the client has gone.
+///
+/// Not a synchronisation device either: the drain resolves the moment the
+/// server closes stdout. This bound only separates "still finishing the
+/// analysis pass it had already started, on a loaded and instrumented
+/// runner" from "hung", and gh #370 — a refresh that ran for fourteen
+/// minutes — is why the second has to be caught at all.
+const OUTPUT_CLOSE_CEILING: Duration = Duration::from_secs(120);
+
 /// [LSP-LIFECYCLE] `shutdown` answers and leaves the process running.
 /// Exiting here would strand the client mid-handshake, with the `exit`
 /// notification it is required to send next going nowhere.
@@ -70,16 +96,7 @@ fn shutdown_answers_without_ending_the_process() -> Result<()> {
         "shutdown must answer in band before the process ends: {response}"
     );
 
-    let deadline = Instant::now()
-        .checked_add(STILL_ALIVE_WINDOW)
-        .unwrap_or_else(Instant::now);
-    while Instant::now() < deadline {
-        assert!(
-            child.try_wait()?.is_none(),
-            "shutdown alone must not end the process — the client still has to send `exit`"
-        );
-        sleep(POLL_INTERVAL);
-    }
+    still_running_throughout(&mut child, STILL_ALIVE_WINDOW)?;
 
     let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
     Ok(())
@@ -97,7 +114,7 @@ fn exit_after_shutdown_ends_the_process_successfully() -> Result<()> {
 
     write_frame(&mut stdin, &notification(EXIT, &Value::Null)?)?;
 
-    let status = ended_within(&mut child, EXIT_WINDOW)?;
+    let status = ended_within(&mut child, stdout, EXIT_WINDOW)?;
     assert_eq!(
         status.code(),
         Some(EXIT_CODE_AFTER_SHUTDOWN),
@@ -117,7 +134,7 @@ fn exit_without_shutdown_ends_the_process_with_a_failure_code() -> Result<()> {
 
     write_frame(&mut stdin, &notification(EXIT, &Value::Null)?)?;
 
-    let status = ended_within(&mut child, EXIT_WINDOW)?;
+    let status = ended_within(&mut child, stdout, EXIT_WINDOW)?;
     assert_eq!(
         status.code(),
         Some(EXIT_CODE_WITHOUT_SHUTDOWN),
@@ -137,7 +154,7 @@ fn closing_stdin_ends_the_process_successfully() -> Result<()> {
 
     drop(stdin);
 
-    let status = ended_within(&mut child, EXIT_WINDOW)?;
+    let status = ended_within(&mut child, stdout, EXIT_WINDOW)?;
     assert_eq!(
         status.code(),
         Some(EXIT_CODE_AFTER_SHUTDOWN),
@@ -147,13 +164,79 @@ fn closing_stdin_ends_the_process_successfully() -> Result<()> {
     Ok(())
 }
 
-/// Waits for `child` to end, failing with the reason rather than hanging.
-fn ended_within(child: &mut std::process::Child, window: Duration) -> Result<ExitStatus> {
-    wait_for_exit(child, window)?.ok_or_else(|| {
+/// Asserts `child` is still running at every poll across `window`.
+fn still_running_throughout(child: &mut std::process::Child, window: Duration) -> Result<()> {
+    let deadline = Instant::now()
+        .checked_add(window)
+        .unwrap_or_else(Instant::now);
+    while Instant::now() < deadline {
+        assert!(
+            child.try_wait()?.is_none(),
+            "shutdown alone must not end the process — the client still has to send `exit`"
+        );
+        sleep(POLL_INTERVAL);
+    }
+    Ok(())
+}
+
+/// Waits for `child` to end, draining its output first.
+///
+/// Every failure path kills and reaps: a server that never closed its output
+/// would otherwise outlive the test that was there to prove it does not, and
+/// the reader thread would stay blocked on it.
+fn ended_within(
+    child: &mut std::process::Child,
+    stdout: BufReader<ChildStdout>,
+    window: Duration,
+) -> Result<ExitStatus> {
+    let (closed, drained) = channel();
+    let reader = spawn(move || {
+        let mut stdout = stdout;
+        let _sent = closed.send(copy(&mut stdout, &mut sink()).map(|_bytes| ()));
+    });
+    let ended = ended_once_output_closed(child, &drained, window);
+    if ended.is_err() {
+        // Killing closes the pipe, so a reader still blocked on a server
+        // that never finished is released and the join below cannot hang.
         let _forced = child.kill();
         let _reaped = child.wait();
+    }
+    let _joined = reader.join();
+    ended
+}
+
+/// Waits for the reader to reach end of file, or says why it never did.
+fn output_closed(drained: &Receiver<std::io::Result<()>>) -> Result<()> {
+    drained
+        .recv_timeout(OUTPUT_CLOSE_CEILING)
+        .map_err(|_| {
+            anyhow!(
+                "deslop-lsp still held its output open {OUTPUT_CLOSE_CEILING:?} after the \
+                 client went away, so it never reached the end of its own input"
+            )
+        })?
+        .map_err(|error| anyhow!("reading deslop-lsp's output failed before it ended: {error}"))
+}
+
+/// The exit status once the server has closed its output, or why it did not.
+///
+/// A client that has gone stops reading; the server does not stop writing,
+/// because it still publishes diagnostics for the pass it had already
+/// started. Once the pipe's buffer fills, that write blocks, the serve loop
+/// never reaches the end of its input, and the process outlives the client —
+/// the exact leak this suite exists to prevent, surfacing as a timeout that
+/// reads like slowness. So the wait is in two parts: the server closing its
+/// output, which is the event, and the process ending after it, which is the
+/// contract. A read that failed is neither, and must not pass for either.
+fn ended_once_output_closed(
+    child: &mut std::process::Child,
+    drained: &Receiver<std::io::Result<()>>,
+    window: Duration,
+) -> Result<ExitStatus> {
+    output_closed(drained)?;
+    wait_for_exit(child, window)?.ok_or_else(|| {
         anyhow!(
-            "deslop-lsp was still running {window:?} after it was told to end — an editor \
+            "deslop-lsp was still running {window:?} after it closed its output — an editor \
              that opens this workspace never gets the process back"
         )
     })
