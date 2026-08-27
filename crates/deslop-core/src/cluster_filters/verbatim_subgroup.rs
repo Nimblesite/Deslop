@@ -33,7 +33,7 @@
 //! the exact source bytes of a member's range — see
 //! [`verbatim_families`].
 
-use std::{collections::HashMap, hash::BuildHasher};
+use std::{collections::HashMap, hash::BuildHasher, num::NonZeroUsize};
 
 use crate::{fingerprint::Fingerprint, pair::FusedCluster, state::FileId};
 
@@ -227,7 +227,14 @@ fn decide<S: BuildHasher>(
 /// Fewest clusters worth sharding the split at all — below this the
 /// thread spawn and the cold per-worker caches cost more than the
 /// decisions.
-const NOISE_SHARD_MIN_CLUSTERS: usize = 512;
+///
+/// The `None` arm is compile-time dead: the literal is non-zero, and
+/// [`std::num::NonZeroUsize::new`] is the only stable way to say so in a
+/// `const` without `unsafe`.
+const NOISE_SHARD_MIN_CLUSTERS: NonZeroUsize = match NonZeroUsize::new(512) {
+    Some(floor) => floor,
+    None => NonZeroUsize::MIN,
+};
 
 /// Clusters per claimed chunk. Large enough that a worker's tree LRU
 /// stays hot across a run of same-file clusters, small enough that one

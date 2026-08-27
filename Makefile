@@ -205,6 +205,8 @@ _ci-contract-tests: _vsix-node-modules
 	@node --test scripts/actions/action-yaml.test.mjs
 	@echo "==> Docs installer snippet fail-closed gate ([DEPLOY-DOCS-INSTALLER-FAILCLOSED])..."
 	@node --test scripts/deployment/installer-snippet.test.mjs
+	@echo "==> PATH-scrub gate ([DEPLOY-EXTERNAL-MCP-CONSUMER])..."
+	@node --test scripts/repository/scrub-path-binaries.test.mjs
 	@echo "==> Duplication-gate provenance gate ([CI-DESLOP])..."
 	@node --test scripts/repository/dup-gate-source.test.mjs
 	@echo "==> Test-selection gate ([TEST-SELECTION])..."
@@ -417,8 +419,19 @@ test-corpus-ci:
 	     echo "==> corpus: --exact would select nothing and libtest would exit 0 (gh #412)."; \
 	     exit 1; }; \
 	 done
+	@mkdir -p $(CORPUS_LOGS)
 	@fail=0; for t in $(CORPUS_TESTS); do \
-	   cargo test --release -p deslop --test corpus_repos -- --ignored --exact --nocapture --test-threads=1 $$t || fail=1; \
+	   log=$(CORPUS_LOGS)/$$t.log; \
+	   cargo test --release -p deslop --test corpus_repos -- --ignored --exact --nocapture --test-threads=1 $$t > $$log 2>&1 || fail=1; \
+	   cat $$log; \
+	   ran=$$(awk '$$1 == "running" && ($$3 == "test" || $$3 == "tests") { total += $$2 } END { print total + 0 }' $$log); \
+	   if [ $$ran -lt $(CORPUS_MIN_TESTS) ]; then \
+	     echo "==> corpus: \`$$t\` executed $$ran tests, not $(CORPUS_MIN_TESTS) (gh #412)."; \
+	     echo "==> corpus: libtest exits 0 when a filter selects nothing, so this would have"; \
+	     echo "==> corpus: reported a green run over zero repositories."; \
+	     grep -F 'test result:' $$log || echo "==> corpus: libtest printed no summary at all."; \
+	     fail=1; \
+	   fi; \
 	 done; \
 	 if [ $$fail -ne 0 ]; then echo "==> corpus: NEW failures (see [NEW] lines above)"; fi; \
 	 exit $$fail
@@ -436,6 +449,15 @@ test-corpus-ci-full: test-corpus-ci
 # to, so a selector that resolves to nothing fails loudly instead of passing
 # green over zero repositories.
 CORPUS_NAMES = target/corpus-test-names.txt
+
+# One log per selected test, kept so the recipe can count what libtest actually
+# ran. The name check above is a pre-flight — it catches the spelling that was
+# wrong, and nothing else. `--exact` selecting nothing is only one way to run
+# zero tests; libtest exits 0 for every one of them. This is the check that
+# holds regardless of cause: a corpus run must execute at least one test, or it
+# has proved nothing and must not report green (gh #412).
+CORPUS_LOGS = target/corpus-logs
+CORPUS_MIN_TESTS = 1
 
 # Scheduled CI runs a deliberately small slice: clone + scan inside ~1 minute.
 # `tokio` is the fastest corpus and the only one that has ever been stable
@@ -538,38 +560,14 @@ _kill-deslop-processes:
 # [DEPLOY-EXTERNAL-MCP-CONSUMER] No install-binary target by design; this scrub
 #   keeps external MCP clients on the VSIX-bundled binary by absolute path.
 # _delete-path-binaries: Remove any Deslop binaries that have leaked onto the
-#   user's PATH (e.g. from `cargo install` or a package-manager install). The
-#   VSIX is the only legitimate distribution surface. The VS Code extension,
-#   Claude Code MCP, Codex MCP, and any other host MUST resolve `deslop`,
-#   `deslop-lsp`, and `deslop-mcp` from the unpacked VSIX `bin/<platform>/`
-#   directory by absolute path. PATH resolution would let a locally-built binary
-#   shadow the Shipwright-versioned bundle. Invoked by every `_vsix-*` and
-#   `test` target so a developer machine that previously installed Deslop is
-#   auto-scrubbed.
+#   user's PATH (e.g. from `cargo install` or a package-manager install), and
+#   fail if one survives. Invoked by every `_vsix-*` and `test` target so a
+#   developer machine that previously installed Deslop is auto-scrubbed. The
+#   detection, the deletion, and the fail-closed re-check live in the script so
+#   they can be tested against a fixture PATH — running this target is
+#   destructive by design, so it is never what the test drives (#474).
 _delete-path-binaries:
-	@echo "==> Removing Deslop binaries from PATH..."
-	@if command -v brew >/dev/null 2>&1; then \
-	  brew uninstall --force deslop >/dev/null 2>&1 || true; \
-	fi
-	@for _bin in deslop deslop-lsp deslop-mcp; do \
-	  cargo uninstall $$_bin >/dev/null 2>&1 || true; \
-	  $(RM) "$(HOME)/.cargo/bin/$$_bin" "$(HOME)/.cargo/bin/$$_bin.exe"; \
-	  hash -r 2>/dev/null || true; \
-	  _attempts=0; \
-	  while _found=$$(command -v $$_bin 2>/dev/null || true); [ -n "$$_found" ]; do \
-	    if [ "$$_attempts" -ge 10 ]; then \
-	      echo "FAIL: $$_bin still resolves on PATH at $$_found"; \
-	      echo "Remove it before running tests; extension tests must use bundled binaries by absolute path."; \
-	      exit 1; \
-	    fi; \
-	    case "$$_found" in \
-	      */*) echo "    deleting $$_bin at $$_found"; $(RM) "$$_found" ;; \
-	      *) echo "FAIL: $$_bin resolved to non-file command $$_found"; exit 1 ;; \
-	    esac; \
-	    hash -r 2>/dev/null || true; \
-	    _attempts=$$(( _attempts + 1 )); \
-	  done; \
-	done
+	@bash scripts/repository/scrub-path-binaries.sh
 
 # _vsix-install: Install Node deps for clients/vscode + webview-ui.
 _vsix-install:

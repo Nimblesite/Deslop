@@ -82,6 +82,8 @@ mod refactor_extract_write_gate;
 mod refactor_merge;
 #[path = "refactor_merge_refusals.rs"]
 mod refactor_merge_refusals;
+#[path = "render_noise_totals_observability.rs"]
+mod render_noise_totals_observability;
 #[path = "report_api.rs"]
 mod report_api;
 #[path = "report_fixture_file_identity.rs"]

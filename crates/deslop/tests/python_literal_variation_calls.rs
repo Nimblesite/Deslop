@@ -10,6 +10,14 @@
 //! there is nothing left to extract. #71 is the REST-endpoint spelling
 //! of it, where the varying literal is an f-string route template.
 //!
+//! Every family member here ends in a call-free `assert` on the value
+//! its varying call bound, so both pins are also the E2E pins for
+//! [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT]: without the
+//! lone-assertion admission the covered-statement precondition rejects
+//! every member and `hidden` falls to zero. The companion negative pin
+//! is `rename_needs_an_anchor`, which keeps two-or-more call-free
+//! statements blocking the filter.
+//!
 //! Both fixtures stage a false-negative control — a byte-identical
 //! `settle_ledger` pair unrelated to the family — and both assertions go
 //! through `negative_pin`. Before that control existed these suites
@@ -50,7 +58,10 @@ const WRITE_LABEL: &str = "gh #70/#79 literal-variation call family";
 /// pin.
 const WRITE_MIN_NODES: u32 = 8;
 /// Components the filter suppresses here: the single call-run family
-/// cluster over `test_write_file_calls.py`.
+/// cluster over `test_write_file_calls.py`. One, not zero, is what
+/// [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT] buys: each
+/// member's trailing `assert` inspects only names the covered call
+/// bound, so it is admitted instead of blocking the filter.
 const WRITE_HIDDEN: u64 = 1;
 
 /// The gh #71 fixture and the one file its family lives in.
@@ -59,7 +70,9 @@ const ENDPOINT_FAMILY: [&str; 1] = ["test_endpoints.py"];
 const ENDPOINT_LABEL: &str = "gh #71 REST endpoint-shape family";
 const ENDPOINT_MIN_NODES: u32 = 4;
 /// Components the filter suppresses here: the single endpoint-shape
-/// family cluster over `test_endpoints.py`.
+/// family cluster over `test_endpoints.py`, admitted through
+/// [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT] on the
+/// trailing `assert resp.status_code == 204`.
 const ENDPOINT_HIDDEN: u64 = 1;
 
 /// Everything both pins assert: the family hidden and counted exactly,

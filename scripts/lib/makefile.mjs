@@ -36,3 +36,53 @@ export function recipeBlocks(target) {
     return [{ header: line, body: (end < 0 ? rest : rest.slice(0, end)).join("\n") }];
   });
 }
+
+/// Make's line continuation. A declaration ending in one carries on to the
+/// next line, and a reader that stops at the newline sees a fraction of the
+/// value plus a stray backslash.
+const CONTINUATION = "\\";
+
+/// The three characters make and the shell treat as word separators, so
+/// splitting never needs a pattern match.
+const SEPARATORS = ["\n", "\t", " "];
+
+/**
+ * Split `text` into words on whitespace, without a pattern match.
+ *
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function words(text) {
+  return SEPARATORS.reduce(
+    (parts, separator) => parts.flatMap((part) => part.split(separator)),
+    [text],
+  ).filter((word) => word.length > 0);
+}
+
+/**
+ * The whole right-hand side of a make variable, as words.
+ *
+ * `?=`, `=` and `:=` all count, and the name is matched at the start of its own
+ * declaration so a variable is read where it is declared rather than wherever
+ * its name happens to appear. Backslash continuations are joined first:
+ * `CORPUS_TESTS_FULL` spans four lines, and a reader that stopped at the first
+ * newline saw three of its eleven names and a literal `\` — the tail was never
+ * checked against anything (gh #412).
+ *
+ * @param {string} name
+ * @returns {string[]} every word assigned, `[]` when the variable is undeclared
+ */
+export function variableWords(name) {
+  const start = makefileLines.findIndex(
+    (line) => line.startsWith(`${name} `) || line.startsWith(`${name}=`),
+  );
+  if (start < 0) return [];
+  const declaration = [];
+  for (let index = start; index < makefileLines.length; index += 1) {
+    const line = makefileLines[index];
+    declaration.push(line);
+    if (!line.trimEnd().endsWith(CONTINUATION)) break;
+  }
+  const [, value] = declaration.join(" ").split("=");
+  return words(value ?? "").filter((word) => word !== CONTINUATION);
+}

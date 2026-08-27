@@ -25,23 +25,48 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import { repoRoot } from "../lib/repo-root.mjs";
-import { makefileLines as makefile, recipeBlocks } from "../lib/makefile.mjs";
+import { recipeBlocks, variableWords as variable, words } from "../lib/makefile.mjs";
+import { stepBody } from "../actions/action-yaml.mjs";
 
 // The package and dedicated Cargo test target that own the real-repository
 // corpus suite.
 const CORPUS_PACKAGE = "deslop";
 const CORPUS_TARGET = "corpus_repos";
-const CORPUS_TEST_PREFIX = "corpus_";
 const ANALYZE_TARGET = "_ci-analyze";
 
-// The make variable naming the resource-bounded slice the scheduled corpus
-// workflow runs, and how libtest selects the skipped suite: `--ignored`, plus
-// the flag that makes a positional filter an exact match, not a substring one.
+// The make variables naming what the corpus workflow selects: the
+// resource-bounded slice the nightly schedule runs, and the whole corpus the
+// `full` dispatch runs. Both are declared in the Makefile and nowhere else.
 const CORPUS_SLICE_VARIABLE = "CORPUS_TESTS";
+const CORPUS_FULL_SLICE_VARIABLE = "CORPUS_TESTS_FULL";
+const CORPUS_REPOS_VARIABLE = "CORPUS_REPOS";
+const CORPUS_REPOS_FULL_VARIABLE = "CORPUS_REPOS_FULL";
+
+// How libtest selects the skipped suite: `--ignored`, plus the flag that makes
+// a positional filter an exact match rather than a substring one, plus the
+// flag that makes libtest report the names it answers to. `--list` prints one
+// `<name>: test` line per test.
 const IGNORED_FLAG = "--ignored";
 const EXACT_FLAG = "--exact";
+const LIST_FLAG = "--list";
+const LIST_ENTRY_SUFFIX = ": test";
+
+// The path separator a corpus test name would carry if the suite were a module
+// of the `suite` binary. It is not one, so a name carrying this resolves to
+// nothing — the shape `CORPUS_TESTS` was written in when gh #412 came back.
+const MODULE_SEPARATOR = "::";
+
+// The scheduled corpus workflow, and the one step in it that runs the suite.
+// It must name a make target and no test or repository of its own: a second
+// copy of the names is how the `full` dispatch came to pass the substring
+// `corpus_` into an `--exact` loop and scan nothing.
+const CORPUS_WORKFLOW = ".github/workflows/corpus.yml";
+const CORPUS_WORKFLOW_STEP = "Run corpus suite";
+const CORPUS_MAKE_TARGETS = ["test-corpus-ci", "test-corpus-ci-full"];
 
 // The exact substrings the release gate used to filter on. Each names hermetic
 // tests: the Ollama suites drive an in-process mock server or a deliberately
@@ -59,26 +84,54 @@ function recipe(target) {
   return blocks.map(({ body }) => body).join("\n");
 }
 
-// The right-hand side of a make variable, as words. `?=` and `=` both count;
-// the name is matched at the start of the line, never as a substring.
-function variable(name) {
-  const line = makefile.find(
-    (entry) => entry.startsWith(`${name} `) || entry.startsWith(`${name}=`),
+// Every name the corpus test binary answers to, as libtest itself reports
+// them: `--list` prints one `<name>: test` line per test, and that list is
+// exactly what an `--exact` filter is matched against. Nothing here parses
+// Rust source or guesses at a naming shape — the binary is asked.
+//
+// The corpus recipes run the release build, so this asks the same build. CI's
+// repository-tests job restores the release `target/` the build job produced,
+// so the compile is already paid for.
+function declaredCorpusTests() {
+  const raw = execFileSync(
+    "cargo",
+    ["test", "--release", "-p", CORPUS_PACKAGE, "--test", CORPUS_TARGET, "--", IGNORED_FLAG, LIST_FLAG],
+    { cwd: repoRoot, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
   );
-  assert.ok(line, `Makefile no longer declares \`${name}\``);
-  const [, value] = line.split("=");
-  return words(value ?? "");
+  const names = raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.endsWith(LIST_ENTRY_SUFFIX))
+    .map((line) => line.slice(0, -LIST_ENTRY_SUFFIX.length));
+  assert.ok(
+    names.length > 0,
+    `\`${CORPUS_TARGET}\` listed no ${IGNORED_FLAG} test at all. Every corpus selector then ` +
+      "resolves to nothing and the scheduled workflow reports green over zero repositories.",
+  );
+  return names;
 }
 
-// Whitespace-separated words of a recipe, so `--skip` is matched as an
-// argument rather than as a substring of prose. Split on the three characters
-// make and the shell treat as separators — no pattern matching.
-function words(body) {
-  return body
-    .split("\n")
-    .flatMap((line) => line.split("\t"))
-    .flatMap((chunk) => chunk.split(" "))
-    .filter((word) => word.length > 0);
+// Asserts one Makefile-declared selector names tests the binary will run. A
+// name that is merely close — over-qualified, misspelled, or a prefix — selects
+// nothing, and libtest exits 0 having run nothing (gh #412).
+function assertSliceResolves(variableName, declared) {
+  const slice = variable(variableName);
+  assert.ok(
+    slice.length > 0,
+    `${variableName} must still name the tests it selects, or the corpus workflow runs nothing ` +
+      "and the summary reports a green run over zero repositories",
+  );
+  for (const name of slice) {
+    assert.ok(
+      declared.includes(name),
+      `${variableName} names \`${name}\`, which ${EXACT_FLAG} resolves to no test: the ` +
+        `${CORPUS_TARGET} binary answers to ${JSON.stringify(declared)} and to nothing else. ` +
+        `${CORPUS_TARGET} is its own Cargo test target, so its file is that binary's crate root ` +
+        `and its tests carry no \`${MODULE_SEPARATOR}\` module path. A run that selects zero ` +
+        "tests exits 0 and reports green over zero repositories (gh #412).",
+    );
+  }
+  return slice;
 }
 
 // The crate that owns the corpus gate's own precision / scope / confidence
@@ -219,18 +272,51 @@ test("[TEST-SELECTION-SKIP] the scheduled slice matches test names exactly", () 
       `${EXACT_FLAG}. Without it libtest matches each name as a substring: renaming a test makes ` +
       "the filter select nothing, and a run that executes zero tests reports green (gh #412).",
   );
-  const slice = variable(CORPUS_SLICE_VARIABLE);
-  assert.ok(
-    slice.length > 0,
-    `${CORPUS_SLICE_VARIABLE} must still name the scheduled slice, or the corpus workflow runs ` +
-      "nothing and the summary reports a green run over zero repositories",
+  // Asked of the binary, not inferred from the name's shape. A prefix check
+  // passed every over-qualified `corpus_repos::corpus_tokio_rust` and every
+  // bare `corpus_` substring — the two spellings that made this gate blind.
+  const declared = declaredCorpusTests();
+  const scheduled = assertSliceResolves(CORPUS_SLICE_VARIABLE, declared);
+  const full = assertSliceResolves(CORPUS_FULL_SLICE_VARIABLE, declared);
+
+  const unselected = declared.filter((name) => !full.includes(name));
+  assert.deepEqual(
+    unselected,
+    [],
+    `${CORPUS_FULL_SLICE_VARIABLE} is the \`full\` dispatch, so it must select every test the ` +
+      `${CORPUS_TARGET} binary declares. It leaves ${JSON.stringify(unselected)} unrun — those ` +
+      "repositories are scanned by nothing, on any schedule.",
   );
-  for (const name of slice) {
+  const unscheduled = scheduled.filter((name) => !full.includes(name));
+  assert.deepEqual(
+    unscheduled,
+    [],
+    `${CORPUS_SLICE_VARIABLE} selects ${JSON.stringify(unscheduled)}, which the \`full\` ` +
+      "dispatch does not: the nightly slice must be a subset of the whole corpus",
+  );
+});
+
+test("[CORPUS-CI] the corpus workflow names a make target and no test of its own", () => {
+  const workflow = readFileSync(resolve(repoRoot, CORPUS_WORKFLOW), "utf8");
+  const body = words(stepBody(workflow, CORPUS_WORKFLOW_STEP));
+  for (const target of CORPUS_MAKE_TARGETS) {
     assert.ok(
-      name.startsWith(CORPUS_TEST_PREFIX),
-      `${CORPUS_SLICE_VARIABLE} names \`${name}\`, which ${EXACT_FLAG} resolves to nothing: ` +
-        `inside the ${CORPUS_TARGET} binary every corpus test starts with ` +
-        `\`${CORPUS_TEST_PREFIX}\`. The scheduled run would execute zero repositories and report green.`,
+      body.includes(target),
+      `\`${CORPUS_WORKFLOW_STEP}\` must run \`make ${target}\`: the nightly slice and the ` +
+        "`full` dispatch are both declared in the Makefile, and the workflow reaches them by name",
+    );
+  }
+  for (const declared of [
+    CORPUS_SLICE_VARIABLE,
+    CORPUS_FULL_SLICE_VARIABLE,
+    CORPUS_REPOS_VARIABLE,
+    CORPUS_REPOS_FULL_VARIABLE,
+  ]) {
+    assert.ok(
+      !body.some((word) => word.includes(declared)),
+      `\`${CORPUS_WORKFLOW_STEP}\` must not set \`${declared}\`. The Makefile is the single ` +
+        "source of the corpus names; the workflow's own copy is how the `full` dispatch came to " +
+        `pass the substring \`corpus_\` into an ${EXACT_FLAG} loop and scan nothing (gh #412).`,
     );
   }
 });

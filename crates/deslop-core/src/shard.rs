@@ -26,6 +26,7 @@
 //! repeated alignment being recomputed — so building one per *chunk*
 //! would trade the balance win straight back for lost reuse.
 
+use std::num::NonZeroUsize;
 use std::sync::Mutex;
 
 /// How many worker threads a sharded stage runs for `items` units of
@@ -39,13 +40,19 @@ use std::sync::Mutex;
 /// where their floor sits, so the answer lives here once: a second copy
 /// drifts, and a stage that silently stops sharding is invisible in the
 /// output it produces.
-pub(crate) fn worker_count(items: usize, min_per_worker: usize) -> usize {
-    if items < min_per_worker {
+///
+/// The floor is a [`NonZeroUsize`] so "how many full shares fit" is a
+/// total question. A zero floor has no answer — every population would
+/// hold infinitely many shares — and a caller that reached here with
+/// one would otherwise have been quietly demoted to a single worker,
+/// which is exactly the silent de-sharding this function exists to make
+/// impossible.
+pub(crate) fn worker_count(items: usize, min_per_worker: NonZeroUsize) -> usize {
+    if items < min_per_worker.get() {
         return 1;
     }
-    let available = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
-    let full_shares = items.checked_div(min_per_worker).unwrap_or_default();
-    available.min(full_shares).max(1)
+    let available = std::thread::available_parallelism().map_or(1, NonZeroUsize::get);
+    available.min(items / min_per_worker).max(1)
 }
 
 /// The per-chunk results in input order, paired with each worker's
