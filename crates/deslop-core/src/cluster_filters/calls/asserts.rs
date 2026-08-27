@@ -1,5 +1,5 @@
 //! Assertion admission for the literal-variation sequence rule
-//! ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
+//! ([CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT]).
 //!
 //! `resp = client.delete(f"/api/…"); assert resp.status_code == 204` is
 //! the idiom the filter exists to hide, and the trailing assertion is
@@ -15,6 +15,7 @@
 use tree_sitter::Node;
 
 use super::super::Snippet;
+use crate::refactor::preconditions::named_children;
 
 /// Grammars with a call-free assertion statement. Rust (`assert!` is a
 /// macro invocation), C#, and ECMAScript spell assertions as calls, so
@@ -28,7 +29,8 @@ const fn assert_kinds(language: &str) -> &'static [&'static str] {
 
 /// True when `statement` is an assertion whose every subject identifier
 /// names a value bound by one of `call_statements` — and it inspects at
-/// least one such value, so a vacuous assertion does not qualify.
+/// least one such value, so a vacuous assertion does not qualify
+/// ([CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT]).
 pub(super) fn is_assert_on_call_bound_value(
     statement: Node<'_>,
     call_statements: &[&Node<'_>],
@@ -39,7 +41,7 @@ pub(super) fn is_assert_on_call_bound_value(
     }
     let bound = bound_names(call_statements, snippet.source);
     let mut subjects = Vec::new();
-    collect_subject_identifiers(statement, snippet.source, &mut subjects);
+    collect_identifiers(statement, snippet.source, subject_child, &mut subjects);
     !subjects.is_empty() && subjects.iter().all(|name| bound.contains(name))
 }
 
@@ -58,51 +60,48 @@ fn bound_names(statements: &[&Node<'_>], source: &[u8]) -> Vec<Vec<u8>> {
 fn collect_assignment_targets(node: Node<'_>, source: &[u8], out: &mut Vec<Vec<u8>>) {
     if node.kind() == "assignment" {
         if let Some(left) = node.child_by_field_name("left") {
-            collect_identifiers(left, source, out);
+            collect_identifiers(left, source, every_child, &mut *out);
         }
     }
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
+    for child in named_children(node) {
         collect_assignment_targets(child, source, out);
     }
 }
 
-/// Records every identifier in `node`'s subtree.
-fn collect_identifiers(node: Node<'_>, source: &[u8], out: &mut Vec<Vec<u8>>) {
-    if node.kind() == "identifier" {
-        if let Some(bytes) = source.get(node.start_byte()..node.end_byte()) {
-            out.push(bytes.to_vec());
-        }
-        return;
-    }
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
-        collect_identifiers(child, source, out);
-    }
+/// Decides whether the collector descends from `parent` into `child`.
+type ChildGuard = fn(Node<'_>, Node<'_>) -> bool;
+
+/// The whole subtree counts: an assignment target names what it binds
+/// wherever inside the target expression the identifier sits.
+fn every_child(_parent: Node<'_>, _child: Node<'_>) -> bool {
+    true
 }
 
-/// Records the identifiers `node` inspects — every identifier except an
-/// attribute name, which names a field on a subject rather than a
-/// subject (`resp.status_code` inspects `resp`).
-fn collect_subject_identifiers(node: Node<'_>, source: &[u8], out: &mut Vec<Vec<u8>>) {
-    if node.kind() == "identifier" {
-        if let Some(bytes) = source.get(node.start_byte()..node.end_byte()) {
-            out.push(bytes.to_vec());
-        }
-        return;
-    }
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
-        if !is_attribute_name(node, child) {
-            collect_subject_identifiers(child, source, out);
-        }
-    }
-}
-
-/// True when `child` sits in `parent`'s attribute-name field.
-fn is_attribute_name(parent: Node<'_>, child: Node<'_>) -> bool {
-    parent.kind() == "attribute"
-        && parent
+/// Attribute names are skipped: they name a field *on* a subject rather
+/// than a subject, so `resp.status_code` inspects `resp` alone.
+fn subject_child(parent: Node<'_>, child: Node<'_>) -> bool {
+    parent.kind() != "attribute"
+        || parent
             .child_by_field_name("attribute")
-            .is_some_and(|name| name.id() == child.id())
+            .is_none_or(|name| name.id() != child.id())
+}
+
+/// Records every identifier in `node`'s subtree that `descend` admits.
+fn collect_identifiers(
+    node: Node<'_>,
+    source: &[u8],
+    descend: ChildGuard,
+    out: &mut Vec<Vec<u8>>,
+) {
+    if node.kind() == "identifier" {
+        if let Some(bytes) = source.get(node.start_byte()..node.end_byte()) {
+            out.push(bytes.to_vec());
+        }
+        return;
+    }
+    for child in named_children(node) {
+        if descend(node, child) {
+            collect_identifiers(child, source, descend, out);
+        }
+    }
 }

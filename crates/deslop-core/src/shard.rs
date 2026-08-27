@@ -28,6 +28,25 @@
 
 use std::sync::Mutex;
 
+/// How many worker threads a sharded stage runs for `items` units of
+/// work, given the fewest units that make a worker worth spawning.
+///
+/// Below `min_per_worker` the thread spawn — and, where a worker owns a
+/// cache, its cold start — costs more than the work itself, so the
+/// stage stays on the calling thread. Above it the count is capped so
+/// every worker still carries a full share rather than racing for
+/// scraps. Both sharded stages ask the same question and only differ in
+/// where their floor sits, so the answer lives here once: a second copy
+/// drifts, and a stage that silently stops sharding is invisible in the
+/// output it produces.
+pub(crate) fn worker_count(items: usize, min_per_worker: usize) -> usize {
+    if min_per_worker == 0 || items < min_per_worker {
+        return 1;
+    }
+    let available = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+    available.min(items / min_per_worker).max(1)
+}
+
 /// The per-chunk results in input order, paired with each worker's
 /// final state in worker order. Both sequences are independent of the
 /// order the workers happened to finish in.

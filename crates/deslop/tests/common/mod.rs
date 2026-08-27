@@ -340,6 +340,14 @@ pub(crate) fn occurrence_path(occurrence: &Value) -> Result<&str> {
         .ok_or_else(|| anyhow!("reported occurrence is missing path"))
 }
 
+/// True when an occurrence is rendered but marked hidden — present in a
+/// cluster's `size`, absent from the report a human reads and from every
+/// line metric. A count alone cannot see the difference, so assertions
+/// that care about *shown* occurrences ask this instead.
+pub(crate) fn occurrence_is_hidden(occurrence: &Value) -> bool {
+    field(occurrence, "hidden").as_bool().unwrap_or(false)
+}
+
 /// The relative paths of every occurrence in `cluster`, in report order.
 pub(crate) fn occurrence_paths(cluster: &Value) -> Vec<String> {
     occurrences(cluster)
@@ -438,7 +446,7 @@ pub(crate) fn visible_duplicated_lines(report: &Value) -> BTreeMap<String, BTree
     let mut per_file: BTreeMap<String, BTreeSet<u64>> = BTreeMap::new();
     for cluster in clusters(report) {
         for occurrence in occurrences(cluster) {
-            if field(occurrence, "hidden").as_bool().unwrap_or(false) {
+            if occurrence_is_hidden(occurrence) {
                 continue;
             }
             let Some(path) = field(occurrence, "path").as_str() else {

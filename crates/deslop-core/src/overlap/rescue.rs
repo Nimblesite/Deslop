@@ -43,7 +43,7 @@ pub fn apply_shared_subtree_rescue(
     fingerprints: &[Fingerprint],
     trees: &[NormalizedNode],
 ) {
-    let workers = worker_count(pairs.len());
+    let workers = crate::shard::worker_count(pairs.len(), MIN_SHARD_WORK);
     if workers <= 1 {
         let mut measurer = OverlapMeasurer::new(trees);
         let mut tally = RescueTally::new();
@@ -98,16 +98,6 @@ fn report_shards(shards: &[(RescueTally, OverlapMeasurer<'_>)]) {
         totals = totals.add(measurer.stats());
     }
     merged.report_total(totals);
-}
-
-/// How many worker threads the rescue uses for `pairs` candidates:
-/// the available parallelism, capped so every shard carries real work.
-fn worker_count(pairs: usize) -> usize {
-    if pairs < MIN_SHARD_WORK {
-        return 1;
-    }
-    let available = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
-    available.min(pairs / MIN_SHARD_WORK).max(1)
 }
 
 /// Measures one pair when it is eligible, resolvable, and cross-file,

@@ -58,8 +58,11 @@ family takes the suppression with its component. The false negative this pass
 exists to close — a proven copy `A`/`A` vanishing when a shape-compatible stranger
 joined its cluster — is cross-file by construction, so it still escapes. What this
 deliberately gives up: a genuine intra-file byte-identical copy sitting inside a
-component the filters suppressed stays hidden; that is the price of the idiom
-proof, paid once, visibly, in the pins.
+component the filters suppressed stays hidden. That price must be **paid visibly,
+by a pin that owes it**: an intra-file byte-identical family inside a suppressed
+component, asserted hidden while the fixture's cross-file control clone surfaces.
+No gh #434 fixture holds a byte-identical pair, so that pin does not exist yet —
+owed, not claimed.
 
 A family this pass hides contributes nothing to any metric: `duplicated_loc` and
 `duplication_percent` fold visible clusters only, pinned green by
