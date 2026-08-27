@@ -1,6 +1,6 @@
 # Fused confidence — remaining work
 
-**What this file is.** The open work on fused admission, measured cluster confidence, content gating, bucket routing and confidence-aware ranking — and nothing else. It states one status per item, once. Everything the `worktree-fused-score-followups` branch carried is merged (#420, #418) and the branch-readiness ledger it used to hold is deleted with it; the `.deslop.toml` ratchet ledger is the audit trail for the duplication gate and stays there. This rewrite is what gh #395 asked for.
+**What this file is.** The open work on fused admission, measured cluster confidence, content gating, bucket routing and confidence-aware ranking. It states one status per item, once. It also now carries everything [`../release-audit.md`](../release-audit.md) used to hold that is **not** a regression since v0.32.0 — the fusion-arithmetic departures from the reading list (item 7), and the engine, gate and documentation work parked behind their own issues (item 8). The release audit is scoped to regressions only and does not restate any of it. Everything the `worktree-fused-score-followups` branch carried is merged (#420, #418) and the branch-readiness ledger it used to hold is deleted with it; the `.deslop.toml` ratchet ledger is the audit trail for the duplication gate and stays there. This rewrite is what gh #395 asked for.
 
 **Owned elsewhere. Do not restate it here.**
 
@@ -170,6 +170,52 @@ Each of these is a shipped false positive with no fixture that would catch it. T
 - **#283 / #284** — data-table and object-literal families. Recheck the language-agnostic data category shipped for #336 before treating either as an open detector defect: `python_issue_133_constant_table` and `fsharp_issue_336_data_table_category` are green, so the category itself is intact.
 - **#362 / `[RANK-STRUCTURAL-ONLY]`** — two unrelated const-declaration files must not produce the repository's largest ranked finding. A two-file run is a fixture, not a corpus: this one is writable today.
 
+## 7. Fusion arithmetic — measured departures from the reading list
+
+Every place Deslop combines two numbers into one was audited against [`reading-list.md`](../specs/reading-list.md) on 2026-08-27, with two papers read directly rather than quoted from our own notes: [arXiv 2510.15480](https://arxiv.org/abs/2510.15480) (selecting and combining LLMs for clone detection) and the [SSCD preprint](https://arxiv.org/abs/2309.02182). Absorbed here from the release audit — none of it is a regression since v0.32.0.
+
+**What checked out, and is not open work.** Pair fusion is a bounded max exactly as the ensemble literature advises (`pair.rs::bounded_fused`, `[FUSION-STRATEGY-BOUNDED-MAX]`); so are the content gate, the shape and content readings, the weighted-line metric, and the mechanical percentage's unweighted SonarQube-comparable definition. MinHash is the right primitive for a Jaccard-shaped problem, Baxter's `2S / (2S + L + R)` is used where Baxter used it (mergeability, not confidence), Zhang–Shasha TED is Baxter's own near-miss extension, the three-layer candidate union is what every surveyed system does, and the #343 sum removal is stricter than the paper permits and right for our regime. No fusion arithmetic lives outside Rust.
+
+What did not check out, ordered by accuracy at stake.
+
+**7a. #458 — axis signals average across rendered pairs. CONFIRMED, unpinned.** `cluster/signals.rs::fold_pairs` renders each cluster signal as the mean over every unordered pair of rendered occurrences, and clusters are transitive closures, so the denominator includes pairs no stage ever admitted. Measured at HEAD on `ts-mixed-band` plus a byte-identical copy of `ledger_a.ts`: the two identical files render `identical` at `structural / token_jaccard / fused = 1.0 / 1.0 / 1.0` scanned alone, and `nearly_identical` at `0.9982 / 0.8313 / 0.7953` inside the six-member cluster. Byte proof loses its **bucket**, not just its rank, and `fused` then multiplies the ranking weight at `report_weight.rs:141`.
+
+`[FUSION-CLUSTER-SIGNALS]` bans averaging discovery edges and then mandates averaging rendered pairs. Note this is not the averaging the paper prohibits — that one is across different scores, and we take the max there. Mean-versus-max is also a false dichotomy: max combines three measurements of *one* object, while cluster pairs are *different* objects, so max is a false-positive vector and the mean is a false-negative vector. Neither is the answer on its own; the admission filter missing from the denominator is.
+
+Write the failing fixture first — a byte-identical pair plus one weak member, asserting the rendered `structural`, the bucket and the rank position — and watch it fail before choosing the aggregation. The two existing unit tests in `cluster/signals/tests.rs` assert the mean is bit-identical to the per-pair loop, which pins the *arithmetic* and says nothing about whether the pair set is right.
+
+**7b. #363 — the ranking formula's spec and code disagree, twice.** `pipeline.md:207` specifies `weight = nodes × (size − 1) × log2(1 + spanned_loc)`; `cluster.rs:444` computes it over `spanned_bytes`, and bytes and lines order clusters differently. Separately, the visible re-rank users actually see (`report_weight.rs:160`) computes `nodes × (visible − 1)` with no log term at all, then multiplies by category, structural-only and fused confidence. Decide which side is the truth and change the other.
+
+**7c. Two provenance citations are false.** `candidates.embedding_min_cosine = 0.80` is labelled in `[FUSION-TUNING-LEVERS]` as "SSCD's published operating point". SSCD's tabulated settings are `similarity 0 / 0.95` with `topN 0 / 1 / 100`; 0.80 appears nowhere. `candidates.embedding_support_floor = 0.80` inherits the provenance by derivation, and it is the line at which `[CLONE-BUCKETS-ROUTING]` row 2 lets semantic evidence carry a bucket alone. Separately, SourcererCC's 0.7 is **overlap** similarity — shared tokens ÷ tokens in the larger fragment — not Jaccard: `admission.fused_threshold` cites it as a Jaccard cutoff, which makes us stricter than the paper by an unmeasured margin in the false-negative direction, and `content_gate.support_floor` applies it to raw-byte agreement, a third quantity no token study measured. `landscape.md:16` already says "overlap filter" correctly, so `fusion.md` and `landscape.md` disagree with each other. The values may still be right; re-label them as defect or derived, not literature.
+
+**7d. `candidates.embedding_top_k = 5` is below every published topN.** Marked Unrecorded, and the spec already concedes the rationale argues for "small, not for five". SSCD used topN 100 on BCB and up to 10 on industrial data, and ties the value explicitly to how large clone classes are in the corpus. This is the axis that exists to find Type-3/4, so being wrong here is silent recall loss. Sweep it against a corpus with large clone classes before it stays at 5.
+
+**7e. Max without normalization.** The paper's finding is score normalization **and** favouring maximum or sum; we do the second half. Our three axes are all in `[0, 1]` but are not calibrated against each other — a cosine of 0.85 from a local embedding model, a MinHash Jaccard estimate of 0.85 and a tree alignment of 0.85 are not the same weight of evidence, and under max the most generous axis wins by construction. Compensations exist and are deliberate (`fused_threshold` at 0.85 rather than the literature's 0.7, the content gate, `[FUSION-SHARED-SUBTREE]`, `[PAIR-SIZE-COHERENCE]`), but nothing measures cross-axis comparability and no test asserts it. Worth keeping in view: the paper's best ensemble reached 46.91% precision. Max fusion is a recall-first move measured in a precision-poor regime — it buys recall and costs precision, and the threshold is the only thing paying that bill. Say so in `[FUSION-STRATEGY-BOUNDED-MAX]`, which currently argues the max is conservative; it is conservative about *manufacturing* confidence and generous about *admitting* a pair.
+
+**7f. House rules wearing literature labels.** `rename_consistency_discount = 0.9` is a presentation choice derived from wanting the answer above `fused_threshold` while reserving 1.0 for byte proof — Baker's p-match theory treats a corroborated bijective rename as *proven* Type-2, and Type-2 is the band where benchmark precision is highest. Low risk; label it accurately rather than change it. Four ranking levers are Unrecorded outright — `ranking.type4_embedding_floor` (0.90), `ranking.low_structural_type4_ceiling` (0.10), `ranking.low_structural_type4_weight` (1/10), `routing.proven_identical_token_floor` (0.99) — as are the inline literal tables in `buckets.rs` and `report_render.rs`. The spec's own rule is that unrecorded is a tracked gap, not a resting state.
+
+## 8. Parked engine, gate and documentation work
+
+Absorbed from the release audit. None of these is a regression since v0.32.0; each is owned by its issue, and the release ships with them open.
+
+**Engine defects.**
+
+- **#432 — operator-only drift reaches the act-now tier and outranks the real clone.** `ledger_credit.py` and `ledger_debit.py` differ only in `+` versus `-` and render `nearly_identical` at `structural 0.9907, token_jaccard 1.0000, fused 0.9477`, weight 101.400 — ranked first, ahead of the corpus's one genuine `identical` pair at `fused 1.0000`. A `find-similar` consumer is told to write one where the other is meant. v0.32.0 was worse here: operators collapsed to a shared placeholder, so `+` and `-` hashed identically. This is debt made visible by `[PIPELINE-NORMALIZE-AST-OPERATOR]`, not debt introduced. Ends when the confidence blend discounts operator disagreement.
+- **#433 — mixed passes measure different content evidence than cold.** On identical corpus bytes the mixed pass and the cold pass diverge: `agreement` 0.3333 versus 0.3590, `rename_consistency` 0.5608 versus 0.5833. `fused` survives 0.85 here only because the shape term dominates, but the rendered `evidence_verdict` already differs ("share 0.33 of their content" versus "0.36"), and a cluster whose content term is the max would move bucket between two runs of the same code. Correction to the record: this was filed as "not reproducible through the CLI, specific to the LSP path", which was measured cold-versus-fully-warm only. It reproduces through the CLI on the **mixed** pass.
+- **#443** — `content/frontier.rs::positional_agreement` returns `1.0` when nothing was measured, so "no authored content to disagree on" is indistinguishable from byte-proven agreement.
+- **#431** — `buckets/gate.rs` overwrites the measured `token_jaccard` with `1.0` for `NearlyIdentical` clusters at `structural >= STRUCTURAL_SATURATION_FLOOR` (0.99). The Merkle argument it rests on does not cover every cluster routed there.
+- **#356** — embeddings-on ANN bridges mutate structural components before measurement. `embedding_route_invariance` went green under the container election and is unskipped; the issue itself is not closed.
+
+**Stale artifacts this cycle's changes invalidated.** `report_golden` (#432) drifted `canonical_node_count` 60 → 68 and with it every cluster id — the `[PIPELINE-CLUSTER-ELECT-CONTAINER]` election changing what a cluster is made of. `incremental_multilang_golden` ×3 (#433) is stale the same way. `[PERF-FLUTTER-TODO-ACCURACY]` records report hash `2562e181…` as the accepted deterministic output, recorded before that election, so it no longer describes HEAD. All are stale, not wrong. Re-bless **once**, last, after #432 and #433 land.
+
+**Gates and coverage.**
+
+- **#440 is done, not open.** The VS Code extension host now has a line-coverage floor: counters compiled into the modules and dumped from inside the host measure 87.6% across all 43 compiled modules, enforced as `vsix.extension_threshold` in `coverage-thresholds.json`. No Testing API migration was needed. Recorded because the previous audit carried it as both done and open.
+- **#422 / #166** — the corpus gate has never run in CI. All 11 repository checks are `#[ignore]`d: minutes of wall time and more than 13 GB peak per repository. `corpus/flutter.json` sets `max_peak_rss_mb: 9000`, above a standard GitHub Actions runner, and `flutter/memory` and `fsharp/memory` are `corpus/known-failures.json` entries. Re-derive the bound from a fresh measured scan and state the runner limit in the rationale.
+- **#426** — `corpus_manifest_contract` is red: `flutter` has no `expect_files_min`, so a scan that analysed zero files would satisfy every cluster assertion in the manifest, which is #342's failure mode exactly.
+
+**Documentation drift.** `skip_policy_contract.rs`'s module doc miscounts its own registry — it says "twenty-two gh #432–#435 entries" and "three embedding entries", where the measured registry holds 28 rows total, 12 of them accuracy tests across #432/#433/#434/#369, and #435 has none left.
+
 ---
 
 # Checklist — unfinished
@@ -182,6 +228,27 @@ Each of these is a shipped false positive with no fixture that would catch it. T
 - [ ] **#421** — stop publishing sub-line fragments; tighten `python_issue_69_abstract_method` to an empty visible surface.
 - [ ] **#362** — two unrelated const-declaration files must not rank first.
 - [ ] **#71 / #103 / #285**, **#79**, **#283 / #284** — one negative fixture each, asserting the family stays hidden while a real clone in the same run stays visible.
+- [ ] **#458** — a byte-identical pair must not lose its `identical` bucket to the cluster it sits in. Fixture first: identical pair plus one weak member, asserting rendered `structural`, bucket and rank; watch it fail before choosing the aggregation (item 7a).
+- [ ] **#432** — discount operator disagreement in the confidence blend so `+`/`-` drift cannot reach an act-now bucket or outrank a byte-identical pair.
+- [ ] **#433** — make the frontier-leaf population identical on the cold, warm and mixed passes.
+- [ ] **#443** — distinguish "no authored content measured" from agreement `1.0`.
+- [ ] **#431** — stop overwriting measured `token_jaccard` for clusters the Merkle argument does not cover.
+- [ ] **#356** — ANN bridges must not mutate structural components before measurement.
+- [ ] **#432 / #433 / `[PERF-FLUTTER-TODO-ACCURACY]`** — re-bless `report_golden` and `incremental_multilang_golden`, and re-record the Flutter report hash, **once**, last, after #432 and #433 land. Review the diff; regenerating is never the remedy on its own.
+
+## Fusion arithmetic and provenance
+
+- [ ] **#363** — decide whether the ranking weight is over `spanned_loc` or `spanned_bytes`, and whether the visible re-rank keeps the log term; change whichever side is not the truth (item 7b).
+- [ ] Re-label `embedding_min_cosine`, `embedding_support_floor`, `fused_threshold` and `content_gate.support_floor` as defect or derived, not literature. Reconcile `fusion.md` with `landscape.md` on SourcererCC's overlap-versus-Jaccard (item 7c).
+- [ ] Sweep `embedding_top_k` against a corpus with large clone classes before it stays at 5 (item 7d).
+- [ ] State in `[FUSION-STRATEGY-BOUNDED-MAX]` that the max is taken over uncalibrated axes, and name what pays for it (item 7e).
+- [ ] Record provenance for `type4_embedding_floor`, `low_structural_type4_ceiling`, `low_structural_type4_weight`, `proven_identical_token_floor` and the inline literal tables in `buckets.rs` / `report_render.rs`; label `rename_consistency_discount` a house rule (item 7f).
+
+## Gates and coverage
+
+- [x] **#440** — the extension host has a line-coverage floor: 87.6% across 43 compiled modules, enforced as `vsix.extension_threshold`.
+- [ ] **#426** — curate `expect_files_min` and `expect_clusters` for `flutter` and `fsharp`; unskip `corpus_manifest_contract`.
+- [ ] **#422 / #166** — bring the corpus suite inside a PR gate's resources; re-derive `corpus/flutter.json`'s `max_peak_rss_mb` from a fresh measured scan and state the runner bound in the rationale.
 
 ## Assertion instruments
 
@@ -191,22 +258,23 @@ Each of these is a shipped false positive with no fixture that would catch it. T
 
 ## Skipped while the follow-ups are in flight — gh #432 / #433 / #434
 
-Eleven accuracy tests remain red against in-flight work — and for #434 that includes shipped behaviour: its four fixtures publish suppressed noise families with the release binary against unchanged fixture bytes, and they move `duplication_percent`, so those skips are not release-safe. They are `#[ignore]`d under `[TEST-SELECTION-SKIP]` — each reason cites its issue number below — so the release gate runs green while the work lands. Each skip ends by deleting the attribute **and** its `CURATED_SKIPS` row in `crates/deslop/tests/skip_policy_contract.rs`; the assertions themselves are untouched.
+Twelve accuracy tests remain red against in-flight work — and for #434 that includes shipped behaviour: its four fixtures publish suppressed noise families with the release binary against unchanged fixture bytes, and they move `duplication_percent`, so those skips are not release-safe. They are `#[ignore]`d under `[TEST-SELECTION-SKIP]` — each reason cites its issue number below — so the release gate runs green while the work lands. Each skip ends by deleting the attribute **and** its `CURATED_SKIPS` row in `crates/deslop/tests/skip_policy_contract.rs`; the assertions themselves are untouched.
 
 Eleven skips from this list already ended. The #435 pair closed with the tracing callsite-interest race fix (see item 5). `history_determinism` closed by re-pinning the mixed cluster at the contract value `RENAME_CONSISTENCY_DISCOUNT × shape = 0.9` — its old `fused = 1.0` pin dated from shape saturation, and the failure was in the *cold* control, before any exclusion cycle, never in warm evidence. The `state_file_and_ipc` trio closed by making the staging satisfy [LIVE-CACHE-SEED-KEY]: a real prewarm run writes the key, then only the report bytes are replaced — the seed was being *rejected* as unkeyed, not superseded by a race. `rank_structural_only_policy` ×2 closed with [PIPELINE-CLUSTER-ELECT-CONTAINER] (item 3f). `refactor_merge_refusals` closed by pinning the accurate outcome — operator drift publishes only its verbatim tail — with the residual byte proof re-covered by a comment-drift fixture. `ts_issue_284_produce_then_assert` and `embedding_route_invariance` (#356) went green under the same fixes and are unskipped. `hidden_group_summary_names_the_hider_not_the_users_config` (#434) closed too: the hidden-group summary now names Deslop's own filters instead of a `.deslop.toml` the scan root does not contain, so #434 is down to its four Python fixtures.
 
 - **#432** — operator-only drift rides #408's graded structural overlap to the act-now tier (`operator_drift_is_not_duplication` ×2) and stales the cold golden's ids and node counts (`report_golden`). Ends when the confidence blend discounts operator disagreement.
 - **#433** — warm and mixed passes measure different content evidence than cold on identical corpus state (`incremental_multilang_golden` ×3 — the two golden runs, plus the authored-contract check the refreshed `MULTILANG_CASES` ids now disagree with the still-stale committed golden — and `lsh_only_nearmiss_recall`). Ends when the frontier-leaf population is identical cold and warm; then re-bless the goldens once.
-- **#434** — `[CLONE-NOISE-VERBATIM-SUBGROUP]` now publishes the intra-file byte-identical cores of suppressed noise families while the negative pins assert whole-family suppression (`python_issue_107_chained_dict_assert`, `python_issue_72_monkeypatch`, `python_literal_variation_calls` ×2). Ends when the spec arbitration decides cross-file-hidden versus verbatim-published and the pins are restated against it. **These are shipped false positives** — the worst, `python-issue-71-rest-endpoint-shape`, renders `nearly_identical` at 70.18% duplicated where v0.32.0 asserted zero clusters — and they hold the release.
+- **#434** — the four Python noise pins (`python_issue_107_chained_dict_assert`, `python_issue_72_monkeypatch`, `python_literal_variation_calls` ×2). **These are regressions since v0.32.0 and they block the release**, so they are owned by [`../release-audit.md`](../release-audit.md) §2, measurements and arbitration included. Do not restate them here; the rows above exist only so this file's skip census is complete.
 
-## Release evidence
+## Public documentation
 
-- [ ] Validate the candidate packaged Action through the same download/install/execute path users receive. The conditional `diff-gate` job reporting a skip is not evidence.
-- [ ] **#345 / #363** — the public fusion and report-context docs still describe obsolete CLI defaults and an obsolete ranking formula. `fusion.md`'s `rename_consistency` definition and `pipeline.md`'s `[PIPELINE-CLUSTER-SUBSUME]` ladder agree with the code; `REPORTING-CONTEXT.md` and the site accuracy page have not been re-read since.
+- [ ] **#345** — `REPORTING-CONTEXT.md` and the site accuracy page still describe obsolete CLI defaults and an obsolete ranking formula, and have not been re-read since. `fusion.md`'s `rename_consistency` definition and `pipeline.md`'s `[PIPELINE-CLUSTER-SUBSUME]` ladder do agree with the code. The ranking formula's own spec/code split is #363, above.
 
 ## Repository policy
 
-- [ ] 37 committed source files exceed the 500-line rule, largest `deslop-mcp/tests/cli.rs` (2,891) and `deslop-core/tests/live.rs` (1,473). Counted over committed `.rs/.ts/.tsx/.mjs/.js/.py/.kt/.java`, excluding `node_modules`. Pre-existing and ungated — measured against `origin/main`, exactly one changed file crossed 500 on this branch (`docs/specs/vsix.md`, 496 → 505). Split them or gate the rule.
+- [ ] Correct `skip_policy_contract.rs`'s module doc: 28 registry rows, 12 of them accuracy tests across #432 / #433 / #434 / #369, none for #435.
+
+- [ ] 37 committed source files exceed the 500-line rule, largest `deslop-mcp/tests/cli.rs` (2,902) and `deslop-core/tests/live.rs` (1,473). Counted over committed `.rs/.ts/.tsx/.mjs/.js/.py/.kt/.java`, excluding `node_modules`. Pre-existing and ungated — measured against `origin/main`, exactly one changed file crossed 500 on this branch (`docs/specs/vsix.md`, 496 → 505). Split them or gate the rule.
 
 ## Blocked elsewhere — do not start these here
 
