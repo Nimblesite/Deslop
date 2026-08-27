@@ -320,6 +320,7 @@ This list defines the required outcomes. It deliberately does not prescribe impl
 - [ ] Ensure debug logging does not materially change the performance conclusion of the workload being diagnosed.
 - [x] Ensure logs remain small enough to inspect and retain after a complete Flutter run.
 - [x] Ensure final aggregate events are available even when a stage processes no eligible items. `RescueTally::report_total` always emits, including for an empty population.
+- [x] Ensure every stage that consults the cluster-noise filters reports what it found. The counters are shared across the whole run, so the noise split's own totals are a partial count; `render_report` emits them again as `run_cumulative_after_report_render` once the render pass has finished convicting. Reporting a partial count under a stage name misdiagnosed gh #434 twice — per-stage keying, so each record is self-describing rather than cumulative, is gh #478.
 
 ### Protect correctness while performance changes [PERF-FLUTTER-TODO-ACCURACY]
 

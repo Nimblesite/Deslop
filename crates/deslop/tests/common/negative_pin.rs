@@ -34,8 +34,8 @@ use serde_json::Value;
 
 use super::{
     approx, cluster_bucket, cluster_count, cluster_id, cluster_size, cluster_spanning, clusters,
-    clusters_hidden, expect_cluster_spanning, metric_field, occurrence_files, occurrence_is_hidden,
-    occurrences, signal,
+    clusters_hidden, expect_cluster_spanning, field, metric_field, occurrence_files,
+    occurrence_is_hidden, occurrences, signal,
     signals::{
         signal_dump, ACT_NOW_BUCKETS, ACT_NOW_FUSED, HONEST_SHAPE_ONLY_BUCKETS, IDENTICAL_BUCKET,
     },
@@ -46,6 +46,11 @@ use super::{
 /// The number of visible clusters a fully-suppressed noise fixture may
 /// publish: the control, and nothing else.
 const SOLE_VISIBLE_CLUSTER: usize = 1;
+
+/// The report field that proves the scan opened a file, rather than
+/// skipping it and leaving the family absent for a reason the pin never
+/// intended to assert.
+const FILES_ANALYSED_FIELD: &str = "files_analysed";
 
 /// Asserts the two-sided contract: no visible cluster spans
 /// `family_files`, the suppression is counted **exactly**
@@ -269,6 +274,80 @@ pub(crate) fn assert_only_the_control_files_carry_duplicated_lines(
          a family file here is the suppression leaking into the duplication gate: \
          {lines:#?}",
         lines = visible_cluster_lines(report),
+    );
+}
+
+/// The whole of what a fully-suppressed noise fixture must show, in one
+/// value, so a pin cannot state three quarters of it.
+///
+/// Five suites were each spelling the same four-call block out by hand.
+/// A block copied five times is a block that drifts five ways: the
+/// moment one of them dropped the metric half or the analysed count, it
+/// would still read like a complete pin. Stating the fixture's numbers
+/// as data and the contract once as code makes the contract the thing
+/// that is shared and the numbers the thing that varies.
+#[derive(Debug)]
+pub(crate) struct SuppressedFamily<'fixture> {
+    /// The files holding the scaffolding family. Judged **one at a
+    /// time**: [`cluster_spanning`] matches a cluster containing *all*
+    /// the names it is given, so handing it the whole family at once
+    /// asks only that no single cluster pools every file — a bar a
+    /// family split across two clusters clears while still publishing.
+    pub(crate) family_files: &'fixture [&'fixture str],
+    /// The byte-identical false-negative control staged beside it.
+    pub(crate) control_files: &'fixture [&'fixture str],
+    /// Clusters the render pass must hide — exactly, never at least.
+    pub(crate) expected_hidden: u64,
+    /// Duplicated lines the control accounts for, which is the whole of
+    /// this report's duplication.
+    pub(crate) control_loc: u64,
+    /// Files the scan must have read, so a skipped file cannot pass
+    /// itself off as a suppression.
+    pub(crate) files_analysed: u64,
+}
+
+/// Asserts every half of the contract: the family hidden per file and
+/// counted exactly, the byte-identical control published first, whole
+/// and saturated, the metrics counting that control and nothing else —
+/// down to which file each duplicated line is charged to — and every
+/// file analysed.
+pub(crate) fn assert_suppressed_family(
+    report: &Value,
+    label: &str,
+    fixture: &SuppressedFamily<'_>,
+) -> Result<()> {
+    for family_file in fixture.family_files {
+        assert_family_hidden_with_control(
+            report,
+            label,
+            &[*family_file],
+            fixture.control_files,
+            fixture.expected_hidden,
+        )?;
+    }
+    assert_control_is_the_only_published_cluster(
+        report,
+        label,
+        fixture.control_files,
+        fixture.control_loc,
+    )?;
+    assert_only_the_control_files_carry_duplicated_lines(report, label, fixture.control_files);
+    assert_every_file_was_analysed(report, label, fixture);
+    Ok(())
+}
+
+/// A suppression is only proven when the scan read the files. A file the
+/// walker skipped leaves the family just as absent while proving
+/// nothing, so the analysed count is pinned beside every other half.
+fn assert_every_file_was_analysed(report: &Value, label: &str, fixture: &SuppressedFamily<'_>) {
+    assert_eq!(
+        field(report, FILES_ANALYSED_FIELD).as_u64(),
+        Some(fixture.files_analysed),
+        "{label}: every family file {family:?} and every control file {control:?} must be \
+         analysed — a file the scan never opened leaves the family just as absent while \
+         proving nothing was suppressed: {report:#}",
+        family = fixture.family_files,
+        control = fixture.control_files,
     );
 }
 

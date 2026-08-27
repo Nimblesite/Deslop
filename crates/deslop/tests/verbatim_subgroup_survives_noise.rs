@@ -42,15 +42,7 @@ use std::collections::BTreeSet;
 
 use serde_json::Value;
 
-use crate::common::{
-    negative_pin::{
-        assert_control_is_the_only_published_cluster, assert_family_hidden_with_control,
-        assert_only_the_control_files_carry_duplicated_lines,
-    },
-    signals::*,
-    verbatim_subgroup::*,
-    *,
-};
+use crate::common::{signals::*, verbatim_subgroup::*, *};
 
 /// The node floor the collection-cell family needs: one cell of a list
 /// literal is a smaller window than a four-statement run.
@@ -62,8 +54,14 @@ const CONST_COPY: [&str; 2] = ["retry_defaults.py", "retry_defaults_copy.py"];
 /// The stranger whose only relation to [`CONST_COPY`] is its shape.
 const CONST_STRANGER: &str = "theme_tokens.py";
 
-/// The single file holding one list literal whose first two cells are
-/// byte-identical and whose third is not.
+/// The corpus holding one list literal whose first two cells are
+/// byte-identical and whose third is not. It nests one level down so
+/// the control-clone pin can scan the directory above it and read the
+/// very same file — a second copy of these bytes is what turned two
+/// pins over one literal into two pins asserting opposite things
+/// (gh #462).
+const CELL_CASE: &str = "collection-cells/cells";
+/// The single file holding that literal.
 const CELL_FILE: &str = "ledger_rows.py";
 /// The 1-based lines of the two identical cells, in file order.
 const CELL_COPY_LINES: [(u64, u64); 2] = [(2, 2), (3, 3)];
@@ -153,7 +151,7 @@ fn a_copied_call_run_survives_a_literal_varying_run_in_its_cluster() -> Result<(
 // their exact lines, and the differing cell must not join them.
 #[test]
 fn two_identical_collection_cells_survive_a_differing_sibling_cell() -> Result<()> {
-    let report = render("collection-cells", CELL_MIN_NODES)?;
+    let report = render(CELL_CASE, CELL_MIN_NODES)?;
     let cluster = expect_cluster_spanning(&report, &[CELL_FILE])?;
     let dump = signal_dump(cluster);
     assert_eq!(
@@ -183,88 +181,234 @@ fn two_identical_collection_cells_survive_a_differing_sibling_cell() -> Result<(
         lines = visible_cluster_lines(&report),
     );
     assert_eq!(
-        visible_duplicated_lines(&report)
-            .values()
-            .flatten()
-            .copied()
-            .collect::<BTreeSet<u64>>(),
-        CELL_COPY_LINES
-            .iter()
-            .map(|(start, _)| *start)
-            .collect::<BTreeSet<u64>>(),
+        duplicated_line_numbers(&report),
+        start_lines(&CELL_COPY_LINES),
         "exactly the two copied cell lines are duplicated: {lines:#?}",
         lines = visible_cluster_lines(&report),
     );
     Ok(())
 }
 
-/// [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] The one file holding a
-/// genuinely byte-identical pair of collection cells inside a component
-/// the sibling-cell filter suppresses.
-const PRICE_FILE: [&str; 1] = ["ledger_rows.py"];
-/// The cross-file byte-identical copy staged in the same run. Without
-/// it, "the pair stayed hidden" is a bar a blind detector clears.
-const PRICE_CONTROL: [&str; 2] = ["control_clone_a.py", "control_clone_b.py"];
-/// Components suppressed here: the one collection-cell component.
-const PRICE_HIDDEN: u64 = 1;
-/// Duplicated lines the control accounts for: eight lines, twice.
-const PRICE_CONTROL_LOC: u64 = 16;
-/// The cell file and both control files.
-const PRICE_FILES_ANALYSED: u64 = 3;
-const PRICE_CASE: &str = "collection-cells-price";
-const PRICE_LABEL: &str = "[CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] intra-file verbatim pair";
+/// [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL] The same
+/// literal with its differing cell removed, so every cell is the copy.
+/// No member differs, the sibling-cell filter never fires, and the copy
+/// is reported — the baseline the contested corpus must not fall below.
+const MONOTONIC_CASE: &str = "collection-cells-monotonic";
+/// The 1-based lines of the three identical cells, in file order.
+const MONOTONIC_COPY_LINES: [(u64, u64); 3] = [(2, 2), (3, 3), (4, 4)];
+/// Nothing is suppressed in either collection-cell corpus.
+const NOTHING_HIDDEN: u64 = 0;
 
-// [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] The price the arbitration
-// accepts, stated as a contract instead of an absence.
+/// The corpus holding the copied cells *and* a cross-file control
+/// clone. It is the `cells/` directory the survival pin scans, read one
+/// level up — one `ledger_rows.py` on disk, never a second copy of it.
+const CONTROL_CASE: &str = "collection-cells";
+/// The cross-file byte-identical copy staged beside the cells.
+const CONTROL_COPY: [&str; 2] = ["control_clone_a.py", "control_clone_b.py"];
+/// Lines of `settle_ledger` in each of the two control files.
+const CONTROL_LOC_PER_FILE: u64 = 8;
+/// Duplicated lines the copied cells contribute: one line each.
+const CELL_LOC: u64 = 2;
+/// The cell file and both control files.
+const CONTROL_FILES_ANALYSED: u64 = 3;
+/// The control clone and the copied cells — and nothing else.
+const CONTROL_CLUSTERS: usize = 2;
+const CONTROL_LABEL: &str =
+    "[CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL] cells beside the control";
+
+/// Every 1-based line the visible clusters mark duplicated, in every
+/// file, as one set.
+fn duplicated_line_numbers(report: &Value) -> BTreeSet<u64> {
+    visible_duplicated_lines(report)
+        .values()
+        .flatten()
+        .copied()
+        .collect()
+}
+
+/// The 1-based start line of each range in `ranges`.
+fn start_lines(ranges: &[(u64, u64)]) -> BTreeSet<u64> {
+    ranges.iter().map(|(start, _)| *start).collect()
+}
+
+// [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL] The sharpest
+// statement of gh #462, as an A/B over one collection literal.
 //
-// `noise.md` says what this pass deliberately gives up: "a genuine
-// intra-file byte-identical copy sitting inside a component the filters
-// suppressed stays hidden; that is the price of the idiom proof, paid
-// once, visibly, in the pins". Nowhere was it visible. The four gh #434
-// noise pins cannot pay it — every member of their families varies in
-// its literals by construction, so none of them stages a byte-identical
-// pair at all, and "the whole family was suppressed" would hold
-// identically if the price did not exist.
+// A: every cell holds the same bytes. No member differs, so the
+//    sibling-cell filter's own verbatim hatch keeps it quiet and the
+//    copy is reported — three occurrences, `identical`, nothing hidden.
+// B: one *differing* cell is added. That cell is the only change, and
+//    it is precisely the member the filter exists to suppress.
 //
-// `ledger_rows.py` does stage one: cells 2 and 3 are byte-identical and
-// cell 4 is not. Byte-identity across files is proof of copying —
-// independently authored code does not coincide byte for byte.
-// Byte-identity inside one file is proof of the *idiom* the filter just
-// recognised, so the pair takes the suppression with its component. This
-// fails if the hatch ever re-opens for an intra-file family, and it
-// fails just as hard if the cross-file copy in the same run stops being
-// reported.
+// Adding it must not delete the copy A reported. The cross-file
+// arbitration did exactly that: B published nothing at all, so a corpus
+// lost a finding by gaining a line that was never part of it. Detection
+// has to be monotone in the noise around a copy — a report that is a
+// function of a duplicate's neighbours rather than of the duplicate
+// cannot be read, because nothing tells the reader which one they got.
 #[test]
-fn an_intra_file_verbatim_pair_inside_a_suppressed_component_stays_hidden() -> Result<()> {
-    let report = render(PRICE_CASE, CELL_MIN_NODES)?;
-    assert_family_hidden_with_control(
-        &report,
-        PRICE_LABEL,
-        &PRICE_FILE,
-        &PRICE_CONTROL,
-        PRICE_HIDDEN,
-    )?;
-    assert_control_is_the_only_published_cluster(
-        &report,
-        PRICE_LABEL,
-        &PRICE_CONTROL,
-        PRICE_CONTROL_LOC,
-    )?;
-    assert_only_the_control_files_carry_duplicated_lines(&report, PRICE_LABEL, &PRICE_CONTROL);
+fn adding_a_differing_sibling_never_deletes_a_visible_copy() -> Result<()> {
+    let alone = render(MONOTONIC_CASE, CELL_MIN_NODES)?;
+    let uncontested = expect_cluster_spanning(&alone, &[CELL_FILE])?;
+    assert_eq!(
+        cluster_bucket(uncontested),
+        IDENTICAL_BUCKET,
+        "every cell is the same bytes — {dump}",
+        dump = signal_dump(uncontested)
+    );
+    assert_eq!(
+        occurrence_ranges(uncontested),
+        MONOTONIC_COPY_LINES.to_vec(),
+        "with no stranger present the copy is all three cells: {lines:#?}",
+        lines = visible_cluster_lines(&alone),
+    );
+    assert_eq!(
+        clusters_hidden(&alone),
+        NOTHING_HIDDEN,
+        "no member differs, so the sibling-cell filter cannot fire and \
+         nothing is suppressed: {alone:#}"
+    );
+
+    let joined = render(CELL_CASE, CELL_MIN_NODES)?;
+    let contested = expect_cluster_spanning(&joined, &[CELL_FILE])?;
+    assert_eq!(
+        cluster_bucket(contested),
+        IDENTICAL_BUCKET,
+        "the copy is still copied byte for byte once the stranger joins \
+         — {dump}",
+        dump = signal_dump(contested)
+    );
+    assert_eq!(
+        occurrence_ranges(contested),
+        CELL_COPY_LINES.to_vec(),
+        "the stranger joined the literal, not the copy: {lines:#?}",
+        lines = visible_cluster_lines(&joined),
+    );
+    assert_eq!(
+        clusters_hidden(&joined),
+        NOTHING_HIDDEN,
+        "the filter fired on the literal and the copy still escaped it, \
+         so no component is left suppressed: {joined:#}"
+    );
+
+    let before = duplicated_line_numbers(&alone);
+    let after = duplicated_line_numbers(&joined);
+    for line in start_lines(&CELL_COPY_LINES) {
+        assert!(
+            before.contains(&line),
+            "line {line} carries the copy and is duplicated with no \
+             stranger present: {before:?}"
+        );
+        assert!(
+            after.contains(&line),
+            "line {line} carries the same copy and must stay duplicated \
+             after the stranger joined — a duplicate deleted by the \
+             arrival of a line that is not part of it (gh #462): {after:?}"
+        );
+    }
+    assert!(
+        !after.contains(&CELL_STRANGER_LINE),
+        "the stranger is still not a duplicate of anything: {after:?}"
+    );
+    Ok(())
+}
+
+// [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL] What this pin
+// used to assert, and why it now asserts the opposite.
+//
+// It was `an_intra_file_verbatim_pair_inside_a_suppressed_component_
+// stays_hidden`, and it paid the price [CLONE-NOISE-VERBATIM-SUBGROUP-
+// CROSS-FILE] named: an intra-file byte-identical family inside a
+// suppressed component stays hidden. On the sibling-cell route that was
+// not a price but a false negative — the same literal with its
+// differing cell removed published the copy happily, so the copy was
+// being deleted by the arrival of a member that was never part of it
+// (gh #462, `adding_a_differing_sibling_never_deletes_a_visible_copy`).
+// The price is still owed, and still paid, on the routes whose families
+// really can span files: `verbatim_subgroup_idiom_price.rs`.
+//
+// This pin's other half survives untouched and is why it stays here. A
+// pin that only counts absences passes just as well when the detector
+// has gone blind, so the copied cells are asserted *beside* a cross-file
+// clone that must stay visible, stay `identical`, and stay ranked first.
+#[test]
+fn the_copied_cells_publish_beside_the_cross_file_control() -> Result<()> {
+    let report = render(CONTROL_CASE, CELL_MIN_NODES)?;
     assert_eq!(
         field(&report, "files_analysed").as_u64(),
-        Some(PRICE_FILES_ANALYSED),
-        "the intra-file pair was analysed and decided *against*, not skipped — a \
-         file the scan never opened proves nothing about the arbitration: {report:#}"
+        Some(CONTROL_FILES_ANALYSED),
+        "{CONTROL_LABEL}: the cells and both controls were all analysed — \
+         a file the scan never opened proves nothing: {report:#}"
     );
-    for file in PRICE_FILE {
+    assert_eq!(
+        clusters_hidden(&report),
+        NOTHING_HIDDEN,
+        "{CONTROL_LABEL}: the sibling-cell filter fired and the copy \
+         escaped it, so no component is left suppressed: {report:#}"
+    );
+    assert_eq!(
+        clusters(&report).len(),
+        CONTROL_CLUSTERS,
+        "{CONTROL_LABEL}: exactly the control clone and the copied cells: \
+         {published:#?}",
+        published = published(&report),
+    );
+
+    let control = expect_cluster_spanning(&report, &CONTROL_COPY)?;
+    assert_eq!(
+        cluster_bucket(control),
+        IDENTICAL_BUCKET,
+        "{CONTROL_LABEL}: the control is a byte-for-byte paste — {dump}",
+        dump = signal_dump(control)
+    );
+    assert_eq!(
+        clusters(&report).first().map(cluster_id),
+        Some(cluster_id(control)),
+        "{CONTROL_LABEL}: the control is sixteen lines of copied logic and \
+         the cells are two — the control ranks first ([RANK-SCORE]): \
+         {published:#?}",
+        published = published(&report),
+    );
+
+    let cells = expect_cluster_spanning(&report, &[CELL_FILE])?;
+    assert_eq!(
+        cluster_bucket(cells),
+        IDENTICAL_BUCKET,
+        "{CONTROL_LABEL}: the two cells are byte-identical — {dump}",
+        dump = signal_dump(cells)
+    );
+    assert_eq!(
+        occurrence_ranges(cells),
+        CELL_COPY_LINES.to_vec(),
+        "{CONTROL_LABEL}: the copy is the two cells on lines \
+         {CELL_COPY_LINES:?}: {lines:#?}",
+        lines = visible_cluster_lines(&report),
+    );
+
+    for file in CONTROL_COPY {
         assert_eq!(
             duplicated_loc_for(&report, file),
-            0,
-            "{file}: the price is that this pair earns nothing — a copy the report \
-             will not show may not reach the duplication gate either: {lines:#?}",
+            CONTROL_LOC_PER_FILE,
+            "{CONTROL_LABEL}: {file} keeps every one of its copied lines: \
+             {lines:#?}",
             lines = visible_cluster_lines(&report),
         );
     }
+    assert_eq!(
+        duplicated_loc_for(&report, CELL_FILE),
+        CELL_LOC,
+        "{CONTROL_LABEL}: a copy the report shows also reaches the \
+         duplication gate — the two cell lines count: {lines:#?}",
+        lines = visible_cluster_lines(&report),
+    );
+    assert_eq!(
+        visible_duplicated_loc(&report),
+        CONTROL_LOC_PER_FILE
+            .saturating_mul(2)
+            .saturating_add(CELL_LOC),
+        "{CONTROL_LABEL}: the corpus duplicates the control twice over and \
+         the cell once: {published:#?}",
+        published = published(&report),
+    );
     Ok(())
 }

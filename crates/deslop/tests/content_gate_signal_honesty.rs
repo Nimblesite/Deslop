@@ -37,7 +37,10 @@
 
 use serde_json::Value;
 
-use deslop_core::buckets::{RENAME_CONSISTENCY_DISCOUNT, STRUCTURAL_SATURATION_FLOOR};
+use deslop_core::buckets::{
+    CONTENT_SUPPORT_FLOOR, RENAME_CONSISTENCY_DISCOUNT, SATURATING_TOKEN_FLOOR,
+    STRUCTURAL_SATURATION_FLOOR,
+};
 
 use crate::common::{signals::*, *};
 
@@ -177,4 +180,128 @@ fn a_digest_equal_pair_keeps_its_saturated_signals() -> Result<()> {
     }
     assert_signals_reproduce_fused(control, "byte-identical control");
     Ok(())
+}
+
+/// The pair that reproduces gh #460: two unrelated tree-sitter field
+/// accessors — different node kind, different field, different body —
+/// whose only shared authored logic is the grammar-mandated accessor
+/// idiom. They measure `structural = 0.82`, `token_jaccard = 0.73`, so
+/// neither axis saturates and [FUSION-CONTENT-GATE] never runs on them.
+const ACCESSOR_PAIR: [&str; 2] = ["accessor_argument.rs", "accessor_assignment.rs"];
+
+/// The byte-identical control in the same fixture: both axes saturate,
+/// the gate runs, and `agreement = 1.00` genuinely corroborates.
+const SATURATED_CONTROL_PAIR: [&str; 2] = ["control_alpha.rs", "control_beta.rs"];
+
+/// The clause `render::signals::corroborated_verdict` emits. It tells
+/// the reader the measured content evidence was weighed against the
+/// shape reading and left it standing.
+const CORROBORATED_CLAUSE: &str = "the content evidence did not discount that";
+
+/// Renders the unsaturated-gate fixture once per assertion below. Both
+/// of its pairs are single function bodies, so they cluster at the same
+/// [`MIN_NODES`] floor the ledger corpus uses.
+fn render_unsaturated() -> Result<Value> {
+    run_report(&fixture("content-gate-unsaturated"), MIN_NODES)
+}
+
+// [FUSION-CONTENT-GATE] gh #460 — the report may not tell a reader that
+// content evidence corroborated a match the gate never consulted.
+//
+// `buckets::routing::route_shape_identical` returns before the gate
+// whenever `has_saturating_shape_evidence` is false, and
+// `buckets::gate::content_gated_signals` leaves `fused` untouched on the
+// same condition. So for every cluster below saturation `fused == shape`
+// by construction, and `render::signals::content_evidence_verdict` —
+// which sees only the signal triple and branches on `fused + eps >=
+// shape` — can reach no branch but `corroborated_verdict`. It publishes
+// "the content evidence did not discount that" for a cluster whose
+// evidence was measured at 0.31 and then discarded, which is the single
+// strongest available disproof of the match rendered to the reader as
+// corroboration.
+//
+// Measured on this repo's own tree (2026-08-27, 1316 visible clusters):
+// 637 of 637 non-saturated clusters carry this clause, and 637 of 637
+// render `fused == shape`. The branch is unreachable, not merely rare.
+#[test]
+fn a_gate_skipped_cluster_is_not_told_its_content_evidence_agreed() -> Result<()> {
+    let report = render_unsaturated()?;
+    let accessor = expect_cluster_spanning(&report, &ACCESSOR_PAIR)?;
+    assert!(
+        ACT_NOW_BUCKETS.contains(&cluster_bucket(accessor)),
+        "the accessor pair must reach an act-now bucket for its verdict to be \
+         the sentence a reader acts on — it routed {bucket}: {report:#}",
+        bucket = cluster_bucket(accessor),
+    );
+    let structural = signal(accessor, "structural");
+    let token_jaccard = signal(accessor, "token_jaccard");
+    assert!(
+        structural < STRUCTURAL_SATURATION_FLOOR && token_jaccard < SATURATING_TOKEN_FLOOR,
+        "the accessor pair must sit below both saturation floors, which is what \
+         scopes [FUSION-CONTENT-GATE] out of it — it measured \
+         structural={structural}, token_jaccard={token_jaccard}: {accessor:#}"
+    );
+    let support = signal(accessor, "agreement").max(signal(accessor, "rename_consistency"));
+    assert!(
+        support < CONTENT_SUPPORT_FLOOR,
+        "the accessor pair's content evidence must be measured and low for the \
+         verdict to be making a false claim about it — support={support}: \
+         {accessor:#}"
+    );
+    let verdict = cluster_verdict(accessor);
+    assert!(
+        !verdict.contains(CORROBORATED_CLAUSE),
+        "the gate never ran on this cluster (structural={structural} and \
+         token_jaccard={token_jaccard} are both below saturation), so its \
+         measured content evidence — support={support} — was discarded rather \
+         than weighed. Telling the reader it `did not discount` the shape \
+         renders the disproof as corroboration: {verdict}"
+    );
+    Ok(())
+}
+
+// The other half of the contract, asserted in the same run so honesty
+// for the gate-skipped population can never be bought by deleting the
+// sentence everywhere. The byte-identical control saturates both axes,
+// the gate does run on it, and `agreement = 1.00` is a real corroboration
+// the reader is entitled to read.
+#[test]
+fn a_gated_cluster_still_reports_the_evidence_that_corroborated_it() -> Result<()> {
+    let report = render_unsaturated()?;
+    let control = expect_cluster_spanning(&report, &SATURATED_CONTROL_PAIR)?;
+    assert_eq!(
+        cluster_bucket(control),
+        IDENTICAL_BUCKET,
+        "the byte-identical control must stay identical, otherwise the run \
+         proves nothing about the population the gate does serve: {report:#}"
+    );
+    let agreement = signal(control, "agreement");
+    assert!(
+        approx(agreement, SATURATED),
+        "the control's copies are byte-identical, so every collapsed position \
+         agrees: agreement={agreement}: {control:#}"
+    );
+    let control_verdict = cluster_verdict(control);
+    assert!(
+        control_verdict.contains(CORROBORATED_CLAUSE),
+        "the gate ran here and the evidence did corroborate, so the reader must \
+         still be told so: {control_verdict}"
+    );
+    let accessor_verdict = cluster_verdict(expect_cluster_spanning(&report, &ACCESSOR_PAIR)?);
+    assert_ne!(
+        control_verdict, accessor_verdict,
+        "one cluster agrees on 1.00 of its content and the other on 0.31; a \
+         report that says the same sentence about both has told the reader \
+         nothing: {report:#}"
+    );
+    Ok(())
+}
+
+/// A cluster's rendered `evidence_verdict`, the sentence every surface
+/// quotes verbatim ([FUSION-CONTENT-GATE]).
+fn cluster_verdict(cluster: &Value) -> String {
+    field(cluster, "evidence_verdict")
+        .as_str()
+        .unwrap_or_default()
+        .to_owned()
 }

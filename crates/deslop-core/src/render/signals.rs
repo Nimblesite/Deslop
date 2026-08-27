@@ -158,9 +158,9 @@ fn format_signal(value: f64) -> String {
 }
 
 /// Plain-English reading of the shape score against the measured
-/// content evidence ([FUSION-CONTENT-GATE], #344), for readers who have
-/// the numbers in front of them and no way to tell a renamed copy from
-/// boilerplate.
+/// content evidence ([FUSION-CONTENT-GATE-VERDICT], #344, gh #460), for
+/// readers who have the numbers in front of them and no way to tell a
+/// renamed copy from boilerplate.
 ///
 /// Grounded only in the figures a surface already renders: it explains
 /// the gap between the shape match and the fused confidence, and never
@@ -169,11 +169,44 @@ fn format_signal(value: f64) -> String {
 /// here, and carried on the wire as `evidence_verdict`, so the VS Code
 /// panel, the `JetBrains` panel and any future surface quote the same
 /// sentence rather than each growing its own verdict engine.
+///
+/// **Which reading applies turns on whether the gate ran at all.**
+/// [FUSION-CONTENT-GATE] is scoped to shape-saturating clusters:
+/// `buckets::routing::route_shape_identical` returns before the gate,
+/// and `buckets::gate::content_gated_signals` leaves `fused` untouched,
+/// whenever [`crate::buckets::has_saturating_shape_evidence`] is false.
+/// Below saturation `fused == shape` **by construction**, so
+/// `fused + RENDERED_EPSILON >= shape` is unconditionally true there and
+/// [`corroborated_verdict`] was the only reachable reading — 637 of 637
+/// non-saturated clusters on this repo's own tree (2026-08-27, 1316
+/// visible clusters), every one of them told that its content evidence
+/// had been weighed and had left the shape standing, when the evidence
+/// was in fact measured, found low, and never consulted. The gh #460
+/// accessor pair is the shape of the harm: `agreement = 0.31`,
+/// `rename_consistency = 0.00` — the strongest available disproof of the
+/// match — published as corroboration of it. That population now reads
+/// [`unweighed_verdict`], which says what actually happened.
+///
+/// The gate's own predicate decides, never a saturation test written a
+/// second time here, so the sentence and the gate cannot disagree about
+/// whether the gate ran. That predicate is a pure function of the
+/// rendered triple, which is what lets the render path and the
+/// `--from-report` replay path ([`crate::report_restamp`]) reach the
+/// same reading from the same cluster.
+///
+/// **Pinned by**
+/// `deslop::content_gate_signal_honesty::a_gate_skipped_cluster_is_not_told_its_content_evidence_agreed`,
+/// with
+/// `a_gated_cluster_still_reports_the_evidence_that_corroborated_it` as
+/// the control that keeps the saturated population's verdict honest.
 #[must_use]
 pub fn content_evidence_verdict(signals: ReportSignals) -> String {
     let shape = signals.shape_score();
     if signals.embedding_cos > shape && signals.embedding_cos + RENDERED_EPSILON >= signals.fused {
         return semantic_verdict(signals, shape);
+    }
+    if !crate::buckets::has_saturating_shape_evidence(signals) {
+        return unweighed_verdict(signals, shape);
     }
     if signals.fused + RENDERED_EPSILON >= shape {
         return corroborated_verdict(signals, shape);
@@ -183,6 +216,34 @@ pub fn content_evidence_verdict(signals: ReportSignals) -> String {
     } else {
         boilerplate_verdict(signals, shape)
     }
+}
+
+/// The shape never saturated, so [FUSION-CONTENT-GATE] was scoped out
+/// and the confidence rests on shape alone
+/// ([FUSION-CONTENT-GATE-VERDICT], gh #460).
+///
+/// The measured figures are still shown — they are the only content
+/// evidence there is, and withholding them would leave the reader a
+/// confidence they cannot interrogate — but named as unused, never
+/// dressed up as support. Nor as disproof: below a saturated shape the
+/// two locations are not aligned position for position, which is the
+/// alignment both content populations assume, so a low reading here is
+/// no more reliable against the match than a high one would be for it.
+fn unweighed_verdict(signals: ReportSignals, shape: f64) -> String {
+    format!(
+        "The shapes match at {shape}, and that is the whole of this {fused} confidence: the \
+         content check runs only where the shape match saturates, so it did not run here and \
+         nothing the code actually says was weighed against the shape. The content was still \
+         measured, and these numbers went unused: the locations share {agreement} of their \
+         content and consistent renaming explains {rename} of what differs. Read them as \
+         observations — below an exact shape match the two locations are not lined up \
+         position for position, so a low reading is no more proof against this match than a \
+         high one would be for it.",
+        shape = format_signal(shape),
+        fused = format_signal(signals.fused),
+        agreement = format_signal(signals.agreement),
+        rename = format_signal(signals.rename_consistency),
+    )
 }
 
 /// The embedding pass, not the shape, is what produced this confidence.
@@ -328,6 +389,34 @@ mod tests {
              model, which read these as the same behavior written two ways. The content \
              evidence measures the code itself, not the behavior: shared content 0.05, \
              renaming 0.00."
+        );
+
+        // [FUSION-CONTENT-GATE-VERDICT] gh #460 — the accessor pair's
+        // measured triple. Neither axis saturates, so the gate never ran
+        // on it and its content evidence never entered the confidence.
+        let gate_skipped = signals(0.82, 0.73, 0.0, 0.82, 0.31, 0.0, 0.0);
+        let skipped_verdict = content_evidence_verdict(gate_skipped);
+        assert_eq!(
+            skipped_verdict,
+            "The shapes match at 0.82, and that is the whole of this 0.82 confidence: the \
+             content check runs only where the shape match saturates, so it did not run here \
+             and nothing the code actually says was weighed against the shape. The content \
+             was still measured, and these numbers went unused: the locations share 0.31 of \
+             their content and consistent renaming explains 0.00 of what differs. Read them \
+             as observations — below an exact shape match the two locations are not lined up \
+             position for position, so a low reading is no more proof against this match \
+             than a high one would be for it."
+        );
+        assert!(
+            !skipped_verdict.contains("did not discount"),
+            "the gate never ran on this cluster, so its evidence cannot be said to have \
+             declined to discount anything: {skipped_verdict}"
+        );
+        assert_ne!(
+            skipped_verdict,
+            content_evidence_verdict(verbatim),
+            "a cluster whose evidence was weighed and one whose evidence was skipped must \
+             not read the same"
         );
 
         assert_ne!(

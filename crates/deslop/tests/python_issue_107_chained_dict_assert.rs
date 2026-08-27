@@ -23,10 +23,7 @@
 //! compares exact source bytes, and this pin is green by default.
 
 use crate::common::{
-    negative_pin::{
-        assert_control_is_the_only_published_cluster, assert_family_hidden_with_control,
-        assert_only_the_control_files_carry_duplicated_lines,
-    },
+    negative_pin::{assert_suppressed_family, SuppressedFamily},
     *,
 };
 
@@ -58,6 +55,18 @@ const MIN_NODES: u32 = 4;
 /// family stopped producing candidates.
 const EXPECTED_HIDDEN: u64 = 4;
 
+/// Every half of the contract this fixture is held to, as data: the
+/// family judged file by file, the control that must survive it, and the
+/// three counts the report must show. Stating it once keeps a pin from
+/// quietly asserting less than its neighbours.
+const PIN: SuppressedFamily<'static> = SuppressedFamily {
+    family_files: &FAMILY,
+    control_files: &CONTROL,
+    expected_hidden: EXPECTED_HIDDEN,
+    control_loc: CONTROL_LOC,
+    files_analysed: FILES_ANALYSED,
+};
+
 // [CLONE-NOISE-PY-DICT-ASSERT] gh #107, gh #103 class 2.
 #[test]
 fn chained_dict_assertions_are_suppressed_while_a_real_clone_survives() -> Result<()> {
@@ -72,16 +81,5 @@ fn chained_dict_assertions_are_suppressed_while_a_real_clone_survives() -> Resul
         "chained `assert X[k1][k2]` assertions across unrelated test files \
          must not surface as duplicates: {offenders:#?}"
     );
-    for module in FAMILY {
-        assert_family_hidden_with_control(&report, LABEL, &[module], &CONTROL, EXPECTED_HIDDEN)?;
-    }
-    assert_control_is_the_only_published_cluster(&report, LABEL, &CONTROL, CONTROL_LOC)?;
-    assert_only_the_control_files_carry_duplicated_lines(&report, LABEL, &CONTROL);
-    assert_eq!(
-        field(&report, "files_analysed").as_u64(),
-        Some(FILES_ANALYSED),
-        "all three pytest modules and both control files were analysed, so the \
-         suppression was exercised rather than the files skipped: {report:#}"
-    );
-    Ok(())
+    assert_suppressed_family(&report, LABEL, &PIN)
 }

@@ -23,7 +23,8 @@ exists to find — disappeared from the report entirely. Nothing about `C` has t
 unusual: it only has to normalise to the same shape, which is precisely what every
 noise family is made of. Three routes were measured (`[CLONE-NOISE-CONSTANT-TABLE]`,
 `[CLONE-NOISE-LITERAL-VARIATION-CALLS]`, `[CLONE-NOISE-PY-COLLECTION-SIBLING-CELLS]`),
-and the rule is shared by every filter that carries the hatch.
+and the rule is shared by every filter that carries the hatch. All three stay open:
+the cross-file arbitration below narrowed the hatch and must not close any of them.
 
 Loosening the predicate alone would trade the false negative for a false positive:
 keeping the cluster publishes `C` as an occurrence of a copy it is not part of. The
@@ -40,29 +41,61 @@ consistently-renamed three-way clone stays one three-way clone. Implemented in
 `cluster_filters/verbatim_subgroup.rs`, pinned by
 `crates/deslop/tests/verbatim_subgroup_survives_noise.rs`.
 
-#### [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] A verbatim family must be a copy, and a copy spans files
+#### [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] A verbatim family must be a copy, and usually a copy spans files
 
 Two failure modes were measured against this pass (gh #434). On `python-issue-72`
 the filter fired and an **intra-file** byte-identical core of the very family it
 recognised republished as `structural_only` — scaffolding escaping through the
 hatch built to protect copies, and counting its 15 lines in `duplicated_loc`.
 The arbitration: **a byte-identical family escapes suppression only when its
-occurrences span at least two files.**
+occurrences span at least two files** — except where the filter that recognised it
+only ever sees one file, which [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]
+below carves out.
 
 Byte-identity across files is proof of copying — independently authored code does
-not coincide byte-for-byte. Byte-identity within one file is proof of the *idiom*
-the filter just recognised: the same `monkeypatch.setenv` tail, the same assertion
-pair against the same fixture, written the same way because the pattern mandates
-it. Within one file the filter's classification is the better evidence, and the
+not coincide byte-for-byte. Byte-identity within one file is usually proof of the
+*idiom* the filter just recognised: the same `monkeypatch.setenv` tail, the same
+assertion pair against the same fixture, written the same way because the pattern
+mandates it. There the filter's classification is the better evidence, and the
 family takes the suppression with its component. The false negative this pass
 exists to close — a proven copy `A`/`A` vanishing when a shape-compatible stranger
 joined its cluster — is cross-file by construction, so it still escapes. What this
 deliberately gives up: a genuine intra-file byte-identical copy sitting inside a
-component the filters suppressed stays hidden. That price must be **paid visibly,
-by a pin that owes it**: an intra-file byte-identical family inside a suppressed
-component, asserted hidden while the fixture's cross-file control clone surfaces.
-No gh #434 fixture holds a byte-identical pair, so that pin does not exist yet —
-owed, not claimed.
+component one of these filters suppressed stays hidden. That price is **paid
+visibly, by a pin that owes it** — `verbatim_subgroup_idiom_price.rs` stages one
+file holding a call run twice over, asserts the copy hidden, and asserts the same
+bytes published the moment they are split across two files.
+
+#### [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL] Filters that only ever see one file are exempt
+
+Asking for a second file is only meaningful when the filter could have found one.
+[CLONE-NOISE-PY-COLLECTION-SIBLING-CELLS] suppresses entries of a *single*
+collection literal, so every family it recognises sits in one file by
+construction. Requiring cross-file spread there is a question with one possible
+answer, and it closed the escape hatch on that route permanently — one of the
+three routes the hatch was built to protect.
+
+What that cost was measured (gh #462). In a list of three entries where the first
+two are byte-identical, the pair published as `identical` when all three entries
+matched, and vanished the moment the third entry was *changed*. Editing an
+unrelated row deleted a duplicate that had nothing to do with it. A report that
+depends on a copy's neighbours rather than on the copy cannot be read, because
+nothing tells the reader which of the two answers they were given.
+
+The rule: **a filter whose members must share one file does not get to demand two.**
+Its byte-identical families escape suppression on byte-identity alone.
+
+This does not weaken the idiom argument anywhere it applies. The reasoning behind
+CROSS-FILE is that a repeated idiom explains repeated bytes better than a paste
+does — true of a `monkeypatch.setenv` tail or a mirrored assertion pair, which the
+pattern mandates be written the same way. A data table's idiom is the opposite: its
+rows are meant to *differ*, and the sibling-cell filter says so itself by only
+firing when at least two entries differ in raw bytes. Two identical rows are not
+that pattern. They are a pasted row, and usually a bug.
+
+Which filter recognised a component therefore decides which question the hatch
+asks of it. The filters whose families can span files are unchanged; only the
+sibling-cell route is exempt.
 
 A family this pass hides contributes nothing to any metric: `duplicated_loc` and
 `duplication_percent` fold visible clusters only, pinned green by
@@ -79,11 +112,11 @@ differ in one byte is not a verbatim family and inherits its component's
 suppression. A pass documented as grouping "by the exact source bytes" must
 publish only pairs that are.
 
-The restated #434 pins carry both directions: the fixture's real cross-file
+The restated #434 pins carry both directions: each fixture's real cross-file
 control clone stays visible and ranked first, while the intra-file cores on
-`python-issue-72` and `python-issue-107` stay hidden; and
-`verbatim_subgroup_survives_noise.rs` must stage its proven copy across files,
-which is the case the hatch exists for.
+`python-issue-72` and `python-issue-107` stay hidden. `verbatim_subgroup_survives_noise.rs`
+stages the third route beside such a control — the copied cells publish, the
+differing cell earns nothing, and the control still leads the report.
 
 ## Language-agnostic filters
 
@@ -200,7 +233,10 @@ smallest enclosing collection literal (dict/list/set/tuple) is the *same
 instance* — same file, same literal node — no member carries a lambda
 (logic inside an element is extractable and keeps clustering), and at least two
 members differ in raw bytes (the standard verbatim escape hatch: a
-byte-identical repeated entry is a real copy and still surfaces). Members of
+byte-identical repeated entry is a real copy and still surfaces — this filter is
+exempt from the cross-file requirement, see
+[CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL], because its members share
+one file by construction). Members of
 *different* literals fall through to the data-table family
 ([CLONE-NOISE-LITERAL-TABLE]). Python is the one language measured; other
 languages fall through unchanged. Pinned by
@@ -251,11 +287,56 @@ a varying call returned (`monkeypatch.setenv("HOST", h)` then
 so it may not block the filter on its own (gh #434, `python-issue-70` /
 `python-issue-71`).
 
-**Two or more call-free statements still block the filter.** Authored
-call-free data handling between the varying calls is exactly the extractable
-logic a real clone shares, which is why `rename_needs_an_anchor` pins the
-precondition and keeps holding unchanged: a Type-2 clone that mixes one varying
-call with its own invariant assertions and data handling must keep publishing.
+**Three or more call-free statements always block the filter, and two block it
+unless they are exactly the literal tautology below.** Authored call-free data
+handling between the varying calls is exactly the extractable logic a real clone
+shares, which is why `rename_needs_an_anchor` pins the precondition and keeps
+holding unchanged: a Type-2 clone that mixes one varying call with its own
+invariant assertions and data handling must keep publishing.
+
+##### [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT-TAUTOLOGY] The literal tautology
+
+A second call-free statement is admitted — only ever the second, and only
+alongside the assertion — when it writes a literal into a local that nothing
+but that assertion reads, and the assertion then checks the local against a
+literal. In full:
+
+```python
+monkeypatch.setenv("FLY_API_TOKEN", "abc")
+monkeypatch.setenv("FLY_APP_NAME", "app")
+explicit_host_id = "fly-1"
+assert explicit_host_id == "fly-1"
+```
+
+Those last two lines test nothing. The value asserted is the value written two
+lines above, in the same range; nothing is computed, nothing is called, and no
+state from outside the range is consulted. It is the scaffolding the lone
+assertion clause already admits, spelled across two lines instead of one, so it
+may not block the filter either (gh #72,
+`python-issue-72-monkeypatch-setenv`).
+
+Each term is exact.
+
+**A literal** is a single string, number, boolean, or `None`, and nothing else.
+An identifier, an attribute, a subscript, an interpolated string, a
+concatenation, an arithmetic expression — none of those qualify, so
+`explicit_host_id = host_prefix + "1"` keeps blocking the filter. Building a
+value is authored data handling, and the tautology clause must never reach it
+(`python-computed-value-not-a-tautology`).
+
+**Nothing but the assertion reads it** means the local's name occurs exactly
+twice across the covered statements: once as the target it is written to, once
+inside the assertion. A local that any other covered statement touches, or that
+nothing reads at all, is not admitted.
+
+**The assertion** is the second of the two statements, in source order — an
+assertion cannot be reading a value written after it. It is judged by the lone
+assertion clause above, with one addition: the tautology's target counts as a
+bound name. Without that addition the example fails its own rule, because
+`explicit_host_id` is bound by the literal rather than by a call.
+
+The pair is admitted whole or not at all: fail any of these terms and both
+statements block the filter, exactly as two call-free statements did before.
 
 The sequence form requires **every** position to vary. A sequence mixing
 varying calls with invariant ones is not payload: the invariant calls are

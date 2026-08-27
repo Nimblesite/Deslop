@@ -93,10 +93,36 @@ fn assigns(line: &str, variable: &str) -> bool {
         })
 }
 
+/// The file's lines with make's backslash continuations joined, so a variable
+/// declared across several physical lines is read as the one logical line make
+/// itself sees. A trailing `\\` must never survive into a value: the corpus
+/// names would carry it as a phantom selector (gh #412's shape, from the
+/// parser's side this time).
+fn logical_lines(makefile: &str) -> Vec<String> {
+    let mut joined = Vec::new();
+    let mut pending: Option<String> = None;
+    for line in makefile.lines() {
+        let (body, continues) = match line.strip_suffix('\\') {
+            Some(without) => (without, true),
+            None => (line, false),
+        };
+        pending = Some(match pending.take() {
+            Some(head) => format!("{head} {body}"),
+            None => body.to_owned(),
+        });
+        if !continues {
+            if let Some(complete) = pending.take() {
+                joined.push(complete);
+            }
+        }
+    }
+    joined
+}
+
 /// The whitespace-separated words a Makefile variable is assigned.
 fn words(makefile: &str, variable: &str) -> Result<Vec<String>> {
-    let line = makefile
-        .lines()
+    let line = logical_lines(makefile)
+        .into_iter()
         .find(|line| assigns(line, variable))
         .ok_or_else(|| {
             anyhow!(

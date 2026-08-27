@@ -37,12 +37,24 @@ pub(super) fn collect_argument_shapes(
 fn arg_shape(node: Node<'_>, source: &[u8], language: &str) -> ArgShape {
     let inner = unwrap_argument(node);
     if let Some(bytes) = string_literal_bytes(inner, source) {
-        return ArgShape::StringLiteral(bytes);
+        return ArgShape::StringLiteral(bytes, is_interpolated(inner));
     }
     if let Some(bytes) = literal_collection_bytes(inner, source, language) {
-        return ArgShape::StringLiteral(bytes);
+        return ArgShape::StringLiteral(bytes, false);
     }
     ArgShape::Other
+}
+
+/// True when the string node embeds an interpolation — a Python
+/// f-string, a JS/TS template substitution — so its text is authored
+/// code choosing data rather than data handed to a parameterisable
+/// family (gh #467).
+fn is_interpolated(node: Node<'_>) -> bool {
+    use crate::ast::named_children;
+
+    named_children(node)
+        .iter()
+        .any(|child| matches!(child.kind(), "interpolation" | "template_substitution"))
 }
 
 /// Raw bytes of an argument that is a **pure literal collection

@@ -44,6 +44,7 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 
 ## Testing — the accuracy enforcement surface
 
+- Organise tests in to logical folders and logical files within those folders. Don't just dump tests in crates/deslop/tests and name the file after the issue name. Group them together logically
 - **Coarse E2E, black-box only.**. Drive the CLI against fixture repos; assert against rendered reports. Never reach into internals.
 - **Many user interactions per test, MANY assertions per user interaction**
 - **Every confirmed false positive or false negative earns a fixture** that would have caught it.

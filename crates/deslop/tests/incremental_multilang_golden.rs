@@ -63,10 +63,6 @@ const DRIFT_HINT: &str = "Ranking, spans, ids and metrics are all user-visible, 
 // [PIPELINE-DETERMINISM] Half one: unchanged. Two cold renders of the
 // mixed corpus must agree with each other and with the committed bytes.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #433 [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE] \
-     docs/plans/fused-score-followups.md — warm and mixed passes measure different content \
-     evidence than cold on identical corpus state, so the committed golden has no stable \
-     value to hold yet. Run via `-- --ignored`."]
 fn cold_multilang_report_matches_committed_golden_byte_for_byte() -> Result<()> {
     let rendered = String::from_utf8(render_cold_multilang()?)?;
     assert_eq!(
@@ -84,10 +80,6 @@ fn cold_multilang_report_matches_committed_golden_byte_for_byte() -> Result<()> 
 // one blessed while a language was silently missing, or while the store
 // was cross-serving trees — fails here even though its bytes match.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #433 [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE] \
-     docs/plans/fused-score-followups.md — the committed golden still holds the pre-gh-430 \
-     ids while the authored contract table holds fresh cold ids; the golden cannot be \
-     blessed until warm evidence matches cold. Run via `-- --ignored`."]
 fn committed_multilang_golden_satisfies_the_authored_contract() -> Result<()> {
     let golden = load_golden(&multilang_golden_path(), BLESS)?;
     assert_multilang_contract(&golden, "committed golden")?;
@@ -379,10 +371,6 @@ fn assert_one_cluster_per_language(golden: &Value) -> Result<()> {
 // committed cold golden field for field, with `cache_stats` the sole
 // permitted difference — and it owes it having rebuilt no signature.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #433 [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE] \
-     docs/plans/fused-score-followups.md — warm and mixed passes measure different content \
-     evidence than cold on identical corpus state, so the committed golden has no stable \
-     value to hold yet. Run via `-- --ignored`."]
 fn fully_warm_multilang_run_reproduces_the_committed_golden() -> Result<()> {
     // Seeding a warm corpus *is* the cold-fills / warm-serves /
     // warm-owes-cold contract over twelve byte-distinct files spanning

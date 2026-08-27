@@ -55,6 +55,12 @@ const EXACT_FLAG = "--exact";
 const LIST_FLAG = "--list";
 const LIST_ENTRY_SUFFIX = ": test";
 
+// The make variable holding the floor on how many tests a corpus run must
+// actually execute, and how the recipe must reach it — through the variable,
+// so the recipe and this gate cannot hold two different numbers.
+const CORPUS_MINIMUM_VARIABLE = "CORPUS_MIN_TESTS";
+const MINIMUM_REFERENCE = `$(${CORPUS_MINIMUM_VARIABLE})`;
+
 // The path separator a corpus test name would carry if the suite were a module
 // of the `suite` binary. It is not one, so a name carrying this resolves to
 // nothing — the shape `CORPUS_TESTS` was written in when gh #412 came back.
@@ -271,6 +277,20 @@ test("[TEST-SELECTION-SKIP] the scheduled slice matches test names exactly", () 
     "`make test-corpus-ci` runs a resource-bounded slice named in CORPUS_TESTS, so it must pass " +
       `${EXACT_FLAG}. Without it libtest matches each name as a substring: renaming a test makes ` +
       "the filter select nothing, and a run that executes zero tests reports green (gh #412).",
+  );
+  // The names below are a pre-flight: they catch the spelling that was wrong
+  // and nothing else. `--exact` selecting nothing is only one way for a corpus
+  // run to execute zero tests, and libtest exits 0 for every one of them, so
+  // the recipe must count what actually ran and fail when the count is short.
+  assert.ok(
+    args.includes(MINIMUM_REFERENCE),
+    "`make test-corpus-ci` must reach the run-count floor through " +
+      `\`${MINIMUM_REFERENCE}\`: a corpus run that executes no test has proved nothing, and ` +
+      "libtest still exits 0 (gh #412)",
+  );
+  assert.ok(
+    Number(variable(CORPUS_MINIMUM_VARIABLE)[0]) >= 1,
+    `${CORPUS_MINIMUM_VARIABLE} must be at least 1, or the floor admits a run over zero tests`,
   );
   // Asked of the binary, not inferred from the name's shape. A prefix check
   // passed every over-qualified `corpus_repos::corpus_tokio_rust` and every

@@ -17,13 +17,13 @@ use deslop_core::{config::ClonePolicy, live::transport::IpcMode};
 use crate::backend::LspEmbeddingConfig;
 
 /// Startup flag setting the analysis worker-thread count.
-const WORKER_THREADS_FLAG: &str = "--worker-threads";
+pub(crate) const WORKER_THREADS_FLAG: &str = "--worker-threads";
 /// Startup flag lowering the analysis threads' scheduling priority.
-const NICE_FLAG: &str = "--nice";
+pub(crate) const NICE_FLAG: &str = "--nice";
 /// Startup flag choosing the IPC transport (stdio or TCP).
-const IPC_TRANSPORT_FLAG: &str = "--ipc-transport";
+pub(crate) const IPC_TRANSPORT_FLAG: &str = "--ipc-transport";
 /// Startup flag restricting ranking to structural evidence.
-const RANKING_STRUCTURAL_ONLY_FLAG: &str = "--ranking-structural-only";
+pub(crate) const RANKING_STRUCTURAL_ONLY_FLAG: &str = "--ranking-structural-only";
 
 /// Fully parsed startup configuration for the LSP app layer.
 #[derive(Debug, Clone)]
@@ -56,6 +56,11 @@ pub enum LspAction {
         /// Exact bytes to write to stdout.
         output: String,
     },
+    /// Print the command-line help and exit successfully ([LSP-CLI-HELP]).
+    Help {
+        /// Exact bytes to write to stdout.
+        output: String,
+    },
     /// Start the LSP server with parsed configuration.
     Serve(LspStartup),
 }
@@ -74,6 +79,11 @@ where
     if let Some(output) = version_contract(&args)? {
         return Ok(LspAction::Version { output });
     }
+    if crate::help::requests_help(&args) {
+        return Ok(LspAction::Help {
+            output: crate::help::help_output(),
+        });
+    }
     Ok(LspAction::Serve(startup_from_args(&args)?))
 }
 
@@ -90,8 +100,8 @@ where
     R: FnOnce(LspStartup) -> Result<ExitCode>,
 {
     match action_from_args(args)? {
-        LspAction::Version { output } => {
-            write_version(&mut stdout, &output).map(|()| ExitCode::SUCCESS)
+        LspAction::Version { output } | LspAction::Help { output } => {
+            write_stdout(&mut stdout, &output).map(|()| ExitCode::SUCCESS)
         }
         LspAction::Serve(startup) => runner(startup),
     }
@@ -164,7 +174,9 @@ where
 
 /// Returns the version-contract output when argv requested it.
 fn version_contract(args: &[String]) -> Result<Option<String>> {
-    if let Some(output) = version_contract_output(args, "deslop-lsp", ComponentKind::Lsp)? {
+    if let Some(output) =
+        version_contract_output(args, crate::help::BINARY_NAME, ComponentKind::Lsp)?
+    {
         return Ok(Some(output));
     }
     Ok(requests_version(args).then(String::new))
@@ -201,7 +213,7 @@ fn parse_workspace_root(args: &[String]) -> Result<PathBuf> {
         .skip(1)
         .find(|arg| !arg.starts_with('-'))
         .map(PathBuf::from)
-        .ok_or_else(|| anyhow!("usage: deslop-lsp <workspace-root>"))
+        .ok_or_else(|| anyhow!("usage: {} <workspace-root>", crate::help::BINARY_NAME))
 }
 
 /// Reads the optional `--worker-threads` value, defaulting to Tokio behavior.
@@ -355,8 +367,8 @@ fn init_tracing() {
         .try_init();
 }
 
-/// Writes exact version-contract bytes to stdout.
-fn write_version<W: Write>(stdout: &mut W, output: &str) -> Result<()> {
+/// Writes exact user-facing bytes — version contract or help — to stdout.
+fn write_stdout<W: Write>(stdout: &mut W, output: &str) -> Result<()> {
     stdout.write_all(output.as_bytes())?;
     Ok(())
 }

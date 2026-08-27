@@ -215,7 +215,9 @@ pub struct ReportInputs<'a, S: BuildHasher> {
 /// cosmetic: the split stage emitted `fired=0` over a 14-member
 /// component and that partial total was twice read as the whole run's,
 /// concluding the filters never examined a cluster they had in fact
-/// examined and declined (gh #434).
+/// examined and declined (gh #434). Keying the counters per stage, so
+/// each record reports its own numbers instead of a running sum, needs
+/// `cluster_filters/` and is tracked in gh #478.
 const NOISE_TOTALS_RUN_STAGE: &str = "run_cumulative_after_report_render";
 
 /// Converts the internal representation into a report ready for

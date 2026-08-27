@@ -25,9 +25,15 @@
 //! consistently-renamed three-way clone stays one three-way clone.
 //!
 //! [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] The hatch protects a
-//! *copy*, and a copy spans files. A byte-identical family confined to
-//! one file is the idiom the filter just recognised, not a paste of it,
-//! so it hides with its component — see [`is_copied_family`].
+//! *copy*, and for most filters a copy spans files. A byte-identical
+//! family confined to one file is the idiom the filter just recognised,
+//! not a paste of it, so it hides with its component.
+//!
+//! [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL] That holds
+//! only where the filter could have seen a second file. A filter whose
+//! members must already share one file is exempt: asking it for
+//! cross-file proof has one possible answer, and it erased real copies.
+//! See [`is_copied_family`].
 //!
 //! [CLONE-NOISE-VERBATIM-SUBGROUP-EXACT-BYTES] "Byte-identical" means
 //! the exact source bytes of a member's range — see
@@ -41,7 +47,7 @@ use super::{
     family::{families_by, restrict},
     is_noise_pattern,
     snippets::ParseCache,
-    spans_multiple_files,
+    spans_multiple_files, NoiseFilter, NoiseStage,
 };
 
 /// Smallest byte-identical family worth keeping: one lone occurrence is
@@ -309,38 +315,46 @@ fn split_one<S: BuildHasher>(
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
 ) -> Option<Vec<FusedCluster>> {
-    let keepable = copied_families(fused, fingerprints, sources)?;
+    let families = splittable_families(fused, fingerprints, sources)?;
     let members = resolved_members(fused, fingerprints)?;
-    if !is_noise_pattern(&members, sources, file_languages, cache) {
-        return None;
-    }
-    Some(
+    let filter = is_noise_pattern(&members, sources, file_languages, cache, NoiseStage::Split)?;
+    let keepable: Vec<&Vec<usize>> = families
+        .iter()
+        .filter(|family| is_copied_family(family, fingerprints, filter))
+        .collect();
+    // No family the hatch protects: the component keeps its own shape and
+    // takes the suppression whole, downstream, exactly as it always did.
+    // Emitting an empty run here would drop it before the report could
+    // count it as hidden.
+    (!keepable.is_empty()).then(|| {
         keepable
             .iter()
             .map(|family| restrict(fused, family))
-            .collect(),
-    )
+            .collect()
+    })
 }
 
-/// The byte-identical families in `fused` the escape hatch protects, or
-/// `None` when no split could change the component — it holds no such
-/// family, or the one it holds already *is* the whole component.
+/// The byte-identical families in `fused` a split could act on, or
+/// `None` when no split could change the component — it holds no family
+/// of two or more, or the one it holds already *is* the whole component.
 ///
 /// Answered from the corpus alone, before any re-parse, so the noise
 /// filters only ever run on a component a split could actually change
-/// ([CLONE-NOISE-REPARSE-CACHE]).
-fn copied_families(
+/// ([CLONE-NOISE-REPARSE-CACHE]). Whether a family is a *copy* is a
+/// second question, asked in [`is_copied_family`] once the filter that
+/// recognised the component is known.
+fn splittable_families(
     fused: &FusedCluster,
     fingerprints: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
 ) -> Option<Vec<Vec<usize>>> {
-    let keepable: Vec<Vec<usize>> = verbatim_families(&fused.members, fingerprints, sources)
+    let families: Vec<Vec<usize>> = verbatim_families(&fused.members, fingerprints, sources)
         .into_iter()
-        .filter(|family| is_copied_family(family, fingerprints))
+        .filter(|family| family.len() >= MIN_FAMILY_MEMBERS)
         .collect();
-    let covered: usize = keepable.iter().map(Vec::len).sum();
-    let already_whole = keepable.len() == 1 && covered == fused.members.len();
-    (!keepable.is_empty() && !already_whole).then_some(keepable)
+    let covered: usize = families.iter().map(Vec::len).sum();
+    let already_whole = families.len() == 1 && covered == fused.members.len();
+    (!families.is_empty() && !already_whole).then_some(families)
 }
 
 /// Every member's fingerprint, or `None` when one of them does not
@@ -360,27 +374,35 @@ fn resolved_members(
 
 /// Whether `family` is the copy the escape hatch exists to protect
 /// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE]): a byte-identical
-/// family of at least two members spanning at least two files.
+/// family of at least two members which, for most filters, must also
+/// span at least two files.
 ///
 /// Byte-identity **across files** is proof of copying — independently
 /// authored code does not coincide byte for byte. Byte-identity
-/// **within one file** is proof of the idiom the noise filter just
-/// recognised: the same `monkeypatch.setenv` tail, the same assertion
-/// pair against the same fixture, written that way because the pattern
-/// mandates it. There the filter's classification is the better
-/// evidence, so the family takes the suppression with its component
-/// rather than republishing as a cluster of scaffolding. The false
-/// negative this pass exists to close — a proven copy vanishing because
-/// a shape-compatible stranger joined its cluster — is cross-file by
-/// construction, so it still escapes.
-fn is_copied_family(family: &[usize], fingerprints: &[Fingerprint]) -> bool {
+/// **within one file** is usually proof of the idiom the noise filter
+/// just recognised: the same `monkeypatch.setenv` tail, the same
+/// assertion pair against the same fixture, written that way because the
+/// pattern mandates it. There the filter's classification is the better
+/// evidence, so the family takes the suppression with its component.
+///
+/// That reasoning needs the filter to have had a *choice*. A filter
+/// whose members must already share one file cannot offer cross-file
+/// evidence either way, and demanding it deleted real copies: two
+/// byte-identical cells of one list literal published when they were the
+/// whole literal, and vanished the moment a third, *differing* cell
+/// joined — a duplicate erased by the arrival of a line that was never
+/// part of it ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL],
+/// gh #462). Which filter fired therefore decides which question is
+/// asked; see [`NoiseFilter::demands_cross_file_copy`].
+fn is_copied_family(family: &[usize], fingerprints: &[Fingerprint], filter: NoiseFilter) -> bool {
     family.len() >= MIN_FAMILY_MEMBERS
-        && spans_multiple_files(
-            family
-                .iter()
-                .filter_map(|index| fingerprints.get(*index))
-                .map(|member| member.file_id),
-        )
+        && (!filter.demands_cross_file_copy()
+            || spans_multiple_files(
+                family
+                    .iter()
+                    .filter_map(|index| fingerprints.get(*index))
+                    .map(|member| member.file_id),
+            ))
 }
 
 /// Groups the component's members by the exact source bytes their

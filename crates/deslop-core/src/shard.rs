@@ -65,10 +65,6 @@ type Sharded<R, S> = (Vec<R>, Vec<S>);
 ///
 /// `init` builds one state per worker, reused across every chunk that
 /// worker claims and returned for the caller to merge.
-///
-/// A panicking worker is re-raised on the caller rather than dropped: a
-/// swallowed join would silently omit that chunk's items while the run
-/// still reported itself complete.
 pub(crate) fn map_chunks<C, R, S>(
     chunks: impl Iterator<Item = C> + Send,
     workers: usize,
@@ -81,11 +77,37 @@ where
     S: Send,
 {
     let queue = Mutex::new(chunks.enumerate());
+    let (mut claimed, states) = join_workers(&queue, workers, &init, &work);
+    claimed.sort_by_key(|(position, _)| *position);
+    (
+        claimed.into_iter().map(|(_, result)| result).collect(),
+        states,
+    )
+}
+
+/// Spawns `workers` drains over `queue` and joins them, collecting every
+/// worker's positioned chunk results and its final state. The results
+/// come back in completion order; [`map_chunks`] restores input order.
+///
+/// A panicking worker is re-raised on the caller rather than dropped: a
+/// swallowed join would silently omit that chunk's items while the run
+/// still reported itself complete.
+fn join_workers<C, R, S>(
+    queue: &Mutex<impl Iterator<Item = (usize, C)> + Send>,
+    workers: usize,
+    init: &(impl Fn() -> S + Sync),
+    work: &(impl Fn(&mut S, C) -> R + Sync),
+) -> (Vec<(usize, R)>, Vec<S>)
+where
+    C: Send,
+    R: Send,
+    S: Send,
+{
     let mut claimed: Vec<(usize, R)> = Vec::new();
     let mut states: Vec<S> = Vec::with_capacity(workers);
     std::thread::scope(|scope| {
         let handles: Vec<_> = (0..workers.max(1))
-            .map(|_| scope.spawn(|| drain(&queue, &init, &work)))
+            .map(|_| scope.spawn(|| drain(queue, init, work)))
             .collect();
         for handle in handles {
             match handle.join() {
@@ -97,11 +119,7 @@ where
             }
         }
     });
-    claimed.sort_by_key(|(position, _)| *position);
-    (
-        claimed.into_iter().map(|(_, result)| result).collect(),
-        states,
-    )
+    (claimed, states)
 }
 
 /// One worker's loop: build its state, then claim and run chunks until

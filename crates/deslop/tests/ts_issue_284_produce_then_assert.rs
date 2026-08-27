@@ -31,10 +31,7 @@
 use anyhow::Result;
 
 use crate::common::{
-    negative_pin::{
-        assert_control_is_the_only_published_cluster, assert_family_hidden_with_control,
-        assert_only_the_control_files_carry_duplicated_lines,
-    },
+    negative_pin::{assert_suppressed_family, SuppressedFamily},
     *,
 };
 
@@ -66,20 +63,21 @@ const MIN_NODES: u32 = 8;
 /// this fixture never staged as noise.
 const EXPECTED_HIDDEN: u64 = 3;
 
+/// Every half of the contract this fixture is held to, as data: the
+/// family judged file by file, the control that must survive it, and the
+/// three counts the report must show. Stating it once keeps a pin from
+/// quietly asserting less than its neighbours.
+const PIN: SuppressedFamily<'static> = SuppressedFamily {
+    family_files: &FAMILY,
+    control_files: &CONTROL,
+    expected_hidden: EXPECTED_HIDDEN,
+    control_loc: CONTROL_LOC,
+    files_analysed: FILES_ANALYSED,
+};
+
 // [CLONE-NOISE-LITERAL-VARIATION-CALLS] gh #284.
 #[test]
 fn produce_then_assert_scenarios_are_suppressed_while_a_real_clone_survives() -> Result<()> {
     let report = run_report(&fixture(FIXTURE), MIN_NODES)?;
-    for scenarios in FAMILY {
-        assert_family_hidden_with_control(&report, LABEL, &[scenarios], &CONTROL, EXPECTED_HIDDEN)?;
-    }
-    assert_control_is_the_only_published_cluster(&report, LABEL, &CONTROL, CONTROL_LOC)?;
-    assert_only_the_control_files_carry_duplicated_lines(&report, LABEL, &CONTROL);
-    assert_eq!(
-        field(&report, "files_analysed").as_u64(),
-        Some(FILES_ANALYSED),
-        "{LABEL}: both scenario files and both control files were analysed, so the \
-         suppression was decided rather than the files skipped: {report:#}"
-    );
-    Ok(())
+    assert_suppressed_family(&report, LABEL, &PIN)
 }

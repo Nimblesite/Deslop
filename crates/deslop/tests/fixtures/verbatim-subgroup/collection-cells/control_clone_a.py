@@ -1,8 +1,8 @@
 # False-negative control for this fixture. `settle_ledger` below is
-# copy-pasted byte-for-byte into `control_clone_b.py`. Whatever hides
-# the noise family in this directory must leave this pair visible — a
-# suppression test that only asserts an empty report passes just as well
-# when the detector has gone blind.
+# copy-pasted byte-for-byte into `control_clone_b.py`. It is the proof
+# the run was not blind: whatever this directory's arbitration decides
+# about the collection cells in `cells/`, this cross-file pair must stay
+# visible and stay ranked first.
 
 
 def settle_ledger(entries, floor, penalty):

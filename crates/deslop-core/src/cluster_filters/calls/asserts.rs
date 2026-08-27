@@ -7,10 +7,17 @@
 //! — part of the idiom, not authored logic. Admission is deliberately
 //! narrow: the statement must be assertion-shaped for its grammar, and
 //! every identifier it inspects must name a value one of the covered
-//! call-bearing statements bound. An assertion on outside state, a
-//! computation smuggled into an assert, or a second call-free statement
-//! still blocks the filter, so an authored call-free statement keeps
-//! its cluster visible (`rename_needs_an_anchor`).
+//! call-bearing statements bound. An assertion on outside state, or a
+//! computation smuggled into an assert, still blocks the filter, so an
+//! authored call-free statement keeps its cluster visible
+//! (`rename_needs_an_anchor`).
+//!
+//! One second call-free statement joins it: the literal tautology
+//! ([CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT-TAUTOLOGY]),
+//! `explicit_host_id = "fly-1"; assert explicit_host_id == "fly-1"`,
+//! which asserts a value against itself and so tests nothing. Building
+//! the value instead of writing it down — `host_prefix + "1"` — is
+//! authored data handling and keeps blocking.
 
 use tree_sitter::Node;
 
@@ -36,13 +43,109 @@ pub(super) fn is_assert_on_call_bound_value(
     call_statements: &[&Node<'_>],
     snippet: &Snippet<'_>,
 ) -> bool {
+    let bound = bound_names(call_statements, snippet.source);
+    is_assert_on(statement, &bound, snippet)
+}
+
+/// True when the two call-free statements are a literal tautology
+/// followed by the assertion that reads it: the first writes a literal
+/// into a local nothing else in the range touches, and the second is an
+/// assertion admitted once that local counts as bound
+/// ([CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT-TAUTOLOGY]).
+pub(super) fn is_literal_tautology_pair(
+    pair: [&Node<'_>; 2],
+    call_statements: &[&Node<'_>],
+    covered: &[Node<'_>],
+    snippet: &Snippet<'_>,
+) -> bool {
+    let [tautology, assertion] = pair;
+    let Some(target) = literal_assignment_target(*tautology, snippet.source) else {
+        return false;
+    };
+    if !only_the_assertion_reads(&target, *tautology, *assertion, covered, snippet.source) {
+        return false;
+    }
+    let mut bound = bound_names(call_statements, snippet.source);
+    bound.push(target);
+    is_assert_on(*assertion, &bound, snippet)
+}
+
+/// True when `statement` is an assertion whose subject identifiers are
+/// non-empty and all named in `bound`.
+fn is_assert_on(statement: Node<'_>, bound: &[Vec<u8>], snippet: &Snippet<'_>) -> bool {
     if !assert_kinds(snippet.language).contains(&statement.kind()) {
         return false;
     }
-    let bound = bound_names(call_statements, snippet.source);
     let mut subjects = Vec::new();
     collect_identifiers(statement, snippet.source, subject_child, &mut subjects);
     !subjects.is_empty() && subjects.iter().all(|name| bound.contains(name))
+}
+
+/// Right-hand sides that are a literal outright: a string, number,
+/// boolean, or `None`. Python spellings — no other grammar has a
+/// call-free assertion statement, so no other grammar reaches here.
+const LITERAL_KINDS: &[&str] = &["string", "integer", "float", "true", "false", "none"];
+
+/// How often the tautology's local may be named across the covered
+/// statements: written once, read once by the assertion.
+const TAUTOLOGY_OCCURRENCES: usize = 2;
+
+/// The local a `name = <literal>` statement binds. `None` for anything
+/// else — a computed right-hand side, an interpolated string, a
+/// destructuring target, or a statement that is not an assignment.
+fn literal_assignment_target(statement: Node<'_>, source: &[u8]) -> Option<Vec<u8>> {
+    let assignment = sole_assignment(statement)?;
+    let left = assignment.child_by_field_name("left")?;
+    let right = assignment.child_by_field_name("right")?;
+    let is_literal = left.kind() == "identifier"
+        && LITERAL_KINDS.contains(&right.kind())
+        && names_in(right, source).is_empty();
+    is_literal
+        .then(|| source.get(left.start_byte()..left.end_byte()))
+        .flatten()
+        .map(<[u8]>::to_vec)
+}
+
+/// The one assignment a statement is, whether the grammar wraps it in an
+/// expression statement or not. `None` when the statement holds anything
+/// besides a single assignment.
+fn sole_assignment(statement: Node<'_>) -> Option<Node<'_>> {
+    if statement.kind() == "assignment" {
+        return Some(statement);
+    }
+    match named_children(statement).as_slice() {
+        [only] if only.kind() == "assignment" => Some(*only),
+        _ => None,
+    }
+}
+
+/// True when `target` is named exactly twice across `covered` — once in
+/// the tautology that writes it, once in the assertion that reads it —
+/// so no other covered statement consumes the value.
+fn only_the_assertion_reads(
+    target: &[u8],
+    tautology: Node<'_>,
+    assertion: Node<'_>,
+    covered: &[Node<'_>],
+    source: &[u8],
+) -> bool {
+    let mentions = |node| {
+        names_in(node, source)
+            .iter()
+            .filter(|n| *n == target)
+            .count()
+    };
+    let total: usize = covered.iter().map(|node| mentions(*node)).sum();
+    total == TAUTOLOGY_OCCURRENCES && mentions(tautology) == 1 && mentions(assertion) == 1
+}
+
+/// Every identifier in `node`'s subtree, attribute names included: a
+/// name reached by any route is a mention, and counting a field access
+/// as one only ever blocks the filter.
+fn names_in(node: Node<'_>, source: &[u8]) -> Vec<Vec<u8>> {
+    let mut names = Vec::new();
+    collect_identifiers(node, source, every_child, &mut names);
+    names
 }
 
 /// Names the call-bearing statements bind: every assignment-target

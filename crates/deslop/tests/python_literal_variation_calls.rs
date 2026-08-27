@@ -32,10 +32,7 @@
 use anyhow::Result;
 
 use crate::common::{
-    negative_pin::{
-        assert_control_is_the_only_published_cluster, assert_family_hidden_with_control,
-        assert_only_the_control_files_carry_duplicated_lines,
-    },
+    negative_pin::{assert_suppressed_family, SuppressedFamily},
     *,
 };
 
@@ -88,16 +85,17 @@ fn assert_family_is_scaffolding(
     expected_hidden: u64,
 ) -> Result<()> {
     let report = run_report(&fixture(fixture_dir), min_nodes)?;
-    assert_family_hidden_with_control(&report, label, family, &CONTROL, expected_hidden)?;
-    assert_control_is_the_only_published_cluster(&report, label, &CONTROL, CONTROL_LOC)?;
-    assert_only_the_control_files_carry_duplicated_lines(&report, label, &CONTROL);
-    assert_eq!(
-        field(&report, "files_analysed").as_u64(),
-        Some(FILES_ANALYSED),
-        "{label}: the family file and both control files were analysed, so the \
-         suppression was exercised rather than the file skipped: {report:#}"
-    );
-    Ok(())
+    assert_suppressed_family(
+        &report,
+        label,
+        &SuppressedFamily {
+            family_files: family,
+            control_files: &CONTROL,
+            expected_hidden,
+            control_loc: CONTROL_LOC,
+            files_analysed: FILES_ANALYSED,
+        },
+    )
 }
 
 // GH #70 / #79 regression: four `test_*_write` functions call the same
