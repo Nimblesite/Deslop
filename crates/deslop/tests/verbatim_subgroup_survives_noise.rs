@@ -42,7 +42,14 @@ use std::collections::BTreeSet;
 
 use serde_json::Value;
 
-use crate::common::{signals::*, *};
+use crate::common::{
+    negative_pin::{
+        assert_control_is_the_only_published_cluster, assert_family_hidden_with_control,
+        assert_only_the_control_files_carry_duplicated_lines,
+    },
+    signals::*,
+    *,
+};
 
 /// Node floor low enough that a run of four sibling constant
 /// declarations, a run of four calls, or one collection cell qualifies
@@ -292,5 +299,76 @@ fn two_identical_collection_cells_survive_a_differing_sibling_cell() -> Result<(
         "exactly the two copied cell lines are duplicated: {lines:#?}",
         lines = visible_cluster_lines(&report),
     );
+    Ok(())
+}
+
+/// [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] The one file holding a
+/// genuinely byte-identical pair of collection cells inside a component
+/// the sibling-cell filter suppresses.
+const PRICE_FILE: [&str; 1] = ["ledger_rows.py"];
+/// The cross-file byte-identical copy staged in the same run. Without
+/// it, "the pair stayed hidden" is a bar a blind detector clears.
+const PRICE_CONTROL: [&str; 2] = ["control_clone_a.py", "control_clone_b.py"];
+/// Components suppressed here: the one collection-cell component.
+const PRICE_HIDDEN: u64 = 1;
+/// Duplicated lines the control accounts for: eight lines, twice.
+const PRICE_CONTROL_LOC: u64 = 16;
+/// The cell file and both control files.
+const PRICE_FILES_ANALYSED: u64 = 3;
+const PRICE_CASE: &str = "collection-cells-price";
+const PRICE_LABEL: &str = "[CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] intra-file verbatim pair";
+
+// [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] The price the arbitration
+// accepts, stated as a contract instead of an absence.
+//
+// `noise.md` says what this pass deliberately gives up: "a genuine
+// intra-file byte-identical copy sitting inside a component the filters
+// suppressed stays hidden; that is the price of the idiom proof, paid
+// once, visibly, in the pins". Nowhere was it visible. The four gh #434
+// noise pins cannot pay it — every member of their families varies in
+// its literals by construction, so none of them stages a byte-identical
+// pair at all, and "the whole family was suppressed" would hold
+// identically if the price did not exist.
+//
+// `ledger_rows.py` does stage one: cells 2 and 3 are byte-identical and
+// cell 4 is not. Byte-identity across files is proof of copying —
+// independently authored code does not coincide byte for byte.
+// Byte-identity inside one file is proof of the *idiom* the filter just
+// recognised, so the pair takes the suppression with its component. This
+// fails if the hatch ever re-opens for an intra-file family, and it
+// fails just as hard if the cross-file copy in the same run stops being
+// reported.
+#[test]
+fn an_intra_file_verbatim_pair_inside_a_suppressed_component_stays_hidden() -> Result<()> {
+    let report = render(PRICE_CASE, CELL_MIN_NODES)?;
+    assert_family_hidden_with_control(
+        &report,
+        PRICE_LABEL,
+        &PRICE_FILE,
+        &PRICE_CONTROL,
+        PRICE_HIDDEN,
+    )?;
+    assert_control_is_the_only_published_cluster(
+        &report,
+        PRICE_LABEL,
+        &PRICE_CONTROL,
+        PRICE_CONTROL_LOC,
+    )?;
+    assert_only_the_control_files_carry_duplicated_lines(&report, PRICE_LABEL, &PRICE_CONTROL);
+    assert_eq!(
+        field(&report, "files_analysed").as_u64(),
+        Some(PRICE_FILES_ANALYSED),
+        "the intra-file pair was analysed and decided *against*, not skipped — a \
+         file the scan never opened proves nothing about the arbitration: {report:#}"
+    );
+    for file in PRICE_FILE {
+        assert_eq!(
+            duplicated_loc_for(&report, file),
+            0,
+            "{file}: the price is that this pair earns nothing — a copy the report \
+             will not show may not reach the duplication gate either: {lines:#?}",
+            lines = visible_cluster_lines(&report),
+        );
+    }
     Ok(())
 }

@@ -15,7 +15,7 @@
 use tree_sitter::Node;
 
 use crate::{
-    ast::ByteRange,
+    ast::{named_children, ByteRange},
     buckets::{classify, lacks_content_support, ClusterKind},
     cluster_filters::enclosing_kind,
     refactor::tables::ScopeKinds,
@@ -412,11 +412,4 @@ pub(crate) fn node_text(node: Node<'_>, source: &[u8]) -> Option<String> {
 pub(crate) fn field_text(node: Node<'_>, field: &str, source: &[u8]) -> Option<String> {
     node.child_by_field_name(field)
         .and_then(|child| node_text(child, source))
-}
-
-/// Named children of `node` in source order — shared by the merge
-/// engine's raw-tree scans.
-pub(crate) fn named_children(node: Node<'_>) -> Vec<Node<'_>> {
-    let mut cursor = node.walk();
-    node.named_children(&mut cursor).collect()
 }

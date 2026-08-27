@@ -7,7 +7,7 @@ use tree_sitter::Node;
 use std::sync::Arc;
 
 use super::{enclosing_kind, parse_for, snippets::CallSequence, ParseCache, Snippet};
-use crate::ast::ByteRange;
+use crate::ast::{named_children, ByteRange};
 
 use args::collect_argument_shapes;
 
@@ -131,16 +131,19 @@ fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>], cache: &ParseCac
     }
     let sequences: Option<Vec<&[CallShape]>> =
         cells.iter().map(|cell| cell.shapes.as_deref()).collect();
-    let Some(sequences) = sequences else {
-        return false;
-    };
+    sequences.is_some_and(|sequences| every_sequence_position_varies(&sequences))
+}
+
+/// True when the members share one non-empty ordered call header and
+/// every position in it carries differing string literals.
+fn every_sequence_position_varies(sequences: &[&[CallShape]]) -> bool {
     let Some(first) = sequences.first() else {
         return false;
     };
     if first.is_empty() || !sequences.iter().all(|seq| same_call_headers(seq, first)) {
         return false;
     }
-    (0..first.len()).all(|index| sequence_position_differs(&sequences, index))
+    (0..first.len()).all(|index| sequence_position_differs(sequences, index))
 }
 
 /// Computes the fused literal-variation sequence cell for one snippet:
@@ -167,7 +170,7 @@ fn call_sequence(snippet: &Snippet<'_>) -> super::snippets::CallSequence {
 /// handling remained inside the range (`rename_needs_an_anchor`). And a
 /// *block* of call-free assertions is shared verification logic the
 /// members genuinely duplicate, not payload, so only the lone one is
-/// idiom ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
+/// idiom ([CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT]).
 fn covered_statements_admissible(snippet: &Snippet<'_>) -> bool {
     let Some(tree) = parse_for(snippet) else {
         return false;
@@ -204,8 +207,7 @@ fn collect_covered_statements<'tree>(
         out.push(node);
         return;
     }
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
+    for child in named_children(node) {
         collect_covered_statements(child, range, out);
     }
 }
@@ -228,11 +230,9 @@ fn subtree_contains_call(node: Node<'_>, kinds: &[&str]) -> bool {
     if kinds.contains(&node.kind()) {
         return true;
     }
-    let mut cursor = node.walk();
-    let found = node
-        .named_children(&mut cursor)
-        .any(|child| subtree_contains_call(child, kinds));
-    found
+    named_children(node)
+        .into_iter()
+        .any(|child| subtree_contains_call(child, kinds))
 }
 
 /// Returns every call fully contained in `snippet.range`, preserving
@@ -277,8 +277,7 @@ fn collect_call_shapes(node: Node<'_>, walk: &Walk<'_>, out: &mut Vec<CallShape>
             return;
         }
     }
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
+    for child in named_children(node) {
         collect_call_shapes(child, walk, out);
     }
 }
@@ -306,8 +305,7 @@ fn walk_argument_children(call: Node<'_>, walk: &Walk<'_>, out: &mut Vec<CallSha
     else {
         return;
     };
-    let mut cursor = args.walk();
-    for child in args.named_children(&mut cursor) {
+    for child in named_children(args) {
         collect_call_shapes(child, walk, out);
     }
 }
@@ -367,24 +365,45 @@ fn has_differing_string_literals<'c>(calls: impl IntoIterator<Item = &'c CallSha
     let Some(first) = calls.first() else {
         return false;
     };
-    let mut saw_difference = false;
-    let mut saw_string_arg = false;
-    for index in 0..first.arguments.len() {
-        let Some(ArgShape::StringLiteral(baseline)) = first.arguments.get(index) else {
-            continue;
-        };
-        saw_string_arg = true;
-        for call in calls.iter().skip(1) {
-            match call.arguments.get(index) {
-                Some(ArgShape::StringLiteral(bytes)) if bytes != baseline => {
-                    saw_difference = true;
-                }
-                Some(ArgShape::StringLiteral(_)) => {}
-                _ => {
-                    return false;
-                }
+    let agreements: Vec<LiteralAgreement> = (0..first.arguments.len())
+        .map(|index| literal_agreement(&calls, index))
+        .collect();
+    !agreements.contains(&LiteralAgreement::Incomparable)
+        && agreements.contains(&LiteralAgreement::Differs)
+}
+
+/// How one positional argument index reads across the cluster.
+#[derive(PartialEq, Eq)]
+enum LiteralAgreement {
+    /// The first member holds no string literal at this index, so the
+    /// position says nothing about literal variation either way.
+    NotAString,
+    /// Every member holds the same string-literal bytes here.
+    Same,
+    /// Some member holds different string-literal bytes here — the
+    /// intentional test-data variation the filter looks for.
+    Differs,
+    /// Some member holds a non-string where the first holds a string,
+    /// so the calls are not comparable as literal variation at all.
+    Incomparable,
+}
+
+/// Compares argument `index` of every member against the first member.
+fn literal_agreement(calls: &[&CallShape], index: usize) -> LiteralAgreement {
+    let Some(Some(ArgShape::StringLiteral(baseline))) =
+        calls.first().map(|call| call.arguments.get(index))
+    else {
+        return LiteralAgreement::NotAString;
+    };
+    let mut agreement = LiteralAgreement::Same;
+    for call in calls.iter().skip(1) {
+        match call.arguments.get(index) {
+            Some(ArgShape::StringLiteral(bytes)) if bytes != baseline => {
+                agreement = LiteralAgreement::Differs;
             }
+            Some(ArgShape::StringLiteral(_)) => {}
+            _ => return LiteralAgreement::Incomparable,
         }
     }
-    saw_string_arg && saw_difference
+    agreement
 }

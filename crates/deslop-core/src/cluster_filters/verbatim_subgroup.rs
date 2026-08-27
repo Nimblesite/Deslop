@@ -77,18 +77,29 @@ pub(crate) fn split_noise_verbatim_families<S: BuildHasher + Sync>(
         sources,
         file_languages,
     };
-    let order = file_locality_order(fused_clusters, fingerprints);
+    let slots = decide_every_cluster(&inputs, cache);
+    cache.log_noise_totals("noise_verbatim_split");
+    slots.into_iter().flatten().flatten().collect()
+}
+
+/// One replacement run per input cluster, held at that cluster's input
+/// position so the emitted order — and therefore the report — does not
+/// depend on which worker decided what.
+fn decide_every_cluster<S: BuildHasher + Sync>(
+    inputs: &SplitInputs<'_, S>,
+    cache: &ParseCache,
+) -> Vec<Option<Vec<FusedCluster>>> {
+    let order = file_locality_order(inputs.fused_clusters, inputs.fingerprints);
     // One slot per input cluster; a split writes its families as a
     // run, an untouched cluster writes itself, both in input position.
     let mut slots: Vec<Option<Vec<FusedCluster>>> =
-        (0..fused_clusters.len()).map(|_| None).collect();
-    if worker_count(order.len()) <= 1 {
-        split_serially(&order, &inputs, cache, &mut slots);
+        (0..inputs.fused_clusters.len()).map(|_| None).collect();
+    if split_workers(order.len()) <= 1 {
+        split_serially(&order, inputs, cache, &mut slots);
     } else {
-        split_across_workers(&order, &inputs, cache, &mut slots);
+        split_across_workers(&order, inputs, cache, &mut slots);
     }
-    cache.log_noise_totals("noise_verbatim_split");
-    slots.into_iter().flatten().flatten().collect()
+    slots
 }
 
 /// The corpus every cluster's decision reads, gathered so a worker
@@ -167,7 +178,7 @@ fn split_across_workers<S: BuildHasher + Sync>(
     let progress = Progress::new(order.len());
     let (claimed, _states) = crate::shard::map_chunks(
         order.chunks(NOISE_CHUNK_CLUSTERS),
-        worker_count(order.len()),
+        split_workers(order.len()),
         || (),
         |(), chunk| decide_chunk(chunk, inputs, cache, &progress),
     );
@@ -223,13 +234,10 @@ const NOISE_SHARD_MIN_CLUSTERS: usize = 512;
 /// unlucky draw of wide clusters cannot hold the stage open.
 const NOISE_CHUNK_CLUSTERS: usize = 32;
 
-/// How many worker threads decide `clusters` clusters.
-fn worker_count(clusters: usize) -> usize {
-    if clusters < NOISE_SHARD_MIN_CLUSTERS {
-        return 1;
-    }
-    let available = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
-    available.min(clusters / NOISE_SHARD_MIN_CLUSTERS).max(1)
+/// How many worker threads decide `clusters` clusters, against this
+/// stage's own floor ([`crate::shard::worker_count`]).
+fn split_workers(clusters: usize) -> usize {
+    crate::shard::worker_count(clusters, NOISE_SHARD_MIN_CLUSTERS)
 }
 
 /// Fixed-interval progress for a stage that runs for minutes on a large
@@ -294,31 +302,50 @@ fn split_one<S: BuildHasher>(
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
 ) -> Option<Vec<FusedCluster>> {
-    let families = verbatim_families(&fused.members, fingerprints, sources);
-    let keepable: Vec<&Vec<usize>> = families
-        .iter()
-        .filter(|family| is_copied_family(family, fingerprints))
-        .collect();
-    let covered: usize = keepable.iter().map(|family| family.len()).sum();
-    if keepable.is_empty() || covered == fused.members.len() && keepable.len() == 1 {
+    let keepable = copied_families(fused, fingerprints, sources)?;
+    let members = resolved_members(fused, fingerprints)?;
+    if !is_noise_pattern(&members, sources, file_languages, cache) {
         return None;
     }
+    Some(
+        keepable
+            .iter()
+            .map(|family| restrict(fused, family))
+            .collect(),
+    )
+}
+
+/// The byte-identical families in `fused` the escape hatch protects, or
+/// `None` when no split could change the component — it holds no such
+/// family, or the one it holds already *is* the whole component.
+///
+/// Answered from the corpus alone, before any re-parse, so the noise
+/// filters only ever run on a component a split could actually change
+/// ([CLONE-NOISE-REPARSE-CACHE]).
+fn copied_families(
+    fused: &FusedCluster,
+    fingerprints: &[Fingerprint],
+    sources: &HashMap<FileId, Vec<u8>>,
+) -> Option<Vec<Vec<usize>>> {
+    let keepable: Vec<Vec<usize>> = verbatim_families(&fused.members, fingerprints, sources)
+        .into_iter()
+        .filter(|family| is_copied_family(family, fingerprints))
+        .collect();
+    let covered: usize = keepable.iter().map(Vec::len).sum();
+    let already_whole = keepable.len() == 1 && covered == fused.members.len();
+    (!keepable.is_empty() && !already_whole).then_some(keepable)
+}
+
+/// Every member's fingerprint, or `None` when one of them does not
+/// resolve: a component judged from fewer members than it holds is
+/// judged on evidence it does not have.
+fn resolved_members(fused: &FusedCluster, fingerprints: &[Fingerprint]) -> Option<Vec<Fingerprint>> {
     let members: Vec<Fingerprint> = fused
         .members
         .iter()
         .filter_map(|index| fingerprints.get(*index).cloned())
         .collect();
-    if members.len() != fused.members.len()
-        || !is_noise_pattern(&members, sources, file_languages, cache)
-    {
-        return None;
-    }
-    Some(
-        keepable
-            .into_iter()
-            .map(|family| restrict(fused, family))
-            .collect(),
-    )
+    (members.len() == fused.members.len()).then_some(members)
 }
 
 /// Whether `family` is the copy the escape hatch exists to protect

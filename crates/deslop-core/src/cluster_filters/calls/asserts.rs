@@ -15,7 +15,7 @@
 use tree_sitter::Node;
 
 use super::super::Snippet;
-use crate::refactor::preconditions::named_children;
+use crate::ast::named_children;
 
 /// Grammars with a call-free assertion statement. Rust (`assert!` is a
 /// macro invocation), C#, and ECMAScript spell assertions as calls, so
@@ -60,7 +60,7 @@ fn bound_names(statements: &[&Node<'_>], source: &[u8]) -> Vec<Vec<u8>> {
 fn collect_assignment_targets(node: Node<'_>, source: &[u8], out: &mut Vec<Vec<u8>>) {
     if node.kind() == "assignment" {
         if let Some(left) = node.child_by_field_name("left") {
-            collect_identifiers(left, source, every_child, &mut *out);
+            collect_identifiers(left, source, every_child, out);
         }
     }
     for child in named_children(node) {
@@ -80,10 +80,11 @@ fn every_child(_parent: Node<'_>, _child: Node<'_>) -> bool {
 /// Attribute names are skipped: they name a field *on* a subject rather
 /// than a subject, so `resp.status_code` inspects `resp` alone.
 fn subject_child(parent: Node<'_>, child: Node<'_>) -> bool {
-    parent.kind() != "attribute"
-        || parent
+    let names_a_field = parent.kind() == "attribute"
+        && parent
             .child_by_field_name("attribute")
-            .is_none_or(|name| name.id() != child.id())
+            .is_some_and(|name| name.id() == child.id());
+    !names_a_field
 }
 
 /// Records every identifier in `node`'s subtree that `descend` admits.

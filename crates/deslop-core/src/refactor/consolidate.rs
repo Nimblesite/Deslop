@@ -25,10 +25,10 @@ use std::{collections::HashMap, path::PathBuf};
 use tree_sitter::Node;
 
 use crate::{
-    ast::ByteRange,
+    ast::{named_children, ByteRange},
     lang::{shared::parse_source, LanguageParser},
     refactor::{
-        preconditions::{self, named_children, node_text, raw_slices_equivalent},
+        preconditions::{self, node_text, raw_slices_equivalent},
         RefactorError,
     },
     report::ReportCluster,

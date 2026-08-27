@@ -8,11 +8,11 @@ use std::{collections::BTreeSet, path::PathBuf};
 use tree_sitter::{Node, Tree};
 
 use crate::{
-    ast::ByteRange,
+    ast::{named_children, ByteRange},
     lang::LanguageParser,
     refactor::{
         consolidate::DefinitionSite,
-        preconditions::{named_children, node_text},
+        preconditions::node_text,
         tables::BindingKind,
     },
 };

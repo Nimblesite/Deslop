@@ -14,8 +14,21 @@
 //! survive whatever hides the assertions. Before it existed this suite
 //! asserted an empty report, which a detector that had stopped
 //! producing candidates would have satisfied perfectly.
+//!
+//! The gh #434 `[CLONE-NOISE-VERBATIM-SUBGROUP-EXACT-BYTES]` arbitration
+//! is what this fixture measured: the pairs that used to publish here
+//! were **not** byte-identical at all — adjacent one-line assertions
+//! differing in their compared keys and values — so the family grouping
+//! was manufacturing "verbatim" families out of differing bytes. It now
+//! compares exact source bytes, and this pin is green by default.
 
-use crate::common::{negative_pin::assert_family_hidden_with_control, verdict::*, *};
+use crate::common::{
+    negative_pin::{
+        assert_control_is_the_only_published_cluster, assert_family_hidden_with_control,
+        assert_only_the_control_files_carry_duplicated_lines,
+    },
+    *,
+};
 
 /// The three unrelated pytest modules holding the idiom.
 const FAMILY: [&str; 3] = [
@@ -24,15 +37,32 @@ const FAMILY: [&str; 3] = [
     "test_sandbox_coverage.py",
 ];
 
+/// The false-negative control staged in this fixture.
+const CONTROL: [&str; 2] = ["control_clone_a.py", "control_clone_b.py"];
+
+/// Duplicated lines the control clone accounts for: eight lines, twice.
+const CONTROL_LOC: u64 = 16;
+
+/// All three pytest modules and both control files.
+const FILES_ANALYSED: u64 = 5;
+
+const FIXTURE: &str = "python-issue-107-chained-dict-assert";
+const LABEL: &str = "gh #107/#103 chained-subscript assertion family";
+const MIN_NODES: u32 = 4;
+
+/// Components the idiom filter suppresses here — measured, and the
+/// number that makes a partially-blind detector fail. With one of the
+/// three modules deleted the run still hides a component and reports the
+/// control alone with the same 16 duplicated lines, so every `>= 1`
+/// bound passes; only this exact count notices that two thirds of the
+/// family stopped producing candidates.
+const EXPECTED_HIDDEN: u64 = 4;
+
 // [CLONE-NOISE-PY-DICT-ASSERT] gh #107, gh #103 class 2.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #434 [CLONE-NOISE-VERBATIM-SUBGROUP] \
-     docs/plans/fused-score-followups.md — the intra-file byte-identical core of the \
-     suppressed dict-assert family now publishes while this pin asserts whole-family \
-     suppression; spec arbitration pending. Run via `-- --ignored`."]
 fn chained_dict_assertions_are_suppressed_while_a_real_clone_survives() -> Result<()> {
-    let scan_root = fixture("python-issue-107-chained-dict-assert");
-    let report = run_report(&scan_root, 4)?;
+    let scan_root = fixture(FIXTURE);
+    let report = run_report(&scan_root, MIN_NODES)?;
 
     let offenders = summaries_where(&report, &scan_root, |text| {
         text.contains("assert ") && text.contains("][")
@@ -43,30 +73,15 @@ fn chained_dict_assertions_are_suppressed_while_a_real_clone_survives() -> Resul
          must not surface as duplicates: {offenders:#?}"
     );
     for module in FAMILY {
-        assert_family_hidden_with_control(
-            &report,
-            "gh #107/#103 chained-subscript assertion family",
-            &[module],
-            &["control_clone_a.py", "control_clone_b.py"],
-        )?;
+        assert_family_hidden_with_control(&report, LABEL, &[module], &CONTROL, EXPECTED_HIDDEN)?;
     }
+    assert_control_is_the_only_published_cluster(&report, LABEL, &CONTROL, CONTROL_LOC)?;
+    assert_only_the_control_files_carry_duplicated_lines(&report, LABEL, &CONTROL);
     assert_eq!(
         field(&report, "files_analysed").as_u64(),
-        Some(5),
+        Some(FILES_ANALYSED),
         "all three pytest modules and both control files were analysed, so the \
          suppression was exercised rather than the files skipped: {report:#}"
-    );
-    assert_eq!(
-        clusters(&report).len(),
-        1,
-        "the three modules share nothing beyond the idiom, so the control clone \
-         must be the only surviving cluster of any bucket: {report:#}"
-    );
-    assert_eq!(
-        duplicated_loc(&report),
-        16,
-        "suppressed idiom matches must not count as duplicated lines; only the \
-         control clone's eight lines, twice, may: {report:#}"
     );
     Ok(())
 }
