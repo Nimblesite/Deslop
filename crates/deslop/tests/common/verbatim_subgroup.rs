@@ -27,8 +27,15 @@ pub(crate) const MIN_NODES: u32 = 8;
 /// one.
 pub(crate) const CALL_CASE: &str = "literal-calls";
 
+/// The file the copied call run lives in. `literal-calls/` holds it
+/// once beside a byte-identical twin; `idiom-price/` holds the same run
+/// twice over inside this one file.
+pub(crate) const CALL_ORIGIN: &str = "invoice_emitter.py";
+/// The byte-identical twin, present only in the cross-file layout.
+pub(crate) const CALL_TWIN: &str = "invoice_emitter_copy.py";
+
 /// The two byte-identical call runs, and the run whose literals vary.
-pub(crate) const CALL_COPY: [&str; 2] = ["invoice_emitter.py", "invoice_emitter_copy.py"];
+pub(crate) const CALL_COPY: [&str; 2] = [CALL_ORIGIN, CALL_TWIN];
 /// The stranger whose only relation to [`CALL_COPY`] is its shape.
 pub(crate) const CALL_STRANGER: &str = "refund_emitter.py";
 

@@ -11,11 +11,7 @@ use tree_sitter::Node;
 use crate::{
     ast::{named_children, ByteRange},
     lang::{shared::parse_source, LanguageParser},
-    refactor::{
-        consolidate::DefinitionSite,
-        preconditions::node_text,
-        RefactorError,
-    },
+    refactor::{consolidate::DefinitionSite, preconditions::node_text, RefactorError},
     report::{ReportCluster, ReportOccurrence},
 };
 

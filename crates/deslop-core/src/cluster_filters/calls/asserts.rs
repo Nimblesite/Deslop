@@ -88,12 +88,7 @@ fn subject_child(parent: Node<'_>, child: Node<'_>) -> bool {
 }
 
 /// Records every identifier in `node`'s subtree that `descend` admits.
-fn collect_identifiers(
-    node: Node<'_>,
-    source: &[u8],
-    descend: ChildGuard,
-    out: &mut Vec<Vec<u8>>,
-) {
+fn collect_identifiers(node: Node<'_>, source: &[u8], descend: ChildGuard, out: &mut Vec<Vec<u8>>) {
     if node.kind() == "identifier" {
         if let Some(bytes) = source.get(node.start_byte()..node.end_byte()) {
             out.push(bytes.to_vec());

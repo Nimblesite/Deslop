@@ -410,11 +410,32 @@ test-corpus-ci: export DESLOP_CORPUS_BASELINE = 1
 test-corpus-ci:
 	node scripts/corpus/fetch-corpus.mjs $(CORPUS_REPOS)
 	cargo build --release --bin deslop
+	@cargo test --release -p deslop --test corpus_repos -- --ignored --list > $(CORPUS_NAMES)
+	@for t in $(CORPUS_TESTS); do \
+	   grep -qFx "$$t: test" $(CORPUS_NAMES) || { \
+	     echo "==> corpus: CORPUS_TESTS names \`$$t\`, which no test in corpus_repos answers to."; \
+	     echo "==> corpus: --exact would select nothing and libtest would exit 0 (gh #412)."; \
+	     exit 1; }; \
+	 done
 	@fail=0; for t in $(CORPUS_TESTS); do \
 	   cargo test --release -p deslop --test corpus_repos -- --ignored --exact --nocapture --test-threads=1 $$t || fail=1; \
 	 done; \
 	 if [ $$fail -ne 0 ]; then echo "==> corpus: NEW failures (see [NEW] lines above)"; fi; \
 	 exit $$fail
+
+## test-corpus-ci-full: `make test-corpus-ci` over the WHOLE corpus — every
+##                      pinned repository and every test in the suite. Needs
+##                      >16 GB (#166) and about 20 minutes. This is what the
+##                      corpus workflow's `full` dispatch runs, so the names
+##                      live here and the workflow names none of its own.
+test-corpus-ci-full: CORPUS_REPOS = $(CORPUS_REPOS_FULL)
+test-corpus-ci-full: CORPUS_TESTS = $(CORPUS_TESTS_FULL)
+test-corpus-ci-full: test-corpus-ci
+
+# Where the recipe above parks libtest's own list of the names it will answer
+# to, so a selector that resolves to nothing fails loudly instead of passing
+# green over zero repositories.
+CORPUS_NAMES = target/corpus-test-names.txt
 
 # Scheduled CI runs a deliberately small slice: clone + scan inside ~1 minute.
 # `tokio` is the fastest corpus and the only one that has ever been stable
@@ -424,8 +445,25 @@ test-corpus-ci:
 # Precision defects (#331 Dart, #336 F#) are NOT covered here — those repos
 # peak above 13 GB (#166) and take minutes to scan. Run the full suite with
 # `make test-corpus` locally, or dispatch the workflow with `full`.
+#
+# [CORPUS-CI] These are the names libtest answers to, matched with `--exact`:
+# bare, because `crates/deslop/Cargo.toml` gives the corpus suite its own
+# `[[test]]` target, which makes that file a crate root rather than a module.
+# They were written `corpus_repos::<test>` — a module path from a layout that
+# no longer exists — and every scheduled run selected nothing and reported
+# green (gh #412 again). `crates/deslop/tests/corpus_selection_contract.rs`
+# is what now holds these names to tests that exist.
 CORPUS_REPOS ?= tokio nest
-CORPUS_TESTS ?= corpus_repos::corpus_tokio_rust corpus_repos::corpus_nest_typescript corpus_repos::corpus_determinism_nest_typescript
+CORPUS_TESTS ?= corpus_tokio_rust corpus_nest_typescript corpus_determinism_nest_typescript
+
+# The whole corpus, for `test-corpus-ci-full`. A second copy of these lists in
+# the workflow YAML is how the `full` dispatch came to pass the substring
+# `corpus_` into an `--exact` loop and scan nothing at all.
+CORPUS_REPOS_FULL = flutter jellyfin tokio django react nest laravel hugo fsharp
+CORPUS_TESTS_FULL = corpus_flutter_dart corpus_jellyfin_csharp corpus_tokio_rust \
+                    corpus_django_python corpus_react_javascript corpus_nest_typescript \
+                    corpus_laravel_php corpus_hugo_go corpus_fsharp \
+                    corpus_determinism_nest_typescript corpus_determinism_jellyfin_csharp
 
 # [CI-DESLOP] Self-hosted duplication gate. Runs the release binary built by
 #   `build` against this repo, so the gate is always the CURRENT detector, never

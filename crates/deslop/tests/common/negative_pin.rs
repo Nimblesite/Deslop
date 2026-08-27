@@ -258,9 +258,13 @@ pub(crate) fn assert_only_the_control_files_carry_duplicated_lines(
     control_files: &[&str],
 ) {
     let counted: BTreeSet<String> = visible_duplicated_lines(report).into_keys().collect();
-    let expected: BTreeSet<String> = control_files.iter().map(|name| (*name).to_owned()).collect();
+    let expected: BTreeSet<String> = control_files
+        .iter()
+        .map(|name| (*name).to_owned())
+        .collect();
     assert_eq!(
-        counted, expected,
+        counted,
+        expected,
         "{label}: only the control clone's own files may carry a duplicated line — \
          a family file here is the suppression leaking into the duplication gate: \
          {lines:#?}",

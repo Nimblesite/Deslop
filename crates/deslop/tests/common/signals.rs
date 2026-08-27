@@ -19,8 +19,8 @@ use deslop_core::{
 use serde_json::Value;
 
 use super::{
-    approx, cluster_bucket, cluster_file_set, cluster_size, clusters, field,
-    occurrence_is_hidden, occurrence_texts, occurrences, signal, Result,
+    approx, cluster_bucket, cluster_file_set, cluster_size, clusters, field, occurrence_is_hidden,
+    occurrence_texts, occurrences, signal, Result,
 };
 
 /// The agent-facing act-now line ([FUSED-THRESHOLD]): at or above this a

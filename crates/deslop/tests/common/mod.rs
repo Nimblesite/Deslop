@@ -92,6 +92,13 @@ pub(crate) mod store;
 /// `signals`.
 pub(crate) mod corpora;
 
+/// The `verbatim-subgroup` fixture vocabulary, shared by the suite
+/// pinning that a copy survives an unrelated cluster member and the one
+/// pinning the price the cross-file arbitration accepts. Imported
+/// explicitly with `use crate::common::verbatim_subgroup::*;`, for the
+/// same reason as `signals`.
+pub(crate) mod verbatim_subgroup;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,

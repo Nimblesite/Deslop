@@ -39,6 +39,8 @@ mod config_include_dependencies;
 mod content_gate_signal_honesty;
 #[path = "corpus_manifest_contract.rs"]
 mod corpus_manifest_contract;
+#[path = "corpus_selection_contract.rs"]
+mod corpus_selection_contract;
 #[path = "cross_cluster_collapse.rs"]
 mod cross_cluster_collapse;
 #[path = "cross_cluster_enclosure.rs"]
@@ -267,5 +269,7 @@ mod type2_rename_anchor_floor;
 mod type3_enclosing_method;
 #[path = "typescript_features.rs"]
 mod typescript_features;
+#[path = "verbatim_subgroup_idiom_price.rs"]
+mod verbatim_subgroup_idiom_price;
 #[path = "verbatim_subgroup_survives_noise.rs"]
 mod verbatim_subgroup_survives_noise;
