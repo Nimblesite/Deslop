@@ -40,11 +40,12 @@ use std::sync::Mutex;
 /// drifts, and a stage that silently stops sharding is invisible in the
 /// output it produces.
 pub(crate) fn worker_count(items: usize, min_per_worker: usize) -> usize {
-    if min_per_worker == 0 || items < min_per_worker {
+    if items < min_per_worker {
         return 1;
     }
     let available = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
-    available.min(items / min_per_worker).max(1)
+    let full_shares = items.checked_div(min_per_worker).unwrap_or_default();
+    available.min(full_shares).max(1)
 }
 
 /// The per-chunk results in input order, paired with each worker's

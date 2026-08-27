@@ -203,6 +203,8 @@ mod python_issue_115_strenum;
 mod python_issue_119_embedding_role_mismatch;
 #[path = "python_issue_133_constant_table.rs"]
 mod python_issue_133_constant_table;
+#[path = "python_issue_467_copy_paste_pair.rs"]
+mod python_issue_467_copy_paste_pair;
 #[path = "python_issue_69_abstract_method.rs"]
 mod python_issue_69_abstract_method;
 #[path = "python_issue_72_monkeypatch.rs"]

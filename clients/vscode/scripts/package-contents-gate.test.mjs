@@ -139,3 +139,43 @@ test("assertDeclaredEntriesPresent passes the real listing and catches an over-e
     "dropping the declared icon must fail the package",
   );
 });
+
+// The assertions below read the real packaging configuration rather than an
+// in-memory listing. The allow-list above is the backstop; these pin the two
+// rules that stop the leak reaching it in the first place, so a future edit
+// that deletes either one fails here with the reason attached.
+
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** Ignore rules that must survive, and the artifact each one keeps out. */
+const REQUIRED_IGNORE_RULES = [
+  ["test-results/**", "Playwright traces, screenshots, videos and .last-run.json"],
+  ["playwright.config.mjs", "the Playwright config itself"],
+];
+
+test("[#472] .vscodeignore keeps Playwright's output and config out of the package", () => {
+  const rules = readFileSync(resolve(extensionRoot, ".vscodeignore"), "utf8")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
+  for (const [rule, keptOut] of REQUIRED_IGNORE_RULES) {
+    assert.ok(rules.includes(rule), `.vscodeignore must keep ${rule} — it is what excludes ${keptOut}`);
+  }
+});
+
+test("[#472] Playwright writes its output under target/, never beside the extension", async () => {
+  const config = (await import("../playwright.config.mjs")).default;
+  assert.equal(typeof config.outputDir, "string", "playwright.config.mjs must set an explicit outputDir");
+  assert.ok(
+    !config.outputDir.startsWith(`${extensionRoot}/`) && config.outputDir !== extensionRoot,
+    `Playwright outputDir ${config.outputDir} is inside the packaging root ${extensionRoot}; a failing run would ship its traces`,
+  );
+  assert.ok(
+    config.outputDir.includes("/target/"),
+    `every build artifact belongs under target/; got ${config.outputDir}`,
+  );
+});

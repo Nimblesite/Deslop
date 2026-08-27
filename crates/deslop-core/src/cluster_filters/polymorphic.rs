@@ -19,7 +19,10 @@ use super::{
     override_marker::carries_override_marker,
     parse_for, spans_multiple_files, ParseCache, Snippet,
 };
-use crate::{ast::ByteRange, state::FileId};
+use crate::{
+    ast::{named_children, ByteRange},
+    state::FileId,
+};
 
 /// What one cluster member contributes to the polymorphic decision, in
 /// owned form so [`ParseCache`] can memoise it by `(file, range)`
@@ -211,11 +214,9 @@ fn scaffolding_besides_functions<'tree>(
     }
     match node.kind() {
         "module" | "class_definition" | "block" | "decorated_definition" => {
-            let mut cursor = node.walk();
-            let residue_clean = node
-                .named_children(&mut cursor)
-                .all(|child| scaffolding_besides_functions(child, range, kinds, functions));
-            residue_clean
+            named_children(node)
+                .into_iter()
+                .all(|child| scaffolding_besides_functions(child, range, kinds, functions))
         }
         "expression_statement" => is_docstring(node),
         kind => is_inert_declaration_kind(kind),

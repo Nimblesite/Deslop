@@ -19,7 +19,8 @@ This is the same binary the VS Code extension launches for its in-process MCP
 host, so the agent sees identical analysis whether it talks to Copilot Chat
 inside VS Code or to Codex over its own stdio MCP. Per
 [DEPLOY-EXTERNAL-MCP-CONSUMER] this is the only supported wiring outside of
-the brew/scoop PATH form. Pointing a client at `target/release/deslop-mcp` or
+the release-locked PATH forms (brew/scoop, the published fail-closed curl
+installer). Pointing a client at `target/release/deslop-mcp` or
 a `cargo install` artifact silently drifts the agent's analysis off the
 shipright-versioned wire contract and is forbidden by the rules in
 [CLAUDE.md](../../CLAUDE.md).

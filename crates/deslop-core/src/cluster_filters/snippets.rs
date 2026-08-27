@@ -16,7 +16,12 @@ use std::{
 
 use super::body_shape::OwnedShapeToken;
 use super::{calls::CallShape, contract_index::ContractIndex, polymorphic::OwnedSubject};
-use crate::{ast::ByteRange, fingerprint::Fingerprint, lang::shared::parse_source, state::FileId};
+use crate::{
+    ast::{named_children, ByteRange},
+    fingerprint::Fingerprint,
+    lang::shared::parse_source,
+    state::FileId,
+};
 
 /// Bounded per-range memo cells for [`ParseCache`]
 /// ([PERF-FLUTTER-TODO-MEMORY]).
@@ -416,8 +421,7 @@ fn collect_field_kinds(node: tree_sitter::Node<'_>, kinds: &mut FieldKinds) {
     {
         return;
     }
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
+    for child in named_children(node) {
         collect_field_kinds(child, kinds);
     }
 }

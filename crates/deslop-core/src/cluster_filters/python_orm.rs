@@ -15,7 +15,10 @@ use super::{
     is_multi_member_language_cluster, parse_for, spans_multiple_files, trimmed_snippet_range,
     Snippet,
 };
-use crate::{ast::ByteRange, state::FileId};
+use crate::{
+    ast::{named_children, ByteRange},
+    state::FileId,
+};
 
 /// Detects ****: ORM / dataclass / Pydantic constructor calls
 /// of the shape `ModelName(field1=val, field2=val, ...)`. Two members
@@ -88,8 +91,7 @@ fn collect_calls_in_range<'tree>(node: Node<'tree>, range: ByteRange, out: &mut 
     if node.kind() == "call" && node.start_byte() >= range.start && node.end_byte() <= range.end {
         out.push(node);
     }
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
+    for child in named_children(node) {
         collect_calls_in_range(child, range, out);
     }
 }
@@ -114,10 +116,9 @@ fn call_is_class_constructor(call: Node<'_>, source: &[u8]) -> bool {
 /// any positional or splat argument is present.
 fn kwargs_only_keyword_set(call: Node<'_>, source: &[u8]) -> Option<BTreeSet<Vec<u8>>> {
     let arguments = call.child_by_field_name("arguments")?;
-    let mut cursor = arguments.walk();
     let mut keywords = BTreeSet::new();
     let mut saw_kwarg = false;
-    for arg in arguments.named_children(&mut cursor) {
+    for arg in named_children(arguments) {
         if arg.kind() != "keyword_argument" {
             return None;
         }
@@ -254,8 +255,7 @@ fn mapped_column_walk(
         let _inserted = out.insert(name);
         return true;
     }
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
+    for child in named_children(node) {
         if !mapped_column_walk(child, range, source, out) {
             return false;
         }
@@ -266,9 +266,7 @@ fn mapped_column_walk(
 /// True for an `expression_statement` that is nothing but a string —
 /// a module, class or function docstring.
 fn is_docstring_statement(node: Node<'_>) -> bool {
-    let mut cursor = node.walk();
-    let children: Vec<Node<'_>> = node.named_children(&mut cursor).collect();
-    matches!(children.as_slice(), [only] if only.kind() == "string")
+    matches!(named_children(node).as_slice(), [only] if only.kind() == "string")
 }
 
 /// Returns the LHS attribute name for an `attr: Mapped[T] = mapped_column(...)`
@@ -277,8 +275,7 @@ fn mapped_column_declaration_name(node: Node<'_>, source: &[u8]) -> Option<Vec<u
     if node.kind() != "expression_statement" {
         return None;
     }
-    let mut cursor = node.walk();
-    let inner = node.named_children(&mut cursor).next()?;
+    let inner = node.named_child(0)?;
     if inner.kind() != "assignment" {
         return None;
     }

@@ -86,7 +86,11 @@ fn selectable() -> Result<BTreeSet<String>> {
 fn assigns(line: &str, variable: &str) -> bool {
     line.strip_prefix(variable)
         .map(str::trim_start)
-        .is_some_and(|rest| ASSIGNMENTS.iter().any(|operator| rest.starts_with(operator)))
+        .is_some_and(|rest| {
+            ASSIGNMENTS
+                .iter()
+                .any(|operator| rest.starts_with(operator))
+        })
 }
 
 /// The whitespace-separated words a Makefile variable is assigned.
@@ -150,8 +154,8 @@ fn assert_resolves(variable: &str, name: &str, selectable: &BTreeSet<String>) {
 /// Every repository pinned by a `corpus/<name>.json` manifest.
 fn pinned_repositories() -> Result<BTreeSet<String>> {
     let directory = repo_root().join(CORPUS_DIRECTORY);
-    let entries = fs::read_dir(&directory)
-        .with_context(|| format!("unreadable: {}", directory.display()))?;
+    let entries =
+        fs::read_dir(&directory).with_context(|| format!("unreadable: {}", directory.display()))?;
     let mut found = BTreeSet::new();
     for entry in entries {
         let path = entry?.path();

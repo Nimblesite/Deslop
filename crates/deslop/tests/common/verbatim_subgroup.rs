@@ -12,7 +12,8 @@ use serde_json::Value;
 
 use super::{
     approx, cluster_bucket, cluster_file_set, cluster_id, cluster_size, clusters,
-    expect_cluster_spanning, field, fixture, occurrence_files, per_file_metrics, run_report, signal,
+    expect_cluster_spanning, field, fixture, occurrence_files, per_file_metrics, run_report,
+    signal,
     signals::{signal_dump, IDENTICAL_BUCKET},
     Result,
 };
