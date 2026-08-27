@@ -32,6 +32,12 @@ use crate::common::{negative_pin::assert_family_demoted_with_control, *};
 /// The false-negative control.
 const CONTROL: [&str; 2] = ["control_clone_a.py", "control_clone_b.py"];
 
+/// Components suppressed here alongside the demoted residual. Exact
+/// rather than the `>= 1` it replaces: that bound could only fail
+/// downward, while every over-suppression regression moves this number
+/// up.
+const EXPECTED_HIDDEN: u64 = 2;
+
 // [CLONE-NOISE-LITERAL-VARIATION-CALLS] gh #103 class 3.
 #[test]
 fn helper_call_sites_stay_demoted_while_a_real_clone_survives() -> Result<()> {
@@ -42,11 +48,7 @@ fn helper_call_sites_stay_demoted_while_a_real_clone_survives() -> Result<()> {
         &["test_turns.py"],
         &CONTROL,
         1,
+        EXPECTED_HIDDEN,
     )?;
-    assert!(
-        clusters_hidden(&report) >= 1,
-        "the `_post_turn` call-site family must be actively hidden and counted: \
-         {report:#}"
-    );
     Ok(())
 }

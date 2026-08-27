@@ -339,7 +339,10 @@ fn copied_families(
 /// Every member's fingerprint, or `None` when one of them does not
 /// resolve: a component judged from fewer members than it holds is
 /// judged on evidence it does not have.
-fn resolved_members(fused: &FusedCluster, fingerprints: &[Fingerprint]) -> Option<Vec<Fingerprint>> {
+fn resolved_members(
+    fused: &FusedCluster,
+    fingerprints: &[Fingerprint],
+) -> Option<Vec<Fingerprint>> {
     let members: Vec<Fingerprint> = fused
         .members
         .iter()

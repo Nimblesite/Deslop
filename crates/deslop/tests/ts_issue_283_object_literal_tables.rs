@@ -20,7 +20,13 @@
 
 use anyhow::Result;
 
-use crate::common::{negative_pin::assert_family_hidden_with_control, *};
+use crate::common::{
+    negative_pin::{
+        assert_control_is_the_only_published_cluster, assert_family_hidden_with_control,
+        assert_only_the_control_files_carry_duplicated_lines,
+    },
+    *,
+};
 
 /// The three unrelated tables.
 const FAMILY: [&str; 3] = ["theme.ts", "rust_scalars.ts", "tdbin_errors.ts"];
@@ -28,24 +34,42 @@ const FAMILY: [&str; 3] = ["theme.ts", "rust_scalars.ts", "tdbin_errors.ts"];
 /// The false-negative control.
 const CONTROL: [&str; 2] = ["control_clone_a.ts", "control_clone_b.ts"];
 
+/// Duplicated lines the control clone accounts for: eleven lines, twice.
+const CONTROL_LOC: u64 = 22;
+
+/// The three tables and both control files.
+const FILES_ANALYSED: u64 = 5;
+
+/// The committed corpus this pin runs against.
+const FIXTURE: &str = "ts-issue-283-object-literal-tables";
+
+/// What every failure message here names itself as.
+const LABEL: &str = "gh #283 object-literal table family";
+
+/// Node floor at which a run of object-literal properties is a
+/// candidate window — the geometry gh #283 reports.
+const MIN_NODES: u32 = 8;
+
+/// Components [CLONE-NOISE-CONSTANT-TABLE] suppresses here — measured.
+/// The three tables do not pool into one component: the constant-table
+/// rule elects two, and a *higher* count is the filter eating something
+/// this fixture never staged as noise.
+const EXPECTED_HIDDEN: u64 = 2;
+
 // [CLONE-NOISE-CONSTANT-TABLE] gh #283.
 #[test]
 fn unrelated_object_literal_tables_are_suppressed_while_a_real_clone_survives() -> Result<()> {
-    let report = run_report(&fixture("ts-issue-283-object-literal-tables"), 8)?;
+    let report = run_report(&fixture(FIXTURE), MIN_NODES)?;
     for table in FAMILY {
-        assert_family_hidden_with_control(
-            &report,
-            "gh #283 object-literal table family",
-            &[table],
-            &CONTROL,
-        )?;
+        assert_family_hidden_with_control(&report, LABEL, &[table], &CONTROL, EXPECTED_HIDDEN)?;
     }
+    assert_control_is_the_only_published_cluster(&report, LABEL, &CONTROL, CONTROL_LOC)?;
+    assert_only_the_control_files_carry_duplicated_lines(&report, LABEL, &CONTROL);
     assert_eq!(
-        metric_field(&report, "duplicated_loc").as_u64(),
-        Some(22),
-        "only the control clone's eleven lines, twice, may count as duplicated: \
-         {lines:#?}",
-        lines = visible_cluster_lines(&report),
+        field(&report, "files_analysed").as_u64(),
+        Some(FILES_ANALYSED),
+        "{LABEL}: all three tables and both control files were analysed, so the \
+         suppression was decided rather than the files skipped: {report:#}"
     );
     Ok(())
 }

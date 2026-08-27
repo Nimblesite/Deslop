@@ -37,27 +37,45 @@ impl Corpus {
     /// Registers one file per entry of `bodies` and fingerprints each
     /// over its whole extent, so member index == position in `bodies`.
     fn new(bodies: &[&str]) -> Self {
+        let one_each: Vec<&[&str]> = bodies.iter().map(std::slice::from_ref).collect();
+        Self::across_files(&one_each)
+    }
+
+    /// Registers one file per entry of `files`, holding that entry's
+    /// bodies concatenated, and fingerprints every body over its own
+    /// byte range. Member indices run in reading order — file by file,
+    /// body by body — so a family reads as a list of positions whether
+    /// or not its members share a file, which is what
+    /// [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] turns on.
+    fn across_files(files: &[&[&str]]) -> Self {
         let mut registry = FileRegistry::new();
         let mut corpus = Self {
             sources: HashMap::new(),
             languages: HashMap::new(),
             fingerprints: Vec::new(),
         };
-        for (position, body) in bodies.iter().enumerate() {
+        for (position, bodies) in files.iter().enumerate() {
             let file_id = registry.register(format!("case{position}.py").into());
-            let _previous = corpus.sources.insert(file_id, body.as_bytes().to_vec());
             let _language = corpus.languages.insert(file_id, "python");
-            corpus.fingerprints.push(Fingerprint {
-                hash: [0_u8; 32],
-                file_id,
-                byte_range: ByteRange {
-                    start: 0,
-                    end: body.len(),
-                },
-                node_count: 16,
-            });
+            let _previous = corpus.sources.insert(file_id, bodies.concat().into_bytes());
+            corpus.fingerprint_each(file_id, bodies);
         }
         corpus
+    }
+
+    /// Fingerprints each of one file's bodies over its own byte range.
+    fn fingerprint_each(&mut self, file_id: FileId, bodies: &[&str]) {
+        let mut start: usize = 0;
+        for body in bodies {
+            let end = start.saturating_add(body.len());
+            self.fingerprints.push(Fingerprint {
+                hash: [0_u8; 32],
+                file_id,
+                byte_range: ByteRange { start, end },
+                node_count: 16,
+            });
+            start = end;
+        }
     }
 
     /// Splits one component holding every registered file, in order.
@@ -206,5 +224,40 @@ fn edges_survive_only_where_both_endpoints_did() {
         "only the edge joining the two surviving members is kept; an edge \
          pointing at the dropped stranger would misreport the component's \
          cross-file strength"
+    );
+}
+
+// [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] The price the arbitration
+// names, charged where a reader can see it. Members 0 and 1 share every
+// byte, so the old predicate protected them; they also share a file,
+// which is proof of the idiom the filter just recognised rather than
+// proof of a paste.
+#[test]
+fn an_intra_file_verbatim_family_takes_the_suppression_with_its_component() {
+    let corpus = Corpus::across_files(&[&[RETRY_DEFAULTS, RETRY_DEFAULTS, THEME_TOKENS]]);
+    assert_eq!(
+        member_lists(&corpus.split_all()),
+        vec![vec![0, 1, 2]],
+        "a byte-identical family that never leaves its file is not a copy —          nothing is partitioned off it, and the whole component is handed on          for the report to hide"
+    );
+}
+
+// The discriminating case: one suppressed component holding both kinds
+// of family at once. Only the family that crossed a file boundary is a
+// copy, and only it escapes.
+#[test]
+fn only_the_cross_file_family_escapes_a_suppressed_component() {
+    let corpus = Corpus::across_files(&[
+        &[RETRY_DEFAULTS],
+        &[RETRY_DEFAULTS],
+        &[THEME_TOKENS, THEME_TOKENS],
+    ]);
+    assert_eq!(
+        member_lists(&corpus.split_all()),
+        vec![vec![0, 1]],
+        "the retry table is byte-identical across two files, so it is a paste and \
+         survives the suppression its cluster-mates earned; the theme table is \
+         byte-identical twice inside one file, so it is the idiom and leaves with \
+         the component — a pass that kept it would republish scaffolding as a clone"
     );
 }

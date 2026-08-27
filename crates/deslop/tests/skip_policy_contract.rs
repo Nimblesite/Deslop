@@ -23,7 +23,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    path::Path,
     process::Command,
 };
 
@@ -510,24 +509,12 @@ fn every_corpus_make_target_names_a_cargo_test_target_that_exists() -> Result<()
     Ok(())
 }
 
-/// [TEST-ONE-BINARY] The runtime path a corpus test answers to inside the
-/// single `suite` binary: `<module>::<test>`, where the module is the corpus
-/// suite file's own stem. `--exact` matches this path, not the bare function
-/// name.
-fn qualified(test: &str) -> String {
-    let module = Path::new(CORPUS_SUITE)
-        .file_stem()
-        .and_then(std::ffi::OsStr::to_str)
-        .unwrap_or_default();
-    format!("{module}::{test}")
-}
-
 #[test]
 fn the_scheduled_corpus_slice_names_tests_that_still_exist() -> Result<()> {
     let suite: Vec<String> = ignored_tests()?
         .into_iter()
         .filter(|skip| skip.file == CORPUS_SUITE)
-        .map(|skip| qualified(&skip.test))
+        .map(|skip| skip.test)
         .collect();
     let slice = scheduled_slice()?;
     assert!(
@@ -540,10 +527,18 @@ fn the_scheduled_corpus_slice_names_tests_that_still_exist() -> Result<()> {
 }
 
 /// Every name the scheduled slice selects must be a test the suite declares,
-/// spelled the way `--exact` matches it: the `<module>::<test>` path the
-/// single `suite` binary reports, not the bare function name. `--exact` makes
-/// a stale or unqualified name select nothing rather than something adjacent,
-/// and a run that executes zero tests reports green — gh #412, one rename away.
+/// spelled the way `--exact` actually matches it: the bare function name.
+///
+/// This assertion used to qualify both sides as `<module>::<test>`, on the
+/// premise that every test answers inside one `suite` binary. That premise is
+/// false for this suite — `crates/deslop/Cargo.toml` declares `corpus_repos`
+/// as its own `[[test]]` target, so its file is that binary's crate root and
+/// its tests are top level. Qualifying both sides made the comparison agree
+/// with itself and pass while the Makefile named tests that resolve to
+/// nothing: `--exact` selected zero tests and the run reported green over
+/// zero repositories. That is gh #412 exactly, reintroduced by the very gate
+/// written to prevent it, which is why the names are compared unqualified
+/// here and why the target layout is asserted rather than assumed.
 fn assert_slice_resolves(slice: &[String], suite: &[String]) {
     for name in slice {
         assert!(

@@ -153,7 +153,10 @@ pub(crate) use structural_families::split_structural_families;
 pub(crate) use verbatim_subgroup::split_noise_verbatim_families;
 
 use crate::{
-    ast::ByteRange, clone_category::CloneCategory, fingerprint::Fingerprint, state::FileId,
+    ast::{named_children, ByteRange},
+    clone_category::CloneCategory,
+    fingerprint::Fingerprint,
+    state::FileId,
 };
 
 /// Decides whether `cluster` is a known noise pattern that must not be
@@ -430,11 +433,9 @@ pub(super) fn node_contains_kind(node: Node<'_>, kind: &str) -> bool {
     if node.kind() == kind {
         return true;
     }
-    let mut cursor = node.walk();
-    let found = node
-        .named_children(&mut cursor)
-        .any(|child| node_contains_kind(child, kind));
-    found
+    named_children(node)
+        .into_iter()
+        .any(|child| node_contains_kind(child, kind))
 }
 
 /// Returns true when `needle` occurs in `bytes`.
@@ -572,11 +573,9 @@ pub(super) fn node_contains_identifier(node: Node<'_>, source: &[u8], needle: &[
     {
         return true;
     }
-    let mut cursor = node.walk();
-    let found = node
-        .named_children(&mut cursor)
-        .any(|child| node_contains_identifier(child, source, needle));
-    found
+    named_children(node)
+        .into_iter()
+        .any(|child| node_contains_identifier(child, source, needle))
 }
 
 /// Walks `root` looking for the smallest descendant of `kinds` whose
@@ -595,10 +594,7 @@ pub(crate) fn enclosing_kind<'tree>(
         if kinds.contains(&node.kind()) {
             best = Some(node);
         }
-        let mut cursor = node.walk();
-        for child in node.named_children(&mut cursor) {
-            stack.push(child);
-        }
+        stack.extend(named_children(node));
     }
     best
 }

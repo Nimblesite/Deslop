@@ -19,6 +19,7 @@
 use tree_sitter::Node;
 
 use super::{enclosing_kind, function_kinds, parse_for, trimmed_snippet_range, Snippet};
+use crate::ast::named_children;
 
 /// Top-level construct role a cluster member resolves to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,11 +79,9 @@ fn role_of(node: Node<'_>, language: &str) -> Option<MemberRole> {
 
 /// Resolves the role inside a Python decorated definition wrapper.
 fn decorated_definition_role(node: Node<'_>, language: &str) -> Option<MemberRole> {
-    let mut cursor = node.walk();
-    let role = node
-        .named_children(&mut cursor)
-        .find_map(|child| role_of(child, language));
-    role
+    named_children(node)
+        .into_iter()
+        .find_map(|child| role_of(child, language))
 }
 
 /// All node kinds that count as a top-level construct for role

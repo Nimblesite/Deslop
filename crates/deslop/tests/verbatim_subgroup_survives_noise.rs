@@ -48,13 +48,9 @@ use crate::common::{
         assert_only_the_control_files_carry_duplicated_lines,
     },
     signals::*,
+    verbatim_subgroup::*,
     *,
 };
-
-/// Node floor low enough that a run of four sibling constant
-/// declarations, a run of four calls, or one collection cell qualifies
-/// as a candidate window — the geometry all three issues report.
-const MIN_NODES: u32 = 8;
 
 /// The node floor the collection-cell family needs: one cell of a list
 /// literal is a smaller window than a four-statement run.
@@ -66,11 +62,6 @@ const CONST_COPY: [&str; 2] = ["retry_defaults.py", "retry_defaults_copy.py"];
 /// The stranger whose only relation to [`CONST_COPY`] is its shape.
 const CONST_STRANGER: &str = "theme_tokens.py";
 
-/// The two byte-identical call runs, and the run whose literals vary.
-const CALL_COPY: [&str; 2] = ["invoice_emitter.py", "invoice_emitter_copy.py"];
-/// The stranger whose only relation to [`CALL_COPY`] is its shape.
-const CALL_STRANGER: &str = "refund_emitter.py";
-
 /// The single file holding one list literal whose first two cells are
 /// byte-identical and whose third is not.
 const CELL_FILE: &str = "ledger_rows.py";
@@ -81,25 +72,6 @@ const CELL_STRANGER_LINE: u64 = 4;
 
 /// Lines each copy of the constant table covers.
 const CONST_LOC_PER_FILE: u64 = 4;
-/// Lines each copy of the call run covers — the whole five-line `emit`
-/// function, not only the four `persist` calls inside it.
-///
-/// `invoice_emitter.py` and `invoice_emitter_copy.py` are byte-identical
-/// files, so `def emit():` is as duplicated as the calls under it, and
-/// the published `identical` cluster spans L1-5 of both. Four was what
-/// the same-file overlap collapse elected while it ranked an
-/// overlapping run by cross-file edge strength: the four-call window
-/// scored higher than the function enclosing it purely by carrying less
-/// code, and the `def` line went uncounted
-/// ([PIPELINE-CLUSTER-EXACT-SCOPE], gh #408). The undercount was the
-/// artifact; five is what the two files actually share.
-const CALL_LOC_PER_FILE: u64 = 5;
-
-/// Renders one `verbatim-subgroup` case.
-fn render(case: &str, min_nodes: u32) -> Result<Value> {
-    run_report(&fixture("verbatim-subgroup").join(case), min_nodes)
-}
-
 /// `(start_line, end_line)` for every occurrence of `cluster`, sorted.
 fn occurrence_ranges(cluster: &Value) -> Vec<(u64, u64)> {
     let mut ranges: Vec<(u64, u64)> = occurrences(cluster)
@@ -113,82 +85,6 @@ fn occurrence_ranges(cluster: &Value) -> Vec<(u64, u64)> {
         .collect();
     ranges.sort_unstable();
     ranges
-}
-
-/// Per-file duplicated LOC as the report renders it, `0` when the file
-/// carries no row at all.
-fn duplicated_loc_for(report: &Value, file: &str) -> u64 {
-    per_file_metrics(report)
-        .iter()
-        .find(|metric| {
-            field(metric, "path")
-                .as_str()
-                .is_some_and(|path| path.ends_with(file))
-        })
-        .map_or(0, |metric| {
-            field(metric, "duplicated_loc").as_u64().unwrap_or_default()
-        })
-}
-
-/// Every visible cluster as `id [bucket] files` — the smallest dump
-/// that diagnoses a failure without re-running the scan.
-fn published(report: &Value) -> Vec<String> {
-    clusters(report)
-        .iter()
-        .map(|cluster| {
-            format!(
-                "{id} [{bucket}] {files:?}",
-                id = cluster_id(cluster),
-                bucket = cluster_bucket(cluster),
-                files = occurrence_files(cluster),
-            )
-        })
-        .collect()
-}
-
-/// Asserts the copy spanning `copy` survives as one saturated,
-/// `identical`, size-2 cluster that the stranger is not part of.
-fn assert_copy_survives_alone(
-    report: &Value,
-    label: &str,
-    copy: &[&str; 2],
-    stranger: &str,
-) -> Result<()> {
-    let cluster = expect_cluster_spanning(report, copy)?;
-    let dump = signal_dump(cluster);
-    assert_eq!(
-        cluster_bucket(cluster),
-        "identical",
-        "{label}: the pair is copied byte for byte, so it is `identical` \
-         whatever else joined its cluster — {dump}"
-    );
-    assert_eq!(
-        cluster_size(cluster),
-        2,
-        "{label}: exactly the two copies are shown — {dump}"
-    );
-    assert!(
-        approx(signal(cluster, "structural"), 1.0)
-            && approx(signal(cluster, "token_jaccard"), 1.0)
-            && approx(signal(cluster, "fused"), 1.0),
-        "{label}: byte-proven duplication saturates every axis it was \
-         measured on — {dump}"
-    );
-    assert_eq!(
-        cluster_file_set(cluster),
-        copy.iter().map(|name| (*name).to_owned()).collect(),
-        "{label}: the copy's cluster spans exactly its own two files"
-    );
-    assert!(
-        !occurrence_files(cluster)
-            .iter()
-            .any(|file| file == stranger),
-        "{label}: {stranger} is not a copy of anything — it shares only the \
-         shape normalisation leaves behind, so it must not be an occurrence \
-         of the copy's cluster: {files:?}",
-        files = occurrence_files(cluster),
-    );
-    Ok(())
 }
 
 // [CLONE-NOISE-CONSTANT-TABLE] Two byte-identical constant tables stay
@@ -230,7 +126,7 @@ fn a_copied_constant_table_survives_an_unrelated_table_in_its_cluster() -> Resul
 // reported.
 #[test]
 fn a_copied_call_run_survives_a_literal_varying_run_in_its_cluster() -> Result<()> {
-    let report = render("literal-calls", MIN_NODES)?;
+    let report = render(CALL_CASE, MIN_NODES)?;
     assert_copy_survives_alone(&report, "literal calls", &CALL_COPY, CALL_STRANGER)?;
     for file in CALL_COPY {
         assert_eq!(
