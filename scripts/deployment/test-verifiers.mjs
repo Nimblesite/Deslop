@@ -243,7 +243,11 @@ function vsixRejectsForeignPlatformBundle(work) {
 
 function vsixRejectsCompiledOutDir(work) {
   const vsixPath = buildVsixZip(work, { extraOutFile: true });
-  expectFail(verifyVsix, [vsixPath, hostPlatform], /must not include extension\/out\//);
+  expectFail(
+    verifyVsix,
+    [vsixPath, hostPlatform],
+    /from outside the extension: [^\n]*extension\/out\//,
+  );
 }
 
 function vsixAcceptsValidPackage(work) {
