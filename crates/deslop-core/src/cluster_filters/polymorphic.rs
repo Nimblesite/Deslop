@@ -213,11 +213,9 @@ fn scaffolding_besides_functions<'tree>(
         return true;
     }
     match node.kind() {
-        "module" | "class_definition" | "block" | "decorated_definition" => {
-            named_children(node)
-                .into_iter()
-                .all(|child| scaffolding_besides_functions(child, range, kinds, functions))
-        }
+        "module" | "class_definition" | "block" | "decorated_definition" => named_children(node)
+            .into_iter()
+            .all(|child| scaffolding_besides_functions(child, range, kinds, functions)),
         "expression_statement" => is_docstring(node),
         kind => is_inert_declaration_kind(kind),
     }

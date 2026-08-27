@@ -135,6 +135,9 @@ const AWAITED_CALL: &str = "await client.delete(";
 const HEADER_ARGUMENT: &str = "headers={\"X-API-Key\": test_api_key}";
 const STATUS_ASSERTION: &str = "assert resp.status_code == 204";
 
+/// Which set of figures a percentage failure is about.
+const REPO_SCOPE: &str = "repo";
+
 /// The one thing that differs between the copies.
 const ORDERS_ROUTE: &str = "/api/v1/orders/";
 const INVOICES_ROUTE: &str = "/api/v1/invoices/";
@@ -346,10 +349,12 @@ fn assert_the_pair_is_actionable(pair: &Value) {
         dump = signal_dump(pair),
     );
     assert!(
-        fused >= ACT_NOW_FUSED && fused > REUSE_FUSED,
-        "{LABEL}: fused={fused:.4} must clear the act-now line {ACT_NOW_FUSED} \
-         and the reuse-bias line {REUSE_FUSED}, or an agent is told to author \
-         the copy this fixture stages: {dump}",
+        fused >= ACT_NOW_FUSED,
+        "{LABEL}: fused={fused:.4} must clear the act-now line {ACT_NOW_FUSED}, \
+         the stronger of the two agent-facing bars — clearing it clears the \
+         reuse-bias line {REUSE_FUSED} with it. Below either, an agent asking \
+         find-similar is told to go ahead and author the copy this fixture \
+         stages: {dump}",
         dump = signal_dump(pair),
     );
 }
@@ -393,7 +398,7 @@ fn assert_percent_re_derives(
 
 /// The repo totals: both findings' lines, both findings counted, all three
 /// copied files named.
-fn assert_repo_metrics(report: &Value) -> Result<()> {
+fn assert_repo_totals(report: &Value) {
     assert_eq!(
         (
             duplicated_loc(report),
@@ -410,10 +415,15 @@ fn assert_repo_metrics(report: &Value) -> Result<()> {
          the gate by the whole finding: {lines:#?}",
         lines = visible_cluster_lines(report),
     );
+}
+
+/// The repo percentage, re-derived from the totals asserted above.
+fn assert_repo_metrics(report: &Value) -> Result<()> {
+    assert_repo_totals(report);
     let reported = metric_field(report, "duplication_percent")
         .as_f64()
         .unwrap_or(-1.0);
-    assert_percent_re_derives("repo", reported, EXPECTED_DUPLICATED_LOC, ANALYSED_LOC)
+    assert_percent_re_derives(REPO_SCOPE, reported, EXPECTED_DUPLICATED_LOC, ANALYSED_LOC)
 }
 
 /// The `metrics.per_file` row for `name`.

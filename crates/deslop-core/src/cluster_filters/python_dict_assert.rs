@@ -188,9 +188,7 @@ fn decorator_expression_is_static(expression: Node<'_>) -> bool {
 fn is_dotted_name(node: Node<'_>) -> bool {
     match node.kind() {
         "identifier" => true,
-        "attribute" => {
-            named_children(node).into_iter().all(is_dotted_name)
-        }
+        "attribute" => named_children(node).into_iter().all(is_dotted_name),
         _ => false,
     }
 }

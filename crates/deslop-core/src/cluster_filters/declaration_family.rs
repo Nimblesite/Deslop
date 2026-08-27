@@ -91,9 +91,7 @@ use std::{
 
 use tree_sitter::Node;
 
-use crate::{
-    ast::named_children, clone_category::CloneCategory, cluster::Cluster, state::FileId,
-};
+use crate::{ast::named_children, clone_category::CloneCategory, cluster::Cluster, state::FileId};
 
 use super::{
     collect_snippets, enclosing_kind, forwarding::forwarding_body, node_intersects_range,

@@ -64,7 +64,7 @@ const TEST_TARGET_KIND: &str = "test";
 /// the memory work in #166); `corpus_manifest_contract` is the curation those
 /// same two oversized repositories block (gh #426); the two gh #369 entries
 /// are red on purpose against unfinished fusion and embedding behaviour. The
-/// eleven gh #432–#434 entries are the fused-score follow-ups' own accuracy
+/// nine gh #432–#434 entries are the fused-score follow-ups' own accuracy
 /// pins, skipped in flight per `docs/plans/fused-score-followups.md` — each
 /// returns when its issue lands. The three gh #439 entries are the same
 /// bargain for curated recall: they pin that `type2_recall` cannot tell the
@@ -73,7 +73,7 @@ const TEST_TARGET_KIND: &str = "test";
 ///
 /// Those counts are prose, and prose drifts. [`SKIPS_PER_ISSUE`] is what
 /// stops it drifting silently.
-const CURATED_SKIPS: [(&str, &str, u32); 28] = [
+const CURATED_SKIPS: [(&str, &str, u32); 26] = [
     (
         "crates/deslop-lsp/tests/lsp_embedding_determinism.rs",
         "lsp_embedding_refresh_is_bounded_and_reproducible",
@@ -192,16 +192,6 @@ const CURATED_SKIPS: [(&str, &str, u32); 28] = [
         434,
     ),
     (
-        "crates/deslop/tests/python_literal_variation_calls.rs",
-        "rest_endpoint_family_is_suppressed_while_a_real_clone_survives",
-        434,
-    ),
-    (
-        "crates/deslop/tests/python_literal_variation_calls.rs",
-        "write_file_call_family_is_suppressed_while_a_real_clone_survives",
-        434,
-    ),
-    (
         "crates/deslop/tests/report_golden.rs",
         "cold_report_matches_committed_golden_byte_for_byte",
         432,
@@ -221,7 +211,7 @@ const SKIPS_PER_ISSUE: [(u32, usize); 7] = [
     (426, 1),
     (432, 3),
     (433, 4),
-    (434, 4),
+    (434, 2),
     (439, 3),
 ];
 

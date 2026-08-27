@@ -104,9 +104,8 @@ fn words(makefile: &str, variable: &str) -> Result<Vec<String>> {
                  nowhere else, so a missing one leaves the workflow selecting nothing"
             )
         })?;
-    let value = line
-        .splitn(2, '=')
-        .nth(1)
+    let (_name, value) = line
+        .split_once('=')
         .ok_or_else(|| anyhow!("{MAKEFILE}: `{variable}` is declared with no value"))?;
     Ok(value.split_whitespace().map(ToOwned::to_owned).collect())
 }

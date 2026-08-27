@@ -206,6 +206,18 @@ pub struct ReportInputs<'a, S: BuildHasher> {
     pub parse_cache: &'a crate::cluster_filters::ParseCache,
 }
 
+/// Stage label on the cluster-noise counters emitted once the render
+/// pass has finished convicting ([PERF-FLUTTER-TODO-OBSERVABILITY]).
+///
+/// The counters live on the run-shared [`ParseCache`], so by this point
+/// they hold the noise-split stage *plus* every render-stage check —
+/// hence `run_cumulative`, not a stage name. The distinction is not
+/// cosmetic: the split stage emitted `fired=0` over a 14-member
+/// component and that partial total was twice read as the whole run's,
+/// concluding the filters never examined a cluster they had in fact
+/// examined and declined (gh #434).
+const NOISE_TOTALS_RUN_STAGE: &str = "run_cumulative_after_report_render";
+
 /// Converts the internal representation into a report ready for
 /// serialisation. Applies [EXCLUSION-CONFIG] `report_hide` semantics:
 /// per-occurrence `hidden` flags come from `exclusion`, and any cluster
@@ -248,6 +260,12 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
             *slot = Some(built);
         }
     }
+    // Every render-stage noise check has now run: `cluster_is_hidden` is
+    // the only caller downstream of the split stage, and it is reached
+    // solely from the loop above. Without this the render stage's
+    // convictions were recorded into the shared counters and discarded
+    // unread ([PERF-FLUTTER-TODO-OBSERVABILITY]).
+    parse_cache.log_noise_totals(NOISE_TOTALS_RUN_STAGE);
     let materialised: Vec<(ReportCluster, bool)> = slots.into_iter().flatten().collect();
     // The order covered exactly `0..len`, so every slot is filled; a
     // short collect would mean a cluster vanished mid-render.
