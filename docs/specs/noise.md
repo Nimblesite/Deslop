@@ -236,6 +236,24 @@ sequence contained in each member's range) and at least one argument position
 differs in string-literal bytes. Members whose literals all agree never match,
 so byte-identical copies keep the family's verbatim escape hatch.
 
+#### [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT] The covered-statement precondition
+
+The filter may only fire on a range whose **every covered statement contains a
+call**, with one exception: a **single lone call-free statement** is admitted
+when — and only when — it is an assertion (a Python `assert_statement`) whose
+subject identifiers are non-empty and **all bound by the assignment targets of
+the covered calls**. That is the idiom made precise: an assertion on the value
+a varying call returned (`monkeypatch.setenv("HOST", h)` then
+`assert host == h`) is part of the scaffolding, not authored logic beside it,
+so it may not block the filter on its own (gh #434, `python-issue-70` /
+`python-issue-71`).
+
+**Two or more call-free statements still block the filter.** Authored
+call-free data handling between the varying calls is exactly the extractable
+logic a real clone shares, which is why `rename_needs_an_anchor` pins the
+precondition and keeps holding unchanged: a Type-2 clone that mixes one varying
+call with its own invariant assertions and data handling must keep publishing.
+
 The sequence form requires **every** position to vary. A sequence mixing
 varying calls with invariant ones is not payload: the invariant calls are
 shared logic the members genuinely duplicate, so the cluster stays visible.

@@ -4,7 +4,7 @@ Scoped to **regressions since `f92300e` (v0.32.0)**: behaviour that is worse at 
 
 Everything else that was on this page — the fusion-arithmetic departures, the parked engine defects, the gate and coverage work, the documentation drift — is not a regression and now lives in [`plans/fused-score-followups.md`](plans/fused-score-followups.md). It is not restated here.
 
-**Verdict: not ready. One blocker remains — the #434 noise families (§ 2). The gate compile (§ 1) is fixed and verified.**
+**Verdict: not ready.** What stands between this branch and the release: two #434 fixes half-landed (`release-gate`, in progress) and the packaged Action unvalidated. The gate compile (§ 1) is fixed and verified.
 
 ## 1. The gate does not compile — introduced on this branch (fixed)
 
@@ -61,13 +61,16 @@ Recorded so neither gets re-raised against this release.
 - [x] **Gate the two benches** — `required-features = ["benchmark"]` on both `[[bench]]` sections (§1). Fixed by `release-gate` over TMC; verified here against the exact gate command.
 - [x] **#434 — `duplicated_loc` must not count a suppressed family.** No separate fix exists: metrics already fold only visible clusters, pinned green by `metric_excludes_hidden_clusters` (re-run here, passing). This item collapses into the two fix items below — what § 2 still shows counting is the *published* trio, which goes hidden only when #72 lands.
 - [x] **#434 — decide the `[CLONE-NOISE-VERBATIM-SUBGROUP]` arbitration** and write it into `docs/specs/noise.md`. Decided: the hatch is **cross-file only** ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE]) and byte-identity means **exact source bytes** ([CLONE-NOISE-VERBATIM-SUBGROUP-EXACT-BYTES]). #72/#107 unblocked.
-- [ ] **#434 — fix #70 / #71**, where the filter records no suppression at all. Move `rename_needs_an_anchor` with it or explain why it still holds. *(`release-gate`'s — `crates/**` by TMC delegation.)*
-- [ ] **#434 — fix #72 / #107**, where suppression is counted and same-file cores publish anyway. **Unblocked** — the arbitration is decided and written; implement [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] and [-EXACT-BYTES] in `docs/specs/noise.md`. *(`release-gate`'s — `crates/**`.)*
-- [ ] **Restate all four #434 pins** against the decided spec and delete their `CURATED_SKIPS` rows. *(`release-gate`'s — `crates/**`.)*
-- [ ] **Correct #459 on GitHub** — the measurement does not hold; post the cold/warm/min-nodes sweep. Do not close it; that is the issue author's call.
-- [ ] **Re-bless the stale goldens once, last** — `report_golden` (#432) and `incremental_multilang_golden` ×3 (#433) are stale, not wrong, and `[PERF-FLUTTER-TODO-ACCURACY]`'s recorded hash `2562e181…` predates `[PIPELINE-CLUSTER-ELECT-CONTAINER]`. Blocked on #432 and #433 landing.
-- [ ] **Run the full gate on the candidate.** A strict `make test-corpus` cannot pass yet — `flutter/memory` and `fsharp/memory` are `corpus/known-failures.json` entries under #166, `corpus/flutter.json` sets `max_peak_rss_mb: 9000` above a standard runner, and #426 keeps `corpus_manifest_contract` red. Either land those first or state plainly that the release ships without a strict corpus run.
-- [ ] **Validate the candidate packaged Action** through the download/install/execute path users receive. A conditional `diff-gate` job reporting a skip is not evidence.
+- [ ] **#434 — fix #70 / #71** — **owner `release-gate`, in progress.** Rule decided: every covered statement must carry a call, **except one lone call-free statement**, admitted only as a Python `assert_statement` whose subject identifiers are non-empty and all bound by the covered calls' assignment targets. Two or more call-free statements still block the filter — authored data handling is the extractable logic `rename_needs_an_anchor` protects, so the pin holds as is. Spec: [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT] in `docs/specs/noise.md`.
+- [ ] **#434 — fix #72 / #107** — **owner `release-gate`, in progress**, implementing [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] and [-EXACT-BYTES] exactly as `docs/specs/noise.md` states. Unblocked by the decided arbitration.
+- [ ] **Restate all four #434 pins and delete their `CURATED_SKIPS` rows** — **owner `release-gate`, blocked on the two fixes.** Surgery: 28 → 24 rows, `SKIPS_PER_ISSUE` loses `(434, 4)` so 7 → 6 entries.
+- [ ] **Re-measure all four #434 fixtures** with the release CLI at each pin's own `--min-nodes` and rewrite the § 2 table with post-fix dup%, `duplicated_loc` and hidden — **owner `pi-audit`, after the fixes land.** No figure carries over unmeasured.
+- [ ] **Recount the § 1 skip sentence after the pins un-ignore** — 24 rows, #434 out of the red-under-ignored list, `skip_policy_contract.rs` prose to "seven gh #432–#433" — **owner `pi-audit`, counted from the registry, nothing guessed.**
+- [ ] **Correct #459 on GitHub** — **owner `pi-audit`.** Post the cold/warm/min-nodes sweep as a comment; **never close** (confirmed). Tick only when the comment is live.
+- [ ] **Re-bless the stale goldens once, last** — **owner `release-gate`**; an investigation is classifying each golden stale vs engine-defect vs restatement, and the findings land with `pi-audit` to write up. Blocked on #432/#433.
+- [ ] **Strict `make test-corpus` — a signable either/or** — **owner `release-gate`.** `flutter/memory` and `fsharp/memory` are `corpus/known-failures.json` entries under #166, `corpus/flutter.json` needs `max_peak_rss_mb: 9000` against a 7 GB standard runner, and #426 keeps `corpus_manifest_contract` red. Either land those, or ship with this exact release-note sentence: *"This release ships without a strict corpus run: the Flutter and F# corpus checks remain known-failures under gh #166 (runner memory), and the corpus manifest scope contract (gh #426) is red; every other gate ran green on the candidate."*
+- [ ] **Run the full gate on the candidate** — **after `release-gate`'s #72/#107 lands** (two agents mid-edit in `crates/**`; not now, confirmed).
+- [ ] **Validate the candidate packaged Action** — **owner `pi-audit`.** Download, install, execute on a real repo; record commands and real output in § 3. A skipped conditional `diff-gate` job is not evidence. **Version drift is in scope:** the shipped Action pins `deslop` 0.27 while 0.32.0 is released (found by `Osprey2`) — the validation must catch and record it.
 
 ## Retired findings — citation index
 
