@@ -14,6 +14,9 @@ use args::collect_argument_shapes;
 /// Per-argument shape extraction for the filter.
 mod args;
 
+/// Assertion admission for the covered-statement rule.
+mod asserts;
+
 /// Detects literal-variation call scaffolding
 /// ([CLONE-NOISE-LITERAL-VARIATION-CALLS]): every cluster member
 /// resolves to the same callee/arity call shape — one enclosing call,
@@ -123,7 +126,7 @@ fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>], cache: &ParseCac
     let Some(cells) = cells else {
         return false;
     };
-    if !cells.iter().all(|cell| cell.all_statements_have_call) {
+    if !cells.iter().all(|cell| cell.statements_admissible) {
         return false;
     }
     let sequences: Option<Vec<&[CallShape]>> =

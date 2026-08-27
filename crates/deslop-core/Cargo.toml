@@ -70,10 +70,15 @@ workspace = true
 name = "suite"
 path = "tests/suite.rs"
 
+# Both benches import the `benchmark`-gated measurement modules, so they only
+# build when that feature is on. Without this, `--all-targets` builds them
+# unconditionally and fails E0432.
 [[bench]]
 name = "shared_subtree_alignment"
 harness = false
+required-features = ["benchmark"]
 
 [[bench]]
 name = "cluster_signals"
 harness = false
+required-features = ["benchmark"]

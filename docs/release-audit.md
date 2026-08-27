@@ -4,15 +4,15 @@ Scoped to **regressions since `f92300e` (v0.32.0)**: behaviour that is worse at 
 
 Everything else that was on this page — the fusion-arithmetic departures, the parked engine defects, the gate and coverage work, the documentation drift — is not a regression and now lives in [`plans/fused-score-followups.md`](plans/fused-score-followups.md). It is not restated here.
 
-**Verdict: not ready. Two blockers.**
+**Verdict: not ready. One blocker remains — the #434 noise families (§ 2). The gate compile (§ 1) is fixed and verified.**
 
-## 1. The gate does not compile — introduced on this branch
+## 1. The gate does not compile — introduced on this branch (fixed)
 
 `crates/deslop-core/Cargo.toml` declares two bench targets, `cluster_signals` and `shared_subtree_alignment`, without `required-features = ["benchmark"]`. Both sources import `cluster::benchmark` / `overlap::benchmark`, which are `#[cfg(feature = "benchmark")]`. The gate runs `--all-targets --features deslop-core/live,deslop-lsp/profiling`, and `deslop-lsp/profiling` pulls in `fxprof-processed-profile` and `pprof` only — it does not enable `deslop-core/benchmark`. So cargo builds the benches without the feature and dies.
 
 Reproduced directly: `cargo check -p deslop-core --benches` fails `E0432`, "could not find `benchmark` in `cluster`" and "in `overlap`", with rustc naming both gated modules as configured out. `make test` and `make lint` both fail to compile at HEAD.
 
-**Fix:** add `required-features = ["benchmark"]` to both `[[bench]]` sections. `scripts/benchmarks/cluster-signals.mjs` and `shared-subtree-alignment.mjs` already pass `--features benchmark` themselves, so nothing else moves. With that gate applied locally and reverted, the full suite runs 1210 passed, 0 failed — this is the branch's only self-inflicted damage.
+**Fix — applied by `release-gate` over TMC, verified here:** `required-features = ["benchmark"]` now sits on both `[[bench]]` sections. `scripts/benchmarks/cluster-signals.mjs` and `shared-subtree-alignment.mjs` already pass `--features benchmark` themselves, so nothing else moved. The exact gate command now compiles every target clean, and the full suite with the fix runs 1210 passed, 0 failed — this was the branch's only self-inflicted damage.
 
 That count excludes the 28 rows of `CURATED_SKIPS` in `crates/deslop/tests/skip_policy_contract.rs`. Twelve of them are accuracy tests that are red for real reasons under `-- --ignored`: `operator_drift_is_not_duplication` ×2 and `report_golden` (#432), `incremental_multilang_golden` ×3 and `lsh_only_nearmiss_recall` (#433), the four #434 pins below, and `lsp_embedding_determinism` / `issue_343_sum_clamp_saturation` (#369). Read "1210 passed" next to that number, never on its own.
 
@@ -24,7 +24,7 @@ Re-measured at HEAD with the release CLI, at each pin's own `--min-nodes`, on th
 |---|---|---|---|---|
 | `python-issue-71` | one `nearly_identical` family ×4, ranked **#1** above the real clone staged in the same run (weight 108 vs 44) | 70.18 | 40 | 0 |
 | `python-issue-70` | one `structural_only` family ×4 | 57.14 | 28 | 0 |
-| `python-issue-72` | one `structural_only` family ×3 | 67.39 | 31 | 3 |
+| `python-issue-72` | one `structural_only` trio ×3, all intra-file in `test_fly_host.py`, `hidden=false` — its 15 lines are counted in `duplicated_loc` (31 of 46) | 67.39 | 31 | 3 |
 | `python-issue-107` | three `identical` clusters, one same-file pair per file | 45.83 | 22 | 4 |
 
 Each fixture also stages a real 16-line clone as a control. Every row counts the noise family on top of it, so `--fail-over` trips on scaffolding.
@@ -58,8 +58,8 @@ Recorded so neither gets re-raised against this release.
 
 ## To finish this release
 
-- [ ] **Gate the two benches** — `required-features = ["benchmark"]` on both `[[bench]]` sections (§1). Two lines; verified fix.
-- [ ] **#434 — `duplicated_loc` must not count a suppressed family.** Arbitration-independent, so do it first.
+- [x] **Gate the two benches** — `required-features = ["benchmark"]` on both `[[bench]]` sections (§1). Fixed by `release-gate` over TMC; verified here against the exact gate command.
+- [x] **#434 — `duplicated_loc` must not count a suppressed family.** No separate fix exists: metrics already fold only visible clusters, pinned green by `metric_excludes_hidden_clusters` (re-run here, passing). This item collapses into the two fix items below — what § 2 still shows counting is the *published* trio, which goes hidden only when #72 lands.
 - [ ] **#434 — decide the `[CLONE-NOISE-VERBATIM-SUBGROUP]` arbitration** (cross-file-hidden versus verbatim-published) and write it into `docs/specs/noise.md`.
 - [ ] **#434 — fix #70 / #71**, where the filter records no suppression at all. Move `rename_needs_an_anchor` with it or explain why it still holds.
 - [ ] **#434 — fix #72 / #107**, where suppression is counted and same-file cores publish anyway. Blocked on the arbitration.
