@@ -38,6 +38,9 @@ use std::{collections::HashMap, sync::Arc};
 
 /// Zhang–Shasha ordered tree alignment ([FUSION-SHARED-SUBTREE]).
 mod alignment;
+/// Deterministic exact-alignment benchmark workloads.
+#[cfg(feature = "benchmark")]
+pub mod benchmark;
 /// Large-tree greedy coverage fallback ([FUSION-SHARED-SUBTREE]).
 mod credit;
 /// Rescue application over the candidate set ([FUSION-SHARED-SUBTREE]).

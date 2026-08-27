@@ -23,6 +23,10 @@
 //! each sub-problem and every interior cell is written before it is
 //! read, so the distance is identical to the freshly-allocated form.
 
+/// One forest-grid row's hot cell recurrence.
+mod row;
+/// Exact constant-time paths for one-node keyroot spans.
+mod singleton;
 /// Alignment arithmetic pinned against the textbook recurrence.
 #[cfg(test)]
 mod tests;
@@ -55,6 +59,9 @@ pub(super) struct Aligner {
     right_keyroots: Vec<usize>,
     /// Last post-order position seen per leftmost-leaf index.
     latest: Vec<usize>,
+    /// Full forest-DP invocations, exposed only to deterministic work-count tests.
+    #[cfg(test)]
+    forest_runs: usize,
 }
 
 impl Aligner {
@@ -75,21 +82,42 @@ impl Aligner {
     /// unit insert/delete/relabel costs. Standard keyroot decomposition.
     pub(super) fn distance(&mut self, left: &[PostNode], right: &[PostNode]) -> usize {
         self.reset(left, right);
+        self.fill_distances(left, right);
+        self.result(left.len(), right.len())
+    }
+
+    /// Evaluates every keyroot-pair subproblem in decomposition order.
+    fn fill_distances(&mut self, left: &[PostNode], right: &[PostNode]) {
         for left_position in 0..self.left_keyroots.len() {
             for right_position in 0..self.right_keyroots.len() {
                 let Some(span) = self.span(left, right, (left_position, right_position)) else {
                     continue;
                 };
-                let Self {
-                    forest, tree_dist, ..
-                } = self;
-                forest_distance(span, forest, tree_dist);
+                self.fill_span(span);
             }
         }
-        let last = left
-            .len()
-            .saturating_mul(right.len().saturating_add(1))
-            .saturating_add(right.len());
+    }
+
+    /// Evaluates one keyroot pair, using an exact singleton shortcut.
+    fn fill_span(&mut self, span: ForestSpan<'_>) {
+        if singleton::write_distances(span, &mut self.tree_dist) {
+            return;
+        }
+        #[cfg(test)]
+        {
+            self.forest_runs = self.forest_runs.saturating_add(1);
+        }
+        let Self {
+            forest, tree_dist, ..
+        } = self;
+        forest_distance(span, forest, tree_dist);
+    }
+
+    /// Reads the completed whole-tree distance cell.
+    fn result(&self, left_nodes: usize, right_nodes: usize) -> usize {
+        let last = left_nodes
+            .saturating_mul(right_nodes.saturating_add(1))
+            .saturating_add(right_nodes);
         usize::try_from(read(&self.tree_dist, last)).unwrap_or(0)
     }
 
@@ -101,18 +129,7 @@ impl Aligner {
     /// itself a whole-tree pair, and a stale value carried over from the
     /// previous alignment would be spliced in as if it belonged here.
     fn reset(&mut self, left: &[PostNode], right: &[PostNode]) {
-        let tree_cells = left
-            .len()
-            .saturating_add(1)
-            .saturating_mul(right.len().saturating_add(1));
-        self.tree_dist.clear();
-        self.tree_dist.resize(tree_cells, 0);
-        let forest_cells = left
-            .len()
-            .saturating_add(2)
-            .saturating_mul(right.len().saturating_add(2));
-        self.forest.clear();
-        self.forest.resize(forest_cells, 0);
+        self.reset_grids(left.len(), right.len());
         let Self {
             latest,
             left_keyroots,
@@ -121,6 +138,21 @@ impl Aligner {
         } = self;
         keyroots(left, latest, left_keyroots);
         keyroots(right, latest, right_keyroots);
+    }
+
+    /// Clears and sizes the two reusable grids for one endpoint pair.
+    fn reset_grids(&mut self, left_nodes: usize, right_nodes: usize) {
+        let tree_cells = left_nodes
+            .saturating_add(1)
+            .saturating_mul(right_nodes.saturating_add(1));
+        self.tree_dist.clear();
+        self.tree_dist.resize(tree_cells, 0);
+        let forest_cells = left_nodes
+            .saturating_add(1)
+            .saturating_add(1)
+            .saturating_mul(right_nodes.saturating_add(2));
+        self.forest.clear();
+        self.forest.resize(forest_cells, 0);
     }
 
     /// The context for one keyroot pair, or `None` when either keyroot
@@ -201,28 +233,8 @@ struct ForestSpan<'seq> {
     tree_stride: usize,
 }
 
-/// One row of the keyroot pair's forest grid, resolved once so the
-/// inner loop reads offsets instead of recomputing them per cell.
-#[derive(Clone, Copy)]
-struct Row {
-    /// Grid offset of this row's column zero.
-    base: usize,
-    /// Grid offset of the previous row's column zero.
-    above: usize,
-    /// Whether the left node at this row roots a whole subtree.
-    left_whole: bool,
-    /// Grid offset of the row a non-whole splice reads its corner from.
-    corner_base: usize,
-    /// Leftmost leaf of the right keyroot, the whole-subtree test's
-    /// right-hand side.
-    right_leaf: usize,
-    /// Offset of this row's first subtree-distance cell.
-    subtree_base: usize,
-    /// Left node's kind.
-    left_kind: &'static str,
-}
-
 /// Fills `tree_dist` for the subtree pair rooted at the two keyroots.
+#[cfg_attr(feature = "profile-internals", inline(never))]
 fn forest_distance(span: ForestSpan<'_>, forest: &mut [u32], tree_dist: &mut [u32]) {
     seed(span, forest);
     for left_index in span.left_leaf..=span.left_root {
@@ -231,36 +243,14 @@ fn forest_distance(span: ForestSpan<'_>, forest: &mut [u32], tree_dist: &mut [u3
             .saturating_sub(span.left_leaf)
             .saturating_add(1)
             .saturating_mul(span.forest_stride);
-        fill_row(
-            span,
-            row_at(span, left_index, left_leftmost, base),
-            forest,
-            tree_dist,
-        );
-    }
-}
-
-/// Resolves everything one row needs before its cells are walked, so
-/// the inner loop does no multiplication and no sequence lookup.
-fn row_at(span: ForestSpan<'_>, left_index: usize, left_leftmost: usize, base: usize) -> Row {
-    Row {
-        base,
-        above: base.saturating_sub(span.forest_stride),
-        left_whole: left_leftmost == span.left_leaf,
-        corner_base: left_leftmost
-            .saturating_sub(span.left_leaf)
-            .saturating_mul(span.forest_stride),
-        right_leaf: span.right_leaf,
-        subtree_base: left_index
-            .saturating_mul(span.tree_stride)
-            .saturating_add(span.right_leaf),
-        left_kind: kind_at(span.left, left_index),
+        row::fill(span, left_index, left_leftmost, base, forest, tree_dist);
     }
 }
 
 /// Re-seeds the forest grid's pure insert/delete borders for one
 /// keyroot pair. Every interior cell is written before it is read, so
 /// only the borders carry over from the previous sub-problem.
+#[cfg_attr(feature = "profile-internals", inline(never))]
 fn seed(span: ForestSpan<'_>, forest: &mut [u32]) {
     write(forest, 0, 0);
     let rows = span
@@ -278,95 +268,6 @@ fn seed(span: ForestSpan<'_>, forest: &mut [u32]) {
     for column in 1..columns {
         write(forest, column, small(column));
     }
-}
-
-/// Fills one row of the keyroot pair's forest grid.
-///
-/// The row is walked as slices rather than grid coordinates: the cells
-/// above it, the cells written before it, its own cells, and its
-/// subtree-distance run are each resolved once here, so a cell costs
-/// three slice reads and no arithmetic on offsets. The cell to the
-/// left is the value just produced, so it is carried in `previous`
-/// rather than read back out of the grid at all.
-fn fill_row(span: ForestSpan<'_>, row: Row, forest: &mut [u32], tree_dist: &mut [u32]) {
-    let Some(nodes) = span
-        .right
-        .get(span.right_leaf.saturating_sub(1)..span.right_root)
-    else {
-        return;
-    };
-    let (earlier, current) = forest.split_at_mut(row.base);
-    let (Some(above), Some(subtree)) = (
-        earlier.get(row.above..),
-        tree_dist.get_mut(row.subtree_base..),
-    ) else {
-        return;
-    };
-    let mut grids = Grids {
-        above,
-        earlier,
-        subtree,
-    };
-    let mut previous = read(current, 0);
-    for (offset, node) in nodes.iter().enumerate() {
-        previous = cell(
-            row,
-            Cursor {
-                offset,
-                node,
-                previous,
-            },
-            &mut grids,
-        );
-        write(current, offset.saturating_add(1), previous);
-    }
-}
-
-/// One cell's position in a row, and the value just written to its left.
-#[derive(Clone, Copy)]
-struct Cursor<'seq> {
-    /// Zero-based offset from the row's first measured column.
-    offset: usize,
-    /// The right sequence's node at this column.
-    node: &'seq PostNode,
-    /// The cell immediately to the left, already computed.
-    previous: u32,
-}
-
-/// The three runs of cells one row reads.
-struct Grids<'grid> {
-    /// The row above, from its column zero.
-    above: &'grid [u32],
-    /// Every cell written before this row — where a splice's corner sits.
-    earlier: &'grid [u32],
-    /// This row's subtree distances, from the keyroot's leftmost leaf.
-    subtree: &'grid mut [u32],
-}
-
-/// Computes one forest-distance cell, recording a subtree distance when
-/// both prefixes are whole subtrees.
-///
-/// The three Zhang–Shasha options: delete the left node, insert the
-/// right one, or — the third — relabel two whole subtrees against each
-/// other, or splice in an already-computed subtree distance.
-fn cell(row: Row, cursor: Cursor<'_>, grids: &mut Grids<'_>) -> u32 {
-    let whole = row.left_whole && cursor.node.leftmost == row.right_leaf;
-    let substitute = if whole {
-        read(grids.above, cursor.offset)
-            .saturating_add(u32::from(row.left_kind != cursor.node.kind))
-    } else {
-        let right_prefix = cursor.node.leftmost.saturating_sub(row.right_leaf);
-        read(grids.earlier, row.corner_base.saturating_add(right_prefix))
-            .saturating_add(read(grids.subtree, cursor.offset))
-    };
-    let best = read(grids.above, cursor.offset.saturating_add(1))
-        .saturating_add(1)
-        .min(cursor.previous.saturating_add(1))
-        .min(substitute);
-    if whole {
-        write(grids.subtree, cursor.offset, best);
-    }
-    best
 }
 
 /// Cell value; [`u32::MAX`] out of range, so a min-fold can never elect

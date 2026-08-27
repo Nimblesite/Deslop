@@ -82,6 +82,11 @@ pub const CROSS_LANGUAGE_MIN_JACCARD: f64 = 0.10;
 /// method with shared subtrees; the demanding floor plus the token
 /// corroboration below keeps accidental shape-vocabulary overlap out.
 pub const SHARED_SUBTREE_MIN_OVERLAP: f64 = 0.75;
+/// Denominator of the largest endpoint share that may be absent while
+/// still reaching [`SHARED_SUBTREE_MIN_OVERLAP`]. At the 0.75 floor,
+/// the smaller endpoint must contain at least three quarters of the
+/// larger endpoint's nodes.
+const SHARED_SUBTREE_MAX_UNSHARED_DENOMINATOR: usize = 4;
 /// Token-Jaccard corroboration a shared-subtree near-miss must also
 /// carry ([FUSION-SHARED-SUBTREE]). Shared subtrees alone cannot admit
 /// a pair: normalisation makes boilerplate scaffolding Merkle-identical
@@ -408,6 +413,15 @@ pub(crate) fn rescue_eligible(pair: &CandidatePair) -> bool {
         && score.bounded_fused() < pair.fused_min_score
         && score.token_jaccard >= SHARED_SUBTREE_MIN_JACCARD
         && pair.endpoint_node_counts.0 >= SHARED_SUBTREE_MIN_NODE_COUNT
+        && shared_subtree_can_reach_floor(pair.endpoint_node_counts)
+}
+
+/// Whether endpoint sizes leave enough nodes for the smaller tree to
+/// cover [`SHARED_SUBTREE_MIN_OVERLAP`] of the larger tree. The
+/// complement form avoids overflow for corpus-sized node counts.
+fn shared_subtree_can_reach_floor((smaller, larger): (usize, usize)) -> bool {
+    let maximum_unshared = larger / SHARED_SUBTREE_MAX_UNSHARED_DENOMINATOR;
+    smaller >= larger.saturating_sub(maximum_unshared)
 }
 
 /// True when the pair's endpoints live in different files.

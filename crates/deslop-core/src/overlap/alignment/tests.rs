@@ -27,6 +27,117 @@ const GENERATED_SHAPES: usize = 60;
 /// obviously correct; this bound is what keeps it fast.
 const MAX_GENERATED_NODES: usize = 9;
 
+/// Nodes in the wide-tree regression fixture.
+const WIDE_TREE_NODES: usize = 128;
+
+/// Every node differs, so each exact relabel contributes one edit.
+const EXPECTED_WIDE_TREE_DISTANCE: usize = WIDE_TREE_NODES;
+
+/// Singleton rows and columns are exact without forest DP, leaving root/root.
+const EXPECTED_WIDE_TREE_FOREST_RUNS: usize = 1;
+
+/// Distinct fixture kinds make every aligned node exercise relabelling.
+const WIDE_LEFT_KIND: &str = "alpha";
+
+/// Distinct fixture kinds make every aligned node exercise relabelling.
+const WIDE_RIGHT_KIND: &str = "beta";
+
+/// Third kind used to pin matching and non-matching singleton paths.
+const OTHER_KIND: &str = "gamma";
+
+/// Flat tree postorder: leaves followed by their common root.
+fn wide_sequence(kind: &'static str) -> Vec<PostNode> {
+    let mut nodes = (1..WIDE_TREE_NODES)
+        .map(|position| PostNode {
+            kind,
+            leftmost: position,
+        })
+        .collect::<Vec<_>>();
+    nodes.push(PostNode { kind, leftmost: 1 });
+    nodes
+}
+
+/// [PERF-FLUTTER-TODO-RESCUE] One-node keyroot pairs have an exact
+/// constant-time answer and must not enter the general forest DP. Wide ASTs
+/// contain quadratically many such pairs; routing them through the grid was
+/// the dominant stack in the ten-second Flutter-rescue profile.
+#[test]
+fn singleton_keyroot_pairs_skip_full_forest_dp() {
+    let left = wide_sequence(WIDE_LEFT_KIND);
+    let right = wide_sequence(WIDE_RIGHT_KIND);
+    let mut aligner = Aligner::default();
+
+    let distance = aligner.distance(&left, &right);
+
+    assert_eq!(
+        distance, EXPECTED_WIDE_TREE_DISTANCE,
+        "the shortcut must preserve the exact edit distance"
+    );
+    assert_eq!(
+        aligner.forest_runs, EXPECTED_WIDE_TREE_FOREST_RUNS,
+        "leaf pairs have an exact 0/1 answer and must not run the full forest DP"
+    );
+}
+
+/// [PERF-FLUTTER-TODO-RESCUE] Singleton-to-tree shortcuts must preserve the
+/// textbook distance whether the retained node is the root, is nested away
+/// from the leftmost spine, or has no matching kind. Both directions are
+/// asserted because they write different matrix strides.
+#[test]
+fn singleton_tree_shortcuts_match_the_textbook_in_both_directions() {
+    let cases = [
+        RefTree {
+            kind: WIDE_LEFT_KIND,
+            children: vec![RefTree {
+                kind: OTHER_KIND,
+                children: Vec::new(),
+            }],
+        },
+        RefTree {
+            kind: OTHER_KIND,
+            children: vec![RefTree {
+                kind: WIDE_RIGHT_KIND,
+                children: vec![RefTree {
+                    kind: WIDE_LEFT_KIND,
+                    children: Vec::new(),
+                }],
+            }],
+        },
+        RefTree {
+            kind: OTHER_KIND,
+            children: vec![RefTree {
+                kind: WIDE_RIGHT_KIND,
+                children: Vec::new(),
+            }],
+        },
+    ];
+    let singleton = RefTree {
+        kind: WIDE_LEFT_KIND,
+        children: Vec::new(),
+    };
+    for (index, tree) in cases.iter().enumerate() {
+        assert_shortcut_matches_reference(index, &singleton, tree);
+        assert_shortcut_matches_reference(index, tree, &singleton);
+    }
+}
+
+/// Compares one shortcut direction with the independent forest recurrence.
+fn assert_shortcut_matches_reference(index: usize, left: &RefTree, right: &RefTree) {
+    let expected = reference_distance(std::slice::from_ref(left), std::slice::from_ref(right));
+    let left_sequence = postorder(left);
+    let right_sequence = postorder(right);
+    let mut aligner = Aligner::default();
+    let measured = aligner.distance(&left_sequence, &right_sequence);
+    assert_eq!(
+        measured, expected,
+        "singleton case {index} must retain its exact distance"
+    );
+    assert_eq!(
+        aligner.forest_runs, 0,
+        "singleton case {index} must bypass forest DP"
+    );
+}
+
 /// Ordered tree edit distance between two forests, by the textbook
 /// recurrence: delete the rightmost root, insert the rightmost root, or
 /// match the two rightmost roots and recurse into both their children
