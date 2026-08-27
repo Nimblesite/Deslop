@@ -60,10 +60,10 @@ Recorded so neither gets re-raised against this release.
 
 - [x] **Gate the two benches** — `required-features = ["benchmark"]` on both `[[bench]]` sections (§1). Fixed by `release-gate` over TMC; verified here against the exact gate command.
 - [x] **#434 — `duplicated_loc` must not count a suppressed family.** No separate fix exists: metrics already fold only visible clusters, pinned green by `metric_excludes_hidden_clusters` (re-run here, passing). This item collapses into the two fix items below — what § 2 still shows counting is the *published* trio, which goes hidden only when #72 lands.
-- [ ] **#434 — decide the `[CLONE-NOISE-VERBATIM-SUBGROUP]` arbitration** (cross-file-hidden versus verbatim-published) and write it into `docs/specs/noise.md`.
-- [ ] **#434 — fix #70 / #71**, where the filter records no suppression at all. Move `rename_needs_an_anchor` with it or explain why it still holds.
-- [ ] **#434 — fix #72 / #107**, where suppression is counted and same-file cores publish anyway. Blocked on the arbitration.
-- [ ] **Restate all four #434 pins** against the decided spec and delete their `CURATED_SKIPS` rows.
+- [x] **#434 — decide the `[CLONE-NOISE-VERBATIM-SUBGROUP]` arbitration** and write it into `docs/specs/noise.md`. Decided: the hatch is **cross-file only** ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE]) and byte-identity means **exact source bytes** ([CLONE-NOISE-VERBATIM-SUBGROUP-EXACT-BYTES]). #72/#107 unblocked.
+- [ ] **#434 — fix #70 / #71**, where the filter records no suppression at all. Move `rename_needs_an_anchor` with it or explain why it still holds. *(`release-gate`'s — `crates/**` by TMC delegation.)*
+- [ ] **#434 — fix #72 / #107**, where suppression is counted and same-file cores publish anyway. **Unblocked** — the arbitration is decided and written; implement [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] and [-EXACT-BYTES] in `docs/specs/noise.md`. *(`release-gate`'s — `crates/**`.)*
+- [ ] **Restate all four #434 pins** against the decided spec and delete their `CURATED_SKIPS` rows. *(`release-gate`'s — `crates/**`.)*
 - [ ] **Correct #459 on GitHub** — the measurement does not hold; post the cold/warm/min-nodes sweep. Do not close it; that is the issue author's call.
 - [ ] **Re-bless the stale goldens once, last** — `report_golden` (#432) and `incremental_multilang_golden` ×3 (#433) are stale, not wrong, and `[PERF-FLUTTER-TODO-ACCURACY]`'s recorded hash `2562e181…` predates `[PIPELINE-CLUSTER-ELECT-CONTAINER]`. Blocked on #432 and #433 landing.
 - [ ] **Run the full gate on the candidate.** A strict `make test-corpus` cannot pass yet — `flutter/memory` and `fsharp/memory` are `corpus/known-failures.json` entries under #166, `corpus/flutter.json` sets `max_peak_rss_mb: 9000` above a standard runner, and #426 keeps `corpus_manifest_contract` red. Either land those first or state plainly that the release ships without a strict corpus run.

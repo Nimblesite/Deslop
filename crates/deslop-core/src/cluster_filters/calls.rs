@@ -149,27 +149,43 @@ fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>], cache: &ParseCac
 /// ([PERF-FLUTTER-TODO-CORPUS]).
 fn call_sequence(snippet: &Snippet<'_>) -> super::snippets::CallSequence {
     super::snippets::CallSequence {
-        all_statements_have_call: every_covered_statement_has_call(snippet),
+        statements_admissible: covered_statements_admissible(snippet),
         shapes: call_shapes_in_range(snippet),
     }
 }
 
-/// Whether every complete statement covered by `snippet` contains a call.
+/// Whether the statements covered by `snippet` are admissible to the
+/// sequence rule: every complete covered statement contains a call,
+/// except that one lone call-free statement is admitted when it is an
+/// assertion on a value the covered calls bound — the trailing
+/// acceptance check of the test idiom this filter hides (gh #70, #71).
 ///
-/// A varying call is not the whole matched region when an adjacent authored
-/// statement carries additional work. Ignoring that statement let one REST
-/// call hide the endpoint-bearing accessor window while its call-free data
-/// handling remained inside the range (`rename_needs_an_anchor`).
-fn every_covered_statement_has_call(snippet: &Snippet<'_>) -> bool {
+/// Anything else call-free blocks the filter. A varying call is not the
+/// whole matched region when an adjacent authored statement carries
+/// additional work: ignoring such a statement let one REST call hide
+/// the endpoint-bearing accessor window while its call-free data
+/// handling remained inside the range (`rename_needs_an_anchor`). And a
+/// *block* of call-free assertions is shared verification logic the
+/// members genuinely duplicate, not payload, so only the lone one is
+/// idiom ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
+fn covered_statements_admissible(snippet: &Snippet<'_>) -> bool {
     let Some(tree) = parse_for(snippet) else {
         return false;
     };
     let mut statements = Vec::new();
     collect_covered_statements(tree.root_node(), snippet.range, &mut statements);
-    !statements.is_empty()
-        && statements
-            .iter()
-            .all(|node| subtree_contains_call(*node, call_kinds(snippet.language)))
+    if statements.is_empty() {
+        return false;
+    }
+    let kinds = call_kinds(snippet.language);
+    let (with_call, without_call): (Vec<&Node<'_>>, Vec<&Node<'_>>) = statements
+        .iter()
+        .partition(|node| subtree_contains_call(**node, kinds));
+    match without_call.as_slice() {
+        [] => true,
+        [lone] => asserts::is_assert_on_call_bound_value(**lone, &with_call, snippet),
+        _ => false,
+    }
 }
 
 /// Collects the outermost complete statement-shaped nodes inside `range`.

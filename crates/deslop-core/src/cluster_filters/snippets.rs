@@ -114,12 +114,15 @@ pub struct ParseCache {
 /// fully determines every memoised analysis.
 type SnippetKey = (FileId, usize, usize);
 
-/// The fused literal-variation sequence cell: whether every complete
-/// statement covered by the range contains a call, and the ordered call
-/// shapes fully inside it (`None` when the file has no grammar here).
+/// The fused literal-variation sequence cell: whether the statements
+/// covered by the range are admissible to the sequence rule, and the
+/// ordered call shapes fully inside it (`None` when the file has no
+/// grammar here).
 pub(crate) struct CallSequence {
-    /// `every_covered_statement_has_call` verdict.
-    pub(crate) all_statements_have_call: bool,
+    /// `covered_statements_admissible` verdict: every covered statement
+    /// carries a call, or the lone call-free one is an assertion on a
+    /// call-bound value ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
+    pub(crate) statements_admissible: bool,
     /// Ordered [`CallShape`]s inside the range.
     pub(crate) shapes: Option<Vec<CallShape>>,
 }

@@ -23,6 +23,15 @@
 //!
 //! Clusters the filters do not suppress are returned untouched, so a
 //! consistently-renamed three-way clone stays one three-way clone.
+//!
+//! [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] The hatch protects a
+//! *copy*, and a copy spans files. A byte-identical family confined to
+//! one file is the idiom the filter just recognised, not a paste of it,
+//! so it hides with its component — see [`is_copied_family`].
+//!
+//! [CLONE-NOISE-VERBATIM-SUBGROUP-EXACT-BYTES] "Byte-identical" means
+//! the exact source bytes of a member's range — see
+//! [`verbatim_families`].
 
 use std::{collections::HashMap, hash::BuildHasher};
 
@@ -32,6 +41,7 @@ use super::{
     family::{families_by, restrict},
     is_noise_pattern,
     snippets::ParseCache,
+    spans_multiple_files,
 };
 
 /// Smallest byte-identical family worth keeping: one lone occurrence is
@@ -287,7 +297,7 @@ fn split_one<S: BuildHasher>(
     let families = verbatim_families(&fused.members, fingerprints, sources);
     let keepable: Vec<&Vec<usize>> = families
         .iter()
-        .filter(|family| family.len() >= MIN_FAMILY_MEMBERS)
+        .filter(|family| is_copied_family(family, fingerprints))
         .collect();
     let covered: usize = keepable.iter().map(|family| family.len()).sum();
     if keepable.is_empty() || covered == fused.members.len() && keepable.len() == 1 {
@@ -311,8 +321,35 @@ fn split_one<S: BuildHasher>(
     )
 }
 
+/// Whether `family` is the copy the escape hatch exists to protect
+/// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE]): a byte-identical
+/// family of at least two members spanning at least two files.
+///
+/// Byte-identity **across files** is proof of copying — independently
+/// authored code does not coincide byte for byte. Byte-identity
+/// **within one file** is proof of the idiom the noise filter just
+/// recognised: the same `monkeypatch.setenv` tail, the same assertion
+/// pair against the same fixture, written that way because the pattern
+/// mandates it. There the filter's classification is the better
+/// evidence, so the family takes the suppression with its component
+/// rather than republishing as a cluster of scaffolding. The false
+/// negative this pass exists to close — a proven copy vanishing because
+/// a shape-compatible stranger joined its cluster — is cross-file by
+/// construction, so it still escapes.
+fn is_copied_family(family: &[usize], fingerprints: &[Fingerprint]) -> bool {
+    family.len() >= MIN_FAMILY_MEMBERS
+        && spans_multiple_files(
+            family
+                .iter()
+                .filter_map(|index| fingerprints.get(*index))
+                .map(|member| member.file_id),
+        )
+}
+
 /// Groups the component's members by the exact source bytes their
-/// fingerprint covers.
+/// fingerprint covers ([CLONE-NOISE-VERBATIM-SUBGROUP-EXACT-BYTES]) —
+/// no normalised comparison and no trivia tolerance, so a family whose
+/// members differ in one byte is not a verbatim family at all.
 fn verbatim_families(
     member_indices: &[usize],
     fingerprints: &[Fingerprint],

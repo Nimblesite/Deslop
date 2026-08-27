@@ -40,6 +40,48 @@ consistently-renamed three-way clone stays one three-way clone. Implemented in
 `cluster_filters/verbatim_subgroup.rs`, pinned by
 `crates/deslop/tests/verbatim_subgroup_survives_noise.rs`.
 
+#### [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] A verbatim family must be a copy, and a copy spans files
+
+Two failure modes were measured against this pass (gh #434). On `python-issue-72`
+the filter fired and an **intra-file** byte-identical core of the very family it
+recognised republished as `structural_only` — scaffolding escaping through the
+hatch built to protect copies, and counting its 15 lines in `duplicated_loc`.
+The arbitration: **a byte-identical family escapes suppression only when its
+occurrences span at least two files.**
+
+Byte-identity across files is proof of copying — independently authored code does
+not coincide byte-for-byte. Byte-identity within one file is proof of the *idiom*
+the filter just recognised: the same `monkeypatch.setenv` tail, the same assertion
+pair against the same fixture, written the same way because the pattern mandates
+it. Within one file the filter's classification is the better evidence, and the
+family takes the suppression with its component. The false negative this pass
+exists to close — a proven copy `A`/`A` vanishing when a shape-compatible stranger
+joined its cluster — is cross-file by construction, so it still escapes. What this
+deliberately gives up: a genuine intra-file byte-identical copy sitting inside a
+component the filters suppressed stays hidden; that is the price of the idiom
+proof, paid once, visibly, in the pins.
+
+A family this pass hides contributes nothing to any metric: `duplicated_loc` and
+`duplication_percent` fold visible clusters only, pinned green by
+`metric_excludes_hidden_clusters`.
+
+#### [CLONE-NOISE-VERBATIM-SUBGROUP-EXACT-BYTES] "Byte-identical" means exact source bytes
+
+On `python-issue-107` the published pairs were **not byte-identical at all** —
+adjacent one-line assertions differing in their compared keys and values — so the
+grouping itself was manufacturing "verbatim" families out of differing bytes. The
+rule: the family grouping compares the **exact source bytes** of the members'
+ranges — no normalised comparison, no trivia tolerance. A family whose members
+differ in one byte is not a verbatim family and inherits its component's
+suppression. A pass documented as grouping "by the exact source bytes" must
+publish only pairs that are.
+
+The restated #434 pins carry both directions: the fixture's real cross-file
+control clone stays visible and ranked first, while the intra-file cores on
+`python-issue-72` and `python-issue-107` stay hidden; and
+`verbatim_subgroup_survives_noise.rs` must stage its proven copy across files,
+which is the case the hatch exists for.
+
 ## Language-agnostic filters
 
 ### [CLONE-NOISE-SIGNATURE-ONLY] Signature-only matches
