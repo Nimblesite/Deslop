@@ -256,6 +256,82 @@ fn the_large_tree_fallback_never_exceeds_the_alignment() -> Result<(), String> {
     Ok(())
 }
 
+/// Two distinct functions, in one order.
+const ALPHA_THEN_BETA: &str = "\
+fn alpha(seed: u32) -> u32 {
+    let mut total = seed;
+    total = total + 1;
+    total
+}
+fn beta(seed: u32) -> u32 {
+    let mut count = seed;
+    while count > 0 {
+        count = count - 1;
+    }
+    count
+}
+";
+
+/// The same two functions, in the other order. Nothing else differs.
+const BETA_THEN_ALPHA: &str = "\
+fn beta(seed: u32) -> u32 {
+    let mut count = seed;
+    while count > 0 {
+        count = count - 1;
+    }
+    count
+}
+fn alpha(seed: u32) -> u32 {
+    let mut total = seed;
+    total = total + 1;
+    total
+}
+";
+
+/// [FUSION-SHARED-SUBTREE] The greedy fallback must never credit shared
+/// mass that no ordered alignment could achieve.
+///
+/// `credit_shared_nodes` claims to be a conservative lower bound on the
+/// alignment: "node mass matched under a bijection of disjoint
+/// identical subtrees is achievable by an alignment". A tree alignment
+/// is *ordered* — a Tai mapping preserves post-order on both sides — but
+/// the greedy bijection does not, so two endpoints holding the same
+/// subtrees in swapped order are credited their full mass while the
+/// alignment must delete and reinsert one of them. The fallback then
+/// reports an overlap the honest measure never reaches, and the rescue
+/// admits a pair on it.
+///
+/// This is the same property `the_large_tree_fallback_never_exceeds_the_alignment`
+/// asserts, on the case that separates a bijection from an alignment.
+#[test]
+fn the_fallback_never_credits_mass_no_ordered_alignment_can_reach() -> Result<(), String> {
+    let mut registry = FileRegistry::new();
+    let left_id = registry.register(PathBuf::from("left.rs"));
+    let right_id = registry.register(PathBuf::from("right.rs"));
+    let left = parse(ALPHA_THEN_BETA, left_id)?;
+    let right = parse(BETA_THEN_ALPHA, right_id)?;
+    let trees = [left.tree, right.tree];
+    let index = trees
+        .iter()
+        .map(|tree| (tree.file_id, tree))
+        .collect::<std::collections::HashMap<FileId, &NormalizedNode>>();
+    let left_view = build_view(&index, &left.whole).ok_or("the left endpoint resolves")?;
+    let right_view = build_view(&index, &right.whole).ok_or("the right endpoint resolves")?;
+    let aligned = aligned_shared_nodes(&left_view, &right_view);
+    let credited = credit_shared_nodes(&left_view, &right_view);
+    assert!(
+        aligned > 0,
+        "the two files share both functions, so the alignment must credit real mass"
+    );
+    assert!(
+        credited <= aligned,
+        "swapped-order endpoints: the greedy fallback credited {credited} shared \
+         nodes but no ordered alignment reaches more than {aligned} — the fallback \
+         reports overlap the measure it stands in for cannot achieve"
+    );
+    Ok(())
+}
+
 // The cap is what keeps the quadratic DP bounded. It is a real number
 // in the admission path, so a change to it is a performance decision
 // that must be made deliberately rather than drifted into.

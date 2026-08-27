@@ -19,6 +19,8 @@
 //! fixed-interval progress records, never per-pair events
 //! ([PERF-FLUTTER-TODO-OBSERVABILITY]).
 
+use std::num::NonZeroUsize;
+
 use crate::{
     ast::NormalizedNode,
     fingerprint::Fingerprint,
@@ -29,7 +31,14 @@ use super::{tally::RescueTally, OverlapMeasurer};
 
 /// Fewest candidate pairs worth sharding at all — below this the thread
 /// spawn costs more than the measurements.
-const MIN_SHARD_WORK: usize = 4_096;
+///
+/// The `None` arm is compile-time dead: the literal is non-zero, and
+/// [`std::num::NonZeroUsize::new`] is the only stable way to say so in a
+/// `const` without `unsafe`.
+const MIN_SHARD_WORK: NonZeroUsize = match NonZeroUsize::new(4_096) {
+    Some(floor) => floor,
+    None => NonZeroUsize::MIN,
+};
 
 /// Candidate pairs per claimed chunk. Small enough that a worker which
 /// draws a run of expensive endpoints cannot hold the stage open, large
@@ -43,7 +52,7 @@ pub fn apply_shared_subtree_rescue(
     fingerprints: &[Fingerprint],
     trees: &[NormalizedNode],
 ) {
-    let workers = worker_count(pairs.len());
+    let workers = crate::shard::worker_count(pairs.len(), MIN_SHARD_WORK);
     if workers <= 1 {
         let mut measurer = OverlapMeasurer::new(trees);
         let mut tally = RescueTally::new();
@@ -98,16 +107,6 @@ fn report_shards(shards: &[(RescueTally, OverlapMeasurer<'_>)]) {
         totals = totals.add(measurer.stats());
     }
     merged.report_total(totals);
-}
-
-/// How many worker threads the rescue uses for `pairs` candidates:
-/// the available parallelism, capped so every shard carries real work.
-fn worker_count(pairs: usize) -> usize {
-    if pairs < MIN_SHARD_WORK {
-        return 1;
-    }
-    let available = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
-    available.min(pairs / MIN_SHARD_WORK).max(1)
 }
 
 /// Measures one pair when it is eligible, resolvable, and cross-file,
@@ -235,7 +234,7 @@ mod shard_equivalence_tests {
     /// pass vacuously.
     #[test]
     fn sharded_rescue_matches_serial_outcomes() -> Result<(), String> {
-        let pair_count = MIN_SHARD_WORK.saturating_mul(2);
+        let pair_count = MIN_SHARD_WORK.get().saturating_mul(2);
         let mut registry = FileRegistry::new();
         let left_id = registry.register(PathBuf::from("left.rs"));
         let right_id = registry.register(PathBuf::from("right.rs"));

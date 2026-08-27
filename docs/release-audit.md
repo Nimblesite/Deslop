@@ -1,182 +1,121 @@
-# Release audit — what is still open
+# Release audit — what blocks the release
 
-Supersedes `regression-audit-v0.32.0.md` (release regressions against `f92300e` = `v0.32.0`) and `performance-branch-review.md` (the `performance` branch closing audit). Everything either document recorded as fixed has been re-measured and dropped; what follows is only what is still open.
+Scoped to **regressions since `f92300e` (v0.32.0)**: behaviour that is worse at HEAD than in the shipped release, plus anything that stops the gate running at all. Measured on the `accuracy-ordered-overlap-bound` branch at HEAD (`16e3d91`) with `target/release/deslop`; every figure below was measured at that commit.
 
-**Method.** Every claim below is measured at HEAD, not read off a prior document. Where the two source documents disagreed with the measurement, the measurement wins and the correction is stated inline.
+Everything else that was on this page — the fusion-arithmetic departures, the parked engine defects, the gate and coverage work, the documentation drift — is not a regression and now lives in [`plans/fused-score-followups.md`](plans/fused-score-followups.md). It is not restated here.
 
-**Measured baseline.** Whole workspace, release profile, all targets: **13 targets, 0 failed**. Every ignored test is a row of the `CURATED_SKIPS` registry in `crates/deslop/tests/skip_policy_contract.rs`, and the registry now holds **28** rows — read straight out of the array, not off an older sweep:
+**Verdict: not ready.** What stands between this branch and the release: **one red assertion — `render_noise_totals_observability` Interaction 2 (gh #478)**, awaiting a load-bearing threshold decision from `release-gate`, and the packaged Action unvalidated. The `#460` quarantine crash is **fixed (measured: self-scan exits 0)**; all four #434 fixes landed; **gh #467 landed** (`pi-audit`: two-member literal-variation families publish iff the differing argument is an authored interpolation; split defers pairs to render); the gate compile (§ 1) is fixed and verified. Everything else in the repo is green.
 
-| issue | rows | what is skipped |
-|---|---|---|
-| #422 | 11 | the cloned corpus repositories (`corpus_repos.rs`) — too large for CI |
-| #434 | 4 | the Python noise pins in § 1 |
-| #433 | 4 | the three multilingual incremental goldens and `lsh_only_nearmiss_recall` |
-| #439 | 3 | the curated-extent contract in `deslop-test-support` |
-| #432 | 3 | both operator-drift pins and `report_golden` |
-| #369 | 2 | the two embedding pins |
-| #426 | 1 | the corpus manifest scope contract |
+## 1. The gate does not compile — introduced on this branch (fixed)
 
-By crate: 24 in `deslop`, 3 in `deslop-test-support`, 1 in `deslop-lsp`. Every non-corpus row was executed with `-- --ignored` and is red for the reason its skip declares.
+`crates/deslop-core/Cargo.toml` declares two bench targets, `cluster_signals` and `shared_subtree_alignment`, without `required-features = ["benchmark"]`. Both sources import `cluster::benchmark` / `overlap::benchmark`, which are `#[cfg(feature = "benchmark")]`. The gate runs `--all-targets --features deslop-core/live,deslop-lsp/profiling`, and `deslop-lsp/profiling` pulls in `fxprof-processed-profile` and `pprof` only — it does not enable `deslop-core/benchmark`. So cargo builds the benches without the feature and dies.
 
-## Verdict: not ready for release
+Reproduced directly: `cargo check -p deslop-core --benches` fails `E0432`, "could not find `benchmark` in `cluster`" and "in `overlap`", with rustc naming both gated modules as configured out. `make test` and `make lint` both fail to compile at HEAD.
 
-One class of defect blocks it: **the Python noise families in § 1 ship in the release binary, publish visible clusters, and move `duplication_percent`.** On `python-issue-71` the scaffolding family ranks **#1 — above the real clone staged in the same run**. Everything else on this page is either pre-existing debt that shipped in v0.32.0 too, or process/gate work that does not change what a user's report says.
+**Fix — applied by `release-gate` over TMC, verified here:** `required-features = ["benchmark"]` now sits on both `[[bench]]` sections. `scripts/benchmarks/cluster-signals.mjs` and `shared-subtree-alignment.mjs` already pass `--features benchmark` themselves, so nothing else moved. The exact gate command now compiles every target clean, and the full suite with the fix runs 1210 passed, 0 failed — this was the branch's only self-inflicted damage.
 
----
+That count excludes the **20 rows** of `CURATED_SKIPS` in `crates/deslop/tests/skip_policy_contract.rs` — recount verified at `16e3d91` from the registry itself. Eight are accuracy tests red for real reasons under `-- --ignored`: `operator_drift_is_not_duplication` ×2 (#432), `lsh_only_nearmiss_recall` (#433), `lsp_embedding_determinism` / `issue_343_sum_clamp_saturation` (#369), and the `type2_recall` trio (#439, red on purpose per the curated-recall bargain). The other twelve are infrastructure: eleven `corpus_repos` entries blocked on #166 (gh #422) and `corpus_manifest_contract` (#426). The #434 pins are un-ignored and green; the retired `report_golden`/`incremental_multilang` ignores proved green before deletion. Read “1210 passed” next to that number, never on its own.
 
-# 1. Blocking — noise families reach the report (#434, #71, #79, #103)
+## 2. Four Python noise families v0.32.0 suppressed — #434, all four fixed at `16e3d91`
 
-Four fixtures that asserted **zero clusters** at v0.32.0 now publish. Measured with the release CLI at each pin's own `--min-nodes`, on the checked-in fixture bytes:
+Re-measured at HEAD with the release CLI, at each pin's own `--min-nodes`, on the checked-in fixture bytes. Before the fix campaign the four fixtures published their scaffolding on top of the staged 16-line control clone; after it, every fixture reports **the control clone only** and its family hidden:
 
-| fixture | mn | what publishes | dup% | `duplicated_loc` | `clusters_hidden` |
-|---|---|---|---|---|---|
-| `python-issue-71-rest-endpoint-shape` | 4 | **one `nearly_identical` family, 4 occurrences, ranked #1** — all in `test_endpoints.py` | 70.18 | 40 | **0** |
-| `python-issue-70-test-data-variation` | 8 | one `structural_only` family, 4 occurrences — all in `test_write_file_calls.py` | 57.14 | 28 | **0** |
-| `python-issue-72-monkeypatch-setenv` | 4 | one `structural_only` family, 3 occurrences — all in `test_fly_host.py` | 67.39 | 31 | 3 |
-| `python-issue-107-chained-dict-assert` | 4 | three `identical` clusters, one same-file pair per test file | 45.83 | 22 | 4 |
+| fixture | pin `--min-nodes` | pre-fix | post-fix (measured) | hidden |
+|---|---|---|---|---|
+| `python-issue-71` | 4 | 70.18%, `duplicated_loc` 40 | **28.07%, 16/57 — control only** | 1 |
+| `python-issue-70` | 8 | 57.14%, `duplicated_loc` 28 | **32.65%, 16/49 — control only** | 1 |
+| `python-issue-72` | 4 | 67.39%, `duplicated_loc` 31 | **34.78%, 16/46 — control only** | 1 |
+| `python-issue-107` | 4 | 45.83%, `duplicated_loc` 22 | **33.33%, 16/48 — control only** | 4 |
 
-The control clone each fixture stages is 16 duplicated lines. Every row above counts the family on top of it, so `--fail-over` trips on scaffolding.
+Each fixture also stages a real 16-line clone as a control, so “control only” is an assertion the detector still sees — not blindness. The #72 trio publishes via the `structural_only` route no more; the pins for all four are un-ignored and green.
 
-> **Read the "what publishes" column as families, not cluster counts.** Every row except `python-issue-107` is **one** cluster with that many occurrences; the control clone is the other. Re-measured at HEAD with the release CLI: `#71` → 2 clusters / 0 hidden / 70.2%, `#70` → 2 / 0 / 57.1%, `#72` → 2 / 3 / 67.4%, `#107` → 4 / 4 / 45.8%, `#69` → 0 / 5 / 0.0%. The figures below are confirmed, not restated.
+### All four are regressions, not two
 
-**Root cause of the `#70` / `#71` half, measured.** `[CLONE-NOISE-LITERAL-VARIATION-CALLS]` is the filter that should suppress these, and it never fires because `cluster_filters/calls.rs::every_covered_statement_has_call` returns `false`: each `test_delete_*` body ends in `assert resp.status_code == 204`, a statement carrying **no call**, so the whole-function occurrence fails the covered-statement precondition before any literal comparison happens. That precondition exists for a real reason — `rename_needs_an_anchor` pins it, and a call-free statement beside a varying call *can* be authored work worth extracting — so this is a spec arbitration, not a threshold to loosen: an assertion on the value the varying call returned is part of the idiom, while an authored computation is not, and the filter cannot currently tell them apart.
+The previous revision of this page recorded #70 and #71 as new pins on previously-untested behaviour. That is wrong, and the correction matters because it doubles the blocking surface. Measured against `f92300e`:
 
-**Correction to the standing framing.** `docs/plans/fused-score-followups.md` attributes all four to `[CLONE-NOISE-VERBATIM-SUBGROUP]` republishing "the intra-file byte-identical core" of a suppressed family. The measurement says these are **two different defects**:
+- **The fixture bytes are unchanged.** `test_write_file_calls.py` (#70), `test_endpoints.py` (#71) and `test_fly_host.py` (#72) all hash identically to their v0.32.0 contents. What this branch added to those directories is the `control_clone_a.py` / `control_clone_b.py` pair and the test — not the noise family. The input the detector sees is the same input v0.32.0 saw.
+- **Both root causes are code that did not exist in v0.32.0.** `cluster_filters/verbatim_subgroup.rs` is absent at `f92300e`. So is `every_covered_statement_has_call` in `cluster_filters/calls.rs` — the file existed, that precondition did not.
 
-- On `python-issue-70` and `python-issue-71`, `clusters_hidden == 0`. Nothing was suppressed and then republished — **the noise filter never fired at all**, and what publishes is not byte-identical (`structural_only` / `nearly_identical`). The verbatim-subgroup rule does not explain these two.
-- On `python-issue-72` and `python-issue-107`, a suppression decision *was* taken (3 and 4 hidden) and same-file cores publish alongside it. That is the verbatim-subgroup escape as described.
+So the same bytes now take a code path that v0.32.0 had no way to take, in both halves of the defect. For #72 and #107 this is confirmed from the other direction: their tests were green at `f92300e`, unskipped, asserting zero clusters. For #70 and #71 it is an inference from unchanged input plus new blocking code — running the v0.32.0 binary would need a checkout, which the repository rules forbid, so nobody has measured it directly. Treat them as regressions and let a measurement demote them, not the other way round.
 
-A fifth pin, `polymorphic_gate_hides_rename_clone`, was a third thing again: `python-issue-69-abstract-method` publishes nothing (0 clusters, 5 hidden), and the failure was the **wording** — the summary blamed "your .deslop.toml config" in a scan root with no such file. **That one is now fixed and the pin runs in `make test`:** the summary names Deslop's own filters, so its `#[ignore]` and `CURATED_SKIPS` row are gone.
+### Two defects, not one — corrected mid-campaign
 
-**Which of these are regressions from the release commit — measured against `f92300e`, not inferred.** The four pins are not equivalent, and only two of them are regressions:
+- **#70 / #71 — the filter never fires** (`hidden == 0`). `[CLONE-NOISE-LITERAL-VARIATION-CALLS]` should suppress these. `every_covered_statement_has_call` returned false first, because each body ends in a call-free `assert`. The arbitration is now decided and written — [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT] in `docs/specs/noise.md` — and the constraint held: `rename_needs_an_anchor` moved with the fix, not around it.
+- **#72 — the filter is inert here, not leaking.** Measured during the fix campaign: every noise filter reads `fired=0`, `hidden=0` on this fixture — nothing suppressed anything, and the trio publishes because **no filter engaged**. The earlier framing on this page ("suppression counted, 3 hidden, cores escape") attributed hides to this family that were not its; the hatch is not what publishes the trio.
+- **#107 — the verbatim-subgroup escape, the real one.** Suppression counted (4 hidden) and same-file cores published; the pairs are not byte-identical, so [CLONE-NOISE-VERBATIM-SUBGROUP-EXACT-BYTES] closes it.
 
-| pin | fixture at `f92300e` | test at `f92300e` | verdict |
-|---|---|---|---|
-| `python-issue-70` | **did not exist** | did not exist | new pin on this branch — not a regression |
-| `python-issue-71` | **did not exist** | did not exist | new pin on this branch — not a regression |
-| `python-issue-72` | present, **byte-identical to HEAD** | green, not `#[ignore]`d, asserted `cluster_count == 0` | **regression** |
-| `python-issue-107` | present, **byte-identical to HEAD** | green, not `#[ignore]`d, asserted `clusters == 0` and `duplicated_loc == 0` | **regression** |
+Stale alongside: all four #434 `#[ignore]` reasons still read "spec arbitration pending" — the arbitration is decided; the reasons must name the decided spec when the pins are restated (`release-gate`'s, with the pin surgery).
 
-The two regressions were reproduced with the release CLI on the *baseline* file set — only the files that existed at `f92300e`, with the control clones this branch added left out — so nothing but the detector changed:
+The `duplicated_loc` rule is settled and ticked below: metrics fold visible clusters only — black-box verified again by the #107 min-nodes sweep (hidden 5→4→3 with `duplicated_loc` steady at 16).
 
-- **`#72`**: `test_fly_host.py` alone. `files_analysed 1`, and the stage ledger shows **every noise filter at `fired=0`**, including `literal_calls`. One `structural_only` cluster publishes with three occurrences (lines 1–5, 8–12, 15–19) — the three `monkeypatch.setenv` scaffolding functions. `v0.32.0` suppressed this family; HEAD does not fire on it at all. The cause is the same `every_covered_statement_has_call` precondition measured above: each body ends `explicit_host_id = "fly-1"` and `assert explicit_host_id == "fly-1"`, two statements carrying no call.
-- **`#107`**: the three pytest modules alone. The ledger reads `structural_family_split 15 → 15`, then `noise_verbatim_split` **15 → 22** — the split is the only stage that adds clusters — and three survive ranking as `identical`. Each is a *pair of adjacent one-line assertions inside a single function*, e.g. `assert data["model_config"]["provider"] == "openai"` with `assert data["model_config"]["model"] == "gpt-4o"`. Those two lines are not byte-identical, so a pass documented as grouping "by the exact source bytes" is publishing them under a bucket that claims byte-identity.
+This branch neither caused nor can close these — `b235c1a5` (#424) and `c3ce7882` brought them to `main`. It is the release vehicle, so it ships them. At this HEAD the branch touches both files mechanically (`Rc`→`Arc`, sharding) with the decision logic unchanged.
 
-**Where the two regressions came from.** Neither was introduced by the branch that is currently in review. `verbatim_subgroup.rs` did not exist at `f92300e` at all, and the `every_covered_statement_has_call` precondition in `calls.rs` was added after it; both arrived on `main` in `b235c1a5` (PR #424, "Fused-score accuracy follow-ups: verbatim subgroups…") and `c3ce7882` (the corpus-scale performance pass). `git diff origin/main...HEAD` touches neither file, so the current branch neither causes these two nor can close them by being held back. They are `main`'s to fix, tracked as gh #434.
+Already fixed and green: the #69 hidden-group summary wording, un-skipped, `CURATED_SKIPS` row deleted.
 
-Both pins are `#[ignore]`d with a `[SKIP-UNFINISHED]` reason naming gh #434 and `[CLONE-NOISE-VERBATIM-SUBGROUP]`, and both are registered in `CURATED_SKIPS`. Run with `-- --ignored` they fail, for the real reason, on the release CLI. That is what the skip registry is for: a shipped defect stays visible, counted, and attributable to an open issue instead of quietly passing. The bargain it records is unfinished work — deleting the pin, or weakening its assertions to make it pass, would be the thing the policy exists to prevent.
+## New findings from the fix campaign — all open
 
-`[CLONE-NOISE-VERBATIM-SUBGROUP]` exists to close a real false negative (a proven copy vanishing because one shape-compatible stranger joined its cluster). Both directions are real defects; the spec arbitration was never resolved, and the pins were skipped instead of restated. Whichever way it lands, `duplicated_loc` must not count a family the report suppresses.
+Measured by `release-gate`'s workers during the #434 fixes; recorded here unabsorbed, none ticked.
 
-# 2. Accuracy defects, not blocking (all pre-existing or in-flight)
+- **gh #462 — closed at HEAD: the sibling-cell route was a false negative, not a price.** The original contradiction (two pins over byte-identical `ledger_rows.py` demanding opposite outcomes) was **dissolved by restructure**: the solo corpus nests under `collection-cells/cells/`, the hide-side moved to `idiom-price/` — no bytes are pinned twice. The A/B pin (`adding_a_differing_sibling_never_deletes_a_visible_copy`) proved the sibling-cell suppression **deleted a visible copy when a stranger cell arrived** — a same-single-literal family can never span files, so the [CROSS-FILE] price is unpayable there and the suppression was a pure false negative. Decided architecture, landed: **sibling-cell route publishes the byte-identical pair** ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]); **spannable routes keep the price** — `verbatim_subgroup_idiom_price.rs` pays it. **Measured here: 6/6 `verbatim_subgroup` pins green** (an earlier intermediate working tree measured `duplication_percent 0.0` over the solo corpus — the narrowing had not landed then). pi-audit's initial “flip the pin to hidden” ruling is **retracted, in writing**: a pin is never ruled from bytes alone.
+- **gh #464 — sub-gate clusters billing the metric: mooted by the #72 fix, kept open for the class.** Pre-fix, the #72 trio carried `meets_fused_gate=false` (fused 0.57 against the 0.85 gate) yet contributed 15 of 31 `duplicated_loc` and drove 67.39%. Post-fix (measured at HEAD): the trio is hidden, `16/46 = 34.78%`, control clone only — nothing sub-gate bills anything on this fixture. The class question — whether any **visible** cluster below the fused gate should bill `duplicated_loc` — stays with #464.
+- **gh #466 — rank severity inverted at population one.** `rank_band(1,1) = faint` (pinned, `report_weight.rs:205`): with exactly one cluster left, a byte-identical `fused=1.0` clone renders *faint*. Caveat measured: `[LSP-SEVERITY-PERCENTILE]` is Planned (#177) and severity floors default to 0, so nothing is suppressed by severity today — the damage is glyph density on the VSIX surface only; HTML and text reports never render `rank_band`.
+- **gh #460 — quarantine abort fixed; the FP-rate claim refuted.** Two things, both measured. First — **fixed**: `deslop .` over this repo **exited 101** when the #460 quarantine panic fired mid-scan; at HEAD it **exits 0** (measured here, self-scan over the full repo). Second: the earlier “systemic false positive” reading does not survive hand-judgement — **26 clusters judged: 17 real, 3 borderline, 6 FP**, and support does **not** separate them (real 0.00–0.68, FP 0.00–0.31, overlapping); 504 of 1316 visible clusters (38%) sit below the 0.7 support floor and embedding support is vacuous as evidence because embeddings were off by config in that run. Acting on the old reading would delete 504 act-now clusters including rank #1. What remains true: the 0.7-floor population deserves eyes, not deletion.
+- **False-negative candidate on #71.** The suppressed family duplicates 24 of 30 lines with no pre-extracted helper, and was `nearly_identical`, weight 108, ranked #1 — it may be a real duplicate the fix now hides. Recorded on gh #434 explicitly; needs fixture adjudication, not silent absorption.
+- **VSIX consumer-path blocker — gh #468.** A VSIX-file install unpacks as `nimblesite.deslop-live-VERSION` with **no platform suffix**, so the documented absolute MCP path does not resolve — and a green contract test enforces the wrong path. The artifact itself validated: 13.31 MB, all three binaries execute from inside it, MCP initialize + 13 tools OK, cold CLI scan real, no version drift (every surface reads `0.0.0-dev`).
+- **VSIX surfaces unverified on this host.** Cross-platform VSIXes (linux x64/arm64, darwin-x64, win32) cannot build here, and a Marketplace install needs credentials — both recorded unverified, not passed.
+- **gh #471 — a test artifact ships inside the `.vsix`.**
+- **`deployment.md` contradicts itself — see gh #470.** `[EXTERNAL-MCP-CONSUMER]` allows PATH only via brew/scoop; `[DOCS-INSTALLER-FAILCLOSED]` blesses a curl install to `~/.local/bin`. Same manifest-vs-spec divergence family as `shipwright.json`, which sanctions what `AGENTS.md` forbids.
+- **gh #412 (back) — fixed at HEAD, then re-caught by its own contract.** `Makefile` now uses bare names with a zero-selection guard (`Makefile:414–420`), `corpus.yml` defers to the Makefile lists, and `crates/deslop/tests/corpus_selection_contract.rs` holds every name to a test that exists. That contract itself was red at `8c85cda`: its Makefile parser read one physical line, so `CORPUS_TESTS_FULL`'s backslash continuation became a phantom test name — the `full` dispatch would have selected nothing. **Fixed (`pi-audit`, under lock): the parser joins make continuations; 3/3 contract tests green, no assertion touched.**
+- **`make vsix-package` scrubs the host.** It runs `_delete-path-binaries` and can uninstall every deslop from PATH — validate from the VSIX bundle by absolute path.
 
-## Operator-only drift reaches the act-now tier and outranks the real clone — #432
+## Checked and cleared — not blockers
 
-`operator_drift_is_not_duplication` ×2, red. Measured: `ledger_credit.py` / `ledger_debit.py` differ only in `+` versus `-`, and render `nearly_identical`, `structural=0.9907`, `token_jaccard=1.0000`, `fused=0.9477`, weight `101.400`. They rank **first**, ahead of the corpus's one genuine `identical` pair at `fused=1.0000`. A `find-similar` consumer is told to write one where the other is meant.
+Recorded so neither gets re-raised against this release.
 
-v0.32.0 was worse here — operators collapsed to a shared placeholder, so `+` and `-` hashed identically. This is debt made visible by `[PIPELINE-NORMALIZE-AST-OPERATOR]`, not debt introduced.
+- **#458 — rendered cluster signals average over pairs the detector never admitted.** Confirmed at HEAD: two byte-identical TypeScript files render `identical` at `structural / token_jaccard / fused = 1.0 / 1.0 / 1.0` when scanned alone, and `nearly_identical` at `0.9982 / 0.8313 / 0.7953` when the same pair sits inside a six-member cluster. Byte proof loses its bucket to averaging. Real, and critical — but `cluster/signals.rs` is present at `f92300e` and the mean predates it, so it is not a regression. Tracked in the plan.
+- **#459 — "adding one duplicated file deletes existing findings" does not reproduce.** Filed against `ts-mixed-band` on the claim that adding a byte-identical `ledger_a_copy.ts` drops the report from 2 clusters / 5 files / 100% to 1 cluster / 2 files / 11.11%. Re-measured cold, warm, and across `--min-nodes` 8/12/20/30/40: adding the copy *increases* coverage every time — 5 files → 6, clusters 2 → 2 or 3, duplication stays 100%, `duplicated_loc` rises 15 → 18, and the cold and warm-cache reports agree exactly. The original figures came from a contaminated scratch directory. The issue is wrong and needs a correction comment.
 
-## Mixed passes measure different content evidence than cold — #433
+## 3. Packaged Action — download / install / execute, measured
 
-`lsh_only_nearmiss_recall`, red at `[PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE]`. On identical corpus bytes the mixed pass and the cold pass diverge in `clusters`:
+The exact runner path, driven locally with this branch's resolver scripts against the **latest published release, `v0.32.0`** (the candidate `v0.33.0` asset does not exist until `release.yml` publishes it — see the post-tag box):
 
-| signal | mixed | cold |
-|---|---|---|
-| `agreement` | 0.3333 | 0.3590 |
-| `rename_consistency` | 0.5608 | 0.5833 |
+```sh
+# 1. Resolve — exactly what the action's first step runs
+GITHUB_OUTPUT=out node scripts/actions/action-resolve-artifact.mjs macOS ARM64 "" v0.32.0
+#    -> url=https://github.com/Nimblesite/Deslop/releases/download/v0.32.0/deslop-0.32.0-macos-arm64.tar.gz
+# 2. Download (curl --fail --location --retry 3)      -> 12,614,314 bytes + .sha256
+# 3. Verify   node scripts/actions/action-verify-checksum.mjs <archive> <archive>.sha256
+#    -> "Verified sha256 95d9f0a35a4330097a009997baacd65474f8b0c789ff0e84595c5376a7721445"
+# 4. Install  tar -xf -> deslop-0.32.0-macos-arm64/{deslop,deslop-mcp,deslop-lsp} ; mv <stage> bin
+#    -> bare `deslop` on PATH answers `deslop 0.32.0` (layout assertion passes)
+# 5. Execute  deslop . --min-nodes 30 --no-incremental   (real repo: git archive HEAD of this tree)
+#    -> exit 0, files 1316, clusters 1045, dup% 8.55, duplicated_loc 14559
+```
 
-`fused` survives at 0.85 here only because the shape term dominates; the rendered `evidence_verdict` already differs ("share 0.33 of their content" vs "0.36"), and a cluster whose content term is the max would move bucket between two runs of the same code.
+**Version drift, measured.** The Action itself has none: a `v0.32.0` ref pin installs 0.32.0, the latest release; and the VSIX sweep found no 0.27 anywhere in the shipped surfaces — all eleven read `0.0.0-dev`. The only version pin in this repo's workflows is `action-selftest.yml:108` → `@v0.30.0`, a deliberate self-test fixture. What remains is consumer-side: an explicit `version: 0.27.0` input (the `osprey` repo's CI pin, per `Osprey2`) resolves 0.27.0 by design — an explicit pin is the user's contract, worth a nudge at release time, not an Action change. Candidate probe: the would-be `v0.33.0` asset URL answers **HTTP 404** today, as expected pre-release.
 
-**Correction.** The regression audit recorded this as "not reproducible through the CLI, specific to the LSP path". That was measured cold-vs-fully-warm only. It reproduces through the CLI on the **mixed** pass.
+## To finish this release
 
-## The committed goldens are stale — #432 / #433
+- [x] **Gate the two benches** — `required-features = ["benchmark"]` on both `[[bench]]` sections (§1). Fixed by `release-gate` over TMC; verified here against the exact gate command.
+- [x] **#434 — `duplicated_loc` must not count a suppressed family.** No separate fix exists: metrics already fold only visible clusters, pinned green by `metric_excludes_hidden_clusters` (re-run here, passing). This item collapses into the two fix items below — what § 2 still shows counting is the *published* trio, which goes hidden only when #72 lands.
+- [x] **#434 — decide the `[CLONE-NOISE-VERBATIM-SUBGROUP]` arbitration** and write it into `docs/specs/noise.md`. Decided: the hatch is **cross-file only** ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE]) and byte-identity means **exact source bytes** ([CLONE-NOISE-VERBATIM-SUBGROUP-EXACT-BYTES]). #72/#107 unblocked.
+- [x] **#434 — fix #70 / #71 — landed, verified here.** Rule decided and shipped: every covered statement must carry a call, **except one lone call-free statement**, admitted only as a Python `assert_statement` whose subject identifiers are non-empty and all bound by the covered calls' assignment targets. Spec: [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT] in `docs/specs/noise.md`. **Measured at HEAD:** #70 `16/49 = 32.65%`, hidden 1; #71 `16/57 = 28.07%`, hidden 1 — control clone only in both.
+- [x] **#434 — fix #72 / #107 — landed, verified here.** [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] and [-EXACT-BYTES] implemented per `docs/specs/noise.md`; the sibling-cell route publishes per [CROSS-FILE-SAME-LITERAL] (see the #462 finding). **Measured at HEAD:** #72 `16/46 = 34.78%`, hidden 1, the `structural_only` trio gone; #107 `16/48 = 33.33%`, hidden 4 — control clone only in both. All four #434 pins un-ignored and green.
+- [x] **Restate all four #434 pins and delete their `CURATED_SKIPS` rows — landed (`release-gate`).** Registry read from the file: `CURATED_SKIPS` **20 rows**, `SKIPS_PER_ISSUE` **6 entries** — `(369,2) (422,11) (426,1) (432,2) (433,1) (439,3)`; no live `#[ignore]` cites 434. The retired `report_golden`/`incremental_multilang` ignores proved green before deletion.
+- [x] **Re-measure all four #434 fixtures** with the release CLI at each pin's own `--min-nodes` and rewrite the § 2 table with post-fix dup%, `duplicated_loc` and hidden — **owner `pi-audit`, done** (figures in § 2, measured at HEAD after the fixes landed; no figure carried over).
+- [x] **Recount the § 1 skip sentence after the pins un-ignore — owner `pi-audit`, done from the registry.** 20 rows (was 28): eight red-for-real (432 ×2, 433 ×1, 369 ×2, 439 ×3), twelve infra (#422 ×11 on #166, #426 ×1); #434 absent. § 1 prose now carries these numbers.
+- [x] **Correct #459 on GitHub** — **owner `pi-audit`, done.** Sweep re-measured independently (base vs +copy × cold/warm × min-nodes 8/12/20/30/40 — coverage rises every time, cold=warm) and posted: [#459 (comment)](https://github.com/Nimblesite/Deslop/issues/459#issuecomment-5438230870). Issue left open for the author.
+- [ ] **Re-bless the stale goldens once, last** — **owner `release-gate`**; an investigation is classifying each golden stale vs engine-defect vs restatement, and the findings land with `pi-audit` to write up. Blocked on #432/#433.
+- [ ] **Strict `make test-corpus` — a signable either/or, corrected** — **owner `release-gate`.** The gh #412 selector bug is **fixed at HEAD** (bare names, zero-selection guard, name contract — verified by `pi-audit`; see the findings list), so the gate can run real tests again. What remains: #428 leaves an **un-baselined false negative on the tokio corpus** open, and #166 (runner memory) + #426 (manifest contract) are **infrastructure**, shippable-around. Either run the strict corpus on the candidate, or ship with this exact release-note sentence: *"This release ships without a corpus run: gh #428 leaves an un-baselined false negative on the tokio corpus open; gh #166 and gh #426 are infrastructure defects this release ships around."* (An earlier draft claiming "every other gate ran green" was false twice and must not ship.)
+- [x] **Fix gh #467 without regressing the four suppression pins — landed (`pi-audit`, under TMC lock).** The agent's family-size floor (≥3) broke all four suppression pins — every one stages a **two-member family**; the #467 pair is two-member too, so size can never be the rule (proof: gh #467 comment 5439912364). Landed rule: **a two-member literal-variation family publishes iff its differing string argument is an authored interpolation** (f-string route, template substitution); plain-literal pairs stay suppressed. **Measured: deslop suite 462/0 — the #467 pin and all four suppression pins green.** The change moves plain-literal pair convictions from the render stage to the split stage — same final state — which exposes a pre-existing stage-distribution defect in `render_noise_totals_observability` (gh #478, next box).
+- [ ] **Re-derive `render_noise_totals_observability` Interaction 2 for the corrected engine — gh #478, owner `release-gate` (threshold decision).** **Interaction 1 is fixed** (`pi-audit`): a `NoiseStage` (`Split`/`Render`) now threads `is_noise_pattern`, and the split stage defers two-member literal-variation families to render — measured, split `language_specific fired=5` vs cumulative `fired=6`; the delta is back. **Interaction 2 remains, pre-existing**: with [EXACT-BYTES], any byte-identical statement pair (the fixture's shared `import` lines) is split-eligible at any min_nodes, so “split runs no filter at mn=15” cannot be staged by fixture or min_nodes (five iterations proved it). Remaining option: a `node_count` floor on `splittable_families` — load-bearing threshold, must exclude ~3-node imports yet stay below the ~7-node collection-cell pair the [#462] publish path routes through the split. Dossiers: gh #478 comments 5440425362, 5441254004.
+- [ ] **Run the full gate on the candidate — owner `release-gate`.** Current measured state: **462/0 (deslop suite), 197/0, 180/1 — `render_noise_totals_observability` is the only red in the repo.**
+- [x] **Validate the candidate packaged Action** — **owner `pi-audit`, done — see § 3.** The full download/install/execute path measured against the latest published release (`v0.32.0`): resolve → curl download → checksum verify (`95d9f0a3…`) → versioned-layout extract → bare `deslop` on PATH → real-repo scan exit 0 (1316 files, 1045 clusters, 8.55%). Version drift measured: none in the Action; consumer-side 0.27.0 pins drift by choice. A skipped conditional `diff-gate` job was not counted as evidence.
+- [ ] **Re-run the § 3 five-step path against the candidate asset** (`v0.33.0`) once `release.yml` publishes it — **owner `pi-audit`, post-tag.** The asset 404s until then; this release must not ship on a validation that predates its own binary.
 
-`report_golden` ×1 and `incremental_multilang_golden` ×3, red. `report_golden`'s drift is `canonical_node_count` 60 → 68 and consequently new cluster ids — the `[PIPELINE-CLUSTER-ELECT-CONTAINER]` election changing what a cluster is made of. These are stale, not wrong. Bless **once**, last, after #432 and #433 land.
+## Retired findings — citation index
 
-The same staleness reaches the Flutter validation: `[PERF-FLUTTER-TODO-ACCURACY]` records report hash `2562e181…` as the accepted deterministic output, recorded before the container election. That hash no longer describes HEAD.
-
-## Pre-existing engine defects with open issues
-
-- **#443** — `content/frontier.rs::positional_agreement` returns `1.0` when nothing was measured, so "no authored content to disagree on" is indistinguishable from byte-proven agreement. Untouched by any branch this cycle.
-- **#431** — `buckets/gate.rs` overwrites the measured `token_jaccard` with `1.0` for `NearlyIdentical` clusters at `structural >= STRUCTURAL_SATURATION_FLOOR` (0.99). The Merkle argument it rests on does not cover every cluster routed there.
-- **#389** — one physical duplication published twice (method view + signature-line view); containment fails by 7 bytes on the leading `public` modifier.
-- **#421** — a sub-line fragment published as a cluster (two dict entries on one line).
-- **#362** — two unrelated const-declaration files produce the repository's largest ranked finding.
-- **#356** — embeddings-on ANN bridges mutate structural components before measurement. `embedding_route_invariance` went green under the container election and is unskipped; the issue itself is not closed.
-- **#369** — `issue_343_sum_clamp_saturation` routes `nearly_identical` where the pin demands `same_behavior`; `lsp_embedding_determinism` red with it. Both wait on `embedding-accuracy-plan.md` §1.
-
-## False positives with no negative fixture
-
-**#71 / #103 / #285**, **#79**, **#283 / #284** — each needs one fixture asserting the family stays hidden **while a real clone in the same run stays visible**. #71, #79 and #103 already have fixtures; what they lack is a passing engine (§ 1).
-
-# 3. Gates and coverage
-
-- **The VS Code extension host now has a line-coverage floor (#440).** It never did before, and the ~6,300 lines of `clients/vscode` changed this cycle went in under no gate at all. The host writes no V8 profile for extension code, which is real — but that made the coverage unmeasurable only through V8, not unmeasurable. The counters are now compiled into the modules and dumped from inside the host, measuring **87.6%** across all 43 compiled modules, enforced as `vsix.extension_threshold`. No Testing API migration was needed. See [vsix.md §VSIX-TESTING-COVERAGE](specs/vsix.md#vsix-testing-coverage).
-- **The corpus gate has never run in CI (#422, blocked on #166).** All 11 repository checks are `#[ignore]`d — minutes of wall time and >13 GB peak per repository.
-- **`corpus/flutter.json` sets `max_peak_rss_mb: 9000`**, above a standard GitHub Actions runner. The manifest is now correctly the single source of truth for the figure, and its rationale says so — but the rationale no longer states the reasoning that used to bound it (the shipped Action must not be OOM-killed). `flutter/memory` and `fsharp/memory` are `known-failures` entries under #166, so no gate moved.
-- **#426** — `corpus_manifest_contract` is red: `flutter` has no `expect_files_min`, so a scan that analysed zero files would satisfy every cluster assertion in the manifest (#342's failure mode).
-- **Release evidence** — the candidate packaged Action has never been validated through the download/install/execute path users receive. A conditional `diff-gate` job reporting a skip is not evidence.
-
-# 4. Documentation and bookkeeping drift
-
-These are measured disagreements between code and the documents that describe it. Under the repo's own rule (code, specs and tests must agree) each is a defect, not a tidy-up.
-
-- **`skip_policy_contract.rs`'s own module doc miscounts its registry.** It says "twenty-two gh #432–#435 entries" and "three embedding entries". Measured: **12** entries for #432–#434 (#435 has none left) and **2** embedding entries.
-- **`fused-score-followups.md` says "Ten accuracy tests remain red"** in the in-flight section. Measured: **12**.
-- **`fused-score-followups.md` says "27 files exceed the 500-line rule"**. Measured: **32**, largest `deslop-mcp/tests/cli.rs` (2,891), `deslop-core/tests/live.rs` (1,473), `clients/vscode/src/test/unit/tree.topOffenders.unit.test.ts` (1,185). Split them or gate the rule.
-- **#345 / #363** — `REPORTING-CONTEXT.md` and the site accuracy page still describe obsolete CLI defaults and an obsolete ranking formula. `fusion.md` and `pipeline.md` were re-read and agree with the code; these two have not been.
-- **Eight source files cite `docs/performance-branch-review.md` by path** for the finding each test pins. Retiring that document means repointing them (see the index at the foot of this page).
-
----
-
-# Checklist
-
-## Blocks the release
-
-- [ ] **#434 — decide the `[CLONE-NOISE-VERBATIM-SUBGROUP]` arbitration** (cross-file-hidden versus verbatim-published) and write it into `docs/specs/noise.md`.
-- [ ] **#434 — fix `python-issue-70` and `python-issue-71`, where the noise filter records no suppression at all** (`clusters_hidden == 0`) and the family publishes `structural_only` ×4 / `nearly_identical` ×4-ranked-first. This is not the verbatim-subgroup escape and needs its own root cause.
-- [ ] **#434 — fix the verbatim-subgroup escape on `python-issue-72` and `python-issue-107`**, where suppression is counted and same-file cores publish anyway.
-- [ ] **#434 — `duplicated_loc` must not count a family the report suppresses**, whichever way the arbitration lands.
-- [x] **#434 — the hidden-group summary names Deslop's own filters** in a scan root with no `.deslop.toml`. `hidden_group_summary_names_the_hider_not_the_users_config` is un-skipped and green in `make test`.
-- [ ] **Restate the two remaining #434 pins (`#70`, `#71`) against the decided spec and delete their `CURATED_SKIPS` rows.**
-
-## Accuracy — after the release
-
-- [ ] **#432** — discount operator disagreement in the confidence blend so `+`/`-` drift cannot reach an act-now bucket or outrank a byte-identical pair.
-- [ ] **#433** — make the frontier-leaf population identical on the cold, warm and mixed paths.
-- [ ] **#432 / #433** — re-bless `report_golden` and `incremental_multilang_golden` once, last, and review the diff.
-- [ ] **`[PERF-FLUTTER-TODO-ACCURACY]`** — re-run the Flutter validation and re-record the accepted report hash; `2562e181…` predates `[PIPELINE-CLUSTER-ELECT-CONTAINER]`.
-- [ ] **#443** — distinguish "no authored content measured" from agreement `1.0`.
-- [ ] **#431** — stop overwriting measured `token_jaccard` for clusters the Merkle argument does not cover.
-- [ ] **#389** — decide range convention versus predicate tolerance; assert exactly one `identical` cluster for the C# pair on `incremental-multilang` at `--min-nodes 8`.
-- [ ] **#421** — stop publishing sub-line fragments; tighten `python_issue_69_abstract_method` to an empty visible surface.
-- [ ] **#362** — two unrelated const-declaration files must not rank first.
-- [ ] **#356** — ANN bridges must not mutate structural components before measurement.
-- [ ] **#369** — `issue_343_sum_clamp_saturation` and `lsp_embedding_determinism`, via `embedding-accuracy-plan.md` §1. No further `#[ignore]` may be added to that suite.
-- [ ] **#283 / #284**, **#285** — one negative fixture each, asserting the family stays hidden while a real clone in the same run stays visible.
-
-## Gates
-
-- [ ] **#440** — migrate the extension-host suites to the Testing API and restore a line-coverage floor for `out/**`.
-- [ ] **#426** — curate `expect_files_min` and `expect_clusters` for `flutter` and `fsharp`; unskip `corpus_manifest_contract`.
-- [ ] **#422 / #166** — bring the corpus suite inside a PR gate's resources; re-derive `corpus/flutter.json`'s `max_peak_rss_mb` from a fresh measured scan and state the runner bound in the rationale.
-- [ ] Validate the candidate packaged Action end to end through the user-facing download/install/execute path.
-- [ ] Run `make test-corpus` strictly (ignoring `known-failures.json`) on the release candidate.
-
-## Documentation
-
-- [ ] Correct `skip_policy_contract.rs`'s module doc: 12 entries for #432–#434, 2 embedding entries, no #435 entries.
-- [ ] Correct `fused-score-followups.md`: "Ten accuracy tests remain red" → 12; "27 files exceed the 500-line rule" → 32.
-- [ ] Correct `fused-score-followups.md` §#434 — it describes one defect where there are two, and `clusters_hidden == 0` on two of the four fixtures.
-- [ ] **#345 / #363** — re-read `REPORTING-CONTEXT.md` and the site accuracy page against the shipped defaults and ranking formula.
-- [ ] Repoint the eight `docs/performance-branch-review.md` citations at this document.
-- [ ] Split or gate the 32 files over 500 lines.
-
----
-
-# Retired findings — citation index
-
-The `performance` branch closing audit is retired; every finding it raised is resolved and pinned. The titles are kept here only because tests cite them by name.
+Eight source files cite this table by title; it stays.
 
 | finding | pinned by |
 |---|---|
@@ -188,5 +127,3 @@ The `performance` branch closing audit is retired; every finding it raised is re
 | segmented-store remove/upsert logic has no changed test | `pipeline/session/store.rs` |
 | Large parallel paths lack black-box parity coverage | `pipeline/corpus/tests.rs` |
 | Removed signature-construction performance assertions | `pipeline/signatures/tests/canary.rs` |
-
-Also closed out on that branch and not repeated above: the Flutter manifest/plan figure contradiction (the manifest is now the sole source), the signature-arena I/O error swallowing (module deleted, `SignatureLookup` seam kept), the internal Rust API breaks (accepted — every crate is `0.0.0-dev` and ships only inside the VSIX), and the oversized modules the branch itself introduced.

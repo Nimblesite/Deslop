@@ -30,6 +30,8 @@
 
 use tree_sitter::Node;
 
+use crate::ast::named_children;
+
 use super::{
     node_intersects_range, parse_for, raw_snippet_texts_differ, trimmed_snippet_range, Snippet,
 };
@@ -59,9 +61,8 @@ fn covers_only_constants(snippet: &Snippet<'_>) -> bool {
         return false;
     }
     let range = trimmed_snippet_range(snippet).unwrap_or(snippet.range);
-    let mut cursor = root.walk();
-    let covered = root
-        .named_children(&mut cursor)
+    let covered = named_children(root)
+        .into_iter()
         .filter(|child| node_intersects_range(*child, range))
         .map(grammar.classify);
     let mut saw_constant = false;
@@ -198,11 +199,9 @@ fn python_pair_is_constant(node: Node<'_>) -> bool {
 /// is a plain literal, not an f-string that can embed arbitrary
 /// expressions.
 fn python_string_is_plain(node: Node<'_>) -> bool {
-    let mut cursor = node.walk();
-    let has_interpolation = node
-        .named_children(&mut cursor)
-        .any(|child| child.kind() == "interpolation");
-    !has_interpolation
+    !named_children(node)
+        .into_iter()
+        .any(|child| child.kind() == "interpolation")
 }
 
 /// Classifies one top-level `source_file` child in Rust. `const_item`
@@ -275,9 +274,8 @@ fn classify_ecmascript_item(node: Node<'_>) -> TopLevel {
 /// with no initialiser, or one initialised by a call, an identifier or
 /// an arrow function, is not a table entry.
 fn classify_ecmascript_declaration(node: Node<'_>) -> TopLevel {
-    let mut cursor = node.walk();
-    let mut declarators = node
-        .named_children(&mut cursor)
+    let mut declarators = named_children(node)
+        .into_iter()
         .filter(|child| child.kind() == "variable_declarator")
         .peekable();
     if declarators.peek().is_none() {
@@ -339,11 +337,9 @@ fn ecmascript_pair_is_constant(node: Node<'_>) -> bool {
 
 /// Returns true when any named child of `node` has kind `kind`.
 fn has_child_kind(node: Node<'_>, kind: &str) -> bool {
-    let mut cursor = node.walk();
-    let found = node
-        .named_children(&mut cursor)
-        .any(|child| child.kind() == kind);
-    found
+    named_children(node)
+        .into_iter()
+        .any(|child| child.kind() == kind)
 }
 
 /// True when `node` is a pure literal value in `language`: no call, no
@@ -365,19 +361,14 @@ pub(super) fn is_literal_value(language: &str, node: Node<'_>) -> bool {
 /// Returns the only named child of `node`, or `None` when it has zero or
 /// more than one.
 fn sole_named_child(node: Node<'_>) -> Option<Node<'_>> {
-    let mut cursor = node.walk();
-    let mut children = node.named_children(&mut cursor);
-    let first = children.next()?;
-    if children.next().is_some() {
-        return None;
+    match named_children(node).as_slice() {
+        [only] => Some(*only),
+        _ => None,
     }
-    Some(first)
 }
 
 /// Returns true when `predicate` holds for every named child of `node`
 /// (vacuously true for an empty collection such as `[]` or `{}`).
 fn all_named_children(node: Node<'_>, predicate: fn(Node<'_>) -> bool) -> bool {
-    let mut cursor = node.walk();
-    let satisfied = node.named_children(&mut cursor).all(predicate);
-    satisfied
+    named_children(node).into_iter().all(predicate)
 }

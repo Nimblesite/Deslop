@@ -8,13 +8,9 @@ use std::{collections::BTreeSet, path::PathBuf};
 use tree_sitter::{Node, Tree};
 
 use crate::{
-    ast::ByteRange,
+    ast::{named_children, ByteRange},
     lang::LanguageParser,
-    refactor::{
-        consolidate::DefinitionSite,
-        preconditions::{named_children, node_text},
-        tables::BindingKind,
-    },
+    refactor::{consolidate::DefinitionSite, preconditions::node_text, tables::BindingKind},
 };
 
 /// One occurrence file's parse artefacts, shared across the checks.

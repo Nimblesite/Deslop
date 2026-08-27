@@ -14,7 +14,8 @@ use crate::{
     clone_category::CloneCategory,
     cluster::Cluster,
     cluster_filters::{
-        is_embedding_role_mismatch, is_noise_pattern, is_single_file_declaration_family, ParseCache,
+        is_embedding_role_mismatch, is_noise_pattern, is_single_file_declaration_family,
+        NoiseStage, ParseCache,
     },
     state::FileId,
 };
@@ -88,7 +89,9 @@ pub(super) fn cluster_is_hidden<S: BuildHasher>(
         inputs.sources,
         inputs.file_languages,
         parse_cache,
-    );
+        NoiseStage::Render,
+    )
+    .is_some();
     // [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH] The gate exists because
     // *embedding* evidence can pair role-incompatible code — a reader
     // against a writer that the model scores alike. It was keyed on the

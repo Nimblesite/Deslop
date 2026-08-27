@@ -15,6 +15,10 @@ live = ["dep:notify", "dep:tokio", "dep:futures", "dep:async-trait", "dep:getran
 # crates. Never enable in production binaries — the deterministic
 # BLAKE3 shim is not a product provider.
 test-support = []
+# Exposes deterministic hot-path measurement only to the checked-in benchmark.
+benchmark = []
+# Keeps hot-loop frames separate for symbolized sampling; not used for timing.
+profile-internals = ["benchmark"]
 
 [dependencies]
 thiserror.workspace = true
@@ -65,3 +69,16 @@ workspace = true
 [[test]]
 name = "suite"
 path = "tests/suite.rs"
+
+# Both benches import the `benchmark`-gated measurement modules, so they only
+# build when that feature is on. Without this, `--all-targets` builds them
+# unconditionally and fails E0432.
+[[bench]]
+name = "shared_subtree_alignment"
+harness = false
+required-features = ["benchmark"]
+
+[[bench]]
+name = "cluster_signals"
+harness = false
+required-features = ["benchmark"]

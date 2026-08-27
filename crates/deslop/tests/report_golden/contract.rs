@@ -172,7 +172,7 @@ fn validated_occurrence_slice(occurrence: &Value) -> Result<Vec<u8>> {
 }
 
 /// The two authored clusters and the ranking between them: the 3-copy
-/// 58-node `settle_invoice` cluster must outrank the 2-copy 38-node
+/// 68-node `settle_invoice` cluster must outrank the 2-copy 38-node
 /// `merge_labels` cluster, weights must be finite, positive, and
 /// non-increasing down the report, and every cluster must clear
 /// `--min-nodes`.

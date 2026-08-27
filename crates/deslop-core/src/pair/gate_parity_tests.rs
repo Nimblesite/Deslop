@@ -120,3 +120,35 @@ fn refused_pairs_reenter_only_through_the_rescue_route() {
         "weak token corroboration must close the rescue route"
     );
 }
+
+/// Shared-subtree overlap cannot exceed the smaller endpoint's share of
+/// the larger endpoint, so the rescue must refuse an impossible pair
+/// before retaining it for alignment. The exact admission boundary is
+/// still eligible: measuring it may prove the required overlap.
+#[test]
+fn rescue_eligibility_respects_the_overlap_size_bound() {
+    const LARGER_ENDPOINT: usize = 100;
+    const BELOW_OVERLAP_FLOOR: usize = 74;
+    const AT_OVERLAP_FLOOR: usize = 75;
+
+    let mut candidate = pair(
+        0.0,
+        super::SHARED_SUBTREE_MIN_JACCARD,
+        0.0,
+        true,
+        LSH_ONLY_MIN_NODE_COUNT,
+        LSH_ONLY_MIN_JACCARD,
+        FUSED_THRESHOLD,
+    );
+    candidate.endpoint_node_counts = (BELOW_OVERLAP_FLOOR, LARGER_ENDPOINT);
+    assert!(
+        !super::rescue_eligible(&candidate),
+        "a 74/100 endpoint pair can never reach 0.75 overlap"
+    );
+
+    candidate.endpoint_node_counts = (AT_OVERLAP_FLOOR, LARGER_ENDPOINT);
+    assert!(
+        super::rescue_eligible(&candidate),
+        "the exact 75/100 boundary must remain measurable"
+    );
+}

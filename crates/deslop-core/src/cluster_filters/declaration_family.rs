@@ -91,7 +91,7 @@ use std::{
 
 use tree_sitter::Node;
 
-use crate::{clone_category::CloneCategory, cluster::Cluster, state::FileId};
+use crate::{ast::named_children, clone_category::CloneCategory, cluster::Cluster, state::FileId};
 
 use super::{
     collect_snippets, enclosing_kind, forwarding::forwarding_body, node_intersects_range,
@@ -184,12 +184,10 @@ fn family_window<'a>(snippet: &Snippet<'a>) -> Option<FamilyWindow<'a>> {
 
 /// The container's named children that the snippet's window touches.
 fn covered_members<'tree>(container: Node<'tree>, snippet: &Snippet<'_>) -> Vec<Node<'tree>> {
-    let mut cursor = container.walk();
-    let members = container
-        .named_children(&mut cursor)
+    named_children(container)
+        .into_iter()
         .filter(|member| node_intersects_range(*member, snippet.range))
-        .collect();
-    members
+        .collect()
 }
 
 /// Python reuses `block` for class *and* function bodies, so the parent

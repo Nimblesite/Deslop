@@ -9,7 +9,7 @@ use std::{collections::HashMap, path::PathBuf};
 use super::*;
 use crate::{
     ast::{ByteRange, NormalizedNode},
-    lsh::SIGNATURE_LEN,
+    lsh::{SignatureIndex, SIGNATURE_LEN},
     state::{FileId, FileRegistry},
 };
 
@@ -96,7 +96,10 @@ fn three_pairs_of_two_structures_cost_two_valuations() {
                 branch("fn", ("call", "field"), first, 50, 90),
             ],
         ),
-        file_tree(second, vec![branch("fn", ("call", "return"), second, 0, 40)]),
+        file_tree(
+            second,
+            vec![branch("fn", ("call", "return"), second, 0, 40)],
+        ),
     ];
     let fingerprints = vec![
         member(1, first, 0, 40),
@@ -104,6 +107,7 @@ fn three_pairs_of_two_structures_cost_two_valuations() {
         member(2, first, 50, 90),
     ];
     let signatures = vec![signature(7), signature(7), signature(9)];
+    let signature_index = SignatureIndex::from_slice(&signatures);
     let vectors: HashMap<usize, Vec<f32>> = HashMap::new();
 
     let cross_overlap =
@@ -123,7 +127,7 @@ fn three_pairs_of_two_structures_cost_two_valuations() {
     let triple = measured_signals(
         &[0, 1, 2],
         &fingerprints,
-        &signatures,
+        &signature_index,
         &vectors,
         &mut measurer,
     );
@@ -131,7 +135,11 @@ fn three_pairs_of_two_structures_cost_two_valuations() {
     let expected_structural = ((1.0 + cross_overlap) + cross_overlap) / 3.0;
     let expected_token = ((1.0 + cross_jaccard) + cross_jaccard) / 3.0;
     assert_eq!(
-        (triple.structural, triple.token_jaccard, triple.embedding_cos),
+        (
+            triple.structural,
+            triple.token_jaccard,
+            triple.embedding_cos
+        ),
         (expected_structural, expected_token, 0.0),
         "the grouped means must be bit-identical to the per-pair loop's \
          sums in the per-pair loop's order"
@@ -166,7 +174,10 @@ fn an_unresolvable_copy_still_scores_its_unequal_pairs_zero() {
                 branch("fn", ("call", "field"), first, 50, 90),
             ],
         ),
-        file_tree(second, vec![branch("fn", ("call", "return"), second, 0, 40)]),
+        file_tree(
+            second,
+            vec![branch("fn", ("call", "return"), second, 0, 40)],
+        ),
     ];
     // The second copy's range matches no node in its tree.
     let fingerprints = vec![
@@ -175,6 +186,7 @@ fn an_unresolvable_copy_still_scores_its_unequal_pairs_zero() {
         member(2, first, 50, 90),
     ];
     let signatures = vec![signature(7), signature(7), signature(9)];
+    let signature_index = SignatureIndex::from_slice(&signatures);
     let vectors: HashMap<usize, Vec<f32>> = HashMap::new();
 
     let cross_overlap =
@@ -184,7 +196,7 @@ fn an_unresolvable_copy_still_scores_its_unequal_pairs_zero() {
     let triple = measured_signals(
         &[0, 1, 2],
         &fingerprints,
-        &signatures,
+        &signature_index,
         &vectors,
         &mut measurer,
     );

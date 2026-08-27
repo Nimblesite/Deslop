@@ -4,10 +4,11 @@
 
 use tree_sitter::Node;
 
+use crate::ast::named_children;
 use crate::refactor::{
     emit::{cluster_id_prefix, line_indent_at},
     merge::{site_arguments, MergeEmitOutcome, MergeEmitRequest},
-    preconditions::{field_text, named_children, node_text},
+    preconditions::{field_text, node_text},
     tables::{BoundaryKind, MergeTables},
 };
 

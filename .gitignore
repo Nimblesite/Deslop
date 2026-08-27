@@ -126,6 +126,11 @@ clients/vscode/src/types/wire-generated.ts
 .ghissues/
 clients/vscode/bin/
 
+# Deployment manifest copied next to the extension by
+# `_vsix-stage-bundled-binaries` and removed by `_vsix-clean`. The tracked
+# source of truth is the repo-root `shipwright.json`; this is its build copy.
+clients/vscode/shipwright.json
+
 clients/vscode/media/webview/
 
 test-results/

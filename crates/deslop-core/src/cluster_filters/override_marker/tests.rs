@@ -7,6 +7,7 @@
 //! (`issue_331_336_shape_only_saturation.rs`) reaches Dart only.
 
 use super::*;
+use crate::ast::named_children;
 
 /// The Dart member the false positive was reported on: a Flutter `build`
 /// override, whose declaring contract (`State<T>`) is never in the scan.
@@ -68,9 +69,7 @@ fn find_kind<'tree>(node: Node<'tree>, kinds: &[&str]) -> Option<Node<'tree>> {
     if kinds.contains(&node.kind()) {
         return Some(node);
     }
-    let mut cursor = node.walk();
-    let children: Vec<Node<'tree>> = node.named_children(&mut cursor).collect();
-    children
+    named_children(node)
         .into_iter()
         .find_map(|child| find_kind(child, kinds))
 }

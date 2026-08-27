@@ -21,7 +21,7 @@
 //! Shared walking / interning plumbing lives in [`super::shared`].
 
 use crate::{
-    ast::NormalizedNode,
+    ast::{named_children, NormalizedNode},
     error::CoreError,
     lang::{
         shared::{build_normalised_root, intern_kind, parse_source, IDENTIFIER_KIND, LITERAL_KIND},
@@ -30,7 +30,7 @@ use crate::{
     refactor::{
         emit::{cluster_id_prefix, line_indent_at, line_start_at},
         merge::{plain_call_text, MergeEmitOutcome, MergeEmitRequest},
-        preconditions::{field_text, named_children, node_text},
+        preconditions::{field_text, node_text},
         tables::{
             BindingKind, BoundaryKind, FrameKind, MergeTables, ReferenceTable, ScopeKinds,
             WriteKind,

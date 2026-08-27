@@ -467,7 +467,9 @@ fn issue_201_transport_flag_is_never_the_workspace_root() -> Result<()> {
 fn version_output(action: LspAction) -> Result<String> {
     match action {
         LspAction::Version { output } => Ok(output),
-        other @ LspAction::Serve(_) => Err(anyhow!("expected version action, got {other:?}")),
+        other @ (LspAction::Serve(_) | LspAction::Help { .. }) => {
+            Err(anyhow!("expected version action, got {other:?}"))
+        }
     }
 }
 
@@ -475,7 +477,9 @@ fn version_output(action: LspAction) -> Result<String> {
 fn serve_startup(action: LspAction) -> Result<LspStartup> {
     match action {
         LspAction::Serve(startup) => Ok(startup),
-        other @ LspAction::Version { .. } => Err(anyhow!("expected serve action, got {other:?}")),
+        other @ (LspAction::Version { .. } | LspAction::Help { .. }) => {
+            Err(anyhow!("expected serve action, got {other:?}"))
+        }
     }
 }
 

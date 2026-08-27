@@ -4,26 +4,38 @@
 
 use tree_sitter::Node;
 
-use std::rc::Rc;
+use std::sync::Arc;
 
-use super::{enclosing_kind, parse_for, snippets::CallSequence, ParseCache, Snippet};
-use crate::ast::ByteRange;
+use super::{enclosing_kind, parse_for, snippets::CallSequence, NoiseStage, ParseCache, Snippet};
+use crate::ast::{named_children, ByteRange};
 
 use args::collect_argument_shapes;
 
 /// Per-argument shape extraction for the filter.
 mod args;
 
+/// Assertion admission for the covered-statement rule.
+mod asserts;
+
 /// Detects literal-variation call scaffolding
-/// ([CLONE-NOISE-LITERAL-VARIATION-CALLS]): every cluster member
-/// resolves to the same callee/arity call shape — one enclosing call,
-/// or the same ordered call sequence — with **at least one string
-/// literal argument differing** across members.
+/// ([CLONE-NOISE-LITERAL-VARIATION-CALLS]): a cluster whose members all
+/// resolve to the same callee/arity call shape — one enclosing call, or
+/// the same ordered call sequence — with **at least one string literal
+/// argument differing** across members.
+///
+/// Two-member families are the render pass's to judge (gh #467,
+/// gh #478): the split pass defers them — an early conviction there
+/// never reaches render, and the pair's publish-or-suppress verdict is
+/// [`pair_is_copy_paste`]'s content call.
 pub(super) fn is_literal_variation_call_cluster(
     snippets: &[Snippet<'_>],
     cache: &ParseCache,
+    stage: NoiseStage,
 ) -> bool {
-    let calls: Option<Vec<Rc<CallShape>>> = snippets
+    if snippets.len() == 2 && stage == NoiseStage::Split {
+        return false;
+    }
+    let calls: Option<Vec<Arc<CallShape>>> = snippets
         .iter()
         .map(|snippet| cache.call_shape(snippet, || call_shape(snippet)))
         .collect();
@@ -35,7 +47,7 @@ pub(super) fn is_literal_variation_call_cluster(
 
 /// Applies the literal-variation rule to one comparable call per
 /// cluster member.
-fn is_literal_variation_call_set(calls: Option<Vec<Rc<CallShape>>>) -> bool {
+fn is_literal_variation_call_set(calls: Option<Vec<Arc<CallShape>>>) -> bool {
     let Some(calls) = calls else { return false };
     let Some(first) = calls.first() else {
         return false;
@@ -49,7 +61,8 @@ fn is_literal_variation_call_set(calls: Option<Vec<Rc<CallShape>>>) -> bool {
     if !calls.iter().all(|call| call.keywords == first.keywords) {
         return false;
     }
-    has_differing_string_literals(calls.iter().map(std::convert::AsRef::as_ref))
+    let members: Vec<&CallShape> = calls.iter().map(Arc::as_ref).collect();
+    has_differing_string_literals(members.iter().copied()) && !pair_is_copy_paste(&members)
 }
 
 /// Distilled view of a call expression used to compare cluster members.
@@ -72,8 +85,9 @@ pub(crate) struct CallShape {
 #[derive(Clone)]
 enum ArgShape {
     /// Raw bytes of a string-literal argument (or string content of an
-    /// f-string / interpolated string).
-    StringLiteral(Vec<u8>),
+    /// f-string / interpolated string), and whether the literal embeds
+    /// an interpolation — the authored-code signal of gh #467.
+    StringLiteral(Vec<u8>, bool),
     /// Anything else — non-string literal, identifier, sub-expression.
     Other,
 }
@@ -116,28 +130,47 @@ fn call_shape_from_node(call: Node<'_>, source: &[u8], language: &str) -> Option
 /// the case this distinguishes: one varying call, four invariant ones.
 /// Scaffolding has nothing left once the literals are removed.
 fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>], cache: &ParseCache) -> bool {
-    let cells: Option<Vec<Rc<CallSequence>>> = snippets
+    let cells: Option<Vec<Arc<CallSequence>>> = snippets
         .iter()
         .map(|snippet| cache.call_sequence(snippet, || Some(call_sequence(snippet))))
         .collect();
     let Some(cells) = cells else {
         return false;
     };
-    if !cells.iter().all(|cell| cell.all_statements_have_call) {
+    if !cells.iter().all(|cell| cell.statements_admissible) {
         return false;
     }
     let sequences: Option<Vec<&[CallShape]>> =
         cells.iter().map(|cell| cell.shapes.as_deref()).collect();
-    let Some(sequences) = sequences else {
-        return false;
-    };
+    sequences.is_some_and(|sequences| every_sequence_position_varies(&sequences))
+}
+
+/// True when the members share one non-empty ordered call header and
+/// every position in it carries differing string literals — except a
+/// two-member pair whose differing literal is authored interpolation,
+/// which publishes (gh #467).
+fn every_sequence_position_varies(sequences: &[&[CallShape]]) -> bool {
     let Some(first) = sequences.first() else {
         return false;
     };
     if first.is_empty() || !sequences.iter().all(|seq| same_call_headers(seq, first)) {
         return false;
     }
-    (0..first.len()).all(|index| sequence_position_differs(&sequences, index))
+    (0..first.len()).all(|index| sequence_position_differs(sequences, index))
+        && !sequence_pair_is_copy_paste(sequences)
+}
+
+/// The sequence form of [`pair_is_copy_paste`]: same position, same
+/// callee, two members, differing interpolated literal.
+fn sequence_pair_is_copy_paste(sequences: &[&[CallShape]]) -> bool {
+    sequences.len() == 2
+        && sequences.first().is_some_and(|first| {
+            (0..first.len()).any(|index| {
+                let position: Vec<&CallShape> =
+                    sequences.iter().filter_map(|seq| seq.get(index)).collect();
+                pair_is_copy_paste(&position)
+            })
+        })
 }
 
 /// Computes the fused literal-variation sequence cell for one snippet:
@@ -146,27 +179,57 @@ fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>], cache: &ParseCac
 /// ([PERF-FLUTTER-TODO-CORPUS]).
 fn call_sequence(snippet: &Snippet<'_>) -> super::snippets::CallSequence {
     super::snippets::CallSequence {
-        all_statements_have_call: every_covered_statement_has_call(snippet),
+        statements_admissible: covered_statements_admissible(snippet),
         shapes: call_shapes_in_range(snippet),
     }
 }
 
-/// Whether every complete statement covered by `snippet` contains a call.
+/// Whether the statements covered by `snippet` are admissible to the
+/// sequence rule: every complete covered statement contains a call,
+/// except that one lone call-free statement is admitted when it is an
+/// assertion on a value the covered calls bound — the trailing
+/// acceptance check of the test idiom this filter hides (gh #70, #71).
 ///
-/// A varying call is not the whole matched region when an adjacent authored
-/// statement carries additional work. Ignoring that statement let one REST
-/// call hide the endpoint-bearing accessor window while its call-free data
-/// handling remained inside the range (`rename_needs_an_anchor`).
-fn every_covered_statement_has_call(snippet: &Snippet<'_>) -> bool {
+/// Anything else call-free blocks the filter. A varying call is not the
+/// whole matched region when an adjacent authored statement carries
+/// additional work: ignoring such a statement let one REST call hide
+/// the endpoint-bearing accessor window while its call-free data
+/// handling remained inside the range (`rename_needs_an_anchor`). And a
+/// *block* of call-free assertions is shared verification logic the
+/// members genuinely duplicate, not payload, so only the lone one is
+/// idiom ([CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT]).
+fn covered_statements_admissible(snippet: &Snippet<'_>) -> bool {
     let Some(tree) = parse_for(snippet) else {
         return false;
     };
     let mut statements = Vec::new();
     collect_covered_statements(tree.root_node(), snippet.range, &mut statements);
-    !statements.is_empty()
-        && statements
-            .iter()
-            .all(|node| subtree_contains_call(*node, call_kinds(snippet.language)))
+    let kinds = call_kinds(snippet.language);
+    let (with_call, without_call): (Vec<&Node<'_>>, Vec<&Node<'_>>) = statements
+        .iter()
+        .partition(|node| subtree_contains_call(**node, kinds));
+    !statements.is_empty() && call_free_admissible(&without_call, &with_call, &statements, snippet)
+}
+
+/// Which call-free statements the covered set may carry: none, the lone
+/// assertion on a call-bound value, or that assertion preceded by the
+/// literal tautology it reads
+/// ([CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT-TAUTOLOGY]).
+/// Three or more never qualify.
+fn call_free_admissible(
+    without_call: &[&Node<'_>],
+    with_call: &[&Node<'_>],
+    covered: &[Node<'_>],
+    snippet: &Snippet<'_>,
+) -> bool {
+    match without_call {
+        [] => true,
+        [lone] => asserts::is_assert_on_call_bound_value(**lone, with_call, snippet),
+        [tautology, assertion] => {
+            asserts::is_literal_tautology_pair([tautology, assertion], with_call, covered, snippet)
+        }
+        _ => false,
+    }
 }
 
 /// Collects the outermost complete statement-shaped nodes inside `range`.
@@ -185,8 +248,7 @@ fn collect_covered_statements<'tree>(
         out.push(node);
         return;
     }
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
+    for child in named_children(node) {
         collect_covered_statements(child, range, out);
     }
 }
@@ -209,11 +271,9 @@ fn subtree_contains_call(node: Node<'_>, kinds: &[&str]) -> bool {
     if kinds.contains(&node.kind()) {
         return true;
     }
-    let mut cursor = node.walk();
-    let found = node
-        .named_children(&mut cursor)
-        .any(|child| subtree_contains_call(child, kinds));
-    found
+    named_children(node)
+        .into_iter()
+        .any(|child| subtree_contains_call(child, kinds))
 }
 
 /// Returns every call fully contained in `snippet.range`, preserving
@@ -258,8 +318,7 @@ fn collect_call_shapes(node: Node<'_>, walk: &Walk<'_>, out: &mut Vec<CallShape>
             return;
         }
     }
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
+    for child in named_children(node) {
         collect_call_shapes(child, walk, out);
     }
 }
@@ -287,8 +346,7 @@ fn walk_argument_children(call: Node<'_>, walk: &Walk<'_>, out: &mut Vec<CallSha
     else {
         return;
     };
-    let mut cursor = args.walk();
-    for child in args.named_children(&mut cursor) {
+    for child in named_children(args) {
         collect_call_shapes(child, walk, out);
     }
 }
@@ -348,24 +406,68 @@ fn has_differing_string_literals<'c>(calls: impl IntoIterator<Item = &'c CallSha
     let Some(first) = calls.first() else {
         return false;
     };
-    let mut saw_difference = false;
-    let mut saw_string_arg = false;
-    for index in 0..first.arguments.len() {
-        let Some(ArgShape::StringLiteral(baseline)) = first.arguments.get(index) else {
-            continue;
-        };
-        saw_string_arg = true;
-        for call in calls.iter().skip(1) {
-            match call.arguments.get(index) {
-                Some(ArgShape::StringLiteral(bytes)) if bytes != baseline => {
-                    saw_difference = true;
-                }
-                Some(ArgShape::StringLiteral(_)) => {}
-                _ => {
-                    return false;
-                }
+    let agreements: Vec<LiteralAgreement> = (0..first.arguments.len())
+        .map(|index| literal_agreement(&calls, index))
+        .collect();
+    !agreements.contains(&LiteralAgreement::Incomparable)
+        && agreements.contains(&LiteralAgreement::Differs)
+}
+
+/// How one positional argument index reads across the cluster.
+#[derive(PartialEq, Eq)]
+enum LiteralAgreement {
+    /// The first member holds no string literal at this index, so the
+    /// position says nothing about literal variation either way.
+    NotAString,
+    /// Every member holds the same string-literal bytes here.
+    Same,
+    /// Some member holds different string-literal bytes here — the
+    /// intentional test-data variation the filter looks for.
+    Differs,
+    /// Some member holds a non-string where the first holds a string,
+    /// so the calls are not comparable as literal variation at all.
+    Incomparable,
+}
+
+/// Compares argument `index` of every member against the first member.
+fn literal_agreement(calls: &[&CallShape], index: usize) -> LiteralAgreement {
+    let Some(Some(ArgShape::StringLiteral(baseline, _))) =
+        calls.first().map(|call| call.arguments.get(index))
+    else {
+        return LiteralAgreement::NotAString;
+    };
+    let mut agreement = LiteralAgreement::Same;
+    for call in calls.iter().skip(1) {
+        match call.arguments.get(index) {
+            Some(ArgShape::StringLiteral(bytes, _)) if bytes != baseline => {
+                agreement = LiteralAgreement::Differs;
             }
+            Some(ArgShape::StringLiteral(_, _)) => {}
+            _ => return LiteralAgreement::Incomparable,
         }
     }
-    saw_string_arg && saw_difference
+    agreement
+}
+
+/// gh #467: whether a two-member literal-variation family is a
+/// copy-pasted pair rather than parameterisable scaffolding. A pair
+/// whose differing string argument is an authored interpolation — an
+/// f-string route, a template substitution — publishes: the variation
+/// is code choosing data, no helper exists for a family to
+/// parameterise over, and suppressing it deletes a visible duplicate.
+/// Plain-literal pairs stay suppressed: their variation is data handed
+/// to a shared callee, which is the scaffolding shape the filter names.
+fn pair_is_copy_paste(calls: &[&CallShape]) -> bool {
+    calls.len() == 2
+        && calls.first().is_some_and(|first| {
+            (0..first.arguments.len()).any(|index| {
+                literal_agreement(calls, index) == LiteralAgreement::Differs
+                    && calls.iter().any(|call| {
+                        matches!(
+                            call.arguments.get(index),
+                            Some(ArgShape::StringLiteral(_, true))
+                        )
+                    })
+            })
+        })
 }

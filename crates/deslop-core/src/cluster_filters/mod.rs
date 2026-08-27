@@ -141,7 +141,7 @@ mod verbatim_subgroup;
 use std::{
     collections::{BTreeSet, HashMap},
     hash::BuildHasher,
-    rc::Rc,
+    sync::Arc,
 };
 
 use tree_sitter::Node;
@@ -153,67 +153,138 @@ pub(crate) use structural_families::split_structural_families;
 pub(crate) use verbatim_subgroup::split_noise_verbatim_families;
 
 use crate::{
-    ast::ByteRange, clone_category::CloneCategory, fingerprint::Fingerprint, state::FileId,
+    ast::{named_children, ByteRange},
+    clone_category::CloneCategory,
+    fingerprint::Fingerprint,
+    state::FileId,
 };
 
+/// Which pipeline stage is asking, so a filter can defer work to the
+/// stage that owns it. The noise-split pass suppresses fused components
+/// early; the render pass suppresses report clusters late. A family the
+/// split suppresses never reaches render, so each filter must convict in
+/// the stage its contract names.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NoiseStage {
+    /// The noise-split pass, over fused components pre-report.
+    Split,
+    /// The report render pass, over ranked report clusters.
+    Render,
+}
+
 /// Decides whether `cluster` is a known noise pattern that must not be
-/// surfaced as duplication. Returns `true` when the cluster should be
-/// hidden from the ranked report.
+/// surfaced as duplication. Returns **which** filter recognised it, and
+/// `None` when none did.
+///
+/// Callers that only need "hide this" use `.is_some()`. The identity
+/// matters to the verbatim-subgroup split, which asks a different
+/// question of a filter whose members must already share one file
+/// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]).
 pub(crate) fn is_noise_pattern<S: BuildHasher>(
     members: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
-) -> bool {
-    let Some(language) = uniform_language(members, file_languages) else {
-        cache.record_noise(
-            NoiseFilter::UniformLanguage,
-            members.len(),
-            false,
-            std::time::Duration::ZERO,
-        );
-        return false;
-    };
-    let Some(snippets) = collect_snippets(members, sources, language, cache) else {
-        cache.record_noise(
-            NoiseFilter::CollectSnippets,
-            members.len(),
-            false,
-            std::time::Duration::ZERO,
-        );
-        return false;
-    };
-    // Generic, language-agnostic noise checks run for every language (they
-    // key off per-language kind maps). The language-specific idiom filters
-    // only fire for their own language, so gate them by `language` rather
-    // than walking every Dart/C# cluster's CST through Python/Rust matchers
-    // that can never match — that wasted walk dominated analysis time on
-    // large codegen-heavy repos ([CLONE-NOISE-REPARSE-CACHE]).
-    // Short-circuit preserved exactly: each check runs only until one
-    // fires, and the counters record only what actually ran
-    // ([PERF-FLUTTER-TODO-OBSERVABILITY]).
+    stage: NoiseStage,
+) -> Option<NoiseFilter> {
+    let language = pre_gate(
+        uniform_language(members, file_languages),
+        NoiseFilter::UniformLanguage,
+        members.len(),
+        cache,
+    )?;
+    let snippets = pre_gate(
+        collect_snippets(members, sources, language, cache),
+        NoiseFilter::CollectSnippets,
+        members.len(),
+        cache,
+    )?;
+    run_noise_checks(language, &snippets, sources, file_languages, cache, stage)
+}
+
+/// Records a pre-gate that could not even reach the filters, and passes
+/// its value through.
+fn pre_gate<T>(
+    value: Option<T>,
+    filter: NoiseFilter,
+    members: usize,
+    cache: &ParseCache,
+) -> Option<T> {
+    if value.is_none() {
+        cache.record_noise(filter, members, false, std::time::Duration::ZERO);
+    }
+    value
+}
+
+/// Runs every noise filter over `snippets` in short-circuit order,
+/// returning the first that fires.
+///
+/// Generic, language-agnostic checks run for every language (they key
+/// off per-language kind maps). The language-specific idiom filters only
+/// fire for their own language, so gate them by `language` rather than
+/// walking every Dart/C# cluster's CST through Python/Rust matchers that
+/// can never match — that wasted walk dominated analysis time on large
+/// codegen-heavy repos ([CLONE-NOISE-REPARSE-CACHE]). Each check runs
+/// only until one fires, and the counters record only what actually ran
+/// ([PERF-FLUTTER-TODO-OBSERVABILITY]).
+fn run_noise_checks<S: BuildHasher>(
+    language: &str,
+    snippets: &[Snippet<'_>],
+    sources: &HashMap<FileId, Vec<u8>>,
+    file_languages: &HashMap<FileId, &'static str, S>,
+    cache: &ParseCache,
+    stage: NoiseStage,
+) -> Option<NoiseFilter> {
     let polymorphic =
-        || polymorphic::is_polymorphic_signature_cluster(&snippets, sources, file_languages, cache);
-    let signature_only = || is_signature_only_cluster(&snippets, cache);
-    let literal_calls = || calls::is_literal_variation_call_cluster(&snippets, cache);
-    let constant_table = || constant_table::is_constant_table_cluster(&snippets);
-    let language_specific = || language_specific_noise(language, &snippets, cache);
-    let checks: [(NoiseFilter, &dyn Fn() -> bool); 5] = [
+        || polymorphic::is_polymorphic_signature_cluster(snippets, sources, file_languages, cache);
+    let signature_only = || is_signature_only_cluster(snippets, cache);
+    let literal_calls = || calls::is_literal_variation_call_cluster(snippets, cache, stage);
+    let constant_table = || constant_table::is_constant_table_cluster(snippets);
+    let checks: [(NoiseFilter, &dyn Fn() -> bool); 4] = [
         (NoiseFilter::Polymorphic, &polymorphic),
         (NoiseFilter::SignatureOnly, &signature_only),
         (NoiseFilter::LiteralCalls, &literal_calls),
         (NoiseFilter::ConstantTable, &constant_table),
-        (NoiseFilter::LanguageSpecific, &language_specific),
     ];
     for (filter, check) in checks {
-        let started = std::time::Instant::now();
-        let result = check();
-        cache.record_noise(filter, snippets.len(), result, started.elapsed());
-        if result {
-            return true;
+        if let Some(fired) = timed(filter, check, snippets.len(), cache) {
+            return Some(fired);
         }
     }
-    false
+    timed_language_specific(language, snippets, cache)
+}
+
+/// Times one generic check, records its counter row, and reports the
+/// filter when it fired.
+fn timed(
+    filter: NoiseFilter,
+    check: &dyn Fn() -> bool,
+    snippets: usize,
+    cache: &ParseCache,
+) -> Option<NoiseFilter> {
+    let started = std::time::Instant::now();
+    let result = check();
+    cache.record_noise(filter, snippets, result, started.elapsed());
+    result.then_some(filter)
+}
+
+/// Times the language-specific bank. Its counter row stays under the one
+/// `language_specific` label so the per-run log is unchanged, while the
+/// returned identity is the individual filter that fired.
+fn timed_language_specific(
+    language: &str,
+    snippets: &[Snippet<'_>],
+    cache: &ParseCache,
+) -> Option<NoiseFilter> {
+    let started = std::time::Instant::now();
+    let fired = language_specific_noise(language, snippets, cache);
+    cache.record_noise(
+        NoiseFilter::LanguageSpecific,
+        snippets.len(),
+        fired.is_some(),
+        started.elapsed(),
+    );
+    fired
 }
 
 /// One cluster-noise sub-check, for [`ParseCache`]'s aggregate counters
@@ -235,6 +306,11 @@ pub(crate) enum NoiseFilter {
     ConstantTable,
     /// The language-specific idiom filters.
     LanguageSpecific,
+    /// The Python sibling-cell filter, named apart from the rest of the
+    /// language-specific bank because its members share one file and one
+    /// literal node by construction
+    /// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]).
+    PyCollectionSiblingCells,
 }
 
 impl NoiseFilter {
@@ -248,7 +324,23 @@ impl NoiseFilter {
             Self::LiteralCalls => "literal_calls",
             Self::ConstantTable => "constant_table",
             Self::LanguageSpecific => "language_specific",
+            Self::PyCollectionSiblingCells => "py_collection_sibling_cells",
         }
+    }
+
+    /// Whether a byte-identical family must span two files before it
+    /// escapes this filter ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE]).
+    ///
+    /// Every filter here recognises a family that *may* be spread over
+    /// many files, so byte-identity confined to one file is better
+    /// explained by the idiom than by a paste — except the sibling-cell
+    /// filter, whose members must already share one file and one literal
+    /// node. Asking a family that is single-file by construction to span
+    /// two files is a question with one answer, and it closed the escape
+    /// hatch on that route permanently
+    /// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]).
+    pub(crate) const fn demands_cross_file_copy(self) -> bool {
+        !matches!(self, Self::PyCollectionSiblingCells)
     }
 }
 
@@ -312,24 +404,47 @@ fn is_literal_dominated_table(literal_fraction: f64, snippets: &[Snippet<'_>]) -
 /// only walked by matchers that can fire for it. C# has no idiom filter
 /// today; Dart suppresses const-data-registry field clusters. Both
 /// also rely on the generic checks plus the fusion and report-hide gates.
-fn language_specific_noise(language: &str, snippets: &[Snippet<'_>], cache: &ParseCache) -> bool {
+fn language_specific_noise(
+    language: &str,
+    snippets: &[Snippet<'_>],
+    cache: &ParseCache,
+) -> Option<NoiseFilter> {
+    let generic = NoiseFilter::LanguageSpecific;
     match language {
-        "dart" => {
-            dart::is_dart_class_field_declaration_cluster(snippets, cache)
-                || dart::is_dart_widget_scaffold_cluster(snippets)
-        }
+        "dart" => (dart::is_dart_class_field_declaration_cluster(snippets, cache)
+            || dart::is_dart_widget_scaffold_cluster(snippets))
+        .then_some(generic),
         "python" => python_noise(snippets),
-        "rust" => rust_noise(snippets),
+        "rust" => rust_noise(snippets).then_some(generic),
         "javascript" | "typescript" | "tsx" => {
-            ecmascript::is_ecmascript_data_shape_cluster(snippets)
+            ecmascript::is_ecmascript_data_shape_cluster(snippets).then_some(generic)
         }
-        _ => false,
+        _ => None,
     }
 }
 
 /// All Python idiom noise filters (/
-/// #112/#114/#115/#121/#126/#133 and monkeypatch scaffolding).
-fn python_noise(snippets: &[Snippet<'_>]) -> bool {
+/// #112/#114/#115/#121/#126/#133 and monkeypatch scaffolding), in
+/// short-circuit order, reporting which one fired.
+///
+/// The sibling-cell filter is named apart from the rest because its
+/// members must already share one file *and* one literal node, so a
+/// byte-identical family it recognises can never span two files
+/// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]). Its
+/// position in the chain is unchanged: a cluster an earlier filter
+/// claims is still credited to that filter.
+fn python_noise(snippets: &[Snippet<'_>]) -> Option<NoiseFilter> {
+    if python_noise_before_cells(snippets) {
+        return Some(NoiseFilter::LanguageSpecific);
+    }
+    if python_collection_cells::is_collection_sibling_cell_cluster(snippets) {
+        return Some(NoiseFilter::PyCollectionSiblingCells);
+    }
+    python_noise_after_cells(snippets).then_some(NoiseFilter::LanguageSpecific)
+}
+
+/// The Python idiom filters that run before the sibling-cell check.
+fn python_noise_before_cells(snippets: &[Snippet<'_>]) -> bool {
     python_idioms::is_generated_template_output_cluster(snippets)
         || python_idioms::is_jwt_hmac_independent_verifier_cluster(snippets)
         || python_idioms::is_monkeypatch_scaffolding_literal_cluster(snippets)
@@ -340,8 +455,11 @@ fn python_noise(snippets: &[Snippet<'_>]) -> bool {
         || python_orm::is_sqlalchemy_mapped_column_cluster(snippets)
         || python::is_test_dict_literal_cluster(snippets)
         || python::is_pytest_fixture_boilerplate_cluster(snippets)
-        || python_collection_cells::is_collection_sibling_cell_cluster(snippets)
-        || python_class_shapes::is_strenum_class_shape_cluster(snippets)
+}
+
+/// The Python idiom filters that run after the sibling-cell check.
+fn python_noise_after_cells(snippets: &[Snippet<'_>]) -> bool {
+    python_class_shapes::is_strenum_class_shape_cluster(snippets)
         || python_class_shapes::is_pydantic_partial_update_cluster(snippets)
         || python::is_parametric_invariant_test_cluster(snippets)
         || python_module_preamble::is_module_preamble_sequence_cluster(snippets)
@@ -430,11 +548,9 @@ pub(super) fn node_contains_kind(node: Node<'_>, kind: &str) -> bool {
     if node.kind() == kind {
         return true;
     }
-    let mut cursor = node.walk();
-    let found = node
-        .named_children(&mut cursor)
-        .any(|child| node_contains_kind(child, kind));
-    found
+    named_children(node)
+        .into_iter()
+        .any(|child| node_contains_kind(child, kind))
 }
 
 /// Returns true when `needle` occurs in `bytes`.
@@ -481,7 +597,7 @@ fn is_signature_only_cluster(snippets: &[Snippet<'_>], cache: &ParseCache) -> bo
     if snippets.len() < 2 {
         return false;
     }
-    let shapes: Option<Vec<Rc<Vec<body_shape::OwnedShapeToken>>>> = snippets
+    let shapes: Option<Vec<Arc<Vec<body_shape::OwnedShapeToken>>>> = snippets
         .iter()
         .map(|snippet| {
             cache.signature_shape(snippet, || {
@@ -572,11 +688,9 @@ pub(super) fn node_contains_identifier(node: Node<'_>, source: &[u8], needle: &[
     {
         return true;
     }
-    let mut cursor = node.walk();
-    let found = node
-        .named_children(&mut cursor)
-        .any(|child| node_contains_identifier(child, source, needle));
-    found
+    named_children(node)
+        .into_iter()
+        .any(|child| node_contains_identifier(child, source, needle))
 }
 
 /// Walks `root` looking for the smallest descendant of `kinds` whose
@@ -595,10 +709,7 @@ pub(crate) fn enclosing_kind<'tree>(
         if kinds.contains(&node.kind()) {
             best = Some(node);
         }
-        let mut cursor = node.walk();
-        for child in node.named_children(&mut cursor) {
-            stack.push(child);
-        }
+        stack.extend(named_children(node));
     }
     best
 }

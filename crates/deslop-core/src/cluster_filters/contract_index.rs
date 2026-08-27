@@ -30,7 +30,7 @@ use std::{
 use tree_sitter::Node;
 
 use super::{function_kinds, snippets::ParseCache};
-use crate::state::FileId;
+use crate::{ast::named_children, state::FileId};
 
 /// Node kinds that declare a type whose members can be forced to a
 /// shared signature.
@@ -162,8 +162,7 @@ impl ContractIndex {
             if is_declarer(node.kind()) {
                 self.record(node, source, language);
             }
-            let mut cursor = node.walk();
-            stack.extend(node.named_children(&mut cursor));
+            stack.extend(named_children(node));
         }
     }
 
@@ -229,12 +228,11 @@ fn base_name<'src>(node: Node<'_>, source: &'src [u8]) -> Option<&'src [u8]> {
 /// child-kind spellings the grammars use.
 pub(super) fn declared_bases(declarer: Node<'_>, source: &[u8]) -> Vec<Vec<u8>> {
     let mut names = Vec::new();
-    let mut cursor = declarer.walk();
     let fielded = CONTRACT_FIELDS
         .iter()
         .filter_map(|field| declarer.child_by_field_name(field));
-    let childed = declarer
-        .named_children(&mut cursor)
+    let childed = named_children(declarer)
+        .into_iter()
         .filter(|child| CONTRACT_KINDS.contains(&child.kind()));
     for reference in fielded.chain(childed) {
         collect_base_names(reference, source, &mut names);
@@ -246,8 +244,7 @@ pub(super) fn declared_bases(declarer: Node<'_>, source: &[u8]) -> Vec<Vec<u8>> 
 /// nodes (`base_list`, `class_heritage`, …) that only group references.
 fn collect_base_names(node: Node<'_>, source: &[u8], names: &mut Vec<Vec<u8>>) {
     if BASE_WRAPPER_KINDS.contains(&node.kind()) {
-        let mut cursor = node.walk();
-        for child in node.named_children(&mut cursor) {
+        for child in named_children(node) {
             collect_base_names(child, source, names);
         }
         return;
@@ -274,8 +271,7 @@ fn member_names(declarer: Node<'_>, source: &[u8], language: &'static str) -> Ve
         if node.id() != declarer.id() && is_declarer(node.kind()) {
             continue;
         }
-        let mut cursor = node.walk();
-        stack.extend(node.named_children(&mut cursor));
+        stack.extend(named_children(node));
     }
     names
 }
@@ -296,9 +292,7 @@ pub(super) fn function_name_node(function: Node<'_>) -> Option<Node<'_>> {
     if let Some(name) = signature.child_by_field_name("name") {
         return Some(name);
     }
-    let mut cursor = signature.walk();
-    let nested = signature
-        .named_children(&mut cursor)
-        .find_map(|child| child.child_by_field_name("name"));
-    nested
+    named_children(signature)
+        .into_iter()
+        .find_map(|child| child.child_by_field_name("name"))
 }

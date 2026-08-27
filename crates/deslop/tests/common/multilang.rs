@@ -20,7 +20,7 @@ use super::{
 };
 
 /// Subtree-size floor the fixture is scanned at. Every authored clone
-/// measures 35–52 nodes, so 20 keeps all six clusters. It must sit
+/// measures 40–57 nodes, so 20 keeps all six clusters. It must sit
 /// *above* 13: at lower floors the C# pair renders a second `identical`
 /// cluster — a 13-node sibling window over the method's signature line
 /// that starts at `public` while the method view starts at `static`,
@@ -112,7 +112,7 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         "ledger_alpha.rs",
         "ledger_beta.rs",
         "927b05fad1c1cc0f",
-        53,
+        51,
         (5, 15, 124, 381),
         (7, 17, 131, 388),
     ),
@@ -121,7 +121,7 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         "ledger_alpha.py",
         "ledger_beta.py",
         "b63105455a75704b",
-        41,
+        40,
         (6, 13, 109, 315),
         (8, 15, 118, 324),
     ),
@@ -130,7 +130,7 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         "ledger_alpha.ts",
         "ledger_beta.ts",
         "ffa9824eae18b341",
-        56,
+        57,
         (5, 15, 127, 391),
         (7, 17, 138, 402),
     ),
@@ -139,7 +139,7 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         "ledger_alpha.dart",
         "ledger_beta.dart",
         "7c61b26360939eaa",
-        57,
+        55,
         (5, 15, 121, 350),
         (7, 17, 123, 352),
     ),
@@ -148,7 +148,7 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         "LedgerAlpha.cs",
         "LedgerBeta.cs",
         "dc672f7f39f21ba4",
-        52,
+        51,
         (9, 24, 173, 537),
         (9, 24, 180, 544),
     ),

@@ -10,7 +10,7 @@ use std::{collections::HashMap, hash::BuildHasher};
 
 use tree_sitter::Node;
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 use super::{
     body_shape::{body_kind_stream, ShapeToken},
@@ -19,7 +19,10 @@ use super::{
     override_marker::carries_override_marker,
     parse_for, spans_multiple_files, ParseCache, Snippet,
 };
-use crate::{ast::ByteRange, state::FileId};
+use crate::{
+    ast::{named_children, ByteRange},
+    state::FileId,
+};
 
 /// What one cluster member contributes to the polymorphic decision, in
 /// owned form so [`ParseCache`] can memoise it by `(file, range)`
@@ -86,7 +89,7 @@ pub(super) fn is_polymorphic_signature_cluster<S: BuildHasher>(
     if !spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id)) {
         return false;
     }
-    let subjects: Option<Vec<Rc<OwnedSubject>>> = snippets
+    let subjects: Option<Vec<Arc<OwnedSubject>>> = snippets
         .iter()
         .map(|snippet| cache.subject(snippet, || subject_of(snippet, cache)))
         .collect();
@@ -210,13 +213,9 @@ fn scaffolding_besides_functions<'tree>(
         return true;
     }
     match node.kind() {
-        "module" | "class_definition" | "block" | "decorated_definition" => {
-            let mut cursor = node.walk();
-            let residue_clean = node
-                .named_children(&mut cursor)
-                .all(|child| scaffolding_besides_functions(child, range, kinds, functions));
-            residue_clean
-        }
+        "module" | "class_definition" | "block" | "decorated_definition" => named_children(node)
+            .into_iter()
+            .all(|child| scaffolding_besides_functions(child, range, kinds, functions)),
         "expression_statement" => is_docstring(node),
         kind => is_inert_declaration_kind(kind),
     }

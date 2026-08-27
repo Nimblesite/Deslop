@@ -6,10 +6,10 @@
 
 Five authored Rust files under `src/`, two Type-1 (byte-identical) clusters with different occurrence counts so ranking order is exercised:
 
-- `settle_invoice` — 60-node declaration, three copies (`alpha.rs`, `beta.rs`, `gamma.rs`), the higher-weight cluster. The span covers the whole `pub fn`, not the body alone: an occurrence that starts at the function *name* is not extractable, and pinning one was how a 7-byte truncation stayed invisible.
+- `settle_invoice` — 68-node declaration, three copies (`alpha.rs`, `beta.rs`, `gamma.rs`), the higher-weight cluster. The span covers the whole `pub fn`, not the body alone: an occurrence that starts at the function *name* is not extractable, and pinning one was how a 7-byte truncation stayed invisible.
 - `merge_labels` — 38-node body, two copies (`delta.rs`, `epsilon.rs`), the lower-weight cluster.
 
-Each file also carries one tiny, structurally unique top-level item (const / struct / enum / type alias / static) so the normalised `__file__` nodes differ and no whole-file cluster forms. The fixed flag set is `--no-incremental --embeddings off --min-nodes 16 --notext --nohtml`; 16 sits above the 12-node `settle_invoice` signature subtree (which would otherwise render as a third cluster) and below both clone bodies.
+Each file also carries one tiny, structurally unique top-level item (const / struct / enum / type alias / static) so the normalised `__file__` nodes differ and no whole-file cluster forms. The fixed flag set is `--no-incremental --embeddings off --min-nodes 16 --notext --nohtml`; 16 sits below both clone declarations (68 and 38 nodes). The 12-node `settle_invoice` signature subtree never renders as a third cluster — the declaration around it contains it, so [PIPELINE-CLUSTER-SUBSUME] elects it away; scanned at `--min-nodes` 12, 13 and 16 this corpus renders the same two clusters and the same 57 duplicated LOC.
 
 The test never scans this directory in place — it copies `src/` into a throwaway temp root — so no run can drop a `.deslop/` cache here. Editing anything under `src/` invalidates the golden.
 

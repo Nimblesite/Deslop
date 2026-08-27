@@ -19,8 +19,8 @@ use deslop_core::{
 use serde_json::Value;
 
 use super::{
-    approx, cluster_bucket, cluster_file_set, cluster_size, clusters, field, occurrence_texts,
-    occurrences, signal, Result,
+    approx, cluster_bucket, cluster_file_set, cluster_size, clusters, field, occurrence_is_hidden,
+    occurrence_texts, occurrences, signal, Result,
 };
 
 /// The agent-facing act-now line ([FUSED-THRESHOLD]): at or above this a
@@ -38,8 +38,16 @@ pub(crate) const REUSE_FUSED: f64 = 0.6;
 /// *content* is duplicated ([RANK-STRUCTURAL-ONLY]).
 pub(crate) const HONEST_SHAPE_ONLY_BUCKETS: [&str; 2] = ["structural_only", "loosely_similar"];
 
+/// The only bucket a byte-identical Type-1 copy may honestly carry
+/// ([CLONE-BUCKETS-ROUTING]). Named because the noise pins need to say
+/// "exactly this", not "one of the act-now three": their controls are
+/// copied byte for byte, so every other act-now label claims the copies
+/// differ somewhere they do not.
+pub(crate) const IDENTICAL_BUCKET: &str = "identical";
+
 /// Buckets a cluster may carry once it has reached the act-now line.
-pub(crate) const ACT_NOW_BUCKETS: [&str; 3] = ["identical", "nearly_identical", "same_behavior"];
+pub(crate) const ACT_NOW_BUCKETS: [&str; 3] =
+    [IDENTICAL_BUCKET, "nearly_identical", "same_behavior"];
 
 /// Asserts the full `structural_only` contract
 /// ([RANK-STRUCTURAL-ONLY], [FUSION-CONTENT-GATE]).
@@ -321,9 +329,7 @@ fn assert_rename_is_not_a_copy(scan_root: &Path, cluster: &Value, label: &str) -
          Type-1 copy proving nothing about rename evidence — {dump}"
     );
     assert!(
-        occurrences(cluster)
-            .iter()
-            .all(|occurrence| occurrence.get("hidden") != Some(&Value::Bool(true))),
+        !occurrences(cluster).iter().any(occurrence_is_hidden),
         "{label}: a proven Type-2 clone may not have a hidden occurrence \
          — {dump}"
     );

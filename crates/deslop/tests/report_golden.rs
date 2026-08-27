@@ -34,10 +34,13 @@ use crate::common::{golden::*, *};
 #[path = "report_golden/contract.rs"]
 mod contract;
 
-/// Fixed `--min-nodes` the golden is rendered at. 16 sits above the
-/// 12-node `settle_invoice` signature subtree (which would otherwise
-/// surface as a third cluster) and below both authored clone bodies
-/// (58 and 38 nodes), so exactly the two authored clusters render.
+/// Fixed `--min-nodes` the golden is rendered at. 16 sits below both
+/// authored clone declarations (68 and 38 nodes), so exactly the two
+/// authored clusters render. The 12-node `settle_invoice` signature
+/// subtree is contained by the declaration around it and is elected
+/// away by [PIPELINE-CLUSTER-SUBSUME] rather than published as a third
+/// cluster: measured at `--min-nodes` 12, 13 and 16, this corpus renders
+/// the same two clusters and the same 57 duplicated LOC at every floor.
 const GOLDEN_MIN_NODES: u64 = 16;
 
 /// The three corpus files carrying the byte-identical `settle_invoice`
@@ -94,10 +97,6 @@ fn render_cold_report() -> Result<Vec<u8>> {
 // so a workspace version bump legitimately lands here and requires a
 // reviewed re-bless.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #432 [PIPELINE-DETERMINISM] \
-     docs/plans/fused-score-followups.md — the committed cold golden holds pre-gh-430 ids and \
-     pre-election node counts; blessing it waits until the #432 blend lands so it is not \
-     blessed twice. Run via `-- --ignored`."]
 fn cold_report_matches_committed_golden_byte_for_byte() -> Result<()> {
     let first = render_cold_report()?;
     let second = render_cold_report()?;

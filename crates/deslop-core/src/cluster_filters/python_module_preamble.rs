@@ -25,7 +25,7 @@ use super::{
     is_multi_member_language_cluster, parse_for, spans_multiple_files, trimmed_snippet_range,
     Snippet,
 };
-use crate::ast::ByteRange;
+use crate::ast::{named_children, ByteRange};
 
 /// Top-level definition kinds that make up a Python test-module preamble.
 /// `class_definition` is intentionally excluded: class-shape false
@@ -73,8 +73,8 @@ fn member_preamble_bodies(snippet: &Snippet<'_>) -> Option<Vec<u8>> {
 /// whose byte span lies fully inside `range`, in source order. Does not
 /// recurse, so nested definitions never count toward the run.
 fn top_level_definitions_in_range(root: Node<'_>, range: ByteRange) -> Vec<Node<'_>> {
-    let mut cursor = root.walk();
-    root.named_children(&mut cursor)
+    named_children(root)
+        .into_iter()
         .filter(|child| PREAMBLE_KINDS.contains(&child.kind()))
         .filter(|child| child.start_byte() >= range.start && child.end_byte() <= range.end)
         .collect()
@@ -94,11 +94,9 @@ fn function_node(node: Node<'_>) -> Option<Node<'_>> {
     if node.kind() == "function_definition" {
         return Some(node);
     }
-    let mut cursor = node.walk();
-    let function = node
-        .named_children(&mut cursor)
-        .find(|child| child.kind() == "function_definition");
-    function
+    named_children(node)
+        .into_iter()
+        .find(|child| child.kind() == "function_definition")
 }
 
 /// Returns true when every member's concatenated body bytes are unique —

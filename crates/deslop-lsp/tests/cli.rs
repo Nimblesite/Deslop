@@ -50,6 +50,114 @@ fn prints_json_version_contract() -> Result<()> {
     Ok(())
 }
 
+/// Every flag `deslop-lsp` accepts. [LSP-CLI-HELP] Help has to advertise the
+/// complete configurable surface — the same promise `deslop --help` makes in
+/// cli.md — or an agent reading it configures the server wrongly.
+const ADVERTISED_FLAGS: &[&str] = &[
+    "--worker-threads",
+    "--nice",
+    "--ipc-transport",
+    "--ranking-structural-only",
+    "--stdio",
+    "--debug",
+    "-h, --help",
+    "-V, --version",
+];
+
+/// The usage line every help request prints.
+const HELP_USAGE_LINE: &str = "Usage: deslop-lsp [OPTIONS] <WORKSPACE_ROOT>";
+
+/// The one-line summary that opens the help output.
+const HELP_ABOUT_LINE: &str =
+    "Language Server Protocol server exposing Deslop live duplicate analysis to editors.";
+
+/// The parse error `--help` produced instead of help before #475 was fixed.
+const ROOTLESS_USAGE_ERROR: &str = "usage: deslop-lsp <workspace-root>";
+
+/// Both spellings clap accepts for help on `deslop` and `deslop-mcp`.
+const HELP_FLAGS: &[&str] = &["--help", "-h"];
+
+// Issue #475: `deslop-lsp --help` logged `ERROR ... usage: deslop-lsp
+// <workspace-root>` and exited 1, because help fell through to the
+// workspace-root parser and every argument starting with `-` is rejected
+// there. Help is a report to the user, not a log: stdout, exit 0, nothing on
+// stderr — the same contract clap already gives `deslop` and `deslop-mcp`.
+// The empty-stderr assertion is the one that catches the original defect.
+#[test]
+fn help_prints_usage_to_stdout_and_exits_zero() -> Result<()> {
+    let mut rendered: Vec<String> = Vec::new();
+    for flag in HELP_FLAGS {
+        let output = Command::cargo_bin("deslop-lsp")?
+            .timeout(Duration::from_secs(10))
+            .arg(flag)
+            .output()?;
+        assert!(
+            output.status.success(),
+            "`deslop-lsp {flag}` must exit 0, got {}",
+            output.status
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stderr),
+            "",
+            "`deslop-lsp {flag}` must print help, never log an error"
+        );
+        let stdout = String::from_utf8(output.stdout)?;
+        assert!(
+            stdout.starts_with(HELP_ABOUT_LINE),
+            "`deslop-lsp {flag}` must open with the component summary, got {stdout:?}"
+        );
+        assert!(
+            stdout.contains(HELP_USAGE_LINE),
+            "`deslop-lsp {flag}` must show the usage line, got {stdout:?}"
+        );
+        for advertised in ADVERTISED_FLAGS {
+            assert!(
+                stdout.contains(advertised),
+                "`deslop-lsp {flag}` must advertise {advertised}, got {stdout:?}"
+            );
+        }
+        assert!(
+            !stdout.contains(ROOTLESS_USAGE_ERROR),
+            "`deslop-lsp {flag}` must not fall through to the workspace-root parser: {stdout:?}"
+        );
+        rendered.push(stdout);
+    }
+    assert_eq!(
+        rendered.first(),
+        rendered.last(),
+        "`--help` and `-h` must render byte-identical help"
+    );
+    Ok(())
+}
+
+// Help wins over starting a server, wherever the client puts it — the same
+// way clap treats it for the sibling binaries. Without this, a host that
+// appends `--help` after the workspace root would launch an analyser instead.
+#[test]
+fn help_after_a_workspace_root_still_prints_help() -> Result<()> {
+    let workspace = copy_fixture("csharp-small")?;
+    let output = Command::cargo_bin("deslop-lsp")?
+        .timeout(Duration::from_secs(10))
+        .arg(workspace.path())
+        .arg("--help")
+        .output()?;
+    assert!(
+        output.status.success(),
+        "`deslop-lsp <root> --help` must exit 0, got {}",
+        output.status
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        "",
+        "`deslop-lsp <root> --help` must not start a server or log startup"
+    );
+    assert!(
+        String::from_utf8(output.stdout)?.contains(HELP_USAGE_LINE),
+        "`deslop-lsp <root> --help` must print the usage line"
+    );
+    Ok(())
+}
+
 // Issue #201: a rootless launch (the transport flag with no workspace root,
 // e.g. `deslop-lsp --stdio` from a folderless VS Code window) must FAIL
 // LOUDLY — exit non-zero AND write the usage error to stderr. The original

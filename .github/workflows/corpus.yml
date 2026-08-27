@@ -72,15 +72,22 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # [CORPUS-CI] Both branches name a make target and nothing else. The
+      # repositories to clone and the tests to select live in the Makefile —
+      # `CORPUS_REPOS`/`CORPUS_TESTS` for the nightly slice,
+      # `CORPUS_REPOS_FULL`/`CORPUS_TESTS_FULL` for `full` — so this workflow
+      # cannot drift from them. It used to carry its own copy and passed
+      # `CORPUS_TESTS="corpus_"` into an `--exact` loop, where a substring
+      # matches no whole test name: every `full` dispatch selected zero tests
+      # and libtest exited 0 (gh #412). `crates/deslop/tests/corpus_selection_contract.rs`
+      # holds both slices to tests that exist.
       - name: Run corpus suite
         id: corpus
         continue-on-error: true
         run: |
           set -o pipefail
           if [ "${{ inputs.full }}" = "true" ]; then
-            make test-corpus-ci \
-              CORPUS_REPOS="flutter jellyfin tokio django react nest laravel hugo fsharp" \
-              CORPUS_TESTS="corpus_" 2>&1 | tee corpus-output.txt
+            make test-corpus-ci-full 2>&1 | tee corpus-output.txt
           else
             echo "PARTIAL=1" >> "$GITHUB_ENV"
             make test-corpus-ci 2>&1 | tee corpus-output.txt

@@ -2,6 +2,8 @@
 
 use tree_sitter::Node;
 
+use crate::ast::named_children;
+
 use super::{
     enclosing_kind, node_intersects_range, parse_for, raw_snippet_texts_differ, ParseCache, Snippet,
 };
@@ -33,9 +35,8 @@ fn covers_only_widget_scaffold_classes(snippet: &Snippet<'_>) -> bool {
         return false;
     };
     let root = tree.root_node();
-    let mut cursor = root.walk();
     let mut covered_classes = 0_usize;
-    for child in root.named_children(&mut cursor) {
+    for child in named_children(root) {
         if !node_intersects_range(child, snippet.range) {
             continue;
         }
@@ -72,14 +73,12 @@ fn is_contained_widget_scaffold_class(node: Node<'_>, snippet: &Snippet<'_>) -> 
     {
         return false;
     }
-    let mut cursor = node.walk();
-    let extends_widget = node.named_children(&mut cursor).any(|child| {
+    named_children(node).into_iter().any(|child| {
         child.kind() == "superclass"
             && child
                 .utf8_text(snippet.source)
                 .is_ok_and(|text| WIDGET_SUPERCLASS_MARKERS.iter().any(|m| text.contains(m)))
-    });
-    extends_widget
+    })
 }
 
 /// Returns true for repeated Dart field/const declarations. Field lists
@@ -117,9 +116,8 @@ fn covers_only_field_declarations(snippet: &Snippet<'_>, cache: &ParseCache) -> 
     let Some(body) = enclosing_kind(root, snippet.range, &["class_body"]) else {
         return false;
     };
-    let mut cursor = body.walk();
     let mut covered = 0_usize;
-    for member in body.named_children(&mut cursor) {
+    for member in named_children(body) {
         if !node_intersects_range(member, snippet.range) {
             continue;
         }

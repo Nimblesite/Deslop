@@ -14,32 +14,134 @@
 //! byte-identical `settle_ledger` pair that must survive whatever hides
 //! the chains. Without it this suite asserted `cluster_count == 0`, a
 //! bar a detector that had gone blind clears perfectly.
+//!
+//! What the chains end in is the whole of gh #72: each one writes a
+//! literal into a local and then asserts that local against the same
+//! literal. Two call-free statements that together test nothing — and
+//! two call-free statements used to block the covered-statement
+//! precondition outright, so every noise filter reported `fired=0`, the
+//! family published as `structural_only`, and `clusters_hidden` read
+//! `0`. [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT-TAUTOLOGY]
+//! admits that pair and nothing else, which is why this file also pins
+//! the other side: build the asserted value instead of writing it down,
+//! and the family must still publish.
 
 use anyhow::Result;
 
-use crate::common::{negative_pin::assert_family_hidden_with_control, *};
+use crate::common::{
+    negative_pin::{assert_suppressed_family, SuppressedFamily},
+    *,
+};
+
+/// The false-negative control staged in this fixture.
+const CONTROL: [&str; 2] = ["control_clone_a.py", "control_clone_b.py"];
+
+/// Duplicated lines the control clone accounts for: eight lines, twice.
+const CONTROL_LOC: u64 = 16;
+
+/// The one file the `monkeypatch.setenv` chain family lives in.
+const FAMILY: [&str; 1] = ["test_fly_host.py"];
+
+/// The family file and both control files.
+const FILES_ANALYSED: u64 = 3;
+
+const FIXTURE: &str = "python-issue-72-monkeypatch-setenv";
+const LABEL: &str = "gh #72/#103 monkeypatch.setenv chain family";
+const MIN_NODES: u32 = 4;
+
+/// Components [CLONE-NOISE-PY-MONKEYPATCH] must suppress here: exactly
+/// one. The final cluster list holds two — the cross-file control and
+/// the single three-member family cluster the subsumption pass elects
+/// over `test_fly_host.py` (it absorbs fifteen inner views into one
+/// survivor) — and the family is the one that must not publish.
+/// [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] forbids a verbatim
+/// partition here because the family is intra-file, so it is suppressed
+/// whole rather than split. A larger number is over-suppression or the
+/// hatch re-opening for an intra-file family; zero is today's inert
+/// filter.
+const EXPECTED_HIDDEN: u64 = 1;
+
+/// Every half of the contract this fixture is held to, as data: the
+/// family judged file by file, the control that must survive it, and the
+/// three counts the report must show. Stating it once keeps a pin from
+/// quietly asserting less than its neighbours.
+const PIN: SuppressedFamily<'static> = SuppressedFamily {
+    family_files: &FAMILY,
+    control_files: &CONTROL,
+    expected_hidden: EXPECTED_HIDDEN,
+    control_loc: CONTROL_LOC,
+    files_analysed: FILES_ANALYSED,
+};
 
 // [CLONE-NOISE-PY-MONKEYPATCH] gh #72, gh #103 class 1.
+// [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT-TAUTOLOGY]
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #434 [CLONE-NOISE-VERBATIM-SUBGROUP] \
-     docs/plans/fused-score-followups.md — the intra-file byte-identical core of the \
-     suppressed monkeypatch family now publishes while this pin asserts whole-family \
-     suppression; spec arbitration pending. Run via `-- --ignored`."]
 fn monkeypatch_setenv_chains_are_suppressed_while_a_real_clone_survives() -> Result<()> {
-    let report = run_report(&fixture("python-issue-72-monkeypatch-setenv"), 4)?;
-    assert_family_hidden_with_control(
-        &report,
-        "gh #72/#103 monkeypatch.setenv chain family",
-        &["test_fly_host.py"],
-        &["control_clone_a.py", "control_clone_b.py"],
-    )?;
+    let report = run_report(&fixture(FIXTURE), MIN_NODES)?;
+    assert_suppressed_family(&report, LABEL, &PIN)
+}
+
+/// The same three tests, the same two varying `setenv` calls, the same
+/// trailing assertion — with one difference: the asserted value is built
+/// (`host_prefix + "1"`) instead of written down. Building it is
+/// authored data handling, so the tautology clause must not reach it.
+const COMPUTED_FIXTURE: &str = "python-computed-value-not-a-tautology";
+const COMPUTED_LABEL: &str = "gh #72 computed-value boundary";
+
+/// The one file this fixture holds. There is no control pair here: the
+/// pin's own assertion *is* the false-negative side, failing the moment
+/// the family stops publishing.
+const COMPUTED_FILES_ANALYSED: u64 = 1;
+
+/// Nothing may be suppressed on this fixture.
+const COMPUTED_HIDDEN: u64 = 0;
+
+/// One published cluster, holding one occurrence per test function.
+const COMPUTED_CLUSTERS: usize = 1;
+const COMPUTED_OCCURRENCES: usize = 3;
+
+/// The bucket the family carries: three functions of one shape, with no
+/// rename evidence to promote them.
+const COMPUTED_BUCKET: &str = "structural_only";
+
+// [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT-TAUTOLOGY]
+// The boundary. A clause widened past `name = <literal>` would hide this
+// family too, and over-suppression is the false negative this repository
+// ranks worst.
+#[test]
+fn a_computed_value_is_not_a_tautology_and_keeps_its_cluster() -> Result<()> {
+    let report = run_report(&fixture(COMPUTED_FIXTURE), MIN_NODES)?;
     assert_eq!(
-        metric_field(&report, "duplicated_loc").as_u64(),
-        Some(16),
-        "only the control clone's eight lines, twice, may count as duplicated — \
-         a suppressed family that still feeds the duplication gate is the defect \
-         moved, not fixed: {lines:#?}",
-        lines = visible_cluster_lines(&report),
+        field(&report, "files_analysed").as_u64(),
+        Some(COMPUTED_FILES_ANALYSED),
+        "{COMPUTED_LABEL}: the family file must reach the pipeline before any \
+         verdict about it means anything: {report:#}"
+    );
+    assert_eq!(
+        clusters_hidden(&report),
+        COMPUTED_HIDDEN,
+        "{COMPUTED_LABEL}: `host_prefix + \"1\"` is a value the members build, \
+         not a literal asserted against itself — hiding it is the tautology \
+         clause eating authored data handling: {report:#}"
+    );
+    assert_eq!(
+        cluster_count(&report),
+        COMPUTED_CLUSTERS,
+        "{COMPUTED_LABEL}: the three sibling tests are one published cluster: \
+         {report:#}"
+    );
+    let family = expect_cluster_spanning(&report, &FAMILY)?;
+    assert_eq!(
+        occurrences(family).len(),
+        COMPUTED_OCCURRENCES,
+        "{COMPUTED_LABEL}: every one of the three tests must be shown, not a \
+         subset a filter trimmed: {report:#}"
+    );
+    assert_eq!(
+        cluster_bucket(family),
+        COMPUTED_BUCKET,
+        "{COMPUTED_LABEL}: shape agreement is all the evidence there is here, \
+         so the cluster is shape-only: {report:#}"
     );
     Ok(())
 }

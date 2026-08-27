@@ -92,6 +92,13 @@ pub(crate) mod store;
 /// `signals`.
 pub(crate) mod corpora;
 
+/// The `verbatim-subgroup` fixture vocabulary, shared by the suite
+/// pinning that a copy survives an unrelated cluster member and the one
+/// pinning the price the cross-file arbitration accepts. Imported
+/// explicitly with `use crate::common::verbatim_subgroup::*;`, for the
+/// same reason as `signals`.
+pub(crate) mod verbatim_subgroup;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -340,6 +347,14 @@ pub(crate) fn occurrence_path(occurrence: &Value) -> Result<&str> {
         .ok_or_else(|| anyhow!("reported occurrence is missing path"))
 }
 
+/// True when an occurrence is rendered but marked hidden — present in a
+/// cluster's `size`, absent from the report a human reads and from every
+/// line metric. A count alone cannot see the difference, so assertions
+/// that care about *shown* occurrences ask this instead.
+pub(crate) fn occurrence_is_hidden(occurrence: &Value) -> bool {
+    field(occurrence, "hidden").as_bool().unwrap_or(false)
+}
+
 /// The relative paths of every occurrence in `cluster`, in report order.
 pub(crate) fn occurrence_paths(cluster: &Value) -> Vec<String> {
     occurrences(cluster)
@@ -438,7 +453,7 @@ pub(crate) fn visible_duplicated_lines(report: &Value) -> BTreeMap<String, BTree
     let mut per_file: BTreeMap<String, BTreeSet<u64>> = BTreeMap::new();
     for cluster in clusters(report) {
         for occurrence in occurrences(cluster) {
-            if field(occurrence, "hidden").as_bool().unwrap_or(false) {
+            if occurrence_is_hidden(occurrence) {
                 continue;
             }
             let Some(path) = field(occurrence, "path").as_str() else {

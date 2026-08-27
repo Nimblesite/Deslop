@@ -83,12 +83,12 @@
   "embedding_provenance": null,
   "clusters": [
     {
-      "id": "43d86a84310253d5",
+      "id": "ce3dbe480e4ddc06",
       "rank": 1,
       "rank_band": "worst",
-      "weight": 120.0,
+      "weight": 136.0,
       "size": 3,
-      "canonical_node_count": 60,
+      "canonical_node_count": 68,
       "signals": {
         "structural": 1.0,
         "token_jaccard": 1.0,
@@ -133,11 +133,11 @@
       "occurrences_total": 3,
       "occurrence_count": 3,
       "occurrences_truncated": false,
-      "summary": "3 copies of a 60-node subtree at alpha.rs:6:1, beta.rs:6:1, gamma.rs:9:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "summary": "3 copies of a 68-node subtree at alpha.rs:6:1, beta.rs:6:1, gamma.rs:9:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
       "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
     },
     {
-      "id": "652583a45f9df196",
+      "id": "611b775c257d2c5e",
       "rank": 2,
       "rank_band": "faint",
       "weight": 38.0,

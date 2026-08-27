@@ -15,6 +15,7 @@ pub mod commands;
 pub mod custom_methods;
 pub mod diagnostics;
 pub mod file_watch;
+mod help;
 pub mod ipc;
 pub mod navigation;
 pub mod notifications;

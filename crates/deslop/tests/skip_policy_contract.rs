@@ -23,7 +23,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    path::Path,
     process::Command,
 };
 
@@ -65,7 +64,7 @@ const TEST_TARGET_KIND: &str = "test";
 /// the memory work in #166); `corpus_manifest_contract` is the curation those
 /// same two oversized repositories block (gh #426); the two gh #369 entries
 /// are red on purpose against unfinished fusion and embedding behaviour. The
-/// eleven gh #432–#434 entries are the fused-score follow-ups' own accuracy
+/// three gh #432–#433 entries are the fused-score follow-ups' own accuracy
 /// pins, skipped in flight per `docs/plans/fused-score-followups.md` — each
 /// returns when its issue lands. The three gh #439 entries are the same
 /// bargain for curated recall: they pin that `type2_recall` cannot tell the
@@ -74,7 +73,7 @@ const TEST_TARGET_KIND: &str = "test";
 ///
 /// Those counts are prose, and prose drifts. [`SKIPS_PER_ISSUE`] is what
 /// stops it drifting silently.
-const CURATED_SKIPS: [(&str, &str, u32); 28] = [
+const CURATED_SKIPS: [(&str, &str, u32); 20] = [
     (
         "crates/deslop-lsp/tests/lsp_embedding_determinism.rs",
         "lsp_embedding_refresh_is_bounded_and_reproducible",
@@ -148,21 +147,6 @@ const CURATED_SKIPS: [(&str, &str, u32); 28] = [
         422,
     ),
     (
-        "crates/deslop/tests/incremental_multilang_golden.rs",
-        "cold_multilang_report_matches_committed_golden_byte_for_byte",
-        433,
-    ),
-    (
-        "crates/deslop/tests/incremental_multilang_golden.rs",
-        "committed_multilang_golden_satisfies_the_authored_contract",
-        433,
-    ),
-    (
-        "crates/deslop/tests/incremental_multilang_golden.rs",
-        "fully_warm_multilang_run_reproduces_the_committed_golden",
-        433,
-    ),
-    (
         "crates/deslop/tests/issue_343_sum_clamp_saturation.rs",
         "mid_band_cluster_confidence_never_exceeds_its_strongest_axis",
         369,
@@ -182,31 +166,6 @@ const CURATED_SKIPS: [(&str, &str, u32); 28] = [
         "the_real_clone_outranks_every_operator_family",
         432,
     ),
-    (
-        "crates/deslop/tests/python_issue_107_chained_dict_assert.rs",
-        "chained_dict_assertions_are_suppressed_while_a_real_clone_survives",
-        434,
-    ),
-    (
-        "crates/deslop/tests/python_issue_72_monkeypatch.rs",
-        "monkeypatch_setenv_chains_are_suppressed_while_a_real_clone_survives",
-        434,
-    ),
-    (
-        "crates/deslop/tests/python_literal_variation_calls.rs",
-        "rest_endpoint_family_is_suppressed_while_a_real_clone_survives",
-        434,
-    ),
-    (
-        "crates/deslop/tests/python_literal_variation_calls.rs",
-        "write_file_call_family_is_suppressed_while_a_real_clone_survives",
-        434,
-    ),
-    (
-        "crates/deslop/tests/report_golden.rs",
-        "cold_report_matches_committed_golden_byte_for_byte",
-        432,
-    ),
 ];
 
 /// How many curated skips each tracking issue owns.
@@ -216,15 +175,8 @@ const CURATED_SKIPS: [(&str, &str, u32); 28] = [
 /// #432–#435 entries when the registry held nine across #432–#434 and none
 /// for #435. That is a wrong answer to the question a reader is actually
 /// asking: which plan still owns this block of silence, and how much of it.
-const SKIPS_PER_ISSUE: [(u32, usize); 7] = [
-    (369, 2),
-    (422, 11),
-    (426, 1),
-    (432, 3),
-    (433, 4),
-    (434, 4),
-    (439, 3),
-];
+const SKIPS_PER_ISSUE: [(u32, usize); 6] =
+    [(369, 2), (422, 11), (426, 1), (432, 2), (433, 1), (439, 3)];
 
 /// How many skips each issue owns, counted from the registry itself.
 fn skips_by_issue() -> BTreeMap<u32, usize> {
@@ -340,6 +292,13 @@ fn the_ignored_tests_in_the_tree_are_exactly_the_curated_set() -> Result<()> {
         CURATED_SKIPS.len(),
         "a file declares the same test name twice, so the curated set no longer identifies it"
     );
+    assert_eq!(
+        present,
+        curated(),
+        "CURATED_SKIPS must stay ordered by file then test name, the order its own \
+         doc comment promises and `ignored_tests()` returns. A registry a reader \
+         cannot scan against the tree hides a misfiled row in plain sight."
+    );
     Ok(())
 }
 
@@ -358,10 +317,33 @@ fn assert_registry_matches(present: &[(String, String)]) {
     );
 }
 
+/// The tracking issue [`CURATED_SKIPS`] credits one `(file, test)` to.
+///
+/// Looked up by name, never by position. Pairing the two lists with `zip`
+/// held only while they agreed element for element, so the first divergence
+/// silently shifted every later row onto the wrong issue: a stale #107 entry
+/// made this gate demand `GH #434` of `report_golden.rs`, whose skip
+/// correctly cites #432. That reports a real breach against an innocent test
+/// and, in the other direction, judges a mis-filed skip against whichever
+/// issue happened to line up with it.
+fn registered_issue(file: &str, test: &str) -> Option<u32> {
+    CURATED_SKIPS
+        .iter()
+        .find(|(curated_file, curated_test, _)| *curated_file == file && *curated_test == test)
+        .map(|(_, _, issue)| *issue)
+}
+
 #[test]
 fn every_skip_in_the_tree_satisfies_the_stated_policy() -> Result<()> {
     let context = policy_context()?;
-    for (skip, (_, _, issue)) in ignored_tests()?.iter().zip(CURATED_SKIPS) {
+    for skip in &ignored_tests()? {
+        let issue = registered_issue(&skip.file, &skip.test).ok_or_else(|| {
+            anyhow!(
+                "{}::{} carries `#[ignore]` and CURATED_SKIPS credits it to no issue",
+                skip.file,
+                skip.test
+            )
+        })?;
         let breached = breaches(skip, issue, &context);
         assert!(
             breached.is_empty(),
@@ -510,24 +492,12 @@ fn every_corpus_make_target_names_a_cargo_test_target_that_exists() -> Result<()
     Ok(())
 }
 
-/// [TEST-ONE-BINARY] The runtime path a corpus test answers to inside the
-/// single `suite` binary: `<module>::<test>`, where the module is the corpus
-/// suite file's own stem. `--exact` matches this path, not the bare function
-/// name.
-fn qualified(test: &str) -> String {
-    let module = Path::new(CORPUS_SUITE)
-        .file_stem()
-        .and_then(std::ffi::OsStr::to_str)
-        .unwrap_or_default();
-    format!("{module}::{test}")
-}
-
 #[test]
 fn the_scheduled_corpus_slice_names_tests_that_still_exist() -> Result<()> {
     let suite: Vec<String> = ignored_tests()?
         .into_iter()
         .filter(|skip| skip.file == CORPUS_SUITE)
-        .map(|skip| qualified(&skip.test))
+        .map(|skip| skip.test)
         .collect();
     let slice = scheduled_slice()?;
     assert!(
@@ -540,10 +510,18 @@ fn the_scheduled_corpus_slice_names_tests_that_still_exist() -> Result<()> {
 }
 
 /// Every name the scheduled slice selects must be a test the suite declares,
-/// spelled the way `--exact` matches it: the `<module>::<test>` path the
-/// single `suite` binary reports, not the bare function name. `--exact` makes
-/// a stale or unqualified name select nothing rather than something adjacent,
-/// and a run that executes zero tests reports green — gh #412, one rename away.
+/// spelled the way `--exact` actually matches it: the bare function name.
+///
+/// This assertion used to qualify both sides as `<module>::<test>`, on the
+/// premise that every test answers inside one `suite` binary. That premise is
+/// false for this suite — `crates/deslop/Cargo.toml` declares `corpus_repos`
+/// as its own `[[test]]` target, so its file is that binary's crate root and
+/// its tests are top level. Qualifying both sides made the comparison agree
+/// with itself and pass while the Makefile named tests that resolve to
+/// nothing: `--exact` selected zero tests and the run reported green over
+/// zero repositories. That is gh #412 exactly, reintroduced by the very gate
+/// written to prevent it, which is why the names are compared unqualified
+/// here and why the target layout is asserted rather than assumed.
 fn assert_slice_resolves(slice: &[String], suite: &[String]) {
     for name in slice {
         assert!(

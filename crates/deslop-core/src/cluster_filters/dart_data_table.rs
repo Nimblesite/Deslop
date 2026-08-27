@@ -16,6 +16,8 @@
 
 use tree_sitter::Node;
 
+use crate::ast::named_children;
+
 use super::{
     enclosing_kind, node_contains_kind, node_intersects_range, parse_for, raw_snippet_texts_differ,
     Snippet,
@@ -49,9 +51,8 @@ fn covers_only_data_elements(snippet: &Snippet<'_>) -> bool {
     else {
         return false;
     };
-    let mut cursor = literal.walk();
     let mut covered = 0_usize;
-    for element in literal.named_children(&mut cursor) {
+    for element in named_children(literal) {
         if !node_intersects_range(element, snippet.range) {
             continue;
         }

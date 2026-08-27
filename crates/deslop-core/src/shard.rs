@@ -26,7 +26,34 @@
 //! repeated alignment being recomputed — so building one per *chunk*
 //! would trade the balance win straight back for lost reuse.
 
+use std::num::NonZeroUsize;
 use std::sync::Mutex;
+
+/// How many worker threads a sharded stage runs for `items` units of
+/// work, given the fewest units that make a worker worth spawning.
+///
+/// Below `min_per_worker` the thread spawn — and, where a worker owns a
+/// cache, its cold start — costs more than the work itself, so the
+/// stage stays on the calling thread. Above it the count is capped so
+/// every worker still carries a full share rather than racing for
+/// scraps. Both sharded stages ask the same question and only differ in
+/// where their floor sits, so the answer lives here once: a second copy
+/// drifts, and a stage that silently stops sharding is invisible in the
+/// output it produces.
+///
+/// The floor is a [`NonZeroUsize`] so "how many full shares fit" is a
+/// total question. A zero floor has no answer — every population would
+/// hold infinitely many shares — and a caller that reached here with
+/// one would otherwise have been quietly demoted to a single worker,
+/// which is exactly the silent de-sharding this function exists to make
+/// impossible.
+pub(crate) fn worker_count(items: usize, min_per_worker: NonZeroUsize) -> usize {
+    if items < min_per_worker.get() {
+        return 1;
+    }
+    let available = std::thread::available_parallelism().map_or(1, NonZeroUsize::get);
+    available.min(items / min_per_worker).max(1)
+}
 
 /// The per-chunk results in input order, paired with each worker's
 /// final state in worker order. Both sequences are independent of the
@@ -38,10 +65,6 @@ type Sharded<R, S> = (Vec<R>, Vec<S>);
 ///
 /// `init` builds one state per worker, reused across every chunk that
 /// worker claims and returned for the caller to merge.
-///
-/// A panicking worker is re-raised on the caller rather than dropped: a
-/// swallowed join would silently omit that chunk's items while the run
-/// still reported itself complete.
 pub(crate) fn map_chunks<C, R, S>(
     chunks: impl Iterator<Item = C> + Send,
     workers: usize,
@@ -54,11 +77,37 @@ where
     S: Send,
 {
     let queue = Mutex::new(chunks.enumerate());
+    let (mut claimed, states) = join_workers(&queue, workers, &init, &work);
+    claimed.sort_by_key(|(position, _)| *position);
+    (
+        claimed.into_iter().map(|(_, result)| result).collect(),
+        states,
+    )
+}
+
+/// Spawns `workers` drains over `queue` and joins them, collecting every
+/// worker's positioned chunk results and its final state. The results
+/// come back in completion order; [`map_chunks`] restores input order.
+///
+/// A panicking worker is re-raised on the caller rather than dropped: a
+/// swallowed join would silently omit that chunk's items while the run
+/// still reported itself complete.
+fn join_workers<C, R, S>(
+    queue: &Mutex<impl Iterator<Item = (usize, C)> + Send>,
+    workers: usize,
+    init: &(impl Fn() -> S + Sync),
+    work: &(impl Fn(&mut S, C) -> R + Sync),
+) -> (Vec<(usize, R)>, Vec<S>)
+where
+    C: Send,
+    R: Send,
+    S: Send,
+{
     let mut claimed: Vec<(usize, R)> = Vec::new();
     let mut states: Vec<S> = Vec::with_capacity(workers);
     std::thread::scope(|scope| {
         let handles: Vec<_> = (0..workers.max(1))
-            .map(|_| scope.spawn(|| drain(&queue, &init, &work)))
+            .map(|_| scope.spawn(|| drain(queue, init, work)))
             .collect();
         for handle in handles {
             match handle.join() {
@@ -70,11 +119,7 @@ where
             }
         }
     });
-    claimed.sort_by_key(|(position, _)| *position);
-    (
-        claimed.into_iter().map(|(_, result)| result).collect(),
-        states,
-    )
+    (claimed, states)
 }
 
 /// One worker's loop: build its state, then claim and run chunks until

@@ -30,7 +30,10 @@
 
 use anyhow::Result;
 
-use crate::common::{negative_pin::assert_family_hidden_with_control, *};
+use crate::common::{
+    negative_pin::{assert_suppressed_family, SuppressedFamily},
+    *,
+};
 
 /// The two scenario files.
 const FAMILY: [&str; 2] = ["typescript-tdbin.test.ts", "rust-tdbin.test.ts"];
@@ -38,24 +41,43 @@ const FAMILY: [&str; 2] = ["typescript-tdbin.test.ts", "rust-tdbin.test.ts"];
 /// The false-negative control.
 const CONTROL: [&str; 2] = ["control_clone_a.ts", "control_clone_b.ts"];
 
+/// Duplicated lines the control clone accounts for: eleven lines, twice.
+const CONTROL_LOC: u64 = 22;
+
+/// Both scenario files and both control files.
+const FILES_ANALYSED: u64 = 4;
+
+/// The committed corpus this pin runs against.
+const FIXTURE: &str = "ts-issue-284-produce-then-assert";
+
+/// What every failure message here names itself as.
+const LABEL: &str = "gh #284 produce-then-assert scenario family";
+
+/// Node floor at which a run of `expect(...).toContain(...)` statements
+/// is a candidate window — the geometry gh #284 reports.
+const MIN_NODES: u32 = 8;
+
+/// Components [CLONE-NOISE-LITERAL-VARIATION-CALLS] suppresses here —
+/// measured. The two scenario files hold three literal-varying assertion
+/// runs between them; a *higher* count is the filter eating something
+/// this fixture never staged as noise.
+const EXPECTED_HIDDEN: u64 = 3;
+
+/// Every half of the contract this fixture is held to, as data: the
+/// family judged file by file, the control that must survive it, and the
+/// three counts the report must show. Stating it once keeps a pin from
+/// quietly asserting less than its neighbours.
+const PIN: SuppressedFamily<'static> = SuppressedFamily {
+    family_files: &FAMILY,
+    control_files: &CONTROL,
+    expected_hidden: EXPECTED_HIDDEN,
+    control_loc: CONTROL_LOC,
+    files_analysed: FILES_ANALYSED,
+};
+
 // [CLONE-NOISE-LITERAL-VARIATION-CALLS] gh #284.
 #[test]
 fn produce_then_assert_scenarios_are_suppressed_while_a_real_clone_survives() -> Result<()> {
-    let report = run_report(&fixture("ts-issue-284-produce-then-assert"), 8)?;
-    for scenarios in FAMILY {
-        assert_family_hidden_with_control(
-            &report,
-            "gh #284 produce-then-assert scenario family",
-            &[scenarios],
-            &CONTROL,
-        )?;
-    }
-    assert_eq!(
-        metric_field(&report, "duplicated_loc").as_u64(),
-        Some(22),
-        "only the control clone's eleven lines, twice, may count as duplicated: \
-         {lines:#?}",
-        lines = visible_cluster_lines(&report),
-    );
-    Ok(())
+    let report = run_report(&fixture(FIXTURE), MIN_NODES)?;
+    assert_suppressed_family(&report, LABEL, &PIN)
 }

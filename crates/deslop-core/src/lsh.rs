@@ -38,8 +38,8 @@ const EMPTY_HASH_SENTINEL: u64 = u64::MAX;
 /// per-call allocation in the hot loop.
 pub type Signature = [u64; SIGNATURE_LEN];
 
-/// The all-zero signature — the neutral fill for
-/// [`SignatureLookup::read_into`] buffers.
+/// The all-zero signature — the neutral stand-in tests use for a
+/// fingerprint whose signature was never built.
 pub const ZEROED_SIGNATURE: Signature = [0; SIGNATURE_LEN];
 
 /// A borrowed, positionally-indexed view over a signature population
@@ -125,8 +125,11 @@ impl<'a> SignatureIndex<'a> {
 /// backing would implement — with the caveat that the banding and
 /// pair-gate consumers read the population ~10⁸ times on a
 /// corpus-scale run, so any such backing must serve reads at memory
-/// speed. Reads fill a caller buffer — a non-resident lookup could not
-/// lend a reference.
+/// speed and lend a reference rather than copy. A signature is a
+/// kilobyte, and the cluster-signal stage alone asked for 32 million of
+/// them on the Flutter corpus ([PERF-FLUTTER-TODO-PAIRS]); handing back
+/// a borrow rather than filling a caller buffer removes 32 GB of
+/// memcpy from that stage without changing a single measured value.
 pub trait SignatureLookup: Sync {
     /// The type's name, for `Debug`.
     fn kind(&self) -> &'static str {
@@ -141,9 +144,9 @@ pub trait SignatureLookup: Sync {
         self.len() == 0
     }
 
-    /// Reads the signature at `index` into `out`; returns whether it
-    /// existed. `out` is left untouched when it did not.
-    fn read_into(&self, index: usize, out: &mut Signature) -> bool;
+    /// The signature at `index`, or `None` when the population has no
+    /// such position.
+    fn signature(&self, index: usize) -> Option<&Signature>;
 }
 
 impl std::fmt::Debug for dyn SignatureLookup + '_ {
@@ -161,14 +164,8 @@ impl SignatureLookup for SignatureIndex<'_> {
         SignatureIndex::len(self)
     }
 
-    fn read_into(&self, index: usize, out: &mut Signature) -> bool {
-        match self.get(index) {
-            Some(signature) => {
-                out.copy_from_slice(signature);
-                true
-            }
-            None => false,
-        }
+    fn signature(&self, index: usize) -> Option<&Signature> {
+        self.get(index)
     }
 }
 

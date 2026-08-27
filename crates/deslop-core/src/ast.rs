@@ -16,6 +16,8 @@
 //!   per-language normaliser so Type-2 clones (renamed variables) produce
 //!   identical trees.
 
+use tree_sitter::Node;
+
 use crate::state::FileId;
 
 /// Half-open byte range `[start, end)` into a source file.
@@ -113,6 +115,18 @@ impl Drop for NormalizedNode {
             stack.append(&mut node.children);
         }
     }
+}
+
+/// Named children of `node` in source order.
+///
+/// The one place the crate spells the tree-sitter cursor dance. Every
+/// raw-tree walk — language parsing, the merge engine, the cluster
+/// noise filters — reads children through here, so a walk never
+/// open-codes `node.walk()` and the borrow of the cursor never leaks
+/// into a caller's control flow.
+pub(crate) fn named_children(node: Node<'_>) -> Vec<Node<'_>> {
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor).collect()
 }
 
 #[cfg(test)]

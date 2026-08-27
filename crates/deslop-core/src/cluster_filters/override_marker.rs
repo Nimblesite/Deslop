@@ -13,6 +13,8 @@
 
 use tree_sitter::Node;
 
+use crate::ast::named_children;
+
 /// The node kind that marks a member as implementing a contract declared
 /// elsewhere, and the exact marker the language spells it with
 /// ([CLONE-NOISE-POLYMORPHIC-CONTRACT]).
@@ -52,8 +54,7 @@ pub(super) fn carries_override_marker(function: Node<'_>, language: &str, source
     let Some((kind, marker)) = override_marker_kind(language) else {
         return false;
     };
-    let mut cursor = function.walk();
-    let found = function.named_children(&mut cursor).any(|child| {
+    named_children(function).into_iter().any(|child| {
         child.kind() == kind
             && source.get(
                 child
@@ -61,8 +62,7 @@ pub(super) fn carries_override_marker(function: Node<'_>, language: &str, source
                     .unwrap_or(child)
                     .byte_range(),
             ) == Some(marker)
-    });
-    found
+    })
 }
 
 #[cfg(test)]

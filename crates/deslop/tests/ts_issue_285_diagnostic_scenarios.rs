@@ -40,6 +40,11 @@ use crate::common::{negative_pin::assert_family_demoted_with_control, *};
 /// The false-negative control.
 const CONTROL: [&str; 2] = ["control_clone_a.ts", "control_clone_b.ts"];
 
+/// Assertion-helper sub-families suppressed here. Exact rather than the
+/// `>= 1` it replaces: that bound could only fail downward, while every
+/// over-suppression regression moves this number up.
+const EXPECTED_HIDDEN: u64 = 2;
+
 // [CLONE-NOISE-LITERAL-VARIATION-CALLS] gh #285.
 #[test]
 fn diagnostic_scenarios_stay_demoted_while_a_real_clone_survives() -> Result<()> {
@@ -50,11 +55,7 @@ fn diagnostic_scenarios_stay_demoted_while_a_real_clone_survives() -> Result<()>
         &["rust-tdbin.test.ts"],
         &CONTROL,
         1,
+        EXPECTED_HIDDEN,
     )?;
-    assert!(
-        clusters_hidden(&report) >= 1,
-        "the assertion-helper sub-families must be actively hidden and counted: \
-         {report:#}"
-    );
     Ok(())
 }

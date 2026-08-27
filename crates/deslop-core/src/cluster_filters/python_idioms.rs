@@ -14,7 +14,7 @@ use super::{
     contains_bytes, enclosing_kind, is_multi_member_language_cluster, node_contains_identifier,
     parse_for, snippet_range_text, source_head, spans_multiple_files, trim_ascii_start, Snippet,
 };
-use crate::state::FileId;
+use crate::{ast::named_children, state::FileId};
 
 /// Detects ****: production HS256/JWT signing code and tests
 /// that re-implement the same HMAC calculation independently. The
@@ -156,11 +156,10 @@ fn python_descend_to_assignment(node: Node<'_>) -> Node<'_> {
     if node.kind() != "expression_statement" {
         return node;
     }
-    let mut cursor = node.walk();
-    let inner = node
-        .named_children(&mut cursor)
-        .find(|child| child.kind() == "assignment");
-    inner.unwrap_or(node)
+    named_children(node)
+        .into_iter()
+        .find(|child| child.kind() == "assignment")
+        .unwrap_or(node)
 }
 
 /// Suppresses tiny string literal clusters inside pytest monkeypatch

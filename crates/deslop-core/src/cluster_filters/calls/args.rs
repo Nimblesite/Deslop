@@ -6,6 +6,8 @@
 
 use tree_sitter::Node;
 
+use crate::ast::named_children;
+
 use super::super::constant_table::is_literal_value;
 use super::ArgShape;
 
@@ -24,8 +26,7 @@ pub(super) fn collect_argument_shapes(
     };
     let mut shapes = Vec::new();
     let mut keywords = Vec::new();
-    let mut cursor = args.walk();
-    for arg in args.named_children(&mut cursor) {
+    for arg in named_children(args) {
         shapes.push(arg_shape(arg, source, language));
         keywords.push(keyword_name(arg, source));
     }
@@ -36,12 +37,24 @@ pub(super) fn collect_argument_shapes(
 fn arg_shape(node: Node<'_>, source: &[u8], language: &str) -> ArgShape {
     let inner = unwrap_argument(node);
     if let Some(bytes) = string_literal_bytes(inner, source) {
-        return ArgShape::StringLiteral(bytes);
+        return ArgShape::StringLiteral(bytes, is_interpolated(inner));
     }
     if let Some(bytes) = literal_collection_bytes(inner, source, language) {
-        return ArgShape::StringLiteral(bytes);
+        return ArgShape::StringLiteral(bytes, false);
     }
     ArgShape::Other
+}
+
+/// True when the string node embeds an interpolation — a Python
+/// f-string, a JS/TS template substitution — so its text is authored
+/// code choosing data rather than data handed to a parameterisable
+/// family (gh #467).
+fn is_interpolated(node: Node<'_>) -> bool {
+    use crate::ast::named_children;
+
+    named_children(node)
+        .iter()
+        .any(|child| matches!(child.kind(), "interpolation" | "template_substitution"))
 }
 
 /// Raw bytes of an argument that is a **pure literal collection
@@ -84,9 +97,7 @@ fn carries_string_leaf(node: Node<'_>) -> bool {
     if string_literal_bytes(node, &[]).is_some() || is_string_kind(node.kind()) {
         return true;
     }
-    let mut cursor = node.walk();
-    let children: Vec<Node<'_>> = node.named_children(&mut cursor).collect();
-    children.into_iter().any(carries_string_leaf)
+    named_children(node).into_iter().any(carries_string_leaf)
 }
 
 /// Strips a C# `argument` wrapper, or a Python `keyword_argument`'s
@@ -105,9 +116,7 @@ fn carries_string_leaf(node: Node<'_>) -> bool {
 /// literal.
 fn unwrap_argument(node: Node<'_>) -> Node<'_> {
     if node.kind() == "argument" {
-        let mut cursor = node.walk();
-        let child = node.named_children(&mut cursor).next();
-        if let Some(child) = child {
+        if let Some(child) = node.named_child(0) {
             return child;
         }
     }

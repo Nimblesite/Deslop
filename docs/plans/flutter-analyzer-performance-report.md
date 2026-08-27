@@ -277,7 +277,7 @@ This list defines the required outcomes. It deliberately does not prescribe impl
 - [x] Bound pair-generation and candidate-construction time within an explicit share of the end-to-end budget. Superseded: per-stage budgets are not enforced figures — the manifest's end-to-end ceilings are the only budget; stage elapsed times are logged for diagnosis.
 - [ ] Bound the resident pair population so it cannot independently exceed the memory budget. Landed: slim packed-key set + per-axis evidence map (no payload map, no arrival rows); the first-seen-keys shard gate for parallel construction is designed but unwired.
 - [ ] Preserve every candidate required for curated recall and confidence guarantees.
-- [ ] Confirm that reductions in pair volume do not hide false negatives or manufacture false positives.
+- [x] Confirm that reductions in pair volume do not hide false negatives or manufacture false positives. Every change in this round is verified by the rendered report's sha256 on the material slice; the one change that did move it — the large-endpoint fallback repair — removed false positives and is pinned by `the_fallback_never_credits_mass_no_ordered_alignment_can_reach`.
 
 ### Resolve shared-subtree rescue cost [PERF-FLUTTER-TODO-RESCUE]
 
@@ -285,8 +285,8 @@ This list defines the required outcomes. It deliberately does not prescribe impl
 - [ ] Record how many candidates satisfy each rescue eligibility condition.
 - [x] Record how many eligible pairs cross files, resolve both endpoints, use exact alignment, use the large-tree fallback, and are ultimately rescued. eligible 2,241,176 (all cross-file), exact_hits 373,575, bound_hits 376,134, unresolved 0, rescued 403,274.
 - [ ] Record endpoint-size and alignment-work distributions for the rescue population.
-- [ ] Record endpoint-view and pair-result reuse effectiveness.
-- [ ] Determine which candidate families account for most rescue wall time.
+- [x] Record endpoint-view and pair-result reuse effectiveness. Rescue counters carry `exact_hits`, `bound_hits`, `bound_skips` and `order_skips` per pass; on Flutter the multiset bound refused 1,064,216 pairs and the memos answered 315,890.
+- [x] Determine which candidate families account for most rescue wall time. Exact tree alignment: 856,990 of 2,241,176 measured pairs align, and the alignment is the only super-linear term in the stage.
 - [ ] Determine whether the expensive rescue population is materially larger than at the feature's acceptance fixtures.
 - [x] Determine whether the same logical rescue result is evaluated more than once. Yes — bounded exact/endpoint memos plus `Arc`-shared endpoint views now deduplicate; sharded via `std::thread::scope`.
 - [x] Bound rescue work independently of the raw LSH-pair population. Rescue consumes only survival-gated pairs.
@@ -320,6 +320,7 @@ This list defines the required outcomes. It deliberately does not prescribe impl
 - [ ] Ensure debug logging does not materially change the performance conclusion of the workload being diagnosed.
 - [x] Ensure logs remain small enough to inspect and retain after a complete Flutter run.
 - [x] Ensure final aggregate events are available even when a stage processes no eligible items. `RescueTally::report_total` always emits, including for an empty population.
+- [x] Ensure every stage that consults the cluster-noise filters reports what it found. The counters are shared across the whole run, so the noise split's own totals are a partial count; `render_report` emits them again as `run_cumulative_after_report_render` once the render pass has finished convicting. Reporting a partial count under a stage name misdiagnosed gh #434 twice — per-stage keying, so each record is self-describing rather than cumulative, is gh #478.
 
 ### Protect correctness while performance changes [PERF-FLUTTER-TODO-ACCURACY]
 
@@ -359,13 +360,48 @@ This list defines the required outcomes. It deliberately does not prescribe impl
 - [ ] Remove temporary diagnostic instructions and obsolete measurements after the permanent observability requirements are satisfied.
 - [ ] Close this plan only after the full Flutter report is produced inside both wall-time and memory budgets with all accuracy checks passing.
 
-## Final diagnosis
+## Where the completed run spends its time
 
-The measured run failed the manifest's wall ceiling for two concrete reasons:
+The 22 August figures above describe a run that was **killed at 30 minutes**, before clustering. The pipeline now finishes. A complete cold run of the same corpus on 26 August took **51 minutes**, and for the first time the whole budget is visible rather than inferred:
 
-1. **Before matching starts, it serially constructs 3.47 million fingerprint/signature records using a path that repeatedly resolves and tokenizes ranges—including synthetic sibling windows—and retains the entire corpus. This takes 15.5 minutes.**
-2. **It then materializes 55.3 million LSH pairs and runs a post-`f92300e`, serial shared-subtree rescue that applies expensive tree alignment to at least 793,076 candidates. That adds more than 13 minutes and does not finish.**
+| Stage | Time | Share |
+|---|---:|---:|
+| Shared-subtree rescue | 21 m 04 s | 41% |
+| Ranked cluster build | 9 m 44 s | 19% |
+| Verbatim noise split | 6 m 48 s | 13% |
+| Report model build | ~4 m 51 s | 10% |
+| Corpus build (read, parse, fingerprint, signature) | 3 m 32 s | 7% |
+| Structural family split | 2 m 18 s | 5% |
+| Candidate pairs | 1 m 11 s | 2% |
+| Report rendering (JSON, text, HTML) | ~1 m 08 s | 2% |
 
-The memory failure is the same amplification in space: retained corpus state plus enormous pair/candidate structures plus rescue caches reaches 14.6 GB.
+Two facts reframe the earlier diagnosis:
 
-The shared-subtree rescue is the proven immediate post-`f92300e` runtime regression. The unconditional language-aware sibling-window signature path is the strongest explanation in the transcript for the earlier corpus-build slowdown and the 55-million-pair fan-out, but a clean A/B with the aggregate counters above is still required to call that second attribution proven.
+**The corpus build is no longer the problem.** It fell from 15 m 28 s to 3 m 32 s, of which signature generation is 1 m 40 s. The [PERF-FLUTTER-TODO-CORPUS] work landed.
+
+**The rescue is, and it is bounded by tree alignment, not by pair volume.** It scans 4,150,168 candidates, finds 2,241,176 eligible, and runs 856,990 Zhang–Shasha alignments. The kind-multiset bound already refuses 1,064,216 pairs before they align. The remaining alignments are what the 21 minutes buys.
+
+The ranked build has the same shape for a different reason: it measures 16,035,436 occurrence pairs but only 69,489 of them align — 99.6% short-circuit on Merkle equality. Its cost is concentrated in a few very wide clusters, and its 2,596 s of accumulated signal time against 584 s of wall says it is running at roughly 4.4× parallelism on 14 workers. The long tail, not the loop, is what holds that stage open.
+
+## What has been done about it
+
+Measured on a 198-file slice of the Flutter framework (`packages/flutter/lib/src/material`), which reproduces both shapes — 3.6 M signal pairs at 3.8× parallelism, and a rescue whose cost is alignment-bound.
+
+- **Reused alignment scratch and a row-slice inner loop.** The Zhang–Shasha grids are allocated once per worker instead of once per keyroot pair, and the inner loop walks row slices with the left neighbour carried in a register.
+- **Borrowed signatures instead of copied ones** ([PERF-FLUTTER-TODO-PAIRS]). A signature is a kilobyte and the ranked build asked for 32 million of them; the lookup now lends a reference.
+- **An ordered admission bound** ([FUSION-SHARED-SUBTREE-BOUND-ORDER]). The kind-multiset bound cannot see order; an alignment must respect it. The longest common subsequence of the two post-order kind sequences is therefore a second, tighter upper bound, computed bit-parallel at 64 positions per word. It removes 22% of the sample's rescue alignments while admitting exactly the same pairs.
+- **A sharded noise split with one shared parse cache**, replacing an O(n) LRU scan under a global lock and a contract index every worker was rebuilding.
+
+Sample result: 31.34 s → 17.74 s wall, 147.26 s → 68.28 s CPU.
+
+## An accuracy defect found on the way [PERF-FLUTTER-TODO-ACCURACY]
+
+Adding the ordered bound moved the sample's rescue admissions, which a sound bound cannot do. Gating it to alignment-path pairs restored them exactly, isolating every changed decision to the greedy large-endpoint fallback.
+
+That fallback was overstating. It matched identical subtrees under a bijection chosen without regard to order, and an alignment is ordered — two subtrees matched in swapped order cannot both be kept. It also counted matched node pairs as though they were shared mass, ignoring the charge `structural` levies for everything left unmatched. On two files holding the same two functions in swapped order it credited 47 shared nodes where the alignment reaches 32, and the rescue admitted pairs on the difference. On the 51-minute run this route measured 4,080 pairs in the rescue and 1,730 more in the cluster-signal build.
+
+Both faults are fixed: the pairing now walks both endpoints forward only, and the matched mass is converted to guaranteed shared mass as `2m − min(n₁, n₂)`. On the sample this removes 198 admitted pairs that were never real. See [FUSION-SHARED-SUBTREE](../specs/fusion.md#fusion-shared-subtree).
+
+## What remains
+
+The rescue is still 41% of the budget, and the ordered bound only reaches the pairs the multiset bound already let through. The ranked build's long tail is untouched: a single very wide cluster's O(k²) signal measurement runs on one worker, which is what holds that stage at 4.4× parallelism. The report model build — nearly five minutes between the last pipeline stage event and the bucket distribution — has no instrumentation at all.

@@ -19,7 +19,7 @@ use super::{
     enclosing_kind, is_multi_member_language_cluster, node_intersects_range, parse_for,
     raw_snippet_texts_differ, spans_multiple_files, trimmed_snippet_range, Snippet,
 };
-use crate::ast::ByteRange;
+use crate::ast::{named_children, ByteRange};
 
 /// Detects [CLONE-NOISE-RUST-LANGPARSER]: the Rust source files that
 /// implement the first-party language plug-ins all carry the same
@@ -102,8 +102,7 @@ fn collect_rust_impl_shapes(
             out.push(shape);
         }
     }
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
+    for child in named_children(node) {
         collect_rust_impl_shapes(child, range, source, out);
     }
 }
@@ -140,8 +139,7 @@ fn collect_rust_function_names(node: Node<'_>, source: &[u8], out: &mut BTreeSet
             let _inserted = out.insert(name.to_vec());
         }
     }
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
+    for child in named_children(node) {
         collect_rust_function_names(child, source, out);
     }
 }
@@ -275,11 +273,9 @@ fn find_iter_collect_idiom(node: Node<'_>, range: ByteRange, source: &[u8]) -> b
     if node.kind() == "call_expression" && call_is_iter_collect_idiom(node, source) {
         return true;
     }
-    let mut cursor = node.walk();
-    let found = node
-        .named_children(&mut cursor)
-        .any(|child| find_iter_collect_idiom(child, range, source));
-    found
+    named_children(node)
+        .into_iter()
+        .any(|child| find_iter_collect_idiom(child, range, source))
 }
 
 /// Returns true when `call` is a `.collect()` / `.collect::<...>()` call
@@ -357,9 +353,8 @@ fn receiver_chain_has_iter_call(expr: Node<'_>, source: &[u8]) -> bool {
 /// Returns true when the call's `arguments` is exactly one closure whose
 /// body is a `closure_arg.field.method(...)` call expression.
 fn closure_body_is_field_method_call(arguments: Node<'_>, source: &[u8]) -> bool {
-    let mut cursor = arguments.walk();
-    let closures: Vec<Node<'_>> = arguments
-        .named_children(&mut cursor)
+    let closures: Vec<Node<'_>> = named_children(arguments)
+        .into_iter()
         .filter(|child| child.kind() == "closure_expression")
         .collect();
     let [closure] = closures.as_slice() else {
@@ -379,12 +374,10 @@ fn closure_body_is_field_method_call(arguments: Node<'_>, source: &[u8]) -> bool
 /// trivial parameters (we only suppress single-arg field projections).
 fn sole_closure_parameter_bytes<'a>(closure: Node<'_>, source: &'a [u8]) -> Option<&'a [u8]> {
     let parameters = closure.child_by_field_name("parameters")?;
-    let mut cursor = parameters.walk();
-    let mut named = parameters.named_children(&mut cursor);
-    let first = named.next()?;
-    if named.next().is_some() {
+    let named = named_children(parameters);
+    let [first] = named.as_slice() else {
         return None;
-    }
+    };
     if first.kind() != "identifier" {
         return None;
     }
@@ -469,8 +462,7 @@ fn collect_match_arms<'tree>(node: Node<'tree>, range: ByteRange, out: &mut Vec<
         out.push(node);
         return;
     }
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
+    for child in named_children(node) {
         collect_match_arms(child, range, out);
     }
 }
@@ -587,9 +579,8 @@ fn struct_body_in_range_is_all_fields(struct_item: Node<'_>, range: ByteRange) -
 /// swallowing an import-only window, and `raw_snippet_texts_differ` still
 /// lets a byte-identical copy-pasted struct through.
 fn range_covers_only_field_structs(container: Node<'_>, range: ByteRange) -> bool {
-    let mut cursor = container.walk();
     let mut saw_field = false;
-    for child in container.named_children(&mut cursor) {
+    for child in named_children(container) {
         if !node_intersects_range(child, range) {
             continue;
         }
@@ -616,20 +607,17 @@ fn range_covers_only_field_structs(container: Node<'_>, range: ByteRange) -> boo
 /// Returns the direct `field_declaration_list` child of a `struct_item`, or
 /// `None` for a tuple/unit struct that has none.
 fn field_declaration_list_of(struct_item: Node<'_>) -> Option<Node<'_>> {
-    let mut cursor = struct_item.walk();
-    let list = struct_item
-        .named_children(&mut cursor)
-        .find(|child| child.kind() == "field_declaration_list");
-    list
+    named_children(struct_item)
+        .into_iter()
+        .find(|child| child.kind() == "field_declaration_list")
 }
 
 /// Returns true when every named child of `list` that intersects `range` is a
 /// `field_declaration` or its `attribute_item`, with at least one field
 /// present.
 fn field_list_range_is_all_fields(list: Node<'_>, range: ByteRange) -> bool {
-    let mut cursor = list.walk();
     let mut fields = 0_usize;
-    for member in list.named_children(&mut cursor) {
+    for member in named_children(list) {
         if !node_intersects_range(member, range) {
             continue;
         }

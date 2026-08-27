@@ -38,10 +38,19 @@ use std::{collections::HashMap, sync::Arc};
 
 /// Zhang–Shasha ordered tree alignment ([FUSION-SHARED-SUBTREE]).
 mod alignment;
+/// Deterministic exact-alignment benchmark workloads.
+#[cfg(feature = "benchmark")]
+pub mod benchmark;
 /// Large-tree greedy coverage fallback ([FUSION-SHARED-SUBTREE]).
 mod credit;
 /// Rescue application over the candidate set ([FUSION-SHARED-SUBTREE]).
 mod rescue;
+/// Deterministic tree shapes shared by the measurement tests.
+#[cfg(test)]
+mod shapes;
+/// Ordered-subsequence admission bound
+/// ([FUSION-SHARED-SUBTREE-BOUND-ORDER]).
+mod subsequence;
 /// Rescue-pass gate counters ([PERF-FLUTTER-TODO-OBSERVABILITY]).
 mod tally;
 /// Endpoint view construction ([FUSION-SHARED-SUBTREE]).
@@ -53,7 +62,7 @@ mod tests;
 
 pub use rescue::apply_shared_subtree_rescue;
 
-use alignment::aligned_shared_nodes;
+use alignment::Aligner;
 use view::{build_view, EndpointView};
 
 /// Most endpoint views one measurer retains
@@ -121,6 +130,11 @@ pub struct MeasureStats {
     /// the pair cannot clear the floor, skipping the alignment
     /// ([FUSION-SHARED-SUBTREE-BOUND]).
     pub bound_skips: u64,
+    /// Rescue queries the multiset bound admitted but the ordered
+    /// subsequence bound then proved cannot clear the floor
+    /// ([FUSION-SHARED-SUBTREE-BOUND-ORDER]) — the alignments saved by
+    /// respecting post-order rather than kind counts alone.
+    pub order_skips: u64,
     /// Exact Zhang–Shasha alignments computed.
     pub alignments: u64,
     /// Greedy large-tree credit fallbacks computed.
@@ -149,6 +163,13 @@ pub struct OverlapMeasurer<'corpus> {
     bound_results: HashMap<PairKey, f64>,
     /// Aggregate counters ([PIPELINE-OBSERVABILITY-STAGES]).
     stats: MeasureStats,
+    /// Reusable alignment scratch ([PERF-FLUTTER-TODO-RESCUE]). Owned
+    /// by the measurer so every alignment a worker runs reuses one pair
+    /// of grids instead of allocating per keyroot pair.
+    aligner: Aligner,
+    /// Reusable ordered-bound row, for the same reason as `aligner`
+    /// ([FUSION-SHARED-SUBTREE-BOUND-ORDER]).
+    order_row: subsequence::Row,
 }
 
 impl MeasureStats {
@@ -161,6 +182,7 @@ impl MeasureStats {
             exact_hits: self.exact_hits.saturating_add(other.exact_hits),
             bound_hits: self.bound_hits.saturating_add(other.bound_hits),
             bound_skips: self.bound_skips.saturating_add(other.bound_skips),
+            order_skips: self.order_skips.saturating_add(other.order_skips),
             alignments: self.alignments.saturating_add(other.alignments),
             credit_fallbacks: self.credit_fallbacks.saturating_add(other.credit_fallbacks),
             unresolved: self.unresolved.saturating_add(other.unresolved),
@@ -190,6 +212,8 @@ impl<'corpus> OverlapMeasurer<'corpus> {
             exact_results: HashMap::new(),
             bound_results: HashMap::new(),
             stats: MeasureStats::default(),
+            aligner: Aligner::default(),
+            order_row: subsequence::Row::default(),
         }
     }
 
@@ -264,16 +288,52 @@ impl<'corpus> OverlapMeasurer<'corpus> {
         let bound = kind_bound_ratio(&left_view, &right_view);
         if bound < SHARED_SUBTREE_MIN_OVERLAP {
             bump(&mut self.stats.bound_skips);
-            if self.bound_results.len() < BOUND_RESULT_MEMO_MAX {
-                let _previous = self.bound_results.insert(key, bound);
-            }
-            return bound;
+            return self.remember_bound(key, bound);
+        }
+        // The multiset bound admitted the pair; the ordered one is
+        // strictly tighter and still sound, and costs microseconds
+        // against the alignment's milliseconds
+        // ([FUSION-SHARED-SUBTREE-BOUND-ORDER]). Computed second
+        // because the cheaper test already answers most pairs. It
+        // covers endpoints past `ALIGNMENT_MAX_NODES` too: the credit
+        // fallback that answers those is itself a lower bound on the
+        // alignment, so the same upper bound dominates it.
+        let ordered = self.order_bound_ratio(&left_view, &right_view);
+        if ordered < SHARED_SUBTREE_MIN_OVERLAP {
+            bump(&mut self.stats.order_skips);
+            return self.remember_bound(key, ordered);
         }
         let result = self.measure_views(&left_view, &right_view);
         if self.exact_results.len() < EXACT_RESULT_MEMO_MAX {
             let _previous = self.exact_results.insert(key, result);
         }
         result
+    }
+
+    /// Records a below-floor bound under `key` (within the memo cap)
+    /// and returns it. Every caller returns the value it just proved,
+    /// so the memo write and the answer never drift apart.
+    fn remember_bound(&mut self, key: PairKey, bound: f64) -> f64 {
+        if self.bound_results.len() < BOUND_RESULT_MEMO_MAX {
+            let _previous = self.bound_results.insert(key, bound);
+        }
+        bound
+    }
+
+    /// The ordered-subsequence upper bound as an overlap ratio against
+    /// the larger endpoint ([FUSION-SHARED-SUBTREE-BOUND-ORDER]).
+    fn order_bound_ratio(&mut self, left: &EndpointView, right: &EndpointView) -> f64 {
+        let larger = left.total.max(right.total);
+        if larger == 0 {
+            return 0.0;
+        }
+        let shared = subsequence::common_subsequence_len(
+            left.postorder(),
+            left.total,
+            &right.kind_positions,
+            &mut self.order_row,
+        );
+        lossless_count(shared) / lossless_count(larger)
     }
 
     /// Whether this endpoint's byte range resolves to a measurable
@@ -314,7 +374,7 @@ impl<'corpus> OverlapMeasurer<'corpus> {
             credit::credit_shared_nodes(left, right)
         } else {
             bump(&mut self.stats.alignments);
-            aligned_shared_nodes(left, right)
+            self.aligner.shared_nodes(left, right)
         };
         (lossless_count(shared) / lossless_count(larger)).clamp(0.0, 1.0)
     }

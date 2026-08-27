@@ -25,6 +25,9 @@ use crate::{
     state::FileId,
 };
 
+/// Deterministic grouped-signal benchmark workload.
+#[cfg(feature = "benchmark")]
+pub mod benchmark;
 /// The authored declaration an occurrence sits inside
 /// ([PIPELINE-CLUSTER-EXACT-SCOPE]).
 mod scope;

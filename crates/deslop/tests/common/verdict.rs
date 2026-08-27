@@ -10,13 +10,14 @@
 //! `duplicated_loc`, and a percentage inflated by a shape match would
 //! have passed every one of them.
 
+use std::path::Path;
+
 use serde_json::Value;
 
 use super::{
     cluster_size, clusters, clusters_hidden, expect_cluster_spanning, metric_field,
     occurrence_files, occurrence_texts, signal, Result,
 };
-use std::path::Path;
 
 /// `metrics.duplicated_loc`, defaulting to `0` so a missing metric
 /// fails an at-least assertion instead of passing it.

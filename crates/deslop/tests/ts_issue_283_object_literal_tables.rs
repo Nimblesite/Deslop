@@ -20,7 +20,10 @@
 
 use anyhow::Result;
 
-use crate::common::{negative_pin::assert_family_hidden_with_control, *};
+use crate::common::{
+    negative_pin::{assert_suppressed_family, SuppressedFamily},
+    *,
+};
 
 /// The three unrelated tables.
 const FAMILY: [&str; 3] = ["theme.ts", "rust_scalars.ts", "tdbin_errors.ts"];
@@ -28,24 +31,43 @@ const FAMILY: [&str; 3] = ["theme.ts", "rust_scalars.ts", "tdbin_errors.ts"];
 /// The false-negative control.
 const CONTROL: [&str; 2] = ["control_clone_a.ts", "control_clone_b.ts"];
 
+/// Duplicated lines the control clone accounts for: eleven lines, twice.
+const CONTROL_LOC: u64 = 22;
+
+/// The three tables and both control files.
+const FILES_ANALYSED: u64 = 5;
+
+/// The committed corpus this pin runs against.
+const FIXTURE: &str = "ts-issue-283-object-literal-tables";
+
+/// What every failure message here names itself as.
+const LABEL: &str = "gh #283 object-literal table family";
+
+/// Node floor at which a run of object-literal properties is a
+/// candidate window — the geometry gh #283 reports.
+const MIN_NODES: u32 = 8;
+
+/// Components [CLONE-NOISE-CONSTANT-TABLE] suppresses here — measured.
+/// The three tables do not pool into one component: the constant-table
+/// rule elects two, and a *higher* count is the filter eating something
+/// this fixture never staged as noise.
+const EXPECTED_HIDDEN: u64 = 2;
+
+/// Every half of the contract this fixture is held to, as data: the
+/// family judged file by file, the control that must survive it, and the
+/// three counts the report must show. Stating it once keeps a pin from
+/// quietly asserting less than its neighbours.
+const PIN: SuppressedFamily<'static> = SuppressedFamily {
+    family_files: &FAMILY,
+    control_files: &CONTROL,
+    expected_hidden: EXPECTED_HIDDEN,
+    control_loc: CONTROL_LOC,
+    files_analysed: FILES_ANALYSED,
+};
+
 // [CLONE-NOISE-CONSTANT-TABLE] gh #283.
 #[test]
 fn unrelated_object_literal_tables_are_suppressed_while_a_real_clone_survives() -> Result<()> {
-    let report = run_report(&fixture("ts-issue-283-object-literal-tables"), 8)?;
-    for table in FAMILY {
-        assert_family_hidden_with_control(
-            &report,
-            "gh #283 object-literal table family",
-            &[table],
-            &CONTROL,
-        )?;
-    }
-    assert_eq!(
-        metric_field(&report, "duplicated_loc").as_u64(),
-        Some(22),
-        "only the control clone's eleven lines, twice, may count as duplicated: \
-         {lines:#?}",
-        lines = visible_cluster_lines(&report),
-    );
-    Ok(())
+    let report = run_report(&fixture(FIXTURE), MIN_NODES)?;
+    assert_suppressed_family(&report, LABEL, &PIN)
 }
