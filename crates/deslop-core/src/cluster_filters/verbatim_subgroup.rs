@@ -39,7 +39,11 @@
 //! the exact source bytes of a member's range — see
 //! [`verbatim_families`].
 
-use std::{collections::HashMap, hash::BuildHasher, num::NonZeroUsize};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::BuildHasher,
+    num::NonZeroUsize,
+};
 
 use crate::{fingerprint::Fingerprint, pair::FusedCluster, state::FileId};
 
@@ -50,9 +54,9 @@ use super::{
     spans_multiple_files, NoiseFilter, NoiseStage,
 };
 
-/// Smallest byte-identical family worth keeping: one lone occurrence is
-/// not a duplicate of anything.
-const MIN_FAMILY_MEMBERS: usize = 2;
+/// Smallest byte-identical family worth keeping, counted in *distinct
+/// occurrences*: one lone occurrence is not a duplicate of anything.
+const MIN_FAMILY_OCCURRENCES: usize = 2;
 
 /// Replaces every fused cluster the noise filters would suppress but
 /// which still contains a byte-identical family with one cluster per
@@ -336,7 +340,8 @@ fn split_one<S: BuildHasher>(
 
 /// The byte-identical families in `fused` a split could act on, or
 /// `None` when no split could change the component — it holds no family
-/// of two or more, or the one it holds already *is* the whole component.
+/// of two or more *distinct occurrences*, or the one it holds already
+/// *is* the whole component.
 ///
 /// Answered from the corpus alone, before any re-parse, so the noise
 /// filters only ever run on a component a split could actually change
@@ -350,7 +355,7 @@ fn splittable_families(
 ) -> Option<Vec<Vec<usize>>> {
     let families: Vec<Vec<usize>> = verbatim_families(&fused.members, fingerprints, sources)
         .into_iter()
-        .filter(|family| family.len() >= MIN_FAMILY_MEMBERS)
+        .filter(|family| distinct_locations(family, fingerprints) >= MIN_FAMILY_OCCURRENCES)
         .collect();
     let covered: usize = families.iter().map(Vec::len).sum();
     let already_whole = families.len() == 1 && covered == fused.members.len();
@@ -395,7 +400,7 @@ fn resolved_members(
 /// gh #462). Which filter fired therefore decides which question is
 /// asked; see [`NoiseFilter::demands_cross_file_copy`].
 fn is_copied_family(family: &[usize], fingerprints: &[Fingerprint], filter: NoiseFilter) -> bool {
-    family.len() >= MIN_FAMILY_MEMBERS
+    distinct_locations(family, fingerprints) >= MIN_FAMILY_OCCURRENCES
         && (!filter.demands_cross_file_copy()
             || spans_multiple_files(
                 family
@@ -403,6 +408,34 @@ fn is_copied_family(family: &[usize], fingerprints: &[Fingerprint], filter: Nois
                     .filter_map(|index| fingerprints.get(*index))
                     .map(|member| member.file_id),
             ))
+}
+
+/// How many distinct source locations `family` covers.
+///
+/// A member is one fingerprinted subtree, and two members can cover the
+/// *same* bytes of the *same* file: a block node and the full run of its
+/// own children span one range and hash apart, so both are collected and
+/// both land in one byte-identical family. That family is one occurrence
+/// seen twice, never a copy — sizing it by members read it as a paste,
+/// re-parsed a component no split could change, and counted the noise
+/// filters as having examined it ([CLONE-NOISE-VERBATIM-SUBGROUP-EXACT-BYTES],
+/// [PERF-FLUTTER-TODO-OBSERVABILITY]). The duplicate views stay in the
+/// family — the same-file overlap collapse elects the representative
+/// that carries the strongest cross-file edge, and it must still see
+/// every view to choose between them ([PIPELINE-CLUSTER-EXACT]).
+fn distinct_locations(family: &[usize], fingerprints: &[Fingerprint]) -> usize {
+    family
+        .iter()
+        .filter_map(|index| fingerprints.get(*index))
+        .map(|member| {
+            (
+                member.file_id,
+                member.byte_range.start,
+                member.byte_range.end,
+            )
+        })
+        .collect::<HashSet<_>>()
+        .len()
 }
 
 /// Groups the component's members by the exact source bytes their

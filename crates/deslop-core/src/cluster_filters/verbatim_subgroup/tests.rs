@@ -78,6 +78,26 @@ impl Corpus {
         }
     }
 
+    /// Adds a second fingerprint over the exact bytes member `index`
+    /// already covers. The collector emits both a block node and the
+    /// full run of that block's own children, which span one range and
+    /// hash apart, so a real corpus hands this pass two views of one
+    /// location — byte-identical to each other by construction and a
+    /// copy of nothing ([CLONE-NOISE-VERBATIM-SUBGROUP-EXACT-BYTES]).
+    fn duplicate_view_of(&mut self, index: usize) {
+        let second_view: Vec<Fingerprint> = self
+            .fingerprints
+            .iter()
+            .skip(index)
+            .take(1)
+            .map(|seen| Fingerprint {
+                node_count: seen.node_count.saturating_sub(1),
+                ..seen.clone()
+            })
+            .collect();
+        self.fingerprints.extend(second_view);
+    }
+
     /// Splits one component holding every registered file, in order.
     fn split_all(&self) -> Vec<FusedCluster> {
         self.split(&component(self.fingerprints.len()))
@@ -259,5 +279,60 @@ fn only_the_cross_file_family_escapes_a_suppressed_component() {
          survives the suppression its cluster-mates earned; the theme table is \
          byte-identical twice inside one file, so it is the idiom and leaves with \
          the component — a pass that kept it would republish scaffolding as a clone"
+    );
+}
+
+// [CLONE-NOISE-VERBATIM-SUBGROUP-EXACT-BYTES] A family is sized by the
+// occurrences it holds, not the fingerprints. Two views of one location
+// are byte-identical by construction, so counting them as two members
+// made every component holding a multi-statement body look splittable:
+// the noise filters re-parsed and convicted components no split could
+// ever change, and their counters reported those convictions as work
+// the corpus had asked for ([PERF-FLUTTER-TODO-OBSERVABILITY]).
+#[test]
+fn one_location_seen_twice_is_not_a_splittable_family() {
+    let mut corpus = Corpus::new(&[RETRY_DEFAULTS, THEME_TOKENS]);
+    corpus.duplicate_view_of(0);
+    corpus.duplicate_view_of(1);
+    let whole = component(corpus.fingerprints.len());
+    assert_eq!(
+        corpus.fingerprints.len(),
+        4,
+        "two tables, each fingerprinted twice over its own range"
+    );
+    assert!(
+        splittable_families(&whole, &corpus.fingerprints, &corpus.sources).is_none(),
+        "neither table was copied anywhere: each byte-identical group is one \
+         location seen twice, and no split of this component is possible"
+    );
+    assert_eq!(
+        member_lists(&corpus.split_all()),
+        vec![vec![0, 1, 2, 3]],
+        "so the component is handed on whole, exactly as it arrived"
+    );
+}
+
+// The positive control for the same rule: a family that really does
+// cover two locations is still splittable, and it keeps every view of
+// them. Dropping the second view here would rob the same-file overlap
+// collapse of the candidate it elects a representative from
+// ([PIPELINE-CLUSTER-EXACT]).
+#[test]
+fn a_copy_stays_splittable_and_keeps_both_views_of_its_locations() {
+    let mut corpus = Corpus::across_files(&[&[RETRY_DEFAULTS], &[RETRY_DEFAULTS], &[THEME_TOKENS]]);
+    corpus.duplicate_view_of(0);
+    let whole = component(corpus.fingerprints.len());
+    assert_eq!(
+        splittable_families(&whole, &corpus.fingerprints, &corpus.sources),
+        Some(vec![vec![0, 1, 3]]),
+        "the retry table sits in two files, so it covers two locations and a \
+         split can act; the second view of member 0 belongs to the family"
+    );
+    assert_eq!(
+        member_lists(&corpus.split_all()),
+        vec![vec![0, 1, 3]],
+        "the copy survives the suppression its cluster-mate earned, carrying \
+         both views of its first location; the theme table is copied nowhere \
+         and leaves with the component"
     );
 }
