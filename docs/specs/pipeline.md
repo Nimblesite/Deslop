@@ -245,6 +245,12 @@ Before ranking, each cluster's occurrences are reduced to one member per **trans
 
 The sort ends by stamping the ranking onto the report: `rank` (one-based, worst first) and `rank_band` ([severity.md §SEVERITY-BAND](severity.md#severity-band)) ride on every rendered cluster, so every consumer displays the repository's ranking rather than numbering rows from its own array position.
 
+### [RANK-MASS-SUM] The ranking weight is the duplicated mass, never confidence-discounted
+
+The rendered weight is the **sum of duplicated mass**: canonical nodes × member pairs, scaled only by the [RANK-CATEGORY] and [RANK-STRUCTURAL-ONLY] policy multipliers. Clone harm is copies × extent — the mass to fix — not a confidence-scaled figure (Juergens et al., ICSE 2009; Islam/Mondal/Roy, SANER 2019; SonarQube's duplicated-lines density is the same unweighted sum). Confidence already did its job at admission, where a pair either p-matches or it does not (Baker 1995): a pair that cleared admission is a duplicate, and its extent is the same mass whether its confidence measured 1.0 or 0.8. Multiplying mass by confidence erased duplicated-line mass at ranking — a five-member 3792-node family sank below a 3513-node byte-identical pair because its fused confidence was 0.857 (gh #458, pinned by `rank_mass::mass_outranks_confidence_when_mass_is_larger`). At equal mass, the fused confidence orders the tie (a byte-proven copy above a consistent rename above shape-only coincidence); cluster id then makes the order total and reproducible.
+
+**For AI.** `weight = base × category_multiplier × structural_only_multiplier` where `base = canonical_node_count × (visible_members − 1)`; the deleted `signals.fused` multiplier is gone. Sort: weight desc, then `signals.fused` desc, then id asc. `data`-category clusters never carried the fused multiplier ([RANK-CATEGORY] exemption) so their weights are unchanged.
+
 ### [RANK-CATEGORY] Clone category and the ranking policy
 Every cluster carries a **clone category** that is orthogonal to the similarity bucket of [taxonomy.md §CLONE-BUCKETS](taxonomy.md#clone-buckets). The canonical category table (seven values including the literal family) lives at [taxonomy.md §CLONE-CATEGORY-REGISTRY](taxonomy.md#clone-category-registry); this section governs the two fragment-clone categories. The bucket answers *"how similar are these copies?"*; the category answers *"is this repetition extractable logic or un-refactorable data?"*:
 

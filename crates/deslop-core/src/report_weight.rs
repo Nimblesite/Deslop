@@ -1,10 +1,15 @@
 //! Ranking weight for rendered clusters ([PIPELINE-RANK-WORST-FIRST],
-//! [RANK-CATEGORY], [RANK-STRUCTURAL-ONLY], [FUSION-CONTENT-GATE]).
+//! [RANK-MASS-SUM], [RANK-CATEGORY], [RANK-STRUCTURAL-ONLY],
+//! [FUSION-CONTENT-GATE]).
 //!
-//! One place decides how a visible cluster's weight is composed:
-//! geometry (visible occurrences × canonical nodes) scaled by the bucket
-//! and category multipliers, then by the content-gated fused confidence.
-//! Split out of `report.rs` to keep both files inside the size budget.
+//! One place decides how a visible cluster's weight is composed: the
+//! duplicated mass (visible occurrences × canonical nodes), scaled only
+//! by the bucket and category policy multipliers. Confidence never
+//! discounts the weight — it already did its job at admission
+//! ([FUSION-CLUSTER-SIGNALS], Baker 1995: a pair either p-matches or it
+//! does not), and re-discounting it erases duplicated-line mass at
+//! ranking (gh #458, [RANK-MASS-SUM]). Split out of `report.rs` to keep
+//! both files inside the size budget.
 
 use crate::{
     buckets::{classify, ClusterKind},
@@ -16,19 +21,20 @@ use crate::{
 /// Re-ranks visible clusters by non-hidden occurrence count so mixed
 /// clusters dominated by `report_hide` paths cannot push fully-visible
 /// clusters down the ranking ([#140 EXCLUSION-CONFIG],
-/// [PIPELINE-RANK-WORST-FIRST]). The clone-category multiplier from
+/// [PIPELINE-RANK-WORST-FIRST]). The weight is the duplicated mass —
+/// canonical nodes × member pairs, the mass to fix
+/// ([RANK-MASS-SUM]) — never confidence-discounted, so a five-member
+/// near-miss family outranks a two-member byte-identical pair when its
+/// mass is larger (gh #458). The clone-category multiplier from
 /// [RANK-CATEGORY] and the structural-only multiplier from
 /// [RANK-STRUCTURAL-ONLY] are folded in here so a `data`-category or
 /// shape-only-evidence cluster sinks below comparable full-evidence
 /// clones; both multipliers are `1.0` in `keep`/`ignore` modes and for
 /// non-matching clusters, which therefore keep their prior weight.
-/// The content-gated fused confidence then scales the weight continuously
-/// ([FUSION-CONTENT-GATE]): the bucket multipliers demote by class, the
-/// confidence orders within and across classes — at equal geometry a
-/// byte-proven copy outranks a consistent rename, which outranks
-/// shape-only coincidence, and two same-bucket clusters rank by how much
-/// of their content actually agrees. Hidden occurrences still travel on
-/// each cluster for downstream context.
+/// At equal mass the fused confidence orders the tie (a byte-proven
+/// copy above a consistent rename above shape-only coincidence), and
+/// cluster id then makes the order total and reproducible. Hidden
+/// occurrences still travel on each cluster for downstream context.
 pub(crate) fn reweigh_by_visible_occurrences(
     clusters: &mut [ReportCluster],
     policy: RankingPolicy,
@@ -38,14 +44,20 @@ pub(crate) fn reweigh_by_visible_occurrences(
         let base = visible_rank_weight(cluster.canonical_node_count, visible);
         cluster.weight = base
             * category_multiplier(cluster, policy)
-            * structural_only_multiplier(cluster, policy)
-            * confidence_factor(cluster);
+            * structural_only_multiplier(cluster, policy);
     }
     clusters.sort_by(|left, right| {
         right
             .weight
             .partial_cmp(&left.weight)
             .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                right
+                    .signals
+                    .fused
+                    .partial_cmp(&left.signals.fused)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .then_with(|| left.id.cmp(&right.id))
     });
     stamp_ranks(clusters);
@@ -125,20 +137,6 @@ fn structural_only_multiplier(cluster: &ReportCluster, policy: RankingPolicy) ->
     } else {
         1.0
     }
-}
-
-/// Continuous confidence factor for the ranking weight
-/// ([FUSION-CONTENT-GATE]): the content-gated fused confidence, except
-/// for `data`-category clusters, whose demotion belongs exclusively to
-/// the user-configurable `[ranking] data_clones` policy
-/// ([RANK-CATEGORY]). Stacking the confidence demotion on top would
-/// make `data_clone_weight = 1.0` unable to restore a table — the same
-/// knob contract [`structural_only_multiplier`] already honours.
-fn confidence_factor(cluster: &ReportCluster) -> f64 {
-    if CloneCategory::from_wire_label(&cluster.category) == CloneCategory::DataTable {
-        return 1.0;
-    }
-    cluster.signals.fused
 }
 
 /// Counts non-hidden occurrences on a rendered cluster. Hidden
