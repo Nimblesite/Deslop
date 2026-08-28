@@ -16,6 +16,7 @@ use deslop_core::{
     fingerprint::Fingerprint,
     lsh::{Signature, SignatureIndex, SIGNATURE_LEN},
     pair::FusedCluster,
+    pair::FusedEdge,
     state::{FileId, FileRegistry},
 };
 
@@ -169,11 +170,19 @@ fn type4_weight_fixture() -> Type4Fixture {
         fused_clusters: vec![
             FusedCluster {
                 members: vec![0, 1],
-                edges: Vec::new(),
+                edges: vec![FusedEdge {
+                    left: 0,
+                    right: 1,
+                    strength: TYPE4_COSINE,
+                }],
             },
             FusedCluster {
                 members: vec![2, 3],
-                edges: Vec::new(),
+                edges: vec![FusedEdge {
+                    left: 2,
+                    right: 3,
+                    strength: 1.0,
+                }],
             },
         ],
     }

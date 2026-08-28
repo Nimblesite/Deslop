@@ -235,14 +235,14 @@ pub struct CandidatePair {
 
 /// A cluster discovered via transitive closure of surviving candidate pairs.
 ///
-/// Carries membership plus the surviving discovery edges. Signals are
-/// **not** aggregated from the edges: the pairs that glued a component
-/// together are discovery evidence, and averaging them once diluted
-/// byte-proven pairs with every weaker edge in the component. The
-/// rendered signal breakdown is measured between the rendered
-/// occurrences in `crate::cluster` instead. The edges exist solely so
-/// the same-file overlap collapse there can keep the occurrence
-/// carrying the component's strongest cross-file evidence (#339).
+/// Carries membership plus the surviving discovery edges. Every edge is
+/// an admitted pair — it survived one of the admission routes
+/// (`Survived` or the [FUSION-SHARED-SUBTREE] rescue) — and the rendered
+/// signal breakdown is measured over exactly these edges: one elected
+/// pair's own triple, never a mean over the component
+/// ([FUSION-CLUSTER-SIGNALS], gh #458). The same-file overlap collapse in
+/// `crate::cluster` still reads the edges to keep the occurrence carrying
+/// the component's strongest cross-file evidence (#339).
 #[derive(Debug, Clone)]
 pub struct FusedCluster {
     /// Members of the cluster, sorted ascending by fingerprint index.

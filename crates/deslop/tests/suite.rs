@@ -279,3 +279,5 @@ mod typescript_features;
 mod verbatim_subgroup_idiom_price;
 #[path = "verbatim_subgroup_survives_noise.rs"]
 mod verbatim_subgroup_survives_noise;
+#[path = "verbatim_family_survives_stranger.rs"]
+mod verbatim_family_survives_stranger;
