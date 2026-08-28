@@ -193,14 +193,9 @@ type ReportSignals {
   literal_fraction: Float
 }
 
-# [FUSION-CLUSTER-SIGNALS] The occurrence pair whose measured evidence the
-# cluster's rendered signals display. Every displayed signal value is one
-# admitted pair's measurement, never an average over pairs that never
-# cleared admission (gh #458).
+# [FUSION-CLUSTER-SIGNALS]
 type ReportSignalSource {
-  # Index into `ReportCluster.occurrences`.
   left: Int
-  # Index into `ReportCluster.occurrences`.
   right: Int
 }
 

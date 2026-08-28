@@ -144,12 +144,17 @@ fn a_byte_identical_pair_reads_the_same_in_every_cluster() -> Result<()> {
 
     // Admission: the proven pair keeps the six-member cluster act-now —
     // the existential gate stays open (Baker: any pair that qualifies
-    // qualifies the group), and the lookalikes cannot demote it.
-    let bucket_six = cluster_bucket(six);
-    assert!(
-        matches!(bucket_six, "identical" | "nearly_identical"),
+    // qualifies the group), and the lookalikes cannot demote it. The two
+    // clusters land in BOTH buckets: the six-member cluster keeps its
+    // nearly-identical bucket while the copy pair alone is identical —
+    // the lookalikes do not manufacture an identical verdict, and the
+    // byte-identical pair does not lose its act-now bucket.
+    assert_eq!(
+        cluster_bucket(six),
+        "nearly_identical",
         "a cluster containing a byte-identical pair must keep its act-now \
-         bucket, got {bucket_six}: {report:#}"
+         bucket, got {}: {report:#}",
+        cluster_bucket(six)
     );
     assert_eq!(
         cluster_bucket(pair),

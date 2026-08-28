@@ -42,22 +42,25 @@ const CROSS_GROUP_CACHE_MIN_MEMBERS: usize = 2;
 
 /// The measured rendered signal triple plus the pair that earned it.
 ///
-/// [FUSION-CLUSTER-SIGNALS] gh #458: every displayed axis value is a
-/// real admitted pair's measurement — the strongest one — so the report
-/// can name the pair whose evidence it shows instead of an anonymous
-/// cluster average.
+/// [FUSION-CLUSTER-SIGNALS] gh #458: the rendered triple is one
+/// admitted pair's own measurement — the strongest one, in a
+/// deterministic order — so the report can name the pair whose
+/// evidence it shows instead of an anonymous cluster average and
+/// instead of a per-axis stitch that no single pair ever earned.
 pub(super) struct MeasuredSignals {
-    /// The rendered triple: per axis, the strongest measurement any
-    /// admitted pair earned on that axis.
+    /// The rendered triple: the elected admitted pair's own axes
+    /// together, never assembled from different pairs (a pair whose
+    /// signal input is absent renders 0.0 on that axis).
     pub score: PairScore,
-    /// The admitted pair (corpus indices) that best carried the
-    /// cluster's evidence, in a deterministic order; `None` when no
-    /// admitted pair survives the same-file collapse.
+    /// The admitted pair (corpus indices) whose measurement the
+    /// rendered triple displays, in a deterministic order; `None` when
+    /// no admitted pair survives the same-file collapse.
     pub source_pair: Option<(usize, usize)>,
 }
 
 /// Measures the [FUSION-CLUSTER-SIGNALS] triple over the **admitted**
-/// pair set.
+/// pair set: the pair with the highest bounded-fused confidence,
+/// ties resolved to the earliest pair in corpus order.
 ///
 /// Per admitted pair: `structural` is Merkle-hash equality — `1.0` —
 /// or, for a non-equal pair, the measured shared-subtree overlap
@@ -66,9 +69,9 @@ pub(super) struct MeasuredSignals {
 /// estimate between the two signatures, and `embedding_cos` is
 /// [`cosine_similarity`] of the two vectors — the same arithmetic that
 /// admitted the pair evidence. A pair missing an input for a signal
-/// (no vector: embeddings off, oversized input, provider failure) does
-/// not contribute to that signal, so absence never masquerades as a
-/// measured 0.0.
+/// (no vector: embeddings off, oversized input, provider failure)
+/// renders 0.0 on that axis, so absence never masquerades as a
+/// measured value.
 ///
 /// The left occurrence is resolved once per row rather than once per
 /// pair ([PERF-FLUTTER-TODO-PAIRS]). A wide cluster measures hundreds
@@ -94,20 +97,28 @@ pub(super) fn measured_signals<S: BuildHasher>(
         .enumerate()
         .map(|(position, &index)| (index, position))
         .collect();
-    let mut totals = SignalTotals::default();
-    let mut strongest: Option<StrongestPair> = None;
+    let mut best: Option<BestPair> = None;
     fold_pairs(
         &sides,
         &positions,
         admitted_pairs,
         &mut values,
-        &mut totals,
-        &mut strongest,
+        &mut best,
         overlap,
     );
     MeasuredSignals {
-        score: totals.max_score(),
-        source_pair: strongest.map(|pair| (pair.left, pair.right)),
+        // A cluster whose every admitted pair skipped renders an
+        // explicit 0.0 triple with no named source — never a silent
+        // empty ([FUSION-CLUSTER-SIGNALS] gh #458).
+        score: best.map_or(
+            PairScore {
+                structural: 0.0,
+                token_jaccard: 0.0,
+                embedding_cos: 0.0,
+            },
+            BestPair::score,
+        ),
+        source_pair: best.map(|pair| (pair.left, pair.right)),
     }
 }
 
@@ -116,14 +127,15 @@ pub(super) fn measured_signals<S: BuildHasher>(
 /// A pair whose endpoint was collapsed away by the same-file overlap
 /// collapse is skipped: its evidence described within-file duplication,
 /// which never needs to survive a same-file collapse to stay reported
-/// (#339).
+/// (#339). When every admitted pair skips, the cluster renders a
+/// 0.0 triple with no named source — the `None` case is explicit, never
+/// a silent empty.
 fn fold_pairs(
     sides: &[GroupedSignalSide<'_>],
     positions: &HashMap<usize, usize>,
     admitted_pairs: &[(usize, usize)],
     values: &mut SignalValues,
-    totals: &mut SignalTotals,
-    strongest: &mut Option<StrongestPair>,
+    best: &mut Option<BestPair>,
     overlap: &mut OverlapMeasurer<'_>,
 ) {
     for &(left, right) in admitted_pairs {
@@ -132,15 +144,17 @@ fn fold_pairs(
         else {
             continue;
         };
-        totals.add_pair(
+        let pair = BestPair::measure(
             left,
             right,
             sides[left_position],
             sides[right_position],
             values,
-            strongest,
             overlap,
         );
+        if best.as_ref().is_none_or(|current| pair.stronger_than(current)) {
+            *best = Some(pair);
+        }
     }
 }
 
@@ -427,60 +441,12 @@ fn ordered_group_pair((left, right): (usize, usize)) -> (usize, usize) {
     }
 }
 
-/// Per-signal strongest-admitted-pair values plus the pair that best
-/// carried the cluster's evidence ([FUSION-CLUSTER-SIGNALS]).
-#[derive(Debug, Default)]
-struct SignalTotals {
-    /// Strongest admitted-pair Merkle/overlap value.
-    structural: MaxAccumulator,
-    /// Strongest admitted-pair `MinHash` Jaccard value.
-    token_jaccard: MaxAccumulator,
-    /// Strongest admitted-pair vector cosine value.
-    embedding_cos: MaxAccumulator,
-}
-
-impl SignalTotals {
-    /// Folds one admitted pair into every signal it is measurable for
-    /// and into the strongest-pair race.
-    fn add_pair(
-        &mut self,
-        left: usize,
-        right: usize,
-        left_side: GroupedSignalSide<'_>,
-        right_side: GroupedSignalSide<'_>,
-        values: &mut SignalValues,
-        strongest: &mut Option<StrongestPair>,
-        overlap: &mut OverlapMeasurer<'_>,
-    ) {
-        let pair = StrongestPair::measure(left, right, left_side, right_side, values, overlap);
-        if let Some(structural) = pair.structural {
-            self.structural.add(structural);
-        }
-        if let Some(token) = pair.token_jaccard {
-            self.token_jaccard.add(token);
-        }
-        if let Some(embedding) = pair.embedding_cos {
-            self.embedding_cos.add(embedding);
-        }
-        if pair.stronger_than(strongest.as_ref()) {
-            *strongest = Some(pair);
-        }
-    }
-
-    /// Returns the measured per-signal strongest values.
-    fn max_score(&self) -> PairScore {
-        PairScore {
-            structural: self.structural.max(),
-            token_jaccard: self.token_jaccard.max(),
-            embedding_cos: self.embedding_cos.max(),
-        }
-    }
-}
-
 /// One admitted pair's measured triple, and the deterministic ordering
-/// that elects the named signal source.
+/// that elects the named signal source ([FUSION-CLUSTER-SIGNALS]). The
+/// elected pair's axes render together; the other admitted pairs only
+/// contest the election.
 #[derive(Debug, Clone, Copy)]
-struct StrongestPair {
+struct BestPair {
     /// Lower corpus index of the pair.
     left: usize,
     /// Higher corpus index of the pair.
@@ -493,7 +459,7 @@ struct StrongestPair {
     embedding_cos: Option<f64>,
 }
 
-impl StrongestPair {
+impl BestPair {
     /// Measures one admitted pair's triple from its sides.
     fn measure(
         left: usize,
@@ -516,27 +482,28 @@ impl StrongestPair {
         }
     }
 
+    /// The rendered score: this pair's own triple together, with an
+    /// absent signal input rendered 0.0 — the embeddings-off rendering
+    /// convention. Never assembled from different pairs.
+    fn score(self) -> PairScore {
+        PairScore {
+            structural: self.structural.unwrap_or(0.0),
+            token_jaccard: self.token_jaccard.unwrap_or(0.0),
+            embedding_cos: self.embedding_cos.unwrap_or(0.0),
+        }
+    }
+
     /// Whether this pair beats `current` in the deterministic
-    /// strongest-pair order: bounded-fused confidence first, then the
-    /// token axis (a byte-identical pair carries `1.0` where a
-    /// same-shape near-miss cannot), then structural, then embedding,
-    /// then corpus order with the **earliest** pair preferred — the
-    /// lower indices win an exact tie, so a byte-identical pair
-    /// (`90, 360`) is named over a same-shape pair (`90, 630`) that
-    /// measures identically after normalisation. The fused confidence
-    /// is the pair's own bounded max, so a pair whose structural
-    /// saturates ties with a pair whose token saturates and the token
-    /// axis breaks it.
-    fn stronger_than(self, current: Option<&StrongestPair>) -> bool {
-        let Some(current) = current else {
-            return true;
-        };
-        let rank = |pair: &StrongestPair| {
+    /// strongest-pair order: bounded-fused confidence first, ties
+    /// resolved to the earliest pair in corpus order (#301), so a
+    /// byte-identical pair (`90, 360`) is named over a same-shape pair
+    /// (`90, 630`) that measures identically after normalisation. The
+    /// fused confidence is the pair's own bounded max
+    /// ([FUSION-STRATEGY-BOUNDED-MAX]).
+    fn stronger_than(self, current: &BestPair) -> bool {
+        let rank = |pair: &BestPair| {
             (
                 pair.fused(),
-                pair.token_jaccard.unwrap_or(0.0),
-                pair.structural.unwrap_or(0.0),
-                pair.embedding_cos.unwrap_or(0.0),
                 std::cmp::Reverse(pair.left),
                 std::cmp::Reverse(pair.right),
             )
@@ -545,41 +512,12 @@ impl StrongestPair {
     }
 
     /// The pair's bounded-fused confidence: the strongest single axis,
-    /// clamped to `[0, 1]` ([FUSION-STRATEGY-BOUNDED-MAX]).
+    /// clamped to `[0, 1]`.
     fn fused(self) -> f64 {
         self.structural
             .unwrap_or(0.0)
             .max(self.token_jaccard.unwrap_or(0.0))
             .max(self.embedding_cos.unwrap_or(0.0))
             .clamp(0.0, 1.0)
-    }
-}
-
-/// Strongest measured value plus whether anything was measured.
-#[derive(Debug, Default)]
-struct MaxAccumulator {
-    /// Strongest measured value so far.
-    best: f64,
-    /// Whether any value was measured.
-    measured: bool,
-}
-
-impl MaxAccumulator {
-    /// Folds one measured value in.
-    fn add(&mut self, value: f64) {
-        if !self.measured || value > self.best {
-            self.best = value;
-            self.measured = true;
-        }
-    }
-
-    /// Strongest measured value; 0.0 when nothing was measurable,
-    /// matching the embeddings-off rendering convention.
-    fn max(&self) -> f64 {
-        if self.measured {
-            self.best
-        } else {
-            0.0
-        }
     }
 }
