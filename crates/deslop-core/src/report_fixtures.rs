@@ -66,6 +66,7 @@ pub fn fixture_cluster(id: &str, occurrences: Vec<ReportOccurrence>) -> ReportCl
         size: occurrences.len(),
         canonical_node_count: 4,
         signals: identical_signals(),
+        signal_source: None,
         bucket: "identical".to_owned(),
         category: "logic".to_owned(),
         language: "rust".to_owned(),

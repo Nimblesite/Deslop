@@ -111,16 +111,27 @@ const fn signature() -> Signature {
 fn run(corpus: &Corpus, repetitions: usize) -> usize {
     let signatures = SignatureIndex::from_slice(&corpus.signatures);
     let vectors: HashMap<usize, Vec<f32>> = HashMap::new();
+    // The benchmark prices the valuation cost of the widest profile
+    // cluster, so every rendered pair is admitted — the pair set the
+    // measurement folds is the same population the old all-pairs loop
+    // valued ([FUSION-CLUSTER-SIGNALS]).
+    let mut admitted_pairs: Vec<(usize, usize)> = Vec::new();
+    for (position, &left) in corpus.occurrences.iter().enumerate() {
+        for &right in corpus.occurrences.iter().skip(position.saturating_add(1)) {
+            admitted_pairs.push((left, right));
+        }
+    }
     (0..repetitions).fold(0_usize, |checksum, _iteration| {
         let mut overlap = OverlapMeasurer::new(&corpus.trees);
-        let score = measured_signals(
+        let measured = measured_signals(
             &corpus.occurrences,
+            &admitted_pairs,
             &corpus.fingerprints,
             &signatures,
             &vectors,
             &mut overlap,
         );
-        checksum.saturating_add(black_box(score_checksum(score)))
+        checksum.saturating_add(black_box(score_checksum(measured.score)))
     })
 }
 

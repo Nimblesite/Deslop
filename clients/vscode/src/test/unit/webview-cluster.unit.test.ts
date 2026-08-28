@@ -156,9 +156,6 @@ function stringCorpus(root: ts.SourceFile): string {
   return parts.join("\n");
 }
 
-
-
-
 function severityBadgeLabelTemplates(root: ts.Node): string[] {
   const out: string[] = [];
   function visit(node: ts.Node): void {

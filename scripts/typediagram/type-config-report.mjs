@@ -35,6 +35,18 @@ export const REPORT_TYPE_CONFIG = {
         "Share of the matched content that is literal data rather than logic.",
     },
   },
+  ReportSignalSource: {
+    docs: "The occurrence pair whose measured evidence the cluster's signals display ([FUSION-CLUSTER-SIGNALS], gh #458): every rendered value is one admitted pair's measurement, never a cluster average.",
+    derives: ["Debug", "Clone", "Copy", "PartialEq", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      left: "usize",
+      right: "usize",
+    },
+    fieldDocs: {
+      left: "Index into `ReportCluster.occurrences` — the pair's left occurrence.",
+      right: "Index into `ReportCluster.occurrences` — the pair's right occurrence.",
+    },
+  },
   ReportOccurrence: {
     docs: "A single clone occurrence — a specific `(file, byte_range)`.",
     // See `ReportSignals`: [LIVE-DELTA] compares whole values.
@@ -79,6 +91,7 @@ export const REPORT_TYPE_CONFIG = {
       meets_fused_gate: ["default"],
       evidence_verdict: ["default"],
       occurrence_count: ["default"],
+      signal_source: ["default", 'skip_serializing_if = "Option::is_none"'],
       intersects_diff: ["default", 'skip_serializing_if = "Option::is_none"'],
       is_newly_introduced: ["default", 'skip_serializing_if = "Option::is_none"'],
     },
@@ -92,6 +105,8 @@ export const REPORT_TYPE_CONFIG = {
       size: "Count of cloned occurrences in the cluster.",
       canonical_node_count: "AST node count of one canonical member.",
       signals: "Per-cluster signal breakdown (structural / Jaccard / embedding / fused).",
+      signal_source:
+        "The occurrence pair whose measured evidence the rendered signals display ([FUSION-CLUSTER-SIGNALS], gh #458): indices into `occurrences`. Absent when no admitted pair survives, or when the wire truncated it.",
       bucket: "Canonical bucket label (`identical`, `nearly_identical`, `loosely_similar`, `same_behavior`).",
       category: "Clone category ([RANK-CATEGORY]): `logic` (default) or `data` for a demoted data-structure literal. Orthogonal to `bucket`. Empty/absent on older reports resolves to `logic`.",
       language: "Detected language id of the cluster's first occurrence, from the engine's parser registry (`language_for_path`, [PIPELINE-LANG-TRAIT]); `unknown` when unresolvable. Consumers group and filter by this value and never re-derive a language from a file extension.",

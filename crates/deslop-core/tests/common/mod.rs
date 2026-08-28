@@ -481,6 +481,7 @@ impl ReportFixture {
             members,
             weight: 10_000.0,
             signals,
+            signal_source: None,
             content,
         }
     }

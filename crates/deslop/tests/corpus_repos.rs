@@ -70,9 +70,10 @@ use serde_json::Value;
 #[test]
 #[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-PRECISION] \
             docs/plans/corpus-assertion.md — clones flutter/flutter at its pinned commit and \
-            scans the whole Dart tree: the largest in the corpus, roughly 9.5 GB peak and \
-            9m44s on a laptop (#166). The release gate compiles this target and never runs \
-            it. `make test-corpus` runs it, single-threaded, via `-- --ignored`."]
+            scans the whole Dart tree: the largest in the corpus, measured at 295 s wall / \
+            7947 MB peak RSS (gh #166 fixed; ceilings live in corpus/flutter.json). The \
+            release gate compiles this target and never runs it. `make test-corpus` runs it, \
+            single-threaded, via `-- --ignored`."]
 fn corpus_flutter_dart() -> Result<()> {
     gate("flutter")
 }

@@ -52,13 +52,18 @@ pub struct Cluster {
     pub members: Vec<Fingerprint>,
     /// Weight from [PIPELINE-RANK-WORST-FIRST]. Higher = worse offender.
     pub weight: f64,
-    /// Measured signal breakdown ([FUSION-CLUSTER-SIGNALS]): the
-    /// per-signal mean over every unordered pair of the rendered
-    /// members — Merkle-hash equality for `structural`, `MinHash`
-    /// Jaccard for `token_jaccard`, vector cosine for `embedding_cos`.
-    /// Never aggregated from the discovery edges that glued the
-    /// transitive-closure component together.
+    /// Measured signal breakdown ([FUSION-CLUSTER-SIGNALS]): per axis,
+    /// the strongest measurement any admitted pair earned on that
+    /// axis — Merkle-hash equality / shared-subtree overlap for
+    /// `structural`, `MinHash` Jaccard for `token_jaccard`, vector
+    /// cosine for `embedding_cos`. A pair that never cleared admission
+    /// contributes nothing (gh #458).
     pub signals: PairScore,
+    /// The admitted pair — as positions into [`Self::members`], which
+    /// is the rendered occurrence order — whose evidence the signals
+    /// display ([FUSION-CLUSTER-SIGNALS] gh #458). `None` when no
+    /// admitted pair survives the same-file overlap collapse.
+    pub signal_source: Option<(usize, usize)>,
     /// Measured raw-content evidence across the members'
     /// normalisation-collapsed leaves ([FUSION-CONTENT-GATE]):
     /// pooled byte agreement, Type-2 rename consistency, and literal
@@ -337,8 +342,14 @@ fn build_fused_cluster<S: BuildHasher + Sync, H: BuildHasher + Sync, L: BuildHas
         return None;
     }
     let signals_started = std::time::Instant::now();
+    let admitted_pairs: Vec<(usize, usize)> = fused
+        .edges
+        .iter()
+        .map(|edge| (edge.left, edge.right))
+        .collect();
     let measured = measured_signals(
         &occurrence_indices,
+        &admitted_pairs,
         fingerprints,
         inputs.signatures,
         inputs.embedding_vectors,
@@ -350,7 +361,15 @@ fn build_fused_cluster<S: BuildHasher + Sync, H: BuildHasher + Sync, L: BuildHas
         .iter()
         .filter_map(|index| fingerprints.get(*index).cloned())
         .collect();
-    let cluster = materialize_cluster(members, measured, inputs.file_paths);
+    // The source pair is in corpus-index terms; the report reads it as
+    // positions into the rendered occurrence order, which is exactly
+    // `members`.
+    let signal_source = measured.source_pair.and_then(|(left, right)| {
+        let left_position = occurrence_indices.binary_search(&left).ok()?;
+        let right_position = occurrence_indices.binary_search(&right).ok()?;
+        Some((left_position, right_position))
+    });
+    let cluster = materialize_cluster(members, measured.score, signal_source, inputs.file_paths);
     spent.materialize = spent
         .materialize
         .saturating_add(materialize_started.elapsed());
@@ -361,6 +380,7 @@ fn build_fused_cluster<S: BuildHasher + Sync, H: BuildHasher + Sync, L: BuildHas
 fn materialize_cluster(
     members: Vec<Fingerprint>,
     signals: PairScore,
+    signal_source: Option<(usize, usize)>,
     file_paths: &HashMap<FileId, PathBuf>,
 ) -> Cluster {
     let size = members.len();
@@ -374,6 +394,7 @@ fn materialize_cluster(
         members,
         weight,
         signals,
+        signal_source,
         content: ContentEvidence::unmeasured(),
     }
 }

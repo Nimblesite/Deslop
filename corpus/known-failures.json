@@ -23,15 +23,11 @@
     "cluster_count_band": "[CORPUS-SCOPE] The rendered cluster count fell outside the manifest's `expect_clusters` band. Below it, detection stopped finding duplicates; above it, something started manufacturing them - repository-wide swings no per-cluster check can see."
   },
   "known_failures": {
-    "flutter": [
-      "memory"
-    ],
     "fsharp": [
       "memory"
     ]
   },
   "_issues": {
-    "flutter/memory": 166,
     "fsharp/memory": 166
   },
   "ceilings": {}

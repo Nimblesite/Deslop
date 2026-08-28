@@ -167,6 +167,8 @@ mod metrics_folder_rollup;
 mod ollama_failures;
 #[path = "operator_drift_is_not_duplication.rs"]
 mod operator_drift_is_not_duplication;
+#[path = "pair_consistent_signals.rs"]
+mod pair_consistent_signals;
 #[path = "pair_size_coherence.rs"]
 mod pair_size_coherence;
 #[path = "polymorphic_gate_hides_rename_clone.rs"]

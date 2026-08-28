@@ -115,6 +115,7 @@ fn sample_cluster() -> ReportCluster {
         size: 3,
         canonical_node_count: 12,
         signals,
+        signal_source: None,
         bucket: "identical".to_owned(),
         category: "logic".to_owned(),
         language: "rust".to_owned(),

@@ -34,7 +34,8 @@ use crate::{
 // shapes live in `crate::wire_generated`; the impls below stay here.
 pub use crate::report_hints::{default_action_hints, ActionHint};
 pub use crate::wire_generated::{
-    CacheStats, EmbeddingProvenance, Report, ReportCluster, ReportOccurrence, ReportSignals,
+    CacheStats, EmbeddingProvenance, Report, ReportCluster, ReportOccurrence, ReportSignalSource,
+    ReportSignals,
 };
 
 /// Serde default for [`ReportSignals::agreement`] when replaying a
@@ -86,6 +87,12 @@ impl Report {
                 cluster.occurrences.truncate(cap);
                 cluster.occurrences_truncated = true;
             }
+            // [FUSION-CLUSTER-SIGNALS] The named signal source must stay
+            // inside the occurrences the wire actually carries; a
+            // truncated source index would dangle.
+            cluster.signal_source = cluster.signal_source.filter(|source| {
+                source.left < cluster.occurrences.len() && source.right < cluster.occurrences.len()
+            });
             cluster.summary.clear();
             cluster.interpretation.clear();
         }

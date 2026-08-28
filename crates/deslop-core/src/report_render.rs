@@ -24,7 +24,7 @@ use crate::{
     content::ContentEvidence,
     fingerprint::Fingerprint,
     pair::PairScore,
-    report::{ReportCluster, ReportOccurrence, ReportSignals},
+    report::{ReportCluster, ReportOccurrence, ReportSignalSource, ReportSignals},
     report_location::format_occurrence,
     state::{FileId, FileRegistry},
 };
@@ -194,6 +194,10 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         size: cluster.members.len(),
         canonical_node_count,
         signals,
+        signal_source: cluster.signal_source.map(|(left, right)| ReportSignalSource {
+            left,
+            right,
+        }),
         bucket,
         // Default category; `render_report` re-parses the members and
         // stamps the authoritative `CloneCategory` ([RANK-CATEGORY]) using
