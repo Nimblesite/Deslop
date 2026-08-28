@@ -87,7 +87,7 @@ pub(super) fn cluster_rename_consistency<S: BuildHasher>(
 /// and each echo raises the anchor mass and corroborates its
 /// substitution, so completing a rename can never score below leaving
 /// it half-finished (`rename_literal_monotonicity.rs`).
-fn pair_rename_consistency<S: BuildHasher>(
+pub(super) fn pair_rename_consistency<S: BuildHasher>(
     canonical: Option<&MemberContent>,
     member: Option<&MemberContent>,
     sources: &HashMap<FileId, Vec<u8>, S>,

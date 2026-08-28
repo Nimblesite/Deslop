@@ -40,6 +40,14 @@ use rename::ModalBijection;
 
 use crate::{ast::NormalizedNode, cluster::Cluster, fingerprint::Fingerprint, state::FileId};
 
+/// Indexes normalised trees by file for frontier resolution. Shared by
+/// every content measurement so one walk site owns the shape.
+pub(crate) fn tree_index_of<'a>(
+    trees: &'a [NormalizedNode],
+) -> HashMap<FileId, &'a NormalizedNode> {
+    trees.iter().map(|tree| (tree.file_id, tree)).collect()
+}
+
 /// Minimum literal-leaf count before a subtree's literal dominance is
 /// reported at all ([CLONE-NOISE-LITERAL-TABLE]). A data table is a run
 /// of values; a tiny subtree that happens to be mostly literals (a
@@ -174,8 +182,7 @@ pub fn attach_content_evidence<S: BuildHasher, L: BuildHasher>(
     sources: &HashMap<FileId, Vec<u8>, S>,
     file_languages: &HashMap<FileId, &'static str, L>,
 ) {
-    let tree_index: HashMap<FileId, &NormalizedNode> =
-        trees.iter().map(|tree| (tree.file_id, tree)).collect();
+    let tree_index = tree_index_of(trees);
     for cluster in clusters.iter_mut() {
         cluster.content = measure_cluster(&cluster.members, &tree_index, sources, file_languages);
         // [PERF-FLUTTER-TODO-OBSERVABILITY] Per cluster, so `trace` rather
@@ -454,6 +461,33 @@ fn dominant_verbatim_share(dominant: Option<DominantFamily>, members: usize) -> 
 /// it here would let the shape signals vouch for themselves through the
 /// gate built to check them; an operator that differs still counts
 /// against them in either measurement.
+/// [FUSION-CONTENT-GATE] (per-edge, gh #458): one pair's own content
+/// agreement, measured from the endpoints' collapsed leaves exactly as
+/// a cluster's members are measured — the same measurement, one pair at
+/// a time.
+///
+/// The shared-subtree rescue admits pairs on structural overlap and
+/// token corroboration alone; a Merkle-identical signature can carry a
+/// pair whose bodies share nothing (the `verbatim-plus-stranger`
+/// fixture's stranger measures 0.0436 against a copy while its
+/// signature is hash-equal). The cluster-level gate measures only after
+/// the component is built — too late to keep the stranger out of the
+/// family's act-now evidence — so the rescue consults this per
+/// admitted edge and refuses to admit pairs whose own content does not
+/// clear the floor.
+pub(crate) fn pair_content_agreement<S: BuildHasher, L: BuildHasher>(
+    left: &Fingerprint,
+    right: &Fingerprint,
+    tree_index: &HashMap<FileId, &NormalizedNode>,
+    sources: &HashMap<FileId, Vec<u8>, S>,
+    languages: &HashMap<FileId, &'static str, L>,
+) -> f64 {
+    pair_agreement(
+        keys_of(member_content(left, tree_index, sources, languages).as_ref()),
+        keys_of(member_content(right, tree_index, sources, languages).as_ref()),
+    )
+}
+
 fn pair_agreement(canonical: Option<&[LeafKey]>, member: Option<&[LeafKey]>) -> f64 {
     let (Some(canonical), Some(member)) = (canonical, member) else {
         return 0.0;

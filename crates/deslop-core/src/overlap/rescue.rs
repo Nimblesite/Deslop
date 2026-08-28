@@ -19,12 +19,15 @@
 //! fixed-interval progress records, never per-pair events
 //! ([PERF-FLUTTER-TODO-OBSERVABILITY]).
 
-use std::num::NonZeroUsize;
+use std::{collections::HashMap, hash::BuildHasher, num::NonZeroUsize};
 
 use crate::{
     ast::NormalizedNode,
+    buckets::CONTENT_SUPPORT_FLOOR,
+    content::pair_content_agreement,
     fingerprint::Fingerprint,
     pair::{crosses_files, rescue_eligible, CandidatePair, SHARED_SUBTREE_MIN_OVERLAP},
+    state::FileId,
 };
 
 use super::{tally::RescueTally, OverlapMeasurer};
@@ -47,18 +50,37 @@ const RESCUE_CHUNK_PAIRS: usize = 512;
 
 /// Measures shared-subtree overlap onto every rescue-eligible candidate
 /// pair, in parallel when the population justifies it.
-pub fn apply_shared_subtree_rescue(
+///
+/// `sources` and `languages` let the pass apply the per-edge content
+/// gate ([FUSION-CONTENT-GATE], gh #458) to pairs whose overlap cleared
+/// the floor: a Merkle-identical signature alone must not admit a pair
+/// whose bodies share nothing.
+pub fn apply_shared_subtree_rescue<S: BuildHasher + Sync, L: BuildHasher + Sync>(
     pairs: &mut [CandidatePair],
     fingerprints: &[Fingerprint],
     trees: &[NormalizedNode],
+    sources: &HashMap<FileId, Vec<u8>, S>,
+    languages: &HashMap<FileId, &'static str, L>,
 ) {
+    // Content agreement needs every member's tree, resolved once for the
+    // whole pass; each measurement then reads its endpoints' collapsed
+    // leaves through this index.
+    let tree_index: HashMap<FileId, &NormalizedNode> =
+        trees.iter().map(|tree| (tree.file_id, tree)).collect();
+    tracing::trace!(
+        tree_roster = ?trees
+            .iter()
+            .map(|tree| (tree.file_id, tree.byte_range))
+            .collect::<Vec<_>>(),
+        "rescue tree roster"
+    );
     let workers = crate::shard::worker_count(pairs.len(), MIN_SHARD_WORK);
     if workers <= 1 {
         let mut measurer = OverlapMeasurer::new(trees);
         let mut tally = RescueTally::new();
         for pair in pairs.iter_mut() {
             tally.scan();
-            measure_one(pair, fingerprints, &mut measurer, &mut tally);
+            measure_one(pair, fingerprints, &tree_index, sources, languages, &mut measurer, &mut tally);
         }
         tally.report_total(measurer.stats());
         return;
@@ -74,21 +96,26 @@ pub fn apply_shared_subtree_rescue(
         pairs.chunks_mut(RESCUE_CHUNK_PAIRS),
         workers,
         || (RescueTally::new(), OverlapMeasurer::new(trees)),
-        |(tally, measurer), chunk| measure_chunk(chunk, fingerprints, measurer, tally),
+        |(tally, measurer), chunk| {
+            measure_chunk(chunk, fingerprints, &tree_index, sources, languages, measurer, tally)
+        },
     );
     report_shards(&shards);
 }
 
 /// Measures one claimed chunk onto the worker's own tally and measurer.
-fn measure_chunk(
+fn measure_chunk<S: BuildHasher, L: BuildHasher>(
     chunk: &mut [CandidatePair],
     fingerprints: &[Fingerprint],
+    tree_index: &HashMap<FileId, &NormalizedNode>,
+    sources: &HashMap<FileId, Vec<u8>, S>,
+    languages: &HashMap<FileId, &'static str, L>,
     measurer: &mut OverlapMeasurer<'_>,
     tally: &mut RescueTally,
 ) {
     for pair in chunk.iter_mut() {
         tally.scan();
-        measure_one(pair, fingerprints, measurer, tally);
+        measure_one(pair, fingerprints, tree_index, sources, languages, measurer, tally);
     }
 }
 
@@ -111,9 +138,21 @@ fn report_shards(shards: &[(RescueTally, OverlapMeasurer<'_>)]) {
 
 /// Measures one pair when it is eligible, resolvable, and cross-file,
 /// recording every gate it passes.
-fn measure_one(
+///
+/// A pair whose overlap cleared the floor still has to carry its own
+/// content through the gate ([FUSION-CONTENT-GATE], gh #458): the
+/// overlap floor is a *structural* claim and the token corroboration a
+/// *token* claim, and neither knows whether the endpoints' collapsed
+/// leaves agree. When the pair's own content agreement falls below
+/// [`CONTENT_SUPPORT_FLOOR`] the rescue refuses it — the overlap is
+/// left unset so survival drops the pair exactly as if the rescue had
+/// never measured it.
+fn measure_one<S: BuildHasher, L: BuildHasher>(
     pair: &mut CandidatePair,
     fingerprints: &[Fingerprint],
+    tree_index: &HashMap<FileId, &NormalizedNode>,
+    sources: &HashMap<FileId, Vec<u8>, S>,
+    languages: &HashMap<FileId, &'static str, L>,
     measurer: &mut OverlapMeasurer<'_>,
     tally: &mut RescueTally,
 ) {
@@ -130,10 +169,28 @@ fn measure_one(
     }
     tally.cross_file();
     pair.shared_subtree_overlap = measurer.rescue_overlap(left, right);
-    tally.measure(
-        pair.shared_subtree_overlap >= SHARED_SUBTREE_MIN_OVERLAP,
-        measurer.stats(),
+    let clears_overlap = pair.shared_subtree_overlap >= SHARED_SUBTREE_MIN_OVERLAP;
+    let content_agreement =
+        pair_content_agreement(left, right, tree_index, sources, languages);
+    let clears_content = !clears_overlap || content_agreement >= CONTENT_SUPPORT_FLOOR;
+    tracing::trace!(
+        left_file = ?left.file_id,
+        right_file = ?right.file_id,
+        left_range = ?left.byte_range,
+        right_range = ?right.byte_range,
+        left_nodes = left.node_count,
+        right_nodes = right.node_count,
+        overlap = pair.shared_subtree_overlap,
+        content_agreement,
+        clears_overlap,
+        clears_content,
+        "rescue per-pair gate"
     );
+    if clears_overlap && !clears_content {
+        tally.content_gate_rejected();
+        pair.shared_subtree_overlap = 0.0;
+    }
+    tally.measure(clears_overlap && clears_content, measurer.stats());
 }
 
 #[cfg(test)]
@@ -161,16 +218,24 @@ mod shard_equivalence_tests {
     /// One serial shard over `chunk`: the reference a single worker
     /// computes, assembled from the very `measure_chunk` the workers
     /// run so the reference can never drift from the live path.
-    fn run_shard(
+    fn run_shard<S: std::hash::BuildHasher, L: std::hash::BuildHasher>(
         chunk: &mut [CandidatePair],
         fingerprints: &[Fingerprint],
         trees: &[NormalizedNode],
+        sources: &std::collections::HashMap<crate::state::FileId, Vec<u8>, S>,
+        languages: &std::collections::HashMap<crate::state::FileId, &'static str, L>,
     ) -> (RescueTally, crate::overlap::MeasureStats) {
         let mut measurer = crate::overlap::OverlapMeasurer::new(trees);
         let mut tally = RescueTally::new();
-        measure_chunk(chunk, fingerprints, &mut measurer, &mut tally);
+        measure_chunk(chunk, fingerprints, &tree_index(trees), sources, languages, &mut measurer, &mut tally);
         let stats = measurer.stats();
         (tally, stats)
+    }
+
+    /// The content-gate index: every tree resolved by file id, exactly
+    /// as the live pass builds it.
+    fn tree_index(trees: &[NormalizedNode]) -> std::collections::HashMap<crate::state::FileId, &NormalizedNode> {
+        trees.iter().map(|tree| (tree.file_id, tree)).collect()
     }
 
     /// Parses `source` as Rust and fingerprints its root.
@@ -238,11 +303,19 @@ mod shard_equivalence_tests {
         let mut registry = FileRegistry::new();
         let left_id = registry.register(PathBuf::from("left.rs"));
         let right_id = registry.register(PathBuf::from("right.rs"));
-        let left = parse(&wide_function(120), left_id)?;
-        let right = parse(&wide_function(121), right_id)?;
+        let left_source = wide_function(120);
+        let right_source = wide_function(121);
+        let left = parse(&left_source, left_id)?;
+        let right = parse(&right_source, right_id)?;
         let nodes = left.1.node_count;
         let fingerprints = [left.1.clone(), right.1.clone()];
         let trees = [left.0, right.0];
+        let sources = std::collections::HashMap::from([
+            (left_id, left_source.into_bytes()),
+            (right_id, right_source.into_bytes()),
+        ]);
+        let languages =
+            std::collections::HashMap::from([(left_id, "rust"), (right_id, "rust")]);
         let fixture = || {
             (0..pair_count)
                 .map(|_| eligible_pair(nodes))
@@ -251,11 +324,18 @@ mod shard_equivalence_tests {
 
         // The threaded entry point — whichever core count routes it.
         let mut sharded = fixture();
-        apply_shared_subtree_rescue(&mut sharded, &fingerprints, &trees);
+        apply_shared_subtree_rescue(
+            &mut sharded,
+            &fingerprints,
+            &trees,
+            &sources,
+            &languages,
+        );
 
         // The serial reference: one measurer, one tally, every pair.
         let mut serial = fixture();
-        let (serial_tally, serial_stats) = run_shard(&mut serial, &fingerprints, &trees);
+        let (serial_tally, serial_stats) =
+            run_shard(&mut serial, &fingerprints, &trees, &sources, &languages);
 
         for (index, (shard_pair, serial_pair)) in sharded.iter().zip(&serial).enumerate() {
             assert!(
@@ -278,8 +358,8 @@ mod shard_equivalence_tests {
         let mut halved = fixture();
         let midpoint = pair_count / 2;
         let (head, tail) = halved.split_at_mut(midpoint);
-        let (head_tally, head_stats) = run_shard(head, &fingerprints, &trees);
-        let (tail_tally, tail_stats) = run_shard(tail, &fingerprints, &trees);
+        let (head_tally, head_stats) = run_shard(head, &fingerprints, &trees, &sources, &languages);
+        let (tail_tally, tail_stats) = run_shard(tail, &fingerprints, &trees, &sources, &languages);
         for (index, (half_pair, serial_pair)) in halved.iter().zip(&serial).enumerate() {
             assert!(
                 (half_pair.shared_subtree_overlap - serial_pair.shared_subtree_overlap).abs()

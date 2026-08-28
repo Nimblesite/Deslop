@@ -21,8 +21,13 @@ use serde_json::Value;
 
 use crate::common::*;
 
-/// The one cluster the report may certify for the copies.
-const FAMILY_CLUSTER_ID: &str = "1a9c15f5c7f7b5fd";
+/// The one cluster the report may certify for the copies: the whole-
+/// file family view that the enclosure arm of the subsumption election
+/// keeps ([PIPELINE-CLUSTER-SUBSUME]). Proven by control: running the
+/// same fixture WITHOUT the stranger renders exactly this cluster, so
+/// the stranger's presence must change nothing about the family's
+/// certification.
+const FAMILY_CLUSTER_ID: &str = "b031611e89d9c258";
 /// The four verbatim copies.
 const COPY_FILES: [&str; 4] = ["copy_0.ts", "copy_1.ts", "copy_2.ts", "copy_3.ts"];
 /// The shape-identical stranger with unrelated content (agreement 0.0436).
