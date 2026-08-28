@@ -156,14 +156,8 @@ function stringCorpus(root: ts.SourceFile): string {
   return parts.join("\n");
 }
 
-function templateText(node: ts.TemplateLiteral): string {
-  if (ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
-  const parts: string[] = [node.head.text];
-  for (const span of node.templateSpans) {
-    parts.push("${", span.expression.getText(), "}", span.literal.text);
-  }
-  return parts.join("");
-}
+
+
 
 function severityBadgeLabelTemplates(root: ts.Node): string[] {
   const out: string[] = [];
