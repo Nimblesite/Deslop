@@ -121,11 +121,11 @@ fn a_verbatim_family_survives_an_unrelated_stranger() -> Result<()> {
          support floor {CONTENT_SUPPORT_FLOOR} — the stranger must not \
          demote a proven family"
     );
-    assert!(
-        matches!(cluster_bucket(mixed), "identical" | "nearly_identical"),
-        "a cluster containing a proven copy family must keep its act-now \
-         bucket, got {}",
-        cluster_bucket(mixed)
+    assert_eq!(
+        cluster_bucket(mixed),
+        "nearly_identical",
+        "the mixed cluster's agreement 0.7609 must keep it in the act-now \
+         nearly-identical band — the stranger cannot demote a proven family"
     );
     assert_eq!(
         cluster_bucket(family),
