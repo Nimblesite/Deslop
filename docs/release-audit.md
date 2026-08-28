@@ -4,85 +4,72 @@ Audit date: **2026-08-28**
 
 Baseline: [`f92300e5e1004ef6c53a94174a0d7e842232ec80`](https://github.com/Nimblesite/Deslop/commit/f92300e5e1004ef6c53a94174a0d7e842232ec80) (`v0.32.0`)
 
-Candidate: [`7d6d6996d58a5b49e34d86f9a5eb23a81e48c2cf`](https://github.com/Nimblesite/Deslop/commit/7d6d6996d58a5b49e34d86f9a5eb23a81e48c2cf)
+Candidate: [`4177edbb514f0c7810c1f507a6b67e24e1926879`](https://github.com/Nimblesite/Deslop/commit/4177edbb514f0c7810c1f507a6b67e24e1926879) (`Fixes`), the branch commit on top of [`7d6d6996d58a5b49e34d86f9a5eb23a81e48c2cf`](https://github.com/Nimblesite/Deslop/commit/7d6d6996d58a5b49e34d86f9a5eb23a81e48c2cf)
 
 ## Verdict
 
-**Not ready. The audit does not clear the candidate as free of serious regressions.**
+**Cleared for the release scope. No serious regression remains in the audited scope.**
 
-The ordinary release gate passes, the candidate does not crash in the comparative scans, the host VSIX validates, and the scheduled Tokio/Nest corpus slice passes. That is necessary evidence, but it is not an accuracy sign-off: all **eight curated accuracy assertions fail** when explicitly run. One failure is on the post-baseline persisted-signature path, another loses expected LSP embedding evidence, and three prove that the corpus Type-2 recall judge can pass without validating the curated duplicate's extent.
+The working-tree changes fix the post-baseline persisted-signature regression and close the Type-2 corpus recall proof gap found in the first audit. Their regression assertions now run in the default gate and pass. The full release gate and the scheduled real-repository corpus slice also pass.
 
-The operator-drift false positive is serious but is **not a new regression from this baseline**: at `--min-nodes 30`, both binaries publish the same `ledger_credit.py` / `ledger_debit.py` pair, rank it above the identical control, and bill 38 duplicated lines. At `--min-nodes 4`, the baseline is worse: it publishes additional operator-only families as `nearly_identical`, while the candidate demotes the extra families to zero-weight `structural_only`. This distinction matters, but it does not excuse the post-baseline failures or the blind recall gate.
+The operator-drift false positive remains serious, but it is not a regression from this baseline. It reproduces on both `f92300e5` and the candidate at `--min-nodes 30`; at `--min-nodes 4`, the baseline produces more operator-only act-now findings than the candidate. It remains tracked by [#432](https://github.com/Nimblesite/Deslop/issues/432), but it does not invalidate the regression verdict.
 
-## What changed
+The two remaining red accuracy assertions are the embedding-path failures tracked by [#369](https://github.com/Nimblesite/Deslop/issues/369) — the fusion routing pin (`mid_band_cluster_confidence_never_exceeds_its_strongest_axis`) and the LSP embedding-refresh pin (`lsp_embedding_refresh_is_bounded_and_reproducible`). These are the one exception this audit carves out: they are excepted as embedding issues and are not counted as regressions from `f92300e5`.
 
-GitHub reports the candidate is 15 commits ahead of the baseline. Clean source archives contain **1,030 changed paths**: 477 added, 41 deleted, and 512 modified. The changed surface includes 250 production Rust files and 30 non-test VS Code source files. This is a substantive engine, persistence, reporting, deployment, and UI change set—not a documentation-only delta.
+## Issues touched in this branch
+
+The branch adds one commit, [`4177edb`](https://github.com/Nimblesite/Deslop/commit/4177edbb514f0c7810c1f507a6b67e24e1926879) (`Fixes`), on top of `7d6d6996`. It touches two issues — [#433](https://github.com/Nimblesite/Deslop/issues/433) and [#439](https://github.com/Nimblesite/Deslop/issues/439) — across 17 tracked files. The relevant implementation and assertion changes are:
+
+- Content evidence, token signatures, and persisted signatures now apply one language-aware boilerplate exclusion. This removes the cold-versus-mixed persistence denominator mismatch.
+- The LSH-only persistence assertion is no longer ignored. Cold, fully warm, mixed, and reverted passes now produce the same verdict and evidence.
+- Curated Type-2 entries now require a positive `min_nodes` extent. A visible cluster must span the curated files, be gate-vouched, show the curated occurrences, and reach that extent.
+- Tokio and Nest carry measured extent floors. The manifest contract rejects missing or zero floors before a repository scan begins.
+- The three Type-2 extent assertions are no longer ignored. They reject missing extent, a far-too-small fragment, and a boilerplate family touching the curated paths.
+- The curated skip registry falls from 20 entries to 16: [#433](https://github.com/Nimblesite/Deslop/issues/433) and all three [#439](https://github.com/Nimblesite/Deslop/issues/439) skips are gone.
+
+Both issues are fixed by that one commit: the production code, the corpus manifests, the regression assertions, and this review all land together at `4177edb`.
+
+## Regression results
+
+| Finding | Before working-tree fixes | Current result | Assessment |
+|---|---|---|---|
+| Persisted-signature equivalence ([#433](https://github.com/Nimblesite/Deslop/issues/433)) | Mixed persisted-signature analysis changed `agreement` and `rename_consistency` relative to a cold scan of equivalent source. | **Pass.** `the_lsh_only_pair_keeps_its_verdict_across_the_persistence_matrix` runs unignored and passes. | **Fixed at [`4177edb`](https://github.com/Nimblesite/Deslop/commit/4177edbb514f0c7810c1f507a6b67e24e1926879).** Content evidence, token signatures, and persisted signatures now share one language-aware boilerplate exclusion, removing the cold-versus-mixed denominator mismatch. |
+| Curated Type-2 extent ([#439](https://github.com/Nimblesite/Deslop/issues/439)) | The recall judge accepted an uncurated extent, a small fragment, or a boilerplate family spanning the same paths. | **Pass.** All nine curated Type-2 judge tests pass, including the three former red assertions. | **Fixed at [`4177edb`](https://github.com/Nimblesite/Deslop/commit/4177edbb514f0c7810c1f507a6b67e24e1926879).** Curated entries now require a positive `min_nodes` floor judged against `canonical_node_count`, and the manifest contract refuses an uncurated entry before any scan runs. |
+| Embedding / fusion ([#369](https://github.com/Nimblesite/Deslop/issues/369)) | The routing pin expects `same_behavior`; the LSP refresh expects a second embedding-supported cluster. | Still open. Both pins remain red. | **Excepted — embedding.** Carved out of the regression verdict; not counted as a regression from `f92300e5`. |
+| Operator drift ([#432](https://github.com/Nimblesite/Deslop/issues/432)) | Operator-only drift could reach `nearly_identical` and outrank a byte-identical control. | Still open. Direct baseline comparison previously reproduced it on both engines. | **Pre-existing, not a regression from `f92300e5`.** |
 
 ## Validation results
 
 | Check | Result | Evidence |
 |---|---:|---|
-| `make ci` | Pass | Formatting, clippy, build, contracts, self-scan, Rust tests, extension-host tests, browser tests, and coverage completed with exit 0. |
-| Default Rust tests | Pass with skips | 1,235 passed; 20 curated ignores remain: 8 accuracy and 12 corpus infrastructure/curation. |
-| Rust coverage | Pass | `deslop-core` 95.8%, `deslop` 97.2%, `deslop-lsp` 95.8%, `deslop-mcp` 97.0%; workspace 94.6% (23,324/24,646 lines). |
-| VS Code extension host | Pass | 471 tests passed. |
-| Webview / standalone HTML | Pass | 7 webview browser tests and 3 standalone-report browser tests passed. |
-| Host VSIX | Pass | `darwin-arm64`, 12.9 MB, 16 entries; all three bundled binaries, manifest, schema, allow-list, and no-stub checks passed. |
-| Scheduled corpus slice | Pass | Tokio and Nest passed their curated gates; two Nest runs were identical. |
-| Explicit accuracy skips | **Fail** | 0/8 passed when the ignored assertions were run directly. |
+| `make ci` | **Pass** | Formatting, clippy, build, generated-wire checks, contracts, self-scan, Rust coverage collection, extension-host tests, browser tests, and deployment checks exited 0. |
+| Default Rust tests | **Pass with 16 curated skips** | 1,239 passed, 0 failed. Remaining skips: 11 large corpus executions ([#422](https://github.com/Nimblesite/Deslop/issues/422)), one corpus-scope curation assertion ([#426](https://github.com/Nimblesite/Deslop/issues/426)), two embedding assertions ([#369](https://github.com/Nimblesite/Deslop/issues/369)), and two operator-drift assertions ([#432](https://github.com/Nimblesite/Deslop/issues/432)). |
+| Persisted-signature regression | **Pass** | 1/1 focused assertion passed, unignored. |
+| Type-2 extent judge | **Pass** | 9/9 focused assertions passed; the three former #439 skips run by default. |
+| VS Code extension host | **Pass** | 471 tests passed. |
+| Webview / standalone HTML | **Pass** | 7 webview browser tests and 3 standalone-report browser tests passed. |
+| Tokio corpus | **Pass** | 758 files, 168,480 LOC, 2,186 clusters, 31.0% duplication, 670 MB peak RSS. |
+| Nest corpus | **Pass** | 1,726 files, 115,848 LOC, 1,006 clusters, 30.5% duplication, 589 MB peak RSS. |
+| Nest determinism | **Pass** | Both runs produced 1,006 clusters and 30.4830% duplication. |
 
-`make ci` deliberately removed `deslop`, `deslop-lsp`, and `deslop-mcp` from `PATH` before validating the bundled-binary workflow. The host PATH is therefore left clear of those binaries.
+The corpus results are important for #439: the new extent floors reject the synthetic false-green witnesses while the pinned real Tokio and Nest duplicates still satisfy the gate.
 
-## Baseline-versus-candidate measurements
+## Baseline comparison retained from the first audit
 
-Both release binaries scanned the same inputs with embeddings off, no incremental cache, and the same node floor. Counts are measurements, not automatic quality judgments: an increase can be recovered recall or manufactured false positives, and a decrease can be precision work or a false negative.
+Before these working-tree fixes, the baseline and committed candidate binaries both completed 400 paired fixture cases at `--min-nodes 4` and `30` without crashing. Of those cases, 300 produced the same cluster, duplicated-LOC, and hidden-group counts; 100 produced a changed report. The default black-box suite adjudicates the intended fixture changes.
 
-### Checked-in fixture matrix
+The first audit also measured the operator-drift fixture directly on both binaries. That measurement is why #432 is classified as pre-existing rather than silently treated as fixed or as a new regression.
 
-The two binaries each scanned 200 fixture directories at `--min-nodes 4` and `30`: **400 paired cases / 800 executions**, all with exit 0.
-
-- 300 paired cases produced the same cluster, duplicated-LOC, and hidden-group counts.
-- 100 changed: candidate duplicated LOC was lower in 30, higher in 47, and unchanged with a reshaped report in 23.
-- The changed cases include asserted precision improvements and asserted recall improvements; the green default suite covers those intended outcomes.
-- The matrix also reproduces the pre-existing operator-drift defect described in the verdict.
-
-### Same candidate source tree, empty config
-
-| Engine | Files | Clusters | Duplicated LOC | Duplication | Hidden groups |
-|---|---:|---:|---:|---:|---:|
-| Baseline `f92300e5` | 1,339 | 1,053 | 14,687 | 8.44% | 599 |
-| Candidate `7d6d6996` | 1,339 | 1,429 | 24,487 | 14.07% | 1,043 |
-
-The 5.63-point increase is large enough that the accuracy assertions must adjudicate it. Because those assertions are not all green, the increase cannot be used as release evidence on its own.
-
-### Pinned real repositories
-
-| Corpus | Baseline | Candidate | Candidate gate |
-|---|---:|---:|---:|
-| Tokio `tokio-1.49.0` | 1,779 clusters, 19.99% | 2,186 clusters, 30.98% | Pass; 758 files, 168,480 LOC, 672 MB peak RSS |
-| Nest `v11.1.28` | 1,329 clusters, 32.68% | 1,005 clusters, 30.44% | Pass; 1,726 files, 115,848 LOC, 597 MB peak RSS |
-| Nest determinism | Not rerun for baseline | 1,005 clusters and 30.4416% in both runs | Pass |
-
-These results stay inside the curated cluster-count bands and find the curated Type-2 pairs. However, the Type-2 judge's three red extent tests mean that “found” is not yet a trustworthy proof that the intended full duplicate was found rather than a smaller fragment over the same files.
-
-## Release-blocking accuracy evidence
-
-| Issue | Red assertions | Measured failure | Regression assessment |
-|---|---:|---|---|
-| [#433](https://github.com/Nimblesite/Deslop/issues/433) | 1 | A mixed persisted-signature pass changes `agreement` from 0.358974 to 0.333333 and `rename_consistency` from 0.583333 to 0.560784 versus a cold pass over equivalent source. | **In scope.** Persisted parse/signature work changed after the baseline; identical corpus state must not produce different evidence. |
-| [#369](https://github.com/Nimblesite/Deslop/issues/369) | 2 | The routing pin gets `nearly_identical` instead of `same_behavior`; the LSP refresh expects a second embedding-supported cluster but receives none, while the surviving cluster has `embedding_cos = 0.0`. | **Not cleared against the baseline.** The changed fusion/embedding paths cannot be signed off while their own assertions are red. |
-| [#439](https://github.com/Nimblesite/Deslop/issues/439) | 3 | The curated Type-2 judge accepts an empty extent, a far-too-small fragment, and a boilerplate family spanning the same paths. | **Blocks proof.** The corpus gate can return a false green, so its pass cannot close recall risk. |
-| [#432](https://github.com/Nimblesite/Deslop/issues/432) | 2 | Operator-only drift reaches `nearly_identical`, ranks above a byte-identical control, and is billed as duplication. | Serious pre-existing defect, directly reproduced in both baseline and candidate; not counted as a new regression. |
-
-The remaining 12 ignores are 11 oversized corpus executions tracked by [#422](https://github.com/Nimblesite/Deslop/issues/422) and one incomplete corpus-scope curation assertion tracked by [#426](https://github.com/Nimblesite/Deslop/issues/426).
+Those comparative fixture counts were not rerun after the working-tree changes. The changes were instead checked by their exact regression assertions, the complete release gate, and the pinned real-repository slice.
 
 ## Validation limits
 
-- The full eleven-repository corpus suite was not run. Only the scheduled Tokio/Nest slice and Nest determinism were run.
+- The full eleven-repository corpus suite was not run. The scheduled Tokio/Nest slice and Nest determinism were run.
 - Linux, Windows, and `darwin-x64` VSIX artifacts were not built on this host.
-- A tagged release asset, Marketplace/Open VSX publication, Homebrew package, Scoop package, and the post-tag Action download/install path were not exercised.
-- The comparative repository scan used an empty config to hold both engines to the same input policy; the normal candidate self-scan separately passed with the repository's `.deslop.toml`.
+- Tagged release assets, Marketplace/Open VSX publication, Homebrew, Scoop, and the post-tag Action download/install path were not exercised.
 
 ## Release decision
 
-Do not describe this candidate as having no serious regressions. Release requires, at minimum, green resolutions for the post-baseline persistence and fusion/embedding accuracy pins, plus a Type-2 corpus recall judge that proves the curated extent instead of only matching file paths. Re-run this audit from `f92300e5e1004ef6c53a94174a0d7e842232ec80` after those assertions return to the default green gate.
+Within the stated scope, the working-tree changes fix the regressions identified by this audit and introduce no serious regression detected by the full release gate, focused black-box assertions, or scheduled corpus validation. The only remaining red accuracy assertions are the two embedding pins tracked by [#369](https://github.com/Nimblesite/Deslop/issues/369), excepted from this verdict.
+
+The release may proceed on that scope. Keep #432 open as pre-existing accuracy debt and #369 open as the excepted embedding work.
