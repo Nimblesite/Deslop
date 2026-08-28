@@ -144,7 +144,12 @@ pub fn build_ranked_fused_clusters<
     // #408): subsumption deletes whole views, and the choice must see
     // the same measured content evidence the report will render — a
     // survivor elected on raw geometry cannot be re-elected later.
-    attach_content_evidence(&mut clusters, inputs.trees, inputs.sources);
+    attach_content_evidence(
+        &mut clusters,
+        inputs.trees,
+        inputs.sources,
+        inputs.file_languages,
+    );
     let collapsed = collapse_cross_cluster_overlap(clusters);
     log_ranked_cluster_distribution(
         &collapsed,

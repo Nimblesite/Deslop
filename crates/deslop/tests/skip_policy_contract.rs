@@ -64,35 +64,17 @@ const TEST_TARGET_KIND: &str = "test";
 /// the memory work in #166); `corpus_manifest_contract` is the curation those
 /// same two oversized repositories block (gh #426); the two gh #369 entries
 /// are red on purpose against unfinished fusion and embedding behaviour. The
-/// three gh #432–#433 entries are the fused-score follow-ups' own accuracy
+/// two gh #432 entries are the fused-score follow-ups' own accuracy
 /// pins, skipped in flight per `docs/plans/fused-score-followups.md` — each
-/// returns when its issue lands. The three gh #439 entries are the same
-/// bargain for curated recall: they pin that `type2_recall` cannot tell the
-/// curated module from a fragment spanning the same paths, and return when
-/// the extent predicate lands (`docs/plans/corpus-assertion.md` § L9).
+/// returns when its issue lands.
 ///
 /// Those counts are prose, and prose drifts. [`SKIPS_PER_ISSUE`] is what
 /// stops it drifting silently.
-const CURATED_SKIPS: [(&str, &str, u32); 20] = [
+const CURATED_SKIPS: [(&str, &str, u32); 16] = [
     (
         "crates/deslop-lsp/tests/lsp_embedding_determinism.rs",
         "lsp_embedding_refresh_is_bounded_and_reproducible",
         369,
-    ),
-    (
-        "crates/deslop-test-support/src/corpus_confidence/tests/curated.rs",
-        "a_boilerplate_family_spanning_the_curated_pair_is_not_the_curated_rename",
-        439,
-    ),
-    (
-        "crates/deslop-test-support/src/corpus_confidence/tests/curated.rs",
-        "a_fragment_far_below_the_curated_extent_is_not_the_curated_rename",
-        439,
-    ),
-    (
-        "crates/deslop-test-support/src/corpus_confidence/tests/curated.rs",
-        "an_entry_curating_no_extent_asserts_nothing_and_must_fail",
-        439,
     ),
     (
         "crates/deslop/tests/corpus_manifest_contract.rs",
@@ -152,11 +134,6 @@ const CURATED_SKIPS: [(&str, &str, u32); 20] = [
         369,
     ),
     (
-        "crates/deslop/tests/lsh_only_nearmiss_recall.rs",
-        "the_lsh_only_pair_keeps_its_verdict_across_the_persistence_matrix",
-        433,
-    ),
-    (
         "crates/deslop/tests/operator_drift_is_not_duplication.rs",
         "an_operator_only_difference_never_reaches_the_act_now_line",
         432,
@@ -175,8 +152,7 @@ const CURATED_SKIPS: [(&str, &str, u32); 20] = [
 /// #432–#435 entries when the registry held nine across #432–#434 and none
 /// for #435. That is a wrong answer to the question a reader is actually
 /// asking: which plan still owns this block of silence, and how much of it.
-const SKIPS_PER_ISSUE: [(u32, usize); 6] =
-    [(369, 2), (422, 11), (426, 1), (432, 2), (433, 1), (439, 3)];
+const SKIPS_PER_ISSUE: [(u32, usize); 4] = [(369, 2), (422, 11), (426, 1), (432, 2)];
 
 /// How many skips each issue owns, counted from the registry itself.
 fn skips_by_issue() -> BTreeMap<u32, usize> {

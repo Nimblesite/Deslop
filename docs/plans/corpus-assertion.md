@@ -74,7 +74,7 @@ Seven open false-positive issues (#71 #79 #103 #283 #284 #285 #336) all say *"th
 
 [CORPUS-CI] sizes the scheduled slice to finish in about a minute. The summary is supposed to name what was skipped. Nothing asserts it does, so a three-repo run reads as a nine-repo pass.
 
-### L9. 🛑 #439 — `type2_recall` curates paths but not extent
+### L9. #439 — `type2_recall` curates paths but not extent — CLOSED by [CORPUS-RECALL]
 
 `check_one_curated_type2` asks two questions: does a visible cluster span the curated files, and is it gate-vouched. Neither says the cluster *is* the curated duplicate. A curated entry claims "these two files are one module written twice"; any cluster touching both files satisfies it, however small.
 
@@ -82,8 +82,8 @@ Measured on tokio. At `7bb29d4`, deleting the curated 395-node whole-module rena
 
 **How the skip ends.** `[CORPUS-RECALL]` gains a required `min_nodes` per curated entry, and the judge compares it against the cluster's `canonical_node_count`. An entry that curates no extent must fail rather than pass on a path overlap — the stance [CORPUS-SCOPE] already takes on a missing `expect_files_min` — otherwise #439 reopens the next time a manifest grows an entry. `min_nodes` is a floor, not a pin: the legitimate whole-module view of the tokio pair measured 348 and 395 nodes on two builds of the same pinned commit, so the correct extent moves while the two orders of magnitude separating it from the fragments do not.
 
-- [ ] **#439** teach `check_one_curated_type2` the extent predicate; three pins in `corpus_confidence/tests/curated.rs` are `#[ignore]`d against it and return when it lands.
-- [ ] Curate a measured `min_nodes` into the three existing entries (`nest.json` ×2, `tokio.json` ×1). Needs a clone-and-scan per repository, so it lands with item F.
+- [x] **#439** teach `check_one_curated_type2` the extent predicate; the three pins in `corpus_confidence/tests/curated.rs` run un-`#[ignore]`d. An entry curating no `min_nodes` fails, and `corpus_manifest_contract.rs::assert_curated_extent` refuses such a manifest before any scan is paid for.
+- [x] Curate a measured `min_nodes` into the three existing entries (`nest.json` ×2, `tokio.json` ×1). Measured with this tree's `target/release/deslop` against the pinned clones under the gate's exact scan flags: tokio stderr/stdout rendered `canonical_node_count` 348 (348 and 395 on two earlier builds of the same commit — floor **300**, below measured drift, ~10× the 31-node accessor family); nest shutdown hooks rendered 255, with a 44-node sprawl cluster spanning the same pair plus three unrelated files in the same report (floor **200**); the nest exception family rendered 70 across its 17 stamped files (floor **50**, above the 31–39-node boilerplate scale the witnesses set, under drift for a genuinely small module).
 
 ## Part 2 — Assert a fuckload
 
@@ -94,7 +94,7 @@ The target state: **every repository, every run, asserts every row below.** Ids 
 | `files_analysed` | the scan parsed a plausible number of files, never zero | `expect_files_min` | ✅ |
 | `recall` | curated byte-identical clones are reported | `must_find` | 🟡 span only (L5) |
 | `recall_quality` | …in an act-now bucket, every curated occurrence **shown**, within `max_rank` | `must_find` | ❌ missing |
-| `type2_recall` | curated renames reported, gate-vouched, shown | `must_find_type2` | ✅ |
+| `type2_recall` | curated renames reported, gate-vouched, shown, at the curated `min_nodes` extent | `must_find_type2` | ✅ |
 | `precision` | curated non-duplicates never share a cluster | `must_not_cluster` | ❌ missing (L4) |
 | `boilerplate_rank` | framework-mandated shapes never rank first | `must_not_rank_first` | 🛑 unsound (L3) |
 | `data_table_rank` | digit-dominated clusters carry `category: data` | none | ✅ |

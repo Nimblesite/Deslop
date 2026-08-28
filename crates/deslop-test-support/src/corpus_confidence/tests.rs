@@ -116,9 +116,6 @@ const CURATED_MIN_NODES: u64 = 300;
 /// The whole-module view of a curated pair, as tokio renders it today.
 const MODULE_NODES: u64 = 348;
 
-/// The rendered field carrying a cluster's extent, as [CORPUS-RECALL] reads it.
-const CANONICAL_NODE_COUNT: &str = "canonical_node_count";
-
 /// One cluster whose occurrences carry the given rendered paths, at the
 /// extent a credible whole-module rename carries. [`sized`] overrides it.
 fn spanning(bucket: &str, structural: f64, token: f64, files: &[&str]) -> Value {

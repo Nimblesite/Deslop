@@ -7,11 +7,7 @@
 //! parser, so two Type-2 clones produce identical token streams and Type-3
 //! near-misses produce streams with high k-gram Jaccard.
 
-use crate::{
-    ast::NormalizedNode,
-    boilerplate::{is_import_boilerplate_carrier, is_import_boilerplate_only_subtree},
-    fingerprint::Fingerprint,
-};
+use crate::{ast::NormalizedNode, boilerplate::is_boilerplate, fingerprint::Fingerprint};
 
 /// k-gram width used by the token LSH pass. Matches the value recommended by
 /// the [TECH-TOKEN-SOURCERERCC] literature: short enough to keep Jaccard
@@ -144,9 +140,7 @@ fn cross_language_token(token: &'static str) -> &'static str {
 /// [`crate::sibling`] so the token LSH path sees the same code the
 /// structural pass considered meaningful.
 fn walk_skipping_boilerplate(node: &NormalizedNode, out: &mut Vec<&'static str>, language: &str) {
-    if is_import_boilerplate_carrier(language, node.kind)
-        || is_import_boilerplate_only_subtree(language, node)
-    {
+    if is_boilerplate(Some(language), node) {
         return;
     }
     out.push(node.kind);
@@ -220,10 +214,18 @@ pub(crate) fn resolve_range_nodes(
 /// where two shape-identical subtrees can still disagree in raw source
 /// content — and the literal-dominance measurement behind the
 /// language-agnostic data-table category ([CLONE-NOISE-LITERAL-TABLE]).
+///
+/// Import/prologue subtrees for `language` are skipped with the same
+/// [`is_boilerplate`] classifier the fingerprint, sibling and token-LSH
+/// passes apply ([PIPELINE-BOILERPLATE-FILTER]): those ranges are not
+/// clone evidence on any other axis, so their raw bytes must neither
+/// corroborate nor disprove a cluster here — one exclusion, one frontier
+/// population, on every pass ([PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE]).
 #[must_use]
 pub(crate) fn collapsed_leaves(
     root: &NormalizedNode,
     fingerprint: &Fingerprint,
+    language: Option<&str>,
 ) -> Option<Vec<(&'static str, crate::ast::ByteRange)>> {
     let resolved = resolve_range_nodes(
         root,
@@ -232,7 +234,7 @@ pub(crate) fn collapsed_leaves(
     )?;
     let mut out = Vec::new();
     for member in resolved {
-        collect_collapsed_leaves(member, &mut out);
+        collect_collapsed_leaves(member, &mut out, language);
     }
     Some(out)
 }
@@ -247,10 +249,14 @@ pub(crate) fn collapsed_leaves(
 fn collect_collapsed_leaves(
     node: &NormalizedNode,
     out: &mut Vec<(&'static str, crate::ast::ByteRange)>,
+    language: Option<&str>,
 ) {
+    if is_boilerplate(language, node) {
+        return;
+    }
     let frontier = out.len();
     for child in &node.children {
-        collect_collapsed_leaves(child, out);
+        collect_collapsed_leaves(child, out, language);
     }
     // [PIPELINE-NORMALIZE-AST-OPERATOR] An operator leaf is a frontier
     // position like any other collapsed leaf. Its kind already carries

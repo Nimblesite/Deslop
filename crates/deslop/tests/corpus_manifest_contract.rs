@@ -114,9 +114,26 @@ fn every_curated_type2_entry_names_a_verifiable_cross_file_pair() -> Result<()> 
                 .filter_map(Value::as_str)
                 .collect();
             assert_ground_truth_pair(&name, &files, entry);
+            assert_curated_extent(&name, &files, entry);
         }
     }
     Ok(())
+}
+
+/// Every curated entry must pin its extent. `min_nodes` is the floor
+/// [CORPUS-RECALL] compares against the reported `canonical_node_count`;
+/// without it, any cluster touching both curated paths satisfies the recall
+/// check, however small — the vacuous green gh #439 documents. The judge
+/// fails an uncurated entry at gate time; this refuses the manifest before
+/// any scan is paid for.
+fn assert_curated_extent(name: &str, files: &[&str], entry: &Value) {
+    let min_nodes = entry.get("min_nodes").and_then(Value::as_u64);
+    assert!(
+        min_nodes.is_some_and(|nodes| nodes > 0),
+        "{name}: curated entry for {files:?} must curate a positive `min_nodes` extent \
+         floor, measured against the pinned clone and set below build-to-build drift \
+         (gh #439)"
+    );
 }
 
 /// One curated entry must name at least two distinct files and carry the

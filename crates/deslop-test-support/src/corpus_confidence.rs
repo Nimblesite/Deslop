@@ -19,7 +19,9 @@
 use deslop_core::{buckets::has_saturating_shape_evidence, wire_generated::ReportSignals};
 use serde_json::Value;
 
-use crate::corpus::{cluster_shows_span, reports_clone_spanning, visible_clusters, Failure};
+use crate::corpus::{
+    cluster_shows_span, field_u64, reports_clone_spanning, visible_clusters, Failure,
+};
 
 /// Minimum demoted clusters before [`check_type2_gate_liveness`] will judge a
 /// report.
@@ -332,16 +334,33 @@ fn bucket_of(cluster: &Value) -> &str {
         .unwrap_or("<unlabelled>")
 }
 
+/// The rendered cluster field carrying its extent, in normalized AST nodes.
+/// [CORPUS-RECALL] compares it against a curated entry's `min_nodes` floor.
+const CANONICAL_NODE_COUNT: &str = "canonical_node_count";
+
+/// The manifest field a `must_find_type2` entry must curate: the smallest
+/// extent, in [`CANONICAL_NODE_COUNT`] nodes, that can credibly be the
+/// curated duplicate. A floor, not a pin — the correct extent moves between
+/// builds while the orders of magnitude separating it from boilerplate
+/// fragments do not (gh #439).
+const CURATED_EXTENT_FIELD: &str = "min_nodes";
+
 /// [CORPUS-RECALL] `type2_recall` — every hand-verified Type-2 rename in the
 /// manifest's `must_find_type2` list must be reported as a visible,
-/// gate-vouched cluster spanning its curated files.
+/// gate-vouched cluster spanning its curated files **at the curated extent**.
 ///
 /// This is the actual recall assertion [`check_type2_gate_liveness`] is not:
 /// each entry names a pair a human verified is a rename-duplicate by diffing
 /// the code, so a miss is a false negative on known ground truth, a hidden
 /// cluster is a claim the user never sees, and a demoted or sub-floor bucket
-/// means the gate failed to vouch for a proven rename. An empty list asserts
-/// nothing — `must_find_status` in the manifest says so explicitly.
+/// means the gate failed to vouch for a proven rename. A spanning cluster
+/// below the entry's `min_nodes` floor is a fragment or a boilerplate family
+/// touching the curated paths, not the curated duplicate — gh #439 shows the
+/// check staying green with its ground truth deleted when extent is ignored.
+/// An empty list asserts nothing — `must_find_status` in the manifest says so
+/// explicitly — but an entry that curates no extent fails rather than passing
+/// on a path overlap, the stance [CORPUS-SCOPE] takes on a missing
+/// `expect_files_min`.
 pub fn check_type2_curated_recall(manifest: &Value, report: &Value, failures: &mut Vec<Failure>) {
     let entries = manifest
         .get("must_find_type2")
@@ -357,6 +376,10 @@ pub fn check_type2_curated_recall(manifest: &Value, report: &Value, failures: &m
 fn check_one_curated_type2(entry: &Value, report: &Value, failures: &mut Vec<Failure>) {
     let files = curated_files(entry);
     let why = entry.get("why").and_then(Value::as_str).unwrap_or("");
+    let Some(min_nodes) = entry.get(CURATED_EXTENT_FIELD).and_then(Value::as_u64) else {
+        failures.push(missing_extent_curation(&files, why));
+        return;
+    };
     if !reports_clone_spanning(report, &files) {
         failures.push(Failure::new(
             "type2_recall",
@@ -364,20 +387,79 @@ fn check_one_curated_type2(entry: &Value, report: &Value, failures: &mut Vec<Fai
         ));
         return;
     }
-    let vouched = visible_clusters(report)
-        .iter()
-        .any(|cluster| gate_vouched(cluster) && cluster_shows_span(cluster, &files));
-    if !vouched {
-        failures.push(Failure::new(
-            "type2_recall",
-            format!(
-                "a cluster spans {files:?} but no shown gate-vouched \
-                 `{CONTENT_VOUCHED_BUCKET}` cluster does — the proven rename was demoted, \
-                 one of its occurrences is hidden, or its evidence did not come from the \
-                 gate. Hand-verified Type-2 rename: {why}"
-            ),
-        ));
+    check_vouched_at_extent(report, &files, min_nodes, why, failures);
+}
+
+/// The extent clause of one curated entry: among the shown, gate-vouched
+/// clusters spanning the curated files, the widest must reach the entry's
+/// `min_nodes` floor. Path overlap alone let a 31-node accessor family
+/// answer for a deleted 395-node module rename (gh #439 witness 1) and a
+/// 39-node buried fragment answer for the whole-module view (witness 2).
+fn check_vouched_at_extent(
+    report: &Value,
+    files: &[String],
+    min_nodes: u64,
+    why: &str,
+    failures: &mut Vec<Failure>,
+) {
+    let widest = visible_clusters(report)
+        .into_iter()
+        .filter(|cluster| gate_vouched(cluster) && cluster_shows_span(cluster, files))
+        .map(|cluster| field_u64(cluster, CANONICAL_NODE_COUNT))
+        .max();
+    match widest {
+        None => failures.push(unvouched_span(files, why)),
+        Some(widest) if widest < min_nodes => {
+            failures.push(below_curated_extent(files, widest, min_nodes, why));
+        }
+        Some(_) => {}
     }
+}
+
+/// The failure for an entry that curates no extent. Without `min_nodes` the
+/// entry cannot tell the module from a fragment, so it must fail rather than
+/// pass on the strength of a path overlap — otherwise gh #439 reopens the
+/// next time a manifest adds an entry.
+fn missing_extent_curation(files: &[String], why: &str) -> Failure {
+    Failure::new(
+        "type2_recall",
+        format!(
+            "entry for {files:?} curates no `{CURATED_EXTENT_FIELD}`, so nothing pins the \
+             extent of the curated duplicate and any cluster touching its paths would \
+             satisfy the check, however small (gh #439). Curate the smallest \
+             `{CANONICAL_NODE_COUNT}` that can credibly be this rename. Hand-verified \
+             Type-2 rename: {why}"
+        ),
+    )
+}
+
+/// The failure for a curated pair whose only spanning evidence is not a
+/// shown, gate-vouched cluster.
+fn unvouched_span(files: &[String], why: &str) -> Failure {
+    Failure::new(
+        "type2_recall",
+        format!(
+            "a cluster spans {files:?} but no shown gate-vouched \
+             `{CONTENT_VOUCHED_BUCKET}` cluster does — the proven rename was demoted, \
+             one of its occurrences is hidden, or its evidence did not come from the \
+             gate. Hand-verified Type-2 rename: {why}"
+        ),
+    )
+}
+
+/// The failure for a curated pair whose spanning, vouched evidence is all
+/// below the curated extent — too small to be the curated duplicate.
+fn below_curated_extent(files: &[String], widest: u64, min_nodes: u64, why: &str) -> Failure {
+    Failure::new(
+        "type2_recall",
+        format!(
+            "the widest shown gate-vouched cluster spanning {files:?} has an extent of \
+             {widest} nodes against the curated `{CURATED_EXTENT_FIELD}` floor of \
+             {min_nodes} — too small to be the curated duplicate. A boilerplate family \
+             or buried fragment touching both paths is not the module written twice \
+             (gh #439). Hand-verified Type-2 rename: {why}"
+        ),
+    )
 }
 
 /// True when the cluster's wire bucket is one of `buckets`.

@@ -141,10 +141,6 @@ fn an_empty_curated_list_asserts_nothing() {
 }
 
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #439 [CORPUS-RECALL] \
-     docs/plans/corpus-assertion.md — `check_one_curated_type2` compares curated paths but \
-     not curated extent, so the judge cannot yet fail a cluster too small to be the \
-     curated duplicate. Run via `-- --ignored`."]
 fn a_boilerplate_family_spanning_the_curated_pair_is_not_the_curated_rename() {
     // gh #439. Measured on tokio at 7bb29d4: delete the curated 395-node
     // module rename from the report and this check stays green, satisfied
@@ -176,10 +172,6 @@ fn a_boilerplate_family_spanning_the_curated_pair_is_not_the_curated_rename() {
 }
 
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #439 [CORPUS-RECALL] \
-     docs/plans/corpus-assertion.md — `check_one_curated_type2` compares curated paths but \
-     not curated extent, so the judge cannot yet fail a cluster too small to be the \
-     curated duplicate. Run via `-- --ignored`."]
 fn a_fragment_far_below_the_curated_extent_is_not_the_curated_rename() {
     // gh #439 witness 2. At 7332719 tokio reported the curated pair as a
     // 39-node fragment ranked 1628 of 2155 — a finding no user scrolls to
@@ -205,10 +197,6 @@ fn a_fragment_far_below_the_curated_extent_is_not_the_curated_rename() {
 }
 
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #439 [CORPUS-RECALL] \
-     docs/plans/corpus-assertion.md — `check_one_curated_type2` compares curated paths but \
-     not curated extent, so the judge cannot yet fail a cluster too small to be the \
-     curated duplicate. Run via `-- --ignored`."]
 fn an_entry_curating_no_extent_asserts_nothing_and_must_fail() {
     // [CORPUS-RECALL] the same stance [CORPUS-SCOPE] takes on a missing
     // `expect_files_min`: an entry that curates no extent cannot tell the

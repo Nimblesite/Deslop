@@ -171,10 +171,6 @@ fn assert_pair_verdict(report: &serde_json::Value, label: &str) -> Result<()> {
 // fully warm, a mixed pass where one file's signatures are rebuilt and
 // the other's are served from the store, and a revert that full-hits.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #433 [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE] \
-     docs/plans/fused-score-followups.md — the lsh-only pair's verdict flips between cold and \
-     warm passes because content evidence measures different denominators per pass. \
-     Run via `-- --ignored`."]
 fn the_lsh_only_pair_keeps_its_verdict_across_the_persistence_matrix() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");

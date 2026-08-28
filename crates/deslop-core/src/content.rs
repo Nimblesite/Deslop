@@ -165,15 +165,19 @@ struct DominantFamily {
 /// Measures and attaches [`ContentEvidence`] for every cluster. Runs
 /// once per render, immediately after ranking; cost is one walk per
 /// cluster member over already-normalised trees — no re-parsing.
-pub fn attach_content_evidence<S: BuildHasher>(
+/// `file_languages` selects each member's import/prologue boilerplate
+/// exclusion ([PIPELINE-BOILERPLATE-FILTER]), so the frontier measures
+/// the same population as every other axis.
+pub fn attach_content_evidence<S: BuildHasher, L: BuildHasher>(
     clusters: &mut [Cluster],
     trees: &[NormalizedNode],
     sources: &HashMap<FileId, Vec<u8>, S>,
+    file_languages: &HashMap<FileId, &'static str, L>,
 ) {
     let tree_index: HashMap<FileId, &NormalizedNode> =
         trees.iter().map(|tree| (tree.file_id, tree)).collect();
     for cluster in clusters.iter_mut() {
-        cluster.content = measure_cluster(&cluster.members, &tree_index, sources);
+        cluster.content = measure_cluster(&cluster.members, &tree_index, sources, file_languages);
         // [PERF-FLUTTER-TODO-OBSERVABILITY] Per cluster, so `trace` rather
         // than `debug`: a corpus-scale run has to stay readable and stay
         // fast at the level someone reaches for first. The shared-subtree
@@ -197,14 +201,15 @@ pub fn attach_content_evidence<S: BuildHasher>(
 
 /// Measures one cluster's [`ContentEvidence`] from its members'
 /// collapsed leaves, resolving each member's content keys exactly once.
-fn measure_cluster<S: BuildHasher>(
+fn measure_cluster<S: BuildHasher, L: BuildHasher>(
     members: &[Fingerprint],
     tree_index: &HashMap<FileId, &NormalizedNode>,
     sources: &HashMap<FileId, Vec<u8>, S>,
+    languages: &HashMap<FileId, &'static str, L>,
 ) -> ContentEvidence {
     let member_contents: Vec<Option<MemberContent>> = members
         .iter()
-        .map(|member| member_content(member, tree_index, sources))
+        .map(|member| member_content(member, tree_index, sources, languages))
         .collect();
     let canonical = member_contents.first().and_then(Option::as_ref);
     let canonical_keys = keys_of(canonical);

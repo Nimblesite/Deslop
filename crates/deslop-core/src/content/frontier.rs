@@ -192,16 +192,20 @@ pub(super) fn positional_agreement(canonical: &[LeafKey], member: &[LeafKey]) ->
 }
 
 /// One member's resolved content frontier: a key and its source range
-/// per collapsed leaf. `None` when the member's tree, source, or byte
-/// range cannot be resolved.
-pub(super) fn member_content<S: BuildHasher>(
+/// per collapsed leaf, with the member's import/prologue boilerplate
+/// excluded exactly as every other measurement axis excludes it
+/// ([PIPELINE-BOILERPLATE-FILTER]). `None` when the member's tree,
+/// source, or byte range cannot be resolved.
+pub(super) fn member_content<S: BuildHasher, L: BuildHasher>(
     member: &Fingerprint,
     tree_index: &HashMap<FileId, &NormalizedNode>,
     sources: &HashMap<FileId, Vec<u8>, S>,
+    languages: &HashMap<FileId, &'static str, L>,
 ) -> Option<MemberContent> {
     let root = tree_index.get(&member.file_id)?;
     let source = sources.get(&member.file_id)?;
-    let leaves = collapsed_leaves(root, member)?;
+    let language = languages.get(&member.file_id).map(|id| &**id);
+    let leaves = collapsed_leaves(root, member, language)?;
     let keys = leaves
         .iter()
         .map(|(kind, range)| {
