@@ -171,6 +171,8 @@ mod operator_drift_is_not_duplication;
 mod pair_consistent_signals;
 #[path = "pair_size_coherence.rs"]
 mod pair_size_coherence;
+#[path = "perf_sample.rs"]
+mod perf_sample;
 #[path = "rank_mass.rs"]
 mod rank_mass;
 #[path = "polymorphic_gate_hides_rename_clone.rs"]

@@ -60,8 +60,9 @@ const TEST_TARGET_KIND: &str = "test";
 /// Every test allowed not to run, with the issue that owns its return.
 ///
 /// Ordered by file then test name, matching `ignored_tests()`. The eleven
-/// `corpus_repos` entries are the real-repository gate (gh #422, blocked on
-/// the memory work in #166); `corpus_manifest_contract` is the curation those
+/// `corpus_repos` entries and `perf_sample` are the real-repository gate
+/// (gh #422, blocked on the memory work in #166); `corpus_manifest_contract`
+/// is the curation those
 /// same two oversized repositories block (gh #426); the two gh #369 entries
 /// are red on purpose against unfinished fusion and embedding behaviour. The
 /// two gh #432 entries are the fused-score follow-ups' own accuracy
@@ -70,7 +71,7 @@ const TEST_TARGET_KIND: &str = "test";
 ///
 /// Those counts are prose, and prose drifts. [`SKIPS_PER_ISSUE`] is what
 /// stops it drifting silently.
-const CURATED_SKIPS: [(&str, &str, u32); 16] = [
+const CURATED_SKIPS: [(&str, &str, u32); 17] = [
     (
         "crates/deslop-lsp/tests/lsp_embedding_determinism.rs",
         "lsp_embedding_refresh_is_bounded_and_reproducible",
@@ -143,6 +144,11 @@ const CURATED_SKIPS: [(&str, &str, u32); 16] = [
         "the_real_clone_outranks_every_operator_family",
         432,
     ),
+    (
+        "crates/deslop/tests/perf_sample.rs",
+        "perf_sample_bounded_scan",
+        422,
+    ),
 ];
 
 /// How many curated skips each tracking issue owns.
@@ -152,7 +158,7 @@ const CURATED_SKIPS: [(&str, &str, u32); 16] = [
 /// #432–#435 entries when the registry held nine across #432–#434 and none
 /// for #435. That is a wrong answer to the question a reader is actually
 /// asking: which plan still owns this block of silence, and how much of it.
-const SKIPS_PER_ISSUE: [(u32, usize); 4] = [(369, 2), (422, 11), (426, 1), (432, 2)];
+const SKIPS_PER_ISSUE: [(u32, usize); 4] = [(369, 2), (422, 12), (426, 1), (432, 2)];
 
 /// How many skips each issue owns, counted from the registry itself.
 fn skips_by_issue() -> BTreeMap<u32, usize> {
