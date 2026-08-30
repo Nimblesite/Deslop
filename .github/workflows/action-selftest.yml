@@ -105,7 +105,7 @@ jobs:
 
       - name: Run the action pinned by tag, with no version input
         id: derived
-        uses: Nimblesite/Deslop@v0.30.0
+        uses: Nimblesite/Deslop@v0.32.0
         with:
           path: examples/rust
           no-fail-over: "true"
