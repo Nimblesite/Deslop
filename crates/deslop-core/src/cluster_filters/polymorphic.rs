@@ -49,6 +49,14 @@ pub(crate) struct OwnedSubject {
     /// which proves a contract declares it even when that contract is
     /// outside the scan ([`carries_override_marker`]).
     pub(super) overrides: bool,
+    /// Whether the subject is the abstract declaration of the contract
+    /// itself rather than an implementation. The abstract declaration IS
+    /// the contract, so a wider view that names it alongside the
+    /// implementations qualifies for [CLONE-NOISE-POLYMORPHIC-SIGNATURE];
+    /// without this arm the implementations were convicted at method
+    /// scope while the whole-file view that also names the abstract base
+    /// escaped untouched (`python-issue-69-abstract-method`).
+    pub(super) abstract_declaration: bool,
 }
 
 /// Detects the polymorphic-signature pattern: every cluster member
@@ -112,9 +120,54 @@ pub(super) fn is_polymorphic_signature_cluster<S: BuildHasher>(
         return false;
     };
     let contracts = cache.contracts(sources, file_languages, language);
-    subjects
-        .iter()
-        .all(|subject| subject.overrides || contracts.declares(&subject.bases, &subject.name))
+    subjects.iter().all(|subject| {
+        subject.overrides
+            || subject.abstract_declaration
+            || contracts.declares(&subject.bases, &subject.name)
+    })
+}
+
+/// Whether the subject is the abstract declaration of the contract it
+/// names: a Python function carrying `@abstractmethod`, or a bare
+/// Ellipsis body (`...`). The declaration is the contract, so it
+/// satisfies the contract requirement on its own ([CLONE-NOISE-POLYMORPHIC-CONTRACT]).
+/// Other languages reach the same place through
+/// [`ContractIndex::declares`] on an implementation's bases.
+fn is_abstract_declaration(function: Node<'_>, language: &str, source: &[u8]) -> bool {
+    if language.as_bytes() == b"python" {
+        return python_abstract_method(function, source)
+            || function
+                .child_by_field_name("body")
+                .is_some_and(|body| body.named_child_count() == 1
+                    && body.named_child(0).is_some_and(|child| child.kind() == "ellipsis"));
+    }
+    false
+}
+
+/// True when the Python function carries an `abstractmethod` decorator
+/// in the decorator block immediately above it — the language's own
+/// abstract marker, read off the source lines like
+/// [`python_function_has_fixture_decorator`].
+fn python_abstract_method(function: Node<'_>, source: &[u8]) -> bool {
+    let Some(prefix) = source
+        .get(..function.start_byte())
+        .and_then(|bytes| std::str::from_utf8(bytes).ok())
+    else {
+        return false;
+    };
+    for line in prefix.lines().rev() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || !trimmed.starts_with('@') {
+            return false;
+        }
+        if trimmed
+            .strip_prefix('@')
+            .is_some_and(|callee| callee.contains("abstractmethod"))
+        {
+            return true;
+        }
+    }
+    false
 }
 
 /// blake3 digest of a body-shape stream: `Kind` as two bytes, `Symbol`
@@ -162,6 +215,7 @@ fn subject_of(snippet: &Snippet<'_>, cache: &ParseCache) -> Option<OwnedSubject>
             .unwrap_or_default(),
         shape_digest: digest,
         overrides: carries_override_marker(function, snippet.language, snippet.source),
+        abstract_declaration: is_abstract_declaration(function, snippet.language, snippet.source),
     })
 }
 

@@ -57,7 +57,7 @@ const CONST_COPY: [&str; 2] = ["retry_defaults.py", "retry_defaults_copy.py"];
 /// proof scales by `8 / (8 + 4) = 0.6667` — below the ten-anchor
 /// certification point, which is exactly what the assertion pins
 /// ([FUSED-CONTENT-GATE]).
-const CONST_TABLE_ANCHORS: usize = 8;
+const CONST_TABLE_ANCHORS: u32 = 8;
 /// The stranger whose only relation to [`CONST_COPY`] is its shape.
 const CONST_STRANGER: &str = "theme_tokens.py";
 

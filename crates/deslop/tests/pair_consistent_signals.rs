@@ -52,14 +52,18 @@ fn signal_source_paths(cluster: &Value) -> Result<(String, String)> {
         anyhow::anyhow!("signal_source must name the right occurrence index: {source:?}")
     })?;
     let occurrences = occurrences(cluster);
+    let left_index = usize::try_from(left)
+        .map_err(|error| anyhow::anyhow!("signal_source.left {left} is invalid: {error}"))?;
+    let right_index = usize::try_from(right)
+        .map_err(|error| anyhow::anyhow!("signal_source.right {right} is invalid: {error}"))?;
     let left_path = occurrence_path(
         occurrences
-            .get(usize::try_from(left).unwrap_or(usize::MAX))
+            .get(left_index)
             .ok_or_else(|| anyhow::anyhow!("signal_source.left {left} out of range"))?,
     )?;
     let right_path = occurrence_path(
         occurrences
-            .get(usize::try_from(right).unwrap_or(usize::MAX))
+            .get(right_index)
             .ok_or_else(|| anyhow::anyhow!("signal_source.right {right} out of range"))?,
     )?;
     Ok((left_path.to_owned(), right_path.to_owned()))
@@ -124,24 +128,24 @@ fn a_byte_identical_pair_reads_the_same_in_every_cluster() -> Result<()> {
     let dump_six = signal_dump(six);
     let dump_pair = signal_dump(pair);
     assert_eq!(
-        signal(pair, "structural"),
-        1.0,
+        signal(pair, "structural").to_bits(),
+        1.0_f64.to_bits(),
         "the pair cluster must render the pair's own structural: {dump_pair}"
     );
     assert_eq!(
-        signal(pair, "token_jaccard"),
-        1.0,
+        signal(pair, "token_jaccard").to_bits(),
+        1.0_f64.to_bits(),
         "the pair cluster must render the pair's own token evidence: {dump_pair}"
     );
     assert_eq!(
-        signal(six, "structural"),
-        1.0,
+        signal(six, "structural").to_bits(),
+        1.0_f64.to_bits(),
         "the six-member cluster must display the strongest admitted pair's \
          structural (the byte-identical pair), not the diluted mean: {dump_six}"
     );
     assert_eq!(
-        signal(six, "token_jaccard"),
-        1.0,
+        signal(six, "token_jaccard").to_bits(),
+        1.0_f64.to_bits(),
         "the six-member cluster must display the strongest admitted pair's \
          token evidence, not the diluted 0.8313 mean: {dump_six}"
     );
@@ -212,8 +216,8 @@ fn a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster() -> 
 
     // The pair alone: byte-identical files agree completely on content.
     assert_eq!(
-        signal(pair, "pair_agreement"),
-        VERBATIM_PAIR_AGREEMENT,
+        signal(pair, "pair_agreement").to_bits(),
+        VERBATIM_PAIR_AGREEMENT.to_bits(),
         "the byte-identical pair's own agreement must be {VERBATIM_PAIR_AGREEMENT}: {dump}",
         dump = signal_dump(pair)
     );
@@ -228,32 +232,32 @@ fn a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster() -> 
         "the content evidence must cite the same elected pair as the shape evidence"
     );
     assert_eq!(
-        signal(six, "structural"),
-        ELECTED_PAIR_EXACT_EVIDENCE,
+        signal(six, "structural").to_bits(),
+        ELECTED_PAIR_EXACT_EVIDENCE.to_bits(),
         "the elected pair is structurally exact: {}",
         signal_dump(six)
     );
     assert_eq!(
-        signal(six, "token_jaccard"),
-        ELECTED_PAIR_EXACT_EVIDENCE,
+        signal(six, "token_jaccard").to_bits(),
+        ELECTED_PAIR_EXACT_EVIDENCE.to_bits(),
         "the elected pair has exact normalized token evidence: {}",
         signal_dump(six)
     );
     assert_eq!(
-        signal(six, "embedding_cos"),
-        EMBEDDINGS_OFF_EVIDENCE,
+        signal(six, "embedding_cos").to_bits(),
+        EMBEDDINGS_OFF_EVIDENCE.to_bits(),
         "an absent embedding input must render zero: {}",
         signal_dump(six)
     );
     assert_eq!(
-        signal(six, "pair_agreement"),
-        ELECTED_PAIR_EXACT_EVIDENCE,
+        signal(six, "pair_agreement").to_bits(),
+        ELECTED_PAIR_EXACT_EVIDENCE.to_bits(),
         "cluster members must not dilute the elected pair's byte agreement: {}",
         signal_dump(six)
     );
     assert_eq!(
-        signal(six, "pair_rename_consistency"),
-        ELECTED_PAIR_EXACT_EVIDENCE,
+        signal(six, "pair_rename_consistency").to_bits(),
+        ELECTED_PAIR_EXACT_EVIDENCE.to_bits(),
         "the elected pair's certified rename evidence must remain attached to that pair: {}",
         signal_dump(six)
     );

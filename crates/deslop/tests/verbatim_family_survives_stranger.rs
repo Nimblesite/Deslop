@@ -90,20 +90,20 @@ fn a_verbatim_family_survives_an_unrelated_stranger() -> Result<()> {
     //    handed on untouched, not split.
     let whole_file = expect_cluster_id(&report, WHOLE_FILE_CLUSTER_ID)?;
     assert_eq!(
-        cluster_bucket(&whole_file),
+        cluster_bucket(whole_file),
         "nearly_identical",
         "the whole-file closure is nearly_identical — the Identical route \
          is downgraded because the stranger's raw bytes differ \
          ([CLONE-BUCKETS-IDENTICAL]): {}",
-        signal_dump(&whole_file)
+        signal_dump(whole_file)
     );
     assert_eq!(
-        occurrences(&whole_file).len(),
+        occurrences(whole_file).len(),
         5,
         "the closure holds the four copies plus the stranger"
     );
     assert_eq!(
-        cluster_file_set(&whole_file),
+        cluster_file_set(whole_file),
         COPY_FILES
             .iter()
             .map(|path| (*path).to_owned())
@@ -118,45 +118,47 @@ fn a_verbatim_family_survives_an_unrelated_stranger() -> Result<()> {
     //    byte-identical pair's 1.0/1.0 evidence, named source, so the
     //    stranger's presence demotes nothing (AC6).
     assert_eq!(
-        signal(&whole_file, "structural"),
-        1.0,
+        signal(whole_file, "structural").to_bits(),
+        1.0_f64.to_bits(),
         "the elected pair's structural evidence"
     );
     assert_eq!(
-        signal(&whole_file, "token_jaccard"),
-        1.0,
+        signal(whole_file, "token_jaccard").to_bits(),
+        1.0_f64.to_bits(),
         "the elected pair's token evidence"
     );
     assert_eq!(
-        signal(&whole_file, "pair_agreement"),
-        1.0,
+        signal(whole_file, "pair_agreement").to_bits(),
+        1.0_f64.to_bits(),
         "the elected pair is byte-identical, so its content agreement \
          saturates"
     );
     assert_eq!(
-        signal(&whole_file, "pair_rename_consistency"),
-        1.0,
+        signal(whole_file, "pair_rename_consistency").to_bits(),
+        1.0_f64.to_bits(),
         "the elected pair is byte-identical, so its rename consistency \
          saturates"
     );
-    let source = field(&whole_file, "signal_source");
-    let left_index = source
+    let source = field(whole_file, "signal_source");
+    let left = source
         .get("left")
         .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow::anyhow!("signal_source.left must exist"))?
-        as usize;
-    let right_index = source
+        .ok_or_else(|| anyhow::anyhow!("signal_source.left must exist"))?;
+    let right = source
         .get("right")
         .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow::anyhow!("signal_source.right must exist"))?
-        as usize;
+        .ok_or_else(|| anyhow::anyhow!("signal_source.right must exist"))?;
+    let left_index = usize::try_from(left)
+        .map_err(|error| anyhow::anyhow!("signal_source.left {left} is invalid: {error}"))?;
+    let right_index = usize::try_from(right)
+        .map_err(|error| anyhow::anyhow!("signal_source.right {right} is invalid: {error}"))?;
     let left = occurrence_path(
-        occurrences(&whole_file)
+        occurrences(whole_file)
             .get(left_index)
             .ok_or_else(|| anyhow::anyhow!("signal_source.left {left_index} out of range"))?,
     )?;
     let right = occurrence_path(
-        occurrences(&whole_file)
+        occurrences(whole_file)
             .get(right_index)
             .ok_or_else(|| anyhow::anyhow!("signal_source.right {right_index} out of range"))?,
     )?;
@@ -171,12 +173,12 @@ fn a_verbatim_family_survives_an_unrelated_stranger() -> Result<()> {
     //    bucket its raw slices earn.
     let nested = expect_cluster_id(&report, NESTED_BLOCK_CLUSTER_ID)?;
     assert_eq!(
-        cluster_bucket(&nested),
+        cluster_bucket(nested),
         BYTE_PROOF_BUCKET,
         "the copies' byte-identical block is byte-proof identical"
     );
     assert_eq!(
-        cluster_file_set(&nested),
+        cluster_file_set(nested),
         COPY_FILES.iter().map(|path| (*path).to_owned()).collect(),
         "the nested block spans the four copies alone"
     );
@@ -186,9 +188,7 @@ fn a_verbatim_family_survives_an_unrelated_stranger() -> Result<()> {
     //    can never manufacture, whatever the majority around it
     //    ([CLONE-BUCKETS-IDENTICAL]).
     for cluster in clusters(&report) {
-        let has_stranger = occurrences(cluster)
-            .iter()
-            .any(|occurrence| is_stranger(occurrence));
+        let has_stranger = occurrences(cluster).iter().any(is_stranger);
         if has_stranger {
             assert_ne!(
                 cluster_bucket(cluster),
@@ -205,8 +205,7 @@ fn a_verbatim_family_survives_an_unrelated_stranger() -> Result<()> {
 /// Whether an occurrence's file is the stranger.
 fn is_stranger(occurrence: &Value) -> bool {
     occurrence_path(occurrence)
-        .map(|path| path.rsplit('/').next().unwrap_or_default() == STRANGER_FILE)
-        .unwrap_or(false)
+        .is_ok_and(|path| path.rsplit('/').next().unwrap_or_default() == STRANGER_FILE)
 }
 
 /// Whether a rendered path names one of the verbatim copies.

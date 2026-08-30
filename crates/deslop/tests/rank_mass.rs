@@ -58,10 +58,7 @@ fn mass_outranks_confidence_when_mass_is_larger() -> Result<()> {
     let report = run_rank_mass_report()?;
 
     let mid = cluster_by_id(&report, MID_CLUSTER_ID).ok_or_else(|| {
-        anyhow::anyhow!(
-            "the five-member cluster {} must exist: {report:#}",
-            MID_CLUSTER_ID
-        )
+        anyhow::anyhow!("the five-member cluster {MID_CLUSTER_ID} must exist: {report:#}")
     })?;
     let big = cluster_by_id(&report, BIG_CLUSTER_ID)
         .ok_or_else(|| anyhow::anyhow!("the pair cluster {BIG_CLUSTER_ID} must exist"))?;

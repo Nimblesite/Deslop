@@ -45,7 +45,7 @@ pub(crate) const CALL_STRANGER: &str = "refund_emitter.py";
 /// identifiers to clear the ten-anchor certification point, so the rename
 /// proof certifies to `1.0` ([FUSED-CONTENT-GATE]). Ten is the floor the
 /// anchor mass reaches `content_gate.support_floor` at — `10 / 14 ≥ 0.70`.
-pub(crate) const CALL_PAIR_ANCHORS: usize = 10;
+pub(crate) const CALL_PAIR_ANCHORS: u32 = 10;
 
 /// Lines each copy of the call run covers — the whole five-line `emit`
 /// function, not only the four `persist` calls inside it.
@@ -85,8 +85,9 @@ const VERBATIM_PAIR_SIGNALS: &[(&str, f64)] = &[
 /// ([FUSED-CONTENT-GATE]). The ten-anchor certification point is where the
 /// mass reaches `content_gate.support_floor` (0.70) — the same operating
 /// point `deslop_core::buckets::CONTENT_SUPPORT_FLOOR` names.
-pub(crate) fn rename_consistency_for(anchors: usize) -> f64 {
-    let weight = (anchors as f64) / ((anchors as f64) + 4.0);
+pub(crate) fn rename_consistency_for(anchors: u32) -> f64 {
+    let anchor_mass = f64::from(anchors);
+    let weight = anchor_mass / (anchor_mass + 4.0);
     if weight >= 0.70 {
         1.0
     } else {

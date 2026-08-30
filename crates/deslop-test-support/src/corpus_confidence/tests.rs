@@ -64,8 +64,6 @@ fn with_embedding(bucket: &str, structural: f64, token: f64, embedding: f64, fus
     })
 }
 
-/// The shipped arithmetic: the strongest single axis, bounded.
-
 /// The same cluster with every occurrence hidden, so it renders nothing.
 fn hide(mut cluster: Value) -> Value {
     if let Some(entry) = cluster.get_mut("occurrences") {

@@ -23,10 +23,12 @@ use std::{collections::HashMap, hash::BuildHasher, num::NonZeroUsize};
 
 use crate::{
     ast::NormalizedNode,
-    buckets::CONTENT_SUPPORT_FLOOR,
     content::pair_content_agreement,
     fingerprint::Fingerprint,
-    pair::{crosses_files, rescue_eligible, CandidatePair, SHARED_SUBTREE_MIN_OVERLAP},
+    pair::{
+        crosses_files, rescue_eligible, CandidatePair, RESCUE_MIN_CONTENT_AGREEMENT,
+        SHARED_SUBTREE_MIN_OVERLAP,
+    },
     state::FileId,
 };
 
@@ -168,8 +170,8 @@ fn report_shards(shards: &[(RescueTally, OverlapMeasurer<'_>)]) {
 /// overlap floor is a *structural* claim and the token corroboration a
 /// *token* claim, and neither knows whether the endpoints' collapsed
 /// leaves agree. When the pair's own content agreement falls below
-/// [`CONTENT_SUPPORT_FLOOR`] the rescue refuses it — the overlap is
-/// left unset so survival drops the pair exactly as if the rescue had
+/// [`RESCUE_MIN_CONTENT_AGREEMENT`] the rescue refuses it — the overlap
+/// is left unset so survival drops the pair exactly as if the rescue had
 /// never measured it.
 fn measure_one<S: BuildHasher, L: BuildHasher>(
     pair: &mut CandidatePair,
@@ -195,7 +197,8 @@ fn measure_one<S: BuildHasher, L: BuildHasher>(
     pair.shared_subtree_overlap = measurer.rescue_overlap(left, right);
     let clears_overlap = pair.shared_subtree_overlap >= SHARED_SUBTREE_MIN_OVERLAP;
     let content_agreement = pair_content_agreement(left, right, tree_index, sources, languages);
-    let clears_content = !clears_overlap || content_agreement >= CONTENT_SUPPORT_FLOOR;
+    let clears_content =
+        !clears_overlap || content_agreement >= RESCUE_MIN_CONTENT_AGREEMENT;
     tracing::trace!(
         left_file = ?left.file_id,
         right_file = ?right.file_id,

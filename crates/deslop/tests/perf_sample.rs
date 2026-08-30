@@ -27,11 +27,13 @@
 
 use std::{
     env, fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     thread,
     time::{Duration, Instant},
 };
+
+use anyhow::{Context, Result};
 
 /// Sample window when `DESLOP_PERF_SECONDS` is unset.
 const DEFAULT_SECONDS: u64 = 10;
@@ -54,13 +56,13 @@ const SCAN_FLAGS: [&str; 7] = [
             the release binary and a clone on disk (default: the pinned flutter checkout); \
             never finishes the scan, so the release gate compiles this target and leaves it \
             ignored. Run via `cargo test --release -p deslop --test perf_sample -- --ignored --nocapture`"]
-fn perf_sample_bounded_scan() {
-    let root = scan_root();
+fn perf_sample_bounded_scan() -> Result<()> {
+    let root = scan_root()?;
     let seconds = env::var("DESLOP_PERF_SECONDS")
         .ok()
         .and_then(|value| value.parse().ok())
         .unwrap_or(DEFAULT_SECONDS);
-    let output = repo_root().join("target").join("perf-sample");
+    let output = repo_root()?.join("target").join("perf-sample");
 
     // A fresh logs dir keeps "newest log file" unambiguous when several
     // samples are taken in a row: each run gets its own prefix.
@@ -70,7 +72,7 @@ fn perf_sample_bounded_scan() {
     let output = output.with_extension(prefix_stamp.to_string());
 
     let started = Instant::now();
-    let mut child = Command::new(release_binary())
+    let mut child = Command::new(release_binary()?)
         .arg(&root)
         .arg("--output")
         .arg(&output)
@@ -80,14 +82,14 @@ fn perf_sample_bounded_scan() {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .expect("spawn release deslop binary");
+        .context("spawn release deslop binary")?;
 
     // Poll for early exit instead of sleeping the whole window: a scan
     // that finishes inside the window should report its own wall time,
     // not the window.
     let deadline = Instant::now() + Duration::from_secs(seconds);
     let exited = loop {
-        if let Some(_status) = child.try_wait().expect("child pollable") {
+        if let Some(_status) = child.try_wait().context("poll sample scan")? {
             break true;
         }
         if Instant::now() >= deadline {
@@ -98,13 +100,14 @@ fn perf_sample_bounded_scan() {
     let status = if exited {
         None
     } else {
-        child.kill().expect("kill sample scan");
+        child.kill().context("kill sample scan")?;
         Some(seconds)
     };
     let wall = started.elapsed();
 
-    let log = newest_log(&output);
-    let text = fs::read_to_string(&log).unwrap_or_default();
+    let log = newest_log(&output)?;
+    let text =
+        fs::read_to_string(&log).with_context(|| format!("read sample log {}", log.display()))?;
     println!("perf sample: log={} bytes={}", log.display(), text.len());
 
     println!("perf sample: root={}", root.display());
@@ -122,12 +125,13 @@ fn perf_sample_bounded_scan() {
         // break the parser.
         if let Some(rest) = after_marker(line, "fingerprint corpus progress ") {
             let fields = parse_fields(rest);
-            let files_done = fields["files_done"];
-            let elapsed_ms = fields["elapsed_ms"];
-            let rate = files_per_second(files_done, elapsed_ms);
+            let files_done = required_field(&fields, "files_done")?;
+            let files_total = required_field(&fields, "files_total")?;
+            let fingerprints = required_field(&fields, "fingerprints")?;
+            let elapsed_ms = required_field(&fields, "elapsed_ms")?;
+            let rate = files_per_second(files_done, elapsed_ms)?;
             println!(
-                "perf sample: progress files_done={files_done}/{} fingerprints={} elapsed_ms={elapsed_ms} rate={rate:.1} files/s",
-                fields["files_total"], fields["fingerprints"]
+                "perf sample: progress files_done={files_done}/{files_total} fingerprints={fingerprints} elapsed_ms={elapsed_ms} rate={rate:.1} files/s"
             );
             last_progress = Some((files_done, elapsed_ms));
         } else if let Some(rest) = after_marker(line, "fingerprint corpus built ") {
@@ -146,26 +150,29 @@ fn perf_sample_bounded_scan() {
         text.len()
     );
     if let Some((files_done, elapsed_ms)) = last_progress {
-        let rate = files_per_second(files_done, elapsed_ms);
+        let rate = files_per_second(files_done, elapsed_ms)?;
         println!(
             "perf sample: LAST files_done={files_done} elapsed_ms={elapsed_ms} rate={rate:.1} files/s"
         );
     }
+    Ok(())
 }
 
 /// Returns the text after `marker` anywhere in `line`, so record parsing does
 /// not depend on the timestamp/level prefix width.
 fn after_marker<'a>(line: &'a str, marker: &str) -> Option<&'a str> {
     line.find(marker)
-        .map(|position| &line[position + marker.len()..])
+        .and_then(|position| position.checked_add(marker.len()))
+        .and_then(|start| line.get(start..))
 }
 
 /// `files/s` from a count and a millisecond elapsed, guarding the zero case.
-fn files_per_second(files: u64, elapsed_ms: u64) -> f64 {
+fn files_per_second(files: u64, elapsed_ms: u64) -> Result<f64> {
     if elapsed_ms == 0 {
-        return 0.0;
+        return Ok(0.0);
     }
-    f64::from(u32::try_from(files).unwrap_or(u32::MAX)) / (elapsed_ms as f64 / 1000.0)
+    let files = u32::try_from(files).context("sample file count exceeds u32")?;
+    Ok(f64::from(files) / Duration::from_millis(elapsed_ms).as_secs_f64())
 }
 
 /// Parses space-separated `key=value` tokens into a name→u64 map. Keys with
@@ -177,59 +184,70 @@ fn parse_fields(rest: &str) -> std::collections::HashMap<&str, u64> {
         .collect()
 }
 
+/// Required numeric field from one structured progress record.
+fn required_field(fields: &std::collections::HashMap<&str, u64>, name: &str) -> Result<u64> {
+    fields
+        .get(name)
+        .copied()
+        .with_context(|| format!("progress record missing {name}"))
+}
+
 /// Repo root derived from this test's manifest location.
-fn repo_root() -> PathBuf {
+fn repo_root() -> Result<PathBuf> {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("..")
         .canonicalize()
-        .expect("repo root exists")
+        .context("repo root exists")
 }
 
 /// Scan root from `DESLOP_PERF_ROOT`, else the pinned flutter corpus.
-fn scan_root() -> PathBuf {
+fn scan_root() -> Result<PathBuf> {
     if let Some(root) = env::var_os("DESLOP_PERF_ROOT") {
-        return PathBuf::from(root);
+        return Ok(PathBuf::from(root));
     }
-    let root = repo_root().join(".corpus").join("flutter-3.38.9");
-    assert!(
+    let root = repo_root()?.join(".corpus").join("flutter-3.38.9");
+    anyhow::ensure!(
         root.is_dir(),
         "flutter corpus clone missing at {} — run `node scripts/corpus/fetch-corpus.mjs flutter`",
         root.display()
     );
-    root
+    Ok(root)
 }
 
 /// Release binary path, mirroring the corpus harness's expectation.
-fn release_binary() -> PathBuf {
-    let binary = repo_root()
+fn release_binary() -> Result<PathBuf> {
+    let binary = repo_root()?
         .join("target")
         .join("release")
         .join(format!("deslop{}", std::env::consts::EXE_SUFFIX));
-    assert!(
+    anyhow::ensure!(
         binary.is_file(),
         "release binary missing at {} — build it first (`cargo build --release -p deslop`)",
         binary.display()
     );
-    binary
+    Ok(binary)
 }
 
 /// Newest `deslop-*.log` under the run's logs dir. The log file name is the
 /// process start epoch second, so newest-by-name is newest-by-start.
-fn newest_log(output_prefix: &PathBuf) -> PathBuf {
+fn newest_log(output_prefix: &Path) -> Result<PathBuf> {
     // The CLI puts logs under `<dir of --output>/logs`, named
     // `deslop-<epoch>.log` (see `logging.rs` / `paths::logs_dir`).
     let logs_dir = output_prefix
         .parent()
-        .map(|parent| parent.join("logs"))
-        .unwrap_or_else(|| PathBuf::from("logs"));
+        .context("sample output prefix must have a parent")?
+        .join("logs");
     let mut newest: Option<PathBuf> = None;
-    for entry in fs::read_dir(&logs_dir).expect("logs dir readable") {
-        let path = entry.expect("dir entry").path();
+    for entry in fs::read_dir(&logs_dir).context("logs dir readable")? {
+        let path = entry.context("read logs dir entry")?.path();
         let is_log = path
             .file_name()
             .and_then(|name| name.to_str())
-            .is_some_and(|name| name.starts_with("deslop-") && name.ends_with(".log"));
+            .is_some_and(|name| name.starts_with("deslop-"))
+            && path
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("log"));
         if !is_log {
             continue;
         }
@@ -241,5 +259,5 @@ fn newest_log(output_prefix: &PathBuf) -> PathBuf {
             newest = Some(path);
         }
     }
-    newest.unwrap_or_else(|| logs_dir.join("deslop-0.log"))
+    newest.with_context(|| format!("no deslop log in {}", logs_dir.display()))
 }
