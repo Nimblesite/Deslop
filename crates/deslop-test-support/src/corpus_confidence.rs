@@ -3,7 +3,7 @@
 //! curated `type2_recall`.
 //!
 //! Both exist because the synthetic fixtures that pin
-//! [FUSION-STRATEGY-BOUNDED-MAX] and [FUSION-CONTENT-GATE] are built to
+//! [FUSED-STRATEGY-BOUNDED-MAX] and [FUSED-CONTENT-GATE] are built to
 //! demonstrate a mechanism, not to survive a real corpus. A fixture proves the
 //! gate *can* separate a proven rename from sibling scaffolding on five files
 //! the author chose; it says nothing about whether the operating point holds
@@ -65,7 +65,7 @@ const BOUNDED_MAX_EPSILON: f64 = 1e-6;
 const DEMOTED_BUCKETS: [&str; 2] = ["structural_only", "loosely_similar"];
 
 /// [CORPUS-BASELINE] `fused_bounded_max` — every rendered confidence must obey
-/// [FUSION-STRATEGY-BOUNDED-MAX].
+/// [FUSED-STRATEGY-BOUNDED-MAX].
 ///
 /// This is gh #343 pinned as a formula, per cluster, rather than as a
 /// distribution. `PairScore::fused` summed three correlated axes and clamped,
@@ -108,7 +108,7 @@ pub fn check_fused_bounded_max(report: &Value, failures: &mut Vec<Failure>) {
         "fused_bounded_max",
         format!(
             "{} of {} visible clusters render a confidence above the strongest axis they were \
-             computed from, which [FUSION-STRATEGY-BOUNDED-MAX] forbids — the first is {first} \
+             computed from, which [FUSED-STRATEGY-BOUNDED-MAX] forbids — the first is {first} \
              (gh #343: the sum-then-clamp arm renders exactly this)",
             breaches.len(),
             clusters.len(),
@@ -141,7 +141,7 @@ fn bounded_max_breach(cluster: &Value) -> Option<String> {
 /// This is a population-shape heuristic, **not** a recall assertion — it
 /// identifies no expected pair and reads no curated ground truth (that is
 /// [`check_type2_curated_recall`]'s job). What it catches is the catastrophic
-/// operating-point failure [FUSION-CONTENT-GATE] makes possible:
+/// operating-point failure [FUSED-CONTENT-GATE] makes possible:
 /// `route_shape_identical` demotes a shape-identical cluster whose content
 /// evidence is absent; set the operating point slightly too high and every
 /// genuine Type-2 rename in a real repository sinks into the demoted tier

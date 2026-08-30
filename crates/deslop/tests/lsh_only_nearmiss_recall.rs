@@ -16,7 +16,7 @@
 //!
 //! **The precision half lives in `issue_331_336_shape_only_saturation.rs`
 //! and this file is its counterweight.** Row 4 admits on token overlap
-//! alone, so it passes through [FUSION-CONTENT-GATE] like every other
+//! alone, so it passes through [FUSED-CONTENT-GATE] like every other
 //! shape-saturating route: a framework-mandated declaration family
 //! measures the same anchor-free triple (`structural=0.00,
 //! token_jaccard=0.93` across six distinct Flutter widgets) and is
@@ -82,7 +82,7 @@ const LEFT_SOURCE: &str = "import os\nimport sys\n\n\ndef reconcile(entries, flo
 /// the `LSH_ONLY_MIN_JACCARD = 0.90` floor.
 ///
 /// The reordered pair itself still shares every statement subtree, so it
-/// measures a graded overlap rather than nothing ([FUSION-SHARED-SUBTREE]);
+/// measures a graded overlap rather than nothing ([FUSED-SHARED-SUBTREE]);
 /// what it does not have is an *exact* anchor, which is what makes the
 /// token axis the only route that admits it.
 const RIGHT_SOURCE: &str = "import os\nimport sys\n\n\ndef settle(entries, floor):\n\
@@ -231,7 +231,7 @@ fn right_file_fingerprint_count(tmp: &Path) -> Result<u64> {
 
 /// The agent-facing act-now line ([FUSED-THRESHOLD]) this pair must
 /// stay at or above: a verbatim statement-reorder clone is duplication
-/// an agent may act on, and [FUSION-CONTENT-GATE] measures real content
+/// an agent may act on, and [FUSED-CONTENT-GATE] measures real content
 /// agreement here, so the gate that demotes shape-only families
 /// ([CLONE-NOISE-DART-WIDGET-SCAFFOLD], #331) must leave this pair alone.
 const ACT_NOW_FUSED: f64 = 0.85;
@@ -252,7 +252,7 @@ fn assert_signal_triple(cluster: &serde_json::Value) {
     // "no structural evidence" — which was only ever true because
     // `structural` was Merkle equality. A statement reorder shares every
     // statement subtree; only their order differs, so it measures real
-    // overlap ([FUSION-SHARED-SUBTREE]). Asserting the zero asserted that
+    // overlap ([FUSED-SHARED-SUBTREE]). Asserting the zero asserted that
     // the shared statements did not exist.
     assert!(
         structural >= deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,

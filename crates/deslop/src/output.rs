@@ -232,7 +232,7 @@ pub(crate) fn load_report(path: &std::path::Path) -> Result<Report> {
     // derived fields — rank, band, shape, occurrence count, fused gate,
     // evidence sentence — are the engine's to state, and a report written
     // before one of them existed must not render a zero
-    // ([SEVERITY-BAND], [FUSION-CONTENT-GATE]).
+    // ([SEVERITY-BAND], [FUSED-CONTENT-GATE]).
     deslop_core::report_restamp::restamp_derived_fields(&mut report);
     Ok(report)
 }

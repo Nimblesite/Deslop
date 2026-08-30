@@ -1,11 +1,11 @@
-//! E2E regression for GH #343 [FUSION-STRATEGY-BOUNDED-MAX]: sum-then-clamp
+//! E2E regression for GH #343 [FUSED-STRATEGY-BOUNDED-MAX]: sum-then-clamp
 //! fusion saturates on correlated mid-band evidence.
 //!
 //! `PairScore::fused()` sums three correlated views of the same code and
 //! clamps to `[0, 1]`. A cluster whose mean signals sum past 1.0 renders
 //! `fused = 1.000` — a claim of proven duplication — even though no single
 //! axis saturated and no occurrence pair is byte-identical. The
-//! [FUSION-CONTENT-GATE] rescues only the two saturating corners
+//! [FUSED-CONTENT-GATE] rescues only the two saturating corners
 //! (`structural >= 0.99`, `token_jaccard >= 0.95`); the mid band passes
 //! under the gate untouched.
 //!
@@ -82,14 +82,14 @@ fn assert_mid_band_evidence(scan_root: &Path, cluster: &Value) -> Result<()> {
 // rendered confidence. Today `fused()` clamps 0.00 + 0.30 + 0.95 to a
 // flat 1.000 — indistinguishable from a byte-proven verbatim copy.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #369 [FUSION-SHARED-SUBTREE] \
+#[ignore = "[SKIP-UNFINISHED] GH #369 [FUSED-SHARED-SUBTREE] \
             docs/plans/rename-recall-plan.md — RED ON PURPOSE, and materially closer than \
             it was. \
             The two embedding-only false positives are gone and the real \
             clone is found — `cluster_count` is now the expected 1, where \
             it used to be 2 with the genuine pair hidden. Two expectations \
             remain unmet, both downstream of `structural` becoming a \
-            measurement ([FUSION-SHARED-SUBTREE]): one cluster still routes \
+            measurement ([FUSED-SHARED-SUBTREE]): one cluster still routes \
             to hidden where this wants none, and the pair is asserted to be \
             `same_behavior` when ledger_a/ledger_c differ only by a rename \
             and one redundant paren — measured `structural = 0.997`, which \
@@ -224,7 +224,7 @@ fn byte_identical_pair_still_earns_full_confidence_under_the_bound() -> Result<(
 // evidence, no structural anchor". The anchor was reported as absent
 // because `structural` was Merkle equality and the stray paren rehashed
 // the root, so a pair sharing 99.7% of its AST measured exactly zero
-// ([FUSION-SHARED-SUBTREE], gh #408). Asserting invisibility asserted
+// ([FUSED-SHARED-SUBTREE], gh #408). Asserting invisibility asserted
 // that false negative.
 //
 // What #343 actually quarantined is *manufactured* confidence: a sum
@@ -263,7 +263,7 @@ fn without_embeddings_the_mid_band_pair_is_visible_without_saturating() -> Resul
     let fused = signal(cluster, "fused");
     assert!(
         fused <= strongest + f64::EPSILON,
-        "[FUSION-STRATEGY-BOUNDED-MAX] fused must never exceed the strongest axis: \
+        "[FUSED-STRATEGY-BOUNDED-MAX] fused must never exceed the strongest axis: \
          fused={fused}, strongest={strongest}"
     );
     assert!(

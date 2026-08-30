@@ -1,6 +1,6 @@
 # Unhardcoding the tuning levers
 
-Turns every compiled accuracy threshold into a configuration item with the current value as its default. Specified by [`fusion.md §FUSION-TUNING-LEVERS`](../specs/fusion.md#fusion-tuning-levers) (the levers and their provenance) and [`exclusion.md §[tuning]`](../specs/exclusion.md) (the file surface, validation, precedence, cache key, and report declaration).
+Turns every compiled accuracy threshold into a configuration item with the current value as its default. Specified by [`fused.md §FUSION-TUNING-LEVERS`](../specs/fused.md#fusion-tuning-levers) (the levers and their provenance) and [`exclusion.md §[tuning]`](../specs/exclusion.md) (the file surface, validation, precedence, cache key, and report declaration).
 
 **The whole migration is behaviour-preserving.** Every phase lands with the same reports it started with. No default moves in this work stream; a default change is a separate, test-first change with its own corpus measurement.
 
@@ -28,7 +28,7 @@ Exit: `TuningPolicy` exists, is validated, and is unused by the pipeline.
 
 ## Phase 2 — name the unnamed literals
 
-Nothing inline can be configured, so the seven sites in the [FUSION-TUNING-LEVERS] unnamed table become `DEFAULT_*` constants with provenance doc comments first. The four repetitions of the shape-identical `0.99` collapse to one constant — they are one concept written four times, and today a change to one is a silent divergence.
+Nothing inline can be configured, so the seven sites in the [FUSED-TUNING-LEVERS] unnamed table become `DEFAULT_*` constants with provenance doc comments first. The four repetitions of the shape-identical `0.99` collapse to one constant — they are one concept written four times, and today a change to one is a silent divergence.
 
 This phase changes no value and adds no plumbing. Goldens prove it.
 
@@ -44,7 +44,7 @@ Tests: a fixture where a pair sits between two `fused_threshold` values, asserte
 
 The widest blast radius: `classify_signals`, `is_structural_only_signals`, `lacks_content_support`, `has_saturating_shape_evidence`, and `attach_content_evidence` all take the policy, and `classify_signals` has many callers.
 
-Tests: the routing-line fixtures exist and are asserted by bucket and rank. Each gains a tuned variant asserting a cluster crosses a bucket boundary when and only when its governing key moves — bucket and ranking position all asserted, since content evidence ([FUSION-CONTENT-GATE]) makes them move together.
+Tests: the routing-line fixtures exist and are asserted by bucket and rank. Each gains a tuned variant asserting a cluster crosses a bucket boundary when and only when its governing key moves — bucket and ranking position all asserted, since content evidence ([FUSED-CONTENT-GATE]) makes them move together.
 
 Watch for the #197 and #331 fixtures specifically: they are what the defaults are calibrated against, so they must hold at defaults and shift predictably off them.
 
@@ -72,7 +72,7 @@ Docs: `.deslop.toml` reference on the site, and `REPORTING-CONTEXT.md` so agents
 
 Six defaults carry **unrecorded** provenance — `embedding_top_k`, `embedding_exact_pair_limit`, `type4_embedding_floor`, `low_structural_type4_ceiling`, `low_structural_type4_weight`, `proven_identical_token_floor` — and two more are **derived but unswept**: `literal_table_min_fraction` and `literal_table_min_literals`, where the argument fixes the direction but not the number.
 
-Now that they are levers, each can be swept against the pinned corpus and resolved to a citation, a defect fixture, or a measured operating point recorded in the [FUSION-TUNING-LEVERS] ledger. Any value the sweep shows to be wrong is a defect under the strict accuracy rule — a failing test and a quarantine, not a quiet edit in this plan.
+Now that they are levers, each can be swept against the pinned corpus and resolved to a citation, a defect fixture, or a measured operating point recorded in the [FUSED-TUNING-LEVERS] ledger. Any value the sweep shows to be wrong is a defect under the strict accuracy rule — a failing test and a quarantine, not a quiet edit in this plan.
 
 ## Ordering
 

@@ -3,7 +3,7 @@ use super::support::*;
 // Two Rust files that are renamed (Type-2) clones of one function: the
 // copy renames the function and its parameter but keeps the body's
 // locals, so most collapsed-leaf content still agrees and the pair
-// routes to `nearly_identical` under [FUSION-CONTENT-GATE]. A fully
+// routes to `nearly_identical` under [FUSED-CONTENT-GATE]. A fully
 // renamed copy carries no content evidence and honestly routes to
 // `structural_only` instead. Shared with `bucket_groups` as its
 // nearly-identical seed pair.

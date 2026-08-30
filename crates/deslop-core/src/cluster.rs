@@ -1,7 +1,7 @@
 //! Clone cluster materialisation and ranking.
 //!
 //! Implements [PIPELINE-CLUSTER-EXACT], the fused-clustering output of
-//! [FUSION-STRATEGY-BOUNDED-MAX], and the "worst offenders first" scoring of
+//! [FUSED-STRATEGY-BOUNDED-MAX], and the "worst offenders first" scoring of
 //! [PIPELINE-RANK-WORST-FIRST]. Consumes [`FusedCluster`]s from
 //! [`crate::pair::cluster_by_transitive_closure`] — the two inputs
 //! contributing to those clusters are (a) exact structural buckets per
@@ -31,7 +31,7 @@ pub mod benchmark;
 /// The authored declaration an occurrence sits inside
 /// ([PIPELINE-CLUSTER-EXACT-SCOPE]).
 mod scope;
-/// Rendered-truth signal measurement ([FUSION-CLUSTER-SIGNALS]).
+/// Rendered-truth signal measurement ([FUSED-CLUSTER-SIGNALS]).
 mod signals;
 /// Cross-cluster subsumption ([PIPELINE-CLUSTER-SUBSUME]).
 mod subsume;
@@ -52,7 +52,7 @@ pub struct Cluster {
     pub members: Vec<Fingerprint>,
     /// Weight from [PIPELINE-RANK-WORST-FIRST]. Higher = worse offender.
     pub weight: f64,
-    /// Measured signal breakdown ([FUSION-CLUSTER-SIGNALS]): per axis,
+    /// Measured signal breakdown ([FUSED-CLUSTER-SIGNALS]): per axis,
     /// the strongest measurement any admitted pair earned on that
     /// axis — Merkle-hash equality / shared-subtree overlap for
     /// `structural`, `MinHash` Jaccard for `token_jaccard`, vector
@@ -61,11 +61,11 @@ pub struct Cluster {
     pub signals: PairScore,
     /// The admitted pair — as positions into [`Self::members`], which
     /// is the rendered occurrence order — whose evidence the signals
-    /// display ([FUSION-CLUSTER-SIGNALS] gh #458). `None` when no
+    /// display ([FUSED-CLUSTER-SIGNALS] gh #458). `None` when no
     /// admitted pair survives the same-file overlap collapse.
     pub signal_source: Option<(usize, usize)>,
     /// Measured raw-content evidence across the members'
-    /// normalisation-collapsed leaves ([FUSION-CONTENT-GATE]):
+    /// normalisation-collapsed leaves ([FUSED-CONTENT-GATE]):
     /// pooled byte agreement, Type-2 rename consistency, and literal
     /// dominance ([CLONE-NOISE-LITERAL-TABLE]). Starts
     /// [`ContentEvidence::unmeasured`];
@@ -87,10 +87,10 @@ const MIN_REPORTABLE_MEMBERS: usize = 2;
 /// how the cluster was discovered.
 ///
 /// The signal breakdown is measured between each cluster's rendered
-/// occurrences ([FUSION-CLUSTER-SIGNALS]) from the inputs' `signatures`
+/// occurrences ([FUSED-CLUSTER-SIGNALS]) from the inputs' `signatures`
 /// and `embedding_vectors`, and each cluster's [`ContentEvidence`] is
 /// measured from `trees` and `sources` **before** cross-cluster
-/// subsumption elects the surviving view ([FUSION-CONTENT-GATE],
+/// subsumption elects the surviving view ([FUSED-CONTENT-GATE],
 /// [PIPELINE-CLUSTER-SUBSUME]). Cluster ids hash the smallest member's
 /// digest together with every member's workspace-relative path
 /// ([PIPELINE-DETERMINISM], gh #430), so identical fused clusters across
@@ -106,7 +106,7 @@ pub struct ClusterBuildInputs<'a, S: BuildHasher, H: BuildHasher, L: BuildHasher
     pub fingerprints: &'a [Fingerprint],
     /// Per-fingerprint `MinHash` signatures, positionally aligned.
     pub signatures: &'a dyn SignatureLookup,
-    /// Embedding vectors by corpus index ([FUSION-CLUSTER-SIGNALS]).
+    /// Embedding vectors by corpus index ([FUSED-CLUSTER-SIGNALS]).
     pub embedding_vectors: &'a HashMap<usize, Vec<f32>, S>,
     /// Transitive-closure components to rehydrate.
     pub fused_clusters: &'a [FusedCluster],
@@ -145,7 +145,7 @@ pub fn build_ranked_fused_clusters<
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| left.id.cmp(&right.id))
     });
-    // [FUSION-CONTENT-GATE] before [PIPELINE-CLUSTER-SUBSUME] (#367,
+    // [FUSED-CONTENT-GATE] before [PIPELINE-CLUSTER-SUBSUME] (#367,
     // #408): subsumption deletes whole views, and the choice must see
     // the same measured content evidence the report will render — a
     // survivor elected on raw geometry cannot be re-elected later.
@@ -176,7 +176,7 @@ const SIGNAL_CHUNK_CLUSTERS: usize = 8;
 /// Materialises every fused cluster that remains reportable.
 ///
 /// A corpus-scale run pays for this stage in the O(k²) per-cluster pair
-/// measurement ([FUSION-CLUSTER-SIGNALS]): one 877-member scaffold
+/// measurement ([FUSED-CLUSTER-SIGNALS]): one 877-member scaffold
 /// cluster measures 384k pairs, most of them full tree alignments.
 /// Clusters are independent, every measurement is a pure function of
 /// the corpus, and each occurrence belongs to exactly one component —
@@ -281,7 +281,7 @@ impl BuildSpent {
 /// Emits the cluster-signal overlap measurement counters and substage
 /// wall time, so memo effectiveness and cost attribution across the
 /// whole ranked build are readable from one event
-/// ([FUSION-SHARED-SUBTREE-MEMO], [PIPELINE-OBSERVABILITY-STAGES]).
+/// ([FUSED-SHARED-SUBTREE-MEMO], [PIPELINE-OBSERVABILITY-STAGES]).
 fn log_signal_measurement(stats: crate::overlap::MeasureStats, spent: &BuildSpent) {
     tracing::info!(
         alignments = stats.alignments,

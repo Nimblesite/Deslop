@@ -123,7 +123,7 @@ fn python_same_role_pair_surfaces_with_measured_embedding_support() -> Result<()
 // does not describe it. The old expectation only held because
 // `structural` was Merkle equality: the differing loop keyword rehashed
 // the root, so a pair sharing 91% of its AST measured exactly 0.0 and
-// fell into row 2 by default ([FUSION-SHARED-SUBTREE], gh #408).
+// fell into row 2 by default ([FUSED-SHARED-SUBTREE], gh #408).
 //
 // `same_behavior` reachability is still asserted end-to-end, on the two
 // fixtures that are genuinely Type-4 — recursion against iteration —

@@ -30,7 +30,7 @@ fn js_and_jsx_renamed_components_cluster_across_extensions() -> Result<()> {
     // renamed: the plain-JS grammar parses JSX, and both are the
     // `javascript` language, so they cluster. The five identical CSS
     // class-name literals anchor the bijective prop rename, so
-    // [FUSION-CONTENT-GATE] routes the pair act-now `nearly_identical`.
+    // [FUSED-CONTENT-GATE] routes the pair act-now `nearly_identical`.
     assert_bucketed_clone(
         "jsx-js-components",
         10,

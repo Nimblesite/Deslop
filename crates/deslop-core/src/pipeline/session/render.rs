@@ -86,10 +86,10 @@ impl PipelineSession {
             Some(already) => already,
             None => self.materialize_trees()?,
         };
-        // [FUSION-SHARED-SUBTREE] (gh #408): measure the structural
+        // [FUSED-SHARED-SUBTREE] (gh #408): measure the structural
         // overlap the anchor axis discards before survival drops the
         // enclosing Type-3 pair and leaves only its fragment views. The
-        // per-edge content gate ([FUSION-CONTENT-GATE], gh #458) runs
+        // per-edge content gate ([FUSED-CONTENT-GATE], gh #458) runs
         // inside the pass: a rescue-admitted pair must carry its own
         // content, not just a Merkle-identical signature.
         let rescue_input = pairs.len();
@@ -157,7 +157,7 @@ impl PipelineSession {
             fused_clusters.len(),
             stage_started,
         );
-        // [FUSION-CLUSTER-SIGNALS] One signature space per run: the
+        // [FUSED-CLUSTER-SIGNALS] One signature space per run: the
         // cross-language space compares any pair when the audit mode is
         // on; the per-language space is exact otherwise. Mixing spaces
         // inside one cluster mean would average incomparable values.

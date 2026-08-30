@@ -76,7 +76,7 @@
 //! unchanged statements inside these methods stay Merkle-identical,
 //! which is exactly why the fragment views survived. `structural` is
 //! now that overlap, measured by ordered tree alignment
-//! ([FUSION-SHARED-SUBTREE]); [CLONE-BUCKETS-ROUTING] row 4b routes it
+//! ([FUSED-SHARED-SUBTREE]); [CLONE-BUCKETS-ROUTING] row 4b routes it
 //! on the same two floors that admit the pair.
 //!
 //! A second defect sat behind the first and only became visible once

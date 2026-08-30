@@ -1,7 +1,7 @@
 //! The collapsed-leaf content frontier: the raw-byte evidence
 //! normalisation erased.
 //!
-//! [FUSION-CONTENT-GATE] measures what `structural` and `token_jaccard`
+//! [FUSED-CONTENT-GATE] measures what `structural` and `token_jaccard`
 //! cannot see, and every one of those measurements reads the same
 //! artefact — one key per collapsed leaf, in frontier order, tagged with
 //! the population it belongs to ([PIPELINE-NORMALIZE-AST-OPERATOR]).
@@ -54,7 +54,7 @@ impl Population {
 
     /// Whether a leaf in this population is *authored content* — bytes
     /// normalisation erased, which is the only thing
-    /// [FUSION-CONTENT-GATE] exists to measure.
+    /// [FUSED-CONTENT-GATE] exists to measure.
     ///
     /// An operator is not erased. [PIPELINE-NORMALIZE-AST-OPERATOR]
     /// keeps it in the normalised kind, so `structural` and

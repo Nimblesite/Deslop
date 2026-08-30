@@ -390,7 +390,7 @@ function bestBubbleCluster(
 }
 
 // Two gates, because the two populations carry different evidence
-// ([VSIX-LIVE-BUBBLE], [FUSION-CONTENT-GATE]). An act-now bucket is the
+// ([VSIX-LIVE-BUBBLE], [FUSED-CONTENT-GATE]). An act-now bucket is the
 // engine's own verdict that the user should act, reached with content
 // evidence and byte proof this client never sees; the same gate
 // deliberately pushes a proven rename's confidence *below*

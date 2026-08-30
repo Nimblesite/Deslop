@@ -68,7 +68,7 @@ envelope.
 > multipliers ([RANK-MASS-SUM](pipeline.md#rank-mass-sum)); a `data`-category
 > cluster's demotion belongs exclusively to the `[ranking] data_clones` policy
 > ([PIPELINE-RANK-WORST-FIRST](pipeline.md#pipeline-rank-worst-first),
-> [RANK-CATEGORY]). `fused` is a pair admission quantity ([FUSION-SCOPE]) and
+> [RANK-CATEGORY]). `fused` is a pair admission quantity ([FUSED-SCOPE]) and
 > plays no part in ordering: ordering by confidence puts a two-line
 > byte-identical pair above a 400-line proven clone, and filtering on it
 > discards proven Type-2 renames the content gate deliberately routes below
@@ -262,7 +262,7 @@ code passes `buckets: ["identical"]` inside the prevention loop too) and the uni
 
 Output: top-`limit` clusters in **report order** — final report `weight` descending
 ([RANK-MASS-SUM](pipeline.md#rank-mass-sum)) — carrying signals, interpretation, action hints,
-occurrences, and the `filters` echo. `fused` is a pair admission quantity ([FUSION-SCOPE]) and
+occurrences, and the `filters` echo. `fused` is a pair admission quantity ([FUSED-SCOPE]) and
 plays no part in ordering: ordering by confidence would put a two-line byte-identical pair above a
 400-line proven clone.
 

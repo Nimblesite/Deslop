@@ -1,5 +1,5 @@
 //! E2E regression for [REPAIR-RENAME-LITERAL-ECHO] — the boundary of the
-//! literal echo that certifies a rename ([FUSION-CONTENT-GATE],
+//! literal echo that certifies a rename ([FUSED-CONTENT-GATE],
 //! [TECH-PMATCH-BAKER], gh #409, gh #410).
 //!
 //! A literal that spells the name of a renamed symbol is part of the

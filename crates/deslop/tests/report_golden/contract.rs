@@ -264,7 +264,7 @@ fn assert_authored_cluster(cluster_list: &[Value], rank: usize, copies: u64) -> 
 /// otherwise have to derive: the worst-first rank and its severity band
 /// ([SEVERITY-BAND]), the language ([PIPELINE-LANG-TRAIT]), the display
 /// occurrence count, the shape reading, the fused-gate verdict and the
-/// evidence sentence ([FUSION-CONTENT-GATE]).
+/// evidence sentence ([FUSED-CONTENT-GATE]).
 ///
 /// Every one of these is carried precisely so no client recomputes it,
 /// so a report that omits one — or states one the rest of the report

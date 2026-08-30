@@ -1,4 +1,4 @@
-// Seven-field `ReportSignals` fixtures ([FUSION-CONTENT-GATE], #344).
+// Seven-field `ReportSignals` fixtures ([FUSED-CONTENT-GATE], #344).
 //
 // The four-field literal `{ structural, token_jaccard, embedding_cos, fused }`
 // was copy-pasted across twenty suites. Once the wire carried the measured
@@ -16,7 +16,7 @@ import type { Bucket, ReportSignals } from "../types/report";
 
 /** The signal breakdown a fixture cluster of `bucket` carries. `shape`
  * is spelled out per bucket rather than reduced from the two shape axes
- * here — the engine owns that reduction ([FUSION-CONTENT-GATE]) and a
+ * here — the engine owns that reduction ([FUSED-CONTENT-GATE]) and a
  * fixture that recomputed it could never catch the engine getting it
  * wrong. */
 export function bucketSignals(bucket: Bucket): ReportSignals {
@@ -37,7 +37,7 @@ export function bucketSignals(bucket: Bucket): ReportSignals {
 /** Whether a fixture cluster of `bucket` clears the engine's reportable
  * fused threshold. Spelled out per bucket for the same reason `shape`
  * is: the threshold constant lives in Rust and a fixture that mirrored
- * it would drift with it silently ([FUSION-CONTENT-GATE]). */
+ * it would drift with it silently ([FUSED-CONTENT-GATE]). */
 export function bucketMeetsFusedGate(bucket: Bucket): boolean {
   switch (bucket) {
     case "identical":

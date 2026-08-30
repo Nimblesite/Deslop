@@ -1,10 +1,10 @@
 //! Applies the shared-subtree rescue over the candidate set
-//! ([FUSION-SHARED-SUBTREE], gh #408).
+//! ([FUSED-SHARED-SUBTREE], gh #408).
 //!
 //! Only pairs the fused threshold would otherwise drop — despite
 //! corroborating token evidence — are measured: aligning two subtrees for
 //! all candidates would repeat the admission-cost mistake
-//! [FUSION-CONTENT-GATE] deliberately avoids, and a pair that already
+//! [FUSED-CONTENT-GATE] deliberately avoids, and a pair that already
 //! survives needs no rescue.
 //!
 //! The pass is measured work over a corpus-scale population, so it runs
@@ -52,7 +52,7 @@ const RESCUE_CHUNK_PAIRS: usize = 512;
 /// pair, in parallel when the population justifies it.
 ///
 /// `sources` and `languages` let the pass apply the per-edge content
-/// gate ([FUSION-CONTENT-GATE], gh #458) to pairs whose overlap cleared
+/// gate ([FUSED-CONTENT-GATE], gh #458) to pairs whose overlap cleared
 /// the floor: a Merkle-identical signature alone must not admit a pair
 /// whose bodies share nothing.
 pub fn apply_shared_subtree_rescue<S: BuildHasher + Sync, L: BuildHasher + Sync>(
@@ -140,7 +140,7 @@ fn report_shards(shards: &[(RescueTally, OverlapMeasurer<'_>)]) {
 /// recording every gate it passes.
 ///
 /// A pair whose overlap cleared the floor still has to carry its own
-/// content through the gate ([FUSION-CONTENT-GATE], gh #458): the
+/// content through the gate ([FUSED-CONTENT-GATE], gh #458): the
 /// overlap floor is a *structural* claim and the token corroboration a
 /// *token* claim, and neither knows whether the endpoints' collapsed
 /// leaves agree. When the pair's own content agreement falls below

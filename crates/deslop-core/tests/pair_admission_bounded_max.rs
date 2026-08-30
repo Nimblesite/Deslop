@@ -1,4 +1,4 @@
-//! Pair-layer admission pins for [FUSION-STRATEGY-BOUNDED-MAX] (gh #343).
+//! Pair-layer admission pins for [FUSED-STRATEGY-BOUNDED-MAX] (gh #343).
 //!
 //! The rendered-report inequality (`fused <= max(axes)`, enforced by the
 //! corpus `fused_bounded_max` check) cannot prove the *admission*
@@ -36,7 +36,7 @@ fn candidate(structural: f64, token_jaccard: f64, embedding_cos: f64) -> Candida
     }
 }
 
-// [FUSION-STRATEGY-BOUNDED-MAX] The discriminating triple: every axis is
+// [FUSED-STRATEGY-BOUNDED-MAX] The discriminating triple: every axis is
 // below the 0.85 threshold, so bounded max computes 0.44 and must drop
 // the pair, while the quarantined sum-then-clamp arm computes
 // 0.44 + 0.42 + 0.0 = 0.86 and would admit it. A cluster appearing here

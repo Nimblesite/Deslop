@@ -1,12 +1,12 @@
 //! Ranking weight for rendered clusters ([PIPELINE-RANK-WORST-FIRST],
 //! [RANK-MASS-SUM], [RANK-CATEGORY], [RANK-STRUCTURAL-ONLY],
-//! [FUSION-CONTENT-GATE]).
+//! [FUSED-CONTENT-GATE]).
 //!
 //! One place decides how a visible cluster's weight is composed: the
 //! duplicated mass (visible occurrences × canonical nodes), scaled only
 //! by the bucket and category policy multipliers. Confidence never
 //! discounts the weight — it already did its job at admission
-//! ([FUSION-CLUSTER-SIGNALS], Baker 1995: a pair either p-matches or it
+//! ([FUSED-CLUSTER-SIGNALS], Baker 1995: a pair either p-matches or it
 //! does not), and re-discounting it erases duplicated-line mass at
 //! ranking (gh #458, [RANK-MASS-SUM]). Split out of `report.rs` to keep
 //! both files inside the size budget.
@@ -127,7 +127,7 @@ fn category_multiplier(cluster: &ReportCluster, policy: RankingPolicy) -> f64 {
 /// their weight belongs to the more specific, user-configurable
 /// `[ranking] data_clones` policy ([RANK-CATEGORY]), and stacking both
 /// demotions would make `data_clone_weight = 1.0` unable to restore a
-/// table that the content gate ([FUSION-CONTENT-GATE]) also routed to
+/// table that the content gate ([FUSED-CONTENT-GATE]) also routed to
 /// the structural-only bucket.
 fn structural_only_multiplier(cluster: &ReportCluster, policy: RankingPolicy) -> f64 {
     if classify(cluster) == ClusterKind::StructuralOnly

@@ -21,7 +21,7 @@ This document compares Deslop's deterministic hybrid core, LSP daemon, MCP surfa
 | **NiCad** | Academic TXL tool; no package, painful build. Strong Type-3 recall on BigCloneBench (~90%) but unusable as a product. |
 | **ConQAT** | Abandoned 2014; superseded by **Teamscale** (commercial, enterprise SaaS, no local, no MCP). |
 | **SourcererCC** | Apache-2.0 Java tool, scales to 250 MLOC, unmaintained since ~2020. |
-| **SSCD / HyClone / SCOTT / Rator** | Research prototypes (2023–2025 papers). GitHub research dumps with no releases. Deslop already cites their findings in [fusion.md](fusion.md) and [landscape.md](landscape.md) — we adopt the algorithms, not the artifacts. |
+| **SSCD / HyClone / SCOTT / Rator** | Research prototypes (2023–2025 papers). GitHub research dumps with no releases. Deslop already cites their findings in [fused.md](fused.md) and [landscape.md](landscape.md) — we adopt the algorithms, not the artifacts. |
 
 #### Literal & constant rules (linter lineage — the [literals.md](literals.md) competitors)
 
@@ -127,8 +127,8 @@ Feature-superiority is bounded. The following are explicit non-goals, and we dec
 - **Language breadth past tree-sitter-accurate grammars.** jscpd claims 150 languages via regex tokenisation; the quality is bad. We ship three languages done correctly, then extend.
 - **Server / SaaS mode.** Teamscale and Sonar own that corner; we are local-first by architecture ([PRINCIPLES-LONG-RUNNING-DAEMON]).
 - **Auto-fix / extract-to-function.** Belongs in refactor tooling, not clone detection. See [LSP-COMMANDS] — the verb slot is reserved, not filled in v1.
-- **Execution-based Type-4 validation (HyClone-style).** Research-interesting, product-risky. [DECISION-CROSS-LANGUAGE] and [fusion.md](fusion.md) explain the scope cut.
-- **Cloud-hosted embedding provider by default.** We allow one via [FUSION-EMBED-PROVIDER] but we never ship it as the default. Privacy is a feature.
+- **Execution-based Type-4 validation (HyClone-style).** Research-interesting, product-risky. [DECISION-CROSS-LANGUAGE] and [fused.md](fused.md) explain the scope cut.
+- **Cloud-hosted embedding provider by default.** We allow one via [FUSED-EMBED-PROVIDER] but we never ship it as the default. Privacy is a feature.
 
 ### One-sentence positioning
 

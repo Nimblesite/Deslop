@@ -20,7 +20,7 @@ Distribution: one platform-specific `.vsix` per VS Code target attached to each 
 The bubble reports duplication while the edited code remains under the cursor.
 
 **When it fires.**
-After every coalesced buffer edit ([LIVE-WATCHER] debounce = 250 ms), the VSIX issues `duplicates/findSimilar` on the range the user most recently touched. The bubble appears, anchored to the bottom-right of the duplicated range, when a returned cluster's bucket is act-now ([CLONE-BUCKETS]) — the engine's own verdict, reached with content evidence and byte proof this client never sees. There is no confidence gate on this surface: `fused` is a pair admission quantity ([FUSION-SCOPE]) and never a client-side filter. If nothing matches, no bubble — silence is the signal that the code is novel.
+After every coalesced buffer edit ([LIVE-WATCHER] debounce = 250 ms), the VSIX issues `duplicates/findSimilar` on the range the user most recently touched. The bubble appears, anchored to the bottom-right of the duplicated range, when a returned cluster's bucket is act-now ([CLONE-BUCKETS]) — the engine's own verdict, reached with content evidence and byte proof this client never sees. There is no confidence gate on this surface: `fused` is a pair admission quantity ([FUSED-SCOPE]) and never a client-side filter. If nothing matches, no bubble — silence is the signal that the code is novel.
 
 **What it looks like.**
 A compact floating widget (VS Code `InlayHint` + `Webview`-backed overlay, rendered by a single `DecorationType` whose `after.contentText` is an HTML-safe Unicode glyph, with a hover-triggered richer webview for detail). Anatomy, from left to right:
@@ -348,7 +348,7 @@ Flow:
    - A disabled notice that selecting a model starts local embedding calculations, may be slow, and progress remains visible in Session.
    - Each installed model as a primary entry, with a short description of its suitability for code (from a bundled hint table: `nomic-embed-code` → "recommended for code clone detection," `unixcoder` → "alternative; strong on cross-language"), and a dimension/size badge.
    - A separator + "Pull a new model…" action that opens `https://ollama.com/library` in a browser and a second "Refresh list" action.
-4. On selection, VSIX calls `embedding/setModel`, persists `deslop.embedding.mode = "auto"`, and keeps the model id visible as pending until a fresh report arrives. The daemon queues the provider refresh, invalidates the embedding cache layer only ([FUSION-EMBED-PROVIDER]), and re-runs the embedding pass in low-priority background batches. Structural + LSH results remain available while this happens.
+4. On selection, VSIX calls `embedding/setModel`, persists `deslop.embedding.mode = "auto"`, and keeps the model id visible as pending until a fresh report arrives. The daemon queues the provider refresh, invalidates the embedding cache layer only ([FUSED-EMBED-PROVIDER]), and re-runs the embedding pass in low-priority background batches. Structural + LSH results remain available while this happens.
 5. MCP uses the same workspace settings contract. An agent-hosted MCP client must not change the model unless the user explicitly initiated that change. If it does switch the model, it must write the same `deslop.embedding.*` settings the VSIX/LSP reads before the switch is accepted. The VSIX treats those settings as authoritative so LSP and MCP model state does not drift.
 6. The status bar updates to `embed: nomic-embed-code`; the Session panel updates; a toast confirms `Embedding model switched to nomic-embed-code`.
 
@@ -472,7 +472,7 @@ Users who run an agent *outside* VS Code (e.g. Claude Code CLI in a terminal) ca
 - Selected-cluster sync: `deslop.openCluster` selects the cluster's Top Offenders row (in cluster, file, and folder modes); moving the caret into a clone selects the same row without stealing the caret; the tree, webview, and bubble agree on the selected id ([VSIX-CLUSTER-SYNC-TESTS]).
 - Embedding picker shows the `Ollama not detected` empty state — and never a stub row — when Ollama is unreachable.
 - Embedding picker lists Ollama models when a mock Ollama HTTP server is running on `127.0.0.1:11434`.
-- Packaged `.vsix` carries no `stub` / `blake3-stub` / `StubProvider` strings in its settings enum or shipped `dist/*.{js,json,md}` assets ([FUSION-EMBED-PROVIDER]); enforced by the `stub-gate` packaging check.
+- Packaged `.vsix` carries no `stub` / `blake3-stub` / `StubProvider` strings in its settings enum or shipped `dist/*.{js,json,md}` assets ([FUSED-EMBED-PROVIDER]); enforced by the `stub-gate` packaging check.
 - Cluster webview renders interpretation, signals, and occurrences.
 - Full-report webview refreshes on daemon notification.
 - Manifest-backed activation tests cover configured paths, environment paths, `DESLOP_BINARY_DIR`, bundled success, `PATH` candidates ignored when the bundle is present, missing binary, component-name mismatch, and version mismatch.

@@ -346,7 +346,7 @@ suite("cluster webview occurrence locations", () => {
 
   test("signal strip hover copy explains every score", () => {
     // The signal copy moved into the shared `types/signals` formatter
-    // ([FUSION-CONTENT-GATE], #344) so the strip, its tooltips and the docs
+    // ([FUSED-CONTENT-GATE], #344) so the strip, its tooltips and the docs
     // anchors cannot describe the same number two ways. The corpus follows it
     // there and now covers the three content-evidence axes too.
     const corpus = [

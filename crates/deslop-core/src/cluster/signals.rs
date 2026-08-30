@@ -1,4 +1,4 @@
-//! Rendered-truth cluster signal measurement ([FUSION-CLUSTER-SIGNALS]).
+//! Rendered-truth cluster signal measurement ([FUSED-CLUSTER-SIGNALS]).
 //!
 //! A cluster's signal triple is measured **between the admitted pairs** —
 //! the surviving discovery edges of the transitive-closure component —
@@ -42,7 +42,7 @@ const CROSS_GROUP_CACHE_MIN_MEMBERS: usize = 2;
 
 /// The measured rendered signal triple plus the pair that earned it.
 ///
-/// [FUSION-CLUSTER-SIGNALS] gh #458: the rendered triple is one
+/// [FUSED-CLUSTER-SIGNALS] gh #458: the rendered triple is one
 /// admitted pair's own measurement — the strongest one, in a
 /// deterministic order — so the report can name the pair whose
 /// evidence it shows instead of an anonymous cluster average and
@@ -58,13 +58,13 @@ pub(super) struct MeasuredSignals {
     pub source_pair: Option<(usize, usize)>,
 }
 
-/// Measures the [FUSION-CLUSTER-SIGNALS] triple over the **admitted**
+/// Measures the [FUSED-CLUSTER-SIGNALS] triple over the **admitted**
 /// pair set: the pair with the highest bounded-fused confidence,
 /// ties resolved to the earliest pair in corpus order.
 ///
 /// Per admitted pair: `structural` is Merkle-hash equality — `1.0` —
 /// or, for a non-equal pair, the measured shared-subtree overlap
-/// ([FUSION-SHARED-SUBTREE]): the best-achievable subtree overlap the
+/// ([FUSED-SHARED-SUBTREE]): the best-achievable subtree overlap the
 /// axis has always claimed to be. `token_jaccard` is the `MinHash`
 /// estimate between the two signatures, and `embedding_cos` is
 /// [`cosine_similarity`] of the two vectors — the same arithmetic that
@@ -109,7 +109,7 @@ pub(super) fn measured_signals<S: BuildHasher>(
     MeasuredSignals {
         // A cluster whose every admitted pair skipped renders an
         // explicit 0.0 triple with no named source — never a silent
-        // empty ([FUSION-CLUSTER-SIGNALS] gh #458).
+        // empty ([FUSED-CLUSTER-SIGNALS] gh #458).
         score: best.map_or(
             PairScore {
                 structural: 0.0,
@@ -442,7 +442,7 @@ fn ordered_group_pair((left, right): (usize, usize)) -> (usize, usize) {
 }
 
 /// One admitted pair's measured triple, and the deterministic ordering
-/// that elects the named signal source ([FUSION-CLUSTER-SIGNALS]). The
+/// that elects the named signal source ([FUSED-CLUSTER-SIGNALS]). The
 /// elected pair's axes render together; the other admitted pairs only
 /// contest the election.
 #[derive(Debug, Clone, Copy)]
@@ -499,7 +499,7 @@ impl BestPair {
     /// byte-identical pair (`90, 360`) is named over a same-shape pair
     /// (`90, 630`) that measures identically after normalisation. The
     /// fused confidence is the pair's own bounded max
-    /// ([FUSION-STRATEGY-BOUNDED-MAX]).
+    /// ([FUSED-STRATEGY-BOUNDED-MAX]).
     fn stronger_than(self, current: &BestPair) -> bool {
         let rank = |pair: &BestPair| {
             (

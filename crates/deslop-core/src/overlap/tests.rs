@@ -1,4 +1,4 @@
-//! Unit tests for [FUSION-SHARED-SUBTREE].
+//! Unit tests for [FUSED-SHARED-SUBTREE].
 //!
 //! `structural` feeds bucket routing, ranking, the duplication metric
 //! and cross-cluster subsumption, so a silent error in this measurement
@@ -130,7 +130,7 @@ fn merkle_equal_endpoints_short_circuit_to_one() -> Result<(), String> {
     Ok(())
 }
 
-// [FUSION-SHARED-SUBTREE] The measurement #408 turns on. The enclosing
+// [FUSED-SHARED-SUBTREE] The measurement #408 turns on. The enclosing
 // method pair carried a literal `structural = 0.0` because the inserted
 // statement rehashes every ancestor Merkle node; it must now measure
 // high enough to clear `SHARED_SUBTREE_MIN_OVERLAP`, or the whole-method
@@ -223,7 +223,7 @@ fn repeated_measurement_of_one_pair_is_stable() -> Result<(), String> {
     Ok(())
 }
 
-// [FUSION-SHARED-SUBTREE] The large-tree fallback is only ever allowed
+// [FUSED-SHARED-SUBTREE] The large-tree fallback is only ever allowed
 // to *suppress* a rescue, never to manufacture one, so it must never
 // exceed the alignment it stands in for. Asserted on the same pair the
 // alignment measures, which is the only way to compare them directly.
@@ -288,7 +288,7 @@ fn alpha(seed: u32) -> u32 {
 }
 ";
 
-/// [FUSION-SHARED-SUBTREE] The greedy fallback must never credit shared
+/// [FUSED-SHARED-SUBTREE] The greedy fallback must never credit shared
 /// mass that no ordered alignment could achieve.
 ///
 /// `credit_shared_nodes` claims to be a conservative lower bound on the
@@ -408,7 +408,7 @@ fn wide_function(name: &str, statements: usize, extra: &str) -> String {
     )
 }
 
-// [FUSION-SHARED-SUBTREE] Endpoints past the alignment cap take the
+// [FUSED-SHARED-SUBTREE] Endpoints past the alignment cap take the
 // greedy coverage bound instead of the quadratic DP. The bound is only
 // ever allowed to *suppress* a rescue, so the path must still measure a
 // near-copy as substantially shared — a fallback that read near zero
@@ -472,7 +472,7 @@ fn rider_function(block: &str) -> String {
     format!("fn beta(seed: u32) -> u32 {{\n{block}    boost\n}}\n")
 }
 
-// [FUSION-SHARED-SUBTREE] The fallback is documented as a conservative
+// [FUSED-SHARED-SUBTREE] The fallback is documented as a conservative
 // lower bound on the alignment. Adversarial shape: the left endpoint is
 // `alpha` (which nests the boost block) plus a disjoint second copy of
 // the block; the right endpoint is `alpha` alone. Tracking credited
@@ -535,7 +535,7 @@ fn wide_expression(name: &str, terms: usize) -> String {
     format!("fn {name}(seed: u32) -> u32 {{\n    {sum}\n}}\n")
 }
 
-// [FUSION-SHARED-SUBTREE] The cap is measured in nodes of the
+// [FUSED-SHARED-SUBTREE] The cap is measured in nodes of the
 // *normalised* tree, so a normalisation change moves what it reaches
 // without the number changing. [PIPELINE-NORMALIZE-AST-OPERATOR] did
 // exactly that: operator tokens became leaves, an operator-dense
@@ -613,7 +613,7 @@ fn views_of(left_source: &str, right_source: &str) -> Result<(EndpointView, Endp
     Ok((left_view, right_view))
 }
 
-// [FUSION-SHARED-SUBTREE-MEMO] The Flutter-scale blowup, captured at
+// [FUSED-SHARED-SUBTREE-MEMO] The Flutter-scale blowup, captured at
 // unit scale. A corpus holds many byte-offset copies of one window, and
 // every cross pair of the two structures is the same logical
 // measurement: Merkle hash equality pins the whole normalised
@@ -689,7 +689,7 @@ fn a_fleet_of_identical_windows_costs_one_alignment() -> Result<(), String> {
     Ok(())
 }
 
-// [FUSION-SHARED-SUBTREE-BOUND] The prefilter is sound only while the
+// [FUSED-SHARED-SUBTREE-BOUND] The prefilter is sound only while the
 // kind-multiset bound never undercuts the alignment: an undercut would
 // veto a rescue the exact measure grants — a manufactured false
 // negative. Held across a genuine near-miss, a vocabulary-only match,
@@ -716,7 +716,7 @@ fn the_kind_multiset_bound_never_undercuts_the_alignment() -> Result<(), String>
     Ok(())
 }
 
-// [FUSION-SHARED-SUBTREE-BOUND] The other half of the capture: when the
+// [FUSED-SHARED-SUBTREE-BOUND] The other half of the capture: when the
 // cheap bound already proves a pair cannot clear the floor, the
 // quadratic alignment must not run at all. This is what detaches rescue
 // cost from the raw candidate population.
@@ -751,7 +751,7 @@ fn a_pair_the_bound_refuses_never_pays_for_an_alignment() -> Result<(), String> 
     Ok(())
 }
 
-// [FUSION-SHARED-SUBTREE-BOUND] The rescue path must agree with the
+// [FUSED-SHARED-SUBTREE-BOUND] The rescue path must agree with the
 // exact measure on every admission decision, return exactly the exact
 // value whenever the pair clears the floor, and never sit below the
 // exact value (its skip answer is an upper bound).
@@ -795,7 +795,7 @@ fn the_rescue_path_agrees_with_the_exact_measure_on_admission() -> Result<(), St
     Ok(())
 }
 
-// [FUSION-SHARED-SUBTREE] Mixed-size boundary: the fallback is selected
+// [FUSED-SHARED-SUBTREE] Mixed-size boundary: the fallback is selected
 // by the LARGER endpoint's node count, but its credit walk reads BOTH
 // endpoints' creditable-entry lists. A small endpoint whose whole body
 // is a subtree also nested inside the large endpoint must still be

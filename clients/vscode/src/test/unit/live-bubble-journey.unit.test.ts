@@ -1,5 +1,5 @@
 // Unit: multi-step live-surface journeys ([VSIX-LIVE-BUBBLE],
-// [FUSION-CONTENT-GATE]).
+// [FUSED-CONTENT-GATE]).
 //
 // The per-step suites pin one transition each. These drive a whole
 // editing session — cursor moves, rescans, mode switches, dismissals,

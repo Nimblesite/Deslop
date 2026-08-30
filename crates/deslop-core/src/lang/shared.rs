@@ -56,7 +56,7 @@ pub const LITERAL_KIND: &str = "__literal__";
 /// reading the digest then inherits it: `structural` saturates at 1.00,
 /// `token_jaccard` echoes it, the LSH bands collide, subsumption elects
 /// between views of code that computes different answers, and
-/// [FUSION-CONTENT-GATE] is left pricing four disagreeing frontier
+/// [FUSED-CONTENT-GATE] is left pricing four disagreeing frontier
 /// positions out of twenty as a ten-percent discount — `fused = 0.90`,
 /// over the [FUSED-THRESHOLD] act-now line.
 ///
@@ -356,7 +356,7 @@ fn normalise_node(
 /// `template_string` and their equivalent in every grammar.
 ///
 /// A literal's *named* parts are deliberately kept. Collapsing them into
-/// the parent looks tidy and is an accuracy defect: [FUSION-CONTENT-GATE]
+/// the parent looks tidy and is an accuracy defect: [FUSED-CONTENT-GATE]
 /// reads the frontier's literal leaves as content evidence, so erasing
 /// them erases the only thing separating "same shape, different content"
 /// from "same code". Measured on `js-async`, where two functions calling

@@ -1,5 +1,5 @@
-//! E2E pin for gh #458 (C3 / AC6) — [FUSION-CLUSTER-SIGNALS] and
-//! [FUSION-CONTENT-GATE]: a proven copy family must keep its act-now
+//! E2E pin for gh #458 (C3 / AC6) — [FUSED-CLUSTER-SIGNALS] and
+//! [FUSED-CONTENT-GATE]: a proven copy family must keep its act-now
 //! evidence when an unrelated shape-identical stranger joins the
 //! corpus — and the stranger must not be laundered into the family's
 //! act-now cluster or double-report the family's mass.
@@ -43,7 +43,7 @@ fn run_family_report() -> Result<Value> {
     )
 }
 
-/// [FUSION-CLUSTER-SIGNALS] gh #458 C3 — the stranger cannot demote the
+/// [FUSED-CLUSTER-SIGNALS] gh #458 C3 — the stranger cannot demote the
 /// proven family and cannot be laundered into it:
 /// 1. the copies are reported in exactly ONE cluster (no
 ///    double-reporting of duplicated mass),

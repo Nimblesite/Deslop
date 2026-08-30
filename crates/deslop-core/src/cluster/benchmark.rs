@@ -114,7 +114,7 @@ fn run(corpus: &Corpus, repetitions: usize) -> usize {
     // The benchmark prices the valuation cost of the widest profile
     // cluster, so every rendered pair is admitted — the pair set the
     // measurement folds is the same population the old all-pairs loop
-    // valued ([FUSION-CLUSTER-SIGNALS]).
+    // valued ([FUSED-CLUSTER-SIGNALS]).
     let mut admitted_pairs: Vec<(usize, usize)> = Vec::new();
     for (position, &left) in corpus.occurrences.iter().enumerate() {
         for &right in corpus.occurrences.iter().skip(position.saturating_add(1)) {

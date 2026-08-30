@@ -1,7 +1,7 @@
 //! On-disk embedding cache keyed by
 //! `(content_hash, provider_id, model_id, model_version)`.
 //!
-//! Implements the caching rule from [FUSION-EMBED-PROVIDER]: re-runs
+//! Implements the caching rule from [FUSED-EMBED-PROVIDER]: re-runs
 //! with unchanged content / provider / model / version skip inference
 //! entirely; swapping models invalidates only the embedding layer.
 //! The cache is a simple sharded directory of little-endian `f32`

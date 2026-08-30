@@ -1,4 +1,4 @@
-//! [FUSION-CLUSTER-SIGNALS] Grouped signal measurement: the means are
+//! [FUSED-CLUSTER-SIGNALS] Grouped signal measurement: the means are
 //! the per-pair loop's exact values, and the cost is one valuation per
 //! distinct group pair — the capture for the ranked build that spent
 //! 90 of its 91 seconds re-deriving 3.6 million pair values on the
@@ -240,7 +240,7 @@ fn an_unresolvable_copy_still_scores_its_unequal_pairs_zero() {
     );
 }
 
-// [FUSION-CLUSTER-SIGNALS] gh #458 — a rendered cluster's signals are
+// [FUSED-CLUSTER-SIGNALS] gh #458 — a rendered cluster's signals are
 // the strongest pair evidence that actually cleared admission, never a
 // mean over pairs that did not. Two of the three pairs below are
 // byte-identical (structural 1.0, token 1.0) yet are **not** part of the
@@ -328,7 +328,7 @@ fn non_admitted_pairs_never_contribute_to_the_rendered_signals() {
     );
 }
 
-// [FUSION-CLUSTER-SIGNALS] gh #458 (master C1) — the rendered triple is
+// [FUSED-CLUSTER-SIGNALS] gh #458 (master C1) — the rendered triple is
 // ONE admitted pair's own axes together, never a per-axis max stitched
 // from different pairs. X = (0,1) measures structural 1.0 / token 0.0;
 // Y = (0,2) measures structural `cross_overlap` / token 1.0. A per-axis
@@ -425,7 +425,7 @@ fn the_rendered_triple_is_one_admitted_pairs_own_axes() {
     );
 }
 
-// [FUSION-CLUSTER-SIGNALS] gh #458 (#301) — the source-pair election is
+// [FUSED-CLUSTER-SIGNALS] gh #458 (#301) — the source-pair election is
 // a pure function of the admitted pair set: identical inputs twice
 // produce identical scores and the identical named pair.
 #[test]
@@ -493,7 +493,7 @@ fn the_source_pair_election_is_deterministic() {
     );
 }
 
-// [FUSION-CLUSTER-SIGNALS] gh #458 — when every admitted pair's endpoint
+// [FUSED-CLUSTER-SIGNALS] gh #458 — when every admitted pair's endpoint
 // collapsed away (same-file collapse, #339), no pair can be measured: the
 // cluster renders an explicit 0.0 triple with NO named source. Never a
 // silent empty.

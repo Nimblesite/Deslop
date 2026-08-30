@@ -103,7 +103,7 @@ suite("severity", () => {
   // forbids. That contradiction is not a product decision — it is a category
   // error, the same one `classifyCluster` made, and the spec already resolved
   // it. Colour carries the bucket; glyph density carries the percentile; the
-  // two are orthogonal ([FUSION-CONTENT-GATE], #344).
+  // two are orthogonal ([FUSED-CONTENT-GATE], #344).
   test("a demoted shape-only family is not painted with act-now severity", () => {
     // The engine ranks the demoted family first and bands it `worst`
     // accordingly — rank 1 of 10 sits at the top of the percentile.

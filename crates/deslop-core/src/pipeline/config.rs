@@ -16,7 +16,7 @@ pub struct PipelineConfig<'a> {
     /// Optional `.deslop.toml` override; `None` means discover in
     /// the scan root.
     pub config_path: Option<PathBuf>,
-    /// Embedding-pass configuration ([FUSION-EMBED-PROVIDER]).
+    /// Embedding-pass configuration ([FUSED-EMBED-PROVIDER]).
     pub embedding: EmbeddingSettings<'a>,
     /// Whether to consult the on-disk fingerprint cache
     /// ([PIPELINE-INCREMENTAL]).

@@ -1,6 +1,6 @@
 //! End-to-end regression coverage for #339: the token layer must be
 //! rename-invariant for sibling-window fingerprints
-//! ([FUSION-SIGNALS-THREE-LAYER], [DECISION-TYPE3-TWO-PASS]).
+//! ([FUSED-SIGNALS-THREE-LAYER], [DECISION-TYPE3-TWO-PASS]).
 //!
 //! A fingerprint whose byte range is a synthetic sibling window (an F#
 //! module body, a JS statement run) resolved its token stream through
@@ -52,7 +52,7 @@ fn assert_rename_invariant(report: &Value) -> Result<()> {
     Ok(())
 }
 
-// [FUSION-SIGNALS-THREE-LAYER] / #339: a module rename that grows the
+// [FUSED-SIGNALS-THREE-LAYER] / #339: a module rename that grows the
 // name by one character shifts every byte offset after it. The token
 // signal must not change — only the fallback-signature artifact did.
 #[test]

@@ -50,7 +50,7 @@ pub(super) struct RescueTally {
     /// rescue population that never existed.
     pub(super) rescued: u64,
     /// Measured pairs whose overlap cleared the floor but whose own
-    /// content agreement did not ([FUSION-CONTENT-GATE], gh #458): the
+    /// content agreement did not ([FUSED-CONTENT-GATE], gh #458): the
     /// rescue looked, then refused. Distinct from `rescued` because a
     /// Merkle-identical signature can clear the overlap floor while the
     /// endpoints' collapsed leaves share nothing (the

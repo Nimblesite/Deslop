@@ -323,7 +323,7 @@ fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
 // researcher breakdown row with bracketed taxonomy labels. Plain mode
 // uses friendly wording; this test guards the taxonomy string the
 // technical branch emits. The csharp-small pair is a maximal Type-2
-// rename with every literal preserved, so [FUSION-CONTENT-GATE] rename
+// rename with every literal preserved, so [FUSED-CONTENT-GATE] rename
 // consistency routes it to the act-now `nearly_identical` bucket's
 // hybrid title ([CLONE-BUCKETS-DUAL-LABEL]).
 #[test]

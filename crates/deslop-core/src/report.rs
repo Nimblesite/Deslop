@@ -42,7 +42,7 @@ pub use crate::wire_generated::{
 /// report written before the content gate existed: an absent field
 /// means nothing was measured, and the unmeasured convention is full
 /// agreement so a missing measurement never demotes a cluster the
-/// original run vouched for ([FUSION-CONTENT-GATE],
+/// original run vouched for ([FUSED-CONTENT-GATE],
 /// [`crate::content::ContentEvidence::unmeasured`]).
 #[must_use]
 pub fn unmeasured_agreement() -> f64 {
@@ -87,7 +87,7 @@ impl Report {
                 cluster.occurrences.truncate(cap);
                 cluster.occurrences_truncated = true;
             }
-            // [FUSION-CLUSTER-SIGNALS] The named signal source must stay
+            // [FUSED-CLUSTER-SIGNALS] The named signal source must stay
             // inside the occurrences the wire actually carries; a
             // truncated source index would dangle.
             cluster.signal_source = cluster.signal_source.filter(|source| {
@@ -129,7 +129,7 @@ pub fn distinct_visible_path_count(cluster: &ReportCluster) -> usize {
 
 impl From<PairScore> for ReportSignals {
     /// The content triple is left at zero here and stamped later by
-    /// [`crate::buckets::content_gated_signals`] ([FUSION-CONTENT-GATE],
+    /// [`crate::buckets::content_gated_signals`] ([FUSED-CONTENT-GATE],
     /// #344). A `PairScore` is the deterministic pair evidence, produced
     /// before any content is measured, so it has nothing truthful to put
     /// in those fields — every rendered cluster passes through the gate,
@@ -156,7 +156,7 @@ impl ReportSignals {
     /// The shape reading — the stronger of `structural` and
     /// `token_jaccard`, two views of one normalised representation, so
     /// the max is what "the shape matched" means
-    /// ([FUSION-CONTENT-GATE]). The single definition behind the wire
+    /// ([FUSED-CONTENT-GATE]). The single definition behind the wire
     /// `shape` field, the content gate's fused reduction, and the
     /// evidence verdict; consumers render the stamped field verbatim
     /// and never re-derive the max.

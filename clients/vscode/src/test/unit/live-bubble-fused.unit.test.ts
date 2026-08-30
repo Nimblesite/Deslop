@@ -1,5 +1,5 @@
 // Unit: how the live bubble consumes the content-gated fused confidence
-// ([FUSION-CONTENT-GATE], [VSIX-LIVE-BUBBLE]).
+// ([FUSED-CONTENT-GATE], [VSIX-LIVE-BUBBLE]).
 //
 // The engine multiplies shape evidence by content evidence, so `fused` no
 // longer saturates for every act-now cluster: a proven maximal rename

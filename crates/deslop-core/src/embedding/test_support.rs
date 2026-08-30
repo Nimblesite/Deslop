@@ -1,4 +1,4 @@
-//! Test-only embedding fixtures ([FUSION-EMBED-PROVIDER]).
+//! Test-only embedding fixtures ([FUSED-EMBED-PROVIDER]).
 //!
 //! Hosts the deterministic BLAKE3 embedding shim used by core unit
 //! tests. The shim is **not** a product provider — it does not appear

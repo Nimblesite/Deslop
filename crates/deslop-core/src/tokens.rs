@@ -1,7 +1,7 @@
 //! Token stream extraction from normalised AST subtrees.
 //!
 //! Implements the token source for [DECISION-TYPE3-TWO-PASS] / the token LSH
-//! stage of [FUSION-SIGNALS-THREE-LAYER]. A "token" here is the normalised
+//! stage of [FUSED-SIGNALS-THREE-LAYER]. A "token" here is the normalised
 //! `kind` of an AST node, yielded in pre-order. Identifier and literal nodes
 //! have already been collapsed to `__ident__` / `__literal__` by the language
 //! parser, so two Type-2 clones produce identical token streams and Type-3
@@ -185,8 +185,8 @@ fn collect_tokens_in_range(
 /// Resolves a fingerprint byte range to the nodes it spans: the exact
 /// node when one exists, else the contiguous child window a synthetic
 /// sibling range covers. Shared by the token stream extraction, the
-/// content-agreement walk ([FUSION-CONTENT-GATE]) and the shared-subtree
-/// overlap ([FUSION-SHARED-SUBTREE]) so all three signals always see
+/// content-agreement walk ([FUSED-CONTENT-GATE]) and the shared-subtree
+/// overlap ([FUSED-SHARED-SUBTREE]) so all three signals always see
 /// the same code.
 pub(crate) fn resolve_range_nodes(
     node: &NormalizedNode,
@@ -210,7 +210,7 @@ pub(crate) fn resolve_range_nodes(
 /// Normalisation-collapsed content frontier covered by `fingerprint`,
 /// in pre-order, as `(kind, byte range)` pairs. `None` when the range
 /// resolves to no node or sibling window. Feeds the content-agreement
-/// signal ([FUSION-CONTENT-GATE]) — the frontier positions are exactly
+/// signal ([FUSED-CONTENT-GATE]) — the frontier positions are exactly
 /// where two shape-identical subtrees can still disagree in raw source
 /// content — and the literal-dominance measurement behind the
 /// language-agnostic data-table category ([CLONE-NOISE-LITERAL-TABLE]).

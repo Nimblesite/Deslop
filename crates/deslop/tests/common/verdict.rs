@@ -136,7 +136,7 @@ pub(crate) fn assert_single_file_cluster(cluster: &Value, size: u64, file: &str)
 /// the two controls hold different bars honestly. A byte-identical copy
 /// still saturates and its caller still demands it. A near-copy's
 /// reported view spans the divergence, so it measures real but
-/// non-exact overlap ([FUSION-SHARED-SUBTREE]) — demanding saturation
+/// non-exact overlap ([FUSED-SHARED-SUBTREE]) — demanding saturation
 /// there demands the fragment view. Passing the bar in keeps the strong
 /// assertion strong where it is true, instead of lowering it for both.
 pub(crate) fn expect_cross_file_duplicate(
@@ -195,7 +195,7 @@ pub(crate) fn loc_as_f64(value: u64) -> Result<f64> {
 ///
 /// The content triple (`agreement`, `rename_consistency`,
 /// `literal_fraction`) belongs here as much as the shape pair does: it
-/// feeds [FUSION-CONTENT-GATE] through `buckets::content_support`, so a
+/// feeds [FUSED-CONTENT-GATE] through `buckets::content_support`, so a
 /// value that drifts here can promote or demote a cluster. Nothing
 /// differs between two byte-identical copies, so there is nothing for a
 /// rename to fail to explain and `rename_consistency` is exactly `1.0`;

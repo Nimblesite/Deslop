@@ -1,5 +1,5 @@
 //! End-to-end regression coverage for issue #3 and #415
-//! [FUSION-STRATEGY-BOUNDED-MAX]: rendered fused scores must stay in
+//! [FUSED-STRATEGY-BOUNDED-MAX]: rendered fused scores must stay in
 //! the public confidence range `[0, 1]`, and the guard itself must be
 //! fail-closed. The previous guard returned `None` when the `clusters`
 //! array was absent and `?`-exited on the first cluster missing a
@@ -33,7 +33,7 @@ fn rendered_fused_values(report: &serde_json::Value) -> Result<Vec<(String, f64)
         .collect()
 }
 
-// Implements [FUSION-STRATEGY-BOUNDED-MAX]: component scores are public
+// Implements [FUSED-STRATEGY-BOUNDED-MAX]: component scores are public
 // confidence signals in [0, 1], and the fused confidence reported to
 // agents must be bounded to the same range — proven over a corpus that
 // is required to produce clusters, so the assertion can never pass by

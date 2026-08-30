@@ -132,7 +132,7 @@ fn scan_inner_pairs(clusters: &[Cluster], dropped: &mut [bool], outer: usize, le
 /// absorbed views die with their absorber and *nothing* reports their
 /// bytes — the "orphan" this module's history already records
 /// (`issue_343_sum_clamp_saturation` counted one). Measuring
-/// `structural` honestly ([FUSION-SHARED-SUBTREE]) made it routine
+/// `structural` honestly ([FUSED-SHARED-SUBTREE]) made it routine
 /// rather than rare: a whole-file view is now admitted, absorbs the
 /// genuine method-level view, and is then overturned by one verbatim
 /// core nested inside it — so `javascript-type3` reported a byte-equal
@@ -199,7 +199,7 @@ fn evaluate_pair(outer: &Cluster, inner: &Cluster) -> PairDecision {
     // only one direction left the case where the enclosing view is
     // also the heavier one — which is exactly the whole-method Type-3
     // near-miss now that its `structural` is a measured overlap
-    // ([FUSION-SHARED-SUBTREE]). There, the untested direction fell
+    // ([FUSED-SHARED-SUBTREE]). There, the untested direction fell
     // through to `structural_precision`, and a byte-identical fragment
     // nested inside the method deleted it on `structural 1.00 > 0.88`
     // — a comparison across two different scopes, where the fragment

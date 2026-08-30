@@ -18,7 +18,7 @@ All three share the `ts-mixed-band` fixture. They were green before the `[PIPELI
 
 ## Fixes, in dependency order
 
-### 1. [FUSION-SIGNALS-THREE-LAYER] Token similarity understates Type-3 clones (issue #367) — the root cause
+### 1. [FUSED-SIGNALS-THREE-LAYER] Token similarity understates Type-3 clones (issue #367) — the root cause
 
 Measured 2026-08-14 by instrumenting `survival_decision`. Minimal repro, **no fixture and no embedder required**: two 1235-byte TypeScript files, identical except a consistent rename and **one added pair of parentheses** (one node in ~380), scan to `Found 0 groups of duplicated code`. Remove the parentheses and the same pair is found correctly (`nearly_identical`, 266/268 pairs survive). The dropped whole-function pair measures:
 
@@ -30,7 +30,7 @@ Two functions 99.7% identical by node count score `token_jaccard = 0.664`. `stru
 
 Mechanism: MinHash estimates Jaccard over the *set* of distinct k-grams. Repetitive bodies have a small distinct-shingle set, so one added node displaces a large fraction of it. This is a property of the token signature, not of `ts-mixed-band`, and it makes every shape-changing Type-3 clone invisible on the default path.
 
-**This is not a branch regression** — verified, not assumed: only one axis is non-zero, so the `fused() = Σ axes` → `bounded_fused() = max axes` change ([FUSION-STRATEGY-BOUNDED-MAX]) is irrelevant here (`sum == max == 0.664`) and `main` drops the pair identically.
+**This is not a branch regression** — verified, not assumed: only one axis is non-zero, so the `fused() = Σ axes` → `bounded_fused() = max axes` change ([FUSED-STRATEGY-BOUNDED-MAX]) is irrelevant here (`sum == max == 0.664`) and `main` drops the pair identically.
 
 Fix direction (needs design, not a threshold bump): the signature should be robust to small local insertions — e.g. multiset/weighted-Jaccard rather than set-Jaccard, or shingling that does not let one node displace a large share of a small distinct set. Any candidate must be validated against the corpus for *both* directions: recall on shape-changing Type-3 clones, and no new false positives on repetitive scaffolding. **Do not raise recall by lowering `FUSED_THRESHOLD`** — that admits every weak pair in the corpus.
 
@@ -48,7 +48,7 @@ Note this cannot fix §1 on its own: that path also requires `token_jaccard ≥ 
 
 `crates/deslop-core/src/pair.rs::survival_decision` applies the LSH-only floors only when `structural <= 0 && embedding_cos <= 0`, so any ε of cosine waives both the 0.90 Jaccard floor and the 40-node floor — weaker corroboration promotes a pair. Fix without new magic numbers: for every `structural <= 0` pair require the node floor (`lsh_only_node_floor`, which already carries the cross-language opt-in), and waive the Jaccard floor only when `embedding_cos >= fused_min_score` — i.e. when the embedding axis independently clears the survival bar. The 18-node garbage edge in cluster `e021161df1cf4142` dies on the node floor regardless of cosine.
 
-### 4. [FUSION-EMBED-PROVIDER] Content-sensitive mock embedder (issue #366)
+### 4. [FUSED-EMBED-PROVIDER] Content-sensitive mock embedder (issue #366)
 
 `crates/deslop/tests/cli/mock_ollama.rs::embed_vector` returns `[sin(len), cos(first_byte), 0.5, -0.5]`: two constant lanes give every pair a high cosine floor and `sin` aliases over length — a 67-byte and an 865-byte text score 0.99997. ~88 `embedding_cos` assertions across 15 files currently calibrate against this noise, and the 379-node `45986e47bfc430a2` cluster (whole `ledger_a` vs `ledger_c`'s bare arithmetic chain, cos 0.9513) is manufactured by it — no gate can kill that profile without also blinding real Type-4 detection.
 
@@ -122,7 +122,7 @@ fused-scoring defects.
   `same_behavior` cluster with them on; `ts-mixed-band` publishes a four-file `nearly_identical` cluster off
   and **zero** clusters on. Restored cosines are changing cluster *membership* through the closure. A bucket
   must be a function of a cluster's occurrences, never of which pass reached them
-  ([FUSION-CLUSTER-SIGNALS]).
+  ([FUSED-CLUSTER-SIGNALS]).
 - ✅ **#357 — landed.** `EmbeddingBatch::push` emitted one ANN point per *fingerprint*, so the HNSW was built
   over N identical points and `indexed_subtrees` reported the occurrence count. It now emits one point per
   distinct snippet carrying all its owners, and `vectors_by_fingerprint` fans the vector back to every owner

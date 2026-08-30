@@ -25,7 +25,7 @@
 
 use crate::report::{ReportCluster, ReportSignals};
 
-/// [FUSION-CONTENT-GATE] floors and the fused-confidence correction.
+/// [FUSED-CONTENT-GATE] floors and the fused-confidence correction.
 mod gate;
 /// The shape-identical routing tail shared by renderer and subsumption.
 mod routing;
@@ -257,7 +257,7 @@ pub fn classify_signals(signals: ReportSignals) -> ClusterKind {
         // destination: the token-carried near-miss
         // ([`is_token_carried_nearmiss`]), the shared-subtree
         // near-miss ([`is_shape_corroborated_nearmiss`],
-        // [FUSION-SHARED-SUBTREE]) and the shape-saturating
+        // [FUSED-SHARED-SUBTREE]) and the shape-saturating
         // near-miss. Kept as one arm because all three routes produce
         // the identical bucket — the named predicates are what keep
         // the rows legible and greppable.
@@ -286,7 +286,7 @@ pub fn classify_signals(signals: ReportSignals) -> ClusterKind {
 ///
 /// There is deliberately no upper `structural` condition: `structural`
 /// is now the measured shared-subtree overlap
-/// ([FUSION-SHARED-SUBTREE]), and additional shape evidence must never
+/// ([FUSED-SHARED-SUBTREE]), and additional shape evidence must never
 /// *hide* a cluster the token axis already carries. The old
 /// `structural <= 0.01` leg predates the overlap measurement, when any
 /// non-zero value meant a Merkle anchor; clusters below
@@ -297,7 +297,7 @@ pub fn is_token_carried_nearmiss(signals: ReportSignals) -> bool {
     signals.token_jaccard >= LSH_ONLY_NEARMISS_MIN_JACCARD
 }
 
-/// [CLONE-BUCKETS-ROUTING] row 4b ([FUSION-SHARED-SUBTREE], gh #408): a
+/// [CLONE-BUCKETS-ROUTING] row 4b ([FUSED-SHARED-SUBTREE], gh #408): a
 /// cluster whose measured shared-subtree overlap clears the admission
 /// floor **and** whose token axis independently corroborates it is a
 /// Type-3 near-miss even below the LSH-only token floor. This is the
@@ -312,7 +312,7 @@ pub fn is_shape_corroborated_nearmiss(signals: ReportSignals) -> bool {
 }
 
 /// The independent evidence a shared-subtree near-miss must carry
-/// besides its shape ([FUSION-SHARED-SUBTREE]).
+/// besides its shape ([FUSED-SHARED-SUBTREE]).
 ///
 /// Either measured axis will do, and requiring the token one
 /// specifically was a hole. Normalisation makes scaffolding

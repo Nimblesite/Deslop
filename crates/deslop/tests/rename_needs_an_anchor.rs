@@ -1,4 +1,4 @@
-//! [FUSION-CONTENT-GATE] / [RANK-STRUCTURAL-ONLY] — a rename is only
+//! [FUSED-CONTENT-GATE] / [RANK-STRUCTURAL-ONLY] — a rename is only
 //! *proven* by evidence the rename itself did not supply.
 //!
 //! `InventoryApi` and `CatalogApi` are the Dart sibling-method idiom:

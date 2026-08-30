@@ -1,5 +1,5 @@
 //! Restamps the derived fields a report carries but does not measure
-//! ([SEVERITY-BAND], [FUSION-CONTENT-GATE], [METRICS-REPO]).
+//! ([SEVERITY-BAND], [FUSED-CONTENT-GATE], [METRICS-REPO]).
 //!
 //! Rank, severity band, shape reading, occurrence count, fused-gate
 //! verdict and the evidence sentence are all *computed* values. The

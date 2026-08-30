@@ -169,7 +169,7 @@ fn subject_of(snippet: &Snippet<'_>, cache: &ParseCache) -> Option<OwnedSubject>
 /// containing the range or, failing that, the sole function the range
 /// contains when everything else inside the range is declaration
 /// scaffolding. The second direction is how a whole-file view of a
-/// single-method class re-enters the pattern — [FUSION-SHARED-SUBTREE]
+/// single-method class re-enters the pattern — [FUSED-SHARED-SUBTREE]
 /// admits module-wide views, and one promoted `docker_host`/`fly_host`
 /// to a whole-file near-identical pair on the strength of the bytes the
 /// `tool_call` contract forces to agree

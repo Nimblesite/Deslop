@@ -20,15 +20,15 @@ Every reported cluster is a real duplicate, and every real duplicate is reported
 
 ## The contract
 
-`fused` is the pair admission score — the strongest single axis, decided pair by pair against a configurable bar ([FUSED-THRESHOLD](specs/fusion.md)); it never refers to the whole cluster ([FUSION-SCOPE](specs/fusion.md)). A cluster renders its bucket (the verdict), the elected pair's measured axes ([FUSION-CLUSTER-SIGNALS]), and its content evidence ([FUSION-CONTENT-GATE]) — never a fused number, and never a confidence-scaled weight ([RANK-MASS-SUM](specs/pipeline.md)). The rendered-confidence world — `signals.fused`, the three bands, `meets_fused_gate`, and the `fused_golden_bands.rs` / `fused_golden_invariants.rs` suites that cited the old contract by name — is deleted by the first backlog item; the surviving pins are the pair-level ones (`pair_admission_bounded_max.rs`, `issue_343_sum_clamp_saturation`).
+`fused` is the pair admission score — the strongest single axis, decided pair by pair against a configurable bar ([FUSED-THRESHOLD](specs/fused.md)); it never refers to the whole cluster ([FUSED-SCOPE](specs/fused.md)). A cluster renders its bucket (the verdict), the elected pair's measured axes ([FUSED-CLUSTER-SIGNALS]), and its content evidence ([FUSED-CONTENT-GATE]) — never a fused number, and never a confidence-scaled weight ([RANK-MASS-SUM](specs/pipeline.md)). The rendered-confidence world — `signals.fused`, the three bands, `meets_fused_gate`, and the `fused_golden_bands.rs` / `fused_golden_invariants.rs` suites that cited the old contract by name — is deleted by the first backlog item; the surviving pins are the pair-level ones (`pair_admission_bounded_max.rs`, `issue_343_sum_clamp_saturation`).
 
 ## Landed — settled on this branch
 
 One line each: what → spec → pin.
 
 - **#373** polymorphic gate no longer hides consistently-renamed Type-2 clones — subject bodies compare as normalised kind streams ([CLONE-NOISE-POLYMORPHIC-CONTRACT]); dual-direction pin `polymorphic_gate_hides_rename_clone.rs`.
-- **#410** certified renames carry no doubt — the asymptotic mass weight stops discounting a rename the anchor mass already vouches for, `rename_consistency` reads 1.0 ([FUSION-CONTENT-GATE]); pin `assert_certified_rename_reaches_act_now` re-points to routing in the rollout; [REPAIR-RENAME-LITERAL-ECHO] monotonicity survives.
-- **#458 shape half** — a cluster renders one admitted pair's own shape axes, `signal_source` names it ([FUSION-CLUSTER-SIGNALS]); `pair_consistent_signals.rs`, `verbatim_family_survives_stranger.rs`.
+- **#410** certified renames carry no doubt — the asymptotic mass weight stops discounting a rename the anchor mass already vouches for, `rename_consistency` reads 1.0 ([FUSED-CONTENT-GATE]); pin `assert_certified_rename_reaches_act_now` re-points to routing in the rollout; [REPAIR-RENAME-LITERAL-ECHO] monotonicity survives.
+- **#458 shape half** — a cluster renders one admitted pair's own shape axes, `signal_source` names it ([FUSED-CLUSTER-SIGNALS]); `pair_consistent_signals.rs`, `verbatim_family_survives_stranger.rs`.
 - **Ranking weight is summed duplicated mass, never confidence-scaled** — [RANK-MASS-SUM] owns the formula; ties break by cluster id; `rank_mass.rs`.
 - **Token-bridge welds, containers, regions** — [PIPELINE-CLUSTER-ELECT] + [PIPELINE-CLUSTER-ELECT-CONTAINER]; `csharp_merged_clone_families.rs`, `rank_structural_only_policy`, eleven unit tests.
 - **Operators survive normalisation as their own tokens** — [PIPELINE-NORMALIZE-AST-OPERATOR]; six-language golden re-blessed (ids/node counts only), alignment cap 512→768, `SEMANTIC_EPOCH` 3.
@@ -47,7 +47,7 @@ Every item is unpinned unless a test is named. **Write the failing fixture first
 - [ ] **#421** — a sub-line fragment published as a cluster (`python-issue-69-abstract-method` at `--min-nodes 4`); tighten to an empty visible surface.
 - [ ] **#362** — two unrelated const-declaration files must not rank first. Writable as a two-file fixture today.
 - [ ] **#71 / #103 / #285**, **#79**, **#283 / #284** — one negative fixture each, asserting the family stays hidden while a real clone in the same run stays visible; the pin pattern exists (`python_issue_69_abstract_method` et al.). Recheck the language-agnostic data category before treating #283/#284 as open detector defects.
-- [ ] **#458 content half** — `agreement` and `rename_consistency` must be the same elected pair's own values ([FUSION-CLUSTER-SIGNALS], [FUSION-CONTENT-GATE] §2). Both cluster means are quarantined with `panic!`; the per-pair machinery (`pair_agreement`, `pair_rename_consistency`) is retained. Repair: elect the shape axes' pair and render its own values — never a sum (ratios in `[0,1]`; sum is right for *mass*, not agreement). Red pin: `a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster`. Noted: a byte-identical pair reads `rename_consistency = 0.5556` alone — the pair value's anchor-mass weight, unchanged by the repair.
+- [ ] **#458 content half** — `agreement` and `rename_consistency` must be the same elected pair's own values ([FUSED-CLUSTER-SIGNALS], [FUSED-CONTENT-GATE] §2). Both cluster means are quarantined with `panic!`; the per-pair machinery (`pair_agreement`, `pair_rename_consistency`) is retained. Repair: elect the shape axes' pair and render its own values — never a sum (ratios in `[0,1]`; sum is right for *mass*, not agreement). Red pin: `a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster`. Noted: a byte-identical pair reads `rename_consistency = 0.5556` alone — the pair value's anchor-mass weight, unchanged by the repair.
 - [ ] **#432** — discount operator disagreement in the blend so `+`/`-` drift cannot reach the top band or outrank a byte-identical pair; then re-bless `report_golden` once.
 - [ ] **#433** — make the frontier-leaf population identical on cold, warm and mixed passes; then re-bless the three goldens once.
 - [ ] **#443** — distinguish "no authored content measured" from agreement `1.0`.
@@ -58,11 +58,11 @@ Every item is unpinned unless a test is named. **Write the failing fixture first
 ## Ranking and provenance
 
 - [ ] **#363** — the confidence multiplier is settled ([RANK-MASS-SUM]); still open: `log2(1 + spanned_loc)` over lines (`pipeline.md`) versus `spanned_bytes` (`cluster.rs`), and whether the visible re-rank keeps a log term. Change whichever side is not the truth.
-- [x] **7c — provenance relabelled in [FUSION-TUNING-LEVERS]** — `embedding_min_cosine` / `content_gate.support_floor` are **Derived** (SSCD tabulates `0/0.95`; SourcererCC's 0.7 is overlap, not Jaccard); `fused_threshold`'s cite corrected.
+- [x] **7c — provenance relabelled in [FUSED-TUNING-LEVERS]** — `embedding_min_cosine` / `content_gate.support_floor` are **Derived** (SSCD tabulates `0/0.95`; SourcererCC's 0.7 is overlap, not Jaccard); `fused_threshold`'s cite corrected.
 - [ ] Sweep `embedding_top_k = 5` against a corpus with large clone classes (every surveyed system ties topN to class size).
-- [x] **7e — stated in [FUSION-STRATEGY-BOUNDED-MAX]** — the max runs over uncalibrated axes, the most generous axis wins by construction, and `fused_threshold` at 0.85 pays the precision bill.
-- [ ] Inline literal tables in `buckets.rs` / `report_render.rs` need provenance; code comments must match the spec's derived labels — spec half landed ([FUSION-TUNING-LEVERS]).
-- [x] **Gate-vs-scale settled** — content gates routing (bucket) and nothing else ([FUSION-CONTENT-GATE]); the rendered-confidence multiply and the question died with the cluster-fused rollout.
+- [x] **7e — stated in [FUSED-STRATEGY-BOUNDED-MAX]** — the max runs over uncalibrated axes, the most generous axis wins by construction, and `fused_threshold` at 0.85 pays the precision bill.
+- [ ] Inline literal tables in `buckets.rs` / `report_render.rs` need provenance; code comments must match the spec's derived labels — spec half landed ([FUSED-TUNING-LEVERS]).
+- [x] **Gate-vs-scale settled** — content gates routing (bucket) and nothing else ([FUSED-CONTENT-GATE]); the rendered-confidence multiply and the question died with the cluster-fused rollout.
 
 ## Gates and coverage
 
@@ -104,4 +104,4 @@ Kept only for the fused repair IDs cited from tests and specifications.
 |---|---|---|
 | `[REPAIR-RENAME-ANCHOR-MASS]` (#405) | A maximal Type-2 rename below the literal-anchor floor priced to `0.0588` — reported as coincidence. Replaced a four-literal cliff with smoothly weighted Baker-corroborated anchor mass | `type2_rename_anchor_floor.rs`, `fused_golden_bands.rs`, `js_language_features.rs`, `js_ts_clone_buckets.rs`, `common/signals.rs`, `taxonomy.md` |
 | `[REPAIR-SUBSUME-CONTENT-FIRST]` (#367, #408) | Measured content before destructive cross-cluster subsumption and made the survivor election read it: a demoted view never deletes a credible one, a demoted encloser yields only to verbatim-proven nesting that carries statement mass, and between credible views enclosure stands | `cross_cluster_collapse.rs`, `type3_enclosing_method.rs`, `cluster/subsume/election.rs`, `[PIPELINE-CLUSTER-SUBSUME]` in `pipeline.md` |
-| `[REPAIR-RENAME-LITERAL-ECHO]` (#409) | Counted a literal renamed alongside its symbol as consistent rename evidence instead of disproof, so a more complete rename can never score below a less complete one | `rename_literal_monotonicity.rs`, `js_language_features.rs`, `content/rename.rs`, `[FUSION-CONTENT-GATE]` in `fusion.md` |
+| `[REPAIR-RENAME-LITERAL-ECHO]` (#409) | Counted a literal renamed alongside its symbol as consistent rename evidence instead of disproof, so a more complete rename can never score below a less complete one | `rename_literal_monotonicity.rs`, `js_language_features.rs`, `content/rename.rs`, `[FUSED-CONTENT-GATE]` in `fused.md` |

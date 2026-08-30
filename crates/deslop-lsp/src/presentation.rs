@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 /// Formats the diagnostic message: category × count — action sentence —
 /// confidence explanation.
 ///
-/// [FUSION-CONTENT-GATE] The trailing explanation is the one shared
+/// [FUSED-CONTENT-GATE] The trailing explanation is the one shared
 /// `render::signals` rendering of the fused confidence and the measured
 /// content evidence. Without it the bucket title is unfalsifiable: a
 /// corroborated Type-2 rename and an anchor-poor scaffolding family both

@@ -1,5 +1,5 @@
 //! End-to-end coverage for #339, sibling-window arm
-//! ([FUSION-SIGNALS-THREE-LAYER], [DECISION-TYPE3-TWO-PASS]).
+//! ([FUSED-SIGNALS-THREE-LAYER], [DECISION-TYPE3-TWO-PASS]).
 //!
 //! **What this file can and cannot prove.** The token-evidence question —
 //! does a sibling-window fingerprint score `token_jaccard` from its normalised
@@ -223,7 +223,7 @@ fn is_act_now(bucket: &str) -> bool {
     matches!(bucket, "identical" | "nearly_identical")
 }
 
-// [FUSION-SIGNALS-THREE-LAYER] / #339: `module ParseHelpersB` is one character
+// [FUSED-SIGNALS-THREE-LAYER] / #339: `module ParseHelpersB` is one character
 // longer than `module ParseHelpers`, so every byte offset in the second file
 // shifts by one. The duplicated two-binding window is unchanged.
 #[test]

@@ -1,6 +1,6 @@
 //! `MinHash` + banded LSH for Type-3 candidate discovery.
 //!
-//! Implements the token LSH stage of [FUSION-SIGNALS-THREE-LAYER] and the
+//! Implements the token LSH stage of [FUSED-SIGNALS-THREE-LAYER] and the
 //! second pass of [DECISION-TYPE3-TWO-PASS]. Computes a deterministic
 //! `MinHash` signature over k-grams of normalised node kinds and splits the
 //! signature into `BANDS × ROWS_PER_BAND` bands; pairs of fingerprints

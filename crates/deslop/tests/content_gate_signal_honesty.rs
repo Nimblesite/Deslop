@@ -1,4 +1,4 @@
-//! [FUSION-CONTENT-GATE] — the gate may correct a signal it can prove,
+//! [FUSED-CONTENT-GATE] — the gate may correct a signal it can prove,
 //! and may not publish one it did not measure (gh #431).
 //!
 //! `apply_content_gate` rewrites `token_jaccard` to `1.0` for a
@@ -66,7 +66,7 @@ fn render() -> Result<Value> {
     run_report(&fixture("operator-drift"), MIN_NODES)
 }
 
-/// The confidence [FUSION-CONTENT-GATE] fuses shape against: pooled byte
+/// The confidence [FUSED-CONTENT-GATE] fuses shape against: pooled byte
 /// agreement, or a discounted literal-anchored rename proof, whichever
 /// is the stronger evidence. Read off the *rendered* wire so the check
 /// below is a statement about the published report alone.
@@ -186,7 +186,7 @@ fn a_digest_equal_pair_keeps_its_saturated_signals() -> Result<()> {
 /// accessors — different node kind, different field, different body —
 /// whose only shared authored logic is the grammar-mandated accessor
 /// idiom. They measure `structural = 0.82`, `token_jaccard = 0.73`, so
-/// neither axis saturates and [FUSION-CONTENT-GATE] never runs on them.
+/// neither axis saturates and [FUSED-CONTENT-GATE] never runs on them.
 const ACCESSOR_PAIR: [&str; 2] = ["accessor_argument.rs", "accessor_assignment.rs"];
 
 /// The byte-identical control in the same fixture: both axes saturate,
@@ -205,7 +205,7 @@ fn render_unsaturated() -> Result<Value> {
     run_report(&fixture("content-gate-unsaturated"), MIN_NODES)
 }
 
-// [FUSION-CONTENT-GATE] gh #460 — the report may not tell a reader that
+// [FUSED-CONTENT-GATE] gh #460 — the report may not tell a reader that
 // content evidence corroborated a match the gate never consulted.
 //
 // `buckets::routing::route_shape_identical` returns before the gate
@@ -238,7 +238,7 @@ fn a_gate_skipped_cluster_is_not_told_its_content_evidence_agreed() -> Result<()
     assert!(
         structural < STRUCTURAL_SATURATION_FLOOR && token_jaccard < SATURATING_TOKEN_FLOOR,
         "the accessor pair must sit below both saturation floors, which is what \
-         scopes [FUSION-CONTENT-GATE] out of it — it measured \
+         scopes [FUSED-CONTENT-GATE] out of it — it measured \
          structural={structural}, token_jaccard={token_jaccard}: {accessor:#}"
     );
     let support = signal(accessor, "agreement").max(signal(accessor, "rename_consistency"));
@@ -298,7 +298,7 @@ fn a_gated_cluster_still_reports_the_evidence_that_corroborated_it() -> Result<(
 }
 
 /// A cluster's rendered `evidence_verdict`, the sentence every surface
-/// quotes verbatim ([FUSION-CONTENT-GATE]).
+/// quotes verbatim ([FUSED-CONTENT-GATE]).
 fn cluster_verdict(cluster: &Value) -> String {
     field(cluster, "evidence_verdict")
         .as_str()

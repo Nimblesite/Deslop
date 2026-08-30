@@ -1,4 +1,4 @@
-//! Type-2 rename evidence ([TECH-PMATCH-BAKER], [FUSION-CONTENT-GATE],
+//! Type-2 rename evidence ([TECH-PMATCH-BAKER], [FUSED-CONTENT-GATE],
 //! [REPAIR-RENAME-LITERAL-ECHO]).
 //!
 //! One product per member pair:
@@ -48,7 +48,7 @@ const RENAME_CORROBORATION_MIN_OCCURRENCES: usize = 2;
 /// routing floor.
 const RENAME_EVIDENCE_HALF_MASS: f64 = 4.0;
 
-/// 🛑 QUARANTINED ([FUSION-CONTENT-GATE], gh #458 content half).
+/// 🛑 QUARANTINED ([FUSED-CONTENT-GATE], gh #458 content half).
 ///
 /// **What this did.** It measured `pair_rename_consistency` between the
 /// first member and every other member, summed, and divided by the
@@ -275,7 +275,7 @@ fn anchor_weight(anchors: usize) -> f64 {
 /// (`rename_literal_monotonicity.rs`). `RENAME_CONSISTENCY_DISCOUNT`
 /// still separates a certified rename from byte proof, so proven
 /// copy-paste keeps `fused == 1.0` and a certified rename tops out
-/// below it ([FUSION-CONTENT-GATE]).
+/// below it ([FUSED-CONTENT-GATE]).
 fn evidence_weight(consistency: f64, anchors: usize) -> f64 {
     let weight = anchor_weight(anchors);
     if consistency >= 1.0 && weight >= CONTENT_SUPPORT_FLOOR {

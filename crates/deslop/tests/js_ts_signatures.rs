@@ -6,7 +6,7 @@
 //! renamed Type-2 clones reach identical structural and token signals and,
 //! because measured content evidence — preserved anchors plus
 //! Baker-corroborated substitutions ([TECH-PMATCH-BAKER]) — proves the
-//! identifier mapping ([FUSION-CONTENT-GATE]), route to the act-now
+//! identifier mapping ([FUSED-CONTENT-GATE]), route to the act-now
 //! `nearly_identical` bucket; Type-3 near misses still surface through
 //! shared subtrees.
 
@@ -73,7 +73,7 @@ fn typescript_near_miss_produces_cross_file_structural_cluster() -> Result<()> {
 /// structural identity, routes to the act-now `nearly_identical` bucket,
 /// and renders an exact token Jaccard — the content gate corrects the
 /// placeholder-dominated token fallback once the preserved anchors prove
-/// the rename ([FUSION-CONTENT-GATE]).
+/// the rename ([FUSED-CONTENT-GATE]).
 fn assert_type2_clone(fixture_name: &str, min_nodes: u32, left: &str, right: &str) -> Result<()> {
     let report = run_report(&fixture(fixture_name), min_nodes)?;
     let top = top_cluster(&report, fixture_name)?;
@@ -98,7 +98,7 @@ fn assert_type2_clone(fixture_name: &str, min_nodes: u32, left: &str, right: &st
     Ok(())
 }
 
-/// What [FUSION-SHARED-SUBTREE] licenses a cluster's `structural` to be.
+/// What [FUSED-SHARED-SUBTREE] licenses a cluster's `structural` to be.
 ///
 /// `structural` is a graded alignment — `1 - TED / max(nodes)` — and only
 /// Merkle-equal endpoints short-circuit to `1.0`. Which of the two a
@@ -176,7 +176,7 @@ fn assert_saturated_axes(
     assert!(
         is_exact_one(structural),
         "{fixture_name}: the elected view is Merkle-equal across {left} and \
-         {right}, and [FUSION-SHARED-SUBTREE] short-circuits those to exactly \
+         {right}, and [FUSED-SHARED-SUBTREE] short-circuits those to exactly \
          1.0 — a graded value here means a different, wider view was elected: \
          got {structural}: {report:#}"
     );

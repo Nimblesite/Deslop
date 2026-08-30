@@ -1,4 +1,4 @@
-//! The [FUSION-CONTENT-GATE] routing tail and the measured-tier
+//! The [FUSED-CONTENT-GATE] routing tail and the measured-tier
 //! vocabulary shared by the renderer and cross-cluster subsumption.
 //!
 //! [`route_shape_identical`] is the one copy of the shape-identical
@@ -16,7 +16,7 @@ use super::{
     LITERAL_TABLE_MIN_FRACTION,
 };
 
-/// [FUSION-CONTENT-GATE] routing tail: for shape-identical clusters the
+/// [FUSED-CONTENT-GATE] routing tail: for shape-identical clusters the
 /// measured content evidence decides in both directions. The
 /// deterministic signals cannot: `structural` and `token_jaccard` are
 /// two views of one normalised representation, so once the shape
@@ -151,7 +151,7 @@ fn route_anchor_free(
 
 /// The rows this guard governs: **both** unanchored near-miss routes.
 ///
-/// Row 4b ([FUSION-SHARED-SUBTREE]) is included deliberately. A high
+/// Row 4b ([FUSED-SHARED-SUBTREE]) is included deliberately. A high
 /// shared-subtree overlap is not immunity from the #134/#331
 /// scaffolding pattern — it is the pattern's own signature. Six
 /// distinct Flutter widgets whose `build` bodies share nothing measure
@@ -190,7 +190,7 @@ fn is_cross_file_scaffolding(members: &[Fingerprint]) -> bool {
 }
 
 /// The bucket a cluster's **measured** evidence earns on its own —
-/// [`classify_signals`] plus the [FUSION-CONTENT-GATE] routing tail,
+/// [`classify_signals`] plus the [FUSED-CONTENT-GATE] routing tail,
 /// with no byte-equivalence proof available. Cross-cluster subsumption
 /// ([PIPELINE-CLUSTER-SUBSUME], #367/#408) judges the surviving view
 /// with this before the report renders, so the choice sees the same

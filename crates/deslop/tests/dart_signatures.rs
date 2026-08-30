@@ -50,7 +50,7 @@ fn is_exact_one(value: f64) -> bool {
     (value - 1.0).abs() <= f64::EPSILON
 }
 
-// [FUSION-SIGNALS-THREE-LAYER] Type-2 Dart clones (identical after
+// [FUSED-SIGNALS-THREE-LAYER] Type-2 Dart clones (identical after
 // normalisation, every identifier renamed) must produce both
 // `structural = 1.0` and `token_jaccard = 1.0` — the structural pass
 // proves the Merkle hashes match and the MinHash pass proves identical
@@ -85,7 +85,7 @@ fn dart_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
     Ok(())
 }
 
-// [FUSION-SIGNALS-THREE-LAYER] Two Dart functions sharing control-flow
+// [FUSED-SIGNALS-THREE-LAYER] Two Dart functions sharing control-flow
 // sub-structure (`if (_ < _) { return _; }`, `for (...) { _ = _ + _; }`)
 // but differing in body length are a genuine Type-3 near-miss. The shared
 // subtrees must surface as a cross-file cluster with `structural = 1.0`,
@@ -99,7 +99,7 @@ fn dart_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
 // #154) and is correctly suppressed; it must NOT be what carries the
 // cluster, so we require substantive shape evidence, not a header match.
 //
-// The bound is two-sided ([FUSION-SHARED-SUBTREE], gh #408). It once
+// The bound is two-sided ([FUSED-SHARED-SUBTREE], gh #408). It once
 // required `structural == 1.0`, which only a byte-identical *fragment*
 // nested inside the near-miss can satisfy — and reporting that fragment
 // instead of the enclosing method is the recall hole #408 describes. A

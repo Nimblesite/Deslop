@@ -1,5 +1,5 @@
 // One rendering of the seven-field signal breakdown, shared by every VS Code
-// surface ([FUSION-CONTENT-GATE], #344).
+// surface ([FUSED-CONTENT-GATE], #344).
 //
 // Rendering only. Every reading of these numbers — the shape score, the
 // fused gate, the plain-English verdict — is computed once by
@@ -100,7 +100,7 @@ export function confidenceRows(signals: ReportSignals): SignalRow[] {
 }
 
 /**
- * The three measured content-evidence axes ([FUSION-CONTENT-GATE]). Labels
+ * The three measured content-evidence axes ([FUSED-CONTENT-GATE]). Labels
  * match the `agreement / rename / literal` columns of the CLI signal table so
  * a reader moving between the panel and the report reads one vocabulary.
  */

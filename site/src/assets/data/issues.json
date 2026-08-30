@@ -508,7 +508,7 @@
       "number": 408,
       "title": "STOP-class: spec and code promise Type-3 renamed near-miss recall that does not exist in any language",
       "url": "https://github.com/Nimblesite/Deslop/issues/408",
-      "excerpt": "The disagreement crates/deslop-core/src/buckets.rs:270-279 and docs/specs/fusion.md both state that the renamed Type-3 near-miss is protected, and name csharp-type3 as the measured case: Measured against a genuine Type-3 clone whose identifiers are all renamed and whose bodies…",
+      "excerpt": "The disagreement crates/deslop-core/src/buckets.rs:270-279 and docs/specs/fused.md both state that the renamed Type-3 near-miss is protected, and name csharp-type3 as the measured case: Measured against a genuine Type-3 clone whose identifiers are all renamed and whose bodies…",
       "type": "Bug",
       "labels": [
         {
@@ -2703,7 +2703,7 @@
       "number": 343,
       "title": "PairScore::fused() still saturates outside the content-gate corners (sum-then-clamp)",
       "url": "https://github.com/Nimblesite/Deslop/issues/343",
-      "excerpt": "Requirement 2 of docs/root-cause-fusion.md (\"stop clamping away the top of the range\") is still unmet after #341 and the fusedhardening branch. PairScore::fused() (crates/deslop-core/src/pair.rs) remains structural + token_jaccard + embedding_cos, clamped to [0, 1]. The [FUSIO…",
+      "excerpt": "Requirement 2 of docs/root-cause-fused.md (\"stop clamping away the top of the range\") is still unmet after #341 and the fusedhardening branch. PairScore::fused() (crates/deslop-core/src/pair.rs) remains structural + token_jaccard + embedding_cos, clamped to [0, 1]. The [FUSIO…",
       "type": "Bug",
       "labels": [
         {

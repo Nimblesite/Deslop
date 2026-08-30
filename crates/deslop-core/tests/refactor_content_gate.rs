@@ -1,4 +1,4 @@
-//! [FUSION-CONTENT-GATE] × [AUTOFIX-EXTRACT-PRECONDITIONS] rule 1: the
+//! [FUSED-CONTENT-GATE] × [AUTOFIX-EXTRACT-PRECONDITIONS] rule 1: the
 //! refactor gates decide on the *measured* content evidence, never on
 //! the bucket label alone (gh #344).
 //!
@@ -54,7 +54,7 @@ fn sole_cluster(fixture_name: &str) -> Result<ReportCluster> {
 }
 
 /// Measured content support — the stronger of the two independent
-/// populations, exactly as [FUSION-CONTENT-GATE] routes on it.
+/// populations, exactly as [FUSED-CONTENT-GATE] routes on it.
 fn support(cluster: &ReportCluster) -> f64 {
     cluster
         .signals

@@ -117,7 +117,7 @@ pub fn compute_consolidation_plan<S: ::std::hash::BuildHasher>(
 /// user should hear them.
 ///
 /// The measured content gate comes first
-/// ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 1, [FUSION-CONTENT-GATE], gh
+/// ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 1, [FUSED-CONTENT-GATE], gh
 /// #344): consolidation keeps one copy and deletes the rest, so
 /// "the shapes matched" is the weakest evidence any action here could
 /// act on, and a user told only that their language is unsupported

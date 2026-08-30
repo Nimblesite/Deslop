@@ -1,5 +1,5 @@
 //! A maximal Type-2 rename with almost no literal anchors is still a
-//! Type-2 clone ([FUSION-CONTENT-GATE], [FUSED-THRESHOLD],
+//! Type-2 clone ([FUSED-CONTENT-GATE], [FUSED-THRESHOLD],
 //! [RANK-STRUCTURAL-ONLY], [TECH-PMATCH-BAKER]).
 //!
 //! `fused_golden_bands.rs` pins the Type-2 band — "the load-bearing one.

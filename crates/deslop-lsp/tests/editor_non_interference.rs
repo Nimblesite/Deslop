@@ -165,7 +165,7 @@ fn canonical_navigation_survives_via_additive_clone_diagnostics() -> Result<()> 
          survives without overloading F12: {response}"
     );
 
-    // [FUSION-CONTENT-GATE] #344: the Problems panel is a decision surface.
+    // [FUSED-CONTENT-GATE] #344: the Problems panel is a decision surface.
     // The bucket title alone is unfalsifiable — a corroborated Type-2 rename
     // and an anchor-poor scaffolding family both render structural 1.00 — so
     // the message must also state the fused score and the measured evidence.
@@ -220,7 +220,7 @@ fn additive_code_lens_carries_deslops_own_jump_command_not_definition() -> Resul
         "the lens must navigate via Deslop's own command, never textDocument/definition: {response}"
     );
 
-    // [FUSION-CONTENT-GATE] #344: the lens is the inline decision surface, so
+    // [FUSED-CONTENT-GATE] #344: the lens is the inline decision surface, so
     // it carries the same explanation the Problems panel does.
     let cluster_id = first_lens
         .pointer("/command/arguments/0")
@@ -340,7 +340,7 @@ fn cluster_signals(report: &Value, cluster_id: &str) -> Result<ReportSignals> {
     Ok(serde_json::from_value(signals.clone())?)
 }
 
-/// The confidence explanation [FUSION-CONTENT-GATE] every plain-text Deslop
+/// The confidence explanation [FUSED-CONTENT-GATE] every plain-text Deslop
 /// surface must carry. Spelled out here rather than borrowed from the
 /// renderer, so a surface that quietly drops the fused score or the measured
 /// content evidence fails this test instead of agreeing with itself.
@@ -371,7 +371,7 @@ fn assert_explains_confidence(rendered: &str, signals: ReportSignals, surface: &
     assert!(
         rendered.contains(&expected),
         "the {surface} must state the fused confidence and the measured content evidence \
-         [FUSION-CONTENT-GATE]: expected `{expected}` inside `{rendered}`"
+         [FUSED-CONTENT-GATE]: expected `{expected}` inside `{rendered}`"
     );
     assert!(
         signals.fused > 0.0 && signals.structural > 0.0,

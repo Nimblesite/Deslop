@@ -1,4 +1,4 @@
-//! Shared-subtree structural overlap ([FUSION-SHARED-SUBTREE], gh #408).
+//! Shared-subtree structural overlap ([FUSED-SHARED-SUBTREE], gh #408).
 //!
 //! `pair.rs` documents `structural` as "the best-achievable subtree
 //! overlap", but the candidate layer wrote a literal `0.0` for every
@@ -25,38 +25,38 @@
 //! can suppress a rescue, never manufacture one.
 //!
 //! Measurement is memoised by the ordered pair of endpoint Merkle
-//! hashes ([FUSION-SHARED-SUBTREE-MEMO]): hash equality pins the whole
+//! hashes ([FUSED-SHARED-SUBTREE-MEMO]): hash equality pins the whole
 //! normalised structure — the same premise as the `1.0` short-circuit —
 //! so a corpus holding many byte-offset copies of one window costs one
 //! alignment per *distinct structural pair*, not one per byte-range
 //! combination. The rescue path additionally refuses the quadratic
 //! alignment outright when a sound constant-per-node upper bound already
 //! proves the pair cannot clear the admission floor
-//! ([FUSION-SHARED-SUBTREE-BOUND]).
+//! ([FUSED-SHARED-SUBTREE-BOUND]).
 
 use std::{collections::HashMap, sync::Arc};
 
-/// Zhang–Shasha ordered tree alignment ([FUSION-SHARED-SUBTREE]).
+/// Zhang–Shasha ordered tree alignment ([FUSED-SHARED-SUBTREE]).
 mod alignment;
 /// Deterministic exact-alignment benchmark workloads.
 #[cfg(feature = "benchmark")]
 pub mod benchmark;
-/// Large-tree greedy coverage fallback ([FUSION-SHARED-SUBTREE]).
+/// Large-tree greedy coverage fallback ([FUSED-SHARED-SUBTREE]).
 mod credit;
-/// Rescue application over the candidate set ([FUSION-SHARED-SUBTREE]).
+/// Rescue application over the candidate set ([FUSED-SHARED-SUBTREE]).
 mod rescue;
 /// Deterministic tree shapes shared by the measurement tests.
 #[cfg(test)]
 mod shapes;
 /// Ordered-subsequence admission bound
-/// ([FUSION-SHARED-SUBTREE-BOUND-ORDER]).
+/// ([FUSED-SHARED-SUBTREE-BOUND-ORDER]).
 mod subsequence;
 /// Rescue-pass gate counters ([PERF-FLUTTER-TODO-OBSERVABILITY]).
 mod tally;
-/// Endpoint view construction ([FUSION-SHARED-SUBTREE]).
+/// Endpoint view construction ([FUSED-SHARED-SUBTREE]).
 mod view;
 
-/// Measurement unit tests ([FUSION-SHARED-SUBTREE]).
+/// Measurement unit tests ([FUSED-SHARED-SUBTREE]).
 #[cfg(test)]
 mod tests;
 
@@ -99,7 +99,7 @@ use crate::{
 /// an operator-dense expression counts around half as many nodes again.
 /// At 512 that silently pulled `ts-mixed-band`'s ninety-term expression —
 /// 558 nodes, a consistent rename plus one redundant paren, the case
-/// [FUSION-SHARED-SUBTREE] exists to rescue — onto the conservative bound,
+/// [FUSED-SHARED-SUBTREE] exists to rescue — onto the conservative bound,
 /// which scored it under the admission floor and reported nothing
 /// (`without_embeddings_the_mid_band_pair_is_visible_without_saturating`).
 /// The cap must reach the largest endpoint the admission path is expected
@@ -114,7 +114,7 @@ pub const ALIGNMENT_MAX_NODES: usize = 768;
 pub const SHARED_SUBTREE_MIN_CREDIT_NODES: usize = 3;
 
 /// Aggregate measurement counters for one [`OverlapMeasurer`]
-/// ([FUSION-SHARED-SUBTREE-MEMO], [PIPELINE-OBSERVABILITY-STAGES]).
+/// ([FUSED-SHARED-SUBTREE-MEMO], [PIPELINE-OBSERVABILITY-STAGES]).
 /// Snapshot via [`OverlapMeasurer::stats`]; the rescue and cluster
 /// stages log them so cache effectiveness and alignment volume are
 /// readable from any run.
@@ -128,11 +128,11 @@ pub struct MeasureStats {
     pub bound_hits: u64,
     /// Rescue queries whose freshly computed kind-multiset bound proved
     /// the pair cannot clear the floor, skipping the alignment
-    /// ([FUSION-SHARED-SUBTREE-BOUND]).
+    /// ([FUSED-SHARED-SUBTREE-BOUND]).
     pub bound_skips: u64,
     /// Rescue queries the multiset bound admitted but the ordered
     /// subsequence bound then proved cannot clear the floor
-    /// ([FUSION-SHARED-SUBTREE-BOUND-ORDER]) — the alignments saved by
+    /// ([FUSED-SHARED-SUBTREE-BOUND-ORDER]) — the alignments saved by
     /// respecting post-order rather than kind counts alone.
     pub order_skips: u64,
     /// Exact Zhang–Shasha alignments computed.
@@ -147,7 +147,7 @@ pub struct MeasureStats {
 /// one corpus, memoising per-endpoint views and per-structural-pair
 /// results so an endpoint appearing in many pairs is walked once and a
 /// structure appearing at many byte offsets is aligned once
-/// ([FUSION-SHARED-SUBTREE-MEMO]).
+/// ([FUSED-SHARED-SUBTREE-MEMO]).
 #[derive(Debug)]
 pub struct OverlapMeasurer<'corpus> {
     /// `FileId → normalised root` for the corpus under measurement.
@@ -158,7 +158,7 @@ pub struct OverlapMeasurer<'corpus> {
     /// Exact measured overlap per structural pair.
     exact_results: HashMap<PairKey, f64>,
     /// Below-floor upper bounds per structural pair, usable only by the
-    /// rescue's floor comparison ([FUSION-SHARED-SUBTREE-BOUND]) —
+    /// rescue's floor comparison ([FUSED-SHARED-SUBTREE-BOUND]) —
     /// never as an exact value.
     bound_results: HashMap<PairKey, f64>,
     /// Aggregate counters ([PIPELINE-OBSERVABILITY-STAGES]).
@@ -168,7 +168,7 @@ pub struct OverlapMeasurer<'corpus> {
     /// of grids instead of allocating per keyroot pair.
     aligner: Aligner,
     /// Reusable ordered-bound row, for the same reason as `aligner`
-    /// ([FUSION-SHARED-SUBTREE-BOUND-ORDER]).
+    /// ([FUSED-SHARED-SUBTREE-BOUND-ORDER]).
     order_row: subsequence::Row,
 }
 
@@ -194,7 +194,7 @@ impl MeasureStats {
 type EndpointKey = (FileId, usize, usize);
 
 /// Memo key for a measured pair: the ordered Merkle hashes of the two
-/// endpoints ([FUSION-SHARED-SUBTREE-MEMO]). Hash equality pins the
+/// endpoints ([FUSED-SHARED-SUBTREE-MEMO]). Hash equality pins the
 /// whole normalised structure — the premise the `1.0` short-circuit
 /// already stands on — so every byte-offset copy of one structural
 /// pair shares this key, and the measurement runs once per *structure*
@@ -258,7 +258,7 @@ impl<'corpus> OverlapMeasurer<'corpus> {
     }
 
     /// Overlap for the rescue's floor comparison
-    /// ([FUSION-SHARED-SUBTREE-BOUND]). Identical to [`Self::overlap`]
+    /// ([FUSED-SHARED-SUBTREE-BOUND]). Identical to [`Self::overlap`]
     /// whenever the pair could clear `SHARED_SUBTREE_MIN_OVERLAP`; when
     /// a sound upper bound already proves it cannot, the bound itself —
     /// strictly below the floor — is returned without running the
@@ -293,7 +293,7 @@ impl<'corpus> OverlapMeasurer<'corpus> {
         // The multiset bound admitted the pair; the ordered one is
         // strictly tighter and still sound, and costs microseconds
         // against the alignment's milliseconds
-        // ([FUSION-SHARED-SUBTREE-BOUND-ORDER]). Computed second
+        // ([FUSED-SHARED-SUBTREE-BOUND-ORDER]). Computed second
         // because the cheaper test already answers most pairs. It
         // covers endpoints past `ALIGNMENT_MAX_NODES` too: the credit
         // fallback that answers those is itself a lower bound on the
@@ -321,7 +321,7 @@ impl<'corpus> OverlapMeasurer<'corpus> {
     }
 
     /// The ordered-subsequence upper bound as an overlap ratio against
-    /// the larger endpoint ([FUSION-SHARED-SUBTREE-BOUND-ORDER]).
+    /// the larger endpoint ([FUSED-SHARED-SUBTREE-BOUND-ORDER]).
     fn order_bound_ratio(&mut self, left: &EndpointView, right: &EndpointView) -> f64 {
         let larger = left.total.max(right.total);
         if larger == 0 {
@@ -339,7 +339,7 @@ impl<'corpus> OverlapMeasurer<'corpus> {
     /// Whether this endpoint's byte range resolves to a measurable
     /// view, resolving (and memoising) it on first ask. Resolvability
     /// partitions equal-hash members for the grouped signal
-    /// measurement ([FUSION-CLUSTER-SIGNALS]): an equal-hash pair is
+    /// measurement ([FUSED-CLUSTER-SIGNALS]): an equal-hash pair is
     /// `1.0` by short-circuit either way, but a *different*-hash pair
     /// with an unresolvable side is `0.0`, so one representative may
     /// only stand for members that resolve the same way.
@@ -405,7 +405,7 @@ fn endpoint_key(endpoint: &Fingerprint) -> EndpointKey {
 }
 
 /// Order-insensitive memo key for a measured pair
-/// ([FUSION-SHARED-SUBTREE-MEMO]).
+/// ([FUSED-SHARED-SUBTREE-MEMO]).
 fn pair_key(left: &Fingerprint, right: &Fingerprint) -> PairKey {
     if left.hash <= right.hash {
         (left.hash, right.hash)
@@ -415,7 +415,7 @@ fn pair_key(left: &Fingerprint, right: &Fingerprint) -> PairKey {
 }
 
 /// Sound upper bound on the alignment's shared-node count
-/// ([FUSION-SHARED-SUBTREE-BOUND]). Any edit script maps some set `M`
+/// ([FUSED-SHARED-SUBTREE-BOUND]). Any edit script maps some set `M`
 /// of node pairs; its cost is `deletes + inserts + relabels =
 /// larger + smaller − 2|M| + relabels`, so the shared mass
 /// `larger − TED` never exceeds the kind-preserving part of `M` — which
@@ -445,7 +445,7 @@ fn kind_intersection(
 
 /// The upper bound as an overlap ratio against the larger endpoint —
 /// directly comparable to `SHARED_SUBTREE_MIN_OVERLAP`
-/// ([FUSION-SHARED-SUBTREE-BOUND]).
+/// ([FUSED-SHARED-SUBTREE-BOUND]).
 fn kind_bound_ratio(left: &EndpointView, right: &EndpointView) -> f64 {
     let larger = left.total.max(right.total);
     if larger == 0 {

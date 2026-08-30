@@ -1,4 +1,4 @@
-//! The [FUSION-CONTENT-GATE] correction: measured content evidence
+//! The [FUSED-CONTENT-GATE] correction: measured content evidence
 //! decides what a saturated shape match is worth.
 //!
 //! `structural` and `token_jaccard` are two views of one normalised
@@ -13,7 +13,7 @@ use crate::{content::ContentEvidence, report::ReportSignals};
 use super::{is_shape_corroborated_nearmiss, is_token_carried_nearmiss, ClusterKind};
 
 /// Content agreement at which a *cross-file* shape-identical cluster
-/// holds an act-now `nearly_identical` verdict ([FUSION-CONTENT-GATE]).
+/// holds an act-now `nearly_identical` verdict ([FUSED-CONTENT-GATE]).
 /// Shape saturation makes the token axis an echo of the structural one
 /// — the honest #339 sibling-window signatures made that echo universal
 /// — so measured content is the only discriminating evidence left. The
@@ -23,7 +23,7 @@ use super::{is_shape_corroborated_nearmiss, is_token_carried_nearmiss, ClusterKi
 pub const CONTENT_SUPPORT_FLOOR: f64 = 0.7;
 
 /// Content agreement required for a *single-file* shape-identical
-/// cluster to hold the act-now verdict ([FUSION-CONTENT-GATE]). In-class
+/// cluster to hold the act-now verdict ([FUSED-CONTENT-GATE]). In-class
 /// sibling-method families such as the #197 REST settings surface
 /// measure 0.72–0.80 (shared plumbing, differing endpoint literals) and
 /// are API surface, not extract-worthy duplication — they must keep
@@ -42,7 +42,7 @@ pub const CONTENT_PROMOTE_FLOOR: f64 = 0.85;
 pub const LITERAL_TABLE_MIN_FRACTION: f64 = 0.8;
 
 /// True when a cluster's deterministic signals are shape echoes that
-/// saturate by construction ([FUSION-CONTENT-GATE]): an exact Merkle
+/// saturate by construction ([FUSED-CONTENT-GATE]): an exact Merkle
 /// match, or a near-total kind-stream Jaccard — the token LSH pass
 /// hashes the same normalised representation the structural pass does,
 /// so a `token_jaccard` at the [`super::classify_signals`] near-identical line
@@ -70,7 +70,7 @@ pub fn has_saturating_shape_evidence(signals: ReportSignals) -> bool {
 }
 
 /// Structural grade at or above which a view's occurrences are the same
-/// normalised tree: [FUSION-SHARED-SUBTREE] grades `1 - TED/max(nodes)`,
+/// normalised tree: [FUSED-SHARED-SUBTREE] grades `1 - TED/max(nodes)`,
 /// so saturation means the members align node for node and the view is a
 /// faithful description of one repeated shape. Named because three
 /// routing sites turn on this single boundary — a view *below* it is
@@ -80,7 +80,7 @@ pub const STRUCTURAL_SATURATION_FLOOR: f64 = 0.99;
 /// Content support carried by the two independent measured
 /// populations: either may vouch for a shape-identical cluster — pooled
 /// byte agreement or a corroborated consistent rename —
-/// and [FUSION-CONTENT-GATE] routes on the stronger, never on their
+/// and [FUSED-CONTENT-GATE] routes on the stronger, never on their
 /// mean. Defined once here because the mean is what demoted maximal
 /// Type-2 renames, so the two callers that read this quantity —
 /// [`ContentEvidence::support`] on the measured evidence and
@@ -114,7 +114,7 @@ pub fn content_support(agreement: f64, rename_consistency: f64) -> f64 {
 /// `report_render::route_anchor_free` exists to avoid. The exclusion is
 /// route membership *without a Merkle-saturated shape*: once
 /// `structural >= 0.99` the members align by construction and the
-/// conviction stands exactly as before ([FUSION-SHARED-SUBTREE]).
+/// conviction stands exactly as before ([FUSED-SHARED-SUBTREE]).
 #[must_use]
 pub fn lacks_content_support(signals: ReportSignals) -> bool {
     let misaligned_nearmiss = signals.structural < STRUCTURAL_SATURATION_FLOOR
@@ -125,7 +125,7 @@ pub fn lacks_content_support(signals: ReportSignals) -> bool {
 }
 
 /// Token overlap at or above which the token layer is echoing shape
-/// rather than reporting content ([FUSION-CONTENT-GATE]). Named because
+/// rather than reporting content ([FUSED-CONTENT-GATE]). Named because
 /// the assertion surface has to distinguish the two routes into
 /// `structural_only` — evidence-free below
 /// [`super::STRUCTURAL_ONLY_MAX_SUPPORT`], content-gated at or above this — and
@@ -133,7 +133,7 @@ pub fn lacks_content_support(signals: ReportSignals) -> bool {
 pub const SATURATING_TOKEN_FLOOR: f64 = 0.95;
 
 /// Confidence discount applied to rename-consistency evidence when the
-/// gate fuses it ([FUSION-CONTENT-GATE]). A literal-anchored bijective
+/// gate fuses it ([FUSED-CONTENT-GATE]). A literal-anchored bijective
 /// rename is proven duplication, but its identifier positions matched
 /// through a mapping rather than byte equality — strictly weaker
 /// evidence than a verbatim copy. The discount keeps a proven Type-2
@@ -143,7 +143,7 @@ pub const SATURATING_TOKEN_FLOOR: f64 = 0.95;
 pub const RENAME_CONSISTENCY_DISCOUNT: f64 = 0.9;
 
 /// Corrects the rendered fused confidence for shape-identical clusters
-/// ([FUSION-CONTENT-GATE]). `structural` and `token_jaccard`
+/// ([FUSED-CONTENT-GATE]). `structural` and `token_jaccard`
 /// are two views of one normalised representation, so summing them says
 /// nothing beyond "the shapes matched" — every shape match used to
 /// render `fused = 1.0`, which made the agent-facing act-now threshold
@@ -170,7 +170,7 @@ pub fn content_gated_signals(
     // including the two that leave the confidence untouched. A reader
     // that can see `fused` but not the evidence behind it cannot tell a
     // corroborated rename from an anchor-poor scaffolding family — the
-    // two render the same triple ([FUSION-CONTENT-GATE]). Returning the
+    // two render the same triple ([FUSED-CONTENT-GATE]). Returning the
     // input unchanged here would leave those fields at the zeroes
     // `From<PairScore>` seeded, which reads as "measured, and found
     // nothing" rather than "measured, and found this".
@@ -188,7 +188,7 @@ pub fn content_gated_signals(
 
 /// Scales a saturated shape match by the measured content evidence —
 /// the arithmetic half of [`content_gated_signals`], split out so both
-/// stay inside the function budget ([FUSION-CONTENT-GATE]).
+/// stay inside the function budget ([FUSED-CONTENT-GATE]).
 fn apply_content_gate(
     signals: ReportSignals,
     content: ContentEvidence,
@@ -212,7 +212,7 @@ fn apply_content_gate(
     // The guard is the digest equality the argument names, passed in by
     // the renderer, and not a `structural` reading (gh #431). Since #408
     // that axis grades shared-subtree *overlap*
-    // ([FUSION-SHARED-SUBTREE]): every value below saturation means the
+    // ([FUSED-SHARED-SUBTREE]): every value below saturation means the
     // subtrees provably differ, so no digest is shared and the argument
     // covers none of them, while saturation itself is reachable by
     // ratio — `shared == larger` — without digest equality. Scoping the
@@ -236,7 +236,7 @@ fn apply_content_gate(
 }
 
 /// Stamps the rendered shape reading onto the signals every surface
-/// receives ([FUSION-CONTENT-GATE]). This gate is the last transform a
+/// receives ([FUSED-CONTENT-GATE]). This gate is the last transform a
 /// rendered cluster's signals pass through, so stamping here — on both
 /// exit paths — is what lets every consumer read `shape` verbatim
 /// instead of re-deriving `max(structural, token_jaccard)` locally.
@@ -246,7 +246,7 @@ fn stamp_shape(mut signals: ReportSignals) -> ReportSignals {
 }
 
 /// Stamps the measured content evidence onto a rendered signal triple
-/// without touching the confidence ([FUSION-CONTENT-GATE], #344).
+/// without touching the confidence ([FUSED-CONTENT-GATE], #344).
 fn with_content_evidence(signals: ReportSignals, content: ContentEvidence) -> ReportSignals {
     ReportSignals {
         agreement: content.agreement,

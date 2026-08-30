@@ -1,7 +1,7 @@
 //! Ordered-subsequence upper bound on shared node mass
-//! ([FUSION-SHARED-SUBTREE-BOUND-ORDER]).
+//! ([FUSED-SHARED-SUBTREE-BOUND-ORDER]).
 //!
-//! [FUSION-SHARED-SUBTREE-BOUND] bounds the alignment by the node-kind
+//! [FUSED-SHARED-SUBTREE-BOUND] bounds the alignment by the node-kind
 //! multiset the two endpoints share. That bound ignores *order*, and
 //! order is exactly what an ordered tree alignment must respect: in any
 //! Tai mapping, one node precedes another in post-order on the left if

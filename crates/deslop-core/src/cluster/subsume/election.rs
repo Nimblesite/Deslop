@@ -144,7 +144,7 @@ fn precision_preference(proposed: &Cluster, other: &Cluster, nesting: Nesting) -
         // the duplication and the nested view re-describes it, so
         // enclosure decides and the signal grades are not compared at
         // all. They are not comparable: `structural` is a measured
-        // overlap ([FUSION-SHARED-SUBTREE]) and a nested window scores
+        // overlap ([FUSED-SHARED-SUBTREE]) and a nested window scores
         // higher exactly to the extent that it excludes what differs. A
         // byte-identical 28-byte parameter list scored 1.00 against the
         // enclosing method's 0.88 and deleted the only whole-method
@@ -317,7 +317,7 @@ pub(super) fn demoted(cluster: &Cluster) -> bool {
 /// Reached only when neither occurrence set strictly encloses the
 /// other — [`evaluate_pair`] nominates the enclosing view first, in
 /// both directions. That ordering matters now that `structural` is a
-/// graded overlap ([FUSION-SHARED-SUBTREE]) rather than binary Merkle
+/// graded overlap ([FUSED-SHARED-SUBTREE]) rather than binary Merkle
 /// equality: comparing the grade across two views of *different scope*
 /// systematically favours the narrower one, because a window scores
 /// higher exactly to the extent that it excludes what differs. Between

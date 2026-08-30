@@ -3,7 +3,7 @@
 //! Emits one code lens per occurrence in the requested file. The lens
 //! title carries the cluster count and the shared confidence
 //! explanation — fused score plus measured content evidence
-//! ([FUSION-CONTENT-GATE]) — so a reader sees the full context without
+//! ([FUSED-CONTENT-GATE]) — so a reader sees the full context without
 //! opening the report view, and the attached command jumps to the next
 //! occurrence.
 
@@ -59,7 +59,7 @@ fn lens_for_occurrence(cluster: &ReportCluster, occurrence_index: usize) -> Code
 /// Builds the lens title. Spec-compliant two-dot severity glyph at
 /// the front, cluster count, then the confidence explanation.
 ///
-/// [FUSION-CONTENT-GATE] The signal breakdown is the one shared
+/// [FUSED-CONTENT-GATE] The signal breakdown is the one shared
 /// `render::signals` rendering, so the lens states the fused confidence
 /// and the measured content evidence rather than a hand-rolled subset
 /// that cannot separate a corroborated rename from a scaffolding family.
@@ -194,7 +194,7 @@ mod tests {
                 "title carries three signals to 2dp: {}",
                 command.title
             );
-            // [FUSION-CONTENT-GATE] #344: every lens states the fused
+            // [FUSED-CONTENT-GATE] #344: every lens states the fused
             // confidence and the measured content evidence behind it.
             assert!(
                 command.title.contains(
@@ -289,7 +289,7 @@ mod tests {
         assert!(title.ends_with("jump to next"), "{}", title);
     }
 
-    // [FUSION-CONTENT-GATE] #344: structural and jaccard alone cannot tell a
+    // [FUSED-CONTENT-GATE] #344: structural and jaccard alone cannot tell a
     // corroborated Type-2 rename from an anchor-poor scaffolding family, so
     // the lens must also state the fused score and the measured evidence.
     #[test]

@@ -68,7 +68,7 @@ fn fingerprint(file_id: deslop_core::state::FileId, index: usize) -> Fingerprint
     }
 }
 
-/// [FUSION-EMBED-PROVIDER] A pair whose measured cosine clears the
+/// [FUSED-EMBED-PROVIDER] A pair whose measured cosine clears the
 /// admission floor must reach fusion, even when more than `TOP_K` other
 /// subtrees sit nearer the query.
 ///

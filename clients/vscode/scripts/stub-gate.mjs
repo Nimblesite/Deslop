@@ -3,8 +3,8 @@
 // The deterministic BLAKE3 stub (`provider_id` "stub", `model_id` "blake3-stub",
 // type `StubProvider`) is test-only embedding infrastructure gated behind the
 // deslop-core `test-support` Cargo feature. It must never reach a shipped VSIX:
-// not in the settings enum, not in any bundled asset. Spec: fusion.md
-// [FUSION-EMBED-PROVIDER] and vsix.md [VSIX-EMBED-PICKER].
+// not in the settings enum, not in any bundled asset. Spec: fused.md
+// [FUSED-EMBED-PROVIDER] and vsix.md [VSIX-EMBED-PICKER].
 //
 // This module holds the pure detection logic so it is unit-testable without a
 // real `.vsix`. `verify-vsix-package.mjs` injects an unzip-backed reader;

@@ -36,7 +36,7 @@ export interface ClusterSignalOptions {
  * (`deslop-core::pair::FUSED_THRESHOLD`). Restated here so these
  * fixtures can stage clusters on either side of it — production code
  * reads the engine's own `meets_fused_gate` verdict and owns no copy of
- * this number ([FUSION-CONTENT-GATE]). */
+ * this number ([FUSED-CONTENT-GATE]). */
 export const ENGINE_FUSED_CUTOFF = 0.85;
 const FIXTURE_TEN = 10;
 export const DEFAULT_BUBBLE_CLUSTER_WEIGHT = FIXTURE_TEN;
@@ -47,7 +47,7 @@ const FIXTURE_ANALYSED_LOC = FIXTURE_TEN;
 const FIXTURE_LINE_LENGTH = FIXTURE_TEN;
 
 // Builds a two-occurrence cluster whose fused confidence is explicit, so
-// a test can stage the exact [FUSION-CONTENT-GATE] band it is asserting.
+// a test can stage the exact [FUSED-CONTENT-GATE] band it is asserting.
 export function bubbleCluster(
   id: string,
   weight: number,

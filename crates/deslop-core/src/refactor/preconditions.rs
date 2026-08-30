@@ -10,7 +10,7 @@
 //! Rule 1 also has a content half ([`content_refusal`]): a shape match
 //! is not evidence of duplication, so a cluster whose measured content
 //! evidence does not vouch for it never reaches any of these actions
-//! ([FUSION-CONTENT-GATE], gh #344).
+//! ([FUSED-CONTENT-GATE], gh #344).
 
 use tree_sitter::Node;
 
@@ -100,7 +100,7 @@ pub fn consolidation_candidate(cluster: &ReportCluster) -> bool {
 }
 
 /// The content-evidence half of rule 1
-/// ([AUTOFIX-EXTRACT-PRECONDITIONS], [FUSION-CONTENT-GATE]): the reason
+/// ([AUTOFIX-EXTRACT-PRECONDITIONS], [FUSED-CONTENT-GATE]): the reason
 /// this cluster's shape match is not evidence of duplication, or `None`
 /// when the measured evidence vouches for it.
 ///

@@ -39,7 +39,7 @@ const BUCKET_SEVERITIES: [(&str, DiagnosticSeverity, &str); 4] = [
     ),
 ];
 
-// [FUSION-CONTENT-GATE] #344: each measured axis a diagnostic built from the
+// [FUSED-CONTENT-GATE] #344: each measured axis a diagnostic built from the
 // `sample_cluster` signals must state, with the evidence that axis carries.
 const SAMPLE_EVIDENCE_AXES: [(&str, &str); 7] = [
     ("structural 1.00", "structural axis"),
@@ -250,7 +250,7 @@ fn diagnostic_message_shows_category_count_and_action() {
     );
 }
 
-// [FUSION-CONTENT-GATE] #344: the bucket title alone cannot tell a
+// [FUSED-CONTENT-GATE] #344: the bucket title alone cannot tell a
 // corroborated Type-2 rename from an anchor-poor scaffolding family — both
 // render structural=1.00. The diagnostic must state the fused confidence and
 // the measured content evidence the gate scored, using the one shared
@@ -336,7 +336,7 @@ fn build_for_file_emits_error_for_identical_cluster_with_canonical_link() -> Res
         .first()
         .ok_or_else(|| anyhow!("diagnostic present"))?;
     assert_eq!(diagnostic.source.as_deref(), Some("deslop"));
-    // [FUSION-CONTENT-GATE] #344: the evidence reaches the published
+    // [FUSED-CONTENT-GATE] #344: the evidence reaches the published
     // Diagnostic, not merely the formatter.
     assert!(
         diagnostic

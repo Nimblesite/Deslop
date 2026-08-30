@@ -1,5 +1,5 @@
 //! Fused-signal assertion vocabulary shared by the golden confidence
-//! suites ([FUSION-STRATEGY-BOUNDED-MAX], [FUSION-CONTENT-GATE],
+//! suites ([FUSED-STRATEGY-BOUNDED-MAX], [FUSED-CONTENT-GATE],
 //! [FUSED-THRESHOLD]).
 //!
 //! The bands, the honest shape-only bucket set, and the diagnostic dump
@@ -49,7 +49,7 @@ pub(crate) const ACT_NOW_BUCKETS: [&str; 3] =
     [IDENTICAL_BUCKET, "nearly_identical", "same_behavior"];
 
 /// Asserts the full `structural_only` contract
-/// ([RANK-STRUCTURAL-ONLY], [FUSION-CONTENT-GATE]).
+/// ([RANK-STRUCTURAL-ONLY], [FUSED-CONTENT-GATE]).
 ///
 /// A cluster reaches this bucket by one of **two** routes, and a test
 /// that admits only one pins an implementation instead of the contract:
@@ -189,14 +189,14 @@ pub(crate) fn distinct_texts(scan_root: &Path, cluster: &Value) -> Result<BTreeS
 }
 
 /// True when at least two of a cluster's occurrences are byte-identical
-/// — the proof [FUSION-CONTENT-GATE]'s verbatim guard relies on when it
+/// — the proof [FUSED-CONTENT-GATE]'s verbatim guard relies on when it
 /// vouches full agreement for a cluster that is not wholly identical.
 pub(crate) fn has_verbatim_pair(scan_root: &Path, cluster: &Value) -> Result<bool> {
     let texts = occurrence_texts(scan_root, cluster)?;
     Ok(distinct_texts(scan_root, cluster)?.len() < texts.len())
 }
 
-/// Asserts the full **proven-rename** contract ([FUSION-CONTENT-GATE],
+/// Asserts the full **proven-rename** contract ([FUSED-CONTENT-GATE],
 /// [TECH-PMATCH-BAKER], `[REPAIR-RENAME-ANCHOR-MASS]`) — the mirror of
 /// [`assert_structural_only_contract`], and the reason both live here.
 ///
@@ -231,7 +231,7 @@ pub(crate) fn assert_proven_rename_contract(
 /// inserted statement**. Verdict and not-a-copy are identical; only the
 /// shape half differs, because the reported view spans the whole
 /// declaration and therefore includes the insertion
-/// ([FUSION-SHARED-SUBTREE], gh #408). Demanding Merkle exactness there
+/// ([FUSED-SHARED-SUBTREE], gh #408). Demanding Merkle exactness there
 /// demands the fragment view — the shared sub-range either side of the
 /// insertion — which is the recall hole #408 is filed against.
 pub(crate) fn assert_near_miss_rename_contract(

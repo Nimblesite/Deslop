@@ -1,5 +1,5 @@
 //! One rendering of the fused signal triple and the content evidence
-//! behind it, shared by every surface ([FUSION-CONTENT-GATE], #344).
+//! behind it, shared by every surface ([FUSED-CONTENT-GATE], #344).
 //!
 //! `structural`, `token_jaccard` and `embedding_cos` say *how much* the
 //! members matched; they never say *why* a cluster routed where it did.
@@ -109,7 +109,7 @@ pub fn plain_explanation(signals: ReportSignals) -> String {
 
 /// Why a decision surface refused to act on a cluster whose shape
 /// saturates but whose measured content evidence does not vouch for it
-/// ([`crate::buckets::lacks_content_support`], [FUSION-CONTENT-GATE]).
+/// ([`crate::buckets::lacks_content_support`], [FUSED-CONTENT-GATE]).
 ///
 /// Worded once, here, because more than one surface refuses on this
 /// evidence and a user comparing an LSP refusal against the report must
@@ -146,7 +146,7 @@ pub fn table_row(id: &str, signals: ReportSignals) -> String {
     )
 }
 
-/// Half of the last digit a surface prints ([FUSION-CONTENT-GATE]).
+/// Half of the last digit a surface prints ([FUSED-CONTENT-GATE]).
 /// Two values that render as the same string must never be described
 /// as different, so every comparison the verdict makes is taken at the
 /// precision the reader actually sees.
@@ -158,7 +158,7 @@ fn format_signal(value: f64) -> String {
 }
 
 /// Plain-English reading of the shape score against the measured
-/// content evidence ([FUSION-CONTENT-GATE-VERDICT], #344, gh #460), for
+/// content evidence ([FUSED-CONTENT-GATE-VERDICT], #344, gh #460), for
 /// readers who have the numbers in front of them and no way to tell a
 /// renamed copy from boilerplate.
 ///
@@ -171,7 +171,7 @@ fn format_signal(value: f64) -> String {
 /// sentence rather than each growing its own verdict engine.
 ///
 /// **Which reading applies turns on whether the gate ran at all.**
-/// [FUSION-CONTENT-GATE] is scoped to shape-saturating clusters:
+/// [FUSED-CONTENT-GATE] is scoped to shape-saturating clusters:
 /// `buckets::routing::route_shape_identical` returns before the gate,
 /// and `buckets::gate::content_gated_signals` leaves `fused` untouched,
 /// whenever [`crate::buckets::has_saturating_shape_evidence`] is false.
@@ -218,9 +218,9 @@ pub fn content_evidence_verdict(signals: ReportSignals) -> String {
     }
 }
 
-/// The shape never saturated, so [FUSION-CONTENT-GATE] was scoped out
+/// The shape never saturated, so [FUSED-CONTENT-GATE] was scoped out
 /// and the confidence rests on shape alone
-/// ([FUSION-CONTENT-GATE-VERDICT], gh #460).
+/// ([FUSED-CONTENT-GATE-VERDICT], gh #460).
 ///
 /// The measured figures are still shown — they are the only content
 /// evidence there is, and withholding them would leave the reader a
@@ -334,7 +334,7 @@ mod tests {
         built
     }
 
-    /// [FUSION-CONTENT-GATE] The shape reading is the stronger of the two
+    /// [FUSED-CONTENT-GATE] The shape reading is the stronger of the two
     /// views of one normalised representation — the single reduction the
     /// wire `shape` field carries.
     #[test]
@@ -343,7 +343,7 @@ mod tests {
         assert!((signals(0.2, 0.3, 0.9, 0.9, 0.05, 0.0, 0.0).shape - 0.3).abs() < f64::EPSILON);
     }
 
-    /// [FUSION-CONTENT-GATE] The four readings a rendered cluster can
+    /// [FUSED-CONTENT-GATE] The four readings a rendered cluster can
     /// carry, verbatim. Every surface quotes `evidence_verdict`, so this
     /// wording is the wording users and agents read: a corroborated
     /// rename and an anchor-poor scaffolding family render the identical
@@ -391,7 +391,7 @@ mod tests {
              renaming 0.00."
         );
 
-        // [FUSION-CONTENT-GATE-VERDICT] gh #460 — the accessor pair's
+        // [FUSED-CONTENT-GATE-VERDICT] gh #460 — the accessor pair's
         // measured triple. Neither axis saturates, so the gate never ran
         // on it and its content evidence never entered the confidence.
         let gate_skipped = signals(0.82, 0.73, 0.0, 0.82, 0.31, 0.0, 0.0);

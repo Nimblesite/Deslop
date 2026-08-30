@@ -1,4 +1,4 @@
-//! E2E pin for gh #458 — [FUSION-CLUSTER-SIGNALS]: a rendered cluster's
+//! E2E pin for gh #458 — [FUSED-CLUSTER-SIGNALS]: a rendered cluster's
 //! signals are the strongest admitted pair's evidence, never a mean over
 //! pairs that never cleared admission, and the displayed value is
 //! connected to the pair that earned it.
@@ -188,14 +188,14 @@ fn a_byte_identical_pair_reads_the_same_in_every_cluster() -> Result<()> {
 
 /// The pooled byte agreement a byte-identical pair earns on its own:
 /// their collapsed leaves are the same bytes at every position
-/// ([FUSION-CONTENT-GATE]).
+/// ([FUSED-CONTENT-GATE]).
 const VERBATIM_PAIR_AGREEMENT: f64 = 1.0;
 
 /// The two content axes carried on the rendered signal wire — the pair
 /// the report shows must own both of them, whatever their values are.
 const CONTENT_AXES: [&str; 2] = ["agreement", "rename_consistency"];
 
-// gh #458 (content half) — [FUSION-CONTENT-GATE]: the per-pair contract
+// gh #458 (content half) — [FUSED-CONTENT-GATE]: the per-pair contract
 // the shape axes now honour must hold for the *content* axes too.
 // `agreement` and `rename_consistency` are still folded as a MEAN over
 // the cluster's members (`content::cluster_agreement`,

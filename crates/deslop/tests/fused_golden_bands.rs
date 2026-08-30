@@ -1,5 +1,5 @@
 //! Golden band coverage for the fused confidence
-//! ([FUSION-STRATEGY-BOUNDED-MAX], [FUSION-CONTENT-GATE], [FUSED-THRESHOLD]).
+//! ([FUSED-STRATEGY-BOUNDED-MAX], [FUSED-CONTENT-GATE], [FUSED-THRESHOLD]).
 //!
 //! `docs/plans/fused-score-followups.md` states the contract the fused score has to
 //! satisfy: it must carry information, so that the three documented
@@ -16,7 +16,7 @@
 //!
 //! The Type-2 rows are the load-bearing ones. A rename-only copy is the
 //! textbook definition of a Type-2 clone and every clone detector must
-//! report it. [FUSION-CONTENT-GATE] measures raw-content agreement over
+//! report it. [FUSED-CONTENT-GATE] measures raw-content agreement over
 //! *all* collapsed leaves — identifiers and literals pooled — so a
 //! maximally renamed clone with few literals scores low agreement and is
 //! indistinguishable from unrelated scaffolding. These fixtures keep the
@@ -261,7 +261,7 @@ fn assert_rename_components(cluster: &Value, corpus: &Corpus, stem: &str) {
 /// reach `0.85` in any language at any body length a human writes — the
 /// golden fixtures rendered `0.729` and `0.720` on 17 and 16 anchors —
 /// so the top band silently meant "byte-identical" rather than "clone".
-/// [FUSION-CONTENT-GATE] states the rule this
+/// [FUSED-CONTENT-GATE] states the rule this
 /// pins: a contradiction-free rename whose own mass already clears
 /// [`CONTENT_SUPPORT_FLOOR`](deslop_core::buckets::CONTENT_SUPPORT_FLOOR)
 /// is priced by the rename discount alone.
@@ -422,21 +422,21 @@ fn corpus(language: &str) -> Result<&'static Corpus> {
         .ok_or_else(|| anyhow::anyhow!("no golden corpus registered for {language}"))
 }
 
-// [FUSION-CONTENT-GATE] C#: verbatim / Type-2 rename / unrelated
+// [FUSED-CONTENT-GATE] C#: verbatim / Type-2 rename / unrelated
 // descriptor family, all three in one report.
 #[test]
 fn csharp_fused_bands_separate_copy_paste_rename_and_coincidence() -> Result<()> {
     assert_golden_corpus(corpus("csharp")?)
 }
 
-// [FUSION-CONTENT-GATE] Python: same three scenarios, `self`-bearing
+// [FUSED-CONTENT-GATE] Python: same three scenarios, `self`-bearing
 // descriptor family (shared receiver names are the hardest content case).
 #[test]
 fn python_fused_bands_separate_copy_paste_rename_and_coincidence() -> Result<()> {
     assert_golden_corpus(corpus("python")?)
 }
 
-// [FUSION-CONTENT-GATE] TypeScript: type annotations give the shape-only
+// [FUSED-CONTENT-GATE] TypeScript: type annotations give the shape-only
 // family extra shared identifier positions, so content agreement must
 // still fall below the support floor.
 #[test]
@@ -444,21 +444,21 @@ fn typescript_fused_bands_separate_copy_paste_rename_and_coincidence() -> Result
     assert_golden_corpus(corpus("typescript")?)
 }
 
-// [FUSION-CONTENT-GATE] Go: the descriptor family carries no literals at
+// [FUSED-CONTENT-GATE] Go: the descriptor family carries no literals at
 // all, so content agreement is measured purely over identifiers.
 #[test]
 fn go_fused_bands_separate_copy_paste_rename_and_coincidence() -> Result<()> {
     assert_golden_corpus(corpus("go")?)
 }
 
-// [FUSION-CONTENT-GATE] Rust: `format!` puts the varying text inside a
+// [FUSED-CONTENT-GATE] Rust: `format!` puts the varying text inside a
 // single literal leaf, the sparsest content evidence of any language here.
 #[test]
 fn rust_fused_bands_separate_copy_paste_rename_and_coincidence() -> Result<()> {
     assert_golden_corpus(corpus("rust")?)
 }
 
-// [FUSION-CONTENT-GATE] PHP: sigil-prefixed variables are distinct
+// [FUSED-CONTENT-GATE] PHP: sigil-prefixed variables are distinct
 // identifier leaves, so a rename touches every one of them.
 #[test]
 fn php_fused_bands_separate_copy_paste_rename_and_coincidence() -> Result<()> {

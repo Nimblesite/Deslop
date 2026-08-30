@@ -193,7 +193,7 @@ type ReportSignals {
   literal_fraction: Float
 }
 
-# [FUSION-CLUSTER-SIGNALS]
+# [FUSED-CLUSTER-SIGNALS]
 type ReportSignalSource {
   left: Int
   right: Int

@@ -2,7 +2,7 @@
 
 Deslop combines structural, token, and embedding analysis. The surveyed systems in [landscape.md](landscape.md) and [reading-list.md](reading-list.md) likewise combine representations rather than relying on vector search alone.
 
-### [FUSION-SIGNALS-THREE-LAYER] Deslop is hybrid by design
+### [FUSED-SIGNALS-THREE-LAYER] Deslop is hybrid by design
 
 The pipeline fuses three signals:
 
@@ -12,20 +12,20 @@ The pipeline fuses three signals:
 
 The structural and token layers always run. The embedding layer is opt-in: `--embeddings` defaults to `off`, because it needs a reachable local Ollama and the shipped CLI must produce a report on a machine that has none. `auto` uses embeddings when the provider answers and warns when it does not; `required` hard-fails instead. Leaving it off is a measurable recall loss on Type-3/4 — the research does not support it as a permanent posture, only as a default that never blocks a first run.
 
-### [FUSION-EMBED-PROVIDER] Embedding layer — concrete choices
+### [FUSED-EMBED-PROVIDER] Embedding layer — concrete choices
 
 - **Provider and model are not hard-coded.** Both are CLI flags (`--embedding-provider`, `--embedding-model`). The core crate exposes an `EmbeddingProvider` trait; production providers are selected at runtime by name through `ProviderRegistry::production`, which registers `ollama` only today. A local `onnx` provider is on the roadmap and slots in by registering another factory — no transport-specific special-casing. A deterministic BLAKE3 stub provider exists purely as test infrastructure: it lives behind the `test-support` Cargo feature, is never registered in production, and is barred from the shipped VSIX by a packaging gate. The research picks a *default*, not a lock-in.
 - **Default provider + model (overridable).** Provider defaults to `ollama` (local, no network) and model to `nomic-embed-text` (`DEFAULT_OLLAMA_MODEL`), the embedding model an Ollama install is most likely to already carry. `nomic-embed-code` is the code-tuned alternative and is selected with `--embedding-model`; both follow the 2025 ensemble paper's finding that *"smaller embedding sizes, smaller tokenizer vocabularies and tailored datasets are advantageous"*. CodeT5+110M and UniXCoder are alternate top performers cited in the literature; either should be selectable via `--embedding-model` once exposed through a provider.
 - **Local-only is a policy, not a hard requirement of the architecture.** The default stack never touches the network, but the trait doesn't forbid a hosted provider. A user configuring `--embedding-provider=hosted-foo` opts into that tradeoff deliberately; we don't enable it for them.
 - **ANN index: HNSW.** Use `usearch` or `instant-distance` (pure Rust, no C deps). SSCD validated HNSW at 250 MLOC.
-- **One cosine definition, accumulated in `f64`.** Exact-path pair admission and every rendered `embedding_cos` use the crate's single cosine function (`embedding::cosine_similarity`): dot product and norms accumulated in `f64` over the raw `f32` components, no intermediate normalised vector, result clamped to `[0, 1]`. Byte-identical snippets share one vector, so their rendered cosine is exactly `1.0` — `f32` accumulation grew error with vector width and reported `0.999998` (gh #372, pinned by `issue_372_identical_snippet_cosine.rs` and the unit tests beside the function). The HNSW pass measures `f32` cosine distance only to discover candidates; discovery-edge cosines are never rendered ([FUSION-CLUSTER-SIGNALS]).
+- **One cosine definition, accumulated in `f64`.** Exact-path pair admission and every rendered `embedding_cos` use the crate's single cosine function (`embedding::cosine_similarity`): dot product and norms accumulated in `f64` over the raw `f32` components, no intermediate normalised vector, result clamped to `[0, 1]`. Byte-identical snippets share one vector, so their rendered cosine is exactly `1.0` — `f32` accumulation grew error with vector width and reported `0.999998` (gh #372, pinned by `issue_372_identical_snippet_cosine.rs` and the unit tests beside the function). The HNSW pass measures `f32` cosine distance only to discover candidates; discovery-edge cosines are never rendered ([FUSED-CLUSTER-SIGNALS]).
 - **Ensemble by max, never sum or average.** The 2025 ensemble paper's max/sum finding assumes independent members; Deslop's structural and token axes are two views of one normalised tree, so summing them manufactures confidence neither carries alone (gh #343). Fusion takes the strongest single axis; score normalization is mandatory before combining.
 - **Cache by `(file_content_hash, provider_id, model_id, model_version)`.** Re-runs are free; switching providers or models invalidates only the embedding layer and leaves structural/LSH caches intact. LSP incremental mode reuses the same cache unchanged.
 - **Index granularity: AST subtrees above min-node threshold**, not whole files. We already have those subtrees from the structural pass — embed them directly. This keeps embeddings byte-range-addressable and dramatically reduces the N in k-NN.
 - **The per-input character budget belongs to the provider, never to the pipeline.** A subtree longer than the budget is counted in `failed_subtrees` and never dispatched, because Ollama truncates silently (`truncate: true`) and a truncated vector misrepresents the code it claims to describe. The budget is therefore a property of the model behind the provider — `nomic-embed-text` carries a 2,048-token context, `mxbai-embed-large` 512, `qwen3-embedding` 32k — and is read from `EmbeddingProvider::max_input_chars`. `OllamaProvider` derives it at construction from the model's own `model_info["<arch>.context_length"]` via `POST /api/show`, converted at a deliberately conservative 3 chars/token, falling back to `DEFAULT_MAX_INPUT_CHARS` (6,000) when the endpoint or field is unavailable. A single pipeline-wide constant cannot be correct for two models an order of magnitude apart: gh #286 reported 14,723 of 175,160 subtrees (8.4%) dropped, at the large end where re-derived duplication is most expensive to miss, and no model swap could have recovered them while the cap sat upstream of the provider.
 - **Determinism caveat.** Embedding + ANN is approximate. Mitigate by: (a) recording `provider_id`, `model_id`, and `model_version` in the `.deslop/cache` header and the report, (b) using deterministic ANN parameters (fixed seed, fixed ef_construction), (c) final ranking is still computed over the *union* of structural + LSH + embedding candidates, so a missed ANN neighbor only loses recall, never changes existing cluster content.
 
-### [FUSION-STRATEGY-BOUNDED-MAX] Fusion strategy (how the three signals combine)
+### [FUSED-STRATEGY-BOUNDED-MAX] Fusion strategy (how the three signals combine)
 
 The ID records the strategy this section originally specified; the **sum arm was removed by gh #343** (pinned by `issue_343_sum_clamp_saturation.rs`; `PairScore::bounded_fused` is the only fusion) because the axes are correlated views of one normalised tree and their sum clamps mid-band clusters to a confidence of 1.0 that no single axis earned and no byte-identical pair backs. The strategy in force:
 
@@ -33,24 +33,24 @@ The ID records the strategy this section originally specified; the **sum arm was
 2. For each candidate pair, compute three scores in [0,1]: `structural_sim`, `token_jaccard`, `embedding_cos`.
 3. Final pair score = the **strongest single axis** — `max(structural_sim, token_jaccard, embedding_cos)`, bounded to [0,1] (`PairScore::bounded_fused`). Never their sum, never their average.
 4. **Admission is decided pair by pair.** Each pair either clears
-   `admission.fused_threshold` ([FUSION-TUNING-LEVERS]) or it does not; there is
+   `admission.fused_threshold` ([FUSED-TUNING-LEVERS]) or it does not; there is
    no group-level judgement and no averaging over a group. Clusters are the
    transitive closure of the pairs that cleared it.
 5. Rank clusters by summed duplicated mass ([pipeline.md §RANK-MASS-SUM](pipeline.md#rank-mass-sum)) for "worst offenders first."
 
 This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on structural+embedding and ~high on LSH, a Type-3 may score high on LSH+embedding and medium on structural, and a Type-4 scores primarily on embedding. Every type lands in the report; scores explain *why*, and the fused confidence never exceeds the best of them. The axes are uncalibrated — a cosine 0.85, a Jaccard 0.85 and an alignment 0.85 are not the same weight of evidence, and under max the most generous axis wins; `fused_threshold` at 0.85 (above the literature's 0.7) pays that bill.
 
-### [FUSION-SCOPE] `fused` is a pair quantity
+### [FUSED-SCOPE] `fused` is a pair quantity
 
 **`fused` never refers to the whole cluster. It exists at the level of the pair only.** A cluster-wide fused is impossible by construction: averaging one across the member pairs is the mean that mispriced proven copies (gh #458), and summing ratios in `[0,1]` is meaningless.
 
-`fused` is the pair's admission score: `PairScore::bounded_fused` — the strongest single axis of `structural`, `token_jaccard`, `embedding_cos`, bounded to `[0,1]` ([FUSION-STRATEGY-BOUNDED-MAX]). It decides admission, pair by pair, against `admission.fused_threshold` — nothing else. A cluster renders its bucket (the verdict), the elected pair's measured axes ([FUSION-CLUSTER-SIGNALS]), and its content evidence ([FUSION-CONTENT-GATE]) — never a fused number. There is no cluster-level fused, no rendered confidence derived from it, and no gate that compares one to the pair bar.
+`fused` is the pair's admission score: `PairScore::bounded_fused` — the strongest single axis of `structural`, `token_jaccard`, `embedding_cos`, bounded to `[0,1]` ([FUSED-STRATEGY-BOUNDED-MAX]). It decides admission, pair by pair, against `admission.fused_threshold` — nothing else. A cluster renders its bucket (the verdict), the elected pair's measured axes ([FUSED-CLUSTER-SIGNALS]), and its content evidence ([FUSED-CONTENT-GATE]) — never a fused number. There is no cluster-level fused, no rendered confidence derived from it, and no gate that compares one to the pair bar.
 
 #### [FUSED-THRESHOLD] The pair admission bar
 
-`admission.fused_threshold` (default 0.85) is the pair admission bar; provenance in [FUSION-TUNING-LEVERS]. It is per-pair data (`CandidatePair::fused_min_score`), not a global constant — a cross-language candidate with no structural anchor lowers it to `candidates.cross_language_min_jaccard`. Every threshold in these specs is a configurable default, never a hard-coded constant; the config surface lives in [exclusion.md](exclusion.md) and the migration in `unhardcode-tuning-plan.md`.
+`admission.fused_threshold` (default 0.85) is the pair admission bar; provenance in [FUSED-TUNING-LEVERS]. It is per-pair data (`CandidatePair::fused_min_score`), not a global constant — a cross-language candidate with no structural anchor lowers it to `candidates.cross_language_min_jaccard`. Every threshold in these specs is a configurable default, never a hard-coded constant; the config surface lives in [exclusion.md](exclusion.md) and the migration in `unhardcode-tuning-plan.md`.
 
-### [FUSION-SHARED-SUBTREE] `structural` is measured subtree overlap, not Merkle equality
+### [FUSED-SHARED-SUBTREE] `structural` is measured subtree overlap, not Merkle equality
 
 `structural` is the **best-achievable ordered subtree overlap** between two occurrences: `1 - TED / max(nodes)`, where `TED` is the Zhang–Shasha tree edit distance over normalised node kinds with unit insert/delete/relabel costs (`overlap.rs`). Merkle-equal occurrences short-circuit to `1.0`, so every previously-`1.0` cluster is unchanged; what changes is the other end, which used to be a literal `0.0`.
 
@@ -67,37 +67,37 @@ Walking forward is also what stops a subtree nested inside an already-paired one
 
 The cap counts nodes of the *normalised* tree, so [PIPELINE-NORMALIZE-AST-OPERATOR](pipeline.md) moved what it reaches without the number changing: operator tokens survive as leaves, and an operator-dense expression counts around half as many nodes again. At 512 that pulled `ts-mixed-band`'s ninety-term expression — 558 nodes, a consistent rename plus one redundant paren, exactly the case this section exists to rescue — onto the conservative bound, which scored it under the admission floor and reported **nothing**. The cap must reach the largest endpoint the admission path is expected to rescue, and is set above the largest pinned such case with room to spare rather than trimmed to it. Moving it is a performance decision, pinned deliberately by `the_alignment_cap_is_the_documented_operating_point`, whose companion assertion fails if the cap ever falls back below that measured case.
 
-**Admission is a compound gate over two independently measured axes, not sum fusion, and it is applied pair by pair.** A pair below `admission.fused_threshold` is admitted only when overlap ≥ `admission.shared_subtree_min_overlap` **and** `token_jaccard` ≥ `admission.shared_subtree_min_jaccard` **and** both endpoints clear `admission.shared_subtree_min_node_count`. Neither axis admits alone — normalisation makes scaffolding Merkle-identical across unrelated files, so shape must be corroborated by tokens. This gate changes what is *measured*, never how the pair score is combined. Overlap is measured only on pairs that would otherwise be dropped yet carry the token corroboration, so the cost is bounded away from the ~596K-candidate admission set that [FUSION-CONTENT-GATE] deliberately avoids.
+**Admission is a compound gate over two independently measured axes, not sum fusion, and it is applied pair by pair.** A pair below `admission.fused_threshold` is admitted only when overlap ≥ `admission.shared_subtree_min_overlap` **and** `token_jaccard` ≥ `admission.shared_subtree_min_jaccard` **and** both endpoints clear `admission.shared_subtree_min_node_count`. Neither axis admits alone — normalisation makes scaffolding Merkle-identical across unrelated files, so shape must be corroborated by tokens. This gate changes what is *measured*, never how the pair score is combined. Overlap is measured only on pairs that would otherwise be dropped yet carry the token corroboration, so the cost is bounded away from the ~596K-candidate admission set that [FUSED-CONTENT-GATE] deliberately avoids.
 
 **Routing gains one row, and one comparison is retired.** [CLONE-BUCKETS-ROUTING] row 4b routes high overlap corroborated by an independent axis — the token axis at `admission.shared_subtree_min_jaccard`, **or** the embedding axis at `candidates.embedding_support_floor` — to `nearly_identical`, using the same floors that admitted the pair — so the pipeline can never admit a shared-subtree near-miss the renderer then hides. Row 4's old `structural ≤ 0.01` leg is gone: it predates the measurement, when any non-zero value meant a Merkle anchor, and additional shape evidence must never *hide* a cluster the token axis already carries. Clusters below the overlap floor keep the anchor-free demotion guard unchanged.
 
 Because the value is now graded, **it is no longer comparable across two views of different scope**. A window nested inside a near-miss scores higher exactly to the extent that it excludes what differs, so [PIPELINE-CLUSTER-SUBSUME] compares grades only between views that do not nest; where one encloses the other, enclosure decides within a credibility tier. Pinned by `type3_enclosing_method.rs` in all five languages.
 
-### [FUSION-SHARED-SUBTREE-MEMO] Overlap is memoised by ordered Merkle hash pair
+### [FUSED-SHARED-SUBTREE-MEMO] Overlap is memoised by ordered Merkle hash pair
 
-One measurement per *structure pair*, never per byte-range pair. The memo key is the ordered pair of the two endpoints' Merkle hashes — the same premise the `1.0` short-circuit already stands on: hash equality pins the entire normalised structure, so every byte-offset copy of one structural pair shares the key, and the alignment runs once however many byte-range combinations LSH produced. The memoised value is exact — admission decisions and stored overlap values are identical to unmemoised measurement, only the alignment count changes. On the corpus that motivated it, 793,076 byte-range pairs collapsed onto a fraction as many structure pairs; without the memo the rescue never finished. Pinned by `a_fleet_of_identical_windows_costs_one_alignment` (36 byte-range pairs, exactly 1 alignment). Exact and bound results ([FUSION-SHARED-SUBTREE-BOUND]) are memoised separately, because a bound answers only the rescue question.
+One measurement per *structure pair*, never per byte-range pair. The memo key is the ordered pair of the two endpoints' Merkle hashes — the same premise the `1.0` short-circuit already stands on: hash equality pins the entire normalised structure, so every byte-offset copy of one structural pair shares the key, and the alignment runs once however many byte-range combinations LSH produced. The memoised value is exact — admission decisions and stored overlap values are identical to unmemoised measurement, only the alignment count changes. On the corpus that motivated it, 793,076 byte-range pairs collapsed onto a fraction as many structure pairs; without the memo the rescue never finished. Pinned by `a_fleet_of_identical_windows_costs_one_alignment` (36 byte-range pairs, exactly 1 alignment). Exact and bound results ([FUSED-SHARED-SUBTREE-BOUND]) are memoised separately, because a bound answers only the rescue question.
 
-### [FUSION-SHARED-SUBTREE-BOUND] The kind-multiset bound refuses hopeless alignments
+### [FUSED-SHARED-SUBTREE-BOUND] The kind-multiset bound refuses hopeless alignments
 
-Shared mass never exceeds `min(smaller_total, kind-multiset intersection)`: any edit script maps a set of node pairs, and only kind-preserving pairs contribute to `larger − TED`. The rescue path (`rescue_overlap`) computes this bound first; when `bound / larger` is already below `admission.shared_subtree_min_overlap`, the quadratic alignment is skipped and the bound itself is returned. Sound because the bound never undercuts the alignment (`the_kind_multiset_bound_never_undercuts_the_alignment`), so a value below the floor proves the exact value is too — the admission decision is identical by construction (`the_rescue_path_agrees_with_the_exact_measure_on_admission`), and a refused pair pays for no alignment (`a_pair_the_bound_refuses_never_pays_for_an_alignment`). The bound applies only to the rescue's admission question; cluster signal measurement ([FUSION-CLUSTER-SIGNALS]) always uses the exact `overlap`, because a rendered `structural` value below the floor must still be the measured one.
+Shared mass never exceeds `min(smaller_total, kind-multiset intersection)`: any edit script maps a set of node pairs, and only kind-preserving pairs contribute to `larger − TED`. The rescue path (`rescue_overlap`) computes this bound first; when `bound / larger` is already below `admission.shared_subtree_min_overlap`, the quadratic alignment is skipped and the bound itself is returned. Sound because the bound never undercuts the alignment (`the_kind_multiset_bound_never_undercuts_the_alignment`), so a value below the floor proves the exact value is too — the admission decision is identical by construction (`the_rescue_path_agrees_with_the_exact_measure_on_admission`), and a refused pair pays for no alignment (`a_pair_the_bound_refuses_never_pays_for_an_alignment`). The bound applies only to the rescue's admission question; cluster signal measurement ([FUSED-CLUSTER-SIGNALS]) always uses the exact `overlap`, because a rendered `structural` value below the floor must still be the measured one.
 
-### [FUSION-SHARED-SUBTREE-BOUND-ORDER] The order bound refuses alignments the multiset bound would allow
+### [FUSED-SHARED-SUBTREE-BOUND-ORDER] The order bound refuses alignments the multiset bound would allow
 
 The kind-multiset bound counts *how many* nodes of each kind the two endpoints share. It cannot see where those nodes are, so two endpoints holding the same kinds in scrambled order look, to it, like a perfect match — and it pays for a full alignment to find out otherwise.
 
 Order is available for free. An alignment maps one node before another on the left exactly when it maps their partners in the same order on the right, so the nodes it can match are a common *subsequence* of the two post-order kind sequences. The longest common subsequence is therefore a second upper bound on shared mass, never looser than the multiset one and usually far tighter. It is computed sixty-four positions per machine word (Allison–Dix), which makes it microseconds against the alignment's milliseconds, and the rescue runs it whenever the multiset bound fails to refuse a pair.
 
-It applies at every endpoint size. Above the alignment cap the pair is answered by a lower bound on the alignment ([FUSION-SHARED-SUBTREE]), and this is an upper bound on the same quantity, so it dominates that too.
+It applies at every endpoint size. Above the alignment cap the pair is answered by a lower bound on the alignment ([FUSED-SHARED-SUBTREE]), and this is an upper bound on the same quantity, so it dominates that too.
 
 Soundness is what matters here, because a bound that ever *under*-states shared mass silently drops a real cross-file duplicate. It is pinned against a textbook longest-common-subsequence table at and around every machine-word boundary (`the_bit_parallel_row_matches_the_textbook_table`), against the real Zhang–Shasha result over 3,600 generated tree pairs (`the_bound_never_understates_what_the_alignment_measures`), and shown to be strictly tighter than the multiset bound on scrambled order (`scrambled_order_is_bounded_far_below_the_shared_multiset`). On the Flutter framework slice it removes 22% of the rescue's alignments while admitting exactly the same pairs.
 
-### [FUSION-CLUSTER-SIGNALS] A cluster displays one admitted pair's measured evidence
+### [FUSED-CLUSTER-SIGNALS] A cluster displays one admitted pair's measured evidence
 
 A rendered cluster's signal triple is the measurement of **one admitted pair** — the strongest — never a mean over pairs. Baker's p-match is a per-pair predicate: a group qualifies because its pairs pass, and there is no group-level "average match" to display (Baker 1995, "On Finding Duplication and Near-Duplication in Large Software Systems"). Displayed evidence must therefore attach to the pair that earned it: the report names the elected pair (wire field `signal_source`), so every displayed number is traceable to the exact two occurrences that produced it (gh #458).
 
 **Which pair is elected.** Of the admitted pairs — those that cleared the admission gate — the cluster elects the one with the highest fused confidence (its strongest single axis, bounded to [0,1]); ties resolve to the earliest pair in corpus order, making the election deterministic across runs (gh #301). All three axes render from that one pair, together: a per-axis best drawn from different pairs would display a "super-pair" no actual pair measured. Ensemble fusion research is explicit that the unit is the pair and the combination is max or sum, never average (arXiv:2510.15480, 2025); the same logic says the *pair*, not each axis, is the unit.
 
-**The axes.** Per pair: `structural` is the measured shared-subtree overlap ([FUSION-SHARED-SUBTREE]) — `1.0` for Merkle-equal occurrences, the graded alignment otherwise; `token_jaccard` is the MinHash Jaccard estimate between the two signatures; `embedding_cos` is the cosine of the two vectors under the crate's single cosine definition ([FUSION-EMBED-PROVIDER]), so byte-identical occurrences — which share one vector — render exactly `1.0` (gh #372). A pair missing a signal input (no vector: embeddings off, oversized input, provider failure) renders `0.0` on that axis, the embeddings-off convention — absence never masquerades as a measured value.
+**The axes.** Per pair: `structural` is the measured shared-subtree overlap ([FUSED-SHARED-SUBTREE]) — `1.0` for Merkle-equal occurrences, the graded alignment otherwise; `token_jaccard` is the MinHash Jaccard estimate between the two signatures; `embedding_cos` is the cosine of the two vectors under the crate's single cosine definition ([FUSED-EMBED-PROVIDER]), so byte-identical occurrences — which share one vector — render exactly `1.0` (gh #372). A pair missing a signal input (no vector: embeddings off, oversized input, provider failure) renders `0.0` on that axis, the embeddings-off convention — absence never masquerades as a measured value.
 
 **Only admitted pairs count.** Closure-only pairs — equal-hash combinations that never cleared admission — contribute nothing: they are artifacts of discovery topology (structural star buckets, ANN top-k fan-out, LSH band width), not of the rendered occurrences, and giving them a vote lets the deviant drag the verdict (Engler et al., "Bugs as Deviant Behavior", SOSP 2001: the majority outranks the deviant). gh #458 pinned: a byte-identical pair inside a lookalike cluster renders `1.0/1.0` and keeps its act-now bucket, while the lookalikes do not manufacture an identical verdict.
 
@@ -105,7 +105,7 @@ A rendered cluster's signal triple is the measurement of **one admitted pair** �
 
 **For AI.** Election: `max over admitted pairs of (bounded_fused, Reverse(left), Reverse(right))` where bounded_fused = max(structural, token_jaccard, embedding_cos) clamped to [0,1], and left/right are corpus indices, so the lowest-index pair wins a fused tie. Rendered `PairScore` = the elected pair's own (structural, token_jaccard, embedding_cos), each `unwrap_or(0.0)` when the input is absent. `source_pair` = the elected pair's corpus indices; the wire field `ReportCluster.signal_source` holds their positions into `ReportCluster.occurrences`; `None` (all 0.0, no source) when every admitted pair's endpoint was collapsed by the same-file collapse (#339). Test pins: `the_rendered_triple_is_one_admitted_pairs_own_axes`, `non_admitted_pairs_never_contribute_to_the_rendered_signals`, `the_source_pair_election_is_deterministic`, `when_every_admitted_pair_skips_there_is_no_source_pair` (unit); `a_byte_identical_pair_reads_the_same_in_every_cluster` (E2E).
 
-### [FUSION-CONTENT-GATE] Content agreement gates shape-identical confidence
+### [FUSED-CONTENT-GATE] Content agreement gates shape-identical confidence
 
 `structural_sim` and `token_jaccard` are both computed from the *normalised*
 representation (identifiers and literals collapsed), so on any exact shape
@@ -119,7 +119,7 @@ erased:
    source bytes** of every collapsed leaf, keeping the leaf's population
    (identifier vs literal position).
 2. Measure two independent populations **for the elected pair** — the same
-   pair [FUSION-CLUSTER-SIGNALS] elects for the shape axes, so every number
+   pair [FUSED-CLUSTER-SIGNALS] elects for the shape axes, so every number
    on a cluster's signal row describes the same two occurrences — both in
    `[0, 1]`:
    - `agreement` — fraction of all collapsed positions whose raw bytes match,
@@ -190,26 +190,23 @@ erased:
      rename cleared the act-now routing floor in any language**.
    Neither population is ever pooled with the other, and neither is averaged
    across a cluster's members: both are the elected pair's own measurement,
-   the one rule [FUSION-CLUSTER-SIGNALS] states for every axis. Pooling them
+   the one rule [FUSED-CLUSTER-SIGNALS] states for every axis. Pooling them
    demoted textbook Type-2 clones to `structural_only` — a maximal rename
    scores low `agreement` and high `rename_consistency`, so the mean describes
    neither.
 
-3. **Routing — three zones over `support = max(agreement,
-   rename_consistency)`** (either population may vouch; never their mean).
-   Below `content_gate.support_floor` (the Type-3 line; provenance in
-   [FUSION-TUNING-LEVERS]), and with no semantic support (`embedding_cos` below
-   `candidates.embedding_support_floor`, the line at which the embedding pass
-   vouches for a cluster rather than merely having measured it), the cluster
-   joins the [RANK-STRUCTURAL-ONLY] routing — surfaced honestly or hidden as cross-file
-   scaffolding, and demoted in ranking. At or above
-   `content_gate.promote_floor` (act-now grade) the cluster is a proven
-   clone — a byte-agreeing near-miss
-   or a consistent maximal rename — and routes `nearly_identical` even when
-   the token layer lost its signature to the fingerprint-scoped fallback.
-   Between the two, the legacy signal routing stands: real-world sibling
-   families (the #197 REST settings surface measures 0.72–0.80) keep their
-   demoted verdict.
+3. **Routing uses `support = max(agreement, rename_consistency)`** (either
+   population may vouch; never their mean). The promotion floor depends on
+   cluster spread: a cross-file cluster uses `content_gate.support_floor`
+   (0.70), while a single-file cluster uses `content_gate.promote_floor`
+   (0.85). This preserves recall for copies split across files while keeping
+   real-world in-class sibling families such as #197 (0.72–0.80) demoted.
+   Semantic support at or above `candidates.embedding_support_floor` leaves
+   the legacy signal verdict unchanged. Otherwise, a gate-eligible cluster at
+   or above its spread-dependent floor routes `nearly_identical`; one below
+   it joins the demoted [RANK-STRUCTURAL-ONLY] routing, surfaced as
+   `structural_only` or hidden as cross-file scaffolding according to the
+   routing table.
 4. **Token-signal correction.** A cluster whose members all carry **one**
    Merkle hash has normalised k-gram sets that are equal by construction;
    for such clusters routed `identical` / `nearly_identical` a lower rendered
@@ -219,7 +216,7 @@ erased:
 
    The correction is scoped by that digest equality, tested directly on the
    members, and by nothing else (gh #431). No reading of `structural` can
-   stand in for it: since [FUSION-SHARED-SUBTREE] the axis grades subtree
+   stand in for it: since [FUSED-SHARED-SUBTREE] the axis grades subtree
    *overlap*, so it saturates by ratio as well as by hash equality, and every
    value below saturation means the subtrees provably differ. Scoping the
    correction to `content_gate.structural_saturation_floor` — a near-miss
@@ -273,15 +270,28 @@ belongs to the `[ranking] data_clones` policy ([RANK-CATEGORY]) so
 `data_clone_weight = 1.0` can still restore a table the gate routed to the
 structural-only bucket.
 
-### [FUSION-ALGEBRA] Every calculation, as algebra
+### [FUSED-ALGEBRA] Every calculation, as algebra
 
 The whole arithmetic surface in one place — one formula per block, the English right under it. Each block carries the spec id that owns it; if prose and algebra ever disagree, both are wrong — fix them together.
 
-**Symbols.** `S` structural, `J` token_jaccard, `E` embedding_cos, `A` agreement, `R` rename_consistency, `n` node count, `p` a candidate pair, `c` a cluster, `ℓ` a source line.
+**Symbols.** `H` exact Merkle-hash evidence used during candidate admission,
+`S` measured structural overlap used by rescue and report election, `J`
+token_jaccard, `E` embedding_cos, `A` content agreement, `R`
+rename_consistency, `n` node count, `p` a candidate pair, `c` a cluster, `ℓ`
+a source line. `H` and `S` are deliberately distinct: a non-equal candidate
+starts admission with `H = 0`; its more expensive graded overlap `S` is
+measured only on the rescue path and later for the elected report pair.
 
-**Pair admission** — [FUSION-STRATEGY-BOUNDED-MAX] [FUSED-THRESHOLD] [FUSION-SHARED-SUBTREE]
+**Pair admission** — [FUSED-STRATEGY-BOUNDED-MAX] [FUSED-THRESHOLD] [FUSED-SHARED-SUBTREE]
 
-Structural similarity is the shared-node share of the bigger tree. The aligner is Zhang–Shasha's tree-edit-distance recurrence (keyroot decomposition over post-order sequences of normalised node kinds, unit insert/delete/relabel costs — Zhang & Shasha 1989), and under unit costs the distance is exactly the unmatched node mass, so shared = max − TED and the two spellings agree. Hash-then-TED is the shape Baxter et al. 1998 established: exact hashes cluster, tree edit distance grades the near-miss. The normalisation is ours.
+Structural similarity is the shared-node credit of the bigger tree. The aligner
+uses Zhang–Shasha's tree-edit-distance recurrence (keyroot decomposition over
+post-order sequences of normalised node kinds, unit insert/delete/relabel costs
+— Zhang & Shasha 1989). Deslop defines shared credit as `max(nodes) − TED` and
+normalises it by the larger tree. Baxter et al. 1998 supports subtree hashing
+and near-miss comparison, but not this TED composition: Baxter used a
+leaf-ignoring hash and `2S/(2S+L+R)`. Combining exact Merkle hashes with
+Zhang–Shasha TED is Deslop's design.
 
 $$
 \mathrm{shared}(a,b) = \max\bigl(n(a), n(b)\bigr) - \mathrm{TED}(a,b) \qquad
@@ -290,22 +300,51 @@ $$
 
 Merkle-equal pairs score 1.0 without paying for the walk; past the alignment cap a credited shared-node count — a sound lower bound on the aligned value — answers instead, and the share clamps to `[0, 1]`.
 
-The fused score takes the strongest of the three signals and clamps to [0, 1]. Max — never an average — so one loud signal is never diluted by two quiet ones.
+Exact structural evidence available before that walk is the Merkle-equality
+indicator:
 
 $$
-\mathrm{fused}(p) = \operatorname{clamp}(\max(S(p),\, J(p),\, E(p)),\ 0,\ 1) \qquad \text{(max-or-sum, never average — arXiv:2510.15480)}
+H(a,b) = \mathbf{1}\!\left[\operatorname{merkle}(a)=\operatorname{merkle}(b)\right]
+$$
+
+Embedding similarity is cosine over the raw vectors, accumulated in `f64` and
+clamped because negative cosine is treated as no positive clone evidence. A
+zero-norm vector returns zero; a non-zero vector compared with itself returns
+exactly one.
+
+$$
+E(a,b) =
+\begin{cases}
+0 & \text{if } \lVert v_a\rVert_2\lVert v_b\rVert_2 = 0 \\
+\operatorname{clamp}\!\left(\dfrac{v_a \cdot v_b}{\lVert v_a\rVert_2\lVert v_b\rVert_2},\ 0,\ 1\right) & \text{otherwise}
+\end{cases}
+$$
+
+The admission score takes the strongest signal available before rescue and
+clamps to `[0, 1]`. Max is a Deslop design choice, informed by the 2025
+ensemble study's empirical preference for normalised max/sum variants over
+averaging; that study combines LLM scores and does not itself validate these
+heterogeneous structural, token, and embedding axes.
+
+$$
+f_{\mathrm{admit}}(p) = \operatorname{clamp}(\max(H(p),\, J(p),\, E(p)),\ 0,\ 1)
 $$
 
 The bar a pair must clear depends on the pair. Cross-language pairs with no structural signal can't use `S`, so they fall back to a token-only floor. Everything else uses the configured `fused_threshold` (default 0.85), which was derived from our corpus and clears SourcererCC's 0.7 overlap floor.
 
 $$
-t(p) = \begin{cases} \text{cross\_language\_min\_jaccard} & \text{if cross-language}(p) \land S(p) \le 0 \\ \text{fused\_threshold (default 0.85)} & \text{otherwise} \end{cases}
+t(p) = \begin{cases} \text{cross\_language\_min\_jaccard} & \text{if cross-language}(p) \land H(p) = 0 \\ \text{fused\_threshold (default 0.85)} & \text{otherwise} \end{cases}
 $$
 
-`J` estimates the Jaccard of the two k-gram sets of normalised node kinds (Jaccard 1912). Broder's min-wise identity makes that estimable by hashing: for a min-wise independent family, the probability the two minima agree is exactly the Jaccard.
+`J` estimates the Jaccard of the two k-gram sets of normalised node kinds
+(Jaccard 1912). Broder's min-wise identity makes that estimable by hashing: for
+an ideal min-wise independent family, the probability that two minima agree is
+exactly the Jaccard. Deslop's BLAKE3-XOF slots are a deterministic practical
+approximation to that family, not a proof of exact min-wise independence.
 
 $$
-J(A, B) = \frac{|A \cap B|}{|A \cup B|} \qquad\qquad \Pr_{h \in \mathcal{H}}\Bigl[\,\arg\min_{a \in A} h(a) = \arg\min_{b \in B} h(b)\Bigr] = J(A, B)
+J(G_a, G_b) = \frac{|G_a \cap G_b|}{|G_a \cup G_b|} \qquad\qquad
+\Pr_{h \in \mathcal{H}}\!\left[\arg\min_{x \in G_a} h(x) = \arg\min_{y \in G_b} h(y)\right] = J(G_a,G_b)
 $$
 
 The shipped estimator averages agreement over the `m = representation.minhash_signature_len` blake3-hashed slots (`lsh::estimate_jaccard`); LSH banding follows the standard `BANDS × ROWS_PER_BAND` collision curve.
@@ -314,28 +353,64 @@ $$
 \hat{J}(A, B) = \frac{1}{m} \sum_{i=1}^{m} \mathbf{1}\bigl[\sigma_A(i) = \sigma_B(i)\bigr]
 $$
 
-A pair is admitted when its fused score clears the threshold, or when the shared-subtree escape fires: structural overlap and token overlap both strong, and both sides big enough to be worth counting.
+With `b` bands and `r` rows per band (`m = br`), the idealised probability
+that a pair of true Jaccard similarity `s` collides in at least one band is:
+
+$$
+P_{\mathrm{candidate}}(s) = 1 - \left(1-s^r\right)^b
+$$
+
+A pair is admitted when its pre-rescue score clears its threshold or the
+shared-subtree rescue fires, subject to the size-coherence and LSH-only guards.
+The rescue is cross-file only and requires its own raw-content agreement; those
+conditions are load-bearing parts of the implementation, not optional prose.
 
 $$
 \begin{aligned}
-\mathrm{admit}(p) \iff {}& \mathrm{fused}(p) \ge t(p) \\
-&\lor \bigl( S(p) \ge \text{shared\_subtree\_min\_overlap} \land J(p) \ge \text{shared\_subtree\_min\_jaccard} \\
-&\qquad \land\ n(\text{left}) \ge \text{shared\_subtree\_min\_node\_count} \land n(\text{right}) \ge \text{shared\_subtree\_min\_node\_count} \bigr)
+\mathrm{rescue}(p) \iff {}& \operatorname{cross\_file}(p)
+\land f_{\mathrm{admit}}(p) < t(p) \\
+&\land S(p) \ge \text{shared\_subtree\_min\_overlap}
+\land J(p) \ge \text{shared\_subtree\_min\_jaccard} \\
+&\land \min(n_l,n_r) \ge \text{shared\_subtree\_min\_node\_count}
+\land A(p) \ge \text{content\_support\_floor}
 \end{aligned}
 $$
 
-The guard rescues pure-token pairs. When both structural and embedding evidence are dead (`S` and `E` at zero), MinHash agreement alone still admits — but only above `lsh_only_min_jaccard`, and only when the smaller side has enough nodes.
+When exact structural and embedding evidence are absent, and rescue did not
+fire, MinHash alone can carry the pair only above the stricter LSH-only floors.
+This is a rejection guard, not a rescue.
 
 $$
-\mathrm{guard}(p):\ S(p) \le 0 \land E(p) \le 0 \implies J(p) \ge \text{lsh\_only\_min\_jaccard} \land \min(n(\text{left}),\, n(\text{right})) \ge \text{lsh\_only\_min\_node\_count}
+\mathrm{lsh\_ok}(p) \iff
+\bigl(H(p)=0 \land E(p)=0 \land \neg\mathrm{rescue}(p)\bigr)
+\implies
+\bigl(J(p) \ge \text{lsh\_only\_min\_jaccard}
+\land \min(n_l,n_r) \ge \text{lsh\_only\_min\_node\_count}\bigr)
 $$
 
-**Election** — [FUSION-CLUSTER-SIGNALS]
-
-Every admitted pair in a cluster is a candidate; the cluster elects the strongest — highest fused score first, ties broken by the earlier left position, then the earlier right. Lexicographic ordering makes the winner identical on every machine, every run.
+Pairs without an exact structural anchor must also have coherent endpoint
+sizes. Putting all gates together:
 
 $$
-p^*(c) = \max_{\text{admitted pairs}} \bigl(\mathrm{fused},\ -\text{left},\ -\text{right}\bigr) \qquad \text{(lexicographic, deterministic)}
+\begin{aligned}
+\mathrm{size\_ok}(p) &\iff H(p)=1 \lor \max(n_l,n_r) \le
+\text{max\_endpoint\_node\_ratio}\,\min(n_l,n_r) \\
+\mathrm{admit}(p) &\iff \mathrm{size\_ok}(p)
+\land \mathrm{lsh\_ok}(p)
+\land \bigl(f_{\mathrm{admit}}(p) \ge t(p) \lor \mathrm{rescue}(p)\bigr)
+\end{aligned}
+$$
+
+**Election** — [FUSED-CLUSTER-SIGNALS]
+
+Every admitted pair in a cluster is remeasured on all available axes; the
+cluster elects the strongest measured pair. This election key uses graded `S`,
+unlike the pre-rescue admission score's exact-hash `H`. Ties break by the
+earlier left position, then the earlier right.
+
+$$
+q(p) = \operatorname{clamp}(\max(S(p),J(p),E(p)),0,1) \qquad
+p^*(c) = \arg\max_{p\in\operatorname{admitted}(c)} \bigl(q(p),-\operatorname{left}(p),-\operatorname{right}(p)\bigr)
 $$
 
 The report shows the elected pair's three signals and cites its positions as the evidence source. Nothing else in the cluster is quoted.
@@ -344,15 +419,33 @@ $$
 \mathrm{rendered}(c) = (S, J, E) \text{ of } p^*(c) \qquad \text{signal\_source = positions of } p^*(c)
 $$
 
-**Content evidence** (the elected pair) — [FUSION-CONTENT-GATE]
+**Content evidence** (the elected pair) — [FUSED-CONTENT-GATE]
 
-Agreement compares the aligned collapsed-leaf keys. Position counts equal, it is the positional match share; counts differ, the shapes cannot align and it falls back to the key-set Jaccard — both branches are Jaccard comparisons ([FUSION-CONTENT-GATE]).
+Agreement compares collapsed-leaf keys. With equal position counts it is a
+positional match share over authored content plus every disagreement; a
+matching operator is excluded because the shape axes already counted it. With
+unequal counts it falls back to set Jaccard after removing shared non-authored
+keys from both numerator and denominator. The positional branch is an accuracy
+ratio, not a Jaccard index.
 
 $$
-A = \begin{cases} \dfrac{\text{matching aligned positions}}{\text{all aligned positions}} & \text{if position counts are equal} \\[8pt] \dfrac{|K_a \cap K_b|}{|K_a \cup K_b|} & \text{otherwise (key-set Jaccard)} \end{cases}
+\begin{aligned}
+M_{ab} &= \{i : k_{a,i}\ne k_{b,i}\ \lor\ k_{a,i}\text{ is authored content}\} \\
+F_{ab} &= \{k\in K_a\cap K_b : k\text{ is non-authored}\} \\
+A(a,b) &=
+\begin{cases}
+\dfrac{|\{i\in M_{ab}:k_{a,i}=k_{b,i}\}|}{|M_{ab}|} & \text{if } |K_a|=|K_b| \\[10pt]
+\dfrac{|K_a\cap K_b|-|F_{ab}|}{|K_a\cup K_b|-|F_{ab}|} & \text{otherwise}
+\end{cases}
+\end{aligned}
 $$
 
-Rename mass discounts anchors that could be explained away as a rename: each unit of rename evidence costs half a mass point.
+Either zero denominator yields `1.0`: there is no authored content on which
+the pair disagrees.
+
+Rename mass discounts anchor-poor evidence smoothly. The configured
+`rename_evidence_half_mass` is the anchor count at which this weight equals
+one half.
 
 $$
 w_{\text{mass}} = \frac{\text{anchors}}{\text{anchors} + \text{rename\_evidence\_half\_mass}}
@@ -382,15 +475,25 @@ $$
 \mathrm{support} = \max(A, R) \qquad \text{(either population may vouch; never a mean, never pooled — arXiv:2510.15480)}
 $$
 
-**Routing** — [FUSION-CONTENT-GATE] [CLONE-BUCKETS-ROUTING]
+**Routing** — [FUSED-CONTENT-GATE] [CLONE-BUCKETS-ROUTING]
 
-Three exits. Weak support plus weak embeddings routes structural-only — the content signals had their say and lost. Strong support promotes the cluster to nearly_identical outright. Everyone else falls through to the legacy per-signal routing.
+The gate applies only after the anchor-free near-miss route and only to a
+`nearly_identical` or `structural_only` candidate with saturating shape
+evidence. Semantic support preserves the incoming verdict. Otherwise the
+promotion floor is 0.70 across files and 0.85 within one file; evidence below
+that floor enters the demoted routing.
 
 $$
 \begin{aligned}
-\mathrm{support} < \text{support\_floor} \land E < \text{embedding\_support\_floor} &\implies \text{structural\_only routing} \\
-\mathrm{support} \ge \text{promote\_floor} &\implies \text{nearly\_identical} \\
-\text{otherwise} &\implies \text{legacy signal routing}
+p(c) &= \begin{cases}
+\text{support\_floor} & \text{if } c\text{ spans multiple files} \\
+\text{promote\_floor} & \text{otherwise}
+\end{cases} \\
+E(c) \ge \text{embedding\_support\_floor} &\implies \text{preserve incoming routing} \\
+E(c) < \text{embedding\_support\_floor} \land \mathrm{support}(c) \ge p(c)
+&\implies \text{nearly\_identical} \\
+E(c) < \text{embedding\_support\_floor} \land \mathrm{support}(c) < p(c)
+&\implies \text{demoted routing}
 \end{aligned}
 $$
 
@@ -408,7 +511,8 @@ $$
 \mathrm{weight}(c) = \text{canonical\_nodes}(c) \times (\mathrm{visible}(c) - 1) \times \text{category\_multiplier} \times \text{structural\_only\_multiplier} \qquad \text{(0 when visible < 2)}
 $$
 
-Clusters sort heaviest first; ties break by cluster id ascending so the report order is stable.
+Clusters sort heaviest first; the governing [RANK-MASS-SUM] specification says
+ties break by cluster id ascending so the report order is stable.
 
 $$
 \text{order} = \text{weight descending, then cluster id ascending}
@@ -421,25 +525,37 @@ $$
 The headline number is unweighted duplicated-line density — directly comparable to SonarQube's gate.
 
 $$
-\text{duplication\_percent} = \operatorname{clamp}\!\left(\frac{100 \times \text{duplicated\_loc}}{\text{analysed\_loc}},\ 0,\ 100\right) \qquad \text{(unweighted duplicated-line density — the SonarQube comparable gate)}
+\text{duplication\_percent} = \begin{cases}
+0 & \text{if analysed\_loc}=0 \\
+\operatorname{clamp}\!\left(\dfrac{100 \times \text{duplicated\_loc}}{\text{analysed\_loc}},\ 0,\ 100\right) & \text{otherwise}
+\end{cases}
 $$
 
 A line's weight is the heaviest bucket of any cluster covering it — a line duplicated by a critical cluster counts as critical.
 
 $$
-\text{line\_weight}(\ell) = \max_{\text{clusters covering } \ell}\bigl(\text{bucket\_weight} \times \text{category\_weight}\bigr)
+\text{line\_weight}(\ell) = \begin{cases}
+0 & \text{if no cluster covers }\ell \\
+\max\limits_{c\text{ covers }\ell}\bigl(\text{bucket\_weight}(c) \times \text{category\_weight}(c)\bigr) & \text{otherwise}
+\end{cases}
 $$
 
 The weighted variant sums those per-line weights. Specified for completeness, not shipped.
 
 $$
-\text{weighted\_percent} = \operatorname{clamp}\!\left(\frac{100 \times \sum_{\ell} \text{line\_weight}(\ell)}{\text{analysed\_loc}},\ 0,\ 100\right) \qquad \text{(specified, not shipped)}
+\text{weighted\_percent} = \begin{cases}
+0 & \text{if analysed\_loc}=0 \\
+\operatorname{clamp}\!\left(\dfrac{100 \times \sum_{\ell} \text{line\_weight}(\ell)}{\text{analysed\_loc}},\ 0,\ 100\right) & \text{otherwise}
+\end{cases}
+\qquad \text{(specified, not shipped)}
 $$
 
-Weighting can only pull lines *into* the duplicated set, never out — so the weighted figure can never undercut the unweighted one.
+Every configured bucket and category weight lies in `[0,1]`, so weighting can
+only retain or discount a mechanically duplicated line. It cannot increase the
+headline density.
 
 $$
-\text{weighted\_percent} \le \text{duplication\_percent} \qquad \text{(invariant)}
+0 \le \text{weighted\_percent} \le \text{duplication\_percent} \le 100 \qquad \text{(invariant)}
 $$
 
 **Provenance.** The literature behind the formula lines (links in [reading-list.md](reading-list.md)); quoted where the claim is verbatim:
@@ -447,20 +563,20 @@ $$
 | Decision | Source | Verified claim |
 |---|---|---|
 | Fingerprinted structural axis | Chilowicz et al. 2009 | *"each node of an AST is associated with a fingerprint based on a hash value (incrementally computed) of the subtree rooted at the node"* |
-| Exact hash, TED near-miss extension | Baxter et al. 1998 | hash AST subtrees, cluster by hash, extend to near-miss via tree edit distance |
-| The `TED` recurrence (unit costs, post-order keyroot decomposition) | Zhang & Shasha 1989 | the textbook ordered-tree edit distance the aligner implements; under unit costs shared = max − TED, making both spellings of `S` exact |
+| Exact hash and near-miss precedent | Baxter et al. 1998 | hashes AST subtrees; its near-miss method uses a leaf-ignoring hash and `2S/(2S+L+R)`, not tree edit distance |
+| The `TED` recurrence (unit costs, post-order keyroot decomposition) | Zhang & Shasha 1989 | the textbook ordered-tree edit distance the aligner implements; `shared = max − TED` and its normalisation are Deslop definitions layered on that distance |
 | The Jaccard target and the min-wise identity behind `Ĵ` | Jaccard 1912; Broder 1997 | J = \|A∩B\|/\|A∪B\|; the minimum-hash agreement probability equals the Jaccard |
-| `fused` / `support` = max; the pair is the unit; never average | arXiv:2510.15480 | the unit is the pair and the combination is max or sum, never average |
+| Normalised max as a fusion option | arXiv:2510.15480 | evaluates score fusion for two LLM outputs and finds normalised max/sum variants outperform averaging in its datasets; applying max to Deslop's heterogeneous axes and to content support is a Deslop design choice |
 | `fused_threshold` default above the overlap floor | SourcererCC (Sajnani et al. 2016) | candidate test is \|X∩Y\|/min(\|X\|,\|Y\|) ≥ 0.7 — containment of the smaller bag, not a Jaccard; 0.85 clears it with margin |
 | Routing separates evidence classes — no confidence scaling of findings | Svajlenko & Roy 2015 | BigCloneBench syntactic-similarity bands (VST3 ≥ 0.90, ST3 0.70–0.90, MT3 0.50–0.70, WT3/4 < 0.50); tool precision and recall degrade monotonically as similarity falls, and `promote_floor` 0.85 sits inside the ST3 band |
 | Shape-only repetition demoted, never a failing verdict | Kapser & Godfrey 2008 | shape-level repetition is the weakest ground for a failing verdict |
-| Repo percentage as the comparable gate | SonarQube metrics | the industry-standard CI gate is unweighted duplicated-line density |
+| Repo percentage ratio | SonarQube metrics | SonarQube defines duplicated-line density as `duplicated_lines / lines × 100`; Deslop uses the same ratio form over its own analysed-line and clone projections |
 
-Content-evidence arithmetic (`A`, `R`, the asymptotic weight, the routing floors) and the mass-sum weight are **derived or defect fixes**, not literature — their provenance rows in [FUSION-TUNING-LEVERS] say so.
+Content-evidence arithmetic (`A`, `R`, the asymptotic weight, the routing floors) and the mass-sum weight are **derived or defect fixes**, not literature — their provenance rows in [FUSED-TUNING-LEVERS] say so.
 
-Every numeric constant above is a configurable default, never a hard-coded value — provenance in [FUSION-TUNING-LEVERS], surface in [exclusion.md](exclusion.md), migration in `unhardcode-tuning-plan.md`.
+Every numeric constant above is a configurable default, never a hard-coded value — provenance in [FUSED-TUNING-LEVERS], surface in [exclusion.md](exclusion.md), migration in `unhardcode-tuning-plan.md`.
 
-### [FUSION-TUNING-LEVERS] Every threshold is a configuration item with a recorded provenance
+### [FUSED-TUNING-LEVERS] Every threshold is a configuration item with a recorded provenance
 
 A number is a **lever** when changing it changes which clusters are reported, which bucket they land in, or how they rank. Every lever is named, defaulted to the value compiled today, range- and invariant-validated at load ([EXCLUSION-CONFIG] `[tuning]`), and declared in the report that its value produced ([CONFIG-TUNING-DECLARED]).
 
@@ -484,7 +600,7 @@ A number is a **lever** when changing it changes which clusters are reported, wh
 | `content_gate.support_floor` | `buckets.rs:237` | 0.7 | **Derived** (#341, provenance audit). SourcererCC's 0.7 is token overlap similarity; here it prices raw-byte agreement. Value kept; literature label dropped. |
 | `content_gate.promote_floor` | `buckets.rs:248` | 0.85 | **Derived** (#341). The act-now routing grade for `support`; bounded below by a defect — the #197 REST settings family measures 0.72–0.80 and must keep its demoted verdict. |
 | `content_gate.structural_only_max_support` | `buckets.rs:215` | 0.05 | **Defect.** #197's acceptance criterion (`token_jaccard = 0.00`, `embedding_cos = 0.00`) plus tolerance for MinHash collision noise. It is a ceiling below which a signal counts as *absent*, and is never a support floor — `route_shape_identical` read it as one, so a cosine of 0.05 overruled the measured content evidence and the gate's verdict followed whether the embedding pass ran (#356). |
-| `candidates.embedding_support_floor` | `pair.rs:91` | 0.80 | **Derived** (#356). The cosine at which a measured `embedding_cos` is the embedding pass *vouching for* a cluster rather than merely having measured it — the ANN candidate gate's own operating point, and the line [CLONE-BUCKETS-ROUTING] row 2 lets semantic evidence carry a bucket alone. The [FUSION-CONTENT-GATE] escape is judged against it. |
+| `candidates.embedding_support_floor` | `pair.rs:91` | 0.80 | **Derived** (#356). The cosine at which a measured `embedding_cos` is the embedding pass *vouching for* a cluster rather than merely having measured it — the ANN candidate gate's own operating point, and the line [CLONE-BUCKETS-ROUTING] row 2 lets semantic evidence carry a bucket alone. The [FUSED-CONTENT-GATE] escape is judged against it. |
 | `content_gate.saturating_token_floor` | `buckets.rs:291` | 0.95 | **Defect** (#368). The surviving flutter/flutter #331 cluster read `structural = 0.62, token_jaccard = 0.98` — the token layer echoing shape, not reporting content. |
 | `content_gate.rename_consistency_discount` | `buckets/gate.rs:143` | 0.9 | **Derived** (#346), a house rule and not literature. The certified-rename separator for the *retired* rendered confidence — the only consumer is the shape × content multiply's `content_confidence = max(A, discount × R)` (`gate.rs:200`); routing support reads `R` undiscounted (`content_support`). Dies with the cluster-fused rollout. |
 | `content_gate.rename_corroboration_min` | `content.rs` | 2 | **Literature.** [TECH-PMATCH-BAKER] prev-encoding: a parameter symbol's first occurrence matches anything and constrains nothing; only repetition carries binding proof. |
@@ -516,7 +632,7 @@ A number is a **lever** when changing it changes which clusters are reported, wh
 **Not levers, and never configuration.** `MIN_REPORTABLE_MEMBERS = 2` (`cluster.rs:63`) is definitional — a cluster of one is not duplication. `HNSW_SEED` (`embedding/pairs.rs:31`) is determinism ([PIPELINE-DETERMINISM]); a configurable seed makes runs irreproducible. `F64_MAX_EXACT_INTEGER*` and `F64_TWO_POW_32` (`cluster.rs:388`–`393`) are IEEE-754 facts. `MAGIC` (`fpcache.rs:32`) and `MANIFEST_VERSION` (`version_contract.rs:10`) are format identity. Presentation and transport limits — `LIVE_WIRE_OCCURRENCE_CAP`, `SNIPPET_PREVIEW_LINES`, `CHANNEL_CAPACITY`, `BROADCAST_CAPACITY`, `MIN_CLUSTER_ID_PREFIX_LEN`, and the debouncer's `QUIET_MS` / `CAP_MS` — change what a surface shows or how promptly, never which clusters exist; if ever exposed they belong to a `[live]` or `[report]` section.
 
 ### [REMOVE-STUB] Test-only stub provider must never ship
-The deterministic BLAKE3 stub embedding provider named in [FUSION-EMBED-PROVIDER]
+The deterministic BLAKE3 stub embedding provider named in [FUSED-EMBED-PROVIDER]
 exists purely so E2E tests can exercise the embedding path without a live model.
 It lives behind the `test-support` Cargo feature, is **never** registered in
 `ProviderRegistry::production`, and is barred from the shipped VSIX by a packaging

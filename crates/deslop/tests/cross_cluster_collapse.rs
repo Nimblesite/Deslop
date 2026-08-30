@@ -200,7 +200,7 @@ fn assert_content_proven(cluster: &serde_json::Value) {
 }
 
 /// A low-content enclosing shape must not delete a byte-proven inner clone
-/// before [FUSION-CONTENT-GATE] can measure either view.
+/// before [FUSED-CONTENT-GATE] can measure either view.
 /// [REPAIR-SUBSUME-CONTENT-FIRST]
 #[test]
 fn content_proven_nested_clone_survives_content_poor_enclosing_view() -> Result<()> {

@@ -1,4 +1,4 @@
-// Unit: the shared VS Code signal renderer ([FUSION-CONTENT-GATE], #344).
+// Unit: the shared VS Code signal renderer ([FUSED-CONTENT-GATE], #344).
 //
 // A corroborated Type-2 rename and an anchor-poor scaffolding family render
 // the identical confidence triple — structural 1.00, jaccard 1.00 — so a panel

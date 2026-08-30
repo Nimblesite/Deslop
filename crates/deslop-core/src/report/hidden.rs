@@ -98,7 +98,7 @@ pub(super) fn cluster_is_hidden<S: BuildHasher>(
     // `same_behavior` bucket because that was the only route embedding
     // evidence could carry a cluster through. It is no longer: a
     // shared-subtree near-miss may now be corroborated by the embedding
-    // axis instead of the token axis ([FUSION-SHARED-SUBTREE]), so the
+    // axis instead of the token axis ([FUSED-SHARED-SUBTREE]), so the
     // same evidence reaches an act-now bucket by a second door and must
     // meet the same gate. Keyed on the bucket alone, the Python
     // role-mismatch pair walked straight through it.

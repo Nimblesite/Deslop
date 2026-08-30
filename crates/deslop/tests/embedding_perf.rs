@@ -48,7 +48,7 @@ struct CloneRun {
     provenance: Value,
 }
 
-/// [FUSION-EMBED-PROVIDER] Byte-identical subtrees are embedded once and
+/// [FUSED-EMBED-PROVIDER] Byte-identical subtrees are embedded once and
 /// **indexed** once. `attempted_subtrees` counts occurrences, so the gap
 /// between it and `indexed_subtrees` is the duplicate work the pass no
 /// longer does: N identical points cost N insertions and N queries to
@@ -101,7 +101,7 @@ fn every_owner_of_a_collapsed_ann_point_keeps_its_measured_cosine() -> Result<()
     Ok(())
 }
 
-/// [FUSION-CLUSTER-SIGNALS] Within-file mass duplication survives the
+/// [FUSED-CLUSTER-SIGNALS] Within-file mass duplication survives the
 /// collapse. Six identical statements in one file are one clone cluster
 /// with the embedding pass off, and must stay one with it on.
 ///

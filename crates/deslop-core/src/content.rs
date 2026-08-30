@@ -1,6 +1,6 @@
 //! Content-evidence measurement for shape-identical clone clusters.
 //!
-//! Implements [FUSION-CONTENT-GATE]: normalisation collapses
+//! Implements [FUSED-CONTENT-GATE]: normalisation collapses
 //! identifiers and literals, so `structural` and `token_jaccard` agree by
 //! construction on any shape match and cannot tell a renamed copy of real
 //! logic from mandatory scaffolding or a data table. This pass measures
@@ -74,7 +74,7 @@ const MIN_VERBATIM_FAMILY: usize = 2;
 /// Measured raw-content evidence for one cluster, produced by
 /// [`attach_content_evidence`] and consumed by bucket routing, the
 /// rendered fused confidence, and the ranking weight
-/// ([FUSION-CONTENT-GATE]).
+/// ([FUSED-CONTENT-GATE]).
 #[derive(Debug, Clone, Copy)]
 pub struct ContentEvidence {
     /// Mean fraction of collapsed-leaf positions whose raw bytes match
@@ -115,14 +115,14 @@ pub struct ContentEvidence {
     /// deliberately generous defaults so a missing measurement never
     /// demotes a cluster some *other* signal proves; this flag is how a
     /// route with no other signal tells "measured full agreement" apart
-    /// from "nothing was measured" ([FUSION-CONTENT-GATE]).
+    /// from "nothing was measured" ([FUSED-CONTENT-GATE]).
     pub measured: bool,
 }
 
 impl ContentEvidence {
     /// Content support for bucket routing: either population may vouch
     /// for a shape-identical cluster — pooled byte agreement or a proven
-    /// consistent rename. [FUSION-CONTENT-GATE] routes on both, never on
+    /// consistent rename. [FUSED-CONTENT-GATE] routes on both, never on
     /// their mean; the mean is what demoted maximal Type-2 renames. The
     /// rule itself lives in [`crate::buckets::content_support`], which
     /// the decision surfaces reading the *rendered* signals share, so
@@ -323,7 +323,7 @@ fn canonical_literal_fraction(canonical: Option<&[LeafKey]>) -> f64 {
     member_count(literals) / member_count(vocabulary)
 }
 
-/// 🛑 QUARANTINED ([FUSION-CONTENT-GATE], gh #458 content half).
+/// 🛑 QUARANTINED ([FUSED-CONTENT-GATE], gh #458 content half).
 ///
 /// **What this did.** It measured `pair_agreement` between an anchor
 /// member and every other member, summed the results, and divided by
@@ -485,7 +485,7 @@ fn dominant_verbatim_share(dominant: Option<DominantFamily>, members: usize) -> 
 /// it here would let the shape signals vouch for themselves through the
 /// gate built to check them; an operator that differs still counts
 /// against them in either measurement.
-/// [FUSION-CONTENT-GATE] (per-edge, gh #458): one pair's own content
+/// [FUSED-CONTENT-GATE] (per-edge, gh #458): one pair's own content
 /// agreement, measured from the endpoints' collapsed leaves exactly as
 /// a cluster's members are measured — the same measurement, one pair at
 /// a time.

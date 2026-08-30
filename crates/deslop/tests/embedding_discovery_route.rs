@@ -1,5 +1,5 @@
 //! Discovery route is telemetry, never evidence
-//! ([FUSION-CLUSTER-SIGNALS], GH #351).
+//! ([FUSED-CLUSTER-SIGNALS], GH #351).
 //!
 //! A measured cosine belongs to the pair, not to the pass that surfaced
 //! it. `add_embedding_pair` used to discard `pair.cosine` whenever the

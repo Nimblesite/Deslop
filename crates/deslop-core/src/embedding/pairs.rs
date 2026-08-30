@@ -1,6 +1,6 @@
 //! Embedding ANN pair generator.
 //!
-//! Implements the embedding arm of [FUSION-EMBED-PROVIDER]: build an
+//! Implements the embedding arm of [FUSED-EMBED-PROVIDER]: build an
 //! HNSW index over per-fingerprint embeddings, retrieve top-k
 //! cosine-nearest neighbours per query, and emit pairs whose
 //! `embedding_cos` clears a threshold. Callers (see `pipeline`) union
@@ -169,7 +169,7 @@ fn ann_embedding_pairs(embeddings: &[Vec<f32>]) -> Vec<EmbeddingPair> {
 /// computing it as `dot / (norm * norm)` can land one ULP away because
 /// `sqrt` rounds and squaring the rounded root does not reproduce the
 /// norm-square. Byte-identical snippets share one vector, and the
-/// rendered figure is pinned at exactly `1.0` ([FUSION-EMBED-PROVIDER]).
+/// rendered figure is pinned at exactly `1.0` ([FUSED-EMBED-PROVIDER]).
 #[must_use]
 pub fn cosine_similarity(left: &[f32], right: &[f32]) -> f64 {
     if left == right {
@@ -323,12 +323,12 @@ mod tests {
             .collect()
     }
 
-    /// [FUSION-EMBED-PROVIDER] A vector is perfectly similar to itself. Two
+    /// [FUSED-EMBED-PROVIDER] A vector is perfectly similar to itself. Two
     /// byte-identical snippets share one vector (`group_snippets_by_content`
     /// collapses them), so this is exactly the figure the report renders for
     /// an identical clone pair — it must be `1.0`, not `0.999998` and not one
     /// ULP below it. Bit-exact, not within epsilon: the JSON figure an agent
-    /// reads is pinned at the analytic value ([FUSION-EMBED-PROVIDER], GH #372).
+    /// reads is pinned at the analytic value ([FUSED-EMBED-PROVIDER], GH #372).
     #[test]
     fn identical_vectors_have_cosine_similarity_of_exactly_one() {
         // Bit-exact via `to_bits` ([cluster::signals] precedent): the
@@ -369,7 +369,7 @@ mod tests {
     /// this still fails against the GH #372 arithmetic.
     const RESCALE_TOLERANCE: f64 = 1e-12;
 
-    /// [FUSION-EMBED-PROVIDER] Scaling a vector does not change its
+    /// [FUSED-EMBED-PROVIDER] Scaling a vector does not change its
     /// direction, so cosine stays `1.0` regardless of magnitude.
     #[test]
     fn scaled_copies_of_a_vector_have_cosine_similarity_of_one() {
@@ -384,7 +384,7 @@ mod tests {
         }
     }
 
-    /// [FUSION-EMBED-PROVIDER] The accurate path still reports the analytic
+    /// [FUSED-EMBED-PROVIDER] The accurate path still reports the analytic
     /// answers for orthogonal, opposed, and degenerate inputs, so tightening
     /// precision cannot be mistaken for widening admission.
     #[test]

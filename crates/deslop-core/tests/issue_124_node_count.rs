@@ -1,7 +1,7 @@
 //! Regression coverage for GH #124 Type-4 node-count ranking inflation.
 //!
 //! The fixture no longer declares a signal triple: under
-//! [FUSION-CLUSTER-SIGNALS] a cluster's signals are measured between the
+//! [FUSED-CLUSTER-SIGNALS] a cluster's signals are measured between the
 //! occurrences the report renders, so the fixture must supply the
 //! evidence that produces them — identical Merkle hashes for the exact
 //! pair, partially agreeing `MinHash` signatures for the Type-4 pair, and
@@ -94,7 +94,7 @@ fn issue_124_type4_node_count_does_not_dominate_refactor_ranking() -> Result<()>
     Ok(())
 }
 
-/// [FUSION-CLUSTER-SIGNALS]: every rendered signal is measured between
+/// [FUSED-CLUSTER-SIGNALS]: every rendered signal is measured between
 /// the rendered occurrences, so each one must equal the evidence the
 /// fixture supplied — not a discovery-edge average.
 fn assert_measured_signals(semantic: &Cluster, exact: &Cluster) {

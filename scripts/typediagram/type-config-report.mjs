@@ -36,7 +36,7 @@ export const REPORT_TYPE_CONFIG = {
     },
   },
   ReportSignalSource: {
-    docs: "The occurrence pair whose measured evidence the cluster's signals display ([FUSION-CLUSTER-SIGNALS], gh #458): every rendered value is one admitted pair's measurement, never a cluster average.",
+    docs: "The occurrence pair whose measured evidence the cluster's signals display ([FUSED-CLUSTER-SIGNALS], gh #458): every rendered value is one admitted pair's measurement, never a cluster average.",
     derives: ["Debug", "Clone", "Copy", "PartialEq", "Serialize", "Deserialize"],
     fieldOverrides: {
       left: "usize",
@@ -106,12 +106,12 @@ export const REPORT_TYPE_CONFIG = {
       canonical_node_count: "AST node count of one canonical member.",
       signals: "Per-cluster signal breakdown (structural / Jaccard / embedding / fused).",
       signal_source:
-        "The occurrence pair whose measured evidence the rendered signals display ([FUSION-CLUSTER-SIGNALS], gh #458): indices into `occurrences`. Absent when no admitted pair survives, or when the wire truncated it.",
+        "The occurrence pair whose measured evidence the rendered signals display ([FUSED-CLUSTER-SIGNALS], gh #458): indices into `occurrences`. Absent when no admitted pair survives, or when the wire truncated it.",
       bucket: "Canonical bucket label (`identical`, `nearly_identical`, `loosely_similar`, `same_behavior`).",
       category: "Clone category ([RANK-CATEGORY]): `logic` (default) or `data` for a demoted data-structure literal. Orthogonal to `bucket`. Empty/absent on older reports resolves to `logic`.",
       language: "Detected language id of the cluster's first occurrence, from the engine's parser registry (`language_for_path`, [PIPELINE-LANG-TRAIT]); `unknown` when unresolvable. Consumers group and filter by this value and never re-derive a language from a file extension.",
       meets_fused_gate:
-        "True when `signals.fused` clears the engine's reportable fused threshold ([FUSION-CONTENT-GATE]). Carried so no client mirrors the threshold constant; UI admission below the act-now buckets reads this verbatim.",
+        "True when `signals.fused` clears the engine's reportable fused threshold ([FUSED-CONTENT-GATE]). Carried so no client mirrors the threshold constant; UI admission below the act-now buckets reads this verbatim.",
       evidence_verdict:
         "Engine-authored plain-English reading of the shape score against the measured content evidence — why confidence stayed, fell, or came from the embedding pass. The engine owns this verdict; clients render it verbatim and never manufacture their own from the signal numbers.",
       occurrences: "Cluster members; live wire caps this list.",

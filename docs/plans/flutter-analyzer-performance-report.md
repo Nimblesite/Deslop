@@ -389,7 +389,7 @@ Measured on a 198-file slice of the Flutter framework (`packages/flutter/lib/src
 
 - **Reused alignment scratch and a row-slice inner loop.** The Zhang–Shasha grids are allocated once per worker instead of once per keyroot pair, and the inner loop walks row slices with the left neighbour carried in a register.
 - **Borrowed signatures instead of copied ones** ([PERF-FLUTTER-TODO-PAIRS]). A signature is a kilobyte and the ranked build asked for 32 million of them; the lookup now lends a reference.
-- **An ordered admission bound** ([FUSION-SHARED-SUBTREE-BOUND-ORDER]). The kind-multiset bound cannot see order; an alignment must respect it. The longest common subsequence of the two post-order kind sequences is therefore a second, tighter upper bound, computed bit-parallel at 64 positions per word. It removes 22% of the sample's rescue alignments while admitting exactly the same pairs.
+- **An ordered admission bound** ([FUSED-SHARED-SUBTREE-BOUND-ORDER]). The kind-multiset bound cannot see order; an alignment must respect it. The longest common subsequence of the two post-order kind sequences is therefore a second, tighter upper bound, computed bit-parallel at 64 positions per word. It removes 22% of the sample's rescue alignments while admitting exactly the same pairs.
 - **A sharded noise split with one shared parse cache**, replacing an O(n) LRU scan under a global lock and a contract index every worker was rebuilding.
 
 Sample result: 31.34 s → 17.74 s wall, 147.26 s → 68.28 s CPU.
@@ -400,7 +400,7 @@ Adding the ordered bound moved the sample's rescue admissions, which a sound bou
 
 That fallback was overstating. It matched identical subtrees under a bijection chosen without regard to order, and an alignment is ordered — two subtrees matched in swapped order cannot both be kept. It also counted matched node pairs as though they were shared mass, ignoring the charge `structural` levies for everything left unmatched. On two files holding the same two functions in swapped order it credited 47 shared nodes where the alignment reaches 32, and the rescue admitted pairs on the difference. On the 51-minute run this route measured 4,080 pairs in the rescue and 1,730 more in the cluster-signal build.
 
-Both faults are fixed: the pairing now walks both endpoints forward only, and the matched mass is converted to guaranteed shared mass as `2m − min(n₁, n₂)`. On the sample this removes 198 admitted pairs that were never real. See [FUSION-SHARED-SUBTREE](../specs/fusion.md#fusion-shared-subtree).
+Both faults are fixed: the pairing now walks both endpoints forward only, and the matched mass is converted to guaranteed shared mass as `2m − min(n₁, n₂)`. On the sample this removes 198 admitted pairs that were never real. See [FUSED-SHARED-SUBTREE](../specs/fused.md#fusion-shared-subtree).
 
 ## What remains
 

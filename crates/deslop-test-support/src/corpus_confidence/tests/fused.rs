@@ -139,7 +139,7 @@ fn a_report_of_byte_identical_clones_passes() {
 
 #[test]
 fn a_content_gated_confidence_below_its_ceiling_passes() {
-    // The shape [FUSION-CONTENT-GATE] renders: a proven rename scaled
+    // The shape [FUSED-CONTENT-GATE] renders: a proven rename scaled
     // *down* off a saturated shape signal. The gate is an inequality, so
     // scaling down can never trip it — which is what lets a proven rename
     // legitimately render below the admission bar.

@@ -41,7 +41,7 @@ const STRUCTURAL_ONLY_TITLE = "Same shape, different content";
 const LEGACY_WORD_SUFFIX = "ict";
 
 // `fused` is a confidence in [0,1], never a raw sum — the engine's gate
-// multiplies shape evidence by content evidence ([FUSION-CONTENT-GATE]).
+// multiplies shape evidence by content evidence ([FUSED-CONTENT-GATE]).
 // Tests that need a specific band pass it explicitly.
 const signals = (
   s: number,
@@ -49,7 +49,7 @@ const signals = (
   e: number,
   fused = Math.min(1, Math.max(s, j, e)),
   // What the engine would have stamped as this triple's shape reading.
-  // Staged here, never derived by the client ([FUSION-CONTENT-GATE]).
+  // Staged here, never derived by the client ([FUSED-CONTENT-GATE]).
   shape = Math.max(s, j),
 ): ReportSignals =>
   signalsWith(IDENTICAL_BUCKET, {

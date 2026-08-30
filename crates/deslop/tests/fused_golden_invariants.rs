@@ -1,10 +1,10 @@
 //! Cross-language invariants the rendered fused confidence must satisfy
-//! in *every* report ([FUSION-STRATEGY-BOUNDED-MAX], [FUSION-CONTENT-GATE],
+//! in *every* report ([FUSED-STRATEGY-BOUNDED-MAX], [FUSED-CONTENT-GATE],
 //! [FUSED-THRESHOLD], [RANK-STRUCTURAL-ONLY]).
 //!
 //! `docs/plans/fused-score-followups.md` names the failure mode precisely: sum-then-
 //! clamp fusion over two views of one normalised tree makes `fused` a
-//! re-encoding of "the shapes matched", pinned at 1.0. [FUSION-CONTENT-GATE]
+//! re-encoding of "the shapes matched", pinned at 1.0. [FUSED-CONTENT-GATE]
 //! rescues the two saturating corners (`structural >= 0.99` or
 //! `token_jaccard >= 0.95`) but leaves the arithmetic itself unchanged, so
 //! any cluster whose mean signals sum past 1.0 without either component
@@ -33,7 +33,7 @@ use serde_json::Value;
 use crate::common::{signals::*, *};
 
 /// Buckets whose evidence can justify a saturated confidence: byte
-/// equivalence proven outright, or the [FUSION-CONTENT-GATE] verbatim
+/// equivalence proven outright, or the [FUSED-CONTENT-GATE] verbatim
 /// guard vouching for a cluster dominated by byte-identical members.
 const SATURATION_BUCKETS: [&str; 2] = ["identical", "nearly_identical"];
 
@@ -218,7 +218,7 @@ fn sweep_every_corpus() -> Result<Sweep> {
     Ok(sweep)
 }
 
-// [FUSION-STRATEGY-BOUNDED-MAX] / [FUSION-CONTENT-GATE]: one contract, twenty
+// [FUSED-STRATEGY-BOUNDED-MAX] / [FUSED-CONTENT-GATE]: one contract, twenty
 // corpora, eight languages. Every breach is collected before the failure
 // so a regression shows its full blast radius in one run.
 #[test]

@@ -9,7 +9,7 @@ use anyhow::Result;
 
 use crate::common::{clusters, embeddings::run_mock_embedding_report, field, fixture, seed};
 
-/// [FUSION-EMBED-PROVIDER] Every overflowing vector is accounted as failed,
+/// [FUSED-EMBED-PROVIDER] Every overflowing vector is accounted as failed,
 /// while the deterministic pipeline still returns a valid finite report.
 #[test]
 fn overflowing_json_vectors_are_rejected_before_cache_index_and_report() -> Result<()> {
