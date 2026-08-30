@@ -18,55 +18,55 @@ Delete the shipped cluster-confidence model and every dependency on it at the st
 
 **Delete the old public contract wholesale.**
 
-- Immediately remove cluster `signals.fused`, `meets_fused_gate`, fused bands, `ACT_NOW_FUSED`, `REUSE_FUSED`, the content-confidence multiply, `RENAME_CONSISTENCY_DISCOUNT`, the ranking tie-break, fused history fields, and every renderer or client branch that consumes them.
-- Delete the old cluster-confidence tests and fixtures as part of the same cutover; replace their meaningful accuracy assertions with final-contract assertions over pair admission, occurrences, bucket, elected axes, content support, weight, and order. Do not keep obsolete assertions green through a compatibility layer.
-- Replace the canonical typeDiagram model immediately and regenerate only the final Rust and TypeScript shapes. No dual schema or deprecated field survives.
+- [ ] Immediately remove cluster `signals.fused`, `meets_fused_gate`, fused bands, `ACT_NOW_FUSED`, `REUSE_FUSED`, the content-confidence multiply, `RENAME_CONSISTENCY_DISCOUNT`, the ranking tie-break, fused history fields, and every renderer or client branch that consumes them.
+- [ ] Delete the old cluster-confidence tests and fixtures as part of the same cutover; replace their meaningful accuracy assertions with final-contract assertions over pair admission, occurrences, bucket, elected axes, content support, weight, and order. Do not keep obsolete assertions green through a compatibility layer.
+- [ ] Replace the canonical typeDiagram model immediately and regenerate only the final Rust and TypeScript shapes. No dual schema or deprecated field survives.
 
 **Install the pair-scoped public contract across every surface.**
 
-- JSON, text, HTML, LSP, MCP, and VSIX expose the elected pair’s measured axes and source with no cluster fused score, fused band, or fused gate.
-- Exact `H`, token `J`, or embedding `E` may clear the pair-specific admission bar; rescue requires every configured corroboration and leaves `f_admit` unchanged.
-- A cluster whose strongest `S`, `J`, and `E` belong to different pairs must render one real elected pair rather than per-axis maxima.
-- Equal-mass clusters sort by cluster id regardless of their old cluster confidence.
+- [ ] JSON, text, HTML, LSP, MCP, and VSIX expose the elected pair’s measured axes and source with no cluster fused score, fused band, or fused gate.
+- [ ] Exact `H`, token `J`, or embedding `E` may clear the pair-specific admission bar; rescue requires every configured corroboration and leaves `f_admit` unchanged.
+- [ ] A cluster whose strongest `S`, `J`, and `E` belong to different pairs must render one real elected pair rather than per-axis maxima.
+- [ ] Equal-mass clusters sort by cluster id regardless of their old cluster confidence.
 
 **Replace elected-pair content evidence — gh #458.**
 
-- Replace the quarantined cluster means for `agreement` and `rename_consistency` with `pair_agreement` and `pair_rename_consistency` measured on the same elected pair as `S`, `J`, and `E`.
-- Carry that pair through `signal_source`; never elect content evidence separately and never average across closure members.
-- The final `a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster` assertion must cover the elected pair, occurrence paths, five rendered axes, bucket, and routing support; no intermediate test-only change is landed.
+- [ ] Replace the quarantined cluster means for `agreement` and `rename_consistency` with `pair_agreement` and `pair_rename_consistency` measured on the same elected pair as `S`, `J`, and `E`.
+- [ ] Carry that pair through `signal_source`; never elect content evidence separately and never average across closure members.
+- [ ] The final `a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster` assertion must cover the elected pair, occurrence paths, five rendered axes, bucket, and routing support; no intermediate test-only change is landed.
 
 **Remove every remaining cluster-fused implementation site.**
 
-- Remove `signals.fused`, `meets_fused_gate`, fused bands, `ACT_NOW_FUSED`, `REUSE_FUSED`, and every renderer or client branch that derives a cluster verdict from them.
-- Delete the content-confidence multiply in `buckets/gate.rs`, including `content_confidence = max(A, discount × R)` and the retired `RENAME_CONSISTENCY_DISCOUNT`; routing reads `support = max(A,R)` directly.
-- Remove the `signals.fused` tie-break from `report_weight.rs`; sort equal mass by cluster id.
-- Update `docs/models/live-ipc.td` and regenerate Rust and TypeScript wire models. Do not hand-edit generated files.
-- Delete `fused_golden_bands.rs` and `fused_golden_invariants.rs` during the cutover and replace their meaningful assertions against the final observables before the one change is complete. Pair-level bounds remain covered by `pair_admission_bounded_max.rs` and `issue_343_sum_clamp_saturation.rs`.
-- Remove fused bars, labels, tooltips, help topics, history fields, and local thresholds from every UI. Surfaces render the bucket, elected evidence, and engine-authored explanation.
+- [ ] Remove `signals.fused`, `meets_fused_gate`, fused bands, `ACT_NOW_FUSED`, `REUSE_FUSED`, and every renderer or client branch that derives a cluster verdict from them.
+- [ ] Delete the content-confidence multiply in `buckets/gate.rs`, including `content_confidence = max(A, discount × R)` and the retired `RENAME_CONSISTENCY_DISCOUNT`; routing reads `support = max(A,R)` directly.
+- [ ] Remove the `signals.fused` tie-break from `report_weight.rs`; sort equal mass by cluster id.
+- [ ] Update `docs/models/live-ipc.td` and regenerate Rust and TypeScript wire models. Do not hand-edit generated files.
+- [ ] Delete `fused_golden_bands.rs` and `fused_golden_invariants.rs` during the cutover and replace their meaningful assertions against the final observables before the one change is complete. Pair-level bounds remain covered by `pair_admission_bounded_max.rs` and `issue_343_sum_clamp_saturation.rs`.
+- [ ] Remove fused bars, labels, tooltips, help topics, history fields, and local thresholds from every UI. Surfaces render the bucket, elected evidence, and engine-authored explanation.
 
 **Replace ranking with the one governing formula.**
 
-- Remove every remaining `log2(1 + spanned_loc)`, `spanned_bytes`, or confidence factor from final rendered weight calculations and stale documentation; [RANK-MASS-SUM](../specs/pipeline.md#rank-mass-sum) is the only formula.
-- Assert visible occurrence count, canonical node count, both policy multipliers, exact weight, and `weight desc → id asc` ordering in E2E output.
-- Keep data and structural-only multipliers as explicit policy, not evidence confidence.
+- [ ] Remove every remaining `log2(1 + spanned_loc)`, `spanned_bytes`, or confidence factor from final rendered weight calculations and stale documentation; [RANK-MASS-SUM](../specs/pipeline.md#rank-mass-sum) is the only formula.
+- [ ] Assert visible occurrence count, canonical node count, both policy multipliers, exact weight, and `weight desc → id asc` ordering in E2E output.
+- [ ] Keep data and structural-only multipliers as explicit policy, not evidence confidence.
 
 **Replace the remaining defective detector and routing behavior in the same change.**
 
-- **#389:** publish the `LedgerAlpha`/`LedgerBeta` physical duplication once, with one range convention and one `identical` cluster at `--min-nodes 8`.
-- **#421:** suppress the sub-line `python-issue-69-abstract-method` fragment while retaining a real clone in the same run.
-- **#362, #71, #79, #103, #283, #284, #285:** add one negative fixture per family, asserting exact hidden noise and exact retained duplicates.
-- **#432:** operator disagreement must reduce content support enough that `+`/`-` drift cannot take a stronger bucket than a byte-identical pair.
-- **#433:** cold, warm, and mixed passes must produce the same frontier-leaf population and report.
-- **#443:** represent “no authored content measured” separately from measured agreement `1.0`.
-- **#431:** correct rendered token Jaccard only when every member shares one Merkle hash; graded structural saturation is not equality.
-- **#356:** embeddings may add candidate pairs but must not mutate the occurrence set or evidence of an existing structural component through ANN bridge topology.
+- [ ] **#389:** publish the `LedgerAlpha`/`LedgerBeta` physical duplication once, with one range convention and one `identical` cluster at `--min-nodes 8`.
+- [ ] **#421:** suppress the sub-line `python-issue-69-abstract-method` fragment while retaining a real clone in the same run.
+- [ ] **#362, #71, #79, #103, #283, #284, #285:** add one negative fixture per family, asserting exact hidden noise and exact retained duplicates.
+- [ ] **#432:** operator disagreement must reduce content support enough that `+`/`-` drift cannot take a stronger bucket than a byte-identical pair.
+- [ ] **#433:** cold, warm, and mixed passes must produce the same frontier-leaf population and report.
+- [ ] **#443:** represent “no authored content measured” separately from measured agreement `1.0`.
+- [ ] **#431:** correct rendered token Jaccard only when every member shares one Merkle hash; graded structural saturation is not equality.
+- [ ] **#356:** embeddings may add candidate pairs but must not mutate the occurrence set or evidence of an existing structural component through ANN bridge topology.
 
 **Replace reporting language and documentation in the same change.**
 
-- Make `buckets.rs` the single source for evidence sentences; delete TypeScript copies and rename `action_sentence` to `evidence_sentence` without changing agent-facing action-hint wire fields.
-- Remove the `act-now` vocabulary in favor of explicit buckets.
-- Update `REPORTING-CONTEXT.md`, the site accuracy page, and all examples so `fused` appears only as a pair-admission concept.
-- Replace obsolete code comments and test names that describe cluster fused confidence; retain historical issue references only where they explain a surviving assertion.
+- [ ] Make `buckets.rs` the single source for evidence sentences; delete TypeScript copies and rename `action_sentence` to `evidence_sentence` without changing agent-facing action-hint wire fields.
+- [ ] Remove the `act-now` vocabulary in favor of explicit buckets.
+- [ ] Update `REPORTING-CONTEXT.md`, the site accuracy page, and all examples so `fused` appears only as a pair-admission concept.
+- [ ] Replace obsolete code comments and test names that describe cluster fused confidence; retain historical issue references only where they explain a surviving assertion.
 
 ## Issue provenance (moved from fused.md)
 
@@ -103,6 +103,20 @@ The spec is written issue-free; the issues that pinned its defect-provenance lev
 | Curated ground truth, negative corpus assertions, and release corpus close-outs | [corpus-assertion.md](corpus-assertion.md) |
 | Configuration and provenance of compiled tuning levers | [unhardcode-tuning-plan.md](unhardcode-tuning-plan.md) |
 | Corpus resource ceilings and ignored release tests | [corpus-assertion.md](corpus-assertion.md) and the release audit |
+
+## Checklist
+
+Work in progress; each box flips only when the change compiles and its assertions pass.
+
+- [x] Delete `ReportSignals.fused` and `ReportCluster.meets_fused_gate` from `docs/models/live-ipc.td`; rename `agreement`/`rename_consistency` to `pair_agreement`/`pair_rename_consistency`; regenerate Rust + TypeScript wire models.
+- [x] Generator metadata documents the elected pair (no Mean/Pooled copy).
+- [x] VSIX: fused help topic, fused bar, fused tooltip, fused signals line, fused-gate bubble admission removed; strip renders shape / embedding / `pair_agreement`.
+- [x] VSIX fixtures: `bucketMeetsFusedGate` deleted; `bucketSignals` carries elected-pair axes.
+- [ ] VSIX suites rewritten against the final wire shape; a schema test asserts `fused`/`meets_fused_gate` are absent from the generated types.
+- [ ] TypeScript compile + unit suites green.
+- [ ] VSIX build + webview/UI smoke against the new wire.
+- [ ] Site + docs: `fused` appears only as a pair-admission concept.
+- [ ] Engine owners' slices reviewed on TMC (gate.rs content-confidence multiply, report_weight tie-break, render/signals verdicts, restamp).
 
 ## Completion
 

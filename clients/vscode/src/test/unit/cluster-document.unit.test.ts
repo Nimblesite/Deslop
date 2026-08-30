@@ -20,7 +20,6 @@ function cluster(overrides: Partial<ClusterFixture> = {}): ReportCluster {
       token_jaccard: 0.875,
       shape: 1,
       embedding_cos: 0.25,
-      fused: 0.9,
     }),
     occurrences: [
       {

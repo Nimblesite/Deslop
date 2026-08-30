@@ -38,14 +38,14 @@ pub use crate::wire_generated::{
     ReportSignals,
 };
 
-/// Serde default for [`ReportSignals::agreement`] when replaying a
+/// Serde default for [`ReportSignals::pair_agreement`] when replaying a
 /// report written before the content gate existed: an absent field
 /// means nothing was measured, and the unmeasured convention is full
 /// agreement so a missing measurement never demotes a cluster the
 /// original run vouched for ([FUSED-CONTENT-GATE],
 /// [`crate::content::ContentEvidence::unmeasured`]).
 #[must_use]
-pub fn unmeasured_agreement() -> f64 {
+pub fn unmeasured_pair_agreement() -> f64 {
     1.0
 }
 
@@ -161,7 +161,7 @@ pub fn distinct_visible_path_count(cluster: &ReportCluster) -> usize {
 }
 
 impl From<PairScore> for ReportSignals {
-    /// The content triple is left at zero here and stamped later by
+    /// The content evidence is left at zero here and stamped later by
     /// [`crate::buckets::content_gated_signals`] ([FUSED-CONTENT-GATE],
     /// #344). A `PairScore` is the deterministic pair evidence, produced
     /// before any content is measured, so it has nothing truthful to put
@@ -175,9 +175,8 @@ impl From<PairScore> for ReportSignals {
             // definition once the source fields exist.
             shape: 0.0,
             embedding_cos: score.embedding_cos,
-            fused: score.bounded_fused(),
-            agreement: 0.0,
-            rename_consistency: 0.0,
+            pair_agreement: 0.0,
+            pair_rename_consistency: 0.0,
             literal_fraction: 0.0,
         };
         signals.shape = signals.shape_score();
@@ -190,7 +189,7 @@ impl ReportSignals {
     /// `token_jaccard`, two views of one normalised representation, so
     /// the max is what "the shape matched" means
     /// ([FUSED-CONTENT-GATE]). The single definition behind the wire
-    /// `shape` field, the content gate's fused reduction, and the
+    /// `shape` field, content routing, and the
     /// evidence verdict; consumers render the stamped field verbatim
     /// and never re-derive the max.
     #[must_use]

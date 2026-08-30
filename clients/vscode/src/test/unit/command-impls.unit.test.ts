@@ -548,7 +548,6 @@ suite("tree menu renderers", () => {
       structural: 0.1,
       token_jaccard: 0.2,
       embedding_cos: 0.9,
-      fused: 0.85,
     });
 
     const text = aiPayloadForCluster(c, 7);

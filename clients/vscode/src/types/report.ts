@@ -77,6 +77,7 @@ export type {
   FileMetric,
   ReportChangedNotification,
   ReportDelta,
+  ReportSignalSource,
   RepoMetrics,
   SessionConfig,
   ThresholdSource,

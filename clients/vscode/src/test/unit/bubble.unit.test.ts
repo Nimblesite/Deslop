@@ -21,7 +21,6 @@ function cluster(
     token_jaccard: 0.9,
     shape: 1,
     embedding_cos: 0.5,
-    fused: 0.95,
   }),
 ): ReportCluster {
   return wireCluster({
@@ -67,7 +66,6 @@ suite("bubble rendering helpers", () => {
           structural: 2,
           token_jaccard: -1,
           embedding_cos: 0.5,
-          fused: 1,
         }),
       ),
     );

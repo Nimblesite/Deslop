@@ -1,6 +1,6 @@
 // Unit: LiveBubble.render — drive inline + ghost paths + dismissal + no-op.
 // Every render assertion goes through the shared decoration capture so the
-// suite pins the text the user actually sees, including the fused band
+// suite pins the text the user actually sees, including the engine bucket
 // that decided whether the bubble appeared at all.
 
 import * as assert from "node:assert/strict";
@@ -8,8 +8,7 @@ import * as vscode from "vscode";
 import { LiveBubble } from "../../bubble/live";
 import {
   DEFAULT_BUBBLE_CLUSTER_WEIGHT,
-  ENGINE_FUSED_CUTOFF,
-  HIGH_FUSED_CONFIDENCE,
+  HIGH_ELECTED_AGREEMENT,
   PRIMARY_BUBBLE_CLUSTER_ID,
   bubbleCluster,
   bubbleFixture,
@@ -29,12 +28,12 @@ suite("LiveBubble render", () => {
   test("inline mode renders the bubble decoration", async () => {
     const { capture, bubble } = await bubbleFixture();
     try {
-      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
+      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT)]);
       const visible = capture.visible();
 
       assert.ok(
         visible !== undefined,
-        `fused 0.95 clears ENGINE_FUSED_CUTOFF ${ENGINE_FUSED_CUTOFF} and must render`,
+        `an act-now bucket renders at agreement ${HIGH_ELECTED_AGREEMENT}`,
       );
       assert.match(visible ?? "", /Identical code/, "bubble carries the wire bucket title");
       assert.match(visible ?? "", /×\s*5/, "count comes from the authoritative report");
@@ -46,23 +45,18 @@ suite("LiveBubble render", () => {
 
       // Idempotent re-render (same cluster + range) must not repaint.
       const before = capture.calls.length;
-      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
+      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT)]);
       assert.equal(
         capture.calls.length,
         before,
         "re-rendering the same cluster at the same range must be a no-op",
       );
 
-      // A probe whose only cluster sits under the cutoff clears the surface.
+      // A probe whose only cluster is demoted clears the surface.
       //
-      // The bucket is part of the fixture, not decoration. This row used to
-      // carry the `identical` default, a pairing the engine cannot produce:
-      // `content_gated_signals` returns an `Identical` cluster's signals
-      // untouched, and `Identical` requires structural ≥ 0.99 *and*
-      // token_jaccard ≥ 0.99, so its `bounded_fused` is ≥ 0.99 by
-      // construction — a byte-proven copy never renders 0.2. A weak hint
-      // is what the engine actually pairs with a low confidence, and it is
-      // the population the cutoff exists to gate.
+      // Admission is the bucket and nothing else: the same hint with
+      // perfect elected evidence must stay hidden too, or the assertion
+      // above would also pass if only weak evidence were banned.
       const weakHint = bubbleCluster("c-low", DEFAULT_BUBBLE_CLUSTER_WEIGHT, 0.2, {
         bucket: "loosely_similar",
         structural: 0.3,
@@ -72,21 +66,19 @@ suite("LiveBubble render", () => {
       assert.equal(
         capture.visible(),
         undefined,
-        `fused 0.2 is under ENGINE_FUSED_CUTOFF ${ENGINE_FUSED_CUTOFF} and must clear the bubble`,
+        `a ${weakHint.bucket} cluster is demoted and must clear the bubble`,
       );
-      // …and the gate is the confidence, not the bucket: the same hint at
-      // the cutoff comes back. Without this the assertion above would also
-      // pass if hints were banned from the surface outright.
       bubble.render(capture.editor, span(12), [
-        bubbleCluster("c-hint", DEFAULT_BUBBLE_CLUSTER_WEIGHT, ENGINE_FUSED_CUTOFF, {
+        bubbleCluster("c-hint", DEFAULT_BUBBLE_CLUSTER_WEIGHT, 1, {
           bucket: "loosely_similar",
-          structural: 0.3,
-          token: 0.4,
+          structural: 1,
+          token: 1,
         }),
       ]);
-      assert.ok(
-        capture.visible() !== undefined,
-        `a hint at exactly ${ENGINE_FUSED_CUTOFF} clears the cutoff and must render`,
+      assert.equal(
+        capture.visible(),
+        undefined,
+        "a demoted bucket stays hidden even at agreement 1.0: signals never admit",
       );
     } finally {
       bubble.dispose();
@@ -100,7 +92,7 @@ suite("LiveBubble render", () => {
     const { capture, bubble } = await bubbleFixture();
 
     try {
-      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, 100, HIGH_FUSED_CONFIDENCE, 35)]);
+      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, 100, HIGH_ELECTED_AGREEMENT, 35)]);
       const visible = capture.visible() ?? "";
 
       assert.equal(
@@ -128,7 +120,7 @@ suite("LiveBubble render", () => {
   test("ghost mode renders the ghost-line decoration", async () => {
     const { capture, bubble } = await bubbleFixture({ mode: "ghost" });
     try {
-      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
+      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT)]);
       const ghost = capture.visible() ?? "";
 
       assert.match(ghost, /└─/, "ghost mode renders the tree-branch prefix");
@@ -148,7 +140,7 @@ suite("LiveBubble render", () => {
       // Switching mode mid-session must move the same cluster to the
       // other surface rather than leaving both painted.
       await setMode("inline");
-      bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
+      bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT)]);
       const inline = capture.visible() ?? "";
       assert.doesNotMatch(inline, /└─/, "inline mode drops the ghost prefix");
       assert.match(inline, /Identical code/, "the bucket title survives the mode switch");
@@ -165,7 +157,7 @@ suite("LiveBubble render", () => {
   test("render without a report is a no-op", async () => {
     const { store, capture, bubble } = await bubbleFixture({ snapshot: null });
     try {
-      bubble.render(capture.editor, span(0), [cluster("x", 1, HIGH_FUSED_CONFIDENCE)]);
+      bubble.render(capture.editor, span(0), [cluster("x", 1, HIGH_ELECTED_AGREEMENT)]);
 
       assert.equal(
         capture.calls.length,
@@ -188,21 +180,18 @@ suite("LiveBubble render", () => {
     try {
       renderFullConfidenceBubble(capture, bubble, 0, PRIMARY_BUBBLE_CLUSTER_ID);
 
-      // The bucket is load-bearing: an `identical` cluster is byte-proven and
-      // its `bounded_fused` is ≥ 0.99 by construction, so the engine cannot
-      // hand this surface an act-now bucket at 0.5. A weak hint is the
-      // population the cutoff governs.
+      // The bucket is load-bearing: a `loosely_similar` cluster is demoted,
+      // and no signal value can admit it.
       const belowCutoff = bubbleCluster("y", 1, 0.5, {
         bucket: "loosely_similar",
         structural: 0.4,
         token: 0.5,
       });
       bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [belowCutoff]);
-      assert.ok(0.5 < ENGINE_FUSED_CUTOFF, "fixture must sit below the cutoff to prove anything");
       assert.equal(
         capture.visible(),
         undefined,
-        `fused 0.5 under ENGINE_FUSED_CUTOFF ${ENGINE_FUSED_CUTOFF} must clear the bubble`,
+        `a ${belowCutoff.bucket} cluster must clear the bubble at any agreement`,
       );
 
       // An empty probe keeps the surface clear rather than restoring the
@@ -225,7 +214,7 @@ suite("LiveBubble render", () => {
 
     try {
       const visible = renderFullConfidenceBubble(capture, bubble, 0, "c-a");
-      assert.match(visible, /Identical code/, "seeded at full confidence");
+      assert.match(visible, /Identical code/, "seeded on an act-now bucket");
 
       retractCluster(store, PRIMARY_BUBBLE_CLUSTER_ID);
 
@@ -249,7 +238,6 @@ suite("LiveBubble render", () => {
   // gone. Absence from `report.clusters` cannot separate them, so
   // `ReportStore` now records `clusters_removed` instead of dropping it —
   // the discriminator is retraction, not absence ([VSIX-STATE-DIRTY]).
-  // → docs/plans/fused-score-followups.md § "Where fused stands against it"
   test("a stale probe cannot resurrect a cluster the visible report dropped", async () => {
     const { store, capture, bubble } = await bubbleFixture({ generation: 1 });
 
@@ -259,7 +247,7 @@ suite("LiveBubble render", () => {
       retractCluster(store, PRIMARY_BUBBLE_CLUSTER_ID);
       assert.equal(capture.visible(), undefined, "the delta must clear the bubble");
 
-      bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
+      bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT)]);
       assert.equal(
         capture.visible(),
         undefined,
@@ -310,11 +298,11 @@ suite("LiveBubble render", () => {
       bubble.dismissCluster(DISMISSIBLE_CLUSTER_ID);
       // The dismissedClusters filter drops it before the sort step, so
       // even at unchanged confidence it must not come back.
-      bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [cluster(DISMISSIBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
+      bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [cluster(DISMISSIBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT)]);
       assert.equal(
         capture.visible(),
         undefined,
-        "a dismissed cluster must stay hidden even at fused 0.95",
+        "a dismissed cluster must stay hidden even at agreement 0.95",
       );
 
       // Dismissal is per-cluster, not a global mute.
@@ -349,7 +337,7 @@ suite("LiveBubble render", () => {
     const bubble = new LiveBubble(store, () => undefined);
     try {
       const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));
-      bubble.render(editor, range, [cluster("c-inlay", DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)]);
+      bubble.render(editor, range, [cluster("c-inlay", DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT)]);
       const hints = await vscode.commands.executeCommand<vscode.InlayHint[]>(
         "vscode.executeInlayHintProvider",
         doc.uri,

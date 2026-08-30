@@ -76,11 +76,8 @@ fn sub_threshold_axes_are_dropped_even_though_their_sum_clears_the_bar() {
 // above would also pass if admission dropped everything.
 #[test]
 fn a_single_axis_above_the_threshold_survives_admission() {
-    let clusters = cluster_by_transitive_closure(&[candidate(
-        false,
-        ABSENT_AXIS,
-        ABOVE_THRESHOLD_AXIS,
-    )]);
+    let clusters =
+        cluster_by_transitive_closure(&[candidate(false, ABSENT_AXIS, ABOVE_THRESHOLD_AXIS)]);
     assert_eq!(
         clusters.len(),
         1,
@@ -91,8 +88,7 @@ fn a_single_axis_above_the_threshold_survives_admission() {
         .map(|cluster| cluster.members.clone())
         .unwrap_or_default();
     assert_eq!(
-        members,
-        EXPECTED_MEMBERS,
+        members, EXPECTED_MEMBERS,
         "and the component must contain exactly the pair's two endpoints"
     );
 }
@@ -102,11 +98,7 @@ fn a_single_axis_above_the_threshold_survives_admission() {
 // only this case, never the two above.
 #[test]
 fn an_axis_exactly_at_the_threshold_survives_admission() {
-    let clusters = cluster_by_transitive_closure(&[candidate(
-        false,
-        ABSENT_AXIS,
-        FUSED_THRESHOLD,
-    )]);
+    let clusters = cluster_by_transitive_closure(&[candidate(false, ABSENT_AXIS, FUSED_THRESHOLD)]);
     assert_eq!(
         clusters.len(),
         1,

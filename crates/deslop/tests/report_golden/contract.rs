@@ -263,8 +263,8 @@ fn assert_authored_cluster(cluster_list: &[Value], rank: usize, copies: u64) -> 
 /// Every figure the report states about a cluster that a consumer would
 /// otherwise have to derive: the worst-first rank and its severity band
 /// ([SEVERITY-BAND]), the language ([PIPELINE-LANG-TRAIT]), the display
-/// occurrence count, the shape reading, the fused-gate verdict and the
-/// evidence sentence ([FUSED-CONTENT-GATE]).
+/// occurrence count, the shape reading and the evidence sentence
+/// ([FUSED-CONTENT-GATE]).
 ///
 /// Every one of these is carried precisely so no client recomputes it,
 /// so a report that omits one — or states one the rest of the report
@@ -289,10 +289,11 @@ fn assert_engine_derived_fields(golden: &Value) {
             Some(cluster_size(cluster)),
             "the stated occurrence count must equal the occurrences the report carries: {cluster}"
         );
-        assert_eq!(
-            field(cluster, "meets_fused_gate").as_bool(),
-            Some(true),
-            "byte-proven clones clear the reportable fused line: {cluster}"
+        assert!(
+            cluster.pointer("/signals/fused").is_none()
+                && cluster.get("meets_fused_gate").is_none(),
+            "no cluster-level fused or fused-gate field may survive on the wire \
+             ([FUSED-SCOPE]): {cluster}"
         );
         assert_type1_identical_signals(cluster, "report-golden");
         let verdict = field(cluster, "evidence_verdict")

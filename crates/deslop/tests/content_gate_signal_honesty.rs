@@ -1,7 +1,7 @@
 //! [FUSED-CONTENT-GATE] — the gate may correct a signal it can prove,
 //! and may not publish one it did not measure (gh #431).
 //!
-//! `apply_content_gate` rewrites `token_jaccard` to `1.0` for a
+//! `content_gated_signals` rewrites `token_jaccard` to `1.0` for a
 //! `nearly_identical` cluster, on a Merkle argument: members that share
 //! one normalised-subtree digest have equal kind streams *by
 //! construction*, so a lower measured value is a fingerprint-scoped
@@ -16,12 +16,8 @@
 //! Merkle argument covers none of them. Routing tolerance is not
 //! evidence of identity.
 //!
-//! Two published numbers are fabricated for a cluster in that band:
-//! `token_jaccard`, directly, and `shape` — `max(structural,
-//! token_jaccard)` — which inherits it. `fused` does not, because it is
-//! computed from the pre-correction triple, and that split is what makes
-//! the defect visible from outside the engine: the rendered signals stop
-//! reproducing the rendered confidence.
+//! The published `token_jaccard` is fabricated for a cluster in that
+//! band, and `shape` — `max(structural, token_jaccard)` — inherits it.
 //!
 //! # Why this fixture cannot pass by going blind
 //!
@@ -38,8 +34,7 @@
 use serde_json::Value;
 
 use deslop_core::buckets::{
-    CONTENT_SUPPORT_FLOOR, RENAME_CONSISTENCY_DISCOUNT, SATURATING_TOKEN_FLOOR,
-    STRUCTURAL_SATURATION_FLOOR,
+    CONTENT_SUPPORT_FLOOR, SATURATING_TOKEN_FLOOR, STRUCTURAL_SATURATION_FLOOR,
 };
 
 use crate::common::{signals::*, *};
@@ -66,49 +61,31 @@ fn render() -> Result<Value> {
     run_report(&fixture("operator-drift"), MIN_NODES)
 }
 
-/// The confidence [FUSED-CONTENT-GATE] fuses shape against: pooled byte
-/// agreement, or a discounted literal-anchored rename proof, whichever
-/// is the stronger evidence. Read off the *rendered* wire so the check
-/// below is a statement about the published report alone.
-fn rendered_content_confidence(cluster: &Value) -> f64 {
-    signal(cluster, "agreement")
-        .max(RENAME_CONSISTENCY_DISCOUNT * signal(cluster, "rename_consistency"))
-}
-
 /// Asserts the published signal triple is internally consistent: `shape`
-/// is the shape reading of the two axes beside it, and `fused` is that
-/// reading scaled by the content evidence rendered next to it (or the
-/// semantic signal, when that is stronger).
-///
-/// This is the property a fabricated signal breaks without any knowledge
-/// of what the engine measured. `fused` is computed inside the gate from
-/// the pre-correction triple; overwrite an axis afterwards and the
-/// published numbers no longer reproduce the published confidence, which
-/// is observable from the report alone.
-fn assert_signals_reproduce_fused(cluster: &Value, label: &str) {
+/// is the shape reading of the two axes beside it
+/// ([FUSED-CONTENT-GATE]). A gate that overwrote an axis after computing
+/// the reading would publish numbers that disagree with the reading
+/// derived from them, observable from the report alone.
+fn assert_shape_is_reproducible(cluster: &Value, label: &str) {
     let structural = signal(cluster, "structural");
     let token_jaccard = signal(cluster, "token_jaccard");
     let shape = signal(cluster, "shape");
-    let fused = signal(cluster, "fused");
     assert!(
         approx(shape, structural.max(token_jaccard)),
         "{label}: rendered shape={shape} is not max(structural={structural}, \
          token_jaccard={token_jaccard}) — a published axis disagrees with the \
          reading derived from it: {cluster:#}"
     );
-    let expected =
-        signal(cluster, "embedding_cos").max(shape * rendered_content_confidence(cluster));
     assert!(
-        approx(fused, expected),
-        "{label}: rendered fused={fused} is not reproducible from the rendered \
-         signals (expected {expected}) — the confidence was computed from a \
-         different triple than the one published: {cluster:#}"
+        cluster.pointer("/signals/fused").is_none(),
+        "{label}: no cluster-level fused field may survive on the wire \
+         ([FUSED-SCOPE]): {cluster:#}"
     );
 }
 
 // The defect: a `nearly_identical` cluster whose members are not
-// digest-equal is published carrying `token_jaccard = 1.00`, a value no
-// measurement supports, and a `shape = 1.00` derived from it.
+// digest-equal must not be published carrying `token_jaccard = 1.00`, a
+// value no measurement supports, nor a `shape = 1.00` derived from it.
 //
 // The ledger pair is the whole point of the fixture here: it is the one
 // family that clusters at all once the operator reaches the digest, so
@@ -147,14 +124,13 @@ fn the_content_gate_publishes_no_token_jaccard_it_did_not_measure() -> Result<()
          fabricated token axis and claims a perfect shape match for members \
          measured at structural={structural}: {ledger:#}"
     );
-    assert_signals_reproduce_fused(ledger, "ledger pair");
+    assert_shape_is_reproducible(ledger, "ledger pair");
     Ok(())
 }
 
 // The other half of the contract: the correction must keep working for
 // the population the Merkle argument actually covers. A digest-equal
-// pair renders the saturated triple, and its confidence saturates with
-// it.
+// pair renders the saturated triple.
 //
 // Asserted in the same run as the ledger pair so "the band is honest"
 // can never be bought by desaturating every cluster in the report.
@@ -169,7 +145,7 @@ fn a_digest_equal_pair_keeps_its_saturated_signals() -> Result<()> {
          otherwise the run proves nothing about what the gate protects: \
          {report:#}"
     );
-    for axis in ["structural", "token_jaccard", "shape", "fused"] {
+    for axis in ["structural", "token_jaccard", "shape"] {
         let value = signal(control, axis);
         assert!(
             approx(value, SATURATED),
@@ -178,7 +154,7 @@ fn a_digest_equal_pair_keeps_its_saturated_signals() -> Result<()> {
              pair saturated: {control:#}"
         );
     }
-    assert_signals_reproduce_fused(control, "byte-identical control");
+    assert_shape_is_reproducible(control, "byte-identical control");
     Ok(())
 }
 
@@ -190,13 +166,13 @@ fn a_digest_equal_pair_keeps_its_saturated_signals() -> Result<()> {
 const ACCESSOR_PAIR: [&str; 2] = ["accessor_argument.rs", "accessor_assignment.rs"];
 
 /// The byte-identical control in the same fixture: both axes saturate,
-/// the gate runs, and `agreement = 1.00` genuinely corroborates.
+/// the gate runs, and `pair_agreement = 1.00` genuinely corroborates.
 const SATURATED_CONTROL_PAIR: [&str; 2] = ["control_alpha.rs", "control_beta.rs"];
 
 /// The clause `render::signals::corroborated_verdict` emits. It tells
-/// the reader the measured content evidence was weighed against the
-/// shape reading and left it standing.
-const CORROBORATED_CLAUSE: &str = "the content evidence did not discount that";
+/// the reader the measured content evidence vouches for the shape
+/// reading.
+const CORROBORATED_CLAUSE: &str = "the content evidence vouches for it";
 
 /// Renders the unsaturated-gate fixture once per assertion below. Both
 /// of its pairs are single function bodies, so they cluster at the same
@@ -209,20 +185,16 @@ fn render_unsaturated() -> Result<Value> {
 // content evidence corroborated a match the gate never consulted.
 //
 // `buckets::routing::route_shape_identical` returns before the gate
-// whenever `has_saturating_shape_evidence` is false, and
-// `buckets::gate::content_gated_signals` leaves `fused` untouched on the
-// same condition. So for every cluster below saturation `fused == shape`
-// by construction, and `render::signals::content_evidence_verdict` —
-// which sees only the signal triple and branches on `fused + eps >=
-// shape` — can reach no branch but `corroborated_verdict`. It publishes
-// "the content evidence did not discount that" for a cluster whose
-// evidence was measured at 0.31 and then discarded, which is the single
-// strongest available disproof of the match rendered to the reader as
-// corroboration.
+// whenever `has_saturating_shape_evidence` is false, so the gate never
+// runs on a below-saturation cluster, and
+// `render::signals::content_evidence_verdict` reaches the
+// `unweighed_verdict` branch for it — it names the measured figures as
+// unused observations, never as corroboration.
 //
 // Measured on this repo's own tree (2026-08-27, 1316 visible clusters):
-// 637 of 637 non-saturated clusters carry this clause, and 637 of 637
-// render `fused == shape`. The branch is unreachable, not merely rare.
+// 637 of 637 non-saturated clusters used to carry the corroborated
+// clause, rendering the strongest available disproof of the match as
+// corroboration. That population now reads the honest verdict.
 #[test]
 fn a_gate_skipped_cluster_is_not_told_its_content_evidence_agreed() -> Result<()> {
     let report = render_unsaturated()?;
@@ -241,7 +213,8 @@ fn a_gate_skipped_cluster_is_not_told_its_content_evidence_agreed() -> Result<()
          scopes [FUSED-CONTENT-GATE] out of it — it measured \
          structural={structural}, token_jaccard={token_jaccard}: {accessor:#}"
     );
-    let support = signal(accessor, "agreement").max(signal(accessor, "rename_consistency"));
+    let support = signal(accessor, "pair_agreement")
+        .max(signal(accessor, "pair_rename_consistency"));
     assert!(
         support < CONTENT_SUPPORT_FLOOR,
         "the accessor pair's content evidence must be measured and low for the \
@@ -254,8 +227,8 @@ fn a_gate_skipped_cluster_is_not_told_its_content_evidence_agreed() -> Result<()
         "the gate never ran on this cluster (structural={structural} and \
          token_jaccard={token_jaccard} are both below saturation), so its \
          measured content evidence — support={support} — was discarded rather \
-         than weighed. Telling the reader it `did not discount` the shape \
-         renders the disproof as corroboration: {verdict}"
+         than weighed. Telling the reader it `vouches for` the shape renders \
+         the disproof as corroboration: {verdict}"
     );
     Ok(())
 }
@@ -263,8 +236,8 @@ fn a_gate_skipped_cluster_is_not_told_its_content_evidence_agreed() -> Result<()
 // The other half of the contract, asserted in the same run so honesty
 // for the gate-skipped population can never be bought by deleting the
 // sentence everywhere. The byte-identical control saturates both axes,
-// the gate does run on it, and `agreement = 1.00` is a real corroboration
-// the reader is entitled to read.
+// the gate does run on it, and `pair_agreement = 1.00` is a real
+// corroboration the reader is entitled to read.
 #[test]
 fn a_gated_cluster_still_reports_the_evidence_that_corroborated_it() -> Result<()> {
     let report = render_unsaturated()?;
@@ -275,11 +248,11 @@ fn a_gated_cluster_still_reports_the_evidence_that_corroborated_it() -> Result<(
         "the byte-identical control must stay identical, otherwise the run \
          proves nothing about the population the gate does serve: {report:#}"
     );
-    let agreement = signal(control, "agreement");
+    let agreement = signal(control, "pair_agreement");
     assert!(
         approx(agreement, SATURATED),
         "the control's copies are byte-identical, so every collapsed position \
-         agrees: agreement={agreement}: {control:#}"
+         agrees: pair_agreement={agreement}: {control:#}"
     );
     let control_verdict = cluster_verdict(control);
     assert!(

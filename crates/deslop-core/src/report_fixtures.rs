@@ -26,8 +26,8 @@ pub fn identical_signals() -> ReportSignals {
         token_jaccard: 1.0,
         shape: 1.0,
         embedding_cos: 0.0,
-        agreement: 1.0,
-        rename_consistency: 0.0,
+        pair_agreement: 1.0,
+        pair_rename_consistency: 0.0,
         literal_fraction: 0.0,
     }
 }

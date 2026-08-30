@@ -1,13 +1,8 @@
-//! E2E regression for GH #343 [FUSED-STRATEGY-BOUNDED-MAX]: sum-then-clamp
-//! fusion saturates on correlated mid-band evidence.
-//!
-//! `PairScore::fused()` sums three correlated views of the same code and
-//! clamps to `[0, 1]`. A cluster whose mean signals sum past 1.0 renders
-//! `fused = 1.000` — a claim of proven duplication — even though no single
-//! axis saturated and no occurrence pair is byte-identical. The
-//! [FUSED-CONTENT-GATE] rescues only the two saturating corners
-//! (`structural >= 0.99`, `token_jaccard >= 0.95`); the mid band passes
-//! under the gate untouched.
+//! E2E regression for GH #343 [FUSED-STRATEGY-BOUNDED-MAX]: the sum
+//! arm of the fused score is removed; the pair-level bound is pinned by
+//! `pair_admission_bounded_max.rs`. This file pins what remains on the
+//! report surface: the mid-band pair stays visible and routed to a real
+//! bucket (recall), and no byte-identical pair is required to see it.
 //!
 //! The fixture pair is `ledger_a.ts` / `ledger_c.ts` from `ts-mixed-band`:
 //! two 90-term arithmetic chains differing by one parenthesised head term.
@@ -15,14 +10,10 @@
 //! are left-leaning), so the pair connects through token LSH and the
 //! embedding pass alone: `structural ~ 0`, `token_jaccard` mid-band,
 //! `embedding_cos ~ 0.95` under the deterministic [`MockOllama`] vectors.
-//! No axis reaches 1.0 and the files are not byte-identical, yet the
-//! summed fusion clamps to full confidence.
 //!
-//! Contract pinned here: without a byte-identical occurrence pair, the
-//! rendered confidence never exceeds the strongest single axis, and in
-//! particular never saturates at 1.0. The cluster itself is a genuine
-//! near-duplicate, so the confidence must also stay act-now-worthy — the
-//! fix bounds the fusion, it does not erase the evidence.
+//! Contract pinned here: the cluster is a genuine near-duplicate and must
+//! stay visible with a real bucket — the bounded-max repair rescues it
+//! rather than erasing the evidence.
 
 use std::path::Path;
 
@@ -42,14 +33,6 @@ fn run_two_file_report(server: &MockOllama, scan_root: &Path) -> Result<Value> {
     }
     let output = scan_root.join("report");
     run_mock_embedding_report(scan_root, &output, "12", server.endpoint())
-}
-
-/// The strongest single axis of the rendered signal triple — the ceiling
-/// a bounded fusion of correlated evidence may reach without byte proof.
-fn strongest_axis(cluster: &Value) -> f64 {
-    signal(cluster, "structural")
-        .max(signal(cluster, "token_jaccard"))
-        .max(signal(cluster, "embedding_cos"))
 }
 
 /// The evidence shape that exposes the clamp: an embedding-dominant
@@ -78,24 +61,23 @@ fn assert_mid_band_evidence(scan_root: &Path, cluster: &Value) -> Result<()> {
     Ok(())
 }
 
-// GH #343 acceptance: correlated mid-band evidence must not saturate the
-// rendered confidence. Today `fused()` clamps 0.00 + 0.30 + 0.95 to a
-// flat 1.000 — indistinguishable from a byte-proven verbatim copy.
+// GH #343 acceptance: the mid-band pair survives the bounded-max
+// admission as a visible cluster with a real bucket — the repair rescues
+// genuine near-duplicate evidence instead of erasing it.
 #[test]
 #[ignore = "[SKIP-UNFINISHED] GH #369 [FUSED-SHARED-SUBTREE] \
             docs/plans/rename-recall-plan.md — RED ON PURPOSE, and materially closer than \
             it was. \
             The two embedding-only false positives are gone and the real \
             clone is found — `cluster_count` is now the expected 1, where \
-            it used to be 2 with the genuine pair hidden. Two expectations \
-            remain unmet, both downstream of `structural` becoming a \
-            measurement ([FUSED-SHARED-SUBTREE]): one cluster still routes \
-            to hidden where this wants none, and the pair is asserted to be \
+            it used to be 2 with the genuine pair hidden. One expectation \
+            remains unmet, downstream of `structural` becoming a \
+            measurement ([FUSED-SHARED-SUBTREE]): the pair is asserted to be \
             `same_behavior` when ledger_a/ledger_c differ only by a rename \
             and one redundant paren — measured `structural = 0.997`, which \
             is a near-identical clone, not a Type-4. Settling that is #369's \
             own work. Assertions are intact — run with `-- --ignored`."]
-fn mid_band_cluster_confidence_never_exceeds_its_strongest_axis() -> Result<()> {
+fn mid_band_pair_stays_visible_with_a_real_bucket() -> Result<()> {
     let server = MockOllama::spawn()?;
     let tmp = tempfile::tempdir()?;
     let report = run_two_file_report(&server, tmp.path())?;
@@ -134,50 +116,18 @@ fn mid_band_cluster_confidence_never_exceeds_its_strongest_axis() -> Result<()> 
          got {duplication}"
     );
     assert_mid_band_evidence(tmp.path(), cluster)?;
-
-    let fused = signal(cluster, "fused");
-    let ceiling = strongest_axis(cluster);
     assert!(
-        fused <= ceiling + 1e-6,
-        "fused confidence exceeded its strongest axis without a byte-identical \
-         pair: fused {fused:.4} > max axis {ceiling:.4} — sum-then-clamp \
-         saturation, GH #343 — {dump}",
-        dump = signal_dump(cluster)
-    );
-    // The bound is exact, not merely an inequality: with no saturating
-    // shape signal the content gate leaves the bounded max untouched, and
-    // the strongest axis here is the embedding — anything below it would
-    // discard measured evidence, anything above it would manufacture some.
-    assert!(
-        approx(fused, ceiling),
-        "fused must equal the strongest axis when no gate applies — {dump}",
-        dump = signal_dump(cluster)
-    );
-    assert!(
-        approx(fused, signal(cluster, "embedding_cos")),
-        "the embedding is the dominant axis of this fixture — {dump}",
-        dump = signal_dump(cluster)
-    );
-    assert!(
-        !approx(fused, 1.0),
-        "full confidence without byte proof — {dump}",
-        dump = signal_dump(cluster)
-    );
-    assert!(
-        fused >= ACT_NOW_FUSED,
-        "bounding the fusion must not erase genuine near-duplicate evidence: \
-         fused {fused:.4} fell below the act-now line {ACT_NOW_FUSED} — {dump}",
+        cluster.pointer("/signals/fused").is_none(),
+        "no cluster-level fused field may survive on the wire ([FUSED-SCOPE]): {dump}",
         dump = signal_dump(cluster)
     );
     Ok(())
 }
 
 // The control the bound must not break: byte-proven duplication still
-// earns the full 1.0 on every axis and routes `identical`. A bounded
-// fusion that capped proven copies below full confidence would trade the
-// #343 false positive for a false negative.
+// earns 1.0 on every rendered axis and routes `identical`.
 #[test]
-fn byte_identical_pair_still_earns_full_confidence_under_the_bound() -> Result<()> {
+fn byte_identical_pair_still_saturates_every_axis() -> Result<()> {
     let server = MockOllama::spawn()?;
     let tmp = tempfile::tempdir()?;
     let source = fixture("ts-mixed-band").join("ledger_a.ts");
@@ -208,8 +158,8 @@ fn byte_identical_pair_still_earns_full_confidence_under_the_bound() -> Result<(
         "identical bytes embed identically — {dump}"
     );
     assert!(
-        approx(signal(cluster, "fused"), 1.0),
-        "byte proof is exactly what fused = 1.0 is reserved for — {dump}"
+        approx(signal(cluster, "pair_agreement"), 1.0),
+        "byte-identical pair's content evidence must read 1.0 — {dump}"
     );
     Ok(())
 }
@@ -229,12 +179,11 @@ fn byte_identical_pair_still_earns_full_confidence_under_the_bound() -> Result<(
 //
 // What #343 actually quarantined is *manufactured* confidence: a sum
 // that clamped mid-band evidence to a flat 1.0 no single axis earned.
-// That contract is unchanged and is asserted here directly, which is
-// stronger than asserting the cluster away — `fused` must stay at or
-// below the strongest axis, and must stay short of the 1.0 reserved for
-// byte proof, even now that the pair is reported.
+// The cluster-level fused field is gone ([FUSED-SCOPE]); this pins the
+// recall half — the pair is reported, and no wire `fused` claims a
+// certainty no axis earned.
 #[test]
-fn without_embeddings_the_mid_band_pair_is_visible_without_saturating() -> Result<()> {
+fn without_embeddings_the_mid_band_pair_is_visible() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let fixtures = fixture("ts-mixed-band");
     for name in ["ledger_a.ts", "ledger_c.ts"] {
@@ -257,20 +206,14 @@ fn without_embeddings_the_mid_band_pair_is_visible_without_saturating() -> Resul
     let cluster = visible
         .first()
         .ok_or_else(|| anyhow::anyhow!("the visible clone must be present: {report:#}"))?;
-    let strongest = signal(cluster, "structural")
-        .max(signal(cluster, "token_jaccard"))
-        .max(signal(cluster, "embedding_cos"));
-    let fused = signal(cluster, "fused");
     assert!(
-        fused <= strongest + f64::EPSILON,
-        "[FUSED-STRATEGY-BOUNDED-MAX] fused must never exceed the strongest axis: \
-         fused={fused}, strongest={strongest}"
+        cluster.pointer("/signals/fused").is_none(),
+        "no cluster-level fused field may survive on the wire ([FUSED-SCOPE]): {report:#}"
     );
     assert!(
-        fused < 1.0,
-        "full confidence is reserved for byte proof, and these two files are not \
-         byte-identical — a sum would have clamped this to 1.0, which is the \
-         saturation #343 quarantined: fused={fused}"
+        ACT_NOW_BUCKETS.contains(&cluster_bucket(cluster))
+            || HONEST_SHAPE_ONLY_BUCKETS.contains(&cluster_bucket(cluster)),
+        "the pair must route to a real bucket: {report:#}"
     );
     let duplication = metric_field(&report, "duplication_percent")
         .as_f64()
@@ -282,12 +225,12 @@ fn without_embeddings_the_mid_band_pair_is_visible_without_saturating() -> Resul
     Ok(())
 }
 
-// The whole mixed-band fixture, embeddings off: every visible cluster obeys
-// the bound, and full confidence appears only with byte proof. This is the
-// per-cluster form of the sweep invariant, asserted against the exact
-// corpus that exposed the saturation.
+// The whole mixed-band fixture, embeddings off: every visible cluster is
+// reported and no wire `fused` survives. This is the per-cluster form of
+// the scope contract, asserted against the exact corpus that exposed the
+// saturation.
 #[test]
-fn every_visible_mixed_band_cluster_obeys_the_bound() -> Result<()> {
+fn every_visible_mixed_band_cluster_has_no_wire_fused_and_a_real_bucket() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     seed(&fixture("ts-mixed-band"), tmp.path())?;
     let report = run_report(tmp.path(), 12)?;
@@ -310,20 +253,20 @@ fn every_visible_mixed_band_cluster_obeys_the_bound() -> Result<()> {
     );
     for cluster in clusters(&report) {
         let dump = signal_dump(cluster);
-        let fused = signal(cluster, "fused");
-        let ceiling = strongest_axis(cluster);
         assert!(
-            (0.0..=1.0).contains(&fused),
-            "fused must stay in [0, 1] — {dump}"
+            cluster.pointer("/signals/fused").is_none(),
+            "no cluster-level fused field may survive on the wire ([FUSED-SCOPE]) — {dump}"
         );
         assert!(
-            fused <= ceiling + 1e-6,
-            "fused {fused:.4} exceeded its strongest axis {ceiling:.4} — {dump}"
+            ACT_NOW_BUCKETS.contains(&cluster_bucket(cluster))
+                || HONEST_SHAPE_ONLY_BUCKETS.contains(&cluster_bucket(cluster)),
+            "every visible cluster must route to a real bucket — {dump}"
         );
-        if approx(fused, 1.0) {
+        for axis in ["structural", "token_jaccard", "embedding_cos"] {
+            let value = signal(cluster, axis);
             assert!(
-                has_verbatim_pair(tmp.path(), cluster)?,
-                "fused = 1.0 without a byte-identical pair — {dump}"
+                (0.0..=1.0).contains(&value),
+                "{axis} must stay in [0, 1] — {dump}"
             );
         }
     }

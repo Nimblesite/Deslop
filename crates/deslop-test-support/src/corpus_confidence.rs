@@ -1,16 +1,13 @@
-//! [CORPUS-BASELINE] The confidence checks the real-repository gate runs
-//! over a finished report: `fused_bounded_max`, `type2_gate_liveness` and the
-//! curated `type2_recall`.
+//! [CORPUS-BASELINE] The content-evidence checks the real-repository gate runs
+//! over a finished report: `type2_gate_liveness` and curated `type2_recall`.
 //!
 //! Both exist because the synthetic fixtures that pin
 //! [FUSED-STRATEGY-BOUNDED-MAX] and [FUSED-CONTENT-GATE] are built to
 //! demonstrate a mechanism, not to survive a real corpus. A fixture proves the
 //! gate *can* separate a proven rename from sibling scaffolding on five files
 //! the author chose; it says nothing about whether the operating point holds
-//! across 30,000 real ones. These two catch the failure modes that only appear
-//! at that scale, and they catch them in opposite directions — one guards the
-//! confidence arithmetic itself, the other guards against that arithmetic
-//! swallowing the findings.
+//! across 30,000 real ones. These checks catch operating-point and recall
+//! failures that only appear at that scale.
 //!
 //! Both are keyed on rendered report fields only, with no rank in the key, so
 //! they are stable against the cluster-order churn `corpus/known-failures.json`
@@ -26,18 +23,18 @@ use crate::corpus::{
 /// Minimum demoted clusters before [`check_type2_gate_liveness`] will judge a
 /// report.
 ///
-/// Below this the absence of act-now findings is ordinary — a clean repository
+/// Below this the absence of supported duplicate findings is ordinary — a clean repository
 /// has neither population. The check fires on the *shape* of a report that
 /// found plenty of same-shape families and vouched for none of them.
 const TYPE2_MIN_DEMOTED: usize = 20;
 
 /// The bucket a shape-identical cluster reaches only by the content gate
-/// vouching for it — the one act-now destination
+/// vouching for it — the one supported destination
 /// [`check_type2_gate_liveness`] can read as evidence the gate is alive.
 ///
 /// `identical` is deliberately **not** here. That bucket is decided by raw
 /// byte-equivalence in `report_bucket_kind`, and both `route_shape_identical`
-/// and `content_gated_signals` return before touching it, so a byte-identical
+/// and the content gate return before touching it, so a byte-identical
 /// clone is proof about the *byte comparison*, not about the gate. Counting it
 /// made the check vacuous: Tokio renders 452 `identical` clusters, so every
 /// Type-2 rename in the repository could regress into the demoted tier and the
@@ -45,95 +42,15 @@ const TYPE2_MIN_DEMOTED: usize = 20;
 ///
 /// The bucket alone is not enough either: the token-LSH Type-3 path can
 /// classify a cluster `nearly_identical` from token overlap *below* the
-/// saturating floor, in which case `content_gated_signals` returned without
+/// saturating floor, in which case the content gate returned without
 /// ever judging it — so counting such a cluster as gate evidence let one
 /// unrelated near miss keep this check green while every genuine rename sank.
 /// [`gate_vouched`] therefore also requires the gate's own precondition,
 /// [`has_saturating_shape_evidence`].
 const CONTENT_VOUCHED_BUCKET: &str = "nearly_identical";
 
-/// Tolerance on the bounded-max invariant in [`check_fused_bounded_max`].
-///
-/// The rendered signals are `f64`s serialised to JSON and read back, and the
-/// invariant is an inequality between values the renderer computed from each
-/// other, so only representation error is being absorbed here — not slack for
-/// a differently-shaped formula. `1e-6` is far below the 0.001 the report
-/// itself renders at and far above the last-bit spread of a round trip.
-const BOUNDED_MAX_EPSILON: f64 = 1e-6;
-
 /// Wire bucket labels the content gate demotes a shape-identical cluster into.
 const DEMOTED_BUCKETS: [&str; 2] = ["structural_only", "loosely_similar"];
-
-/// [CORPUS-BASELINE] `fused_bounded_max` — every rendered confidence must obey
-/// [FUSED-STRATEGY-BOUNDED-MAX].
-///
-/// This is gh #343 pinned as a formula, per cluster, rather than as a
-/// distribution. `PairScore::fused` summed three correlated axes and clamped,
-/// so a pair at `structural 0.00 / token 0.30 / embedding 0.94` admitted at
-/// `1.00` — indistinguishable from a byte-proven verbatim copy. The shipped
-/// arithmetic is `bounded_fused` = the strongest single axis, and every path
-/// that rewrites the confidence downstream only ever scales it *down*:
-///
-/// - an ungated cluster keeps the pair's `bounded_fused`, which is the max;
-/// - `content_gated_signals` renders `max(embedding, max(structural, token) ×
-///   content_confidence)` with `content_confidence ∈ [0,1]`;
-/// - a byte-proven `Identical` cluster renders `1.0` with `token_jaccard` also
-///   corrected to `1.0`, so the max is `1.0` too.
-///
-/// So `fused ≤ max(structural, token_jaccard, embedding_cos)` holds for every
-/// cluster the engine can legitimately render, and `min(1, s + t + e)` breaks
-/// it the moment any two axes are positive. That makes this an exact contract
-/// with no operating point in it: it cannot churn when ranking moves, it
-/// cannot be rescued by one healthy outlier in a population of saturated
-/// clusters, and it cannot fire on a repository whose clusters legitimately
-/// share one confidence.
-///
-/// It replaces an earlier `fused_spread` check that asked whether the
-/// population took more than one distinct value. That predicate was unsound in
-/// both directions — a single outlier cleared it however many clusters were
-/// saturated, and a repository of genuinely byte-identical clones failed it —
-/// and on the scheduled corpora it never reached the arithmetic at all, since
-/// those scans run embeddings-off where every cluster is either byte-identical
-/// or content-gated and the incoming pair `fused` is discarded at render.
-pub fn check_fused_bounded_max(report: &Value, failures: &mut Vec<Failure>) {
-    let clusters = visible_clusters(report);
-    let breaches: Vec<String> = clusters
-        .iter()
-        .filter_map(|cluster| bounded_max_breach(cluster))
-        .collect();
-    let Some(first) = breaches.first() else {
-        return;
-    };
-    failures.push(Failure::new(
-        "fused_bounded_max",
-        format!(
-            "{} of {} visible clusters render a confidence above the strongest axis they were \
-             computed from, which [FUSED-STRATEGY-BOUNDED-MAX] forbids — the first is {first} \
-             (gh #343: the sum-then-clamp arm renders exactly this)",
-            breaches.len(),
-            clusters.len(),
-        ),
-    ));
-}
-
-/// Describes how one cluster breaks the bounded-max invariant, or `None`.
-fn bounded_max_breach(cluster: &Value) -> Option<String> {
-    let structural = signal(cluster, "structural");
-    let token = signal(cluster, "token_jaccard");
-    let embedding = signal(cluster, "embedding_cos");
-    let fused = signal(cluster, "fused");
-    let strongest = structural.max(token).max(embedding);
-    (fused > strongest + BOUNDED_MAX_EPSILON).then(|| {
-        format!(
-            "bucket {} at structural {structural:.3} / token {token:.3} / embedding \
-             {embedding:.3} rendering fused {fused:.3}, over the {strongest:.3} ceiling",
-            cluster
-                .get("bucket")
-                .and_then(Value::as_str)
-                .unwrap_or("<unlabelled>"),
-        )
-    })
-}
 
 /// [CORPUS-BASELINE] `type2_gate_liveness` — the content gate must vouch for
 /// *something* when it demotes a large same-shape population.
@@ -196,10 +113,9 @@ fn rendered_signals(cluster: &Value) -> ReportSignals {
         structural: signal(cluster, "structural"),
         token_jaccard: signal(cluster, "token_jaccard"),
         embedding_cos: signal(cluster, "embedding_cos"),
-        fused: signal(cluster, "fused"),
         shape: signal(cluster, "shape"),
-        agreement: signal(cluster, "agreement"),
-        rename_consistency: signal(cluster, "rename_consistency"),
+        pair_agreement: signal(cluster, "pair_agreement"),
+        pair_rename_consistency: signal(cluster, "pair_rename_consistency"),
         literal_fraction: signal(cluster, "literal_fraction"),
     }
 }

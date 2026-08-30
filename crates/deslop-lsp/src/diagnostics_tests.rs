@@ -67,8 +67,8 @@ fn sample_cluster(
         token_jaccard: 0.9,
         shape: PERFECT_SIGNAL,
         embedding_cos: 0.4,
-        agreement: 0.58,
-        rename_consistency: 0.72,
+        pair_agreement: 0.58,
+        pair_rename_consistency: 0.72,
         literal_fraction: 0.24,
     };
     let mut cluster = deslop_core::report_fixtures::fixture_cluster(id, occurrences);
@@ -292,8 +292,8 @@ fn diagnostic_message_tracks_each_clusters_own_evidence() {
         token_jaccard: 0.0,
         shape: PERFECT_SIGNAL,
         embedding_cos: 0.0,
-        agreement: 0.04,
-        rename_consistency: 0.02,
+        pair_agreement: 0.04,
+        pair_rename_consistency: 0.02,
         literal_fraction: 0.77,
     };
     let message = diagnostic_message(&anchor_poor);

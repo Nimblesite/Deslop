@@ -196,18 +196,10 @@ const ELECTED_PAIR_EXACT_EVIDENCE: f64 = 1.0;
 /// Embeddings are disabled for this fixture, so the elected pair has no vector evidence.
 const EMBEDDINGS_OFF_EVIDENCE: f64 = 0.0;
 
-// gh #458 (content half) — [FUSED-CONTENT-GATE]: the per-pair contract
-// the shape axes now honour must hold for the *content* axes too.
-// `agreement` and `rename_consistency` are still folded as a MEAN over
-// the cluster's members (`content::cluster_agreement`,
-// `content::rename::cluster_rename_consistency`), so the byte-identical
-// pair that reads one value in its own two-member cluster reads a
-// diluted value in the six-member cluster that contains the very same
-// two files. That is the identical defect gh #458 removed from the shape
-// axes, still live on the axes the content gate actually reads. Baker
-// (1995) defines duplication per pair: there is no class-level average
-// to take, and averaging lets unrelated members vote a proven copy below
-// CONTENT_SUPPORT_FLOOR and out of its supported bucket.
+// gh #458 (content half) — [FUSED-CONTENT-GATE]: the pair-local contract
+// covers the content axes too. Baker (1995) defines duplication per pair:
+// there is no class-level average to take, and unrelated closure members
+// must never vote a proven copy below CONTENT_SUPPORT_FLOOR.
 #[test]
 fn a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster() -> Result<()> {
     let report = run_pair_mean_report()?;
@@ -220,7 +212,7 @@ fn a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster() -> 
 
     // The pair alone: byte-identical files agree completely on content.
     assert_eq!(
-        signal(pair, "agreement"),
+        signal(pair, "pair_agreement"),
         VERBATIM_PAIR_AGREEMENT,
         "the byte-identical pair's own agreement must be {VERBATIM_PAIR_AGREEMENT}: {dump}",
         dump = signal_dump(pair)
@@ -254,13 +246,13 @@ fn a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster() -> 
         signal_dump(six)
     );
     assert_eq!(
-        signal(six, "agreement"),
+        signal(six, "pair_agreement"),
         ELECTED_PAIR_EXACT_EVIDENCE,
         "cluster members must not dilute the elected pair's byte agreement: {}",
         signal_dump(six)
     );
     assert_eq!(
-        signal(six, "rename_consistency"),
+        signal(six, "pair_rename_consistency"),
         ELECTED_PAIR_EXACT_EVIDENCE,
         "the elected pair's certified rename evidence must remain attached to that pair: {}",
         signal_dump(six)
@@ -274,7 +266,7 @@ fn a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster() -> 
     // The gate reads these axes, so dilution is a demotion engine: the
     // proven pair must keep the cluster's content support above the
     // floor the gate demotes below.
-    let support = signal(six, "agreement").max(signal(six, "rename_consistency"));
+    let support = signal(six, "pair_agreement").max(signal(six, "pair_rename_consistency"));
     assert!(
         support >= deslop_core::buckets::CONTENT_SUPPORT_FLOOR,
         "a cluster holding a byte-identical pair must carry content support at or \

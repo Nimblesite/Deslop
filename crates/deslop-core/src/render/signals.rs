@@ -79,8 +79,8 @@ fn confidence_pairs(signals: ReportSignals) -> [(&'static str, f64); 3] {
 /// The measured content evidence the gate scored the shape against.
 fn evidence_pairs(signals: ReportSignals) -> [(&'static str, f64); 3] {
     [
-        ("agreement", signals.agreement),
-        ("rename", signals.rename_consistency),
+        ("agreement", signals.pair_agreement),
+        ("rename", signals.pair_rename_consistency),
         ("literal", signals.literal_fraction),
     ]
 }
@@ -126,7 +126,7 @@ pub fn unvouched_content_reason(signals: ReportSignals) -> String {
     format!(
         "the shapes match but the measured content does not vouch for them — \
          support {support:.2} is below the {floor:.2} content floor: {explanation}",
-        support = crate::buckets::content_support(signals.agreement, signals.rename_consistency),
+        support = crate::buckets::content_support(signals.pair_agreement, signals.pair_rename_consistency),
         floor = crate::buckets::CONTENT_SUPPORT_FLOOR,
         explanation = plain_explanation(signals),
     )
@@ -144,8 +144,8 @@ pub fn table_row(id: &str, signals: ReportSignals) -> String {
         s = signals.structural,
         j = signals.token_jaccard,
         e = signals.embedding_cos,
-        a = signals.agreement,
-        r = signals.rename_consistency,
+        a = signals.pair_agreement,
+        r = signals.pair_rename_consistency,
         l = signals.literal_fraction,
     )
 }
@@ -206,7 +206,7 @@ pub fn content_evidence_verdict(signals: ReportSignals) -> String {
     if !crate::buckets::has_saturating_shape_evidence(signals) {
         return unweighed_verdict(signals, shape);
     }
-    if crate::buckets::content_support(signals.agreement, signals.rename_consistency)
+    if crate::buckets::content_support(signals.pair_agreement, signals.pair_rename_consistency)
         >= crate::buckets::CONTENT_SUPPORT_FLOOR
     {
         corroborated_verdict(signals, shape)
@@ -237,8 +237,8 @@ fn unweighed_verdict(signals: ReportSignals, shape: f64) -> String {
          position for position, so a low reading is no more proof against this match than a \
          high one would be for it.",
         shape = format_signal(shape),
-        agreement = format_signal(signals.agreement),
-        rename = format_signal(signals.rename_consistency),
+        agreement = format_signal(signals.pair_agreement),
+        rename = format_signal(signals.pair_rename_consistency),
     )
 }
 
@@ -250,8 +250,8 @@ fn semantic_verdict(signals: ReportSignals, shape: f64) -> String {
          content evidence measures the code itself, not the behavior: shared content \
          {agreement}, renaming {rename}.",
         shape = format_signal(shape),
-        agreement = format_signal(signals.agreement),
-        rename = format_signal(signals.rename_consistency),
+        agreement = format_signal(signals.pair_agreement),
+        rename = format_signal(signals.pair_rename_consistency),
     )
 }
 
@@ -264,8 +264,8 @@ fn corroborated_verdict(signals: ReportSignals, shape: f64) -> String {
          locations share {agreement} of their content and consistent renaming explains \
          {rename} of what differs, so the match clears the {floor:.2} content floor.",
         shape = format_signal(shape),
-        agreement = format_signal(signals.agreement),
-        rename = format_signal(signals.rename_consistency),
+        agreement = format_signal(signals.pair_agreement),
+        rename = format_signal(signals.pair_rename_consistency),
         floor = crate::buckets::CONTENT_SUPPORT_FLOOR,
     )
 }
@@ -279,8 +279,8 @@ fn boilerplate_verdict(signals: ReportSignals, shape: f64) -> String {
          matching shape over content that does not agree is what sibling boilerplate looks \
          like — read both locations before extracting anything.",
         shape = format_signal(shape),
-        agreement = format_signal(signals.agreement),
-        rename = format_signal(signals.rename_consistency),
+        agreement = format_signal(signals.pair_agreement),
+        rename = format_signal(signals.pair_rename_consistency),
         floor = crate::buckets::CONTENT_SUPPORT_FLOOR,
     )
 }
@@ -303,8 +303,8 @@ mod tests {
             token_jaccard,
             shape: 0.0,
             embedding_cos,
-            agreement,
-            rename_consistency,
+            pair_agreement: agreement,
+            pair_rename_consistency: rename_consistency,
             literal_fraction,
         };
         built.shape = built.shape_score();

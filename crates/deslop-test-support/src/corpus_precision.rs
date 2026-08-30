@@ -78,7 +78,7 @@ fn check_one_curated_non_duplicate(entry: &Value, report: &Value, failures: &mut
     failures.push(Failure::new(
         "precision",
         format!(
-            "cluster {id} ({bucket}, {size} occurrences, fused {fused:.3}) is shown spanning \
+            "cluster {id} ({bucket}, {size} occurrences) is shown spanning \
              {files:?}, which a human verified is not duplication. Curated: {why}",
             id = breach
                 .get("id")
@@ -89,10 +89,6 @@ fn check_one_curated_non_duplicate(entry: &Value, report: &Value, failures: &mut
                 .and_then(Value::as_str)
                 .unwrap_or("<unlabelled>"),
             size = field_u64(breach, "size"),
-            fused = breach
-                .pointer("/signals/fused")
-                .and_then(Value::as_f64)
-                .unwrap_or_default(),
         ),
     ));
 }

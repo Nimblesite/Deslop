@@ -16,7 +16,7 @@ export const REPORT_TYPE_CONFIG = {
     // no literal dominance.
     fieldSerdeAttrs: {
       shape: ["default"],
-      pair_agreement: ['default = "crate::report::unmeasured_agreement"'],
+      pair_agreement: ['default = "crate::report::unmeasured_pair_agreement"'],
       pair_rename_consistency: ["default"],
       literal_fraction: ["default"],
     },
@@ -107,7 +107,7 @@ export const REPORT_TYPE_CONFIG = {
       canonical_node_count: "AST node count of one canonical member.",
       signals: "Per-cluster signal breakdown (structural / Jaccard / embedding / pair agreement / pair rename consistency / literal).",
       signal_source:
-        "The occurrence pair whose measured evidence the rendered signals display ([FUSED-CLUSTER-SIGNALS]): indices into `occurrences`. Absent when no admitted pair survives, or when the wire truncated it.",
+        "The occurrence pair whose measured evidence the rendered signals display ([FUSED-CLUSTER-SIGNALS]): indices into `occurrences`. Wire truncation retains and reindexes both endpoints whenever its occurrence cap can carry a pair; absent only when no admitted pair survives or the requested cap is below two.",
       bucket: "Canonical bucket label (`identical`, `nearly_identical`, `loosely_similar`, `same_behavior`).",
       category: "Clone category ([RANK-CATEGORY]): `logic` (default) or `data` for a demoted data-structure literal. Orthogonal to `bucket`. Empty/absent on older reports resolves to `logic`.",
       language: "Detected language id of the cluster's first occurrence, from the engine's parser registry (`language_for_path`, [PIPELINE-LANG-TRAIT]); `unknown` when unresolvable. Consumers group and filter by this value and never re-derive a language from a file extension.",

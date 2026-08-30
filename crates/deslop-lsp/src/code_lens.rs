@@ -108,8 +108,8 @@ mod tests {
             token_jaccard: 0.72,
             shape: 0.87,
             embedding_cos: 0.55,
-            agreement: 0.63,
-            rename_consistency: 0.94,
+            pair_agreement: 0.63,
+            pair_rename_consistency: 0.94,
             literal_fraction: 0.11,
         };
         let mut cluster = deslop_core::report_fixtures::fixture_cluster(id, occurrences);
@@ -331,8 +331,8 @@ mod tests {
             token_jaccard: PERFECT_SIGNAL,
             shape: PERFECT_SIGNAL,
             embedding_cos: 0.99,
-            agreement: 0.07,
-            rename_consistency: 0.03,
+            pair_agreement: 0.07,
+            pair_rename_consistency: 0.03,
             literal_fraction: 0.81,
         };
         let title = title_for(&anchor_poor);

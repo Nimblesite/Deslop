@@ -123,9 +123,9 @@ fn assert_control_verdict(control: &Value, label: &str) {
         ACT_NOW_BUCKETS.contains(&cluster_bucket(control)),
         "{label}: the control clone is copied byte for byte; a suppression wide \
          enough to demote it has eaten real duplication — bucket={bucket} \
-         fused={fused:.4}",
+         agreement={agreement:.4}",
         bucket = cluster_bucket(control),
-        fused = signal(control, "fused"),
+        agreement = signal(control, "pair_agreement"),
     );
     assert_control_is_byte_proven(control, label);
 }
@@ -432,11 +432,13 @@ fn assert_each_family_cluster_is_demoted(over_family: &[&Value], label: &str) {
             bucket = cluster_bucket(cluster),
         );
         assert!(
-            signal(cluster, "fused") < ACT_NOW_FUSED,
-            "{label}: {id} reached the act-now line at {fused:.4}; an agent told \
-             not to write this code would be told wrong",
+            signal(cluster, "pair_agreement") < 1.0
+                && signal(cluster, "pair_rename_consistency") < 1.0,
+            "{label}: {id} is a scaffolding family — no elected pair's content \
+             evidence may claim full duplication (agreement=1.0 or a certified \
+             rename=1.0) while the cluster wears a demoted label: {dump}",
             id = cluster_id(cluster),
-            fused = signal(cluster, "fused"),
+            dump = signal_dump(cluster),
         );
     }
 }

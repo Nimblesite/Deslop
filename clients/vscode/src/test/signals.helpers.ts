@@ -1,16 +1,12 @@
-// Seven-field `ReportSignals` fixtures ([FUSED-CONTENT-GATE], #344).
+// Seven-field elected-pair `ReportSignals` fixtures ([FUSED-CLUSTER-SIGNALS]).
 //
-// The four-field literal `{ structural, token_jaccard, embedding_cos, fused }`
-// was copy-pasted across twenty suites. Once the wire carried the measured
-// content evidence — the only thing separating a corroborated Type-2 rename
-// from an anchor-poor scaffolding family, since both render structural 1.00
-// and jaccard 1.00 — twenty copies became twenty places to leave that evidence
-// at a dishonest zero under a perfect shape score.
-//
-// One builder instead, keyed by the engine's bucket so the confidence and the
-// evidence a fixture claims stay coherent with each other: an `identical`
-// cluster shares all of its content, a `structural_only` cluster shares almost
-// none of it, and the fused score each carries is what that evidence supports.
+// Every axis is one admitted pair's measurement — the elected pair named by
+// `signal_source` — never a cluster mean. One builder instead of twenty
+// copy-pasted literals, keyed by the engine's bucket so the evidence a
+// fixture claims stays coherent with the bucket: an `identical` cluster's
+// elected pair shares all of its content, a `structural_only` cluster's
+// shares almost none of it. There is no combined score on the wire to
+// fixture: admission and routing are the engine's bucket verdict.
 
 import type { Bucket, ReportSignals } from "../types/report";
 
@@ -22,31 +18,15 @@ import type { Bucket, ReportSignals } from "../types/report";
 export function bucketSignals(bucket: Bucket): ReportSignals {
   switch (bucket) {
     case "nearly_identical":
-      return signals(0.99, 0.96, 0.99, 0, 0.96, 0.97, 1, 0);
+      return signals(0.99, 0.96, 0.99, 0, 0.97, 1, 0);
     case "structural_only":
-      return signals(1, 1, 1, 0, 0.16, 0.16, 0, 0.85);
+      return signals(1, 1, 1, 0, 0.16, 0, 0.85);
     case "loosely_similar":
-      return signals(0.2, 0.4, 0.4, 0, 0.4, 0.35, 0, 0);
+      return signals(0.2, 0.4, 0.4, 0, 0.35, 0, 0);
     case "same_behavior":
-      return signals(0.2, 0.3, 0.3, 0.9, 0.9, 0.05, 0, 0);
+      return signals(0.2, 0.3, 0.3, 0.9, 0.05, 0, 0);
     case "identical":
-      return signals(1, 1, 1, 0, 1, 1, 1, 0);
-  }
-}
-
-/** Whether a fixture cluster of `bucket` clears the engine's reportable
- * fused threshold. Spelled out per bucket for the same reason `shape`
- * is: the threshold constant lives in Rust and a fixture that mirrored
- * it would drift with it silently ([FUSED-CONTENT-GATE]). */
-export function bucketMeetsFusedGate(bucket: Bucket): boolean {
-  switch (bucket) {
-    case "identical":
-    case "nearly_identical":
-    case "same_behavior":
-      return true;
-    case "loosely_similar":
-    case "structural_only":
-      return false;
+      return signals(1, 1, 1, 0, 1, 1, 0);
   }
 }
 
@@ -63,9 +43,8 @@ function signals(
   tokenJaccard: number,
   shape: number,
   embeddingCos: number,
-  fused: number,
-  agreement: number,
-  renameConsistency: number,
+  pairAgreement: number,
+  pairRenameConsistency: number,
   literalFraction: number,
 ): ReportSignals {
   return {
@@ -73,9 +52,8 @@ function signals(
     token_jaccard: tokenJaccard,
     shape,
     embedding_cos: embeddingCos,
-    fused,
-    agreement,
-    rename_consistency: renameConsistency,
+    pair_agreement: pairAgreement,
+    pair_rename_consistency: pairRenameConsistency,
     literal_fraction: literalFraction,
   };
 }

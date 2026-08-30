@@ -34,7 +34,6 @@ function cluster(
       token_jaccard: 0.6,
       shape: 0.6,
       embedding_cos: 0.7,
-      fused: 0.8,
     }),
     occurrences: occurrences.map((o) => ({ ...o, hidden: false })),
   });

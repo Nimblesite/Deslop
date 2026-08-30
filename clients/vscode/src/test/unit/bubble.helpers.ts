@@ -23,35 +23,28 @@ export interface ClusterSignalOptions {
    * shape bar sets it outright. */
   shape?: number;
   embedding?: number;
-  /** The engine's fused-gate verdict. Set when a suite stages a cluster
-   * on a specific side of the reportable line. */
-  meetsFusedGate?: boolean;
   /** The engine's global worst-first rank, when the suite stages more
    * than one candidate and pins which wins. */
   rank?: number;
   occurrenceTotal?: number;
 }
 
-/** The confidence the engine's reportable cutoff sits at today
- * (`deslop-core::pair::FUSED_THRESHOLD`). Restated here so these
- * fixtures can stage clusters on either side of it — production code
- * reads the engine's own `meets_fused_gate` verdict and owns no copy of
- * this number ([FUSED-CONTENT-GATE]). */
-export const ENGINE_FUSED_CUTOFF = 0.85;
 const FIXTURE_TEN = 10;
 export const DEFAULT_BUBBLE_CLUSTER_WEIGHT = FIXTURE_TEN;
-export const HIGH_FUSED_CONFIDENCE = 0.95;
+export const HIGH_ELECTED_AGREEMENT = 0.95;
 export const PRIMARY_BUBBLE_CLUSTER_ID = "c-a";
 const FIXTURE_OCCURRENCE_END_BYTE = FIXTURE_TEN;
 const FIXTURE_ANALYSED_LOC = FIXTURE_TEN;
 const FIXTURE_LINE_LENGTH = FIXTURE_TEN;
 
-// Builds a two-occurrence cluster whose fused confidence is explicit, so
-// a test can stage the exact [FUSED-CONTENT-GATE] band it is asserting.
+// Builds a two-occurrence cluster whose elected pair's byte agreement is
+// explicit, so a test can stage the exact content evidence it is
+// asserting ([FUSED-CONTENT-GATE]). Admission is the engine's bucket
+// alone; no signal value influences whether a cluster renders.
 export function bubbleCluster(
   id: string,
   weight: number,
-  fused: number,
+  pairAgreement: number,
   options: ClusterSignalOptions = {},
 ): ReportCluster {
   const total = options.occurrenceTotal ?? 2;
@@ -69,9 +62,8 @@ export function bubbleCluster(
       token_jaccard: token,
       shape: options.shape ?? Math.max(structural, token),
       embedding_cos: options.embedding ?? 0,
-      fused,
+      pair_agreement: pairAgreement,
     }),
-    meets_fused_gate: options.meetsFusedGate ?? fused >= ENGINE_FUSED_CUTOFF,
     occurrences: [
       occurrence("/tmp/A.cs", 0, FIXTURE_OCCURRENCE_END_BYTE),
       occurrence("/tmp/B.cs", 0, FIXTURE_OCCURRENCE_END_BYTE),
@@ -88,10 +80,10 @@ export function bubbleCluster(
 export function probeCluster(
   id: string,
   weight: number,
-  fused: number,
+  pairAgreement: number,
   occurrenceTotal?: number,
 ): ReportCluster {
-  const built = bubbleCluster(id, weight, fused, {
+  const built = bubbleCluster(id, weight, pairAgreement, {
     embedding: 0.5,
     occurrenceTotal: occurrenceTotal ?? 2,
   });
@@ -102,7 +94,7 @@ export function probeCluster(
 // so a probe claiming a different count is visibly wrong.
 export function probeReport(): Report {
   return reportWithClusters(
-    [probeCluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE, 5)],
+    [probeCluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT, 5)],
     {},
     {
       analysed_loc: FIXTURE_ANALYSED_LOC,
@@ -330,7 +322,7 @@ export function renderFullConfidenceBubble(
   clusterId: string,
 ): string {
   bubble.render(capture.editor, span(startChar), [
-    probeCluster(clusterId, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE),
+    probeCluster(clusterId, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT),
   ]);
   return assertBubbleShows(
     capture,

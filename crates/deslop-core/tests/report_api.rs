@@ -127,9 +127,8 @@ fn sample_cluster() -> ReportCluster {
         token_jaccard: 1.0,
         shape: 1.0,
         embedding_cos: 0.0,
-        fused: 1.0,
-        agreement: 0.0,
-        rename_consistency: 0.0,
+        pair_agreement: 0.0,
+        pair_rename_consistency: 0.0,
         literal_fraction: 0.0,
     };
     ReportCluster {
@@ -144,7 +143,6 @@ fn sample_cluster() -> ReportCluster {
         bucket: "identical".to_owned(),
         category: "logic".to_owned(),
         language: "rust".to_owned(),
-        meets_fused_gate: true,
         evidence_verdict: deslop_core::render::signals::content_evidence_verdict(signals),
         occurrences: sample_occurrences(),
         occurrences_total: 0,

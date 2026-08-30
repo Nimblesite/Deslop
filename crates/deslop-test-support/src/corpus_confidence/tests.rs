@@ -160,6 +160,5 @@ fn manifest_with_type2(files: &[&str]) -> Value {
 }
 
 mod curated;
-mod fused;
 mod liveness;
 mod recall;

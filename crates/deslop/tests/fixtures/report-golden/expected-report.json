@@ -56,15 +56,15 @@
   "action_hints": [
     {
       "pattern": "bucket=identical",
-      "recommendation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+      "recommendation": "Identical code. Safe to extract \u2014 every copy is the same. (Type-1 or Type-2 exact clone)"
     },
     {
       "pattern": "bucket=nearly-identical",
-      "recommendation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+      "recommendation": "Nearly identical code. Review the locations \u2014 small differences may matter. (Type-3 near-miss)"
     },
     {
       "pattern": "bucket=structural-only",
-      "recommendation": "Same shape, different content. Only the code shape matches — usually sibling boilerplate. Verify before extracting. (structural-only match (unverified Type-2/3 candidate))"
+      "recommendation": "Same shape, different content. Only the code shape matches \u2014 usually sibling boilerplate. Verify before extracting. (structural-only match (unverified Type-2/3 candidate))"
     },
     {
       "pattern": "bucket=loosely-similar",
@@ -72,7 +72,7 @@
     },
     {
       "pattern": "bucket=same-behavior",
-      "recommendation": "Same behavior, different code. The AI noticed these do the same thing written two ways — read both before merging. (Type-4 semantic clone (AI match))"
+      "recommendation": "Same behavior, different code. The AI noticed these do the same thing written two ways \u2014 read both before merging. (Type-4 semantic clone (AI match))"
     },
     {
       "pattern": "category=data",
@@ -94,15 +94,13 @@
         "token_jaccard": 1.0,
         "shape": 1.0,
         "embedding_cos": 0.0,
-        "fused": 1.0,
-        "agreement": 1.0,
-        "rename_consistency": 1.0,
+        "pair_agreement": 1.0,
+        "pair_rename_consistency": 1.0,
         "literal_fraction": 0.0
       },
       "bucket": "identical",
       "category": "logic",
       "language": "rust",
-      "meets_fused_gate": true,
       "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so confidence stayed at 1.00.",
       "occurrences": [
         {
@@ -134,7 +132,7 @@
       "occurrence_count": 3,
       "occurrences_truncated": false,
       "summary": "3 copies of a 68-node subtree at alpha.rs:6:1, beta.rs:6:1, gamma.rs:9:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
-      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+      "interpretation": "Identical code. Safe to extract \u2014 every copy is the same. (Type-1 or Type-2 exact clone)"
     },
     {
       "id": "611b775c257d2c5e",
@@ -148,15 +146,13 @@
         "token_jaccard": 1.0,
         "shape": 1.0,
         "embedding_cos": 0.0,
-        "fused": 1.0,
-        "agreement": 1.0,
-        "rename_consistency": 1.0,
+        "pair_agreement": 1.0,
+        "pair_rename_consistency": 1.0,
         "literal_fraction": 0.0
       },
       "bucket": "identical",
       "category": "logic",
       "language": "rust",
-      "meets_fused_gate": true,
       "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so confidence stayed at 1.00.",
       "occurrences": [
         {
@@ -180,7 +176,7 @@
       "occurrence_count": 2,
       "occurrences_truncated": false,
       "summary": "2 copies of a 38-node subtree at delta.rs:6:1, epsilon.rs:6:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
-      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+      "interpretation": "Identical code. Safe to extract \u2014 every copy is the same. (Type-1 or Type-2 exact clone)"
     }
   ]
 }

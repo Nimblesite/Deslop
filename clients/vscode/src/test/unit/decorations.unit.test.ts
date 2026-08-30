@@ -20,7 +20,6 @@ function cluster(): ReportCluster {
       token_jaccard: 0.2,
       shape: 0.2,
       embedding_cos: 0.9,
-      fused: 0.95,
     }),
     occurrences: [
       occurrence("/a.cs", 0, 10),

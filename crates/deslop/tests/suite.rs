@@ -95,8 +95,6 @@ mod fsharp_issue_339_token_fallback_rename;
 mod fused_golden_bands;
 #[path = "fused_golden_invariants.rs"]
 mod fused_golden_invariants;
-#[path = "fused_score_bounds.rs"]
-mod fused_score_bounds;
 #[path = "go_vendor_exclusion.rs"]
 mod go_vendor_exclusion;
 #[path = "incremental_equivalence.rs"]

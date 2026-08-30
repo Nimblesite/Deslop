@@ -222,8 +222,8 @@ fn stamp_shape(mut signals: ReportSignals) -> ReportSignals {
 /// without touching the confidence ([FUSED-CONTENT-GATE], #344).
 fn with_content_evidence(signals: ReportSignals, content: ContentEvidence) -> ReportSignals {
     ReportSignals {
-        agreement: content.pair_agreement,
-        rename_consistency: content.pair_rename_consistency,
+        pair_agreement: content.agreement,
+        pair_rename_consistency: content.rename_consistency,
         literal_fraction: content.literal_fraction,
         ..signals
     }

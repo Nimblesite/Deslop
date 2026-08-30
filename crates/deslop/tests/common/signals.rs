@@ -1,10 +1,14 @@
-//! Fused-signal assertion vocabulary shared by the golden confidence
-//! suites ([FUSED-STRATEGY-BOUNDED-MAX], [FUSED-CONTENT-GATE],
+//! Final-contract assertion vocabulary shared by the accuracy suites
+//! ([FUSED-STRATEGY-BOUNDED-MAX], [FUSED-CONTENT-GATE],
 //! [FUSED-THRESHOLD]).
 //!
-//! The bands, the honest shape-only bucket set, and the diagnostic dump
-//! are the same contract in every suite that asserts on `signals.fused`,
-//! so they live here rather than being restated per binary.
+//! The honest shape-only bucket set and the diagnostic dump are the
+//! same contract in every suite that asserts on a rendered cluster, so
+//! they live here rather than being restated per binary. There is no
+//! cluster-level `fused` to band ([FUSED-SCOPE]): the report carries
+//! the elected pair's measured axes and its content evidence, and
+//! routing reads `support = max(pair_agreement, pair_rename_consistency)`
+//! directly ([FUSED-CONTENT-GATE]).
 
 use std::{collections::BTreeSet, path::Path};
 
@@ -22,16 +26,6 @@ use super::{
     approx, cluster_bucket, cluster_file_set, cluster_size, clusters, field, occurrence_is_hidden,
     occurrence_texts, occurrences, signal, Result,
 };
-
-/// The top reported confidence band ([FUSED-THRESHOLD]): at or above this
-/// the report states maximal measured evidence, so nothing but real
-/// duplication may reach it.
-pub(crate) const ACT_NOW_FUSED: f64 = 0.85;
-
-/// The lower band boundary ([FUSED-THRESHOLD]): below this the report
-/// states weak evidence, so a genuine clone that lands here understates
-/// what was measured even when the report still lists it.
-pub(crate) const REUSE_FUSED: f64 = 0.6;
 
 /// Buckets that describe a shape-only match without claiming the
 /// *content* is duplicated ([RANK-STRUCTURAL-ONLY]).
@@ -71,11 +65,6 @@ pub(crate) const ACT_NOW_BUCKETS: [&str; 3] =
 /// reachable through that same predicate, so it holds universally and
 /// catches a mislabelled low-shape cluster the old band admitted.
 ///
-/// An earlier revision asserted that `token_jaccard` could not land
-/// between the two constants. Production emits exactly that: a
-/// `structural = 1.00`, mid-token, low-content cluster is demoted by
-/// `route_shape_identical` and routes here.
-///
 /// Since #344 the measured content evidence *is* on the report wire, so
 /// this helper no longer has to guess which door a cluster came through
 /// — [`assert_reached_a_real_route`] checks each door by its own entry
@@ -100,9 +89,9 @@ pub(crate) fn assert_structural_only_contract(cluster: &Value, label: &str) {
     );
     assert_reached_a_real_route(cluster, label);
     assert!(
-        signal(cluster, "fused") < ACT_NOW_FUSED,
-        "{label}: structural_only is a demoted verdict and must stay below \
-         the act-now line: {dump}",
+        HONEST_SHAPE_ONLY_BUCKETS.contains(&cluster_bucket(cluster)),
+        "{label}: structural_only is a demoted verdict and must stay in the \
+         demoted tier: {dump}",
         dump = signal_dump(cluster)
     );
 }
@@ -121,9 +110,9 @@ pub(crate) fn assert_structural_only_contract(cluster: &Value, label: &str) {
 /// blanket bound asserted a property the engine never promised: a
 /// content-gated cluster at cosine 0.61 is a correct `structural_only`
 /// and the old assertion called it a defect. It never fired only because
-/// its one caller runs with embeddings off. `agreement` and
-/// `rename_consistency` are now on the wire, so each door is checked by
-/// its own entry condition instead.
+/// its one caller runs with embeddings off. `pair_agreement` and
+/// `pair_rename_consistency` are now on the wire, so each door is
+/// checked by its own entry condition instead.
 fn assert_reached_a_real_route(cluster: &Value, label: &str) {
     let evidence_free = signal(cluster, "token_jaccard") < STRUCTURAL_ONLY_MAX_SUPPORT
         && signal(cluster, "embedding_cos") < STRUCTURAL_ONLY_MAX_SUPPORT;
@@ -137,7 +126,7 @@ fn assert_reached_a_real_route(cluster: &Value, label: &str) {
     } else {
         CONTENT_PROMOTE_FLOOR
     };
-    let support = signal(cluster, "agreement").max(signal(cluster, "rename_consistency"));
+    let support = signal(cluster, "pair_agreement").max(signal(cluster, "pair_rename_consistency"));
     assert!(
         evidence_free || support < promote_floor,
         "{label}: structural_only requires one of the two documented \
@@ -158,7 +147,7 @@ pub(crate) fn signal_dump(cluster: &Value) -> String {
     format!(
         "id={id} bucket={bucket} category={category} size={size} weight={weight:.3} \
          structural={structural:.4} token_jaccard={token:.4} embedding_cos={embedding:.4} \
-         fused={fused:.4} files={files:?}",
+         pair_agreement={agreement:.4} pair_rename_consistency={rename:.4} files={files:?}",
         id = field(cluster, "id").as_str().unwrap_or("?"),
         bucket = cluster_bucket(cluster),
         category = field(cluster, "category").as_str().unwrap_or("?"),
@@ -167,7 +156,8 @@ pub(crate) fn signal_dump(cluster: &Value) -> String {
         structural = signal(cluster, "structural"),
         token = signal(cluster, "token_jaccard"),
         embedding = signal(cluster, "embedding_cos"),
-        fused = signal(cluster, "fused"),
+        agreement = signal(cluster, "pair_agreement"),
+        rename = signal(cluster, "pair_rename_consistency"),
         files = cluster_file_set(cluster),
     )
 }
@@ -205,18 +195,17 @@ pub(crate) fn has_verbatim_pair(scan_root: &Path, cluster: &Value) -> Result<boo
 /// `structural = 1.00, token_jaccard = 1.00`: the token LSH pass hashes
 /// the normalised representation the structural pass already collapsed,
 /// so neither deterministic axis can tell them apart. Only the measured
-/// content evidence separates them, and it is not on the report wire
-/// (#344) — so a suite asserting one verdict is really asserting *which
-/// side of the content gate* the fixture falls on. Stating both
-/// contracts once, here, is what stops two suites drifting into
-/// asserting opposite verdicts about the same evidence, which is exactly
-/// what the pre-`[REPAIR-RENAME-ANCHOR-MASS]` literal-anchor cliff
-/// produced.
+/// content evidence separates them, and it is on the report wire (#344)
+/// — so a suite asserting one verdict is really asserting *which side
+/// of the content gate* the fixture falls on. Stating both contracts
+/// once, here, is what stops two suites drifting into asserting opposite
+/// verdicts about the same evidence, which is exactly what the
+/// pre-`[REPAIR-RENAME-ANCHOR-MASS]` literal-anchor cliff produced.
 ///
 /// Demotion is the failure mode this guards: a renamed copy of real
-/// logic that lands in `HONEST_SHAPE_ONLY_BUCKETS`, or below
-/// [`REUSE_FUSED`], is a false negative at the agent surface — the
-/// recipe tells the agent to write the copy anyway.
+/// logic that lands in `HONEST_SHAPE_ONLY_BUCKETS` is a false negative
+/// at the agent surface — the recipe tells the agent to write the copy
+/// anyway.
 pub(crate) fn assert_proven_rename_contract(
     scan_root: &Path,
     cluster: &Value,
@@ -286,8 +275,11 @@ fn assert_rename_shape(cluster: &Value, label: &str) {
     );
 }
 
-/// Verdict half: the bucket and the fused confidence a rename whose
-/// identifier mapping is proven must carry.
+/// Verdict half: the bucket a rename whose identifier mapping is proven
+/// must carry, and the measured content evidence that proves it
+/// ([FUSED-CONTENT-GATE]). Routing reads `support = max(pair_agreement,
+/// pair_rename_consistency)`; a proven rename clears the cross-file
+/// support floor on its rename axis.
 fn assert_rename_verdict(cluster: &Value, label: &str) {
     let dump = signal_dump(cluster);
     assert!(
@@ -301,17 +293,13 @@ fn assert_rename_verdict(cluster: &Value, label: &str) {
         "{label}: same shape, same logic, renamed identifiers is the \
          textbook `nearly_identical` clone — {dump}"
     );
-    let fused = signal(cluster, "fused");
+    let rename = signal(cluster, "pair_rename_consistency");
     assert!(
-        fused >= REUSE_FUSED,
-        "{label}: a renamed copy of real logic must stay at or above the \
-         lower band boundary ({REUSE_FUSED}) — below it the report states \
-         weak evidence — {dump}"
-    );
-    assert!(
-        fused < 1.0,
-        "{label}: only a byte-identical copy may saturate the confidence \
-         — {dump}"
+        rename >= CONTENT_SUPPORT_FLOOR,
+        "{label}: a renamed copy of real logic must carry measured rename \
+         evidence at or above the cross-file support floor \
+         ({CONTENT_SUPPORT_FLOOR}) — below it the content gate would demote \
+         the clone — {dump}"
     );
 }
 
