@@ -97,7 +97,7 @@ pub fn apply_shared_subtree_rescue<S: BuildHasher + Sync, L: BuildHasher + Sync>
         workers,
         || (RescueTally::new(), OverlapMeasurer::new(trees)),
         |(tally, measurer), chunk| {
-            measure_chunk(chunk, fingerprints, &tree_index, sources, languages, measurer, tally)
+            measure_chunk(chunk, fingerprints, &tree_index, sources, languages, measurer, tally);
         },
     );
     report_shards(&shards);

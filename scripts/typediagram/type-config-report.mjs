@@ -22,23 +22,23 @@ export const REPORT_TYPE_CONFIG = {
     },
     fieldDocs: {
       structural:
-        "The elected pair's measured shared-subtree overlap ([FUSED-CLUSTER-SIGNALS]): 1.0 for Merkle-equal occurrences, the graded alignment otherwise. Never a mean over cluster pairs.",
+        "The elected pair's measured shared-subtree overlap ([`FUSED-CLUSTER-SIGNALS`]): 1.0 for Merkle-equal occurrences, the graded alignment otherwise. Never a mean over cluster pairs.",
       token_jaccard:
-        "The elected pair's MinHash Jaccard estimate ([FUSED-CLUSTER-SIGNALS]). Never a mean over cluster pairs.",
+        "The elected pair's `MinHash` Jaccard estimate ([`FUSED-CLUSTER-SIGNALS`]). Never a mean over cluster pairs.",
       shape:
         "The shape reading: the stronger of `structural` and `token_jaccard` — two views of one normalised representation, so the max is what \"the shape matched\" means. Computed by the engine, the same reduction `buckets` applies; consumers render it verbatim and never re-derive it.",
       embedding_cos:
-        "The elected pair's embedding cosine ([FUSED-CLUSTER-SIGNALS]) — exactly 1.0 for byte-identical occurrences, which share one vector; 0.0 when no vector was measured. Never a mean over cluster pairs.",
+        "The elected pair's embedding cosine ([`FUSED-CLUSTER-SIGNALS`]) — exactly 1.0 for byte-identical occurrences, which share one vector; 0.0 when no vector was measured. Never a mean over cluster pairs.",
       pair_agreement:
-        "The elected pair's own byte agreement ([FUSED-CONTENT-GATE], [FUSED-CLUSTER-SIGNALS]) — how much of the matched content those two occurrences share. Never a pooled mean across the cluster.",
+        "The elected pair's own byte agreement ([`FUSED-CONTENT-GATE`], [`FUSED-CLUSTER-SIGNALS`]) — how much of the matched content those two occurrences share. Never a pooled mean across the cluster.",
       pair_rename_consistency:
-        "The elected pair's own rename consistency ([FUSED-CONTENT-GATE], [FUSED-CLUSTER-SIGNALS]) — whether one consistent identifier renaming explains the differences between those two occurrences. Never a pooled mean across the cluster.",
+        "The elected pair's own rename consistency ([`FUSED-CONTENT-GATE`], [`FUSED-CLUSTER-SIGNALS`]) — whether one consistent identifier renaming explains the differences between those two occurrences. Never a pooled mean across the cluster.",
       literal_fraction:
         "Share of the matched content that is literal data rather than logic.",
     },
   },
   ReportSignalSource: {
-    docs: "The occurrence pair whose measured evidence the cluster's signals display ([FUSED-CLUSTER-SIGNALS]): every rendered value is one admitted pair's measurement, never a cluster average.",
+    docs: "The occurrence pair whose measured evidence the cluster's signals display ([`FUSED-CLUSTER-SIGNALS`]): every rendered value is one admitted pair's measurement, never a cluster average.",
     derives: ["Debug", "Clone", "Copy", "PartialEq", "Serialize", "Deserialize"],
     fieldOverrides: {
       left: "usize",
@@ -107,7 +107,7 @@ export const REPORT_TYPE_CONFIG = {
       canonical_node_count: "AST node count of one canonical member.",
       signals: "Per-cluster signal breakdown (structural / Jaccard / embedding / pair agreement / pair rename consistency / literal).",
       signal_source:
-        "The occurrence pair whose measured evidence the rendered signals display ([FUSED-CLUSTER-SIGNALS]): indices into `occurrences`. Wire truncation retains and reindexes both endpoints whenever its occurrence cap can carry a pair; absent only when no admitted pair survives or the requested cap is below two.",
+        "The occurrence pair whose measured evidence the rendered signals display ([`FUSED-CLUSTER-SIGNALS`]): indices into `occurrences`. Wire truncation retains and reindexes both endpoints whenever its occurrence cap can carry a pair; absent only when no admitted pair survives or the requested cap is below two.",
       bucket: "Canonical bucket label (`identical`, `nearly_identical`, `loosely_similar`, `same_behavior`).",
       category: "Clone category ([RANK-CATEGORY]): `logic` (default) or `data` for a demoted data-structure literal. Orthogonal to `bucket`. Empty/absent on older reports resolves to `logic`.",
       language: "Detected language id of the cluster's first occurrence, from the engine's parser registry (`language_for_path`, [PIPELINE-LANG-TRAIT]); `unknown` when unresolvable. Consumers group and filter by this value and never re-derive a language from a file extension.",

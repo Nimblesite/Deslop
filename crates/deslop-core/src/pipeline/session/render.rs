@@ -70,7 +70,7 @@ impl PipelineSession {
         let PairingOutcome {
             trees,
             cross_language_signatures,
-            mut pairs,
+            pairs,
             embedding_outcome,
         } = self.build_candidate_pairs(config, fingerprints, &signatures, &lsh_source)?;
         ledger.record(
@@ -86,6 +86,60 @@ impl PipelineSession {
             Some(already) => already,
             None => self.materialize_trees()?,
         };
+        let fused_clusters =
+            self.partition_and_split(fingerprints, pairs, &trees, &parse_cache, &mut ledger);
+        // [FUSED-CLUSTER-SIGNALS] One signature space per run: the
+        // cross-language space compares any pair when the audit mode is
+        // on; the per-language space is exact otherwise. Mixing spaces
+        // inside one cluster mean would average incomparable values.
+        let built_alias_space = cross_language_signatures
+            .as_deref()
+            .map(|space| crate::lsh::SignatureIndex::from_segments([space]));
+        let measurement_signatures = built_alias_space.as_ref().unwrap_or(&signatures);
+        let clusters = self.ranked_clusters(
+            fingerprints,
+            measurement_signatures,
+            &embedding_outcome.vectors,
+            &fused_clusters,
+            &trees,
+            &mut ledger,
+        );
+        tracing::info!(
+            ranked_clusters = clusters.len(),
+            fingerprints = fingerprints.len(),
+            "render complete"
+        );
+        ledger.log_summary();
+        Ok(render_report(ReportInputs {
+            parse_cache: &parse_cache,
+            clusters: &clusters,
+            registry: &self.registry,
+            file_languages: &self.file_languages,
+            files_analysed: self.files_analysed,
+            min_nodes: self.min_nodes,
+            scan_root: &self.root,
+            exclusion: &self.exclusion,
+            embedding_provenance: embedding_outcome.provenance,
+            cache_stats: last_pass_stats,
+            sources: &self.sources,
+            analysed_lines: &self.analysed_lines,
+            boilerplate_ranges: &self.boilerplate_ranges,
+            diff: self.diff_scope.as_ref(),
+        }))
+    }
+
+    /// Runs rescue, transitive closure, the structural-family election
+    /// and the verbatim-subgroup split, and selects the signature space
+    /// the measurement pass reads — the middle of the render pipeline,
+    /// extracted so [`PipelineSession::render`] stays under the size bar.
+    fn partition_and_split(
+        &self,
+        fingerprints: &[crate::fingerprint::Fingerprint],
+        mut pairs: Vec<crate::pair::CandidatePair>,
+        trees: &[crate::ast::NormalizedNode],
+        parse_cache: &ParseCache,
+        ledger: &mut StageLedger,
+    ) -> Vec<crate::pair::FusedCluster> {
         // [FUSED-SHARED-SUBTREE] (gh #408): measure the structural
         // overlap the anchor axis discards before survival drops the
         // enclosing Type-3 pair and leaves only its fragment views. The
@@ -97,7 +151,7 @@ impl PipelineSession {
         apply_shared_subtree_rescue(
             &mut pairs,
             fingerprints,
-            &trees,
+            trees,
             &self.sources,
             &self.file_languages,
         );
@@ -149,7 +203,7 @@ impl PipelineSession {
             fingerprints,
             &self.sources,
             &self.file_languages,
-            &parse_cache,
+            parse_cache,
         );
         ledger.record(
             "noise_verbatim_split",
@@ -157,44 +211,7 @@ impl PipelineSession {
             fused_clusters.len(),
             stage_started,
         );
-        // [FUSED-CLUSTER-SIGNALS] One signature space per run: the
-        // cross-language space compares any pair when the audit mode is
-        // on; the per-language space is exact otherwise. Mixing spaces
-        // inside one cluster mean would average incomparable values.
-        let built_alias_space = cross_language_signatures
-            .as_deref()
-            .map(|space| crate::lsh::SignatureIndex::from_segments([space]));
-        let measurement_signatures = built_alias_space.as_ref().unwrap_or(&signatures);
-        let clusters = self.ranked_clusters(
-            fingerprints,
-            measurement_signatures,
-            &embedding_outcome.vectors,
-            &fused_clusters,
-            &trees,
-            &mut ledger,
-        );
-        tracing::info!(
-            ranked_clusters = clusters.len(),
-            fingerprints = fingerprints.len(),
-            "render complete"
-        );
-        ledger.log_summary();
-        Ok(render_report(ReportInputs {
-            parse_cache: &parse_cache,
-            clusters: &clusters,
-            registry: &self.registry,
-            file_languages: &self.file_languages,
-            files_analysed: self.files_analysed,
-            min_nodes: self.min_nodes,
-            scan_root: &self.root,
-            exclusion: &self.exclusion,
-            embedding_provenance: embedding_outcome.provenance,
-            cache_stats: last_pass_stats,
-            sources: &self.sources,
-            analysed_lines: &self.analysed_lines,
-            boilerplate_ranges: &self.boilerplate_ranges,
-            diff: self.diff_scope.as_ref(),
-        }))
+        fused_clusters
     }
 
     /// The LSH/pair construction half of the render: materialises trees

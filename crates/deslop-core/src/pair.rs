@@ -30,7 +30,7 @@ mod gate_parity_tests;
 /// exact structural matches saturate at 1.0, and Type-3 candidates
 /// discovered by LSH alone need `token_jaccard` ≥
 /// [`LSH_ONLY_MIN_JACCARD`] *and* the fused threshold below, which
-/// together keep LSH-only noise out of clusters. SourcererCC's 0.70
+/// together keep LSH-only noise out of clusters. The `SourcererCC` `0.70`
 /// token-bag intersection-over-larger-block operating point is directional
 /// context only; this 0.85 bounded maximum is Deslop's corpus-derived bar.
 pub const FUSED_THRESHOLD: f64 = 0.85;

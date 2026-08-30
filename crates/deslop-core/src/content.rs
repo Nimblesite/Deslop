@@ -41,9 +41,9 @@ use crate::{ast::NormalizedNode, cluster::Cluster, fingerprint::Fingerprint, sta
 
 /// Indexes normalised trees by file for frontier resolution. Shared by
 /// every content measurement so one walk site owns the shape.
-pub(crate) fn tree_index_of<'a>(
-    trees: &'a [NormalizedNode],
-) -> HashMap<FileId, &'a NormalizedNode> {
+pub(crate) fn tree_index_of(
+    trees: &[NormalizedNode],
+) -> HashMap<FileId, &NormalizedNode> {
     trees.iter().map(|tree| (tree.file_id, tree)).collect()
 }
 
@@ -452,6 +452,10 @@ pub(crate) fn pair_content_agreement<S: BuildHasher, L: BuildHasher>(
     )
 }
 
+/// Fraction of aligned collapsed positions whose raw bytes match — the
+/// positional branch of the elected pair's content agreement
+/// ([FUSED-CONTENT-GATE]); set-Jaccard fallback when the members do not
+/// align position for position.
 fn pair_agreement(canonical: Option<&[LeafKey]>, member: Option<&[LeafKey]>) -> f64 {
     let (Some(canonical), Some(member)) = (canonical, member) else {
         return 0.0;

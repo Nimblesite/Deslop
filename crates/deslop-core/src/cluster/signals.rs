@@ -144,17 +144,16 @@ fn fold_pairs(
         else {
             continue;
         };
-        let pair = BestPair::measure(
-            left,
-            right,
-            sides[left_position],
-            sides[right_position],
-            values,
-            overlap,
-        );
+        let (Some(left_side), Some(right_side)) = (
+            sides.get(left_position).copied(),
+            sides.get(right_position).copied(),
+        ) else {
+            continue;
+        };
+        let pair = BestPair::measure(left, right, left_side, right_side, values, overlap);
         if best
             .as_ref()
-            .is_none_or(|current| pair.stronger_than(current))
+            .map_or(true, |current| pair.stronger_than(current))
         {
             *best = Some(pair);
         }
