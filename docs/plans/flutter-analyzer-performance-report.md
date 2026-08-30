@@ -400,7 +400,7 @@ Adding the ordered bound moved the sample's rescue admissions, which a sound bou
 
 That fallback was overstating. It matched identical subtrees under a bijection chosen without regard to order, and an alignment is ordered — two subtrees matched in swapped order cannot both be kept. It also counted matched node pairs as though they were shared mass, ignoring the charge `structural` levies for everything left unmatched. On two files holding the same two functions in swapped order it credited 47 shared nodes where the alignment reaches 32, and the rescue admitted pairs on the difference. On the 51-minute run this route measured 4,080 pairs in the rescue and 1,730 more in the cluster-signal build.
 
-Both faults are fixed: the pairing now walks both endpoints forward only, and the matched mass is converted to guaranteed shared mass as `2m − min(n₁, n₂)`. On the sample this removes 198 admitted pairs that were never real. See [FUSED-SHARED-SUBTREE](../specs/fused.md#fusion-shared-subtree).
+Both faults are fixed: the pairing now walks both endpoints forward only, and the matched mass is converted to guaranteed shared mass as `2m − min(n₁, n₂)`. On the sample this removes 198 admitted pairs that were never real. See [FUSED-SHARED-SUBTREE](../specs/fused.md#fused-shared-subtree).
 
 ## What remains
 

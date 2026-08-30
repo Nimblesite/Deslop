@@ -104,7 +104,7 @@ The report header carries one honest number: `metrics.duplication_percent = 100 
 
 - `min-nodes = 15` — smaller subtrees are excluded to cut noise. The header of the report will state the value actually used.
 - `FUSED_THRESHOLD = 0.85` — the default **pair admission** bar, decided pair by pair on `bounded_fused`, the strongest single axis ([FUSED-STRATEGY-BOUNDED-MAX]); per-pair data (`CandidatePair::fused_min_score`), never a global constant — explicit cross-language candidates with no structural anchor lower it to 0.10. Every threshold is a configurable default, never hard-coded. Do not assert that nothing below 0.85 was admitted — a cross-language audit legitimately admits far below it.
-- **There is no cluster-level `fused`** — it exists at the level of the pair only ([FUSED-SCOPE](fused.md#fusion-scope)). Clusters carry their `bucket` (the engine's verdict), the elected pair's measured axes, and their content evidence. Filter reported clusters on `bucket`, never on any confidence value.
+- **There is no cluster-level `fused`** — it exists at the level of the pair only ([FUSED-SCOPE](fused.md#fused-scope)). Clusters carry their `bucket` (the engine's verdict), the elected pair's measured axes, and their content evidence. Filter reported clusters on `bucket`, never on any confidence value.
 - `LSH_ONLY_MIN_JACCARD = 0.90` and `LSH_ONLY_MIN_NODE_COUNT = 40` — extra gates for LSH-only candidates (no structural anchor), to keep tiny trivial windows from mega-clustering.
 - Cross-language comparison is off by default. Enable `[analysis] allow_cross_language_comparison = true` only when intentionally auditing ports, generated clients, or semantic equivalents across ecosystems.
 

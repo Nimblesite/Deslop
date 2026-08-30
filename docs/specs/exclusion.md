@@ -47,7 +47,7 @@ data = 0.15
 
 Every value must be finite and in `[0.0, 1.0]`, rejected otherwise with the same `ConfigThreshold`-style error as `[ranking]`. `0.0` is legal here (unlike the ranking multipliers): it removes that class from the weighted numerator only. Nothing in this section can alter the mechanical `duplication_percent` — that figure has no configuration surface, by design.
 
-**`[tuning]` section.** Every accuracy lever of the detector, one sub-table per pipeline stage. The levers, their defaults, and the provenance of each default are specified in [fused.md §FUSION-TUNING-LEVERS](fused.md#fusion-tuning-levers); this section defines only the file surface. Migration is planned in [`plans/unhardcode-tuning-plan.md`](../plans/unhardcode-tuning-plan.md).
+**`[tuning]` section.** Every accuracy lever of the detector, one sub-table per pipeline stage. The levers, their defaults, and the provenance of each default are specified in [fused.md §FUSED-TUNING-LEVERS](fused.md#fused-tuning-levers); this section defines only the file surface. Migration is planned in [`plans/unhardcode-tuning-plan.md`](../plans/unhardcode-tuning-plan.md).
 
 ```toml
 [tuning.admission]            # every key optional; absence inherits the default
@@ -98,7 +98,7 @@ A top-level Dart collection literal whose elements are repeated near-identical d
 
 ### [CLONE-NOISE-LITERAL-TABLE] Language-agnostic literal-dominated tables
 
-The Dart predicate above ships per-grammar CST knowledge, so every other language reported data tables at full `logic` weight (gh #336: an F# integer array literal family ranked #1 on `dotnet/fsharp`). The language-agnostic test needs no grammar tables: the pipeline already walks each cluster member's **normalised** tree for the content gate ([fused.md §FUSION-CONTENT-GATE](fused.md#fusion-content-gate)), and a subtree whose collapsed leaves are overwhelmingly `__literal__` positions *is* a data literal in any language.
+The Dart predicate above ships per-grammar CST knowledge, so every other language reported data tables at full `logic` weight (gh #336: an F# integer array literal family ranked #1 on `dotnet/fsharp`). The language-agnostic test needs no grammar tables: the pipeline already walks each cluster member's **normalised** tree for the content gate ([fused.md §FUSED-CONTENT-GATE](fused.md#fused-content-gate)), and a subtree whose collapsed leaves are overwhelmingly `__literal__` positions *is* a data literal in any language.
 
 **Predicate.** A cluster is classified `data` ([RANK-CATEGORY]) when the canonical member's collapsed leaves are ≥ 0.8 literal positions with at least 8 literals (so a tiny literal-heavy subtree — a tuple return, a short argument list — never registers as a table), and at least two members differ in raw bytes — the same verbatim escape hatch as the Dart predicate. The fraction is measured in the pipeline, where normalised trees live, and travels on the cluster; the classifier composes with the per-language predicates rather than replacing them (identifier-heavy constructor-row tables stay Dart-specific).
 

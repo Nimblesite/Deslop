@@ -49,7 +49,7 @@ On the rejected-refresh path the server emits no terminal `deslop/embeddingProgr
 
 ## Fix 2 — [CLONE-NOISE-COPY-PROOF] (#373)
 
-> Placed last so the `FUSION` sections sit adjacent, as the spec-ID rule
+> Placed last so the `FUSED` sections sit adjacent, as the spec-ID rule
 > requires. Position is not order here — `Order and gates` below is, and it
 > says this fix is independent and may land first.
 

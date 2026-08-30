@@ -1,6 +1,6 @@
 # Unhardcoding the tuning levers
 
-Turns every compiled accuracy threshold into a configuration item with the current value as its default. Specified by [`fused.md §FUSION-TUNING-LEVERS`](../specs/fused.md#fusion-tuning-levers) (the levers and their provenance) and [`exclusion.md §[tuning]`](../specs/exclusion.md) (the file surface, validation, precedence, cache key, and report declaration).
+Turns every compiled accuracy threshold into a configuration item with the current value as its default. Specified by [`fused.md §FUSED-TUNING-LEVERS`](../specs/fused.md#fused-tuning-levers) (the levers and their provenance) and [`exclusion.md §[tuning]`](../specs/exclusion.md) (the file surface, validation, precedence, cache key, and report declaration).
 
 **The whole migration is behaviour-preserving.** Every phase lands with the same reports it started with. No default moves in this work stream; a default change is a separate, test-first change with its own corpus measurement.
 

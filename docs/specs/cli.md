@@ -49,7 +49,7 @@ one ([PIPELINE-INCREMENTAL-INVALIDATION]).
 
 `--no-incremental` turns the *fingerprint* cache off for one run: nothing is read,
 nothing is written, and `cache_stats` reports `{ hits: 0, misses: 0 }`. It does
-**not** disable the embedding cache ([fused.md §FUSION-EMBED-PROVIDER](fused.md)),
+**not** disable the embedding cache ([fused.md §FUSED-EMBED-PROVIDER](fused.md)),
 a separate layer keyed on provider/model identity — pass `--embeddings off` (the
 default) for a run that writes nothing at all. A read-only checkout needs no flag:
 an unwritable cache directory degrades to a full parse with a `warn!` and a

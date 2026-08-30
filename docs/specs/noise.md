@@ -172,7 +172,7 @@ across at least two files, with bodies that differ in normalised node-kind shape
 abstract/interface implementation pattern: the contract forces the signatures to
 agree, and what differs is each implementation's behaviour, so nothing can share
 a refactor. The widened resolution direction exists because
-[FUSED-SHARED-SUBTREE](fused.md#fusion-shared-subtree) admits module-wide
+[FUSED-SHARED-SUBTREE](fused.md#fused-shared-subtree) admits module-wide
 views: a whole-file view of a single-method class was promoted to a
 near-identical pair on the strength of the bytes the contract forces to agree,
 reporting two different backends 100% duplicated
@@ -272,7 +272,7 @@ member's role cannot be resolved.
 
 It engages wherever **embedding evidence is what carried the cluster into an
 act-now bucket**, leaving the deterministic Type-1/2/3 buckets untouched. That
-is the `same_behavior` bucket, and — since [FUSED-SHARED-SUBTREE](fused.md#fusion-shared-subtree)
+is the `same_behavior` bucket, and — since [FUSED-SHARED-SUBTREE](fused.md#fused-shared-subtree)
 — also a [CLONE-BUCKETS-ROUTING](taxonomy.md#clone-buckets-routing) row-4b
 near-miss whose shape was corroborated by the embedding axis rather than the
 token axis (`structural < 0.99`, `token_jaccard` below the corroboration floor,

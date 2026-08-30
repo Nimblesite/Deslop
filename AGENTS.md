@@ -93,6 +93,7 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 - Each spec section must have a unique, heirarchical non-numeric spec Id
 - Spec ids must be cross referenced across tests, code specs and plans
 - Code, specs, and tests MUST agree. Where they don't, 🛑 STOP and report the issue to the user
+- Remove line feeds from text that is only there to enforce text wrapping
 - Don't use line endings to force word wrap. Allow text to wrap naturally.
 - Keep PR documentation TIGHT and HUMAN READABLE (except for the AI section)
 - Remove line endings that only exist to wrap text
