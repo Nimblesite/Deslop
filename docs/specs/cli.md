@@ -145,7 +145,7 @@ view without changing the bucket labels (which are always the shared-text
 same text serves a human reader and an AI scraper). The technical view adds a
 column legend (`rank, signal, id, copies, AST nodes, weight,
 (s=structural j=token e=embedding), files`) and, per ranked cluster, the
-truncated cluster id, AST node count, ranking weight, and the fused signal triple.
+truncated cluster id, AST node count, ranking weight, and the signal triple.
 It is purely additive verbosity layered on the [UX-PLAIN-SUMMARY] structure.
 
 ### [UX-TECHNICAL-CACHE] Cache statistics line

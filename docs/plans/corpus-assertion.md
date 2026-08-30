@@ -98,7 +98,7 @@ The target state: **every repository, every run, asserts every row below.** Ids 
 | `precision` | curated non-duplicates never share a cluster | `must_not_cluster` | ❌ missing (L4) |
 | `boilerplate_rank` | framework-mandated shapes never rank first | `must_not_rank_first` | 🛑 unsound (L3) |
 | `data_table_rank` | digit-dominated clusters carry `category: data` | none | ✅ |
-| `fused_bounded_max` | rendered confidence never exceeds the strongest axis | none | ✅ |
+| `fused_bounded_max` | the pair admission score never exceeds the strongest axis | none | ✅ |
 | `type2_gate_liveness` | the content gate produced *some* vouched evidence | none | ✅ |
 | `determinism` | two runs on an unchanged tree agree exactly | none | 🟡 2 of 9 (L6) |
 | `metrics_stable` | `duplication_percent` and cluster count reproduce exactly | none | 🟡 inside determinism |

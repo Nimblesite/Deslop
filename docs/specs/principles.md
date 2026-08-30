@@ -96,6 +96,6 @@ a defect, and if the engine ever gains a heat band this moves onto it.
 
 What a client may never do: apply any other threshold constant, classify a value into
 bands, combine two wire values into a third that a user sees, or word a verdict about
-the evidence. Those arrive stamped — `rank`, `rank_band`, `shape`, `meets_fused_gate`,
+the evidence. Those arrive stamped — `rank`, `rank_band`, `shape`, `bucket`,
 `evidence_verdict`, `occurrence_count`, `language`, `percent` — and are rendered
 verbatim.

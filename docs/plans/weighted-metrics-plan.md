@@ -6,7 +6,7 @@ Implements [pipeline.md §METRICS-REPO-WEIGHTED](../specs/pipeline.md#metrics-re
 
 ## Decisions (settled — in the spec, do not reopen)
 
-Two metrics on the wire ([METRICS-REPO-WEIGHTED]): the mechanical percentage untouched and still the default gate; the weighted companion priced by bucket × category constants from the spec's default table, per-line max-weight-wins (invariant: weighted ≤ mechanical), never fused-scaled ([RANK-MASS-SUM] is the same rule), two independent gates with one kill switch ([EXIT-CODES-WEIGHTED]). Weighting prices honest labels; misrouted clusters stay separate accuracy bugs.
+Two metrics on the wire ([METRICS-REPO-WEIGHTED]): the mechanical percentage untouched and still the default gate; the weighted companion priced by bucket × category constants from the spec's default table, per-line max-weight-wins (invariant: weighted ≤ mechanical), never confidence-scaled ([RANK-MASS-SUM] is the same rule), two independent gates with one kill switch ([EXIT-CODES-WEIGHTED]). Weighting prices honest labels; misrouted clusters stay separate accuracy bugs.
 
 ## Work items, in order
 

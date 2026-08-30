@@ -44,7 +44,7 @@ Tests: a fixture where a pair sits between two `fused_threshold` values, asserte
 
 The widest blast radius: `classify_signals`, `is_structural_only_signals`, `lacks_content_support`, `has_saturating_shape_evidence`, and `attach_content_evidence` all take the policy, and `classify_signals` has many callers.
 
-Tests: the routing-line fixtures already exist (`fused_golden_bands.rs`, `fused_golden_invariants.rs`). Each gains a tuned variant asserting a cluster crosses a bucket boundary when and only when its governing key moves — bucket, rendered `fused`, and ranking position all asserted, since [FUSION-CONTENT-GATE] step 6 makes them move together.
+Tests: the routing-line fixtures exist and are asserted by bucket and rank. Each gains a tuned variant asserting a cluster crosses a bucket boundary when and only when its governing key moves — bucket and ranking position all asserted, since content evidence ([FUSION-CONTENT-GATE]) makes them move together.
 
 Watch for the #197 and #331 fixtures specifically: they are what the defaults are calibrated against, so they must hold at defaults and shift predictably off them.
 
