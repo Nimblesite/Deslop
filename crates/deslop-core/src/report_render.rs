@@ -209,7 +209,6 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         // Stamped below by the one derived-field pass
         // ([`crate::report_restamp`]) so the render path and the
         // `--from-report` replay path can never compute them differently.
-        meets_fused_gate: false,
         evidence_verdict: String::new(),
         occurrences,
         occurrences_total,
@@ -693,7 +692,6 @@ mod tests {
             token_jaccard: 1.0,
             shape: 1.0,
             embedding_cos: 0.0,
-            fused: 1.0,
             agreement: 0.0,
             rename_consistency: 0.0,
             literal_fraction: 0.0,

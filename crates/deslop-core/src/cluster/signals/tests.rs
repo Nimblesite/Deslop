@@ -395,7 +395,8 @@ fn the_rendered_triple_is_one_admitted_pairs_own_axes() {
          (1.0, 1.0) that no admitted pair measures, got {rendered:?}"
     );
     assert_ne!(
-        rendered, (1.0, 1.0),
+        rendered,
+        (1.0, 1.0),
         "a per-axis max would fabricate a pair that exists nowhere"
     );
 

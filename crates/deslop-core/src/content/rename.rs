@@ -40,8 +40,8 @@ const RENAME_CORROBORATION_MIN_OCCURRENCES: usize = 2;
 /// copy — preserved literals, echoed literals, identity identifiers,
 /// and substitutions corroborated by repetition. Replaces the deleted
 /// `RENAME_EVIDENCE_MIN_LITERALS = 4` cliff, which zeroed every
-/// sub-floor pair and rendered a maximal one-literal Type-2 rename at
-/// `fused = 0.0588` (`deslop/tests/type2_rename_anchor_floor.rs`):
+/// sub-floor pair and priced a maximal one-literal Type-2 rename at
+/// `0.0588` (`deslop/tests/type2_rename_anchor_floor.rs`):
 /// scarce anchors now weaken the proof smoothly instead of erasing it,
 /// while a forwarding scaffold's echoed subject substitution (its name
 /// twice plus its collaborator, mass 3, weight 3/7) stays below every
@@ -58,8 +58,8 @@ const RENAME_EVIDENCE_HALF_MASS: f64 = 4.0;
 /// its own subject name — while repeated consistent substitutions and
 /// preserved literals are independent anchors of deliberate copying.
 /// Scarce anchors weaken the proof smoothly instead of erasing it; the
-/// cliff rendered a maximal one-literal Type-2 rename at
-/// `fused = 0.0588`, an agent-surface false negative pinned by
+/// cliff priced a maximal one-literal Type-2 rename at
+/// `0.0588`, an agent-surface false negative pinned by
 /// `deslop/tests/type2_rename_anchor_floor.rs`. `0.0` without
 /// positional alignment.
 ///
@@ -216,10 +216,8 @@ fn anchor_weight(anchors: usize) -> f64 {
 ///
 /// The result is monotone: completing a rename can only raise
 /// `consistency` and add anchors, so certification can only switch on
-/// (`rename_literal_monotonicity.rs`). `RENAME_CONSISTENCY_DISCOUNT`
-/// still separates a certified rename from byte proof, so proven
-/// copy-paste keeps `fused == 1.0` and a certified rename tops out
-/// below it ([FUSED-CONTENT-GATE]).
+/// (`rename_literal_monotonicity.rs`). Byte agreement and certified
+/// rename evidence remain separate axes ([FUSED-CONTENT-GATE]).
 fn evidence_weight(consistency: f64, anchors: usize) -> f64 {
     let weight = anchor_weight(anchors);
     if consistency >= 1.0 && weight >= CONTENT_SUPPORT_FLOOR {

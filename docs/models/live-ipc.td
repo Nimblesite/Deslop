@@ -187,9 +187,8 @@ type ReportSignals {
   token_jaccard: Float
   shape: Float
   embedding_cos: Float
-  fused: Float
-  agreement: Float
-  rename_consistency: Float
+  pair_agreement: Float
+  pair_rename_consistency: Float
   literal_fraction: Float
 }
 
@@ -221,7 +220,6 @@ type ReportCluster {
   bucket: String
   category: String
   language: String
-  meets_fused_gate: Bool
   evidence_verdict: String
   occurrences: List<ReportOccurrence>
   occurrences_total: Int

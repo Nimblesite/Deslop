@@ -8,35 +8,37 @@ export const REPORT_TYPE_CONFIG = {
     // symptom is a live client left showing stale data — so the delta
     // compares the whole value and the compiler keeps it complete.
     derives: ["Debug", "Clone", "Copy", "PartialEq", "Serialize", "Deserialize"],
-    // Reports written before the content gate carry only the four
-    // fused-confidence fields. `--from-report` must replay them, and an
+    // Reports written before the content gate carry only the three
+    // shape/semantic fields. `--from-report` must replay them, and an
     // absent measurement must never demote a cluster the original run
     // vouched for — so the defaults mirror
     // `ContentEvidence::unmeasured()`: full agreement, no rename proof,
     // no literal dominance.
     fieldSerdeAttrs: {
       shape: ["default"],
-      agreement: ['default = "crate::report::unmeasured_agreement"'],
-      rename_consistency: ["default"],
+      pair_agreement: ['default = "crate::report::unmeasured_agreement"'],
+      pair_rename_consistency: ["default"],
       literal_fraction: ["default"],
     },
     fieldDocs: {
-      structural: "Mean structural signal across cluster pairs.",
-      token_jaccard: "Mean token Jaccard estimate across cluster pairs.",
+      structural:
+        "The elected pair's measured shared-subtree overlap ([FUSED-CLUSTER-SIGNALS]): 1.0 for Merkle-equal occurrences, the graded alignment otherwise. Never a mean over cluster pairs.",
+      token_jaccard:
+        "The elected pair's MinHash Jaccard estimate ([FUSED-CLUSTER-SIGNALS]). Never a mean over cluster pairs.",
       shape:
         "The shape reading: the stronger of `structural` and `token_jaccard` — two views of one normalised representation, so the max is what \"the shape matched\" means. Computed by the engine, the same reduction `buckets` applies; consumers render it verbatim and never re-derive it.",
-      embedding_cos: "Mean embedding cosine similarity across cluster pairs.",
-      fused: "Unit-bounded fused confidence from the three components.",
-      agreement:
-        "Pooled byte agreement across the collapsed content frontier — how much of the content the members actually share.",
-      rename_consistency:
-        "Baker-corroborated evidence that one consistent identifier renaming explains the members' differences.",
+      embedding_cos:
+        "The elected pair's embedding cosine ([FUSED-CLUSTER-SIGNALS]) — exactly 1.0 for byte-identical occurrences, which share one vector; 0.0 when no vector was measured. Never a mean over cluster pairs.",
+      pair_agreement:
+        "The elected pair's own byte agreement ([FUSED-CONTENT-GATE], [FUSED-CLUSTER-SIGNALS]) — how much of the matched content those two occurrences share. Never a pooled mean across the cluster.",
+      pair_rename_consistency:
+        "The elected pair's own rename consistency ([FUSED-CONTENT-GATE], [FUSED-CLUSTER-SIGNALS]) — whether one consistent identifier renaming explains the differences between those two occurrences. Never a pooled mean across the cluster.",
       literal_fraction:
         "Share of the matched content that is literal data rather than logic.",
     },
   },
   ReportSignalSource: {
-    docs: "The occurrence pair whose measured evidence the cluster's signals display ([FUSED-CLUSTER-SIGNALS], gh #458): every rendered value is one admitted pair's measurement, never a cluster average.",
+    docs: "The occurrence pair whose measured evidence the cluster's signals display ([FUSED-CLUSTER-SIGNALS]): every rendered value is one admitted pair's measurement, never a cluster average.",
     derives: ["Debug", "Clone", "Copy", "PartialEq", "Serialize", "Deserialize"],
     fieldOverrides: {
       left: "usize",
@@ -88,7 +90,6 @@ export const REPORT_TYPE_CONFIG = {
       rank_band: ["default"],
       category: ["default"],
       language: ["default"],
-      meets_fused_gate: ["default"],
       evidence_verdict: ["default"],
       occurrence_count: ["default"],
       signal_source: ["default", 'skip_serializing_if = "Option::is_none"'],
@@ -104,14 +105,12 @@ export const REPORT_TYPE_CONFIG = {
       weight: "Ranking weight (higher = worse).",
       size: "Count of cloned occurrences in the cluster.",
       canonical_node_count: "AST node count of one canonical member.",
-      signals: "Per-cluster signal breakdown (structural / Jaccard / embedding / fused).",
+      signals: "Per-cluster signal breakdown (structural / Jaccard / embedding / pair agreement / pair rename consistency / literal).",
       signal_source:
-        "The occurrence pair whose measured evidence the rendered signals display ([FUSED-CLUSTER-SIGNALS], gh #458): indices into `occurrences`. Absent when no admitted pair survives, or when the wire truncated it.",
+        "The occurrence pair whose measured evidence the rendered signals display ([FUSED-CLUSTER-SIGNALS]): indices into `occurrences`. Absent when no admitted pair survives, or when the wire truncated it.",
       bucket: "Canonical bucket label (`identical`, `nearly_identical`, `loosely_similar`, `same_behavior`).",
       category: "Clone category ([RANK-CATEGORY]): `logic` (default) or `data` for a demoted data-structure literal. Orthogonal to `bucket`. Empty/absent on older reports resolves to `logic`.",
       language: "Detected language id of the cluster's first occurrence, from the engine's parser registry (`language_for_path`, [PIPELINE-LANG-TRAIT]); `unknown` when unresolvable. Consumers group and filter by this value and never re-derive a language from a file extension.",
-      meets_fused_gate:
-        "True when `signals.fused` clears the engine's reportable fused threshold ([FUSED-CONTENT-GATE]). Carried so no client mirrors the threshold constant; UI admission below the act-now buckets reads this verbatim.",
       evidence_verdict:
         "Engine-authored plain-English reading of the shape score against the measured content evidence — why confidence stayed, fell, or came from the embedding pass. The engine owns this verdict; clients render it verbatim and never manufacture their own from the signal numbers.",
       occurrences: "Cluster members; live wire caps this list.",

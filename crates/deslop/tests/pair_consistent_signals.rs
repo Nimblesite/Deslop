@@ -84,7 +84,7 @@ fn run_pair_mean_report() -> Result<Value> {
 // six-member cluster displays the strongest admitted pair's evidence — the
 // byte-identical `ledger_a.ts` ↔ `ledger_a_copy.ts` pair — so its rendered
 // `structural` and `token_jaccard` are the same `1.0 / 1.0` the pair
-// cluster displays, the cluster keeps its act-now bucket, and the report
+// cluster displays, the cluster keeps its supported bucket, and the report
 // names the pair that earned the displayed value.
 #[test]
 fn a_byte_identical_pair_reads_the_same_in_every_cluster() -> Result<()> {
@@ -146,17 +146,17 @@ fn a_byte_identical_pair_reads_the_same_in_every_cluster() -> Result<()> {
          token evidence, not the diluted 0.8313 mean: {dump_six}"
     );
 
-    // Admission: the proven pair keeps the six-member cluster act-now —
+    // Admission: the proven pair keeps the six-member cluster supported —
     // the existential gate stays open (Baker: any pair that qualifies
     // qualifies the group), and the lookalikes cannot demote it. The two
     // clusters land in BOTH buckets: the six-member cluster keeps its
     // nearly-identical bucket while the copy pair alone is identical —
     // the lookalikes do not manufacture an identical verdict, and the
-    // byte-identical pair does not lose its act-now bucket.
+    // byte-identical pair does not lose its supported bucket.
     assert_eq!(
         cluster_bucket(six),
         "nearly_identical",
-        "a cluster containing a byte-identical pair must keep its act-now \
+        "a cluster containing a byte-identical pair must keep its supported \
          bucket, got {}: {report:#}",
         cluster_bucket(six)
     );
@@ -207,7 +207,7 @@ const EMBEDDINGS_OFF_EVIDENCE: f64 = 0.0;
 // axes, still live on the axes the content gate actually reads. Baker
 // (1995) defines duplication per pair: there is no class-level average
 // to take, and averaging lets unrelated members vote a proven copy below
-// CONTENT_SUPPORT_FLOOR and out of its act-now bucket.
+// CONTENT_SUPPORT_FLOOR and out of its supported bucket.
 #[test]
 fn a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster() -> Result<()> {
     let report = run_pair_mean_report()?;
@@ -278,7 +278,7 @@ fn a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster() -> 
     assert!(
         support >= deslop_core::buckets::CONTENT_SUPPORT_FLOOR,
         "a cluster holding a byte-identical pair must carry content support at or \
-         above {floor} — below it the gate demotes a proven copy out of its act-now \
+         above {floor} — below it the gate demotes a proven copy out of its supported \
          bucket, a false negative manufactured purely by averaging: support={support:.4} \
          {dump}",
         floor = deslop_core::buckets::CONTENT_SUPPORT_FLOOR,

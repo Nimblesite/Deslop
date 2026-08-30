@@ -4,11 +4,10 @@
 //!
 //! 1. Take the union of structural-hash bucket members and token-LSH band
 //!    collisions as the candidate pair set.
-//! 2. Score each pair on two signals in `[0, 1]`: `structural_sim` (1.0 for
-//!    members of the same Merkle bucket, else the best-achievable subtree
-//!    overlap which is 0.0 for cross-bucket token-only candidates) and
-//!    `token_jaccard` estimated from the `MinHash` signatures.
-//! 3. Apply the fused threshold and form clusters via transitive closure.
+//! 2. Score each pair on the evidence available before rescue: exact Merkle
+//!    evidence `H`, token Jaccard `J`, and embedding cosine `E`.
+//! 3. Apply the pair-specific fused threshold or the separate compound
+//!    shared-subtree rescue, then form clusters via transitive closure.
 //!
 //! Pair scores go into the final report (see [PRINCIPLES-AUDIENCE-AGENT])
 //! so agent consumers can tell **why** each cluster was flagged.
@@ -31,10 +30,9 @@ mod gate_parity_tests;
 /// exact structural matches saturate at 1.0, and Type-3 candidates
 /// discovered by LSH alone need `token_jaccard` ≥
 /// [`LSH_ONLY_MIN_JACCARD`] *and* the fused threshold below, which
-/// together keep LSH-only noise out of clusters. The literature
-/// ([TECH-TOKEN-SOURCERERCC]) treats Jaccard ≥ 0.7 as a typical Type-3
-/// cutoff; we go higher for LSH-only because those pairs have no
-/// structural anchor.
+/// together keep LSH-only noise out of clusters. SourcererCC's 0.70
+/// token-bag intersection-over-larger-block operating point is directional
+/// context only; this 0.85 bounded maximum is Deslop's corpus-derived bar.
 pub const FUSED_THRESHOLD: f64 = 0.85;
 /// Additional Jaccard floor applied to pairs that fired only on the LSH
 /// path (no structural hash match). Keeps thousands of tiny "same
@@ -131,14 +129,14 @@ pub const SHARED_SUBTREE_MIN_NODE_COUNT: usize = 30;
 /// `deslop::embedding_route_invariance` (gh #356).
 pub const EMBEDDING_SUPPORT_FLOOR: f64 = 0.80;
 
-/// Per-pair score breakdown in `[0, 1]`. See
-/// [FUSED-STRATEGY-BOUNDED-MAX] for the semantics. Three slots are reserved
-/// from v1 so the embedding pass in P5 is additive, not a schema bump:
-/// the ensemble-LLM 2025 finding is that sum/max fusion (never average)
-/// gives the biggest gain.
+/// Per-pair score breakdown in `[0, 1]`. Candidate admission stores exact
+/// Merkle evidence in `structural`; report election stores measured overlap
+/// there after the pair has already been admitted. Only the former is an
+/// input to [`Self::bounded_fused`] ([FUSED-STRATEGY-BOUNDED-MAX]).
 #[derive(Debug, Clone, Copy)]
 pub struct PairScore {
-    /// 1.0 when the pair shares an exact Merkle bucket, else 0.0.
+    /// Exact Merkle evidence `H` during admission; measured overlap `S`
+    /// after admission when the same shape is used for report evidence.
     pub structural: f64,
     /// Estimated k-gram Jaccard in `[0, 1]`.
     pub token_jaccard: f64,
@@ -153,12 +151,9 @@ impl PairScore {
     /// The axes are correlated views of one normalised tree, so combining
     /// them may sharpen a verdict but must never exceed the best evidence
     /// — a confidence above every individual axis would be manufactured,
-    /// not measured. Non-finite axes contribute nothing. At render time
-    /// [FUSED-CONTENT-GATE] (`buckets.rs`) re-scores shape-saturating
-    /// clusters as `max(embedding_cos, shape × content)` — the same bound
-    /// with measured content evidence in place of this function's
-    /// implicit 1.0 — making the gate the definition of the rendered
-    /// confidence rather than a correction of it.
+    /// not measured. Non-finite axes contribute nothing. This is solely
+    /// the pre-rescue pair-admission quantity; cluster reports never call
+    /// it or render its result.
     #[must_use]
     pub fn bounded_fused(self) -> f64 {
         [self.structural, self.token_jaccard, self.embedding_cos]
@@ -252,7 +247,7 @@ pub struct FusedCluster {
 }
 
 /// One surviving discovery edge inside a [`FusedCluster`]: the two
-/// fingerprint indices it connects and its bounded fused strength.
+/// fingerprint indices it connects and its pre-rescue fused strength.
 #[derive(Debug, Clone, Copy)]
 pub struct FusedEdge {
     /// Lower fingerprint index of the surviving pair.
@@ -447,8 +442,8 @@ pub(crate) fn crosses_files(left: &Fingerprint, right: &Fingerprint) -> bool {
 /// corroborates at [`SHARED_SUBTREE_MIN_JACCARD`], and both endpoints
 /// are substantive ([`SHARED_SUBTREE_MIN_NODE_COUNT`]). This is a
 /// compound gate over two *independently measured* axes, not sum
-/// fusion — neither axis alone admits, and the rendered fused
-/// confidence stays the bounded max ([FUSED-STRATEGY-BOUNDED-MAX]).
+/// fusion — neither axis alone admits, and rescue never mutates the
+/// pre-rescue fused value ([FUSED-STRATEGY-BOUNDED-MAX]).
 fn shared_subtree_rescued(pair: &CandidatePair, score: PairScore) -> bool {
     pair.shared_subtree_overlap >= SHARED_SUBTREE_MIN_OVERLAP
         && score.token_jaccard >= SHARED_SUBTREE_MIN_JACCARD

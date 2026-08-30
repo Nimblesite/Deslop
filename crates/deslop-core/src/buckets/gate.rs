@@ -3,10 +3,17 @@
 //!
 //! `structural` and `token_jaccard` are two views of one normalised
 //! representation, so once the shape saturates they echo each other
-//! and say nothing about what the code *said*. The floors, the
-//! support quantity, and the fused-confidence correction live here;
-//! the routing tail that applies them per bucket lives in
-//! [`super::routing`].
+//! and say nothing about what the code *said*. The floors and the
+//! support quantity live here; the routing tail that applies them per
+//! bucket lives in [`super::routing`].
+//!
+//! There is no cluster-level `fused` and no content-confidence
+//! multiply ([FUSED-SCOPE], [FUSED-CONTENT-GATE]). `fused` is the pair
+//! admission score, decided pair by pair at admission
+//! ([FUSED-STRATEGY-BOUNDED-MAX]); the report carries the elected
+//! pair's measured axes and its content evidence, never a rendered
+//! cluster confidence. Routing reads `support = max(agreement,
+//! rename_consistency)` directly — no discount, no shape scaling.
 
 use crate::{content::ContentEvidence, report::ReportSignals};
 
@@ -132,32 +139,16 @@ pub fn lacks_content_support(signals: ReportSignals) -> bool {
 /// a test carrying its own copy of the number drifts from the router.
 pub const SATURATING_TOKEN_FLOOR: f64 = 0.95;
 
-/// Confidence discount applied to rename-consistency evidence when the
-/// gate fuses it ([FUSED-CONTENT-GATE]). A literal-anchored bijective
-/// rename is proven duplication, but its identifier positions matched
-/// through a mapping rather than byte equality — strictly weaker
-/// evidence than a verbatim copy. The discount keeps a proven Type-2
-/// rename above the [FUSED-THRESHOLD] act-now line while reserving
-/// saturation (`fused == 1.0`) for byte-proven duplication, so the
-/// rendered score still orders copy-paste above rename.
-pub const RENAME_CONSISTENCY_DISCOUNT: f64 = 0.9;
-
-/// Corrects the rendered fused confidence for shape-identical clusters
-/// ([FUSED-CONTENT-GATE]). `structural` and `token_jaccard`
-/// are two views of one normalised representation, so summing them says
-/// nothing beyond "the shapes matched" — every shape match used to
-/// render `fused = 1.0`, which made the agent-facing act-now threshold
-/// unreachable from below. The honest confidence for a shape match is
-/// its structural certainty scaled by measured content evidence — pooled
-/// byte agreement or discounted rename consistency, whichever is the
-/// stronger proof — or the semantic signal when that beats both.
-/// Byte-equivalence-proven [`ClusterKind::Identical`] clusters keep
-/// their saturated confidence, and clusters discovered without an exact
-/// shape match (LSH / embedding paths) keep the existing fusion.
+/// The final render transform for a shape-identical cluster's signal
+/// triple: stamps the elected pair's measured content evidence and
+/// applies the token-axis correction where the members share one
+/// digest. There is no cluster `fused` to compute — admission decided
+/// the pair, the report names it, and routing reads `support =
+/// max(agreement, rename_consistency)` from the measured evidence.
 ///
 /// `members_share_one_digest` is the renderer's answer to "do all of
 /// this cluster's members carry the same normalised-subtree hash" — the
-/// only fact that licenses the token-axis correction below, and one the
+/// only fact that licenses the token-axis correction, and one the
 /// signal triple cannot supply on its own (gh #431).
 #[must_use]
 pub fn content_gated_signals(
@@ -166,63 +157,46 @@ pub fn content_gated_signals(
     kind: ClusterKind,
     members_share_one_digest: bool,
 ) -> ReportSignals {
-    // #344: the measured content evidence is stamped on **every** path,
-    // including the two that leave the confidence untouched. A reader
-    // that can see `fused` but not the evidence behind it cannot tell a
-    // corroborated rename from an anchor-poor scaffolding family — the
-    // two render the same triple ([FUSED-CONTENT-GATE]). Returning the
-    // input unchanged here would leave those fields at the zeroes
+    // The measured content evidence is stamped on **every** path,
+    // including the two that leave the triple untouched. A reader that
+    // can see the pair's axes but not the evidence behind them cannot
+    // tell a corroborated rename from an anchor-poor scaffolding family
+    // — the two render the same triple ([FUSED-CONTENT-GATE]). Returning
+    // the input unchanged here would leave those fields at the zeroes
     // `From<PairScore>` seeded, which reads as "measured, and found
     // nothing" rather than "measured, and found this".
     let signals = with_content_evidence(signals, content);
     if kind == ClusterKind::Identical || !has_saturating_shape_evidence(signals) {
         return stamp_shape(signals);
     }
-    stamp_shape(apply_content_gate(
-        signals,
-        content,
-        kind,
-        members_share_one_digest,
-    ))
+    stamp_shape(correct_token_echo(signals, kind, members_share_one_digest))
 }
 
-/// Scales a saturated shape match by the measured content evidence —
-/// the arithmetic half of [`content_gated_signals`], split out so both
-/// stay inside the function budget ([FUSED-CONTENT-GATE]).
-fn apply_content_gate(
+/// Corrects the rendered `token_jaccard` for a `NearlyIdentical` cluster
+/// whose members all carry **one** normalised-subtree digest: their kind
+/// streams are equal by construction, so the true token Jaccard is 1.0 —
+/// the same argument the byte-equivalence upgrade applies to `Identical`.
+/// A lower rendered value there is a fingerprint-scoped fallback-signature
+/// artifact, not evidence, so it is corrected here.
+///
+/// The guard is the digest equality the argument names, passed in by
+/// the renderer, and not a `structural` reading (gh #431). Since #408
+/// that axis grades shared-subtree *overlap* ([FUSED-SHARED-SUBTREE]):
+/// every value below saturation means the subtrees provably differ, so
+/// no digest is shared and the argument covers none of them, while
+/// saturation itself is reachable by ratio — `shared == larger` —
+/// without digest equality. Scoping the correction to
+/// `STRUCTURAL_SATURATION_FLOOR` therefore published `token_jaccard =
+/// 1.0`, and a `shape` derived from it, for the whole `[0.99, 1.0)` band
+/// on no evidence at all: a near-miss *routing* tolerance is not proof
+/// of identity. A mixed LSH-glued cluster keeps its estimated value.
+/// `StructuralOnly` keeps its unscored signal: absent token support is
+/// that bucket's defining signature ([RANK-STRUCTURAL-ONLY]).
+fn correct_token_echo(
     signals: ReportSignals,
-    content: ContentEvidence,
     kind: ClusterKind,
     members_share_one_digest: bool,
 ) -> ReportSignals {
-    let content_confidence = content
-        .agreement
-        .max(RENAME_CONSISTENCY_DISCOUNT * content.rename_consistency);
-    let fused = signals
-        .embedding_cos
-        .max(signals.shape_score() * content_confidence)
-        .clamp(0.0, 1.0);
-    // A `NearlyIdentical` cluster whose members all carry **one**
-    // normalised-subtree digest has equal kind streams by construction,
-    // so the true token Jaccard is 1.0 — the same argument the
-    // byte-equivalence upgrade applies to `Identical`. A lower rendered
-    // value there is a fingerprint-scoped fallback-signature artifact,
-    // not evidence, so it is corrected here.
-    //
-    // The guard is the digest equality the argument names, passed in by
-    // the renderer, and not a `structural` reading (gh #431). Since #408
-    // that axis grades shared-subtree *overlap*
-    // ([FUSED-SHARED-SUBTREE]): every value below saturation means the
-    // subtrees provably differ, so no digest is shared and the argument
-    // covers none of them, while saturation itself is reachable by
-    // ratio — `shared == larger` — without digest equality. Scoping the
-    // correction to `STRUCTURAL_SATURATION_FLOOR` therefore published
-    // `token_jaccard = 1.0`, and a `shape` derived from it, for the
-    // whole `[0.99, 1.0)` band on no evidence at all: a near-miss
-    // *routing* tolerance is not proof of identity. A mixed LSH-glued
-    // cluster keeps its estimated value. `StructuralOnly` keeps its
-    // unscored signal: absent token support is that bucket's defining
-    // signature ([RANK-STRUCTURAL-ONLY]).
     let token_jaccard = if kind == ClusterKind::NearlyIdentical && members_share_one_digest {
         1.0
     } else {
@@ -230,7 +204,6 @@ fn apply_content_gate(
     };
     ReportSignals {
         token_jaccard,
-        fused,
         ..signals
     }
 }

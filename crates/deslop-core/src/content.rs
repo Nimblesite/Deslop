@@ -7,8 +7,8 @@
 //! what normalisation erased, in two independent populations:
 //!
 //! - **agreement** — the fraction of collapsed-leaf positions whose raw
-//!   source bytes still match across members, identifiers and literals
-//!   pooled. High for verbatim and lightly-edited copies.
+//!   source bytes match on the elected admitted pair, identifiers and
+//!   literals pooled. High for verbatim and lightly-edited copies.
 //! - **rename consistency** — the Type-2 discriminator
 //!   ([TECH-PMATCH-BAKER]): a genuine maximal rename preserves every
 //!   literal and maps identifiers through one bijective substitution
@@ -18,7 +18,7 @@
 //!   substitutes only its own subject name. Pooling the populations
 //!   averaged this proof away and demoted textbook Type-2 clones to
 //!   `structural_only`; measured separately, a renamed clone keeps its
-//!   act-now verdict.
+//!   supported duplicate bucket.
 //!
 //! The result is stored on each [`Cluster`] so bucket routing and every
 //! report surface can separate real clones from shape coincidence.
@@ -117,7 +117,7 @@ pub struct ContentEvidence {
 
 impl ContentEvidence {
     /// Content support for bucket routing: either population may vouch
-    /// for a shape-identical cluster — pooled byte agreement or a proven
+    /// for a shape-identical cluster — elected-pair byte agreement or a proven
     /// consistent rename. [FUSED-CONTENT-GATE] routes on both, never on
     /// their mean; the mean is what demoted maximal Type-2 renames. The
     /// rule itself lives in [`crate::buckets::content_support`], which
@@ -129,7 +129,7 @@ impl ContentEvidence {
     }
 
     /// Evidence for a cluster no measurement pass has touched: full
-    /// pooled agreement (so nothing is demoted on a missing
+    /// agreement (so nothing is demoted on a missing
     /// measurement), no rename proof, no literal dominance.
     #[must_use]
     pub const fn unmeasured() -> Self {

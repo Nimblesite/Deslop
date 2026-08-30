@@ -385,9 +385,7 @@ fn materialize_cluster(
 ) -> Cluster {
     let size = members.len();
     let smallest_nodes = smallest_node_count(&members);
-    let rank_nodes = refactor_potential_node_count(smallest_nodes, signals);
-    let spanned_bytes = spanned_byte_count(&members);
-    let weight = rank_weight(rank_nodes, size, spanned_bytes);
+    let weight = mass_weight(smallest_nodes, size);
     let id_source = cluster_id_source(&members, file_paths);
     Cluster {
         id: encode_short_id(id_source),
@@ -406,34 +404,6 @@ fn smallest_node_count(members: &[Fingerprint]) -> usize {
         .map(|member| member.node_count)
         .min()
         .unwrap_or(0)
-}
-
-/// Sums physical byte spans for the ranking formula.
-fn spanned_byte_count(members: &[Fingerprint]) -> u64 {
-    members
-        .iter()
-        .map(|member| u64::try_from(member.byte_range.len()).unwrap_or(u64::MAX))
-        .fold(0_u64, u64::saturating_add)
-}
-
-/// Returns the node count used for ranking.
-///
-/// Low-structural Type-4 clusters often span a large interface-shaped AST
-/// region while only a small body fragment is actually refactorable. Keep the
-/// rendered `canonical_node_count` unchanged, but rank those clusters by a
-/// conservative refactor-potential fraction so exact duplicates stay ahead.
-fn refactor_potential_node_count(clone_node_count: usize, signals: PairScore) -> usize {
-    if signals.structural < LOW_STRUCTURAL_TYPE4_CEILING
-        && signals.embedding_cos >= TYPE4_EMBEDDING_FLOOR
-    {
-        clone_node_count
-            .saturating_mul(LOW_STRUCTURAL_TYPE4_WEIGHT_NUMERATOR)
-            .checked_div(LOW_STRUCTURAL_TYPE4_WEIGHT_DENOMINATOR)
-            .unwrap_or(clone_node_count)
-            .max(1)
-    } else {
-        clone_node_count
-    }
 }
 
 /// Selects the deterministic hash source for the public cluster id
@@ -737,19 +707,22 @@ impl OverlapRun {
     }
 }
 
-/// Implements the [PIPELINE-RANK-WORST-FIRST] formula.
+/// Implements the [RANK-MASS-SUM] formula: duplicated mass only.
 ///
-/// `weight = clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes)`
+/// `weight = clone_node_count × (cluster_size − 1)`
 ///
-/// Values are capped at `f64`'s mantissa precision (2^53) before conversion;
-/// real-world inputs are orders of magnitude below that, so the clamp only
-/// protects against pathological inputs rather than reshaping the formula.
+/// The visible re-rank in `report_weight.rs` is the authoritative final
+/// weight (it folds the category and structural-only policy multipliers
+/// and the `report_hide` visibility); this is the mass a cluster carries
+/// before that pass, used to keep the pre-render order stable. No
+/// `log2(1 + spanned)` term and no confidence factor survives
+/// ([RANK-MASS-SUM], gh #458): a duplicate's extent is the mass to fix,
+/// never a confidence-scaled figure.
 #[must_use]
-fn rank_weight(clone_node_count: usize, cluster_size: usize, spanned_bytes: u64) -> f64 {
+fn mass_weight(clone_node_count: usize, cluster_size: usize) -> f64 {
     let nodes = lossless_f64_from_usize(clone_node_count);
     let size_minus_one = lossless_f64_from_usize(cluster_size.saturating_sub(1));
-    let spanned = lossless_f64_from_u64(spanned_bytes.saturating_add(1));
-    nodes * size_minus_one * spanned.log2()
+    nodes * size_minus_one
 }
 
 /// Converts `usize` to `f64`, clamping to 2^53 (the largest integer that
@@ -775,14 +748,6 @@ const F64_MAX_EXACT_INTEGER: f64 = 9_007_199_254_740_992.0;
 /// 2^32 as an `f64`. Used by [`lossless_f64_from_u64`] to reassemble 64-bit
 /// values without a direct `u64 as f64` cast.
 const F64_TWO_POW_32: f64 = 4_294_967_296.0;
-/// Structural ceiling below which Type-4 span size is treated as low-signal.
-const LOW_STRUCTURAL_TYPE4_CEILING: f64 = 0.10;
-/// Semantic confidence floor for Type-4 ranking dampening.
-const TYPE4_EMBEDDING_FLOOR: f64 = 0.90;
-/// Rank low-structural Type-4 clusters at 10% of their AST node span.
-const LOW_STRUCTURAL_TYPE4_WEIGHT_NUMERATOR: usize = 1;
-/// Denominator for the low-structural Type-4 ranking fraction.
-const LOW_STRUCTURAL_TYPE4_WEIGHT_DENOMINATOR: usize = 10;
 
 /// Shortens a full 32-byte hash to an 8-byte hex stable id for reporting.
 #[must_use]

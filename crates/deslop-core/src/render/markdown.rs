@@ -157,7 +157,6 @@ mod tests {
             token_jaccard: 0.98,
             shape: 0.99,
             embedding_cos: 0.0,
-            fused: 0.98,
             agreement: 0.0,
             rename_consistency: 0.0,
             literal_fraction: 0.0,

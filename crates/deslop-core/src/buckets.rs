@@ -6,7 +6,7 @@
 //!
 //! **Two audiences, three surface classes, one bucket identity.**
 //! - **Pure-visual** (HTML card, VS Code bubble / webviews / tree view)
-//!   → humans only. Use [`BucketLabels::plain_title`] + [`action_sentence`].
+//!   → humans only. Use [`BucketLabels::plain_title`] + [`evidence_sentence`].
 //!   No `Type-N`, no enum names, no signal triples in prose.
 //! - **Shared-text** (CLI stderr, LSP `diagnostic.message`, VS Code
 //!   Problems panel, hover tooltip) → humans first, agents scrape.
@@ -15,7 +15,7 @@
 //!   mandate: *"Shoot for human readable, but include technical terms
 //!   in brackets for the ai"*.
 //! - **AI-only** (JSON `interpretation`, `action_hints`, `schema_doc`,
-//!   MCP responses) → agents only. Use plain title + action sentence +
+//!   MCP responses) → agents only. Use plain title + evidence sentence +
 //!   [`BucketLabels::taxonomy_label`] assembled into one precise
 //!   sentence. Dropping `Type-N` would break prompts in the wild.
 //!
@@ -101,8 +101,8 @@ impl ClusterKind {
 /// string constants scattered across the crate.
 ///
 /// Renderers pick a field by surface class per [CLONE-BUCKETS-DUAL-LABEL]:
-/// - Pure-visual → [`Self::plain_title`] + [`Self::action_sentence`].
-/// - Shared-text → [`Self::hybrid_title`] + [`Self::action_sentence`].
+/// - Pure-visual → [`Self::plain_title`] + [`Self::evidence_sentence`].
+/// - Shared-text → [`Self::hybrid_title`] + [`Self::evidence_sentence`].
 /// - AI-only → compose via [`Self::agent_summary`].
 #[derive(Debug, Clone, Copy)]
 pub struct BucketLabels {
@@ -117,7 +117,7 @@ pub struct BucketLabels {
     pub hybrid_title: &'static str,
     /// Plain-English one-liner shown under the title on every surface.
     /// Same copy regardless of class.
-    pub action_sentence: &'static str,
+    pub evidence_sentence: &'static str,
     /// Academic taxonomy reference appended to AI-only prose and
     /// bracketed into `hybrid_title`. Example: `"Type-1 or Type-2
     /// exact clone"` (note: the bracketed form inside `hybrid_title`
@@ -134,7 +134,7 @@ pub struct BucketLabels {
 }
 
 impl BucketLabels {
-    /// AI-only sentence combining plain title, action sentence, and
+    /// AI-only sentence combining plain title, evidence sentence, and
     /// academic taxonomy. Used by JSON `cluster.interpretation` and
     /// `action_hints[*].recommendation`. Deterministic — safe to
     /// include in golden-test assertions.
@@ -142,7 +142,7 @@ impl BucketLabels {
     pub fn agent_summary(&self) -> String {
         format!(
             "{}. {} ({})",
-            self.plain_title, self.action_sentence, self.taxonomy_label
+            self.plain_title, self.evidence_sentence, self.taxonomy_label
         )
     }
 }
@@ -157,7 +157,7 @@ pub const fn bucket_labels(kind: ClusterKind) -> BucketLabels {
         ClusterKind::Identical => BucketLabels {
             plain_title: "Identical code",
             hybrid_title: "Identical code [Type-1/2]",
-            action_sentence: "Safe to extract — every copy is the same.",
+            evidence_sentence: "Safe to extract — every copy is the same.",
             taxonomy_label: "Type-1 or Type-2 exact clone",
             css_suffix: "identical",
             ai_match: false,
@@ -165,7 +165,7 @@ pub const fn bucket_labels(kind: ClusterKind) -> BucketLabels {
         ClusterKind::NearlyIdentical => BucketLabels {
             plain_title: "Nearly identical code",
             hybrid_title: "Nearly identical code [Type-3]",
-            action_sentence: "Review the locations — small differences may matter.",
+            evidence_sentence: "Review the locations — small differences may matter.",
             taxonomy_label: "Type-3 near-miss",
             css_suffix: "nearly-identical",
             ai_match: false,
@@ -173,7 +173,7 @@ pub const fn bucket_labels(kind: ClusterKind) -> BucketLabels {
         ClusterKind::StructuralOnly => BucketLabels {
             plain_title: "Same shape, different content",
             hybrid_title: "Same shape, different content [structural-only]",
-            action_sentence:
+            evidence_sentence:
                 "Only the code shape matches — usually sibling boilerplate. Verify before extracting.",
             taxonomy_label: "structural-only match (unverified Type-2/3 candidate)",
             css_suffix: "structural-only",
@@ -182,7 +182,7 @@ pub const fn bucket_labels(kind: ClusterKind) -> BucketLabels {
         ClusterKind::LooselySimilar => BucketLabels {
             plain_title: "Loosely similar code",
             hybrid_title: "Loosely similar code [weak LSH]",
-            action_sentence: "Loose textual overlap. Treat as a hint.",
+            evidence_sentence: "Loose textual overlap. Treat as a hint.",
             taxonomy_label: "weak LSH-only signal (sub-Type-3)",
             css_suffix: "loosely-similar",
             ai_match: false,
@@ -190,7 +190,7 @@ pub const fn bucket_labels(kind: ClusterKind) -> BucketLabels {
         ClusterKind::SameBehavior => BucketLabels {
             plain_title: "Same behavior, different code",
             hybrid_title: "Same behavior, different code [Type-4, AI match]",
-            action_sentence:
+            evidence_sentence:
                 "The AI noticed these do the same thing written two ways — read both before merging.",
             taxonomy_label: "Type-4 semantic clone (AI match)",
             css_suffix: "same-behavior",

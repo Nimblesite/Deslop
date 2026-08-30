@@ -1,9 +1,8 @@
 // Live duplication bubble — [VSIX-LIVE-BUBBLE].
 // Fires after every coalesced buffer edit. Calls deslop/duplicatesFindSimilar
-// on the most-recently-touched range; admission is `bubbleAdmits`: an
-// act-now bucket always renders (the engine's own verdict — its content
-// gate can push a proven rename's fused *below* the cutoff), and anything
-// below those bands renders only when the engine's fused gate is met. Surfaces:
+// on the most-recently-touched range; admission is `bubbleAdmits`: only an
+// act-now bucket renders — the engine's own verdict, reached with content
+// evidence and byte proof this client never sees. Surfaces:
 //   primary: after-text decoration (severity dot + bucket label + count + canonical)
 //   secondary: inlay hint with a 3-bar signal strip
 // Ghost-line mode renders a whole-line after-text decoration instead.
@@ -389,20 +388,16 @@ function bestBubbleCluster(
     .sort((a, b) => a.rank - b.rank)[0];
 }
 
-// Two gates, because the two populations carry different evidence
-// ([VSIX-LIVE-BUBBLE], [FUSED-CONTENT-GATE]). An act-now bucket is the
-// engine's own verdict that the user should act, reached with content
-// evidence and byte proof this client never sees; the same gate
-// deliberately pushes a proven rename's confidence *below*
-// fused threshold, so re-testing an act-now cluster against a UI-local
-// cutoff withholds precisely the findings this surface exists to show.
-// Below the act-now bands no such verdict stands behind the cluster and
-// the fused cutoff is the right gate — a weak LSH hint is worth the
-// user's attention only once it clears the line. Whether it clears is
-// the engine's call too: `meets_fused_gate` rides on the cluster, so the
-// threshold constant exists once, in Rust.
+// One gate: the bucket ([VSIX-LIVE-BUBBLE], [FUSED-CONTENT-GATE]). An
+// act-now bucket is the engine's own verdict that the user should act,
+// reached with content evidence and byte proof this client never sees.
+// There is no second admission path: the fused gate is gone from the wire,
+// and no UI-local threshold stands in for it — a below-act-now cluster
+// simply has no engine verdict behind it and does not render. The
+// threshold constant exists once, in Rust, and this client never mirrors
+// it.
 function bubbleAdmits(cluster: ReportCluster): boolean {
-  return isActNow(resolveBucket(cluster)) || cluster.meets_fused_gate;
+  return isActNow(resolveBucket(cluster));
 }
 
 class BubbleInlayProvider implements vscode.InlayHintsProvider {

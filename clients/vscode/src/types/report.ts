@@ -233,15 +233,15 @@ export function bucketLabels(bucket: Bucket): BucketLabels {
 
 // [CLONE-BUCKETS-ROUTING] The engine owns the routing and is the only
 // place it can be decided. `deslop-core::report_render::report_bucket_kind`
-// weighs four inputs — the *raw* signal triple, measured `ContentEvidence`,
-// raw-source byte-equivalence, and the member spread — and the triple that
-// reaches this client is the *post-gate projection* of that decision:
-// `content_gated_signals` overwrites `token_jaccard` to 1.0 for a
-// shape-identical near miss (#232) and rewrites `fused`. Re-running the
-// engine's raw-signal table over rendered signals is therefore a category
-// error, and every arm that tried it shipped a defect: a proven rename read
-// back as byte-identical ("Safe to extract — every copy is the same" about
-// code whose identifiers all differ), a content-gated family promoted to
+// weighs the *raw* signal triple, measured `ContentEvidence`, raw-source
+// byte-equivalence, and the member spread — and the triple that reaches
+// this client is the elected pair's own measurement, projected by the
+// engine: `content_gated_signals` overwrites `token_jaccard` to 1.0 for a
+// shape-identical near miss (#232). Re-running the engine's raw-signal
+// table over rendered signals is therefore a category error, and every
+// arm that tried it shipped a defect: a proven rename read back as
+// byte-identical ("Safe to extract — every copy is the same" about code
+// whose identifiers all differ), a content-gated family promoted to
 // act-now, and two low-structural arms the engine never had. The UI reads
 // the engine's label and never manufactures one.
 export function resolveBucket(cluster: ReportCluster): Bucket {

@@ -2,10 +2,10 @@
 //!
 //! A cluster's signal triple is measured **between the admitted pairs** —
 //! the surviving discovery edges of the transitive-closure component —
-//! never between every unordered pair of rendered occurrences. Each axis
-//! reports the strongest measurement any admitted pair earned on that
-//! axis, and a pair that never cleared `admission.fused_threshold`
-//! contributes nothing (gh #458). Averaging is wrong on both counts:
+//! never between every unordered pair of rendered occurrences. The pair
+//! with the strongest `q = max(S, J, E)` is elected once and all three of
+//! its axes render together; a pair that never cleared admission contributes
+//! nothing (gh #458). Averaging is wrong on both counts:
 //! Baker (1995) defines duplication as a per-pair predicate with no
 //! class-level average to take, and averaging closure-only pairs lets
 //! one unrelated member dilute N proven copies — a byte-identical file
@@ -59,7 +59,7 @@ pub(super) struct MeasuredSignals {
 }
 
 /// Measures the [FUSED-CLUSTER-SIGNALS] triple over the **admitted**
-/// pair set: the pair with the highest bounded-fused confidence,
+/// pair set: the pair with the highest bounded report-election quality,
 /// ties resolved to the earliest pair in corpus order.
 ///
 /// Per admitted pair: `structural` is Merkle-hash equality — `1.0` —
@@ -152,7 +152,10 @@ fn fold_pairs(
             values,
             overlap,
         );
-        if best.as_ref().is_none_or(|current| pair.stronger_than(current)) {
+        if best
+            .as_ref()
+            .is_none_or(|current| pair.stronger_than(current))
+        {
             *best = Some(pair);
         }
     }
@@ -494,16 +497,17 @@ impl BestPair {
     }
 
     /// Whether this pair beats `current` in the deterministic
-    /// strongest-pair order: bounded-fused confidence first, ties
+    /// strongest-pair order: report-election quality first, ties
     /// resolved to the earliest pair in corpus order (#301), so a
     /// byte-identical pair (`90, 360`) is named over a same-shape pair
     /// (`90, 630`) that measures identically after normalisation. The
-    /// fused confidence is the pair's own bounded max
-    /// ([FUSED-STRATEGY-BOUNDED-MAX]).
+    /// election quality is the pair's own bounded `max(S, J, E)`
+    /// ([FUSED-CLUSTER-SIGNALS]). It is not the pre-rescue admission
+    /// quantity `fused = max(H, J, E)`.
     fn stronger_than(self, current: &BestPair) -> bool {
         let rank = |pair: &BestPair| {
             (
-                pair.fused(),
+                pair.quality(),
                 std::cmp::Reverse(pair.left),
                 std::cmp::Reverse(pair.right),
             )
@@ -511,9 +515,9 @@ impl BestPair {
         rank(&self) > rank(current)
     }
 
-    /// The pair's bounded-fused confidence: the strongest single axis,
-    /// clamped to `[0, 1]`.
-    fn fused(self) -> f64 {
+    /// The pair's bounded report-election quality: the strongest measured
+    /// report axis, clamped to `[0, 1]`.
+    fn quality(self) -> f64 {
         self.structural
             .unwrap_or(0.0)
             .max(self.token_jaccard.unwrap_or(0.0))

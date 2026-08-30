@@ -31,10 +31,10 @@ use crate::{
 /// shape-only-evidence cluster sinks below comparable full-evidence
 /// clones; both multipliers are `1.0` in `keep`/`ignore` modes and for
 /// non-matching clusters, which therefore keep their prior weight.
-/// At equal mass the fused confidence orders the tie (a byte-proven
-/// copy above a consistent rename above shape-only coincidence), and
-/// cluster id then makes the order total and reproducible. Hidden
-/// occurrences still travel on each cluster for downstream context.
+/// At equal mass cluster id makes the order total and reproducible
+/// ([RANK-MASS-SUM]); there is no fused tie-break — confidence did
+/// its job at admission ([FUSED-SCOPE]). Hidden occurrences still
+/// travel on each cluster for downstream context.
 pub(crate) fn reweigh_by_visible_occurrences(
     clusters: &mut [ReportCluster],
     policy: RankingPolicy,
@@ -51,13 +51,6 @@ pub(crate) fn reweigh_by_visible_occurrences(
             .weight
             .partial_cmp(&left.weight)
             .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| {
-                right
-                    .signals
-                    .fused
-                    .partial_cmp(&left.signals.fused)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
             .then_with(|| left.id.cmp(&right.id))
     });
     stamp_ranks(clusters);
