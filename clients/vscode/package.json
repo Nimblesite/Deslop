@@ -591,10 +591,10 @@
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@types/mocha": "^10.0.9",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.4.0",
     "@types/vscode": "~1.134.0",
-    "@typescript-eslint/eslint-plugin": "^8.67.0",
-    "@typescript-eslint/parser": "^8.67.0",
+    "@typescript-eslint/eslint-plugin": "^8.68.0",
+    "@typescript-eslint/parser": "^8.68.0",
     "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.9.2",
@@ -604,8 +604,8 @@
     "glob": "^13.0.6",
     "istanbul-lib-coverage": "^3.2.2",
     "mocha": "^11.8.0",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.67.0",
+    "typescript": "^7.0.2",
+    "typescript-eslint": "^8.68.0",
     "v8-to-istanbul": "^9.3.0"
   }
 }
