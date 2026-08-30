@@ -111,7 +111,11 @@ fn a_byte_identical_pair_reads_the_same_in_every_cluster() -> Result<()> {
 
     let pair = cluster_by_id(&report, PAIR_CLUSTER_ID)
         .ok_or_else(|| anyhow::anyhow!("pair cluster {PAIR_CLUSTER_ID} missing: {report:#}"))?;
-    assert_eq!(occurrences(pair).len(), 2, "the pair cluster holds one pair");
+    assert_eq!(
+        occurrences(pair).len(),
+        2,
+        "the pair cluster holds one pair"
+    );
 
     // Pair-consistency: the byte-identical pair measures 1.0 / 1.0, and
     // the six-member cluster must display that pair's evidence — the
@@ -178,6 +182,80 @@ fn a_byte_identical_pair_reads_the_same_in_every_cluster() -> Result<()> {
         ("ledger_a.ts", COPY_STEM),
         "the six-member cluster's displayed signals must name the byte-identical \
          pair that earned them, got {left_path} and {right_path}"
+    );
+    Ok(())
+}
+
+/// The pooled byte agreement a byte-identical pair earns on its own:
+/// their collapsed leaves are the same bytes at every position
+/// ([FUSION-CONTENT-GATE]).
+const VERBATIM_PAIR_AGREEMENT: f64 = 1.0;
+
+/// The two content axes carried on the rendered signal wire — the pair
+/// the report shows must own both of them, whatever their values are.
+const CONTENT_AXES: [&str; 2] = ["agreement", "rename_consistency"];
+
+// gh #458 (content half) — [FUSION-CONTENT-GATE]: the per-pair contract
+// the shape axes now honour must hold for the *content* axes too.
+// `agreement` and `rename_consistency` are still folded as a MEAN over
+// the cluster's members (`content::cluster_agreement`,
+// `content::rename::cluster_rename_consistency`), so the byte-identical
+// pair that reads one value in its own two-member cluster reads a
+// diluted value in the six-member cluster that contains the very same
+// two files. That is the identical defect gh #458 removed from the shape
+// axes, still live on the axes the content gate actually reads. Baker
+// (1995) defines duplication per pair: there is no class-level average
+// to take, and averaging lets unrelated members vote a proven copy below
+// CONTENT_SUPPORT_FLOOR and out of its act-now bucket.
+#[test]
+fn a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster() -> Result<()> {
+    let report = run_pair_mean_report()?;
+
+    let six = cluster_by_id(&report, SIX_MEMBER_CLUSTER_ID).ok_or_else(|| {
+        anyhow::anyhow!("six-member cluster {SIX_MEMBER_CLUSTER_ID} missing: {report:#}")
+    })?;
+    let pair = cluster_by_id(&report, PAIR_CLUSTER_ID)
+        .ok_or_else(|| anyhow::anyhow!("pair cluster {PAIR_CLUSTER_ID} missing: {report:#}"))?;
+
+    // The pair alone: byte-identical files agree completely on content.
+    assert_eq!(
+        signal(pair, "agreement"),
+        VERBATIM_PAIR_AGREEMENT,
+        "the byte-identical pair's own agreement must be {VERBATIM_PAIR_AGREEMENT}: {dump}",
+        dump = signal_dump(pair)
+    );
+
+    // The same two files inside the six-member cluster: the rendered
+    // content evidence belongs to the pair that earned it, exactly as
+    // `structural` and `token_jaccard` now do. A mean over five other
+    // members is not a measurement of any pair in the report, so the
+    // same two files would read two different numbers in one report.
+    for axis in CONTENT_AXES {
+        assert_eq!(
+            signal(six, axis),
+            signal(pair, axis),
+            "the six-member cluster's {axis} must be the byte-identical pair's own \
+             evidence, not a mean over members that never made that measurement — \
+             the same two files cannot read {six_value} in one cluster and \
+             {pair_value} in another within one report: {dump}",
+            six_value = signal(six, axis),
+            pair_value = signal(pair, axis),
+            dump = signal_dump(six)
+        );
+    }
+
+    // The gate reads these axes, so dilution is a demotion engine: the
+    // proven pair must keep the cluster's content support above the
+    // floor the gate demotes below.
+    let support = signal(six, "agreement").max(signal(six, "rename_consistency"));
+    assert!(
+        support >= deslop_core::buckets::CONTENT_SUPPORT_FLOOR,
+        "a cluster holding a byte-identical pair must carry content support at or \
+         above {floor} — below it the gate demotes a proven copy out of its act-now \
+         bucket, a false negative manufactured purely by averaging: support={support:.4} \
+         {dump}",
+        floor = deslop_core::buckets::CONTENT_SUPPORT_FLOOR,
+        dump = signal_dump(six)
     );
     Ok(())
 }

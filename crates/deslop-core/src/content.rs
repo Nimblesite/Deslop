@@ -165,6 +165,14 @@ type FamilyTally = (usize, usize);
 struct DominantFamily {
     /// Index of the family's earliest member — the anchor every other
     /// member's agreement is measured against.
+    #[expect(
+        dead_code,
+        reason = "[ACCURACY-QUARANTINE] Read only by the quarantined \
+                  `cluster_agreement` (gh #458 content half). The repair needs \
+                  it to elect the pair whose content the cluster renders, so it \
+                  is retained rather than deleted; `expect` errors once a live \
+                  reader returns."
+    )]
     anchor: usize,
     /// Number of members in the family.
     size: usize,
@@ -315,42 +323,58 @@ fn canonical_literal_fraction(canonical: Option<&[LeafKey]>) -> f64 {
     member_count(literals) / member_count(vocabulary)
 }
 
-/// Mean pooled agreement of every other member against one anchor.
-/// `1.0` for degenerate single-member clusters; a member whose leaves
-/// cannot be resolved contributes `0.0` — unresolvable content is no
-/// evidence of agreement.
+/// 🛑 QUARANTINED ([FUSION-CONTENT-GATE], gh #458 content half).
 ///
-/// The anchor is a member of the largest token-identical family when
-/// there is one, and the first member otherwise. That choice is the
-/// whole of what the old `verbatim_dominated` short-circuit was for:
-/// measuring a cluster of proven copies against a canonical that
-/// happens *not* to be one of them averaged the copies down below the
-/// support floor, so the measurement was replaced wholesale by `1.0`.
+/// **What this did.** It measured `pair_agreement` between an anchor
+/// member and every other member, summed the results, and divided by
+/// the member count — a **mean**. The anchor was a member of the
+/// largest token-identical family when one existed, the first member
+/// otherwise.
 ///
-/// Replacing it was too much. A strict majority is not everyone: a
-/// five-member cluster of three exact copies plus two shape-compatible
-/// strangers cleared the floor at 3/5 and every member — strangers
-/// included — was then handed the proof the three copies had earned,
-/// saturating `fused` for code that is not duplicated. Anchoring
-/// instead of short-circuiting keeps the copies at `1.0` where they
-/// belong and leaves each stranger scoring its own real agreement, so
-/// the cluster's number describes the cluster.
+/// **Why it was deleted.** A mean is not a measurement of any pair in
+/// the report. Baker (1995) defines duplication as a per-pair
+/// predicate: a pair either p-matches or it does not, and there is no
+/// class-level average to take. gh #458 removed exactly this fold from
+/// the *shape* axes; it survived here, on the two axes the content gate
+/// actually reads (`buckets/gate.rs` demotes when
+/// `content_support(agreement, rename_consistency) <
+/// CONTENT_SUPPORT_FLOOR`). So every additional member is a vote that
+/// can push a proven copy below the floor and out of its act-now
+/// bucket — a false negative manufactured purely by averaging, and a
+/// rendered number no two files in the report ever measured.
+///
+/// Measured on `ts-mixed-band` + a byte-identical copy of
+/// `ledger_a.ts`: the pair reads `agreement = 1.0` in its own
+/// two-member cluster and `0.7967` inside the six-member cluster
+/// holding the same two files, dragging `fused` to `0.7967`.
+///
+/// Moving the anchor (the previous repair) does not fix this. It
+/// changes *which* pair the mean is taken against; the mean remains.
+///
+/// **Pinned by** `deslop/tests/pair_consistent_signals.rs::
+/// a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster`.
+///
+/// The replacement must render one elected admitted pair's own content,
+/// the way `cluster::signals::MeasuredSignals` now renders the shape
+/// axes — not a mean, and not a per-axis stitch across different pairs.
+#[expect(
+    clippy::panic,
+    reason = "[ACCURACY-QUARANTINE] Mandated by AGENTS.md: this fold produced \
+              silently-wrong content evidence (a mean no pair measured) that \
+              demotes proven duplicates. A panic is found in seconds; the false \
+              negative it replaces was never found at all."
+)]
 fn cluster_agreement(
-    member_contents: &[Option<MemberContent>],
-    dominant: Option<DominantFamily>,
+    _member_contents: &[Option<MemberContent>],
+    _dominant: Option<DominantFamily>,
 ) -> f64 {
-    if member_contents.len() < 2 {
-        return 1.0;
-    }
-    let anchor = dominant.map_or(0, |family| family.anchor);
-    let canonical = keys_of(member_contents.get(anchor).and_then(Option::as_ref));
-    let total: f64 = member_contents
-        .iter()
-        .enumerate()
-        .filter(|(index, _)| *index != anchor)
-        .map(|(_, content)| pair_agreement(canonical, keys_of(content.as_ref())))
-        .sum();
-    total / member_count(member_contents.len().saturating_sub(1))
+    panic!(
+        "[ACCURACY-QUARANTINE] cluster_agreement averaged per-pair content \
+         agreement across cluster members (gh #458 content half). A mean is not \
+         any pair's measurement and demotes proven copies below \
+         CONTENT_SUPPORT_FLOOR. Pinned by pair_consistent_signals.rs::\
+         a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster"
+    )
 }
 
 /// Aligned literal positions whose raw bytes match — each one an

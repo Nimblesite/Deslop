@@ -48,23 +48,51 @@ const RENAME_CORROBORATION_MIN_OCCURRENCES: usize = 2;
 /// routing floor.
 const RENAME_EVIDENCE_HALF_MASS: f64 = 4.0;
 
-/// Mean Type-2 rename evidence of every non-canonical member against
-/// the canonical member. Degenerate and unresolvable members score
-/// `0.0`: rename evidence is a positive proof, never a default.
+/// 🛑 QUARANTINED ([FUSION-CONTENT-GATE], gh #458 content half).
+///
+/// **What this did.** It measured `pair_rename_consistency` between the
+/// first member and every other member, summed, and divided by the
+/// member count — a **mean**, and one anchored on the first member
+/// rather than on the dominant family `cluster_agreement` anchored to,
+/// so the two content axes did not even average against the same pair.
+///
+/// **Why it was deleted.** Same defect as `content::cluster_agreement`:
+/// a mean is not a measurement of any pair in the report, and Baker
+/// (1995) gives no class-level average to take. This axis feeds the
+/// content gate directly (`buckets/gate.rs`), so each additional member
+/// votes a proven Type-2 rename toward demotion below
+/// `CONTENT_SUPPORT_FLOOR`.
+///
+/// **Pinned by** `deslop/tests/pair_consistent_signals.rs::
+/// a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster`.
+///
+/// The replacement must render the elected admitted pair's own
+/// `pair_rename_consistency`, the same pair `agreement` is taken from.
+///
+/// Note for the repair, not part of this defect: the same fixture shows
+/// a byte-identical pair rendering `rename_consistency = 0.5556` in its
+/// *own* two-member cluster, where the mean is a no-op. That is
+/// `pair_rename_consistency`'s anchor-mass weight, a per-pair value and
+/// therefore outside this quarantine — but it needs its own judgement.
+#[expect(
+    clippy::panic,
+    reason = "[ACCURACY-QUARANTINE] Mandated by AGENTS.md: this fold produced \
+              silently-wrong rename evidence (a mean no pair measured) that \
+              demotes proven Type-2 renames. A panic is found in seconds; the \
+              false negative it replaces was never found at all."
+)]
 pub(super) fn cluster_rename_consistency<S: BuildHasher>(
-    canonical: Option<&MemberContent>,
-    member_contents: &[Option<MemberContent>],
-    sources: &HashMap<FileId, Vec<u8>, S>,
+    _canonical: Option<&MemberContent>,
+    _member_contents: &[Option<MemberContent>],
+    _sources: &HashMap<FileId, Vec<u8>, S>,
 ) -> f64 {
-    if member_contents.len() < 2 {
-        return 0.0;
-    }
-    let total: f64 = member_contents
-        .iter()
-        .skip(1)
-        .map(|member| pair_rename_consistency(canonical, member.as_ref(), sources))
-        .sum();
-    total / member_count(member_contents.len().saturating_sub(1))
+    panic!(
+        "[ACCURACY-QUARANTINE] cluster_rename_consistency averaged per-pair \
+         rename consistency across cluster members (gh #458 content half). A mean \
+         is not any pair's measurement and demotes proven renames below \
+         CONTENT_SUPPORT_FLOOR. Pinned by pair_consistent_signals.rs::\
+         a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster"
+    )
 }
 
 /// Type-2 rename evidence between two members ([TECH-PMATCH-BAKER]): the
@@ -87,6 +115,15 @@ pub(super) fn cluster_rename_consistency<S: BuildHasher>(
 /// and each echo raises the anchor mass and corroborates its
 /// substitution, so completing a rename can never score below leaving
 /// it half-finished (`rename_literal_monotonicity.rs`).
+#[expect(
+    dead_code,
+    reason = "[ACCURACY-QUARANTINE] The per-pair rename subsystem reachable from \
+              here lost its only caller when `cluster_rename_consistency` was \
+              quarantined (gh #458 content half). It is the raw material the \
+              repair calls for the elected admitted pair, so it is retained \
+              rather than deleted. `expect` self-removes: it errors the moment \
+              the repair restores a live caller."
+)]
 pub(super) fn pair_rename_consistency<S: BuildHasher>(
     canonical: Option<&MemberContent>,
     member: Option<&MemberContent>,
