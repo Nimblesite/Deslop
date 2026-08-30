@@ -565,33 +565,54 @@ suite("report schema helpers", () => {
     }
   });
 
-  // [VSIX-LIVE-BUBBLE] The act-now set is what the live bubble admits
+  // [VSIX-LIVE-BUBBLE] The live-bubble set is what the bubble admits
   // without a second opinion, so it must be exactly the buckets whose
-  // action sentence tells the user to do something now, and nothing else.
-  test("the act-now set is exactly the buckets that tell the user to act", () => {
-    assert.deepEqual([...ACT_NOW_BUCKETS], [IDENTICAL_BUCKET, NEARLY_IDENTICAL_BUCKET]);
-    assert.ok(isActNow(IDENTICAL_BUCKET), "a byte-proven copy is act-now");
-    assert.ok(isActNow(NEARLY_IDENTICAL_BUCKET), "a proven near miss is act-now");
-    assert.equal(
-      isActNow(STRUCTURAL_ONLY_BUCKET),
-      false,
-      "the demoted tier says 'verify before extracting' — that is not act-now",
+  // engine-authored interpretation tells the user to act, and nothing
+  // else. The interpretation is wire data ([VSIX-COMMON-RENDERING]): the
+  // client passes it through untouched, and each eligible bucket's
+  // engine sentence (staged here verbatim from
+  // `deslop-core::buckets`) is the one that asks for an action.
+  test("the live-bubble set is exactly the buckets whose engine verdict demands action", () => {
+    assert.deepEqual([...LIVE_BUBBLE_BUCKETS], [IDENTICAL_BUCKET, NEARLY_IDENTICAL_BUCKET]);
+    assert.ok(isLiveBubbleBucket(IDENTICAL_BUCKET), "a byte-proven copy is bubble-eligible");
+    assert.ok(
+      isLiveBubbleBucket(NEARLY_IDENTICAL_BUCKET),
+      "a proven near miss is bubble-eligible",
     );
     assert.equal(
-      isActNow(LOOSELY_SIMILAR_BUCKET),
+      isLiveBubbleBucket(STRUCTURAL_ONLY_BUCKET),
+      false,
+      "the demoted tier says 'verify before extracting' — the bubble must not render it",
+    );
+    assert.equal(
+      isLiveBubbleBucket(LOOSELY_SIMILAR_BUCKET),
       false,
       "a hint is not something to act on",
     );
     assert.equal(
-      isActNow(SAME_BEHAVIOR_BUCKET),
+      isLiveBubbleBucket(SAME_BEHAVIOR_BUCKET),
       false,
-      "an AI match says 'read both before merging' — it earns its place on confidence, not on a verdict",
+      "an AI match earns its place on confidence, not on a verdict",
     );
-    for (const bucket of ACT_NOW_BUCKETS) {
+    const ENGINE_SENTENCES: { bucket: string; sentence: string }[] = [
+      { bucket: IDENTICAL_BUCKET, sentence: "Safe to extract — every copy is the same." },
+      {
+        bucket: NEARLY_IDENTICAL_BUCKET,
+        sentence: "Review the locations — small differences may matter.",
+      },
+    ];
+    for (const { bucket, sentence } of ENGINE_SENTENCES) {
+      const routed = cluster({ bucket, interpretation: sentence });
+      const interpretation = clusterInterpretation(routed);
+      assert.equal(
+        interpretation,
+        sentence,
+        `${bucket}: the client must pass the engine's sentence through untouched`,
+      );
       assert.match(
-        bucketLabels(bucket).actionSentence,
+        interpretation,
         /extract|Review/,
-        `${bucket}: an act-now bucket must actually ask for an action`,
+        `${bucket}: a bubble-eligible bucket must carry an engine sentence that asks for action`,
       );
     }
   });

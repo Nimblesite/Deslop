@@ -25,7 +25,7 @@ import {
   SEVERITIES,
   Severity,
   clusterBand,
-  isActNow,
+  isLiveBubbleBucket,
 } from "../../types/report";
 import { wireCluster } from "../cluster.helpers";
 import { signalsWith } from "../signals.helpers";
@@ -198,14 +198,14 @@ suite("severity", () => {
     assert.equal(clusterSeverity(cluster("b", 0, "same_behavior")), HINT_SEVERITY);
   });
 
-  test("only act-now buckets may wear an act-now colour", () => {
+  test("only bubble-eligible buckets may wear an act-now colour", () => {
     // The one-line statement of the defect, so a future remap cannot quietly
     // hand crimson back to a bucket the engine refused to vouch for.
     for (const bucket of BUCKETS) {
       const level = deslopSeverityOf(bucket);
       if (level === ERROR_SEVERITY) {
         assert.ok(
-          isActNow(bucket),
+          isLiveBubbleBucket(bucket),
           `${bucket} resolves to the loudest paint but the engine does not call it actionable`,
         );
       }
