@@ -35,13 +35,7 @@ const MID_CLUSTER_ID: &str = "02bb5e80ee7e2d96";
 /// The byte-identical pair: 1 × 3513 = 3513 duplicated nodes.
 const BIG_CLUSTER_ID: &str = "2a6f2840074b7094";
 /// Every file the five-member cluster reports.
-const MID_FILES: [&str; 5] = [
-    "mid_0.ts",
-    "mid_1.ts",
-    "mid_2.ts",
-    "mid_3.ts",
-    "mid_4.ts",
-];
+const MID_FILES: [&str; 5] = ["mid_0.ts", "mid_1.ts", "mid_2.ts", "mid_3.ts", "mid_4.ts"];
 /// The two files of the byte-identical pair.
 const BIG_FILES: [&str; 2] = ["big_a.ts", "big_b.ts"];
 

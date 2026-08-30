@@ -11,8 +11,8 @@ use serde_json::Value;
 
 use super::{
     approx, cluster_bucket, cluster_id, cluster_size, clusters_hidden, expect_cluster_spanning,
-    field, metric_field, occurrences, per_file_metrics,
-    verdict::assert_type1_identical_signals, visible_duplicated_loc, Result,
+    field, metric_field, occurrences, per_file_metrics, verdict::assert_type1_identical_signals,
+    visible_duplicated_loc, Result,
 };
 
 /// Files the seeded corpus contains, as the `u64` the cache counters use.

@@ -29,6 +29,10 @@ const TYPE4_JACCARD: f64 = 0.359_375;
 const TYPE4_COSINE: f64 = 0.94;
 /// Float slack for measured signal comparisons (`f32` vector arithmetic).
 const SIGNAL_TOLERANCE: f64 = 1e-5;
+/// Exact duplicated mass of the semantic cluster.
+const SEMANTIC_WEIGHT: f64 = 814.0;
+/// Exact duplicated mass of the structural cluster.
+const EXACT_WEIGHT: f64 = 182.0;
 
 #[test]
 fn rank_mass_never_discounts_a_large_semantic_clone_by_confidence() -> Result<()> {
@@ -78,9 +82,20 @@ fn rank_mass_never_discounts_a_large_semantic_clone_by_confidence() -> Result<()
         182,
         "fixture must model the smaller actionable exact duplicate"
     );
-    assert_eq!(semantic.weight, 814.0, "semantic duplicated mass is exact");
-    assert_eq!(exact.weight, 182.0, "exact duplicated mass is exact");
-    assert!(semantic.weight > exact.weight, "confidence never discounts mass");
+    assert_eq!(
+        semantic.weight.to_bits(),
+        SEMANTIC_WEIGHT.to_bits(),
+        "semantic duplicated mass is exact"
+    );
+    assert_eq!(
+        exact.weight.to_bits(),
+        EXACT_WEIGHT.to_bits(),
+        "exact duplicated mass is exact"
+    );
+    assert!(
+        semantic.weight > exact.weight,
+        "confidence never discounts mass"
+    );
     assert_eq!(
         clusters.first().map(|cluster| cluster.id.as_str()),
         Some(semantic.id.as_str()),

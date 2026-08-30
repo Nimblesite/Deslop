@@ -194,10 +194,9 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         size: cluster.members.len(),
         canonical_node_count,
         signals,
-        signal_source: cluster.signal_source.map(|(left, right)| ReportSignalSource {
-            left,
-            right,
-        }),
+        signal_source: cluster
+            .signal_source
+            .map(|(left, right)| ReportSignalSource { left, right }),
         bucket,
         // Default category; `render_report` re-parses the members and
         // stamps the authoritative `CloneCategory` ([RANK-CATEGORY]) using

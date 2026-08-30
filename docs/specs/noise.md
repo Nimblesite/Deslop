@@ -36,10 +36,7 @@ occurrences it kept — no signal is inherited from the members that left, and t
 disjoint copies inside one suppressed component come out as two findings rather than
 one merged cluster or none.
 
-A component the filters do **not** suppress is handed on untouched, so a
-consistently-renamed three-way clone stays one three-way clone. Implemented in
-`cluster_filters/verbatim_subgroup.rs`, pinned by
-`crates/deslop/tests/verbatim_subgroup_survives_noise.rs`.
+A component the filters do **not** suppress is handed on untouched, so a consistently-renamed three-way clone stays one three-way clone. **The contract is exhaustive.** A component a filter convicts is replaced by one cluster per qualifying byte-identical family it holds, and the members outside those families are dropped; a component no filter convicts is handed on untouched — it is never split, silently dropped, or panicked. The split exists only to protect a byte-identical family from a suppression that would eat it; it is never unconditional, and no generic fallback may classify an unrecognised component as suppressible or splittable. This is the post-closure suppression stage; admission and closure formation are governed by [FUSED-STRATEGY-BOUNDED-MAX] step 4, which acts earlier and is unchanged. Implemented in `cluster_filters/verbatim_subgroup.rs`, pinned by `crates/deslop/tests/verbatim_subgroup_survives_noise.rs` and `crates/deslop/tests/verbatim_family_survives_stranger.rs`.
 
 #### [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] A verbatim family must be a copy, and usually a copy spans files
 

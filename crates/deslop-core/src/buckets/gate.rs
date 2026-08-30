@@ -128,7 +128,8 @@ pub fn lacks_content_support(signals: ReportSignals) -> bool {
         && (is_token_carried_nearmiss(signals) || is_shape_corroborated_nearmiss(signals));
     has_saturating_shape_evidence(signals)
         && !misaligned_nearmiss
-        && content_support(signals.pair_agreement, signals.pair_rename_consistency) < CONTENT_SUPPORT_FLOOR
+        && content_support(signals.pair_agreement, signals.pair_rename_consistency)
+            < CONTENT_SUPPORT_FLOOR
 }
 
 /// Token overlap at or above which the token layer is echoing shape

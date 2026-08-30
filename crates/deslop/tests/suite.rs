@@ -167,8 +167,6 @@ mod pair_consistent_signals;
 mod pair_size_coherence;
 #[path = "perf_sample.rs"]
 mod perf_sample;
-#[path = "rank_mass.rs"]
-mod rank_mass;
 #[path = "polymorphic_gate_hides_rename_clone.rs"]
 mod polymorphic_gate_hides_rename_clone;
 #[path = "python_dict_assert_payload_proof.rs"]
@@ -219,6 +217,8 @@ mod python_literal_variation_calls;
 mod python_same_shape_backends;
 #[path = "python_signatures.rs"]
 mod python_signatures;
+#[path = "rank_mass.rs"]
+mod rank_mass;
 #[path = "rank_structural_only_policy.rs"]
 mod rank_structural_only_policy;
 #[path = "regex_literal_delimiters.rs"]
@@ -271,9 +271,9 @@ mod type2_rename_anchor_floor;
 mod type3_enclosing_method;
 #[path = "typescript_features.rs"]
 mod typescript_features;
+#[path = "verbatim_family_survives_stranger.rs"]
+mod verbatim_family_survives_stranger;
 #[path = "verbatim_subgroup_idiom_price.rs"]
 mod verbatim_subgroup_idiom_price;
 #[path = "verbatim_subgroup_survives_noise.rs"]
 mod verbatim_subgroup_survives_noise;
-#[path = "verbatim_family_survives_stranger.rs"]
-mod verbatim_family_survives_stranger;

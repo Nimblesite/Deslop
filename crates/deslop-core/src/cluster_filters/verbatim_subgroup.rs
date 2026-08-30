@@ -312,7 +312,6 @@ const NOISE_PROGRESS_INTERVAL: usize = 5_000;
 /// mixed verbatim family needs no re-parse at all — so the noise
 /// filters only run on the components a split could actually change
 /// ([CLONE-NOISE-REPARSE-CACHE]).
-#[allow(clippy::panic)]
 fn split_one<S: BuildHasher>(
     fused: &FusedCluster,
     fingerprints: &[Fingerprint],
@@ -322,23 +321,19 @@ fn split_one<S: BuildHasher>(
 ) -> Option<Vec<FusedCluster>> {
     let families = splittable_families(fused, fingerprints, sources)?;
     let members = resolved_members(fused, fingerprints)?;
-    let filter = is_noise_pattern(&members, sources, file_languages, cache, NoiseStage::Split);
+    let Some(filter) =
+        is_noise_pattern(&members, sources, file_languages, cache, NoiseStage::Split)
+    else {
+        // [CLONE-NOISE-VERBATIM-SUBGROUP]: a component the noise filters
+        // do not suppress is handed on untouched — no split, no member
+        // dropped, no panic. The pairwise admission that built the
+        // closure decides its fate
+        // ([FUSED-STRATEGY-BOUNDED-MAX] step 4).
+        return None;
+    };
     let keepable: Vec<&Vec<usize>> = families
         .iter()
-        .filter(|family| match filter {
-            Some(filter) => is_copied_family(family, fingerprints, filter),
-            // No noise filter recognised the mixed cluster — it is a genuine
-            // duplicate at nested windows or an unrelated-but-measured pair,
-            // not an idiom the filters classify. The copy proof that remains
-            // is cross-file byte identity ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE]):
-            // independently authored code does not coincide byte for byte across
-            // files, so a cross-file family is kept and a single-file family or
-            // a non-family member is dropped. Laundering the strangers through
-            // the elected exact pair (the old `None` arm's silent keep-whole)
-            // is the false positive `verbatim_family_survives_stranger::
-            // a_verbatim_family_survives_an_unrelated_stranger` pins.
-            None => is_cross_file_copy(family, fingerprints),
-        })
+        .filter(|family| is_copied_family(family, fingerprints, filter))
         .collect();
     // No family the hatch protects: the component keeps its own shape and
     // takes the suppression whole, downstream, exactly as it always did.
@@ -350,21 +345,6 @@ fn split_one<S: BuildHasher>(
             .map(|family| restrict(fused, family))
             .collect()
     })
-}
-
-/// Whether a byte-identical family is a cross-file copy: at least
-/// [`MIN_FAMILY_OCCURRENCES`] distinct locations spanning at least two
-/// files. This is the copy proof the split falls back on when no noise
-/// filter classifies the mixed cluster — the escape hatch's own
-/// rationale ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE]).
-fn is_cross_file_copy(family: &[usize], fingerprints: &[Fingerprint]) -> bool {
-    distinct_locations(family, fingerprints) >= MIN_FAMILY_OCCURRENCES
-        && spans_multiple_files(
-            family
-                .iter()
-                .filter_map(|index| fingerprints.get(*index))
-                .map(|member| member.file_id),
-        )
 }
 
 /// The byte-identical families in `fused` a split could act on, or

@@ -26,7 +26,11 @@
 //! - `DESLOP_PERF_SECONDS` — sample window in seconds (default 10).
 
 use std::{
-    env, fs, path::PathBuf, process::{Command, Stdio}, thread, time::{Duration, Instant},
+    env, fs,
+    path::PathBuf,
+    process::{Command, Stdio},
+    thread,
+    time::{Duration, Instant},
 };
 
 /// Sample window when `DESLOP_PERF_SECONDS` is unset.
@@ -152,7 +156,8 @@ fn perf_sample_bounded_scan() {
 /// Returns the text after `marker` anywhere in `line`, so record parsing does
 /// not depend on the timestamp/level prefix width.
 fn after_marker<'a>(line: &'a str, marker: &str) -> Option<&'a str> {
-    line.find(marker).map(|position| &line[position + marker.len()..])
+    line.find(marker)
+        .map(|position| &line[position + marker.len()..])
 }
 
 /// `files/s` from a count and a millisecond elapsed, guarding the zero case.

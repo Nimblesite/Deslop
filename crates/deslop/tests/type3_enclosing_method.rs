@@ -165,7 +165,10 @@ fn assert_fragments_absorbed(report: &Value, survivor: &Value, files: [&str; 2])
 fn assert_rescued_pair_evidence(cluster: &Value) {
     let source = field(cluster, "signal_source");
     assert_eq!(
-        (field(source, "left").as_u64(), field(source, "right").as_u64()),
+        (
+            field(source, "left").as_u64(),
+            field(source, "right").as_u64()
+        ),
         (Some(0), Some(1)),
         "the two enclosing occurrences must be the elected evidence pair: {cluster:#}"
     );

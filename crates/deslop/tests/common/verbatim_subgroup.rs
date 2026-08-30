@@ -12,7 +12,8 @@ use serde_json::Value;
 
 use super::{
     approx, cluster_bucket, cluster_file_set, cluster_id, cluster_size, clusters,
-    expect_cluster_spanning, field, fixture, occurrence_files, per_file_metrics, run_report, signal,
+    expect_cluster_spanning, field, fixture, occurrence_files, per_file_metrics, run_report,
+    signal,
     signals::{signal_dump, IDENTICAL_BUCKET},
     Result,
 };
@@ -158,7 +159,10 @@ pub(crate) fn assert_copy_survives_alone(
         );
     }
     assert!(
-        approx(signal(cluster, "pair_rename_consistency"), rename_consistency),
+        approx(
+            signal(cluster, "pair_rename_consistency"),
+            rename_consistency
+        ),
         "{label}: the byte-identical pair's rename consistency must be the \
          anchor-scaled value {rename_consistency}, never a saturated stand-in — \
          {dump}"

@@ -123,14 +123,14 @@ fn three_pairs_of_two_structures_cost_two_valuations() {
         "fixture: disjoint constant signatures must estimate 0.0"
     );
 
-    let mut measurer = OverlapMeasurer::new(&trees);
+    let mut overlap_measurer = OverlapMeasurer::new(&trees);
     let measured = measured_signals(
         &[0, 1, 2],
         &[(0, 1), (0, 2), (1, 2)],
         &fingerprints,
         &signature_index,
         &vectors,
-        &mut measurer,
+        &mut overlap_measurer,
     );
     let triple = measured.score;
 
@@ -150,7 +150,7 @@ fn three_pairs_of_two_structures_cost_two_valuations() {
         "the hash-equal copy pair must be named as the signal source"
     );
 
-    let stats = measurer.stats();
+    let stats = overlap_measurer.stats();
     assert_eq!(
         (stats.hash_equal, stats.alignments, stats.exact_hits),
         (1, 1, 0),
@@ -289,14 +289,14 @@ fn non_admitted_pairs_never_contribute_to_the_rendered_signals() {
          got {cross_overlap}"
     );
 
-    let mut measurer = OverlapMeasurer::new(&trees);
+    let mut overlap_measurer = OverlapMeasurer::new(&trees);
     let measured = measured_signals(
         &[0, 1, 2],
         &[(0, 1)],
         &fingerprints,
         &signature_index,
         &vectors,
-        &mut measurer,
+        &mut overlap_measurer,
     );
     let triple = measured.score;
     let mean_over_all_pairs = (cross_overlap + 1.0 + cross_overlap) / 3.0;
@@ -318,7 +318,8 @@ fn non_admitted_pairs_never_contribute_to_the_rendered_signals() {
          0.333..."
     );
     assert_eq!(
-        triple.embedding_cos, 0.0,
+        triple.embedding_cos.to_bits(),
+        0.0_f64.to_bits(),
         "embeddings off: no pair carries a vector"
     );
     assert_eq!(
@@ -376,14 +377,14 @@ fn the_rendered_triple_is_one_admitted_pairs_own_axes() {
     let x_triple = (1.0, 0.0);
     let y_triple = (cross_overlap, 1.0);
 
-    let mut measurer = OverlapMeasurer::new(&trees);
+    let mut overlap_measurer = OverlapMeasurer::new(&trees);
     let measured = measured_signals(
         &[0, 1, 2],
         &[(0, 1), (0, 2)],
         &fingerprints,
         &signature_index,
         &vectors,
-        &mut measurer,
+        &mut overlap_measurer,
     );
     let triple = measured.score;
 
@@ -403,27 +404,29 @@ fn the_rendered_triple_is_one_admitted_pairs_own_axes() {
     // The named pair's own axes must equal the rendered axes (name ==
     // axes): measuring the elected source pair as the sole admitted pair
     // reproduces the rendered triple exactly.
-    let Some((source_left, source_right)) = measured.source_pair else {
-        panic!("two admitted pairs both resolve; a source pair must be named");
-    };
-    let mut measurer = OverlapMeasurer::new(&trees);
-    let solo = measured_signals(
-        &[0, 1, 2],
-        &[(source_left, source_right)],
-        &fingerprints,
-        &signature_index,
-        &vectors,
-        &mut measurer,
+    assert!(
+        measured.source_pair.is_some(),
+        "two admitted pairs both resolve; a source pair must be named"
     );
-    assert_eq!(
-        (
-            solo.score.structural.to_bits(),
-            solo.score.token_jaccard.to_bits()
-        ),
-        (triple.structural.to_bits(), triple.token_jaccard.to_bits()),
-        "the named source pair's own axes must be exactly the rendered \
-         axes"
-    );
+    if let Some((source_left, source_right)) = measured.source_pair {
+        let mut source_measurer = OverlapMeasurer::new(&trees);
+        let solo = measured_signals(
+            &[0, 1, 2],
+            &[(source_left, source_right)],
+            &fingerprints,
+            &signature_index,
+            &vectors,
+            &mut source_measurer,
+        );
+        assert_eq!(
+            (
+                solo.score.structural.to_bits(),
+                solo.score.token_jaccard.to_bits()
+            ),
+            (triple.structural.to_bits(), triple.token_jaccard.to_bits()),
+            "the named source pair's own axes must be exactly the rendered axes"
+        );
+    }
 }
 
 // [FUSED-CLUSTER-SIGNALS] gh #458 (#301) — the source-pair election is
@@ -528,14 +531,14 @@ fn when_every_admitted_pair_skips_there_is_no_source_pair() {
 
     // The admitted pair (0,1) has an endpoint at index 1 that is not in
     // the rendered occurrence set — the same-file collapse removed it.
-    let mut measurer = OverlapMeasurer::new(&trees);
+    let mut overlap_measurer = OverlapMeasurer::new(&trees);
     let measured = measured_signals(
         &[0, 2],
         &[(0, 1)],
         &fingerprints,
         &signature_index,
         &vectors,
-        &mut measurer,
+        &mut overlap_measurer,
     );
 
     assert_eq!(

@@ -98,8 +98,13 @@ fn occurrence_ranges(cluster: &Value) -> Vec<(u64, u64)> {
 #[test]
 fn a_copied_constant_table_survives_an_unrelated_table_in_its_cluster() -> Result<()> {
     let report = render("constant-table", MIN_NODES)?;
-    assert_copy_survives_alone(&report, "constant table", &CONST_COPY, CONST_STRANGER,
-        rename_consistency_for(CONST_TABLE_ANCHORS))?;
+    assert_copy_survives_alone(
+        &report,
+        "constant table",
+        &CONST_COPY,
+        CONST_STRANGER,
+        rename_consistency_for(CONST_TABLE_ANCHORS),
+    )?;
     for file in CONST_COPY {
         assert_eq!(
             duplicated_loc_for(&report, file),
@@ -133,8 +138,13 @@ fn a_copied_constant_table_survives_an_unrelated_table_in_its_cluster() -> Resul
 #[test]
 fn a_copied_call_run_survives_a_literal_varying_run_in_its_cluster() -> Result<()> {
     let report = render(CALL_CASE, MIN_NODES)?;
-    assert_copy_survives_alone(&report, "literal calls", &CALL_COPY, CALL_STRANGER,
-        rename_consistency_for(CALL_PAIR_ANCHORS))?;
+    assert_copy_survives_alone(
+        &report,
+        "literal calls",
+        &CALL_COPY,
+        CALL_STRANGER,
+        rename_consistency_for(CALL_PAIR_ANCHORS),
+    )?;
     for file in CALL_COPY {
         assert_eq!(
             duplicated_loc_for(&report, file),

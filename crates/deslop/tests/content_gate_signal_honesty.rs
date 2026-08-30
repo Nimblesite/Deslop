@@ -33,9 +33,7 @@
 
 use serde_json::Value;
 
-use deslop_core::buckets::{
-    CONTENT_SUPPORT_FLOOR, STRUCTURAL_SATURATION_FLOOR,
-};
+use deslop_core::buckets::{CONTENT_SUPPORT_FLOOR, STRUCTURAL_SATURATION_FLOOR};
 
 use crate::common::{signals::*, *};
 
@@ -208,8 +206,8 @@ fn a_cluster_whose_evidence_did_not_corroborate_is_not_told_it_agreed() -> Resul
         bucket = cluster_bucket(accessor),
     );
     let structural = signal(accessor, "structural");
-    let support = signal(accessor, "pair_agreement")
-        .max(signal(accessor, "pair_rename_consistency"));
+    let support =
+        signal(accessor, "pair_agreement").max(signal(accessor, "pair_rename_consistency"));
     assert!(
         support < CONTENT_SUPPORT_FLOOR,
         "the accessor pair's content evidence must be measured and below the \

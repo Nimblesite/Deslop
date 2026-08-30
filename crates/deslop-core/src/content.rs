@@ -41,9 +41,7 @@ use crate::{ast::NormalizedNode, cluster::Cluster, fingerprint::Fingerprint, sta
 
 /// Indexes normalised trees by file for frontier resolution. Shared by
 /// every content measurement so one walk site owns the shape.
-pub(crate) fn tree_index_of(
-    trees: &[NormalizedNode],
-) -> HashMap<FileId, &NormalizedNode> {
+pub(crate) fn tree_index_of(trees: &[NormalizedNode]) -> HashMap<FileId, &NormalizedNode> {
     trees.iter().map(|tree| (tree.file_id, tree)).collect()
 }
 

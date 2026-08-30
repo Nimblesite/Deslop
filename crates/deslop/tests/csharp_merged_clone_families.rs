@@ -161,8 +161,7 @@ fn assert_near_identical_pair(family: &Value, left: &str, right: &str, report: &
          {left}/{right} saturate it: {report:#}"
     );
     assert!(
-        signal(family, "pair_agreement")
-            .max(signal(family, "pair_rename_consistency"))
+        signal(family, "pair_agreement").max(signal(family, "pair_rename_consistency"))
             >= CONTENT_SUPPORT_FLOOR,
         "{left}/{right} must keep the content support a near-identical \
          clone earns — one measured population above the routing floor — \

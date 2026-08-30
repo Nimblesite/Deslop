@@ -80,7 +80,15 @@ pub fn apply_shared_subtree_rescue<S: BuildHasher + Sync, L: BuildHasher + Sync>
         let mut tally = RescueTally::new();
         for pair in pairs.iter_mut() {
             tally.scan();
-            measure_one(pair, fingerprints, &tree_index, sources, languages, &mut measurer, &mut tally);
+            measure_one(
+                pair,
+                fingerprints,
+                &tree_index,
+                sources,
+                languages,
+                &mut measurer,
+                &mut tally,
+            );
         }
         tally.report_total(measurer.stats());
         return;
@@ -97,7 +105,15 @@ pub fn apply_shared_subtree_rescue<S: BuildHasher + Sync, L: BuildHasher + Sync>
         workers,
         || (RescueTally::new(), OverlapMeasurer::new(trees)),
         |(tally, measurer), chunk| {
-            measure_chunk(chunk, fingerprints, &tree_index, sources, languages, measurer, tally);
+            measure_chunk(
+                chunk,
+                fingerprints,
+                &tree_index,
+                sources,
+                languages,
+                measurer,
+                tally,
+            );
         },
     );
     report_shards(&shards);
@@ -115,7 +131,15 @@ fn measure_chunk<S: BuildHasher, L: BuildHasher>(
 ) {
     for pair in chunk.iter_mut() {
         tally.scan();
-        measure_one(pair, fingerprints, tree_index, sources, languages, measurer, tally);
+        measure_one(
+            pair,
+            fingerprints,
+            tree_index,
+            sources,
+            languages,
+            measurer,
+            tally,
+        );
     }
 }
 
@@ -170,8 +194,7 @@ fn measure_one<S: BuildHasher, L: BuildHasher>(
     tally.cross_file();
     pair.shared_subtree_overlap = measurer.rescue_overlap(left, right);
     let clears_overlap = pair.shared_subtree_overlap >= SHARED_SUBTREE_MIN_OVERLAP;
-    let content_agreement =
-        pair_content_agreement(left, right, tree_index, sources, languages);
+    let content_agreement = pair_content_agreement(left, right, tree_index, sources, languages);
     let clears_content = !clears_overlap || content_agreement >= CONTENT_SUPPORT_FLOOR;
     tracing::trace!(
         left_file = ?left.file_id,
@@ -227,14 +250,24 @@ mod shard_equivalence_tests {
     ) -> (RescueTally, crate::overlap::MeasureStats) {
         let mut measurer = crate::overlap::OverlapMeasurer::new(trees);
         let mut tally = RescueTally::new();
-        measure_chunk(chunk, fingerprints, &tree_index(trees), sources, languages, &mut measurer, &mut tally);
+        measure_chunk(
+            chunk,
+            fingerprints,
+            &tree_index(trees),
+            sources,
+            languages,
+            &mut measurer,
+            &mut tally,
+        );
         let stats = measurer.stats();
         (tally, stats)
     }
 
     /// The content-gate index: every tree resolved by file id, exactly
     /// as the live pass builds it.
-    fn tree_index(trees: &[NormalizedNode]) -> std::collections::HashMap<crate::state::FileId, &NormalizedNode> {
+    fn tree_index(
+        trees: &[NormalizedNode],
+    ) -> std::collections::HashMap<crate::state::FileId, &NormalizedNode> {
         trees.iter().map(|tree| (tree.file_id, tree)).collect()
     }
 
@@ -314,8 +347,7 @@ mod shard_equivalence_tests {
             (left_id, left_source.into_bytes()),
             (right_id, right_source.into_bytes()),
         ]);
-        let languages =
-            std::collections::HashMap::from([(left_id, "rust"), (right_id, "rust")]);
+        let languages = std::collections::HashMap::from([(left_id, "rust"), (right_id, "rust")]);
         let fixture = || {
             (0..pair_count)
                 .map(|_| eligible_pair(nodes))
@@ -324,13 +356,7 @@ mod shard_equivalence_tests {
 
         // The threaded entry point — whichever core count routes it.
         let mut sharded = fixture();
-        apply_shared_subtree_rescue(
-            &mut sharded,
-            &fingerprints,
-            &trees,
-            &sources,
-            &languages,
-        );
+        apply_shared_subtree_rescue(&mut sharded, &fingerprints, &trees, &sources, &languages);
 
         // The serial reference: one measurer, one tally, every pair.
         let mut serial = fixture();

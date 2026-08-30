@@ -196,7 +196,10 @@ fn regions_that_merely_touch_are_all_published() {
         actual.sort_unstable();
         assert_eq!(actual, expected, "{}", case.why);
         assert!(
-            clusters.windows(2).all(|pair| pair[0].id < pair[1].id),
+            clusters.windows(2).all(|pair| match pair {
+                [left, right] => left.id < right.id,
+                _ => true,
+            }),
             "equal-mass clusters sort by id after subsumption: {}",
             case.why
         );

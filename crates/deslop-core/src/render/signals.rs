@@ -126,7 +126,10 @@ pub fn unvouched_content_reason(signals: ReportSignals) -> String {
     format!(
         "the shapes match but the measured content does not vouch for them — \
          support {support:.2} is below the {floor:.2} content floor: {explanation}",
-        support = crate::buckets::content_support(signals.pair_agreement, signals.pair_rename_consistency),
+        support = crate::buckets::content_support(
+            signals.pair_agreement,
+            signals.pair_rename_consistency
+        ),
         floor = crate::buckets::CONTENT_SUPPORT_FLOOR,
         explanation = plain_explanation(signals),
     )
