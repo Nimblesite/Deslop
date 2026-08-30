@@ -18,37 +18,37 @@ Delete the shipped cluster-confidence model and every dependency on it at the st
 
 **Delete the old public contract wholesale.**
 
-- [ ] Immediately remove cluster `signals.fused`, `meets_fused_gate`, fused bands, `ACT_NOW_FUSED`, `REUSE_FUSED`, the content-confidence multiply, `RENAME_CONSISTENCY_DISCOUNT`, the ranking tie-break, fused history fields, and every renderer or client branch that consumes them.
-- [ ] Delete the old cluster-confidence tests and fixtures as part of the same cutover; replace their meaningful accuracy assertions with final-contract assertions over pair admission, occurrences, bucket, elected axes, content support, weight, and order. Do not keep obsolete assertions green through a compatibility layer.
+- [x] Immediately remove cluster `signals.fused`, `meets_fused_gate`, fused bands, `ACT_NOW_FUSED`, `REUSE_FUSED`, the content-confidence multiply, `RENAME_CONSISTENCY_DISCOUNT`, the ranking tie-break, fused history fields, and every renderer or client branch that consumes them.
+- [x] Delete the old cluster-confidence tests and fixtures as part of the same cutover; replace their meaningful accuracy assertions with final-contract assertions over pair admission, occurrences, bucket, elected axes, content support, weight, and order. Do not keep obsolete assertions green through a compatibility layer.
 - [ ] Replace the canonical typeDiagram model immediately and regenerate only the final Rust and TypeScript shapes. No dual schema or deprecated field survives.
 
 **Install the pair-scoped public contract across every surface.**
 
-- [ ] JSON, text, HTML, LSP, MCP, and VSIX expose the elected pair’s measured axes and source with no cluster fused score, fused band, or fused gate.
+- [x] JSON, text, HTML, LSP, MCP, and VSIX expose the elected pair’s measured axes and source with no cluster fused score, fused band, or fused gate.
 - [ ] Exact `H`, token `J`, or embedding `E` may clear the pair-specific admission bar; rescue requires every configured corroboration and leaves `f_admit` unchanged.
 - [ ] A cluster whose strongest `S`, `J`, and `E` belong to different pairs must render one real elected pair rather than per-axis maxima.
-- [ ] Equal-mass clusters sort by cluster id regardless of their old cluster confidence.
+- [x] Equal-mass clusters sort by cluster id regardless of their old cluster confidence.
 
 **Replace elected-pair content evidence — gh #458.**
 
-- [ ] Replace the quarantined cluster means for `agreement` and `rename_consistency` with `pair_agreement` and `pair_rename_consistency` measured on the same elected pair as `S`, `J`, and `E`.
-- [ ] Carry that pair through `signal_source`; never elect content evidence separately and never average across closure members.
+- [x] Replace the quarantined cluster means for `agreement` and `rename_consistency` with `pair_agreement` and `pair_rename_consistency` measured on the same elected pair as `S`, `J`, and `E`.
+- [x] Carry that pair through `signal_source`; never elect content evidence separately and never average across closure members.
 - [ ] The final `a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster` assertion must cover the elected pair, occurrence paths, five rendered axes, bucket, and routing support; no intermediate test-only change is landed.
 
 **Remove every remaining cluster-fused implementation site.**
 
-- [ ] Remove `signals.fused`, `meets_fused_gate`, fused bands, `ACT_NOW_FUSED`, `REUSE_FUSED`, and every renderer or client branch that derives a cluster verdict from them.
-- [ ] Delete the content-confidence multiply in `buckets/gate.rs`, including `content_confidence = max(A, discount × R)` and the retired `RENAME_CONSISTENCY_DISCOUNT`; routing reads `support = max(A,R)` directly.
-- [ ] Remove the `signals.fused` tie-break from `report_weight.rs`; sort equal mass by cluster id.
+- [x] Remove `signals.fused`, `meets_fused_gate`, fused bands, `ACT_NOW_FUSED`, `REUSE_FUSED`, and every renderer or client branch that derives a cluster verdict from them.
+- [x] Delete the content-confidence multiply in `buckets/gate.rs`, including `content_confidence = max(A, discount × R)` and the retired `RENAME_CONSISTENCY_DISCOUNT`; routing reads `support = max(A,R)` directly.
+- [x] Remove the `signals.fused` tie-break from `report_weight.rs`; sort equal mass by cluster id.
 - [x] Update `docs/models/live-ipc.td` and regenerate Rust and TypeScript wire models. Do not hand-edit generated files.
-- [ ] Delete `fused_golden_bands.rs` and `fused_golden_invariants.rs` during the cutover and replace their meaningful assertions against the final observables before the one change is complete. Pair-level bounds remain covered by `pair_admission_bounded_max.rs` and `issue_343_sum_clamp_saturation.rs`.
+- [x] Delete `fused_golden_bands.rs` and `fused_golden_invariants.rs` during the cutover and replace their meaningful assertions against the final observables before the one change is complete. Pair-level bounds remain covered by `pair_admission_bounded_max.rs` and `issue_343_sum_clamp_saturation.rs`.
 - [x] Remove fused bars, labels, tooltips, help topics, history fields, and local thresholds from every UI. Surfaces render the bucket, elected evidence, and engine-authored explanation.
 
 **Replace ranking with the one governing formula.**
 
-- [ ] Remove every remaining `log2(1 + spanned_loc)`, `spanned_bytes`, or confidence factor from final rendered weight calculations and stale documentation; [RANK-MASS-SUM](../specs/pipeline.md#rank-mass-sum) is the only formula.
-- [ ] Assert visible occurrence count, canonical node count, both policy multipliers, exact weight, and `weight desc → id asc` ordering in E2E output.
-- [ ] Keep data and structural-only multipliers as explicit policy, not evidence confidence.
+- [x] Remove every remaining `log2(1 + spanned_loc)`, `spanned_bytes`, or confidence factor from final rendered weight calculations and stale documentation; [RANK-MASS-SUM](../specs/pipeline.md#rank-mass-sum) is the only formula.
+- [x] Assert visible occurrence count, canonical node count, both policy multipliers, exact weight, and `weight desc → id asc` ordering in E2E output.
+- [x] Keep data and structural-only multipliers as explicit policy, not evidence confidence.
 
 **Replace the remaining defective detector and routing behavior in the same change.**
 
