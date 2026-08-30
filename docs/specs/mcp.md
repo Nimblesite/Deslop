@@ -69,8 +69,9 @@ envelope.
 > demotion belongs exclusively to the `[ranking] data_clones` policy
 > ([PIPELINE-RANK-WORST-FIRST](pipeline.md#pipeline-rank-worst-first),
 > [RANK-CATEGORY]). It is
-> **not** sorted by `signals.fused`, and an agent must not re-sort or filter on
-> that field — the rendered confidence is a per-cluster quality, so ordering by
+> **not** sorted by `signals.fused`. Re-sorting or filtering on that field
+> discards the ranking the engine computed: the rendered confidence is a
+> per-cluster quality, so ordering by
 > it puts a two-line byte-identical pair above a 400-line proven clone, and
 > filtering on it discards proven Type-2 renames the content gate deliberately
 > renders below the admission bar ([REPORTING-CONTEXT](REPORTING-CONTEXT.md)).

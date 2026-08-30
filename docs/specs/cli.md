@@ -131,7 +131,7 @@ colour choice.
 The default stderr summary is plain English aimed at a human in a terminal (no
 jargon, no signal letters): a `Found N groups…` headline, friendly cache/embedding
 sentences when applicable, a per-bucket breakdown, a one-sentence "Worst offender"
-callout, the worst-10 ranked rows each with an action sentence, and a `Next:`
+callout, the worst-10 ranked rows each with an evidence sentence, and a `Next:`
 pointer to the HTML report. A zero-cluster report instead prints a single
 "no duplication detected" success line and omits the worst-offender callout
 entirely; the renderer is total and never panics on an empty corpus.

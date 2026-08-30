@@ -23,15 +23,14 @@ use super::{
     occurrence_texts, occurrences, signal, Result,
 };
 
-/// The agent-facing act-now line ([FUSED-THRESHOLD]): at or above this a
-/// `find-similar` consumer must refuse to write the copy, so nothing but
-/// real duplication may reach it.
+/// The top reported confidence band ([FUSED-THRESHOLD]): at or above this
+/// the report states maximal measured evidence, so nothing but real
+/// duplication may reach it.
 pub(crate) const ACT_NOW_FUSED: f64 = 0.85;
 
-/// The agent-facing reuse-bias line (`docs/snippets/agents-md-recipe.md`):
-/// below this the recipe tells the agent to author the code outright, so
-/// a genuine clone that lands here is a false negative at the agent
-/// surface even when the report still lists it.
+/// The lower band boundary ([FUSED-THRESHOLD]): below this the report
+/// states weak evidence, so a genuine clone that lands here understates
+/// what was measured even when the report still lists it.
 pub(crate) const REUSE_FUSED: f64 = 0.6;
 
 /// Buckets that describe a shape-only match without claiming the

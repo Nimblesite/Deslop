@@ -39,6 +39,20 @@ Deslop v1 is a batch CLI, but the architecture must not foreclose a future daemo
 - **Byte ranges, not line numbers, are the source of truth** everywhere in the core. Line numbers are derived at render time. LSPs need byte offsets; computing them retroactively would be a rewrite.
 - **No process-global mutable state outside `src/state.rs`.** A daemon keeps multiple analyses live in one process — anything that assumes "one run, then exit" will bite later.
 
+### [PRINCIPLES-REPORT-NOT-DICTATE] We report, we don't dictate
+
+Deslop states what it measured and how it computed it. It never tells the reader what to do about a finding — not a human, not an agent.
+
+**Banned on every surface** — bucket sentences, severity copy, hover text, MCP responses, logs:
+
+- Directives: *"Safe to extract"*, *"Verify before extracting"*, *"Review the locations"*, *"read both before merging"*, *"treat as a hint"*.
+- Names that are directives: *act-now*, *action sentence*, *recommendation*.
+- Safety and worth claims: *"safe to"*, *"worth extracting"*, *"you should"*. Whether extraction is safe depends on facts Deslop never measured.
+
+**Required instead:** what was measured. *"Every copy is the same after normalisation."* *"Only the code shape matches; the content does not agree."*
+
+A threshold may describe where **Deslop's own** behaviour changes — what it admits, hides, or how it ranks. Never what the reader's should.
+
 ### [PRINCIPLES-ONE-CALCULATION] Every figure is computed once, in the engine
 
 A *figure* is any number, label, verdict or ordering the product asserts about

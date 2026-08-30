@@ -16,13 +16,15 @@ All three classes point at the **same** bucket identity (the Rust enum variant).
 
 **This table is the canonical definition of every clone bucket Deslop reports. Every renderer — HTML, CLI, VS Code, MCP — must agree with it. If a surface disagrees, the surface is wrong, not the table.**
 
-| Bucket (enum)     | Plain title (pure-visual)                       | Hybrid title (shared-text)                          | Action sentence                                                                                | Colour band        | Taxonomy ref                |
+| Bucket (enum)     | Plain title (pure-visual)                       | Hybrid title (shared-text)                          | Evidence sentence                                                                              | Colour band        | Taxonomy ref                |
 |-------------------|-------------------------------------------------|-----------------------------------------------------|------------------------------------------------------------------------------------------------|--------------------|-----------------------------|
-| `Identical`       | **Identical code**                              | `Identical code [Type-1/2]`                         | Safe to extract — every copy is the same.                                                      | green / crimson    | Type-1, Type-2              |
-| `NearlyIdentical` | **Nearly identical code**                       | `Nearly identical code [Type-3]`                    | Review the locations — small differences may matter.                                           | yellow / blue      | Type-3                      |
-| `StructuralOnly`  | **Same shape, different content**               | `Same shape, different content [structural-only]`   | Only the code shape matches — usually sibling boilerplate. Verify before extracting.           | muted / outline    | structural-only (unverified Type-2/3 candidate) |
-| `LooselySimilar`  | **Loosely similar code**                        | `Loosely similar code [weak LSH]`                   | Loose textual overlap. Treat as a hint.                                                        | neutral            | weak LSH-only (sub-Type-3)  |
-| `SameBehavior`    | **Same behavior, different code** *(AI match)*  | `Same behavior, different code [Type-4, AI match]`  | The AI noticed these do the same thing written two ways — read both before merging.            | purple / cyan      | Type-4                      |
+| `Identical`       | **Identical code**                              | `Identical code [Type-1/2]`                         | Every copy is the same after normalisation.                                                    | green / crimson    | Type-1, Type-2              |
+| `NearlyIdentical` | **Nearly identical code**                       | `Nearly identical code [Type-3]`                    | The copies differ in small ways.                                                               | yellow / blue      | Type-3                      |
+| `StructuralOnly`  | **Same shape, different content**               | `Same shape, different content [structural-only]`   | Only the code shape matches; the measured content does not agree. Commonly sibling boilerplate. | muted / outline    | structural-only (unverified Type-2/3 candidate) |
+| `LooselySimilar`  | **Loosely similar code**                        | `Loosely similar code [weak LSH]`                   | Loose textual overlap, with no other axis corroborating it.                                    | neutral            | weak LSH-only (sub-Type-3)  |
+| `SameBehavior`    | **Same behavior, different code** *(AI match)*  | `Same behavior, different code [Type-4, AI match]`  | The embedding pass matched these as the same behaviour written two ways; no deterministic axis corroborates. | purple / cyan      | Type-4                      |
+
+Each sentence states what was measured and stops there ([PRINCIPLES-REPORT-NOT-DICTATE](principles.md#principles-report-not-dictate)).
 
 `green / crimson`, `yellow / blue` etc. are light-theme / dark-theme pairs. Exact CSS variables live alongside the renderer in `crates/deslop-core/src/render/html.rs`; this table governs which colour family, not the specific hex.
 
@@ -43,23 +45,23 @@ Surface routing:
 | VS Code cluster detail / report webviews              | Pure-visual    | **Plain title** + Action sentence                |
 | VS Code tree view node labels                         | Pure-visual    | **Plain title**                                  |
 | CLI stderr summary row                                | Shared-text    | **Hybrid title**                                 |
-| LSP `diagnostic.message`                              | Shared-text    | **Hybrid title** + Action sentence               |
-| VS Code Problems panel (mirrors LSP)                  | Shared-text    | **Hybrid title** + Action sentence               |
-| LSP hover tooltip                                     | Shared-text    | **Hybrid title** + Action sentence               |
-| JSON `cluster.interpretation`                         | AI-only        | **Plain title** + Action sentence + `Type-N`     |
-| JSON `action_hints[*].recommendation`                 | AI-only        | **Plain title** + Action sentence + `Type-N`     |
+| LSP `diagnostic.message`                              | Shared-text    | **Hybrid title** + Evidence sentence               |
+| VS Code Problems panel (mirrors LSP)                  | Shared-text    | **Hybrid title** + Evidence sentence               |
+| LSP hover tooltip                                     | Shared-text    | **Hybrid title** + Evidence sentence               |
+| JSON `cluster.interpretation`                         | AI-only        | **Plain title** + Evidence sentence + `Type-N`     |
+| JSON `action_hints[*].recommendation`                 | AI-only        | **Plain title** + Evidence sentence + `Type-N` |
 | `REPORTING-CONTEXT.md` (`schema_doc`)                 | AI-only        | Full table with all three forms                  |
-| MCP tool descriptions, resources                      | AI-only        | **Plain title** + Action sentence + `Type-N`     |
+| MCP tool descriptions, resources                      | AI-only        | **Plain title** + Evidence sentence + `Type-N`     |
 | Source code identifiers, spec IDs, tests              | n/a (dev)      | **Enum variant** (`ClusterKind::Identical` etc.) |
 
 **Rules:**
 
 1. **The enum is the identity.** `ClusterKind::Identical`, `ClusterKind::NearlyIdentical`, `ClusterKind::StructuralOnly`, `ClusterKind::LooselySimilar`, `ClusterKind::SameBehavior`. These names appear in code, tests, and CSS class suffixes. Never `Exact`, never `Near`, never `Weak`, never `Semantic`.
-2. **Pure-visual is pure.** HTML card, bubble, webviews, tree view — developers see the plain title and action sentence, never `Type-N`. If you feel pulled toward a "technical mode" toggle on a pure-visual surface, the toggle is the bug.
+2. **Pure-visual is pure.** HTML card, bubble, webviews, tree view — developers see the plain title and evidence sentence, never `Type-N`. If you feel pulled toward a "technical mode" toggle on a pure-visual surface, the toggle is the bug.
 3. **Shared-text is hybrid.** CLI stderr, LSP diagnostics, Problems panel, hover — plain prose prefix so humans read it naturally, bracketed `Type-N` suffix so AI scrapers can still classify. `"Identical code [Type-1/2]"` on one line; `"Same behavior, different code [Type-4, AI match]"` on another.
-4. **AI-only retains everything.** JSON `interpretation`, `action_hints`, `schema_doc`, MCP responses keep the full plain-title + action-sentence + `Type-N` form. Dropping `Type-N` would break agent prompts already in the wild.
+4. **AI-only retains everything.** JSON `interpretation`, `action_hints`, `schema_doc`, MCP responses keep the full plain-title + evidence-sentence + `Type-N` form. Dropping `Type-N` would break agent prompts already in the wild.
 5. **`SameBehavior` carries the `(AI match)` badge.** Shown as `"Same behavior, different code (AI match)"` on pure-visual surfaces and `"Same behavior, different code [Type-4, AI match]"` on shared-text surfaces. It is the AI-specific value-add; users deserve to know which clusters came from the embedding pass vs the deterministic pipeline.
-6. **One helper, three forms.** A single function in `deslop-core::buckets` returns the `(plain_title, hybrid_title, action_sentence, taxonomy_label, css_suffix, ai_match)` sextuple keyed by `ClusterKind`. Every renderer pulls the form it needs from that struct. Drift is a bug.
+6. **One helper, three forms.** A single function in `deslop-core::buckets` returns the `(plain_title, hybrid_title, evidence_sentence, taxonomy_label, css_suffix, ai_match)` sextuple keyed by `ClusterKind`. Every renderer pulls the form it needs from that struct. Drift is a bug.
 
 ### [CLONE-BUCKETS-ROUTING] Signal-to-bucket routing
 
@@ -146,7 +148,7 @@ table is canonical for every renderer, schema enum, and facet surface (all deriv
 | `ConstantDrift` | `constant_drift` | conflicting values | Same constant name resolves to different values — confirm which is correct and consolidate. | [LITERAL-CATEGORY-CONST-DRIFT] |
 | `ConstantAlias` | `constant_alias` | same value, different names | One value lives under several names — pick the canonical name and delete the rest. | [LITERAL-CATEGORY-CONST-ALIAS] |
 
-Chips and action sentences come from the same one-helper pattern as the bucket sextuple (rule 6 of
+Chips and evidence sentences come from the same one-helper pattern as the bucket sextuple (rule 6 of
 [CLONE-BUCKETS-DUAL-LABEL]): a single function in `deslop-core::clone_category` keyed by variant;
 every surface pulls from it. The **wire label and chip columns are normative**; the action
 sentences above are paraphrases whose exact copy lives in `deslop-core::clone_category` (the same
