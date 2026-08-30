@@ -38,26 +38,17 @@ The ID records the strategy this section originally specified; the **sum arm was
    transitive closure of the pairs that cleared it.
 5. Rank clusters by summed duplicated mass ([pipeline.md §RANK-MASS-SUM](pipeline.md#rank-mass-sum)) for "worst offenders first."
 
-This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on structural+embedding and ~high on LSH, a Type-3 may score high on LSH+embedding and medium on structural, and a Type-4 scores primarily on embedding. Every type lands in the report; scores explain *why*, and the fused confidence never exceeds the best of them. The axes are uncalibrated — a cosine 0.85, a Jaccard 0.85 and an alignment 0.85 are not the same weight of evidence, and under max the most generous axis wins; `fused_threshold` at 0.85 (above the literature's 0.7) pays that bill. Rendered confidence is defined by [FUSION-CONTENT-GATE]: for shape-saturating clusters the gate substitutes measured content evidence for this function's implicit 1.0 content factor; everywhere else the bounded max **is** the rendered value.
+This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on structural+embedding and ~high on LSH, a Type-3 may score high on LSH+embedding and medium on structural, and a Type-4 scores primarily on embedding. Every type lands in the report; scores explain *why*, and the fused confidence never exceeds the best of them. The axes are uncalibrated — a cosine 0.85, a Jaccard 0.85 and an alignment 0.85 are not the same weight of evidence, and under max the most generous axis wins; `fused_threshold` at 0.85 (above the literature's 0.7) pays that bill.
 
-### [FUSION-SCOPE] `fused` is two quantities at two scopes
+### [FUSION-SCOPE] `fused` is a pair quantity
 
-Governed by [PRINCIPLES-REPORT-NOT-DICTATE](principles.md#principles-report-not-dictate): `fused` is a measurement a consumer may use, weigh differently, or ignore. The name is reused at two scopes, and only one of them decides anything:
+**`fused` never refers to the whole cluster. It exists at the level of the pair only.** A cluster-wide fused is impossible by construction: averaging one across the member pairs is the mean that mispriced proven copies (gh #458), and summing ratios in `[0,1]` is meaningless.
 
-| | **pair fused** | **cluster fused** |
-|---|---|---|
-| Definition | `PairScore::bounded_fused` — the pair's strongest single axis, bounded to `[0,1]` | the **elected** pair's own fused ([FUSION-CLUSTER-SIGNALS]), then content-gated ([FUSION-CONTENT-GATE] §3) |
-| Scope | one candidate pair | one rendered cluster |
-| Role | **admission**, decided pair by pair against `admission.fused_threshold` | **rendered confidence**, published as `signals.fused` |
-| Content evidence | none | folded in, so a cluster's value is normally *lower* than the pair value that admitted it |
+`fused` is the pair's admission score: `PairScore::bounded_fused` — the strongest single axis of `structural`, `token_jaccard`, `embedding_cos`, bounded to `[0,1]` ([FUSION-STRATEGY-BOUNDED-MAX]). It decides admission, pair by pair, against `admission.fused_threshold` — nothing else. A cluster renders its bucket (the verdict), the elected pair's measured axes ([FUSION-CLUSTER-SIGNALS]), and its content evidence ([FUSION-CONTENT-GATE]) — never a fused number. There is no cluster-level fused, no rendered confidence derived from it, and no gate that compares one to the pair bar.
 
-Both scopes are needed — admission needs one scalar because a pair may qualify on any axis; the rendered value needs content because shape alone says nothing about what the code said. **The shared threshold is the defect:** `report_restamp.rs` (`meets_fused_gate`) and `render/signals.rs` compare a cluster-scope value against the pair-scope admission bar, so `meets_fused_gate` can read false on a cluster the engine admitted and vouched for. Tracked in `fused-score-followups.md`; until the lever lands, the flag keeps its current meaning and is never an admission verdict.
+#### [FUSED-THRESHOLD] The pair admission bar
 
-#### [FUSED-THRESHOLD] The 0.85 line, and the three bands
-
-`admission.fused_threshold` (0.85) is the pair-scope admission bar; provenance in [FUSION-TUNING-LEVERS]. It is per-pair data (`CandidatePair::fused_min_score`), not a global constant — a cross-language candidate with no structural anchor lowers it to `candidates.cross_language_min_jaccard`.
-
-Read against a cluster's rendered `signals.fused`, the same 0.85 tops three reported bands: `>= 0.85`, `0.6..0.85`, `< 0.6`. 0.6 is the lower boundary (`REUSE_FUSED` in the golden suites), below which the report states weak evidence. All three bands must be reachable and mean the same thing in every language (`fused_golden_bands.rs`), so the rendered value discriminates rather than saturating. The bands report evidence; they do not assign a response.
+`admission.fused_threshold` (default 0.85) is the pair admission bar; provenance in [FUSION-TUNING-LEVERS]. It is per-pair data (`CandidatePair::fused_min_score`), not a global constant — a cross-language candidate with no structural anchor lowers it to `candidates.cross_language_min_jaccard`. Every threshold in these specs is a configurable default, never a hard-coded constant; the config surface lives in [exclusion.md](exclusion.md) and the migration in `unhardcode-tuning-plan.md`.
 
 ### [FUSION-SHARED-SUBTREE] `structural` is measured subtree overlap, not Merkle equality
 
@@ -76,7 +67,7 @@ Walking forward is also what stops a subtree nested inside an already-paired one
 
 The cap counts nodes of the *normalised* tree, so [PIPELINE-NORMALIZE-AST-OPERATOR](pipeline.md) moved what it reaches without the number changing: operator tokens survive as leaves, and an operator-dense expression counts around half as many nodes again. At 512 that pulled `ts-mixed-band`'s ninety-term expression — 558 nodes, a consistent rename plus one redundant paren, exactly the case this section exists to rescue — onto the conservative bound, which scored it under the admission floor and reported **nothing**. The cap must reach the largest endpoint the admission path is expected to rescue, and is set above the largest pinned such case with room to spare rather than trimmed to it. Moving it is a performance decision, pinned deliberately by `the_alignment_cap_is_the_documented_operating_point`, whose companion assertion fails if the cap ever falls back below that measured case.
 
-**Admission is a compound gate over two independently measured axes, not sum fusion, and it is applied pair by pair.** A pair below `admission.fused_threshold` is admitted only when overlap ≥ `admission.shared_subtree_min_overlap` **and** `token_jaccard` ≥ `admission.shared_subtree_min_jaccard` **and** both endpoints clear `admission.shared_subtree_min_node_count`. Neither axis admits alone — normalisation makes scaffolding Merkle-identical across unrelated files, so shape must be corroborated by tokens. The rendered fused confidence remains the bounded max ([FUSION-STRATEGY-BOUNDED-MAX]); this gate changes what is *measured*, never how confidence is combined. Overlap is measured only on pairs that would otherwise be dropped yet carry the token corroboration, so the cost is bounded away from the ~596K-candidate admission set that [FUSION-CONTENT-GATE] deliberately avoids.
+**Admission is a compound gate over two independently measured axes, not sum fusion, and it is applied pair by pair.** A pair below `admission.fused_threshold` is admitted only when overlap ≥ `admission.shared_subtree_min_overlap` **and** `token_jaccard` ≥ `admission.shared_subtree_min_jaccard` **and** both endpoints clear `admission.shared_subtree_min_node_count`. Neither axis admits alone — normalisation makes scaffolding Merkle-identical across unrelated files, so shape must be corroborated by tokens. This gate changes what is *measured*, never how the pair score is combined. Overlap is measured only on pairs that would otherwise be dropped yet carry the token corroboration, so the cost is bounded away from the ~596K-candidate admission set that [FUSION-CONTENT-GATE] deliberately avoids.
 
 **Routing gains one row, and one comparison is retired.** [CLONE-BUCKETS-ROUTING] row 4b routes high overlap corroborated by an independent axis — the token axis at `admission.shared_subtree_min_jaccard`, **or** the embedding axis at `candidates.embedding_support_floor` — to `nearly_identical`, using the same floors that admitted the pair — so the pipeline can never admit a shared-subtree near-miss the renderer then hides. Row 4's old `structural ≤ 0.01` leg is gone: it predates the measurement, when any non-zero value meant a Merkle anchor, and additional shape evidence must never *hide* a cluster the token axis already carries. Clusters below the overlap floor keep the anchor-free demotion guard unchanged.
 
@@ -169,8 +160,8 @@ erased:
      consistently — the anchors carry that burden, and they must *weigh*
      the proof, never gate it: the deleted
      `rename_evidence_min_literals` cliff zeroed every pair below four
-     literal anchors and rendered a maximal one-literal Type-2 rename at
-     `fused = 0.0588`, an agent-surface false negative
+     literal anchors, pricing a maximal one-literal Type-2 rename to
+     `0.0588` — an agent-surface false negative
      (`type2_rename_anchor_floor.rs`).
      **A certified rename carries no doubt left for the mass term to
      price** (gh #410). When the lesser of literal consistency and
@@ -194,11 +185,9 @@ erased:
      anchors, certification can only switch on — the
      [REPAIR-RENAME-LITERAL-ECHO] monotonicity property is preserved.
      Without it the axis was capped at
-     `rename_consistency_discount × anchors / (anchors + 4)`, so
-     `fused >= 0.85` needed 68 affirming positions and **no Type-2
-     rename could reach the top band in any language**, so the band
-     described byte-equality rather than clone-ness
-     (`fused_golden_bands.rs`, six languages, both rename stems).
+     `rename_consistency_discount × anchors / (anchors + 4)`, so a
+     certified rename could never read 1.0 and **no Type-2
+     rename cleared the act-now routing floor in any language**.
    Neither population is ever pooled with the other, and neither is averaged
    across a cluster's members: both are the elected pair's own measurement,
    the one rule [FUSION-CLUSTER-SIGNALS] states for every axis. Pooling them
@@ -206,22 +195,7 @@ erased:
    scores low `agreement` and high `rename_consistency`, so the mean describes
    neither.
 
-3. **Rendered confidence**: for shape-identical clusters not proven
-   byte-equivalent, `fused = max(embedding_cos, max(structural, token_jaccard)
-   × max(agreement, rename_consistency_discount × rename_consistency))`. The
-   discount reflects that mapping-explained identifier positions are strictly
-   weaker evidence than byte equality: a certified rename tops out at
-   `rename_consistency_discount` of a saturated shape, which is inside the
-   act-now band, while `fused = 1.0` stays reserved for byte-proven
-   duplication — so proven copy-paste always outranks proven rename. LSH-only and
-   embedding-discovered pairs render the bounded max fusion unchanged — the
-   same formula with the content factor at its implicit 1.0.
-
-   The multiply is **derived, not literature** — unlike the max, the
-   per-pair unit and the mass sum, it carries no citation. It stands as the
-   rendering rule; §4's threshold governs routing.
-
-4. **Routing — three zones over `support = max(agreement,
+3. **Routing — three zones over `support = max(agreement,
    rename_consistency)`** (either population may vouch; never their mean).
    Below `content_gate.support_floor` (the Type-3 line; provenance in
    [FUSION-TUNING-LEVERS]), and with no semantic support (`embedding_cos` below
@@ -236,7 +210,7 @@ erased:
    Between the two, the legacy signal routing stands: real-world sibling
    families (the #197 REST settings surface measures 0.72–0.80) keep their
    demoted verdict.
-5. **Token-signal correction.** A cluster whose members all carry **one**
+4. **Token-signal correction.** A cluster whose members all carry **one**
    Merkle hash has normalised k-gram sets that are equal by construction;
    for such clusters routed `identical` / `nearly_identical` a lower rendered
    `token_jaccard` is a fallback-signature artifact and is corrected to 1.0
@@ -251,15 +225,15 @@ erased:
    correction to `content_gate.structural_saturation_floor` — a near-miss
    **routing** tolerance — published `token_jaccard = 1.0`, and the `shape`
    reading derived from it, across the whole `[0.99, 1.0)` band on no
-   evidence: the rendered signals then no longer reproduced the rendered
-   `fused`, which is computed before the correction. Routing tolerance is not
+   evidence. Routing tolerance is not
    proof of identity. Pinned by
    `crates/deslop/tests/content_gate_signal_honesty.rs`.
-6. **Ranking does not read this number as a factor.** The report weight is
-   the **sum** of duplicated mass, never scaled by confidence — see
-   [pipeline.md §RANK-MASS-SUM](pipeline.md#rank-mass-sum), which owns the
-   formula. `fused` breaks ties at equal mass and does nothing else to the
-   ranking.
+5. **Ranking reads none of this.** The report weight is the **sum** of
+   duplicated mass — see [pipeline.md §RANK-MASS-SUM](pipeline.md#rank-mass-sum),
+   which owns the formula — never a confidence factor, with no fused
+   tie-break: at equal mass, cluster id makes the order total. Content
+   evidence answers the binary question — is this a clone, and which bucket
+   — never how heavily it weighs.
 
 `token_jaccard` itself stays rename-invariant (normalised k-grams); the gate
 adds evidence rather than redefining an existing signal.
@@ -269,7 +243,7 @@ same normalised kinds the structural pass hashes, so a near-total
 `token_jaccard` (≥ `content_gate.saturating_token_floor`, the near-identical
 routing line) saturates on shape
 matches exactly as `structural` does — the surviving flutter/flutter #331
-cluster read `structural=0.62, token_jaccard=0.98, fused=1.00` because
+cluster read `structural=0.62, token_jaccard=0.98` because
 transitive closure mixed structural and LSH pairs. The gate therefore fires on
 *either* saturating signal.
 
@@ -299,6 +273,68 @@ belongs to the `[ranking] data_clones` policy ([RANK-CATEGORY]) so
 `data_clone_weight = 1.0` can still restore a table the gate routed to the
 structural-only bucket.
 
+### [FUSION-ALGEBRA] Every calculation, as algebra
+
+The whole arithmetic surface in one place. Each line carries the spec id that owns it; if prose and algebra ever disagree, both are wrong — fix them together.
+
+**Symbols.** `S` structural, `J` token_jaccard, `E` embedding_cos, `A` agreement, `R` rename_consistency, `n` node count, `p` a candidate pair, `c` a cluster, `ℓ` a source line.
+
+```text
+— Pair admission — [FUSION-STRATEGY-BOUNDED-MAX] [FUSED-THRESHOLD] [FUSION-SHARED-SUBTREE]
+
+  S(a,b)       = 1 − TED(a,b) / max(n(a), n(b));   1.0 when Merkle-equal
+  fused(p)     = clamp(max(S(p), J(p), E(p)), 0, 1)
+  t(p)         = cross_language_min_jaccard            if cross-language(p) ∧ S(p) ≤ 0
+                 fused_threshold  (default 0.85)       otherwise
+  admit(p)     ⟺ fused(p) ≥ t(p)
+                 ∨ ( S(p) ≥ shared_subtree_min_overlap ∧ J(p) ≥ shared_subtree_min_jaccard
+                     ∧ n(left) ≥ shared_subtree_min_node_count
+                     ∧ n(right) ≥ shared_subtree_min_node_count )
+  guard(p)     : S(p) ≤ 0 ∧ E(p) ≤ 0 ⟹ J(p) ≥ lsh_only_min_jaccard
+                                     ∧ min(n(left), n(right)) ≥ lsh_only_min_node_count
+
+— Election — [FUSION-CLUSTER-SIGNALS]
+
+  p*(c)        = max over admitted pairs of (fused, −left, −right)      (lexicographic, deterministic)
+  rendered(c)  = (S, J, E) of p*(c);   signal_source = positions of p*(c)
+
+— Content evidence (the elected pair) — [FUSION-CONTENT-GATE]
+
+  A            = matching collapsed positions / all collapsed positions
+  w_mass       = anchors / (anchors + rename_evidence_half_mass)
+  certified    ⟺ min(literal_consistency, coverage) = 1.0 ∧ w_mass ≥ support_floor
+  w            = 1.0                                        if certified
+                 rename_consistency_discount × w_mass       otherwise
+  R            = min(literal_consistency, coverage) × w
+  support      = max(A, R)          (either population may vouch; never a mean, never pooled)
+
+— Routing — [FUSION-CONTENT-GATE] [CLONE-BUCKETS-ROUTING]
+
+  support < support_floor ∧ E < embedding_support_floor   ⟹ structural_only routing
+  support ≥ promote_floor                                  ⟹ nearly_identical
+  otherwise                                                ⟹ legacy signal routing
+  all members one Merkle hash ∧ bucket ∈ {identical, nearly_identical}
+                                                           ⟹ rendered J = 1.0   (token correction)
+
+— Weight and order — [RANK-MASS-SUM] [RANK-CATEGORY] [RANK-STRUCTURAL-ONLY]
+
+  weight(c)    = canonical_nodes(c) × (visible(c) − 1)
+                 × category_multiplier × structural_only_multiplier;   0 when visible < 2
+  order        = weight desc, then cluster id asc
+
+  A duplicate is a duplicate: content evidence decides whether a cluster is
+  reported and which bucket it wears — never how heavily it weighs.
+
+— Repo metrics — [METRICS-REPO] [METRICS-REPO-WEIGHTED]
+
+  duplication_percent = clamp(100 × duplicated_loc / analysed_loc, 0, 100)
+  line_weight(ℓ)      = max over clusters covering ℓ of (bucket_weight × category_weight)
+  weighted_percent    = clamp(100 × Σ_ℓ line_weight(ℓ) / analysed_loc, 0, 100)   (specified, not shipped)
+  invariant           : weighted_percent ≤ duplication_percent
+```
+
+Every numeric constant above is a configurable default, never a hard-coded value — provenance in [FUSION-TUNING-LEVERS], surface in [exclusion.md](exclusion.md), migration in `unhardcode-tuning-plan.md`.
+
 ### [FUSION-TUNING-LEVERS] Every threshold is a configuration item with a recorded provenance
 
 A number is a **lever** when changing it changes which clusters are reported, which bucket they land in, or how they rank. Every lever is named, defaulted to the value compiled today, range- and invariant-validated at load ([EXCLUSION-CONFIG] `[tuning]`), and declared in the report that its value produced ([CONFIG-TUNING-DECLARED]).
@@ -321,13 +357,13 @@ A number is a **lever** when changing it changes which clusters are reported, wh
 | `candidates.embedding_top_k` | `embedding/pairs.rs:16` | 5 | **Unrecorded.** The stated rationale — recall comes from the union, not the ANN fan-out — argues for *small*, not for *five*. |
 | `candidates.embedding_exact_pair_limit` | `embedding/pairs.rs:22` | 256 | **Unrecorded.** |
 | `content_gate.support_floor` | `buckets.rs:237` | 0.7 | **Derived** (#341, provenance audit). SourcererCC's 0.7 is token overlap similarity; here it prices raw-byte agreement. Value kept; literature label dropped. |
-| `content_gate.promote_floor` | `buckets.rs:248` | 0.85 | **Derived** (#341). The act-now grade, matched to `fused_threshold`; bounded below by a defect — the #197 REST settings family measures 0.72–0.80 and must keep its demoted verdict. |
+| `content_gate.promote_floor` | `buckets.rs:248` | 0.85 | **Derived** (#341). The act-now routing grade for `support`; bounded below by a defect — the #197 REST settings family measures 0.72–0.80 and must keep its demoted verdict. |
 | `content_gate.structural_only_max_support` | `buckets.rs:215` | 0.05 | **Defect.** #197's acceptance criterion (`token_jaccard = 0.00`, `embedding_cos = 0.00`) plus tolerance for MinHash collision noise. It is a ceiling below which a signal counts as *absent*, and is never a support floor — `route_shape_identical` read it as one, so a cosine of 0.05 overruled the measured content evidence and the gate's verdict followed whether the embedding pass ran (#356). |
 | `candidates.embedding_support_floor` | `pair.rs:91` | 0.80 | **Derived** (#356). The cosine at which a measured `embedding_cos` is the embedding pass *vouching for* a cluster rather than merely having measured it — the ANN candidate gate's own operating point, and the line [CLONE-BUCKETS-ROUTING] row 2 lets semantic evidence carry a bucket alone. The [FUSION-CONTENT-GATE] escape is judged against it. |
 | `content_gate.saturating_token_floor` | `buckets.rs:291` | 0.95 | **Defect** (#368). The surviving flutter/flutter #331 cluster read `structural = 0.62, token_jaccard = 0.98` — the token layer echoing shape, not reporting content. |
-| `content_gate.rename_consistency_discount` | `buckets.rs:301` | 0.9 | **Derived** (#346), a house rule and not literature: it keeps a proven Type-2 rename above `fused_threshold` while reserving `fused = 1.0` for byte proof. The `shape × content` multiply it scales carries the same label ([FUSION-CONTENT-GATE] §3). |
+| `content_gate.rename_consistency_discount` | `buckets.rs:301` | 0.9 | **Derived** (#346), a house rule and not literature: it prices residual doubt in a rename as an asymptotic mass weight, dropped entirely where the anchor mass already vouches (#410). Shapes the `rename_consistency` axis that feeds routing support — never a rendered confidence. |
 | `content_gate.rename_corroboration_min` | `content.rs` | 2 | **Literature.** [TECH-PMATCH-BAKER] prev-encoding: a parameter symbol's first occurrence matches anything and constrains nothing; only repetition carries binding proof. |
-| `content_gate.rename_evidence_half_mass` | `content/rename.rs` | 4 | **Defect.** Replaces the `rename_evidence_min_literals = 4` cliff (#346), which zeroed sub-floor rename evidence and rendered a maximal one-literal Type-2 rename at `fused = 0.0588` (`type2_rename_anchor_floor.rs`). Same operating point, now a half-saturation mass: a forwarding echo's single substitution (mass 2, weight 1/3) stays below every routing floor while a 16-anchor maximal rename clears the reuse line. The weight is an asymptote, so it applies only while doubt remains: a rename certified contradiction-free at or above `content_gate.support_floor` of mass weighs 1.0 (#410, above). |
+| `content_gate.rename_evidence_half_mass` | `content/rename.rs` | 4 | **Defect.** Replaces the `rename_evidence_min_literals = 4` cliff (#346), which zeroed sub-floor rename evidence and priced a maximal one-literal Type-2 rename to `0.0588` (`type2_rename_anchor_floor.rs`). Same operating point, now a half-saturation mass: a forwarding echo's single substitution (mass 2, weight 1/3) stays below every routing floor while a 16-anchor maximal rename clears them all. The weight is an asymptote, so it applies only while doubt remains: a rename certified contradiction-free at or above `content_gate.support_floor` of mass weighs 1.0 (#410, above). |
 | `content_gate.verbatim_member_share_floor` | `content.rs:54` | 0.5 | **Defect** (#341, tightened #346). A strict majority — the share must *exceed* it. #104's verbatim pair among lookalikes (share ≥ 2/3) must stay visible; two byte-identical widgets inside 453 framework declarations (≈ 0.004) must not vouch for the family; and two disjoint identical pairs at exactly 0.5 must not certify each other. |
 | `content_gate.literal_table_min_fraction` | `buckets.rs:257` | 0.8 | **Derived** (#341), value unswept. "Overwhelmingly literal" is the stated criterion for [CLONE-NOISE-LITERAL-TABLE]; 0.8 is where it was set, not where it was measured. |
 | `content_gate.literal_table_min_literals` | `content.rs:36` | 8 | **Derived** (#341), value unswept. A data table is a run of values, so a two-element tuple return must not reach the classifier — the argument fixes the direction, not the number. |

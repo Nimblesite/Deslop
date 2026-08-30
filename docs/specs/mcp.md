@@ -63,18 +63,16 @@ envelope.
 > enums those sections describe are implemented today on the current surface.
 >
 > **`top-offenders` output order — shipped.** Clusters come back in **report
-> order**: final report `weight` descending, with `confidence_factor` already
-> folded into that weight — the content-gated fused confidence for most
-> clusters, and deliberately `1.0` for `data`-category clusters, whose
-> demotion belongs exclusively to the `[ranking] data_clones` policy
+> order**: final report `weight` descending — the summed duplicated mass,
+> scaled only by the [RANK-CATEGORY] and [RANK-STRUCTURAL-ONLY] policy
+> multipliers ([RANK-MASS-SUM](pipeline.md#rank-mass-sum)); a `data`-category
+> cluster's demotion belongs exclusively to the `[ranking] data_clones` policy
 > ([PIPELINE-RANK-WORST-FIRST](pipeline.md#pipeline-rank-worst-first),
-> [RANK-CATEGORY]). It is
-> **not** sorted by `signals.fused`. Re-sorting or filtering on that field
-> discards the ranking the engine computed: the rendered confidence is a
-> per-cluster quality, so ordering by
-> it puts a two-line byte-identical pair above a 400-line proven clone, and
-> filtering on it discards proven Type-2 renames the content gate deliberately
-> renders below the admission bar ([REPORTING-CONTEXT](REPORTING-CONTEXT.md)).
+> [RANK-CATEGORY]). `fused` is a pair admission quantity ([FUSION-SCOPE]) and
+> plays no part in ordering: ordering by confidence puts a two-line
+> byte-identical pair above a 400-line proven clone, and filtering on it
+> discards proven Type-2 renames the content gate deliberately routes below
+> the top band ([REPORTING-CONTEXT](REPORTING-CONTEXT.md)).
 > Filter on `bucket`. The same contract governs `find-similar`
 > ([MCP-TOOL-FINDSIMILAR]).
 
@@ -262,13 +260,11 @@ declaring a new constant, query `duplicates { categories: ["shadowed_constant",
 code passes `buckets: ["identical"]` inside the prevention loop too) and the uniform `limit`
 (default 5, replacing the old `top_n`) + `max_occurrences` params.
 
-Output: top-`limit` clusters in **report order** — final report `weight` descending, with
-`confidence_factor` already folded in (the content-gated fused confidence, or `1.0` for
-`data`-category clusters per [RANK-CATEGORY])
-([PIPELINE-RANK-WORST-FIRST](pipeline.md#pipeline-rank-worst-first)) — carrying signals,
-interpretation, action hints, occurrences, and the `filters` echo. Not sorted by `fused`: the
-rendered confidence is a per-cluster quality, and ordering by it would put a two-line byte-identical
-pair above a 400-line proven clone.
+Output: top-`limit` clusters in **report order** — final report `weight` descending
+([RANK-MASS-SUM](pipeline.md#rank-mass-sum)) — carrying signals, interpretation, action hints,
+occurrences, and the `filters` echo. `fused` is a pair admission quantity ([FUSION-SCOPE]) and
+plays no part in ordering: ordering by confidence would put a two-line byte-identical pair above a
+400-line proven clone.
 
 Edge cases:
 

@@ -217,8 +217,8 @@ reaches.** A method implementing a *framework* interface has no declaring base
 in the index — Flutter's `State<T>.build` is not in the user's repository — so
 the index alone reads every `@override` implementation as an ordinary same-named
 function and clusters it as duplication. Six distinct Flutter widgets did
-exactly that, two of their `build` overrides rendering `nearly_identical` at
-`fused = 0.889` on `structural = 0.889, token_jaccard = 0.797` while the
+exactly that, two of their `build` overrides routing `nearly_identical` on
+`structural = 0.889, token_jaccard = 0.797` while the
 measured content evidence said `agreement = 0.25, rename_consistency = 0.0`
 ([FUSION-CONTENT-GATE] keys on saturation and this pair sits under it). The
 languages that spell the relationship — Dart `@override`, C# `override`,
