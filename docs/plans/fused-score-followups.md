@@ -1,6 +1,6 @@
-# Fused confidence — remaining work
+# Fused admission — remaining work
 
-**What this file is.** The open work on fused admission, measured cluster confidence, content gating, bucket routing and confidence-aware ranking. One status per item, once: spec ids for the rules, pins for the assertions. Nothing here restates a spec; work owned elsewhere is listed and not repeated.
+**What this file is.** The open work on fused pair admission, content routing and ranking. One status per item, once: spec ids for the rules, pins for the assertions. Nothing here restates a spec; work owned elsewhere is listed and not repeated.
 
 **Owned elsewhere. Do not restate it here.**
 
@@ -12,7 +12,7 @@
 | Driving repo duplication under the 16.4 pin | gh #397, ledger in `.deslop.toml` |
 | Unhardcoding the compiled tuning levers and recording their provenance (`embedding_top_k`, `type4_embedding_floor`, `low_structural_type4_ceiling`, `low_structural_type4_weight`, `proven_identical_token_floor`, `literal_table_*`) | [`unhardcode-tuning-plan.md`](unhardcode-tuning-plan.md) |
 
-A candidate-route problem belongs here only when two runs produce the same final occurrence set and assign it different measured confidence.
+A candidate-route problem belongs here only when two runs produce the same final occurrence set and disagree on its admission, routing or rank.
 
 ## The one measure
 
@@ -20,16 +20,16 @@ Every reported cluster is a real duplicate, and every real duplicate is reported
 
 ## The contract
 
-`fused` must **carry information**: all three bands (`>= 0.85`, `0.6..0.85`, `< 0.6`) must be reachable and mean the same thing in every language ([FUSED-THRESHOLD](specs/fusion.md)); Deslop publishes the value and the evidence behind it, and what a consumer does with each band is the consumer's own policy ([PRINCIPLES-REPORT-NOT-DICTATE](specs/principles.md)). The failure mode is sum-then-clamp fusion over two views of one normalised tree, which makes `fused` a re-encoding of "the shapes matched" pinned at 1.0, with the middle of the range unreachable. The certified-rename rule — top band at `RENAME_CONSISTENCY_DISCOUNT × shape`, `fused = 1.0` reserved for byte proof — is [FUSION-CONTENT-GATE](specs/fusion.md) §3. `fused_golden_bands.rs` and `fused_golden_invariants.rs` cite this paragraph by name; do not weaken it without moving those suites with it.
+`fused` is the pair admission score — the strongest single axis, decided pair by pair against a configurable bar ([FUSED-THRESHOLD](specs/fusion.md)); it never refers to the whole cluster ([FUSION-SCOPE](specs/fusion.md)). A cluster renders its bucket (the verdict), the elected pair's measured axes ([FUSION-CLUSTER-SIGNALS]), and its content evidence ([FUSION-CONTENT-GATE]) — never a fused number, and never a confidence-scaled weight ([RANK-MASS-SUM](specs/pipeline.md)). The rendered-confidence world — `signals.fused`, the three bands, `meets_fused_gate`, and the `fused_golden_bands.rs` / `fused_golden_invariants.rs` suites that cited the old contract by name — is deleted by the first backlog item; the surviving pins are the pair-level ones (`pair_admission_bounded_max.rs`, `issue_343_sum_clamp_saturation`).
 
 ## Landed — settled on this branch
 
 One line each: what → spec → pin.
 
 - **#373** polymorphic gate no longer hides consistently-renamed Type-2 clones — subject bodies compare as normalised kind streams ([CLONE-NOISE-POLYMORPHIC-CONTRACT]); dual-direction pin `polymorphic_gate_hides_rename_clone.rs`.
-- **#410** certified-total renames reach the top band — [FUSION-CONTENT-GATE] §3; `assert_certified_rename_reaches_act_now`, both stems, six languages; [REPAIR-RENAME-LITERAL-ECHO] monotonicity survives.
+- **#410** certified renames carry no doubt — the mass discount drops where the anchor mass vouches, `rename_consistency` reads 1.0 ([FUSION-CONTENT-GATE]); pin `assert_certified_rename_reaches_act_now` re-points to routing in the rollout; [REPAIR-RENAME-LITERAL-ECHO] monotonicity survives.
 - **#458 shape half** — a cluster renders one admitted pair's own shape axes, `signal_source` names it ([FUSION-CLUSTER-SIGNALS]); `pair_consistent_signals.rs`, `verbatim_family_survives_stranger.rs`.
-- **Ranking weight is summed duplicated mass, never confidence-scaled** — [RANK-MASS-SUM] owns the formula; `fused` is only a tie-break; `rank_mass.rs`.
+- **Ranking weight is summed duplicated mass, never confidence-scaled** — [RANK-MASS-SUM] owns the formula; ties break by cluster id; `rank_mass.rs`.
 - **Token-bridge welds, containers, regions** — [PIPELINE-CLUSTER-ELECT] + [PIPELINE-CLUSTER-ELECT-CONTAINER]; `csharp_merged_clone_families.rs`, `rank_structural_only_policy`, eleven unit tests.
 - **Operators survive normalisation as their own tokens** — [PIPELINE-NORMALIZE-AST-OPERATOR]; six-language golden re-blessed (ids/node counts only), alignment cap 512→768, `SEMANTIC_EPOCH` 3.
 - **Assertion instruments hardened** — #415 `fused_score_bounds.rs` fails on empty/missing signals; #398 `ReportFixture` one `FileId` per path (`report_fixture_file_identity.rs`); #435 callsite-interest anchor; #412 substring skips replaced with declared `#[ignore]`s under [TEST-SELECTION-SKIP] — `make test` runs the whole workspace unfiltered.
@@ -53,7 +53,7 @@ Every item is unpinned unless a test is named. **Write the failing fixture first
 - [ ] **#443** — distinguish "no authored content measured" from agreement `1.0`.
 - [ ] **#431** — stop overwriting measured `token_jaccard` for clusters the Merkle argument does not cover.
 - [ ] **#356** — ANN bridges must not mutate structural components before measurement (`embedding_route_invariance` green, issue open).
-- [ ] **meets_fused_gate scope mismatch** — [FUSION-SCOPE]: the flag compares a cluster value to the pair bar and can read false on an admitted cluster; the VSIX bubble reads it as a gate. Give the cluster line its own lever or retire it.
+- [ ] **Retire cluster fused (code rollout)** — remove `signals.fused` from the wire and every surface, `meets_fused_gate`, the content-gate multiply (`buckets/gate.rs`), the fused tie-break in `report_weight.rs`, the band constants (`ACT_NOW_FUSED` / `REUSE_FUSED`), and the evidence-line fused; delete `fused_golden_bands.rs` / `fused_golden_invariants.rs`; re-point the certified-rename and history-determinism pins from rendered fused to routing outcomes (bucket + support) without weakening an assertion; update the code comments citing the old contract.
 
 ## Ranking and provenance
 
@@ -62,7 +62,7 @@ Every item is unpinned unless a test is named. **Write the failing fixture first
 - [ ] Sweep `embedding_top_k = 5` against a corpus with large clone classes (every surveyed system ties topN to class size).
 - [x] **7e — stated in [FUSION-STRATEGY-BOUNDED-MAX]** — the max runs over uncalibrated axes, the most generous axis wins by construction, and `fused_threshold` at 0.85 pays the precision bill.
 - [ ] Inline literal tables in `buckets.rs` / `report_render.rs` need provenance; code comments must match the spec's derived labels — spec half landed ([FUSION-TUNING-LEVERS]).
-- [ ] Decide whether content gates admission or scales rendered confidence — §3 scales (`fused = shape × content`); a gate would change which clusters report.
+- [x] **Gate-vs-scale settled** — content gates routing (bucket) and nothing else ([FUSION-CONTENT-GATE]); the rendered-confidence multiply and the question died with the cluster-fused rollout.
 
 ## Gates and coverage
 
@@ -73,7 +73,7 @@ Every item is unpinned unless a test is named. **Write the failing fixture first
 
 - [ ] Bucket sentences in `buckets.rs` (the single source) per the [CLONE-BUCKETS](../specs/taxonomy.md#clone-buckets) table; `clone_category.rs`'s *"Extract the duplicated logic into a shared function."* and `report_boilerplate.rs`'s *"Consider…"* / *"Review only if…"* go with them.
 - [ ] Delete the TypeScript copies of Rust strings — `types/report.ts`, `severity.ts`, `bubble/renderParts.ts`, `bubble/live.ts`, `types/signals.ts` each restate a sentence `buckets.rs` owns, breaking the one-rendering rule.
-- [ ] Rename `act-now` — 243 occurrences across 63 files (`ACT_NOW_FUSED`, `ACT_NOW_BUCKETS`, `isActNow`, spec prose) — to the band it denotes.
+- [ ] Rename `act-now` — 243 occurrences across 63 files (`ACT_NOW_FUSED`, `ACT_NOW_BUCKETS`, `isActNow`, spec prose) — to the bucket it denotes; the band constants themselves die with the rollout.
 - [ ] `action_sentence` → `evidence_sentence` in the buckets sextuple; the wire names `action_hints` / `recommendation` stay (renaming breaks agent prompts for no accuracy gain).
 
 ## Public documentation and repository policy
@@ -102,6 +102,6 @@ Kept only for the fused repair IDs cited from tests and specifications.
 
 | ID | What it fixed | Held by |
 |---|---|---|
-| `[REPAIR-RENAME-ANCHOR-MASS]` (#405) | A maximal Type-2 rename below the literal-anchor floor rendered `fused = 0.0588` and was reported as coincidence. Replaced a four-literal cliff with smoothly weighted Baker-corroborated anchor mass | `type2_rename_anchor_floor.rs`, `fused_golden_bands.rs`, `js_language_features.rs`, `js_ts_clone_buckets.rs`, `common/signals.rs`, `taxonomy.md` |
+| `[REPAIR-RENAME-ANCHOR-MASS]` (#405) | A maximal Type-2 rename below the literal-anchor floor priced to `0.0588` — reported as coincidence. Replaced a four-literal cliff with smoothly weighted Baker-corroborated anchor mass | `type2_rename_anchor_floor.rs`, `fused_golden_bands.rs`, `js_language_features.rs`, `js_ts_clone_buckets.rs`, `common/signals.rs`, `taxonomy.md` |
 | `[REPAIR-SUBSUME-CONTENT-FIRST]` (#367, #408) | Measured content before destructive cross-cluster subsumption and made the survivor election read it: a demoted view never deletes a credible one, a demoted encloser yields only to verbatim-proven nesting that carries statement mass, and between credible views enclosure stands | `cross_cluster_collapse.rs`, `type3_enclosing_method.rs`, `cluster/subsume/election.rs`, `[PIPELINE-CLUSTER-SUBSUME]` in `pipeline.md` |
 | `[REPAIR-RENAME-LITERAL-ECHO]` (#409) | Counted a literal renamed alongside its symbol as consistent rename evidence instead of disproof, so a more complete rename can never score below a less complete one | `rename_literal_monotonicity.rs`, `js_language_features.rs`, `content/rename.rs`, `[FUSION-CONTENT-GATE]` in `fusion.md` |

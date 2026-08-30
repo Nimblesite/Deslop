@@ -95,7 +95,7 @@ Each published diagnostic carries:
 - `range` — derived from `(start_byte, end_byte)` of the occurrence on this file, using the open buffer's line-index.
 - `severity` — per [LSP-SEVERITY].
 - `data` — `{ "cluster_id": <16-char cluster id>, "taxonomy": <academic label> }`. The cluster id (stable across runs, same one used in text/HTML reports) rides the machine-facing `data` so an agent can call `deslop/clusterById` without parsing the message ([LSP-AGENT-FRIENDLY]); `code` and `codeDescription` are left unset, and the cluster's `deslop://cluster/<id>` view is reached through [LSP-VIRTUAL-DOC].
-- `message` — `"<bucket title> × <count> — <evidence sentence> — <confidence explanation>"`, the same human-readable, agent-readable line the other surfaces show ([PRINCIPLES-AUDIENCE-AGENT]). The confidence explanation is `deslop-core::render::signals::plain_explanation` — `structural`, `jaccard`, `embedding`, `fused`, then the measured content evidence `agreement`, `rename`, `literal`, each to two decimal places ([FUSION-CONTENT-GATE]). It is the reason the bucket title is falsifiable: a corroborated Type-2 rename and an anchor-poor scaffolding family both render `structural 1.00`, and only the evidence tells them apart. Every surface renders it through that one function, so the Problems panel, the code lens, the Markdown report and the HTML footer can never describe the same numbers differently.
+- `message` — `"<bucket title> × <count> — <evidence sentence> — <evidence explanation>"`, the same human-readable, agent-readable line the other surfaces show ([PRINCIPLES-AUDIENCE-AGENT]). The evidence explanation is `deslop-core::render::signals::plain_explanation` — the elected pair's axes `structural`, `jaccard`, `embedding`, then the measured content evidence `agreement`, `rename`, `literal`, each to two decimal places ([FUSION-CONTENT-GATE]). It is the reason the bucket title is falsifiable: a corroborated Type-2 rename and an anchor-poor scaffolding family both render `structural 1.00`, and only the evidence tells them apart. Every surface renders it through that one function, so the Problems panel, the code lens, the Markdown report and the HTML footer can never describe the same numbers differently.
 - `source` — `"deslop"`.
 - `tags` — never `Unnecessary` or `Deprecated`; duplication isn't dead code.
 - `relatedInformation` — one entry per *other* occurrence of the cluster, with its `Location` and "occurrence N of M" label. This is what makes the Problems panel jumpable across occurrences.
@@ -126,7 +126,7 @@ Pull-based diagnostics only travel to the editor for files the client actively p
 At the first line of every clone occurrence, a code lens reading:
 
 ```
-●● 4 copies — structural 1.00 · jaccard 0.97 · embedding 0.91 · fused 0.88 · agreement 0.62 · rename 0.94 · literal 0.11 — jump to next
+●● 4 copies — structural 1.00 · jaccard 0.97 · embedding 0.91 · agreement 0.62 · rename 0.94 · literal 0.11 — jump to next
 ```
 
 The leading glyph (`●●`) is a two-dot severity badge whose colour matches the diagnostic severity. It's Unicode, not ANSI — LSP clients render their own. The signal breakdown is the same `render::signals::plain_explanation` the diagnostic message carries ([LSP-DIAGNOSTICS], [FUSION-CONTENT-GATE]) — all seven fields of the JSON report's `signals`, so a user reading inline has parity with an agent reading the JSON, and the lens and the Problems panel can never disagree. Plain text, never Markdown: a client renders a lens title verbatim, so a code span would show as a literal backtick.

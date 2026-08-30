@@ -282,10 +282,11 @@ The whole arithmetic surface in one place. Each line carries the spec id that ow
 ```text
 — Pair admission — [FUSION-STRATEGY-BOUNDED-MAX] [FUSED-THRESHOLD] [FUSION-SHARED-SUBTREE]
 
-  S(a,b)       = 1 − TED(a,b) / max(n(a), n(b));   1.0 when Merkle-equal
-  fused(p)     = clamp(max(S(p), J(p), E(p)), 0, 1)
+  S(a,b)       = 1 − TED(a,b) / max(n(a), n(b));   1.0 when Merkle-equal    # Baxter et al. 1998: hash, then TED near-miss
+  fused(p)     = clamp(max(S(p), J(p), E(p)), 0, 1)                          # max-or-sum, never average — arXiv:2510.15480
   t(p)         = cross_language_min_jaccard            if cross-language(p) ∧ S(p) ≤ 0
-                 fused_threshold  (default 0.85)       otherwise
+                 fused_threshold  (default 0.85)       otherwise             # derived; clears SourcererCC's 0.7 overlap floor
+  J            = MinHash Jaccard estimate   (signature agreement probability — Broder's MinHash)
   admit(p)     ⟺ fused(p) ≥ t(p)
                  ∨ ( S(p) ≥ shared_subtree_min_overlap ∧ J(p) ≥ shared_subtree_min_jaccard
                      ∧ n(left) ≥ shared_subtree_min_node_count
@@ -306,7 +307,7 @@ The whole arithmetic surface in one place. Each line carries the spec id that ow
   w            = 1.0                                        if certified
                  rename_consistency_discount × w_mass       otherwise
   R            = min(literal_consistency, coverage) × w
-  support      = max(A, R)          (either population may vouch; never a mean, never pooled)
+  support      = max(A, R)          (either population may vouch; never a mean, never pooled)   # max, never average — arXiv:2510.15480
 
 — Routing — [FUSION-CONTENT-GATE] [CLONE-BUCKETS-ROUTING]
 
@@ -327,11 +328,25 @@ The whole arithmetic surface in one place. Each line carries the spec id that ow
 
 — Repo metrics — [METRICS-REPO] [METRICS-REPO-WEIGHTED]
 
-  duplication_percent = clamp(100 × duplicated_loc / analysed_loc, 0, 100)
+  duplication_percent = clamp(100 × duplicated_loc / analysed_loc, 0, 100)   # unweighted duplicated-line density — the SonarQube comparable gate
   line_weight(ℓ)      = max over clusters covering ℓ of (bucket_weight × category_weight)
   weighted_percent    = clamp(100 × Σ_ℓ line_weight(ℓ) / analysed_loc, 0, 100)   (specified, not shipped)
   invariant           : weighted_percent ≤ duplication_percent
 ```
+
+**Provenance.** The literature behind the formula lines (links in [reading-list.md](reading-list.md)); quoted where the claim is verbatim:
+
+| Decision | Source | Verified claim |
+|---|---|---|
+| Fingerprinted structural axis | Chilowicz et al. 2009 | *"each node of an AST is associated with a fingerprint based on a hash value (incrementally computed) of the subtree rooted at the node"* |
+| Exact hash, TED near-miss extension | Baxter et al. 1998 | hash AST subtrees, cluster by hash, extend to near-miss via tree edit distance |
+| `fused` / `support` = max; the pair is the unit; never average | arXiv:2510.15480 | the unit is the pair and the combination is max or sum, never average |
+| `fused_threshold` default above the overlap floor | SourcererCC (Sajnani et al. 2016) | 0.7 token-overlap default; 0.85 clears it with margin |
+| Routing separates evidence classes — no confidence scaling of findings | Svajlenko & Roy 2015 | tool precision and recall degrade monotonically as syntactic similarity falls |
+| Shape-only repetition demoted, never a failing verdict | Kapser & Godfrey 2008 | shape-level repetition is the weakest ground for a failing verdict |
+| Repo percentage as the comparable gate | SonarQube metrics | the industry-standard CI gate is unweighted duplicated-line density |
+
+Content-evidence arithmetic (`A`, `R`, the asymptotic weight, the routing floors) and the mass-sum weight are **derived or defect fixes**, not literature — their provenance rows in [FUSION-TUNING-LEVERS] say so.
 
 Every numeric constant above is a configurable default, never a hard-coded value — provenance in [FUSION-TUNING-LEVERS], surface in [exclusion.md](exclusion.md), migration in `unhardcode-tuning-plan.md`.
 
