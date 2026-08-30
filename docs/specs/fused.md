@@ -2,6 +2,11 @@
 
 Deslop combines structural, token, and embedding analysis. The surveyed systems in [landscape.md](landscape.md) and [reading-list.md](reading-list.md) likewise combine representations rather than relying on vector search alone.
 
+> Admission is based on whether or not we believe it's a clone
+
+> Weight is based on how much damage the clone is doing to the codebase by being a clone
+
+
 ### [FUSED-SIGNALS-THREE-LAYER] Deslop is hybrid by design
 
 The pipeline fuses three signals:
