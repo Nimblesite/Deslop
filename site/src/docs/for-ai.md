@@ -15,14 +15,15 @@ This page gives coding agents direct operating instructions. Humans configuring 
 
 ## Check before you write
 
-Before you author any new code unit — function, method, class, helper, fixture, test setup, parser branch, error type, route handler, view model — call `find-similar` with the proposed snippet (or a `path` + `start_byte` + `end_byte` range) and read `signals.fused` in the response:
+Before you author any new code unit — function, method, class, helper, fixture, test setup, parser branch, error type, route handler, view model — call `find-similar` with the proposed snippet (or a `path` + `start_byte` + `end_byte` range) and read the returned cluster's `bucket`:
 
-| `signals.fused` | Bucket | What you do |
-| --- | --- | --- |
-| `≥ 0.85` | `identical` / `nearly_identical` | **Do not write the copy.** Reuse the canonical occurrence the tool returns. Extract a shared helper if neither call site fits as-is. |
-| `0.6 – 0.85` | any | Read the canonical occurrence before you decide. Bias toward reuse. |
-| `< 0.6` | any, or empty | Author it. |
-| any | `structural_only` | Shape-only match — often sibling boilerplate. Read the canonical occurrence before concluding anything. |
+| `bucket` | What you do |
+| --- | --- |
+| `identical` | **Do not write the copy.** Reuse the canonical occurrence the tool returns. Extract a shared helper if neither call site fits as-is. |
+| `nearly_identical` | **Do not write the copy.** The elected pair's content evidence (`pair_agreement`, `pair_rename_consistency`) shows what differs — usually a rename. Reuse or extract. |
+| `structural_only` | Shape-only match — often sibling boilerplate. Read the canonical occurrence before concluding anything. |
+| `loosely_similar` | A hint. Bias toward reading, not acting. |
+| `same_behavior` | Two implementations of one behaviour (requires embeddings). Reconcile before adding a third. |
 
 `find-similar` is the **authoring** tool. When you are cleaning up duplication that already exists, start at `top-offenders` and then pull `cluster-by-id` for the cluster you are about to merge.
 
@@ -61,7 +62,7 @@ The CLI has no snippet query: `find-similar` is an MCP tool, and the CLI cannot 
 2. Before authoring, scan the baseline `clusters[]` for the file and the neighbouring files you are about to touch. If a cluster already covers the pattern you were going to add, reuse its canonical occurrence — that is the CLI's version of prevention, and it catches the common case.
 3. Write the change.
 4. Re-run `deslop . --notext --nohtml`. The fingerprint cache is on by default, so this re-parses only the files you actually touched — the cost is proportional to your change, not to the repository. Run it per change, not per session.
-5. Search `clusters[].occurrences[]` for the path you just wrote. If your new code appears in a cluster whose `signals.fused ≥ 0.85`, you just wrote a duplicate. Collapse it now, while the change is still in your working set.
+5. Search `clusters[].occurrences[]` for the path you just wrote. If your new code appears in a cluster whose `bucket` is `identical` or `nearly_identical`, you just wrote a duplicate. Collapse it now, while the change is still in your working set.
 6. Re-run and confirm the cluster is gone or smaller.
 
 A run exits `3` when repo-wide duplication crosses a configured ceiling; the report is still written on a breach, so parse it either way. Full table in [Exit codes](/docs/configuration/#exit-codes).
@@ -78,7 +79,7 @@ If neither MCP nor the CLI is available, say so and stop. Do not guess.
 | `metrics.threshold.breached` | `true` → the run exited `3` and the gate failed. `source` is `cli`, `config`, or `none`. |
 | `clusters` | Sorted by `weight` **descending** — `clusters[0]` is always the worst offender. Work top-down; do not start in the middle. |
 | `bucket` | `identical` / `nearly_identical` → extract a shared definition. `structural_only` → shape matched with no token or semantic evidence; verify it is a real duplicate before extracting. `loosely_similar` → parametrise the difference. `same_behavior` → reconcile two implementations of one behaviour (requires embeddings). |
-| `signals.fused` | Unit-bounded confidence. `≥ 0.85` is the act-now line — the same threshold as the law above. |
+| `signals.pair_agreement` | How much of the matched content the elected pair shares, byte for byte. The content evidence behind the bucket. |
 | `occurrences[].hidden` | `true` marks a `report_hide` match — usually a hand-written clone of generated code. |
 
 ### Byte ranges, not line numbers

@@ -289,7 +289,7 @@ The HTML renderer uses the same ranking and the same cluster summaries as JSON a
 
 - syntax-highlighted example snippets, with long snippets and extra locations folded into collapsible toggles
 - an "AI match" badge and an impact chip on each duplicate group
-- a per-group signals table (structural / token / embedding / fused) in a collapsible "Run details" footer
+- a per-group signals table (structural / token / embedding) in a collapsible "Run details" footer
 
 It does not add: scores not in the JSON, commentary beyond the `summary` field, or links to external services.
 
