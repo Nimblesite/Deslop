@@ -197,8 +197,7 @@ fn measure_one<S: BuildHasher, L: BuildHasher>(
     pair.shared_subtree_overlap = measurer.rescue_overlap(left, right);
     let clears_overlap = pair.shared_subtree_overlap >= SHARED_SUBTREE_MIN_OVERLAP;
     let content_agreement = pair_content_agreement(left, right, tree_index, sources, languages);
-    let clears_content =
-        !clears_overlap || content_agreement >= RESCUE_MIN_CONTENT_AGREEMENT;
+    let clears_content = !clears_overlap || content_agreement >= RESCUE_MIN_CONTENT_AGREEMENT;
     tracing::trace!(
         left_file = ?left.file_id,
         right_file = ?right.file_id,

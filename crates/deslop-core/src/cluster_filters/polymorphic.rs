@@ -136,10 +136,12 @@ pub(super) fn is_polymorphic_signature_cluster<S: BuildHasher>(
 fn is_abstract_declaration(function: Node<'_>, language: &str, source: &[u8]) -> bool {
     if language.as_bytes() == b"python" {
         return python_abstract_method(function, source)
-            || function
-                .child_by_field_name("body")
-                .is_some_and(|body| body.named_child_count() == 1
-                    && body.named_child(0).is_some_and(|child| child.kind() == "ellipsis"));
+            || function.child_by_field_name("body").is_some_and(|body| {
+                body.named_child_count() == 1
+                    && body
+                        .named_child(0)
+                        .is_some_and(|child| child.kind() == "ellipsis")
+            });
     }
     false
 }
