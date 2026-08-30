@@ -275,79 +275,162 @@ structural-only bucket.
 
 ### [FUSION-ALGEBRA] Every calculation, as algebra
 
-The whole arithmetic surface in one place. Each line carries the spec id that owns it; if prose and algebra ever disagree, both are wrong — fix them together.
+The whole arithmetic surface in one place — one formula per block, the English right under it. Each block carries the spec id that owns it; if prose and algebra ever disagree, both are wrong — fix them together.
 
 **Symbols.** `S` structural, `J` token_jaccard, `E` embedding_cos, `A` agreement, `R` rename_consistency, `n` node count, `p` a candidate pair, `c` a cluster, `ℓ` a source line.
 
 **Pair admission** — [FUSION-STRATEGY-BOUNDED-MAX] [FUSED-THRESHOLD] [FUSION-SHARED-SUBTREE]
 
+Structural similarity is one minus tree-edit distance, normalised by the bigger of the two trees. Merkle-equal pairs score 1.0 without paying for the TED walk.
+
+$$
+S(a,b) = 1 - \frac{\mathrm{TED}(a,b)}{\max(n(a),\, n(b))} \qquad \text{(1.0 when Merkle-equal — Baxter et al. 1998: hash, then TED near-miss)}
+$$
+
+The fused score takes the strongest of the three signals and clamps to [0, 1]. Max — never an average — so one loud signal is never diluted by two quiet ones.
+
+$$
+\mathrm{fused}(p) = \operatorname{clamp}(\max(S(p),\, J(p),\, E(p)),\ 0,\ 1) \qquad \text{(max-or-sum, never average — arXiv:2510.15480)}
+$$
+
+The bar a pair must clear depends on the pair. Cross-language pairs with no structural signal can't use `S`, so they fall back to a token-only floor. Everything else uses the configured `fused_threshold` (default 0.85), which was derived from our corpus and clears SourcererCC's 0.7 overlap floor.
+
+$$
+t(p) = \begin{cases} \text{cross\_language\_min\_jaccard} & \text{if cross-language}(p) \land S(p) \le 0 \\ \text{fused\_threshold (default 0.85)} & \text{otherwise} \end{cases}
+$$
+
+`J` is the MinHash estimate of token-set Jaccard — literally the probability that two MinHash signatures agree at any index (Broder's MinHash).
+
+$$
+J = \text{MinHash Jaccard estimate} \qquad \text{(signature agreement probability — Broder's MinHash)}
+$$
+
+A pair is admitted when its fused score clears the threshold, or when the shared-subtree escape fires: structural overlap and token overlap both strong, and both sides big enough to be worth counting.
+
 $$
 \begin{aligned}
-S(a,b) &= 1 - \frac{\mathrm{TED}(a,b)}{\max(n(a), n(b))} && \text{(1.0 when Merkle-equal — Baxter et al. 1998: hash, then TED near-miss)} \\
-\mathrm{fused}(p) &= \operatorname{clamp}(\max(S(p), J(p), E(p)),\ 0,\ 1) && \text{(max-or-sum, never average — arXiv:2510.15480)} \\
-t(p) &= \begin{cases} \text{cross\_language\_min\_jaccard} & \text{if } \text{cross-language}(p) \land S(p) \le 0 \\ \text{fused\_threshold (default 0.85)} & \text{otherwise} \end{cases} && \text{(derived; clears SourcererCC's 0.7 overlap floor)} \\
-J &= \text{MinHash Jaccard estimate} && \text{(signature agreement probability — Broder's MinHash)} \\
-\mathrm{admit}(p) &\iff \mathrm{fused}(p) \ge t(p) \\
-&\quad \lor \bigl( S(p) \ge \text{shared\_subtree\_min\_overlap} \land J(p) \ge \text{shared\_subtree\_min\_jaccard} \\
-&\qquad\quad \land\ n(\text{left}) \ge \text{shared\_subtree\_min\_node\_count} \land n(\text{right}) \ge \text{shared\_subtree\_min\_node\_count} \bigr) \\
-\mathrm{guard}(p) &: S(p) \le 0 \land E(p) \le 0 \implies J(p) \ge \text{lsh\_only\_min\_jaccard} \\
-&\qquad\quad \land \min(n(\text{left}), n(\text{right})) \ge \text{lsh\_only\_min\_node\_count}
+\mathrm{admit}(p) \iff {}& \mathrm{fused}(p) \ge t(p) \\
+&\lor \bigl( S(p) \ge \text{shared\_subtree\_min\_overlap} \land J(p) \ge \text{shared\_subtree\_min\_jaccard} \\
+&\qquad \land\ n(\text{left}) \ge \text{shared\_subtree\_min\_node\_count} \land n(\text{right}) \ge \text{shared\_subtree\_min\_node\_count} \bigr)
 \end{aligned}
+$$
+
+The guard rescues pure-token pairs. When both structural and embedding evidence are dead (`S` and `E` at zero), MinHash agreement alone still admits — but only above `lsh_only_min_jaccard`, and only when the smaller side has enough nodes.
+
+$$
+\mathrm{guard}(p):\ S(p) \le 0 \land E(p) \le 0 \implies J(p) \ge \text{lsh\_only\_min\_jaccard} \land \min(n(\text{left}),\, n(\text{right})) \ge \text{lsh\_only\_min\_node\_count}
 $$
 
 **Election** — [FUSION-CLUSTER-SIGNALS]
 
+Every admitted pair in a cluster is a candidate; the cluster elects the strongest — highest fused score first, ties broken by the earlier left position, then the earlier right. Lexicographic ordering makes the winner identical on every machine, every run.
+
 $$
-\begin{aligned}
-p^*(c) &= \max_{\text{admitted pairs}} \bigl(\mathrm{fused},\ -\text{left},\ -\text{right}\bigr) && \text{(lexicographic, deterministic)} \\
-\mathrm{rendered}(c) &= (S, J, E) \text{ of } p^*(c) && \text{signal\_source = positions of } p^*(c)
-\end{aligned}
+p^*(c) = \max_{\text{admitted pairs}} \bigl(\mathrm{fused},\ -\text{left},\ -\text{right}\bigr) \qquad \text{(lexicographic, deterministic)}
+$$
+
+The report shows the elected pair's three signals and cites its positions as the evidence source. Nothing else in the cluster is quoted.
+
+$$
+\mathrm{rendered}(c) = (S, J, E) \text{ of } p^*(c) \qquad \text{signal\_source = positions of } p^*(c)
 $$
 
 **Content evidence** (the elected pair) — [FUSION-CONTENT-GATE]
 
+Agreement is the share of collapsed source positions that match between the two sides.
+
 $$
-\begin{aligned}
-A &= \frac{\text{matching collapsed positions}}{\text{all collapsed positions}} \\
-w_{\text{mass}} &= \frac{\text{anchors}}{\text{anchors} + \text{rename\_evidence\_half\_mass}} \\
-\mathrm{certified} &\iff \min(\text{literal\_consistency}, \text{coverage}) = 1.0 \land w_{\text{mass}} \ge \text{support\_floor} \\
-w &= \begin{cases} 1.0 & \text{if certified} \\ \text{rename\_consistency\_discount} \times w_{\text{mass}} & \text{otherwise} \end{cases} \\
-R &= \min(\text{literal\_consistency}, \text{coverage}) \times w \\
-\mathrm{support} &= \max(A, R) && \text{(either population may vouch; never a mean, never pooled — max, never average — arXiv:2510.15480)}
-\end{aligned}
+A = \frac{\text{matching collapsed positions}}{\text{all collapsed positions}}
+$$
+
+Rename mass discounts anchors that could be explained away as a rename: each unit of rename evidence costs half a mass point.
+
+$$
+w_{\text{mass}} = \frac{\text{anchors}}{\text{anchors} + \text{rename\_evidence\_half\_mass}}
+$$
+
+Evidence is certified only when it is airtight: literal consistency and coverage both perfect, and the mass clears the support floor.
+
+$$
+\mathrm{certified} \iff \min(\text{literal\_consistency},\, \text{coverage}) = 1.0 \land w_{\text{mass}} \ge \text{support\_floor}
+$$
+
+Certified evidence weighs at full strength; everything else is discounted by the rename consistency factor.
+
+$$
+w = \begin{cases} 1.0 & \text{if certified} \\ \text{rename\_consistency\_discount} \times w_{\text{mass}} & \text{otherwise} \end{cases}
+$$
+
+Rename consistency is the weaker of consistency and coverage, scaled by the weight above.
+
+$$
+R = \min(\text{literal\_consistency},\, \text{coverage}) \times w
+$$
+
+Support is whichever population vouches harder — matched lines or rename consistency. Never a mean, never pooled: averaging would let two lukewarm signals impersonate one strong one.
+
+$$
+\mathrm{support} = \max(A, R) \qquad \text{(either population may vouch; never a mean, never pooled — arXiv:2510.15480)}
 $$
 
 **Routing** — [FUSION-CONTENT-GATE] [CLONE-BUCKETS-ROUTING]
+
+Three exits. Weak support plus weak embeddings routes structural-only — the content signals had their say and lost. Strong support promotes the cluster to nearly_identical outright. Everyone else falls through to the legacy per-signal routing.
 
 $$
 \begin{aligned}
 \mathrm{support} < \text{support\_floor} \land E < \text{embedding\_support\_floor} &\implies \text{structural\_only routing} \\
 \mathrm{support} \ge \text{promote\_floor} &\implies \text{nearly\_identical} \\
-\text{otherwise} &\implies \text{legacy signal routing} \\
-\text{all members one Merkle hash} \land \text{bucket} \in \{\text{identical}, \text{nearly\_identical}\} &\implies \text{rendered } J = 1.0 \quad \text{(token correction)}
+\text{otherwise} &\implies \text{legacy signal routing}
 \end{aligned}
+$$
+
+When every member of a bucket shares one Merkle hash, the tokens are identical by construction — so the rendered Jaccard is corrected to 1.0, suppressing MinHash estimation noise.
+
+$$
+\text{all members one Merkle hash} \land \text{bucket} \in \{\text{identical},\ \text{nearly\_identical}\} \implies \text{rendered } J = 1.0 \qquad \text{(token correction)}
 $$
 
 **Weight and order** — [RANK-MASS-SUM] [RANK-CATEGORY] [RANK-STRUCTURAL-ONLY]
 
+Weight is size times duplication: more canonical nodes weigh more, each extra occurrence adds the size again, and the category and structural-only multipliers scale the result. A cluster with fewer than two visible occurrences weighs nothing — singletons are not duplication.
+
 $$
-\begin{aligned}
-\mathrm{weight}(c) &= \text{canonical\_nodes}(c) \times (\mathrm{visible}(c) - 1) \times \text{category\_multiplier} \times \text{structural\_only\_multiplier} && \text{(0 when visible < 2)} \\
-\text{order} &= \text{weight desc, then cluster id asc}
-\end{aligned}
+\mathrm{weight}(c) = \text{canonical\_nodes}(c) \times (\mathrm{visible}(c) - 1) \times \text{category\_multiplier} \times \text{structural\_only\_multiplier} \qquad \text{(0 when visible < 2)}
+$$
+
+Clusters sort heaviest first; ties break by cluster id ascending so the report order is stable.
+
+$$
+\text{order} = \text{weight descending, then cluster id ascending}
 $$
 
 *A duplicate is a duplicate: content evidence decides whether a cluster is reported and which bucket it wears — never how heavily it weighs.*
 
 **Repo metrics** — [METRICS-REPO] [METRICS-REPO-WEIGHTED]
 
+The headline number is unweighted duplicated-line density — directly comparable to SonarQube's gate.
+
 $$
-\begin{aligned}
-\text{duplication\_percent} &= \operatorname{clamp}\!\left(\frac{100 \times \text{duplicated\_loc}}{\text{analysed\_loc}},\ 0,\ 100\right) && \text{(unweighted duplicated-line density — the SonarQube comparable gate)} \\
-\text{line\_weight}(\ell) &= \max_{\text{clusters covering } \ell}(\text{bucket\_weight} \times \text{category\_weight}) \\
-\text{weighted\_percent} &= \operatorname{clamp}\!\left(\frac{100 \times \sum_{\ell} \text{line\_weight}(\ell)}{\text{analysed\_loc}},\ 0,\ 100\right) && \text{(specified, not shipped)} \\
-\text{invariant}: \text{weighted\_percent} &\le \text{duplication\_percent}
-\end{aligned}
+\text{duplication\_percent} = \operatorname{clamp}\!\left(\frac{100 \times \text{duplicated\_loc}}{\text{analysed\_loc}},\ 0,\ 100\right) \qquad \text{(unweighted duplicated-line density — the SonarQube comparable gate)}
+$$
+
+A line's weight is the heaviest bucket of any cluster covering it — a line duplicated by a critical cluster counts as critical.
+
+$$
+\text{line\_weight}(\ell) = \max_{\text{clusters covering } \ell}\bigl(\text{bucket\_weight} \times \text{category\_weight}\bigr)
+$$
+
+The weighted variant sums those per-line weights. Specified for completeness, not shipped.
+
+$$
+\text{weighted\_percent} = \operatorname{clamp}\!\left(\frac{100 \times \sum_{\ell} \text{line\_weight}(\ell)}{\text{analysed\_loc}},\ 0,\ 100\right) \qquad \text{(specified, not shipped)}
+$$
+
+Weighting can only pull lines *into* the duplicated set, never out — so the weighted figure can never undercut the unweighted one.
+
+$$
+\text{weighted\_percent} \le \text{duplication\_percent} \qquad \text{(invariant)}
 $$
 
 **Provenance.** The literature behind the formula lines (links in [reading-list.md](reading-list.md)); quoted where the claim is verbatim:
