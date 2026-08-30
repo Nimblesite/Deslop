@@ -68,6 +68,32 @@ Delete the shipped cluster-confidence model and every dependency on it at the st
 - Update `REPORTING-CONTEXT.md`, the site accuracy page, and all examples so `fused` appears only as a pair-admission concept.
 - Replace obsolete code comments and test names that describe cluster fused confidence; retain historical issue references only where they explain a surviving assertion.
 
+## Issue provenance (moved from fused.md)
+
+The spec is written issue-free; the issues that pinned its defect-provenance levers and its design decisions live here. Each row records what the issue governs, so the spec's `**Defect**` / `**Derived**` labels remain checkable claims.
+
+| Issue | Governs |
+| --- | --- |
+| #104 | Verbatim guard: a verbatim pair among lookalikes (share 2/3) must stay visible |
+| #197 | Structural-only family: acceptance criterion (`token_jaccard = 0.00`, `embedding_cos = 0.00`); in-file REST settings family (0.72–0.80) stays demoted |
+| #232 | Token-signal correction: a same-Merkle-hash cluster's normalised k-gram sets are equal by construction, so the rendered `token_jaccard` is corrected to 1.0 |
+| #286 | Provider-owned input budget: the upstream fixed cap dropped 14,723 of 175,160 subtrees |
+| #301 | Election tie-break: earliest pair in corpus order |
+| #331 | flutter/flutter shape-echo cluster (`structural = 0.62`, `token_jaccard = 0.98`): the token layer echoing shape, not reporting content |
+| #336 | Shape-match saturation on the normalised representation says nothing about content |
+| #339 | Same-file collapse can remove every admitted endpoint → no source pair, all-zero axes |
+| #341 | Content-gate floors (`support_floor`, `promote_floor`, `literal_table_min_fraction`, `literal_table_min_literals`, `verbatim_member_share_floor`) |
+| #343 | Sum-arm removal; the per-pair mean dilution of a byte-identical pair to `structural = 0.36` |
+| #346 | Rename-evidence cliff → half-saturation mass weight; `rename_consistency_discount` |
+| #356 | `structural_only_max_support` read as a support floor → gate verdict turned on whether the embedding pass ran |
+| #368 | `max_endpoint_node_ratio`; `saturating_token_floor` |
+| #372 | Byte-identical snippets share one vector → cosine exactly 1.0 |
+| #408 | Shared-subtree overlap replaces the literal `0.0`; rescue floors (`shared_subtree_min_overlap`, `shared_subtree_min_jaccard`, `shared_subtree_min_node_count`) |
+| #409 | Literal echo ([REPAIR-RENAME-LITERAL-ECHO]): a substituted literal whose bytes transform exactly by one bijection substitution corroborates the rename |
+| #410 | Certification: a contradiction-free rename carries no doubt left for the mass term to price |
+| #431 | Token correction scoped by digest equality, never by a `structural` reading |
+| #458 | Elected-pair evidence and no cluster-level fused: a byte-identical pair renders `1.0/1.0` and keeps its bucket; mass outranks confidence at ranking |
+
 ## Owned elsewhere
 
 | Work | Owner |
