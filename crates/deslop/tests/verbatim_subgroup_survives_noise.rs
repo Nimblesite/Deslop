@@ -51,6 +51,13 @@ const CELL_MIN_NODES: u32 = 4;
 /// The two byte-identical constant tables, and the unrelated table that
 /// shares their normalised shape.
 const CONST_COPY: [&str; 2] = ["retry_defaults.py", "retry_defaults_copy.py"];
+
+/// Anchor positions of the constant-table pair's elected measurement: the
+/// four assignments hold four literals and four identifiers, so the rename
+/// proof scales by `8 / (8 + 4) = 0.6667` — below the ten-anchor
+/// certification point, which is exactly what the assertion pins
+/// ([FUSED-CONTENT-GATE]).
+const CONST_TABLE_ANCHORS: usize = 8;
 /// The stranger whose only relation to [`CONST_COPY`] is its shape.
 const CONST_STRANGER: &str = "theme_tokens.py";
 
@@ -91,7 +98,8 @@ fn occurrence_ranges(cluster: &Value) -> Vec<(u64, u64)> {
 #[test]
 fn a_copied_constant_table_survives_an_unrelated_table_in_its_cluster() -> Result<()> {
     let report = render("constant-table", MIN_NODES)?;
-    assert_copy_survives_alone(&report, "constant table", &CONST_COPY, CONST_STRANGER)?;
+    assert_copy_survives_alone(&report, "constant table", &CONST_COPY, CONST_STRANGER,
+        rename_consistency_for(CONST_TABLE_ANCHORS))?;
     for file in CONST_COPY {
         assert_eq!(
             duplicated_loc_for(&report, file),
@@ -125,7 +133,8 @@ fn a_copied_constant_table_survives_an_unrelated_table_in_its_cluster() -> Resul
 #[test]
 fn a_copied_call_run_survives_a_literal_varying_run_in_its_cluster() -> Result<()> {
     let report = render(CALL_CASE, MIN_NODES)?;
-    assert_copy_survives_alone(&report, "literal calls", &CALL_COPY, CALL_STRANGER)?;
+    assert_copy_survives_alone(&report, "literal calls", &CALL_COPY, CALL_STRANGER,
+        rename_consistency_for(CALL_PAIR_ANCHORS))?;
     for file in CALL_COPY {
         assert_eq!(
             duplicated_loc_for(&report, file),

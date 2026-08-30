@@ -22,10 +22,6 @@ use serde_json::Value;
 
 use crate::common::{corpora::*, *};
 
-/// The agent-facing act-now line ([FUSED-THRESHOLD]): `find-similar`
-/// consumers refuse to write code at or above this fused confidence.
-const ACT_NOW_FUSED: f64 = 0.85;
-
 /// Buckets that honestly describe a shape-only match without telling
 /// the reader (human or agent) that the content is duplicated.
 const HONEST_SHAPE_ONLY_BUCKETS: [&str; 2] = ["structural_only", "loosely_similar"];
@@ -102,8 +98,9 @@ fn assert_genuine_clone_rank(report: &Value, files: &[&str]) -> Result<usize> {
         "byte-identical clone across {files:?} must stay bucketed identical: {report:#}"
     );
     assert!(
-        signal(clone, "fused") >= ACT_NOW_FUSED,
-        "byte-identical clone across {files:?} must keep act-now confidence: {report:#}"
+        approx(signal(clone, "pair_agreement"), 1.0),
+        "byte-identical clone across {files:?} must carry saturated content \
+         evidence: {report:#}"
     );
     assert!(
         approx(signal(clone, "token_jaccard"), 1.0),
@@ -121,17 +118,16 @@ fn assert_genuine_clone_rank(report: &Value, files: &[&str]) -> Result<usize> {
 /// below the genuine clone.
 fn assert_shape_only_cluster(cluster: &Value, rank: usize, genuine_rank: usize) {
     let bucket = cluster_bucket(cluster);
-    let fused = signal(cluster, "fused");
     let files = cluster_file_set(cluster);
-    assert!(
-        fused < ACT_NOW_FUSED,
-        "shape-only family {files:?} must not reach the act-now fused line: \
-         bucket={bucket}, fused={fused}"
-    );
     assert!(
         HONEST_SHAPE_ONLY_BUCKETS.contains(&bucket),
         "shape-only family {files:?} must be routed to an honest bucket: \
-         bucket={bucket}, fused={fused}"
+         bucket={bucket}"
+    );
+    assert!(
+        cluster.pointer("/signals/fused").is_none(),
+        "no cluster-level fused field may survive on the wire ([FUSED-SCOPE]): \
+         {cluster:#}"
     );
     assert!(
         genuine_rank < rank,
