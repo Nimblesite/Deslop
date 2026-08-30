@@ -160,6 +160,26 @@ fn assert_fragments_absorbed(report: &Value, survivor: &Value, files: [&str; 2])
     }
 }
 
+/// The enclosing pair's final-contract evidence: a measured rescue, not
+/// a reconstructed cluster-confidence scalar.
+fn assert_rescued_pair_evidence(cluster: &Value) {
+    let source = field(cluster, "signal_source");
+    assert_eq!(
+        (field(source, "left").as_u64(), field(source, "right").as_u64()),
+        (Some(0), Some(1)),
+        "the two enclosing occurrences must be the elected evidence pair: {cluster:#}"
+    );
+    assert!(
+        signal(cluster, "structural") >= deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
+        "the rescue must carry measured shared-subtree overlap: {cluster:#}"
+    );
+    assert!(
+        signal(cluster, "token_jaccard") >= deslop_core::pair::SHARED_SUBTREE_MIN_JACCARD,
+        "the rescue must carry token corroboration: {cluster:#}"
+    );
+    assert!(approx(signal(cluster, "embedding_cos"), 0.0));
+}
+
 /// The full #408 contract for one language fixture.
 fn assert_enclosing_pair_visible(name: &str, left: &MethodSpan, right: &MethodSpan) -> Result<()> {
     for side in [left, right] {
@@ -194,10 +214,7 @@ fn assert_enclosing_pair_visible(name: &str, left: &MethodSpan, right: &MethodSp
         "a one-statement Type-3 near-miss must render as a credible near-identical \
          clone, not a demoted shape match: {cluster:#}"
     );
-    assert!(
-        signal(cluster, "fused") >= 0.6,
-        "the pair's confidence must reach the reuse band ([FUSED-THRESHOLD]): {cluster:#}"
-    );
+    assert_rescued_pair_evidence(cluster);
     assert_fragments_absorbed(&report, cluster, [left.path, right.path]);
     Ok(())
 }

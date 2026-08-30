@@ -342,19 +342,18 @@ fn cluster_signals(report: &Value, cluster_id: &str) -> Result<ReportSignals> {
 
 /// The confidence explanation [FUSED-CONTENT-GATE] every plain-text Deslop
 /// surface must carry. Spelled out here rather than borrowed from the
-/// renderer, so a surface that quietly drops the fused score or the measured
-/// content evidence fails this test instead of agreeing with itself.
+/// renderer, so a surface that quietly drops the measured content evidence
+/// fails this test instead of agreeing with itself. There is no cluster
+/// `fused` to state ([FUSED-SCOPE]).
 fn expected_explanation(signals: ReportSignals) -> String {
     format!(
         "structural {structural:.2} · jaccard {jaccard:.2} · embedding {embedding:.2} · \
-         fused {fused:.2} · agreement {agreement:.2} · rename {rename:.2} · \
-         literal {literal:.2}",
+         agreement {agreement:.2} · rename {rename:.2} · literal {literal:.2}",
         structural = signals.structural,
         jaccard = signals.token_jaccard,
         embedding = signals.embedding_cos,
-        fused = signals.fused,
-        agreement = signals.agreement,
-        rename = signals.rename_consistency,
+        agreement = signals.pair_agreement,
+        rename = signals.pair_rename_consistency,
         literal = signals.literal_fraction,
     )
 }
@@ -370,11 +369,11 @@ fn assert_explains_confidence(rendered: &str, signals: ReportSignals, surface: &
     );
     assert!(
         rendered.contains(&expected),
-        "the {surface} must state the fused confidence and the measured content evidence \
+        "the {surface} must state the measured content evidence \
          [FUSED-CONTENT-GATE]: expected `{expected}` inside `{rendered}`"
     );
     assert!(
-        signals.fused > 0.0 && signals.structural > 0.0,
+        signals.structural > 0.0,
         "a published clone must carry positive support, else the {surface} pins nothing: \
          {signals:?}"
     );

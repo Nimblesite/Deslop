@@ -11,10 +11,10 @@
 
 #![allow(dead_code)]
 
-/// Fused-signal bands and assertion vocabulary ([FUSED-THRESHOLD]).
-/// Suites that assert on `signals.fused` import it explicitly with
+/// Elected-pair signal and bucket assertion vocabulary.
+/// Suites that assert on reported evidence import it explicitly with
 /// `use crate::common::signals::*;` — a glob re-export here would be an
-/// unused import in every binary that never touches the vocabulary.
+/// unused import in every binary that never touches that vocabulary.
 /// The two-sided contract every noise-family pin is judged by: the
 /// family stays hidden while a real clone in the same run stays visible.
 pub(crate) mod negative_pin;
@@ -256,7 +256,7 @@ pub(crate) fn cluster_size(cluster: &Value) -> u64 {
     field(cluster, "size").as_u64().unwrap_or(0)
 }
 
-/// One component of a cluster's fused `signals` block (e.g. `token_jaccard`),
+/// One component of a cluster's elected-pair `signals` block (e.g. `token_jaccard`),
 /// or `0.0` when the named signal is absent.
 pub(crate) fn signal(cluster: &Value, key: &str) -> f64 {
     cluster
@@ -271,7 +271,7 @@ pub(crate) fn cluster_count(report: &Value) -> usize {
 }
 
 /// True when `value` lies within `1e-9` of `target`. Lets a test pin an
-/// exact fused-signal value (typically `0.0` or `1.0`) without tripping
+/// exact signal value (typically `0.0` or `1.0`) without tripping
 /// the float-equality lint or carrying its own epsilon.
 pub(crate) fn approx(value: f64, target: f64) -> bool {
     (value - target).abs() <= 1e-9

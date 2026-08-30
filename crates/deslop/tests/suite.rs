@@ -91,10 +91,6 @@ mod fsharp_issue_336_data_table_category;
 mod fsharp_issue_339_sibling_window_rename;
 #[path = "fsharp_issue_339_token_fallback_rename.rs"]
 mod fsharp_issue_339_token_fallback_rename;
-#[path = "fused_golden_bands.rs"]
-mod fused_golden_bands;
-#[path = "fused_golden_invariants.rs"]
-mod fused_golden_invariants;
 #[path = "go_vendor_exclusion.rs"]
 mod go_vendor_exclusion;
 #[path = "incremental_equivalence.rs"]

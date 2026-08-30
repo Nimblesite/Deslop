@@ -11,7 +11,8 @@ use serde_json::Value;
 
 use super::{
     approx, cluster_bucket, cluster_id, cluster_size, clusters_hidden, expect_cluster_spanning,
-    field, metric_field, occurrences, per_file_metrics, signal, visible_duplicated_loc, Result,
+    field, metric_field, occurrences, per_file_metrics,
+    verdict::assert_type1_identical_signals, visible_duplicated_loc, Result,
 };
 
 /// Files the seeded corpus contains, as the `u64` the cache counters use.
@@ -61,18 +62,6 @@ const SEEDED_CLONE_NODES: u64 = 45;
 /// blob detectable in the rendered spans at all.
 const SEEDED_SPANS: &[(&str, u64, u64, u64, u64)] =
     &[("alpha.rs", 2, 8, 30, 201), ("beta.rs", 2, 8, 26, 197)];
-
-/// Every signal of the authored clone, exactly. Embeddings are off and
-/// the two bodies are byte-identical, so all four values are determined.
-/// `token_jaccard` is the one the audit watched move under a corrupted
-/// signature payload while every other field held
-/// ([PIPELINE-INCREMENTAL-INTEGRITY]).
-const SEEDED_SIGNALS: &[(&str, f64)] = &[
-    ("structural", 1.0),
-    ("token_jaccard", 1.0),
-    ("embedding_cos", 0.0),
-    ("fused", 1.0),
-];
 
 /// The clone body shared verbatim by `alpha.rs` and `beta.rs`. Seven
 /// lines, byte-identical in both files, so one cluster spanning the
@@ -132,7 +121,7 @@ pub(crate) fn assert_seeded_corpus(report: &Value, label: &str) -> Result<()> {
     let clone = expect_cluster_spanning(report, &["alpha.rs", "beta.rs"])?;
     assert_clone_identity(clone, label, report);
     assert_clone_spans(clone, label)?;
-    assert_clone_signals(clone, label);
+    assert_type1_identical_signals(clone, label);
     assert_seeded_metrics(report, label);
     Ok(())
 }
@@ -195,19 +184,6 @@ fn assert_clone_spans(clone: &Value, label: &str) -> Result<()> {
         );
     }
     Ok(())
-}
-
-/// All four signals of the authored clone, exactly.
-fn assert_clone_signals(clone: &Value, label: &str) {
-    for (name, expected) in SEEDED_SIGNALS {
-        let actual = signal(clone, name);
-        assert!(
-            approx(actual, *expected),
-            "{label}: signal `{name}` must be {expected}, got {actual} — a \
-             signal that moves while the source does not is the \
-             corrupted-payload signature: {clone:#}"
-        );
-    }
 }
 
 /// [METRICS-REPO] The corpus's exact figures, plus the arithmetic that

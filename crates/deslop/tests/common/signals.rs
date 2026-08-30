@@ -34,13 +34,17 @@ pub(crate) const HONEST_SHAPE_ONLY_BUCKETS: [&str; 2] = ["structural_only", "loo
 /// The only bucket a byte-identical Type-1 copy may honestly carry
 /// ([CLONE-BUCKETS-ROUTING]). Named because the noise pins need to say
 /// "exactly this", not "one of the act-now three": their controls are
-/// copied byte for byte, so every other act-now label claims the copies
+/// copied byte for byte, so every other duplicate label claims the copies
 /// differ somewhere they do not.
 pub(crate) const IDENTICAL_BUCKET: &str = "identical";
 
-/// Buckets a cluster may carry once it has reached the act-now line.
+/// Buckets that make an explicit duplication claim.
 pub(crate) const ACT_NOW_BUCKETS: [&str; 3] =
     [IDENTICAL_BUCKET, "nearly_identical", "same_behavior"];
+
+/// Alias kept for suites that read the bucket set by its older name;
+/// the report renders the wire labels, never these names.
+pub(crate) const CONFIRMED_DUPLICATE_BUCKETS: [&str; 3] = ACT_NOW_BUCKETS;
 
 /// Asserts the full `structural_only` contract
 /// ([RANK-STRUCTURAL-ONLY], [FUSED-CONTENT-GATE]).

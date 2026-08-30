@@ -112,7 +112,7 @@ fn mid_band_pair_stays_visible_with_a_real_bucket() -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("duplication_percent is not a number: {report:#}"))?;
     assert!(
         duplication > 0.0,
-        "a visible act-now cluster must register in the duplication metric, \
+        "a visible duplicate cluster must register in the duplication metric, \
          got {duplication}"
     );
     assert_mid_band_evidence(tmp.path(), cluster)?;
@@ -211,7 +211,7 @@ fn without_embeddings_the_mid_band_pair_is_visible() -> Result<()> {
         "no cluster-level fused field may survive on the wire ([FUSED-SCOPE]): {report:#}"
     );
     assert!(
-        ACT_NOW_BUCKETS.contains(&cluster_bucket(cluster))
+        CONFIRMED_DUPLICATE_BUCKETS.contains(&cluster_bucket(cluster))
             || HONEST_SHAPE_ONLY_BUCKETS.contains(&cluster_bucket(cluster)),
         "the pair must route to a real bucket: {report:#}"
     );
@@ -246,7 +246,7 @@ fn every_visible_mixed_band_cluster_has_no_wire_fused_and_a_real_bucket() -> Res
     );
     let family = expect_cluster_spanning(&report, &["ledger_a.ts", "ledger_b.ts"])?;
     assert!(
-        ACT_NOW_BUCKETS.contains(&cluster_bucket(family))
+        CONFIRMED_DUPLICATE_BUCKETS.contains(&cluster_bucket(family))
             || HONEST_SHAPE_ONLY_BUCKETS.contains(&cluster_bucket(family)),
         "the a/b rename family must route to a real bucket — {dump}",
         dump = signal_dump(family)
@@ -258,7 +258,7 @@ fn every_visible_mixed_band_cluster_has_no_wire_fused_and_a_real_bucket() -> Res
             "no cluster-level fused field may survive on the wire ([FUSED-SCOPE]) — {dump}"
         );
         assert!(
-            ACT_NOW_BUCKETS.contains(&cluster_bucket(cluster))
+            CONFIRMED_DUPLICATE_BUCKETS.contains(&cluster_bucket(cluster))
                 || HONEST_SHAPE_ONLY_BUCKETS.contains(&cluster_bucket(cluster)),
             "every visible cluster must route to a real bucket — {dump}"
         );

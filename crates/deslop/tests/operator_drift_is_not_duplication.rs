@@ -6,11 +6,11 @@
 //! `alpha + beta` and `alpha - beta` normalised to the same subtree with
 //! the same identifier frontier and the same literals: nothing
 //! downstream had any evidence they differed. The pair rendered
-//! `structural = 1.00`, `token_jaccard = 1.00`, `agreement = 1.00` and
-//! `fused = 1.00` — the engine's strongest possible claim, made about
+//! `structural = 1.00`, `token_jaccard = 1.00` and `pair_agreement =
+//! 1.00` — the engine's strongest possible claim, made about
 //! code that computes a different answer.
 //!
-//! That is the [FUSED-THRESHOLD] act-now line, so a `find-similar`
+//! That is a duplicate verdict, so a `find-similar`
 //! consumer is told to reuse one where the other is meant, and an agent
 //! following `docs/snippets/agents-md-recipe.md` deletes a subtraction
 //! in favour of an addition. Sign errors, inverted comparisons and
@@ -28,9 +28,8 @@
 //! The contract is *not* "never cluster them". Two functions that share
 //! a shape and differ in an operator may well be worth a reader's
 //! attention. The contract is that the report must not claim the
-//! content is duplicated: the pair must stay out of the act-now
-//! buckets, and its rendered confidence must stay under the act-now
-//! line.
+//! content is duplicated: the pair must stay out of the explicit
+//! duplicate buckets, and its elected-pair evidence must remain honest.
 //!
 //! # Why this fixture cannot pass by going blind
 //!
@@ -65,7 +64,7 @@ const MIN_NODES: u32 = 8;
 /// the other three cannot exercise those bounds. A four-statement body
 /// over one operator does not cluster at all once the operator reaches
 /// the digest, so `found` is `None` for each of them and every bound
-/// below it — bucket, fused, agreement — was unreachable in any passing
+/// below it — bucket and pair agreement — was unreachable in any passing
 /// run. The claim that they were pinned was untrue. `ledger_credit.py`
 /// and `ledger_debit.py` share a twelve-line body and differ in exactly
 /// one token, `+` against `-` on the `shifted` line, which is the shape
@@ -141,16 +140,16 @@ fn render() -> Result<Value> {
     run_report(&fixture("operator-drift"), MIN_NODES)
 }
 
-/// Every visible cluster as `id [bucket] fused files`.
+/// Every visible cluster as `id [bucket] agreement files`.
 fn published(report: &Value) -> Vec<String> {
     clusters(report)
         .iter()
         .map(|cluster| {
             format!(
-                "{id} [{bucket}] fused={fused:.4} {files:?}",
+                "{id} [{bucket}] agreement={agreement:.4} {files:?}",
                 id = cluster_id(cluster),
                 bucket = cluster_bucket(cluster),
-                fused = signal(cluster, "fused"),
+                agreement = signal(cluster, "pair_agreement"),
                 files = occurrence_files(cluster),
             )
         })
@@ -175,11 +174,7 @@ fn published(report: &Value) -> Vec<String> {
 // and `clusters_hidden` was 0, so the test was green while pinning
 // nothing.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #432 [FUSED-THRESHOLD] \
-     docs/plans/fused-score-followups.md — operator-only drift rides #408's graded structural \
-     overlap to the act-now tier; the confidence blend needs the operator-disagreement \
-     signal. Run via `-- --ignored`."]
-fn an_operator_only_difference_never_reaches_the_act_now_line() -> Result<()> {
+fn an_operator_only_difference_never_claims_duplication() -> Result<()> {
     let report = render()?;
     assert_eq!(
         field(&report, "files_analysed").as_u64(),
@@ -198,8 +193,8 @@ fn an_operator_only_difference_never_reaches_the_act_now_line() -> Result<()> {
         published = published(&report),
     );
     assert!(
-        approx(signal(control, "agreement"), 1.0),
-        "the control's agreement must stay saturated in this run — a \
+        approx(signal(control, "pair_agreement"), 1.0),
+        "the control's pair agreement must stay saturated in this run — a \
          separation that lowered every score has distinguished nothing: {dump}",
         dump = signal_dump(control),
     );
@@ -226,21 +221,14 @@ fn an_operator_only_difference_never_reaches_the_act_now_line() -> Result<()> {
         let Some(cluster) = found else { continue };
         let dump = signal_dump(cluster);
         assert!(
-            !ACT_NOW_BUCKETS.contains(&cluster_bucket(cluster)),
+            !CONFIRMED_DUPLICATE_BUCKETS.contains(&cluster_bucket(cluster)),
             "{label}: {left} and {right} compute different answers. A \
-             cluster in an act-now bucket tells a `find-similar` consumer \
+             cluster in a duplicate bucket tells a `find-similar` consumer \
              to write one where the other is meant — {dump}"
         );
         assert!(
-            signal(cluster, "fused") < ACT_NOW_FUSED,
-            "{label}: rendered confidence {fused:.4} is at or above the \
-             act-now line of {ACT_NOW_FUSED}; the engine is making its \
-             strongest claim about code whose behaviour differs — {dump}",
-            fused = signal(cluster, "fused"),
-        );
-        assert!(
-            signal(cluster, "agreement") < 1.0,
-            "{label}: `agreement` is the measured proof that the members \
+            signal(cluster, "pair_agreement") < 1.0,
+            "{label}: `pair_agreement` is the measured proof that the members \
              share their content, and these members do not — a saturated \
              agreement here is the measurement itself going blind to the \
              operator — {dump}"
@@ -267,9 +255,9 @@ fn the_byte_identical_control_survives_in_the_same_run() -> Result<()> {
         "both copies of the control must be shown — {dump}"
     );
     assert!(
-        approx(signal(control, "fused"), 1.0) && approx(signal(control, "agreement"), 1.0),
-        "byte-proven duplication saturates confidence and agreement; a fix \
-         that lowered every score has distinguished nothing — {dump}"
+        approx(signal(control, "pair_agreement"), 1.0),
+        "byte-proven duplication saturates agreement; a fix that lowered \
+         every score has distinguished nothing — {dump}"
     );
     Ok(())
 }
@@ -277,10 +265,6 @@ fn the_byte_identical_control_survives_in_the_same_run() -> Result<()> {
 // Neither operator family may be published as the report's worst
 // offender while a real clone sits in the same run.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #432 [FUSED-THRESHOLD] \
-     docs/plans/fused-score-followups.md — operator-only drift rides #408's graded structural \
-     overlap to the act-now tier, so the real clone no longer outranks every operator \
-     family. Run via `-- --ignored`."]
 fn the_real_clone_outranks_every_operator_family() -> Result<()> {
     let report = render()?;
     let control = expect_cluster_spanning(&report, &CONTROL)?;

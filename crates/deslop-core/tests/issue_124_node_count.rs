@@ -1,4 +1,5 @@
-//! Regression coverage for GH #124 Type-4 node-count ranking inflation.
+//! Final-contract replacement for GH #124's retired confidence-weighted
+//! ranking: duplicated mass outranks confidence ([RANK-MASS-SUM]).
 //!
 //! The fixture no longer declares a signal triple: under
 //! [FUSED-CLUSTER-SIGNALS] a cluster's signals are measured between the
@@ -30,7 +31,7 @@ const TYPE4_COSINE: f64 = 0.94;
 const SIGNAL_TOLERANCE: f64 = 1e-5;
 
 #[test]
-fn issue_124_type4_node_count_does_not_dominate_refactor_ranking() -> Result<()> {
+fn rank_mass_never_discounts_a_large_semantic_clone_by_confidence() -> Result<()> {
     let fixture = type4_weight_fixture();
 
     let signature_index = SignatureIndex::from_slice(&fixture.signatures);
@@ -77,16 +78,13 @@ fn issue_124_type4_node_count_does_not_dominate_refactor_ranking() -> Result<()>
         182,
         "fixture must model the smaller actionable exact duplicate"
     );
-    assert!(
-        exact.weight > semantic.weight,
-        "issue #124: low-structural Type-4 span should not outrank a smaller exact duplicate; semantic={} exact={}",
-        semantic.weight,
-        exact.weight
-    );
+    assert_eq!(semantic.weight, 814.0, "semantic duplicated mass is exact");
+    assert_eq!(exact.weight, 182.0, "exact duplicated mass is exact");
+    assert!(semantic.weight > exact.weight, "confidence never discounts mass");
     assert_eq!(
         clusters.first().map(|cluster| cluster.id.as_str()),
-        Some(exact.id.as_str()),
-        "issue #124: the actionable exact duplicate should be ranked first"
+        Some(semantic.id.as_str()),
+        "the larger duplicated mass ranks first regardless of confidence"
     );
 
     assert_measured_signals(semantic, exact);

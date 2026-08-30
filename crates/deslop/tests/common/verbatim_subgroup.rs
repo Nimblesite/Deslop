@@ -11,10 +11,10 @@
 use serde_json::Value;
 
 use super::{
-    approx, cluster_bucket, cluster_file_set, cluster_id, cluster_size, clusters,
-    expect_cluster_spanning, field, fixture, occurrence_files, per_file_metrics, run_report,
-    signal,
+    cluster_bucket, cluster_file_set, cluster_id, cluster_size, clusters, expect_cluster_spanning,
+    field, fixture, occurrence_files, per_file_metrics, run_report,
     signals::{signal_dump, IDENTICAL_BUCKET},
+    verdict::assert_type1_identical_signals,
     Result,
 };
 
@@ -111,13 +111,7 @@ pub(crate) fn assert_copy_survives_alone(
         2,
         "{label}: exactly the two copies are shown — {dump}"
     );
-    assert!(
-        approx(signal(cluster, "structural"), 1.0)
-            && approx(signal(cluster, "token_jaccard"), 1.0)
-            && approx(signal(cluster, "fused"), 1.0),
-        "{label}: byte-proven duplication saturates every axis it was \
-         measured on — {dump}"
-    );
+    assert_type1_identical_signals(cluster, label);
     assert_eq!(
         cluster_file_set(cluster),
         copy.iter().map(|name| (*name).to_owned()).collect(),

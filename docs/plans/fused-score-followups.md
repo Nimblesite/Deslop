@@ -112,11 +112,16 @@ Work in progress; each box flips only when the change compiles and its assertion
 - [x] Generator metadata documents the elected pair (no Mean/Pooled copy).
 - [x] VSIX: fused help topic, fused bar, fused tooltip, fused signals line, fused-gate bubble admission removed; strip renders shape / embedding / `pair_agreement`.
 - [x] VSIX fixtures: `bucketMeetsFusedGate` deleted; `bucketSignals` carries elected-pair axes.
-- [ ] VSIX suites rewritten against the final wire shape; a schema test asserts `fused`/`meets_fused_gate` are absent from the generated types.
+- [x] VSIX suites rewritten against the final wire shape; a schema test asserts `fused`/`meets_fused_gate` are absent from the generated types.
 - [ ] TypeScript compile + unit suites green.
 - [ ] VSIX build + webview/UI smoke against the new wire.
 - [ ] Site + docs: `fused` appears only as a pair-admission concept.
-- [ ] Engine owners' slices reviewed on TMC (gate.rs content-confidence multiply, report_weight tie-break, render/signals verdicts, restamp).
+- [x] Engine owners' slices reviewed on TMC (gate.rs content-confidence multiply, report_weight tie-break, render/signals verdicts, restamp).
+- [x] Core Rust: `buckets/gate.rs` content-confidence multiply and `RENAME_CONSISTENCY_DISCOUNT` deleted; routing reads `support = max(pair_agreement, pair_rename_consistency)` directly.
+- [x] Core Rust: `report_weight.rs` fused tie-break deleted; equal mass sorts by cluster id ascending.
+- [x] Core Rust: `cluster.rs` weight is the one mass formula; `log2(1 + spanned)` and refactor-potential node discount deleted.
+- [x] Core Rust: `report_restamp.rs` no longer stamps `meets_fused_gate`; `render/signals.rs` verdict engine reads pair evidence, no fused column.
+- [x] Rust E2E: golden bands/invariants migrated to final contract (bucket + pair evidence + ranking); `fused_score_bounds` deleted; `issue_343` asserts no wire fused + real bucket.
 
 ## Completion
 

@@ -65,17 +65,6 @@ fn with_embedding(bucket: &str, structural: f64, token: f64, embedding: f64, fus
 }
 
 /// The shipped arithmetic: the strongest single axis, bounded.
-fn bounded_max(structural: f64, token: f64, embedding: f64) -> f64 {
-    structural.max(token).max(embedding).clamp(0.0, 1.0)
-}
-
-/// The quarantined arithmetic from gh #343, kept here as a negative
-/// control. A gate that never fails against the code it was written to
-/// catch asserts nothing, so every `fused_bounded_max` test that expects a
-/// pass is re-run through this to prove it would have caught the revert.
-fn sum_then_clamp(structural: f64, token: f64, embedding: f64) -> f64 {
-    (structural + token + embedding).clamp(0.0, 1.0)
-}
 
 /// The same cluster with every occurrence hidden, so it renders nothing.
 fn hide(mut cluster: Value) -> Value {
@@ -88,17 +77,6 @@ fn hide(mut cluster: Value) -> Value {
 fn report(clusters: &[Value]) -> Value {
     json!({ "clusters": clusters })
 }
-
-/// The signal triples the negative control is run over. Each is a shape
-/// the engine really renders, and each has at least two positive axes so
-/// the sum and the max provably disagree.
-const TRIPLES: [(&str, f64, f64, f64); 5] = [
-    ("identical", 1.0, 1.0, 0.0),
-    ("nearly_identical", 1.0, 1.0, 0.42),
-    ("structural_only", 1.0, 0.30, 0.0),
-    ("loosely_similar", 0.20, 0.30, 0.94),
-    ("same_behavior", 0.10, 0.20, 0.88),
-];
 
 /// Smallest cluster that can credibly *be* the whole-module rename the
 /// curated entries in these tests describe, in `canonical_node_count`.

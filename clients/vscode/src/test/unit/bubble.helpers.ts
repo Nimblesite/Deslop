@@ -237,7 +237,7 @@ export async function resolveProbe(
   request: DeferredProbeRequest | undefined,
   probe: Promise<void>,
   cancellationExpected?: boolean,
-  clusters: ReportCluster[] = [probeCluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_FUSED_CONFIDENCE)],
+  clusters: ReportCluster[] = [probeCluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT)],
 ): Promise<void> {
   assert.ok(request !== undefined, "probe request must exist");
   if (cancellationExpected !== undefined) {

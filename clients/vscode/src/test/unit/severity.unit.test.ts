@@ -37,7 +37,7 @@ const ERROR_SEVERITY = "error" as const;
 
 function cluster(
   id: string,
-  fused = 0,
+  pairAgreement = 0,
   bucket: Bucket = IDENTICAL_BUCKET,
   band: Severity = FAINT_BAND,
   rank = 1,
@@ -50,7 +50,7 @@ function cluster(
     size: 0,
     canonical_node_count: 0,
     bucket,
-    signals: signalsWith(IDENTICAL_BUCKET, { fused }),
+    signals: signalsWith(IDENTICAL_BUCKET, { pair_agreement: pairAgreement }),
     occurrences: [],
   });
 }
@@ -123,8 +123,9 @@ suite("severity", () => {
       "fixture: the demoted family is the top-ranked cluster",
     );
     assert.ok(
-      (clusters[0]?.signals.fused ?? 1) < (clusters[1]?.signals.fused ?? 0),
-      "fixture: it also carries strictly lower confidence than the proven clone",
+      (clusters[0]?.signals.pair_agreement ?? 1) <
+        (clusters[1]?.signals.pair_agreement ?? 0),
+      "fixture: it also carries strictly weaker elected content evidence than the proven clone",
     );
 
     // The paint. This is the assertion the defect was about.

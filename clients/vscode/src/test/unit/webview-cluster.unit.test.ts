@@ -156,6 +156,19 @@ function stringCorpus(root: ts.SourceFile): string {
   return parts.join("\n");
 }
 
+// The source text of a template expression: its head, every
+// interpolated expression verbatim, and every span's literal tail — the
+// same reconstruction `stringCorpus` performs, extended with expression
+// text so assertions can pin which variable a label is built from.
+function templateText(expr: ts.TemplateExpression): string {
+  const parts = [expr.head.text];
+  for (const span of expr.templateSpans) {
+    parts.push(span.expression.getText());
+    parts.push(span.literal.text);
+  }
+  return parts.join("");
+}
+
 function severityBadgeLabelTemplates(root: ts.Node): string[] {
   const out: string[] = [];
   function visit(node: ts.Node): void {
@@ -346,20 +359,26 @@ suite("cluster webview occurrence locations", () => {
 
   test("signal strip hover copy explains every score", () => {
     // The signal copy moved into the shared `types/signals` formatter
-    // ([FUSED-CONTENT-GATE], #344) so the strip, its tooltips and the docs
-    // anchors cannot describe the same number two ways. The corpus follows it
-    // there and now covers the three content-evidence axes too.
+    // (#344) so the strip, its tooltips and the docs anchors cannot
+    // describe the same number two ways. The corpus follows it there and
+    // covers the three content-evidence axes. There is no combined-score
+    // hover: that axis is gone from the wire, and its old hover copy with
+    // it — asserted negatively so it cannot quietly return.
     const corpus = [
       stringCorpus(parseSignalStrip()),
       stringCorpus(parseHelpBubble()),
       Object.values(SIGNAL_HELP).join("\n"),
       signalTitle({ topic: "agreement", label: "agreement", value: 0.08 }),
     ].join("\n");
+    assert.doesNotMatch(
+      corpus,
+      /Combined clone score/,
+      "the combined-score hover must stay deleted with the fused axis",
+    );
     for (const phrase of [
       "AST-shape similarity",
       "Token-overlap similarity",
       "Semantic similarity",
-      "Combined clone score",
       "Current value",
       "How much of the matched content the locations genuinely share",
       "one consistent identifier renaming explains every difference",

@@ -7,9 +7,9 @@
 //! (`stock-locations`, `display-banners`, ...). Nobody copied anything;
 //! the shape is what the HTTP client mandates.
 //!
-//! The report published them as `nearly_identical`, `fused = 0.900`,
-//! `rename_consistency = 1.000`, ranked **above** a byte-identical
-//! clone in the same corpus — the engine's act-now claim, made about
+//! The report published them as `nearly_identical`, with
+//! `pair_rename_consistency = 1.000`, ranked **above** a byte-identical
+//! clone in the same corpus — an explicit duplication claim about
 //! seven methods that call seven different endpoints.
 //!
 //! # The mechanism
@@ -78,17 +78,16 @@ fn render() -> Result<Value> {
     run_report(&fixture(FIXTURE), MIN_NODES)
 }
 
-/// Every visible cluster as `id [bucket] fused rename files`.
+/// Every visible cluster as `id [bucket] pair rename evidence files`.
 fn published(report: &Value) -> Vec<String> {
     clusters(report)
         .iter()
         .map(|cluster| {
             format!(
-                "{id} [{bucket}] fused={fused:.4} rename={rename:.4} {files:?}",
+                "{id} [{bucket}] rename={rename:.4} {files:?}",
                 id = cluster_id(cluster),
                 bucket = cluster_bucket(cluster),
-                fused = signal(cluster, "fused"),
-                rename = signal(cluster, "rename_consistency"),
+                rename = signal(cluster, "pair_rename_consistency"),
                 files = occurrence_files(cluster),
             )
         })
@@ -120,7 +119,7 @@ fn occurrence_spans(cluster: &Value) -> Vec<(String, u64, u64)> {
 // detector that had simply stopped producing candidates fails here
 // too.
 #[test]
-fn sibling_accessors_never_reach_the_act_now_line() -> Result<()> {
+fn sibling_accessors_never_claim_duplication() -> Result<()> {
     let report = render()?;
     assert_eq!(
         field(&report, "files_analysed").as_u64(),
@@ -138,8 +137,8 @@ fn sibling_accessors_never_reach_the_act_now_line() -> Result<()> {
         published = published(&report),
     );
     assert!(
-        approx(signal(control, "fused"), 1.0) && approx(signal(control, "agreement"), 1.0),
-        "byte-proven duplication saturates confidence and agreement; a fix that \
+        approx(signal(control, "pair_agreement"), 1.0),
+        "byte-proven duplication saturates agreement; a fix that \
          lowered every score has distinguished nothing — {dump}",
         dump = signal_dump(control),
     );
@@ -148,16 +147,14 @@ fn sibling_accessors_never_reach_the_act_now_line() -> Result<()> {
     };
     let dump = signal_dump(family);
     assert!(
-        !ACT_NOW_BUCKETS.contains(&cluster_bucket(family)),
-        "the seven accessors call seven different endpoints. An act-now bucket \
+        !CONFIRMED_DUPLICATE_BUCKETS.contains(&cluster_bucket(family)),
+        "the seven accessors call seven different endpoints. A duplicate bucket \
          tells a `find-similar` consumer to write one where another is meant — \
          {dump}"
     );
     assert!(
-        signal(family, "fused") < ACT_NOW_FUSED,
-        "rendered confidence {fused:.4} is at or above the act-now line of \
-         {ACT_NOW_FUSED} for code nobody copied — {dump}",
-        fused = signal(family, "fused"),
+        signal(family, "pair_rename_consistency") < 1.0,
+        "a scaffolding family must not carry a certified rename reading — {dump}"
     );
     Ok(())
 }
@@ -173,13 +170,13 @@ fn a_rename_is_never_proven_without_an_anchor_outside_it() -> Result<()> {
         return Ok(());
     };
     assert!(
-        signal(family, "rename_consistency") < 1.0,
-        "`rename_consistency` at {rename:.4} is the engine's certificate that one \
+        signal(family, "pair_rename_consistency") < 1.0,
+        "`pair_rename_consistency` at {rename:.4} is the engine's certificate that one \
          bijection explains everything that differs. The elected window holds no \
          literal at all, so the only thing corroborating the substitution is the \
          substitution — an empty literal population scoring 1.0 is absent \
          evidence being read as perfect evidence — {dump}",
-        rename = signal(family, "rename_consistency"),
+        rename = signal(family, "pair_rename_consistency"),
         dump = signal_dump(family),
     );
     Ok(())
