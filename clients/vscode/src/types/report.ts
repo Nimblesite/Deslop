@@ -173,8 +173,6 @@ export interface BucketLabels {
   // Shared-text surfaces (Problems panel, hover, diagnostic message) —
   // plain prose + bracketed Type-N suffix for AI scrapers.
   hybridTitle: string;
-  // Plain-English one-liner shown under the title on every surface.
-  actionSentence: string;
   // Academic taxonomy reference composed into AI-only sentences.
   taxonomyLabel: string;
   // CSS class suffix for HTML / webview cards.
@@ -187,7 +185,6 @@ const LABELS: Record<Bucket, BucketLabels> = {
   identical: {
     plainTitle: "Identical code",
     hybridTitle: "Identical code [Type-1/2]",
-    actionSentence: "Safe to extract — every copy is the same.",
     taxonomyLabel: "Type-1 or Type-2 exact clone",
     cssSuffix: IDENTICAL_BUCKET_VALUE,
     aiMatch: false,
@@ -195,7 +192,6 @@ const LABELS: Record<Bucket, BucketLabels> = {
   nearly_identical: {
     plainTitle: "Nearly identical code",
     hybridTitle: "Nearly identical code [Type-3]",
-    actionSentence: "Review the locations — small differences may matter.",
     taxonomyLabel: "Type-3 near-miss",
     cssSuffix: "nearly-identical",
     aiMatch: false,
@@ -203,8 +199,6 @@ const LABELS: Record<Bucket, BucketLabels> = {
   structural_only: {
     plainTitle: "Same shape, different content",
     hybridTitle: "Same shape, different content [structural-only]",
-    actionSentence:
-      "Only the code shape matches — usually sibling boilerplate. Verify before extracting.",
     taxonomyLabel: "structural-only match (unverified Type-2/3 candidate)",
     cssSuffix: "structural-only",
     aiMatch: false,
@@ -212,7 +206,6 @@ const LABELS: Record<Bucket, BucketLabels> = {
   loosely_similar: {
     plainTitle: "Loosely similar code",
     hybridTitle: "Loosely similar code [weak LSH]",
-    actionSentence: "Loose textual overlap. Treat as a hint.",
     taxonomyLabel: "weak LSH-only signal (sub-Type-3)",
     cssSuffix: "loosely-similar",
     aiMatch: false,
@@ -220,8 +213,6 @@ const LABELS: Record<Bucket, BucketLabels> = {
   same_behavior: {
     plainTitle: "Same behavior, different code",
     hybridTitle: "Same behavior, different code [Type-4, AI match]",
-    actionSentence:
-      "The AI noticed these do the same thing written two ways — read both before merging.",
     taxonomyLabel: "Type-4 semantic clone (AI match)",
     cssSuffix: "same-behavior",
     aiMatch: true,
@@ -259,17 +250,15 @@ export function resolveBucket(cluster: ReportCluster): Bucket {
   return "loosely_similar";
 }
 
-// Buckets the engine considers actionable. A surface that withholds one of
-// these is a false negative; a surface that paints anything else with them
-// is a false positive. Exported so the live bubble, the tree, and the tests
-// share one definition ([VSIX-LIVE-BUBBLE]).
-export const ACT_NOW_BUCKETS: readonly Bucket[] = [
+// The exact buckets eligible for the live bubble. Exported so the bubble and
+// its tests share one explicit engine-bucket contract ([VSIX-LIVE-BUBBLE]).
+export const LIVE_BUBBLE_BUCKETS: readonly Bucket[] = [
   IDENTICAL_BUCKET_VALUE,
   "nearly_identical",
 ] as const;
 
-export function isActNow(bucket: Bucket): boolean {
-  return ACT_NOW_BUCKETS.includes(bucket);
+export function isLiveBubbleBucket(bucket: Bucket): boolean {
+  return LIVE_BUBBLE_BUCKETS.includes(bucket);
 }
 
 // ---------------------------------------------------------------------------
@@ -353,13 +342,9 @@ export function applyFacetFilter(
   );
 }
 
-// Returns the cluster's interpretation line, falling back to the
-// bucket's action sentence when the live wire has blanked the field.
-// Every UI surface (hover, decorations, panels) funnels through this
-// so the "what does this cluster mean" prose stays consistent whether
-// the cluster came from a live LSP response or a CLI-loaded report.
+// Returns the engine-authored interpretation. `buckets.rs` is the only source
+// of evidence sentences; clients carry the wire text without reconstructing
+// or falling back to a TypeScript copy.
 export function clusterInterpretation(cluster: ReportCluster): string {
-  return cluster.interpretation && cluster.interpretation.length > 0
-    ? cluster.interpretation
-    : bucketLabels(resolveBucket(cluster)).actionSentence;
+  return cluster.interpretation;
 }

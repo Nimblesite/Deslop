@@ -63,13 +63,13 @@ const TEST_TARGET_KIND: &str = "test";
 /// `corpus_repos` entries and `perf_sample` are the real-repository gate
 /// (gh #422, blocked on the memory work in #166); the two gh #369 entries
 /// are red on purpose against unfinished fusion and embedding behaviour. The
-/// two gh #432 entries are the fused-score follow-ups' own accuracy
-/// pins, skipped in flight per `docs/plans/fused-score-followups.md` — each
-/// returns when its issue lands.
+/// gh #432 operator-drift pins were un-ignored when the fused-score
+/// follow-ups landed their elected-pair contract — `operator_drift_is_not_duplication`
+/// now runs live.
 ///
 /// Those counts are prose, and prose drifts. [`SKIPS_PER_ISSUE`] is what
 /// stops it drifting silently.
-const CURATED_SKIPS: [(&str, &str, u32); 16] = [
+const CURATED_SKIPS: [(&str, &str, u32); 14] = [
     (
         "crates/deslop-lsp/tests/lsp_embedding_determinism.rs",
         "lsp_embedding_refresh_is_bounded_and_reproducible",
@@ -124,18 +124,8 @@ const CURATED_SKIPS: [(&str, &str, u32); 16] = [
     ),
     (
         "crates/deslop/tests/issue_343_sum_clamp_saturation.rs",
-        "mid_band_cluster_confidence_never_exceeds_its_strongest_axis",
+        "mid_band_pair_stays_visible_with_a_real_bucket",
         369,
-    ),
-    (
-        "crates/deslop/tests/operator_drift_is_not_duplication.rs",
-        "an_operator_only_difference_never_reaches_the_act_now_line",
-        432,
-    ),
-    (
-        "crates/deslop/tests/operator_drift_is_not_duplication.rs",
-        "the_real_clone_outranks_every_operator_family",
-        432,
     ),
     (
         "crates/deslop/tests/perf_sample.rs",
@@ -151,7 +141,7 @@ const CURATED_SKIPS: [(&str, &str, u32); 16] = [
 /// #432–#435 entries when the registry held nine across #432–#434 and none
 /// for #435. That is a wrong answer to the question a reader is actually
 /// asking: which plan still owns this block of silence, and how much of it.
-const SKIPS_PER_ISSUE: [(u32, usize); 3] = [(369, 2), (422, 12), (432, 2)];
+const SKIPS_PER_ISSUE: [(u32, usize); 2] = [(369, 2), (422, 12)];
 
 /// How many skips each issue owns, counted from the registry itself.
 fn skips_by_issue() -> BTreeMap<u32, usize> {

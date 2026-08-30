@@ -128,13 +128,18 @@ fn from_report_replays_legacy_report_predating_content_signals() -> Result<()> {
         "schema-carried bucket must be preserved on replay"
     );
     assert_eq!(signal("structural"), Some(1.0));
-    assert_eq!(signal("fused"), Some(1.0));
     assert_eq!(
-        signal("agreement"),
+        signal("fused"),
+        None,
+        "no cluster-level fused may survive on the wire, even from a legacy \
+         report ([FUSED-SCOPE])"
+    );
+    assert_eq!(
+        signal("pair_agreement"),
         Some(1.0),
         "absent agreement is unmeasured, and unmeasured never demotes"
     );
-    assert_eq!(signal("rename_consistency"), Some(0.0));
+    assert_eq!(signal("pair_rename_consistency"), Some(0.0));
     assert_eq!(signal("literal_fraction"), Some(0.0));
     let provenance = json
         .get("embedding_provenance")

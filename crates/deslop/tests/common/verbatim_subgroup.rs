@@ -11,10 +11,9 @@
 use serde_json::Value;
 
 use super::{
-    cluster_bucket, cluster_file_set, cluster_id, cluster_size, clusters, expect_cluster_spanning,
-    field, fixture, occurrence_files, per_file_metrics, run_report,
+    approx, cluster_bucket, cluster_file_set, cluster_id, cluster_size, clusters,
+    expect_cluster_spanning, field, fixture, occurrence_files, per_file_metrics, run_report, signal,
     signals::{signal_dump, IDENTICAL_BUCKET},
-    verdict::assert_type1_identical_signals,
     Result,
 };
 
@@ -53,6 +52,18 @@ pub(crate) const CALL_STRANGER: &str = "refund_emitter.py";
 /// ([PIPELINE-CLUSTER-EXACT-SCOPE], gh #408). The undercount was the
 /// artifact; five is what the two files actually share.
 pub(crate) const CALL_LOC_PER_FILE: u64 = 5;
+
+/// Every elected-pair axis fixed by a byte-identical copy with embeddings off.
+/// `literal_fraction` is corpus content, not evidence strength, so each fixture
+/// asserts its own authored value where that value matters.
+const VERBATIM_PAIR_SIGNALS: &[(&str, f64)] = &[
+    ("structural", 1.0),
+    ("token_jaccard", 1.0),
+    ("shape", 1.0),
+    ("embedding_cos", 0.0),
+    ("pair_agreement", 1.0),
+    ("pair_rename_consistency", 1.0),
+];
 
 /// Renders one `verbatim-subgroup` case.
 pub(crate) fn render(case: &str, min_nodes: u32) -> Result<Value> {
@@ -111,7 +122,12 @@ pub(crate) fn assert_copy_survives_alone(
         2,
         "{label}: exactly the two copies are shown — {dump}"
     );
-    assert_type1_identical_signals(cluster, label);
+    for (name, expected) in VERBATIM_PAIR_SIGNALS {
+        assert!(
+            approx(signal(cluster, name), *expected),
+            "{label}: byte-proven signal `{name}` must be {expected} — {dump}"
+        );
+    }
     assert_eq!(
         cluster_file_set(cluster),
         copy.iter().map(|name| (*name).to_owned()).collect(),

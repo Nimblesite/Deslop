@@ -7,9 +7,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as reportModule from "../../types/report";
 import {
-  ACT_NOW_BUCKETS,
+  LIVE_BUBBLE_BUCKETS,
   bucketLabels,
-  isActNow,
+  clusterInterpretation,
+  isLiveBubbleBucket,
   occurrenceCount,
   resolveBucket,
   type ReportCluster,
@@ -23,7 +24,7 @@ const NEARLY_IDENTICAL_BUCKET = "nearly_identical";
 const STRUCTURAL_ONLY_BUCKET = "structural_only";
 const LOOSELY_SIMILAR_BUCKET = "loosely_similar";
 const SAME_BEHAVIOR_BUCKET = "same_behavior";
-const LOOSE_ACTION_SENTENCE = "Loose textual overlap. Treat as a hint.";
+const LOOSE_INTERPRETATION = "Engine-authored loose-match evidence.";
 const UTF8_ENCODING = "utf8";
 const LOW_SCORE = 0.2;
 const SHAPE_SCORE = 0.3;
@@ -34,8 +35,8 @@ const NEAR_TOKEN_SCORE = 0.96;
 const FIXTURE_TEN = 10;
 const ENGINE_OCCURRENCE_COUNT = 35;
 const PAIR_COUNT = 2;
-const HINT_ACTION_ASSERTION =
-  "the user must not be told to act on a pair the engine ranked as a hint";
+const HINT_INTERPRETATION_ASSERTION =
+  "the client must carry the engine's hint interpretation unchanged";
 const STRUCTURAL_ONLY_TITLE = "Same shape, different content";
 const LEGACY_WORD_SUFFIX = "ict";
 
@@ -189,7 +190,7 @@ suite("report schema helpers", () => {
   // ⚠️ INVERTED. This row used to assert `nearly_identical` for
   // `structural 0.00, token 0.95`. The engine calls that
   // `loosely_similar` — `classify_signals` requires `structural >= 0.20`
-  // before a token signal can reach an act-now bucket and has no
+  // before a token signal can reach a confirmed duplicate bucket and has no
   // low-structural arm at all — so the old expectation encoded the very
   // divergence this change removes. Every assertion is kept; the
   // expected value now agrees with the engine instead of contradicting it.
@@ -197,12 +198,13 @@ suite("report schema helpers", () => {
     const weakShape = cluster({
       bucket: LOOSELY_SIMILAR_BUCKET,
       signals: signals(0.0, TOKEN_ANCHOR_SCORE, 0),
+      interpretation: LOOSE_INTERPRETATION,
     });
     assert.equal(resolveBucket(weakShape), LOOSELY_SIMILAR_BUCKET);
     assert.equal(
-      bucketLabels(resolveBucket(weakShape)).actionSentence,
-      LOOSE_ACTION_SENTENCE,
-      HINT_ACTION_ASSERTION,
+      clusterInterpretation(weakShape),
+      LOOSE_INTERPRETATION,
+      HINT_INTERPRETATION_ASSERTION,
     );
   });
 
@@ -260,20 +262,25 @@ suite("report schema helpers", () => {
   // the engine never carried: it gated on `structural > 0.0` where the
   // engine gates on `structural >= 0.20`, and added
   // `structural <= 0.01 && token >= 0.9` outright. Both triples below are
-  // `loosely_similar` in the engine, so a hint was repainted as an
-  // act-now "Review the locations" on the flagship surface.
-  test("a weak-shape pair the engine called a hint is never promoted to act-now", () => {
+  // `loosely_similar` in the engine, so a hint was repainted as a
+  // confirmed near-miss on the flagship surface.
+  test("a weak-shape pair keeps the engine's hint interpretation", () => {
     for (const triple of [signals(0.1, NEAR_TOKEN_SCORE, 0), signals(0.0, 0.92, 0)]) {
-      const routed = resolveBucket(cluster({ bucket: LOOSELY_SIMILAR_BUCKET, signals: triple }));
+      const candidate = cluster({
+        bucket: LOOSELY_SIMILAR_BUCKET,
+        signals: triple,
+        interpretation: LOOSE_INTERPRETATION,
+      });
+      const routed = resolveBucket(candidate);
       assert.equal(
         routed,
         LOOSELY_SIMILAR_BUCKET,
         `the engine's hint verdict must survive the triple ${JSON.stringify(triple)}`,
       );
       assert.equal(
-        bucketLabels(routed).actionSentence,
-        LOOSE_ACTION_SENTENCE,
-        HINT_ACTION_ASSERTION,
+        clusterInterpretation(candidate),
+        LOOSE_INTERPRETATION,
+        HINT_INTERPRETATION_ASSERTION,
       );
       assert.equal(bucketLabels(routed).aiMatch, false);
     }
@@ -313,21 +320,27 @@ suite("report schema helpers", () => {
       signals(1.0, 1.0, 0, 1.0).structural,
       "fixture: its shape evidence is indistinguishable from a verbatim copy",
     );
-    const routed = resolveBucket(cluster({ bucket: NEARLY_IDENTICAL_BUCKET, signals: rename }));
+    const nearMissInterpretation = "Engine-authored near-miss evidence.";
+    const renamedCluster = cluster({
+      bucket: NEARLY_IDENTICAL_BUCKET,
+      signals: rename,
+      interpretation: nearMissInterpretation,
+    });
+    const routed = resolveBucket(renamedCluster);
     assert.equal(
       routed,
       NEARLY_IDENTICAL_BUCKET,
       "a rename below full confidence must not be labelled byte-identical",
     );
     assert.equal(
-      bucketLabels(routed).actionSentence,
-      "Review the locations — small differences may matter.",
-      "the user must be told to review, not that extraction is safe",
+      clusterInterpretation(renamedCluster),
+      nearMissInterpretation,
+      "the client must render the engine-authored interpretation",
     );
     assert.notEqual(
-      bucketLabels(routed).actionSentence,
-      bucketLabels(IDENTICAL_BUCKET).actionSentence,
-      "the rename must not borrow the byte-identical action sentence",
+      clusterInterpretation(renamedCluster),
+      LOOSE_INTERPRETATION,
+      "the near miss must not borrow a different cluster's interpretation",
     );
   });
 
@@ -373,15 +386,20 @@ suite("report schema helpers", () => {
   // come back as the hint bucket — any surviving re-derivation would
   // answer "identical" here.
   test("an unlabelled cluster is a hint, however loudly its signals saturate", () => {
-    const unlabelled = resolveBucket(cluster({ bucket: "", signals: signals(1.0, 1.0, 1.0, 1.0) }));
+    const candidate = cluster({
+      bucket: "",
+      signals: signals(1.0, 1.0, 1.0, 1.0),
+      interpretation: LOOSE_INTERPRETATION,
+    });
+    const unlabelled = resolveBucket(candidate);
     assert.equal(
       unlabelled,
       LOOSELY_SIMILAR_BUCKET,
       "a report with no engine verdict carries no verdict to render",
     );
     assert.equal(
-      bucketLabels(unlabelled).actionSentence,
-      LOOSE_ACTION_SENTENCE,
+      clusterInterpretation(candidate),
+      LOOSE_INTERPRETATION,
     );
     assert.equal(
       resolveBucket(cluster({ bucket: "not_a_bucket", signals: signals(1.0, 1.0, 1.0, 1.0) })),
@@ -445,11 +463,6 @@ suite("report schema helpers", () => {
       assert.ok(
         labels.hybridTitle.startsWith(labels.plainTitle),
         `${routed}: the hybrid title must extend the plain title, not restate it`,
-      );
-      assert.match(
-        labels.actionSentence,
-        /\.$/,
-        `${routed}: the action sentence must be a complete sentence`,
       );
       assert.equal(
         labels.aiMatch,

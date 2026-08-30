@@ -1,7 +1,7 @@
 // Live duplication bubble — [VSIX-LIVE-BUBBLE].
 // Fires after every coalesced buffer edit. Calls deslop/duplicatesFindSimilar
 // on the most-recently-touched range; admission is `bubbleAdmits`: only an
-// act-now bucket renders — the engine's own verdict, reached with content
+// explicitly eligible duplicate bucket renders — the engine's own verdict, reached with content
 // evidence and byte proof this client never sees. Surfaces:
 //   primary: after-text decoration (severity dot + bucket label + count + canonical)
 //   secondary: inlay hint with a 3-bar signal strip
@@ -18,7 +18,7 @@ import { ANALYSED_LANGUAGE_IDS } from "../types/languages";
 import {
   ReportCluster,
   clusterBand,
-  isActNow,
+  isLiveBubbleBucket,
   resolveBucket,
 } from "../types/report";
 import { bubbleHover, ghostText, inlineText, signalStrip } from "./renderParts";
@@ -389,15 +389,15 @@ function bestBubbleCluster(
 }
 
 // One gate: the bucket ([VSIX-LIVE-BUBBLE], [FUSED-CONTENT-GATE]). An
-// act-now bucket is the engine's own verdict that the user should act,
+// eligible bucket is the engine's own duplicate verdict,
 // reached with content evidence and byte proof this client never sees.
 // There is no second admission path: the fused gate is gone from the wire,
-// and no UI-local threshold stands in for it — a below-act-now cluster
+// and no UI-local threshold stands in for it — an ineligible cluster
 // simply has no engine verdict behind it and does not render. The
 // threshold constant exists once, in Rust, and this client never mirrors
 // it.
 function bubbleAdmits(cluster: ReportCluster): boolean {
-  return isActNow(resolveBucket(cluster));
+  return isLiveBubbleBucket(resolveBucket(cluster));
 }
 
 class BubbleInlayProvider implements vscode.InlayHintsProvider {

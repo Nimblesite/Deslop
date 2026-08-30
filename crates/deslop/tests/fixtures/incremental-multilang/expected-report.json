@@ -98,15 +98,15 @@
   "action_hints": [
     {
       "pattern": "bucket=identical",
-      "recommendation": "Identical code. Safe to extract \u2014 every copy is the same. (Type-1 or Type-2 exact clone)"
+      "recommendation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
     },
     {
       "pattern": "bucket=nearly-identical",
-      "recommendation": "Nearly identical code. Review the locations \u2014 small differences may matter. (Type-3 near-miss)"
+      "recommendation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
     },
     {
       "pattern": "bucket=structural-only",
-      "recommendation": "Same shape, different content. Only the code shape matches \u2014 usually sibling boilerplate. Verify before extracting. (structural-only match (unverified Type-2/3 candidate))"
+      "recommendation": "Same shape, different content. Only the code shape matches — usually sibling boilerplate. Verify before extracting. (structural-only match (unverified Type-2/3 candidate))"
     },
     {
       "pattern": "bucket=loosely-similar",
@@ -114,7 +114,7 @@
     },
     {
       "pattern": "bucket=same-behavior",
-      "recommendation": "Same behavior, different code. The AI noticed these do the same thing written two ways \u2014 read both before merging. (Type-4 semantic clone (AI match))"
+      "recommendation": "Same behavior, different code. The AI noticed these do the same thing written two ways — read both before merging. (Type-4 semantic clone (AI match))"
     },
     {
       "pattern": "category=data",
@@ -140,10 +140,14 @@
         "pair_rename_consistency": 1.0,
         "literal_fraction": 0.0
       },
+      "signal_source": {
+        "left": 0,
+        "right": 1
+      },
       "bucket": "identical",
       "category": "logic",
       "language": "go",
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so confidence stayed at 1.00.",
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
       "occurrences": [
         {
           "path": "ledger_alpha.go",
@@ -166,7 +170,7 @@
       "occurrence_count": 2,
       "occurrences_truncated": false,
       "summary": "2 copies of a 57-node subtree at ledger_alpha.go:7:1, ledger_beta.go:9:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
-      "interpretation": "Identical code. Safe to extract \u2014 every copy is the same. (Type-1 or Type-2 exact clone)"
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
     },
     {
       "id": "ffa9824eae18b341",
@@ -184,10 +188,14 @@
         "pair_rename_consistency": 1.0,
         "literal_fraction": 0.0
       },
+      "signal_source": {
+        "left": 0,
+        "right": 1
+      },
       "bucket": "identical",
       "category": "logic",
       "language": "typescript",
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so confidence stayed at 1.00.",
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
       "occurrences": [
         {
           "path": "ledger_alpha.ts",
@@ -210,7 +218,7 @@
       "occurrence_count": 2,
       "occurrences_truncated": false,
       "summary": "2 copies of a 57-node subtree at ledger_alpha.ts:5:1, ledger_beta.ts:7:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
-      "interpretation": "Identical code. Safe to extract \u2014 every copy is the same. (Type-1 or Type-2 exact clone)"
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
     },
     {
       "id": "7c61b26360939eaa",
@@ -228,10 +236,14 @@
         "pair_rename_consistency": 1.0,
         "literal_fraction": 0.0
       },
+      "signal_source": {
+        "left": 0,
+        "right": 1
+      },
       "bucket": "identical",
       "category": "logic",
       "language": "dart",
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so confidence stayed at 1.00.",
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
       "occurrences": [
         {
           "path": "ledger_alpha.dart",
@@ -254,7 +266,7 @@
       "occurrence_count": 2,
       "occurrences_truncated": false,
       "summary": "2 copies of a 55-node subtree at ledger_alpha.dart:5:1, ledger_beta.dart:7:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
-      "interpretation": "Identical code. Safe to extract \u2014 every copy is the same. (Type-1 or Type-2 exact clone)"
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
     },
     {
       "id": "927b05fad1c1cc0f",
@@ -272,10 +284,14 @@
         "pair_rename_consistency": 1.0,
         "literal_fraction": 0.0
       },
+      "signal_source": {
+        "left": 0,
+        "right": 1
+      },
       "bucket": "identical",
       "category": "logic",
       "language": "rust",
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so confidence stayed at 1.00.",
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
       "occurrences": [
         {
           "path": "ledger_alpha.rs",
@@ -298,7 +314,7 @@
       "occurrence_count": 2,
       "occurrences_truncated": false,
       "summary": "2 copies of a 51-node subtree at ledger_alpha.rs:5:1, ledger_beta.rs:7:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
-      "interpretation": "Identical code. Safe to extract \u2014 every copy is the same. (Type-1 or Type-2 exact clone)"
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
     },
     {
       "id": "dc672f7f39f21ba4",
@@ -316,10 +332,14 @@
         "pair_rename_consistency": 1.0,
         "literal_fraction": 0.0
       },
+      "signal_source": {
+        "left": 0,
+        "right": 1
+      },
       "bucket": "identical",
       "category": "logic",
       "language": "csharp",
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so confidence stayed at 1.00.",
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
       "occurrences": [
         {
           "path": "LedgerAlpha.cs",
@@ -342,7 +362,7 @@
       "occurrence_count": 2,
       "occurrences_truncated": false,
       "summary": "2 copies of a 51-node subtree at LedgerAlpha.cs:9:5, LedgerBeta.cs:9:5 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
-      "interpretation": "Identical code. Safe to extract \u2014 every copy is the same. (Type-1 or Type-2 exact clone)"
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
     },
     {
       "id": "b63105455a75704b",
@@ -360,10 +380,14 @@
         "pair_rename_consistency": 1.0,
         "literal_fraction": 0.0
       },
+      "signal_source": {
+        "left": 0,
+        "right": 1
+      },
       "bucket": "identical",
       "category": "logic",
       "language": "python",
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so confidence stayed at 1.00.",
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
       "occurrences": [
         {
           "path": "ledger_alpha.py",
@@ -386,7 +410,7 @@
       "occurrence_count": 2,
       "occurrences_truncated": false,
       "summary": "2 copies of a 40-node subtree at ledger_alpha.py:6:1, ledger_beta.py:8:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
-      "interpretation": "Identical code. Safe to extract \u2014 every copy is the same. (Type-1 or Type-2 exact clone)"
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
     }
   ]
 }

@@ -34,7 +34,7 @@
 use serde_json::Value;
 
 use deslop_core::buckets::{
-    CONTENT_SUPPORT_FLOOR, SATURATING_TOKEN_FLOOR, STRUCTURAL_SATURATION_FLOOR,
+    CONTENT_SUPPORT_FLOOR, STRUCTURAL_SATURATION_FLOOR,
 };
 
 use crate::common::{signals::*, *};
@@ -161,8 +161,9 @@ fn a_digest_equal_pair_keeps_its_saturated_signals() -> Result<()> {
 /// The pair that reproduces gh #460: two unrelated tree-sitter field
 /// accessors — different node kind, different field, different body —
 /// whose only shared authored logic is the grammar-mandated accessor
-/// idiom. They measure `structural = 0.82`, `token_jaccard = 0.73`, so
-/// neither axis saturates and [FUSED-CONTENT-GATE] never runs on them.
+/// idiom. They measure `structural = 1.00`, `token_jaccard = 1.00` (the
+/// shared accessor shape saturates), so the gate runs on them and
+/// refuses the promotion: content support stays below the floor.
 const ACCESSOR_PAIR: [&str; 2] = ["accessor_argument.rs", "accessor_assignment.rs"];
 
 /// The byte-identical control in the same fixture: both axes saturate,
@@ -182,53 +183,45 @@ fn render_unsaturated() -> Result<Value> {
 }
 
 // [FUSED-CONTENT-GATE] gh #460 — the report may not tell a reader that
-// content evidence corroborated a match the gate never consulted.
+// content evidence corroborated a match whose evidence did not
+// corroborate it.
 //
-// `buckets::routing::route_shape_identical` returns before the gate
-// whenever `has_saturating_shape_evidence` is false, so the gate never
-// runs on a below-saturation cluster, and
-// `render::signals::content_evidence_verdict` reaches the
-// `unweighed_verdict` branch for it — it names the measured figures as
-// unused observations, never as corroboration.
-//
-// Measured on this repo's own tree (2026-08-27, 1316 visible clusters):
-// 637 of 637 non-saturated clusters used to carry the corroborated
-// clause, rendering the strongest available disproof of the match as
-// corroboration. That population now reads the honest verdict.
+// `buckets::routing::route_shape_identical` demotes the pair: the
+// shared accessor shape saturates both axes, the gate runs, and the
+// measured content support falls below the floor, so the cluster
+// carries the honest `structural_only` bucket and the boilerplate
+// verdict — never the corroborated sentence. The gate-skipped branch
+// of the verdict engine (below-saturation clusters, whose evidence the
+// gate could not weigh) is pinned unit-level in
+// `render/signals.rs::verdict_reads_each_family`; this E2E pins the
+// same honesty property through the whole pipeline.
 #[test]
-fn a_gate_skipped_cluster_is_not_told_its_content_evidence_agreed() -> Result<()> {
+fn a_cluster_whose_evidence_did_not_corroborate_is_not_told_it_agreed() -> Result<()> {
     let report = render_unsaturated()?;
     let accessor = expect_cluster_spanning(&report, &ACCESSOR_PAIR)?;
-    assert!(
-        ACT_NOW_BUCKETS.contains(&cluster_bucket(accessor)),
-        "the accessor pair must reach an act-now bucket for its verdict to be \
-         the sentence a reader acts on — it routed {bucket}: {report:#}",
+    assert_eq!(
+        cluster_bucket(accessor),
+        "structural_only",
+        "the accessor pair shares only shape: its content support is below the \
+         floor, so an act-now bucket would tell a `find-similar` consumer to \
+         reuse one where the other is meant — it routed {bucket}: {report:#}",
         bucket = cluster_bucket(accessor),
     );
     let structural = signal(accessor, "structural");
-    let token_jaccard = signal(accessor, "token_jaccard");
-    assert!(
-        structural < STRUCTURAL_SATURATION_FLOOR && token_jaccard < SATURATING_TOKEN_FLOOR,
-        "the accessor pair must sit below both saturation floors, which is what \
-         scopes [FUSED-CONTENT-GATE] out of it — it measured \
-         structural={structural}, token_jaccard={token_jaccard}: {accessor:#}"
-    );
     let support = signal(accessor, "pair_agreement")
         .max(signal(accessor, "pair_rename_consistency"));
     assert!(
         support < CONTENT_SUPPORT_FLOOR,
-        "the accessor pair's content evidence must be measured and low for the \
-         verdict to be making a false claim about it — support={support}: \
-         {accessor:#}"
+        "the accessor pair's content evidence must be measured and below the \
+         floor for the verdict to be making a false claim about it — \
+         support={support}: {accessor:#}"
     );
     let verdict = cluster_verdict(accessor);
     assert!(
         !verdict.contains(CORROBORATED_CLAUSE),
-        "the gate never ran on this cluster (structural={structural} and \
-         token_jaccard={token_jaccard} are both below saturation), so its \
-         measured content evidence — support={support} — was discarded rather \
-         than weighed. Telling the reader it `vouches for` the shape renders \
-         the disproof as corroboration: {verdict}"
+        "the evidence did not clear the content floor (structural={structural}, \
+         support={support}), so the verdict must not claim the content evidence \
+         vouches for the shape — {verdict}"
     );
     Ok(())
 }
@@ -263,9 +256,9 @@ fn a_gated_cluster_still_reports_the_evidence_that_corroborated_it() -> Result<(
     let accessor_verdict = cluster_verdict(expect_cluster_spanning(&report, &ACCESSOR_PAIR)?);
     assert_ne!(
         control_verdict, accessor_verdict,
-        "one cluster agrees on 1.00 of its content and the other on 0.31; a \
-         report that says the same sentence about both has told the reader \
-         nothing: {report:#}"
+        "one cluster agrees on 1.00 of its content and the other falls below \
+         the content floor; a report that says the same sentence about both \
+         has told the reader nothing: {report:#}"
     );
     Ok(())
 }

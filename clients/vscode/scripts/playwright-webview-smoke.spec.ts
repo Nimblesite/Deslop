@@ -2,6 +2,8 @@ import { type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
+import type { Report } from "../src/types/report";
+
 // `test`/`expect` come from the coverage fixture so this same suite records the
 // webview V8 coverage when WEBVIEW_COVERAGE=1 (no separate rendering harness).
 import { expect, test } from "./webview-coverage-fixture";
@@ -297,18 +299,16 @@ const sampleReport = {
         token_jaccard: 0.34,
         shape: 0.34,
         embedding_cos: 0.91,
-        fused: 0.88,
-        agreement: 0.05,
-        rename_consistency: 0,
+        pair_agreement: 0.05,
+        pair_rename_consistency: 0,
         literal_fraction: 0,
       },
+      signal_source: { left: 0, right: 1 },
       bucket: "same_behavior",
       language: "dart",
-      meets_fused_gate: true,
       evidence_verdict:
-        "The shapes barely match (0.34) — the 0.88 confidence comes from the embedding model, " +
-        "which read these as the same behavior written two ways. The content evidence measures " +
-        "the code itself, not the behavior: shared content 0.05, renaming 0.00.",
+        "The elected pair has a 0.91 semantic match. Its content evidence is 0.05 shared content " +
+        "and 0.00 consistent renaming.",
       occurrences_total: 2,
       occurrence_count: 2,
       occurrences_truncated: false,
@@ -331,18 +331,16 @@ const sampleReport = {
         token_jaccard: 0.96,
         shape: 0.99,
         embedding_cos: 0.7,
-        fused: 0.86,
-        agreement: 0.88,
-        rename_consistency: 0.95,
+        pair_agreement: 0.88,
+        pair_rename_consistency: 0.95,
         literal_fraction: 0.1,
       },
+      signal_source: { left: 0, right: 1 },
       bucket: "nearly_identical",
       language: "dart",
-      meets_fused_gate: true,
       evidence_verdict:
-        "The shapes match at 0.99 and the content evidence did not discount that: the locations " +
-        "share 0.88 of their content and consistent renaming explains 0.95 of what differs, so " +
-        "confidence stayed at 0.86.",
+        "The elected pair has a 0.99 structural match. Its content evidence is 0.88 shared content " +
+        "and 0.95 consistent renaming.",
       occurrences_total: 3,
       occurrence_count: 3,
       occurrences_truncated: false,
@@ -366,18 +364,15 @@ const sampleReport = {
         token_jaccard: 1,
         shape: 1,
         embedding_cos: 0.82,
-        fused: 0.97,
-        agreement: 1,
-        rename_consistency: 1,
+        pair_agreement: 1,
+        pair_rename_consistency: 1,
         literal_fraction: 0,
       },
+      signal_source: { left: 0, right: 1 },
       bucket: "identical",
       language: "dart",
-      meets_fused_gate: true,
       evidence_verdict:
-        "The shapes match at 1.00 and the content evidence did not discount that: the locations " +
-        "share 1.00 of their content and consistent renaming explains 1.00 of what differs, so " +
-        "confidence stayed at 0.97.",
+        "The elected pair is byte-identical, with 1.00 shared content and 1.00 consistent renaming.",
       occurrences_total: 2,
       occurrence_count: 2,
       occurrences_truncated: false,
@@ -389,7 +384,7 @@ const sampleReport = {
       ],
     },
   ],
-};
+} satisfies Report;
 
 function occurrence(
   filePath: string,

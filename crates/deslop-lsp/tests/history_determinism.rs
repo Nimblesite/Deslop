@@ -14,13 +14,10 @@ use serde_json::Value;
 
 const REPORT_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// The control cluster's rendered confidence. Two of its four members
-/// are byte-identical and two are certified whole-file renames, so the
-/// cluster is not byte-proven as a whole: `fused = 1.0` stays reserved
-/// for byte proof, and a certified rename prices at
-/// `RENAME_CONSISTENCY_DISCOUNT (0.9) x shape (1.0)` — the fused
-/// contract in `docs/plans/fused-score-followups.md` § The contract.
-const CERTIFIED_RENAME_FUSED: f64 = 0.9;
+/// The elected pair is the first pair in corpus order when every
+/// candidate ties on `max(S, J, E)` ([FUSED-CLUSTER-SIGNALS]).
+const ELECTED_PAIR: (u64, u64) = (0, 1);
+const FULL_EVIDENCE: f64 = 1.0;
 const ORIGINAL_CONFIG: &[u8] = b"[defaults]\nexclude = []\n";
 const SOURCE_LAYOUT: [(&str, &str, &str); 4] = [
     ("move/tax_alpha.ts", "ts-type2-loop", "tax_alpha.ts"),
@@ -133,16 +130,25 @@ fn assert_clean_control(report: &Value) -> Result<()> {
         1.0,
         "{cluster:#}"
     );
-    assert_eq!(
-        json_path(cluster, &["signals", "fused"]),
-        CERTIFIED_RENAME_FUSED,
-        "{cluster:#}"
+    assert!(
+        json_path(cluster, &["signals", "fused"]).is_null(),
+        "cluster fused confidence was deleted from the report contract: {cluster:#}"
     );
     assert_eq!(
-        json_path(cluster, &["signals", "rename_consistency"]),
-        1.0,
-        "the discount is earned by a certified rename, not by weak \
-         evidence: {cluster:#}"
+        (
+            json_path(cluster, &["signals", "pair_agreement"]).as_f64(),
+            json_path(cluster, &["signals", "pair_rename_consistency"]).as_f64(),
+        ),
+        (Some(FULL_EVIDENCE), Some(FULL_EVIDENCE)),
+        "the elected pair's measured content evidence must survive the history cycle: {cluster:#}"
+    );
+    assert_eq!(
+        (
+            json_path(cluster, &["signal_source", "left"]).as_u64(),
+            json_path(cluster, &["signal_source", "right"]).as_u64(),
+        ),
+        (Some(ELECTED_PAIR.0), Some(ELECTED_PAIR.1)),
+        "the rendered axes must name the one elected pair: {cluster:#}"
     );
     assert_eq!(
         json_path(report, &["metrics", "clusters_total"]),

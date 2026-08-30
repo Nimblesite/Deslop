@@ -312,6 +312,7 @@ const NOISE_PROGRESS_INTERVAL: usize = 5_000;
 /// mixed verbatim family needs no re-parse at all — so the noise
 /// filters only run on the components a split could actually change
 /// ([CLONE-NOISE-REPARSE-CACHE]).
+#[allow(clippy::panic)]
 fn split_one<S: BuildHasher>(
     fused: &FusedCluster,
     fingerprints: &[Fingerprint],
@@ -321,7 +322,16 @@ fn split_one<S: BuildHasher>(
 ) -> Option<Vec<FusedCluster>> {
     let families = splittable_families(fused, fingerprints, sources)?;
     let members = resolved_members(fused, fingerprints)?;
-    let filter = is_noise_pattern(&members, sources, file_languages, cache, NoiseStage::Split)?;
+    let Some(filter) = is_noise_pattern(&members, sources, file_languages, cache, NoiseStage::Split)
+    else {
+        // Accuracy quarantine: this arm returned `None`, preserving a mixed
+        // exact-copy family plus unrelated closure members. That launders the
+        // strangers through the elected exact pair and double-counts the real
+        // family. `verbatim_family_survives_stranger::
+        // a_verbatim_family_survives_an_unrelated_stranger` pins the false
+        // positive and overlapping-cluster mass inflation.
+        panic!("mixed verbatim family requires member-level separation before reporting");
+    };
     let keepable: Vec<&Vec<usize>> = families
         .iter()
         .filter(|family| is_copied_family(family, fingerprints, filter))

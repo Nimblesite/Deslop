@@ -22,7 +22,13 @@ import {
   helpCopy,
   type HelpTopic,
 } from "../components/HelpBubble";
-import { bucketLabels, clusterSlug, occurrenceCount, resolveBucket } from "../../../src/types/report";
+import {
+  bucketLabels,
+  clusterInterpretation,
+  clusterSlug,
+  occurrenceCount,
+  resolveBucket,
+} from "../../../src/types/report";
 import { formatScore } from "../../../src/types/format";
 import { helpValueTitle } from "../../../src/types/signals";
 import type { ReportCluster, ReportOccurrence } from "../../../src/types/report";
@@ -119,6 +125,7 @@ function ClusterApp() {
 
   const canonical = cluster.occurrences[0];
   const bucketInfo = bucketLabels(resolveBucket(cluster));
+  const evidence = clusterInterpretation(cluster);
   const focusedIndex = focusedIndexFor(cluster);
 
   return (
@@ -187,9 +194,9 @@ function ClusterApp() {
               fontWeight: BOLD_FONT_WEIGHT,
               letterSpacing: "-0.02em",
             }}
-            title={`${bucketInfo.plainTitle}: ${bucketInfo.actionSentence}`}
+            title={`${bucketInfo.plainTitle}: ${evidence}`}
           >
-            <HelpedText topic={CLONE_BUCKET_TOPIC} title={`${bucketInfo.plainTitle}: ${bucketInfo.actionSentence}`}>
+            <HelpedText topic={CLONE_BUCKET_TOPIC} title={`${bucketInfo.plainTitle}: ${evidence}`}>
               <DocTextLink topic={CLONE_BUCKET_TOPIC}>{bucketInfo.plainTitle}</DocTextLink>
             </HelpedText>
           </h1>
@@ -200,9 +207,9 @@ function ClusterApp() {
               fontFamily: FONT.ui,
               fontSize: "15px",
             }}
-            title={`Recommended reading for this bucket: ${bucketInfo.actionSentence}`}
+            title={`Engine interpretation for this bucket: ${evidence}`}
           >
-            <HelpedText topic={CLONE_BUCKET_TOPIC}>{bucketInfo.actionSentence}</HelpedText>
+            <HelpedText topic={CLONE_BUCKET_TOPIC}>{evidence}</HelpedText>
           </p>
         </div>
         <div style={{ textAlign: "right", minWidth: 0, overflowWrap: ANYWHERE_WRAP }}>
