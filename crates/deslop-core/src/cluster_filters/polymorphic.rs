@@ -157,7 +157,7 @@ fn python_abstract_method(function: Node<'_>, source: &[u8]) -> bool {
     else {
         return false;
     };
-    for line in prefix.lines().rev() {
+    for line in prefix.trim_end().lines().rev() {
         let trimmed = line.trim();
         if trimmed.is_empty() || !trimmed.starts_with('@') {
             return false;
@@ -268,10 +268,26 @@ fn scaffolding_besides_functions<'tree>(
         functions.push(node);
         return true;
     }
+    // A range that cuts into a function without reaching its end is a
+    // view into that function, not residue around it: the whole-file
+    // views [FUSED-SHARED-SUBTREE] admits can start in the class header
+    // and end inside the method body, and the function is still what the
+    // view is about (`python-issue-69-abstract-method`). A range cutting
+    // through two functions collects both, so the sole-function
+    // requirement still refuses it.
+    if kinds.contains(&node.kind())
+        && node.start_byte() >= range.start
+        && node.start_byte() < range.end
+    {
+        functions.push(node);
+        return true;
+    }
     match node.kind() {
-        "module" | "class_definition" | "block" | "decorated_definition" => named_children(node)
-            .into_iter()
-            .all(|child| scaffolding_besides_functions(child, range, kinds, functions)),
+        "module" | "class_definition" | "block" | "decorated_definition" | "decorator" => {
+            named_children(node)
+                .into_iter()
+                .all(|child| scaffolding_besides_functions(child, range, kinds, functions))
+        }
         "expression_statement" => is_docstring(node),
         kind => is_inert_declaration_kind(kind),
     }

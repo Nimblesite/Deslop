@@ -59,10 +59,6 @@ const CLONE_LAST_LINE: u64 = 13;
 /// One occurrence per file.
 const CLONE_OCCURRENCES: u64 = 2;
 
-/// A certified consistent rename must at least reach the
-/// read-the-canonical-occurrence band.
-const RENAME_FUSED_FLOOR: f64 = 0.6;
-
 #[test]
 fn same_shaped_backends_stay_hidden_while_the_renamed_helper_surfaces() -> Result<()> {
     let scan_root = fixture(FIXTURE);
@@ -119,9 +115,10 @@ fn same_shaped_backends_stay_hidden_while_the_renamed_helper_surfaces() -> Resul
         "the token layer is rename-invariant by design: {report:#}"
     );
     assert!(
-        signal(clone, "fused") >= RENAME_FUSED_FLOOR,
-        "suppressing the contract pair must not cost the rename clone \
-         its rank: {report:#}"
+        approx(signal(clone, "pair_rename_consistency"), 1.0),
+        "a total consistent rename is certified by the elected pair's own \
+         rename evidence — suppressing the contract pair must not cost the \
+         rename clone its rank: {report:#}"
     );
     for occurrence in occurrences(clone) {
         assert_eq!(
