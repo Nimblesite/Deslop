@@ -277,26 +277,22 @@ fn ollama_type4_cross_file_cluster_has_positive_embedding_signal() -> Result<()>
         .get("structural")
         .and_then(serde_json::Value::as_f64)
         .unwrap_or_default();
-    let fused = signals
-        .get("fused")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or_default();
     assert!(
         embedding_cos > 0.3,
         "Type-4 cross-file cluster must carry a meaningful embedding_cos, got {embedding_cos}"
     );
-    let deterministic_max = structural.max(token_jaccard);
     assert!(
-        fused >= deterministic_max,
-        "fused score {fused} must preserve the best deterministic signal {deterministic_max}",
+        signals.get("fused").is_none(),
+        "no cluster-level fused may survive on the wire ([FUSED-SCOPE]): {signals:#?}"
     );
+    let shape = signals
+        .get("shape")
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or_default();
     assert!(
-        fused >= embedding_cos,
-        "fused score {fused} must preserve the embedding signal {embedding_cos}",
-    );
-    assert!(
-        fused <= 1.0,
-        "fused score {fused} must stay in the public confidence range",
+        (shape - structural.max(token_jaccard)).abs() < 1e-6,
+        "the rendered shape reading must preserve the strongest structural axis — \
+         shape={shape}, structural={structural}, token_jaccard={token_jaccard}"
     );
     Ok(())
 }

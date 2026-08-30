@@ -129,13 +129,12 @@ fn subsumption_never_drops_a_view_naming_a_file_the_survivor_omits() -> Result<(
 }
 
 // A corpus staging several degrees of duplication cannot render one
-// confidence for all of them. `ts-mixed-band` holds a near copy
+// verdict for all of them. `ts-mixed-band` holds a near copy
 // (`ledger_d`/`ledger_e`, one parenthesis apart from `ledger_a`), a
 // renamed copy (`ledger_c`), and a same-shape family whose identifiers
-// *and* literals all differ (`ledger_b`). They reach the report as one
-// visible cluster at `structural 1.0 / token_jaccard 1.0 / fused 1.0`,
-// so the rendered confidence cannot separate a one-token edit from a
-// wholesale rewrite, and `ledger_c` never surfaces at all.
+// *and* literals all differ (`ledger_b`). The report must separate a
+// one-token edit from a wholesale rewrite by routing them to distinct
+// buckets with distinct evidence verdicts — never one label for all.
 #[test]
 fn ts_mixed_band_renders_a_distinct_confidence_per_band() -> Result<()> {
     let report = run_report(&fixture("ts-mixed-band"), 12)?;
@@ -145,14 +144,28 @@ fn ts_mixed_band_renders_a_distinct_confidence_per_band() -> Result<()> {
         "one visible cluster cannot express three degrees of duplication: \
          {report:#}"
     );
-    let confidences: std::collections::BTreeSet<String> = published
+    let buckets: std::collections::BTreeSet<String> = published
         .iter()
-        .map(|cluster| format!("{fused:.4}", fused = signal(cluster, "fused")))
+        .map(|cluster| cluster_bucket(cluster).to_owned())
         .collect();
     assert!(
-        confidences.len() >= 2,
-        "three degrees of duplication cannot all render one confidence, got \
-         {confidences:?}: {report:#}"
+        buckets.len() >= 2,
+        "three degrees of duplication cannot all render one bucket, got \
+         {buckets:?}: {report:#}"
+    );
+    let verdicts: std::collections::BTreeSet<String> = published
+        .iter()
+        .map(|cluster| {
+            field(cluster, "evidence_verdict")
+                .as_str()
+                .unwrap_or_default()
+                .to_owned()
+        })
+        .collect();
+    assert!(
+        verdicts.len() >= 2,
+        "three degrees of duplication cannot all render one evidence verdict, \
+         got {verdicts:?}: {report:#}"
     );
     assert!(
         published
