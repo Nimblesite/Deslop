@@ -191,9 +191,10 @@ fn a_byte_identical_pair_reads_the_same_in_every_cluster() -> Result<()> {
 /// ([FUSED-CONTENT-GATE]).
 const VERBATIM_PAIR_AGREEMENT: f64 = 1.0;
 
-/// The two content axes carried on the rendered signal wire — the pair
-/// the report shows must own both of them, whatever their values are.
-const CONTENT_AXES: [&str; 2] = ["agreement", "rename_consistency"];
+/// Exact evidence earned by the elected byte-identical occurrence pair.
+const ELECTED_PAIR_EXACT_EVIDENCE: f64 = 1.0;
+/// Embeddings are disabled for this fixture, so the elected pair has no vector evidence.
+const EMBEDDINGS_OFF_EVIDENCE: f64 = 0.0;
 
 // gh #458 (content half) — [FUSED-CONTENT-GATE]: the per-pair contract
 // the shape axes now honour must hold for the *content* axes too.
@@ -225,24 +226,50 @@ fn a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster() -> 
         dump = signal_dump(pair)
     );
 
-    // The same two files inside the six-member cluster: the rendered
-    // content evidence belongs to the pair that earned it, exactly as
-    // `structural` and `token_jaccard` now do. A mean over five other
-    // members is not a measurement of any pair in the report, so the
-    // same two files would read two different numbers in one report.
-    for axis in CONTENT_AXES {
-        assert_eq!(
-            signal(six, axis),
-            signal(pair, axis),
-            "the six-member cluster's {axis} must be the byte-identical pair's own \
-             evidence, not a mean over members that never made that measurement — \
-             the same two files cannot read {six_value} in one cluster and \
-             {pair_value} in another within one report: {dump}",
-            six_value = signal(six, axis),
-            pair_value = signal(pair, axis),
-            dump = signal_dump(six)
-        );
-    }
+    // The six-member cluster's elected occurrence pair owns every rendered axis. The
+    // separate two-member cluster covers a different AST range in the same files, so
+    // equating its rename-anchor mass would compare different occurrence pairs.
+    let (left_path, right_path) = signal_source_paths(six)?;
+    assert_eq!(
+        (left_path.as_str(), right_path.as_str()),
+        ("ledger_a.ts", COPY_STEM),
+        "the content evidence must cite the same elected pair as the shape evidence"
+    );
+    assert_eq!(
+        signal(six, "structural"),
+        ELECTED_PAIR_EXACT_EVIDENCE,
+        "the elected pair is structurally exact: {}",
+        signal_dump(six)
+    );
+    assert_eq!(
+        signal(six, "token_jaccard"),
+        ELECTED_PAIR_EXACT_EVIDENCE,
+        "the elected pair has exact normalized token evidence: {}",
+        signal_dump(six)
+    );
+    assert_eq!(
+        signal(six, "embedding_cos"),
+        EMBEDDINGS_OFF_EVIDENCE,
+        "an absent embedding input must render zero: {}",
+        signal_dump(six)
+    );
+    assert_eq!(
+        signal(six, "agreement"),
+        ELECTED_PAIR_EXACT_EVIDENCE,
+        "cluster members must not dilute the elected pair's byte agreement: {}",
+        signal_dump(six)
+    );
+    assert_eq!(
+        signal(six, "rename_consistency"),
+        ELECTED_PAIR_EXACT_EVIDENCE,
+        "the elected pair's certified rename evidence must remain attached to that pair: {}",
+        signal_dump(six)
+    );
+    assert_eq!(
+        cluster_bucket(six),
+        "nearly_identical",
+        "the elected pair's evidence must keep the six-member cluster in its supported bucket"
+    );
 
     // The gate reads these axes, so dilution is a demotion engine: the
     // proven pair must keep the cluster's content support above the

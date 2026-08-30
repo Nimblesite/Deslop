@@ -20,9 +20,8 @@
 //!   `structural_only`; measured separately, a renamed clone keeps its
 //!   act-now verdict.
 //!
-//! The result is stored on each [`Cluster`] so bucket routing, the
-//! rendered fused confidence, and the ranking weight can separate real
-//! clones from shape coincidence.
+//! The result is stored on each [`Cluster`] so bucket routing and every
+//! report surface can separate real clones from shape coincidence.
 
 use std::collections::HashMap;
 use std::hash::BuildHasher;
@@ -73,14 +72,13 @@ const MIN_VERBATIM_FAMILY: usize = 2;
 
 /// Measured raw-content evidence for one cluster, produced by
 /// [`attach_content_evidence`] and consumed by bucket routing, the
-/// rendered fused confidence, and the ranking weight
-/// ([FUSED-CONTENT-GATE]).
+/// report surfaces ([FUSED-CONTENT-GATE]).
 #[derive(Debug, Clone, Copy)]
 pub struct ContentEvidence {
-    /// Mean fraction of collapsed-leaf positions whose raw bytes match
-    /// the canonical member, identifiers and literals pooled, in `[0, 1]`.
+    /// Fraction of collapsed-leaf positions whose raw bytes match on the
+    /// elected signal pair, identifiers and literals pooled, in `[0, 1]`.
     pub agreement: f64,
-    /// Mean Type-2 rename evidence in `[0, 1]`
+    /// Elected-pair Type-2 rename evidence in `[0, 1]`
     /// ([TECH-PMATCH-BAKER]): the lesser of literal consistency (a
     /// literal preserved, or echoing an elected identifier substitution
     /// — renamed alongside its symbol, #409) and corroborated
@@ -105,9 +103,7 @@ pub struct ContentEvidence {
     /// holds a strict majority of the members (more than
     /// [`VERBATIM_MEMBER_SHARE_FLOOR`]). Token equality between whole
     /// members is proof of copying in its own right (the #190 verbatim
-    /// escape hatch), so [`Self::agreement`] reports full agreement for
-    /// such a cluster rather than the positional score the odd-one-out
-    /// members would dilute.
+    /// escape hatch), independently of the elected pair's agreement.
     pub verbatim_dominated: bool,
     /// True when the pass actually compared two members' raw content.
     /// `false` for [`Self::unmeasured`] and for a cluster whose members
@@ -163,17 +159,6 @@ type FamilyTally = (usize, usize);
 /// it, and how many members it holds.
 #[derive(Debug, Clone, Copy)]
 struct DominantFamily {
-    /// Index of the family's earliest member — the anchor every other
-    /// member's agreement is measured against.
-    #[expect(
-        dead_code,
-        reason = "[ACCURACY-QUARANTINE] Read only by the quarantined \
-                  `cluster_agreement` (gh #458 content half). The repair needs \
-                  it to elect the pair whose content the cluster renders, so it \
-                  is retained rather than deleted; `expect` errors once a live \
-                  reader returns."
-    )]
-    anchor: usize,
     /// Number of members in the family.
     size: usize,
 }
@@ -192,7 +177,13 @@ pub fn attach_content_evidence<S: BuildHasher, L: BuildHasher>(
 ) {
     let tree_index = tree_index_of(trees);
     for cluster in clusters.iter_mut() {
-        cluster.content = measure_cluster(&cluster.members, &tree_index, sources, file_languages);
+        cluster.content = measure_cluster(
+            &cluster.members,
+            cluster.signal_source,
+            &tree_index,
+            sources,
+            file_languages,
+        );
         // [PERF-FLUTTER-TODO-OBSERVABILITY] Per cluster, so `trace` rather
         // than `debug`: a corpus-scale run has to stay readable and stay
         // fast at the level someone reaches for first. The shared-subtree
@@ -218,6 +209,7 @@ pub fn attach_content_evidence<S: BuildHasher, L: BuildHasher>(
 /// collapsed leaves, resolving each member's content keys exactly once.
 fn measure_cluster<S: BuildHasher, L: BuildHasher>(
     members: &[Fingerprint],
+    signal_source: Option<(usize, usize)>,
     tree_index: &HashMap<FileId, &NormalizedNode>,
     sources: &HashMap<FileId, Vec<u8>, S>,
     languages: &HashMap<FileId, &'static str, L>,
@@ -231,21 +223,23 @@ fn measure_cluster<S: BuildHasher, L: BuildHasher>(
     let dominant = dominant_verbatim_family(&member_contents);
     let verbatim_dominated = member_contents.len() >= 2
         && dominant_verbatim_share(dominant, member_contents.len()) > VERBATIM_MEMBER_SHARE_FLOOR;
+    let pair = signal_source.and_then(|(left, right)| {
+        Some((
+            member_contents.get(left)?.as_ref()?,
+            member_contents.get(right)?.as_ref()?,
+        ))
+    });
     ContentEvidence {
-        agreement: cluster_agreement(&member_contents, dominant),
-        rename_consistency: rename::cluster_rename_consistency(
-            canonical,
-            &member_contents,
-            sources,
-        ),
+        agreement: pair.map_or(0.0, |(left, right)| {
+            pair_agreement(Some(&left.keys), Some(&right.keys))
+        }),
+        rename_consistency: pair.map_or(0.0, |(left, right)| {
+            rename::pair_rename_consistency(Some(left), Some(right), sources)
+        }),
         literal_fraction: canonical_literal_fraction(canonical_keys),
         substance_varies: cluster_substance_varies(canonical_keys, &member_contents),
         verbatim_dominated,
-        // A comparison needs a canonical member *and* something to
-        // compare it against: one resolvable member alone measures
-        // nothing, and every field above then carries its degenerate
-        // default rather than evidence.
-        measured: canonical.is_some() && member_contents.iter().skip(1).any(Option::is_some),
+        measured: pair.is_some(),
     }
 }
 
@@ -321,60 +315,6 @@ fn canonical_literal_fraction(canonical: Option<&[LeafKey]>) -> f64 {
         return 0.0;
     }
     member_count(literals) / member_count(vocabulary)
-}
-
-/// 🛑 QUARANTINED ([FUSED-CONTENT-GATE], gh #458 content half).
-///
-/// **What this did.** It measured `pair_agreement` between an anchor
-/// member and every other member, summed the results, and divided by
-/// the member count — a **mean**. The anchor was a member of the
-/// largest token-identical family when one existed, the first member
-/// otherwise.
-///
-/// **Why it was deleted.** A mean is not a measurement of any pair in
-/// the report. Baker (1995) defines duplication as a per-pair
-/// predicate: a pair either p-matches or it does not, and there is no
-/// class-level average to take. gh #458 removed exactly this fold from
-/// the *shape* axes; it survived here, on the two axes the content gate
-/// actually reads (`buckets/gate.rs` demotes when
-/// `content_support(agreement, rename_consistency) <
-/// CONTENT_SUPPORT_FLOOR`). So every additional member is a vote that
-/// can push a proven copy below the floor and out of its act-now
-/// bucket — a false negative manufactured purely by averaging, and a
-/// rendered number no two files in the report ever measured.
-///
-/// Measured on `ts-mixed-band` + a byte-identical copy of
-/// `ledger_a.ts`: the pair reads `agreement = 1.0` in its own
-/// two-member cluster and `0.7967` inside the six-member cluster
-/// holding the same two files, dragging `fused` to `0.7967`.
-///
-/// Moving the anchor (the previous repair) does not fix this. It
-/// changes *which* pair the mean is taken against; the mean remains.
-///
-/// **Pinned by** `deslop/tests/pair_consistent_signals.rs::
-/// a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster`.
-///
-/// The replacement must render one elected admitted pair's own content,
-/// the way `cluster::signals::MeasuredSignals` now renders the shape
-/// axes — not a mean, and not a per-axis stitch across different pairs.
-#[expect(
-    clippy::panic,
-    reason = "[ACCURACY-QUARANTINE] Mandated by AGENTS.md: this fold produced \
-              silently-wrong content evidence (a mean no pair measured) that \
-              demotes proven duplicates. A panic is found in seconds; the false \
-              negative it replaces was never found at all."
-)]
-fn cluster_agreement(
-    _member_contents: &[Option<MemberContent>],
-    _dominant: Option<DominantFamily>,
-) -> f64 {
-    panic!(
-        "[ACCURACY-QUARANTINE] cluster_agreement averaged per-pair content \
-         agreement across cluster members (gh #458 content half). A mean is not \
-         any pair's measurement and demotes proven copies below \
-         CONTENT_SUPPORT_FLOOR. Pinned by pair_consistent_signals.rs::\
-         a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster"
-    )
 }
 
 /// Aligned literal positions whose raw bytes match — each one an
@@ -456,7 +396,7 @@ fn dominant_verbatim_family(member_contents: &[Option<MemberContent>]) -> Option
         .into_values()
         .filter(|(_, size)| *size >= MIN_VERBATIM_FAMILY)
         .max_by(|left, right| left.1.cmp(&right.1).then_with(|| right.0.cmp(&left.0)))
-        .map(|(anchor, size)| DominantFamily { anchor, size })
+        .map(|(_, size)| DominantFamily { size })
 }
 
 /// The share of a cluster held by its largest token-identical family.
