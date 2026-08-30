@@ -159,9 +159,8 @@ fn a_digest_equal_pair_keeps_its_saturated_signals() -> Result<()> {
 /// The pair that reproduces gh #460: two unrelated tree-sitter field
 /// accessors — different node kind, different field, different body —
 /// whose only shared authored logic is the grammar-mandated accessor
-/// idiom. They measure `structural = 1.00`, `token_jaccard = 1.00` (the
-/// shared accessor shape saturates), so the gate runs on them and
-/// refuses the promotion: content support stays below the floor.
+/// idiom. Their shared-subtree shape does not saturate, so the content
+/// gate measures its observations but does not use them for routing.
 const ACCESSOR_PAIR: [&str; 2] = ["accessor_argument.rs", "accessor_assignment.rs"];
 
 /// The byte-identical control in the same fixture: both axes saturate,
@@ -172,6 +171,9 @@ const SATURATED_CONTROL_PAIR: [&str; 2] = ["control_alpha.rs", "control_beta.rs"
 /// the reader the measured content evidence vouches for the shape
 /// reading.
 const CORROBORATED_CLAUSE: &str = "the content evidence vouches for it";
+
+/// The clause that makes the below-saturation routing boundary explicit.
+const GATE_SKIPPED_CLAUSE: &str = "the content check runs only where the shape match saturates";
 
 /// Renders the unsaturated-gate fixture once per assertion below. Both
 /// of its pairs are single function bodies, so they cluster at the same
@@ -184,28 +186,28 @@ fn render_unsaturated() -> Result<Value> {
 // content evidence corroborated a match whose evidence did not
 // corroborate it.
 //
-// `buckets::routing::route_shape_identical` demotes the pair: the
-// shared accessor shape saturates both axes, the gate runs, and the
-// measured content support falls below the floor, so the cluster
-// carries the honest `structural_only` bucket and the boilerplate
-// verdict — never the corroborated sentence. The gate-skipped branch
-// of the verdict engine (below-saturation clusters, whose evidence the
-// gate could not weigh) is pinned unit-level in
-// `render/signals.rs::verdict_reads_each_family`; this E2E pins the
-// same honesty property through the whole pipeline.
+// The shared accessor shape stays below saturation, so the content gate
+// cannot route it. The pair keeps the anchor-free `nearly_identical`
+// verdict while its evidence sentence states that the measured content
+// values were observations, not corroboration. This E2E pins that
+// distinction through the whole pipeline.
 #[test]
 fn a_cluster_whose_evidence_did_not_corroborate_is_not_told_it_agreed() -> Result<()> {
     let report = render_unsaturated()?;
     let accessor = expect_cluster_spanning(&report, &ACCESSOR_PAIR)?;
     assert_eq!(
         cluster_bucket(accessor),
-        "structural_only",
-        "the accessor pair shares only shape: its content support is below the \
-         floor, so an act-now bucket would tell a `find-similar` consumer to \
-         reuse one where the other is meant — it routed {bucket}: {report:#}",
+        "nearly_identical",
+        "below-saturation content observations do not override the anchor-free \
+         route — it routed {bucket}: {report:#}",
         bucket = cluster_bucket(accessor),
     );
     let structural = signal(accessor, "structural");
+    assert!(
+        structural < STRUCTURAL_SATURATION_FLOOR,
+        "the content gate must be skipped only because the elected pair stays \
+         below the saturation floor: {accessor:#}"
+    );
     let support =
         signal(accessor, "pair_agreement").max(signal(accessor, "pair_rename_consistency"));
     assert!(
@@ -220,6 +222,11 @@ fn a_cluster_whose_evidence_did_not_corroborate_is_not_told_it_agreed() -> Resul
         "the evidence did not clear the content floor (structural={structural}, \
          support={support}), so the verdict must not claim the content evidence \
          vouches for the shape — {verdict}"
+    );
+    assert!(
+        verdict.contains(GATE_SKIPPED_CLAUSE),
+        "the report must say why the measured evidence did not participate in \
+         routing: {verdict}"
     );
     Ok(())
 }

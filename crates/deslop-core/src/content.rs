@@ -32,8 +32,8 @@ mod frontier;
 mod rename;
 
 use frontier::{
-    key_set_jaccard, keys_of, member_content, member_count, population, positional_agreement,
-    LeafKey, MemberContent, Population,
+    key_set_jaccard, keys_of, member_content, member_count, operators_disagree, population,
+    positional_agreement, LeafKey, MemberContent, Population,
 };
 use rename::ModalBijection;
 
@@ -232,7 +232,11 @@ fn measure_cluster<S: BuildHasher, L: BuildHasher>(
             pair_agreement(Some(&left.keys), Some(&right.keys))
         }),
         rename_consistency: pair.map_or(0.0, |(left, right)| {
-            rename::pair_rename_consistency(Some(left), Some(right), sources)
+            if operators_disagree(&left.keys, &right.keys) {
+                0.0
+            } else {
+                rename::pair_rename_consistency(Some(left), Some(right), sources)
+            }
         }),
         literal_fraction: canonical_literal_fraction(canonical_keys),
         substance_varies: cluster_substance_varies(canonical_keys, &member_contents),
@@ -280,8 +284,7 @@ fn pair_substance_varies(canonical: Option<&[LeafKey]>, member: Option<&[LeafKey
     // substance that changed. There is no substitution that explains
     // `+` becoming `-`: it is a different computation, not a different
     // name for the same one.
-    let operators = population(canonical, member, Population::Operator);
-    let operators_vary = operators.iter().any(|(left, right)| left != right);
+    let operators_vary = operators_disagree(canonical, member);
     literals_vary
         || operators_vary
         || mapping_consistency(&population(canonical, member, Population::Identifier)) < 1.0
@@ -458,6 +461,9 @@ fn pair_agreement(canonical: Option<&[LeafKey]>, member: Option<&[LeafKey]>) -> 
     let (Some(canonical), Some(member)) = (canonical, member) else {
         return 0.0;
     };
+    if operators_disagree(canonical, member) {
+        return 0.0;
+    }
     if canonical.is_empty() && member.is_empty() {
         return 1.0;
     }

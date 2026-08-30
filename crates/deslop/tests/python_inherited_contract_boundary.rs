@@ -22,6 +22,8 @@
 
 use crate::common::*;
 
+use deslop_core::buckets::CONTENT_SUPPORT_FLOOR;
+
 /// The fixture holding the real contract pair and the inherited-but-not-
 /// declared copy.
 const FIXTURE: &str = "python-inherited-contract-boundary";
@@ -59,10 +61,6 @@ const CLONE_LAST_LINE: u64 = 14;
 
 /// One occurrence per file.
 const CLONE_OCCURRENCES: u64 = 2;
-
-/// A consistent rename must at least reach the read-the-canonical-
-/// occurrence band.
-const RENAME_FUSED_FLOOR: f64 = 0.6;
 
 #[test]
 fn an_inherited_method_no_base_declares_is_not_a_contract_implementation() -> Result<()> {
@@ -120,16 +118,21 @@ fn an_inherited_method_no_base_declares_is_not_a_contract_implementation() -> Re
         "the token layer is rename-invariant by design: {report:#}"
     );
     assert!(
-        approx(signal(clone, "rename_consistency"), 1.0),
+        approx(signal(clone, "pair_rename_consistency"), 1.0),
         "every identifier is renamed the same way in every occurrence, \
          which is what makes this a copy rather than an implementation: \
          {report:#}"
     );
     assert!(
-        signal(clone, "fused") >= RENAME_FUSED_FLOOR,
+        signal(clone, "pair_rename_consistency") >= CONTENT_SUPPORT_FLOOR,
         "`CommonWorker` never declares `synchronise`, so nothing forces \
-         these two bodies to agree and the copy must keep its rank: \
+         these two bodies to agree and the elected pair must support its bucket: \
          {report:#}"
+    );
+    assert_eq!(
+        field(clone, "signal_source"),
+        &serde_json::json!({"left": 0, "right": 1}),
+        "the rendered evidence must identify the copied pair: {report:#}"
     );
     for occurrence in occurrences(clone) {
         assert_eq!(

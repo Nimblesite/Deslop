@@ -279,14 +279,7 @@ role-mismatch pair reached an act-now bucket through the new door and walked
 straight past the gate written to catch it.
 
 ### [CLONE-NOISE-LITERAL-VARIATION-CALLS] Literal-variation call scaffolding
-Scaffolding repeats one call shape varying only its string-literal arguments —
-`setenv` keys, event names, endpoint paths — so after literal normalisation the
-members collapse to one subtree even though the differing literals are payload,
-not extractable logic. A cluster is suppressed when every member resolves to the
-same callee and arity (one enclosing call per member, or the same ordered call
-sequence contained in each member's range) and at least one argument position
-differs in string-literal bytes. Members whose literals all agree never match,
-so byte-identical copies keep the family's verbatim escape hatch.
+Scaffolding repeats one call shape varying only its string-literal arguments — `setenv` keys, event names, endpoint paths — so after literal normalisation the members collapse to one subtree even though the differing literals are payload, not extractable logic. A cluster is suppressed when every member resolves to the same callee and arity (one enclosing call per member, or the same ordered call sequence contained in each member's range), at least one literal-bearing call position differs in string-literal bytes, and every literal-bearing position differs. A call position that carries no string literal is neutral: it neither proves variation nor blocks the sequence. An invariant literal-bearing position is shared authored logic and blocks suppression. Members whose literals all agree never match, so byte-identical copies keep the family's verbatim escape hatch.
 
 #### [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT] The covered-statement precondition
 

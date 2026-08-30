@@ -136,7 +136,7 @@ fn a_substring_collision_never_certifies_a_rename_the_way_a_symbol_echo_does() -
     assert_view(echo, VIEW_FIRST_LINE, CONSISTENT_LAST_LINE, CONSISTENT);
     assert_proven_rename_contract(&echo_root, echo, CONSISTENT)?;
     assert!(
-        signal(echo, "rename_consistency") >= CONTENT_SUPPORT_FLOOR,
+        signal(echo, "pair_rename_consistency") >= CONTENT_SUPPORT_FLOOR,
         "{CONSISTENT}: a full-symbol echo is the certification case and \
          must clear the content-support floor — {dump}",
         dump = signal_dump(echo)
@@ -168,7 +168,7 @@ fn a_substring_collision_never_certifies_a_rename_the_way_a_symbol_echo_does() -
         dump = signal_dump(mangled)
     );
     assert!(
-        signal(mangled, "rename_consistency") < CONTENT_SUPPORT_FLOOR,
+        signal(mangled, "pair_rename_consistency") < CONTENT_SUPPORT_FLOOR,
         "{SUBSTRING}: the mangled message must leave the rename \
          uncertified, below the content-support floor — {dump}",
         dump = signal_dump(mangled)
@@ -178,24 +178,24 @@ fn a_substring_collision_never_certifies_a_rename_the_way_a_symbol_echo_does() -
     // substitutes anywhere in the bytes returns 1.0 for *both* fixtures
     // and satisfies every monotonic assertion while the defect is live.
     assert!(
-        signal(echo, "rename_consistency") > signal(mangled, "rename_consistency"),
+        signal(echo, "pair_rename_consistency") > signal(mangled, "pair_rename_consistency"),
         "a full-symbol echo must measure as strictly more rename evidence \
          than a mid-word byte collision: echo={echo_rename:.4} \
          substring={mangled_rename:.4}\n  echo: {echo_dump}\n  \
          substring: {mangled_dump}",
-        echo_rename = signal(echo, "rename_consistency"),
-        mangled_rename = signal(mangled, "rename_consistency"),
+        echo_rename = signal(echo, "pair_rename_consistency"),
+        mangled_rename = signal(mangled, "pair_rename_consistency"),
         echo_dump = signal_dump(echo),
         mangled_dump = signal_dump(mangled),
     );
+    let echo_support = signal(echo, "pair_agreement").max(signal(echo, "pair_rename_consistency"));
+    let mangled_support =
+        signal(mangled, "pair_agreement").max(signal(mangled, "pair_rename_consistency"));
     assert!(
-        signal(echo, "fused") > signal(mangled, "fused"),
-        "the rendered confidence must separate the two as well, or the \
-         report advises identically about a clean rename and a mangled \
-         one: echo={echo_fused:.4} substring={mangled_fused:.4}\n  \
+        echo_support > mangled_support,
+        "routing support must strictly separate the clean rename from the \
+         mangled one: echo={echo_support:.4} substring={mangled_support:.4}\n  \
          echo: {echo_dump}\n  substring: {mangled_dump}",
-        echo_fused = signal(echo, "fused"),
-        mangled_fused = signal(mangled, "fused"),
         echo_dump = signal_dump(echo),
         mangled_dump = signal_dump(mangled),
     );

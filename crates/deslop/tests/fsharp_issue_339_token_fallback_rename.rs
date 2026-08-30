@@ -19,6 +19,8 @@
 
 use serde_json::Value;
 
+use deslop_core::buckets::CONTENT_SUPPORT_FLOOR;
+
 use crate::common::{corpora::*, *};
 
 /// The genuine clone with its module renamed one character LONGER, so
@@ -45,9 +47,16 @@ fn assert_rename_invariant(report: &Value) -> Result<()> {
         "nearly_identical",
         "a renamed copy whose content agrees must stay act-now: {report:#}"
     );
+    let support = signal(clone, "pair_agreement").max(signal(clone, "pair_rename_consistency"));
     assert!(
-        signal(clone, "fused") >= 0.85,
-        "content-supported rename must keep act-now confidence: {report:#}"
+        support >= CONTENT_SUPPORT_FLOOR,
+        "the elected pair's content evidence must support the nearly-identical \
+         route: {report:#}"
+    );
+    assert_eq!(
+        field(clone, "signal_source"),
+        &serde_json::json!({"left": 0, "right": 1}),
+        "the rendered axes must name the pair that measured them: {report:#}"
     );
     Ok(())
 }

@@ -159,6 +159,20 @@ pub(super) fn key_set_jaccard(left: &[LeafKey], right: &[LeafKey]) -> f64 {
     member_count(intersection) / member_count(union)
 }
 
+/// Whether aligned behaviour-bearing operator positions disagree.
+///
+/// Unlike an identifier rename or literal edit, an operator change is
+/// a different computation. [FUSED-CONTENT-GATE] therefore treats one
+/// as a hard contradiction instead of allowing surrounding matches to
+/// dilute it into a high agreement ratio (#432).
+pub(super) fn operators_disagree(left: &[LeafKey], right: &[LeafKey]) -> bool {
+    left.iter().zip(right).any(|(left, right)| {
+        left.population == Population::Operator
+            && right.population == Population::Operator
+            && left.key != right.key
+    })
+}
+
 /// Positional agreement between two shape-aligned members' frontiers:
 /// the share of measured positions whose raw bytes match.
 ///

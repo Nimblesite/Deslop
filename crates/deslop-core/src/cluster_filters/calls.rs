@@ -122,13 +122,11 @@ fn call_shape_from_node(call: Node<'_>, source: &[u8], language: &str) -> Option
 /// Detects body-range clusters whose contained call sequence has the
 /// same callees but intentionally different literal test data.
 ///
-/// Every position must vary. A sequence in which some calls carry
-/// differing literals while others are invariant is not payload — the
-/// invariant calls are shared logic the members genuinely duplicate, and
-/// hiding the cluster would lose a real Type-2 clone. Two `[Fact]` tests
-/// that fetch different URLs and then run the same four assertions are
-/// the case this distinguishes: one varying call, four invariant ones.
-/// Scaffolding has nothing left once the literals are removed.
+/// Every literal-bearing position must vary. A position with no string
+/// literal is neutral: the diagnostic-scenario idiom runs the same
+/// subject-under-test call between its varying setup and expectation,
+/// while an invariant literal-bearing assertion is shared authored
+/// logic and blocks suppression (#285).
 fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>], cache: &ParseCache) -> bool {
     let cells: Option<Vec<Arc<CallSequence>>> = snippets
         .iter()
@@ -142,21 +140,25 @@ fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>], cache: &ParseCac
     }
     let sequences: Option<Vec<&[CallShape]>> =
         cells.iter().map(|cell| cell.shapes.as_deref()).collect();
-    sequences.is_some_and(|sequences| every_sequence_position_varies(&sequences))
+    sequences.is_some_and(|sequences| literal_bearing_sequence_positions_vary(&sequences))
 }
 
-/// True when the members share one non-empty ordered call header and
-/// every position in it carries differing string literals — except a
-/// two-member pair whose differing literal is authored interpolation,
-/// which publishes (gh #467).
-fn every_sequence_position_varies(sequences: &[&[CallShape]]) -> bool {
+/// True when the members share one non-empty ordered call header, at
+/// least one position varies in string-literal bytes, every position
+/// carrying a string literal varies, and no authored interpolation pair
+/// is mistaken for payload (gh #467).
+fn literal_bearing_sequence_positions_vary(sequences: &[&[CallShape]]) -> bool {
     let Some(first) = sequences.first() else {
         return false;
     };
     if first.is_empty() || !sequences.iter().all(|seq| same_call_headers(seq, first)) {
         return false;
     }
-    (0..first.len()).all(|index| sequence_position_differs(sequences, index))
+    (0..first.len()).any(|index| sequence_position_differs(sequences, index))
+        && (0..first.len()).all(|index| {
+            !sequence_position_has_string_literal(sequences, index)
+                || sequence_position_differs(sequences, index)
+        })
         && !sequence_pair_is_copy_paste(sequences)
 }
 
@@ -367,6 +369,17 @@ fn sequence_position_differs(sequences: &[&[CallShape]], index: usize) -> bool {
         .filter_map(|sequence| sequence.get(index))
         .collect();
     calls.len() == sequences.len() && has_differing_string_literals(calls)
+}
+
+/// Whether any member's call at `index` carries a string literal.
+fn sequence_position_has_string_literal(sequences: &[&[CallShape]], index: usize) -> bool {
+    sequences.iter().any(|sequence| {
+        sequence.get(index).is_some_and(|call| {
+            call.arguments
+                .iter()
+                .any(|argument| matches!(argument, ArgShape::StringLiteral(_, _)))
+        })
+    })
 }
 
 /// Returns the set of tree-sitter node kinds that count as call

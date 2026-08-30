@@ -27,6 +27,10 @@ use super::{
     occurrence_texts, occurrences, signal, Result,
 };
 
+/// Evidence-verdict clause for the below-saturation routing boundary.
+const CONTENT_GATE_SKIPPED_CLAUSE: &str =
+    "the content check runs only where the shape match saturates";
+
 /// Buckets that describe a shape-only match without claiming the
 /// *content* is duplicated ([RANK-STRUCTURAL-ONLY]).
 pub(crate) const HONEST_SHAPE_ONLY_BUCKETS: [&str; 2] = ["structural_only", "loosely_similar"];
@@ -233,8 +237,27 @@ pub(crate) fn assert_near_miss_rename_contract(
     label: &str,
 ) -> Result<()> {
     assert_near_miss_rename_shape(cluster, label);
-    assert_rename_verdict(cluster, label);
+    assert_anchor_free_near_miss_verdict(cluster, label);
     assert_rename_is_not_a_copy(scan_root, cluster, label)
+}
+
+/// Verdict for a below-saturation near miss. Its measured content is
+/// observable but does not route the cluster ([FUSED-CONTENT-GATE]).
+fn assert_anchor_free_near_miss_verdict(cluster: &Value, label: &str) {
+    let dump = signal_dump(cluster);
+    assert_eq!(
+        cluster_bucket(cluster),
+        "nearly_identical",
+        "{label}: the admitted below-saturation Type-3 pair keeps the \
+         anchor-free route — {dump}"
+    );
+    assert!(
+        field(cluster, "evidence_verdict")
+            .as_str()
+            .is_some_and(|verdict| verdict.contains(CONTENT_GATE_SKIPPED_CLAUSE)),
+        "{label}: the report must say that the measured content observations \
+         did not route the pair — {dump}"
+    );
 }
 
 /// Shape half for a rename carrying an inserted statement: real shape
