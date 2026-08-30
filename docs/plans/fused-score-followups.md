@@ -27,7 +27,7 @@ Every reported cluster is a real duplicate, and every real duplicate is reported
 One line each: what → spec → pin.
 
 - **#373** polymorphic gate no longer hides consistently-renamed Type-2 clones — subject bodies compare as normalised kind streams ([CLONE-NOISE-POLYMORPHIC-CONTRACT]); dual-direction pin `polymorphic_gate_hides_rename_clone.rs`.
-- **#410** certified renames carry no doubt — the mass discount drops where the anchor mass vouches, `rename_consistency` reads 1.0 ([FUSION-CONTENT-GATE]); pin `assert_certified_rename_reaches_act_now` re-points to routing in the rollout; [REPAIR-RENAME-LITERAL-ECHO] monotonicity survives.
+- **#410** certified renames carry no doubt — the asymptotic mass weight stops discounting a rename the anchor mass already vouches for, `rename_consistency` reads 1.0 ([FUSION-CONTENT-GATE]); pin `assert_certified_rename_reaches_act_now` re-points to routing in the rollout; [REPAIR-RENAME-LITERAL-ECHO] monotonicity survives.
 - **#458 shape half** — a cluster renders one admitted pair's own shape axes, `signal_source` names it ([FUSION-CLUSTER-SIGNALS]); `pair_consistent_signals.rs`, `verbatim_family_survives_stranger.rs`.
 - **Ranking weight is summed duplicated mass, never confidence-scaled** — [RANK-MASS-SUM] owns the formula; ties break by cluster id; `rank_mass.rs`.
 - **Token-bridge welds, containers, regions** — [PIPELINE-CLUSTER-ELECT] + [PIPELINE-CLUSTER-ELECT-CONTAINER]; `csharp_merged_clone_families.rs`, `rank_structural_only_policy`, eleven unit tests.
@@ -53,7 +53,7 @@ Every item is unpinned unless a test is named. **Write the failing fixture first
 - [ ] **#443** — distinguish "no authored content measured" from agreement `1.0`.
 - [ ] **#431** — stop overwriting measured `token_jaccard` for clusters the Merkle argument does not cover.
 - [ ] **#356** — ANN bridges must not mutate structural components before measurement (`embedding_route_invariance` green, issue open).
-- [ ] **Retire cluster fused (code rollout)** — remove `signals.fused` from the wire and every surface, `meets_fused_gate`, the content-gate multiply (`buckets/gate.rs`), the fused tie-break in `report_weight.rs`, the band constants (`ACT_NOW_FUSED` / `REUSE_FUSED`), and the evidence-line fused; delete `fused_golden_bands.rs` / `fused_golden_invariants.rs`; re-point the certified-rename and history-determinism pins from rendered fused to routing outcomes (bucket + support) without weakening an assertion; update the code comments citing the old contract.
+- [ ] **Retire cluster fused (code rollout)** — remove `signals.fused` from the wire and every surface, `meets_fused_gate`, the content-gate multiply (`buckets/gate.rs` `apply_content_gate`, including `content_confidence = max(A, discount × R)` and `RENAME_CONSISTENCY_DISCOUNT`), the fused tie-break in `report_weight.rs`, the band constants (`ACT_NOW_FUSED` / `REUSE_FUSED`), and the evidence-line fused; delete `fused_golden_bands.rs` / `fused_golden_invariants.rs`; re-point the certified-rename and history-determinism pins from rendered fused to routing outcomes (bucket + support) without weakening an assertion; update the code comments citing the old contract.
 
 ## Ranking and provenance
 

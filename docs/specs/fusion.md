@@ -281,11 +281,14 @@ The whole arithmetic surface in one place — one formula per block, the English
 
 **Pair admission** — [FUSION-STRATEGY-BOUNDED-MAX] [FUSED-THRESHOLD] [FUSION-SHARED-SUBTREE]
 
-Structural similarity is one minus tree-edit distance, normalised by the bigger of the two trees. Merkle-equal pairs score 1.0 without paying for the TED walk.
+Structural similarity is the shared-node share of the bigger tree. The aligner is Zhang–Shasha's tree-edit-distance recurrence (keyroot decomposition over post-order sequences of normalised node kinds, unit insert/delete/relabel costs — Zhang & Shasha 1989), and under unit costs the distance is exactly the unmatched node mass, so shared = max − TED and the two spellings agree. Hash-then-TED is the shape Baxter et al. 1998 established: exact hashes cluster, tree edit distance grades the near-miss. The normalisation is ours.
 
 $$
-S(a,b) = 1 - \frac{\mathrm{TED}(a,b)}{\max(n(a),\, n(b))} \qquad \text{(1.0 when Merkle-equal — Baxter et al. 1998: hash, then TED near-miss)}
+\mathrm{shared}(a,b) = \max\bigl(n(a), n(b)\bigr) - \mathrm{TED}(a,b) \qquad
+S(a,b) = \frac{\mathrm{shared}(a,b)}{\max(n(a),\, n(b))} = 1 - \frac{\mathrm{TED}(a,b)}{\max(n(a),\, n(b))}
 $$
+
+Merkle-equal pairs score 1.0 without paying for the walk; past the alignment cap a credited shared-node count — a sound lower bound on the aligned value — answers instead, and the share clamps to `[0, 1]`.
 
 The fused score takes the strongest of the three signals and clamps to [0, 1]. Max — never an average — so one loud signal is never diluted by two quiet ones.
 
@@ -299,10 +302,16 @@ $$
 t(p) = \begin{cases} \text{cross\_language\_min\_jaccard} & \text{if cross-language}(p) \land S(p) \le 0 \\ \text{fused\_threshold (default 0.85)} & \text{otherwise} \end{cases}
 $$
 
-`J` is the MinHash estimate of token-set Jaccard — literally the probability that two MinHash signatures agree at any index (Broder's MinHash).
+`J` estimates the Jaccard of the two k-gram sets of normalised node kinds (Jaccard 1912). Broder's min-wise identity makes that estimable by hashing: for a min-wise independent family, the probability the two minima agree is exactly the Jaccard.
 
 $$
-J = \text{MinHash Jaccard estimate} \qquad \text{(signature agreement probability — Broder's MinHash)}
+J(A, B) = \frac{|A \cap B|}{|A \cup B|} \qquad\qquad \Pr_{h \in \mathcal{H}}\Bigl[\,\arg\min_{a \in A} h(a) = \arg\min_{b \in B} h(b)\Bigr] = J(A, B)
+$$
+
+The shipped estimator averages agreement over the `m = representation.minhash_signature_len` blake3-hashed slots (`lsh::estimate_jaccard`); LSH banding follows the standard `BANDS × ROWS_PER_BAND` collision curve.
+
+$$
+\hat{J}(A, B) = \frac{1}{m} \sum_{i=1}^{m} \mathbf{1}\bigl[\sigma_A(i) = \sigma_B(i)\bigr]
 $$
 
 A pair is admitted when its fused score clears the threshold, or when the shared-subtree escape fires: structural overlap and token overlap both strong, and both sides big enough to be worth counting.
@@ -337,10 +346,10 @@ $$
 
 **Content evidence** (the elected pair) — [FUSION-CONTENT-GATE]
 
-Agreement is the share of collapsed source positions that match between the two sides.
+Agreement compares the aligned collapsed-leaf keys. Position counts equal, it is the positional match share; counts differ, the shapes cannot align and it falls back to the key-set Jaccard — both branches are Jaccard comparisons ([FUSION-CONTENT-GATE]).
 
 $$
-A = \frac{\text{matching collapsed positions}}{\text{all collapsed positions}}
+A = \begin{cases} \dfrac{\text{matching aligned positions}}{\text{all aligned positions}} & \text{if position counts are equal} \\[8pt] \dfrac{|K_a \cap K_b|}{|K_a \cup K_b|} & \text{otherwise (key-set Jaccard)} \end{cases}
 $$
 
 Rename mass discounts anchors that could be explained away as a rename: each unit of rename evidence costs half a mass point.
@@ -355,10 +364,10 @@ $$
 \mathrm{certified} \iff \min(\text{literal\_consistency},\, \text{coverage}) = 1.0 \land w_{\text{mass}} \ge \text{support\_floor}
 $$
 
-Certified evidence weighs at full strength; everything else is discounted by the rename consistency factor.
+Certified evidence weighs at full strength; everything else keeps its asymptotic mass weight. The axis carries no discount — routing reads `R` undiscounted, and the residual-doubt discount's only consumer was the retired rendered confidence.
 
 $$
-w = \begin{cases} 1.0 & \text{if certified} \\ \text{rename\_consistency\_discount} \times w_{\text{mass}} & \text{otherwise} \end{cases}
+w = \begin{cases} 1.0 & \text{if certified} \\ w_{\text{mass}} & \text{otherwise} \end{cases}
 $$
 
 Rename consistency is the weaker of consistency and coverage, scaled by the weight above.
@@ -439,9 +448,11 @@ $$
 |---|---|---|
 | Fingerprinted structural axis | Chilowicz et al. 2009 | *"each node of an AST is associated with a fingerprint based on a hash value (incrementally computed) of the subtree rooted at the node"* |
 | Exact hash, TED near-miss extension | Baxter et al. 1998 | hash AST subtrees, cluster by hash, extend to near-miss via tree edit distance |
+| The `TED` recurrence (unit costs, post-order keyroot decomposition) | Zhang & Shasha 1989 | the textbook ordered-tree edit distance the aligner implements; under unit costs shared = max − TED, making both spellings of `S` exact |
+| The Jaccard target and the min-wise identity behind `Ĵ` | Jaccard 1912; Broder 1997 | J = \|A∩B\|/\|A∪B\|; the minimum-hash agreement probability equals the Jaccard |
 | `fused` / `support` = max; the pair is the unit; never average | arXiv:2510.15480 | the unit is the pair and the combination is max or sum, never average |
-| `fused_threshold` default above the overlap floor | SourcererCC (Sajnani et al. 2016) | 0.7 token-overlap default; 0.85 clears it with margin |
-| Routing separates evidence classes — no confidence scaling of findings | Svajlenko & Roy 2015 | tool precision and recall degrade monotonically as syntactic similarity falls |
+| `fused_threshold` default above the overlap floor | SourcererCC (Sajnani et al. 2016) | candidate test is \|X∩Y\|/min(\|X\|,\|Y\|) ≥ 0.7 — containment of the smaller bag, not a Jaccard; 0.85 clears it with margin |
+| Routing separates evidence classes — no confidence scaling of findings | Svajlenko & Roy 2015 | BigCloneBench syntactic-similarity bands (VST3 ≥ 0.90, ST3 0.70–0.90, MT3 0.50–0.70, WT3/4 < 0.50); tool precision and recall degrade monotonically as similarity falls, and `promote_floor` 0.85 sits inside the ST3 band |
 | Shape-only repetition demoted, never a failing verdict | Kapser & Godfrey 2008 | shape-level repetition is the weakest ground for a failing verdict |
 | Repo percentage as the comparable gate | SonarQube metrics | the industry-standard CI gate is unweighted duplicated-line density |
 
@@ -475,7 +486,7 @@ A number is a **lever** when changing it changes which clusters are reported, wh
 | `content_gate.structural_only_max_support` | `buckets.rs:215` | 0.05 | **Defect.** #197's acceptance criterion (`token_jaccard = 0.00`, `embedding_cos = 0.00`) plus tolerance for MinHash collision noise. It is a ceiling below which a signal counts as *absent*, and is never a support floor — `route_shape_identical` read it as one, so a cosine of 0.05 overruled the measured content evidence and the gate's verdict followed whether the embedding pass ran (#356). |
 | `candidates.embedding_support_floor` | `pair.rs:91` | 0.80 | **Derived** (#356). The cosine at which a measured `embedding_cos` is the embedding pass *vouching for* a cluster rather than merely having measured it — the ANN candidate gate's own operating point, and the line [CLONE-BUCKETS-ROUTING] row 2 lets semantic evidence carry a bucket alone. The [FUSION-CONTENT-GATE] escape is judged against it. |
 | `content_gate.saturating_token_floor` | `buckets.rs:291` | 0.95 | **Defect** (#368). The surviving flutter/flutter #331 cluster read `structural = 0.62, token_jaccard = 0.98` — the token layer echoing shape, not reporting content. |
-| `content_gate.rename_consistency_discount` | `buckets.rs:301` | 0.9 | **Derived** (#346), a house rule and not literature: it prices residual doubt in a rename as an asymptotic mass weight, dropped entirely where the anchor mass already vouches (#410). Shapes the `rename_consistency` axis that feeds routing support — never a rendered confidence. |
+| `content_gate.rename_consistency_discount` | `buckets/gate.rs:143` | 0.9 | **Derived** (#346), a house rule and not literature. The certified-rename separator for the *retired* rendered confidence — the only consumer is the shape × content multiply's `content_confidence = max(A, discount × R)` (`gate.rs:200`); routing support reads `R` undiscounted (`content_support`). Dies with the cluster-fused rollout. |
 | `content_gate.rename_corroboration_min` | `content.rs` | 2 | **Literature.** [TECH-PMATCH-BAKER] prev-encoding: a parameter symbol's first occurrence matches anything and constrains nothing; only repetition carries binding proof. |
 | `content_gate.rename_evidence_half_mass` | `content/rename.rs` | 4 | **Defect.** Replaces the `rename_evidence_min_literals = 4` cliff (#346), which zeroed sub-floor rename evidence and priced a maximal one-literal Type-2 rename to `0.0588` (`type2_rename_anchor_floor.rs`). Same operating point, now a half-saturation mass: a forwarding echo's single substitution (mass 2, weight 1/3) stays below every routing floor while a 16-anchor maximal rename clears them all. The weight is an asymptote, so it applies only while doubt remains: a rename certified contradiction-free at or above `content_gate.support_floor` of mass weighs 1.0 (#410, above). |
 | `content_gate.verbatim_member_share_floor` | `content.rs:54` | 0.5 | **Defect** (#341, tightened #346). A strict majority — the share must *exceed* it. #104's verbatim pair among lookalikes (share ≥ 2/3) must stay visible; two byte-identical widgets inside 453 framework declarations (≈ 0.004) must not vouch for the family; and two disjoint identical pairs at exactly 0.5 must not certify each other. |
