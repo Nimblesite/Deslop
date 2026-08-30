@@ -113,9 +113,9 @@ Work in progress; each box flips only when the change compiles and its assertion
 - [x] VSIX: fused help topic, fused bar, fused tooltip, fused signals line, fused-gate bubble admission removed; strip renders shape / embedding / `pair_agreement`.
 - [x] VSIX fixtures: `bucketMeetsFusedGate` deleted; `bucketSignals` carries elected-pair axes.
 - [x] VSIX suites rewritten against the final wire shape; a schema test asserts `fused`/`meets_fused_gate` are absent from the generated types.
-- [ ] TypeScript compile + unit suites green.
-- [ ] VSIX build + webview/UI smoke against the new wire.
-- [ ] Site + docs: `fused` appears only as a pair-admission concept.
+- [x] TypeScript compile + unit suites green.
+- [x] VSIX build + webview/UI smoke against the new wire.
+- [x] Site + docs: `fused` appears only as a pair-admission concept.
 - [x] Engine owners' slices reviewed on TMC (gate.rs content-confidence multiply, report_weight tie-break, render/signals verdicts, restamp).
 - [x] Core Rust: `buckets/gate.rs` content-confidence multiply and `RENAME_CONSISTENCY_DISCOUNT` deleted; routing reads `support = max(pair_agreement, pair_rename_consistency)` directly.
 - [x] Core Rust: `report_weight.rs` fused tie-break deleted; equal mass sorts by cluster id ascending.
