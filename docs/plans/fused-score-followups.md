@@ -1,6 +1,6 @@
 # Fused confidence — remaining work
 
-**What this file is.** The open work on fused admission, measured cluster confidence, content gating, bucket routing and confidence-aware ranking. It states one status per item, once. It also now carries everything [`../release-audit.md`](../release-audit.md) used to hold that is **not** a regression since v0.32.0 — the fusion-arithmetic departures from the reading list (item 7), and the engine, gate and documentation work parked behind their own issues (item 8). The release audit is scoped to regressions only and does not restate any of it. Everything the `worktree-fused-score-followups` branch carried is merged (#420, #418) and the branch-readiness ledger it used to hold is deleted with it; the `.deslop.toml` ratchet ledger is the audit trail for the duplication gate and stays there. This rewrite is what gh #395 asked for.
+**What this file is.** The open work on fused admission, measured cluster confidence, content gating, bucket routing and confidence-aware ranking. One status per item, once: spec ids for the rules, pins for the assertions. Nothing here restates a spec; work owned elsewhere is listed and not repeated.
 
 **Owned elsewhere. Do not restate it here.**
 
@@ -10,6 +10,7 @@
 | Curated ground truth, negative corpus assertions, and the #331 / #336 / #339 / #347 / #401 close-outs | [`corpus-assertion.md`](corpus-assertion.md) |
 | The metrics/gate row of #344 | [`weighted-metrics-plan.md`](weighted-metrics-plan.md) |
 | Driving repo duplication under the 16.4 pin | gh #397, ledger in `.deslop.toml` |
+| Unhardcoding the compiled tuning levers and recording their provenance (`embedding_top_k`, `type4_embedding_floor`, `low_structural_type4_ceiling`, `low_structural_type4_weight`, `proven_identical_token_floor`, `literal_table_*`) | [`unhardcode-tuning-plan.md`](unhardcode-tuning-plan.md) |
 
 A candidate-route problem belongs here only when two runs produce the same final occurrence set and assign it different measured confidence.
 
@@ -19,26 +20,20 @@ Every reported cluster is a real duplicate, and every real duplicate is reported
 
 ## The contract
 
-`fused` must **carry information**: all three bands (`>= 0.85`, `0.6..0.85`, `< 0.6`) must be reachable and must mean the same thing in every language. Deslop publishes the value and the evidence behind it; what a consumer does with each band is the consumer's own policy ([FUSION-REPORT-NOT-VERDICT]). The failure mode is sum-then-clamp fusion over two views of one normalised tree, which makes `fused` a re-encoding of "the shapes matched" pinned at 1.0, with the middle of the range unreachable. `fused_golden_bands.rs` and `fused_golden_invariants.rs` cite this paragraph by name; do not weaken it without moving those suites with it.
+`fused` must **carry information**: all three bands (`>= 0.85`, `0.6..0.85`, `< 0.6`) must be reachable and mean the same thing in every language ([FUSED-THRESHOLD](specs/fusion.md)); Deslop publishes the value and the evidence behind it, and what a consumer does with each band is the consumer's own policy ([PRINCIPLES-REPORT-NOT-DICTATE](specs/principles.md)). The failure mode is sum-then-clamp fusion over two views of one normalised tree, which makes `fused` a re-encoding of "the shapes matched" pinned at 1.0, with the middle of the range unreachable. The certified-rename rule — top band at `RENAME_CONSISTENCY_DISCOUNT × shape`, `fused = 1.0` reserved for byte proof — is [FUSION-CONTENT-GATE](specs/fusion.md) §3. `fused_golden_bands.rs` and `fused_golden_invariants.rs` cite this paragraph by name; do not weaken it without moving those suites with it.
 
-**The top band is a clone-ness statement, not a byte-equality statement** (#410, settled). A Type-2 rename the measurement has certified — every aligned literal preserved or echoed, every constrained identifier position byte-identical or a corroborated bijection substitution, and anchor mass at or above the point where the mass term vouches for the pair on its own — is duplication, so it reaches `>= 0.85`. It reaches it at exactly `RENAME_CONSISTENCY_DISCOUNT × shape`, never at 1.0: `fused = 1.0` stays reserved for byte proof, so copy-paste is still ranked strictly above rename. An uncertified rename — any contradiction, or too little mass — keeps the smooth `anchors / (anchors + 4)` discount and stays in the reuse band or below.
+## Landed — settled on this branch
 
-## Where fused stands against it
+One line each: what → spec → pin.
 
-Established, with the assertion that holds it. These are not open work; they are the baseline the backlog sits on. Cited by name from `live-bubble-fused.unit.test.ts`, `live-bubble.unit.test.ts` and `report-schema.unit.test.ts`.
-
-| Property | Held by |
-|---|---|
-| Fusion is the strongest single axis, never the sum — at **admission**, not only at render | `deslop-core/tests/pair_admission_bounded_max.rs` (axes `0.44 / 0.42 / 0.0` must be `DroppedBelowFused`; the sum would admit at 0.86), `issue_343_sum_clamp_saturation.rs` |
-| Shape axes render one **admitted pair's** own measurement, never a mean over the cluster; the report names that pair | `cluster::signals::measured_signals`, `[FUSION-CLUSTER-SIGNALS]` |
-| Ranking weight is the **sum** of duplicated mass, never confidence-scaled | `report_weight.rs`, `[RANK-MASS-SUM]`, `rank_mass.rs` |
-| Shape-saturating clusters are re-scored against measured content evidence | `buckets::content_gated_signals`, `[FUSION-CONTENT-GATE]` |
-| The engine's `bucket` is the verdict, not a UI-local `fused` cutoff — an act-now cluster below 0.85 still reaches every surface | `live-bubble-fused.unit.test.ts`, `report-schema.unit.test.ts` |
-| All three agent bands are reachable and mean the same thing in six languages | `fused_golden_bands.rs` — verbatim / maximal rename / shape-only, with band separation and rank order per language |
-| No report renders a constant confidence; every component stays in `[0,1]`; only byte-proven duplication saturates | `fused_golden_invariants.rs`, swept over 21 corpora |
-| One cosine definition, `f64` accumulation, byte-identical snippets render exactly `1.0` | `issue_372_identical_snippet_cosine.rs` |
-| `structural` is measured subtree overlap, so a whole-method Type-3 near-miss is admitted and rendered in five languages | `type3_enclosing_method.rs`, `[FUSION-SHARED-SUBTREE]` |
-| A demoted enclosing view yields to a byte-proven nested clone only when that clone carries statement mass | `cross_cluster_collapse.rs`, `[PIPELINE-CLUSTER-SUBSUME]` |
+- **#373** polymorphic gate no longer hides consistently-renamed Type-2 clones — subject bodies compare as normalised kind streams ([CLONE-NOISE-POLYMORPHIC-CONTRACT]); dual-direction pin `polymorphic_gate_hides_rename_clone.rs`.
+- **#410** certified-total renames reach the top band — [FUSION-CONTENT-GATE] §3; `assert_certified_rename_reaches_act_now`, both stems, six languages; [REPAIR-RENAME-LITERAL-ECHO] monotonicity survives.
+- **#458 shape half** — a cluster renders one admitted pair's own shape axes, `signal_source` names it ([FUSION-CLUSTER-SIGNALS]); `pair_consistent_signals.rs`, `verbatim_family_survives_stranger.rs`.
+- **Ranking weight is summed duplicated mass, never confidence-scaled** — [RANK-MASS-SUM] owns the formula; `fused` is only a tie-break; `rank_mass.rs`.
+- **Token-bridge welds, containers, regions** — [PIPELINE-CLUSTER-ELECT] + [PIPELINE-CLUSTER-ELECT-CONTAINER]; `csharp_merged_clone_families.rs`, `rank_structural_only_policy`, eleven unit tests.
+- **Operators survive normalisation as their own tokens** — [PIPELINE-NORMALIZE-AST-OPERATOR]; six-language golden re-blessed (ids/node counts only), alignment cap 512→768, `SEMANTIC_EPOCH` 3.
+- **Assertion instruments hardened** — #415 `fused_score_bounds.rs` fails on empty/missing signals; #398 `ReportFixture` one `FileId` per path (`report_fixture_file_identity.rs`); #435 callsite-interest anchor; #412 substring skips replaced with declared `#[ignore]`s under [TEST-SELECTION-SKIP] — `make test` runs the whole workspace unfiltered.
+- **#440 / #426** — VSIX extension coverage floor 87.6% (`vsix.extension_threshold`); corpus manifests curated — `flutter`/`fsharp` `expect_files_min`/`expect_clusters`, curated Type-2 entries carry a `min_nodes` extent floor (gh #439), `corpus_manifest_contract` unskipped.
 
 ---
 
@@ -46,259 +41,58 @@ Established, with the assertion that holds it. These are not open work; they are
 
 Every item is unpinned unless a test is named. **Write the failing fixture first and watch it fail** — the assertion is worth more than the fix.
 
-## 1. #373 — the polymorphic gate hides consistently-renamed Type-2 clones — FIXED IN TREE
-
-Was the largest known recall hole in this plan's territory. `subject_bodies_differ` now compares the subject bodies' **normalised kind streams** (named nodes, comments skipped, nesting-faithful close markers), not raw source bytes, so a consistent rename is the same implementation and only genuinely different implementations read as polymorphism. The comparator is one shared definition — `cluster_filters/body_shape.rs` — also adopted by `[CLONE-NOISE-SIGNATURE-ONLY]`, whose spec already promised kind-sequence semantics while its doc comment still said bytes.
-
-Pinned red-first, both directions at one threshold in one test: `polymorphic_gate_hides_rename_clone.rs` — the `same-name-rename-clone` fixture (the issue's exact repro) must publish exactly one visible cross-file `nearly_identical` cluster covering the whole 16-line function in both files with `clusters_hidden = 0` and a non-zero duplication metric, while `python-issue-69-abstract-method` renders zero visible clusters and a `0.0` metric in the same run. The secondary defect — every hidden cluster attributed to "your .deslop.toml config" in scan roots with no such file — is reworded to what the renderer actually knows and pinned by `hidden_group_summary_names_the_hider_not_the_users_config` in the same file. `noise.md` updated to match. Awaiting merge and release verification; the 7 corpus repos the issue names re-measure then.
-
-## 2. #410 — a certified-total rename cannot reach the act-now band — FIXED IN TREE
-
-Settled: the mass term was the wrong shape for a bijection the engine had already certified, and the answer is written into § The contract above and into [FUSION-CONTENT-GATE]. `content/rename.rs::evidence_weight` drops the asymptotic mass discount exactly where the mass term already vouches for the pair on its own — `anchors / (anchors + 4) >= CONTENT_SUPPORT_FLOOR`, i.e. ten anchors — and only when `min(literal_consistency, coverage)` is exactly 1.0. Certification cannot promote a cluster the discount would have demoted, and cannot switch off as a rename is completed, so `[REPAIR-RENAME-LITERAL-ECHO]`'s monotonicity survives by construction. `CONTENT_SUPPORT_FLOOR` was not touched.
-
-Pinned red-first in `fused_golden_bands.rs`: `assert_certified_rename_reaches_act_now` requires `rename_consistency == 1.0`, `fused >= 0.85` and an act-now bucket for **both** rename stems in **all six** languages, and the cross-language band test now demands `[0.85, 1.0)` rather than `[0.6, 1.0)`. Watched red at `0.7286 / 0.7614 / 0.7714` across seven tests, green after. Re-measured green: `type2_rename_anchor_floor`, `rename_literal_monotonicity`, `dart_issue_197_single_file_structural_only`, `js_language_features`, `js_ts_clone_buckets`.
-
-The measurement that framed the issue, kept because it is what retired the original framing. Re-measured 2026-08-21 against this tree's `target/release/deslop`, because the #408 structural change moved the inputs:
-
-| fixture | agreement | rename_consistency | rendered `fused` | bucket |
-|---|---|---|---|---|
-| `ts-qualified-type-rename` (`--min-nodes 8`) | 0.818 | 0.692 | 0.818 | `nearly_identical` |
-| `fused-golden-*` maximal rename (`--min-nodes 12`) | 0.333 | 0.810 | 0.729 | `nearly_identical` |
-| `fused-golden-*` lean rename | 0.059 | 0.800 | 0.720 | `nearly_identical` |
-
-The arithmetic lives in [FUSION-CONTENT-GATE] and is not restated here.
-
-Two things follow, and the first retires the framing the issue was filed under:
-
-- **The demotion is gone.** `ts-qualified-type-rename` renders `nearly_identical` at `fused 0.818`, because `content_support` takes the stronger population and agreement carries it. `typescript_qualified_type_name_rename_is_token_invariant` is green. The old "misses `CONTENT_SUPPORT_FLOOR` by 0.033" reading is stale twice over — with #409's literal echoes the anchor set is 9, so the axis reads 0.692, and the axis is not what decides this cluster.
-- **The band ceiling is the live defect.** A rename-only clone whose literals disagree is priced entirely through the rename axis, which caps at `0.9 × n/(n+4)`: 0.9 in the limit, 0.729 at the golden fixtures' 17 anchors, 0.60 at 8. So `fused >= 0.85` was **unreachable for any Type-2 rename**, whatever the evidence — the top band described byte-equality rather than clone-ness. Two discounts stack to produce it, and only one of them was designed to.
-
-**Constraints the fix honoured.** `CONTENT_SUPPORT_FLOOR` may not be lowered to close a gap. `RENAME_CONSISTENCY_DISCOUNT` exists to reserve `fused = 1.0` for byte proof, so any bypass must keep proven copy-paste ranked above proven rename. Re-measure against `dart_issue_197`, the F# data-table corpus, `type2_rename_anchor_floor`, `fused_golden_bands` in all six languages, and `rename_literal_monotonicity` — #409's monotonicity property must survive.
-
-## 3. A token bridge welds two structural families and reports neither — [PIPELINE-CLUSTER-ELECT] — FIXED IN TREE
-
-Found while chasing the `Windows check + TCP IPC E2E` red on PR #424, which was neither a Windows fault nor a transport fault. `mcp_tools_work_over_tcp_transport` asserted only that `top-offenders` returned a payload *shaped* like a live report, so it passed on `total_clusters: 0` and the failure surfaced one assertion later as an empty `find-similar` — a readiness race that was never there. Strengthened to `total_clusters > 0`, the true state came straight out: the live report over `crates/deslop-mcp/tests/fixtures/csharp-mcp` was empty. Reproduced with the release CLI, no LSP in the picture.
-
-That corpus is four C# files holding two independent Type-2 pairs — `Alpha.Compute`/`Beta.Run`, a summing loop copied with every identifier renamed, and `Delta.Times`/`Gamma.Times`, a multiplying loop one literal apart. Each pair alone reports `nearly_identical` at the shipped `--min-nodes 30`. All four together reported **nothing**: `visible=0 hidden=1`, `duplication_percent 0.0`.
-
-`cluster_by_transitive_closure` treats an LSH band collision exactly like a shared subtree, so one token edge welded the sum and the product into a single four-member component. The content stage then measured the union honestly — `agreement 0.3127`, `rename_consistency 0.3333`, `substance_varies true` — the cluster bucketed `loosely_similar`, and report policy hid it. Both real families were lost *to the presence of each other*, which is a false negative that grows with corpus size and cannot show up on a two-file fixture.
-
-The operator disagreement driving it is correct: `[PIPELINE-NORMALIZE-AST-OPERATOR]` exists so `+` and `*` stop reading as the same code. The defect was the response. `cluster_filters/structural_families.rs` now elects the code back out of a welded component before any signal is measured, which is `[CLONE-NOISE-VERBATIM-SUBGROUP]`'s mechanism one layer earlier and keyed on the digest instead of the source bytes. The two passes now share `cluster_filters/family.rs`. A component with one family and a near-miss fringe is left whole, so an ordinary Type-3 cluster keeps every occurrence it had.
-
-Splitting on the digest alone was wrong, and the CI run caught it: `csharp-merge-readafter`'s welded component holds a byte-identical 158-byte run *and* the mis-scoped near-miss enclosing it, and separating those handed the encloser to cross-cluster subsumption, which elected it and deleted the Type-1 clone — `byte_identical_clone_survives_a_demoted_enclosing_view_in_one_file` and `content_proven_nested_clone_survives_content_poor_enclosing_view` both went red. The fix is to merge families into the **regions** they cover first, on mutual byte coverage, and split only across regions. Nesting stays in one cluster, where the same-file overlap collapse and `[PIPELINE-CLUSTER-SUBSUME]` elect between the views on discovery evidence this pass has already discarded. One-way coverage is not a nesting, which is what keeps `csharp-mcp` splitting: its shallow four-file shape encloses each two-file clone in half the corpus and covers code neither reaches in the other half, so it is a view of neither and becomes its own region instead of gluing the two back together.
-
-The next CI run caught the second overreach: `config_can_enable_cross_language_clusters` went red because a port of one algorithm into another language is a different normalised subtree *by construction*, so `mixed-small`'s opted-in cross-language cluster was split into one cluster per language and the finding the opt-in exists to produce disappeared. The digest premise holds inside one grammar only, so the pass now leaves any component spanning languages — or whose languages it cannot resolve — entirely alone (`[CONFIG-CROSS-LANGUAGE]`).
-
-Pinned red-first by `crates/deslop/tests/csharp_merged_clone_families.rs` — both families in one scan, each `nearly_identical` with two occurrences, `structural == 1.0`, `token_jaccard == 1.0` and `fused >= 0.85`; exactly two visible clusters and exactly one hidden; no cluster spanning `Alpha.cs` with `Delta.cs`; the two families separating strictly and in opposite directions on the content axes — the renamed pair certifying `rename_consistency == 1.0` at `agreement <= 0.75`, the literal-edited pair holding `agreement >= 0.9` at `rename_consistency < 1.0`; and a non-zero duplication metric. Watched red at `duplication_percent 0.0` with neither pair present. `crates/deslop/tests/common/mod.rs::fixture` now falls back to `deslop-mcp`'s fixture tree, the mirror of that crate's `copied_fixture_named`, so both suites read the same bytes rather than a second copy of the corpus. Eleven unit tests in `cluster_filters/structural_families/tests.rs` hold the region cases the E2E cannot reach, including the four-file bridge, the two-depth nesting that must survive it, and the two-language component the pass must not touch. `[PIPELINE-CLUSTER-ELECT]` added to `docs/specs/pipeline.md`, adjacent to `[PIPELINE-CLUSTER-EXACT]` and `[PIPELINE-CLUSTER-SUBSUME]`.
-
-## 3b. The six-language golden re-blessed after operator normalisation — [PIPELINE-NORMALIZE-AST-OPERATOR] — LANDED
-
-`cold_multilang_report_matches_committed_golden_byte_for_byte` and `fully_warm_multilang_run_reproduces_the_committed_golden` went red once the earlier failures stopped masking them — CI is fail-fast, so neither test had run on this branch since the operator change landed.
-
-Not a clustering regression, and proved so before blessing: disabling `[PIPELINE-CLUSTER-ELECT]` outright leaves the report byte-identical, so the election pass never touches this fixture. The drift is `[PIPELINE-NORMALIZE-AST-OPERATOR]` — behaviour-bearing operator tokens now survive normalisation as leaves, so every subtree containing them counts more nodes: rust 45→53, python 35→41, typescript 51→56, dart 50→57, csharp 46→52, go 52→57, a rise of 5–8 that matches the operator count in each `reconcile_entries` body. Every cluster id moved with it, because `cluster_id_source` is the minimum member digest and every digest changed.
-
-What did **not** move is the evidence the drift is benign: the same six clusters over the same six file pairs, every occurrence span byte-for-byte unchanged, all `identical`, `clusters_hidden 0`, `duplicated_loc 136`, `duplication_percent 64.76`. Only the ranking order shifted, and only because weight is the node count.
-
-`MULTILANG_CASES` in `crates/deslop/tests/common/multilang.rs` is re-pinned to the new ids and node counts. No assertion was relaxed — the contract still demands exact equality on the id, the node count, both spans, the bucket, the category and all four signals per language, which is what turned a bytes-match into a red test in the first place.
-
-## 3c. Two false verdicts the branch's own changes unmasked — LANDED
-
-CI is fail-fast, so both sat behind earlier failures and had not run on this branch since the changes that caused them.
-
-**A framework contract the corpus cannot show — false positive.** `issue_331_distinct_widget_declarations_must_not_saturate_fused_confidence` reported two distinct Flutter widgets as `nearly_identical` at `fused = 0.889` on `structural 0.889 / token_jaccard 0.797`, while the measured content said `agreement 0.25, rename_consistency 0.0` — `[FUSION-CONTENT-GATE]` keys on saturation and the pair sits under it. Not the family election (disabling it reproduces the failure) and not the routing (`buckets/`, `overlap.rs`, `report_render.rs` are byte-identical to `main`). It is the branch's own `[CLONE-NOISE-POLYMORPHIC-CONTRACT]` tightening: requiring a base that *declares* the method was right for #373, but the contract index only sees what the scan reached, so `State<T>.build` resolves to nothing and every `@override` of an external interface clusters as duplication. `cluster_filters/override_marker.rs` accepts the language's own override marker as the same proof — Dart `@override`, C# `override`, TypeScript `override`, one row per parsed language, matched on the AST by identity. Python has no row, so #373 and #69 are untouched, and the filter still requires the bodies to *differ*, so a genuinely copy-pasted override is never suppressed. Three unit tests carry the rows the Dart-only E2E cannot reach.
-
-**The alignment cap stopped reaching — false negative.** `without_embeddings_the_mid_band_pair_is_visible_without_saturating` reported nothing for a consistent rename plus one redundant paren over a ninety-term expression. `overlap.rs::ALIGNMENT_MAX_NODES` counts nodes of the *normalised* tree, so `[PIPELINE-NORMALIZE-AST-OPERATOR]` moved what 512 reaches without the number changing: measured, this pair's endpoints are **558 nodes**, so they took the greedy conservative bound, scored under the admission floor, and were dropped — the `[FUSION-SHARED-SUBTREE]` rescue disabled on exactly the case it exists for. Raised to 768, the pair renders `structural 0.998, token_jaccard 1.0, agreement 0.997, rename_consistency 1.0, fused 0.995`. The cap's own pin moves with it and gains a companion assertion that fails if it ever falls back below the measured case; all five `type3_enclosing_method` languages and the whole `cross_cluster_enclosure` suite stay green.
-
-## 3d. The operator placeholder was the root of rounds 3, 5 and 8 — [PIPELINE-NORMALIZE-AST-OPERATOR] — LANDED
-
-`an_operator_only_difference_never_reaches_the_act_now_line` reported `arithmetic_add.py` against `arithmetic_sub.py` at `structural 1.0000, token_jaccard 1.0000, agreement 1.0000, fused 0.9000`, bucket `nearly_identical` — above the act-now line, on code whose sign is inverted. All three operator families failed, not just the arithmetic one.
-
-The cause was the section's own design, and it is the same cause as two earlier failures on this branch. Operators were kept as leaves but **collapsed to one `__op__` kind**, on the stated reasoning that they collapse "exactly as identifiers and literals do". That reasoning is inverted. Identifiers and literals collapse because a rename and a constant edit preserve behaviour, so equal hashes mean *the same code up to renames* — the premise `[PIPELINE-CLUSTER-ELECT]` states and elects on. An operator swap is neither, so the shared placeholder made `alpha + beta` and `alpha - beta` hash identically and the fingerprint asserted a sameness that does not exist. Every stage reading the digest inherited it: `structural` saturated, `token_jaccard` echoed it, the LSH bands collided, subsumption elected between views of code computing different answers, and `[FUSION-CONTENT-GATE]` was left pricing four disagreeing frontier positions out of twenty as a ten-percent discount.
-
-Discrimination was being deferred to a downstream gate that cannot recover what the fingerprint threw away. The two other rounds are the same defect wearing different clothes: the node-count rise that re-blessed the six-language golden (3b) and the 558-node endpoints that overran the 512 alignment cap (3c) are both the placeholder's mass, added without its discrimination.
-
-The fix is in the normaliser. Each operator leaf now carries its own token — the kind is `__op__+`, never a shared `__op__` — so `+` and `-` are different subtrees and no downstream stage has to correct for a digest that lied. On the fixture the three families stop clustering entirely, and the byte-identical control asserted in the same run still buckets `identical` at `fused 1.00` and still ranks first, which is what proves the change discriminated operators rather than blinding the detector. Type-2 recall is untouched: a renamed clone changes identifiers and literals, which still collapse, and leaves its operators alone.
-
-`BEHAVIOUR_BEARING_TOKENS` became a `(token, kind)` table with the kinds written out, so normalisation allocates nothing per operator on a path that runs over every anonymous child of every node of every file. A hand-written table can pair `<<=` with `__op__<<`, which would silently reinstate the defect for one row, so `lang::shared::tests::every_row_is_its_own_token_behind_the_prefix` proves each of the 52 rows is its own token behind the prefix and that no two rows collide on either side.
-
-Three things moved with it, each re-pinned with the evidence that the change was benign:
-
-- **`fpcache::blob::SEMANTIC_EPOCH` 2 → 3.** Epoch 2 covered keeping the leaves; it does not cover naming them. A store warmed under epoch 2 holds trees in which `base + fee` and `base - fee` still hash identically, so without the bump a warm run keeps certifying an operator swap as duplication.
-- **Ten AST goldens regenerated**, and the diff is only the operator kind lines — every range, depth and node count byte-identical. Regenerating is never the remedy on its own, so `assert_dump_is_correct` gained the invariant that proves it: every operator leaf's kind must be `__op__` followed by exactly the bytes it spans, read back out of the fixture rather than out of the tool. A dump full of shared placeholders is byte-for-byte stable and completely wrong, and this is the assertion that says so.
-- **`SEEDED_CLONE_ID`** re-blessed: the id is the canonical subtree's Merkle hash and the seven operator leaves now hash by their own tokens. Nothing the reader sees moved — spans, bucket, category, node count, signals and metrics are all unchanged, which is the proof.
-
-`csharp_merged_clone_families` tightened from one hidden cluster to **zero**. The hidden view was a four-occurrence `for`-loop family spanning both clone families, which existed only because `total = total + index` and `product = product * factor` normalised identically; spanning both, it nested inside neither method cluster and could not be elected against either. It is now two two-occurrence views, each nested inside its own method cluster and elected away there. The assertion's purpose is unchanged and its bar is strictly higher.
-
-## 3e. The election published a narrow region as a cluster of its own — [PIPELINE-CLUSTER-ELECT] — LANDED
-
-`nested_dict_literal_fixtures_across_test_files_do_not_cluster` failed on this branch and passes on `main`: cluster `eaf319142afa6f6e`, bucket `structural_only`, spanning `test_agent_workspace_coverage.py:1-10` and `test_api.py:1-10` at `structural 1.00, token_jaccard 1.00, agreement 0.14, rename_consistency 0.04, literal_fraction 0.77`. Two unrelated pytest payload fixtures — one asserts `payload["id"] == "call-1"`, the other `body["tool_call_id"] == "call-7"` — and the report put the whole fixture at **56.41%** duplicated, both files at 100%.
-
-`[PIPELINE-CLUSTER-ELECT]` caused it, and only it: reverting the operator kinds alone still failed, restoring the 512 alignment cap alone still failed, disabling the election passed. The component holds six families — one whole-module family over the two files, and five function-and-below families that also reach `test_sandbox_embodied_http.py`. Mutual coverage fails one way in every direction: each module occurrence encloses a function occurrence in its own file, but the third file's occurrences sit inside no module occurrence at all. Two regions, so the pass split, and the whole-module pair was published as a cluster of two — under the three-member, three-file scaffolding floor that hides the same pattern on `main`, where the family is four members over three files.
-
-The pass was drawing a weld from a region count. A weld is a token edge joining **distinct code**, and distinct code is what disjoint bytes mean; two regions that overlap are one duplication fingerprinted at two depths over an uneven file reach, and there is nothing to undo. `holds_a_weld` now requires two regions that share no byte before any split happens. The bridge case that makes the pass work is untouched, because the two clones a bridge encloses share no byte with each other — the weld is between them, and the bridge touching both is what made it a bridge.
-
-The fixture now renders one cluster, three hidden and **5.13%** duplicated, identical to the main-equivalent render. Two unit tests hold the geometry the E2E cannot isolate: `an_enclosing_view_reaching_fewer_files_than_its_nested_run_is_not_a_weld` is #112 in miniature, and `a_bridge_touching_both_clones_does_not_hide_the_weld_between_them` asserts the `csharp-mcp` split still emits all three regions, so the false positive was not traded for the false negative the pass exists to fix.
-
-## 3f. Containers swallowed the family they concatenate — [PIPELINE-CLUSTER-ELECT-CONTAINER] — LANDED
-
-The shared-subtree rescue welds a structural family to the views that merely contain it — the class holding seven shape-identical methods, the sliding window spanning two of them, the file root over the lot. Inside one component those containers glue every occurrence in a file into one overlapping run, and the same-file overlap collapse publishes the family as one container occurrence per file: `rank_structural_only_policy`'s seven-method family rendered as two whole-class occurrences (100% of both files "duplicated") at `--min-nodes 40`, and as three overlapping sub-method fragment families at 30 — which is what moved both `[ranking]` pins.
-
-[PIPELINE-CLUSTER-ELECT] now elects concatenation members out before anything is measured, on the same two measures [PIPELINE-CLUSTER-SUBSUME] already trusts — the family outnumbers the container's own family and supplies two thirds of its bytes, with the copied-block node floor so idiom lines confer no standing — plus an overflow test that keeps every neighbouring contract intact: the #112 module pair (nested run merely reaching a third file) stays whole, `csharp-merge-readafter`'s lone method over one duplicated run stays the merge gate's business, and the `fsharp-issue-339` sibling window wholly composed of two per-binding shapes keeps its members, while a self-overlapping sliding tiling forfeits that exemption. Spec section in [`pipeline.md`](../specs/pipeline.md); unit pins in `cluster_filters/structural_families/tests.rs`; E2E by `rank_structural_only_policy` (seven whole-method occurrences, demoted below the byte-identical pair by default, out-ranking it under `keep`) and `rename_needs_an_anchor` (published family windows now contain the endpoint literal the elected window used to exclude).
-
-## 4. Subsumption escapes — #389 and #421
-
-The election is fixed and pinned (`[PIPELINE-CLUSTER-SUBSUME]`, `cross_cluster_collapse.rs`). These two are the known escapes around it, and both corrupt the reported figures as well as the cluster list.
-
-**#389 — one physical duplication published twice.** On `incremental-multilang` at `--min-nodes 8`, the C# `LedgerAlpha.cs`/`LedgerBeta.cs` pair publishes both the 44-node method clone (bytes 180–537) and the 13-node signature-line view (bytes 173–236). Per-occurrence containment fails by 7 bytes because the two views disagree about whether the leading `public` modifier belongs to the method, so the spec's own motivation — one duplicate shown once, counted once in `clusters_total` and the duplication metric — is violated by its predicate. Separate the two candidate causes before fixing: a range-convention mismatch between the method-declaration fingerprint and the sibling-window fingerprint, or a predicate that must tolerate leading-modifier straddle explicitly rather than by bare intersection.
-
-**#421 — a sub-line fragment published as a cluster.** `python-issue-69-abstract-method` at `--min-nodes 4` publishes visible `structural_only` cluster `24fef911085b4836` over two dict entries of the *same line* (`docker_host.py` L15, bytes 398..410 and 412..434). Nothing a reader can extract lives inside one line of a dict literal. Pre-existing on main, not a #420 regression. When it is fixed, `python_issue_69_abstract_method` tightens from "no cross-file pairing" to an empty visible surface — the test already carries the full-set helper.
-
-## 5. Assertion instruments that pass vacuously
-
-A green run is only evidence if the assertion could have gone red. Three in this plan's path cannot.
-
-- **#415 — the fused bound guard was fail-open — FIXED IN TREE.** `fused_score_bounds.rs` now errors on a missing `clusters` array or a missing/non-numeric `signals.fused`, and requires at least one inspected cluster, so the bound check can never pass by inspecting nothing. Green against `csharp-small`, meaning no real bound violation was hiding behind the vacuous pass.
-- **#398 — the fixture harness faked cross-file-ness — FIXED IN TREE.** `ReportFixture` now gives one path one `FileId`: members of one file are assembled into one source and addressed by slice, re-registering a path with different bytes fails loudly, and `cluster_with_content` lets a suite supply measured `ContentEvidence`. Pinned by `report_fixture_file_identity.rs`: `files_analysed`, per-file metrics, member spans, and — with measured support in the 0.7–0.85 gap — a same-file cluster demoting at `CONTENT_PROMOTE_FLOOR` instead of promoting through the phantom cross-file branch. The pre-existing `ReportFixture` suites (#98/#99/#108/#120/#121/#122/#239) stay green under the corrected harness. One finding worth keeping: rendered signals *carry* the cluster's `ContentEvidence` — `unmeasured()` renders as `agreement 1.0`, deliberate fail-safe against demotion — so unit-level content-gate assertions must pass measured evidence explicitly.
-- **#435 — the observability captures went blind mid-run — FIXED IN TREE.** Not test ordering in the captures themselves: `tracing`'s callsite interest is computed lazily on first hit against the dispatchers registered at that instant and cached process-wide, so a sibling test's pipeline running with no subscriber could first-hit a callsite during a capture test's scoped-default rebuild and cache `Interest::never`, silencing that `tracing::info!` for every later test in the process. The harness now anchors an always-enabled global default (`CallsiteInterestAnchor`, `deslop-core/tests/common/mod.rs`) before the first capture, so no `deslop_core` callsite can ever cache `never`; threads without a scoped capture discard events exactly as `NoSubscriber` did. Both observability tests are unskipped and green under the full parallel suite.
-- **#412 — `make test` filtered by name substring — FIXED IN TREE.** `--skip ollama_ --skip corpus_` matched any test whose name *contained* those strings, so tests **designed to run without services** were silently skipped — `mock_ollama_*` (embedding stub), `lsp_survives_when_*_ollama_*` (fallback), `binary_starts_without_ollama_*`, `embedding_list_models_returns_empty_when_ollama_*`, `synthetic_corpus_*`, `live_ingest_corpus_*` (#287 parity), `issue_189_new_exclude_pattern_drops_existing_corpus_*`, `python_multi_file_corpus_*`, `refresh_command_re_evaluates_the_corpus_*`, and the corpus gate's own precision / scope / confidence self-tests in `deslop-test-support`. The fix is structural: both skips are gone, and the one suite that must stay out of the gate — the clone-and-scan `corpus_repos` target — states that at each test as `#[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 …"]`, so the reason is printed on every run instead of hidden in a Makefile filter. An earlier revision gated it with `required-features` instead; that removed the target from `--all-targets` altogether, which is how commit `77bcbaed5` left it uncompilable. Skipping must cost coverage of a test's *execution*, never of its *compilation*. No multi-crate refactor was needed for the Ollama half: every Rust embedding test is hermetic already (in-process `MockOllama` or a deliberately dead endpoint), so `make test-ollama` reduces to the VSIX suite, the only one that wants a live daemon. Pinned by `scripts/repository/test-selection.test.mjs` under `make lint`; spec `[TEST-SELECTION]` in [`specs/release.md`](../specs/release.md). Two follow-ups fall out of it. First, `coverage-thresholds.json` still lists `crates/deslop-core/src/embedding/ollama.rs` in `rust.ignore_filename_regex` — an exemption that only made sense while every test touching it was filtered out. Re-measure with the gate actually running the mock-Ollama suites and drop the entry if the crate holds its floor without it. Second, every "suite is green" claim written while the filter was live was measured against a gate that did not run those tests.
-
-## 6. False positives that need a negative pin
-
-Each of these is a shipped false positive with no fixture that would catch it. The fixture pin is **not** blocked on the corpus — `python_issue_69_abstract_method`, `python_issue_100_kwargs_ctor` and `python_issue_115_strenum` all assert an empty or bounded visible surface today, and that pattern is the pin. Only the *real-repository generalisation* waits on [`corpus-assertion.md`](corpus-assertion.md) Part A, which is also where the seven open false positives get a curated surface.
-
-- **#71 / #103 / #285** — assertion idioms. The three standing Python contracts (`python_issue_72_monkeypatch`, `python_dict_assert_payload_proof`, `python_literal_variation_calls`) are green, so these are the families those pins do not cover.
-- **#79** — helper call sites with literal arguments.
-- **#283 / #284** — data-table and object-literal families. Recheck the language-agnostic data category shipped for #336 before treating either as an open detector defect: `python_issue_133_constant_table` and `fsharp_issue_336_data_table_category` are green, so the category itself is intact.
-- **#362 / `[RANK-STRUCTURAL-ONLY]`** — two unrelated const-declaration files must not produce the repository's largest ranked finding. A two-file run is a fixture, not a corpus: this one is writable today.
-
-## 7. Fusion arithmetic — measured departures from the reading list
-
-Every place Deslop combines two numbers into one was audited against [`reading-list.md`](../specs/reading-list.md) on 2026-08-27, with two papers read directly rather than quoted from our own notes: [arXiv 2510.15480](https://arxiv.org/abs/2510.15480) (selecting and combining LLMs for clone detection) and the [SSCD preprint](https://arxiv.org/abs/2309.02182). Absorbed here from the release audit — none of it is a regression since v0.32.0.
-
-**What checked out, and is not open work.** Pair fusion is a bounded max exactly as the ensemble literature advises (`pair.rs::bounded_fused`, `[FUSION-STRATEGY-BOUNDED-MAX]`); so are the content gate, the shape and content readings, the weighted-line metric, and the mechanical percentage's unweighted SonarQube-comparable definition. MinHash is the right primitive for a Jaccard-shaped problem, Baxter's `2S / (2S + L + R)` is used where Baxter used it (mergeability, not confidence), Zhang–Shasha TED is Baxter's own near-miss extension, the three-layer candidate union is what every surveyed system does, and the #343 sum removal is stricter than the paper permits and right for our regime. No fusion arithmetic lives outside Rust.
-
-What did not check out, ordered by accuracy at stake.
-
-**7a. #458 — averaging pair measurements. SHAPE HALF LANDED; CONTENT HALF QUARANTINED.**
-
-The rule, now stated once in [FUSION-CLUSTER-SIGNALS]: a cluster renders **one admitted pair's own** measurement. Duplication is a per-pair predicate (Baker 1995) — there is no class-level average to take, and a mean renders a number no two occurrences in the report ever produced.
-
-*Shape axes — landed.* `structural`, `token_jaccard` and `embedding_cos` are the elected pair's own values, the election is deterministic, closure-only pairs contribute nothing, and `signal_source` names the pair on the wire. Pinned by `pair_consistent_signals.rs`, `verbatim_family_survives_stranger.rs` and four unit tests.
-
-*Content axes — quarantined, open.* `agreement` and `rename_consistency` were still means over cluster members, and did not even average against the same anchor. So one formula ran on two opposite rules: `fused = max(shape) × max(agreement, …)` multiplied one pair's value by a cluster average. Measured on `ts-mixed-band` plus a byte-identical copy of `ledger_a.ts` — the pair reads `agreement = 1.0` in its own cluster and `0.7967` inside the six-member cluster holding the same two files, dragging `fused` to `0.7967`. `content::cluster_agreement` and `content::rename::cluster_rename_consistency` are replaced by `panic!` under the AGENTS.md accuracy quarantine; the per-pair machinery below them is retained behind self-removing `#[expect(dead_code)]`. Pinned red by `pair_consistent_signals.rs::a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster`.
-
-**The repair:** elect the same pair the shape axes elect, and render its own `pair_agreement` / `pair_rename_consistency`. Not a sum — these are ratios in `[0,1]` and summing them is meaningless; sum is right for *mass*, not for agreement.
-
-Noted while measuring, outside this defect: a byte-identical pair renders `rename_consistency = 0.5556` in its own **two-member** cluster, where the mean is a no-op. That is `pair_rename_consistency`'s anchor-mass weight — a genuine per-pair value that needs its own judgement.
-
-**7b. #363 — the ranking formula's spec and code disagree. PARTLY SETTLED.**
-
-*Settled:* the confidence multiplier is gone. [RANK-MASS-SUM] makes the weight the **sum** of duplicated mass — `canonical_nodes × visible_pairs`, scaled only by the [RANK-CATEGORY] and [RANK-STRUCTURAL-ONLY] policy multipliers — with `fused` demoted to a tie-break. Clone harm is copies × extent, not a confidence-scaled figure (Juergens ICSE 2009; SonarQube's duplicated-lines density is the same unweighted sum). Pinned by `rank_mass.rs`.
-
-*Still open:* `pipeline.md` specifies a `log2(1 + spanned_loc)` term over lines; `cluster.rs` computes over `spanned_bytes`; the visible re-rank carries no log term at all. Bytes and lines order clusters differently. Decide which side is the truth and change the other.
-
-**7c. Two provenance citations are false.** `candidates.embedding_min_cosine = 0.80` is labelled in `[FUSION-TUNING-LEVERS]` as "SSCD's published operating point". SSCD's tabulated settings are `similarity 0 / 0.95` with `topN 0 / 1 / 100`; 0.80 appears nowhere. `candidates.embedding_support_floor = 0.80` inherits the provenance by derivation, and it is the line at which `[CLONE-BUCKETS-ROUTING]` row 2 lets semantic evidence carry a bucket alone. Separately, SourcererCC's 0.7 is **overlap** similarity — shared tokens ÷ tokens in the larger fragment — not Jaccard: `admission.fused_threshold` cites it as a Jaccard cutoff, which makes us stricter than the paper by an unmeasured margin in the false-negative direction, and `content_gate.support_floor` applies it to raw-byte agreement, a third quantity no token study measured. `landscape.md:16` already says "overlap filter" correctly, so `fusion.md` and `landscape.md` disagree with each other. The values may still be right; re-label them as defect or derived, not literature.
-
-**7d. `candidates.embedding_top_k = 5` is below every published topN.** Marked Unrecorded, and the spec already concedes the rationale argues for "small, not for five". SSCD used topN 100 on BCB and up to 10 on industrial data, and ties the value explicitly to how large clone classes are in the corpus. This is the axis that exists to find Type-3/4, so being wrong here is silent recall loss. Sweep it against a corpus with large clone classes before it stays at 5.
-
-**7e. Max without normalization.** The paper's finding is score normalization **and** favouring maximum or sum; we do the second half. Our three axes are all in `[0, 1]` but are not calibrated against each other — a cosine of 0.85 from a local embedding model, a MinHash Jaccard estimate of 0.85 and a tree alignment of 0.85 are not the same weight of evidence, and under max the most generous axis wins by construction. Compensations exist and are deliberate (`fused_threshold` at 0.85 rather than the literature's 0.7, the content gate, `[FUSION-SHARED-SUBTREE]`, `[PAIR-SIZE-COHERENCE]`), but nothing measures cross-axis comparability and no test asserts it. Worth keeping in view: the paper's best ensemble reached 46.91% precision. Max fusion is a recall-first move measured in a precision-poor regime — it buys recall and costs precision, and the threshold is the only thing paying that bill. Say so in `[FUSION-STRATEGY-BOUNDED-MAX]`, which currently argues the max is conservative; it is conservative about *manufacturing* confidence and generous about *admitting* a pair.
-
-**7f. House rules wearing literature labels.** The `shape × content` multiply in [FUSION-CONTENT-GATE] §3 is cited by nothing — the max, the per-pair unit and the mass sum all carry citations and this does not. Relabelled derived in the spec; whether content should *gate* `fused` rather than scale it is the open decision. `rename_consistency_discount = 0.9` is likewise a presentation choice derived from wanting the answer above `fused_threshold` while reserving 1.0 for byte proof — Baker's p-match theory treats a corroborated bijective rename as *proven* Type-2, and Type-2 is the band where benchmark precision is highest. Low risk; label it accurately rather than change it. Four ranking levers are Unrecorded outright — `ranking.type4_embedding_floor` (0.90), `ranking.low_structural_type4_ceiling` (0.10), `ranking.low_structural_type4_weight` (1/10), `routing.proven_identical_token_floor` (0.99) — as are the inline literal tables in `buckets.rs` and `report_render.rs`. The spec's own rule is that unrecorded is a tracked gap, not a resting state.
-
-## 8. Parked engine, gate and documentation work
-
-Absorbed from the release audit. None of these is a regression since v0.32.0; each is owned by its issue, and the release ships with them open.
-
-**Engine defects.**
-
-- **#432 — operator-only drift reaches the act-now tier and outranks the real clone.** `ledger_credit.py` and `ledger_debit.py` differ only in `+` versus `-` and render `nearly_identical` at `structural 0.9907, token_jaccard 1.0000, fused 0.9477`, weight 101.400 (measured before [RANK-MASS-SUM] removed the confidence multiplier — the figure is stale, the ranking complaint is not) — ranked first, ahead of the corpus's one genuine `identical` pair at `fused 1.0000`. A `find-similar` consumer reads maximal evidence for a pair that computes a different answer. v0.32.0 was worse here: operators collapsed to a shared placeholder, so `+` and `-` hashed identically. This is debt made visible by `[PIPELINE-NORMALIZE-AST-OPERATOR]`, not debt introduced. Ends when the confidence blend discounts operator disagreement.
-- **#433 — mixed passes measure different content evidence than cold.** On identical corpus bytes the mixed pass and the cold pass diverge: `agreement` 0.3333 versus 0.3590, `rename_consistency` 0.5608 versus 0.5833. `fused` survives 0.85 here only because the shape term dominates, but the rendered `evidence_verdict` already differs ("share 0.33 of their content" versus "0.36"), and a cluster whose content term is the max would move bucket between two runs of the same code. Correction to the record: this was filed as "not reproducible through the CLI, specific to the LSP path", which was measured cold-versus-fully-warm only. It reproduces through the CLI on the **mixed** pass.
-- **#443** — `content/frontier.rs::positional_agreement` returns `1.0` when nothing was measured, so "no authored content to disagree on" is indistinguishable from byte-proven agreement.
-- **#431** — `buckets/gate.rs` overwrites the measured `token_jaccard` with `1.0` for `NearlyIdentical` clusters at `structural >= STRUCTURAL_SATURATION_FLOOR` (0.99). The Merkle argument it rests on does not cover every cluster routed there.
-- **#356** — embeddings-on ANN bridges mutate structural components before measurement. `embedding_route_invariance` went green under the container election and is unskipped; the issue itself is not closed.
-
-**Stale artifacts this cycle's changes invalidated.** `report_golden` (#432) drifted `canonical_node_count` 60 → 68 and with it every cluster id — the `[PIPELINE-CLUSTER-ELECT-CONTAINER]` election changing what a cluster is made of. `incremental_multilang_golden` ×3 (#433) is stale the same way. `[PERF-FLUTTER-TODO-ACCURACY]` records report hash `2562e181…` as the accepted deterministic output, recorded before that election, so it no longer describes HEAD. All are stale, not wrong. Re-bless **once**, last, after #432 and #433 land.
-
-**Gates and coverage.**
-
-- **#440 is done, not open.** The VS Code extension host now has a line-coverage floor: counters compiled into the modules and dumped from inside the host measure 87.6% across all 43 compiled modules, enforced as `vsix.extension_threshold` in `coverage-thresholds.json`. No Testing API migration was needed. Recorded because the previous audit carried it as both done and open.
-- **#422 / #166** — the corpus gate has never run in CI. All 11 repository checks are `#[ignore]`d: minutes of wall time and more than 13 GB peak per repository. `flutter`'s ceilings are now re-derived from a measured scan (295 s / 7947 MB against a 9000 MB ceiling) and `flutter/memory` is out of `known-failures.json`; `fsharp/memory` remains. `max_peak_rss_mb: 9000` still sits above a standard GitHub Actions runner.
-- ✅ **#426 — done.** `flutter` and `fsharp` carry measured `expect_files_min` and `expect_clusters`; `every_manifest_curates_a_non_vacuous_scan_scope` is unskipped. Curated Type-2 entries now also carry a `min_nodes` extent floor, refused at manifest level by `assert_curated_extent` and enforced by the `type2_recall` judge, so a fragment spanning the curated paths can no longer answer for the curated duplicate (gh #439).
-
-**Documentation drift.** `skip_policy_contract.rs`'s module doc and `SKIPS_PER_ISSUE` are re-counted with each un-skip; the registry now holds 16 rows across #369, #422, #426 and #432. The count is compiler- and test-enforced in both directions, so this stays honest without prose upkeep.
-
----
-
-# Checklist — unfinished
-
 ## Engine accuracy
 
-- [x] **#373** — byte comparison replaced with the shared normalised kind stream (`body_shape.rs`); dual-direction pin `polymorphic_gate_hides_rename_clone.rs` watched red then green; suppression message misattribution fixed and pinned. In tree, awaiting merge.
-- [x] **#410** — a contradiction-free rename whose own anchor mass already clears `CONTENT_SUPPORT_FLOOR` is priced by `RENAME_CONSISTENCY_DISCOUNT` alone; written into § The contract and `[FUSION-CONTENT-GATE]`. Act-now reachability pinned in six languages, both rename stems. `CONTENT_SUPPORT_FLOOR` unchanged. In tree, awaiting merge.
-- [ ] **#389** — decide range convention versus predicate tolerance; assert exactly one `identical` cluster for the C# pair on `incremental-multilang` at `--min-nodes 8`.
-- [ ] **#421** — stop publishing sub-line fragments; tighten `python_issue_69_abstract_method` to an empty visible surface.
-- [ ] **#362** — two unrelated const-declaration files must not rank first.
-- [ ] **#71 / #103 / #285**, **#79**, **#283 / #284** — one negative fixture each, asserting the family stays hidden while a real clone in the same run stays visible.
-- [x] **#458 shape half** — the triple is the elected admitted pair's own measurement, `signal_source` names it, closure-only pairs contribute nothing; weight is summed mass, not confidence-scaled. Pinned by `pair_consistent_signals.rs`, `verbatim_family_survives_stranger.rs`, `rank_mass.rs`.
-- [ ] **#458 content half** — `agreement` and `rename_consistency` must be the *same elected pair's* own values. Both cluster means are quarantined with `panic!`; the red pin is `a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster` (item 7a).
-- [ ] **#432** — discount operator disagreement in the confidence blend so `+`/`-` drift cannot reach an act-now bucket or outrank a byte-identical pair.
-- [ ] **#433** — make the frontier-leaf population identical on the cold, warm and mixed passes.
+- [ ] **#389** — one physical duplication published twice: the C# `LedgerAlpha`/`LedgerBeta` method clone and its signature-line view disagree on the leading `public` modifier by 7 bytes. Decide range convention versus predicate tolerance; assert exactly one `identical` cluster at `--min-nodes 8` on `incremental-multilang`.
+- [ ] **#421** — a sub-line fragment published as a cluster (`python-issue-69-abstract-method` at `--min-nodes 4`); tighten to an empty visible surface.
+- [ ] **#362** — two unrelated const-declaration files must not rank first. Writable as a two-file fixture today.
+- [ ] **#71 / #103 / #285**, **#79**, **#283 / #284** — one negative fixture each, asserting the family stays hidden while a real clone in the same run stays visible; the pin pattern exists (`python_issue_69_abstract_method` et al.). Recheck the language-agnostic data category before treating #283/#284 as open detector defects.
+- [ ] **#458 content half** — `agreement` and `rename_consistency` must be the same elected pair's own values ([FUSION-CLUSTER-SIGNALS], [FUSION-CONTENT-GATE] §2). Both cluster means are quarantined with `panic!`; the per-pair machinery (`pair_agreement`, `pair_rename_consistency`) is retained. Repair: elect the shape axes' pair and render its own values — never a sum (ratios in `[0,1]`; sum is right for *mass*, not agreement). Red pin: `a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster`. Noted: a byte-identical pair reads `rename_consistency = 0.5556` alone — the pair value's anchor-mass weight, unchanged by the repair.
+- [ ] **#432** — discount operator disagreement in the blend so `+`/`-` drift cannot reach the top band or outrank a byte-identical pair; then re-bless `report_golden` once.
+- [ ] **#433** — make the frontier-leaf population identical on cold, warm and mixed passes; then re-bless the three goldens once.
 - [ ] **#443** — distinguish "no authored content measured" from agreement `1.0`.
 - [ ] **#431** — stop overwriting measured `token_jaccard` for clusters the Merkle argument does not cover.
-- [ ] **#356** — ANN bridges must not mutate structural components before measurement.
-- [ ] **#432 / #433 / `[PERF-FLUTTER-TODO-ACCURACY]`** — re-bless `report_golden` and `incremental_multilang_golden`, and re-record the Flutter report hash, **once**, last, after #432 and #433 land. Review the diff; regenerating is never the remedy on its own.
+- [ ] **#356** — ANN bridges must not mutate structural components before measurement (`embedding_route_invariance` green, issue open).
+- [ ] **meets_fused_gate scope mismatch** — [FUSION-SCOPE]: the flag compares a cluster value to the pair bar and can read false on an admitted cluster; the VSIX bubble reads it as a gate. Give the cluster line its own lever or retire it.
 
-## Fusion arithmetic and provenance
+## Ranking and provenance
 
-- [ ] **#363** — the confidence multiplier is settled ([RANK-MASS-SUM]); still open is `spanned_loc` versus `spanned_bytes` and whether the visible re-rank keeps the log term. Change whichever side is not the truth (item 7b).
-- [ ] Re-label `embedding_min_cosine`, `embedding_support_floor`, `fused_threshold` and `content_gate.support_floor` as defect or derived, not literature. Reconcile `fusion.md` with `landscape.md` on SourcererCC's overlap-versus-Jaccard (item 7c).
-- [ ] Sweep `embedding_top_k` against a corpus with large clone classes before it stays at 5 (item 7d).
-- [ ] State in `[FUSION-STRATEGY-BOUNDED-MAX]` that the max is taken over uncalibrated axes, and name what pays for it (item 7e).
-- [ ] Record provenance for `type4_embedding_floor`, `low_structural_type4_ceiling`, `low_structural_type4_weight`, `proven_identical_token_floor` and the inline literal tables in `buckets.rs` / `report_render.rs`; label `rename_consistency_discount` a house rule (item 7f).
+- [ ] **#363** — the confidence multiplier is settled ([RANK-MASS-SUM]); still open: `log2(1 + spanned_loc)` over lines (`pipeline.md`) versus `spanned_bytes` (`cluster.rs`), and whether the visible re-rank keeps a log term. Change whichever side is not the truth.
+- [x] **7c — provenance relabelled in [FUSION-TUNING-LEVERS]** — `embedding_min_cosine` / `content_gate.support_floor` are **Derived** (SSCD tabulates `0/0.95`; SourcererCC's 0.7 is overlap, not Jaccard); `fused_threshold`'s cite corrected.
+- [ ] Sweep `embedding_top_k = 5` against a corpus with large clone classes (every surveyed system ties topN to class size).
+- [x] **7e — stated in [FUSION-STRATEGY-BOUNDED-MAX]** — the max runs over uncalibrated axes, the most generous axis wins by construction, and `fused_threshold` at 0.85 pays the precision bill.
+- [ ] Inline literal tables in `buckets.rs` / `report_render.rs` need provenance; code comments must match the spec's derived labels — spec half landed ([FUSION-TUNING-LEVERS]).
+- [ ] Decide whether content gates admission or scales rendered confidence — §3 scales (`fused = shape × content`); a gate would change which clusters report.
 
 ## Gates and coverage
 
-- [x] **#440** — the extension host has a line-coverage floor: 87.6% across 43 compiled modules, enforced as `vsix.extension_threshold`.
-- [x] **#426** — `flutter` and `fsharp` carry measured `expect_files_min` / `expect_clusters`; curated Type-2 entries carry a `min_nodes` extent floor (gh #439); `corpus_manifest_contract` unskipped.
-- [ ] **#422 / #166** — bring the corpus suite inside a PR gate's resources. `flutter`'s ceilings are re-derived and its `memory` known-failure is cleared; `fsharp/memory` remains.
-
-## Assertion instruments
-
-- [x] **#415** — `fused_score_bounds.rs` fails on an empty report and on a missing signal field, and requires a non-empty inspected set. In tree, awaiting merge.
-- [x] **#398** — `ReportFixture` reuses one `FileId` per path; same-file clusters route as same-file. Pinned by `report_fixture_file_identity.rs` (3 tests, watched red then green). In tree, awaiting merge.
-- [x] **#412** — substring skips replaced with declared `#[ignore]`s under `[TEST-SELECTION-SKIP]` (gh #422 for the corpus suite); `make test` now runs the whole workspace unfiltered, `make lint` refuses a recipe that names a test, and `crates/deslop/tests/skip_policy_contract.rs` reads every `#[ignore]` off the AST and holds it to a category, an issue, a spec id and a plan. Every "suite is green" claim in this file still needs re-reading against a gate that actually runs those tests. The accidental-skip inventory is in item 4 above.
-
-## Skipped while the follow-ups are in flight — gh #432 / #433 / #434
-
-Twelve accuracy tests remain red against in-flight work — and for #434 that includes shipped behaviour: its four fixtures publish suppressed noise families with the release binary against unchanged fixture bytes, and they move `duplication_percent`, so those skips are not release-safe. They are `#[ignore]`d under `[TEST-SELECTION-SKIP]` — each reason cites its issue number below — so the release gate runs green while the work lands. Each skip ends by deleting the attribute **and** its `CURATED_SKIPS` row in `crates/deslop/tests/skip_policy_contract.rs`; the assertions themselves are untouched.
-
-Eleven skips from this list already ended. The #435 pair closed with the tracing callsite-interest race fix (see item 5). `history_determinism` closed by re-pinning the mixed cluster at the contract value `RENAME_CONSISTENCY_DISCOUNT × shape = 0.9` — its old `fused = 1.0` pin dated from shape saturation, and the failure was in the *cold* control, before any exclusion cycle, never in warm evidence. The `state_file_and_ipc` trio closed by making the staging satisfy [LIVE-CACHE-SEED-KEY]: a real prewarm run writes the key, then only the report bytes are replaced — the seed was being *rejected* as unkeyed, not superseded by a race. `rank_structural_only_policy` ×2 closed with [PIPELINE-CLUSTER-ELECT-CONTAINER] (item 3f). `refactor_merge_refusals` closed by pinning the accurate outcome — operator drift publishes only its verbatim tail — with the residual byte proof re-covered by a comment-drift fixture. `ts_issue_284_produce_then_assert` and `embedding_route_invariance` (#356) went green under the same fixes and are unskipped. `hidden_group_summary_names_the_hider_not_the_users_config` (#434) closed too: the hidden-group summary now names Deslop's own filters instead of a `.deslop.toml` the scan root does not contain, so #434 is down to its four Python fixtures.
-
-- **#432** — operator-only drift rides #408's graded structural overlap to the act-now tier (`operator_drift_is_not_duplication` ×2) and stales the cold golden's ids and node counts (`report_golden`). Ends when the confidence blend discounts operator disagreement.
-- **#433** — warm and mixed passes measure different content evidence than cold on identical corpus state (`incremental_multilang_golden` ×3 — the two golden runs, plus the authored-contract check the refreshed `MULTILANG_CASES` ids now disagree with the still-stale committed golden — and `lsh_only_nearmiss_recall`). Ends when the frontier-leaf population is identical cold and warm; then re-bless the goldens once.
-- **#434** — the four Python noise pins (`python_issue_107_chained_dict_assert`, `python_issue_72_monkeypatch`, `python_literal_variation_calls` ×2). **These are regressions since v0.32.0 and they block the release**, so they are owned by [`../release-audit.md`](../release-audit.md) §2, measurements and arbitration included. Do not restate them here; the rows above exist only so this file's skip census is complete.
+- [ ] **#422 / #166** — bring the corpus suite inside a PR gate's resources. `flutter`'s ceilings re-derived (295 s / 7947 MB against 9000 MB) and its `memory` known-failure cleared; `fsharp/memory` remains; `max_peak_rss_mb: 9000` still sits above a standard runner.
+- [ ] Re-read every "suite is green" claim against the unfiltered gate; drop `ollama.rs` from `rust.ignore_filename_regex` if the crate holds its floor without it.
 
 ## Reporting language — [PRINCIPLES-REPORT-NOT-DICTATE]
 
-The specs now state facts; the call sites still dictate. Mechanical, no accuracy risk, one pass:
+- [ ] Bucket sentences in `buckets.rs` (the single source) per the [CLONE-BUCKETS](../specs/taxonomy.md#clone-buckets) table; `clone_category.rs`'s *"Extract the duplicated logic into a shared function."* and `report_boilerplate.rs`'s *"Consider…"* / *"Review only if…"* go with them.
+- [ ] Delete the TypeScript copies of Rust strings — `types/report.ts`, `severity.ts`, `bubble/renderParts.ts`, `bubble/live.ts`, `types/signals.ts` each restate a sentence `buckets.rs` owns, breaking the one-rendering rule.
+- [ ] Rename `act-now` — 243 occurrences across 63 files (`ACT_NOW_FUSED`, `ACT_NOW_BUCKETS`, `isActNow`, spec prose) — to the band it denotes.
+- [ ] `action_sentence` → `evidence_sentence` in the buckets sextuple; the wire names `action_hints` / `recommendation` stay (renaming breaks agent prompts for no accuracy gain).
 
-- [ ] **Bucket sentences** (`buckets.rs`, the single source): *"Safe to extract — every copy is the same."* → *"Every copy is the same after normalisation."* and the other four, per the [CLONE-BUCKETS](../specs/taxonomy.md#clone-buckets) table. `clone_category.rs`'s *"Extract the duplicated logic into a shared function."* and `report_boilerplate.rs`'s *"Consider…"* / *"Review only if…"* go with them.
-- [ ] **The TypeScript copies are duplicates of Rust strings** — `types/report.ts`, `severity.ts`, `bubble/renderParts.ts`, `bubble/live.ts`, `types/signals.ts` each restate a sentence `buckets.rs` owns. That breaks the one-rendering rule as well as this one; delete the copies rather than editing them twice.
-- [ ] **`act-now` is a directive as a name** — 243 occurrences across 63 files (`ACT_NOW_FUSED`, `ACT_NOW_BUCKETS`, `isActNow`, spec prose). Rename to the band it actually denotes.
-- [ ] **`action_sentence` → `evidence_sentence`** in the `buckets` sextuple. The wire names `action_hints` / `recommendation` stay — a rename breaks every agent prompt in the wild for no accuracy gain; their *contents* obey the principle.
+## Public documentation and repository policy
 
-## Public documentation
-
-- [ ] **#345** — `REPORTING-CONTEXT.md` and the site accuracy page still describe obsolete CLI defaults and an obsolete ranking formula, and have not been re-read since. `fusion.md`'s `rename_consistency` definition and `pipeline.md`'s `[PIPELINE-CLUSTER-SUBSUME]` ladder do agree with the code. The ranking formula's own spec/code split is #363, above.
-
-## Repository policy
-
-- [ ] 37 committed source files exceed the 500-line rule, largest `deslop-mcp/tests/cli.rs` (2,902) and `deslop-core/tests/live.rs` (1,473). Counted over committed `.rs/.ts/.tsx/.mjs/.js/.py/.kt/.java`, excluding `node_modules`. Pre-existing and ungated — measured against `origin/main`, exactly one changed file crossed 500 on this branch (`docs/specs/vsix.md`, 496 → 505). Split them or gate the rule.
+- [ ] **#345** — `REPORTING-CONTEXT.md` (`schema_doc`) and the site accuracy page still describe obsolete CLI defaults and the obsolete ranking formula.
+- [ ] 37 committed source files exceed the 500-line rule (largest `deslop-mcp/tests/cli.rs` at 2,902) — split them or gate the rule.
 
 ## Blocked elsewhere — do not start these here
 
-- [ ] The two remaining embedding `#[ignore]`s — `lsp_embedding_determinism` (#369), `issue_343_sum_clamp_saturation` (#369) — wait on [`embedding-accuracy-plan.md`](embedding-accuracy-plan.md) §1. No further ignore may be added to that suite. `embedding_route_invariance` (#356) went green under the [PIPELINE-CLUSTER-ELECT-CONTAINER] election and is unskipped.
-- [ ] The corpus close-outs #331 / #336 / #339 / #347 / #401, and a strict `make test-corpus` run on the release candidate, wait on [`corpus-assertion.md`](corpus-assertion.md) Part A and on clones this environment lacks.
+- [ ] The two remaining embedding `#[ignore]`s (`lsp_embedding_determinism`, `issue_343_sum_clamp_saturation`, #369) wait on [`embedding-accuracy-plan.md`](embedding-accuracy-plan.md) §1. No further ignore may be added to that suite.
+- [ ] The corpus close-outs #331 / #336 / #339 / #347 / #401 and a strict `make test-corpus` on the release candidate wait on [`corpus-assertion.md`](corpus-assertion.md) Part A.
+
+## Skipped while the follow-ups are in flight — gh #432 / #433 / #434
+
+Twelve accuracy tests remain red against in-flight work; #434's four are regressions since v0.32.0 and block the release, owned by [`../release-audit.md`](../release-audit.md) §2. Each is `#[ignore]`d under [TEST-SELECTION-SKIP] citing its issue; each ends by deleting the attribute **and** its `CURATED_SKIPS` row — assertions untouched. Eleven ended: the #435 pair (callsite anchor), `history_determinism` (re-pinned at `0.9 × shape`), the `state_file_and_ipc` trio (live-cache seed), `rank_structural_only_policy` ×2 (container election), `refactor_merge_refusals`, `ts_issue_284_produce_then_assert`, `embedding_route_invariance` (#356), and #434's hidden-group summary.
+
+- **#432** — `operator_drift_is_not_duplication` ×2, `report_golden` (ids/node counts stale after [PIPELINE-CLUSTER-ELECT-CONTAINER]). Ends when the blend discounts operator disagreement; re-bless `report_golden` once, last.
+- **#433** — `incremental_multilang_golden` ×3, `lsh_only_nearmiss_recall`. Ends when the frontier-leaf population is identical cold and warm.
+- **#434** — the four Python noise pins. Do not restate them here; see the release audit §2.
 
 ---
 
@@ -308,6 +102,6 @@ Kept only for the fused repair IDs cited from tests and specifications.
 
 | ID | What it fixed | Held by |
 |---|---|---|
-| `[REPAIR-RENAME-ANCHOR-MASS]` (#405) | A maximal Type-2 rename below the literal-anchor floor rendered `fused = 0.0588` and was reported as coincidence. Replaced a four-literal cliff with smoothly weighted Baker-corroborated anchor mass — the term item 2 above now re-opens on its ceiling, not on that cliff | `type2_rename_anchor_floor.rs`, `fused_golden_bands.rs`, `js_language_features.rs`, `js_ts_clone_buckets.rs`, `common/signals.rs`, `taxonomy.md` |
+| `[REPAIR-RENAME-ANCHOR-MASS]` (#405) | A maximal Type-2 rename below the literal-anchor floor rendered `fused = 0.0588` and was reported as coincidence. Replaced a four-literal cliff with smoothly weighted Baker-corroborated anchor mass | `type2_rename_anchor_floor.rs`, `fused_golden_bands.rs`, `js_language_features.rs`, `js_ts_clone_buckets.rs`, `common/signals.rs`, `taxonomy.md` |
 | `[REPAIR-SUBSUME-CONTENT-FIRST]` (#367, #408) | Measured content before destructive cross-cluster subsumption and made the survivor election read it: a demoted view never deletes a credible one, a demoted encloser yields only to verbatim-proven nesting that carries statement mass, and between credible views enclosure stands | `cross_cluster_collapse.rs`, `type3_enclosing_method.rs`, `cluster/subsume/election.rs`, `[PIPELINE-CLUSTER-SUBSUME]` in `pipeline.md` |
 | `[REPAIR-RENAME-LITERAL-ECHO]` (#409) | Counted a literal renamed alongside its symbol as consistent rename evidence instead of disproof, so a more complete rename can never score below a less complete one | `rename_literal_monotonicity.rs`, `js_language_features.rs`, `content/rename.rs`, `[FUSION-CONTENT-GATE]` in `fusion.md` |

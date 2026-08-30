@@ -2,16 +2,11 @@
 
 Implements [pipeline.md §METRICS-REPO-WEIGHTED](../specs/pipeline.md#metrics-repo-weighted) and [§EXIT-CODES-WEIGHTED](../specs/pipeline.md#exit-codes-weighted); config surface in [exclusion.md](../specs/exclusion.md). The spec is normative — this plan is sequencing, touch-list, and test contract only.
 
-**Problem.** `metrics.duplication_percent` counts every visible line at equal weight, so a `structural_only` family — evidence the tool itself labels "unverified, verify before extracting" — moves the CI gate exactly like byte-proven copy-paste. This is the open metrics row of gh **#344** (Gap 3 of the fused rollout), and gh **#355** is a measured instance: a Dart delegating-method family alone producing `duplication_percent = 13.71`.
+**Problem.** `metrics.duplication_percent` counts every visible line at equal weight, so a `structural_only` family — evidence the tool itself labels "unverified" — moves the CI gate exactly like byte-proven copy-paste. This is the open metrics row of gh **#344** (Gap 3 of the fused rollout), and gh **#355** is a measured instance: a Dart delegating-method family alone producing `duplication_percent = 13.71`.
 
-## Decisions (settled — do not reopen)
+## Decisions (settled — in the spec, do not reopen)
 
-1. **Two metrics, not one formula.** The mechanical percentage is untouched, unconfigurable, and stays the default gate — it is the industry-comparable number (SonarQube `duplicated_lines_density` precedent) and every existing ratcheted threshold depends on its meaning. The weighted percentage ships beside it, always both on the wire.
-2. **Weights follow measured evidence class, not academic type number.** Per-bucket × per-category declared constants (defaults in the spec table: `identical`/`nearly_identical` 1.0, `same_behavior` 0.5, `structural_only` 0.15, `loosely_similar` 0.0; `data` 0.15). Grounding: [reading-list.md §metrics](../specs/reading-list.md#read-list-metrics) — Svajlenko & Roy 2015 (reliability degrades across similarity bands), Kapser & Godfrey 2008 (shape-level cloning is frequently benign), Bellon et al. 2007 (per-type precision differs).
-3. **Not fused-scaled** — the same rule ranking follows ([pipeline.md §RANK-MASS-SUM](../specs/pipeline.md#rank-mass-sum)). A continuous confidence multiplier would make the percentage a function of fusion internals and irreproducible from the report. Bucket constants, echoed on the wire, recomputable by anyone.
-4. **Per-line max-weight-wins.** Where clusters overlap, a line takes the strongest covering evidence — no line exceeds 1.0, and a weak cluster cannot dilute a proven one. This is not in tension with the summed ranking weight: mass is summed *across* clusters because duplicated lines add up, while a single line covered twice is still one line. Invariant: weighted ≤ mechanical whenever all weights ≤ 1.0; equal at all-1.0.
-5. **Two independent gates, one kill switch.** `--fail-over-weighted` / `[threshold] max_weighted_duplication_percent` mirror the mechanical gate; either breach exits `3`; `--no-fail-over` disables both.
-6. **Weighting is not a routing fix.** A misrouted cluster (e.g. the #283/#284/#285 promotions to `nearly_identical`) enters the weighted numerator at full weight; those stay separate accuracy bugs. The weighted metric prices honest labels — it does not launder dishonest ones.
+Two metrics on the wire ([METRICS-REPO-WEIGHTED]): the mechanical percentage untouched and still the default gate; the weighted companion priced by bucket × category constants from the spec's default table, per-line max-weight-wins (invariant: weighted ≤ mechanical), never fused-scaled ([RANK-MASS-SUM] is the same rule), two independent gates with one kill switch ([EXIT-CODES-WEIGHTED]). Weighting prices honest labels; misrouted clusters stay separate accuracy bugs.
 
 ## Work items, in order
 

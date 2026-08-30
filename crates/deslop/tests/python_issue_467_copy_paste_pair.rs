@@ -350,11 +350,10 @@ fn assert_the_pair_is_actionable(pair: &Value) {
     );
     assert!(
         fused >= ACT_NOW_FUSED,
-        "{LABEL}: fused={fused:.4} must clear the act-now line {ACT_NOW_FUSED}, \
-         the stronger of the two agent-facing bars — clearing it clears the \
-         reuse-bias line {REUSE_FUSED} with it. Below either, an agent asking \
-         find-similar is told to go ahead and author the copy this fixture \
-         stages: {dump}",
+        "{LABEL}: fused={fused:.4} must clear the top reported band {ACT_NOW_FUSED}, \
+         the stronger of the two evidence bars — clearing it clears the \
+         lower band boundary {REUSE_FUSED} with it. Below either, the report \
+         states weak evidence for the copy this fixture stages: {dump}",
         dump = signal_dump(pair),
     );
 }

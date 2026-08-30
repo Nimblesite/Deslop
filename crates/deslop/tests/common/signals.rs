@@ -305,8 +305,8 @@ fn assert_rename_verdict(cluster: &Value, label: &str) {
     assert!(
         fused >= REUSE_FUSED,
         "{label}: a renamed copy of real logic must stay at or above the \
-         reuse-bias line ({REUSE_FUSED}) — below it the agent recipe tells \
-         the agent to write the copy anyway — {dump}"
+         lower band boundary ({REUSE_FUSED}) — below it the report states \
+         weak evidence — {dump}"
     );
     assert!(
         fused < 1.0,

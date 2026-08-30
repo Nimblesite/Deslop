@@ -63,7 +63,7 @@ Fields:
 | `size` | How many copies of this subtree exist. `size=20` means the same pattern appears 20 times. |
 | `occurrence_count` | The authoritative display count of a cluster's occurrences. Live-wire responses cap `occurrences[]`, so this is the number to show — never `occurrences.length`. |
 | `language` | The language id the parser registry resolved for the cluster (`csharp`, `rust`, `python`, `dart`, `javascript`, `typescript`, `tsx`, `php`, `fsharp`, `go`, or `unknown`). Group and filter on this rather than on a file extension. |
-| `meets_fused_gate` | Whether the cluster's `signals.fused` clears `FUSED_THRESHOLD`. Carried so the comparison is stated rather than left for each consumer to re-derive; the two quantities differ in scope (see below). |
+| `meets_fused_gate` | Whether the cluster's rendered `signals.fused` clears the pair-scope admission bar `FUSED_THRESHOLD`. A known scope defect ([FUSION-SCOPE](fusion.md#fusion-scope), tracked in `fused-score-followups.md`): the bar admits pairs, the value renders clusters, so the flag can read false on an admitted cluster. Never an admission verdict — filter on `bucket`. |
 | `evidence_verdict` | One plain-English sentence reading the shape score against the measured content evidence — why confidence stayed, fell, or came from the embedding pass. Engine-authored; render it verbatim. |
 | `nodes` | AST node count of one canonical copy. Bigger subtree = more meaningful clone. |
 | `path:line:column` | Human-readable occurrence location in text/HTML/hover summaries. JSON keeps `start_byte` / `end_byte` for machine navigation. |

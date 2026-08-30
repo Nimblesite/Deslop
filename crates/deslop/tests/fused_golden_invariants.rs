@@ -253,7 +253,7 @@ fn fused_confidence_obeys_one_contract_in_every_language() -> Result<()> {
 // [FUSED-THRESHOLD] Per-report discrimination: each golden corpus stages
 // three deliberately different degrees of duplication, so a report that
 // renders one fused value for all of them has erased the distinction the
-// agent recipe branches on.
+// documented bands state.
 #[test]
 fn no_golden_report_renders_a_constant_fused_score() -> Result<()> {
     let mut verdicts: Vec<String> = Vec::new();

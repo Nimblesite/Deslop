@@ -2,7 +2,7 @@
 //! ([FUSION-STRATEGY-BOUNDED-MAX], [FUSION-CONTENT-GATE], [FUSED-THRESHOLD]).
 //!
 //! `docs/plans/fused-score-followups.md` states the contract the fused score has to
-//! satisfy: it must carry information, so that the three documented agent
+//! satisfy: it must carry information, so that the three documented
 //! bands are all reachable and mean what the docs say they mean. Each
 //! `fused-golden-<language>` fixture directory stages the same four
 //! real-world scenarios side by side so one report exercises all of them:
@@ -233,8 +233,8 @@ fn assert_rename_components(cluster: &Value, corpus: &Corpus, stem: &str) {
     assert!(
         fused >= REUSE_FUSED,
         "{language}/{stem}: a renamed copy of real logic must stay at or above the \
-         reuse-bias line ({REUSE_FUSED}) — below it the agent recipe tells the agent \
-         to write the copy anyway — {dump}"
+         lower band boundary ({REUSE_FUSED}) — below it the report states weak \
+         evidence — {dump}"
     );
     assert!(
         fused < 1.0,
@@ -253,15 +253,15 @@ fn assert_rename_components(cluster: &Value, corpus: &Corpus, stem: &str) {
 /// a **certified** Type-2 proof: identical logic, every identifier
 /// substituted consistently and corroborated by repetition, every
 /// aligned literal preserved, and anchor mass well past the point where
-/// the mass term alone vouches for the pair. That is duplication an
-/// agent must not re-author, so it has to reach the act-now line.
+/// the mass term alone vouches for the pair. That is the strongest
+/// measured evidence the report states, so it has to reach the top band.
 ///
 /// While `rename_consistency` was the bare product
 /// `anchors / (anchors + RENAME_EVIDENCE_HALF_MASS)`, no rename could
 /// reach `0.85` in any language at any body length a human writes — the
 /// golden fixtures rendered `0.729` and `0.720` on 17 and 16 anchors —
-/// so the top agent band silently meant "byte-identical" rather than
-/// "do not write this copy". [FUSION-CONTENT-GATE] states the rule this
+/// so the top band silently meant "byte-identical" rather than "clone".
+/// [FUSION-CONTENT-GATE] states the rule this
 /// pins: a contradiction-free rename whose own mass already clears
 /// [`CONTENT_SUPPORT_FLOOR`](deslop_core::buckets::CONTENT_SUPPORT_FLOOR)
 /// is priced by the rename discount alone.
@@ -276,10 +276,9 @@ fn assert_certified_rename_reaches_act_now(cluster: &Value, corpus: &Corpus, ste
     );
     assert!(
         signal(cluster, "fused") >= ACT_NOW_FUSED,
-        "{language}/{stem}: a certified Type-2 rename is duplication an agent must \
-         not re-author, so it must reach the act-now line ({ACT_NOW_FUSED}); a top \
-         band only copy-paste can enter means \"byte-identical\", not \"do not write \
-         this copy\" — {dump}"
+        "{language}/{stem}: a certified Type-2 rename is real duplication, so it \
+         must reach the top reported band ({ACT_NOW_FUSED}); a top band only \
+         copy-paste can enter means \"byte-identical\", not \"clone\" — {dump}"
     );
     assert!(
         ACT_NOW_BUCKETS.contains(&cluster_bucket(cluster)),
@@ -468,7 +467,7 @@ fn php_fused_bands_separate_copy_paste_rename_and_coincidence() -> Result<()> {
 
 // [FUSED-THRESHOLD] Cross-language: the same four scenarios must land in
 // the same bands in *every* language. A metric whose meaning shifts per
-// language cannot back a documented agent contract.
+// language cannot back a documented band contract.
 #[test]
 fn fused_bands_mean_the_same_thing_in_every_language() -> Result<()> {
     let mut verdicts: Vec<String> = Vec::new();

@@ -38,7 +38,7 @@ The ID records the strategy this section originally specified; the **sum arm was
    transitive closure of the pairs that cleared it.
 5. Rank clusters by summed duplicated mass ([pipeline.md §RANK-MASS-SUM](pipeline.md#rank-mass-sum)) for "worst offenders first."
 
-This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on structural+embedding and ~high on LSH, a Type-3 may score high on LSH+embedding and medium on structural, and a Type-4 scores primarily on embedding. Every type lands in the report; scores explain *why*, and the fused confidence never exceeds the best of them. Rendered confidence is defined by [FUSION-CONTENT-GATE]: for shape-saturating clusters the gate substitutes measured content evidence for this function's implicit 1.0 content factor; everywhere else the bounded max **is** the rendered value.
+This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on structural+embedding and ~high on LSH, a Type-3 may score high on LSH+embedding and medium on structural, and a Type-4 scores primarily on embedding. Every type lands in the report; scores explain *why*, and the fused confidence never exceeds the best of them. The axes are uncalibrated — a cosine 0.85, a Jaccard 0.85 and an alignment 0.85 are not the same weight of evidence, and under max the most generous axis wins; `fused_threshold` at 0.85 (above the literature's 0.7) pays that bill. Rendered confidence is defined by [FUSION-CONTENT-GATE]: for shape-saturating clusters the gate substitutes measured content evidence for this function's implicit 1.0 content factor; everywhere else the bounded max **is** the rendered value.
 
 ### [FUSION-SCOPE] `fused` is two quantities at two scopes
 
@@ -51,13 +51,13 @@ Governed by [PRINCIPLES-REPORT-NOT-DICTATE](principles.md#principles-report-not-
 | Role | **admission**, decided pair by pair against `admission.fused_threshold` | **rendered confidence**, published as `signals.fused` |
 | Content evidence | none | folded in, so a cluster's value is normally *lower* than the pair value that admitted it |
 
-Both scopes are needed — admission needs one scalar because a pair may qualify on any axis; the rendered value needs content because shape alone says nothing about what the code said. **The shared threshold is the defect:** `report_restamp.rs` (`meets_fused_gate`) and `render/signals.rs` compare a cluster-scope value against the pair-scope admission bar, so `meets_fused_gate` can read false on a cluster the engine admitted and vouched for. A cluster-scope line needs its own lever and its own provenance.
+Both scopes are needed — admission needs one scalar because a pair may qualify on any axis; the rendered value needs content because shape alone says nothing about what the code said. **The shared threshold is the defect:** `report_restamp.rs` (`meets_fused_gate`) and `render/signals.rs` compare a cluster-scope value against the pair-scope admission bar, so `meets_fused_gate` can read false on a cluster the engine admitted and vouched for. Tracked in `fused-score-followups.md`; until the lever lands, the flag keeps its current meaning and is never an admission verdict.
 
 #### [FUSED-THRESHOLD] The 0.85 line, and the three bands
 
 `admission.fused_threshold` (0.85) is the pair-scope admission bar; provenance in [FUSION-TUNING-LEVERS]. It is per-pair data (`CandidatePair::fused_min_score`), not a global constant — a cross-language candidate with no structural anchor lowers it to `candidates.cross_language_min_jaccard`.
 
-Read against a cluster's rendered `signals.fused`, the same 0.85 tops three reported bands: `>= 0.85`, `0.6..0.85`, `< 0.6`. All three must be reachable and mean the same thing in every language (`fused_golden_bands.rs`), so the rendered value discriminates rather than saturating. The bands report evidence; they do not assign a response.
+Read against a cluster's rendered `signals.fused`, the same 0.85 tops three reported bands: `>= 0.85`, `0.6..0.85`, `< 0.6`. 0.6 is the lower boundary (`REUSE_FUSED` in the golden suites), below which the report states weak evidence. All three bands must be reachable and mean the same thing in every language (`fused_golden_bands.rs`), so the rendered value discriminates rather than saturating. The bands report evidence; they do not assign a response.
 
 ### [FUSION-SHARED-SUBTREE] `structural` is measured subtree overlap, not Merkle equality
 
@@ -223,8 +223,8 @@ erased:
 
 4. **Routing — three zones over `support = max(agreement,
    rename_consistency)`** (either population may vouch; never their mean).
-   Below `content_gate.support_floor` (the [TECH-TOKEN-SOURCERERCC] Type-3
-   overlap cutoff), and with no semantic support (`embedding_cos` below
+   Below `content_gate.support_floor` (the Type-3 line; provenance in
+   [FUSION-TUNING-LEVERS]), and with no semantic support (`embedding_cos` below
    `candidates.embedding_support_floor`, the line at which the embedding pass
    vouches for a cluster rather than merely having measured it), the cluster
    joins the [RANK-STRUCTURAL-ONLY] routing — surfaced honestly or hidden as cross-file
@@ -309,7 +309,7 @@ A number is a **lever** when changing it changes which clusters are reported, wh
 
 | Key | Site | Default | Provenance |
 | --- | --- | --- | --- |
-| `admission.fused_threshold` | `pair.rs:31` | 0.85 | **Derived.** Under bounded max one axis alone can carry a pair, so the bar on that axis rises to compensate. [TECH-TOKEN-SOURCERERCC] treats Jaccard ≥ 0.7 as the typical Type-3 cutoff; Deslop sits higher for that reason. Not an ROC sweep. |
+| `admission.fused_threshold` | `pair.rs:31` | 0.85 | **Derived.** Under bounded max one axis alone can carry a pair, so the bar on that axis rises to compensate. SourcererCC's 0.7 is overlap similarity, not Jaccard ([TECH-TOKEN-SOURCERERCC]); Deslop sits above the stricter reading. Not an ROC sweep. |
 | `admission.lsh_only_min_jaccard` | `pair.rs:36` | 0.90 | **Defect.** Not a similarity threshold — a guard. LSH-only pairs have no structural anchor, and tiny `using`/`namespace` sibling windows hit Jaccard ≈ 1.0 by accident, then merge into a mega-cluster through transitive closure. |
 | `admission.lsh_only_min_node_count` | `pair.rs:43` | 40 | **Defect.** The same defect's other half, applied at both endpoints: an 18-node k-gram set is mostly grammar scaffolding, so tens of thousands of such subtrees agree by accident. |
 | `admission.max_endpoint_node_ratio` | `pair.rs:61` | 4 | **Defect** (#368). [PAIR-SIZE-COHERENCE] — an embedding-only pair scored a 19-node parameter list against a 274-node arithmetic chain at cosine 1.00. Deliberately loose; fires only where the pair is self-contradictory. |
@@ -317,10 +317,10 @@ A number is a **lever** when changing it changes which clusters are reported, wh
 | `admission.shared_subtree_min_jaccard` | `pair.rs` | 0.65 | **Defect** (#408). The corroboration floor, deliberately *below* `lsh_only_min_jaccard`: a one-statement Type-3 insertion measures 0.74–0.85 exact whole-method Jaccard precisely because the inserted statement dilutes the k-gram set. Above 0.85 it would re-close the recall hole it exists to open. |
 | `admission.shared_subtree_min_node_count` | `pair.rs` | 30 | **Defect** (#408). Below `lsh_only_min_node_count` because this route carries structural corroboration that LSH-only pairs lack, and above grammar scaffolding: the smallest genuine fixture method (`python-type3`'s `aggregate`) is 31 nodes. |
 | `candidates.cross_language_min_jaccard` | `pair.rs:66` | 0.10 | **Derived.** Cross-language AST vocabularies differ and the mode is opt-in ([CONFIG-CROSS-LANGUAGE]), so the floor sits below the same-language LSH-only floor. |
-| `candidates.embedding_min_cosine` | `embedding/pairs.rs:27` | 0.80 | **Literature.** SSCD's published operating point, and a candidate-set gate only — `fused_threshold` still decides admission downstream. |
+| `candidates.embedding_min_cosine` | `embedding/pairs.rs:27` | 0.80 | **Derived** (provenance audit). A candidate-set gate only — `fused_threshold` decides admission downstream. SSCD tabulates `0 / 0.95`; 0.80 is Deslop's own operating point, not a published one. |
 | `candidates.embedding_top_k` | `embedding/pairs.rs:16` | 5 | **Unrecorded.** The stated rationale — recall comes from the union, not the ANN fan-out — argues for *small*, not for *five*. |
 | `candidates.embedding_exact_pair_limit` | `embedding/pairs.rs:22` | 256 | **Unrecorded.** |
-| `content_gate.support_floor` | `buckets.rs:237` | 0.7 | **Literature** (#341). [TECH-TOKEN-SOURCERERCC] Type-3 overlap cutoff. |
+| `content_gate.support_floor` | `buckets.rs:237` | 0.7 | **Derived** (#341, provenance audit). SourcererCC's 0.7 is token overlap similarity; here it prices raw-byte agreement. Value kept; literature label dropped. |
 | `content_gate.promote_floor` | `buckets.rs:248` | 0.85 | **Derived** (#341). The act-now grade, matched to `fused_threshold`; bounded below by a defect — the #197 REST settings family measures 0.72–0.80 and must keep its demoted verdict. |
 | `content_gate.structural_only_max_support` | `buckets.rs:215` | 0.05 | **Defect.** #197's acceptance criterion (`token_jaccard = 0.00`, `embedding_cos = 0.00`) plus tolerance for MinHash collision noise. It is a ceiling below which a signal counts as *absent*, and is never a support floor — `route_shape_identical` read it as one, so a cosine of 0.05 overruled the measured content evidence and the gate's verdict followed whether the embedding pass ran (#356). |
 | `candidates.embedding_support_floor` | `pair.rs:91` | 0.80 | **Derived** (#356). The cosine at which a measured `embedding_cos` is the embedding pass *vouching for* a cluster rather than merely having measured it — the ANN candidate gate's own operating point, and the line [CLONE-BUCKETS-ROUTING] row 2 lets semantic evidence carry a bucket alone. The [FUSION-CONTENT-GATE] escape is judged against it. |
