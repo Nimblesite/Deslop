@@ -31,11 +31,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
 
@@ -65,7 +65,7 @@ jobs:
       # Clones are pinned by SHA, so the cache key only has to track the
       # manifests. A moved upstream tag is caught by fetch-corpus.mjs anyway.
       - name: Cache corpus clones
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .corpus
           key: corpus-${{ hashFiles('corpus/*.json') }}

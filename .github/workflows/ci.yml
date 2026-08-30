@@ -250,7 +250,7 @@ jobs:
         run: npm install -g typediagram@0.11.0
 
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@v2.86.5
+        uses: taiki-e/install-action@v2.87.0
         with:
           tool: cargo-llvm-cov
 
@@ -359,7 +359,7 @@ jobs:
         run: npm install -g typediagram@0.11.0
 
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@v2.86.4
+        uses: taiki-e/install-action@v2.87.0
         with:
           tool: cargo-llvm-cov
 
@@ -457,7 +457,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@v2.86.4
+        uses: taiki-e/install-action@v2.87.0
         with:
           tool: cargo-llvm-cov
 
@@ -656,7 +656,7 @@ jobs:
       - name: Install typediagram
         run: npm install -g typediagram@0.11.0
 
-      - uses: actions/setup-java@v5.7.0
+      - uses: actions/setup-java@v6.0.0
         with:
           distribution: temurin
           java-version: "21"
@@ -706,7 +706,7 @@ jobs:
           cache: npm
           cache-dependency-path: site/package-lock.json
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
