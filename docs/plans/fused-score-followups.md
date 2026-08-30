@@ -40,9 +40,9 @@ Delete the shipped cluster-confidence model and every dependency on it at the st
 - [ ] Remove `signals.fused`, `meets_fused_gate`, fused bands, `ACT_NOW_FUSED`, `REUSE_FUSED`, and every renderer or client branch that derives a cluster verdict from them.
 - [ ] Delete the content-confidence multiply in `buckets/gate.rs`, including `content_confidence = max(A, discount × R)` and the retired `RENAME_CONSISTENCY_DISCOUNT`; routing reads `support = max(A,R)` directly.
 - [ ] Remove the `signals.fused` tie-break from `report_weight.rs`; sort equal mass by cluster id.
-- [ ] Update `docs/models/live-ipc.td` and regenerate Rust and TypeScript wire models. Do not hand-edit generated files.
+- [x] Update `docs/models/live-ipc.td` and regenerate Rust and TypeScript wire models. Do not hand-edit generated files.
 - [ ] Delete `fused_golden_bands.rs` and `fused_golden_invariants.rs` during the cutover and replace their meaningful assertions against the final observables before the one change is complete. Pair-level bounds remain covered by `pair_admission_bounded_max.rs` and `issue_343_sum_clamp_saturation.rs`.
-- [ ] Remove fused bars, labels, tooltips, help topics, history fields, and local thresholds from every UI. Surfaces render the bucket, elected evidence, and engine-authored explanation.
+- [x] Remove fused bars, labels, tooltips, help topics, history fields, and local thresholds from every UI. Surfaces render the bucket, elected evidence, and engine-authored explanation.
 
 **Replace ranking with the one governing formula.**
 
@@ -63,10 +63,10 @@ Delete the shipped cluster-confidence model and every dependency on it at the st
 
 **Replace reporting language and documentation in the same change.**
 
-- [ ] Make `buckets.rs` the single source for evidence sentences; delete TypeScript copies and rename `action_sentence` to `evidence_sentence` without changing agent-facing action-hint wire fields.
-- [ ] Remove the `act-now` vocabulary in favor of explicit buckets.
-- [ ] Update `REPORTING-CONTEXT.md`, the site accuracy page, and all examples so `fused` appears only as a pair-admission concept.
-- [ ] Replace obsolete code comments and test names that describe cluster fused confidence; retain historical issue references only where they explain a surviving assertion.
+- [x] Make `buckets.rs` the single source for evidence sentences; delete TypeScript copies and rename `action_sentence` to `evidence_sentence` without changing agent-facing action-hint wire fields.
+- [x] Remove the `act-now` vocabulary in favor of explicit buckets.
+- [x] Update `REPORTING-CONTEXT.md`, the site accuracy page, and all examples so `fused` appears only as a pair-admission concept.
+- [x] Replace obsolete code comments and test names that describe cluster fused confidence; retain historical issue references only where they explain a surviving assertion.
 
 ## Issue provenance (moved from fused.md)
 
