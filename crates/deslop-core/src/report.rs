@@ -84,19 +84,52 @@ impl Report {
             cluster.occurrences_total = count;
             cluster.occurrence_count = count;
             if cluster.occurrences.len() > cap {
-                cluster.occurrences.truncate(cap);
+                truncate_occurrences_preserving_source(cluster, cap);
                 cluster.occurrences_truncated = true;
             }
-            // [FUSED-CLUSTER-SIGNALS] The named signal source must stay
-            // inside the occurrences the wire actually carries; a
-            // truncated source index would dangle.
-            cluster.signal_source = cluster.signal_source.filter(|source| {
-                source.left < cluster.occurrences.len() && source.right < cluster.occurrences.len()
-            });
             cluster.summary.clear();
             cluster.interpretation.clear();
         }
         self
+    }
+}
+
+/// Caps one cluster while retaining the named evidence pair whenever the
+/// requested cap can carry both endpoints ([FUSED-CLUSTER-SIGNALS]).
+fn truncate_occurrences_preserving_source(cluster: &mut ReportCluster, cap: usize) {
+    let retained = retained_occurrence_indices(cluster, cap);
+    let source = cluster.signal_source.and_then(|source| {
+        let left = retained.iter().position(|&index| index == source.left)?;
+        let right = retained.iter().position(|&index| index == source.right)?;
+        Some(ReportSignalSource { left, right })
+    });
+    let original = std::mem::take(&mut cluster.occurrences);
+    cluster.occurrences = retained
+        .into_iter()
+        .filter_map(|index| original.get(index).cloned())
+        .collect();
+    cluster.signal_source = source;
+}
+
+/// Original occurrence indices retained on the live wire, ordered exactly
+/// as the full report ordered them.
+fn retained_occurrence_indices(cluster: &ReportCluster, cap: usize) -> Vec<usize> {
+    let mut retained = Vec::with_capacity(cap.min(cluster.occurrences.len()));
+    if let Some(source) = cluster.signal_source {
+        push_distinct_valid(&mut retained, source.left, cluster.occurrences.len(), cap);
+        push_distinct_valid(&mut retained, source.right, cluster.occurrences.len(), cap);
+    }
+    for index in 0..cluster.occurrences.len() {
+        push_distinct_valid(&mut retained, index, cluster.occurrences.len(), cap);
+    }
+    retained.sort_unstable();
+    retained
+}
+
+/// Adds one valid index once while room remains.
+fn push_distinct_valid(retained: &mut Vec<usize>, index: usize, total: usize, cap: usize) {
+    if retained.len() < cap && index < total && !retained.contains(&index) {
+        retained.push(index);
     }
 }
 

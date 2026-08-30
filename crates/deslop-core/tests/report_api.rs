@@ -8,7 +8,7 @@ use deslop_core::{
     config::ExclusionConfig,
     report::{
         ActionHint, CacheStats, EmbeddingProvenance, Report, ReportCluster, ReportOccurrence,
-        ReportSignals,
+        ReportSignalSource, ReportSignals,
     },
     report_boilerplate::build_boilerplate_hints,
     report_metrics::RepoMetrics,
@@ -17,18 +17,43 @@ use deslop_core::{
 
 #[test]
 fn truncate_for_wire_caps_occurrences_and_blanks_derivable_text() {
-    let report = sample_report().truncate_for_wire(2).truncate_for_wire(2);
+    let report = sample_report()
+        .truncate_for_wire(WIRE_OCCURRENCE_CAP)
+        .truncate_for_wire(WIRE_OCCURRENCE_CAP);
     assert!(report.schema_doc.is_empty());
     let Some(cluster) = report.clusters.first() else {
         assert_eq!(report.clusters.len(), 1);
         return;
     };
-    assert_eq!(cluster.occurrences.len(), 2);
-    assert_eq!(cluster.occurrences_total, 3);
+    assert_eq!(cluster.occurrences.len(), WIRE_OCCURRENCE_CAP);
+    assert_eq!(cluster.occurrences_total, FULL_OCCURRENCE_COUNT);
     assert!(cluster.occurrences_truncated);
+    assert_eq!(
+        cluster
+            .occurrences
+            .iter()
+            .map(|occurrence| occurrence.path.as_path())
+            .collect::<Vec<_>>(),
+        EXPECTED_SOURCE_PATHS.map(std::path::Path::new),
+        "truncation must retain the elected evidence endpoints, not merely the first occurrences"
+    );
+    assert_eq!(
+        cluster.signal_source,
+        Some(ReportSignalSource { left: 0, right: 1 }),
+        "signal_source must be reindexed into the truncated occurrence list"
+    );
     assert!(cluster.summary.is_empty());
     assert!(cluster.interpretation.is_empty());
 }
+
+/// Requested live-wire occurrence budget.
+const WIRE_OCCURRENCE_CAP: usize = 2;
+/// Occurrences carried by the untruncated sample cluster.
+const FULL_OCCURRENCE_COUNT: usize = 3;
+/// Original occurrence positions elected as the signal source.
+const ORIGINAL_SIGNAL_SOURCE: ReportSignalSource = ReportSignalSource { left: 1, right: 2 };
+/// Paths belonging to the elected source after the first occurrence is discarded.
+const EXPECTED_SOURCE_PATHS: [&str; 2] = ["file-1.cs", "file-2.cs"];
 
 #[test]
 fn boilerplate_hints_use_default_recommendation_for_future_languages() -> anyhow::Result<()> {
@@ -115,7 +140,7 @@ fn sample_cluster() -> ReportCluster {
         size: 3,
         canonical_node_count: 12,
         signals,
-        signal_source: None,
+        signal_source: Some(ORIGINAL_SIGNAL_SOURCE),
         bucket: "identical".to_owned(),
         category: "logic".to_owned(),
         language: "rust".to_owned(),

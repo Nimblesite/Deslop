@@ -105,8 +105,8 @@ export function confidenceRows(signals: ReportSignals): SignalRow[] {
  */
 export function evidenceRows(signals: ReportSignals): SignalRow[] {
   return [
-    { topic: "agreement", label: "agreement", value: signals.agreement },
-    { topic: "rename-consistency", label: "rename", value: signals.rename_consistency },
+    { topic: "agreement", label: "agreement", value: signals.pair_agreement },
+    { topic: "rename-consistency", label: "rename", value: signals.pair_rename_consistency },
     { topic: "literal-fraction", label: "literal", value: signals.literal_fraction },
   ];
 }

@@ -25,7 +25,7 @@
 
 use crate::report::{ReportCluster, ReportSignals};
 
-/// [FUSED-CONTENT-GATE] floors and the fused-confidence correction.
+/// [FUSED-CONTENT-GATE] floors and the content-evidence stamping.
 mod gate;
 /// The shape-identical routing tail shared by renderer and subsumption.
 mod routing;
@@ -33,7 +33,7 @@ mod routing;
 pub use gate::{
     content_gated_signals, content_support, has_saturating_shape_evidence, lacks_content_support,
     CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR, LITERAL_TABLE_MIN_FRACTION,
-    RENAME_CONSISTENCY_DISCOUNT, SATURATING_TOKEN_FLOOR, STRUCTURAL_SATURATION_FLOOR,
+    SATURATING_TOKEN_FLOOR, STRUCTURAL_SATURATION_FLOOR,
 };
 pub(crate) use routing::{
     is_demoted_tier, measured_kind, route_shape_identical, spans_multiple_files,

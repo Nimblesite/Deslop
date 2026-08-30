@@ -128,7 +128,7 @@ pub fn lacks_content_support(signals: ReportSignals) -> bool {
         && (is_token_carried_nearmiss(signals) || is_shape_corroborated_nearmiss(signals));
     has_saturating_shape_evidence(signals)
         && !misaligned_nearmiss
-        && content_support(signals.agreement, signals.rename_consistency) < CONTENT_SUPPORT_FLOOR
+        && content_support(signals.pair_agreement, signals.pair_rename_consistency) < CONTENT_SUPPORT_FLOOR
 }
 
 /// Token overlap at or above which the token layer is echoing shape
@@ -222,8 +222,8 @@ fn stamp_shape(mut signals: ReportSignals) -> ReportSignals {
 /// without touching the confidence ([FUSED-CONTENT-GATE], #344).
 fn with_content_evidence(signals: ReportSignals, content: ContentEvidence) -> ReportSignals {
     ReportSignals {
-        agreement: content.agreement,
-        rename_consistency: content.rename_consistency,
+        agreement: content.pair_agreement,
+        rename_consistency: content.pair_rename_consistency,
         literal_fraction: content.literal_fraction,
         ..signals
     }

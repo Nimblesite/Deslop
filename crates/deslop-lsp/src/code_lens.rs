@@ -57,12 +57,13 @@ fn lens_for_occurrence(cluster: &ReportCluster, occurrence_index: usize) -> Code
 }
 
 /// Builds the lens title. Spec-compliant two-dot severity glyph at
-/// the front, cluster count, then the confidence explanation.
+/// the front, cluster count, then the signal explanation.
 ///
 /// [FUSED-CONTENT-GATE] The signal breakdown is the one shared
-/// `render::signals` rendering, so the lens states the fused confidence
-/// and the measured content evidence rather than a hand-rolled subset
-/// that cannot separate a corroborated rename from a scaffolding family.
+/// `render::signals` rendering, so the lens states the elected pair's
+/// measured axes and the content evidence rather than a hand-rolled
+/// subset that cannot separate a corroborated rename from a scaffolding
+/// family. There is no cluster `fused` to state ([FUSED-SCOPE]).
 fn title_for(cluster: &ReportCluster) -> String {
     format!(
         "●● {count} copies — {explanation} — jump to next",
@@ -107,7 +108,6 @@ mod tests {
             token_jaccard: 0.72,
             shape: 0.87,
             embedding_cos: 0.55,
-            fused: 0.88,
             agreement: 0.63,
             rename_consistency: 0.94,
             literal_fraction: 0.11,
@@ -194,14 +194,14 @@ mod tests {
                 "title carries three signals to 2dp: {}",
                 command.title
             );
-            // [FUSED-CONTENT-GATE] #344: every lens states the fused
-            // confidence and the measured content evidence behind it.
+            // [FUSED-CONTENT-GATE] #344: every lens states the measured
+            // content evidence behind the shape axes.
             assert!(
                 command.title.contains(
-                    "structural 0.87 · jaccard 0.72 · embedding 0.55 · fused 0.88 · \
+                    "structural 0.87 · jaccard 0.72 · embedding 0.55 · \
                      agreement 0.63 · rename 0.94 · literal 0.11"
                 ),
-                "title carries all seven signals via render::signals: {}",
+                "title carries all six signals via render::signals: {}",
                 command.title
             );
             assert!(
@@ -291,12 +291,12 @@ mod tests {
 
     // [FUSED-CONTENT-GATE] #344: structural and jaccard alone cannot tell a
     // corroborated Type-2 rename from an anchor-poor scaffolding family, so
-    // the lens must also state the fused score and the measured evidence.
+    // the lens must also state the measured evidence.
     #[test]
-    fn title_for_states_fused_confidence_and_measured_content_evidence() {
+    fn title_for_states_measured_content_evidence() {
         let cluster = make_cluster("c", 7, vec![]);
         let title = title_for(&cluster);
-        assert!(title.contains("fused 0.88"), "fused confidence: {title}");
+        assert!(title.contains("structural 0.87"), "structural: {title}");
         assert!(title.contains("agreement 0.63"), "byte agreement: {title}");
         assert!(
             title.contains("rename 0.94"),
@@ -305,6 +305,10 @@ mod tests {
         assert!(
             title.contains("literal 0.11"),
             "literal share of the match: {title}"
+        );
+        assert!(
+            !title.contains("fused"),
+            "no cluster fused score on any surface: {title}"
         );
         assert_eq!(
             title,
@@ -327,7 +331,6 @@ mod tests {
             token_jaccard: PERFECT_SIGNAL,
             shape: PERFECT_SIGNAL,
             embedding_cos: 0.99,
-            fused: 0.42,
             agreement: 0.07,
             rename_consistency: 0.03,
             literal_fraction: 0.81,
@@ -338,7 +341,7 @@ mod tests {
             "identical shape: {title}"
         );
         assert!(
-            title.contains("fused 0.42 · agreement 0.07 · rename 0.03 · literal 0.81"),
+            title.contains("agreement 0.07 · rename 0.03 · literal 0.81"),
             "anchor-poor evidence separates it from a corroborated rename: {title}"
         );
         assert!(

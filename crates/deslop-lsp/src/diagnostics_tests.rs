@@ -41,11 +41,10 @@ const BUCKET_SEVERITIES: [(&str, DiagnosticSeverity, &str); 4] = [
 
 // [FUSED-CONTENT-GATE] #344: each measured axis a diagnostic built from the
 // `sample_cluster` signals must state, with the evidence that axis carries.
-const SAMPLE_EVIDENCE_AXES: [(&str, &str); 7] = [
+const SAMPLE_EVIDENCE_AXES: [(&str, &str); 6] = [
     ("structural 1.00", "structural axis"),
     ("jaccard 0.90", "token axis"),
     ("embedding 0.40", "embedding axis"),
-    ("fused 0.91", "fused confidence"),
     ("agreement 0.58", "pooled byte agreement"),
     ("rename 0.72", "Baker rename corroboration"),
     ("literal 0.24", "literal share of the match"),
@@ -68,7 +67,6 @@ fn sample_cluster(
         token_jaccard: 0.9,
         shape: PERFECT_SIGNAL,
         embedding_cos: 0.4,
-        fused: 0.91,
         agreement: 0.58,
         rename_consistency: 0.72,
         literal_fraction: 0.24,
@@ -252,11 +250,11 @@ fn diagnostic_message_shows_category_count_and_action() {
 
 // [FUSED-CONTENT-GATE] #344: the bucket title alone cannot tell a
 // corroborated Type-2 rename from an anchor-poor scaffolding family — both
-// render structural=1.00. The diagnostic must state the fused confidence and
-// the measured content evidence the gate scored, using the one shared
+// render structural=1.00. The diagnostic must state the measured content
+// evidence the gate scored, using the one shared
 // `render::signals` rendering.
 #[test]
-fn diagnostic_message_states_fused_confidence_and_measured_content_evidence() {
+fn diagnostic_message_states_measured_content_evidence() {
     let cluster = two_file_cluster();
     let message = diagnostic_message(&cluster);
     assert!(
@@ -266,6 +264,10 @@ fn diagnostic_message_states_fused_confidence_and_measured_content_evidence() {
     for (evidence, axis) in SAMPLE_EVIDENCE_AXES {
         assert!(message.contains(evidence), "{axis}: {message}");
     }
+    assert!(
+        !message.contains("fused"),
+        "no cluster fused score on any surface: {message}"
+    );
     assert!(
         message.ends_with(&deslop_core::render::signals::plain_explanation(
             cluster.signals
@@ -290,7 +292,6 @@ fn diagnostic_message_tracks_each_clusters_own_evidence() {
         token_jaccard: 0.0,
         shape: PERFECT_SIGNAL,
         embedding_cos: 0.0,
-        fused: 0.33,
         agreement: 0.04,
         rename_consistency: 0.02,
         literal_fraction: 0.77,
@@ -301,7 +302,7 @@ fn diagnostic_message_tracks_each_clusters_own_evidence() {
         "shape-only support: {message}"
     );
     assert!(
-        message.contains("fused 0.33 · agreement 0.04 · rename 0.02 · literal 0.77"),
+        message.contains("agreement 0.04 · rename 0.02 · literal 0.77"),
         "anchor-poor evidence is what separates this from a real rename: {message}"
     );
     assert!(
@@ -341,8 +342,8 @@ fn build_for_file_emits_error_for_identical_cluster_with_canonical_link() -> Res
     assert!(
         diagnostic
             .message
-            .contains("fused 0.91 · agreement 0.58 · rename 0.72 · literal 0.24"),
-        "published diagnostic carries the fused score and content evidence: {}",
+            .contains("agreement 0.58 · rename 0.72 · literal 0.24"),
+        "published diagnostic carries the content evidence: {}",
         diagnostic.message
     );
     assert!(

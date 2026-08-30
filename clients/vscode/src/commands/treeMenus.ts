@@ -218,8 +218,8 @@ function signalsLine(cluster: ReportCluster): string {
     `signals: structural=${formatScorePrecise(s.structural)} ` +
     `token=${formatScorePrecise(s.token_jaccard)} ` +
     `embed=${formatScorePrecise(s.embedding_cos)} ` +
-    `agreement=${formatScorePrecise(s.agreement)} ` +
-    `rename=${formatScorePrecise(s.rename_consistency)}`
+    `agreement=${formatScorePrecise(s.pair_agreement)} ` +
+    `rename=${formatScorePrecise(s.pair_rename_consistency)}`
   );
 }
 

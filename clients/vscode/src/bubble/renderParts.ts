@@ -70,7 +70,7 @@ export function ghostText(
 // are the engine's bucket verdict, not a number this strip re-derives.
 export function signalStrip(cluster: ReportCluster): string {
   const signals = cluster.signals;
-  return `${bar(signals.shape)}${bar(signals.embedding_cos)}${bar(signals.agreement)}`;
+  return `${bar(signals.shape)}${bar(signals.embedding_cos)}${bar(signals.pair_agreement)}`;
 }
 
 // The full block is reserved for an exact 1.0 and nothing else. Rounding
