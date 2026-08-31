@@ -8,34 +8,27 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-import { Bucket, ReportCluster, ReportOccurrence } from "../../types/report";
 import { ClusterNode, OccurrenceNode } from "../../tree/providers";
+import type { ReportCluster, ReportOccurrence } from "../../types/report";
 import { activateExtension } from "./helpers";
-import { wireCluster } from "../cluster.helpers";
-import { signalsWith } from "../signals.helpers";
+import { occurrence, wireCluster } from "../cluster.helpers";
 
 const UTF8_ENCODING = "utf8";
 const CLOSE_ALL_EDITORS_COMMAND = "workbench.action.closeAllEditors";
 
 function cluster(
   id: string,
-  bucket: Bucket,
   occurrences: { path: string; start_byte: number; end_byte: number }[],
   rank = 1,
 ): ReportCluster {
   return wireCluster({
     id,
     rank,
-    weight: 42,
+    mass: 42,
     canonical_node_count: 12,
-    bucket,
-    signals: signalsWith(bucket, {
-      structural: 0.5,
-      token_jaccard: 0.6,
-      shape: 0.6,
-      embedding_cos: 0.7,
-    }),
-    occurrences: occurrences.map((o) => ({ ...o, hidden: false })),
+    occurrences: occurrences.map((o) =>
+      occurrence(o.path, o.start_byte, o.end_byte),
+    ),
   });
 }
 
@@ -57,7 +50,7 @@ suite("tree context menu commands", () => {
     const file = path.join(dir, "hum.cs");
     fs.writeFileSync(file, "a\nb\nc\n", UTF8_ENCODING);
 
-    const node = occurrenceNode({ path: file, start_byte: 2, end_byte: 3, hidden: false });
+    const node = occurrenceNode(occurrence(file, 2, 3));
     await vscode.commands.executeCommand("deslop.copyHumanLocation", node);
     const text = await vscode.env.clipboard.readText();
     assert.equal(text, `${file}:2:1`);
@@ -72,7 +65,7 @@ suite("tree context menu commands", () => {
     fs.writeFileSync(fileA, "A\n", UTF8_ENCODING);
     fs.writeFileSync(fileB, "B\n", UTF8_ENCODING);
 
-    const c = cluster("c-e2e-cl", "identical", [
+    const c = cluster("c-e2e-cl", [
       { path: fileA, start_byte: 0, end_byte: 1 },
       { path: fileB, start_byte: 0, end_byte: 1 },
     ]);
@@ -89,8 +82,7 @@ suite("tree context menu commands", () => {
   test("deslop.copyContextForAI on a cluster embeds byte ranges for tool consumption", async () => {
     const c = cluster(
       "c-e2e-ai",
-      "same_behavior",
-      [{ path: "src/foo.cs", start_byte: 0, end_byte: 123 }],
+      [{path: "src/foo.cs", start_byte: 0, end_byte: 123}],
       9,
     );
     await vscode.commands.executeCommand("deslop.copyContextForAI", clusterNode(c));
@@ -107,7 +99,7 @@ suite("tree context menu commands", () => {
 
     await vscode.commands.executeCommand(
       "deslop.copySourceSnippet",
-      occurrenceNode({ path: file, start_byte: 0, end_byte: 11, hidden: false }),
+      occurrenceNode(occurrence(file, 0, 11)),
     );
     const text = await vscode.env.clipboard.readText();
     assert.match(text, /```python\nprint\('hi'\)/);
@@ -122,7 +114,7 @@ suite("tree context menu commands", () => {
     fs.writeFileSync(file, "x\n", UTF8_ENCODING);
     await vscode.commands.executeCommand(
       "deslop.revealOccurrenceInExplorer",
-      occurrenceNode({ path: file, start_byte: 0, end_byte: 1, hidden: false }),
+      occurrenceNode(occurrence(file, 0, 1)),
     );
     fs.rmSync(dir, { recursive: true, force: true });
   });
@@ -135,7 +127,7 @@ suite("tree context menu commands", () => {
     try {
       await vscode.commands.executeCommand(
         "deslop.openOccurrence",
-        occurrenceNode({ path: file, start_byte: 5, end_byte: 8, hidden: false }),
+        occurrenceNode(occurrence(file, 5, 8)),
       );
 
       const editor = vscode.window.activeTextEditor;
@@ -161,7 +153,7 @@ suite("tree context menu commands", () => {
     fs.writeFileSync(sibling, "sibling call\n", UTF8_ENCODING);
 
     try {
-      const c = cluster("c-e2e-canon", "identical", [
+      const c = cluster("c-e2e-canon", [
         { path: canonical, start_byte: startByte, end_byte: endByte },
         { path: sibling, start_byte: 0, end_byte: 7 },
       ]);
@@ -189,7 +181,6 @@ suite("tree context menu commands", () => {
     await vscode.commands.executeCommand(CLOSE_ALL_EDITORS_COMMAND);
     const c = cluster(
       "c-e2e-all",
-      "identical",
       files.map((p) => ({ path: p, start_byte: 0, end_byte: 3 })),
     );
     await vscode.commands.executeCommand("deslop.openAllOccurrences", clusterNode(c));
@@ -212,12 +203,10 @@ suite("tree context menu commands", () => {
   test("deslop.openClusterDetails is a no-op for an orphan occurrence node", async () => {
     await vscode.commands.executeCommand(
       "deslop.openClusterDetails",
-      occurrenceNode({
-        path: "/tmp/__cdd_no_parent__.cs",
+      occurrenceNode({path: "/tmp/__cdd_no_parent__.cs",
         start_byte: 0,
         end_byte: 1,
-        hidden: false,
-      }),
+        hidden: false, start_line: 1, end_line: 2}),
     );
   });
 });

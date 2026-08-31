@@ -36,6 +36,7 @@ export function emptyReport(overrides: Partial<Report> = {}): Report {
     literal_findings_total: 0,
     literal_findings_hidden: 0,
     literal_findings_capped: false,
+    literal_max_findings: 100,
     ...overrides,
   };
 }

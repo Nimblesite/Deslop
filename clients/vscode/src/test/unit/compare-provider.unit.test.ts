@@ -18,6 +18,8 @@ function occurrence(sourcePath: string, startByte: number, endByte: number): Rep
     path: sourcePath,
     start_byte: startByte,
     end_byte: endByte,
+    start_line: 1,
+    end_line: 2,
     hidden: false,
   };
 }

@@ -5,27 +5,16 @@ import { clusterDocumentContent } from "../../clusterDocument";
 import type { Report, ReportCluster } from "../../types/report";
 import type { ClusterFixture } from "../cluster.helpers";
 import { emptyReport, repoMetrics } from "./report.helpers";
-import { wireCluster } from "../cluster.helpers";
-import { signalsWith } from "../signals.helpers";
+import { occurrence, wireCluster } from "../cluster.helpers";
 
 function cluster(overrides: Partial<ClusterFixture> = {}): ReportCluster {
   return wireCluster({
     id: "cluster-for-test",
-    weight: 12.345,
-    size: 2,
+    mass: 12.345,
     canonical_node_count: 12,
-    bucket: "identical",
-    signals: signalsWith("nearly_identical", {
-      structural: 1,
-      token_jaccard: 0.875,
-      shape: 1,
-      embedding_cos: 0.25,
-    }),
     occurrences: [
       {
-        path: "/repo/Alpha.cs",
-        start_byte: 5,
-        end_byte: 30,
+        ...occurrence("/repo/Alpha.cs", 5, 30),
         hidden: false,
         displayLocation: {
           label: "/repo/Alpha.cs:2:6",
@@ -36,9 +25,7 @@ function cluster(overrides: Partial<ClusterFixture> = {}): ReportCluster {
         },
       },
       {
-        path: "/repo/Beta.cs",
-        start_byte: 40,
-        end_byte: 70,
+        ...occurrence("/repo/Beta.cs", 40, 70),
         hidden: true,
       },
     ],

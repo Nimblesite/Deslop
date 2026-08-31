@@ -11,7 +11,6 @@ import { ReportStore } from "../../reportStore";
 import { refreshAfterChange, wireSessionReset } from "../../notifications";
 import { Report, ReportCluster } from "../../types/report";
 import { emptyReport } from "./report.helpers";
-import { bucketSignals } from "../signals.helpers";
 import { occurrence, wireCluster } from "../cluster.helpers";
 
 type StateChange = { oldState: State; newState: State };
@@ -34,13 +33,9 @@ function fakeClient(): { client: LanguageClient; fire: (change: StateChange) => 
 function cluster(id: string, path: string): ReportCluster {
   return wireCluster({
     id,
-    weight: 10,
+    mass: 10,
     canonical_node_count: 40,
-    signals: bucketSignals("identical"),
-    bucket: "identical",
     occurrences: [occurrence(path, 0, 10), occurrence(path, 20, 30)],
-    summary: `cluster ${id}`,
-    interpretation: "Identical code.",
   });
 }
 
@@ -154,7 +149,10 @@ suite("session reset on LSP restart", () => {
 
     const inflight = refreshAfterChange(client, store, {
       generation: 100,
-      summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0, worst_weight: 0 },
+      summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0,
+    literal_findings_added: 0,
+    literal_findings_removed: 0,
+    literal_findings_updated: 0, worst_mass: 0 },
     });
     // Flush microtasks (no timers) until the delta await settles and the
     // snapshot request is dispatched — in the OLD session.

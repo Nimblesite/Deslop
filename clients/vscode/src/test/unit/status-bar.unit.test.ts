@@ -7,7 +7,6 @@ import { StatusBar, sameFile, shortPath } from "../../commands/statusBar";
 import { ReportStore } from "../../reportStore";
 import { Report } from "../../types/report";
 import { emptyReport, repoMetrics } from "./report.helpers";
-import { bucketSignals } from "../signals.helpers";
 import { occurrence, wireCluster } from "../cluster.helpers";
 
 function report(): Report {
@@ -25,11 +24,9 @@ function report(): Report {
     clusters: [
       wireCluster({
         id: "a",
-        weight: 10,
-        size: 3,
-        bucket: "identical",
-        signals: bucketSignals("identical"),
-        occurrences: [occurrence("/tmp/A/Alpha.cs", 0, 10)],
+        mass: 10,
+        canonical_node_count: 3,
+                occurrences: [occurrence("/tmp/A/Alpha.cs", 0, 10)],
       }),
     ],
   });

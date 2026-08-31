@@ -23,7 +23,7 @@ suite("webview handleMessage", () => {
     try {
       await handleMessage(store, {
         kind: "open/occurrence",
-        occurrence: { path: "/tmp/doesnotexist.cs", start_byte: 0, end_byte: 1, hidden: false },
+        occurrence: {path: "/tmp/doesnotexist.cs", start_byte: 0, end_byte: 1, hidden: false, start_line: 1, end_line: 2},
       });
     } catch {
       // the command dispatch tries to open the file which doesn't exist;

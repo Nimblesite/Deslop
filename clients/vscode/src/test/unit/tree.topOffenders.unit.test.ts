@@ -13,7 +13,6 @@ import * as vscode from "vscode";
 import {
   FileNode,
   FolderNode,
-  LanguageGroupNode,
   TopOffendersProvider,
   StatusTicker,
 } from "../../tree/providers";
@@ -30,7 +29,7 @@ import {
   withGroupBy,
   withSetting,
 } from "./tree.helpers";
-import { CATEGORY_STYLE } from "../../tree/nodes";
+import { SEVERITY_STYLE } from "../../tree/nodes";
 
 const DEFAULT_OCCURRENCE_END_BYTE = 20;
 const HIGHEST_CLUSTER_WEIGHT = 100;
@@ -38,7 +37,6 @@ const HIGH_CLUSTER_WEIGHT = 80;
 const MEDIUM_CLUSTER_WEIGHT = 60;
 const TIED_CLUSTER_WEIGHT = 50;
 const FILE_GROUPING_MODE = "file";
-const IDENTICAL_BUCKET = "identical";
 const MISSING_LABEL = "<missing>";
 const MIXED_FILE_PATH = "/repo/Mixed.cs";
 const REPO_A_PATH = "/repo/A.cs";
@@ -78,7 +76,7 @@ function reportOccurrence(
   startByte = 0,
   endByte = DEFAULT_OCCURRENCE_END_BYTE,
 ): ReportOccurrence {
-  return { path: occurrencePath, start_byte: startByte, end_byte: endByte, hidden: false };
+  return { path: occurrencePath, start_byte: startByte, end_byte: endByte, start_line: 1, end_line: 2, hidden: false };
 }
 
 // Re-shapes a fixture cluster around an explicit occurrence list. Every
@@ -91,7 +89,7 @@ function withOccurrences(
 ): ReportCluster {
   return {
     ...base,
-    size: occurrences.length,
+    canonical_node_count: occurrences.length,
     occurrences_total: occurrences.length,
     occurrence_count: occurrences.length,
     occurrences,
@@ -454,14 +452,14 @@ suite("TopOffendersProvider", () => {
     }
   });
 
-  test("file mode children are bucket groups; only buckets present appear", async () => {
+  test("file mode children are severity groups; only bands present appear", async () => {
     // [VSIX-TOP-OFFENDERS-FILE-MODE]
     const store = new ReportStore();
     store.setSnapshot(
       report([
-        cluster(FIRST_CLUSTER_ID, HIGHEST_CLUSTER_WEIGHT, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, IDENTICAL_BUCKET),
-        cluster(SECOND_CLUSTER_ID, HIGH_CLUSTER_WEIGHT, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "nearly_identical"),
-        cluster("c3", MEDIUM_CLUSTER_WEIGHT, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, IDENTICAL_BUCKET),
+        cluster(FIRST_CLUSTER_ID, HIGHEST_CLUSTER_WEIGHT, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "worst"),
+        cluster(SECOND_CLUSTER_ID, HIGH_CLUSTER_WEIGHT, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "top10"),
+        cluster("c3", MEDIUM_CLUSTER_WEIGHT, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "worst"),
       ]),
       0,
     );
@@ -471,10 +469,10 @@ suite("TopOffendersProvider", () => {
       const [fileRoot] = provider.getChildren();
       assert.ok(fileRoot instanceof FileNode, "single root must be a FileNode");
       const groups = provider.getChildren(fileRoot);
-      assert.equal(groups.length, PAIR_COUNT, "only Identical and Nearly identical groups present");
+      assert.equal(groups.length, PAIR_COUNT, "only the two present bands render");
       const groupLabels = groups.map(labelText);
-      assert.match(groupLabels[0] ?? "", /Identical code \(2\)/, "Identical group has 2 clusters and the higher max weight (100)");
-      assert.match(groupLabels[1] ?? "", /Nearly identical code \(1\)/);
+      assert.match(groupLabels[0] ?? "", /Severity worst/, "the worst band group leads (its max mass is the file's worst)");
+      assert.match(groupLabels[1] ?? "", /Severity top10/);
     });
   });
 
@@ -483,8 +481,8 @@ suite("TopOffendersProvider", () => {
     const store = new ReportStore();
     store.setSnapshot(
       report([
-        cluster("hi", HIGHEST_CLUSTER_WEIGHT, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, IDENTICAL_BUCKET),
-        cluster("lo", MEDIUM_CLUSTER_WEIGHT, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, IDENTICAL_BUCKET),
+        cluster("hi", HIGHEST_CLUSTER_WEIGHT, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "worst"),
+        cluster("lo", MEDIUM_CLUSTER_WEIGHT, MIXED_FILE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE, "worst"),
       ]),
       0,
     );
@@ -493,9 +491,9 @@ suite("TopOffendersProvider", () => {
     await withGroupBy(FILE_GROUPING_MODE, () => {
       const [fileRoot] = provider.getChildren();
       assert.ok(fileRoot, "file root must exist");
-      const [bucketGroup] = provider.getChildren(fileRoot);
-      assert.ok(bucketGroup, "bucket group must exist");
-      const clusterNodes = provider.getChildren(bucketGroup);
+      const [severityGroup] = provider.getChildren(fileRoot);
+      assert.ok(severityGroup, "severity group must exist");
+      const clusterNodes = provider.getChildren(severityGroup);
       assert.equal(clusterNodes.length, PAIR_COUNT);
       const labels = clusterNodes.map(labelText);
       const descriptions = clusterNodes.map((n) => String(n.description ?? ""));
@@ -510,7 +508,7 @@ suite("TopOffendersProvider", () => {
     // [VSIX-TOP-OFFENDERS-FILE-MODE] Tooltip is mode-invariant.
     const store = new ReportStore();
     store.setSnapshot(
-      report([cluster("only", HIGHEST_CLUSTER_WEIGHT, "/repo/src/Mixed.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, IDENTICAL_BUCKET)]),
+      report([cluster("only", HIGHEST_CLUSTER_WEIGHT, "/repo/src/Mixed.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "worst")]),
       0,
     );
     const provider = new TopOffendersProvider(store, new StatusTicker());
@@ -522,9 +520,9 @@ suite("TopOffendersProvider", () => {
     await withGroupBy(FILE_GROUPING_MODE, () => {
       const [fileRoot] = provider.getChildren();
       assert.ok(fileRoot);
-      const [bucketGroup] = provider.getChildren(fileRoot);
-      assert.ok(bucketGroup);
-      const [fileModeCluster] = provider.getChildren(bucketGroup);
+      const [severityGroup] = provider.getChildren(fileRoot);
+      assert.ok(severityGroup);
+      const [fileModeCluster] = provider.getChildren(severityGroup);
       assert.ok(fileModeCluster);
       assert.match(tooltipText(fileModeCluster), /\/repo\/src\/Mixed\.cs/);
     });
@@ -533,7 +531,7 @@ suite("TopOffendersProvider", () => {
   test("file mode occurrence leaves match cluster mode byte-for-byte", async () => {
     // [VSIX-TOP-OFFENDERS-FILE-MODE] No special-case rendering for leaves.
     const store = new ReportStore();
-    const c = cluster("only", 100, "/repo/src/Mixed.cs", 7, 14, "identical");
+    const c = cluster("only", 100, "/repo/src/Mixed.cs", 7, 14, "worst");
     store.setSnapshot(report([c]), 0);
     const provider = new TopOffendersProvider(store, new StatusTicker());
 
@@ -583,66 +581,66 @@ suite("TopOffendersProvider", () => {
     }
   });
 
-  test("renders distinct accessible category color metadata on Top Offenders rows", () => {
-    // [VSIX-TOP-OFFENDERS-CATEGORY-COLORS]
+  test("renders distinct accessible severity color metadata on Top Offenders rows", () => {
+    // [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Severity bands drive icon colour.
     const store = new ReportStore();
     store.setSnapshot(
       report([
-        cluster("exact", HIGHEST_CLUSTER_WEIGHT, "/repo/src/a/Exact.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, IDENTICAL_BUCKET),
-        cluster("near", 90, "/repo/src/b/Near.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "nearly_identical"),
+        cluster("exact", HIGHEST_CLUSTER_WEIGHT, "/repo/src/a/Exact.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "worst"),
+        cluster("near", 90, "/repo/src/b/Near.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "top10"),
       ]),
       0,
     );
     const provider = new TopOffendersProvider(store, new StatusTicker());
 
     const [exact, near] = provider.getChildren();
-    assert.ok(exact, "exact duplicate row must render");
-    assert.ok(near, "near duplicate row must render");
+    assert.ok(exact, "worst-band row must render");
+    assert.ok(near, "top10 row must render");
     assert.ok(exact.iconPath instanceof vscode.ThemeIcon);
     assert.ok(near.iconPath instanceof vscode.ThemeIcon);
-    assert.notEqual(iconColorId(exact), "", "exact duplicate must carry a theme color");
-    assert.notEqual(iconColorId(near), "", "near duplicate must carry a theme color");
+    assert.notEqual(iconColorId(exact), "", "worst band must carry a theme color");
+    assert.notEqual(iconColorId(near), "", "top10 band must carry a theme color");
     assert.notEqual(
       iconColorId(exact),
       iconColorId(near),
-      "exact and near duplicate categories must have distinct theme colors",
+      "worst and top10 bands must have distinct theme colors",
     );
-    assert.match(labelText(exact), /Identical code/);
-    assert.match(labelText(near), /Nearly identical code/);
+    assert.match(labelText(exact), /Duplicate code/);
+    assert.match(labelText(near), /Duplicate code/);
     assert.match(labelText(exact), /Exact\.cs/);
     assert.match(labelText(near), /Near\.cs/);
-    assert.match(exact.accessibilityInformation?.label ?? "", /Identical code/);
-    assert.match(near.accessibilityInformation?.label ?? "", /Nearly identical code/);
+    assert.match(exact.accessibilityInformation?.label ?? "", /Duplicate code/);
+    assert.match(near.accessibilityInformation?.label ?? "", /Duplicate code/);
     assert.match(exact.accessibilityInformation?.label ?? "", /Exact\.cs/);
     assert.match(near.accessibilityInformation?.label ?? "", /Near\.cs/);
     assert.match(tooltipText(exact), /\/repo\/src\/a\/Exact\.cs/);
     assert.match(tooltipText(near), /\/repo\/src\/b\/Near\.cs/);
   });
 
-  test("identical cluster icon is red not green — green implies safe, but identical code is worst severity", () => {
-    // [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Identical = error level, must not use green.
+  test("worst-band cluster icon is red not green — green implies safe, but duplicates are worst severity", () => {
+    // [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Worst band = error level, must not use green.
     const store = new ReportStore();
     store.setSnapshot(
-      report([cluster("clone", HIGHEST_CLUSTER_WEIGHT, "/repo/src/Clone.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, IDENTICAL_BUCKET)]),
+      report([cluster("clone", HIGHEST_CLUSTER_WEIGHT, "/repo/src/Clone.cs", 0, DEFAULT_OCCURRENCE_END_BYTE, "worst")]),
       0,
     );
     const provider = new TopOffendersProvider(store, new StatusTicker());
     const [node] = provider.getChildren();
-    assert.ok(node, "identical cluster must render a node");
+    assert.ok(node, "worst-band cluster must render a node");
     assert.equal(
       iconColorId(node),
       "charts.red",
-      "identical clones are the highest severity — icon must be red, not green",
+      "worst-band duplicates are the highest severity — icon must be red, not green",
     );
   });
 
-  test("no category style uses charts.green — green is never correct for code duplication", () => {
+  test("no severity style uses charts.green — green is never correct for code duplication", () => {
     // [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Green implies safety/good; duplicates are never good.
-    for (const [bucket, style] of Object.entries(CATEGORY_STYLE)) {
+    for (const [severity, style] of Object.entries(SEVERITY_STYLE)) {
       assert.notEqual(
         style.color,
         "charts.green",
-        `${bucket} must not use charts.green — green implies the code is in good shape`,
+        `${severity} must not use charts.green — green implies the code is in good shape`,
       );
     }
   });
@@ -669,7 +667,7 @@ suite("TopOffendersProvider", () => {
     const tip1 = tooltipText(first);
     const tip2 = tooltipText(second);
     assert.match(tip1, /\brank\s+#1\b/, "tooltip must spell out the parent cluster rank");
-    assert.match(tip1, /Identical code/, "tooltip must name the category");
+    assert.match(tip1, /Duplicate code/, "tooltip must name the verdict");
     assert.match(tip1, /occurrence 1 of 2/, "tooltip must show position in cluster");
     assert.match(tip2, /occurrence 2 of 2/, "second occurrence tooltip must reflect its index");
   });
@@ -793,6 +791,9 @@ suite("TopOffendersProvider", () => {
         clusters_added: [cluster("fresh", TIED_CLUSTER_WEIGHT, "/fresh.cs")],
         clusters_removed: ["stale"],
         clusters_updated: [],
+    literal_findings_added: [],
+    literal_findings_removed: [],
+    literal_findings_updated: [],
         metrics: metrics(),
         cache_stats: { hits: CACHE_HIT_COUNT, misses: 0 },
         tool_version: "v2",
@@ -829,6 +830,9 @@ suite("TopOffendersProvider", () => {
       clusters_added: [],
       clusters_removed: ["fixed"],
       clusters_updated: [],
+    literal_findings_added: [],
+    literal_findings_removed: [],
+    literal_findings_updated: [],
       metrics: metrics(),
       cache_stats: { hits: CACHE_HIT_COUNT, misses: 0 },
       tool_version: "v2",
@@ -1008,39 +1012,6 @@ suite("TopOffendersProvider", () => {
     });
   });
 
-  // [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] The split wraps the subtree in one
-  // worst-first LanguageGroupNode per language; global rank is preserved.
-  test("split by language groups clusters under per-language nodes", async () => {
-    const store = new ReportStore();
-    store.setSnapshot(
-      report([
-        cluster("rust1", HIGHEST_CLUSTER_WEIGHT, "/repo/src/a.rs"),
-        cluster("dart1", HIGH_CLUSTER_WEIGHT, "/repo/lib/a.dart"),
-        cluster("rust2", MEDIUM_CLUSTER_WEIGHT, "/repo/src/b.rs"),
-      ]),
-      0,
-    );
-    const provider = new TopOffendersProvider(store, new StatusTicker());
-    await withSetting("topOffenders.splitByLanguage", true, () => {
-      const roots = provider.getChildren();
-      assert.ok(
-        roots.every((node) => node instanceof LanguageGroupNode),
-        "split-on: every root is a language group",
-      );
-      assert.deepEqual(
-        roots.map(labelText),
-        ["Rust", "Dart"],
-        "languages ordered worst-first: Rust (100) before Dart (80)",
-      );
-      const rustChildren = provider.getChildren(roots[0]);
-      assert.equal(rustChildren.length, PAIR_COUNT, "the Rust group holds both Rust clusters");
-      assert.match(
-        String(rustChildren[0]?.description ?? ""),
-        /rank #1/,
-        "global rank survives the language split",
-      );
-    });
-  });
 
   // [VSIX-TOP-OFFENDERS-SORT] The sort axis reorders cluster-mode rows too —
   // impact keeps worst-first, path is alphabetical — while the global rank #N

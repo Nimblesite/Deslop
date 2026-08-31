@@ -30,6 +30,9 @@ suite("reportChanged refresh wiring", () => {
             clusters_added: [],
             clusters_removed: [],
             clusters_updated: [],
+    literal_findings_added: 0,
+    literal_findings_removed: 0,
+    literal_findings_updated: 0,
             metrics: repoMetrics(),
             cache_stats: { hits: 0, misses: 0 },
             tool_version: "v",
@@ -47,7 +50,10 @@ suite("reportChanged refresh wiring", () => {
       0,
     );
     const schedule = wireNotifications(client, store);
-    changedCb?.({ generation: 1, summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0, worst_weight: 0 } });
+    changedCb?.({ generation: 1, summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0,
+    literal_findings_added: 0,
+    literal_findings_removed: 0,
+    literal_findings_updated: 0, worst_mass: 0 } });
     await schedule.settled();
     assert.ok(requests.includes(REPORT_DELTA_METHOD));
     assert.equal(store.current.generation, 1, "the queued delta must be applied by settled()");
@@ -71,7 +77,10 @@ suite("reportChanged refresh wiring", () => {
     } as unknown as LanguageClient;
     const store = new ReportStore();
     const schedule = wireNotifications(client, store);
-    changedCb?.({ generation: 5, summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0, worst_weight: 0 } });
+    changedCb?.({ generation: 5, summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0,
+    literal_findings_added: 0,
+    literal_findings_removed: 0,
+    literal_findings_updated: 0, worst_mass: 0 } });
     await schedule.settled();
     assert.ok(requests.includes("deslop/reportGet"));
     assert.equal(store.current.generation, 5, "the fallback snapshot must be stored by settled()");
@@ -102,7 +111,10 @@ suite("reportChanged refresh wiring", () => {
     const notify = (generation: number) =>
       changedCb?.({
         generation,
-        summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0, worst_weight: 0 },
+        summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0,
+    literal_findings_added: 0,
+    literal_findings_removed: 0,
+    literal_findings_updated: 0, worst_mass: 0 },
       });
     const drainUntil = async (condition: () => boolean) => {
       for (let i = 0; i < 50 && !condition(); i++) await Promise.resolve();
@@ -164,6 +176,9 @@ suite("reportChanged refresh wiring", () => {
               clusters_added: [fresh],
               clusters_removed: ["phantom"],
               clusters_updated: [],
+    literal_findings_added: 0,
+    literal_findings_removed: 0,
+    literal_findings_updated: 0,
               cache_stats: { hits: 0, misses: 0 },
               tool_version: "v",
             });
@@ -174,6 +189,9 @@ suite("reportChanged refresh wiring", () => {
             clusters_added: [fresh],
             clusters_removed: [],
             clusters_updated: [],
+    literal_findings_added: 0,
+    literal_findings_removed: 0,
+    literal_findings_updated: 0,
             cache_stats: { hits: 0, misses: 0 },
             tool_version: "v",
           });
@@ -188,7 +206,10 @@ suite("reportChanged refresh wiring", () => {
 
     await refreshAfterChange(client, store, {
       generation: LIVE_GENERATION,
-      summary: { clusters_added: 1, clusters_removed: 1, clusters_updated: 0, worst_weight: 80 },
+      summary: { clusters_added: 1, clusters_removed: 1, clusters_updated: 0,
+    literal_findings_added: 0,
+    literal_findings_removed: 0,
+    literal_findings_updated: 0, worst_mass: 80 },
     });
 
     assert.deepEqual(

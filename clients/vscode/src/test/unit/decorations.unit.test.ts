@@ -6,28 +6,17 @@ import * as vscode from "vscode";
 import { hoverFor, byteRangeToRange } from "../../decorations/manager";
 import { ReportCluster, ReportOccurrence } from "../../types/report";
 import { occurrence, wireCluster } from "../cluster.helpers";
-import { signalsWith } from "../signals.helpers";
 
 function cluster(): ReportCluster {
   return wireCluster({
     id: "cluster-1",
-    weight: 10,
-    size: 4,
-    canonical_node_count: 5,
-    bucket: "same_behavior",
-    signals: signalsWith("same_behavior", {
-      structural: 0.1,
-      token_jaccard: 0.2,
-      shape: 0.2,
-      embedding_cos: 0.9,
-    }),
-    occurrences: [
+    mass: 10,
+        canonical_node_count: 2,
+        occurrences: [
       occurrence("/a.cs", 0, 10),
       occurrence("/b.cs", 0, 10),
     ],
     occurrence_count: 4,
-    summary: "summary",
-    interpretation: "interp",
   });
 }
 
@@ -63,12 +52,10 @@ suite("decorations helpers", () => {
       content: "abc\ndef\n",
       language: "plaintext",
     });
-    const targetOccurrence: ReportOccurrence = {
-      path: "/x",
+    const targetOccurrence: ReportOccurrence = {path: "/x",
       start_byte: 0,
       end_byte: 9999,
-      hidden: false,
-    };
+      hidden: false, start_line: 1, end_line: 2};
     assert.equal(byteRangeToRange(doc, targetOccurrence), null);
   });
 
@@ -77,12 +64,10 @@ suite("decorations helpers", () => {
       content: "hello\nworld\n",
       language: "plaintext",
     });
-    const targetOccurrence: ReportOccurrence = {
-      path: "/x",
+    const targetOccurrence: ReportOccurrence = {path: "/x",
       start_byte: 0,
       end_byte: 5,
-      hidden: false,
-    };
+      hidden: false, start_line: 1, end_line: 2};
     const range = byteRangeToRange(doc, targetOccurrence);
     assert.ok(range);
     assert.equal(range.start.line, 0);

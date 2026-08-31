@@ -69,7 +69,7 @@ suite("ReportStore dirty-file projection", () => {
       ["/repo/CleanA.cs", "/repo/CleanB.cs"],
       "visible cluster keeps clean peer occurrences outside the edited file",
     );
-    assert.equal(visible.clusters[0]?.size, 2, "visible count is reduced after pruning stale offsets");
+    assert.equal(visible.clusters[0]?.canonical_node_count, 2, "visible count is reduced after pruning stale offsets");
     assert.equal(visible.clusters[0]?.occurrences_total, 2, "wire total is reduced with visible count");
     assert.ok(
       visible.clusters.every((c) => c.occurrences.length >= 2),

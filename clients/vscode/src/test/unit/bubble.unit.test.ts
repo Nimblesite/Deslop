@@ -12,34 +12,22 @@ import * as liveBubble from "../../bubble/live";
 import { clusterHoverMarkdown } from "../../clusterHover";
 import { ReportCluster } from "../../types/report";
 import { occurrence, wireCluster } from "../cluster.helpers";
-import { bucketSignals, signalsWith } from "../signals.helpers";
 
-function cluster(
-  signals = signalsWith("nearly_identical", {
-    structural: 1,
-    token_jaccard: 0.9,
-    shape: 1,
-    embedding_cos: 0.5,
-  }),
-): ReportCluster {
+function cluster(): ReportCluster {
   return wireCluster({
     id: "abcdef0123456789",
-    weight: 3,
-    size: 4,
-    canonical_node_count: 5,
-    bucket: "identical",
-    signals,
+    mass: 3,
+    canonical_node_count: 4,
     occurrences: [
       occurrence("/tmp/a/b/Alpha.cs", 0, 10),
       occurrence("/tmp/a/b/Beta.cs", 0, 10),
     ],
     occurrence_count: 4,
-    interpretation: "interp",
   });
 }
 
 suite("bubble rendering helpers", () => {
-  test("inlineText includes the severity dot, bucket label, authoritative count, and filename", () => {
+  test("inlineText includes the count and filename", () => {
     const text = inlineText(cluster(), "worst");
     assert.match(text, /×\s*4/);
     assert.match(text, /Alpha\.cs/);
@@ -52,26 +40,18 @@ suite("bubble rendering helpers", () => {
     assert.doesNotMatch(text, /Alpha/);
   });
 
-  test("ghostText encodes the signal strip", () => {
+  test("ghostText encodes the tree-branch prefix and count", () => {
     const text = ghostText(cluster(), "top10");
     assert.match(text, /└─/);
     assert.match(text, /×\s*4/);
   });
 
-  test("the ghost line renders no pair evidence for a sourced cluster", () => {
+  test("the ghost line renders no pair evidence for any cluster", () => {
     // [FUSED-PAIR-SIGNALS] Admission signals (structural, token, embedding,
     // content similarity) are pair-only and never touch a cluster surface.
-    // The ghost line carries the bucket, slug and count — never the former
-    // `pair 1↔2` bar strip, whatever the cluster's signal_source says.
-    const c = cluster(
-      signalsWith("identical", {
-        structural: 2,
-        token_jaccard: -1,
-        shape: 2,
-        embedding_cos: 0.5,
-        pair_agreement: -1,
-      }),
-    );
+    // The ghost line carries the verdict, slug and count — never the former
+    // `pair 1↔2` bar strip.
+    const c = cluster();
     const ghost = ghostText(c, "top10");
     assert.equal(ghost.includes("pair"), false, "no pair label may render");
     assert.equal(ghost.includes("↔"), false, "no pair separator may render");
@@ -86,13 +66,12 @@ suite("bubble rendering helpers", () => {
     }
   });
 
-  test("no cluster renders pair scores, with or without a signal source", () => {
+  test("no cluster renders pair scores", () => {
     // The former strip showed the elected pair's bars when a source was
     // named and nothing otherwise. Pair evidence now renders on no cluster
     // surface at all, so both arms assert the same absence.
     const sourced = cluster();
     const unsourced = cluster();
-    unsourced.signal_source = undefined;
     for (const [context, c] of [
       ["sourced cluster", sourced],
       ["unsourced cluster", unsourced],
@@ -128,20 +107,19 @@ suite("bubble rendering helpers", () => {
   // Audience: HUMAN. Issue #30. The plain human bucket label
   // ("Identical code", "Nearly identical code", …) must be bold in
   // the first line — never the hybridTitle taxonomy variant.
-  test("bubbleHover bucket label in the title is the plain human name (#30)", () => {
+  test("bubbleHover title is the plain human verdict (#30)", () => {
     const c = cluster();
-    c.signals = bucketSignals("identical");
     const text = bubbleHover(c).value;
     const firstLine = text.split("\n")[0] ?? "";
     assert.match(
       firstLine,
-      /\*\*[0-9a-f]+ Identical code\*\*/,
-      `human title must contain the plain bucket label; got first line: ${firstLine}`,
+      /\*\*[0-9a-f]+ Duplicate code\*\*/,
+      `human title must contain the plain verdict; got first line: ${firstLine}`,
     );
     assert.doesNotMatch(
       firstLine,
-      /Type-\d/,
-      `human title must not expose taxonomy Type-N label: ${firstLine}`,
+      /Identical code|Nearly identical|Same shape|Same behavior/,
+      `human title must not expose a clone-kind label: ${firstLine}`,
     );
   });
 
@@ -252,7 +230,7 @@ suite("bubble rendering helpers", () => {
   test("compact hover uses stable slug, not rank, and closes bold cleanly", () => {
     const c = cluster();
     c.id = "ab3f9c2def012345";
-    const md = clusterHoverMarkdown(c, { showCategory: false });
+    const md = clusterHoverMarkdown(c, { showVerdict: false });
     const firstLine = md.value.split("\n")[0] ?? "";
 
     assert.doesNotMatch(
@@ -275,7 +253,7 @@ suite("bubble rendering helpers", () => {
   test("full hover uses stable slug, not rank, in the bold headline", () => {
     const c = cluster();
     c.id = "ab3f9c2def012345";
-    const md = clusterHoverMarkdown(c, { showCategory: true });
+    const md = clusterHoverMarkdown(c, { showVerdict: true });
     const firstLine = md.value.split("\n")[0] ?? "";
 
     assert.doesNotMatch(

@@ -361,29 +361,11 @@ const sampleReport = {
       id: "abcdef1234567890",
       rank: 1,
       rank_band: "worst",
-      weight: 42.75,
-      size: 2,
+      mass: 42.75,
       canonical_node_count: 18,
-      signals: {
-        structural: 0.22,
-        token_jaccard: 0.34,
-        shape: 0.34,
-        embedding_cos: 0.91,
-        pair_agreement: 0.05,
-        pair_rename_consistency: 0,
-        literal_fraction: 0,
-      },
-      signal_source: { left: 0, right: 1 },
-      bucket: "same_behavior",
-      language: "dart",
-      evidence_verdict:
-        "The elected pair has a 0.91 semantic match. Its content evidence is 0.05 shared content " +
-        "and 0.00 consistent renaming.",
       occurrences_total: 2,
       occurrence_count: 2,
       occurrences_truncated: false,
-      summary: "Two Dart classes compute the same geometry values through different implementations.",
-      interpretation: "Same behavior, different code.",
       occurrences: [
         occurrence("src/dart/alpha.dart", 120, 248, 12, 3),
         occurrence("src/dart/beta.dart", 420, 558, 31, 5),
@@ -393,29 +375,11 @@ const sampleReport = {
       id: "bcdefa2345678901",
       rank: 2,
       rank_band: "mid",
-      weight: 26.5,
-      size: 3,
+      mass: 26.5,
       canonical_node_count: 14,
-      signals: {
-        structural: 0.99,
-        token_jaccard: 0.96,
-        shape: 0.99,
-        embedding_cos: 0.7,
-        pair_agreement: 0.88,
-        pair_rename_consistency: 0.95,
-        literal_fraction: 0.1,
-      },
-      signal_source: { left: 0, right: 1 },
-      bucket: "nearly_identical",
-      language: "dart",
-      evidence_verdict:
-        "The elected pair has a 0.99 structural match. Its content evidence is 0.88 shared content " +
-        "and 0.95 consistent renaming.",
       occurrences_total: 3,
       occurrence_count: 3,
       occurrences_truncated: false,
-      summary: "Parser branches differ only by token names.",
-      interpretation: "Review the locations; small differences may matter.",
       occurrences: [
         occurrence("src/dart/parser_alpha.dart", 210, 330, 44, 7),
         occurrence("src/dart/parser_beta.dart", 610, 742, 88, 9),
@@ -426,28 +390,11 @@ const sampleReport = {
       id: "cdefab3456789012",
       rank: 3,
       rank_band: "faint",
-      weight: 11.2,
-      size: 2,
+      mass: 11.2,
       canonical_node_count: 9,
-      signals: {
-        structural: 1,
-        token_jaccard: 1,
-        shape: 1,
-        embedding_cos: 0.82,
-        pair_agreement: 1,
-        pair_rename_consistency: 1,
-        literal_fraction: 0,
-      },
-      signal_source: { left: 0, right: 1 },
-      bucket: "identical",
-      language: "dart",
-      evidence_verdict:
-        "The elected pair is byte-identical, with 1.00 shared content and 1.00 consistent renaming.",
       occurrences_total: 2,
       occurrence_count: 2,
       occurrences_truncated: false,
-      summary: "Generated model serialization helpers match exactly.",
-      interpretation: "Safe to extract; every copy is the same.",
       occurrences: [
         occurrence("src/models/models.g.dart", 80, 160, 15, 1),
         occurrence("src/models/serializers.g.dart", 180, 260, 27, 1, true),
@@ -459,7 +406,7 @@ const sampleReport = {
 const reportWithoutSignalSource: Report = {
   ...sampleReport,
   clusters: sampleReport.clusters.map((cluster, index) =>
-    index === 0 ? { ...cluster, signal_source: undefined } : cluster),
+    index === 0 ? cluster : cluster),
 };
 
 function occurrence(

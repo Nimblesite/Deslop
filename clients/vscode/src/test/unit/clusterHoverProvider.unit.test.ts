@@ -10,8 +10,7 @@ import { ClusterHoverProvider } from "../../decorations/clusterHoverProvider";
 import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
-import { wireCluster } from "../cluster.helpers";
-import { signalsWith } from "../signals.helpers";
+import { occurrence, wireCluster } from "../cluster.helpers";
 
 function reportWith(clusters: ReportCluster[]): Report {
   return reportWithClusters(clusters);
@@ -20,19 +19,9 @@ function reportWith(clusters: ReportCluster[]): Report {
 function clusterAt(path: string, startByte: number, endByte: number): ReportCluster {
   return wireCluster({
     id: `${path}:${startByte}:${endByte}`,
-    weight: 9,
-    size: 2,
-    canonical_node_count: 3,
-    bucket: "same_behavior",
-    signals: signalsWith("same_behavior", {
-      structural: 0.1,
-      token_jaccard: 0.2,
-      shape: 0.2,
-      embedding_cos: 0.9,
-    }),
-    occurrences: [{ path, start_byte: startByte, end_byte: endByte, hidden: false }],
-    summary: "summary",
-    interpretation: "interp",
+    mass: 9,
+        canonical_node_count: 3,
+        occurrences: [occurrence(path, startByte, endByte)],
   });
 }
 

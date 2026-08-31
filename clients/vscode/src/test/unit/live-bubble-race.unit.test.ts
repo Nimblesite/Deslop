@@ -68,7 +68,7 @@ suite("LiveBubble stale-probe races", () => {
       // The newer full snapshot omits c-a entirely — and settles every
       // retraction tombstone, which is exactly why the ledger cannot guard
       // this race on its own.
-      store.setSnapshot(reportWithClusters([bubbleCluster("c-other", 3, 0.95)]), 2);
+      store.setSnapshot(reportWithClusters([bubbleCluster("c-other", 3)]), 2);
       assert.equal(
         store.current.retractedClusters.size,
         0,
@@ -88,7 +88,7 @@ suite("LiveBubble stale-probe races", () => {
       // probe against the new snapshot still renders.
       const probeB = bubble.probe(capture.editor, editAt(6, "bbbb"));
       await resolveProbe(requests[1], probeB, undefined, [
-        bubbleCluster("c-other", 3, 0.95),
+        bubbleCluster("c-other", 3),
       ]);
       assert.match(
         capture.visible() ?? "",
@@ -110,7 +110,7 @@ suite("LiveBubble stale-probe races", () => {
 
       // A stale completion labelled with an older generation must be
       // rejected outright: content and generation both stay put.
-      const staleSnapshot = reportWithClusters([bubbleCluster("c-stale", 9, 0.95)]);
+      const staleSnapshot = reportWithClusters([bubbleCluster("c-stale", 9)]);
       assert.equal(
         store.setSnapshot(staleSnapshot, 2),
         false,
@@ -132,7 +132,7 @@ suite("LiveBubble stale-probe races", () => {
       // generation, but different content — c-a is gone. The wire label
       // reads 3 again; only the client-owned revision records the change.
       assert.equal(
-        store.setSnapshot(reportWithClusters([bubbleCluster("c-other", 3, 0.95)]), 3),
+        store.setSnapshot(reportWithClusters([bubbleCluster("c-other", 3)]), 3),
         true,
         "a same-generation replacement is accepted",
       );

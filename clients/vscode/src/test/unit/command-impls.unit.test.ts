@@ -37,11 +37,9 @@ import { ReportStore } from "../../reportStore";
 import { activateExtension } from "../suite/helpers";
 import { ClusterNode, OccurrenceNode } from "../../tree/providers";
 import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
-import { bucketSignals, signalsWith } from "../signals.helpers";
-import { wireCluster } from "../cluster.helpers";
+import { occurrence, wireCluster } from "../cluster.helpers";
 
 const UTF8_ENCODING = "utf8";
-const IDENTICAL_BUCKET = "identical";
 const TEST_SOURCE_PATH = "src/foo.cs";
 const SECOND_TEST_SOURCE_PATH = "src/bar.cs";
 const ELECTED_PAIR_LINE_PREFIX = "elected_pair:";
@@ -60,7 +58,6 @@ const MARKDOWN_LANGUAGE = "markdown";
 const CODE_FENCE = "```";
 const TEST_TWO = 2;
 const TEST_THREE = 3;
-const PAIR_COUNT = TEST_TWO;
 const TWO_CHARACTER_OFFSET = TEST_TWO;
 const THIRD_OCCURRENCE_INDEX = TEST_TWO;
 const REPORT_GET_CALL_COUNT = TEST_TWO;
@@ -102,17 +99,10 @@ async function commandsEventuallyInclude(...ids: string[]): Promise<string[]> {
 function cluster(id: string, paths: string[]): ReportCluster {
   return wireCluster({
     id,
-    weight: DEFAULT_CLUSTER_WEIGHT,
-    size: PAIR_COUNT,
-    bucket: IDENTICAL_BUCKET,
-    signals: bucketSignals(IDENTICAL_BUCKET),
-    occurrences: paths.map((p) => ({
-      path: p,
-      start_byte: 0,
-      end_byte: DEFAULT_OCCURRENCE_END_BYTE,
-      hidden: false,
-    })),
-    interpretation: "interp",
+    mass: DEFAULT_CLUSTER_WEIGHT,
+    occurrences: paths.map((p) =>
+      occurrence(p, 0, DEFAULT_OCCURRENCE_END_BYTE),
+    ),
   });
 }
 
@@ -124,11 +114,10 @@ function clusterWithRanges(
   return wireCluster({
     id,
     rank,
-    weight: DEFAULT_CLUSTER_WEIGHT,
-    bucket: IDENTICAL_BUCKET,
-    signals: bucketSignals(IDENTICAL_BUCKET),
-    occurrences: occurrences.map((o) => ({ ...o, hidden: false })),
-    interpretation: "interp",
+    mass: DEFAULT_CLUSTER_WEIGHT,
+    occurrences: occurrences.map((o) =>
+      occurrence(o.path, o.start_byte, o.end_byte),
+    ),
   });
 }
 
@@ -215,12 +204,13 @@ suite("register command implementations", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-occ-"));
     const file = path.join(dir, "occ.txt");
     fs.writeFileSync(file, "hello\nworld\n", UTF8_ENCODING);
-    await openOccurrence({
-      path: file,
-      start_byte: 0,
-      end_byte: SHORT_OCCURRENCE_END_BYTE,
-      hidden: false,
-    });
+    await openOccurrence(
+      fixtureOccurrence({
+        path: file,
+        start_byte: 0,
+        end_byte: SHORT_OCCURRENCE_END_BYTE,
+      }),
+    );
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
@@ -407,12 +397,11 @@ suite("register command implementations", () => {
 
   test("compare provider renders a friendly fallback for a stale occurrence file", async () => {
     const uri = buildCompareUri(
-      {
+      fixtureOccurrence({
         path: "missing-deslop-compare-file.cs",
         start_byte: 0,
         end_byte: TEST_TWENTY,
-        hidden: false,
-      },
+      }),
       "a",
       "stale-cluster",
     );
@@ -496,11 +485,13 @@ suite("register command implementations", () => {
   });
 });
 
-function occurrence(overrides: Partial<ReportOccurrence> = {}): ReportOccurrence {
+function fixtureOccurrence(overrides: Partial<ReportOccurrence> = {}): ReportOccurrence {
   return {
     path: TEST_SOURCE_PATH,
     start_byte: 0,
     end_byte: DEFAULT_OCCURRENCE_END_BYTE,
+    start_line: 1,
+    end_line: 2,
     hidden: false,
     ...overrides,
   };
@@ -526,38 +517,34 @@ suite("tree menu renderers", () => {
       { path: fileA, start_byte: 0, end_byte: TEST_TEN },
       { path: fileB, start_byte: 0, end_byte: TEST_TEN },
     ]);
-    c.bucket = IDENTICAL_BUCKET;
 
     const text = clusterLocationsText(c);
     const lines = text.split("\n");
     assert.equal(lines.length, THREE_LINE_COUNT, "header + 2 occurrences");
     assert.match(lines[0] ?? "", /^cluster c-x/);
-    assert.match(lines[0] ?? "", /Identical code/);
+    assert.match(lines[0] ?? "", /mass/);
     assert.match(lines[0] ?? "", /2 occurrences/);
     assert.match(lines[1] ?? "", /A\.cs:1:1$/);
     assert.match(lines[THIRD_LINE_INDEX] ?? "", /B\.cs:1:1$/);
     assert.ok(!text.includes("start_byte"));
     assert.ok(!text.includes(".."), "human copy must not include byte ranges");
+    assert.doesNotMatch(text, /Identical code|nearly identical|same behavior|structural_only/i,
+      "no clone-kind label may reach the copy surface");
 
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  test("aiPayloadForCluster encodes id, bucket, rank, and byte ranges", () => {
+  test("aiPayloadForCluster encodes id, mass, rank, and byte ranges", () => {
     const c = clusterWithRanges("c-ai", [
       { path: TEST_SOURCE_PATH, start_byte: DEFAULT_CLUSTER_WEIGHT, end_byte: 200 },
       { path: SECOND_TEST_SOURCE_PATH, start_byte: 5, end_byte: 80 },
     ]);
-    c.bucket = "same_behavior";
-    c.signals = signalsWith("same_behavior", {
-      structural: 0.1,
-      token_jaccard: 0.2,
-      embedding_cos: 0.9,
-    });
 
     const text = aiPayloadForCluster(c, 7);
     assert.match(text, /cluster_id: c-ai/);
     assert.match(text, /rank: 7/);
-    assert.match(text, /bucket: same_behavior/);
+    assert.match(text, /mass: /);
+    assert.doesNotMatch(text, /bucket:/, "no clone-kind line may reach the AI payload");
     // [FUSED-PAIR-SIGNALS] No cluster surface — including copy-for-AI —
     // renders pair evidence: no structural, jaccard, or embedding score,
     // in any wire format the payload ever used.
@@ -580,7 +567,6 @@ suite("tree menu renderers", () => {
       { path: TEST_SOURCE_PATH, start_byte: 0, end_byte: DEFAULT_OCCURRENCE_END_BYTE },
       { path: SECOND_TEST_SOURCE_PATH, start_byte: 5, end_byte: 80 },
     ]);
-    c.signal_source = undefined;
     const clusterText = aiPayloadForCluster(c, 1);
     for (const prefix of [ELECTED_PAIR_LINE_PREFIX, PAIR_SIGNALS_LINE_PREFIX]) {
       assert.equal(
@@ -649,7 +635,6 @@ suite("tree menu renderers", () => {
       { path: TEST_SOURCE_PATH, start_byte: 0, end_byte: DEFAULT_OCCURRENCE_END_BYTE },
       { path: "src/bar.cs", start_byte: 5, end_byte: 80 },
     ]);
-    c.bucket = "nearly_identical";
 
     const store = new ReportStore();
     store.setSnapshot(report([c]), 0);
@@ -667,7 +652,7 @@ suite("tree menu renderers", () => {
 
   test("aiPayloadForOccurrence omits parent section when store has no cluster for the occurrence", () => {
     const store = new ReportStore();
-    const text = aiPayloadForOccurrence(occurrence(), store);
+    const text = aiPayloadForOccurrence(fixtureOccurrence(), store);
     assert.match(text, /occurrence_path/);
     assert.ok(!text.includes("cluster_id:"), "no cluster → no parent block");
   });
@@ -678,12 +663,9 @@ suite("tree menu renderers", () => {
     const source = "public class Snippet { int x = 1; }\n";
     fs.writeFileSync(file, source, UTF8_ENCODING);
 
-    const text = sourceSnippetText({
-      path: file,
-      start_byte: 0,
-      end_byte: TEST_TWENTY,
-      hidden: false,
-    });
+    const text = sourceSnippetText(
+      fixtureOccurrence({ path: file, start_byte: 0, end_byte: TEST_TWENTY }),
+    );
 
     const firstLine = text.split("\n")[0] ?? "";
     assert.match(firstLine, /^.+:1:1$/);
@@ -713,12 +695,9 @@ suite("tree menu renderers", () => {
     for (const [name, tag] of expected) {
       const file = path.join(dir, name);
       fs.writeFileSync(file, "value\n", UTF8_ENCODING);
-      const text = sourceSnippetText({
-        path: file,
-        start_byte: 0,
-        end_byte: 5,
-        hidden: false,
-      });
+      const text = sourceSnippetText(
+        fixtureOccurrence({ path: file, start_byte: 0, end_byte: 5 }),
+      );
       assert.equal(
         text.split("\n")[1],
         CODE_FENCE + tag,
@@ -754,7 +733,7 @@ suite("tree menu renderers", () => {
   test("clusterIdForTreeNode returns undefined for occurrences with no matching parent", () => {
     const store = new ReportStore();
     assert.equal(
-      clusterIdForTreeNode(occurrenceNodeFor(occurrence()), store),
+      clusterIdForTreeNode(occurrenceNodeFor(fixtureOccurrence()), store),
       undefined,
     );
   });
@@ -770,12 +749,9 @@ suite("tree menu handlers", () => {
     const file = path.join(dir, "hum.cs");
     fs.writeFileSync(file, "line-a\nline-b\n", UTF8_ENCODING);
 
-    const node = occurrenceNodeFor({
-      path: file,
-      start_byte: 0,
-      end_byte: SHORT_OCCURRENCE_END_BYTE,
-      hidden: false,
-    });
+    const node = occurrenceNodeFor(
+      fixtureOccurrence({ path: file, start_byte: 0, end_byte: SHORT_OCCURRENCE_END_BYTE }),
+    );
     await copyHumanLocation(node);
     const clipboard = await vscode.env.clipboard.readText();
     assert.equal(clipboard, `${file}:1:1`);
@@ -793,7 +769,6 @@ suite("tree menu handlers", () => {
       { path: fileA, start_byte: 0, end_byte: 1 },
       { path: fileB, start_byte: 0, end_byte: 1 },
     ]);
-    c.bucket = IDENTICAL_BUCKET;
 
     await copyClusterLocations(clusterNodeFor(c));
     const clipboard = await vscode.env.clipboard.readText();
@@ -812,7 +787,6 @@ suite("tree menu handlers", () => {
       [{ path: TEST_SOURCE_PATH, start_byte: 0, end_byte: DEFAULT_OCCURRENCE_END_BYTE }],
       THIRD_RANK,
     );
-    c.bucket = "nearly_identical";
     const store = new ReportStore();
     store.setSnapshot(report([c]), 0);
 
@@ -827,7 +801,6 @@ suite("tree menu handlers", () => {
     const c = clusterWithRanges("c-occ-ctx", [
       { path: TEST_SOURCE_PATH, start_byte: 0, end_byte: 9 },
     ]);
-    c.bucket = IDENTICAL_BUCKET;
     const store = new ReportStore();
     store.setSnapshot(report([c]), 0);
 
@@ -846,7 +819,7 @@ suite("tree menu handlers", () => {
     fs.writeFileSync(file, "def hi(): return 42\n", UTF8_ENCODING);
 
     await copySourceSnippet(
-      occurrenceNodeFor({ path: file, start_byte: 0, end_byte: 8, hidden: false }),
+      occurrenceNodeFor(fixtureOccurrence({ path: file, start_byte: 0, end_byte: 8 })),
     );
     const clipboard = await vscode.env.clipboard.readText();
     assert.match(clipboard, /```python\ndef hi\(/);
@@ -856,12 +829,7 @@ suite("tree menu handlers", () => {
   });
 
   test("revealOccurrenceInExplorer shows an error when the file no longer exists", async () => {
-    const node = occurrenceNodeFor({
-      path: "/tmp/__cdd_does_not_exist__.cs",
-      start_byte: 0,
-      end_byte: 1,
-      hidden: false,
-    });
+    const node = occurrenceNodeFor(fixtureOccurrence({ path: "/tmp/__cdd_does_not_exist__.cs", start_byte: 0, end_byte: 1 }));
     await revealOccurrenceInExplorer(node);
   });
 
@@ -869,12 +837,9 @@ suite("tree menu handlers", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-rev-"));
     const file = path.join(dir, "reveal.cs");
     fs.writeFileSync(file, "x\n", UTF8_ENCODING);
-    const node = occurrenceNodeFor({
-      path: file,
-      start_byte: 0,
-      end_byte: 1,
-      hidden: false,
-    });
+    const node = occurrenceNodeFor(
+      fixtureOccurrence({ path: file, start_byte: 0, end_byte: 1 }),
+    );
     await revealOccurrenceInExplorer(node);
     fs.rmSync(dir, { recursive: true, force: true });
   });

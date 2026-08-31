@@ -12,7 +12,7 @@ import {
   TYPE,
   SHADOW,
 } from "../../design";
-import { DESLOP_SEVERITIES } from "../../types/report";
+import { DESLOP_SEVERITIES, type DeslopSeverity } from "../../severity";
 
 suite("design tokens", () => {
   test("every color is a hex or rgba string", () => {
@@ -31,7 +31,7 @@ suite("design tokens", () => {
   test("DESLOP_SEVERITY_COLOR covers every level and is a distinct token each", () => {
     // [SEVERITY-COLOR] The paint map. Every level must exist and no two may
     // share a token, or two buckets become indistinguishable on screen.
-    const tokens = DESLOP_SEVERITIES.map((level) => DESLOP_SEVERITY_COLOR[level]);
+    const tokens = DESLOP_SEVERITIES.map((level: DeslopSeverity) => DESLOP_SEVERITY_COLOR[level]);
     for (const [index, level] of DESLOP_SEVERITIES.entries()) {
       assert.ok(tokens[index], `${level} has no colour token`);
       assert.match(String(tokens[index]), /^#[0-9a-fA-F]{3,8}$/, `${level} is not a hex token`);
@@ -40,7 +40,7 @@ suite("design tokens", () => {
     assert.equal(
       DESLOP_SEVERITY_COLOR.error,
       COLOR.primaryContainer,
-      "crimson is reserved for the byte-proven bucket",
+      "crimson is reserved for the worst mass rank band",
     );
   });
 
