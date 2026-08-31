@@ -80,6 +80,19 @@ suite("cluster document", () => {
     );
 
     assert.ok(body.includes("# Deslop cluster cluster-for-test"));
+    assert.ok(body.includes("Elected pair: 1."));
+    assert.ok(body.includes("Pair signals: structural"));
+  });
+
+  test("omits pair signals when the cluster has no elected source", () => {
+    const body = clusterDocumentContent(
+      vscode.Uri.parse("deslop://cluster/cluster-for-test"),
+      report([cluster({ occurrences: [] })]),
+    );
+
+    assert.equal(body.includes("Elected pair:"), false);
+    assert.equal(body.includes("Pair signals:"), false);
+    assert.equal(body.includes("structural"), false);
   });
 
   test("renders invalid URI diagnostics", () => {

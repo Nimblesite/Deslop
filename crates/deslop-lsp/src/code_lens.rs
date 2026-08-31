@@ -1,8 +1,8 @@
 //! `textDocument/codeLens` provider ([LSP-CODE-LENS]).
 //!
 //! Emits one code lens per occurrence in the requested file. The lens
-//! title carries the cluster count and the shared confidence
-//! explanation — fused score plus measured content evidence
+//! title carries the cluster count and the elected pair's measured
+//! axes plus content evidence
 //! ([FUSED-CONTENT-GATE]) — so a reader sees the full context without
 //! opening the report view, and the attached command jumps to the next
 //! occurrence.
@@ -120,10 +120,10 @@ mod tests {
         "nearly_identical".clone_into(&mut cluster.bucket);
         "s".clone_into(&mut cluster.summary);
         "i".clone_into(&mut cluster.interpretation);
-        deslop_core::report_fixtures::restamp_fixture(&mut cluster);
         if cluster.occurrences.len() >= PAIR_SIZE {
             cluster.signal_source = Some(ReportSignalSource { left: 0, right: 1 });
         }
+        deslop_core::report_fixtures::restamp_fixture(&mut cluster);
         cluster
     }
 

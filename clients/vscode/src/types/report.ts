@@ -7,6 +7,7 @@ import type {
   Report as WireReport,
   ReportCluster as WireReportCluster,
   ReportOccurrence as WireReportOccurrence,
+  ReportSignalSource as WireReportSignalSource,
 } from "./wire-generated";
 
 export type {
@@ -34,6 +35,23 @@ export type ReportCluster = Omit<WireReportCluster, "occurrences"> & {
 export type Report = Omit<WireReport, "clusters"> & {
   clusters: ReportCluster[];
 };
+
+/** Resolves the elected evidence pair named by the engine, rejecting an
+ * absent, self-referential, or out-of-range source. Every client surface
+ * uses this guard before rendering pair-scoped scores
+ * ([FUSED-CLUSTER-SIGNALS]). */
+export interface ElectedSignalPair {
+  source: WireReportSignalSource;
+  occurrences: readonly [ReportOccurrence, ReportOccurrence];
+}
+
+export function electedPairForCluster(cluster: ReportCluster): ElectedSignalPair | undefined {
+  const source = cluster.signal_source;
+  if (!source || source.left === source.right) return undefined;
+  const left = cluster.occurrences[source.left];
+  const right = cluster.occurrences[source.right];
+  return left && right ? { source, occurrences: [left, right] } : undefined;
+}
 
 export interface OccurrenceDisplayLocation {
   line: number;

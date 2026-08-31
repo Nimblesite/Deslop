@@ -173,8 +173,8 @@ mod tests {
         "csharp".clone_into(&mut cluster.language);
         "Summary line.".clone_into(&mut cluster.summary);
         "Interpretation line.".clone_into(&mut cluster.interpretation);
-        crate::report_fixtures::restamp_fixture(&mut cluster);
         cluster.signal_source = Some(ReportSignalSource { left: 0, right: 1 });
+        crate::report_fixtures::restamp_fixture(&mut cluster);
         cluster
     }
 

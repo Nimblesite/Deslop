@@ -114,8 +114,8 @@ The report header carries one honest number: `metrics.duplication_percent = 100 
 2. **Check if it's generated code.** Generated files (e.g. `.g.cs`, `.generated.cs`, OpenAPI clients, protobuf output) are hidden by default because they duplicate by design; visible generated-handwritten overlap is still worth reviewing.
 3. **Treat import/using-only repetition as hygiene, not duplication.** For C#, the preferred remediation is usually a shared `GlobalUsings.cs` or project-file `<Using Include="..." />`, not extraction.
 4. **Check byte ranges for overlap.** Adjacent/overlapping ranges in the same file mean the sibling-extension pass is firing on several enclosing contexts of the same physical code — count it as one logical clone, not N.
-5. **For `structural=1.00` clusters** — safe to extract. Identical subtree after normalization.
-6. **For `structural=0.00, token_jaccard≥0.95` clusters** — Type-3 candidate. Read both occurrences. The differences are meaningful. Decide whether to (a) unify via a parameter / strategy, or (b) accept them as intentionally divergent.
+5. **For `Identical` clusters** — the engine verified byte-identical occurrences; extract or consolidate them unless their surrounding ownership makes the duplication intentional.
+6. **For `NearlyIdentical` clusters** — read the elected pair and every occurrence before refactoring. The pair passed admission, but its differences may still be meaningful; decide whether to unify them through a parameter or strategy, or keep them intentionally divergent.
 7. **Ignore clusters where `weight` is low and `size` is 2 and node counts are tiny.** Those are usually boilerplate (constructors, test setup, property accessors) that don't reward extraction.
 
 ## Things to keep in mind when interpreting a report

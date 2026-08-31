@@ -263,7 +263,7 @@ suite("LiveBubble admission", () => {
       rename.signals.pair_agreement,
       "fixture: the elected pair's content evidence is what separates them",
     );
-    assert.equal(signalStrip(verbatim).length, 3, "the strip is three bars wide");
+    assert.match(signalStrip(verbatim), /^pair 1↔2 [▁▂▃▄▅▆▇█]{3}$/u);
     assert.match(signalStrip(demoted), /[▁▂▃▄▅▆▇█]{3}/u, "every bar comes from the ramp");
     assert.notEqual(
       signalStrip(verbatim),

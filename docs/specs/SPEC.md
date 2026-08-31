@@ -115,7 +115,7 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 | Built-in exclusion scoped to the scan root ([CONFIG-EXCLUDE-BUILTIN]) | ✅ gh #342 | `crates/deslop-core/src/config.rs::corpus_built_in_excluded` |
 | Dependency analysis opt-in ([CONFIG-EXCLUDE-DEPENDENCIES]) | ✅ `[analysis] include_dependencies` | `crates/deslop-core/src/config.rs::dependency_components` |
 | Transitive-closure clustering | ✅ | `crates/deslop-core/src/cluster.rs` |
-| Worst-offenders ranking ([PIPELINE-RANK-WORST-FIRST]) | ✅ `nodes × (size−1) × log2(1 + spanned_bytes)` | `crates/deslop-core/src/cluster.rs::rank_weight` |
+| Worst-offenders ranking ([RANK-MASS-SUM]) | ✅ `canonical_nodes × (visible_members − 1) × category_multiplier × structural_only_multiplier`, then weight descending and cluster id ascending | `crates/deslop-core/src/report_weight.rs::reweigh_by_visible_occurrences` |
 | Repo-wide metrics + fail-over threshold ([METRICS-REPO], [EXIT-CODES]) | ✅ exit 3 on breach | `crates/deslop-core/src/report_metrics.rs`, `crates/deslop/src/main.rs` |
 | Evidence-weighted metric + second gate ([METRICS-REPO-WEIGHTED], [EXIT-CODES-WEIGHTED]) | ⏳ specified; lands with gh #344 per [`plans/weighted-metrics-plan.md`](../plans/weighted-metrics-plan.md) | — |
 | Persisted parse processing ([PIPELINE-INCREMENTAL]) | ✅ on by default, `--no-incremental` / `[analysis] incremental = false` opt out — parse stage plus per-fingerprint MinHash signatures, blobs bound to their address by a binding digest ([PIPELINE-INCREMENTAL-INTEGRITY]), pruned under a 2 GiB budget after every full pass ([PIPELINE-INCREMENTAL-RETENTION]) | `crates/deslop-core/src/fpcache.rs` |

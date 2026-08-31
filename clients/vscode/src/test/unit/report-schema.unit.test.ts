@@ -10,6 +10,7 @@ import {
   LIVE_BUBBLE_BUCKETS,
   bucketLabels,
   clusterInterpretation,
+  electedPairForCluster,
   isLiveBubbleBucket,
   occurrenceCount,
   resolveBucket,
@@ -253,6 +254,26 @@ suite("report schema helpers", () => {
           `${axis} must be a measurement in [0,1], got ${value}`,
         );
       }
+    }
+  });
+
+  test("pair evidence resolves only from two distinct carried occurrences", () => {
+    const candidate = cluster();
+    assert.deepEqual(electedPairForCluster(candidate), {
+      source: { left: 0, right: 1 },
+      occurrences: candidate.occurrences,
+    });
+    const rejectedSources: ReportCluster["signal_source"][] = [
+      undefined,
+      { left: 0, right: 0 },
+      { left: 0, right: PAIR_COUNT },
+    ];
+    for (const signalSource of rejectedSources) {
+      assert.equal(
+        electedPairForCluster({ ...candidate, signal_source: signalSource }),
+        undefined,
+        "anonymous, self-referential, and out-of-range evidence must stay hidden",
+      );
     }
   });
 

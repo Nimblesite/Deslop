@@ -91,7 +91,7 @@ impl PipelineSession {
         // [FUSED-CLUSTER-SIGNALS] One signature space per run: the
         // cross-language space compares any pair when the audit mode is
         // on; the per-language space is exact otherwise. Mixing spaces
-        // inside one cluster mean would average incomparable values.
+        // inside one cluster measurement would compare incomparable values.
         let built_alias_space = cross_language_signatures
             .as_deref()
             .map(|space| crate::lsh::SignatureIndex::from_segments([space]));

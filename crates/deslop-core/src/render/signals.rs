@@ -23,7 +23,7 @@
 //! report shows the elected pair's measured axes and its content
 //! evidence, with the bucket as the engine's verdict.
 
-use crate::report::{ReportCluster, ReportSignals};
+use crate::report::{elected_signal_pair, ReportCluster, ReportSignals};
 
 mod style;
 
@@ -71,12 +71,7 @@ pub fn evidence_summary(signals: ReportSignals) -> String {
 /// occurrence list. Callers must then omit every pair score and verdict.
 #[must_use]
 pub fn elected_pair_attribution(cluster: &ReportCluster) -> Option<String> {
-    let source = cluster.signal_source?;
-    if source.left == source.right {
-        return None;
-    }
-    let left = cluster.occurrences.get(source.left)?;
-    let right = cluster.occurrences.get(source.right)?;
+    let (source, left, right) = elected_signal_pair(cluster)?;
     Some(format!(
         "elected pair: occurrences {} and {} — {} and {}",
         source.left.saturating_add(1),

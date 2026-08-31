@@ -80,10 +80,10 @@ fn sample_cluster(
     "csharp".clone_into(&mut cluster.language);
     "summary".clone_into(&mut cluster.summary);
     "interp".clone_into(&mut cluster.interpretation);
-    deslop_core::report_fixtures::restamp_fixture(&mut cluster);
     if cluster.occurrences.len() >= PAIR_SIZE {
         cluster.signal_source = Some(ReportSignalSource { left: 0, right: 1 });
     }
+    deslop_core::report_fixtures::restamp_fixture(&mut cluster);
     cluster
 }
 

@@ -1,6 +1,11 @@
 import type { JSX } from "preact";
 
-import type { ReportCluster, ReportOccurrence, ReportSignals } from "../../../src/types/report";
+import {
+  electedPairForCluster,
+  type ReportCluster,
+  type ReportOccurrence,
+  type ReportSignals,
+} from "../../../src/types/report";
 import { COLOR, FONT } from "../theme";
 import { HelpedText } from "./HelpBubble";
 import { SignalStrip } from "./SignalStrip";
@@ -62,12 +67,10 @@ function occurrenceLabel(occurrence: ReportOccurrence): string {
 }
 
 export function electedPairEvidence(cluster: ReportCluster): ElectedPairEvidence | null {
-  const source = cluster.signal_source;
-  if (!source || source.left === source.right) return null;
-  const left = cluster.occurrences[source.left];
-  const right = cluster.occurrences[source.right];
-  if (!left || !right) return null;
-  return { pair: [left, right], signals: cluster.signals, verdict: cluster.evidence_verdict };
+  const elected = electedPairForCluster(cluster);
+  return elected
+    ? { pair: elected.occurrences, signals: cluster.signals, verdict: cluster.evidence_verdict }
+    : null;
 }
 
 const PANEL_STYLE: JSX.CSSProperties = {

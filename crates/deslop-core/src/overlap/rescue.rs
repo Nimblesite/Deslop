@@ -69,13 +69,6 @@ pub fn apply_shared_subtree_rescue<S: BuildHasher + Sync, L: BuildHasher + Sync>
     // leaves through this index.
     let tree_index: HashMap<FileId, &NormalizedNode> =
         trees.iter().map(|tree| (tree.file_id, tree)).collect();
-    tracing::trace!(
-        tree_roster = ?trees
-            .iter()
-            .map(|tree| (tree.file_id, tree.byte_range))
-            .collect::<Vec<_>>(),
-        "rescue tree roster"
-    );
     let workers = crate::shard::worker_count(pairs.len(), MIN_SHARD_WORK);
     if workers <= 1 {
         let mut measurer = OverlapMeasurer::new(trees);
@@ -196,21 +189,9 @@ fn measure_one<S: BuildHasher, L: BuildHasher>(
     tally.cross_file();
     pair.shared_subtree_overlap = measurer.rescue_overlap(left, right);
     let clears_overlap = pair.shared_subtree_overlap >= SHARED_SUBTREE_MIN_OVERLAP;
-    let content_agreement = pair_content_agreement(left, right, tree_index, sources, languages);
-    let clears_content = !clears_overlap || content_agreement >= RESCUE_MIN_CONTENT_AGREEMENT;
-    tracing::trace!(
-        left_file = ?left.file_id,
-        right_file = ?right.file_id,
-        left_range = ?left.byte_range,
-        right_range = ?right.byte_range,
-        left_nodes = left.node_count,
-        right_nodes = right.node_count,
-        overlap = pair.shared_subtree_overlap,
-        content_agreement,
-        clears_overlap,
-        clears_content,
-        "rescue per-pair gate"
-    );
+    let clears_content = !clears_overlap
+        || pair_content_agreement(left, right, tree_index, sources, languages)
+            >= RESCUE_MIN_CONTENT_AGREEMENT;
     if clears_overlap && !clears_content {
         tally.content_gate_rejected();
         pair.shared_subtree_overlap = 0.0;

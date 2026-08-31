@@ -43,6 +43,9 @@ import { wireCluster } from "../cluster.helpers";
 const UTF8_ENCODING = "utf8";
 const IDENTICAL_BUCKET = "identical";
 const TEST_SOURCE_PATH = "src/foo.cs";
+const SECOND_TEST_SOURCE_PATH = "src/bar.cs";
+const ELECTED_PAIR_LINE_PREFIX = "elected_pair:";
+const PAIR_SIGNALS_LINE_PREFIX = "pair_signals:";
 const FILE_A_NAME = "A.cs";
 const FILE_B_NAME = "B.cs";
 const TEST_TEN = 10;
@@ -542,6 +545,7 @@ suite("tree menu renderers", () => {
   test("aiPayloadForCluster encodes id, bucket, rank, signals, and byte ranges", () => {
     const c = clusterWithRanges("c-ai", [
       { path: TEST_SOURCE_PATH, start_byte: DEFAULT_CLUSTER_WEIGHT, end_byte: 200 },
+      { path: SECOND_TEST_SOURCE_PATH, start_byte: 5, end_byte: 80 },
     ]);
     c.bucket = "same_behavior";
     c.signals = signalsWith("same_behavior", {
@@ -554,10 +558,40 @@ suite("tree menu renderers", () => {
     assert.match(text, /cluster_id: c-ai/);
     assert.match(text, /rank: 7/);
     assert.match(text, /bucket: same_behavior/);
-    assert.match(text, /signals: structural=0\.1000/);
+    assert.match(text, /elected_pair: occurrence 1 \(src\/foo\.cs\) <-> occurrence 2 \(src\/bar\.cs\)/);
+    assert.match(text, /pair_signals: structural=0\.1000/);
     assert.match(text, /embed=0\.9000/);
     assert.match(text, /10\.\.200/);
     assert.match(text, /Use these byte ranges as precise edit anchors/);
+  });
+
+  test("AI payloads omit every pair score when the cluster has no elected source", () => {
+    const c = clusterWithRanges("c-unsourced", [
+      { path: TEST_SOURCE_PATH, start_byte: 0, end_byte: DEFAULT_OCCURRENCE_END_BYTE },
+      { path: SECOND_TEST_SOURCE_PATH, start_byte: 5, end_byte: 80 },
+    ]);
+    c.signal_source = undefined;
+    const clusterText = aiPayloadForCluster(c, 1);
+    for (const prefix of [ELECTED_PAIR_LINE_PREFIX, PAIR_SIGNALS_LINE_PREFIX]) {
+      assert.equal(
+        clusterText.split("\n").some((line) => line.startsWith(prefix)),
+        false,
+        "cluster copy-for-AI must not publish pair evidence without a named pair",
+      );
+    }
+
+    const store = new ReportStore();
+    store.setSnapshot(report([c]), 0);
+    const first = c.occurrences[0];
+    assert.ok(first);
+    const occurrenceText = aiPayloadForOccurrence(first, store);
+    for (const prefix of [ELECTED_PAIR_LINE_PREFIX, PAIR_SIGNALS_LINE_PREFIX]) {
+      assert.equal(
+        occurrenceText.split("\n").some((line) => line.startsWith(prefix)),
+        false,
+        "occurrence copy-for-AI must not publish its parent pair evidence without a named pair",
+      );
+    }
   });
 
   test("aiPayloadForCluster leads with the slug so AI and human surfaces agree (#146)", () => {

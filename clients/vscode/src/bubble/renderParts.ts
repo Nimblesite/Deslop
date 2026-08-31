@@ -12,6 +12,7 @@ import {
   ReportCluster,
   Severity,
   bucketLabels,
+  electedPairForCluster,
   occurrenceCount,
   resolveBucket,
 } from "../types/report";
@@ -25,6 +26,9 @@ export interface BubbleRenderParts {
   signalStrip: string;
   hover: vscode.MarkdownString;
 }
+
+const PAIR_EVIDENCE_LABEL = "pair";
+const PAIR_SEPARATOR = "↔";
 
 export function renderBubbleParts(
   cluster: ReportCluster,
@@ -69,8 +73,11 @@ export function ghostText(
 // content evidence. There is no combined-score bar: admission and routing
 // are the engine's bucket verdict, not a number this strip re-derives.
 export function signalStrip(cluster: ReportCluster): string {
+  const elected = electedPairForCluster(cluster);
+  if (!elected) return "";
   const signals = cluster.signals;
-  return `${bar(signals.shape)}${bar(signals.embedding_cos)}${bar(signals.pair_agreement)}`;
+  const pair = `${elected.source.left + 1}${PAIR_SEPARATOR}${elected.source.right + 1}`;
+  return `${PAIR_EVIDENCE_LABEL} ${pair} ${bar(signals.shape)}${bar(signals.embedding_cos)}${bar(signals.pair_agreement)}`;
 }
 
 // The full block is reserved for an exact 1.0 and nothing else. Rounding

@@ -59,17 +59,26 @@ suite("bubble rendering helpers", () => {
     assert.match(text, /×\s*4/);
   });
 
-  test("signalStrip clamps inputs to the bar range", () => {
+  test("signalStrip attributes its clamped bars to the elected pair", () => {
     const strip = signalStrip(
       cluster(
         signalsWith("identical", {
           structural: 2,
           token_jaccard: -1,
+          shape: 2,
           embedding_cos: 0.5,
+          pair_agreement: -1,
         }),
       ),
     );
-    assert.equal(strip.length, 3);
+    assert.equal(strip, "pair 1↔2 █▄▁");
+  });
+
+  test("signalStrip renders no pair scores without an elected source", () => {
+    const c = cluster();
+    c.signal_source = undefined;
+    assert.equal(signalStrip(c), "");
+    assert.equal(ghostText(c, "top10").includes("█"), false);
   });
 
   test("shortPath returns the basename for posix and windows separators", () => {

@@ -52,22 +52,22 @@ pub struct Cluster {
     pub members: Vec<Fingerprint>,
     /// Weight from [PIPELINE-RANK-WORST-FIRST]. Higher = worse offender.
     pub weight: f64,
-    /// Measured signal breakdown ([FUSED-CLUSTER-SIGNALS]): per axis,
-    /// the strongest measurement any admitted pair earned on that
-    /// axis — Merkle-hash equality / shared-subtree overlap for
-    /// `structural`, `MinHash` Jaccard for `token_jaccard`, vector
-    /// cosine for `embedding_cos`. A pair that never cleared admission
-    /// contributes nothing (gh #458).
+    /// Measured signal breakdown ([FUSED-CLUSTER-SIGNALS]): one elected
+    /// admitted pair's three axes together — Merkle-hash equality /
+    /// shared-subtree overlap for `structural`, `MinHash` Jaccard for
+    /// `token_jaccard`, vector cosine for `embedding_cos`. Per-axis
+    /// maxima are forbidden because they could describe no real pair;
+    /// a pair that never cleared admission contributes nothing (gh #458).
     pub signals: PairScore,
     /// The admitted pair — as positions into [`Self::members`], which
     /// is the rendered occurrence order — whose evidence the signals
     /// display ([FUSED-CLUSTER-SIGNALS] gh #458). `None` when no
     /// admitted pair survives the same-file overlap collapse.
     pub signal_source: Option<(usize, usize)>,
-    /// Measured raw-content evidence across the members'
-    /// normalisation-collapsed leaves ([FUSED-CONTENT-GATE]):
-    /// pooled byte agreement, Type-2 rename consistency, and literal
-    /// dominance ([CLONE-NOISE-LITERAL-TABLE]). Starts
+    /// The elected pair's measured raw-content evidence from its
+    /// normalisation-collapsed leaves ([FUSED-CONTENT-GATE]): byte
+    /// agreement, Type-2 rename consistency, and literal dominance
+    /// ([CLONE-NOISE-LITERAL-TABLE]). Starts
     /// [`ContentEvidence::unmeasured`];
     /// [`crate::content::attach_content_evidence`] measures it inside
     /// [`build_ranked_fused_clusters`], before cross-cluster

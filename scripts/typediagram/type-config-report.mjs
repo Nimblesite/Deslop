@@ -105,14 +105,14 @@ export const REPORT_TYPE_CONFIG = {
       weight: "Ranking weight (higher = worse).",
       size: "Count of cloned occurrences in the cluster.",
       canonical_node_count: "AST node count of one canonical member.",
-      signals: "Per-cluster signal breakdown (structural / Jaccard / embedding / pair agreement / pair rename consistency / literal).",
+      signals: "The elected pair's signal breakdown (structural / Jaccard / embedding / pair agreement / pair rename consistency / literal); all axes are zero when `signal_source` is absent.",
       signal_source:
-        "The occurrence pair whose measured evidence the rendered signals display ([`FUSED-CLUSTER-SIGNALS`]): indices into `occurrences`. Wire truncation retains and reindexes both endpoints whenever its occurrence cap can carry a pair; absent only when no admitted pair survives or the requested cap is below two.",
+        "The occurrence pair whose measured evidence the rendered signals display ([`FUSED-CLUSTER-SIGNALS`]): two distinct indices into `occurrences`. Wire truncation retains and reindexes both endpoints whenever its occurrence cap can carry a pair. When absent because no admitted pair survives or the requested cap is below two, every pair-scoped signal is zero and `evidence_verdict` is empty.",
       bucket: "Canonical bucket label (`identical`, `nearly_identical`, `loosely_similar`, `same_behavior`).",
       category: "Clone category ([RANK-CATEGORY]): `logic` (default) or `data` for a demoted data-structure literal. Orthogonal to `bucket`. Empty/absent on older reports resolves to `logic`.",
       language: "Detected language id of the cluster's first occurrence, from the engine's parser registry (`language_for_path`, [PIPELINE-LANG-TRAIT]); `unknown` when unresolvable. Consumers group and filter by this value and never re-derive a language from a file extension.",
       evidence_verdict:
-        "Engine-authored plain-English reading of the shape score against the measured content evidence — why confidence stayed, fell, or came from the embedding pass. The engine owns this verdict; clients render it verbatim and never manufacture their own from the signal numbers.",
+        "Engine-authored plain-English reading of the elected pair's shape score against its measured content evidence — why confidence stayed, fell, or came from the embedding pass. Empty when `signal_source` is absent. The engine owns this verdict; clients render it verbatim and never manufacture their own from the signal numbers.",
       occurrences: "Cluster members; live wire caps this list.",
       occurrences_total: "Total occurrences before wire truncation.",
       occurrence_count:

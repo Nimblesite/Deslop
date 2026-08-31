@@ -40,9 +40,13 @@ pub fn restamp_derived_fields(report: &mut Report) {
 /// evidence than a path extension, and a replayed report has only the
 /// path to go on.
 pub(crate) fn restamp_cluster(cluster: &mut ReportCluster) {
+    crate::report::enforce_pair_evidence_scope(cluster);
     cluster.signals.shape = cluster.signals.shape_score();
     cluster.occurrence_count = occurrence_count(cluster);
-    cluster.evidence_verdict = crate::render::signals::content_evidence_verdict(cluster.signals);
+    if crate::report::elected_signal_pair(cluster).is_some() {
+        cluster.evidence_verdict =
+            crate::render::signals::content_evidence_verdict(cluster.signals);
+    }
     if cluster.language.is_empty() {
         cluster.language = cluster
             .occurrences

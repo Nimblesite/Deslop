@@ -48,12 +48,42 @@ fn truncate_for_wire_caps_occurrences_and_blanks_derivable_text() {
 
 /// Requested live-wire occurrence budget.
 const WIRE_OCCURRENCE_CAP: usize = 2;
+/// A wire budget that cannot carry both endpoints of pair evidence.
+const SINGLE_OCCURRENCE_CAP: usize = 1;
 /// Occurrences carried by the untruncated sample cluster.
 const FULL_OCCURRENCE_COUNT: usize = 3;
 /// Original occurrence positions elected as the signal source.
 const ORIGINAL_SIGNAL_SOURCE: ReportSignalSource = ReportSignalSource { left: 1, right: 2 };
 /// Paths belonging to the elected source after the first occurrence is discarded.
 const EXPECTED_SOURCE_PATHS: [&str; 2] = ["file-1.cs", "file-2.cs"];
+
+#[test]
+fn truncate_for_wire_removes_pair_evidence_when_the_source_pair_cannot_fit() -> anyhow::Result<()> {
+    let report = sample_report().truncate_for_wire(SINGLE_OCCURRENCE_CAP);
+    let [cluster] = report.clusters.as_slice() else {
+        anyhow::bail!("the sample report must retain exactly one cluster");
+    };
+    assert_eq!(cluster.occurrences.len(), SINGLE_OCCURRENCE_CAP);
+    assert_eq!(cluster.signal_source, None);
+    assert_eq!(cluster.signals.structural.to_bits(), 0.0_f64.to_bits());
+    assert_eq!(cluster.signals.token_jaccard.to_bits(), 0.0_f64.to_bits());
+    assert_eq!(cluster.signals.embedding_cos.to_bits(), 0.0_f64.to_bits());
+    assert_eq!(cluster.signals.shape.to_bits(), 0.0_f64.to_bits());
+    assert_eq!(cluster.signals.pair_agreement.to_bits(), 0.0_f64.to_bits());
+    assert_eq!(
+        cluster.signals.pair_rename_consistency.to_bits(),
+        0.0_f64.to_bits()
+    );
+    assert_eq!(
+        cluster.signals.literal_fraction.to_bits(),
+        0.0_f64.to_bits()
+    );
+    assert!(
+        cluster.evidence_verdict.is_empty(),
+        "an anonymous pair verdict must not survive wire truncation"
+    );
+    Ok(())
+}
 
 #[test]
 fn boilerplate_hints_use_default_recommendation_for_future_languages() -> anyhow::Result<()> {

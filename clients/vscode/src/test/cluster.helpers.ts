@@ -69,11 +69,6 @@ export function wireCluster(fixture: ClusterFixture): ReportCluster {
     signals: fixture.signals ?? bucketSignals(bucket),
     // The elected pair whose measurement `signals` carries
     // ([FUSED-CLUSTER-SIGNALS]). Default: the fixture's first two
-    // occurrences, the pair a two-member fixture elects. Every rendered
-    // axis must trace to a real pair, so a fixture without one is a
-    // fixture lying about where its numbers came from.
-    // The elected pair whose measurement `signals` carries
-    // ([FUSED-CLUSTER-SIGNALS]). Default: the fixture's first two
     // occurrences, the pair a multi-member fixture elects; a
     // single-occurrence fixture has no admitted pair and carries no
     // source, matching the engine's no-pair convention. Every rendered

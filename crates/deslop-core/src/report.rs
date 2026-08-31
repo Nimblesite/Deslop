@@ -87,11 +87,49 @@ impl Report {
                 truncate_occurrences_preserving_source(cluster, cap);
                 cluster.occurrences_truncated = true;
             }
+            enforce_pair_evidence_scope(cluster);
             cluster.summary.clear();
             cluster.interpretation.clear();
         }
         self
     }
+}
+
+/// The valid elected pair carried by `cluster`, including its wire indices.
+/// An absent, self-referential, or out-of-range source is no pair
+/// ([FUSED-CLUSTER-SIGNALS]).
+#[must_use]
+pub fn elected_signal_pair(
+    cluster: &ReportCluster,
+) -> Option<(ReportSignalSource, &ReportOccurrence, &ReportOccurrence)> {
+    let source = cluster.signal_source?;
+    if source.left == source.right {
+        return None;
+    }
+    Some((
+        source,
+        cluster.occurrences.get(source.left)?,
+        cluster.occurrences.get(source.right)?,
+    ))
+}
+
+/// Enforces the raw-wire pair scope: without two named occurrences there are
+/// no pair axes or pair verdict to publish.
+pub(crate) fn enforce_pair_evidence_scope(cluster: &mut ReportCluster) {
+    if elected_signal_pair(cluster).is_some() {
+        return;
+    }
+    cluster.signal_source = None;
+    cluster.signals = ReportSignals {
+        structural: 0.0,
+        token_jaccard: 0.0,
+        shape: 0.0,
+        embedding_cos: 0.0,
+        pair_agreement: 0.0,
+        pair_rename_consistency: 0.0,
+        literal_fraction: 0.0,
+    };
+    cluster.evidence_verdict.clear();
 }
 
 /// Caps one cluster while retaining the named evidence pair whenever the
