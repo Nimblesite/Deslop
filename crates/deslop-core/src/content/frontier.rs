@@ -173,6 +173,30 @@ pub(super) fn operators_disagree(left: &[LeafKey], right: &[LeafKey]) -> bool {
     })
 }
 
+/// Whether two equally-sized operator populations contain different
+/// tokens. Ordering alone is not a contradiction: statement reordering
+/// is a Type-3 edit. A changed multiset at equal cardinality is an
+/// operator substitution, so surrounding authored bytes may not dilute
+/// it into content support (#432).
+pub(super) fn operators_substitute(left: &[LeafKey], right: &[LeafKey]) -> bool {
+    let mut left = operator_keys(left);
+    let mut right = operator_keys(right);
+    if left.is_empty() || left.len() != right.len() {
+        return false;
+    }
+    left.sort_unstable();
+    right.sort_unstable();
+    left != right
+}
+
+/// Raw operator identities carried by one content frontier.
+fn operator_keys(keys: &[LeafKey]) -> Vec<u64> {
+    keys.iter()
+        .filter(|key| key.population == Population::Operator)
+        .map(|key| key.key)
+        .collect()
+}
+
 /// Positional agreement between two shape-aligned members' frontiers:
 /// the share of measured positions whose raw bytes match.
 ///

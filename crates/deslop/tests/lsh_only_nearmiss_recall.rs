@@ -102,20 +102,25 @@ const RIGHT_FILE: &str = "ledger_right.py";
 /// again after #408 made `structural` a subtree-overlap grade and
 /// [PIPELINE-NORMALIZE-AST-OPERATOR] added operator kinds to the token
 /// stream: the pair now admits through the **anchored** near-miss row
-/// (`structural` 0.85 shared-subtree overlap) rather than the anchor-free
+/// (`structural` 59/73 shared-subtree overlap) rather than the anchor-free
 /// row 4, and the richer token stream lowers the k-gram estimate to
-/// 95/128 components. The recall contract this file pins is the visible
+/// 89/128 components. The recall contract this file pins is the visible
 /// `nearly_identical` bucket with the elected pair's measured axes.
-const MEASURED_JACCARD: f64 = 0.742_187_5;
+const MEASURED_JACCARD: f64 = 89.0 / 128.0;
 
 /// Graded shared-subtree overlap of the elected pair.
-const MEASURED_STRUCTURAL: f64 = 0.85;
+const MEASURED_STRUCTURAL: f64 = 59.0 / 73.0;
 
-/// Raw-content agreement measured on the elected pair.
-const MEASURED_AGREEMENT: f64 = 0.324_324_324_324_324_34;
+/// Raw-content agreement measured on the elected pair. The endpoints'
+/// Merkle digests differ, so [FUSED-CONTENT-GATE] requires key-set
+/// Jaccard rather than a fictitious positional alignment: 12/13 keys.
+const MEASURED_AGREEMENT: f64 = 12.0 / 13.0;
 
-/// Consistent-rename evidence measured on the elected pair.
-const MEASURED_RENAME_CONSISTENCY: f64 = 0.535_714_285_714_285_7;
+/// Shape-mismatched endpoints have no positional rename evidence.
+const MEASURED_RENAME_CONSISTENCY: f64 = 0.0;
+
+/// Embeddings are disabled for the fixture.
+const MEASURED_EMBEDDING: f64 = 0.0;
 
 /// Seeds the two-file Python corpus.
 fn seed(scan_root: &Path) -> Result<()> {
@@ -255,8 +260,8 @@ fn assert_elected_pair_axes(cluster: &serde_json::Value) {
     );
     let cosine = signal(cluster, "embedding_cos");
     assert!(
-        approx(cosine, 0.0),
-        "embeddings are off, so the cosine must be 0.0, got {cosine}: {cluster:#}"
+        approx(cosine, MEASURED_EMBEDDING),
+        "embeddings are off, so the cosine must be {MEASURED_EMBEDDING}, got {cosine}: {cluster:#}"
     );
     let agreement = signal(cluster, "pair_agreement");
     assert!(

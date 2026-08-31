@@ -20,20 +20,20 @@ Delete the shipped cluster-confidence model and every dependency on it at the st
 
 - [x] Immediately remove cluster `signals.fused`, `meets_fused_gate`, fused bands, `ACT_NOW_FUSED`, `REUSE_FUSED`, the content-confidence multiply, `RENAME_CONSISTENCY_DISCOUNT`, the ranking tie-break, fused history fields, and every renderer or client branch that consumes them.
 - [x] Delete the old cluster-confidence tests and fixtures as part of the same cutover; replace their meaningful accuracy assertions with final-contract assertions over pair admission, occurrences, bucket, elected axes, content support, weight, and order. Do not keep obsolete assertions green through a compatibility layer.
-- [ ] Replace the canonical typeDiagram model immediately and regenerate only the final Rust and TypeScript shapes. No dual schema or deprecated field survives.
+- [x] Replace the canonical typeDiagram model immediately and regenerate only the final Rust and TypeScript shapes. No dual schema or deprecated field survives.
 
 **Install the pair-scoped public contract across every surface.**
 
 - [x] JSON, text, HTML, LSP, MCP, and VSIX expose the elected pair’s measured axes and source with no cluster fused score, fused band, or fused gate.
-- [ ] Exact `H`, token `J`, or embedding `E` may clear the pair-specific admission bar; rescue requires every configured corroboration and leaves `f_admit` unchanged.
-- [ ] A cluster whose strongest `S`, `J`, and `E` belong to different pairs must render one real elected pair rather than per-axis maxima.
+- [x] Exact `H`, token `J`, or embedding `E` may clear the pair-specific admission bar; rescue requires every configured corroboration and leaves `f_admit` unchanged.
+- [x] A cluster whose strongest `S`, `J`, and `E` belong to different pairs must render one real elected pair rather than per-axis maxima.
 - [x] Equal-mass clusters sort by cluster id regardless of their old cluster confidence.
 
 **Replace elected-pair content evidence — gh #458.**
 
 - [x] Replace the quarantined cluster means for `agreement` and `rename_consistency` with `pair_agreement` and `pair_rename_consistency` measured on the same elected pair as `S`, `J`, and `E`.
 - [x] Carry that pair through `signal_source`; never elect content evidence separately and never average across closure members.
-- [ ] The final `a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster` assertion must cover the elected pair, occurrence paths, five rendered axes, bucket, and routing support; no intermediate test-only change is landed.
+- [x] The final `a_byte_identical_pairs_content_evidence_is_never_diluted_by_the_cluster` assertion must cover the elected pair, occurrence paths, five rendered axes, bucket, and routing support; no intermediate test-only change is landed.
 
 **Remove every remaining cluster-fused implementation site.**
 
@@ -52,14 +52,14 @@ Delete the shipped cluster-confidence model and every dependency on it at the st
 
 **Replace the remaining defective detector and routing behavior in the same change.**
 
-- [ ] **#389:** publish the `LedgerAlpha`/`LedgerBeta` physical duplication once, with one range convention and one `identical` cluster at `--min-nodes 8`.
-- [ ] **#421:** suppress the sub-line `python-issue-69-abstract-method` fragment while retaining a real clone in the same run.
-- [ ] **#362, #71, #79, #103, #283, #284, #285:** add one negative fixture per family, asserting exact hidden noise and exact retained duplicates.
-- [ ] **#432:** operator disagreement must reduce content support enough that `+`/`-` drift cannot take a stronger bucket than a byte-identical pair.
-- [ ] **#433:** cold, warm, and mixed passes must produce the same frontier-leaf population and report.
-- [ ] **#443:** represent “no authored content measured” separately from measured agreement `1.0`.
-- [ ] **#431:** correct rendered token Jaccard only when every member shares one Merkle hash; graded structural saturation is not equality.
-- [ ] **#356:** embeddings may add candidate pairs but must not mutate the occurrence set or evidence of an existing structural component through ANN bridge topology.
+- [x] **#389:** publish the `LedgerAlpha`/`LedgerBeta` physical duplication once, with one range convention and one `identical` cluster at `--min-nodes 8`.
+- [x] **#421:** suppress the sub-line `python-issue-69-abstract-method` fragment while retaining a real clone in the same run.
+- [x] **#362, #71, #79, #103, #283, #284, #285:** add one negative fixture per family, asserting exact hidden noise and exact retained duplicates.
+- [x] **#432:** operator disagreement must reduce content support enough that `+`/`-` drift cannot take a stronger bucket than a byte-identical pair.
+- [x] **#433:** cold, warm, and mixed passes must produce the same frontier-leaf population and report.
+- [x] **#443:** represent “no authored content measured” separately from measured agreement `1.0`.
+- [x] **#431:** correct rendered token Jaccard only when every member shares one Merkle hash; graded structural saturation is not equality.
+- [x] **#356:** embeddings may add candidate pairs but must not mutate the occurrence set or evidence of an existing structural component through ANN bridge topology.
 
 **Replace reporting language and documentation in the same change.**
 

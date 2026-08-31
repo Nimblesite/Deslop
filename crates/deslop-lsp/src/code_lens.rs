@@ -10,7 +10,7 @@
 use std::path::Path;
 
 use deslop_core::live::FileReport;
-use deslop_core::render::signals::plain_explanation;
+use deslop_core::render::signals::elected_pair_explanation;
 use deslop_core::report::ReportCluster;
 use serde_json::json;
 use tower_lsp::lsp_types::{CodeLens, Command, Position, Range};
@@ -65,10 +65,10 @@ fn lens_for_occurrence(cluster: &ReportCluster, occurrence_index: usize) -> Code
 /// subset that cannot separate a corroborated rename from a scaffolding
 /// family. There is no cluster `fused` to state ([FUSED-SCOPE]).
 fn title_for(cluster: &ReportCluster) -> String {
-    format!(
-        "●● {count} copies — {explanation} — jump to next",
-        count = cluster.size,
-        explanation = plain_explanation(cluster.signals),
+    let prefix = format!("●● {} copies", cluster.size);
+    elected_pair_explanation(cluster).map_or_else(
+        || format!("{prefix} — jump to next"),
+        |evidence| format!("{prefix} — {evidence} — jump to next"),
     )
 }
 
@@ -91,7 +91,7 @@ fn zero_range() -> Range {
 mod tests {
     use super::*;
     use anyhow::{anyhow, Result};
-    use deslop_core::report::{ReportOccurrence, ReportSignals};
+    use deslop_core::report::{ReportOccurrence, ReportSignalSource, ReportSignals};
     use std::path::PathBuf;
 
     const ALPHA_FILE: &str = "Alpha.cs";
@@ -121,6 +121,9 @@ mod tests {
         "s".clone_into(&mut cluster.summary);
         "i".clone_into(&mut cluster.interpretation);
         deslop_core::report_fixtures::restamp_fixture(&mut cluster);
+        if cluster.occurrences.len() >= PAIR_SIZE {
+            cluster.signal_source = Some(ReportSignalSource { left: 0, right: 1 });
+        }
         cluster
     }
 
@@ -280,7 +283,11 @@ mod tests {
 
     #[test]
     fn title_for_formats_all_signals_to_two_decimal_places() {
-        let cluster = make_cluster("c", 7, vec![]);
+        let cluster = make_cluster(
+            "c",
+            7,
+            vec![occurrence("A.cs", 0, 1), occurrence("B.cs", 0, 1)],
+        );
         let title = title_for(&cluster);
         assert_title_contains(&title, "●● 7 copies");
         assert_title_contains(&title, "structural 0.87");
@@ -294,7 +301,11 @@ mod tests {
     // the lens must also state the measured evidence.
     #[test]
     fn title_for_states_measured_content_evidence() {
-        let cluster = make_cluster("c", 7, vec![]);
+        let cluster = make_cluster(
+            "c",
+            7,
+            vec![occurrence("A.cs", 0, 1), occurrence("B.cs", 0, 1)],
+        );
         let title = title_for(&cluster);
         assert!(title.contains("structural 0.87"), "structural: {title}");
         assert!(title.contains("agreement 0.63"), "byte agreement: {title}");
@@ -314,7 +325,8 @@ mod tests {
             title,
             format!(
                 "●● 7 copies — {} — jump to next",
-                deslop_core::render::signals::plain_explanation(cluster.signals)
+                deslop_core::render::signals::elected_pair_explanation(&cluster)
+                    .unwrap_or_default()
             ),
             "the lens title must be the shared render::signals rendering, never a \
              second hand-rolled formatter"
@@ -325,7 +337,11 @@ mod tests {
     // title reads the cluster's own signals rather than a constant.
     #[test]
     fn title_for_tracks_each_clusters_own_evidence() {
-        let mut anchor_poor = make_cluster("scaffolding", 4, vec![]);
+        let mut anchor_poor = make_cluster(
+            "scaffolding",
+            4,
+            vec![occurrence("A.cs", 0, 1), occurrence("B.cs", 0, 1)],
+        );
         anchor_poor.signals = ReportSignals {
             structural: PERFECT_SIGNAL,
             token_jaccard: PERFECT_SIGNAL,
@@ -348,5 +364,14 @@ mod tests {
             !title.contains("agreement 0.63"),
             "must not echo another cluster's evidence: {title}"
         );
+    }
+
+    #[test]
+    fn title_without_an_elected_pair_omits_every_pair_score() {
+        let cluster = make_cluster("unsourced", 7, vec![]);
+        let title = title_for(&cluster);
+        assert_eq!(title, "●● 7 copies — jump to next");
+        assert!(!title.contains("structural"));
+        assert!(!title.contains("agreement"));
     }
 }

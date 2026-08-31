@@ -63,13 +63,13 @@ suite("decorations helpers", () => {
       content: "abc\ndef\n",
       language: "plaintext",
     });
-    const occurrence: ReportOccurrence = {
+    const targetOccurrence: ReportOccurrence = {
       path: "/x",
       start_byte: 0,
       end_byte: 9999,
       hidden: false,
     };
-    assert.equal(byteRangeToRange(doc, occurrence), null);
+    assert.equal(byteRangeToRange(doc, targetOccurrence), null);
   });
 
   test("byteRangeToRange maps bytes to positions inside the document", async () => {
@@ -77,13 +77,13 @@ suite("decorations helpers", () => {
       content: "hello\nworld\n",
       language: "plaintext",
     });
-    const occurrence: ReportOccurrence = {
+    const targetOccurrence: ReportOccurrence = {
       path: "/x",
       start_byte: 0,
       end_byte: 5,
       hidden: false,
     };
-    const range = byteRangeToRange(doc, occurrence);
+    const range = byteRangeToRange(doc, targetOccurrence);
     assert.ok(range);
     assert.equal(range.start.line, 0);
     assert.equal(range.start.character, 0);

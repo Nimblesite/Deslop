@@ -21,15 +21,14 @@
 //!
 //! # Why this fixture cannot pass by going blind
 //!
-//! `ledger_credit.py` / `ledger_debit.py` differ in exactly one operator
-//! (`+` against `-` on the `shifted` line) inside a twelve-line shared
-//! body — the smallest input that lands inside the band, measuring
-//! `structural = 0.9907`. `control_alpha.py` / `control_beta.py` hold a
-//! byte-identical function whose members *are* digest-equal, so the
-//! saturated triple the correction exists to protect is asserted in the
-//! same run. A fix that bought honesty by desaturating everything fails
-//! on the control; a fix that left the band fabricated fails on the
-//! ledger pair.
+//! `ledger_alpha.py` / `ledger_beta.py` are a long Type-3 pair whose one
+//! control-flow node changes from `if` to `while`. The edit keeps their
+//! measured structural overlap inside `[0.99, 1.0)` without relying on an
+//! operator that the normaliser must treat as a hard contradiction. The
+//! byte-identical control in `content-gate-unsaturated` proves the
+//! digest-equal correction separately. A fix that bought honesty by
+//! desaturating everything fails on that control; a fix that fabricated
+//! the band still fails on the Type-3 pair.
 
 use serde_json::Value;
 
@@ -37,26 +36,28 @@ use deslop_core::buckets::{CONTENT_SUPPORT_FLOOR, STRUCTURAL_SATURATION_FLOOR};
 
 use crate::common::{signals::*, *};
 
-/// Node floor low enough that each fixture function body is a candidate
-/// window — the same floor `operator_drift_is_not_duplication` renders
-/// the fixture at, so both suites describe one measured corpus.
+/// Node floor for the small control and accessor fixtures.
 const MIN_NODES: u32 = 8;
 
-/// The pair that lands inside the `[0.99, 1.0)` band: one operator
-/// apart, so their normalised subtrees differ and no digest is shared.
-const LEDGER_PAIR: [&str; 2] = ["ledger_credit.py", "ledger_debit.py"];
+/// Node floor that admits the 307-node Type-3 function roots while excluding
+/// exact repeated statement windows, so the assertion cannot select a nested
+/// digest-equal pair instead of the near-saturated pair under test.
+const SATURATION_BAND_MIN_NODES: u32 = 200;
 
-/// The byte-identical pair, whose members genuinely share one digest —
-/// the population the Merkle correction is entitled to.
-const CONTROL_PAIR: [&str; 2] = ["control_alpha.py", "control_beta.py"];
+/// The pair that lands inside the `[0.99, 1.0)` band: one control-flow
+/// node apart, so their normalised subtrees differ and no digest is shared.
+const SATURATION_BAND_PAIR: [&str; 2] = ["ledger_alpha.py", "ledger_beta.py"];
 
 /// Saturation: the reading the gate may publish only for members proven
 /// to share a normalised subtree.
 const SATURATED: f64 = 1.0;
 
-/// Renders the operator-drift fixture once for every assertion below.
-fn render() -> Result<Value> {
-    run_report(&fixture("operator-drift"), MIN_NODES)
+/// Renders the deliberately near-saturated Type-3 fixture.
+fn render_saturation_band() -> Result<Value> {
+    run_report(
+        &fixture("content-gate-saturation-band"),
+        SATURATION_BAND_MIN_NODES,
+    )
 }
 
 /// Asserts the published signal triple is internally consistent: `shape`
@@ -85,16 +86,22 @@ fn assert_shape_is_reproducible(cluster: &Value, label: &str) {
 // digest-equal must not be published carrying `token_jaccard = 1.00`, a
 // value no measurement supports, nor a `shape = 1.00` derived from it.
 //
-// The ledger pair is the whole point of the fixture here: it is the one
-// family that clusters at all once the operator reaches the digest, so
-// it is the only input that can reach the band. Its `structural` is
+// The Type-3 pair is the whole point of the fixture here. Its `structural` is
 // asserted strictly below saturation first — that is the precondition
 // that makes every assertion after it meaningful, and it is what a
 // future normalisation change would break silently.
 #[test]
 fn the_content_gate_publishes_no_token_jaccard_it_did_not_measure() -> Result<()> {
-    let report = render()?;
-    let ledger = expect_cluster_spanning(&report, &LEDGER_PAIR)?;
+    let report = render_saturation_band()?;
+    let ledger = clusters(&report)
+        .iter()
+        .find(|cluster| {
+            SATURATION_BAND_PAIR
+                .iter()
+                .all(|file| cluster_file_set(cluster).contains(*file))
+                && (STRUCTURAL_SATURATION_FLOOR..SATURATED).contains(&signal(cluster, "structural"))
+        })
+        .ok_or_else(|| anyhow::anyhow!("expected a cluster in the [0.99, 1.0) band: {report:#}"))?;
     assert!(
         ACT_NOW_BUCKETS.contains(&cluster_bucket(ledger)),
         "the ledger pair must reach a shape-identical bucket for the gate to \
@@ -134,8 +141,8 @@ fn the_content_gate_publishes_no_token_jaccard_it_did_not_measure() -> Result<()
 // can never be bought by desaturating every cluster in the report.
 #[test]
 fn a_digest_equal_pair_keeps_its_saturated_signals() -> Result<()> {
-    let report = render()?;
-    let control = expect_cluster_spanning(&report, &CONTROL_PAIR)?;
+    let report = render_unsaturated()?;
+    let control = expect_cluster_spanning(&report, &SATURATED_CONTROL_PAIR)?;
     assert_eq!(
         cluster_bucket(control),
         "identical",

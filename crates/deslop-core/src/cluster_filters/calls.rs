@@ -6,7 +6,7 @@ use tree_sitter::Node;
 
 use std::sync::Arc;
 
-use super::{enclosing_kind, parse_for, snippets::CallSequence, NoiseStage, ParseCache, Snippet};
+use super::{enclosing_kind, parse_for, NoiseStage, ParseCache, Snippet};
 use crate::ast::{named_children, ByteRange};
 
 use args::collect_argument_shapes;
@@ -16,6 +16,12 @@ mod args;
 
 /// Assertion admission for the covered-statement rule.
 mod asserts;
+
+/// Bound-result flow for invariant adapter calls in scenario scaffolding.
+mod dataflow;
+
+/// Ordered-call scenario scaffolding classification.
+mod sequence;
 
 /// Detects literal-variation call scaffolding
 /// ([CLONE-NOISE-LITERAL-VARIATION-CALLS]): a cluster whose members all
@@ -42,7 +48,7 @@ pub(super) fn is_literal_variation_call_cluster(
     if is_literal_variation_call_set(calls) {
         return true;
     }
-    is_literal_variation_call_sequence(snippets, cache)
+    sequence::is_literal_variation_call_sequence(snippets, cache)
 }
 
 /// Applies the literal-variation rule to one comparable call per
@@ -79,6 +85,10 @@ pub(crate) struct CallShape {
     keywords: Vec<Option<Vec<u8>>>,
     /// Per-argument summary used for literal-variation detection.
     arguments: Vec<ArgShape>,
+    /// Local name this call's result is assigned to, when any.
+    result_binding: Option<Vec<u8>>,
+    /// Raw identifier arguments this call consumes.
+    argument_identifiers: Vec<Vec<u8>>,
 }
 
 /// Per-argument summary recorded for each call.
@@ -116,63 +126,9 @@ fn call_shape_from_node(call: Node<'_>, source: &[u8], language: &str) -> Option
         callee,
         keywords,
         arguments,
+        result_binding: dataflow::assigned_binding(call, source),
+        argument_identifiers: dataflow::argument_identifiers(call, source),
     })
-}
-
-/// Detects body-range clusters whose contained call sequence has the
-/// same callees but intentionally different literal test data.
-///
-/// Every literal-bearing position must vary. A position with no string
-/// literal is neutral: the diagnostic-scenario idiom runs the same
-/// subject-under-test call between its varying setup and expectation,
-/// while an invariant literal-bearing assertion is shared authored
-/// logic and blocks suppression (#285).
-fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>], cache: &ParseCache) -> bool {
-    let cells: Option<Vec<Arc<CallSequence>>> = snippets
-        .iter()
-        .map(|snippet| cache.call_sequence(snippet, || Some(call_sequence(snippet))))
-        .collect();
-    let Some(cells) = cells else {
-        return false;
-    };
-    if !cells.iter().all(|cell| cell.statements_admissible) {
-        return false;
-    }
-    let sequences: Option<Vec<&[CallShape]>> =
-        cells.iter().map(|cell| cell.shapes.as_deref()).collect();
-    sequences.is_some_and(|sequences| literal_bearing_sequence_positions_vary(&sequences))
-}
-
-/// True when the members share one non-empty ordered call header, at
-/// least one position varies in string-literal bytes, every position
-/// carrying a string literal varies, and no authored interpolation pair
-/// is mistaken for payload (gh #467).
-fn literal_bearing_sequence_positions_vary(sequences: &[&[CallShape]]) -> bool {
-    let Some(first) = sequences.first() else {
-        return false;
-    };
-    if first.is_empty() || !sequences.iter().all(|seq| same_call_headers(seq, first)) {
-        return false;
-    }
-    (0..first.len()).any(|index| sequence_position_differs(sequences, index))
-        && (0..first.len()).all(|index| {
-            !sequence_position_has_string_literal(sequences, index)
-                || sequence_position_differs(sequences, index)
-        })
-        && !sequence_pair_is_copy_paste(sequences)
-}
-
-/// The sequence form of [`pair_is_copy_paste`]: same position, same
-/// callee, two members, differing interpolated literal.
-fn sequence_pair_is_copy_paste(sequences: &[&[CallShape]]) -> bool {
-    sequences.len() == 2
-        && sequences.first().is_some_and(|first| {
-            (0..first.len()).any(|index| {
-                let position: Vec<&CallShape> =
-                    sequences.iter().filter_map(|seq| seq.get(index)).collect();
-                pair_is_copy_paste(&position)
-            })
-        })
 }
 
 /// Computes the fused literal-variation sequence cell for one snippet:
@@ -369,17 +325,6 @@ fn sequence_position_differs(sequences: &[&[CallShape]], index: usize) -> bool {
         .filter_map(|sequence| sequence.get(index))
         .collect();
     calls.len() == sequences.len() && has_differing_string_literals(calls)
-}
-
-/// Whether any member's call at `index` carries a string literal.
-fn sequence_position_has_string_literal(sequences: &[&[CallShape]], index: usize) -> bool {
-    sequences.iter().any(|sequence| {
-        sequence.get(index).is_some_and(|call| {
-            call.arguments
-                .iter()
-                .any(|argument| matches!(argument, ArgShape::StringLiteral(_, _)))
-        })
-    })
 }
 
 /// Returns the set of tree-sitter node kinds that count as call

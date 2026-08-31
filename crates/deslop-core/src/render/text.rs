@@ -212,16 +212,25 @@ fn write_cluster(out: &mut String, idx: usize, cluster: &ReportCluster) {
     };
     let _ = writeln!(
         out,
-        "#{rank} [{id}]{chip} weight={weight:.2} size={size} nodes={nodes}\n  {summary}\n  :: {interpretation}\n  content evidence: {evidence}",
+        "#{rank} [{id}]{chip} weight={weight:.2} size={size} nodes={nodes}\n  {summary}\n  :: {interpretation}",
         rank = idx.saturating_add(1),
         id = cluster.id,
         weight = cluster.weight,
         size = cluster.size,
         nodes = cluster.canonical_node_count,
         summary = cluster.summary,
-        evidence = crate::render::signals::evidence_summary(cluster.signals),
     );
+    write_pair_evidence(out, cluster);
     write_cluster_occurrences(out, cluster);
+}
+
+/// Writes content evidence only when the report identifies its exact pair.
+fn write_pair_evidence(out: &mut String, cluster: &ReportCluster) {
+    let Some(attribution) = crate::render::signals::elected_pair_attribution(cluster) else {
+        return;
+    };
+    let evidence = crate::render::signals::evidence_summary(cluster.signals);
+    let _ = writeln!(out, "  content evidence: {evidence} ({attribution})");
 }
 
 /// Writes one badged row per occurrence on a `--diff` run, through the

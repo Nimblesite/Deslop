@@ -11,7 +11,10 @@ use crate::common;
 
 use anyhow::{bail, Result};
 use common::ReportFixture;
-use deslop_core::{content::ContentEvidence, pair::PairScore};
+use deslop_core::{
+    content::{ContentContradiction, ContentEvidence},
+    pair::PairScore,
+};
 
 /// Two same-shaped loaders in one file whose identifiers and literals
 /// diverge inconsistently: structural evidence saturates while the
@@ -41,6 +44,7 @@ fn gap_content() -> ContentEvidence {
         substance_varies: true,
         verbatim_dominated: false,
         measured: true,
+        contradiction: ContentContradiction::None,
     }
 }
 

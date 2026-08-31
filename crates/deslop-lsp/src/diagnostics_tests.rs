@@ -1,6 +1,6 @@
 use super::*;
 use anyhow::{anyhow, Result};
-use deslop_core::report::ReportSignals;
+use deslop_core::report::{ReportSignalSource, ReportSignals};
 use tempfile::TempDir;
 
 const ALPHA_FILE: &str = "Alpha.cs";
@@ -13,6 +13,7 @@ const PERFECT_SIGNAL: f64 = 1.0;
 const LIGHT_CLUSTER_WEIGHT: f64 = 1.0;
 const HEAVY_CLUSTER_WEIGHT: f64 = 100.0;
 const FIXTURE_END_BYTE: usize = 5;
+const PAIR_SIZE: usize = 2;
 
 // [LSP-SEVERITY-BUCKET] Every bucket, the severity it must publish, and the
 // rationale that mapping pins.
@@ -80,6 +81,9 @@ fn sample_cluster(
     "summary".clone_into(&mut cluster.summary);
     "interp".clone_into(&mut cluster.interpretation);
     deslop_core::report_fixtures::restamp_fixture(&mut cluster);
+    if cluster.occurrences.len() >= PAIR_SIZE {
+        cluster.signal_source = Some(ReportSignalSource { left: 0, right: 1 });
+    }
     cluster
 }
 
@@ -269,11 +273,42 @@ fn diagnostic_message_states_measured_content_evidence() {
         "no cluster fused score on any surface: {message}"
     );
     assert!(
-        message.ends_with(&deslop_core::render::signals::plain_explanation(
+        message.contains(&deslop_core::render::signals::plain_explanation(
             cluster.signals
         )),
         "the explanation must be the shared render::signals rendering, never a \
          second hand-rolled formatter: {message}"
+    );
+    let attribution = deslop_core::render::signals::elected_pair_attribution(&cluster);
+    assert!(
+        attribution.is_some(),
+        "the fixture must name its elected pair"
+    );
+    assert!(
+        message.ends_with(attribution.as_deref().unwrap_or_default()),
+        "content evidence is a pair quantity — the message must close by naming \
+         the elected pair that earned it, never leave the numbers looking like a \
+         cluster measurement ([FUSED-CLUSTER-SIGNALS]): {message}"
+    );
+}
+
+#[test]
+fn diagnostic_without_an_elected_pair_omits_every_pair_score() {
+    let cluster = sample_cluster(
+        "unsourced",
+        HEAVY_CLUSTER_WEIGHT,
+        vec![occurrence(A_FILE, 0, 1)],
+        "nearly_identical",
+    );
+    let message = diagnostic_message(&cluster);
+    assert!(message.contains("Nearly identical code × 1"));
+    assert!(
+        !message.contains("structural"),
+        "unsourced structural score leaked: {message}"
+    );
+    assert!(
+        !message.contains("agreement"),
+        "unsourced content score leaked: {message}"
     );
 }
 

@@ -23,48 +23,11 @@
 //! report shows the elected pair's measured axes and its content
 //! evidence, with the bucket as the engine's verdict.
 
-use crate::report::ReportSignals;
+use crate::report::{ReportCluster, ReportSignals};
 
-/// How one surface punctuates a `label`/`value` pair and joins pairs.
-struct PairStyle {
-    /// Text between the label and the value.
-    separator: &'static str,
-    /// Text after the value — Markdown closes its code span here.
-    terminator: &'static str,
-    /// Text between consecutive pairs.
-    joiner: &'static str,
-}
+mod style;
 
-/// Markdown surfaces put every value in a code span.
-const MARKDOWN_STYLE: PairStyle = PairStyle {
-    separator: "=`",
-    terminator: "`",
-    joiner: " ",
-};
-
-/// Surfaces the client renders verbatim — LSP diagnostic messages and
-/// code lens titles — carry no markup, so a backtick would show up as a
-/// literal character in the Problems panel and in the lens.
-const PLAIN_STYLE: PairStyle = PairStyle {
-    separator: " ",
-    terminator: "",
-    joiner: " · ",
-};
-
-/// Renders `pairs` to two decimal places in `style`.
-fn render_pairs(pairs: &[(&str, f64)], style: &PairStyle) -> String {
-    pairs
-        .iter()
-        .map(|(label, value)| {
-            format!(
-                "{label}{separator}{value:.2}{terminator}",
-                separator = style.separator,
-                terminator = style.terminator,
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(style.joiner)
-}
+use style::{render_pairs, MARKDOWN_STYLE, PLAIN_STYLE};
 
 /// The three deterministic axes, in report order
 /// ([FUSED-CLUSTER-SIGNALS]).
@@ -95,6 +58,43 @@ pub fn confidence_summary(signals: ReportSignals) -> String {
 #[must_use]
 pub fn evidence_summary(signals: ReportSignals) -> String {
     render_pairs(&evidence_pairs(signals), &MARKDOWN_STYLE)
+}
+
+/// Names the elected pair whose measured axes and content evidence the
+/// cluster renders ([FUSED-CLUSTER-SIGNALS]): the two occurrences
+/// `signal_source` names, by path. Content evidence is a pair
+/// quantity — displaying it without naming the pair that earned it lets
+/// a reader attribute `agreement`/`rename`/`literal` to the whole
+/// cluster, which the numbers never described ([FUSED-CONTENT-GATE]).
+///
+/// Returns `None` when the source is absent, self-referential, or outside the
+/// occurrence list. Callers must then omit every pair score and verdict.
+#[must_use]
+pub fn elected_pair_attribution(cluster: &ReportCluster) -> Option<String> {
+    let source = cluster.signal_source?;
+    if source.left == source.right {
+        return None;
+    }
+    let left = cluster.occurrences.get(source.left)?;
+    let right = cluster.occurrences.get(source.right)?;
+    Some(format!(
+        "elected pair: occurrences {} and {} — {} and {}",
+        source.left.saturating_add(1),
+        source.right.saturating_add(1),
+        left.path.display(),
+        right.path.display(),
+    ))
+}
+
+/// The complete pair-scoped evidence line. An absent or invalid source yields
+/// no line; a caller must never render the numbers on their own.
+#[must_use]
+pub fn elected_pair_explanation(cluster: &ReportCluster) -> Option<String> {
+    let attribution = elected_pair_attribution(cluster)?;
+    Some(format!(
+        "{} — {attribution}",
+        plain_explanation(cluster.signals)
+    ))
 }
 
 /// The whole signal explanation — the elected pair's three axes *and*
@@ -137,7 +137,7 @@ pub fn unvouched_content_reason(signals: ReportSignals) -> String {
 
 /// Column header for the fixed-width per-group signal table.
 pub const TABLE_HEADER: &str =
-    "group  structural  token_jaccard  embedding_cos  agreement  rename  literal\n";
+    "group  structural  token_jaccard  embedding_cos  agreement  rename  literal  elected_pair\n";
 
 /// One fixed-width row of [`TABLE_HEADER`].
 #[must_use]
@@ -151,6 +151,17 @@ pub fn table_row(id: &str, signals: ReportSignals) -> String {
         r = signals.pair_rename_consistency,
         l = signals.literal_fraction,
     )
+}
+
+/// One fixed-width HTML-table row with the exact pair attribution appended.
+/// Unsourced signals produce no row.
+#[must_use]
+pub fn scoped_table_row(cluster: &ReportCluster) -> Option<String> {
+    let attribution = elected_pair_attribution(cluster)?;
+    Some(format!(
+        "{}  {attribution}",
+        table_row(&cluster.id, cluster.signals)
+    ))
 }
 
 /// Half of the last digit a surface prints ([FUSED-CONTENT-GATE]).
@@ -290,7 +301,14 @@ fn boilerplate_verdict(signals: ReportSignals, shape: f64) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
+    use crate::report::{ReportOccurrence, ReportSignalSource};
+
     use super::*;
+
+    const LEFT_PATH: &str = "Alpha.cs";
+    const RIGHT_PATH: &str = "Beta.cs";
 
     /// A rendered signal triple with the content evidence behind it.
     fn signals(
@@ -312,6 +330,50 @@ mod tests {
         };
         built.shape = built.shape_score();
         built
+    }
+
+    fn occurrence(path: &str) -> ReportOccurrence {
+        ReportOccurrence {
+            path: PathBuf::from(path),
+            start_byte: 0,
+            end_byte: 1,
+            start_line: 1,
+            end_line: 1,
+            hidden: false,
+            in_diff: None,
+        }
+    }
+
+    fn attributed_cluster() -> ReportCluster {
+        let mut cluster = crate::report_fixtures::fixture_cluster(
+            "pair-scope",
+            vec![occurrence(LEFT_PATH), occurrence(RIGHT_PATH)],
+        );
+        cluster.signals = signals(1.0, 1.0, 0.0, 0.8, 0.9, 0.1);
+        cluster.signal_source = Some(ReportSignalSource { left: 0, right: 1 });
+        cluster
+    }
+
+    #[test]
+    fn pair_rendering_requires_two_valid_distinct_source_occurrences() {
+        let mut cluster = attributed_cluster();
+        assert_eq!(
+            elected_pair_attribution(&cluster).as_deref(),
+            Some("elected pair: occurrences 1 and 2 — Alpha.cs and Beta.cs")
+        );
+        assert!(elected_pair_explanation(&cluster).is_some());
+        assert!(scoped_table_row(&cluster).is_some());
+
+        for invalid in [
+            None,
+            Some(ReportSignalSource { left: 0, right: 0 }),
+            Some(ReportSignalSource { left: 0, right: 9 }),
+        ] {
+            cluster.signal_source = invalid;
+            assert!(elected_pair_attribution(&cluster).is_none());
+            assert!(elected_pair_explanation(&cluster).is_none());
+            assert!(scoped_table_row(&cluster).is_none());
+        }
     }
 
     /// [FUSED-CONTENT-GATE] The shape reading is the stronger of the two

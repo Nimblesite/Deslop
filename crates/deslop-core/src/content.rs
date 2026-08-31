@@ -32,8 +32,8 @@ mod frontier;
 mod rename;
 
 use frontier::{
-    key_set_jaccard, keys_of, member_content, member_count, operators_disagree, population,
-    positional_agreement, LeafKey, MemberContent, Population,
+    key_set_jaccard, keys_of, member_content, member_count, operators_disagree,
+    operators_substitute, population, positional_agreement, LeafKey, MemberContent, Population,
 };
 use rename::ModalBijection;
 
@@ -67,6 +67,17 @@ const VERBATIM_MEMBER_SHARE_FLOOR: f64 = 0.5;
 
 /// Smallest token-identical family that is a copy of anything.
 const MIN_VERBATIM_FAMILY: usize = 2;
+
+/// A semantic contradiction that must prevent content evidence from
+/// supporting the elected pair.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContentContradiction {
+    /// The elected pair carries no known contradiction.
+    None,
+    /// Equally-sized operator populations differ, so the pair changes
+    /// behaviour rather than merely renaming content (#432).
+    OperatorSubstitution,
+}
 
 /// Measured raw-content evidence for one cluster, produced by
 /// [`attach_content_evidence`] and consumed by bucket routing, the
@@ -111,6 +122,10 @@ pub struct ContentEvidence {
     /// route with no other signal tells "measured full agreement" apart
     /// from "nothing was measured" ([FUSED-CONTENT-GATE]).
     pub measured: bool,
+    /// Semantic contradiction found on the elected endpoints. A
+    /// contradiction prevents the pair from inheriting duplicate
+    /// content support even when its normalised shape saturates.
+    pub contradiction: ContentContradiction,
 }
 
 impl ContentEvidence {
@@ -138,6 +153,7 @@ impl ContentEvidence {
             substance_varies: false,
             verbatim_dominated: false,
             measured: false,
+            contradiction: ContentContradiction::None,
         }
     }
 }
@@ -227,22 +243,32 @@ fn measure_cluster<S: BuildHasher, L: BuildHasher>(
             member_contents.get(right)?.as_ref()?,
         ))
     });
+    let (agreement, rename_consistency, contradiction) = measured_pair_evidence(pair, sources);
     ContentEvidence {
-        agreement: pair.map_or(0.0, |(left, right)| {
-            pair_agreement(Some(&left.keys), Some(&right.keys))
-        }),
-        rename_consistency: pair.map_or(0.0, |(left, right)| {
-            if operators_disagree(&left.keys, &right.keys) {
-                0.0
-            } else {
-                rename::pair_rename_consistency(Some(left), Some(right), sources)
-            }
-        }),
+        agreement,
+        rename_consistency,
         literal_fraction: canonical_literal_fraction(canonical_keys),
         substance_varies: cluster_substance_varies(canonical_keys, &member_contents),
         verbatim_dominated,
         measured: pair.is_some(),
+        contradiction,
     }
+}
+
+/// Elected-pair content axes plus the operator-substitution conviction.
+fn measured_pair_evidence<S: BuildHasher>(
+    pair: Option<(&MemberContent, &MemberContent)>,
+    sources: &HashMap<FileId, Vec<u8>, S>,
+) -> (f64, f64, ContentContradiction) {
+    let Some((left, right)) = pair else {
+        return (0.0, 0.0, ContentContradiction::None);
+    };
+    if operators_substitute(&left.keys, &right.keys) {
+        return (0.0, 0.0, ContentContradiction::OperatorSubstitution);
+    }
+    let agreement = pair_agreement(Some(left), Some(right));
+    let rename_consistency = rename::pair_rename_consistency(Some(left), Some(right), sources);
+    (agreement, rename_consistency, ContentContradiction::None)
 }
 
 /// Proof that a cluster's members differ in substance rather than in
@@ -447,28 +473,27 @@ pub(crate) fn pair_content_agreement<S: BuildHasher, L: BuildHasher>(
     sources: &HashMap<FileId, Vec<u8>, S>,
     languages: &HashMap<FileId, &'static str, L>,
 ) -> f64 {
-    pair_agreement(
-        keys_of(member_content(left, tree_index, sources, languages).as_ref()),
-        keys_of(member_content(right, tree_index, sources, languages).as_ref()),
-    )
+    let left = member_content(left, tree_index, sources, languages);
+    let right = member_content(right, tree_index, sources, languages);
+    pair_agreement(left.as_ref(), right.as_ref())
 }
 
 /// Fraction of aligned collapsed positions whose raw bytes match — the
 /// positional branch of the elected pair's content agreement
 /// ([FUSED-CONTENT-GATE]); set-Jaccard fallback when the members do not
 /// align position for position.
-fn pair_agreement(canonical: Option<&[LeafKey]>, member: Option<&[LeafKey]>) -> f64 {
+fn pair_agreement(canonical: Option<&MemberContent>, member: Option<&MemberContent>) -> f64 {
     let (Some(canonical), Some(member)) = (canonical, member) else {
         return 0.0;
     };
-    if operators_disagree(canonical, member) {
+    if operators_disagree(&canonical.keys, &member.keys) {
         return 0.0;
     }
-    if canonical.is_empty() && member.is_empty() {
+    if canonical.keys.is_empty() && member.keys.is_empty() {
         return 1.0;
     }
-    if canonical.len() != member.len() {
-        return key_set_jaccard(canonical, member);
+    if canonical.shape != member.shape || canonical.keys.len() != member.keys.len() {
+        return key_set_jaccard(&canonical.keys, &member.keys);
     }
-    positional_agreement(canonical, member)
+    positional_agreement(&canonical.keys, &member.keys)
 }

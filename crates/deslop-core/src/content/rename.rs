@@ -76,7 +76,7 @@ pub(super) fn pair_rename_consistency<S: BuildHasher>(
     let (Some(canonical), Some(member)) = (canonical, member) else {
         return 0.0;
     };
-    if canonical.keys.len() != member.keys.len() {
+    if canonical.shape != member.shape || canonical.keys.len() != member.keys.len() {
         return 0.0;
     }
     let literals = population(&canonical.keys, &member.keys, Population::Literal);

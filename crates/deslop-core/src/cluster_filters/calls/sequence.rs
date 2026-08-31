@@ -1,0 +1,100 @@
+//! Ordered-call scenario scaffolding classification.
+
+use std::sync::Arc;
+
+use super::{
+    call_sequence, pair_is_copy_paste, same_call_headers, sequence_position_differs, ArgShape,
+    CallShape,
+};
+use crate::cluster_filters::{snippets::CallSequence, ParseCache, Snippet};
+
+/// Detects body-range clusters whose contained call sequence has the
+/// same callees but intentionally different literal test data.
+///
+/// Every position must vary, except an invariant no-literal adapter whose
+/// bound result flows into a later varying call. Such an adapter is connective
+/// scenario plumbing, not an independent reusable assertion. An invariant
+/// literal-bearing call always blocks suppression, as does any invariant call
+/// whose result is not consumed by the varying payload.
+pub(super) fn is_literal_variation_call_sequence(
+    snippets: &[Snippet<'_>],
+    cache: &ParseCache,
+) -> bool {
+    let cells: Option<Vec<Arc<CallSequence>>> = snippets
+        .iter()
+        .map(|snippet| cache.call_sequence(snippet, || Some(call_sequence(snippet))))
+        .collect();
+    let Some(cells) = cells else {
+        return false;
+    };
+    if !cells.iter().all(|cell| cell.statements_admissible) {
+        return false;
+    }
+    let sequences: Option<Vec<&[CallShape]>> =
+        cells.iter().map(|cell| cell.shapes.as_deref()).collect();
+    sequences.is_some_and(|sequences| sequence_is_scenario_scaffolding(&sequences))
+}
+
+/// True when the members share one ordered call header and every invariant
+/// position is only a bound adapter into a later varying position.
+fn sequence_is_scenario_scaffolding(sequences: &[&[CallShape]]) -> bool {
+    let Some(first) = sequences.first() else {
+        return false;
+    };
+    if first.is_empty() || !sequences.iter().all(|seq| same_call_headers(seq, first)) {
+        return false;
+    }
+    let varying: Vec<bool> = (0..first.len())
+        .map(|index| sequence_position_differs(sequences, index))
+        .collect();
+    varying.contains(&true)
+        && varying.iter().enumerate().all(|(index, differs)| {
+            *differs || invariant_position_flows_to_variation(sequences, &varying, index)
+        })
+        && !sequence_pair_is_copy_paste(sequences)
+}
+
+/// Whether one invariant no-literal call only adapts a bound value for a
+/// later literal-varying call in every member.
+fn invariant_position_flows_to_variation(
+    sequences: &[&[CallShape]],
+    varying: &[bool],
+    index: usize,
+) -> bool {
+    sequences.iter().all(|sequence| {
+        let Some(call) = sequence.get(index) else {
+            return false;
+        };
+        !call_has_string_literal(call)
+            && call.result_binding.as_ref().is_some_and(|binding| {
+                sequence
+                    .iter()
+                    .enumerate()
+                    .skip(index.saturating_add(1))
+                    .any(|(later, consumer)| {
+                        varying.get(later).copied().unwrap_or(false)
+                            && consumer.argument_identifiers.contains(binding)
+                    })
+            })
+    })
+}
+
+/// Whether a call position carries authored string payload.
+fn call_has_string_literal(call: &CallShape) -> bool {
+    call.arguments
+        .iter()
+        .any(|argument| matches!(argument, ArgShape::StringLiteral(_, _)))
+}
+
+/// The sequence form of [`pair_is_copy_paste`]: same position, same
+/// callee, two members, differing interpolated literal.
+fn sequence_pair_is_copy_paste(sequences: &[&[CallShape]]) -> bool {
+    sequences.len() == 2
+        && sequences.first().is_some_and(|first| {
+            (0..first.len()).any(|index| {
+                let position: Vec<&CallShape> =
+                    sequences.iter().filter_map(|seq| seq.get(index)).collect();
+                pair_is_copy_paste(&position)
+            })
+        })
+}

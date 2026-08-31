@@ -30,6 +30,11 @@ declare global {
 const repoRoot = findRepoRoot(process.cwd());
 const webviewDir = path.join(repoRoot, "clients", "vscode", "media", "webview");
 const screenshotDir = path.join(repoRoot, "target", "playwright-webview");
+const ELECTED_PAIR_HEADING = "ELECTED PAIR EVIDENCE";
+const ELECTED_PAIR_LEFT = "src/dart/alpha.dart:12:3";
+const ELECTED_PAIR_RIGHT = "src/dart/beta.dart:31:5";
+const ELECTED_PAIR_SOURCE = `${ELECTED_PAIR_LEFT} ↔ ${ELECTED_PAIR_RIGHT}`;
+const PAIR_EVIDENCE_UNAVAILABLE = "PAIR EVIDENCE UNAVAILABLE";
 
 const viewports: readonly ViewportCase[] = [
   { name: "desktop", width: 1280, height: 900 },
@@ -66,8 +71,9 @@ test.describe("VSIX webview bundles", () => {
 
       await expect(page.getByText("CLUSTER").first()).toBeVisible();
       await expect(page.getByRole("heading", { name: "Same behavior, different code" })).toBeVisible();
-      await expect(page.getByText("SIGNALS")).toBeVisible();
-      await expect(page.getByText("src/dart/alpha.dart:12:3")).toBeVisible();
+      await expect(page.getByText(ELECTED_PAIR_HEADING, { exact: true })).toBeVisible();
+      await expect(page.getByText(ELECTED_PAIR_SOURCE, { exact: true })).toBeVisible();
+      await expect(page.getByText(ELECTED_PAIR_LEFT, { exact: true })).toBeVisible();
 
       await page.keyboard.press("n");
       await expect(page.getByRole("heading", { name: "Nearly identical code" })).toBeVisible();
@@ -113,6 +119,18 @@ test.describe("VSIX webview bundles", () => {
     await expect(page.getByRole("heading", { name: "Same behavior, different code" })).toBeVisible();
     await expect(page.getByText("CLUSTER").first()).toBeVisible();
     await expect(page.getByText("No cluster selected.")).toHaveCount(0);
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("a cluster without an elected source cannot render pair scores", async ({ page }) => {
+    const errors = await loadView(page, "cluster", viewports[0]);
+
+    await postHostMessage(page, { kind: "report/snapshot", report: reportWithoutSignalSource });
+    await postHostMessage(page, { kind: "select/cluster", id: sampleReport.clusters[0].id });
+
+    await expect(page.getByText(PAIR_EVIDENCE_UNAVAILABLE, { exact: true })).toBeVisible();
+    await expect(page.getByText(ELECTED_PAIR_HEADING, { exact: true })).toHaveCount(0);
+    await expect(page.getByText("0.91", { exact: true })).toHaveCount(0);
     expect(errors, errors.join("\n")).toEqual([]);
   });
 });
@@ -385,6 +403,12 @@ const sampleReport = {
     },
   ],
 } satisfies Report;
+
+const reportWithoutSignalSource: Report = {
+  ...sampleReport,
+  clusters: sampleReport.clusters.map((cluster, index) =>
+    index === 0 ? { ...cluster, signal_source: undefined } : cluster),
+};
 
 function occurrence(
   filePath: string,

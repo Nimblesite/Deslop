@@ -7,7 +7,10 @@
 //! so the elected view and the rendered label cannot drift apart.
 
 use crate::{
-    content::ContentEvidence, fingerprint::Fingerprint, report::ReportSignals, state::FileId,
+    content::{ContentContradiction, ContentEvidence},
+    fingerprint::Fingerprint,
+    report::ReportSignals,
+    state::FileId,
 };
 
 use super::{
@@ -45,6 +48,9 @@ pub(crate) fn route_shape_identical(
         ClusterKind::NearlyIdentical | ClusterKind::StructuralOnly
     ) {
         return kind;
+    }
+    if content.contradiction == ContentContradiction::OperatorSubstitution {
+        return ClusterKind::StructuralOnly;
     }
     if let Some(demoted) = route_anchor_free(signals, content, members) {
         return demoted;

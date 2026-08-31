@@ -2,7 +2,7 @@
 
 use deslop_core::{
     buckets::{bucket_labels, classify},
-    render::signals::plain_explanation,
+    render::signals::elected_pair_explanation,
     report::{occurrence_count, ReportCluster},
 };
 use serde_json::{json, Value};
@@ -20,13 +20,12 @@ use serde_json::{json, Value};
 pub fn diagnostic_message(cluster: &ReportCluster) -> String {
     let labels = bucket_labels(classify(cluster));
     let count = occurrence_count(cluster);
-    format!(
-        "{} × {} — {} — {}",
-        labels.plain_title,
-        count,
-        labels.evidence_sentence,
-        plain_explanation(cluster.signals),
-    )
+    let prefix = format!(
+        "{} × {} — {}",
+        labels.plain_title, count, labels.evidence_sentence
+    );
+    elected_pair_explanation(cluster)
+        .map_or(prefix.clone(), |evidence| format!("{prefix} — {evidence}"))
 }
 
 /// Stores machine-facing cluster identity outside visible diagnostic text.
