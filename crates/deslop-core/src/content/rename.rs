@@ -12,7 +12,7 @@
 //! (`crates/deslop/tests/rename_literal_monotonicity.rs`). Such an
 //! **echo** is recognised by content, never by coincidence: the
 //! literal's bytes must transform into the partner's bytes exactly by
-//! the same substitution the identifier bijection elected, and the echo
+//! the same substitution the identifier bijection explains, and the echo
 //! then corroborates that substitution the way a repeated identifier
 //! occurrence would.
 
@@ -21,7 +21,7 @@ use std::{collections::BTreeMap, collections::HashMap, hash::BuildHasher};
 use crate::{buckets::CONTENT_SUPPORT_FLOOR, state::FileId};
 
 use super::{
-    frontier::{leaf_bytes, member_count, population, MemberContent, Population},
+    frontier::{frontiers_aligned, leaf_bytes, member_count, population, MemberContent, Population},
     preserved_literal_count, vacuous_share,
 };
 
@@ -64,7 +64,7 @@ const RENAME_EVIDENCE_HALF_MASS: f64 = 4.0;
 /// positional alignment.
 ///
 /// Literal consistency counts a preserved literal *and* a literal echo
-/// of an elected identifier substitution as affirming positions (#409),
+/// of a bijection-explained substitution as affirming positions (#409),
 /// and each echo raises the anchor mass and corroborates its
 /// substitution, so completing a rename can never score below leaving
 /// it half-finished (`rename_literal_monotonicity.rs`).
@@ -76,7 +76,7 @@ pub(super) fn pair_rename_consistency<S: BuildHasher>(
     let (Some(canonical), Some(member)) = (canonical, member) else {
         return 0.0;
     };
-    if canonical.shape != member.shape || canonical.keys.len() != member.keys.len() {
+    if !frontiers_aligned(canonical, member) {
         return 0.0;
     }
     let literals = population(&canonical.keys, &member.keys, Population::Literal);
@@ -124,12 +124,12 @@ struct RenameMapping {
 /// corroboration (#409): the echoed literal is a further position
 /// witnessing the same mapping.
 ///
-/// The parameter bijection is elected over the *substituted* pairs
+/// The parameter bijection is derived over the *substituted* pairs
 /// alone — Baker's fixed symbols and parameters are disjoint alphabets,
 /// and collapsed leaves carry no role, so a homonym byte-string (a
 /// preserved property name that also names a renamed local) must not
 /// let its identity occurrences and its substitution occurrences veto
-/// each other in one modal election. Identity needs no election at all:
+/// each other in one modal bijection. Identity needs no mapping at all:
 /// byte equality at the position is its own witness.
 fn rename_mapping(
     identifiers: &[(u64, u64)],
@@ -162,7 +162,7 @@ fn rename_mapping(
 }
 
 /// The aligned positions whose raw bytes differ — [TECH-PMATCH-BAKER]'s
-/// parameter alphabet, the population [`rename_mapping`] elects its
+/// parameter alphabet, the population [`rename_mapping`] derives its
 /// bijection over.
 fn substituted_pairs(identifiers: &[(u64, u64)]) -> Vec<(u64, u64)> {
     identifiers
@@ -197,7 +197,7 @@ fn anchor_weight(anchors: usize) -> f64 {
 /// to produce that, and only one of them was designed to.
 ///
 /// `consistency` is `min(literal_consistency, coverage)`. At exactly
-/// `1.0` every aligned literal is preserved or echoes an elected
+/// `1.0` every aligned literal is preserved or echoes a bijection-explained
 /// substitution, and every *constrained* identifier position is either
 /// byte-identical or a bijection-explained substitution corroborated by
 /// repetition: the bijection is total, contradiction-free and
@@ -226,7 +226,7 @@ fn evidence_weight(consistency: f64, anchors: usize) -> f64 {
     weight
 }
 
-/// Literal echoes of the elected identifier substitutions (#409), as a
+/// Literal echoes of the bijection's identifier substitutions (#409), as a
 /// per-substitution count: an aligned literal position whose bytes
 /// transform into the partner's bytes exactly by one bijection-explained
 /// identifier substitution. The transform is byte-exact replacement of
@@ -277,7 +277,7 @@ fn substituted_literal_positions(canonical: &MemberContent, member: &MemberConte
         .collect()
 }
 
-/// One elected identifier substitution: the aligned key pair plus the
+/// One bijection-explained substitution: the aligned key pair plus the
 /// raw bytes on each side.
 type SubstitutionBytes<'src> = ((u64, u64), (&'src [u8], &'src [u8]));
 
@@ -318,7 +318,7 @@ fn explained_substitution_bytes<'src, S: BuildHasher>(
 /// already isolated by the AST.
 ///
 /// Replacing every raw byte occurrence instead accepted arbitrary data
-/// as rename proof: under an elected `a -> x` substitution, the literal
+/// as rename proof: under an explained `a -> x` substitution, the literal
 /// `"banana"` transforms into `"bxnxnx"`, so a string whose payload
 /// merely *contains* the substituted bytes corroborated the rename it
 /// contradicts. Repeated across enough identifier positions that cleared
@@ -386,9 +386,9 @@ fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 /// and rename measures: a position is explained when its pair is the
 /// modal partner in both directions. A genuine rename maps every
 /// occurrence of a name to one new name; scattergun similarity does
-/// not. The caller chooses the electorate: [`mapping_consistency`]
-/// elects over every identifier position (identity included), while
-/// [`rename_mapping`] elects over the substituted pairs alone.
+/// not. The caller chooses the population: [`mapping_consistency`]
+/// maps over every identifier position (identity included), while
+/// [`rename_mapping`] maps over the substituted pairs alone.
 pub(super) struct ModalBijection {
     /// Modal partner of each left key.
     forward: BTreeMap<u64, u64>,

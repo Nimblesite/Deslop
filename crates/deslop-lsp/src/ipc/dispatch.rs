@@ -185,13 +185,10 @@ fn dispatch_refresh_report(service: &Arc<LiveService>, handle: &Handle) -> Resul
         service
             .remember_snapshot(previous_generation, previous_report)
             .await;
-        Ok(json!({
-            "command": crate::commands::REFRESH_REPORT,
-            "generation": delta.to_generation,
-            "clustersAdded": delta.clusters_added.len(),
-            "clustersRemoved": delta.clusters_removed.len(),
-            "clustersUpdated": delta.clusters_updated.len(),
-        }))
+        Ok(crate::commands::refresh_report_reply(
+            delta.to_generation,
+            &deslop_core::live::ChangeSummary::from_delta(&delta),
+        ))
     })
 }
 

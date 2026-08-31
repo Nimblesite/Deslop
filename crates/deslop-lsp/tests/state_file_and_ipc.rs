@@ -376,7 +376,15 @@ fn ipc_socket_handles_refresh_report_request() -> Result<()> {
             .is_some_and(|generation| generation >= 2),
         "refreshReport result must advance or expose a live generation: {response}"
     );
-    for delta_field in ["clustersAdded", "clustersRemoved", "clustersUpdated"] {
+    for delta_field in [
+        "clustersAdded",
+        "clustersRemoved",
+        "clustersUpdated",
+        "literalFindingsAdded",
+        "literalFindingsRemoved",
+        "literalFindingsUpdated",
+        "worstMass",
+    ] {
         ensure!(
             response
                 .pointer(&format!("/result/{delta_field}"))

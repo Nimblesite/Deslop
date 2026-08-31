@@ -10,7 +10,7 @@
 //! quality, so they live here rather than beside the judgements in
 //! [`super`].
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::hash::BuildHasher;
 
 use crate::{
@@ -155,13 +155,39 @@ pub(super) fn key_set_jaccard(left: &[LeafKey], right: &[LeafKey]) -> f64 {
     member_count(intersection) / member_count(union)
 }
 
+/// Whether two members' frontiers align position-for-position: equal
+/// normalised shape and equal key counts, so index `i` names the same
+/// authored slot in both members.
+pub(super) fn frontiers_aligned(left: &MemberContent, right: &MemberContent) -> bool {
+    left.shape == right.shape && left.keys.len() == right.keys.len()
+}
+
+/// Whether the endpoints contradict each other on a behaviour-bearing
+/// operator, in either agreement branch ([FUSED-CONTENT-GATE]).
+///
+/// Aligned frontiers compare positionally ([`operators_disagree`]).
+/// Misaligned frontiers compare operator multisets
+/// ([`operators_substitute`]): a positional zip across shifted indices
+/// pairs unrelated slots, so it misses a real substitution — the
+/// operator-drift ledger pair measured `agreement = 0.94` against a
+/// body/whole-function view shift and was admitted through rescue —
+/// and convicts a legitimate Type-3 reorder. Pinned by
+/// `crates/deslop/tests/operator_drift_is_not_duplication.rs`.
+pub(super) fn operator_contradiction(left: &MemberContent, right: &MemberContent) -> bool {
+    if frontiers_aligned(left, right) {
+        operators_disagree(&left.keys, &right.keys)
+    } else {
+        operators_substitute(&left.keys, &right.keys)
+    }
+}
+
 /// Whether aligned behaviour-bearing operator positions disagree.
 ///
 /// Unlike an identifier rename or literal edit, an operator change is
 /// a different computation. [FUSED-CONTENT-GATE] therefore treats one
 /// as a hard contradiction instead of allowing surrounding matches to
 /// dilute it into a high agreement ratio (#432).
-pub(super) fn operators_disagree(left: &[LeafKey], right: &[LeafKey]) -> bool {
+fn operators_disagree(left: &[LeafKey], right: &[LeafKey]) -> bool {
     left.iter().zip(right).any(|(left, right)| {
         left.population == Population::Operator
             && right.population == Population::Operator
@@ -169,28 +195,38 @@ pub(super) fn operators_disagree(left: &[LeafKey], right: &[LeafKey]) -> bool {
     })
 }
 
-/// Whether two equally-sized operator populations contain different
-/// tokens. Ordering alone is not a contradiction: statement reordering
-/// is a Type-3 edit. A changed multiset at equal cardinality is an
-/// operator substitution, so surrounding authored bytes may not dilute
-/// it into content support (#432).
-pub(super) fn operators_substitute(left: &[LeafKey], right: &[LeafKey]) -> bool {
-    let mut left = operator_keys(left);
-    let mut right = operator_keys(right);
-    if left.is_empty() || left.len() != right.len() {
-        return false;
-    }
-    left.sort_unstable();
-    right.sort_unstable();
-    left != right
+/// Whether the two operator populations prove a changed computation.
+///
+/// Ordering alone is not a contradiction: statement reordering is a
+/// Type-3 edit and keeps the multisets equal. A one-sided surplus is an
+/// inserted or deleted computation — also Type-3. But when *each* side
+/// carries an operator the other lacks, no reorder-only or
+/// insertion-only edit explains the pair: an operation changed, so
+/// surrounding authored bytes may not dilute it into content support
+/// (#432). At equal cardinality this is exactly "the multisets differ";
+/// at unequal cardinality it caught the operator-drift ledger pair
+/// `credit[2..10]`/`debit[2..11]`, whose extra trailing `-` hid the
+/// `+`/`-` substitution from the equal-cardinality rule.
+fn operators_substitute(left: &[LeafKey], right: &[LeafKey]) -> bool {
+    let left = operator_counts(left);
+    let right = operator_counts(right);
+    let one_sided = |ours: &BTreeMap<u64, usize>, theirs: &BTreeMap<u64, usize>| {
+        ours.iter()
+            .any(|(key, count)| theirs.get(key).map_or(true, |have| have < count))
+    };
+    one_sided(&left, &right) && one_sided(&right, &left)
 }
 
-/// Raw operator identities carried by one content frontier.
-fn operator_keys(keys: &[LeafKey]) -> Vec<u64> {
-    keys.iter()
-        .filter(|key| key.population == Population::Operator)
-        .map(|key| key.key)
-        .collect()
+/// Raw operator identities carried by one content frontier, counted.
+fn operator_counts(keys: &[LeafKey]) -> BTreeMap<u64, usize> {
+    let mut counts = BTreeMap::new();
+    for key in keys {
+        if key.population == Population::Operator {
+            let slot = counts.entry(key.key).or_insert(0_usize);
+            *slot = slot.saturating_add(1);
+        }
+    }
+    counts
 }
 
 /// Positional agreement between two shape-aligned members' frontiers:

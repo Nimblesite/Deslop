@@ -323,6 +323,35 @@ struct Occurrence {
     declaration: Option<ByteRange>,
 }
 
+impl Occurrence {
+    /// True when the two occupy one authored declaration's worth of
+    /// scope, so the enclosing view describes the other's code too.
+    ///
+    /// Two occurrences strictly inside the *same* declaration qualify.
+    /// So does the asymmetric case: `self` at or above declaration
+    /// level (no function production encloses it) against `other`
+    /// inside one. A whole-file view holding a function whole, against
+    /// an interior window of that same function, is the same
+    /// non-comparability seen from one level up — the window covers
+    /// less of what the file says, so the wider authored scope stays
+    /// the representative (`lsh_only_nearmiss_recall`).
+    fn shares_declaration_with(&self, other: &Self) -> bool {
+        match (self.declaration, other.declaration) {
+            (Some(mine), Some(theirs)) => mine == theirs,
+            (None, Some(_)) => true,
+            (_, None) => false,
+        }
+    }
+
+    /// True when this occurrence covers `other` and is wider on at
+    /// least one side.
+    fn encloses(&self, other: &Self) -> bool {
+        self.range.start <= other.range.start
+            && other.range.end <= self.range.end
+            && (self.range.start < other.range.start || other.range.end < self.range.end)
+    }
+}
+
 /// One transitively-overlapping run of same-file occurrences, reduced to
 /// the reported location plus the frontier the next window is tested
 /// against.
@@ -367,27 +396,7 @@ impl OverlapRun {
     /// A window nested in the occurrence it competes with measures a
     /// higher cross-file edge exactly to the extent that it drops the
     /// statements the two copies disagree on, so a grade contest inside
-    /// one authored declaration elects whichever window omits the most.
-    /// The enclosing view therefore stays when it shares the authored
-    /// declaration with the candidate — `typescript-type3` pins the
-    /// enclosing `accumulate`/`aggregate` view winning over the 37-node
-    /// interior run that dropped the extra `running = running + 2` and
-    /// reported a Merkle-equal pair
-    /// (`js_ts_signatures::typescript_near_miss_produces_cross_file_structural_cluster`).
-    ///
-    /// Between views that do not share a declaration, width alone
-    /// decides; a bridge that should not connect two files must fail
-    /// pair admission, never be hidden by the collapse.
-    /// `fsharp_issue_339_sibling_window_rename` keeps passing because
-    /// the wider whole-module view never reaches the component (its
-    /// pair to the other module fails admission), so the exact sibling
-    /// window remains the only view of the region.
-    ///
-    /// **Inside one declaration grades are never compared** (gh #408).
-    /// A window nested in the occurrence it competes with measures a
-    /// higher cross-file edge exactly to the extent that it drops the
-    /// statements the two copies disagree on, so a grade contest inside
-    /// one authored declaration elects whichever window omits the most.
+    /// one authored declaration would keep whichever window omits the most.
     /// The enclosing view therefore stays when it shares the authored
     /// declaration with the candidate — `typescript-type3` pins the
     /// enclosing `accumulate`/`aggregate` view winning over the 37-node
@@ -403,13 +412,17 @@ impl OverlapRun {
     /// pair to the other module fails admission), so the exact sibling
     /// window remains the only view of the region.
     fn displaces(&self, candidate: &Occurrence) -> bool {
-        panic!(
-            "[PIPELINE-CLUSTER-EXACT-SCOPE] accuracy quarantine: scope={:?}/{:?}, ranges={:?}/{:?}; widening an admitted overlapping range can publish an enclosing range whose operator-divergent pair never passed admission; pinned by crates/deslop/tests/operator_drift_is_not_duplication.rs",
-            self.representative.declaration,
-            candidate.declaration,
-            self.representative.range,
-            candidate.range,
-        );
+        if self.representative.encloses(candidate)
+            && self.representative.shares_declaration_with(candidate)
+        {
+            return false;
+        }
+        // Authored scope and width only ([PIPELINE-CLUSTER-EXACT-SCOPE]).
+        // Pair grades cannot choose a view: a bridge that should not
+        // connect must fail pair admission, not be hidden by the
+        // collapse. Equal-width ties keep the incumbent, so the run
+        // stays deterministic across runs.
+        candidate.range.len() > self.representative.range.len()
     }
 }
 

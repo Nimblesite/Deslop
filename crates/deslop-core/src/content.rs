@@ -6,7 +6,7 @@ mod frontier;
 mod rename;
 
 use frontier::{
-    key_set_jaccard, member_content, member_count, operators_disagree, operators_substitute,
+    frontiers_aligned, key_set_jaccard, member_content, member_count, operator_contradiction,
     positional_agreement, MemberContent, Population,
 };
 
@@ -101,7 +101,7 @@ fn pair_evidence<S: BuildHasher>(
     let Some((left, right)) = pair else {
         return ContentEvidence::unmeasured();
     };
-    if operators_substitute(&left.keys, &right.keys) {
+    if operator_contradiction(left, right) {
         return ContentEvidence {
             measured: true,
             contradiction: ContentContradiction::OperatorSubstitution,
@@ -155,13 +155,13 @@ fn pair_agreement(left: Option<&MemberContent>, right: Option<&MemberContent>) -
     let (Some(left), Some(right)) = (left, right) else {
         return 0.0;
     };
-    if operators_disagree(&left.keys, &right.keys) {
+    if operator_contradiction(left, right) {
         return 0.0;
     }
     if left.keys.is_empty() && right.keys.is_empty() {
         return 1.0;
     }
-    if left.shape != right.shape || left.keys.len() != right.keys.len() {
+    if !frontiers_aligned(left, right) {
         return key_set_jaccard(&left.keys, &right.keys);
     }
     positional_agreement(&left.keys, &right.keys)

@@ -114,10 +114,10 @@ impl PipelineSession {
         }))
     }
 
-    /// Runs rescue, transitive closure, the structural-family election
-    /// and the verbatim-subgroup split, and selects the signature space
-    /// the measurement pass reads — the middle of the render pipeline,
-    /// extracted so [`PipelineSession::render`] stays under the size bar.
+    /// Runs the shared-subtree rescue, the per-edge content gate, the
+    /// transitive closure and the verbatim-subgroup split — the middle of
+    /// the render pipeline, extracted so [`PipelineSession::render`]
+    /// stays under the size bar.
     fn partition_and_split(
         &self,
         fingerprints: &[crate::fingerprint::Fingerprint],

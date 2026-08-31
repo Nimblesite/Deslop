@@ -1,3 +1,9 @@
 {
-  "autoMemoryEnabled": false
+  "autoMemoryEnabled": false,
+  "permissions": {
+    "deny": [
+      "Agent",
+      "Workflow"
+    ]
+  }
 }
