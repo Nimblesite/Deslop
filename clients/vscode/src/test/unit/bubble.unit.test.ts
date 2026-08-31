@@ -96,12 +96,15 @@ suite("bubble rendering helpers", () => {
     assert.equal(shortPath("no-separator"), "no-separator");
   });
 
-  test("bubbleHover renders three action links", () => {
+  test("bubbleHover links open and dismiss, never an implicit compare", () => {
     const md = bubbleHover(cluster());
     const text = md.value;
     assert.match(text, /command:deslop.openCluster/);
-    assert.match(text, /command:deslop.compareWithCanonical/);
     assert.match(text, /command:deslop.bubble.dismissCluster/);
+    // [VSIX-PAIR-COMPARE] A bubble hover names one cluster — it can never
+    // supply both pair endpoints, so no compare link may render here.
+    assert.doesNotMatch(text, /command:deslop\.compareWithCanonical/);
+    assert.doesNotMatch(text, /command:deslop\.comparePair/);
   });
 
   // Audience: HUMAN. Issue #30. The plain human bucket label
@@ -181,9 +184,9 @@ suite("bubble rendering helpers", () => {
     );
     assert.match(bubble.value, /^\*\*abcdef0 [A-Z][A-Za-z, ]+\*\* × 4/);
     assert.match(bubble.value, /Canonical: `.*Alpha\.cs`/);
-    assert.match(bubble.value, /command:deslop\.compareWithCanonical/);
     assert.match(bubble.value, /command:deslop\.openCluster/);
     assert.match(bubble.value, /command:deslop\.bubble\.dismissCluster/);
+    assert.doesNotMatch(bubble.value, /command:deslop\.compareWithCanonical/);
   });
 
   test("renderBubbleParts is the single rebuild path for live bubble text (#46)", () => {

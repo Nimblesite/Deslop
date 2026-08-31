@@ -1,7 +1,8 @@
 import { HelpAction } from "../components/HelpAction";
 import { HelpBubble, HelpedText } from "../components/HelpBubble";
-import { post } from "../store";
+import { clearCompareEndpoints, compareLeft, compareRight, pickCompareEndpoint, post, sameEndpoint } from "../store";
 import { COLOR, FONT } from "../theme";
+import type { CompareEndpoint } from "../store";
 import type { ReportCluster, ReportOccurrence } from "../../../src/types/report";
 
 const TWELVE_PIXEL_SIZE = "12px";
@@ -20,6 +21,15 @@ const WITH_HELP_CLASS = "with-help";
 const OCCURRENCES_TOPIC = "occurrences";
 const OCCURRENCE_LOCATION_TOPIC = "occurrence-location";
 const OPEN_OCCURRENCE_MESSAGE = "open/occurrence";
+// [VSIX-PAIR-COMPARE] Pair evidence renders only after the user selects two
+// explicit endpoints; nothing here compares against an implicit canonical.
+const COMPARE_PAIR_MESSAGE = "compare/pair";
+const SELECT_FOR_COMPARISON = "Select for comparison";
+const COMPARE_SELECTED = "Compare selected occurrences";
+
+export function endpointOf(occurrence: ReportOccurrence): CompareEndpoint {
+  return { path: occurrence.path, start_byte: occurrence.start_byte, end_byte: occurrence.end_byte };
+}
 
 interface OccurrenceListProps {
   cluster: ReportCluster;
@@ -32,9 +42,10 @@ export function OccurrenceList({ cluster, focusedIndex, accent }: OccurrenceList
     <section style={{ marginTop: LARGE_SPACING }}>
       <div
         class={LABEL_CLASS}
-        style={{ color: COLOR.onSurfaceMuted, marginBottom: TWELVE_PIXEL_SIZE, fontFamily: FONT.mono }}
+        style={{ color: COLOR.onSurfaceMuted, marginBottom: TWELVE_PIXEL_SIZE, fontFamily: FONT.mono, display: FLEX_DISPLAY, alignItems: CENTER_ALIGNMENT, gap: SMALL_SPACING }}
       >
         <HelpedText topic={OCCURRENCES_TOPIC}>OCCURRENCES</HelpedText>
+        <CompareSelectedButton />
       </div>
       {cluster.occurrences.map((occurrence, index) => (
         <article
@@ -51,7 +62,7 @@ export function OccurrenceList({ cluster, focusedIndex, accent }: OccurrenceList
           }}
         >
           <OccurrenceLocation occurrence={occurrence} />
-          <OccurrenceActions cluster={cluster} occurrence={occurrence} index={index} />
+          <OccurrenceActions cluster={cluster} occurrence={occurrence} />
         </article>
       ))}
     </section>
@@ -102,11 +113,9 @@ function OccurrenceLocation({ occurrence }: { occurrence: ReportOccurrence }) {
 function OccurrenceActions({
   cluster,
   occurrence,
-  index,
 }: {
   cluster: ReportCluster;
   occurrence: ReportOccurrence;
-  index: number;
 }) {
   return (
     <div
@@ -128,14 +137,12 @@ function OccurrenceActions({
       </HelpAction>
       <HelpAction topic="compare-action">
         <button
-          class={index === 0 ? "" : "primary"}
-          onClick={() => compareWithCanonical(cluster.id, index)}
-          aria-disabled={index === 0}
-          style={index === 0 ? { opacity: 0.3 } : { color: "inherit" }}
-          title={compareTitle(index)}
-          aria-label={compareTitle(index)}
+          aria-pressed={isSelected(cluster, occurrence)}
+          onClick={() => pickCompareEndpoint(endpointOf(occurrence))}
+          title={selectTitle(cluster, occurrence)}
+          aria-label={SELECT_FOR_COMPARISON}
         >
-          Compare
+          {SELECT_FOR_COMPARISON}
         </button>
       </HelpAction>
     </div>
@@ -146,8 +153,52 @@ function openOccurrence(occurrence: ReportOccurrence): void {
   post({ kind: OPEN_OCCURRENCE_MESSAGE, occurrence });
 }
 
-function compareWithCanonical(clusterId: string, index: number): void {
-  if (index !== 0) post({ kind: "compare/canonical", clusterId });
+function CompareSelectedButton() {
+  const left = compareLeft.value;
+  const right = compareRight.value;
+  const ready = Boolean(left && right);
+  return (
+    <button
+      disabled={!ready}
+      style={!ready ? { opacity: 0.3 } : { color: "inherit" }}
+      onClick={() => {
+        if (left && right) {
+          post({ kind: COMPARE_PAIR_MESSAGE, left, right });
+          clearCompareEndpoints();
+        }
+      }}
+      title={
+        ready
+          ? "Open a diff of the two selected occurrences in VS Code's diff editor using Deslop's occurrence-range virtual documents."
+          : "Select two occurrences to enable compare. Pair evidence exists only for the pair you choose."
+      }
+    >
+      {COMPARE_SELECTED}
+    </button>
+  );
+}
+
+function isSelected(cluster: ReportCluster, occurrence: ReportOccurrence): boolean {
+  const endpoint = endpointOf(occurrence);
+  const left = compareLeft.value;
+  const right = compareRight.value;
+  return (
+    cluster.occurrences.some((candidate) => sameEndpoint(endpointOf(candidate), endpoint)) &&
+    Boolean((left && sameEndpoint(left, endpoint)) || (right && sameEndpoint(right, endpoint)))
+  );
+}
+
+function selectTitle(cluster: ReportCluster, occurrence: ReportOccurrence): string {
+  const endpoint = endpointOf(occurrence);
+  const left = compareLeft.value;
+  const right = compareRight.value;
+  if (left && sameEndpoint(left, endpoint)) return "Selected as the left side of the pair compare.";
+  if (right && sameEndpoint(right, endpoint)) return "Selected as the right side of the pair compare.";
+  return left && right
+    ? "Replace the right side of the pair compare with this occurrence."
+    : left
+      ? `Select this occurrence as the right side of the pair compare within ${cluster.id}.`
+      : `Select this occurrence as the left side of the pair compare within ${cluster.id}.`;
 }
 
 function occurrenceTitle(occurrence: ReportOccurrence, index: number): string {
@@ -169,11 +220,4 @@ function locationDescriptionTitle(occurrence: ReportOccurrence): string {
 
 function openTitle(occurrence: ReportOccurrence): string {
   return `Open this occurrence in VS Code at ${occurrence.displayLocation?.label ?? occurrence.path}. The editor selection will cover the clone range.`;
-}
-
-function compareTitle(index: number): string {
-  if (index === 0) {
-    return "Compare is disabled on the canonical occurrence because comparing the anchor to itself would not show a useful diff.";
-  }
-  return "Compare this cluster against its canonical occurrence in VS Code's diff editor using Deslop's occurrence-range virtual documents.";
 }

@@ -10,7 +10,7 @@
 //   * report          — canonical truth from the LSP. Only setSnapshot /
 //                       applyDelta (driven by deslop/reportChanged) write it.
 //                       Lookup by cluster id is always honoured here so
-//                       commands like compareWithCanonical, openCluster,
+//                       commands like comparePair, openCluster,
 //                       openOccurrence keep working through unsaved edits.
 //   * visibleReport   — derived projection. For each file the user has
 //                       edited locally (markFileDirty), occurrences in that

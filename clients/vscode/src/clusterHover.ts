@@ -47,8 +47,10 @@ export function clusterHoverMarkdown(
   }
 
   const openArgs = encodeURIComponent(JSON.stringify([cluster.id]));
+  // [VSIX-PAIR-COMPARE] No compare link here: a hover can only name one
+  // occurrence implicitly, and pair evidence needs two explicit endpoints.
+  // The cluster webview owns the two-slot pair selection.
   const links: string[] = [
-    `[Compare with canonical](command:deslop.compareWithCanonical?${openArgs})`,
     `[View cluster](command:deslop.openCluster?${openArgs})`,
   ];
   if (!showVerdict) {

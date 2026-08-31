@@ -213,7 +213,7 @@ function ClusterApp() {
             title={clusterStatsTitle(cluster)}
           >
             <StatItem topic={MASS_TOPIC} label={MASS_TOPIC} value={formatScore(cluster.mass)} />
-            <StatItem topic={NODES_TOPIC} label={NODES_TOPIC} value={String(cluster.canonical_node_count)} />
+            <StatItem topic="canonical" label={NODES_TOPIC} value={String(cluster.canonical_node_count)} />
             <StatItem topic="occurrence-count" label={OCCURRENCES_TOPIC} value={`× ${occurrenceCount(cluster)}`} />
           </div>
           {canonical ? (
@@ -321,7 +321,7 @@ function HotkeyHelp({ accent }: { accent: string }) {
 }
 
 function StatItem({ topic, label, value }: { topic: HelpTopic; label: string; value: string }) {
-  const title = helpValueTitle(helpCopy(topic), value);
+  const title = `${helpCopy(topic)} (${value})`;
   return (
     <span class={WITH_HELP_CLASS} title={title}>
       <span>

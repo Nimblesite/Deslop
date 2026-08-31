@@ -38,7 +38,10 @@ suite("decorations helpers", () => {
     assert.match(text, /Canonical/, "canonical section must be shown");
     // Action links present.
     assert.match(text, /command:deslop.openCluster/);
-    assert.match(text, /command:deslop.compareWithCanonical/);
+    // [VSIX-PAIR-COMPARE] Decorations cannot supply two endpoints, so no
+    // compare link may render on a decoration.
+    assert.doesNotMatch(text, /command:deslop\.compareWithCanonical/);
+    assert.doesNotMatch(text, /command:deslop\.comparePair/);
     // No raw AI data.
     assert.doesNotMatch(text, /Type-/);
     assert.doesNotMatch(text, /structural/i);

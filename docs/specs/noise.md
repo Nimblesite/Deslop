@@ -74,21 +74,7 @@ differ in one byte is not a verbatim family and inherits its component's
 suppression. A pass documented as grouping "by the exact source bytes" must
 publish only pairs that are.
 
-A family is then sized by the **distinct source locations** it covers, not by
-how many members landed in it. One location can arrive twice: the fingerprint
-collector emits both a block node and the full run of that block's own children,
-which span the same bytes and hash apart, so they are byte-identical to each
-other by construction. Counted as two members, that pair read as a copy — every
-component holding a multi-statement body looked splittable, the noise filters
-re-parsed and convicted components no split could ever change, and the
-[PERF-FLUTTER-TODO-OBSERVABILITY] counters reported those convictions as work
-the corpus had asked for. Both views stay in the family once it qualifies: the
-same-file overlap collapse elects the representative carrying the strongest
-cross-file edge and needs to see them all. Pinned by
-`one_location_seen_twice_is_not_a_splittable_family` and
-`a_copy_stays_splittable_and_keeps_both_views_of_its_locations` in
-`cluster_filters/verbatim_subgroup/tests.rs`, and end to end by
-`render_stage_noise_convictions_reach_the_emitted_totals`.
+A family is then sized by the **distinct source locations** it covers, not by how many members landed in it. One location can arrive twice: the fingerprint collector emits both a block node and the full run of that block's own children, which span the same bytes and hash apart, so they are byte-identical to each other by construction. Counted as two members, that pair read as a copy — every component holding a multi-statement body looked splittable, the noise filters re-parsed and convicted components no split could ever change, and the [PERF-FLUTTER-TODO-OBSERVABILITY] counters reported those convictions as work the corpus had asked for. Both views stay in the family once it qualifies. The pre-admission same-file overlap collapse selects the authored physical view by scope and width under [PIPELINE-CLUSTER-EXACT-SCOPE]; it never examines cross-file edge strength or any other pair evidence. Pinned by `one_location_seen_twice_is_not_a_splittable_family` and `a_copy_stays_splittable_and_keeps_both_views_of_its_locations` in `cluster_filters/verbatim_subgroup/tests.rs`, and end to end by `render_stage_noise_convictions_reach_the_emitted_totals`.
 
 The restated #434 pins carry both directions: each fixture's real cross-file
 control clone stays visible and ranked first, while the intra-file cores on

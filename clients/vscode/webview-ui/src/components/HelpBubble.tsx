@@ -5,11 +5,9 @@ const DOCS_BASE = "https://deslop.live/docs/vscode-cluster-panel/";
 /** Every helped element of the cluster panel. */
 export type HelpTopic =
   | "cluster-id"
-  | "clone-bucket"
   | "ai-match"
   | "rank"
-  | "weight"
-  | "size"
+  | "mass"
   | "occurrence-count"
   | "canonical"
   | "occurrences"
@@ -22,11 +20,9 @@ export type HelpTopic =
 
 const PANEL_HELP: Record<HelpTopic, string> = {
   "cluster-id": "Stable identifier for this duplicate-code cluster.",
-  "clone-bucket": "Human label for the kind of clone Deslop detected.",
   "ai-match": "The embedding pass found a semantic match, not only a syntactic one.",
   rank: "Worst-first position of this cluster in the current report.",
-  weight: "This cluster's duplicated mass — the worst-first ranking metric.",
-  size: "Number of cloned AST members represented by this cluster.",
+  mass: "This cluster's duplicated mass — the worst-first ranking metric.",
   "occurrence-count": "Number of editor locations in this cluster.",
   canonical: "First occurrence of the cluster — its canonical extent. Compare never uses it implicitly; pair comparison is explicit two-endpoint selection only.",
   occurrences: "The concrete locations where this cluster appears.",

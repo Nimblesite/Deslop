@@ -1,4 +1,4 @@
-// E2E: drive jumpToNextOccurrence / compareWithCanonical / openOccurrence
+// E2E: drive jumpToNextOccurrence / comparePair / openOccurrence
 // with real cluster data from the LSP's initial report, and exercise the
 // bubble render path by positioning inside a known cluster.
 
@@ -106,12 +106,17 @@ suite("cluster navigation", () => {
     await sleep(300);
   });
 
-  test("compareWithCanonical opens populated virtual documents for real relative paths", async () => {
+  test("comparePair opens populated virtual documents for two explicit endpoints with real relative paths", async () => {
     assert.ok(api.client, "extension must expose the real LanguageClient");
     const cluster = await waitForRelativePathCluster(api.client);
+    const left = cluster.occurrences[0];
+    const right = cluster.occurrences[1];
+    assert.ok(left && right, "cluster must expose two endpoints to compare");
 
     await vscode.commands.executeCommand("workbench.action.closeAllEditors");
-    await vscode.commands.executeCommand("deslop.compareWithCanonical", cluster.id);
+    // [VSIX-PAIR-COMPARE] Both endpoints are passed explicitly; the command
+    // has no single-argument form.
+    await vscode.commands.executeCommand("deslop.comparePair", left, right);
     const diff = await waitForDiffTab();
 
     assert.equal(diff.original.scheme, "deslop-compare");
@@ -129,18 +134,19 @@ suite("cluster navigation", () => {
   // lookups silently no-op. The store now splits canonical (LSP-authored) from
   // the visible projection — the diff command must still resolve through
   // canonical even while the file is dirty.
-  test("Compare with Canonical works on a cluster whose file is edited but unsaved (#130)", async () => {
+  test("comparePair works on a cluster whose file is edited but unsaved (#130)", async () => {
     assert.ok(api.client, "extension must expose the real LanguageClient");
     const cluster = await waitForRelativePathCluster(api.client);
-    const dirtyOccurrence = cluster.occurrences[0];
-    assert.ok(dirtyOccurrence, "cluster must have a peer to edit");
+    const left = cluster.occurrences[0];
+    const right = cluster.occurrences[1];
+    assert.ok(left && right, "cluster must expose two endpoints to compare");
 
     await vscode.commands.executeCommand("workbench.action.closeAllEditors");
     const fixture = process.env["DESLOP_TEST_FIXTURE"];
     assert.ok(fixture, "fixture path must be set");
-    const dirtyUri = path.isAbsolute(dirtyOccurrence.path)
-      ? vscode.Uri.file(dirtyOccurrence.path)
-      : vscode.Uri.file(path.join(fixture, dirtyOccurrence.path));
+    const dirtyUri = path.isAbsolute(left.path)
+      ? vscode.Uri.file(left.path)
+      : vscode.Uri.file(path.join(fixture, left.path));
     const doc = await vscode.workspace.openTextDocument(dirtyUri);
     const editor = await vscode.window.showTextDocument(doc);
 
@@ -152,7 +158,7 @@ suite("cluster navigation", () => {
       await editor.edit((b) => b.insert(new vscode.Position(0, 0), " "));
       assert.ok(doc.isDirty, "dirty marker must be set after edit");
 
-      await vscode.commands.executeCommand("deslop.compareWithCanonical", cluster.id);
+      await vscode.commands.executeCommand("deslop.comparePair", left, right);
       const diff = await waitForDiffTab();
 
       assert.equal(diff.original.scheme, "deslop-compare");

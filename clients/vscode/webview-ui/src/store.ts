@@ -29,6 +29,41 @@ export const EMPTY_FILTERS: Filters = {
 
 export const report = signal<Report | null>(null);
 export const selectedClusterId = signal<string | null>(null);
+
+// [VSIX-PAIR-COMPARE] Explicit two-endpoint pair selection. Pair evidence is
+// pair-only: the user picks both endpoints themselves and nothing on a
+// cluster surface compares an occurrence against an implicit canonical.
+export interface CompareEndpoint {
+  readonly path: string;
+  readonly start_byte: number;
+  readonly end_byte: number;
+}
+
+export const compareLeft = signal<CompareEndpoint | null>(null);
+export const compareRight = signal<CompareEndpoint | null>(null);
+
+export function sameEndpoint(a: CompareEndpoint, b: CompareEndpoint): boolean {
+  return a.path === b.path && a.start_byte === b.start_byte && a.end_byte === b.end_byte;
+}
+
+/** Fills the first empty slot; the second pick arms compare, a repeat pick of
+ * the same occurrence is a no-op, and a third pick replaces the right slot. */
+export function pickCompareEndpoint(endpoint: CompareEndpoint): void {
+  batch(() => {
+    if (!compareLeft.value) {
+      compareLeft.value = endpoint;
+    } else if (!sameEndpoint(compareLeft.value, endpoint)) {
+      compareRight.value = endpoint;
+    }
+  });
+}
+
+export function clearCompareEndpoints(): void {
+  batch(() => {
+    compareLeft.value = null;
+    compareRight.value = null;
+  });
+}
 export const analysisState = signal<AnalysisState>({ state: "idle" });
 export const filters = signal<Filters>(EMPTY_FILTERS);
 // [FACET-TOP-OFFENDERS-FILTER] Workspace facet filter pushed by the
@@ -90,12 +125,14 @@ export function applyHostMessage(message: HostMessage): void {
       case "report/delta":
         report.value = message.report;
         lastUpdatedAt.value = Date.now();
+        clearCompareEndpoints();
         break;
       case "analysis/state":
         analysisState.value = message.state;
         break;
       case "select/cluster":
         selectedClusterId.value = message.id;
+        clearCompareEndpoints();
         break;
       case "filter/set":
         filters.value = message.filters;

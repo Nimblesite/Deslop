@@ -177,7 +177,7 @@ function ReportApp() {
                 × {occurrenceCount(cluster)}
               </div>
               <div class={MONOSPACE_CLASS} style={{ fontSize: TWELVE_PIXEL_SIZE, textAlign: RIGHT_ALIGNMENT }}>
-                w {cluster.weight.toFixed(1)}
+                mass {cluster.mass}
               </div>
             </li>
           );

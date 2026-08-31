@@ -70,7 +70,7 @@ The cap counts normalised-tree nodes, including operator leaves from [PIPELINE-N
 
 **Routing.** [CLONE-BUCKETS-ROUTING] row 4b classifies an explicit pair whose overlap is corroborated by token or embedding evidence as `NearlyIdentical` using the admission floors. The obsolete `structural ≤ 0.01` comparison is removed; pairs below the overlap floor retain the anchor-free rejection guard.
 
-Because a nested window can exclude differing code, [PIPELINE-CLUSTER-SUBSUME] compares grades only between non-nested views; enclosure decides nested views within a credibility tier. `type3_enclosing_method.rs` pins all five languages.
+[PIPELINE-CLUSTER-SUBSUME] never compares pair grades. It selects between duplicate component views only by file coverage, physical enclosure, occurrence coverage, duplicated mass, and stable cluster id; structural, Jaccard, embedding, content, rename, literal, and pair classification evidence are forbidden inputs. `type3_enclosing_method.rs` pins the enclosing authored view in all five languages without attaching pair evidence to a cluster.
 
 ### [FUSED-SHARED-SUBTREE-MEMO] Overlap is memoised by ordered Merkle hash pair
 

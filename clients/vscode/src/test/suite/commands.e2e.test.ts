@@ -51,8 +51,10 @@ suite("commands", () => {
     await vscode.commands.executeCommand("deslop.jumpToNextOccurrence");
   });
 
-  test("compareWithCanonical with a bad id is a no-op", async () => {
-    await vscode.commands.executeCommand("deslop.compareWithCanonical", "nonexistent");
+  test("comparePair without two explicit endpoints is a no-op", async () => {
+    // [VSIX-PAIR-COMPARE] The command has no single-argument form; a bad or
+    // missing endpoint pair must not throw or open a diff.
+    await vscode.commands.executeCommand("deslop.comparePair", "nonexistent", undefined);
   });
 
   test("toggleShowAllLenses flips the workspace setting", async () => {

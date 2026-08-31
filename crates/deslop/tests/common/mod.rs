@@ -256,13 +256,31 @@ pub(crate) fn cluster_size(cluster: &Value) -> u64 {
     field(cluster, "size").as_u64().unwrap_or(0)
 }
 
-/// One component of a legacy cluster `signals` block (e.g. `token_jaccard`),
-/// or `0.0` when the named signal is absent.
+/// Reads a component of the cluster `signals` block, or **panics** when
+/// the named signal is absent.
+///
+/// The mass-only wire cutover removed cluster-level signals, buckets,
+/// and evidence verdicts from the report: admission evidence is pair-
+/// scoped and cluster surfaces carry cluster facts and mass only. A
+/// suite that reads a cluster signal is asserting on a deleted surface,
+/// and returning a plausible `0.0` here would turn every such assertion
+/// into a silent false green. Panicking is the mandated quarantine
+/// ([AGENTS.md] strict no-inaccurate-code rule): the failing test names
+/// the exact axis to migrate, instead of passing while asserting
+/// nothing measurable.
 pub(crate) fn signal(cluster: &Value, key: &str) -> f64 {
-    cluster
-        .pointer(&format!("/signals/{key}"))
-        .and_then(Value::as_f64)
-        .unwrap_or_default()
+    match cluster.pointer(&format!("/signals/{key}")) {
+        Some(Value::Number(value)) => value.as_f64().unwrap_or_else(|| {
+            panic!("cluster signals/{key} is not numeric — migrated suites must not read signals: {cluster:#}")
+        }),
+        Some(_) => panic!("cluster signals/{key} is not numeric — migrated suites must not read signals: {cluster:#}"),
+        None => panic!(
+            "cluster signals/{key} no longer exists on the report wire — \
+             the mass-only cutover removed cluster signals; migrate this \
+             assertion to admission/visibility + mass/membership \
+             ([PIPELINE-CLUSTER-CLOSURE]): {cluster:#}"
+        ),
+    }
 }
 
 /// Number of clusters the report rendered — the [METRICS-REPO] visible set.

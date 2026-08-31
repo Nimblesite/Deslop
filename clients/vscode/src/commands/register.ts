@@ -17,7 +17,7 @@ import {
   setTopOffendersSortBy,
 } from "./topOffendersView";
 import { Report, ReportCluster, ReportOccurrence } from "../types/report";
-import { buildCompareUri } from "../compare/provider";
+import { buildCompareUri, CompareEndpointRef } from "../compare/provider";
 import { ClusterNode, OccurrenceNode } from "../tree/providers";
 import {
   aiPayloadForCluster,
@@ -79,8 +79,7 @@ const COMMAND_BINDINGS: readonly CommandBinding[] = [
   // [VSIX-CODE-LENS] The lens "Jump" action cycles occurrences without
   // routing through textDocument/definition ([LSP-NON-INTERFERENCE]).
   { id: "deslop.jumpToNextOccurrence", run: ({ store }, clusterId, occurrenceIndex) => jumpToNextOccurrence(store, clusterId, occurrenceIndex) },
-  { id: "deslop.compareWithCanonical", run: ({ store }, target) => compareWithCanonicalTarget(store, target) },
-  { id: "deslop.compareOccurrenceWithCanonical", run: ({ store }, target) => compareWithCanonicalTarget(store, target) },
+  { id: "deslop.comparePair", run: (_deps, left, right) => comparePairEndpoints(left, right) },
   { id: "deslop.openAllOccurrences", run: (_deps, node) => openAllOccurrences(node as ClusterNode) },
   { id: "deslop.openCanonicalFile", run: (_deps, node) => openCanonicalOccurrence(node as ClusterNode) },
   { id: "deslop.openClusterDetails", run: ({ context, store }, node) => openClusterDetails(context, store, node as ClusterNode | OccurrenceNode) },
@@ -292,52 +291,28 @@ function occurrenceAfterCommandIndex(
   return cluster.occurrences[(occurrenceIndex + 1) % cluster.occurrences.length];
 }
 
-export async function compareWithCanonicalTarget(
-  store: ReportStore,
-  target: unknown,
-): Promise<void> {
-  if (isOccurrenceNode(target)) {
-    const selection = selectedOccurrenceCompare(store, target.occurrence);
-    if (!selection) return;
-    await openCompareDiff(selection.cluster.id, selection.canonical, selection.selected);
-    return;
-  }
-  const clusterId = clusterIdFromCompareTarget(store, target);
-  if (!clusterId) return;
-  await compareWithCanonical(store, clusterId);
+// [VSIX-PAIR-COMPARE] Compare exists only between two occurrences the user
+// selected explicitly. There is no canonical fallback: a missing, malformed,
+// or identical endpoint pair is a no-op, never an implicit comparison.
+const COMPARE_DIFF_TITLE = "Compare selected occurrences";
+
+export async function comparePairEndpoints(left: unknown, right: unknown): Promise<void> {
+  const leftEndpoint = compareEndpoint(left);
+  const rightEndpoint = compareEndpoint(right);
+  if (!leftEndpoint || !rightEndpoint || sameEndpoint(leftEndpoint, rightEndpoint)) return;
+  await openCompareDiff(leftEndpoint, rightEndpoint);
 }
 
-interface OccurrenceCompareSelection {
-  readonly cluster: ReportCluster;
-  readonly canonical: ReportOccurrence;
-  readonly selected: ReportOccurrence;
+function compareEndpoint(value: unknown): CompareEndpointRef | undefined {
+  if (!isObject(value)) return undefined;
+  const candidate = value as Partial<CompareEndpointRef>;
+  if (typeof candidate.path !== "string" || candidate.path.length === 0) return undefined;
+  if (typeof candidate.start_byte !== "number" || !Number.isInteger(candidate.start_byte)) return undefined;
+  if (typeof candidate.end_byte !== "number" || !Number.isInteger(candidate.end_byte)) return undefined;
+  return { path: candidate.path, start_byte: candidate.start_byte, end_byte: candidate.end_byte };
 }
 
-function selectedOccurrenceCompare(
-  store: ReportStore,
-  occurrence: ReportOccurrence,
-): OccurrenceCompareSelection | undefined {
-  const cluster = parentClusterForOccurrence(store, occurrence);
-  const canonical = cluster?.occurrences[0];
-  const selected = cluster?.occurrences.find((candidate) =>
-    sameOccurrence(candidate, occurrence),
-  );
-  if (!cluster || !canonical || !selected || sameOccurrence(canonical, selected)) {
-    return undefined;
-  }
-  return { cluster, canonical, selected };
-}
-
-function parentClusterForOccurrence(
-  store: ReportStore,
-  occurrence: ReportOccurrence,
-): ReportCluster | undefined {
-  return store.current.report?.clusters.find((cluster) =>
-    cluster.occurrences.some((candidate) => sameOccurrence(candidate, occurrence)),
-  );
-}
-
-function sameOccurrence(left: ReportOccurrence, right: ReportOccurrence): boolean {
+function sameEndpoint(left: CompareEndpointRef, right: CompareEndpointRef): boolean {
   return (
     left.path === right.path &&
     left.start_byte === right.start_byte &&
@@ -345,59 +320,12 @@ function sameOccurrence(left: ReportOccurrence, right: ReportOccurrence): boolea
   );
 }
 
-function clusterIdFromCompareTarget(
-  store: ReportStore,
-  target: unknown,
-): string | undefined {
-  if (isString(target)) return target;
-  if (isCompareTreeTarget(target)) return clusterIdForTreeNode(target, store);
-  return undefined;
-}
-
-function isCompareTreeTarget(
-  target: unknown,
-): target is ClusterNode | OccurrenceNode {
-  return isOccurrenceNode(target) || isClusterNode(target);
-}
-
-function isClusterNode(target: unknown): target is ClusterNode {
-  if (!isObject(target) || !("cluster" in target)) {
-    return false;
-  }
-  const cluster = (target as Partial<ClusterNode>).cluster as
-    | Partial<ReportCluster>
-    | undefined;
-  return isString(cluster?.id) && Array.isArray(cluster.occurrences);
-}
-
-export async function compareWithCanonical(
-  store: ReportStore,
-  clusterId: string,
-): Promise<void> {
-  const cluster = compareCluster(store, clusterId);
-  if (!cluster || cluster.occurrences.length < 2) return;
-  const [a, b] = cluster.occurrences;
-  if (!a || !b) return;
-  await openCompareDiff(cluster.id, a, b);
-}
-
-function compareCluster(
-  store: ReportStore,
-  clusterId: string,
-): ReportCluster | undefined {
-  return store.current.report?.clusters.find((c) => c.id === clusterId);
-}
-
-async function openCompareDiff(
-  clusterId: string,
-  a: ReportOccurrence,
-  b: ReportOccurrence,
-): Promise<void> {
+async function openCompareDiff(a: CompareEndpointRef, b: CompareEndpointRef): Promise<void> {
   await vscode.commands.executeCommand(
     "vscode.diff",
-    buildCompareUri(a, "a", clusterId),
-    buildCompareUri(b, "b", clusterId),
-    `Compare (cluster ${clusterId})`,
+    buildCompareUri(a, "a"),
+    buildCompareUri(b, "b"),
+    COMPARE_DIFF_TITLE,
   );
 }
 

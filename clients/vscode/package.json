@@ -81,12 +81,8 @@
         "title": "Deslop: Jump to Next Occurrence in Cluster"
       },
       {
-        "command": "deslop.compareWithCanonical",
-        "title": "Compare With Canonical"
-      },
-      {
-        "command": "deslop.compareOccurrenceWithCanonical",
-        "title": "Compare With Canonical"
+        "command": "deslop.comparePair",
+        "title": "Deslop: Compare Selected Occurrences"
       },
       {
         "command": "deslop.pickEmbeddingModel",
@@ -230,7 +226,7 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "deslop.compareOccurrenceWithCanonical",
+          "command": "deslop.comparePair",
           "when": "false"
         }
       ],
@@ -323,19 +319,9 @@
           "group": "navigation@2"
         },
         {
-          "command": "deslop.compareOccurrenceWithCanonical",
-          "when": "viewItem == deslop.occurrence",
-          "group": "navigation@1"
-        },
-        {
           "command": "deslop.openAllOccurrences",
           "when": "viewItem == deslop.clusterComparable",
           "group": "navigation@3"
-        },
-        {
-          "command": "deslop.compareWithCanonical",
-          "when": "viewItem == deslop.clusterComparable",
-          "group": "navigation@4"
         },
         {
           "command": "deslop.openClusterDetails",
