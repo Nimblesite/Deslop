@@ -37,7 +37,7 @@ fn is_table_file(name: &str) -> bool {
 }
 
 /// Renders the shared #336 corpus with an optional `.deslop.toml` body.
-fn tables_report(config: Option<&str>) -> Result<(PathBuf, Value)> {
+fn tables_report(config: Option<&str>) -> Result<(tempfile::TempDir, PathBuf, Value)> {
     let mut files = fsharp_tables_corpus();
     if let Some(body) = config {
         files.push((".deslop.toml".to_owned(), body.to_owned()));
@@ -51,7 +51,7 @@ fn tables_report(config: Option<&str>) -> Result<(PathBuf, Value)> {
 // `22 × 1 = 44`), and each cluster is byte-honest on the wire.
 #[test]
 fn fsharp_numeric_tables_and_clone_publish_ranked_by_mass() -> Result<()> {
-    let (root, report) = tables_report(None)?;
+    let (_workspace, root, report) = tables_report(None)?;
     let table = rank_where(&report, is_table_file);
     let clone = rank_where(&report, |name| name.starts_with("parse_"));
     assert!(
@@ -85,7 +85,7 @@ fn fsharp_numeric_tables_and_clone_publish_ranked_by_mass() -> Result<()> {
 /// changing weight: every legacy body must render the identical report.
 #[test]
 fn retired_data_clone_knobs_do_not_change_the_report() -> Result<()> {
-    let (_, baseline) = tables_report(None)?;
+    let (_baseline_workspace, _baseline_root, baseline) = tables_report(None)?;
     let ranked_baseline = rankable(&baseline);
     for (body, label) in [
         (
@@ -94,7 +94,7 @@ fn retired_data_clone_knobs_do_not_change_the_report() -> Result<()> {
         ),
         ("[ranking]\ndata_clone_weight = 1.0\n", "data_clone_weight"),
     ] {
-        let (_, report) = tables_report(Some(body))?;
+        let (_workspace, _root, report) = tables_report(Some(body))?;
         assert_eq!(
             rankable(&report),
             ranked_baseline,
@@ -135,7 +135,7 @@ fn rankable(report: &Value) -> Vec<(u64, &str, u64)> {
 fn verbatim_copied_fsharp_table_is_byte_proven() -> Result<()> {
     let table = fsharp_table_file("SharedTable", 2);
     let files = genuine_pair("copy_a.fs", "copy_b.fs", &table);
-    let (root, report) = report_for_with_root(&files, 20)?;
+    let (_workspace, root, report) = report_for_with_root(&files, 20)?;
     let copy = expect_cluster_spanning(&report, &["copy_a.fs", "copy_b.fs"])?;
     assert!(
         has_verbatim_pair(&root, copy)?,

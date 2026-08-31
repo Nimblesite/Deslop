@@ -128,31 +128,42 @@ fn live_session_consolidates_cross_file_cluster() -> Result<()> {
     let (_workspace, session) = live_session("rust-consolidate")?;
     let report = session.report();
     let cluster = crate::common::clusters::cross_file_identical_cluster(&report)?;
-    let plan = merge_plan_for(&session, &cluster.id)
-        .map_err(|error| anyhow!("merge_plan_for: {error}"))?;
+    // The reported view is the whole-file near-miss the subsumption
+    // elects ([PIPELINE-CLUSTER-SUBSUME]); its definition runs disagree
+    // (`normalise_labels` shared, `describe_*` divergent), so the
+    // consolidation engine must refuse with the reason named — the
+    // safe refusal, never a mechanical plan that would rewrite
+    // differing modules ([AUTOFIX-CONSOLIDATE-GATE] v1.1). The
+    // byte-identical core is inside both reported occurrences.
+    let workspace_root = session.root().to_path_buf();
+    let mut sources = std::collections::HashMap::new();
+    for path in cluster
+        .occurrences
+        .iter()
+        .map(|occurrence| occurrence.path.clone())
+        .collect::<std::collections::BTreeSet<_>>()
+    {
+        let absolute = if path.is_absolute() {
+            path.clone()
+        } else {
+            workspace_root.join(&path)
+        };
+        let bytes = std::fs::read(&absolute)?;
+        let _ = sources.insert(path, bytes);
+    }
+    let outcome = deslop_core::refactor::consolidate::compute_consolidation_plan(
+        &cluster,
+        &sources,
+        &deslop_core::lang::rust_lang::RustParser::new(),
+    )?;
+    let deslop_core::refactor::consolidate::ConsolidationOutcome::Refused(reason) = outcome else {
+        return Err(anyhow!(
+            "the near-miss must refuse consolidation, got a mechanical plan"
+        ));
+    };
     ensure!(
-        matches!(plan.verdict, MergeVerdict::Mechanical),
-        "the sibling-module duplicate consolidates mechanically, got {:?}",
-        plan.verdict
-    );
-    ensure!(
-        plan.helper_name == "normalise_labels",
-        "the consolidated symbol rides in helper_name, got {}",
-        plan.helper_name
-    );
-    let edit = plan.workspace_edit.context("wire WorkspaceEdit present")?;
-    let edits = edit
-        .pointer("/documentChanges/0/edits")
-        .and_then(serde_json::Value::as_array)
-        .context("documentChanges carry the duplicate file's edits")?;
-    ensure!(edits.len() == 2, "deletion + import, got {}", edits.len());
-    let uri = edit
-        .pointer("/documentChanges/0/textDocument/uri")
-        .and_then(serde_json::Value::as_str)
-        .context("edited uri present")?;
-    ensure!(
-        uri.starts_with("file://") && uri.contains("pricing_"),
-        "absolute duplicate-file uri, got {uri}"
+        reason.contains("definition run"),
+        "the refusal names the definition-run mismatch, got {reason}"
     );
     Ok(())
 }

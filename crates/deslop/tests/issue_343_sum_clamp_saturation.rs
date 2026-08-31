@@ -27,6 +27,7 @@ use crate::common::{
         assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
         signal_dump,
     },
+    verdict::duplicated_loc_for_path,
     *,
 };
 
@@ -199,12 +200,12 @@ fn without_embeddings_the_mid_band_pair_is_visible() -> Result<()> {
     Ok(())
 }
 
-// The whole mixed-band fixture, embeddings off: every visible cluster is
-// reported and no wire `fused` survives. This is the per-cluster form of
-// the scope contract, asserted against the exact corpus that exposed the
-// saturation.
+// The whole mixed-band fixture, embeddings off: every visible cluster has
+// the mass-only wire, and only the raw-content-supported family is
+// admitted. This is the per-cluster form of the scope contract, asserted
+// against the exact corpus that exposed saturation.
 #[test]
-fn every_visible_mixed_band_cluster_has_no_wire_fused_and_a_real_bucket() -> Result<()> {
+fn visible_mixed_band_clusters_have_no_pair_surface() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     seed(&fixture("ts-mixed-band"), tmp.path())?;
     let report = run_report(tmp.path(), 12)?;
@@ -218,9 +219,22 @@ fn every_visible_mixed_band_cluster_has_no_wire_fused_and_a_real_bucket() -> Res
         cluster_count(&report) > 0,
         "the fixture's rename family must stay visible: {report:#}"
     );
-    let family = expect_cluster_spanning(&report, &["ledger_a.ts", "ledger_b.ts"])?;
-    assert_structural_only_contract(family, "gh #343 a/b rename family");
-    assert_no_pair_surface_on_cluster(family, "gh #343 a/b rename family");
+    let family = expect_cluster_spanning(
+        &report,
+        &["ledger_a.ts", "ledger_c.ts", "ledger_d.ts", "ledger_e.ts"],
+    )?;
+    assert_eq!(
+        occurrence_files(family),
+        ["ledger_a.ts", "ledger_c.ts", "ledger_d.ts", "ledger_e.ts"],
+        "the supported wider family must be reported exactly: {report:#}"
+    );
+    assert_eq!(
+        duplicated_loc_for_path(&report, "ledger_b.ts")?,
+        0,
+        "the shape-only rewrite must fail pair admission before closure: {report:#}"
+    );
+    assert_structural_only_contract(family, "gh #343 supported rename family");
+    assert_no_pair_surface_on_cluster(family, "gh #343 supported rename family");
     for cluster in clusters(&report) {
         let dump = signal_dump(cluster);
         assert_structural_only_contract(cluster, "gh #343 mixed-band cluster");

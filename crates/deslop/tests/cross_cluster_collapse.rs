@@ -17,8 +17,13 @@ use std::{
 
 use anyhow::Result;
 
-use crate::common::signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract};
+use crate::common::signals::assert_no_pair_surface_on_cluster;
 use crate::common::*;
+
+const STANDARD_VIEW_BYTES: u64 = 190;
+const PREMIUM_VIEW_BYTES: u64 = 189;
+const ALPHA_WIDE_VIEW_BYTES: u64 = 493;
+const BETA_WIDE_VIEW_BYTES: u64 = 532;
 
 fn report_path(tmp: &Path) -> PathBuf {
     let mut path = tmp.join("report");
@@ -168,48 +173,56 @@ fn write_content_subsumption_fixture(root: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Finds the exact two-member shared block or reports its disappearance.
-fn expect_shared_logic<'a>(
-    report: &'a serde_json::Value,
-    root: &Path,
-) -> Result<&'a serde_json::Value> {
-    for cluster in clusters(report) {
-        let texts = occurrence_texts(root, cluster)?;
-        if texts.len() == 2 && texts.iter().all(|text| text == SHARED_LOGIC) {
-            return Ok(cluster);
-        }
-    }
-    Err(anyhow::anyhow!(
-        "content-proven nested clone disappeared during cross-cluster subsumption: {report:#}"
-    ))
-}
-
-/// Pins the evidence and verdict of the clone that subsumption must preserve.
-fn assert_content_proven(cluster: &serde_json::Value) {
-    assert_eq!(
-        cluster_size(cluster),
-        2,
-        "the clone must span exactly two files"
-    );
-    assert_structural_only_contract(cluster, "cross-cluster collapse");
-    assert_no_pair_surface_on_cluster(cluster, "cross-cluster collapse");
-    assert_eq!(
-        field(cluster, "signal_source"),
-        &serde_json::json!({"left": 0, "right": 1}),
-        "the rendered evidence must name the admitted pair it measured: {cluster:#}"
-    );
-}
-
-/// A low-content enclosing shape must not delete a byte-proven inner clone
-/// before [FUSED-CONTENT-GATE] can measure either view.
-/// [REPAIR-SUBSUME-CONTENT-FIRST]
+/// [PIPELINE-CLUSTER-SUBSUME] selects the enclosing cross-file view by
+/// physical enclosure and duplicated mass; it never promotes pair evidence
+/// or preserves a nested view merely because that view is byte-identical.
 #[test]
-fn content_proven_nested_clone_survives_content_poor_enclosing_view() -> Result<()> {
+fn wider_cross_file_view_survives_subsumption() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("corpus");
     write_content_subsumption_fixture(&scan_root)?;
     let report = run_report(tmp.path(), &scan_root)?;
-    assert_content_proven(expect_shared_logic(&report, &scan_root)?);
+    let candidates = clusters(&report);
+    assert_eq!(
+        candidates.len(),
+        1,
+        "one cross-file duplication must retain one canonical view: {report:#}"
+    );
+    let clone = candidates
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("candidate count asserted to be one above"))?;
+    let occurrences = cluster_occurrences(clone);
+    assert_eq!(cluster_size(clone), 2, "the clone must span both files");
+    assert_eq!(occurrences.len(), 2, "both visible occurrences must render");
+    let paths: Vec<&str> = occurrences
+        .iter()
+        .map(|occurrence| occurrence.path.as_str())
+        .collect();
+    assert_eq!(
+        paths,
+        vec!["alpha.ts", "beta.ts"],
+        "the canonical view must preserve file coverage"
+    );
+    let spans: Vec<u64> = occurrences
+        .iter()
+        .map(|occurrence| occurrence.end.saturating_sub(occurrence.start))
+        .collect();
+    assert_eq!(spans, vec![ALPHA_WIDE_VIEW_BYTES, BETA_WIDE_VIEW_BYTES]);
+    let texts = occurrence_texts(&scan_root, clone)?;
+    assert_eq!(
+        texts.len(),
+        2,
+        "both occurrence ranges must resolve to source bytes"
+    );
+    assert!(
+        texts.iter().all(|text| text.len() > SHARED_LOGIC.len()),
+        "the wider cross-file view must enclose the nested shared block"
+    );
+    assert_ne!(
+        texts[0], texts[1],
+        "the nested exact block must not elect itself"
+    );
+    assert_no_pair_surface_on_cluster(clone, "cross-cluster collapse");
     Ok(())
 }
 
@@ -287,19 +300,13 @@ fn rendered_clusters(report: &serde_json::Value, needle: &str) -> Vec<String> {
 ///
 /// `csharp-merge-readafter` holds one byte-identical five-statement run
 /// duplicated between two methods of the same class — `Prefix.cs` L6-10
-/// and L17-21, 158 bytes each, byte-for-byte equal. Enclosing it is a
-/// mis-scoped near-miss pairing the *whole* `ApplyStandard` body (L4-12,
-/// 235 bytes) against only the prefix of `ApplyPremium` (L16-21, 189
-/// bytes): two occurrences that are not the same code, routed
-/// `structural_only` at `structural` 0.85 and demoted by the renderer.
-///
-/// The demoted encloser must not delete the byte-identical clone. Both
-/// exceptions that let a nested view overturn its encloser require
-/// `spans_multiple_files`, so a byte-proven clone confined to one file
-/// has no route to survive: the report loses a Type-1 duplicate and
-/// claims nine lines of `ApplyStandard` are duplicated where five are.
+/// and L17-21, 158 bytes each, byte-for-byte equal. The larger authored view
+/// starts at the local `label` declaration and ends after `Publish`: it is
+/// 190 bytes in both methods, consistently renamed only at the label literal.
+/// [PIPELINE-CLUSTER-EXACT-SCOPE] selects that wider view before pair
+/// admission; a nested exact fingerprint must not override the authored scope.
 #[test]
-fn byte_identical_clone_survives_a_demoted_enclosing_view_in_one_file() -> Result<()> {
+fn widest_same_declaration_view_is_the_published_finding() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = fixture("csharp-merge-readafter");
     let report = default_report(tmp.path(), &scan_root)?;
@@ -309,43 +316,40 @@ fn byte_identical_clone_survives_a_demoted_enclosing_view_in_one_file() -> Resul
         "the fixture must report the duplicated prefix at all: {report:#}"
     );
 
-    let mut byte_identical = Vec::new();
-    for cluster in &candidates {
-        let texts = occurrence_texts(&scan_root, cluster)?;
-        if let [first, rest @ ..] = texts.as_slice() {
-            if !rest.is_empty() && rest.iter().all(|text| text == first) {
-                byte_identical.push(cluster.clone());
-            }
-        }
-    }
-
     let rendered = rendered_clusters(&report, "Prefix.cs");
     assert_eq!(
-        byte_identical.len(),
+        candidates.len(),
         1,
-        "exactly one published cluster must be the byte-identical \
-         five-statement run duplicated between ApplyStandard and \
-         ApplyPremium; a demoted `structural_only` view enclosing it must \
-         not delete it. Published: {rendered:#?}"
+        "one physical duplication must publish one canonical view: {rendered:#?}"
     );
-
-    let clone = byte_identical
+    let clone = candidates
         .first()
-        .ok_or_else(|| anyhow::anyhow!("length asserted to be exactly one above"))?;
+        .ok_or_else(|| anyhow::anyhow!("candidate count asserted to be one above"))?;
     let occurrences = cluster_occurrences(clone);
     assert_eq!(
         occurrences.len(),
         2,
-        "the byte-identical run occurs exactly twice: {clone:#}"
+        "the canonical same-file view must retain both method occurrences: {clone:#}"
     );
-    for occurrence in &occurrences {
-        assert_eq!(
-            occurrence.end.saturating_sub(occurrence.start),
-            158,
-            "each occurrence is the same 158-byte run; a differently-sized \
-             occurrence means a mis-scoped view was elected: {clone:#}"
-        );
-    }
+    let texts = occurrence_texts(&scan_root, clone)?;
+    assert_eq!(
+        texts.len(),
+        2,
+        "each occurrence must resolve to source bytes"
+    );
+    assert_ne!(
+        texts[0], texts[1],
+        "the smaller byte-identical fingerprint must not displace the wider authored view"
+    );
+    let spans: Vec<u64> = occurrences
+        .iter()
+        .map(|occurrence| occurrence.end.saturating_sub(occurrence.start))
+        .collect();
+    assert_eq!(
+        spans,
+        vec![STANDARD_VIEW_BYTES, PREMIUM_VIEW_BYTES],
+        "the two wider authored ranges differ only by their literal byte length: {clone:#}"
+    );
     assert_no_pair_surface_on_cluster(clone, "cross-cluster collapse");
     Ok(())
 }

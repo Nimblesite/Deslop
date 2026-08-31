@@ -10,7 +10,11 @@
 
 use anyhow::Result;
 
-use crate::common::*;
+use crate::common::{verdict::duplicated_loc_for_path, *};
+
+const INTERFACE_FILE_COUNT: u64 = 2;
+const NO_CLUSTERS: usize = 0;
+const NO_DUPLICATED_LINES: u64 = 0;
 
 #[test]
 fn typescript_generic_functions_with_renamed_type_params_cluster() -> Result<()> {
@@ -21,26 +25,40 @@ fn typescript_generic_functions_with_renamed_type_params_cluster() -> Result<()>
 }
 
 #[test]
-fn typescript_unrelated_interfaces_are_suppressed_as_data_shape() -> Result<()> {
+fn typescript_unrelated_interfaces_are_rejected_before_closure() -> Result<()> {
     // Two unrelated interfaces with the same field *shape* (readonly,
     // optional, `ReadonlyArray`, a nested object, a union, `Date | null`) but
     // different field *names* are distinct domain types, not extractable
     // duplicate logic. Like renamed-field Rust structs (#224), the data-shape
-    // filter suppresses them so they never pollute top-offenders — even
-    // though both files are analysed.
+    // pair-content gate rejects them before closure, so they never pollute
+    // top-offenders even though both files are analysed.
     let report = run_report(&fixture("ts-interfaces"), 10)?;
     assert_eq!(
         field(&report, "files_analysed").as_u64(),
-        Some(2),
+        Some(INTERFACE_FILE_COUNT),
         "both interface files must be analysed: {report:#}"
     );
-    assert!(
-        clusters(&report).is_empty(),
+    assert_eq!(
+        cluster_count(&report),
+        NO_CLUSTERS,
         "two unrelated interface data shapes must not be reported as a clone: {report:#}"
     );
-    assert!(
-        clusters_hidden(&report) >= 1,
-        "the data-shape family must be detected and hidden, proving the filter fired: {report:#}"
+    assert_eq!(
+        clusters_hidden(&report),
+        NO_DUPLICATED_LINES,
+        "the data-shape pair must fail before suppression: {report:#}"
+    );
+    for file in ["account-shape.ts", "user-shape.ts"] {
+        assert_eq!(
+            duplicated_loc_for_path(&report, file)?,
+            NO_DUPLICATED_LINES,
+            "{file} must receive no duplicate lines from a rejected pair: {report:#}"
+        );
+    }
+    assert_eq!(
+        metric_field(&report, "duplicated_loc").as_u64(),
+        Some(NO_DUPLICATED_LINES),
+        "a pre-closure rejection must not contribute repository duplicate LOC"
     );
     Ok(())
 }

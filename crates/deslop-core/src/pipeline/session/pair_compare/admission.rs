@@ -171,7 +171,16 @@ fn content_required(measured: Measurements) -> bool {
     measured.score.embedding_cos < EMBEDDING_SUPPORT_FLOOR
         && (measured.merkle_equal
             || measured.score.structural >= SHAPE_IDENTICAL_FLOOR
-            || measured.score.token_jaccard >= SATURATING_TOKEN_FLOOR)
+            || measured.score.token_jaccard >= SATURATING_TOKEN_FLOOR
+            || lsh_only_pair_needs_content(measured))
+}
+
+/// Whether an unanchored LSH-only comparison needs raw-content support.
+fn lsh_only_pair_needs_content(measured: Measurements) -> bool {
+    !measured.merkle_equal
+        && measured.score.embedding_cos < EMBEDDING_SUPPORT_FLOOR
+        && measured.score.structural < SHARED_SUBTREE_MIN_OVERLAP
+        && measured.score.token_jaccard >= LSH_ONLY_MIN_JACCARD
 }
 
 /// Pair-content support, never a cluster quantity.

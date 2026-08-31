@@ -172,7 +172,7 @@ fn issue_331_distinct_widget_declarations_must_not_saturate_fused_confidence() -
         DART_GENUINE_CLONE,
     ));
 
-    let (root, report) = report_for_with_root(&files, 20)?;
+    let (_workspace, root, report) = report_for_with_root(&files, 20)?;
     assert_shape_only_family_demoted(
         &root,
         &report,
@@ -229,7 +229,7 @@ fn issue_331_template_stamped_widget_scaffolds_do_not_surface() -> Result<()> {
 // not be reported as act-now duplication above a genuine clone.
 #[test]
 fn issue_336_distinct_numeric_tables_must_not_saturate_fused_confidence() -> Result<()> {
-    let (root, report) = report_for_with_root(&fsharp_tables_corpus(), 20)?;
+    let (_workspace, root, report) = report_for_with_root(&fsharp_tables_corpus(), 20)?;
     assert_shape_only_family_demoted(&root, &report, &["parse_a.fs", "parse_b.fs"], |name| {
         name.starts_with("tables_")
     })

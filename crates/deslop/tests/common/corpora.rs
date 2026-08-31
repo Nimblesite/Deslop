@@ -85,12 +85,11 @@ pub(crate) fn report_for(files: &[(String, String)], min_nodes: u32) -> Result<V
     run_report(&root, min_nodes)
 }
 
-/// [`report_for`] plus the scan root, for suites that need to prove
-/// byte-level facts against the fixture source.
+/// [`report_for`] plus the temporary owner and scan root, for suites that need to prove byte-level facts against the fixture source.
 pub(crate) fn report_for_with_root(
     files: &[(String, String)],
     min_nodes: u32,
-) -> Result<(std::path::PathBuf, Value)> {
+) -> Result<(tempfile::TempDir, std::path::PathBuf, Value)> {
     let tmp = tempfile::tempdir()?;
     let root = tmp.path().join("src");
     fs::create_dir_all(&root)?;
@@ -98,7 +97,7 @@ pub(crate) fn report_for_with_root(
         fs::write(root.join(file_name), source)?;
     }
     let report = run_report(&root, min_nodes)?;
-    Ok((root, report))
+    Ok((tmp, root, report))
 }
 
 /// Zero-based rank of the first cluster whose occurrences include a file

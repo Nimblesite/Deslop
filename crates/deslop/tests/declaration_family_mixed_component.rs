@@ -1,5 +1,5 @@
-//! [RANK-STRUCTURAL-ONLY] A mixed same-shape component must never be
-//! hidden wholesale because one sibling differs.
+//! [FUSED-CONTENT-GATE] Pair-only content admission must retain a
+//! supported Type-2 pair while excluding a same-shape rewrite.
 //!
 //! `csharp-mixed-declaration-component` is one class with three
 //! same-skeleton methods: `AccrueDomestic` and `AccrueRegional` are a
@@ -10,13 +10,9 @@
 //! third member alone — exactly the evidence a cluster-wide
 //! suppression would use to convict the first two.
 //!
-//! The declaration-family filter must not accept that conviction: every
-//! window here covers exactly one declaration, and every body carries a
-//! loop, an accumulator, a branch and arithmetic, so no member proves
-//! the forwarding shape and the plurality proof fails on every path
-//! ([RANK-STRUCTURAL-ONLY-FORWARDING]). The whole component stays visible
-//! and renders the evidence of one admitted pair. The divergent closure
-//! member must neither dilute that pair nor erase it.
+//! The divergent method lacks pair-content support, so it must be rejected
+//! before closure. The two supported methods still form the visible
+//! component; no cluster evidence is needed to decide either result.
 
 use anyhow::Result;
 
@@ -28,8 +24,12 @@ use crate::common::{
     *,
 };
 
+const DOMESTIC_SPAN: (u64, u64) = (18, 30);
+const REGIONAL_SPAN: (u64, u64) = (32, 44);
+const EXPECTED_DUPLICATED_LOC: u64 = 26;
+
 #[test]
-fn a_divergent_sibling_does_not_erase_the_real_pair() -> Result<()> {
+fn a_divergent_same_shape_sibling_does_not_join_the_real_pair() -> Result<()> {
     let scan_root = fixture("csharp-mixed-declaration-component");
     let report = run_report(&scan_root, 20)?;
 
@@ -46,50 +46,49 @@ fn a_divergent_sibling_does_not_erase_the_real_pair() -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("the visible cluster asserted above is missing"))?;
     assert_eq!(
         cluster_size(cluster),
-        3,
-        "all three methods are occurrences of the surviving component: {cluster:#}"
+        2,
+        "only the raw-content-supported methods may enter closure: {cluster:#}"
     );
     assert_eq!(
         occurrence_files(cluster),
-        vec![
-            "BillingAccruals.cs",
-            "BillingAccruals.cs",
-            "BillingAccruals.cs"
-        ],
+        vec!["BillingAccruals.cs", "BillingAccruals.cs"],
         "the component is single-file by construction: {cluster:#}"
     );
-    let texts = occurrence_texts(&scan_root, cluster)?;
-    for method in ["AccrueDomestic", "AccrueRegional", "AccrueExport"] {
-        assert!(
-            texts.iter().any(|text| text.contains(method)),
-            "{method} must be one of the reported occurrences — the real pair \
-             survives and the divergent sibling is reported alongside it, not \
-             silently dropped: {texts:#?}"
-        );
-    }
+    let spans: Vec<(u64, u64)> = occurrences(cluster)
+        .iter()
+        .map(|occurrence| {
+            (
+                field(occurrence, "start_line").as_u64().unwrap_or_default(),
+                field(occurrence, "end_line").as_u64().unwrap_or_default(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        spans,
+        [DOMESTIC_SPAN, REGIONAL_SPAN],
+        "the Domestic and Regional methods survive; the Export rewrite may not: {cluster:#}"
+    );
 
-    // [PIPELINE-CLUSTER-CLOSURE] The verdict and the axes are pair-scoped
-    // now. The acceptance on the wire: the three-body family is admitted,
-    // mass-honest, clean-surfaced and byte-distinct (the divergent sibling
-    // changes the bytes).
+    // [PIPELINE-CLUSTER-CLOSURE] The admitted pair renders as a
+    // mass-honest, clean-surfaced, byte-distinct cluster.
     assert_structural_only_contract(cluster, "mixed declaration component");
     assert_no_pair_surface_on_cluster(cluster, "mixed declaration component");
     assert!(
         !has_verbatim_pair(&scan_root, cluster)?,
-        "the three bodies are a rename family and must slice to differing \
+        "the two bodies are a rename family and must slice to differing \
          bytes: {cluster:#}"
     );
 
     assert_eq!(
         clusters_hidden(&report),
         0,
-        "nothing here proves a declaration family — no window covers two \
-         siblings and every body is logic-bearing — so nothing may be hidden: \
+        "the supported pair is visible and the divergent method is rejected \
+         before closure, so nothing may be hidden: \
          {report:#}"
     );
     assert_eq!(
         duplicated_loc(&report),
-        39,
+        EXPECTED_DUPLICATED_LOC,
         "the visible component's lines are duplicated lines; a hidden component \
          would zero this metric and understate the file: {report:#}"
     );

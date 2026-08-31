@@ -118,8 +118,10 @@ mod calls;
 mod constant_table;
 mod contract_index;
 mod dart;
+mod declaration_family;
 mod ecmascript;
 mod family;
+mod forwarding;
 mod override_marker;
 mod polymorphic;
 mod python;
@@ -129,9 +131,9 @@ mod python_dict_assert;
 mod python_idioms;
 mod python_module_preamble;
 mod python_orm;
+mod role_compat;
 mod rust;
 mod snippets;
-mod structural_families;
 mod verbatim_subgroup;
 
 use std::{
@@ -142,9 +144,9 @@ use std::{
 
 use tree_sitter::Node;
 
+pub(crate) use declaration_family::is_single_file_declaration_family;
 pub use snippets::ParseCache;
 use snippets::{collect_snippets, parse_for, uniform_language, Snippet};
-pub(crate) use structural_families::split_structural_families;
 pub(crate) use verbatim_subgroup::split_noise_verbatim_families;
 
 use crate::{
@@ -162,16 +164,17 @@ use crate::{
 pub(crate) enum NoiseStage {
     /// The noise-split pass, over fused components pre-report.
     Split,
+    /// The report render pass, over ranked report clusters.
+    Render,
 }
 
 /// Decides whether `cluster` is a known noise pattern that must not be
 /// surfaced as duplication. Returns **which** filter recognised it, and
 /// `None` when none did.
 ///
-/// Callers that only need "hide this" use `.is_some()`. The identity
-/// matters to the verbatim-subgroup split, which asks a different
-/// question of a filter whose members must already share one file
-/// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]).
+/// Callers that only need "hide this" use `.is_some()`. The identity is
+/// retained for observability; the verbatim escape hatch applies every
+/// qualifying exact-byte family independently of the filter.
 pub(crate) fn is_noise_pattern<S: BuildHasher>(
     members: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
@@ -299,9 +302,7 @@ pub(crate) enum NoiseFilter {
     /// The language-specific idiom filters.
     LanguageSpecific,
     /// The Python sibling-cell filter, named apart from the rest of the
-    /// language-specific bank because its members share one file and one
-    /// literal node by construction
-    /// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]).
+    /// language-specific bank for per-filter observability.
     PyCollectionSiblingCells,
 }
 
@@ -318,21 +319,6 @@ impl NoiseFilter {
             Self::LanguageSpecific => "language_specific",
             Self::PyCollectionSiblingCells => "py_collection_sibling_cells",
         }
-    }
-
-    /// Whether a byte-identical family must span two files before it
-    /// escapes this filter ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE]).
-    ///
-    /// Every filter here recognises a family that *may* be spread over
-    /// many files, so byte-identity confined to one file is better
-    /// explained by the idiom than by a paste — except the sibling-cell
-    /// filter, whose members must already share one file and one literal
-    /// node. Asking a family that is single-file by construction to span
-    /// two files is a question with one answer, and it closed the escape
-    /// hatch on that route permanently
-    /// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]).
-    pub(crate) const fn demands_cross_file_copy(self) -> bool {
-        !matches!(self, Self::PyCollectionSiblingCells)
     }
 }
 
@@ -408,6 +394,27 @@ fn rust_noise(snippets: &[Snippet<'_>]) -> bool {
         || rust::is_rust_iter_collect_idiom_cluster(snippets)
         || rust::is_rust_match_dispatch_cluster(snippets)
         || rust::is_rust_struct_field_declaration_cluster(snippets)
+}
+
+/// Decides whether two exact pair endpoints hold incompatible top-level
+/// roles — a class/type definition and a function/method
+/// ([CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]). Unresolved roles do not
+/// reject the candidate pair.
+pub(crate) fn is_embedding_role_mismatch<S: BuildHasher>(
+    left: &Fingerprint,
+    right: &Fingerprint,
+    sources: &HashMap<FileId, Vec<u8>>,
+    file_languages: &HashMap<FileId, &'static str, S>,
+    cache: &ParseCache,
+) -> bool {
+    let members = [left.clone(), right.clone()];
+    let Some(language) = uniform_language(&members, file_languages) else {
+        return false;
+    };
+    let Some(snippets) = collect_snippets(&members, sources, language, cache) else {
+        return false;
+    };
+    role_compat::is_role_incompatible_embedding_match(&snippets)
 }
 
 /// Trims surrounding ASCII whitespace from a reported snippet range so

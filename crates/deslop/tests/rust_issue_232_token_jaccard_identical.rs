@@ -19,19 +19,15 @@
 //! 1.0 by definition, so any `identical` cluster reporting `< 0.9` is the
 //! GH #232 regression.
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use serde_json::Value;
 
+use crate::common::scan_dir::run_report_min_nodes;
 use crate::common::{
-    deslop_cmd,
-    signals::{
-        assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
-    },
+    occurrence_texts,
+    signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract},
 };
 
 fn fixture(name: &str) -> PathBuf {
@@ -41,50 +37,45 @@ fn fixture(name: &str) -> PathBuf {
         .join(name)
 }
 
-fn run_report(scan_root: &Path) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let _assertion = deslop_cmd(scan_root, &output)?
-        .args(["--min-nodes", "30", "--embeddings", "off"])
-        .assert()
-        .success();
-    let body = fs::read_to_string(output.with_extension("json"))?;
-    Ok(serde_json::from_str(&body)?)
-}
-
 #[test]
 fn byte_identical_clones_are_byte_proven_from_the_fixture() -> Result<()> {
     let scan_root = fixture("rust-issue-232-token-jaccard");
-    let report = run_report(&scan_root)?;
+    let report = run_report_min_nodes(&scan_root, "30")?;
     let clusters = report
         .get("clusters")
         .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+        .ok_or_else(|| anyhow::anyhow!("report missing clusters: {report:#}"))?;
     assert!(
         !clusters.is_empty(),
         "fixture must produce the byte-identical clone so the byte-proven \
          fact is exercised: {report:#}"
     );
-    // #232 acceptance on the mass-only wire: every reported cluster whose
-    // occurrences slice to identical source bytes must be byte-proven —
-    // the `token_jaccard` value that used to assert it is pair-scoped now
-    // ([PIPELINE-CLUSTER-CLOSURE]).
-    for cluster in &clusters {
-        if has_verbatim_pair(&scan_root, cluster)? {
-            assert_structural_only_contract(cluster, "rust-issue-232");
-            assert_no_pair_surface_on_cluster(cluster, "rust-issue-232");
-        }
-    }
-    let byte_proven = clusters
-        .iter()
-        .filter(|cluster| has_verbatim_pair(&scan_root, cluster).unwrap_or(false))
-        .count();
+    // #232 acceptance on the mass-only wire: the sibling-window clone is
+    // reported (admission) and the byte-identical `render_header` +
+    // `render_footer` block is *inside* both reported occurrences — the
+    // byte truth that the window token-Jaccard used to proxy. The
+    // published view may be the wider near-miss that legitimately
+    // subsumes it ([PIPELINE-CLUSTER-SUBSUME]), so the pin is the block
+    // appearing verbatim in both reported slices, not a byte-proven
+    // *cluster* of its own.
     assert!(
-        byte_proven >= 1,
-        "the fixture's render_header + render_footer window is byte-identical \
-         across alpha.rs and beta.rs and must be reported as a byte-proven \
-         clone: {report:#}"
+        clusters.len() == 1,
+        "the fixture must report exactly one cluster (the whole-file \
+         near-miss subsumes the nested render window): {report:#}"
     );
+    for cluster in clusters {
+        assert_structural_only_contract(cluster, "rust-issue-232");
+        assert_no_pair_surface_on_cluster(cluster, "rust-issue-232");
+        let texts = occurrence_texts(&scan_root, cluster)?;
+        let both_carry_block = texts.len() >= 2
+            && texts
+                .iter()
+                .all(|text| text.contains("render_header") && text.contains("render_footer"));
+        assert!(
+            both_carry_block,
+            "both reported occurrences must carry the byte-identical \
+             render_header + render_footer block: {texts:#?}"
+        );
+    }
     Ok(())
 }

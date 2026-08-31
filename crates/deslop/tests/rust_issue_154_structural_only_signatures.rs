@@ -14,38 +14,17 @@
 //! the second condition, so this assertion really demands that the
 //! whole bucket be filtered from `clusters`.
 
-use std::{fs, path::Path};
-
 use anyhow::Result;
 use serde_json::Value;
 
+use crate::common::scan_dir::run_report_min_nodes;
 use crate::common::signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract};
 use crate::common::*;
-
-fn run_report(scan_root: &Path) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let _assertion = deslop_cmd(scan_root, &output)?
-        .args(["--min-nodes", "4", "--embeddings", "off"])
-        .assert()
-        .success();
-    let body = fs::read_to_string(output.with_extension("json"))?;
-    Ok(serde_json::from_str(&body)?)
-}
 
 #[test]
 fn structural_only_signature_clusters_are_dropped_from_the_report() -> Result<()> {
     let scan_root = fixture("rust-issue-154-structural-only");
-    let report = run_report(&scan_root)?;
-    let total_clusters = report
-        .pointer("/metrics/clusters_total")
-        .and_then(Value::as_u64)
-        .unwrap_or_default();
-    assert!(
-        total_clusters >= 1,
-        "fixture must produce at least one cluster (visible or hidden) so \
-         the structural_only filter is actually exercised: {report:#}"
-    );
+    let report = run_report_min_nodes(&scan_root, "4")?;
     // [PIPELINE-CLUSTER-CLOSURE] The mass-only wire carries cluster facts
     // only; the `structural_only` bucket and its token floor are gone. The
     // acceptance holds on wire facts: every visible cluster must carry the
@@ -62,7 +41,7 @@ fn structural_only_signature_clusters_are_dropped_from_the_report() -> Result<()
     let reported = report
         .pointer("/metrics/duplicated_loc")
         .and_then(Value::as_u64)
-        .unwrap_or(u64::MAX);
+        .ok_or_else(|| anyhow::anyhow!("report missing metrics.duplicated_loc: {report:#}"))?;
     assert_eq!(
         reported,
         visible_duplicated_loc(&report),
@@ -72,7 +51,7 @@ fn structural_only_signature_clusters_are_dropped_from_the_report() -> Result<()
     let hidden = report
         .get("clusters_hidden")
         .and_then(Value::as_u64)
-        .unwrap_or_default();
+        .ok_or_else(|| anyhow::anyhow!("report missing clusters_hidden: {report:#}"))?;
     assert!(
         hidden >= 1,
         "the fixture's structural_only clusters must be suppressed via \

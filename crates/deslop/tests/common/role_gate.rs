@@ -1,10 +1,10 @@
 //! The GH #119 role-gate contract, asserted once for every language
 //! ([CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]).
 //!
-//! The gate requires an embedding-dominant `same_behavior` cluster to be
-//! role/context compatible — all classes, or all functions — before it
-//! surfaces, because a class definition and a function have no safe
-//! shared extraction. Proving that takes two assertions per language and
+//! The gate requires an embedding-dominant pair to be role/context
+//! compatible — all classes, or all functions — before it enters
+//! closure, because a class definition and a function have no safe shared
+//! extraction. Proving that takes two assertions per language and
 //! they pull in opposite directions: the offending cross-role pair must
 //! be suppressed, and a same-role behaviour-equivalent pair must not be.
 //!
@@ -28,11 +28,11 @@ use super::{
 
 /// Subtree-size floor every #119 fixture is scanned at.
 pub(crate) const ROLE_GATE_MIN_NODES: &str = "5";
+const NO_HIDDEN_COMPONENTS: u64 = 0;
 
 /// [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH] acceptance: an embedding-dominant
 /// pair whose members have different top-level roles — a `class`
-/// definition and a top-level function — must not surface. The cluster is
-/// counted in `clusters_hidden` instead.
+/// definition and a top-level function — must be rejected before closure.
 ///
 /// `class_marker` and `function_marker` name source text unique to each
 /// role, so a surviving cluster covering both is the role-mismatch
@@ -55,14 +55,14 @@ pub(crate) fn assert_role_mismatch_is_suppressed(
          extraction: {offenders:#?}"
     );
     assert!(
-        clusters_hidden(&report) >= 1,
-        "the role-incompatible {language} embedding pair must be counted in \
-         clusters_hidden, got {}",
-        clusters_hidden(&report)
+        clusters(&report).is_empty(),
+        "the role-incompatible {language} pair must not form any component: {report:#}"
     );
-    // No visible cluster may cover both roles — `cross_role_pairs` above
-    // already asserts that, so there is nothing left to re-check here:
-    // the bucket that used to name the survivors is gone from the wire.
+    assert_eq!(
+        clusters_hidden(&report),
+        NO_HIDDEN_COMPONENTS,
+        "role incompatibility rejects the pair before suppression: {report:#}"
+    );
     Ok(())
 }
 

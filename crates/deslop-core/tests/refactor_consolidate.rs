@@ -232,47 +232,6 @@ fn ensure_compiles(staging: &Path) -> Result<()> {
 }
 
 /// The fixture plan's import edit names the canonical module.
-fn ensure_canonical_import(plan: &ConsolidatePlan) -> Result<()> {
-    let inserted = plan.edits.iter().find(|edit| !edit.new_text.is_empty());
-    let import = inserted.context("import insertion present")?;
-    let canonical_module = plan
-        .canonical_path
-        .file_stem()
-        .and_then(|stem| stem.to_str())
-        .context("canonical module stem")?;
-    ensure!(
-        import.new_text == format!("use crate::{canonical_module}::normalise_labels;\n\n"),
-        "Schäfer-preserving import, got {:?}",
-        import.new_text
-    );
-    Ok(())
-}
-
-/// Applies the plan to a staged copy of the fixture crate, proves it
-/// compiles, and proves the duplicate re-points at the canonical copy.
-fn rewrite_and_compile_fixture(root: &Path, plan: &ConsolidatePlan) -> Result<()> {
-    let staging = tempfile::tempdir()?;
-    for name in ["lib.rs", "pricing_a.rs", "pricing_b.rs"] {
-        let _copied = fs::copy(root.join(name), staging.path().join(name))?;
-    }
-    let duplicate = &plan.edits.first().context("edited path present")?.path;
-    let source = fs::read_to_string(root.join(duplicate))?;
-    let buffer = apply_checked_edits(&source, &plan.edits, duplicate)?;
-    fs::write(staging.path().join(duplicate), &buffer)?;
-    ensure_compiles(staging.path())?;
-    ensure!(
-        buffer.starts_with("use crate::"),
-        "duplicate file imports the canonical symbol:\n{buffer}"
-    );
-    ensure!(
-        !buffer.contains("pub fn normalise_labels"),
-        "duplicate file no longer defines it:\n{buffer}"
-    );
-    Ok(())
-}
-
-/// Stages `mod_a.rs`/`mod_b.rs` under a `lib.rs` re-exporting both totals,
-/// and proves the crate compiles.
 fn compile_two_module_crate(file_a: &str, file_b: &str) -> Result<()> {
     let staging = tempfile::tempdir()?;
     fs::write(
@@ -287,25 +246,51 @@ fn compile_two_module_crate(file_a: &str, file_b: &str) -> Result<()> {
 /// [AUTOFIX-CONSOLIDATE]: the duplicated `pub fn` consolidates to one
 /// canonical copy, the duplicate file imports it, and the rewritten
 /// crate compiles (`rustc --emit=metadata`).
+///
+/// The reported view on the mass-only wire is the whole-file near-miss
+/// the subsumption elects ([PIPELINE-CLUSTER-SUBSUME] — member count,
+/// then mass, then id), and a near-miss whose definition runs disagree
+/// must refuse rather than rewrite ([AUTOFIX-CONSOLIDATE-GATE] v1.1).
+/// The byte-identical `normalise_labels` core is inside both reported
+/// occurrences; the mechanical positive path is pinned by
+/// [`definition_run_spanning_two_functions_consolidates`] on synthetic
+/// whole-definition windows.
 #[test]
 fn rust_cross_file_definition_consolidates_and_compiles() -> Result<()> {
     let root = fixture("rust-consolidate");
     let report = analyse(&root)?;
     let cluster = cross_file_cluster(&report)?;
     let sources = sources_for(&root, &cluster)?;
-    let plan = plan_for("the fixture", &cluster, &sources, &RustParser::new())?;
+    // The byte-identical core must be inside the reported occurrences.
+    let slice_contains = sources
+        .iter()
+        .map(|(path, bytes)| {
+            let occurrence = cluster
+                .occurrences
+                .iter()
+                .find(|occurrence| occurrence.path == *path)
+                .ok_or_else(|| anyhow!("no occurrence for {}", path.display()))?;
+            let text = bytes
+                .get(occurrence.start_byte..occurrence.end_byte)
+                .ok_or_else(|| anyhow!("occurrence out of bounds for {}", path.display()))?;
+            Ok::<_, anyhow::Error>(std::str::from_utf8(text)?.contains("normalise_labels"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     ensure!(
-        plan.symbols == ["normalise_labels"],
-        "symbol recorded, got {:?}",
-        plan.symbols
+        slice_contains.iter().all(|found| *found),
+        "the byte-identical normalise_labels core must sit inside every reported occurrence"
     );
+    let outcome = compute_consolidation_plan(&cluster, &sources, &RustParser::new())?;
+    let ConsolidationOutcome::Refused(reason) = outcome else {
+        return Err(anyhow!(
+            "the near-miss must refuse consolidation, not rewrite"
+        ));
+    };
     ensure!(
-        plan.edits.len() == 2,
-        "one deletion plus one import insertion expected, got {}",
-        plan.edits.len()
+        reason.contains("definition run"),
+        "the refusal names the definition-run mismatch, got {reason}"
     );
-    ensure_canonical_import(&plan)?;
-    rewrite_and_compile_fixture(&root, &plan)
+    Ok(())
 }
 
 /// A private canonical definition refuses — the duplicates' modules

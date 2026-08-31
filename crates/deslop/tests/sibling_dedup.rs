@@ -318,13 +318,27 @@ fn per_file_counts(cluster: &serde_json::Value) -> Vec<(String, usize)> {
 
 fn first_cluster_count_mismatch(report: &serde_json::Value) -> Option<String> {
     first_cluster_finding(report, |cluster| {
-        let size = u64_field(cluster, "size");
+        let count = u64_field(cluster, "occurrence_count");
         let occurrences_total = u64_field(cluster, "occurrences_total");
-        let occurrences_len = u64::try_from(occurrences_of(cluster).len()).ok()?;
+        let visible = occurrences_of(cluster)
+            .iter()
+            .filter(|occurrence| {
+                !occurrence
+                    .get("hidden")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false)
+            })
+            .count();
+        let occurrences_len = u64::try_from(visible).ok()?;
+        let full_len = u64::try_from(occurrences_of(cluster).len()).ok()?;
+        let truncated = cluster
+            .get("occurrences_truncated")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
         let id = cluster_id(cluster);
-        (size != occurrences_len || occurrences_total != occurrences_len).then(|| {
+        (count != occurrences_len || occurrences_total != full_len || truncated).then(|| {
             format!(
-                "cluster {id}: size={size}, occurrences_total={occurrences_total}, len={occurrences_len}"
+                "cluster {id}: occurrence_count={count}, occurrences_total={occurrences_total}, visible={occurrences_len}, full={full_len}, truncated={truncated}"
             )
         })
     })
@@ -404,16 +418,43 @@ fn cluster_size_equals_occurrences_length_for_every_cluster() -> Result<()> {
         "fixture must produce at least one clone cluster: {report:#}"
     );
     for cluster in &clusters {
-        let size = u64_field(cluster, "size");
-        let occurrences_len = u64::try_from(occurrences_of(cluster).len())?;
+        // The `size` field was removed with the bucket surface; the
+        // mass-only wire carries `occurrence_count` (visible membership)
+        // beside `occurrences_total`. The invariant is the same: every
+        // reported occurrence must be counted, and nothing may hide
+        // behind the cluster id ([PIPELINE-CLUSTER-CLOSURE]). Visible
+        // membership excludes report-hidden occurrences
+        // ([RANK-MASS-SUM]).
+        let count = u64_field(cluster, "occurrence_count");
+        let visible_len = u64::try_from(
+            occurrences_of(cluster)
+                .iter()
+                .filter(|occurrence| {
+                    !occurrence
+                        .get("hidden")
+                        .and_then(serde_json::Value::as_bool)
+                        .unwrap_or(false)
+                })
+                .count(),
+        )?;
         let occurrences_total = u64_field(cluster, "occurrences_total");
+        let truncated = cluster
+            .get("occurrences_truncated")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
         assert_eq!(
-            size, occurrences_len,
-            "cluster.size must equal occurrences.len() after overlap dedup: {cluster:#}"
+            count, visible_len,
+            "cluster.occurrence_count must equal the visible occurrences after overlap \
+         dedup: {cluster:#}"
         );
         assert_eq!(
-            occurrences_total, occurrences_len,
-            "occurrences_total must equal occurrences.len(): {cluster:#}"
+            occurrences_total,
+            u64::try_from(occurrences_of(cluster).len())?,
+            "occurrences_total must equal the full reported membership (hidden included): {cluster:#}"
+        );
+        assert!(
+            !truncated,
+            "no occurrence may be truncated from the report: {cluster:#}"
         );
     }
     Ok(())

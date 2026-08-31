@@ -5,10 +5,10 @@
 //! The fixture reproduces the geometry every previous fix missed
 //! (#134 demoted ≥3-file scaffolding, #197 hid single-file declaration
 //! families): a sibling-method family split across exactly **two** files
-//! — the Dart `part`/extension idiom that kept full `NearlyIdentical`
-//! weight and topped `top-offenders` on Flutter repos. A genuine
-//! verbatim copy-paste pair rides along so the tests assert *relative*
-//! ranking, the user-visible product.
+//! — the Dart `part`/extension idiom that used to receive a
+//! pair-classification weight and top `top-offenders` on Flutter repos. A
+//! genuine verbatim copy-paste pair rides along so the tests assert relative
+//! mass ranking, the user-visible product.
 //!
 //! [RANK-STRUCTURAL-ONLY] retired the `structural_only_weight`,
 //! `data_clone_weight` and `demote` ranking modes: weight means mass and
@@ -161,10 +161,11 @@ fn cluster_at(report: &Value, rank: usize) -> Option<&Value> {
 }
 
 /// [RANK-MASS-SUM] default: both clusters are visible, ranked by pure
-/// mass. The seven-member family (101 nodes) carries
-/// `101 × (7−1) = 606` duplicated mass and outranks the two-copy pair
-/// (`143 × 1 = 143`). The family spans exactly the seven sibling
-/// methods, and the pair is byte-proven verbatim.
+/// mass. The seven-member family out-masses the two-copy pair under the
+/// rendered formula. The canonical node count is produced by the current
+/// normaliser, so this test re-derives mass instead of freezing an obsolete
+/// implementation count. The family spans exactly the seven sibling methods,
+/// and the pair is byte-proven verbatim.
 #[test]
 fn mass_ranks_family_first_and_pair_second() -> Result<()> {
     let src = tempfile::tempdir()?;
@@ -180,9 +181,8 @@ fn mass_ranks_family_first_and_pair_second() -> Result<()> {
     );
     assert!(
         family < pair,
-        "[RANK-MASS-SUM]: the seven-member family (rank {family}) out-ranks the \
-         two-copy pair (rank {pair}) by pure mass — `101 × 6 = 606` vs \
-         `143 × 1 = 143`: {report:#}"
+        "[RANK-MASS-SUM]: the seven-member family (rank {family}) must out-rank \
+         the two-copy pair (rank {pair}) by pure mass: {report:#}"
     );
 
     let family_cluster =
@@ -197,11 +197,16 @@ fn mass_ranks_family_first_and_pair_second() -> Result<()> {
         "the family must report all seven sibling methods, not a whole-class \
          view that encloses them: {family_cluster:#}"
     );
+    let family_nodes = field(family_cluster, "canonical_node_count")
+        .as_u64()
+        .ok_or_else(|| anyhow::anyhow!("family has no canonical node count: {family_cluster:#}"))?;
+    let family_mass = field(family_cluster, "mass")
+        .as_u64()
+        .ok_or_else(|| anyhow::anyhow!("family has no mass: {family_cluster:#}"))?;
     assert_eq!(
-        field(family_cluster, "mass").as_u64(),
-        Some(606),
-        "family mass must be canonical_node_count × (occurrence_count − 1) = \
-         101 × 6: {family_cluster:#}"
+        family_mass,
+        family_nodes.saturating_mul(cluster_size(family_cluster).saturating_sub(1)),
+        "family mass must be canonical_node_count × (occurrence_count − 1): {family_cluster:#}"
     );
     assert_no_pair_surface_on_cluster(family_cluster, "rank-structural-only family");
     assert_structural_only_contract(family_cluster, "rank-structural-only family");
@@ -217,6 +222,13 @@ fn mass_ranks_family_first_and_pair_second() -> Result<()> {
         has_verbatim_pair(&root, pair_cluster)?,
         "the copy-paste pair is byte-identical in source — the byte-proven \
          fact must hold on the mass-only wire: {pair_cluster:#}"
+    );
+    let pair_mass = field(pair_cluster, "mass")
+        .as_u64()
+        .ok_or_else(|| anyhow::anyhow!("verbatim pair has no mass: {pair_cluster:#}"))?;
+    assert!(
+        family_mass > pair_mass,
+        "the rank order must follow larger family mass ({family_mass} > {pair_mass}): {report:#}"
     );
     Ok(())
 }

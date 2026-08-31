@@ -52,26 +52,10 @@ const FIXTURE: &str = "python-issue-72-monkeypatch-setenv";
 const LABEL: &str = "gh #72/#103 monkeypatch.setenv chain family";
 const MIN_NODES: u32 = 4;
 
-/// Components [CLONE-NOISE-PY-MONKEYPATCH] must suppress here: exactly
-/// one. The final cluster list holds two — the cross-file control and
-/// the single three-member family cluster the subsumption pass elects
-/// over `test_fly_host.py` (it absorbs fifteen inner views into one
-/// survivor) — and the family is the one that must not publish.
-/// [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] forbids a verbatim
-/// partition here because the family is intra-file, so it is suppressed
-/// whole rather than split. A larger number is over-suppression or the
-/// hatch re-opening for an intra-file family; zero is today's inert
-/// filter.
-const EXPECTED_HIDDEN: u64 = 1;
-
-/// Every half of the contract this fixture is held to, as data: the
-/// family judged file by file, the control that must survive it, and the
-/// three counts the report must show. Stating it once keeps a pin from
-/// quietly asserting less than its neighbours.
+// Exact suppression contract for the family and its byte-identical control.
 const PIN: SuppressedFamily<'static> = SuppressedFamily {
     family_files: &FAMILY,
     control_files: &CONTROL,
-    expected_hidden: EXPECTED_HIDDEN,
     control_loc: CONTROL_LOC,
     files_analysed: FILES_ANALYSED,
 };
@@ -146,7 +130,7 @@ fn a_computed_value_is_not_a_tautology_and_keeps_its_cluster() -> Result<()> {
     assert_structural_only_contract(family, COMPUTED_LABEL);
     assert_no_pair_surface_on_cluster(family, COMPUTED_LABEL);
     assert!(
-        !has_verbatim_pair(&fixture(FIXTURE), family)?,
+        !has_verbatim_pair(&fixture(COMPUTED_FIXTURE), family)?,
         "{COMPUTED_LABEL}: the computed family differs in bytes (shape only): \
          {report:#}"
     );

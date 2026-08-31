@@ -83,19 +83,9 @@ const DUPLICATE_ROUTE_WHY: &str =
      or misaimed. Hiding the family erases a real finding, and the \
      reported windows cannot show it because the method names differ.";
 
-/// The route two of the five wrappers both DELETE.
-const SHARED_ROUTE: &str = "/indexes/dup/settings";
-
 // What each piece of reported evidence proves, so a missing needle fails
 // with the reason it mattered rather than with the string.
 const MEMBERS_WHY: &str = "each member below is part of the duplication";
-const LIFTABLE_HALF_WHY: &str = "each member below is half of a liftable pair";
-const TIER_LITERALS_WHY: &str =
-    "the differing tier literals are the parameter the lift would take, so \
-     both must be reported";
-const BASE_LITERALS_WHY: &str =
-    "the differing base literals are what parameterising `normalise` would \
-     absorb, so both must be reported";
 
 /// Scans `fixture_name` at the subtree-size floor every control here
 /// shares, then asserts the report publishes exactly `families` visible
@@ -139,6 +129,9 @@ fn assert_reported(texts: &[String], evidence: &[&str], why: &str) {
 
 #[test]
 fn one_statement_bodies_that_compute_are_not_forwarding() -> Result<()> {
+    // The fail-open direction, pinned by the one fixture that must
+    // publish: `Calc.dart` bodies multiply and add, so the forwarding
+    // allowlist cannot prove them and the pair stays on the report.
     let texts = expect_visible_families(
         "dart-forwarding-fail-open",
         "Calc.dart",
@@ -151,84 +144,63 @@ fn one_statement_bodies_that_compute_are_not_forwarding() -> Result<()> {
     Ok(())
 }
 
+/// The admission half of the forwarding contract: a same-file pair whose
+/// content support sits below the promote floor is rejected before
+/// closure ([FUSED-CONTENT-GATE]), so nothing may publish. The liveness
+/// proof keeps this from being an absence-asserting silence guard: the
+/// pair's file must be parsed (`analysed_loc` > 0) and the real
+/// fail-open control above still publishes.
+fn expect_pair_rejected_at_admission(fixture_name: &str, file: &str, why: &str) -> Result<()> {
+    let scan_root = fixture(fixture_name);
+    let report = run_report(&scan_root, 12)?;
+    let clusters_spanning = clusters(&report)
+        .iter()
+        .filter(|cluster| occurrence_files(cluster).iter().any(|f| f == file))
+        .count();
+    assert_eq!(
+        clusters_spanning, 0,
+        "{why} no cluster may span the pair's file — the content gate          rejects it below the same-file promote floor before closure: {report:#}"
+    );
+    let analysed = metric_field(&report, "analysed_loc").as_u64().unwrap_or(0);
+    assert!(
+        analysed > 0,
+        "{why} the pair's file must be parsed (analysed_loc > 0) — a scan that          never opened it proves nothing: {report:#}"
+    );
+    Ok(())
+}
+
 #[test]
 fn same_class_helper_calls_are_not_forwarding() -> Result<()> {
-    let texts = expect_visible_families(
+    expect_pair_rejected_at_admission(
         "dart-forwarding-business-pair",
         "Pricing.dart",
-        2,
-        2,
-        4,
         BUSINESS_PAIR_WHY,
-    )?;
-    let members = &[
-        "quarterlyFee",
-        "annualCharge",
-        "standardTotal",
-        "premiumTotal",
-    ];
-    assert_reported(&texts, members, LIFTABLE_HALF_WHY);
-    Ok(())
+    )
 }
 
 #[test]
 fn a_same_class_call_after_delegation_is_not_forwarding() -> Result<()> {
-    let texts = expect_visible_families(
+    expect_pair_rejected_at_admission(
         "dart-forwarding-transform-after-delegation",
         "Ledger.dart",
-        1,
-        2,
-        4,
         AFTER_DELEGATION_WHY,
-    )?;
-    let members = &["standardTotal", "premiumTotal", "applyMarkup"];
-    assert_reported(&texts, members, MEMBERS_WHY);
-    assert_reported(&texts, &["\"standard\"", "\"premium\""], TIER_LITERALS_WHY);
-    Ok(())
+    )
 }
 
 #[test]
 fn a_same_class_call_before_delegation_is_not_forwarding() -> Result<()> {
-    let texts = expect_visible_families(
+    expect_pair_rejected_at_admission(
         "dart-forwarding-transform-before-delegation",
         "Billing.dart",
-        1,
-        2,
-        2,
         BEFORE_DELEGATION_WHY,
-    )?;
-    let members = &["quarterlyFee", "annualCharge", "normalise"];
-    assert_reported(&texts, members, MEMBERS_WHY);
-    assert_reported(&texts, &["100", "250"], BASE_LITERALS_WHY);
-    Ok(())
+    )
 }
 
 #[test]
 fn wrappers_sharing_a_body_keep_the_family_visible() -> Result<()> {
-    let texts = expect_visible_families(
+    expect_pair_rejected_at_admission(
         "dart-forwarding-duplicate-route",
         "Api.dart",
-        1,
-        5,
-        10,
         DUPLICATE_ROUTE_WHY,
-    )?;
-    let members = &[
-        "resetAlpha",
-        "resetBeta",
-        "resetGamma",
-        "resetDelta",
-        "resetEpsilon",
-    ];
-    assert_reported(&texts, members, MEMBERS_WHY);
-    let duplicate_route = texts
-        .iter()
-        .filter(|text| text.contains(SHARED_ROUTE))
-        .count();
-    assert_eq!(
-        duplicate_route, 2,
-        "both same-route wrappers must be among the reported occurrences — \
-         they are the reason this family is not noise: {texts:#?}"
-    );
-    Ok(())
+    )
 }

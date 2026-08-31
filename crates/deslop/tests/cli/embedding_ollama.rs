@@ -1,4 +1,5 @@
 use super::support::*;
+use crate::common::signals::assert_no_pair_surface_on_cluster;
 use crate::mock_ollama::{MockOllama, MOCK_CONTEXT_TOKENS};
 
 // different default. Reports are parsed via `serde_json` so the
@@ -264,35 +265,27 @@ fn ollama_type4_cross_file_cluster_has_positive_embedding_signal() -> Result<()>
         find_cross_file_cluster(&json, &["Recursive.cs", "Iterative.cs"]).ok_or_else(|| {
             anyhow::anyhow!("no cross-file cluster spanning Recursive.cs + Iterative.cs: {json:#}")
         })?;
-    let signals = object_field(&cluster, "signals", "cluster missing signals object")?;
-    let embedding_cos = signals
-        .get("embedding_cos")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or_default();
-    let token_jaccard = signals
-        .get("token_jaccard")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or_default();
-    let structural = signals
-        .get("structural")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or_default();
+    // The mass-only wire carries no cluster `signals` object: admission
+    // evidence is pair-scoped ([FUSED-PAIR-SIGNALS]). What proves the
+    // embedding route reached the report is the cluster's mere presence
+    // (a Type-4 pair clusters on embedding evidence alone), the
+    // provenance triple above, and the clean surface — no pair-only
+    // field may sit on the cluster.
+    assert_no_pair_surface_on_cluster(&cluster, "type-4 embedding cluster");
     assert!(
-        embedding_cos > 0.3,
-        "Type-4 cross-file cluster must carry a meaningful embedding_cos, got {embedding_cos}"
+        cluster
+            .get("mass")
+            .and_then(serde_json::Value::as_u64)
+            .is_some_and(|mass| mass > 0),
+        "the embedding-admitted cluster must carry positive mass: {cluster:#}",
     );
+    let occurrences = cluster
+        .get("occurrences")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, Vec::len);
     assert!(
-        signals.get("fused").is_none(),
-        "no cluster-level fused may survive on the wire ([FUSED-SCOPE]): {signals:#?}"
-    );
-    let shape = signals
-        .get("shape")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or_default();
-    assert!(
-        (shape - structural.max(token_jaccard)).abs() < 1e-6,
-        "the rendered shape reading must preserve the strongest structural axis — \
-         shape={shape}, structural={structural}, token_jaccard={token_jaccard}"
+        occurrences >= 2,
+        "the embedding-admitted cluster must report both copies: {cluster:#}",
     );
     Ok(())
 }
@@ -432,14 +425,16 @@ fn ollama_incremental_plus_embeddings_second_run_hits_both_caches() -> Result<()
 
     let cluster = find_cross_file_cluster(&second_json, &["Recursive.cs", "Iterative.cs"])
         .ok_or_else(|| anyhow::anyhow!("cached run lost the cross-file cluster"))?;
-    let embedding_cos = cluster
-        .get("signals")
-        .and_then(|s| s.get("embedding_cos"))
-        .and_then(serde_json::Value::as_f64)
-        .ok_or_else(|| anyhow::anyhow!("cached cluster missing embedding_cos"))?;
+    // Admission evidence is pair-scoped on the mass-only wire, so the
+    // cached run proves the embedding route by the cluster's presence,
+    // its mass fields, and the provenance the second run must carry.
     assert!(
-        embedding_cos > 0.3,
-        "second run must preserve embedding signal: got {embedding_cos}",
+        cluster
+            .get("mass")
+            .and_then(serde_json::Value::as_u64)
+            .is_some_and(|mass| mass > 0),
+        "second run must preserve the embedding-admitted cluster with mass: {cluster:#}",
     );
+    assert_no_pair_surface_on_cluster(&cluster, "cached type-4 cluster");
     Ok(())
 }

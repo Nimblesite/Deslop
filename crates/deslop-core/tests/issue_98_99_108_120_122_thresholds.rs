@@ -1,5 +1,9 @@
-//! Regression coverage for the low-structure fusion false positives
-//! tracked in GH #98, #99, #108, #120, and #122.
+//! [CLONE-NOISE] Render-stage regression coverage for low-structure false
+//! positives tracked in GH #98, #99, #108, #120, and #122.
+//!
+//! Schema-shaped and embedding-role candidates are rejected before closure by
+//! [FUSED-CONTENT-GATE] and [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]. This file
+//! proves the remaining convicted-noise cases at their render-stage boundary.
 
 use crate::common;
 
@@ -7,8 +11,15 @@ use anyhow::Result;
 use common::ReportFixture;
 use deslop_core::cluster::Cluster;
 
+const EXPECTED_CONVICTED_CLUSTERS: usize = 2;
+const EXPECTED_HIDDEN_CLUSTERS: usize = 2;
+const EXPECTED_VISIBLE_CLUSTERS: usize = 0;
+const EXPECTED_OCCURRENCES_PER_CLUSTER: usize = 2;
+const MIXED_FIXTURE_CLUSTER_ID: &str = "json-fixture-mixed";
+const ASSERTION_CLUSTER_ID: &str = "assertion-only";
+
 #[test]
-fn low_structure_token_and_embedding_noise_stays_out_of_ranked_report() -> Result<()> {
+fn convicted_low_structure_noise_stays_out_of_ranked_report() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path();
     let mut fixture = ReportFixture::new(scan_root, "python");
@@ -23,63 +34,61 @@ fn low_structure_token_and_embedding_noise_stays_out_of_ranked_report() -> Resul
 
     assert_eq!(
         clusters.len(),
-        4,
-        "fixture must exercise all threshold false-positive shapes"
+        EXPECTED_CONVICTED_CLUSTERS,
+        "fixture must exercise each recognised render-stage noise shape"
     );
-    assert!(clusters.iter().all(|cluster| cluster.mass > 0));
+    assert!(
+        clusters.iter().all(|cluster| cluster.mass > 0),
+        "each convicted fixture must carry positive mass before suppression"
+    );
+    assert!(
+        clusters
+            .iter()
+            .all(|cluster| cluster.members.len() == EXPECTED_OCCURRENCES_PER_CLUSTER),
+        "each fixture must exercise both members of its convicted component"
+    );
+    assert!(
+        clusters
+            .iter()
+            .any(|cluster| cluster.id == MIXED_FIXTURE_CLUSTER_ID),
+        "GH #98 mixed fixture case must reach render-stage suppression"
+    );
+    assert!(
+        clusters
+            .iter()
+            .any(|cluster| cluster.id == ASSERTION_CLUSTER_ID),
+        "GH #99 assertion-only case must reach render-stage suppression"
+    );
     assert_eq!(
-        report.clusters_hidden, 4,
-        "all threshold false positives should be hidden from the ranked report; visible clusters: {visible_clusters:#?}"
+        report.clusters_hidden, EXPECTED_HIDDEN_CLUSTERS,
+        "recognised noise must be hidden after closure; visible clusters: {visible_clusters:#?}"
+    );
+    assert_eq!(
+        report.clusters.len(),
+        EXPECTED_VISIBLE_CLUSTERS,
+        "convicted components must not retain a visible rendering"
     );
     assert!(
         visible_clusters
             .iter()
-            .all(|(id, _, _)| *id != "schema-token-only"),
-        "GH #108 token-only JSON schema cluster leaked into the ranked report"
-    );
-    assert!(
-        visible_clusters
-            .iter()
-            .all(|(id, _, _)| *id != "json-fixture-mixed"),
+            .all(|(id, _, _)| *id != MIXED_FIXTURE_CLUSTER_ID),
         "GH #98 mixed test fixture cluster leaked into the ranked report"
     );
     assert!(
         visible_clusters
             .iter()
-            .all(|(id, _, _)| *id != "assertion-only"),
+            .all(|(id, _, _)| *id != ASSERTION_CLUSTER_ID),
         "GH #99 assertion-only cluster leaked into the ranked report"
     );
     assert!(
-        visible_clusters
-            .iter()
-            .all(|(id, _, _)| *id != "embedding-mega"),
-        "GH #120/#122 embedding mega-cluster leaked into the ranked report"
-    );
-    assert!(
         report.clusters.is_empty(),
-        "ranked report must not surface low-structure token/embedding noise: {visible_clusters:#?}"
+        "ranked report must not surface a filter-convicted noise cluster: {visible_clusters:#?}"
     );
     Ok(())
 }
 
 fn threshold_false_positive_clusters(fixture: &mut ReportFixture) -> Vec<Cluster> {
-    vec![
-        json_schema_cluster(fixture),
-        mixed_fixture_cluster(fixture),
-        assertion_cluster(fixture),
-        embedding_mega_cluster(fixture),
-    ]
-}
-
-fn json_schema_cluster(fixture: &mut ReportFixture) -> Cluster {
-    fixture.cluster(
-        "schema-token-only",
-        vec![
-            ("schemas.py", "def schema_report_get():\n    return {\"type\": \"object\", \"properties\": {\"path\": {\"type\": \"string\"}}, \"required\": [\"path\"]}\n"),
-            ("schemas.py", "def schema_top_offenders():\n    return {\"type\": \"object\", \"properties\": {\"limit\": {\"type\": \"integer\"}}, \"required\": [\"limit\"]}\n"),
-        ],
-        56,
-    )
+    vec![mixed_fixture_cluster(fixture), assertion_cluster(fixture)]
 }
 
 fn mixed_fixture_cluster(fixture: &mut ReportFixture) -> Cluster {
@@ -101,25 +110,5 @@ fn assertion_cluster(fixture: &mut ReportFixture) -> Cluster {
             ("test_config.py", "def test_fly_config(cfg):\n    assert cfg.api_token == \"t\"\n    assert cfg.app_name == \"a\"\n"),
         ],
         44,
-    )
-}
-
-fn embedding_mega_cluster(fixture: &mut ReportFixture) -> Cluster {
-    fixture.cluster(
-        "embedding-mega",
-        vec![
-            ("test_usage_api.py", "import pytest\n\nDAY1 = object()\n\n@pytest.fixture\nasync def second_tenant(db_session):\n    return object()\n"),
-            ("test_builtins.py", "\"\"\"Tests for built-in tools.\"\"\"\n\nfrom unittest.mock import AsyncMock, patch\n\nimport pytest\n"),
-            ("test_sandbox_embodied_http.py", "def _bundle_config_payload(bundle_url):\n    return {\"name\": \"Bundle Sandbox Agent\", \"system_prompt\": \"You are a website builder.\"}\n"),
-            ("test_live_edit.py", "class TestSandboxEmbodiedLiveEditHttp:\n    async def test_api_file_patch_is_observable_in_next_chat_turn(self, client):\n        assert client\n"),
-            ("test_host.py", "class _LiveEditHost(MockAgentWorkspaceHost):\n    async def admin_request(self, *, instance):\n        return instance\n"),
-            ("test_auth.py", "async def test_auth_token(client, tenant):\n    token = await client.post('/auth')\n    assert token\n"),
-            ("test_sandbox_coverage.py", "async def test_workspace_status(client, workspace):\n    response = await client.get('/status')\n    assert response.status_code == 200\n"),
-            ("test_providers.py", "def test_provider_model_selection(provider):\n    assert provider.default_model == 'test-model'\n"),
-            ("conftest.py", "@pytest.fixture\nasync def tenant(db_session):\n    return object()\n"),
-            ("test_agent_factory.py", "def test_agent_factory_builds_runner(factory):\n    assert factory.build('runner') is not None\n"),
-            ("test_sandbox_dispatcher_e2e.py", "async def test_dispatcher_routes_message(dispatcher):\n    result = await dispatcher.send('hello')\n    assert result\n"),
-        ],
-        1040,
     )
 }

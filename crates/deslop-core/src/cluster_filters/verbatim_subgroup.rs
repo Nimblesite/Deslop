@@ -24,16 +24,10 @@
 //! Clusters the filters do not suppress are returned untouched, so a
 //! consistently-renamed three-way clone stays one three-way clone.
 //!
-//! [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] The hatch protects a
-//! *copy*, and for most filters a copy spans files. A byte-identical
-//! family confined to one file is the idiom the filter just recognised,
-//! not a paste of it, so it hides with its component.
-//!
-//! [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL] That holds
-//! only where the filter could have seen a second file. A filter whose
-//! members must already share one file is exempt: asking it for
-//! cross-file proof has one possible answer, and it erased real copies.
-//! See [`is_copied_family`].
+//! [CLONE-NOISE-VERBATIM-SUBGROUP-GEOMETRY] The hatch protects every
+//! exact-byte family at two distinct locations. File geometry does not
+//! alter eligibility: the filter already convicted the component, and
+//! may not impose a second suppression decision on one of its families.
 //!
 //! [CLONE-NOISE-VERBATIM-SUBGROUP-EXACT-BYTES] "Byte-identical" means
 //! the exact source bytes of a member's range — see
@@ -51,7 +45,7 @@ use super::{
     family::{families_by, restrict},
     is_noise_pattern,
     snippets::ParseCache,
-    spans_multiple_files, NoiseFilter, NoiseStage,
+    NoiseStage,
 };
 
 /// Smallest byte-identical family worth keeping, counted in *distinct
@@ -321,19 +315,15 @@ fn split_one<S: BuildHasher>(
 ) -> Option<Vec<FusedCluster>> {
     let families = splittable_families(fused, fingerprints, sources)?;
     let members = resolved_members(fused, fingerprints)?;
-    let Some(filter) =
-        is_noise_pattern(&members, sources, file_languages, cache, NoiseStage::Split)
-    else {
-        // [CLONE-NOISE-VERBATIM-SUBGROUP]: a component the noise filters
-        // do not suppress is handed on untouched — no split, no member
-        // dropped, no panic. The pairwise admission that built the
-        // closure decides its fate
-        // ([FUSED-STRATEGY-BOUNDED-MAX] step 4).
-        return None;
-    };
+    // [CLONE-NOISE-VERBATIM-SUBGROUP]: a component the noise filters
+    // do not suppress is handed on untouched — no split, no member
+    // dropped, no panic. The pairwise admission that built the
+    // closure decides its fate
+    // ([FUSED-STRATEGY-BOUNDED-MAX] step 4).
+    let _filter = is_noise_pattern(&members, sources, file_languages, cache, NoiseStage::Split)?;
     let keepable: Vec<&Vec<usize>> = families
         .iter()
-        .filter(|family| is_copied_family(family, fingerprints, filter))
+        .filter(|family| is_copied_family(family, fingerprints))
         .collect();
     // No family the hatch protects: the component keeps its own shape and
     // takes the suppression whole, downstream, exactly as it always did.
@@ -386,37 +376,11 @@ fn resolved_members(
     (members.len() == fused.members.len()).then_some(members)
 }
 
-/// Whether `family` is the copy the escape hatch exists to protect
-/// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE]): a byte-identical
-/// family of at least two members which, for most filters, must also
-/// span at least two files.
-///
-/// Byte-identity **across files** is proof of copying — independently
-/// authored code does not coincide byte for byte. Byte-identity
-/// **within one file** is usually proof of the idiom the noise filter
-/// just recognised: the same `monkeypatch.setenv` tail, the same
-/// assertion pair against the same fixture, written that way because the
-/// pattern mandates it. There the filter's classification is the better
-/// evidence, so the family takes the suppression with its component.
-///
-/// That reasoning needs the filter to have had a *choice*. A filter
-/// whose members must already share one file cannot offer cross-file
-/// evidence either way, and demanding it deleted real copies: two
-/// byte-identical cells of one list literal published when they were the
-/// whole literal, and vanished the moment a third, *differing* cell
-/// joined — a duplicate erased by the arrival of a line that was never
-/// part of it ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL],
-/// gh #462). Which filter fired therefore decides which question is
-/// asked; see [`NoiseFilter::demands_cross_file_copy`].
-fn is_copied_family(family: &[usize], fingerprints: &[Fingerprint], filter: NoiseFilter) -> bool {
+/// Whether `family` is the exact-byte copy the escape hatch protects
+/// ([CLONE-NOISE-VERBATIM-SUBGROUP-GEOMETRY]). Two distinct locations
+/// qualify regardless of whether they share a file.
+fn is_copied_family(family: &[usize], fingerprints: &[Fingerprint]) -> bool {
     distinct_locations(family, fingerprints) >= MIN_FAMILY_OCCURRENCES
-        && (!filter.demands_cross_file_copy()
-            || spans_multiple_files(
-                family
-                    .iter()
-                    .filter_map(|index| fingerprints.get(*index))
-                    .map(|member| member.file_id),
-            ))
 }
 
 /// How many distinct source locations `family` covers.
@@ -429,9 +393,9 @@ fn is_copied_family(family: &[usize], fingerprints: &[Fingerprint], filter: Nois
 /// re-parsed a component no split could change, and counted the noise
 /// filters as having examined it ([CLONE-NOISE-VERBATIM-SUBGROUP-EXACT-BYTES],
 /// [PERF-FLUTTER-TODO-OBSERVABILITY]). The duplicate views stay in the
-/// family — the same-file overlap collapse elects the representative
-/// that carries the strongest cross-file edge, and it must still see
-/// every view to choose between them ([PIPELINE-CLUSTER-EXACT]).
+/// family — the same-file overlap collapse selects the authored physical
+/// view by scope and width, and it must still see every view
+/// ([PIPELINE-CLUSTER-EXACT-SCOPE]).
 fn distinct_locations(family: &[usize], fingerprints: &[Fingerprint]) -> usize {
     family
         .iter()

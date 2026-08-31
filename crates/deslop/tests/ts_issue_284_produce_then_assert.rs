@@ -57,20 +57,10 @@ const LABEL: &str = "gh #284 produce-then-assert scenario family";
 /// is a candidate window — the geometry gh #284 reports.
 const MIN_NODES: u32 = 8;
 
-/// Components [CLONE-NOISE-LITERAL-VARIATION-CALLS] suppresses here —
-/// measured. The two scenario files hold three literal-varying assertion
-/// runs between them; a *higher* count is the filter eating something
-/// this fixture never staged as noise.
-const EXPECTED_HIDDEN: u64 = 3;
-
-/// Every half of the contract this fixture is held to, as data: the
-/// family judged file by file, the control that must survive it, and the
-/// three counts the report must show. Stating it once keeps a pin from
-/// quietly asserting less than its neighbours.
+// Exact suppression contract for the family and its byte-identical control.
 const PIN: SuppressedFamily<'static> = SuppressedFamily {
     family_files: &FAMILY,
     control_files: &CONTROL,
-    expected_hidden: EXPECTED_HIDDEN,
     control_loc: CONTROL_LOC,
     files_analysed: FILES_ANALYSED,
 };

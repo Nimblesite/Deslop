@@ -37,19 +37,16 @@ fn issue_45_pipeline_emits_stage_observability_events() -> Result<()> {
     assert_eq!(cluster.target, "deslop_core::cluster");
     assert_has_fields(
         &cluster,
-        &["total", "dropped_below_min_members", "largest_weight"],
+        &["total", "dropped_below_min_members", "largest_mass"],
     );
 
-    let bucket = captured.event("bucket distribution")?;
-    assert_eq!(bucket.target, "deslop_core::report");
+    // The bucket distribution event is retired with the bucket surface:
+    // the mass-only report emits its own visibility telemetry instead.
+    let report = captured.event("mass-ranked report built")?;
+    assert_eq!(report.target, "deslop_core::report");
     assert_has_fields(
-        &bucket,
-        &[
-            "identical",
-            "nearly_identical",
-            "loosely_similar",
-            "same_behavior",
-        ],
+        &report,
+        &["visible_clusters", "clusters_hidden", "highest_mass"],
     );
     Ok(())
 }

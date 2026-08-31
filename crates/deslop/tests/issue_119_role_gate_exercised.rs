@@ -1,9 +1,9 @@
 //! [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH] — the role gate must be
 //! *exercised*, not merely present.
 //!
-//! GH #119 added a role-compatibility gate: an embedding-dominant
-//! `same_behavior` cluster must be role/context compatible (all classes,
-//! or all functions) before surfacing. Two suites assert that gate — the
+//! GH #119 added a role-compatibility gate: an embedding-dominant pair
+//! must be role/context compatible (all classes, or all functions) before
+//! closure. Two suites assert that gate — the
 //! Dart and Python `issue_119_embedding_role_mismatch` binaries — and
 //! both of their suppression tests are written as "no offending cluster
 //! is visible".
@@ -11,18 +11,14 @@
 //! That shape passes for two different reasons, and only one of them is
 //! the gate working:
 //!
-//! 1. the embedding pass paired the role-incompatible members and the
-//!    gate suppressed the cluster — the contract, or
-//! 2. the embedding pass never paired them at all, so no cluster ever
-//!    existed to suppress and the assertion is vacuous.
+//! 1. the embedding pass may propose the role-incompatible members, but
+//!    pair admission rejects them before closure — the contract, or
+//! 2. no role-incompatible candidate reaches the output path.
 //!
-//! This binary pins the difference between the two reasons so it cannot
-//! be mistaken for a passing gate again. The role-mismatch fixtures are
-//! near-identical byte-for-byte (a class and a function sharing locals),
-//! so the honest GH #369 shingle mock scores them above the floor and the
-//! pair genuinely reaches the gate. The same-role fixtures are genuinely
-//! Type-4 — same behaviour, different text — which no content statistic
-//! can measure, so those tests declare the ground truth with
+//! Both outcomes must have the same external result: no visible or hidden
+//! component. The same-role fixtures are genuinely Type-4 — same
+//! behaviour, different text — which no content statistic can measure, so
+//! those tests declare the ground truth with
 //! [`MockOllama::spawn_semantic`]: the two function names form one
 //! behaviour-equivalence group, lifting their cosine above the floor
 //! while every other pair keeps its honest shingle cosine.
@@ -40,6 +36,9 @@ use crate::common::{
     *,
 };
 
+const NO_HIDDEN_COMPONENTS: u64 = 0;
+const MINIMUM_INDEXED_EMBEDDINGS: u64 = 1;
+
 /// Scans a private copy of `fixture_root` with `--embeddings off`, the
 /// baseline the embedding pass must measurably move.
 fn report_without_embeddings(fixture_root: &Path) -> Result<Value> {
@@ -49,26 +48,34 @@ fn report_without_embeddings(fixture_root: &Path) -> Result<Value> {
     run_report(scan_root, 5)
 }
 
-/// Asserts the embedding pass measurably changed what the scan
-/// suppressed — the only black-box proof that a pair reached the role
-/// gate rather than never forming.
-fn assert_gate_was_reached(fixture_name: &str, language: &str) -> Result<()> {
+/// Embeddings must not manufacture a visible or hidden component for a
+/// cross-role fixture. Role incompatibility is a pair-admission rejection,
+/// not post-closure suppression.
+fn assert_cross_role_fixture_stays_preclosure_rejected(
+    fixture_name: &str,
+    language: &str,
+) -> Result<()> {
     let root = fixture(fixture_name);
     let without = report_without_embeddings(&root)?;
     let server = MockOllama::spawn()?;
     let with = scan_fixture_copy_with_mock(&root, "5", server.endpoint())?;
-    let hidden_without = clusters_hidden(&without);
-    let hidden_with = clusters_hidden(&with);
+    for (mode, report) in [("embeddings off", &without), ("embeddings on", &with)] {
+        assert!(
+            clusters(report).is_empty(),
+            "{language} `{fixture_name}` must have no {mode} cross-role component: {report:#}"
+        );
+        assert_eq!(
+            clusters_hidden(report),
+            NO_HIDDEN_COMPONENTS,
+            "{language} `{fixture_name}` rejects cross-role pairs before suppression: {report:#}"
+        );
+    }
     assert!(
-        hidden_with > hidden_without,
-        "[CLONE-NOISE-EMBEDDING-ROLE-MISMATCH] the {language} role-mismatch \
-         fixture `{fixture_name}` must form a role-incompatible embedding pair \
-         that the gate then suppresses: clusters_hidden must RISE when the \
-         embedding pass runs, got {hidden_without} with `--embeddings off` and \
-         {hidden_with} with the mock embedder. Equal counts mean the ANN pass \
-         emitted zero pairs, no cluster was ever built, and the suppression \
-         assertion in the {language} #119 suite is vacuous — it would pass \
-         with the role gate deleted."
+        field(field(&with, "embedding_provenance"), "indexed_subtrees")
+            .as_u64()
+            .unwrap_or_default()
+            >= MINIMUM_INDEXED_EMBEDDINGS,
+        "{language} `{fixture_name}` must run embedding discovery before pair admission: {with:#}"
     );
     Ok(())
 }
@@ -76,15 +83,15 @@ fn assert_gate_was_reached(fixture_name: &str, language: &str) -> Result<()> {
 // The Dart role-mismatch fixture must actually build the class/function
 // pair the gate exists to suppress.
 #[test]
-fn dart_role_mismatch_pair_must_reach_the_role_gate() -> Result<()> {
-    assert_gate_was_reached("dart-issue-119-role-mismatch", "Dart")
+fn dart_role_mismatch_pair_is_rejected_before_closure() -> Result<()> {
+    assert_cross_role_fixture_stays_preclosure_rejected("dart-issue-119-role-mismatch", "Dart")
 }
 
 // The Python role-mismatch fixture must actually build the class/function
 // pair the gate exists to suppress.
 #[test]
-fn python_role_mismatch_pair_must_reach_the_role_gate() -> Result<()> {
-    assert_gate_was_reached("python-issue-119-role-mismatch", "Python")
+fn python_role_mismatch_pair_is_rejected_before_closure() -> Result<()> {
+    assert_cross_role_fixture_stays_preclosure_rejected("python-issue-119-role-mismatch", "Python")
 }
 
 // Over-suppression guard, Dart: same-role behaviour-equivalent functions

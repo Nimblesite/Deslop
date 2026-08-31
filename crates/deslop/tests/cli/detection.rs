@@ -1,6 +1,11 @@
 use super::support::*;
 use crate::common::signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair};
 
+const TYPE2_EXPECTED_FILES_ANALYSED: u64 = 2;
+const TYPE2_EXPECTED_OCCURRENCES: usize = 2;
+const MINIMUM_DUPLICATED_MASS: u64 = 1;
+const VALID_MASS_RANK_BANDS: [&str; 4] = ["worst", "top10", "mid", "faint"];
+
 /// Runs the CLI against `fixture(fixture_name)` with `--min-nodes
 /// <min_nodes>`, asserts the process succeeded, and returns the raw
 /// JSON report text. Shared by every detection test that drives a
@@ -31,34 +36,50 @@ fn run_with_args(fixture_name: &str, extra_args: &[&str]) -> Result<(PathBuf, se
 }
 
 /// Asserts the canonical Type-2 report shape shared by every
-/// per-language `*-small` fixture: both files analysed, both file
-/// names present, and at least one reported duplicate cluster that
-/// carries the mass-only wire fields ([RANK-MASS-SUM],
-/// [SEVERITY-BAND]). The old `structural: 1.0` cluster signal is
-/// retired from the wire; the mass fields it was removed with must
-/// never silently disappear.
+/// per-language `*-small` fixture: both files analysed, one component spans
+/// exactly both source files, and its only cluster-level measures are
+/// mass-derived ([RANK-MASS-SUM], [FUSED-PAIR-SIGNALS]). The old
+/// `structural: 1.0` cluster signal is retired from the wire; no pair-only
+/// evidence may silently return.
 fn assert_type2_report(json: &str, first_file: &str, second_file: &str) -> Result<()> {
-    assert!(json.contains("\"files_analysed\": 2"));
-    assert!(json.contains(first_file));
-    assert!(json.contains(second_file));
     let report: serde_json::Value = serde_json::from_str(json)?;
+    assert_eq!(
+        require_u64(&report, "/files_analysed", "report")?,
+        TYPE2_EXPECTED_FILES_ANALYSED,
+        "the Type-2 fixture must analyse both authored source files"
+    );
     let clusters = require_array(&report, "/clusters", "report")?;
     assert!(
         !clusters.is_empty(),
         "a Type-2 fixture must surface a cluster: {json}"
     );
+    let clone = require_cluster_spanning(clusters, first_file, second_file)?;
+    assert_eq!(
+        cluster_file_basenames(clone),
+        std::collections::BTreeSet::from([first_file.to_owned(), second_file.to_owned()]),
+        "the Type-2 component must contain exactly its two fixture files"
+    );
+    assert_eq!(
+        require_array(clone, "/occurrences", "Type-2 cluster")?.len(),
+        TYPE2_EXPECTED_OCCURRENCES,
+        "the Type-2 component must preserve its two exact occurrences"
+    );
+    assert_no_pair_surface_on_cluster(clone, "Type-2 cluster");
     for cluster in clusters {
         let band = cluster
             .get("rank_band")
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| anyhow::anyhow!("cluster carries no rank band: {cluster}"))?;
         assert!(
-            ["worst", "top10", "mid", "faint"].contains(&band),
+            VALID_MASS_RANK_BANDS.contains(&band),
             "cluster {} carries no rank band: {cluster}",
             cluster_id(cluster)
         );
         let mass = require_u64(cluster, "/mass", "cluster")?;
-        assert!(mass >= 1, "cluster mass must be positive: {cluster}");
+        assert!(
+            mass >= MINIMUM_DUPLICATED_MASS,
+            "cluster mass must be positive: {cluster}"
+        );
     }
     Ok(())
 }

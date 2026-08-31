@@ -13,7 +13,7 @@
 
 use anyhow::Result;
 
-use crate::common::signals::has_verbatim_pair;
+use crate::common::signals::{assert_structural_only_contract, has_verbatim_pair};
 use crate::common::*;
 
 /// Drives the `deslop` binary over the named fixture at `min_nodes` and
@@ -30,10 +30,11 @@ fn run_cli(fixture_name: &str, min_nodes: u32) -> Result<serde_json::Value> {
 }
 
 // [FUSED-SIGNALS-THREE-LAYER] Type-2 Python clones (identical after
-// normalisation) must produce token_jaccard = 1.0 — proves
-// minhash_signature maps identical k-gram sets to identical signatures.
-// If the XOF produces wrong values (e.g. all-MAX sentinel), Jaccard
-// would be 1.0 trivially; the Type-3 test below distinguishes that case.
+// normalisation) must be detected — proves the signature pipeline maps
+// identical normalised k-gram sets to identical signatures. A Type-2
+// clone is a *rename*: its occurrences differ in raw bytes, so the
+// wire proves it by admission plus the byte truth that it is NOT a
+// verbatim copy ([PIPELINE-CLUSTER-CLOSURE]).
 #[test]
 fn python_type2_clone_is_byte_identical() -> Result<()> {
     let scan_root = fixture("python-small");
@@ -46,9 +47,11 @@ fn python_type2_clone_is_byte_identical() -> Result<()> {
     let top = clusters
         .first()
         .ok_or_else(|| anyhow::anyhow!("python-small must produce at least one cluster"))?;
+    assert_structural_only_contract(top, "python Type-2 clone");
     assert!(
-        has_verbatim_pair(&scan_root, top)?,
-        "Type-2 Python clone must be byte-proven from the fixture source: {top:#}",
+        !has_verbatim_pair(&scan_root, top)?,
+        "the Type-2 clone is a rename — its occurrences must differ in raw \
+         bytes, never be byte-identical: {top:#}",
     );
     Ok(())
 }

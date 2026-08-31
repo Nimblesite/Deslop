@@ -22,7 +22,22 @@ use crate::mock_ollama::MockOllama;
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::{embeddings::run_mock_embedding_report, signals::has_verbatim_pair, *};
+use crate::common::{
+    embeddings::run_mock_embedding_report,
+    signals::{
+        assert_no_pair_surface_on_cluster, assert_pair_metric, assert_structural_only_contract,
+        compare_pair_with_embeddings, has_verbatim_pair, occurrence_for_file,
+    },
+    *,
+};
+
+const MIN_NODES: u32 = 8;
+const MIN_NODES_ARG: &str = "8";
+const EXACT_SCORE: f64 = 1.0;
+const MISSING_SCORE: f64 = 0.0;
+const LEFT_FILE: &str = "Alpha.cs";
+const RIGHT_FILE: &str = "Beta.cs";
+const EXACT_COPY_FILE: &str = "AlphaCopy.cs";
 
 /// Scans `csharp-small` with the deterministic mock embedder wired in at
 /// the given `min_nodes`, so the same corpus can be reached through
@@ -34,28 +49,36 @@ fn run_with_embeddings(server: &MockOllama, min_nodes: &str) -> Result<Value> {
     run_mock_embedding_report(workspace.path(), &output, min_nodes, server.endpoint())
 }
 
-// A pair the structural pass already holds must still be reported with
-// embeddings on — the discovery route must not decide visibility.
-// [PIPELINE-CLUSTER-CLOSURE]: the measured cosine is pair-scoped now, so
-// the acceptance is pinned by the byte-proven fact instead.
+// A pair the structural pass already holds must still be admitted when no
+// embedding vector is available for that exact pair. The canonical
+// enclosing views differ by class name, but their normalised structure and
+// consistent rename evidence independently meet pair admission.
 #[test]
-fn a_structurally_discovered_pair_still_renders_byte_proven() -> Result<()> {
+fn a_structurally_discovered_pair_does_not_require_an_embedding() -> Result<()> {
     let server = MockOllama::spawn()?;
     let workspace = tempfile::tempdir()?;
     seed(&fixture("csharp-small"), workspace.path())?;
     let output = workspace.path().join("report");
-    let report = run_mock_embedding_report(workspace.path(), &output, "8", server.endpoint())?;
-    assert!(
-        cluster_count(&report) > 0,
-        "the fixture must produce at least one visible cluster: {report:#}"
+    let report =
+        run_mock_embedding_report(workspace.path(), &output, MIN_NODES_ARG, server.endpoint())?;
+    let cluster = expect_cluster_spanning(&report, &[LEFT_FILE, RIGHT_FILE])?;
+    assert_structural_only_contract(cluster, "structurally discovered Type-2 pair");
+    assert_no_pair_surface_on_cluster(cluster, "structurally discovered Type-2 pair");
+    let comparison = compare_pair_with_embeddings(
+        workspace.path(),
+        MIN_NODES,
+        occurrence_for_file(cluster, LEFT_FILE)?,
+        occurrence_for_file(cluster, RIGHT_FILE)?,
+    )?;
+    assert_pair_metric(
+        comparison.evidence.embedding_cos,
+        MISSING_SCORE,
+        "the optional embedding axis is absent for this explicit pair",
     );
-    for cluster in clusters(&report) {
-        assert!(
-            has_verbatim_pair(workspace.path(), cluster)?,
-            "the byte-identical bodies must be byte-proven with embeddings on: \
-             {cluster:#}"
-        );
-    }
+    assert!(
+        comparison.evidence.admitted,
+        "the explicit pair must remain admitted: {comparison:#?}"
+    );
     Ok(())
 }
 
@@ -86,25 +109,41 @@ fn changing_the_discovery_route_never_erases_the_embedding_axis() -> Result<()> 
     Ok(())
 }
 
-// Embedding evidence must survive content-hash deduplication. Two
-// byte-identical bodies share one provider request by design; the result
-// has to fan back out to every fingerprint in the group, or the most
-// perfect duplicates are exactly the ones rendered as unmeasured.
+// Embedding evidence must survive content-hash deduplication. The exact
+// copy shares the source body with `Alpha`, so its vector is deduplicated
+// at provider dispatch but must fan back out to both explicit endpoints.
 #[test]
-fn byte_identical_bodies_each_remain_byte_proven() -> Result<()> {
+fn byte_identical_bodies_each_retain_their_measured_embedding() -> Result<()> {
     let server = MockOllama::spawn()?;
     let workspace = tempfile::tempdir()?;
     seed(&fixture("csharp-small"), workspace.path())?;
+    let _copied = std::fs::copy(
+        workspace.path().join(LEFT_FILE),
+        workspace.path().join(EXACT_COPY_FILE),
+    )?;
     let output = workspace.path().join("report");
-    let report = run_mock_embedding_report(workspace.path(), &output, "8", server.endpoint())?;
-    let byte_proven = clusters(&report)
-        .iter()
-        .filter(|cluster| has_verbatim_pair(workspace.path(), cluster).unwrap_or(false))
-        .count();
-    assert_eq!(
-        byte_proven,
-        cluster_count(&report),
-        "every visible cluster must be byte-proven from the source: {report:#}"
+    let report =
+        run_mock_embedding_report(workspace.path(), &output, MIN_NODES_ARG, server.endpoint())?;
+    let cluster = expect_cluster_spanning(&report, &[LEFT_FILE, EXACT_COPY_FILE])?;
+    assert!(
+        has_verbatim_pair(workspace.path(), cluster)?,
+        "the copied file must preserve an exact pair: {cluster:#}"
     );
+    let comparison = compare_pair_with_embeddings(
+        workspace.path(),
+        MIN_NODES,
+        occurrence_for_file(cluster, LEFT_FILE)?,
+        occurrence_for_file(cluster, EXACT_COPY_FILE)?,
+    )?;
+    assert_pair_metric(
+        comparison.evidence.embedding_cos,
+        EXACT_SCORE,
+        "identical endpoints retain their deduplicated embedding",
+    );
+    assert!(
+        comparison.evidence.admitted,
+        "the exact pair must remain admitted: {comparison:#?}"
+    );
+    assert_no_pair_surface_on_cluster(cluster, "deduplicated exact pair");
     Ok(())
 }

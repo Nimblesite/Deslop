@@ -323,35 +323,6 @@ struct Occurrence {
     declaration: Option<ByteRange>,
 }
 
-impl Occurrence {
-    /// True when the two occupy one authored declaration's worth of
-    /// scope, so the enclosing view describes the other's code too.
-    ///
-    /// Two occurrences strictly inside the *same* declaration qualify.
-    /// So does the asymmetric case: `self` at or above declaration
-    /// level (no function production encloses it) against `other`
-    /// inside one. A whole-file view holding a function whole, against
-    /// an interior window of that same function, is the same
-    /// non-comparability seen from one level up — the window covers
-    /// less of what the file says, so the wider authored scope stays
-    /// the representative (`lsh_only_nearmiss_recall`).
-    fn shares_declaration_with(&self, other: &Self) -> bool {
-        match (self.declaration, other.declaration) {
-            (Some(mine), Some(theirs)) => mine == theirs,
-            (None, Some(_)) => true,
-            (_, None) => false,
-        }
-    }
-
-    /// True when this occurrence covers `other` and is wider on at
-    /// least one side.
-    fn encloses(&self, other: &Self) -> bool {
-        self.range.start <= other.range.start
-            && other.range.end <= self.range.end
-            && (self.range.start < other.range.start || other.range.end < self.range.end)
-    }
-}
-
 /// One transitively-overlapping run of same-file occurrences, reduced to
 /// the reported location plus the frontier the next window is tested
 /// against.
@@ -432,17 +403,13 @@ impl OverlapRun {
     /// pair to the other module fails admission), so the exact sibling
     /// window remains the only view of the region.
     fn displaces(&self, candidate: &Occurrence) -> bool {
-        if self.representative.encloses(candidate)
-            && self.representative.shares_declaration_with(candidate)
-        {
-            return false;
-        }
-        // Authored scope and width only ([PIPELINE-CLUSTER-EXACT-SCOPE]).
-        // Pair grades cannot choose a view: a bridge that should not
-        // connect must fail pair admission, not be hidden by the
-        // collapse. Equal-width ties keep the incumbent, so the run
-        // stays deterministic across runs.
-        candidate.range.len() > self.representative.range.len()
+        panic!(
+            "[PIPELINE-CLUSTER-EXACT-SCOPE] accuracy quarantine: scope={:?}/{:?}, ranges={:?}/{:?}; widening an admitted overlapping range can publish an enclosing range whose operator-divergent pair never passed admission; pinned by crates/deslop/tests/operator_drift_is_not_duplication.rs",
+            self.representative.declaration,
+            candidate.declaration,
+            self.representative.range,
+            candidate.range,
+        );
     }
 }
 

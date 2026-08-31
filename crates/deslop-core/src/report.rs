@@ -8,15 +8,22 @@ use crate::{
     config::ExclusionConfig,
     report_boilerplate::build_boilerplate_hints,
     report_metrics::{compute_repo_metrics, AnalysedLines, MetricsInputs},
-    report_render::{cluster_to_report, ReportSources},
+    report_render::ReportSources,
     report_weight::rank_by_mass,
     state::{FileId, FileRegistry},
 };
+
+mod hidden;
+use hidden::{log_hidden_cluster, materialise_with_visibility, NOISE_TOTALS_RUN_STAGE};
 
 pub use crate::wire_generated::{
     CacheStats, EmbeddingProvenance, PairClassification, PairComparison, PairComparisonParams,
     PairEndpoint, PairEvidence, Report, ReportCluster, ReportOccurrence,
 };
+
+/// The render-stage parse cache, re-exported where [`ReportInputs`]
+/// carries it ([CLONE-NOISE-REPARSE-CACHE]).
+pub use crate::cluster_filters::ParseCache;
 
 /// Default occurrence cap applied by [`Report::truncate_for_wire`].
 pub const LIVE_WIRE_OCCURRENCE_CAP: usize = 100;
@@ -89,39 +96,43 @@ pub struct ReportInputs<'a, S: BuildHasher> {
     pub boilerplate_ranges: &'a [BoilerplateRange],
     /// Verified diff scope.
     pub diff: Option<&'a crate::diff_scope::DiffScope>,
+    /// Shared parse cache for the render-stage noise checks
+    /// ([CLONE-NOISE-REPARSE-CACHE]).
+    pub parse_cache: &'a ParseCache,
 }
 
 /// Converts closure components to the canonical report.
 #[must_use]
 pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
     let report_sources = ReportSources::new(inputs.sources);
-    let materialised: Vec<ReportCluster> = inputs
+    let materialised: Vec<(ReportCluster, bool)> = inputs
         .clusters
         .iter()
         .map(|cluster| {
-            cluster_to_report(
-                cluster,
-                inputs.registry,
-                inputs.file_languages,
-                inputs.scan_root,
-                inputs.exclusion,
-                &report_sources,
-            )
+            materialise_with_visibility(cluster, &inputs, &report_sources, inputs.parse_cache)
         })
         .collect();
+    // Every render-stage noise check has now run: `cluster_is_hidden` is
+    // the only render-stage caller of the noise filters, and it is
+    // reached solely from the loop above. Without this the render
+    // stage's convictions were recorded into the shared counters and
+    // discarded unread ([PERF-FLUTTER-TODO-OBSERVABILITY]).
+    inputs.parse_cache.log_noise_totals(NOISE_TOTALS_RUN_STAGE);
+    for (cluster, hidden) in &materialised {
+        if *hidden {
+            log_hidden_cluster(cluster, "noise or role gate");
+        }
+    }
     let visible_internal: Vec<&Cluster> = inputs
         .clusters
         .iter()
         .zip(&materialised)
-        .filter_map(|(cluster, rendered)| (rendered.occurrence_count >= 2).then_some(cluster))
+        .filter_map(|(cluster, (_, hidden))| (!hidden).then_some(cluster))
         .collect();
-    let clusters_hidden = materialised
-        .iter()
-        .filter(|cluster| cluster.occurrence_count < 2)
-        .count();
+    let clusters_hidden = materialised.iter().filter(|(_, hidden)| *hidden).count();
     let mut clusters: Vec<ReportCluster> = materialised
         .into_iter()
-        .filter(|cluster| cluster.occurrence_count >= 2)
+        .filter_map(|(cluster, hidden)| if hidden { None } else { Some(cluster) })
         .collect();
     rank_by_mass(&mut clusters);
     let mut metrics = compute_repo_metrics(&MetricsInputs {

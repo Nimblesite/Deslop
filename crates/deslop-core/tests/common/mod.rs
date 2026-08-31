@@ -27,7 +27,7 @@ use deslop_core::{
     cluster::Cluster,
     fingerprint::Fingerprint,
     render_report,
-    report::CacheStats,
+    report::{CacheStats, ParseCache},
     report_metrics::AnalysedLines,
     state::{FileId, FileRegistry},
     EmbeddingProvenance, ExclusionConfig, Report, ReportInputs,
@@ -465,6 +465,7 @@ impl ReportFixture {
     /// Renders `clusters` through the production report pipeline.
     pub(crate) fn render(&self, clusters: &[Cluster]) -> deslop_core::Report {
         let exclusion = ExclusionConfig::empty();
+        let parse_cache = ParseCache::new();
         render_report(ReportInputs {
             clusters,
             registry: &self.registry,
@@ -488,6 +489,7 @@ impl ReportFixture {
             analysed_lines: &self.analysed_lines,
             boilerplate_ranges: &[],
             diff: None,
+            parse_cache: &parse_cache,
         })
     }
 }

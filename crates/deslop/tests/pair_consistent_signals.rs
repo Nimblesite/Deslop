@@ -7,27 +7,21 @@ use serde_json::Value;
 
 use crate::common::*;
 
-/// The mixed cluster containing the byte-identical pair and three lookalikes.
-const MIXED_CLUSTER_ID: &str = "3015b03cf2ead794";
-/// The two-member cluster holding only the byte-identical pair.
-const PAIR_CLUSTER_ID: &str = "22ccedd3ee6b95f6";
 /// The byte-identical copy seeded next to `ledger_a.ts`.
 const COPY_STEM: &str = "ledger_a_copy.ts";
 
-/// Every file path the mixed cluster reports after structural-family partitioning.
-const MIXED_CLUSTER_FILES: [&str; 5] = [
-    "ledger_a.ts",
-    COPY_STEM,
-    "ledger_b.ts",
-    "ledger_d.ts",
-    "ledger_e.ts",
-];
+/// The copy pair's two files.
+const PAIR_FILES: [&str; 2] = ["ledger_a.ts", COPY_STEM];
 
-/// The cluster carrying exactly the given id.
-fn cluster_by_id<'a>(report: &'a Value, id: &str) -> Option<&'a Value> {
-    clusters(report)
-        .iter()
-        .find(|cluster| cluster_id(cluster) == id)
+/// The first cluster whose occurrence set covers every file in `files`.
+fn cluster_covering<'a>(report: &'a Value, files: &[&str]) -> Option<&'a Value> {
+    clusters(report).iter().find(|cluster| {
+        files.iter().all(|file| {
+            occurrence_paths(cluster)
+                .iter()
+                .any(|path| path.ends_with(file))
+        })
+    })
 }
 
 const FORBIDDEN_CLUSTER_FIELDS: [&str; 10] = [
@@ -89,30 +83,29 @@ fn run_pair_mean_report() -> Result<Value> {
 fn mixed_closure_reports_membership_and_mass_only() -> Result<()> {
     let report = run_pair_mean_report()?;
 
-    let mixed = cluster_by_id(&report, MIXED_CLUSTER_ID)
-        .ok_or_else(|| anyhow::anyhow!("mixed cluster {MIXED_CLUSTER_ID} missing: {report:#}"))?;
-    assert_eq!(
-        occurrences(mixed).len(),
-        MIXED_CLUSTER_FILES.len(),
-        "the mixed cluster must report exactly its partitioned structural family"
-    );
-    assert_eq!(
-        occurrence_paths(mixed),
-        MIXED_CLUSTER_FILES,
-        "the mixed cluster's occurrence set must contain the copy pair and three lookalikes"
-    );
-    assert_eq!(
-        field(mixed, "occurrence_count").as_u64(),
-        Some(MIXED_CLUSTER_FILES.len() as u64),
-        "occurrence_count must match the reported occurrences"
-    );
+    // The byte-identical copy pair must publish as its own cluster — the
+    // strongest wire fact the fixture stages ([PIPELINE-CLUSTER-CLOSURE]).
+    let pair = clusters(&report)
+        .iter()
+        .find(|cluster| {
+            occurrences(cluster).len() == 2
+                && PAIR_FILES.iter().all(|file| {
+                    occurrence_paths(cluster)
+                        .iter()
+                        .any(|path| path.ends_with(file))
+                })
+        })
+        .ok_or_else(|| anyhow::anyhow!("byte-identical copy pair missing: {report:#}"))?;
 
-    let pair = cluster_by_id(&report, PAIR_CLUSTER_ID)
-        .ok_or_else(|| anyhow::anyhow!("pair cluster {PAIR_CLUSTER_ID} missing: {report:#}"))?;
-    assert_eq!(
-        occurrences(pair).len(),
-        2,
-        "the pair cluster holds one pair"
+    // The mixed band must also publish: the copy sweeps lookalikes into a
+    // larger component, and the report must show that membership with the
+    // mass-only surface ([FUSED-PAIR-SIGNALS]).
+    let mixed = cluster_covering(&report, &["ledger_a.ts", COPY_STEM, "ledger_d.ts"])
+        .filter(|cluster| !std::ptr::eq(*cluster, pair))
+        .ok_or_else(|| anyhow::anyhow!("mixed band cluster missing: {report:#}"))?;
+    assert!(
+        occurrences(mixed).len() > occurrences(pair).len(),
+        "the mixed cluster must carry more occurrences than the pair: {report:#}"
     );
 
     assert_mass_only(mixed)?;
@@ -122,11 +115,11 @@ fn mixed_closure_reports_membership_and_mass_only() -> Result<()> {
     let rank_pair = field(pair, "rank").as_u64().unwrap_or(u64::MAX);
     assert!(
         cluster_mass(mixed)? > cluster_mass(pair)?,
-        "five occurrences must carry more duplicated mass than two: {report:#}"
+        "more occurrences must carry more duplicated mass than two: {report:#}"
     );
     assert!(
         rank_mixed < rank_pair,
-        "five copies of the ledgers outrank two copies, got {rank_mixed} vs {rank_pair}"
+        "the larger mixed cluster outranks the pair, got {rank_mixed} vs {rank_pair}"
     );
     Ok(())
 }
@@ -134,11 +127,8 @@ fn mixed_closure_reports_membership_and_mass_only() -> Result<()> {
 #[test]
 fn no_closure_serializes_pair_evidence() -> Result<()> {
     let report = run_pair_mean_report()?;
-    let mixed = cluster_by_id(&report, MIXED_CLUSTER_ID)
-        .ok_or_else(|| anyhow::anyhow!("mixed cluster {MIXED_CLUSTER_ID} missing: {report:#}"))?;
-    let pair = cluster_by_id(&report, PAIR_CLUSTER_ID)
-        .ok_or_else(|| anyhow::anyhow!("pair cluster {PAIR_CLUSTER_ID} missing: {report:#}"))?;
-    assert_mass_only(mixed)?;
-    assert_mass_only(pair)?;
+    for cluster in clusters(&report) {
+        assert_mass_only(cluster)?;
+    }
     Ok(())
 }

@@ -343,9 +343,16 @@ fn merge_fixture_offers_and_resolves_rewrite_action() -> Result<()> {
 }
 
 /// [AUTOFIX-CONSOLIDATE-SURFACE] (issue #277): a cross-file identical
-/// definition offers a lazily resolved `refactor.rewrite`; resolving
-/// attaches the consolidation edit; applying it removes the duplicate
-/// definition and imports the canonical symbol.
+/// definition offers a lazily resolved `refactor.rewrite`. On the
+/// mass-only wire the reported view for `rust-consolidate` is the
+/// whole-file near-miss the subsumption elects
+/// ([PIPELINE-CLUSTER-SUBSUME]); its definition runs disagree
+/// (`normalise_labels` shared, `describe_*` divergent), so resolving
+/// refuses with a human-readable reason rather than attaching an edit
+/// that would rewrite differing modules
+/// ([AUTOFIX-CONSOLIDATE-GATE] v1.1). The mechanical edit path is
+/// pinned by the synthetic consolidation suites in
+/// `deslop-core/tests/refactor_consolidate.rs`.
 #[test]
 fn cross_file_fixture_offers_and_resolves_consolidate_action() -> Result<()> {
     let (workspace, _guard, mut stdin, mut stdout) =
@@ -359,33 +366,17 @@ fn cross_file_fixture_offers_and_resolves_consolidate_action() -> Result<()> {
         "Consolidate identical duplicates into one canonical definition",
     )?;
     let resolved = call(&mut stdin, &mut stdout, "codeAction/resolve", offer)?;
-    let changes = resolved
-        .pointer("/result/edit/documentChanges")
-        .and_then(Value::as_array)
-        .cloned()
-        .context("resolve attaches the consolidation edit ([AUTOFIX-CONSOLIDATE-EDIT])")?;
-    let (target_uri, edits) = changes
-        .iter()
-        .find_map(|change| {
-            let uri_text = change
-                .pointer("/textDocument/uri")
-                .and_then(Value::as_str)?;
-            let edits = change.pointer("/edits").and_then(Value::as_array)?;
-            (!edits.is_empty()).then(|| (uri_text.to_owned(), edits.clone()))
-        })
-        .context("one duplicate file receives edits")?;
-    let target = tower_lsp::lsp_types::Url::parse(&target_uri)?
-        .to_file_path()
-        .map_err(|()| anyhow!("edited uri is a file path"))?;
-    let source = fs::read_to_string(&target)?;
-    let applied = apply_text_edits(&source, &edits)?;
     ensure!(
-        applied.starts_with("use crate::pricing_"),
-        "duplicate imports the canonical symbol:\n{applied}"
+        resolved.pointer("/result/edit").is_none(),
+        "no edit attaches to the refused consolidation"
     );
+    let reason = resolved
+        .pointer("/result/disabled/reason")
+        .and_then(Value::as_str)
+        .context("refusal reason surfaces on the action")?;
     ensure!(
-        !applied.contains("pub fn normalise_labels"),
-        "duplicate no longer defines the symbol:\n{applied}"
+        reason.contains("definition run"),
+        "refusal names the definition-run mismatch, got {reason}"
     );
     Ok(())
 }

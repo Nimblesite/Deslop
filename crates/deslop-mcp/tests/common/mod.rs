@@ -185,9 +185,28 @@ impl McpHandle {
     /// Spawns the `deslop-mcp` binary against `root` over stdio.
     pub fn spawn(root: &Path) -> Result<Self> {
         let bin = env!("CARGO_BIN_EXE_deslop-mcp");
-        let mut child = Command::new(bin)
+        let mut command = Command::new(bin);
+        let _configured = command.arg("--root").arg(root);
+        Self::from_command(command)
+    }
+
+    /// Spawns the MCP binary from `working_directory` with `root_argument`.
+    ///
+    /// The explicit textual root is required by the wrong-root regression:
+    /// `.` must resolve against the process working directory before the
+    /// server binds its live LSP session ([MCP-ROOT-CANONICAL]).
+    pub fn spawn_with_root_argument(working_directory: &Path, root_argument: &str) -> Result<Self> {
+        let bin = env!("CARGO_BIN_EXE_deslop-mcp");
+        let mut command = Command::new(bin);
+        let _configured = command
             .arg("--root")
-            .arg(root)
+            .arg(root_argument)
+            .current_dir(working_directory);
+        Self::from_command(command)
+    }
+
+    fn from_command(mut command: Command) -> Result<Self> {
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -266,6 +285,12 @@ pub fn wait_for_state_then_init_mcp(workspace: &Path) -> Result<McpHandle> {
 /// Spawns + initializes an MCP child against `root`.
 pub fn initialized_mcp(root: &Path) -> Result<McpHandle> {
     let mut mcp = McpHandle::spawn(root)?;
+    initialize_mcp(&mut mcp)?;
+    Ok(mcp)
+}
+
+/// Performs the MCP `initialize` request for an already-spawned client.
+pub fn initialize_mcp(mcp: &mut McpHandle) -> Result<()> {
     let response = mcp.request(
         "initialize",
         &json!({
@@ -278,7 +303,7 @@ pub fn initialized_mcp(root: &Path) -> Result<McpHandle> {
         response.get("error").is_none(),
         "MCP initialize failed: {response}"
     );
-    Ok(mcp)
+    Ok(())
 }
 
 /// Drives `tools/call` for `tool` with `arguments` and returns its

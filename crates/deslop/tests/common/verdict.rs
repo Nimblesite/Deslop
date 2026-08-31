@@ -15,9 +15,9 @@ use std::path::Path;
 use serde_json::Value;
 
 use super::{
-    cluster_size, clusters, clusters_hidden, expect_cluster_spanning, metric_field,
-    occurrence_files, occurrence_texts, signals::assert_no_pair_surface_on_cluster,
-    signals::has_verbatim_pair, Result,
+    cluster_size, clusters, clusters_hidden, expect_cluster_spanning, field, metric_field,
+    occurrence_files, occurrence_texts, per_file_metrics,
+    signals::assert_no_pair_surface_on_cluster, signals::has_verbatim_pair, Result,
 };
 
 /// `metrics.duplicated_loc`, defaulting to `0` so a missing metric
@@ -26,6 +26,16 @@ pub(crate) fn duplicated_loc(report: &Value) -> u64 {
     metric_field(report, "duplicated_loc")
         .as_u64()
         .unwrap_or_default()
+}
+
+/// Reads a file's duplicated-line count, requiring its metric row and
+/// count to be present so an omitted file cannot masquerade as rejected.
+pub(crate) fn duplicated_loc_for_path(report: &Value, path: &str) -> Result<u64> {
+    per_file_metrics(report)
+        .iter()
+        .find(|metric| field(metric, "path").as_str() == Some(path))
+        .and_then(|metric| field(metric, "duplicated_loc").as_u64())
+        .ok_or_else(|| anyhow::anyhow!("missing duplicated_loc for {path}: {report:#}"))
 }
 
 /// Asserts the report attributes at least `minimum` duplicated lines —

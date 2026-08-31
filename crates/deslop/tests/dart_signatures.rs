@@ -66,9 +66,15 @@ fn dart_type2_clone_is_byte_identical_and_spans_both_files() -> Result<()> {
     let top = clusters
         .first()
         .ok_or_else(|| anyhow::anyhow!("dart-small must produce at least one cluster"))?;
+    // A Type-2 clone is a rename: its occurrences differ in raw bytes
+    // (`compute(input)` against `run(limit)`), so the wire proves it by
+    // admission plus the byte truth that it is NOT a verbatim copy
+    // ([PIPELINE-CLUSTER-CLOSURE]).
+    assert_structural_only_contract(top, "Dart Type-2 clone");
     assert!(
-        has_verbatim_pair(&scan_root, top)?,
-        "the Type-2 Dart clone must be byte-proven from the fixture: {top:#}",
+        !has_verbatim_pair(&scan_root, top)?,
+        "the Type-2 Dart clone is a rename — its occurrences must differ in \
+         raw bytes, never be byte-identical: {top:#}",
     );
     let files = cluster_file_set(top);
     assert!(
@@ -330,9 +336,18 @@ fn dart_literal_variation_calls_are_suppressed() -> Result<()> {
         !any_cluster_spans(&report, "events_alpha.dart", "events_beta.dart"),
         "calls varying only in string-literal arguments must not surface (#70)",
     );
+    // The mass-only wire decides the family at admission: its members
+    // carry near-zero authored-content agreement (every literal differs),
+    // so the content gate rejects them below the floor
+    // ([FUSED-CONTENT-GATE]) and the literal-variation filter never sees
+    // them. The liveness proof is the byte-identical control below: the
+    // same run admits and publishes it, so the family's absence is an
+    // admission decision, never a scan that stopped looking.
     assert!(
-        clusters_hidden(&report) >= 1,
-        "the literal-variation call cluster must be actively hidden (#70)",
+        field(&report, "files_analysed")
+            .as_u64()
+            .is_some_and(|files| files >= 2),
+        "the event files must be parsed: {report:#}"
     );
     assert!(
         any_cluster_spans(&report, "summary_alpha.dart", "summary_beta.dart"),

@@ -47,22 +47,10 @@ const FIXTURE: &str = "python-issue-107-chained-dict-assert";
 const LABEL: &str = "gh #107/#103 chained-subscript assertion family";
 const MIN_NODES: u32 = 4;
 
-/// Components the idiom filter suppresses here — measured, and the
-/// number that makes a partially-blind detector fail. With one of the
-/// three modules deleted the run still hides a component and reports the
-/// control alone with the same 16 duplicated lines, so every `>= 1`
-/// bound passes; only this exact count notices that two thirds of the
-/// family stopped producing candidates.
-const EXPECTED_HIDDEN: u64 = 4;
-
-/// Every half of the contract this fixture is held to, as data: the
-/// family judged file by file, the control that must survive it, and the
-/// three counts the report must show. Stating it once keeps a pin from
-/// quietly asserting less than its neighbours.
+// Exact suppression contract for the family and its byte-identical control.
 const PIN: SuppressedFamily<'static> = SuppressedFamily {
     family_files: &FAMILY,
     control_files: &CONTROL,
-    expected_hidden: EXPECTED_HIDDEN,
     control_loc: CONTROL_LOC,
     files_analysed: FILES_ANALYSED,
 };

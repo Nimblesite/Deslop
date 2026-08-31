@@ -197,20 +197,32 @@ fn write_cluster(out: &mut String, cluster: &ReportCluster) {
     write_cluster_occurrences(out, cluster);
 }
 
-/// Writes one badged row per occurrence on a `--diff` run, through the
-/// shared [`diff_badge`] source ([OUTPUT-SCHEMA-DIFF-TAGS]). Silent on
-/// a run without `--diff` — the cluster block stays byte-identical.
+/// Writes one location row per occurrence, with the diff badge when the
+/// run carries one ([OUTPUT-SCHEMA-DIFF-TAGS]). The location is the
+/// wire's line-based span — never a byte range
+/// ([LOCATION-LINE-COLUMN]).
 fn write_cluster_occurrences(out: &mut String, cluster: &ReportCluster) {
     for occurrence in &cluster.occurrences {
-        let Some(badge) = diff_badge(occurrence.in_diff) else {
-            continue;
-        };
-        let _ = writeln!(
-            out,
-            "  - {path}:{start}-{end} {badge}",
-            path = occurrence.path.display(),
-            start = occurrence.start_line,
-            end = occurrence.end_line,
-        );
+        let badge = diff_badge(occurrence.in_diff);
+        match badge {
+            Some(badge) => {
+                let _ = writeln!(
+                    out,
+                    "  - {path}:{start}:{end} {badge}",
+                    path = occurrence.path.display(),
+                    start = occurrence.start_line,
+                    end = occurrence.end_line,
+                );
+            }
+            None => {
+                let _ = writeln!(
+                    out,
+                    "  - {path}:{start}:{end}",
+                    path = occurrence.path.display(),
+                    start = occurrence.start_line,
+                    end = occurrence.end_line,
+                );
+            }
+        }
     }
 }

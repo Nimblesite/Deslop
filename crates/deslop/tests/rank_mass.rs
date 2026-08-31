@@ -106,11 +106,14 @@ fn mass_outranks_confidence_when_mass_is_larger() -> Result<()> {
          ranks {rank_mid}, the pair {rank_big} — the fused confidence must \
          not erase duplicated-line mass"
     );
-    let weight_mid = field(mid, "weight").as_f64().unwrap_or(0.0);
-    let weight_big = field(big, "weight").as_f64().unwrap_or(0.0);
+    // The mass-only wire carries no `weight` field: mass IS the rank
+    // input ([RANK-MASS-SUM]), so the larger mass must rank worse-first
+    // regardless of the pair's perfect confidence.
+    let mass_mid = field(mid, "mass").as_u64().unwrap_or(0);
+    let mass_big = field(big, "mass").as_u64().unwrap_or(0);
     assert!(
-        weight_mid > weight_big,
-        "the weight must be the mass sum: {weight_mid} > {weight_big}"
+        mass_mid > mass_big,
+        "the reported mass must be the mass sum: {mass_mid} > {mass_big}"
     );
 
     Ok(())

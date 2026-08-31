@@ -91,7 +91,7 @@ use std::{
 
 use tree_sitter::Node;
 
-use crate::{ast::named_children, clone_category::CloneCategory, cluster::Cluster, state::FileId};
+use crate::{ast::named_children, cluster::Cluster, state::FileId};
 
 use super::{
     collect_snippets, enclosing_kind, forwarding::forwarding_body, node_intersects_range,
@@ -110,18 +110,21 @@ use super::{
 /// `structural_only` policy.
 pub(crate) fn is_single_file_declaration_family<S: BuildHasher>(
     cluster: &Cluster,
-    category: CloneCategory,
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
 ) -> bool {
-    if category != CloneCategory::Logic
-        || cluster.members.is_empty()
+    if cluster.members.is_empty()
         || spans_multiple_files(cluster.members.iter().map(|member| member.file_id))
-        || !cluster.content.substance_varies
     {
         return false;
     }
+    // The content `substance_varies` screen is gone with the pair-only
+    // content surface ([FUSED-CONTENT-GATE]). The window proof carries
+    // the discrimination on the mass-only wire: every window must be a
+    // sibling run or a proven forwarding wrapper, no two wrappers may
+    // share a body, and the noise filter is only ever consulted after
+    // the byte-divergent guard of the caller's admission.
     let Some(language) = uniform_language(&cluster.members, file_languages) else {
         return false;
     };

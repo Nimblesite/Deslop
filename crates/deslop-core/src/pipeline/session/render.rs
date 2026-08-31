@@ -14,7 +14,7 @@ use std::{collections::HashMap, path::PathBuf, time::Instant};
 
 use crate::{
     cluster::{build_ranked_fused_clusters, ClusterBuildInputs},
-    cluster_filters::{split_noise_verbatim_families, split_structural_families, ParseCache},
+    cluster_filters::{split_noise_verbatim_families, ParseCache},
     error::CoreError,
     lsh::BandCollisionSource,
     overlap::apply_shared_subtree_rescue,
@@ -110,6 +110,7 @@ impl PipelineSession {
             analysed_lines: &self.analysed_lines,
             boilerplate_ranges: &self.boilerplate_ranges,
             diff: self.diff_scope.as_ref(),
+            parse_cache: &parse_cache,
         }))
     }
 
@@ -154,6 +155,7 @@ impl PipelineSession {
             trees,
             &self.sources,
             &self.file_languages,
+            parse_cache,
         );
         ledger.record(
             "pair_content_gate",
@@ -175,22 +177,6 @@ impl PipelineSession {
         // candidate pairs on a corpus-scale run, freed before the
         // memory-hungry measurement stages ([PERF-FLUTTER-TODO-MEMORY]).
         drop(pairs);
-        // [PIPELINE-CLUSTER-ELECT] Transitive closure treats a token
-        // band collision like a shared subtree, so one such edge welds
-        // two structural families into a component that agrees with
-        // itself nowhere, buckets down, and is hidden — losing both
-        // families to the presence of each other. Elect the families
-        // back out before anything is measured.
-        let stage_started = Instant::now();
-        let split_input = fused_clusters.len();
-        let fused_clusters =
-            split_structural_families(fused_clusters, fingerprints, &self.file_languages);
-        ledger.record(
-            "structural_family_split",
-            split_input,
-            fused_clusters.len(),
-            stage_started,
-        );
         // [CLONE-NOISE-VERBATIM-SUBGROUP] Partition a noise family off
         // the byte-identical copy it swept up *before* signals are
         // measured, so the surviving cluster is measured, bucketed and

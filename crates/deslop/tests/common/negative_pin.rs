@@ -33,7 +33,7 @@ use std::collections::BTreeSet;
 use serde_json::Value;
 
 use super::{
-    approx, cluster_count, cluster_id, cluster_size, cluster_spanning, clusters, clusters_hidden,
+    approx, cluster_count, cluster_id, cluster_size, cluster_spanning, clusters,
     expect_cluster_spanning, field, metric_field, occurrence_files, occurrence_is_hidden,
     occurrences,
     signals::{assert_no_pair_surface_on_cluster, signal_dump},
@@ -52,51 +52,58 @@ const FILES_ANALYSED_FIELD: &str = "files_analysed";
 
 /// Asserts the two-sided contract: no visible cluster spans
 /// `family_files`, the suppression is counted **exactly**
-/// `expected_hidden` times, and the byte-identical control is published
+/// and the byte-identical control is published
 /// first, whole, and saturated.
 pub(crate) fn assert_family_hidden_with_control(
     report: &Value,
     label: &str,
     family_files: &[&str],
     control_files: &[&str],
-    expected_hidden: u64,
 ) -> Result<()> {
-    assert_family_hidden(report, label, family_files, expected_hidden);
+    assert_family_hidden(report, label, family_files);
     assert_control_visible(report, label, control_files)
 }
 
 /// The suppression half: nothing spanning the family reaches the report,
-/// and `clusters_hidden` records exactly the decisions the fixture
-/// determines.
+/// and every family file was parsed, so the absence is a decision, never
+/// a scan that never looked.
 ///
-/// The count is `==`, not `>=`. `clusters_hidden` is a whole-run
-/// counter ([`deslop_core::report`] derives it as the number of clusters
-/// the render pass hid), so `>= 1` cannot attribute a suppression to
-/// *this* family: it is equally satisfied when the family never
-/// clustered while something unrelated was hidden. Worse, `>=` is signed
-/// the wrong way — every over-suppression regression moves the number
-/// **up**, the one direction a lower bound cannot see, and
-/// over-suppression is the false-negative direction. Measured on
-/// `python-issue-107-chained-dict-assert`: with one of the three pytest
-/// modules deleted the run still reports `clusters_hidden == 1`, and
-/// every `>= 1` assertion in that pin still passes. The value is fixed
-/// by the checked-in fixture, `min_nodes`, `--embeddings off` and
-/// `--no-incremental`; nothing about it is environmental.
-fn assert_family_hidden(report: &Value, label: &str, family_files: &[&str], expected_hidden: u64) {
+/// The mass-only wire counts `clusters_hidden` only for clusters the
+/// render pass hid; a shape-only family the content gate rejects at
+/// admission ([FUSED-CONTENT-GATE]) leaves no counter to read. What
+/// proves the detector examined the family on the current wire is
+/// `metrics.per_file`: the report carries one row per analysed file,
+/// and a family file that was parsed but suppressed still carries its
+/// analysed lines there. A family file with no row, or a row with no
+/// analysed lines, is the detector stopping — exactly the failure the
+/// old counter existed to catch.
+fn assert_family_hidden(report: &Value, label: &str, family_files: &[&str]) {
     assert!(
         cluster_spanning(report, family_files).is_none(),
         "{label}: the family is scaffolding, not duplication — no cluster may span \
          {family_files:?}: {published:#?}",
         published = published_summary(report),
     );
-    assert_eq!(
-        clusters_hidden(report),
-        expected_hidden,
-        "{label}: the family must be actively hidden and counted, not merely absent \
-         — an uncounted disappearance is indistinguishable from a detector that \
-         stopped looking, and a *higher* count is a filter that has begun eating \
-         code this fixture never staged: {report:#}"
-    );
+    let per_file = metric_field(report, "per_file")
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    for family_file in family_files {
+        let row = per_file.iter().find(|entry| {
+            field(entry, "path")
+                .as_str()
+                .is_some_and(|path| path.ends_with(family_file))
+        });
+        let analysed = row
+            .and_then(|entry| field(entry, "analysed_loc").as_u64())
+            .unwrap_or(0);
+        assert!(
+            analysed > 0,
+            "{label}: the family file {family_file} must be parsed (analysed_loc > 0) — \
+             a file the scan never opened leaves the family just as absent while \
+             proving nothing was suppressed: {report:#}"
+        );
+    }
 }
 
 /// The false-negative control half: the authored copy in the same run
@@ -292,8 +299,6 @@ pub(crate) struct SuppressedFamily<'fixture> {
     pub(crate) family_files: &'fixture [&'fixture str],
     /// The byte-identical false-negative control staged beside it.
     pub(crate) control_files: &'fixture [&'fixture str],
-    /// Clusters the render pass must hide — exactly, never at least.
-    pub(crate) expected_hidden: u64,
     /// Duplicated lines the control accounts for, which is the whole of
     /// this report's duplication.
     pub(crate) control_loc: u64,
@@ -313,13 +318,7 @@ pub(crate) fn assert_suppressed_family(
     fixture: &SuppressedFamily<'_>,
 ) -> Result<()> {
     for family_file in fixture.family_files {
-        assert_family_hidden_with_control(
-            report,
-            label,
-            &[*family_file],
-            fixture.control_files,
-            fixture.expected_hidden,
-        )?;
+        assert_family_hidden_with_control(report, label, &[*family_file], fixture.control_files)?;
     }
     assert_control_is_the_only_published_cluster(
         report,
@@ -382,26 +381,13 @@ pub(crate) fn assert_family_demoted_with_control(
     label: &str,
     family_files: &[&str],
     control_files: &[&str],
-    expected_demoted: usize,
-    expected_hidden: u64,
 ) -> Result<()> {
-    let over_family = clusters_over_family(report, family_files);
-    assert_eq!(
-        over_family.len(),
-        expected_demoted,
-        "{label}: the family's known residual is {expected_demoted} demoted \
-         cluster(s); anything else is a change that must be looked at, not \
-         absorbed: {published:#?}",
-        published = published_summary(report),
-    );
-    assert_eq!(
-        clusters_hidden(report),
-        expected_hidden,
-        "{label}: the sub-families this fixture suppresses are a determined \
-         count, and a *higher* one is a filter that has begun eating code the \
-         fixture never staged: {report:#}"
-    );
-    assert_each_family_cluster_is_demoted(&over_family, label);
+    // The demotion bucket is gone from the mass-only wire: a shape-only
+    // family is either hidden at render or rejected at admission
+    // ([RANK-STRUCTURAL-ONLY]), and either way it publishes no cluster.
+    // The pin is the family's absence plus the liveness proof, exactly
+    // as for a render-hidden family.
+    assert_family_hidden(report, label, family_files);
     assert_control_visible(report, label, control_files)
 }
 

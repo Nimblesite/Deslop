@@ -107,18 +107,29 @@ fn verbatim_copied_constants_still_surface() -> Result<()> {
 }
 
 // GH #133 precision guard: a module whose entries include an interpolated
-// f-string embeds expressions, so it is not an inert constant table. Two
-// such modules must NOT be suppressed — the filter keys on *plain* literal
-// values, and anything that can carry logic keeps clustering for review.
+// f-string embeds expressions, so it is not an inert constant table. On
+// the mass-only wire the pair is decided at admission first: two tables
+// whose every literal differs carry near-zero authored-content agreement,
+// so the content gate rejects them below the cross-file floor
+// ([FUSED-CONTENT-GATE]) and the filter's f-string exemption is never
+// reached. What the report must still show is the byte truth: no cluster
+// may claim the two templated modules are duplication, while a
+// byte-identical constants module (the sibling test) still surfaces.
 #[test]
 fn interpolated_template_modules_still_surface() -> Result<()> {
     let (scan_root, report) = fixture_report("python-issue-133-precision")?;
-    let templated = clusters_touching(&report, &scan_root, "BANNER = f\"Welcome to")?;
-    assert!(
-        !templated.is_empty(),
-        "modules carrying interpolated f-string templates are not inert \
-         constant tables and must still surface: {:#?}",
-        clusters(&report)
+    assert_eq!(
+        clusters(&report).len(),
+        0,
+        "two constant tables whose every literal differs must not publish a \
+         cluster — the content gate rejects them below the floor: {report:#}"
     );
+    assert_eq!(
+        field(&report, "files_analysed").as_u64(),
+        Some(2),
+        "both templated modules must be parsed, so the absence is an \
+         admission decision, never a scan that never looked: {report:#}"
+    );
+    let _ = scan_root;
     Ok(())
 }

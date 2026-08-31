@@ -11,191 +11,23 @@
 
 use std::{
     fs,
-    io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
-    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
-    thread,
-    time::{Duration, Instant},
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
-const SOCKET_TIMEOUT: Duration = Duration::from_secs(20);
-const POLL_INTERVAL: Duration = Duration::from_millis(50);
+use crate::common;
 
-/// Kill-on-drop guard for the companion LSP child so per-test
-/// workspaces can be reclaimed without leaking sockets when the test
-/// panics.
-struct LspGuard(Child);
-
-impl Drop for LspGuard {
-    fn drop(&mut self) {
-        let _killed = self.0.kill();
-        let _waited = self.0.wait();
-    }
-}
-
-fn spawn_lsp(root: &Path) -> Result<LspGuard> {
-    let mut child =
-        deslop_test_support::spawn_deslop_lsp(root, Stdio::null()).context("spawn deslop-lsp")?;
-    let mut stdin = child.stdin.take().context("lsp stdin")?;
-    let mut stdout = BufReader::new(child.stdout.take().context("lsp stdout")?);
-    lsp_handshake(&mut stdin, &mut stdout).context("lsp handshake")?;
-    child.stdin = Some(stdin);
-    child.stdout = Some(stdout.into_inner());
-    Ok(LspGuard(child))
-}
-
-fn lsp_handshake(stdin: &mut ChildStdin, stdout: &mut BufReader<ChildStdout>) -> Result<()> {
-    let init = json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "initialize",
-        "params": { "processId": null, "rootUri": null, "capabilities": {} }
-    });
-    write_lsp_frame(stdin, &serde_json::to_string(&init)?)?;
-    let _response = read_lsp_frame(stdout)?;
-    let initialized = json!({
-        "jsonrpc": "2.0",
-        "method": "initialized",
-        "params": {}
-    });
-    write_lsp_frame(stdin, &serde_json::to_string(&initialized)?)
-}
-
-fn write_lsp_frame(stdin: &mut ChildStdin, payload: &str) -> Result<()> {
-    deslop_test_support::write_lsp_frame(stdin, payload)
-}
-
-fn read_lsp_frame(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
-    deslop_test_support::read_lsp_frame(reader)
-}
-
-fn wait_for_socket(path: &Path) -> Result<()> {
-    let started = Instant::now();
-    loop {
-        if path.exists() {
-            return Ok(());
-        }
-        if started.elapsed() >= SOCKET_TIMEOUT {
-            return Err(anyhow!(
-                "timed out waiting for socket at {}",
-                path.display()
-            ));
-        }
-        thread::sleep(POLL_INTERVAL);
-    }
-}
-
-struct McpChild {
-    child: Child,
-    stdin: ChildStdin,
-    stdout: BufReader<ChildStdout>,
-    next_id: i64,
-    /// Companion LSP. Reaped on drop so each test tears down both
-    /// processes before the workspace tempdir is reclaimed.
-    _lsp: LspGuard,
-}
-
-impl McpChild {
-    fn spawn_with_cwd(cwd: &Path, root_arg: &str) -> Result<Self> {
-        let lsp = spawn_lsp(cwd)?;
-        let socket = cwd.join(".deslop/cache").join("deslop.sock");
-        wait_for_socket(&socket)?;
-        let binary = env!("CARGO_BIN_EXE_deslop-mcp");
-        let mut cmd = Command::new(binary);
-        let _ = cmd
-            .arg("--root")
-            .arg(root_arg)
-            .current_dir(cwd)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null());
-        let mut child = cmd.spawn().context("spawn deslop-mcp binary")?;
-        let stdin = child.stdin.take().context("child stdin")?;
-        let stdout = child.stdout.take().context("child stdout")?;
-        Ok(Self {
-            child,
-            stdin,
-            stdout: BufReader::new(stdout),
-            next_id: 0,
-            _lsp: lsp,
-        })
-    }
-
-    fn request(&mut self, method: &str, params: &Value) -> Result<Value> {
-        self.next_id = self.next_id.saturating_add(1);
-        let id = self.next_id;
-        let frame = json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "method": method,
-            "params": params,
-        });
-        self.send_frame(&frame)?;
-        loop {
-            let response = self.read_frame()?;
-            if response.get("id").cloned().unwrap_or(Value::Null) == json!(id) {
-                return Ok(response);
-            }
-        }
-    }
-
-    fn read_frame(&mut self) -> Result<Value> {
-        let mut line = String::new();
-        let bytes = self.stdout.read_line(&mut line)?;
-        if bytes == 0 {
-            return Err(anyhow!("mcp stdout closed unexpectedly"));
-        }
-        serde_json::from_str(&line).with_context(|| format!("invalid JSON from mcp: {line}"))
-    }
-
-    fn send_frame(&mut self, frame: &Value) -> Result<()> {
-        let bytes = serde_json::to_vec(frame)?;
-        self.stdin.write_all(&bytes)?;
-        self.stdin.write_all(b"\n")?;
-        self.stdin.flush()?;
-        Ok(())
-    }
-
-    fn finish(mut self) {
-        drop(self.stdin);
-        let started = Instant::now();
-        while started.elapsed() < Duration::from_secs(10) {
-            if self.child.try_wait().ok().flatten().is_some() {
-                return;
-            }
-            thread::sleep(Duration::from_millis(50));
-        }
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-fn init(child: &mut McpChild) -> Result<()> {
-    let _ = child.request(
-        "initialize",
-        &json!({
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": { "name": "wrong-root-test", "version": "0.1.0" }
-        }),
-    )?;
-    Ok(())
-}
-
-fn call_tool(child: &mut McpChild, name: &str) -> Result<Value> {
-    let response = child.request("tools/call", &json!({ "name": name, "arguments": {} }))?;
-    if let Some(error) = response.get("error") {
-        return Err(anyhow!("tools/call {name} failed: {error}"));
-    }
-    response
-        .get("result")
-        .and_then(|result| result.get("structuredContent"))
-        .cloned()
-        .ok_or_else(|| anyhow!("missing structuredContent in {response}"))
+fn initialized_mcp_at(
+    root: &Path,
+    root_argument: &str,
+) -> Result<(common::McpHandle, common::ChildKillOnDrop)> {
+    let lsp = common::spawn_lsp_and_wait_for_socket(root)?;
+    let mut mcp = common::McpHandle::spawn_with_root_argument(root, root_argument)?;
+    common::initialize_mcp(&mut mcp)?;
+    Ok((mcp, lsp))
 }
 
 fn seed_one_csharp_file(dir: &Path) -> Result<()> {
@@ -219,24 +51,22 @@ fn issue_141_relative_root_resolves_to_canonical_workspace() -> Result<()> {
     seed_one_csharp_file(workspace.path())?;
     let canonical_workspace = fs::canonicalize(workspace.path())?;
 
-    let mut child = McpChild::spawn_with_cwd(&canonical_workspace, ".")?;
-    init(&mut child)?;
-    let snapshot = call_tool(&mut child, "session-config")?;
+    let (mut mcp, _lsp) = initialized_mcp_at(&canonical_workspace, ".")?;
+    let snapshot = common::call_tool(&mut mcp, "session", &json!({}))?;
     let reported_root = snapshot
         .get("root")
         .and_then(Value::as_str)
         .map(PathBuf::from)
-        .ok_or_else(|| anyhow!("session-config did not return a string root: {snapshot}"))?;
+        .ok_or_else(|| anyhow!("session did not return a string root: {snapshot}"))?;
     assert!(
         reported_root.is_absolute(),
-        "session-config root must be absolute, got {reported_root:?}",
+        "session root must be absolute, got {reported_root:?}",
     );
     let canonical_reported = fs::canonicalize(&reported_root)?;
     assert_eq!(
         canonical_reported, canonical_workspace,
-        "session-config root must canonicalise to the launch CWD",
+        "session root must canonicalise to the launch CWD",
     );
-    child.finish();
     Ok(())
 }
 
@@ -267,29 +97,39 @@ fn issue_141_cargo_cache_under_root_is_not_analysed() -> Result<()> {
     let workspace_str = canonical_workspace
         .to_str()
         .ok_or_else(|| anyhow!("workspace path is not UTF-8"))?;
-    let mut child = McpChild::spawn_with_cwd(&canonical_workspace, workspace_str)?;
-    init(&mut child)?;
-    let response = child.request(
-        "tools/call",
-        &json!({ "name": "report-get", "arguments": { "offset": 0, "limit": 50 } }),
+    let (mut mcp, _lsp) = initialized_mcp_at(&canonical_workspace, workspace_str)?;
+    let page = common::call_tool(
+        &mut mcp,
+        "duplicates",
+        &json!({ "offset": 0, "limit": 50, "detail": "full" }),
     )?;
-    let result = response
-        .get("result")
-        .and_then(|r| r.get("structuredContent"))
-        .cloned()
-        .ok_or_else(|| anyhow!("missing structuredContent: {response}"))?;
-    let clusters = result
+    let files_analysed = page
+        .get("files_analysed")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("duplicates missing files_analysed: {page}"))?;
+    assert_eq!(
+        files_analysed, 1,
+        "the three .cargo cache files must not enter discovery: {page}"
+    );
+    let clusters = page
         .get("clusters")
         .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+        .ok_or_else(|| anyhow!("duplicates missing clusters: {page}"))?;
     for cluster in clusters {
-        let summary = cluster.get("summary").and_then(Value::as_str).unwrap_or("");
-        assert!(
-            !summary.contains(".cargo/"),
-            "cluster summary leaked cargo cache: {summary}",
-        );
+        let occurrences = cluster
+            .get("occurrences")
+            .and_then(Value::as_array)
+            .ok_or_else(|| anyhow!("full duplicates cluster missing occurrences: {cluster}"))?;
+        for occurrence in occurrences {
+            let path = occurrence
+                .get("path")
+                .and_then(Value::as_str)
+                .ok_or_else(|| anyhow!("occurrence missing path: {occurrence}"))?;
+            assert!(
+                !path.contains(".cargo/"),
+                "cluster occurrence leaked cargo cache: {path}",
+            );
+        }
     }
-    child.finish();
     Ok(())
 }

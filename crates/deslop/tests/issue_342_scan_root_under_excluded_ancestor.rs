@@ -47,7 +47,7 @@ const ANCESTOR_NAMES: [&str; 5] = ["dist", "build", "target", "vendor", "node_mo
 /// `<tmp>/<ancestors…>/innocent-repo/src` and returns the report for that
 /// scan root. An empty `ancestors` gives the control root, whose path
 /// contains no built-in exclude component.
-fn report_under(ancestors: &[&str]) -> Result<(std::path::PathBuf, Value)> {
+fn report_under(ancestors: &[&str]) -> Result<(tempfile::TempDir, std::path::PathBuf, Value)> {
     let tmp = tempfile::tempdir()?;
     let root = ancestors
         .iter()
@@ -56,7 +56,7 @@ fn report_under(ancestors: &[&str]) -> Result<(std::path::PathBuf, Value)> {
         .join("src");
     seed(&fixture("ts-type1-identical"), &root)?;
     let report = run_report(&root, MIN_NODES)?;
-    Ok((root, report))
+    Ok((tmp, root, report))
 }
 
 /// Asserts `report` contains the seeded clone pair in full — both files
@@ -87,14 +87,14 @@ fn assert_clone_reported(scan_root: &Path, report: &Value, label: &str) -> Resul
 fn a_scan_root_with_no_excluded_ancestor_reports_the_seeded_clone() -> Result<()> {
     // The control. If this fails the fixture or the harness moved, and the
     // ancestry assertions below would be vacuous rather than wrong.
-    let (root, report) = report_under(&[])?;
+    let (_tmp, root, report) = report_under(&[])?;
     assert_clone_reported(&root, &report, "control (no excluded ancestor)")
 }
 
 #[test]
 fn a_repo_under_an_excluded_ancestor_still_reports_its_duplicates() -> Result<()> {
     for ancestor in ANCESTOR_NAMES {
-        let (root, report) = report_under(&[ancestor])?;
+        let (_tmp, root, report) = report_under(&[ancestor])?;
         assert_clone_reported(&root, &report, ancestor)?;
     }
     Ok(())
@@ -102,9 +102,9 @@ fn a_repo_under_an_excluded_ancestor_still_reports_its_duplicates() -> Result<()
 
 #[test]
 fn nested_excluded_ancestors_are_ignored_to_any_depth() -> Result<()> {
-    let (root, report) = report_under(&["build", "dist"])?;
+    let (_tmp, root, report) = report_under(&["build", "dist"])?;
     assert_clone_reported(&root, &report, "build/dist")?;
-    let (root, report) = report_under(&["node_modules", "pkg", "target"])?;
+    let (_tmp, root, report) = report_under(&["node_modules", "pkg", "target"])?;
     assert_clone_reported(&root, &report, "node_modules/pkg/target")
 }
 
@@ -163,9 +163,9 @@ fn the_ancestor_directory_name_cannot_change_the_report() -> Result<()> {
     // and asserting the whole report is invariant to a directory name the
     // user never asked deslop to reason about is what stops a future
     // addition to BUILTIN_EXCLUDE_COMPONENTS from reintroducing this.
-    let (_, control) = report_under(&[])?;
+    let (_tmp, _, control) = report_under(&[])?;
     for ancestor in ANCESTOR_NAMES {
-        let (_, nested) = report_under(&[ancestor])?;
+        let (_tmp, _, nested) = report_under(&[ancestor])?;
         assert_eq!(
             field(&nested, "files_analysed"),
             field(&control, "files_analysed"),
