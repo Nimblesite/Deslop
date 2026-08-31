@@ -28,7 +28,7 @@ A compact floating widget (VS Code `InlayHint` + `Webview`-backed overlay, rende
 - **Severity dot** — colour mapped from the cluster's mass-derived rank band per [severity.md §SEVERITY-BAND](severity.md#severity-band). Pair evidence and pair classification cannot colour a cluster. The bubble remains coloured when diagnostics are off; only the dirty projection ([VSIX-STATE-DIRTY]) and silence-when-clean remove it.
 - **Short verdict** — `DUPLICATION`. A cluster-level verdict cannot be inferred from one pair's admission evidence.
 - **Count + location** — `× 4 • UserService.cs:230`. The canonical occurrence of the cluster, linkified to jump on click.
-- **Action chevron** — click expands the bubble into a webview-backed card with cluster membership, mass, and all occurrences. A `Compare` button on an occurrence opens an explicit pair comparison against a selected other occurrence; only that pair view may request and render structural, Jaccard, embedding, and content evidence.
+- **Action chevron** — click expands the bubble into a webview-backed card with cluster membership, mass, and all occurrences. The card carries no compare button: a bubble can only name one occurrence, and pair evidence requires two explicit endpoints. The two-endpoint **Compare selected occurrences** flow lives in the cluster panel ([VSIX-WEBVIEW-ACTIONS-CONTEXT]), and only that explicit pair request may render structural, Jaccard, embedding, and content evidence.
 
 **How it's rendered.**
 VS Code doesn't give us a true floating tooltip over a specific range, so the bubble uses the layering documented in the VS Code extension cookbook:
@@ -235,7 +235,7 @@ The LSP's code lens ([LSP-CODE-LENS]) is the content source. The VSIX styles it 
 Each lens has three actions in its command array:
 
 - **"Jump"** — runs `deslop.jumpToNextOccurrence`, cycling through remaining occurrences. It never routes through `textDocument/definition`, so it cannot interfere with the editor's Go To Definition ([LSP-NON-INTERFERENCE]).
-- **"Compare"** — opens an occurrence picker and then a pair view for the current occurrence and the explicitly selected second occurrence.
+- **"Compare"** — the cluster panel's explicit two-endpoint flow: select one occurrence as the left side and a second as the right side, then **Compare selected occurrences** opens a pair view diffing exactly those two ranges ([VSIX-WEBVIEW-ACTIONS-CONTEXT]).
 - **"Open cluster"** — opens the webview ([webview-runtime.md §VSIX-WEBVIEW](webview-runtime.md#vsix-webview)) pinned to this cluster.
 
 The lens is coloured by the mass-severity map ([severity.md §SEVERITY-COLOR](severity.md#severity-color)), independent of whether diagnostics are enabled. It is hidden only for clusters below the configured mass-percentile floor ([LSP-SEVERITY-PERCENTILE]); users widen it via `deslop.showAllLenses`.

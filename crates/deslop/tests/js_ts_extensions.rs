@@ -58,7 +58,7 @@ fn js_and_jsx_cluster_as_the_same_javascript_language() -> Result<()> {
         "js-jsx-family",
         10,
         &["BadgeList.jsx", "useBadge.js"],
-        "identical",
+        false,
     )
 }
 

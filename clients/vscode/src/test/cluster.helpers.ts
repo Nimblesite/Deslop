@@ -102,10 +102,15 @@ export function stampRanks(clusters: ReportCluster[]): ReportCluster[] {
   }));
 }
 
-function bandOf(rank: number, total: number): Severity {
-  const percentile = total <= 1 ? 0 : 1 - (rank - 1) / (total - 1);
-  if (percentile >= 0.99) return "worst";
-  if (percentile >= 0.9) return "top10";
-  if (percentile >= 0.5) return "mid";
+/** The engine's band for a rank in a report of `total` clusters —
+ * `report_weight::rank_band_cut_points` (pinned in Rust). Exported so
+ * suites can compute the bands a stamped fixture WILL carry; production
+ * code never uses this ([PRINCIPLES-ONE-CALCULATION]). The cut points are
+ * the engine's integer ceil boundaries — e.g. the sole cluster of a
+ * one-cluster report is rank 1 of 1 and is "worst". */
+export function bandOf(rank: number, total: number): Severity {
+  if (rank <= Math.ceil(total / 100)) return "worst";
+  if (rank <= Math.ceil(total / 10)) return "top10";
+  if (rank <= Math.ceil(total / 2)) return "mid";
   return "faint";
 }

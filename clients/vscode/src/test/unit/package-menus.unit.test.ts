@@ -170,9 +170,9 @@ suite("package menu contributions", () => {
     );
   });
 
-  // [FACET-GROUP-BY-TYPE] The grouping toggle cycles all four modes:
-  // cluster → file → folder → type → cluster.
-  test("grouping cycle includes the type mode", () => {
+  // [FACET-GROUP-BY-SEVERITY] The grouping toggle cycles all four modes:
+  // cluster → file → folder → severity → cluster.
+  test("grouping cycle includes the severity mode", () => {
     const pkg = extensionPackage();
     const titleItems = (pkg.contributes.menus["view/title"] ?? []).filter(
       (item) =>
@@ -182,11 +182,17 @@ suite("package menu contributions", () => {
       titleItems.find((item) => item.command === command)?.when ?? "";
     assert.ok(whenOf("deslop.topOffenders.showByFile").includes("== 'cluster'"));
     assert.ok(whenOf("deslop.topOffenders.showByFolder").includes("== 'file'"));
-    assert.ok(whenOf("deslop.topOffenders.showByType").includes("== 'folder'"));
-    assert.ok(whenOf("deslop.topOffenders.showByCluster").includes("== 'type'"));
+    assert.ok(whenOf("deslop.topOffenders.showBySeverity").includes("== 'folder'"));
+    assert.ok(whenOf("deslop.topOffenders.showByCluster").includes("== 'severity'"));
+    assert.equal(
+      commandTitle(pkg, "deslop.topOffenders.showBySeverity"),
+      "Deslop: Group Top Offenders by Severity",
+    );
+    // The clone-type axis is retired: no type-mode toggle may exist.
     assert.equal(
       commandTitle(pkg, "deslop.topOffenders.showByType"),
-      "Deslop: Group Top Offenders by Type",
+      undefined,
+      "type-mode grouping was removed with the bucket axes",
     );
   });
 

@@ -366,6 +366,7 @@ function projectVisible(canonical: Report | null, dirty: ReadonlySet<string>): R
     const projectedCount = Math.max(kept.length, cluster.occurrence_count - removed);
     clusters.push({
       ...cluster,
+      canonical_node_count: projectedCount,
       occurrences: kept,
       occurrence_count: projectedCount,
       occurrences_total: projectedCount,

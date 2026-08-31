@@ -25,7 +25,6 @@
 
 use crate::common::{signals::*, *};
 
-use deslop_core::buckets::CONTENT_SUPPORT_FLOOR;
 use serde_json::Value;
 
 /// Node floor matching the rename suites, so the class body qualifies as
@@ -49,13 +48,6 @@ const FILES_ANALYSED: u64 = 2;
 
 /// One occurrence per gateway.
 const OCCURRENCES: u64 = 2;
-
-/// The bucket a certified consistent rename lands in.
-const NEARLY_IDENTICAL: &str = "nearly_identical";
-
-/// The demoted bucket a rename with an unexplained content difference
-/// lands in.
-const STRUCTURAL_ONLY: &str = "structural_only";
 
 /// First line of the matched view in every gateway — the whole class.
 const VIEW_FIRST_LINE: u64 = 1;
@@ -126,21 +118,9 @@ fn a_substring_collision_never_certifies_a_rename_the_way_a_symbol_echo_does() -
         "the echo fixture has exactly two occurrences — {dump}",
         dump = signal_dump(echo)
     );
-    assert_eq!(
-        cluster_bucket(echo),
-        NEARLY_IDENTICAL,
-        "a rename whose every literal is accounted for is nearly \
-         identical — {dump}",
-        dump = signal_dump(echo)
-    );
+    assert_no_pair_surface_on_cluster(echo, CONSISTENT);
     assert_view(echo, VIEW_FIRST_LINE, CONSISTENT_LAST_LINE, CONSISTENT);
     assert_proven_rename_contract(&echo_root, echo, CONSISTENT)?;
-    assert!(
-        signal(echo, "pair_rename_consistency") >= CONTENT_SUPPORT_FLOOR,
-        "{CONSISTENT}: a full-symbol echo is the certification case and \
-         must clear the content-support floor — {dump}",
-        dump = signal_dump(echo)
-    );
 
     // The boundary: one message mangled mid-word by the same substitution
     // is a content difference the rename does not explain.
@@ -150,54 +130,19 @@ fn a_substring_collision_never_certifies_a_rename_the_way_a_symbol_echo_does() -
         "the substring fixture has exactly two occurrences — {dump}",
         dump = signal_dump(mangled)
     );
-    assert_eq!(
-        cluster_bucket(mangled),
-        STRUCTURAL_ONLY,
-        "`\"invalid request\"` becoming `\"invalkey request\"` is a changed \
-         message, not a renamed symbol; certifying it promotes a cluster \
-         whose content evidence contradicts the rename — {dump}",
-        dump = signal_dump(mangled)
-    );
+    assert_no_pair_surface_on_cluster(mangled, SUBSTRING);
     assert_view(mangled, VIEW_FIRST_LINE, SUBSTRING_LAST_LINE, SUBSTRING);
     assert_structural_only_contract(mangled, SUBSTRING);
-    assert!(
-        !ACT_NOW_BUCKETS.contains(&cluster_bucket(mangled)),
-        "{SUBSTRING}: an act-now bucket tells a `find-similar` consumer to \
-         refuse to write the copy; an unexplained message change has not \
-         earned that — {dump}",
-        dump = signal_dump(mangled)
-    );
-    assert!(
-        signal(mangled, "pair_rename_consistency") < CONTENT_SUPPORT_FLOOR,
-        "{SUBSTRING}: the mangled message must leave the rename \
-         uncertified, below the content-support floor — {dump}",
-        dump = signal_dump(mangled)
-    );
 
-    // Strict separation. `>=` alone is no oracle here: a replacement that
-    // substitutes anywhere in the bytes returns 1.0 for *both* fixtures
-    // and satisfies every monotonic assertion while the defect is live.
-    assert!(
-        signal(echo, "pair_rename_consistency") > signal(mangled, "pair_rename_consistency"),
-        "a full-symbol echo must measure as strictly more rename evidence \
-         than a mid-word byte collision: echo={echo_rename:.4} \
-         substring={mangled_rename:.4}\n  echo: {echo_dump}\n  \
-         substring: {mangled_dump}",
-        echo_rename = signal(echo, "pair_rename_consistency"),
-        mangled_rename = signal(mangled, "pair_rename_consistency"),
-        echo_dump = signal_dump(echo),
-        mangled_dump = signal_dump(mangled),
-    );
-    let echo_support = signal(echo, "pair_agreement").max(signal(echo, "pair_rename_consistency"));
-    let mangled_support =
-        signal(mangled, "pair_agreement").max(signal(mangled, "pair_rename_consistency"));
-    assert!(
-        echo_support > mangled_support,
-        "routing support must strictly separate the clean rename from the \
-         mangled one: echo={echo_support:.4} substring={mangled_support:.4}\n  \
-         echo: {echo_dump}\n  substring: {mangled_dump}",
-        echo_dump = signal_dump(echo),
-        mangled_dump = signal_dump(mangled),
-    );
+    // Strict separation. The old oracle — rendered rename consistency —
+    // was pair-scoped evidence; the mass-only wire carries no rename
+    // surface on clusters ([PIPELINE-CLUSTER-CLOSURE]), so the
+    // certification distinction is asserted as the clean-surface
+    // negative: neither cluster may carry a signals block, a bucket, or
+    // a verdict a consumer could read as a certified rename. The echo's
+    // admission half is the proven-rename contract; the mangled one is
+    // the plain structural contract.
+    assert_no_pair_surface_on_cluster(echo, CONSISTENT);
+    assert_no_pair_surface_on_cluster(mangled, SUBSTRING);
     Ok(())
 }

@@ -12,12 +12,11 @@
 use std::{collections::BTreeSet, path::Path};
 
 use anyhow::anyhow;
-use deslop_core::pair::EMBEDDING_SUPPORT_FLOOR;
 use serde_json::Value;
 
 use super::{
-    approx, cluster_file_set, cluster_id, clusters, field, occurrence_is_hidden, occurrence_texts,
-    occurrences, signal, Result,
+    cluster_file_set, cluster_id, clusters, field, occurrence_is_hidden, occurrence_texts,
+    occurrences, Result,
 };
 
 /// Asserts the admission + visibility + mass contract the wire still
@@ -103,29 +102,26 @@ pub(crate) fn has_verbatim_pair(scan_root: &Path, cluster: &Value) -> Result<boo
 /// [TECH-PMATCH-BAKER], `[REPAIR-RENAME-ANCHOR-MASS]`) — the mirror of
 /// [`assert_structural_only_contract`], and the reason both live here.
 ///
-/// The two contracts describe the same signal triple. A maximal Type-2
-/// rename and an anchor-poor scaffolding family both render
-/// `structural = 1.00, token_jaccard = 1.00`: the token LSH pass hashes
-/// the normalised representation the structural pass already collapsed,
-/// so neither deterministic axis can tell them apart. Only the measured
-/// content evidence separates them, and it is on the report wire (#344)
-/// — so a suite asserting one verdict is really asserting *which side
-/// of the content gate* the fixture falls on. Stating both contracts
-/// once, here, is what stops two suites drifting into asserting opposite
-/// verdicts about the same evidence, which is exactly what the
-/// pre-`[REPAIR-RENAME-ANCHOR-MASS]` literal-anchor cliff produced.
-///
-/// Demotion is the failure mode this guards: a renamed copy of real
-/// logic that lands in `HONEST_SHAPE_ONLY_BUCKETS` is a false negative
-/// at the agent surface — the recipe tells the agent to write the copy
-/// anyway.
+/// The two contracts described the same signal triple: a maximal Type-2
+/// rename and an anchor-poor scaffolding family both rendered
+/// `structural = 1.00, token_jaccard = 1.00`, and only the measured
+/// content evidence separated them. That evidence, the routing bucket,
+/// and the verdict sentence were cluster-surface facts; the mass-only
+/// wire removed all of them ([PIPELINE-CLUSTER-CLOSURE]). What a
+/// rendered cluster can still prove about a renamed fixture is that it
+/// was **admitted** (reported at all — a demoted or dropped rename is
+/// a false negative), that every occurrence is **visible**, that its
+/// **mass** is the wire formula, and that **no pair-only surface** has
+/// crept back onto the cluster to mislabel it. The byte-level half
+/// ([`assert_rename_is_not_a_copy`]) survives unchanged: every
+/// occurrence must differ in raw bytes, or the fixture proves nothing
+/// about renames.
 pub(crate) fn assert_proven_rename_contract(
     scan_root: &Path,
     cluster: &Value,
     label: &str,
 ) -> Result<()> {
-    assert_rename_shape(cluster, label);
-    assert_rename_verdict(cluster, label);
+    assert_admission_and_clean_surface(cluster, label);
     assert_rename_is_not_a_copy(scan_root, cluster, label)
 }
 
@@ -135,15 +131,53 @@ pub(crate) fn assert_proven_rename_contract(
 /// declaration and therefore includes the insertion
 /// ([FUSED-SHARED-SUBTREE], gh #408). Demanding Merkle exactness there
 /// demands the fragment view — the shared sub-range either side of the
-/// insertion — which is the recall hole #408 is filed against.
+/// insertion — which is the recall hole #408 is filed against. The
+/// wire-visible contract is the same as [`assert_proven_rename_contract`].
 pub(crate) fn assert_near_miss_rename_contract(
     scan_root: &Path,
     cluster: &Value,
     label: &str,
 ) -> Result<()> {
-    assert_near_miss_rename_shape(cluster, label);
-    assert_anchor_free_near_miss_verdict(cluster, label);
+    assert_admission_and_clean_surface(cluster, label);
     assert_rename_is_not_a_copy(scan_root, cluster, label)
+}
+
+/// The admission + visibility + mass + no-pair-surface contract every
+/// fixture-level suite can still assert on a rendered cluster
+/// ([PIPELINE-CLUSTER-CLOSURE], [RANK-MASS-SUM]). Positive, readable
+/// numbers first; the negative pin closes the mislabelling path the
+/// routing table used to be able to fabricate.
+fn assert_admission_and_clean_surface(cluster: &Value, label: &str) {
+    assert_rename_verdict(cluster, label);
+    assert_no_pair_surface_on_cluster(cluster, label);
+}
+
+/// Asserts a cluster carries none of the pair-only or presentation
+/// fields the mass-only wire forbids. A cluster that grows a `signals`
+/// block, a bucket, an evidence verdict, a weight, or a category is the
+/// mislabelling/fabrication path reopening — the exact failure the old
+/// bucket and verdict assertions existed to catch.
+pub(crate) fn assert_no_pair_surface_on_cluster(cluster: &Value, label: &str) {
+    for field_name in [
+        "signals",
+        "signal_source",
+        "content",
+        "evidence_verdict",
+        "bucket",
+        "category",
+        "classification",
+        "weight",
+        "size",
+        "summary",
+        "interpretation",
+        "language",
+    ] {
+        assert!(
+            cluster.get(field_name).is_none(),
+            "{label}: the mass-only wire forbids {field_name} on a cluster — a \
+             routing table could fabricate a value through it again: {cluster:#}"
+        );
+    }
 }
 
 /// Verdict half of the rename contracts. On the mass-only wire the

@@ -142,11 +142,8 @@ fn an_embedding_only_pair_does_not_join_occurrences_of_different_size() -> Resul
         "one occurrence per ledger — {dump}",
         dump = span_dump(family)?
     );
-    assert!(
-        ACT_NOW_BUCKETS.contains(&cluster_bucket(family)),
-        "the surviving family is a genuine near-duplicate — {dump}",
-        dump = signal_dump(family)
-    );
+    assert_structural_only_contract(family, "pair-size coherence near-duplicate");
+    assert_no_pair_surface_on_cluster(family, "pair-size coherence near-duplicate");
     Ok(())
 }
 
@@ -171,12 +168,8 @@ fn size_coherence_keeps_every_genuine_ledger_family_visible() -> Result<()> {
         "the rename family must stay visible: {report:#}"
     );
     let family = expect_cluster_spanning(&report, &["ledger_a.ts", "ledger_b.ts"])?;
-    assert!(
-        ACT_NOW_BUCKETS.contains(&cluster_bucket(family))
-            || HONEST_SHAPE_ONLY_BUCKETS.contains(&cluster_bucket(family)),
-        "the a/b rename family must route to a real bucket — {dump}",
-        dump = signal_dump(family)
-    );
+    assert_structural_only_contract(family, "pair-size coherence a/b family");
+    assert_no_pair_surface_on_cluster(family, "pair-size coherence a/b family");
     for cluster in clusters(&report) {
         assert_cluster_is_size_coherent(cluster)?;
     }

@@ -65,7 +65,7 @@ fn javascript_byte_identical_pair_is_identical_bucket() -> Result<()> {
         "js-type1-identical",
         10,
         &["tax_alpha.js", "tax_beta.js"],
-        "identical",
+        false,
     )
 }
 
@@ -75,7 +75,7 @@ fn typescript_byte_identical_pair_is_identical_bucket() -> Result<()> {
         "ts-type1-identical",
         12,
         &["tax_alpha.ts", "tax_beta.ts"],
-        "identical",
+        false,
     )
 }
 
@@ -111,7 +111,7 @@ fn javascript_renamed_map_reduce_arrow_is_nearly_identical() -> Result<()> {
         "js-type2-pipeline",
         8,
         &["invoices.js", "orders.js"],
-        "nearly_identical",
+        false,
     )
 }
 
@@ -179,7 +179,7 @@ fn typescript_near_miss_reordered_statements_cluster_nearly_identical() -> Resul
         "ts-type3-reorder",
         10,
         &["normalizeContact.ts", "normalizeUser.ts"],
-        "nearly_identical",
+        false,
     )
 }
 

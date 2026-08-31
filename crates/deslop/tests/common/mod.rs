@@ -241,9 +241,18 @@ pub(crate) fn occurrences(cluster: &Value) -> &[Value] {
         .unwrap_or_default()
 }
 
-/// A cluster's `bucket` label (e.g. `identical`), or `"?"` when absent.
+/// A cluster's `bucket` label. The mass-only wire removed buckets from
+/// cluster surfaces ([PIPELINE-CLUSTER-CLOSURE]); a suite still reading
+/// one is asserting on a deleted surface, so this **panics** with the
+/// migration message instead of returning a plausible `"?"` that turns
+/// the assertion into a silent false green. Migrate to admission +
+/// visibility + mass + the byte-proven (or byte-distinct) fact.
 pub(crate) fn cluster_bucket(cluster: &Value) -> &str {
-    field(cluster, "bucket").as_str().unwrap_or("?")
+    panic!(
+        "cluster `bucket` no longer exists on the report wire — the mass-only \
+         cutover removed buckets; migrate this assertion to admission/visibility \
+         + mass/membership ([PIPELINE-CLUSTER-CLOSURE]): {cluster:#}"
+    );
 }
 
 /// A cluster's stable `id`, or `"?"` when absent.
@@ -251,9 +260,12 @@ pub(crate) fn cluster_id(cluster: &Value) -> &str {
     field(cluster, "id").as_str().unwrap_or("?")
 }
 
-/// A cluster's `size` (its occurrence count), or `0` when absent.
+/// A cluster's occurrence count, or `0` when absent. The wire carries
+/// the count as `occurrence_count` (visible membership) with
+/// `occurrences_total` alongside; `size` was removed with the bucket
+/// surface.
 pub(crate) fn cluster_size(cluster: &Value) -> u64 {
-    field(cluster, "size").as_u64().unwrap_or(0)
+    field(cluster, "occurrence_count").as_u64().unwrap_or(0)
 }
 
 /// Reads a component of the cluster `signals` block, or **panics** when
@@ -324,31 +336,32 @@ pub(crate) fn expect_cluster_spanning<'a>(report: &'a Value, files: &[&str]) -> 
 /// token signal for `identical` / `nearly_identical`, a near-zero one for
 /// the structural-only routing (#134). Centralises the renamed-clone
 /// assertion every per-feature E2E test would otherwise repeat.
+///
+/// The bucket labels are gone from the wire; what remains provable is
+/// the byte-level truth the labels used to proxy: `byte_identical`
+/// asserts the clone's occurrences are byte-identical text, `false`
+/// asserts they are not (a rename/near-miss). Either way the cluster is
+/// asserted to be admitted, visible, mass-honest, and free of any
+/// pair-only surface ([PIPELINE-CLUSTER-CLOSURE]).
 pub(crate) fn assert_bucketed_clone(
     fixture_dir: &str,
     min_nodes: u32,
     files: &[&str],
-    bucket: &str,
+    byte_identical: bool,
 ) -> Result<()> {
-    let report = run_report(&fixture(fixture_dir), min_nodes)?;
+    let scan_root = fixture(fixture_dir);
+    let report = run_report(&scan_root, min_nodes)?;
     let clone = expect_cluster_spanning(&report, files)?;
+    signals::assert_structural_only_contract(clone, fixture_dir);
+    signals::assert_no_pair_surface_on_cluster(clone, fixture_dir);
     assert_eq!(
-        cluster_bucket(clone),
-        bucket,
-        "{fixture_dir} clone bucket mismatch: {report:#}"
+        signals::has_verbatim_pair(&scan_root, clone)?,
+        byte_identical,
+        "{fixture_dir}: the fixture bytes determine whether the clone is a \
+         verbatim copy (identical) or a byte-distinct rename — the report \
+         must carry the clone either way, and the byte truth must match: \
+         {report:#}"
     );
-    assert!(
-        approx(signal(clone, "structural"), 1.0),
-        "{fixture_dir} renamed clone must reach structural identity: {report:#}"
-    );
-    if bucket == "structural_only" {
-        signals::assert_structural_only_contract(clone, fixture_dir);
-    } else {
-        assert!(
-            approx(signal(clone, "token_jaccard"), 1.0),
-            "{fixture_dir} token layer must also be rename-invariant: {report:#}"
-        );
-    }
     Ok(())
 }
 

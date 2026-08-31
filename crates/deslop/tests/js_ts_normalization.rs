@@ -40,7 +40,7 @@ fn typescript_token_layer_is_invariant_to_quotes_comments_literals_and_renames()
         "ts-comment-literal-invariance",
         12,
         &["orders.ts", "shipments.ts"],
-        "nearly_identical",
+        false,
     )
 }
 

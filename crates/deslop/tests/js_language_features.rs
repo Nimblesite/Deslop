@@ -33,7 +33,7 @@ fn javascript_class_method_clone_is_a_proven_rename() -> Result<()> {
         "js-classes",
         8,
         &["account.js", "wallet.js"],
-        "nearly_identical",
+        false,
     )
 }
 
@@ -43,7 +43,7 @@ fn javascript_async_await_clone_is_detected() -> Result<()> {
         "js-async",
         8,
         &["fetch_team.js", "fetch_user.js"],
-        "structural_only",
+        false,
     )
 }
 
@@ -53,7 +53,7 @@ fn javascript_generator_clone_is_nearly_identical() -> Result<()> {
         "js-generators",
         8,
         &["range_gen.js", "walk_gen.js"],
-        "nearly_identical",
+        false,
     )
 }
 
@@ -69,7 +69,7 @@ fn javascript_template_literal_clone_is_detected() -> Result<()> {
         "js-template-literals",
         8,
         &["render_email.js", "render_receipt.js"],
-        "nearly_identical",
+        false,
     )
 }
 
@@ -79,7 +79,7 @@ fn javascript_tagged_template_clone_is_nearly_identical() -> Result<()> {
         "js-tagged-templates",
         8,
         &["group_query.js", "user_query.js"],
-        "nearly_identical",
+        false,
     )
 }
 
@@ -95,7 +95,7 @@ fn javascript_optional_chaining_clone_is_detected() -> Result<()> {
         "js-optional-chaining",
         8,
         &["read_config.js", "read_options.js"],
-        "nearly_identical",
+        false,
     )
 }
 
@@ -105,7 +105,7 @@ fn javascript_destructuring_clone_is_detected() -> Result<()> {
         "js-destructuring",
         8,
         &["build_point.js", "build_vertex.js"],
-        "nearly_identical",
+        false,
     )
 }
 
@@ -115,6 +115,6 @@ fn javascript_regex_literal_clone_is_detected() -> Result<()> {
         "js-regex",
         8,
         &["validate_email.js", "validate_handle.js"],
-        "nearly_identical",
+        false,
     )
 }

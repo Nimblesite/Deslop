@@ -15,15 +15,15 @@ This page gives coding agents direct operating instructions. Humans configuring 
 
 ## Check before you write
 
-Before you author any new code unit — function, method, class, helper, fixture, test setup, parser branch, error type, route handler, view model — call `find-similar` with the proposed snippet (or a `path` + `start_byte` + `end_byte` range) and read the returned cluster's `bucket`:
+Before you author any new code unit — function, method, class, helper, fixture, test setup, parser branch, error type, route handler, view model — call `find-similar` with the proposed snippet (or a `path` + `start_byte` + `end_byte` range) and read the returned cluster's `rank_band`:
 
-| `bucket` | What you do |
+| `rank_band` | What you do |
 | --- | --- |
-| `identical` | **Do not write the copy.** Reuse the canonical occurrence the tool returns. Extract a shared helper if neither call site fits as-is. |
-| `nearly_identical` | **Do not write the copy.** The elected pair's content evidence (`pair_agreement`, `pair_rename_consistency`) shows what differs — usually a rename. Reuse or extract. |
-| `structural_only` | Shape-only match — often sibling boilerplate. Read the canonical occurrence before concluding anything. |
-| `loosely_similar` | A hint. Bias toward reading, not acting. |
-| `same_behavior` | Two implementations of one behaviour (requires embeddings). Reconcile before adding a third. |
+| worst / top10 | **Do not write the copy.** Reuse the canonical occurrence the tool returns. Extract a shared helper if neither call site fits as-is. Read the occurrences first: the band ranks impact, it does not prove the copies are interchangeable. |
+| mid | Likely a real duplicate. Read both occurrences and the mass before deciding. |
+| faint | A weak tail finding. Bias toward reading, not acting. |
+
+Every cluster is titled neutrally (`Duplicate code`): the engine carries no similarity bucket or cluster-level signal scores, so there is no shortcut — the occurrences are the evidence. To see what differs between two locations, request an explicit pair comparison with both endpoints; pair evidence never attaches to a cluster.
 
 `find-similar` is the **authoring** tool. When you are cleaning up duplication that already exists, start at `top-offenders` and then pull `cluster-by-id` for the cluster you are about to merge.
 
@@ -77,9 +77,8 @@ If neither MCP nor the CLI is available, say so and stop. Do not guess.
 | --- | --- |
 | `metrics.duplication_percent` | The repo-wide headline number a CI gate compares against. |
 | `metrics.threshold.breached` | `true` → the run exited `3` and the gate failed. `source` is `cli`, `config`, or `none`. |
-| `clusters` | Sorted by `weight` **descending** — `clusters[0]` is always the worst offender. Work top-down; do not start in the middle. |
-| `bucket` | `identical` / `nearly_identical` → extract a shared definition. `structural_only` → shape matched with no token or semantic evidence; verify it is a real duplicate before extracting. `loosely_similar` → parametrise the difference. `same_behavior` → reconcile two implementations of one behaviour (requires embeddings). |
-| `signals.pair_agreement` | How much of the matched content the elected pair shares, byte for byte. The content evidence behind the bucket. |
+| `clusters` | Sorted by `mass` **descending** — `clusters[0]` is always the worst offender. Work top-down; do not start in the middle. |
+| `cluster.rank_band` | The engine's mass-percentile band (`worst` / `top10` / `mid` / `faint`): how much attention the cluster deserves, not what kind of clone it is. |
 | `occurrences[].hidden` | `true` marks a `report_hide` match — usually a hand-written clone of generated code. |
 
 ### Byte ranges, not line numbers

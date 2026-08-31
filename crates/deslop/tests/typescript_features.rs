@@ -21,7 +21,7 @@ fn typescript_generic_functions_with_renamed_type_params_cluster() -> Result<()>
         "ts-generics",
         12,
         &["cache.ts", "store.ts"],
-        "nearly_identical",
+        false,
     )
 }
 
@@ -56,7 +56,7 @@ fn typescript_decorated_classes_clone_is_nearly_identical() -> Result<()> {
         "ts-decorators",
         12,
         &["order.controller.ts", "user.controller.ts"],
-        "nearly_identical",
+        false,
     )
 }
 
@@ -66,7 +66,7 @@ fn typescript_enums_with_renamed_members_cluster() -> Result<()> {
         "ts-enums",
         10,
         &["http-status.ts", "task-state.ts"],
-        "nearly_identical",
+        false,
     )
 }
 
@@ -82,7 +82,7 @@ fn typescript_primitive_type_annotation_difference_still_clusters() -> Result<()
         "ts-type-keyword",
         10,
         &["render-a.ts", "render-b.ts"],
-        "nearly_identical",
+        false,
     )
 }
 
@@ -95,7 +95,7 @@ fn typescript_named_type_alias_rename_is_token_invariant() -> Result<()> {
         "ts-named-type-rename",
         10,
         &["build-a.ts", "build-b.ts"],
-        "nearly_identical",
+        false,
     )
 }
 
@@ -109,6 +109,6 @@ fn typescript_qualified_type_name_rename_is_token_invariant() -> Result<()> {
         "ts-qualified-type-rename",
         8,
         &["alpha.ts", "beta.ts"],
-        "nearly_identical",
+        false,
     )
 }

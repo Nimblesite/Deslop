@@ -78,16 +78,15 @@ fn render() -> Result<Value> {
     run_report(&fixture(FIXTURE), MIN_NODES)
 }
 
-/// Every visible cluster as `id [bucket] pair rename evidence files`.
+/// Every visible cluster as `id [mass] files`.
 fn published(report: &Value) -> Vec<String> {
     clusters(report)
         .iter()
         .map(|cluster| {
             format!(
-                "{id} [{bucket}] rename={rename:.4} {files:?}",
+                "{id} [mass={mass}] {files:?}",
                 id = cluster_id(cluster),
-                bucket = cluster_bucket(cluster),
-                rename = signal(cluster, "pair_rename_consistency"),
+                mass = field(cluster, "mass").as_u64().unwrap_or(0),
                 files = occurrence_files(cluster),
             )
         })
@@ -128,34 +127,20 @@ fn sibling_accessors_never_claim_duplication() -> Result<()> {
          the family means anything: {published:#?}",
         published = published(&report),
     );
+    let scan_root = fixture(FIXTURE);
     let control = expect_cluster_spanning(&report, &CONTROL_FILES)?;
-    assert_eq!(
-        cluster_bucket(control),
-        "identical",
+    assert_structural_only_contract(control, "rename-needs-an-anchor control");
+    assert_no_pair_surface_on_cluster(control, "rename-needs-an-anchor control");
+    assert!(
+        has_verbatim_pair(&scan_root, control)?,
         "the byte-identical control must still be published as duplication in \
          this very run: {published:#?}",
         published = published(&report),
     );
-    assert!(
-        approx(signal(control, "pair_agreement"), 1.0),
-        "byte-proven duplication saturates agreement; a fix that \
-         lowered every score has distinguished nothing — {dump}",
-        dump = signal_dump(control),
-    );
     let Some(family) = cluster_spanning(&report, &FAMILY_FILES) else {
         return Ok(());
     };
-    let dump = signal_dump(family);
-    assert!(
-        !CONFIRMED_DUPLICATE_BUCKETS.contains(&cluster_bucket(family)),
-        "the seven accessors call seven different endpoints. A duplicate bucket \
-         tells a `find-similar` consumer to write one where another is meant — \
-         {dump}"
-    );
-    assert!(
-        signal(family, "pair_rename_consistency") < 1.0,
-        "a scaffolding family must not carry a certified rename reading — {dump}"
-    );
+    assert_no_pair_surface_on_cluster(family, "rename-needs-an-anchor family");
     Ok(())
 }
 
@@ -169,16 +154,7 @@ fn a_rename_is_never_proven_without_an_anchor_outside_it() -> Result<()> {
     let Some(family) = cluster_spanning(&report, &FAMILY_FILES) else {
         return Ok(());
     };
-    assert!(
-        signal(family, "pair_rename_consistency") < 1.0,
-        "`pair_rename_consistency` at {rename:.4} is the engine's certificate that one \
-         bijection explains everything that differs. The elected window holds no \
-         literal at all, so the only thing corroborating the substitution is the \
-         substitution — an empty literal population scoring 1.0 is absent \
-         evidence being read as perfect evidence — {dump}",
-        rename = signal(family, "pair_rename_consistency"),
-        dump = signal_dump(family),
-    );
+    assert_no_pair_surface_on_cluster(family, "rename-needs-an-anchor family");
     Ok(())
 }
 

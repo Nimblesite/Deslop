@@ -38,7 +38,9 @@ function parseOccurrenceList(): ts.SourceFile {
 }
 
 function parseClusterRenderer(): ts.SourceFile[] {
-  return [parseClusterWebview(), parseOccurrenceList()];
+  // The help copy is a real render surface: the panel's titles fold in
+  // PANEL_HELP, so hover-copy assertions must see the same text users see.
+  return [parseClusterWebview(), parseOccurrenceList(), parseHelpBubble()];
 }
 
 function parseHelpBubble(): ts.SourceFile {
@@ -270,17 +272,27 @@ suite("cluster webview occurrence locations", () => {
     for (const phrase of [
       "Cluster ",
       "Rank ",
-      "Weight is this cluster's duplicated mass",
+      // [VSIX-PAIR-COMPARE] The mass help copy explains the ranking metric
+      // with the honest term — weight/bucket language is retired.
+      "This cluster's duplicated mass",
       "Canonical occurrence",
       "Hidden means this path matched report_hide configuration",
       "Open this occurrence in VS Code",
-      "Compare is disabled on the canonical occurrence",
+      "Select two occurrences to enable compare",
+      "Compare opens a diff between the two occurrences you selected",
       "Previous cluster",
       "Next cluster",
       "Detailed keyboard help",
-      "AI match",
+      "semantic match",
     ]) {
       assert.match(corpus, new RegExp(escapeRegExp(phrase)), `missing hover copy: ${phrase}`);
+    }
+    // The retired implicit-compare and weight/bucket copy must stay gone.
+    for (const gone of [
+      "Compare is disabled on the canonical occurrence",
+      "Weight is this cluster's duplicated mass",
+    ]) {
+      assert.doesNotMatch(corpus, new RegExp(escapeRegExp(gone)), `retired copy resurfaced: ${gone}`);
     }
   });
 
@@ -292,11 +304,10 @@ suite("cluster webview occurrence locations", () => {
     const corpus = clusterRendererCorpus();
     for (const phrase of [
       "cluster-id",
-      "clone-bucket",
+      "duplicate-code",
       "ai-match",
       "rank",
-      "weight",
-      "size",
+      "mass",
       "occurrence-count",
       "canonical",
       "occurrences",

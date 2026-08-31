@@ -5,6 +5,7 @@ const DOCS_BASE = "https://deslop.live/docs/vscode-cluster-panel/";
 /** Every helped element of the cluster panel. */
 export type HelpTopic =
   | "cluster-id"
+  | "duplicate-code"
   | "ai-match"
   | "rank"
   | "mass"
@@ -20,6 +21,7 @@ export type HelpTopic =
 
 const PANEL_HELP: Record<HelpTopic, string> = {
   "cluster-id": "Stable identifier for this duplicate-code cluster.",
+  "duplicate-code": "Every cluster carries the same neutral title. Severity comes from the cluster's mass rank band, never a similarity bucket label.",
   "ai-match": "The embedding pass found a semantic match, not only a syntactic one.",
   rank: "Worst-first position of this cluster in the current report.",
   mass: "This cluster's duplicated mass — the worst-first ranking metric.",

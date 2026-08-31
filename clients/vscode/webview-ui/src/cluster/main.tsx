@@ -49,7 +49,7 @@ const FAINT_SEVERITY = "faint";
 const KEYDOWN_EVENT = "keydown";
 const LABEL_CLASS = "label";
 const WITH_HELP_CLASS = "with-help";
-const CLONE_BUCKET_TOPIC = "duplicate-code";
+const NEUTRAL_TITLE_TOPIC = "duplicate-code";
 const CLUSTER_ID_TOPIC = "cluster-id";
 const CLUSTER_NAVIGATION_TOPIC = "cluster-navigation";
 const CANONICAL_TOPIC = "canonical";
@@ -171,8 +171,8 @@ function ClusterApp() {
             }}
             title="Duplicate code"
           >
-            <HelpedText topic={CLONE_BUCKET_TOPIC} title="Duplicate code">
-              <DocTextLink topic={CLONE_BUCKET_TOPIC}>Duplicate code</DocTextLink>
+            <HelpedText topic={NEUTRAL_TITLE_TOPIC} title="Duplicate code">
+              <DocTextLink topic={NEUTRAL_TITLE_TOPIC}>Duplicate code</DocTextLink>
             </HelpedText>
           </h1>
           <p
@@ -184,7 +184,7 @@ function ClusterApp() {
             }}
             title={`Mass ${formatScore(cluster.mass)} across ${occurrenceCount(cluster)} occurrences in this report.`}
           >
-            <HelpedText topic={CLONE_BUCKET_TOPIC}>
+            <HelpedText topic={NEUTRAL_TITLE_TOPIC}>
               This cluster repeats code across the report with mass{" "}
               {formatScore(cluster.mass)}.
             </HelpedText>

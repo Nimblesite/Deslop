@@ -160,6 +160,7 @@ function CompareSelectedButton() {
   return (
     <button
       disabled={!ready}
+      aria-label={COMPARE_SELECTED}
       style={!ready ? { opacity: 0.3 } : { color: "inherit" }}
       onClick={() => {
         if (left && right) {
