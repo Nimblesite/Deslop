@@ -2,17 +2,17 @@
 
 use deslop_core::{
     buckets::{bucket_labels, classify},
-    render::signals::plain_explanation,
+    render::signals::elected_pair_explanation,
     report::{occurrence_count, ReportCluster},
 };
 use serde_json::{json, Value};
 
-/// Formats the diagnostic message: category × count — action sentence —
-/// confidence explanation.
+/// Formats the diagnostic message: category × count — evidence sentence —
+/// signal explanation.
 ///
-/// [FUSION-CONTENT-GATE] The trailing explanation is the one shared
-/// `render::signals` rendering of the fused confidence and the measured
-/// content evidence. Without it the bucket title is unfalsifiable: a
+/// [FUSED-CONTENT-GATE] The trailing explanation is the one shared
+/// `render::signals` rendering of the elected pair's measured axes and
+/// the content evidence. Without it the bucket title is unfalsifiable: a
 /// corroborated Type-2 rename and an anchor-poor scaffolding family both
 /// show `structural 1.00`, and only `agreement` / `rename` / `literal`
 /// tell the reader which one is on screen.
@@ -20,13 +20,12 @@ use serde_json::{json, Value};
 pub fn diagnostic_message(cluster: &ReportCluster) -> String {
     let labels = bucket_labels(classify(cluster));
     let count = occurrence_count(cluster);
-    format!(
-        "{} × {} — {} — {}",
-        labels.plain_title,
-        count,
-        labels.action_sentence,
-        plain_explanation(cluster.signals),
-    )
+    let prefix = format!(
+        "{} × {} — {}",
+        labels.plain_title, count, labels.evidence_sentence
+    );
+    elected_pair_explanation(cluster)
+        .map_or(prefix.clone(), |evidence| format!("{prefix} — {evidence}"))
 }
 
 /// Stores machine-facing cluster identity outside visible diagnostic text.

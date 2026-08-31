@@ -1,14 +1,14 @@
 //! Content-evidence measurement for shape-identical clone clusters.
 //!
-//! Implements [FUSION-CONTENT-GATE]: normalisation collapses
+//! Implements [FUSED-CONTENT-GATE]: normalisation collapses
 //! identifiers and literals, so `structural` and `token_jaccard` agree by
 //! construction on any shape match and cannot tell a renamed copy of real
 //! logic from mandatory scaffolding or a data table. This pass measures
 //! what normalisation erased, in two independent populations:
 //!
 //! - **agreement** — the fraction of collapsed-leaf positions whose raw
-//!   source bytes still match across members, identifiers and literals
-//!   pooled. High for verbatim and lightly-edited copies.
+//!   source bytes match on the elected admitted pair, identifiers and
+//!   literals pooled. High for verbatim and lightly-edited copies.
 //! - **rename consistency** — the Type-2 discriminator
 //!   ([TECH-PMATCH-BAKER]): a genuine maximal rename preserves every
 //!   literal and maps identifiers through one bijective substitution
@@ -18,11 +18,10 @@
 //!   substitutes only its own subject name. Pooling the populations
 //!   averaged this proof away and demoted textbook Type-2 clones to
 //!   `structural_only`; measured separately, a renamed clone keeps its
-//!   act-now verdict.
+//!   supported duplicate bucket.
 //!
-//! The result is stored on each [`Cluster`] so bucket routing, the
-//! rendered fused confidence, and the ranking weight can separate real
-//! clones from shape coincidence.
+//! The result is stored on each [`Cluster`] so bucket routing and every
+//! report surface can separate real clones from shape coincidence.
 
 use std::collections::HashMap;
 use std::hash::BuildHasher;
@@ -33,12 +32,18 @@ mod frontier;
 mod rename;
 
 use frontier::{
-    key_set_jaccard, keys_of, member_content, member_count, population, positional_agreement,
-    LeafKey, MemberContent, Population,
+    key_set_jaccard, keys_of, member_content, member_count, operators_disagree,
+    operators_substitute, population, positional_agreement, LeafKey, MemberContent, Population,
 };
 use rename::ModalBijection;
 
 use crate::{ast::NormalizedNode, cluster::Cluster, fingerprint::Fingerprint, state::FileId};
+
+/// Indexes normalised trees by file for frontier resolution. Shared by
+/// every content measurement so one walk site owns the shape.
+pub(crate) fn tree_index_of(trees: &[NormalizedNode]) -> HashMap<FileId, &NormalizedNode> {
+    trees.iter().map(|tree| (tree.file_id, tree)).collect()
+}
 
 /// Minimum literal-leaf count before a subtree's literal dominance is
 /// reported at all ([CLONE-NOISE-LITERAL-TABLE]). A data table is a run
@@ -63,16 +68,26 @@ const VERBATIM_MEMBER_SHARE_FLOOR: f64 = 0.5;
 /// Smallest token-identical family that is a copy of anything.
 const MIN_VERBATIM_FAMILY: usize = 2;
 
+/// A semantic contradiction that must prevent content evidence from
+/// supporting the elected pair.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContentContradiction {
+    /// The elected pair carries no known contradiction.
+    None,
+    /// Equally-sized operator populations differ, so the pair changes
+    /// behaviour rather than merely renaming content (#432).
+    OperatorSubstitution,
+}
+
 /// Measured raw-content evidence for one cluster, produced by
 /// [`attach_content_evidence`] and consumed by bucket routing, the
-/// rendered fused confidence, and the ranking weight
-/// ([FUSION-CONTENT-GATE]).
+/// report surfaces ([FUSED-CONTENT-GATE]).
 #[derive(Debug, Clone, Copy)]
 pub struct ContentEvidence {
-    /// Mean fraction of collapsed-leaf positions whose raw bytes match
-    /// the canonical member, identifiers and literals pooled, in `[0, 1]`.
+    /// Fraction of collapsed-leaf positions whose raw bytes match on the
+    /// elected signal pair, identifiers and literals pooled, in `[0, 1]`.
     pub agreement: f64,
-    /// Mean Type-2 rename evidence in `[0, 1]`
+    /// Elected-pair Type-2 rename evidence in `[0, 1]`
     /// ([TECH-PMATCH-BAKER]): the lesser of literal consistency (a
     /// literal preserved, or echoing an elected identifier substitution
     /// — renamed alongside its symbol, #409) and corroborated
@@ -97,9 +112,7 @@ pub struct ContentEvidence {
     /// holds a strict majority of the members (more than
     /// [`VERBATIM_MEMBER_SHARE_FLOOR`]). Token equality between whole
     /// members is proof of copying in its own right (the #190 verbatim
-    /// escape hatch), so [`Self::agreement`] reports full agreement for
-    /// such a cluster rather than the positional score the odd-one-out
-    /// members would dilute.
+    /// escape hatch), independently of the elected pair's agreement.
     pub verbatim_dominated: bool,
     /// True when the pass actually compared two members' raw content.
     /// `false` for [`Self::unmeasured`] and for a cluster whose members
@@ -107,14 +120,18 @@ pub struct ContentEvidence {
     /// deliberately generous defaults so a missing measurement never
     /// demotes a cluster some *other* signal proves; this flag is how a
     /// route with no other signal tells "measured full agreement" apart
-    /// from "nothing was measured" ([FUSION-CONTENT-GATE]).
+    /// from "nothing was measured" ([FUSED-CONTENT-GATE]).
     pub measured: bool,
+    /// Semantic contradiction found on the elected endpoints. A
+    /// contradiction prevents the pair from inheriting duplicate
+    /// content support even when its normalised shape saturates.
+    pub contradiction: ContentContradiction,
 }
 
 impl ContentEvidence {
     /// Content support for bucket routing: either population may vouch
-    /// for a shape-identical cluster — pooled byte agreement or a proven
-    /// consistent rename. [FUSION-CONTENT-GATE] routes on both, never on
+    /// for a shape-identical cluster — elected-pair byte agreement or a proven
+    /// consistent rename. [FUSED-CONTENT-GATE] routes on both, never on
     /// their mean; the mean is what demoted maximal Type-2 renames. The
     /// rule itself lives in [`crate::buckets::content_support`], which
     /// the decision surfaces reading the *rendered* signals share, so
@@ -125,7 +142,7 @@ impl ContentEvidence {
     }
 
     /// Evidence for a cluster no measurement pass has touched: full
-    /// pooled agreement (so nothing is demoted on a missing
+    /// agreement (so nothing is demoted on a missing
     /// measurement), no rename proof, no literal dominance.
     #[must_use]
     pub const fn unmeasured() -> Self {
@@ -136,6 +153,7 @@ impl ContentEvidence {
             substance_varies: false,
             verbatim_dominated: false,
             measured: false,
+            contradiction: ContentContradiction::None,
         }
     }
 }
@@ -155,9 +173,6 @@ type FamilyTally = (usize, usize);
 /// it, and how many members it holds.
 #[derive(Debug, Clone, Copy)]
 struct DominantFamily {
-    /// Index of the family's earliest member — the anchor every other
-    /// member's agreement is measured against.
-    anchor: usize,
     /// Number of members in the family.
     size: usize,
 }
@@ -165,15 +180,24 @@ struct DominantFamily {
 /// Measures and attaches [`ContentEvidence`] for every cluster. Runs
 /// once per render, immediately after ranking; cost is one walk per
 /// cluster member over already-normalised trees — no re-parsing.
-pub fn attach_content_evidence<S: BuildHasher>(
+/// `file_languages` selects each member's import/prologue boilerplate
+/// exclusion ([PIPELINE-BOILERPLATE-FILTER]), so the frontier measures
+/// the same population as every other axis.
+pub fn attach_content_evidence<S: BuildHasher, L: BuildHasher>(
     clusters: &mut [Cluster],
     trees: &[NormalizedNode],
     sources: &HashMap<FileId, Vec<u8>, S>,
+    file_languages: &HashMap<FileId, &'static str, L>,
 ) {
-    let tree_index: HashMap<FileId, &NormalizedNode> =
-        trees.iter().map(|tree| (tree.file_id, tree)).collect();
+    let tree_index = tree_index_of(trees);
     for cluster in clusters.iter_mut() {
-        cluster.content = measure_cluster(&cluster.members, &tree_index, sources);
+        cluster.content = measure_cluster(
+            &cluster.members,
+            cluster.signal_source,
+            &tree_index,
+            sources,
+            file_languages,
+        );
         // [PERF-FLUTTER-TODO-OBSERVABILITY] Per cluster, so `trace` rather
         // than `debug`: a corpus-scale run has to stay readable and stay
         // fast at the level someone reaches for first. The shared-subtree
@@ -197,36 +221,54 @@ pub fn attach_content_evidence<S: BuildHasher>(
 
 /// Measures one cluster's [`ContentEvidence`] from its members'
 /// collapsed leaves, resolving each member's content keys exactly once.
-fn measure_cluster<S: BuildHasher>(
+fn measure_cluster<S: BuildHasher, L: BuildHasher>(
     members: &[Fingerprint],
+    signal_source: Option<(usize, usize)>,
     tree_index: &HashMap<FileId, &NormalizedNode>,
     sources: &HashMap<FileId, Vec<u8>, S>,
+    languages: &HashMap<FileId, &'static str, L>,
 ) -> ContentEvidence {
     let member_contents: Vec<Option<MemberContent>> = members
         .iter()
-        .map(|member| member_content(member, tree_index, sources))
+        .map(|member| member_content(member, tree_index, sources, languages))
         .collect();
     let canonical = member_contents.first().and_then(Option::as_ref);
     let canonical_keys = keys_of(canonical);
     let dominant = dominant_verbatim_family(&member_contents);
     let verbatim_dominated = member_contents.len() >= 2
         && dominant_verbatim_share(dominant, member_contents.len()) > VERBATIM_MEMBER_SHARE_FLOOR;
+    let pair = signal_source.and_then(|(left, right)| {
+        Some((
+            member_contents.get(left)?.as_ref()?,
+            member_contents.get(right)?.as_ref()?,
+        ))
+    });
+    let (agreement, rename_consistency, contradiction) = measured_pair_evidence(pair, sources);
     ContentEvidence {
-        agreement: cluster_agreement(&member_contents, dominant),
-        rename_consistency: rename::cluster_rename_consistency(
-            canonical,
-            &member_contents,
-            sources,
-        ),
+        agreement,
+        rename_consistency,
         literal_fraction: canonical_literal_fraction(canonical_keys),
         substance_varies: cluster_substance_varies(canonical_keys, &member_contents),
         verbatim_dominated,
-        // A comparison needs a canonical member *and* something to
-        // compare it against: one resolvable member alone measures
-        // nothing, and every field above then carries its degenerate
-        // default rather than evidence.
-        measured: canonical.is_some() && member_contents.iter().skip(1).any(Option::is_some),
+        measured: pair.is_some(),
+        contradiction,
     }
+}
+
+/// Elected-pair content axes plus the operator-substitution conviction.
+fn measured_pair_evidence<S: BuildHasher>(
+    pair: Option<(&MemberContent, &MemberContent)>,
+    sources: &HashMap<FileId, Vec<u8>, S>,
+) -> (f64, f64, ContentContradiction) {
+    let Some((left, right)) = pair else {
+        return (0.0, 0.0, ContentContradiction::None);
+    };
+    if operators_substitute(&left.keys, &right.keys) {
+        return (0.0, 0.0, ContentContradiction::OperatorSubstitution);
+    }
+    let agreement = pair_agreement(Some(left), Some(right));
+    let rename_consistency = rename::pair_rename_consistency(Some(left), Some(right), sources);
+    (agreement, rename_consistency, ContentContradiction::None)
 }
 
 /// Proof that a cluster's members differ in substance rather than in
@@ -268,8 +310,7 @@ fn pair_substance_varies(canonical: Option<&[LeafKey]>, member: Option<&[LeafKey
     // substance that changed. There is no substitution that explains
     // `+` becoming `-`: it is a different computation, not a different
     // name for the same one.
-    let operators = population(canonical, member, Population::Operator);
-    let operators_vary = operators.iter().any(|(left, right)| left != right);
+    let operators_vary = operators_disagree(canonical, member);
     literals_vary
         || operators_vary
         || mapping_consistency(&population(canonical, member, Population::Identifier)) < 1.0
@@ -301,44 +342,6 @@ fn canonical_literal_fraction(canonical: Option<&[LeafKey]>) -> f64 {
         return 0.0;
     }
     member_count(literals) / member_count(vocabulary)
-}
-
-/// Mean pooled agreement of every other member against one anchor.
-/// `1.0` for degenerate single-member clusters; a member whose leaves
-/// cannot be resolved contributes `0.0` — unresolvable content is no
-/// evidence of agreement.
-///
-/// The anchor is a member of the largest token-identical family when
-/// there is one, and the first member otherwise. That choice is the
-/// whole of what the old `verbatim_dominated` short-circuit was for:
-/// measuring a cluster of proven copies against a canonical that
-/// happens *not* to be one of them averaged the copies down below the
-/// support floor, so the measurement was replaced wholesale by `1.0`.
-///
-/// Replacing it was too much. A strict majority is not everyone: a
-/// five-member cluster of three exact copies plus two shape-compatible
-/// strangers cleared the floor at 3/5 and every member — strangers
-/// included — was then handed the proof the three copies had earned,
-/// saturating `fused` for code that is not duplicated. Anchoring
-/// instead of short-circuiting keeps the copies at `1.0` where they
-/// belong and leaves each stranger scoring its own real agreement, so
-/// the cluster's number describes the cluster.
-fn cluster_agreement(
-    member_contents: &[Option<MemberContent>],
-    dominant: Option<DominantFamily>,
-) -> f64 {
-    if member_contents.len() < 2 {
-        return 1.0;
-    }
-    let anchor = dominant.map_or(0, |family| family.anchor);
-    let canonical = keys_of(member_contents.get(anchor).and_then(Option::as_ref));
-    let total: f64 = member_contents
-        .iter()
-        .enumerate()
-        .filter(|(index, _)| *index != anchor)
-        .map(|(_, content)| pair_agreement(canonical, keys_of(content.as_ref())))
-        .sum();
-    total / member_count(member_contents.len().saturating_sub(1))
 }
 
 /// Aligned literal positions whose raw bytes match — each one an
@@ -420,7 +423,7 @@ fn dominant_verbatim_family(member_contents: &[Option<MemberContent>]) -> Option
         .into_values()
         .filter(|(_, size)| *size >= MIN_VERBATIM_FAMILY)
         .max_by(|left, right| left.1.cmp(&right.1).then_with(|| right.0.cmp(&left.0)))
-        .map(|(anchor, size)| DominantFamily { anchor, size })
+        .map(|(_, size)| DominantFamily { size })
 }
 
 /// The share of a cluster held by its largest token-identical family.
@@ -449,15 +452,48 @@ fn dominant_verbatim_share(dominant: Option<DominantFamily>, members: usize) -> 
 /// it here would let the shape signals vouch for themselves through the
 /// gate built to check them; an operator that differs still counts
 /// against them in either measurement.
-fn pair_agreement(canonical: Option<&[LeafKey]>, member: Option<&[LeafKey]>) -> f64 {
+/// [FUSED-CONTENT-GATE] (per-edge, gh #458): one pair's own content
+/// agreement, measured from the endpoints' collapsed leaves exactly as
+/// a cluster's members are measured — the same measurement, one pair at
+/// a time.
+///
+/// The shared-subtree rescue admits pairs on structural overlap and
+/// token corroboration alone; a Merkle-identical signature can carry a
+/// pair whose bodies share nothing (the `verbatim-plus-stranger`
+/// fixture's stranger measures 0.0436 against a copy while its
+/// signature is hash-equal). The cluster-level gate measures only after
+/// the component is built — too late to keep the stranger out of the
+/// family's act-now evidence — so the rescue consults this per
+/// admitted edge and refuses to admit pairs whose own content does not
+/// clear the floor.
+pub(crate) fn pair_content_agreement<S: BuildHasher, L: BuildHasher>(
+    left: &Fingerprint,
+    right: &Fingerprint,
+    tree_index: &HashMap<FileId, &NormalizedNode>,
+    sources: &HashMap<FileId, Vec<u8>, S>,
+    languages: &HashMap<FileId, &'static str, L>,
+) -> f64 {
+    let left = member_content(left, tree_index, sources, languages);
+    let right = member_content(right, tree_index, sources, languages);
+    pair_agreement(left.as_ref(), right.as_ref())
+}
+
+/// Fraction of aligned collapsed positions whose raw bytes match — the
+/// positional branch of the elected pair's content agreement
+/// ([FUSED-CONTENT-GATE]); set-Jaccard fallback when the members do not
+/// align position for position.
+fn pair_agreement(canonical: Option<&MemberContent>, member: Option<&MemberContent>) -> f64 {
     let (Some(canonical), Some(member)) = (canonical, member) else {
         return 0.0;
     };
-    if canonical.is_empty() && member.is_empty() {
+    if operators_disagree(&canonical.keys, &member.keys) {
+        return 0.0;
+    }
+    if canonical.keys.is_empty() && member.keys.is_empty() {
         return 1.0;
     }
-    if canonical.len() != member.len() {
-        return key_set_jaccard(canonical, member);
+    if canonical.shape != member.shape || canonical.keys.len() != member.keys.len() {
+        return key_set_jaccard(&canonical.keys, &member.keys);
     }
-    positional_agreement(canonical, member)
+    positional_agreement(&canonical.keys, &member.keys)
 }

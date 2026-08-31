@@ -39,7 +39,12 @@ pub fn write_run_details(out: &mut String, report: &Report, escape: fn(&str) -> 
 /// Per-cluster signal table. Only included when there's at least one
 /// cluster.
 fn write_signals(out: &mut String, report: &Report, escape: fn(&str) -> String) {
-    if report.clusters.is_empty() {
+    let rows: Vec<String> = report
+        .clusters
+        .iter()
+        .filter_map(crate::render::signals::scoped_table_row)
+        .collect();
+    if rows.is_empty() {
         return;
     }
     let _ = write!(
@@ -47,15 +52,8 @@ fn write_signals(out: &mut String, report: &Report, escape: fn(&str) -> String) 
         "<h3>Per-group signals</h3><pre>{header}",
         header = escape(crate::render::signals::TABLE_HEADER),
     );
-    for cluster in &report.clusters {
-        let _ = writeln!(
-            out,
-            "{}",
-            escape(&crate::render::signals::table_row(
-                &cluster.id,
-                cluster.signals
-            )),
-        );
+    for row in rows {
+        let _ = writeln!(out, "{}", escape(&row));
     }
     let _ = write!(out, "</pre>");
 }

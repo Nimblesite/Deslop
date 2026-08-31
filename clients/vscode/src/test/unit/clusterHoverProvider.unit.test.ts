@@ -29,7 +29,6 @@ function clusterAt(path: string, startByte: number, endByte: number): ReportClus
       token_jaccard: 0.2,
       shape: 0.2,
       embedding_cos: 0.9,
-      fused: 0.95,
     }),
     occurrences: [{ path, start_byte: startByte, end_byte: endByte, hidden: false }],
     summary: "summary",

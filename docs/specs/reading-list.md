@@ -7,7 +7,9 @@
 Canonical:
 - [Baxter et al. 1998 — AST clone detection](https://leodemoura.github.io/files/ICSM98.pdf)
 - [Chilowicz et al. 2009 — Syntax tree fingerprinting](https://igm.univ-mlv.fr/~chilowi/research/syntax_tree_fingerprinting/syntax_tree_fingerprinting_ICPC09.pdf)
-- [SourcererCC — Scaling clone detection (Semantic Scholar)](https://www.semanticscholar.org/paper/SourcererCC:-Scaling-Code-Clone-Detection-to-Sajnani-Saini/e1abe96610cb3bc989e727f0b59cebedb14260f1)
+- [SourcererCC — Scaling Code Clone Detection to Big-Code (ICSE 2016 PDF)](https://cs.uwaterloo.ca/~m2nagapp/courses/CS846/1171/papers/sajnani_icse16.pdf)
+- [Zhang and Shasha 1989 — Simple Fast Algorithms for the Editing Distance Between Trees and Related Problems](https://doi.org/10.1137/0218082)
+- [Broder 1997 — On the Resemblance and Containment of Documents](https://ieeexplore.ieee.org/document/666900/)
 - [NiCad clone detector](https://www.researchgate.net/publication/221219568_The_NiCad_clone_detector)
 
 Recent (2024–2026):

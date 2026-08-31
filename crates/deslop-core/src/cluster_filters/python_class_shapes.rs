@@ -38,7 +38,7 @@ pub(super) fn is_strenum_class_shape_cluster(snippets: &[Snippet<'_>]) -> bool {
 /// **Every** class, not exactly one. This required a sole class, which
 /// held while a cluster occurrence was always a single declaration. It
 /// is no longer: an occurrence may span a whole module
-/// ([FUSION-SHARED-SUBTREE] widened which view wins), and both fixture
+/// ([FUSED-SHARED-SUBTREE] widened which view wins), and both fixture
 /// modules here declare two enums apiece — so the filter found three
 /// classes, returned `None`, and silently stopped firing. A module
 /// whose declarations are *all* closed-discriminator enums is still

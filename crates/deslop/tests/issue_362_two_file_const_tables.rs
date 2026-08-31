@@ -126,8 +126,8 @@ fn the_authored_clone_survives_the_suppression_and_ranks_first() -> Result<()> {
          negative — {dump}"
     );
     assert!(
-        approx(signal(cluster, "fused"), 1.0),
-        "byte-proven duplication saturates the confidence — {dump}"
+        approx(signal(cluster, "pair_agreement"), 1.0),
+        "byte-proven duplication saturates the content evidence — {dump}"
     );
     assert_eq!(
         cluster_id(clusters(&report).first().unwrap_or(&Value::Null)),

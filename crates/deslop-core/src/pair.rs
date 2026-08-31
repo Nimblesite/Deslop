@@ -1,14 +1,13 @@
 //! Candidate pair scoring and transitive-closure clustering.
 //!
-//! Implements the non-embedding half of [FUSION-STRATEGY-BOUNDED-MAX]:
+//! Implements the non-embedding half of [FUSED-STRATEGY-BOUNDED-MAX]:
 //!
 //! 1. Take the union of structural-hash bucket members and token-LSH band
 //!    collisions as the candidate pair set.
-//! 2. Score each pair on two signals in `[0, 1]`: `structural_sim` (1.0 for
-//!    members of the same Merkle bucket, else the best-achievable subtree
-//!    overlap which is 0.0 for cross-bucket token-only candidates) and
-//!    `token_jaccard` estimated from the `MinHash` signatures.
-//! 3. Apply the fused threshold and form clusters via transitive closure.
+//! 2. Score each pair on the evidence available before rescue: exact Merkle
+//!    evidence `H`, token Jaccard `J`, and embedding cosine `E`.
+//! 3. Apply the pair-specific fused threshold or the separate compound
+//!    shared-subtree rescue, then form clusters via transitive closure.
 //!
 //! Pair scores go into the final report (see [PRINCIPLES-AUDIENCE-AGENT])
 //! so agent consumers can tell **why** each cluster was flagged.
@@ -31,10 +30,9 @@ mod gate_parity_tests;
 /// exact structural matches saturate at 1.0, and Type-3 candidates
 /// discovered by LSH alone need `token_jaccard` ≥
 /// [`LSH_ONLY_MIN_JACCARD`] *and* the fused threshold below, which
-/// together keep LSH-only noise out of clusters. The literature
-/// ([TECH-TOKEN-SOURCERERCC]) treats Jaccard ≥ 0.7 as a typical Type-3
-/// cutoff; we go higher for LSH-only because those pairs have no
-/// structural anchor.
+/// together keep LSH-only noise out of clusters. The `SourcererCC` `0.70`
+/// token-bag intersection-over-larger-block operating point is directional
+/// context only; this 0.85 bounded maximum is Deslop's corpus-derived bar.
 pub const FUSED_THRESHOLD: f64 = 0.85;
 /// Additional Jaccard floor applied to pairs that fired only on the LSH
 /// path (no structural hash match). Keeps thousands of tiny "same
@@ -72,7 +70,7 @@ pub const MAX_ENDPOINT_NODE_RATIO: usize = 4;
 /// clients rather than normal same-language refactoring.
 pub const CROSS_LANGUAGE_MIN_JACCARD: f64 = 0.10;
 /// Shared-subtree overlap at or above which a below-threshold pair is
-/// admitted as a Type-3 near-miss ([FUSION-SHARED-SUBTREE], gh #408).
+/// admitted as a Type-3 near-miss ([FUSED-SHARED-SUBTREE], gh #408).
 ///
 /// A one-statement insertion rehashes every ancestor Merkle node, so
 /// the enclosing method pair of a textbook Type-3 clone carries
@@ -88,7 +86,7 @@ pub const SHARED_SUBTREE_MIN_OVERLAP: f64 = 0.75;
 /// larger endpoint's nodes.
 const SHARED_SUBTREE_MAX_UNSHARED_DENOMINATOR: usize = 4;
 /// Token-Jaccard corroboration a shared-subtree near-miss must also
-/// carry ([FUSION-SHARED-SUBTREE]). Shared subtrees alone cannot admit
+/// carry ([FUSED-SHARED-SUBTREE]). Shared subtrees alone cannot admit
 /// a pair: normalisation makes boilerplate scaffolding Merkle-identical
 /// across unrelated files, so the overlap must be corroborated by the
 /// independent token axis. "Moderate" by design — the exact whole-method
@@ -102,9 +100,17 @@ pub const SHARED_SUBTREE_MIN_JACCARD: f64 = 0.65;
 /// grammar scaffolding alone cannot reach it (the smallest genuine
 /// fixture method, `python-type3`'s `aggregate`, is 31 nodes).
 pub const SHARED_SUBTREE_MIN_NODE_COUNT: usize = 30;
+/// Raw-content agreement a shared-subtree rescue pair must corroborate
+/// ([FUSED-SHARED-SUBTREE]). Corroboration that the endpoints share some
+/// raw content — not the routing support floor: the canonical renamed
+/// near-miss (`csharp-type3`) measures 0.19 because the extra statement
+/// destroys leaf alignment, while the gh #458 stranger measures 0.0436.
+/// The floor sits between them; reuse of `CONTENT_SUPPORT_FLOOR` (0.70)
+/// gated the anchor-free route and drove it to zero clusters.
+pub const RESCUE_MIN_CONTENT_AGREEMENT: f64 = 0.10;
 /// Cosine at or above which a measured `embedding_cos` counts as the
 /// embedding pass *vouching for* a cluster rather than merely having
-/// measured it ([FUSION-CLUSTER-SIGNALS]).
+/// measured it ([FUSED-CLUSTER-SIGNALS]).
 ///
 /// A cosine belongs to the pair, not to the pass that surfaced it
 /// ([REPAIR-COSINE-MERGE], gh #351), so once embeddings are on every
@@ -120,7 +126,7 @@ pub const SHARED_SUBTREE_MIN_NODE_COUNT: usize = 30;
 ///
 /// Asking the other question instead is how a bucket came to follow the
 /// discovery route. `report_render::route_shape_identical` tested the
-/// [FUSION-CONTENT-GATE] escape against
+/// [FUSED-CONTENT-GATE] escape against
 /// `buckets::STRUCTURAL_ONLY_MAX_SUPPORT` — the ceiling *below* which a
 /// signal counts as **absent** — so a cosine of 0.05 read as semantic
 /// backing strong enough to overrule the measured content evidence. The
@@ -131,14 +137,14 @@ pub const SHARED_SUBTREE_MIN_NODE_COUNT: usize = 30;
 /// `deslop::embedding_route_invariance` (gh #356).
 pub const EMBEDDING_SUPPORT_FLOOR: f64 = 0.80;
 
-/// Per-pair score breakdown in `[0, 1]`. See
-/// [FUSION-STRATEGY-BOUNDED-MAX] for the semantics. Three slots are reserved
-/// from v1 so the embedding pass in P5 is additive, not a schema bump:
-/// the ensemble-LLM 2025 finding is that sum/max fusion (never average)
-/// gives the biggest gain.
+/// Per-pair score breakdown in `[0, 1]`. Candidate admission stores exact
+/// Merkle evidence in `structural`; report election stores measured overlap
+/// there after the pair has already been admitted. Only the former is an
+/// input to [`Self::bounded_fused`] ([FUSED-STRATEGY-BOUNDED-MAX]).
 #[derive(Debug, Clone, Copy)]
 pub struct PairScore {
-    /// 1.0 when the pair shares an exact Merkle bucket, else 0.0.
+    /// Exact Merkle evidence `H` during admission; measured overlap `S`
+    /// after admission when the same shape is used for report evidence.
     pub structural: f64,
     /// Estimated k-gram Jaccard in `[0, 1]`.
     pub token_jaccard: f64,
@@ -147,18 +153,15 @@ pub struct PairScore {
 }
 
 impl PairScore {
-    /// [FUSION-STRATEGY-BOUNDED-MAX] Bounded fusion over the three signal
+    /// [FUSED-STRATEGY-BOUNDED-MAX] Bounded fusion over the three signal
     /// axes: the strongest single axis, never their sum.
     ///
     /// The axes are correlated views of one normalised tree, so combining
     /// them may sharpen a verdict but must never exceed the best evidence
     /// — a confidence above every individual axis would be manufactured,
-    /// not measured. Non-finite axes contribute nothing. At render time
-    /// [FUSION-CONTENT-GATE] (`buckets.rs`) re-scores shape-saturating
-    /// clusters as `max(embedding_cos, shape × content)` — the same bound
-    /// with measured content evidence in place of this function's
-    /// implicit 1.0 — making the gate the definition of the rendered
-    /// confidence rather than a correction of it.
+    /// not measured. Non-finite axes contribute nothing. This is solely
+    /// the pre-rescue pair-admission quantity; cluster reports never call
+    /// it or render its result.
     #[must_use]
     pub fn bounded_fused(self) -> f64 {
         [self.structural, self.token_jaccard, self.embedding_cos]
@@ -222,12 +225,12 @@ pub struct CandidatePair {
     /// explicit cross-language audit pairs lower it to
     /// [`CROSS_LANGUAGE_MIN_JACCARD`] so lower-overlap ports can surface.
     pub fused_min_score: f64,
-    /// Measured shared-subtree overlap ([FUSION-SHARED-SUBTREE]).
+    /// Measured shared-subtree overlap ([FUSED-SHARED-SUBTREE]).
     /// `0.0` until the rescue pass measures it — it is only measured
     /// for pairs that are otherwise dropped below the fused threshold
     /// yet carry the corroborating token evidence, because walking two
     /// subtrees per pair across every candidate would repeat the
-    /// admission-cost mistake [FUSION-CONTENT-GATE] deliberately avoids.
+    /// admission-cost mistake [FUSED-CONTENT-GATE] deliberately avoids.
     pub shared_subtree_overlap: f64,
     /// Computed signal breakdown.
     pub score: PairScore,
@@ -235,14 +238,14 @@ pub struct CandidatePair {
 
 /// A cluster discovered via transitive closure of surviving candidate pairs.
 ///
-/// Carries membership plus the surviving discovery edges. Signals are
-/// **not** aggregated from the edges: the pairs that glued a component
-/// together are discovery evidence, and averaging them once diluted
-/// byte-proven pairs with every weaker edge in the component. The
-/// rendered signal breakdown is measured between the rendered
-/// occurrences in `crate::cluster` instead. The edges exist solely so
-/// the same-file overlap collapse there can keep the occurrence
-/// carrying the component's strongest cross-file evidence (#339).
+/// Carries membership plus the surviving discovery edges. Every edge is
+/// an admitted pair — it survived one of the admission routes
+/// (`Survived` or the [FUSED-SHARED-SUBTREE] rescue) — and the rendered
+/// signal breakdown is measured over exactly these edges: one elected
+/// pair's own triple, never a mean over the component
+/// ([FUSED-CLUSTER-SIGNALS], gh #458). The same-file overlap collapse in
+/// `crate::cluster` still reads the edges to keep the occurrence carrying
+/// the component's strongest cross-file evidence (#339).
 #[derive(Debug, Clone)]
 pub struct FusedCluster {
     /// Members of the cluster, sorted ascending by fingerprint index.
@@ -252,7 +255,7 @@ pub struct FusedCluster {
 }
 
 /// One surviving discovery edge inside a [`FusedCluster`]: the two
-/// fingerprint indices it connects and its bounded fused strength.
+/// fingerprint indices it connects and its pre-rescue fused strength.
 #[derive(Debug, Clone, Copy)]
 pub struct FusedEdge {
     /// Lower fingerprint index of the surviving pair.
@@ -268,7 +271,7 @@ enum PairSurvival {
     /// Pair entered the fused cluster graph.
     Survived,
     /// Pair was below the fused threshold but carried shared-subtree
-    /// overlap and token corroboration ([FUSION-SHARED-SUBTREE]).
+    /// overlap and token corroboration ([FUSED-SHARED-SUBTREE]).
     SurvivedSharedSubtree,
     /// Pair failed the global fused-confidence threshold.
     DroppedBelowFused,
@@ -286,7 +289,7 @@ enum PairSurvival {
 struct SurvivalStats {
     /// Candidate pairs admitted to transitive closure.
     survived: usize,
-    /// Pairs admitted via the shared-subtree route ([FUSION-SHARED-SUBTREE]).
+    /// Pairs admitted via the shared-subtree route ([FUSED-SHARED-SUBTREE]).
     survived_shared_subtree: usize,
     /// Candidate pairs dropped below [`FUSED_THRESHOLD`].
     dropped_below_fused: usize,
@@ -404,7 +407,7 @@ pub(crate) fn construction_survives(pair: &CandidatePair) -> bool {
 /// True for a pair worth measuring: dropped below its fused floor on a
 /// zero structural anchor, yet carrying the token corroboration and
 /// endpoint substance the rescue route requires
-/// ([FUSION-SHARED-SUBTREE]). Shared with the rescue pass so the
+/// ([FUSED-SHARED-SUBTREE]). Shared with the rescue pass so the
 /// construction gate and the measurer can never disagree about which
 /// pairs are rescue candidates.
 pub(crate) fn rescue_eligible(pair: &CandidatePair) -> bool {
@@ -427,7 +430,7 @@ fn shared_subtree_can_reach_floor((smaller, larger): (usize, usize)) -> bool {
 /// True when the pair's endpoints live in different files.
 ///
 /// The rescue is deliberately cross-file only. Every clone this route
-/// exists to recover is a copy *between* files ([FUSION-SHARED-SUBTREE],
+/// exists to recover is a copy *between* files ([FUSED-SHARED-SUBTREE],
 /// gh #408), and admitting same-file pairs on shape overlap is the
 /// #197 in-file sibling-family shape, which the report already spends a
 /// dedicated proof suppressing. It is also what keeps a single-file
@@ -441,14 +444,14 @@ pub(crate) fn crosses_files(left: &Fingerprint, right: &Fingerprint) -> bool {
     left.file_id != right.file_id
 }
 
-/// [FUSION-SHARED-SUBTREE] admission: a pair below the fused threshold
+/// [FUSED-SHARED-SUBTREE] admission: a pair below the fused threshold
 /// still enters clustering when its measured shared-subtree overlap
 /// clears [`SHARED_SUBTREE_MIN_OVERLAP`], the independent token axis
 /// corroborates at [`SHARED_SUBTREE_MIN_JACCARD`], and both endpoints
 /// are substantive ([`SHARED_SUBTREE_MIN_NODE_COUNT`]). This is a
 /// compound gate over two *independently measured* axes, not sum
-/// fusion — neither axis alone admits, and the rendered fused
-/// confidence stays the bounded max ([FUSION-STRATEGY-BOUNDED-MAX]).
+/// fusion — neither axis alone admits, and rescue never mutates the
+/// pre-rescue fused value ([FUSED-STRATEGY-BOUNDED-MAX]).
 fn shared_subtree_rescued(pair: &CandidatePair, score: PairScore) -> bool {
     pair.shared_subtree_overlap >= SHARED_SUBTREE_MIN_OVERLAP
         && score.token_jaccard >= SHARED_SUBTREE_MIN_JACCARD

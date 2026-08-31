@@ -392,7 +392,7 @@ A cold-cache `deslop` batch run over a 100 K-LOC C# corpus with embeddings
 disabled (structural + token LSH passes only) completes in **< 30 s** on a release
 binary. This is the CLI counterpart to the daemon budgets above; the embedding
 pass is excluded because Ollama latency dominates and is bounded separately
-([FUSION-EMBED-PROVIDER]). The budget is validated **manually** against a release
+([FUSED-EMBED-PROVIDER]). The budget is validated **manually** against a release
 build on a real corpus — coverage-instrumented `cargo test` triples runtime, so
 the E2E suite carries only a lax anti-quadratic regression guard plus correctness
 assertions (every file analysed, ≥ 1 ranked cluster). Ratchet only.

@@ -10,9 +10,15 @@ import { SIGNAL_HELP, signalTitle } from "../../types/signals";
 const DOC_TEXT_LINK_COMPONENT = "DocTextLink";
 const CLUSTER_ID_TOPIC_CONSTANT = "CLUSTER_ID_TOPIC";
 const CLUSTER_ID_TOPIC_VALUE = "cluster-id";
+const OCCURRENCE_IDENTIFIER = "occurrence";
+const SHORT_OCCURRENCE_IDENTIFIER = "o";
 
 function clusterWebviewSourcePath(): string {
   return path.resolve(__dirname, "../../../webview-ui/src/cluster/main.tsx");
+}
+
+function occurrenceListSourcePath(): string {
+  return path.resolve(__dirname, "../../../webview-ui/src/cluster/OccurrenceList.tsx");
 }
 
 function signalStripSourcePath(): string {
@@ -30,6 +36,14 @@ function parseSource(sourcePath: string): ts.SourceFile {
 
 function parseClusterWebview(): ts.SourceFile {
   return parseSource(clusterWebviewSourcePath());
+}
+
+function parseOccurrenceList(): ts.SourceFile {
+  return parseSource(occurrenceListSourcePath());
+}
+
+function parseClusterRenderer(): ts.SourceFile[] {
+  return [parseClusterWebview(), parseOccurrenceList()];
 }
 
 function parseSignalStrip(): ts.SourceFile {
@@ -62,7 +76,7 @@ function descendants(root: ts.Node, predicate: (node: ts.Node) => boolean): ts.N
 function hasOccurrenceByteAccess(node: ts.Node, propertyName: string): boolean {
   return ts.isPropertyAccessExpression(node) &&
     ts.isIdentifier(node.expression) &&
-    node.expression.text === "o" &&
+    [OCCURRENCE_IDENTIFIER, SHORT_OCCURRENCE_IDENTIFIER].includes(node.expression.text) &&
     node.name.text === propertyName;
 }
 
@@ -135,6 +149,10 @@ function jsxButtons(root: ts.SourceFile): ts.JsxOpeningLikeElement[] {
   ) as ts.JsxOpeningLikeElement[];
 }
 
+function clusterRendererButtons(): ts.JsxOpeningLikeElement[] {
+  return parseClusterRenderer().flatMap(jsxButtons);
+}
+
 function onClickText(button: ts.JsxOpeningLikeElement): string {
   return jsxAttribute(button, "onClick")?.initializer?.getText() ?? "";
 }
@@ -156,11 +174,19 @@ function stringCorpus(root: ts.SourceFile): string {
   return parts.join("\n");
 }
 
-function templateText(node: ts.TemplateLiteral): string {
-  if (ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
-  const parts: string[] = [node.head.text];
-  for (const span of node.templateSpans) {
-    parts.push("${", span.expression.getText(), "}", span.literal.text);
+function clusterRendererCorpus(): string {
+  return parseClusterRenderer().map(stringCorpus).join("\n");
+}
+
+// The source text of a template expression: its head, every
+// interpolated expression verbatim, and every span's literal tail — the
+// same reconstruction `stringCorpus` performs, extended with expression
+// text so assertions can pin which variable a label is built from.
+function templateText(expr: ts.TemplateExpression): string {
+  const parts = [expr.head.text];
+  for (const span of expr.templateSpans) {
+    parts.push(span.expression.getText());
+    parts.push(span.literal.text);
   }
   return parts.join("");
 }
@@ -201,7 +227,7 @@ suite("cluster webview occurrence locations", () => {
     // [VSIX-WEBVIEW] / issue #8: cluster detail occurrence rows must
     // show the same human editor target the Open button navigates to.
     assert.deepEqual(
-      findOccurrenceLocationRenderings(parseClusterWebview()),
+      findOccurrenceLocationRenderings(parseOccurrenceList()),
       ["file + human line/column"],
       "cluster detail webview must show occurrence file plus human line and column",
     );
@@ -209,7 +235,7 @@ suite("cluster webview occurrence locations", () => {
 
   test("does not render byte offsets as the visible occurrence location", () => {
     assert.deepEqual(
-      findRenderedByteLocations(parseClusterWebview()),
+      findRenderedByteLocations(parseOccurrenceList()),
       [],
       "cluster detail webview must not show start_byte/end_byte as user-facing location text",
     );
@@ -237,7 +263,7 @@ suite("cluster webview occurrence locations", () => {
   });
 
   test("every cluster webview button has hover text and an accessible label", () => {
-    const buttons = jsxButtons(parseClusterWebview());
+    const buttons = clusterRendererButtons();
     assert.ok(buttons.length >= 5, "Open, Compare, prev, next, and help buttons must render");
     for (const button of buttons) {
       assert.ok(jsxAttribute(button, "title"), `button missing hover title: ${button.getText()}`);
@@ -249,7 +275,7 @@ suite("cluster webview occurrence locations", () => {
   });
 
   test("cluster webview hover copy explains visible data and actions", () => {
-    const corpus = stringCorpus(parseClusterWebview());
+    const corpus = clusterRendererCorpus();
     for (const phrase of [
       "Cluster ",
       "Rank ",
@@ -270,7 +296,7 @@ suite("cluster webview occurrence locations", () => {
   test("cluster webview links visible explanations to website docs", () => {
     // The panel is the cluster view plus the signal strip it embeds; both
     // carry docs topics, so both are in scope for this assertion.
-    const corpus = `${stringCorpus(parseClusterWebview())}\n${stringCorpus(parseSignalStrip())}`;
+    const corpus = `${clusterRendererCorpus()}\n${stringCorpus(parseSignalStrip())}`;
     for (const phrase of [
       "cluster-id",
       "clone-bucket",
@@ -355,20 +381,26 @@ suite("cluster webview occurrence locations", () => {
 
   test("signal strip hover copy explains every score", () => {
     // The signal copy moved into the shared `types/signals` formatter
-    // ([FUSION-CONTENT-GATE], #344) so the strip, its tooltips and the docs
-    // anchors cannot describe the same number two ways. The corpus follows it
-    // there and now covers the three content-evidence axes too.
+    // (#344) so the strip, its tooltips and the docs anchors cannot
+    // describe the same number two ways. The corpus follows it there and
+    // covers the three content-evidence axes. There is no combined-score
+    // hover: that axis is gone from the wire, and its old hover copy with
+    // it — asserted negatively so it cannot quietly return.
     const corpus = [
       stringCorpus(parseSignalStrip()),
       stringCorpus(parseHelpBubble()),
       Object.values(SIGNAL_HELP).join("\n"),
       signalTitle({ topic: "agreement", label: "agreement", value: 0.08 }),
     ].join("\n");
+    assert.doesNotMatch(
+      corpus,
+      /Combined clone score/,
+      "the combined-score hover must stay deleted with the fused axis",
+    );
     for (const phrase of [
       "AST-shape similarity",
       "Token-overlap similarity",
       "Semantic similarity",
-      "Combined clone score",
       "Current value",
       "How much of the matched content the locations genuinely share",
       "one consistent identifier renaming explains every difference",

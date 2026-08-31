@@ -53,6 +53,10 @@ fn write_signals(out: &mut String, cluster: &ReportCluster) {
         "- size: `{}` nodes (canonical `{}`)",
         cluster.size, cluster.canonical_node_count,
     );
+    let Some(attribution) = crate::render::signals::elected_pair_attribution(cluster) else {
+        let _ = writeln!(out);
+        return;
+    };
     let signals = cluster.signals;
     let _ = writeln!(
         out,
@@ -61,8 +65,9 @@ fn write_signals(out: &mut String, cluster: &ReportCluster) {
     );
     let _ = writeln!(
         out,
-        "- content evidence: {}",
+        "- content evidence: {} — {}",
         crate::render::signals::evidence_summary(signals),
+        attribution,
     );
     let _ = writeln!(out);
 }
@@ -130,7 +135,7 @@ fn count_newlines(bytes: &[u8]) -> usize {
 mod tests {
     use std::path::PathBuf;
 
-    use crate::report::{ReportOccurrence, ReportSignals};
+    use crate::report::{ReportOccurrence, ReportSignalSource, ReportSignals};
 
     use super::*;
 
@@ -147,8 +152,10 @@ mod tests {
     }
 
     fn cluster() -> ReportCluster {
-        let mut cluster =
-            crate::report_fixtures::fixture_cluster("c-md", vec![occurrence("/tmp/A.cs", 0, 5)]);
+        let mut cluster = crate::report_fixtures::fixture_cluster(
+            "c-md",
+            vec![occurrence("/tmp/A.cs", 0, 5), occurrence("/tmp/B.cs", 0, 5)],
+        );
         cluster.weight = 1.25;
         cluster.size = 40;
         cluster.canonical_node_count = 10;
@@ -157,9 +164,8 @@ mod tests {
             token_jaccard: 0.98,
             shape: 0.99,
             embedding_cos: 0.0,
-            fused: 0.98,
-            agreement: 0.0,
-            rename_consistency: 0.0,
+            pair_agreement: 0.0,
+            pair_rename_consistency: 0.0,
             literal_fraction: 0.0,
         };
         cluster.bucket.clear();
@@ -167,6 +173,7 @@ mod tests {
         "csharp".clone_into(&mut cluster.language);
         "Summary line.".clone_into(&mut cluster.summary);
         "Interpretation line.".clone_into(&mut cluster.interpretation);
+        cluster.signal_source = Some(ReportSignalSource { left: 0, right: 1 });
         crate::report_fixtures::restamp_fixture(&mut cluster);
         cluster
     }
@@ -216,6 +223,21 @@ mod tests {
         assert!(
             out.contains("```\nalpha\n```"),
             "expected fenced snippet; got: {out}"
+        );
+    }
+
+    #[test]
+    fn missing_pair_source_omits_every_pair_score() {
+        let mut cluster = cluster();
+        cluster.signal_source = None;
+        let out = render_cluster_markdown(&cluster, |_| None);
+        assert!(
+            !out.contains("structural="),
+            "unsourced structural score leaked: {out}"
+        );
+        assert!(
+            !out.contains("content evidence:"),
+            "unsourced content score leaked: {out}"
         );
     }
 

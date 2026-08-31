@@ -11,7 +11,10 @@ use crate::common;
 
 use anyhow::{bail, Result};
 use common::ReportFixture;
-use deslop_core::{content::ContentEvidence, pair::PairScore};
+use deslop_core::{
+    content::{ContentContradiction, ContentEvidence},
+    pair::PairScore,
+};
 
 /// Two same-shaped loaders in one file whose identifiers and literals
 /// diverge inconsistently: structural evidence saturates while the
@@ -41,6 +44,7 @@ fn gap_content() -> ContentEvidence {
         substance_varies: true,
         verbatim_dominated: false,
         measured: true,
+        contradiction: ContentContradiction::None,
     }
 }
 
@@ -131,16 +135,16 @@ fn same_file_cluster_promotes_only_at_the_single_file_floor() -> Result<()> {
     };
     let support = cluster
         .signals
-        .agreement
-        .max(cluster.signals.rename_consistency);
+        .pair_agreement
+        .max(cluster.signals.pair_rename_consistency);
     assert!(
         (0.7..0.85).contains(&support),
         "the supplied content evidence must land between \
          CONTENT_SUPPORT_FLOOR and CONTENT_PROMOTE_FLOOR so the two \
          routing branches disagree; rendered agreement={} \
          rename_consistency={}",
-        cluster.signals.agreement,
-        cluster.signals.rename_consistency
+        cluster.signals.pair_agreement,
+        cluster.signals.pair_rename_consistency
     );
     assert_eq!(
         cluster.bucket, "structural_only",

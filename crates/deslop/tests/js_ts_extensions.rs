@@ -38,9 +38,15 @@ fn javascript_family_clusters_across_js_mjs_and_cjs_extensions() -> Result<()> {
     // All three extensions carry the same reconciliation routine; because
     // they are one language they cluster together into a single family.
     let clone = expect_cluster_spanning(&report, &["inventory.js", "ledger.mjs", "stock.cjs"])?;
-    assert_eq!(cluster_bucket(clone), "identical");
+    assert_eq!(cluster_bucket(clone), "nearly_identical");
     assert!(approx(signal(clone, "structural"), 1.0));
     assert!(approx(signal(clone, "token_jaccard"), 1.0));
+    assert!(approx(signal(clone, "pair_agreement"), 1.0));
+    assert!(approx(signal(clone, "pair_rename_consistency"), 1.0));
+    assert_eq!(
+        field(clone, "signal_source"),
+        &serde_json::json!({"left": 0, "right": 1})
+    );
     Ok(())
 }
 

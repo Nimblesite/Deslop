@@ -187,10 +187,15 @@ type ReportSignals {
   token_jaccard: Float
   shape: Float
   embedding_cos: Float
-  fused: Float
-  agreement: Float
-  rename_consistency: Float
+  pair_agreement: Float
+  pair_rename_consistency: Float
   literal_fraction: Float
+}
+
+# [FUSED-CLUSTER-SIGNALS]
+type ReportSignalSource {
+  left: Int
+  right: Int
 }
 
 type ReportOccurrence {
@@ -211,10 +216,10 @@ type ReportCluster {
   size: Int
   canonical_node_count: Int
   signals: ReportSignals
+  signal_source: Option<ReportSignalSource>
   bucket: String
   category: String
   language: String
-  meets_fused_gate: Bool
   evidence_verdict: String
   occurrences: List<ReportOccurrence>
   occurrences_total: Int

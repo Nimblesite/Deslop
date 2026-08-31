@@ -19,19 +19,13 @@
 //! `call_kinds` entirely, the second because a pure literal collection
 //! carrying text is a payload exactly as a bare string is.
 //!
-//! **Not fixed, and pinned as a bounded residual:** one cluster still
-//! covers the four whole `test(…)` blocks, demoted to `structural_only`.
-//! `[CLONE-NOISE-LITERAL-VARIATION-CALLS]` requires *every* position of
-//! a call sequence to vary, which protects
-//! `csharp-unrelated-xunit-tests` — two tests that fetch different URLs
-//! and then run four identical assertions are a real clone. Here the
-//! invariant position is `encodeTdbin(schema)`: the subject under test,
-//! carrying no literal at all, so it can never vary and the rule can
-//! never fire. Relaxing it to "every position that carries a literal
-//! must vary" would reach this family and would also weaken the xunit
-//! control, so it is not done here on a demoted cluster. Tracked on
-//! gh #285; the count below fails if a *new* family cluster appears or
-//! if this one climbs into an act-now bucket.
+//! **Fixed completely:** the four whole `test(…)` blocks are suppressed
+//! without weakening the xUnit control. Their sole invariant call,
+//! `encodeTdbin(schema)`, binds `result`, and that value flows directly
+//! into the later literal-varying `expectErrorMessages` call. It is
+//! connective scenario plumbing. The xUnit control's invariant assertions
+//! bind no forwarded result and remain shared logic, so they still block
+//! suppression. The assertion below requires zero residual clusters.
 
 use anyhow::Result;
 
@@ -43,7 +37,10 @@ const CONTROL: [&str; 2] = ["control_clone_a.ts", "control_clone_b.ts"];
 /// Assertion-helper sub-families suppressed here. Exact rather than the
 /// `>= 1` it replaces: that bound could only fail downward, while every
 /// over-suppression regression moves this number up.
-const EXPECTED_HIDDEN: u64 = 2;
+const EXPECTED_HIDDEN: u64 = 3;
+
+/// No diagnostic-scenario residual may remain visible.
+const EXPECTED_RESIDUAL: usize = 0;
 
 // [CLONE-NOISE-LITERAL-VARIATION-CALLS] gh #285.
 #[test]
@@ -54,7 +51,7 @@ fn diagnostic_scenarios_stay_demoted_while_a_real_clone_survives() -> Result<()>
         "gh #285 codec-diagnostic scenario family",
         &["rust-tdbin.test.ts"],
         &CONTROL,
-        1,
+        EXPECTED_RESIDUAL,
         EXPECTED_HIDDEN,
     )?;
     Ok(())

@@ -83,9 +83,8 @@ mod tests {
             token_jaccard: 0.0,
             shape: 0.0,
             embedding_cos: 0.0,
-            fused: 0.0,
-            agreement: 0.0,
-            rename_consistency: 0.0,
+            pair_agreement: 0.0,
+            pair_rename_consistency: 0.0,
             literal_fraction: 0.0,
         };
         crate::report_fixtures::restamp_fixture(&mut cluster);

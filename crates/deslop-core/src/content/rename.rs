@@ -1,4 +1,4 @@
-//! Type-2 rename evidence ([TECH-PMATCH-BAKER], [FUSION-CONTENT-GATE],
+//! Type-2 rename evidence ([TECH-PMATCH-BAKER], [FUSED-CONTENT-GATE],
 //! [REPAIR-RENAME-LITERAL-ECHO]).
 //!
 //! One product per member pair:
@@ -40,32 +40,13 @@ const RENAME_CORROBORATION_MIN_OCCURRENCES: usize = 2;
 /// copy — preserved literals, echoed literals, identity identifiers,
 /// and substitutions corroborated by repetition. Replaces the deleted
 /// `RENAME_EVIDENCE_MIN_LITERALS = 4` cliff, which zeroed every
-/// sub-floor pair and rendered a maximal one-literal Type-2 rename at
-/// `fused = 0.0588` (`deslop/tests/type2_rename_anchor_floor.rs`):
+/// sub-floor pair and priced a maximal one-literal Type-2 rename at
+/// `0.0588` (`deslop/tests/type2_rename_anchor_floor.rs`):
 /// scarce anchors now weaken the proof smoothly instead of erasing it,
 /// while a forwarding scaffold's echoed subject substitution (its name
 /// twice plus its collaborator, mass 3, weight 3/7) stays below every
 /// routing floor.
 const RENAME_EVIDENCE_HALF_MASS: f64 = 4.0;
-
-/// Mean Type-2 rename evidence of every non-canonical member against
-/// the canonical member. Degenerate and unresolvable members score
-/// `0.0`: rename evidence is a positive proof, never a default.
-pub(super) fn cluster_rename_consistency<S: BuildHasher>(
-    canonical: Option<&MemberContent>,
-    member_contents: &[Option<MemberContent>],
-    sources: &HashMap<FileId, Vec<u8>, S>,
-) -> f64 {
-    if member_contents.len() < 2 {
-        return 0.0;
-    }
-    let total: f64 = member_contents
-        .iter()
-        .skip(1)
-        .map(|member| pair_rename_consistency(canonical, member.as_ref(), sources))
-        .sum();
-    total / member_count(member_contents.len().saturating_sub(1))
-}
 
 /// Type-2 rename evidence between two members ([TECH-PMATCH-BAKER]): the
 /// lesser of literal consistency and corroborated rename-mapping
@@ -77,8 +58,8 @@ pub(super) fn cluster_rename_consistency<S: BuildHasher>(
 /// its own subject name — while repeated consistent substitutions and
 /// preserved literals are independent anchors of deliberate copying.
 /// Scarce anchors weaken the proof smoothly instead of erasing it; the
-/// cliff rendered a maximal one-literal Type-2 rename at
-/// `fused = 0.0588`, an agent-surface false negative pinned by
+/// cliff priced a maximal one-literal Type-2 rename at
+/// `0.0588`, an agent-surface false negative pinned by
 /// `deslop/tests/type2_rename_anchor_floor.rs`. `0.0` without
 /// positional alignment.
 ///
@@ -87,7 +68,7 @@ pub(super) fn cluster_rename_consistency<S: BuildHasher>(
 /// and each echo raises the anchor mass and corroborates its
 /// substitution, so completing a rename can never score below leaving
 /// it half-finished (`rename_literal_monotonicity.rs`).
-fn pair_rename_consistency<S: BuildHasher>(
+pub(super) fn pair_rename_consistency<S: BuildHasher>(
     canonical: Option<&MemberContent>,
     member: Option<&MemberContent>,
     sources: &HashMap<FileId, Vec<u8>, S>,
@@ -95,7 +76,7 @@ fn pair_rename_consistency<S: BuildHasher>(
     let (Some(canonical), Some(member)) = (canonical, member) else {
         return 0.0;
     };
-    if canonical.keys.len() != member.keys.len() {
+    if canonical.shape != member.shape || canonical.keys.len() != member.keys.len() {
         return 0.0;
     }
     let literals = population(&canonical.keys, &member.keys, Population::Literal);
@@ -235,10 +216,8 @@ fn anchor_weight(anchors: usize) -> f64 {
 ///
 /// The result is monotone: completing a rename can only raise
 /// `consistency` and add anchors, so certification can only switch on
-/// (`rename_literal_monotonicity.rs`). `RENAME_CONSISTENCY_DISCOUNT`
-/// still separates a certified rename from byte proof, so proven
-/// copy-paste keeps `fused == 1.0` and a certified rename tops out
-/// below it ([FUSION-CONTENT-GATE]).
+/// (`rename_literal_monotonicity.rs`). Byte agreement and certified
+/// rename evidence remain separate axes ([FUSED-CONTENT-GATE]).
 fn evidence_weight(consistency: f64, anchors: usize) -> f64 {
     let weight = anchor_weight(anchors);
     if consistency >= 1.0 && weight >= CONTENT_SUPPORT_FLOOR {

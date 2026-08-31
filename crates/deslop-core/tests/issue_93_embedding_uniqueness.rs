@@ -125,7 +125,7 @@ fn issue_93_embedding_pass_recalls_lsh_missed_clusters_and_credits_every_cosine(
     assert_rendered_signals_are_measured(&fingerprints, &signatures, &clusters)
 }
 
-/// [FUSION-CLUSTER-SIGNALS] Rendered signals are measured between the
+/// [FUSED-CLUSTER-SIGNALS] Rendered signals are measured between the
 /// rendered occurrences. The LSH-visible pair's *discovery edge*
 /// deliberately withholds embedding credit (asserted by the caller), but
 /// the report still shows the true cosine of the two vectors — discovery

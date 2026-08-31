@@ -13,9 +13,9 @@ Supersedes `docs/plans/embedding-accuracy-plan.md`, which covered only the embed
 | #369 | 3 `#[ignore]`d tests in tree | `pair_size_coherence:124`, `issue_343_sum_clamp_saturation:89`, `lsp_embedding_determinism:36` |
 | #370 | 1 `#[ignore]`d test in tree | `embedding_failure_progress:32` — hangs >14 min on the rejected-refresh path |
 
-> **The bracketed IDs below are proposed, not registered.** `[FUSION-SIGNALS-TOKEN-MULTISET]`, `[CLONE-NOISE-COPY-PROOF]` and `[LIVE-EMBEDDING-REFRESH-TERMINAL]` name work this plan has not landed: no section in `docs/specs/` defines them and no code or test cites them, which is correct while the behaviour they would describe does not exist. Checklist item 8 registers them, and until it does none of them is a spec reference — do not cite them from code, tests, or another spec.
+> **The bracketed IDs below are proposed, not registered.** `[FUSED-SIGNALS-TOKEN-MULTISET]`, `[CLONE-NOISE-COPY-PROOF]` and `[LIVE-EMBEDDING-REFRESH-TERMINAL]` name work this plan has not landed: no section in `docs/specs/` defines them and no code or test cites them, which is correct while the behaviour they would describe does not exist. Checklist item 8 registers them, and until it does none of them is a spec reference — do not cite them from code, tests, or another spec.
 
-## Fix 1 — [FUSION-SIGNALS-TOKEN-MULTISET] (#367, root cause)
+## Fix 1 — [FUSED-SIGNALS-TOKEN-MULTISET] (#367, root cause)
 
 `crates/deslop-core/src/lsh.rs::minhash_signature` estimates Jaccard over the **set** of distinct k-grams. A repetitive body has a small distinct-gram set, so one inserted node displaces a large share of it: two functions 99.7% identical by node count measure `token_jaccard = 0.664`, `structural = 0` (the paren rehashes every ancestor Merkle), and `bounded_fused < FUSED_THRESHOLD` kills the pair. Nothing downstream can recover it.
 
@@ -23,7 +23,7 @@ Supersedes `docs/plans/embedding-accuracy-plan.md`, which covered only the embed
 
 **Not permitted:** lowering `FUSED_THRESHOLD` or `LSH_ONLY_MIN_JACCARD`. Validation runs both directions on the pinned corpus — recall on shape-changing Type-3, and zero new false positives on repetitive scaffolding.
 
-## Fix 3 — [FUSION-EMBED-PROVIDER] (#369a)
+## Fix 3 — [FUSED-EMBED-PROVIDER] (#369a)
 
 `crates/deslop/tests/cli/mock_ollama.rs::embed_vector` returns `[sin(len), cos(first_byte), 0.5, -0.5]`: two constant lanes floor every cosine and `sin` aliases over length — a 67-byte and an 865-byte text score 0.99997. That manufactures the two embedding-only false positives #369 names.
 
@@ -49,7 +49,7 @@ On the rejected-refresh path the server emits no terminal `deslop/embeddingProgr
 
 ## Fix 2 — [CLONE-NOISE-COPY-PROOF] (#373)
 
-> Placed last so the `FUSION` sections sit adjacent, as the spec-ID rule
+> Placed last so the `FUSED` sections sit adjacent, as the spec-ID rule
 > requires. Position is not order here — `Order and gates` below is, and it
 > says this fix is independent and may land first.
 
@@ -75,5 +75,5 @@ Every noise filter's escape hatch compares **raw source bytes**, so only a *verb
 - [ ] **5.** Delete the `csharp` language gate in `is_csharp_lsh_type3_near_miss`; rename; adjudicate every newly visible corpus cluster
 - [ ] **6.** Delete the no-terminal-frame exit in the embedding refresh; publish exactly one terminal frame per refresh
 - [ ] **7.** Un-ignore all four: `pair_size_coherence:124`, `issue_343_sum_clamp_saturation:89`, `lsp_embedding_determinism:36`, `embedding_failure_progress:32`
-- [ ] **8.** Restore the blanked spec IDs at `cluster_filters/mod.rs:444` (`Detects ****:`) and `report_render.rs:355` (dangling `//,`); register `[FUSION-SIGNALS-TOKEN-MULTISET]`, `[CLONE-NOISE-COPY-PROOF]`, `[LIVE-EMBEDDING-REFRESH-TERMINAL]` in `docs/specs/`
+- [ ] **8.** Restore the blanked spec IDs at `cluster_filters/mod.rs:444` (`Detects ****:`) and `report_render.rs:355` (dangling `//,`); register `[FUSED-SIGNALS-TOKEN-MULTISET]`, `[CLONE-NOISE-COPY-PROOF]`, `[LIVE-EMBEDDING-REFRESH-TERMINAL]` in `docs/specs/`
 - [ ] **9.** `make ci` green, coverage ratchet held, self-scan duplication gate passes

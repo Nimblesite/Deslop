@@ -386,7 +386,7 @@ impl From<&Report> for ClusterBreakdown {
 /// Renders one cluster row plus a one-line interpretation underneath.
 /// The row header (`#N ● NxM copies in files`) is shared-text and uses
 /// the bucket's `hybrid_title`. The interpretation line under it reads
-/// the plain `action_sentence` so a non-specialist sees non-jargon prose
+/// the plain `evidence_sentence` so a non-specialist sees non-jargon prose
 /// immediately. Technical mode tacks on the signal triple for expert
 /// operators.
 fn render_cluster(theme: &Theme, index: usize, cluster: &ReportCluster, technical: bool) {
@@ -432,7 +432,7 @@ fn render_cluster(theme: &Theme, index: usize, cluster: &ReportCluster, technica
         "       {dim}↳ {action}{reset}",
         dim = theme.dim,
         reset = theme.reset,
-        action = labels.action_sentence,
+        action = labels.evidence_sentence,
     );
 }
 

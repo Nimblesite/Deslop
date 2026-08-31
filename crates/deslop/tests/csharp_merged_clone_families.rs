@@ -30,6 +30,7 @@
 //! bug.
 
 use crate::common::*;
+use deslop_core::buckets::CONTENT_SUPPORT_FLOOR;
 use serde_json::Value;
 
 /// The four-file C# corpus, shared with `deslop-mcp`'s transport suite.
@@ -63,10 +64,6 @@ const FAMILY_OCCURRENCES: u64 = 2;
 
 /// Two families, two clusters. Anything else means one absorbed the other.
 const EXPECTED_CLUSTERS: usize = 2;
-
-/// Both families are near-identical clones, so both must reach the band
-/// that tells a reader to act rather than merely to look.
-const ACT_NOW_FUSED: f64 = 0.85;
 
 /// The summing pair renames nothing away: with every identifier mapped
 /// one-to-one the substance the two bodies share is only what survives
@@ -164,10 +161,11 @@ fn assert_near_identical_pair(family: &Value, left: &str, right: &str, report: &
          {left}/{right} saturate it: {report:#}"
     );
     assert!(
-        signal(family, "fused") >= ACT_NOW_FUSED,
-        "{left}/{right} must keep the rank a near-identical clone \
-         earns, not be diluted by an unrelated family sharing the \
-         corpus: {report:#}"
+        signal(family, "pair_agreement").max(signal(family, "pair_rename_consistency"))
+            >= CONTENT_SUPPORT_FLOOR,
+        "{left}/{right} must keep the content support a near-identical \
+         clone earns — one measured population above the routing floor — \
+         not be diluted by an unrelated family sharing the corpus: {report:#}"
     );
 }
 
@@ -177,33 +175,33 @@ fn assert_near_identical_pair(family: &Value, left: &str, right: &str, report: &
 /// score — the failure mode that produced the merged cluster.
 fn assert_content_axes_separate_strictly(summing: &Value, multiplying: &Value, report: &Value) {
     assert!(
-        approx(signal(summing, "rename_consistency"), 1.0),
+        approx(signal(summing, "pair_rename_consistency"), 1.0),
         "{ALPHA}/{BETA} map every identifier one-to-one — `input` to \
          `limit`, `total` to `accumulator`, `index` to `position` — and \
          a total consistent rename is certified, not estimated: \
          {report:#}"
     );
     assert!(
-        signal(summing, "agreement") <= RENAMED_PAIR_MAX_AGREEMENT,
+        signal(summing, "pair_agreement") <= RENAMED_PAIR_MAX_AGREEMENT,
         "{ALPHA}/{BETA} share only the substance a total rename leaves \
          behind, so their agreement must stay well under the pair that \
          renames nothing: {report:#}"
     );
     assert!(
-        signal(multiplying, "agreement") >= LITERAL_PAIR_MIN_AGREEMENT,
+        signal(multiplying, "pair_agreement") >= LITERAL_PAIR_MIN_AGREEMENT,
         "{DELTA}/{GAMMA} differ by a single loop-start literal and \
          nothing else, so nearly all their substance is shared: \
          {report:#}"
     );
     assert!(
-        signal(multiplying, "rename_consistency") < 1.0,
+        signal(multiplying, "pair_rename_consistency") < 1.0,
         "[REPAIR-RENAME-LITERAL-ECHO] — {DELTA}/{GAMMA} rename no \
          identifier and change one literal, so the rename story is \
          incomplete and must not certify as total: {report:#}"
     );
     assert!(
-        signal(summing, "rename_consistency") > signal(multiplying, "rename_consistency")
-            && signal(multiplying, "agreement") > signal(summing, "agreement"),
+        signal(summing, "pair_rename_consistency") > signal(multiplying, "pair_rename_consistency")
+            && signal(multiplying, "pair_agreement") > signal(summing, "pair_agreement"),
         "the two families must separate strictly and in opposite \
          directions on the two content axes; equal values would mean \
          the report cannot tell a renamed copy from an edited one: \

@@ -136,16 +136,18 @@
         "token_jaccard": 1.0,
         "shape": 1.0,
         "embedding_cos": 0.0,
-        "fused": 1.0,
-        "agreement": 1.0,
-        "rename_consistency": 1.0,
+        "pair_agreement": 1.0,
+        "pair_rename_consistency": 1.0,
         "literal_fraction": 0.0
+      },
+      "signal_source": {
+        "left": 0,
+        "right": 1
       },
       "bucket": "identical",
       "category": "logic",
       "language": "go",
-      "meets_fused_gate": true,
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so confidence stayed at 1.00.",
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
       "occurrences": [
         {
           "path": "ledger_alpha.go",
@@ -182,16 +184,18 @@
         "token_jaccard": 1.0,
         "shape": 1.0,
         "embedding_cos": 0.0,
-        "fused": 1.0,
-        "agreement": 1.0,
-        "rename_consistency": 1.0,
+        "pair_agreement": 1.0,
+        "pair_rename_consistency": 1.0,
         "literal_fraction": 0.0
+      },
+      "signal_source": {
+        "left": 0,
+        "right": 1
       },
       "bucket": "identical",
       "category": "logic",
       "language": "typescript",
-      "meets_fused_gate": true,
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so confidence stayed at 1.00.",
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
       "occurrences": [
         {
           "path": "ledger_alpha.ts",
@@ -228,16 +232,18 @@
         "token_jaccard": 1.0,
         "shape": 1.0,
         "embedding_cos": 0.0,
-        "fused": 1.0,
-        "agreement": 1.0,
-        "rename_consistency": 1.0,
+        "pair_agreement": 1.0,
+        "pair_rename_consistency": 1.0,
         "literal_fraction": 0.0
+      },
+      "signal_source": {
+        "left": 0,
+        "right": 1
       },
       "bucket": "identical",
       "category": "logic",
       "language": "dart",
-      "meets_fused_gate": true,
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so confidence stayed at 1.00.",
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
       "occurrences": [
         {
           "path": "ledger_alpha.dart",
@@ -274,16 +280,18 @@
         "token_jaccard": 1.0,
         "shape": 1.0,
         "embedding_cos": 0.0,
-        "fused": 1.0,
-        "agreement": 1.0,
-        "rename_consistency": 1.0,
+        "pair_agreement": 1.0,
+        "pair_rename_consistency": 1.0,
         "literal_fraction": 0.0
+      },
+      "signal_source": {
+        "left": 0,
+        "right": 1
       },
       "bucket": "identical",
       "category": "logic",
       "language": "rust",
-      "meets_fused_gate": true,
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so confidence stayed at 1.00.",
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
       "occurrences": [
         {
           "path": "ledger_alpha.rs",
@@ -320,16 +328,18 @@
         "token_jaccard": 1.0,
         "shape": 1.0,
         "embedding_cos": 0.0,
-        "fused": 1.0,
-        "agreement": 1.0,
-        "rename_consistency": 1.0,
+        "pair_agreement": 1.0,
+        "pair_rename_consistency": 1.0,
         "literal_fraction": 0.0
+      },
+      "signal_source": {
+        "left": 0,
+        "right": 1
       },
       "bucket": "identical",
       "category": "logic",
       "language": "csharp",
-      "meets_fused_gate": true,
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so confidence stayed at 1.00.",
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
       "occurrences": [
         {
           "path": "LedgerAlpha.cs",
@@ -366,16 +376,18 @@
         "token_jaccard": 1.0,
         "shape": 1.0,
         "embedding_cos": 0.0,
-        "fused": 1.0,
-        "agreement": 1.0,
-        "rename_consistency": 1.0,
+        "pair_agreement": 1.0,
+        "pair_rename_consistency": 1.0,
         "literal_fraction": 0.0
+      },
+      "signal_source": {
+        "left": 0,
+        "right": 1
       },
       "bucket": "identical",
       "category": "logic",
       "language": "python",
-      "meets_fused_gate": true,
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence did not discount that: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so confidence stayed at 1.00.",
+      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
       "occurrences": [
         {
           "path": "ledger_alpha.py",

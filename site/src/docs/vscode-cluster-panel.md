@@ -100,23 +100,19 @@ Signals explain why the locations were grouped. Scores are shown from `0.00` to 
 
 Embeddings are off in a fresh live session until a model is selected.
 
-## Fused
-
-`fused` is Deslop's combined clone score. It joins structural, token, and embedding evidence and is the score used to decide whether a pair is reportable. A shape match is discounted by the content evidence below, so `fused` can sit far under a perfect structural score.
-
 ## Content Evidence
 
-Shape alone cannot tell a renamed copy from unrelated code that happens to share a skeleton. Two clusters can both score `structural 1.00` and `jaccard 1.00` while one is a genuine duplicate and the other is sibling boilerplate — the same `if/else` skeleton around entirely different code. Content Evidence is what Deslop measured inside the match, and it is what discounts the shape score into the fused confidence.
+Shape alone cannot tell a renamed copy from unrelated code that happens to share a skeleton. Two clusters can both score `structural 1.00` and `jaccard 1.00` while one is a genuine duplicate and the other is sibling boilerplate — the same `if/else` skeleton around entirely different code. Content Evidence is what Deslop measured inside the match on the two locations that anchor it. It does not change the score and it does not gate anything on its own — it is the evidence the engine used to route the cluster into its bucket, shown so you can audit that routing.
 
-The panel prints a plain-English reading of the two together under the bars, so you do not have to do the arithmetic: it names the shape score, the measured agreement, and the confidence they produced.
+The panel prints a plain-English reading of the two together under the bars, so you do not have to do the arithmetic: it names the shape score, the measured agreement, and what they mean for this finding.
 
 ## Agreement
 
-`agreement` is how much of the matched content the locations genuinely share, byte for byte. Low agreement under a high shape score means the skeleton lined up but the code inside it did not.
+`agreement` (wire field `pair_agreement`) is how much of the matched content the locations genuinely share, byte for byte. It is measured on the elected pair — the two anchor locations — never pooled across the cluster. Low agreement under a high shape score means the skeleton lined up but the code inside it did not.
 
 ## Rename Consistency
 
-`rename` is whether one consistent identifier renaming explains every difference between the locations. This is what tells a real renamed copy apart from unrelated code that merely shares a shape: a cluster with `agreement 0.10` and `rename 1.00` is the same code with different names, and worth extracting.
+`rename` (wire field `pair_rename_consistency`) is whether one consistent identifier renaming explains every difference between the locations. This is what tells a real renamed copy apart from unrelated code that merely shares a shape: a cluster with `pair_agreement 0.10` and `pair_rename_consistency 1.00` is the same code with different names, and worth extracting.
 
 ## Literal Fraction
 

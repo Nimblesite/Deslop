@@ -9,7 +9,7 @@ use anyhow::Result;
 
 use crate::common::{clusters, embeddings::run_mock_embedding_report, field, fixture, seed};
 
-/// [FUSION-EMBED-PROVIDER] Every overflowing vector is accounted as failed,
+/// [FUSED-EMBED-PROVIDER] Every overflowing vector is accounted as failed,
 /// while the deterministic pipeline still returns a valid finite report.
 #[test]
 fn overflowing_json_vectors_are_rejected_before_cache_index_and_report() -> Result<()> {
@@ -48,15 +48,18 @@ fn overflowing_json_vectors_are_rejected_before_cache_index_and_report() -> Resu
             Some(0.0),
             "invalid provider evidence escaped into a cluster: {cluster:#}"
         );
-        let fused = field(signals, "fused").as_f64().unwrap_or(f64::NAN);
         assert!(
-            fused.is_finite(),
-            "non-finite fused signal escaped: {cluster:#}"
+            field(signals, "fused").is_null(),
+            "no cluster-level fused may survive on the wire ([FUSED-SCOPE]): \
+             {cluster:#}"
         );
-        assert!(
-            (0.0..=1.0).contains(&fused),
-            "fused escaped [0,1]: {cluster:#}"
-        );
+        for axis in ["structural", "token_jaccard", "shape", "pair_agreement"] {
+            let value = field(signals, axis).as_f64().unwrap_or(f64::NAN);
+            assert!(
+                value.is_finite() && (0.0..=1.0).contains(&value),
+                "non-finite or out-of-range {axis}={value} escaped: {cluster:#}"
+            );
+        }
     }
     Ok(())
 }

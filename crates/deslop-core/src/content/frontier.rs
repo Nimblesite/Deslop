@@ -1,7 +1,7 @@
 //! The collapsed-leaf content frontier: the raw-byte evidence
 //! normalisation erased.
 //!
-//! [FUSION-CONTENT-GATE] measures what `structural` and `token_jaccard`
+//! [FUSED-CONTENT-GATE] measures what `structural` and `token_jaccard`
 //! cannot see, and every one of those measurements reads the same
 //! artefact — one key per collapsed leaf, in frontier order, tagged with
 //! the population it belongs to ([PIPELINE-NORMALIZE-AST-OPERATOR]).
@@ -54,7 +54,7 @@ impl Population {
 
     /// Whether a leaf in this population is *authored content* — bytes
     /// normalisation erased, which is the only thing
-    /// [FUSION-CONTENT-GATE] exists to measure.
+    /// [FUSED-CONTENT-GATE] exists to measure.
     ///
     /// An operator is not erased. [PIPELINE-NORMALIZE-AST-OPERATOR]
     /// keeps it in the normalised kind, so `structural` and
@@ -159,6 +159,44 @@ pub(super) fn key_set_jaccard(left: &[LeafKey], right: &[LeafKey]) -> f64 {
     member_count(intersection) / member_count(union)
 }
 
+/// Whether aligned behaviour-bearing operator positions disagree.
+///
+/// Unlike an identifier rename or literal edit, an operator change is
+/// a different computation. [FUSED-CONTENT-GATE] therefore treats one
+/// as a hard contradiction instead of allowing surrounding matches to
+/// dilute it into a high agreement ratio (#432).
+pub(super) fn operators_disagree(left: &[LeafKey], right: &[LeafKey]) -> bool {
+    left.iter().zip(right).any(|(left, right)| {
+        left.population == Population::Operator
+            && right.population == Population::Operator
+            && left.key != right.key
+    })
+}
+
+/// Whether two equally-sized operator populations contain different
+/// tokens. Ordering alone is not a contradiction: statement reordering
+/// is a Type-3 edit. A changed multiset at equal cardinality is an
+/// operator substitution, so surrounding authored bytes may not dilute
+/// it into content support (#432).
+pub(super) fn operators_substitute(left: &[LeafKey], right: &[LeafKey]) -> bool {
+    let mut left = operator_keys(left);
+    let mut right = operator_keys(right);
+    if left.is_empty() || left.len() != right.len() {
+        return false;
+    }
+    left.sort_unstable();
+    right.sort_unstable();
+    left != right
+}
+
+/// Raw operator identities carried by one content frontier.
+fn operator_keys(keys: &[LeafKey]) -> Vec<u64> {
+    keys.iter()
+        .filter(|key| key.population == Population::Operator)
+        .map(|key| key.key)
+        .collect()
+}
+
 /// Positional agreement between two shape-aligned members' frontiers:
 /// the share of measured positions whose raw bytes match.
 ///
@@ -192,16 +230,20 @@ pub(super) fn positional_agreement(canonical: &[LeafKey], member: &[LeafKey]) ->
 }
 
 /// One member's resolved content frontier: a key and its source range
-/// per collapsed leaf. `None` when the member's tree, source, or byte
-/// range cannot be resolved.
-pub(super) fn member_content<S: BuildHasher>(
+/// per collapsed leaf, with the member's import/prologue boilerplate
+/// excluded exactly as every other measurement axis excludes it
+/// ([PIPELINE-BOILERPLATE-FILTER]). `None` when the member's tree,
+/// source, or byte range cannot be resolved.
+pub(super) fn member_content<S: BuildHasher, L: BuildHasher>(
     member: &Fingerprint,
     tree_index: &HashMap<FileId, &NormalizedNode>,
     sources: &HashMap<FileId, Vec<u8>, S>,
+    languages: &HashMap<FileId, &'static str, L>,
 ) -> Option<MemberContent> {
     let root = tree_index.get(&member.file_id)?;
     let source = sources.get(&member.file_id)?;
-    let leaves = collapsed_leaves(root, member)?;
+    let language = languages.get(&member.file_id).map(|id| &**id);
+    let leaves = collapsed_leaves(root, member, language)?;
     let keys = leaves
         .iter()
         .map(|(kind, range)| {

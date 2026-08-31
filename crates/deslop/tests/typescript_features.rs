@@ -75,7 +75,7 @@ fn typescript_primitive_type_annotation_difference_still_clusters() -> Result<()
     // The two functions differ only in their primitive type annotations
     // (`string`/`number` vs `any`/`boolean`); `predefined_type` keywords
     // normalise to one structural kind, so the bodies still match. Every
-    // name and literal agrees, so the content gate ([FUSION-CONTENT-GATE])
+    // name and literal agrees, so the content gate ([FUSED-CONTENT-GATE])
     // confirms the pair as a genuine near-miss rather than the shape-only
     // routing the token-layer fallback used to force.
     assert_bucketed_clone(

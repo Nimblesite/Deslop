@@ -67,7 +67,7 @@ discover → parse → normalize → fingerprint → cluster
 
 ## Embed（语义）
 
-可选，**默认关闭** —— 通过 `--embeddings auto`（探测并在失败时附带警告回退）或 `--embeddings required`（若提供方不可达则硬失败）来启用。启用后，每棵子树都会经过一个代码嵌入模型（默认使用本地 Ollama —— 开箱即用 `nomic-embed-text`，可通过 `--embedding-model` 选用任意 Ollama 嵌入模型）。最近邻搜索在一个 **HNSW** 索引上运行（`instant-distance`，纯 Rust，确定性种子），余弦阈值定义于 [`crates/deslop-core/src/embedding/pairs.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/embedding/pairs.rs)。这会产出**行为相同、代码不同**的候选（Type-4）—— 语义等价但语法不同的代码，例如命令式循环与 LINQ 表达式之别。SSCD（Wiley 2024）验证了 HNSW + ANN 是规模化场景下正确的召回层；Deslop 采用相同的形态，并按 [`fusion.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/fusion.md) 将其与结构趟次和 LSH 趟次配对。
+可选，**默认关闭** —— 通过 `--embeddings auto`（探测并在失败时附带警告回退）或 `--embeddings required`（若提供方不可达则硬失败）来启用。启用后，每棵子树都会经过一个代码嵌入模型（默认使用本地 Ollama —— 开箱即用 `nomic-embed-text`，可通过 `--embedding-model` 选用任意 Ollama 嵌入模型）。最近邻搜索在一个 **HNSW** 索引上运行（`instant-distance`，纯 Rust，确定性种子），余弦阈值定义于 [`crates/deslop-core/src/embedding/pairs.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/embedding/pairs.rs)。这会产出**行为相同、代码不同**的候选（Type-4）—— 语义等价但语法不同的代码，例如命令式循环与 LINQ 表达式之别。SSCD（Wiley 2024）验证了 HNSW + ANN 是规模化场景下正确的召回层；Deslop 采用相同的形态，并按 [`fused.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/fused.md) 将其与结构趟次和 LSH 趟次配对。
 
 嵌入缓存以 `(content_hash, provider_id, model_id, model_version)` 为键，因此切换模型只会使嵌入层失效 —— 结构与 LSH 缓存得以保留。
 

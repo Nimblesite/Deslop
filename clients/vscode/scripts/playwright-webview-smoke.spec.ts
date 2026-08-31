@@ -2,6 +2,8 @@ import { type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
+import type { Report } from "../src/types/report";
+
 // `test`/`expect` come from the coverage fixture so this same suite records the
 // webview V8 coverage when WEBVIEW_COVERAGE=1 (no separate rendering harness).
 import { expect, test } from "./webview-coverage-fixture";
@@ -28,6 +30,11 @@ declare global {
 const repoRoot = findRepoRoot(process.cwd());
 const webviewDir = path.join(repoRoot, "clients", "vscode", "media", "webview");
 const screenshotDir = path.join(repoRoot, "target", "playwright-webview");
+const ELECTED_PAIR_HEADING = "ELECTED PAIR EVIDENCE";
+const ELECTED_PAIR_LEFT = "src/dart/alpha.dart:12:3";
+const ELECTED_PAIR_RIGHT = "src/dart/beta.dart:31:5";
+const ELECTED_PAIR_SOURCE = `${ELECTED_PAIR_LEFT} ↔ ${ELECTED_PAIR_RIGHT}`;
+const PAIR_EVIDENCE_UNAVAILABLE = "PAIR EVIDENCE UNAVAILABLE";
 
 const viewports: readonly ViewportCase[] = [
   { name: "desktop", width: 1280, height: 900 },
@@ -64,8 +71,9 @@ test.describe("VSIX webview bundles", () => {
 
       await expect(page.getByText("CLUSTER").first()).toBeVisible();
       await expect(page.getByRole("heading", { name: "Same behavior, different code" })).toBeVisible();
-      await expect(page.getByText("SIGNALS")).toBeVisible();
-      await expect(page.getByText("src/dart/alpha.dart:12:3")).toBeVisible();
+      await expect(page.getByText(ELECTED_PAIR_HEADING, { exact: true })).toBeVisible();
+      await expect(page.getByText(ELECTED_PAIR_SOURCE, { exact: true })).toBeVisible();
+      await expect(page.getByText(ELECTED_PAIR_LEFT, { exact: true })).toBeVisible();
 
       await page.keyboard.press("n");
       await expect(page.getByRole("heading", { name: "Nearly identical code" })).toBeVisible();
@@ -111,6 +119,18 @@ test.describe("VSIX webview bundles", () => {
     await expect(page.getByRole("heading", { name: "Same behavior, different code" })).toBeVisible();
     await expect(page.getByText("CLUSTER").first()).toBeVisible();
     await expect(page.getByText("No cluster selected.")).toHaveCount(0);
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("a cluster without an elected source cannot render pair scores", async ({ page }) => {
+    const errors = await loadView(page, "cluster", viewports[0]);
+
+    await postHostMessage(page, { kind: "report/snapshot", report: reportWithoutSignalSource });
+    await postHostMessage(page, { kind: "select/cluster", id: sampleReport.clusters[0].id });
+
+    await expect(page.getByText(PAIR_EVIDENCE_UNAVAILABLE, { exact: true })).toBeVisible();
+    await expect(page.getByText(ELECTED_PAIR_HEADING, { exact: true })).toHaveCount(0);
+    await expect(page.getByText("0.91", { exact: true })).toHaveCount(0);
     expect(errors, errors.join("\n")).toEqual([]);
   });
 });
@@ -297,18 +317,16 @@ const sampleReport = {
         token_jaccard: 0.34,
         shape: 0.34,
         embedding_cos: 0.91,
-        fused: 0.88,
-        agreement: 0.05,
-        rename_consistency: 0,
+        pair_agreement: 0.05,
+        pair_rename_consistency: 0,
         literal_fraction: 0,
       },
+      signal_source: { left: 0, right: 1 },
       bucket: "same_behavior",
       language: "dart",
-      meets_fused_gate: true,
       evidence_verdict:
-        "The shapes barely match (0.34) — the 0.88 confidence comes from the embedding model, " +
-        "which read these as the same behavior written two ways. The content evidence measures " +
-        "the code itself, not the behavior: shared content 0.05, renaming 0.00.",
+        "The elected pair has a 0.91 semantic match. Its content evidence is 0.05 shared content " +
+        "and 0.00 consistent renaming.",
       occurrences_total: 2,
       occurrence_count: 2,
       occurrences_truncated: false,
@@ -331,18 +349,16 @@ const sampleReport = {
         token_jaccard: 0.96,
         shape: 0.99,
         embedding_cos: 0.7,
-        fused: 0.86,
-        agreement: 0.88,
-        rename_consistency: 0.95,
+        pair_agreement: 0.88,
+        pair_rename_consistency: 0.95,
         literal_fraction: 0.1,
       },
+      signal_source: { left: 0, right: 1 },
       bucket: "nearly_identical",
       language: "dart",
-      meets_fused_gate: true,
       evidence_verdict:
-        "The shapes match at 0.99 and the content evidence did not discount that: the locations " +
-        "share 0.88 of their content and consistent renaming explains 0.95 of what differs, so " +
-        "confidence stayed at 0.86.",
+        "The elected pair has a 0.99 structural match. Its content evidence is 0.88 shared content " +
+        "and 0.95 consistent renaming.",
       occurrences_total: 3,
       occurrence_count: 3,
       occurrences_truncated: false,
@@ -366,18 +382,15 @@ const sampleReport = {
         token_jaccard: 1,
         shape: 1,
         embedding_cos: 0.82,
-        fused: 0.97,
-        agreement: 1,
-        rename_consistency: 1,
+        pair_agreement: 1,
+        pair_rename_consistency: 1,
         literal_fraction: 0,
       },
+      signal_source: { left: 0, right: 1 },
       bucket: "identical",
       language: "dart",
-      meets_fused_gate: true,
       evidence_verdict:
-        "The shapes match at 1.00 and the content evidence did not discount that: the locations " +
-        "share 1.00 of their content and consistent renaming explains 1.00 of what differs, so " +
-        "confidence stayed at 0.97.",
+        "The elected pair is byte-identical, with 1.00 shared content and 1.00 consistent renaming.",
       occurrences_total: 2,
       occurrence_count: 2,
       occurrences_truncated: false,
@@ -389,6 +402,12 @@ const sampleReport = {
       ],
     },
   ],
+} satisfies Report;
+
+const reportWithoutSignalSource: Report = {
+  ...sampleReport,
+  clusters: sampleReport.clusters.map((cluster, index) =>
+    index === 0 ? { ...cluster, signal_source: undefined } : cluster),
 };
 
 function occurrence(

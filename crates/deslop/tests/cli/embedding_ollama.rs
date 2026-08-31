@@ -156,7 +156,7 @@ fn huge_csharp_source(minimum_chars: usize) -> String {
     )
 }
 
-// GH#286 [FUSION-EMBED-PROVIDER]: the per-input budget belongs to the
+// GH#286 [FUSED-EMBED-PROVIDER]: the per-input budget belongs to the
 // model, not the pipeline. The mock reports a 32,768-token context via
 // `/api/show`, so a ~12k-char method must reach the provider instead of
 // being dropped by the old hard-coded 6,000-char constant. An F# user
@@ -217,7 +217,7 @@ fn issue_286_large_subtree_survives_when_the_model_declares_the_context() -> Res
     Ok(())
 }
 
-// Implements [FUSION-EMBED-PROVIDER] Type-4 end-to-end: the fixture
+// Implements [FUSED-EMBED-PROVIDER] Type-4 end-to-end: the fixture
 // pairs recursive and iterative implementations of factorial /
 // fibonacci / sum-to-n. Without embeddings the two files share no
 // structural or token signal. With live Ollama, the embedding pass
@@ -277,31 +277,27 @@ fn ollama_type4_cross_file_cluster_has_positive_embedding_signal() -> Result<()>
         .get("structural")
         .and_then(serde_json::Value::as_f64)
         .unwrap_or_default();
-    let fused = signals
-        .get("fused")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or_default();
     assert!(
         embedding_cos > 0.3,
         "Type-4 cross-file cluster must carry a meaningful embedding_cos, got {embedding_cos}"
     );
-    let deterministic_max = structural.max(token_jaccard);
     assert!(
-        fused >= deterministic_max,
-        "fused score {fused} must preserve the best deterministic signal {deterministic_max}",
+        signals.get("fused").is_none(),
+        "no cluster-level fused may survive on the wire ([FUSED-SCOPE]): {signals:#?}"
     );
+    let shape = signals
+        .get("shape")
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or_default();
     assert!(
-        fused >= embedding_cos,
-        "fused score {fused} must preserve the embedding signal {embedding_cos}",
-    );
-    assert!(
-        fused <= 1.0,
-        "fused score {fused} must stay in the public confidence range",
+        (shape - structural.max(token_jaccard)).abs() < 1e-6,
+        "the rendered shape reading must preserve the strongest structural axis — \
+         shape={shape}, structural={structural}, token_jaccard={token_jaccard}"
     );
     Ok(())
 }
 
-// Implements [FUSION-EMBED-PROVIDER] auto mode: when Ollama is
+// Implements [FUSED-EMBED-PROVIDER] auto mode: when Ollama is
 // reachable, `--embeddings=auto` must silently upgrade to the live
 // provider and record provenance. Complements
 // `embeddings_auto_falls_back_when_provider_unreachable` which
@@ -323,7 +319,7 @@ fn ollama_auto_mode_populates_provenance_when_reachable() -> Result<()> {
     Ok(())
 }
 
-// Implements [FUSION-EMBED-PROVIDER] cache round-trip: the first
+// Implements [FUSED-EMBED-PROVIDER] cache round-trip: the first
 // run populates `.deslop/cache/embeddings/ollama/<model>/<version>/`
 // with one `.bin` per fingerprint; the second run completes in a
 // small fraction of the wall time because every embedding is
@@ -401,7 +397,7 @@ fn ollama_provenance_surfaces_in_text_and_html() -> Result<()> {
     Ok(())
 }
 
-// Implements [FUSION-EMBED-PROVIDER] × [PIPELINE-INCREMENTAL]: the
+// Implements [FUSED-EMBED-PROVIDER] × [PIPELINE-INCREMENTAL]: the
 // two caches live side-by-side under `.deslop/cache/` and
 // invalidate independently. The first run populates both
 // (`fingerprints/...` and `embeddings/...`); the second run hits

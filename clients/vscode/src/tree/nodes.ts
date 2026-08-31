@@ -14,6 +14,7 @@ import { SEVERITY_DOT } from "../severity";
 import {
   Bucket,
   bucketLabels,
+  clusterInterpretation,
   FileMetric,
   occurrenceCount,
   ReportCluster,
@@ -117,7 +118,7 @@ export class ClusterNode extends vscode.TreeItem {
     // Tooltip is the AI-scrapable hover surface and stays mode-invariant
     // — always carries the full file path. [VSIX-TOP-OFFENDERS-FILE-MODE]
     this.tooltip = new vscode.MarkdownString(
-      `**${labels.hybridTitle}** — ${labels.actionSentence}\n\n` +
+      `**${labels.hybridTitle}** — ${clusterInterpretation(cluster)}\n\n` +
         `file: \`${filePath}\`\n\n` +
         `rank #${rank} · weight: \`${formatScore(cluster.weight)}\` · size: \`${cluster.size}\` · copies: \`${occurrenceCount(cluster)}\`\n\n` +
         `cluster id: \`${cluster.id}\``,
@@ -150,7 +151,7 @@ export class OccurrenceNode extends vscode.TreeItem {
       const rankText = parentRank !== undefined ? `rank #${parentRank} · ` : "";
       this.tooltip = new vscode.MarkdownString(
         `**${rankText}${labels.plainTitle}** · occurrence ${occurrenceIndex + 1} of ${total}\n\n` +
-          labels.actionSentence,
+          clusterInterpretation(parentCluster),
       );
     }
     this.command = {

@@ -34,17 +34,18 @@ use crate::{
 // shapes live in `crate::wire_generated`; the impls below stay here.
 pub use crate::report_hints::{default_action_hints, ActionHint};
 pub use crate::wire_generated::{
-    CacheStats, EmbeddingProvenance, Report, ReportCluster, ReportOccurrence, ReportSignals,
+    CacheStats, EmbeddingProvenance, Report, ReportCluster, ReportOccurrence, ReportSignalSource,
+    ReportSignals,
 };
 
-/// Serde default for [`ReportSignals::agreement`] when replaying a
+/// Serde default for [`ReportSignals::pair_agreement`] when replaying a
 /// report written before the content gate existed: an absent field
 /// means nothing was measured, and the unmeasured convention is full
 /// agreement so a missing measurement never demotes a cluster the
-/// original run vouched for ([FUSION-CONTENT-GATE],
+/// original run vouched for ([FUSED-CONTENT-GATE],
 /// [`crate::content::ContentEvidence::unmeasured`]).
 #[must_use]
-pub fn unmeasured_agreement() -> f64 {
+pub fn unmeasured_pair_agreement() -> f64 {
     1.0
 }
 
@@ -83,13 +84,90 @@ impl Report {
             cluster.occurrences_total = count;
             cluster.occurrence_count = count;
             if cluster.occurrences.len() > cap {
-                cluster.occurrences.truncate(cap);
+                truncate_occurrences_preserving_source(cluster, cap);
                 cluster.occurrences_truncated = true;
             }
+            enforce_pair_evidence_scope(cluster);
             cluster.summary.clear();
             cluster.interpretation.clear();
         }
         self
+    }
+}
+
+/// The valid elected pair carried by `cluster`, including its wire indices.
+/// An absent, self-referential, or out-of-range source is no pair
+/// ([FUSED-CLUSTER-SIGNALS]).
+#[must_use]
+pub fn elected_signal_pair(
+    cluster: &ReportCluster,
+) -> Option<(ReportSignalSource, &ReportOccurrence, &ReportOccurrence)> {
+    let source = cluster.signal_source?;
+    if source.left == source.right {
+        return None;
+    }
+    Some((
+        source,
+        cluster.occurrences.get(source.left)?,
+        cluster.occurrences.get(source.right)?,
+    ))
+}
+
+/// Enforces the raw-wire pair scope: without two named occurrences there are
+/// no pair axes or pair verdict to publish.
+pub(crate) fn enforce_pair_evidence_scope(cluster: &mut ReportCluster) {
+    if elected_signal_pair(cluster).is_some() {
+        return;
+    }
+    cluster.signal_source = None;
+    cluster.signals = ReportSignals {
+        structural: 0.0,
+        token_jaccard: 0.0,
+        shape: 0.0,
+        embedding_cos: 0.0,
+        pair_agreement: 0.0,
+        pair_rename_consistency: 0.0,
+        literal_fraction: 0.0,
+    };
+    cluster.evidence_verdict.clear();
+}
+
+/// Caps one cluster while retaining the named evidence pair whenever the
+/// requested cap can carry both endpoints ([FUSED-CLUSTER-SIGNALS]).
+fn truncate_occurrences_preserving_source(cluster: &mut ReportCluster, cap: usize) {
+    let retained = retained_occurrence_indices(cluster, cap);
+    let source = cluster.signal_source.and_then(|source| {
+        let left = retained.iter().position(|&index| index == source.left)?;
+        let right = retained.iter().position(|&index| index == source.right)?;
+        Some(ReportSignalSource { left, right })
+    });
+    let original = std::mem::take(&mut cluster.occurrences);
+    cluster.occurrences = retained
+        .into_iter()
+        .filter_map(|index| original.get(index).cloned())
+        .collect();
+    cluster.signal_source = source;
+}
+
+/// Original occurrence indices retained on the live wire, ordered exactly
+/// as the full report ordered them.
+fn retained_occurrence_indices(cluster: &ReportCluster, cap: usize) -> Vec<usize> {
+    let mut retained = Vec::with_capacity(cap.min(cluster.occurrences.len()));
+    if let Some(source) = cluster.signal_source {
+        push_distinct_valid(&mut retained, source.left, cluster.occurrences.len(), cap);
+        push_distinct_valid(&mut retained, source.right, cluster.occurrences.len(), cap);
+    }
+    for index in 0..cluster.occurrences.len() {
+        push_distinct_valid(&mut retained, index, cluster.occurrences.len(), cap);
+    }
+    retained.sort_unstable();
+    retained
+}
+
+/// Adds one valid index once while room remains.
+fn push_distinct_valid(retained: &mut Vec<usize>, index: usize, total: usize, cap: usize) {
+    if retained.len() < cap && index < total && !retained.contains(&index) {
+        retained.push(index);
     }
 }
 
@@ -121,8 +199,8 @@ pub fn distinct_visible_path_count(cluster: &ReportCluster) -> usize {
 }
 
 impl From<PairScore> for ReportSignals {
-    /// The content triple is left at zero here and stamped later by
-    /// [`crate::buckets::content_gated_signals`] ([FUSION-CONTENT-GATE],
+    /// The content evidence is left at zero here and stamped later by
+    /// [`crate::buckets::content_gated_signals`] ([FUSED-CONTENT-GATE],
     /// #344). A `PairScore` is the deterministic pair evidence, produced
     /// before any content is measured, so it has nothing truthful to put
     /// in those fields — every rendered cluster passes through the gate,
@@ -135,9 +213,8 @@ impl From<PairScore> for ReportSignals {
             // definition once the source fields exist.
             shape: 0.0,
             embedding_cos: score.embedding_cos,
-            fused: score.bounded_fused(),
-            agreement: 0.0,
-            rename_consistency: 0.0,
+            pair_agreement: 0.0,
+            pair_rename_consistency: 0.0,
             literal_fraction: 0.0,
         };
         signals.shape = signals.shape_score();
@@ -149,8 +226,8 @@ impl ReportSignals {
     /// The shape reading — the stronger of `structural` and
     /// `token_jaccard`, two views of one normalised representation, so
     /// the max is what "the shape matched" means
-    /// ([FUSION-CONTENT-GATE]). The single definition behind the wire
-    /// `shape` field, the content gate's fused reduction, and the
+    /// ([FUSED-CONTENT-GATE]). The single definition behind the wire
+    /// `shape` field, content routing, and the
     /// evidence verdict; consumers render the stamped field verbatim
     /// and never re-derive the max.
     #[must_use]

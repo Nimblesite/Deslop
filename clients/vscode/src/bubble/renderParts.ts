@@ -12,6 +12,7 @@ import {
   ReportCluster,
   Severity,
   bucketLabels,
+  electedPairForCluster,
   occurrenceCount,
   resolveBucket,
 } from "../types/report";
@@ -25,6 +26,9 @@ export interface BubbleRenderParts {
   signalStrip: string;
   hover: vscode.MarkdownString;
 }
+
+const PAIR_EVIDENCE_LABEL = "pair";
+const PAIR_SEPARATOR = "↔";
 
 export function renderBubbleParts(
   cluster: ReportCluster,
@@ -58,29 +62,31 @@ export function ghostText(
   return renderBubbleParts(cluster, severity).ghost;
 }
 
-// Three bars: shape, semantic, confidence ([VSIX-LIVE-BUBBLE]).
-// `structural` and `token_jaccard` are two views of one normalised
-// representation — "summing them says nothing beyond 'the shapes matched'"
-// (`deslop-core::buckets::content_gated_signals`) — so drawing both spends
-// two of the three slots on a single piece of evidence and leaves none for
-// the content-gated confidence. That confidence is the only thing
-// separating a verbatim copy from a proven rename: after the #232
-// correction both render `structural 1.0 / token_jaccard 1.0`, so a strip
-// without `fused` collapses "safe to extract" and "identifiers differ"
-// onto the same three glyphs. The shape bar draws the engine's `shape`
-// reading — the stronger of the two shape views, reduced once in
-// `deslop-core` and carried on the wire; the third bar draws `fused`.
+// Three bars of one elected pair's evidence: shape, semantic, content
+// ([VSIX-LIVE-BUBBLE], [FUSED-CLUSTER-SIGNALS]). `structural` and
+// `token_jaccard` are two views of one normalised representation — "summing
+// them says nothing beyond 'the shapes matched'" — so drawing both spends
+// two of the three slots on a single piece of evidence. The shape bar draws
+// the engine's `shape` reading — the stronger of the two shape views,
+// reduced once in `deslop-core` and carried on the wire; the second bar
+// draws the semantic axis; the third draws `agreement`, the measured
+// content evidence. There is no combined-score bar: admission and routing
+// are the engine's bucket verdict, not a number this strip re-derives.
 export function signalStrip(cluster: ReportCluster): string {
+  const elected = electedPairForCluster(cluster);
+  if (!elected) return "";
   const signals = cluster.signals;
-  return `${bar(signals.shape)}${bar(signals.embedding_cos)}${bar(signals.fused)}`;
+  const pair = `${elected.source.left + 1}${PAIR_SEPARATOR}${elected.source.right + 1}`;
+  return `${PAIR_EVIDENCE_LABEL} ${pair} ${bar(signals.shape)}${bar(signals.embedding_cos)}${bar(signals.pair_agreement)}`;
 }
 
 // The full block is reserved for an exact 1.0 and nothing else. Rounding
 // `value * 7` gave it to everything from 0.929 up, which collapsed the two
 // readings the third bar exists to separate: a byte-proven copy renders
-// `fused 1.00` and a content-gated near-verbatim clone renders `fused 0.96`,
-// and both drew `█`. Proof and near-proof are exactly the distinction a
-// glance at this strip is supposed to make, so the top glyph means proof.
+// `agreement 1.00` and a near-verbatim clone with one drift pair reads
+// `agreement 0.96`, and both drew `█`. Proof and near-proof are exactly
+// the distinction a glance at this strip is supposed to make, so the top
+// glyph means proof.
 function bar(value: number): string {
   if (value >= 1) return BARS[BARS.length - 1] ?? "█";
   const below = BARS.length - 1;

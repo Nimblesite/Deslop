@@ -59,9 +59,14 @@ fn same_named_rename_clone_surfaces_while_real_polymorphism_stays_hidden() -> Re
         "the token layer is rename-invariant by design: {report:#}"
     );
     assert!(
-        signal(clone, "fused") >= 0.6,
-        "a certified consistent rename must at least reach the \
-         read-the-canonical-occurrence band: {report:#}"
+        approx(signal(clone, "pair_rename_consistency"), 1.0),
+        "a certified consistent rename must publish its elected-pair proof: \
+         {report:#}"
+    );
+    assert_eq!(
+        field(clone, "signal_source"),
+        &serde_json::json!({"left": 0, "right": 1}),
+        "the five rendered axes must name their admitted source pair: {report:#}"
     );
     for occurrence in occurrences(clone) {
         let start = field(occurrence, "start_line").as_u64();
@@ -121,7 +126,7 @@ fn hidden_group_summary_names_the_hider_not_the_users_config() -> Result<()> {
         .success();
     let stderr = String::from_utf8_lossy(&assertion.get_output().stderr).into_owned();
     assert!(
-        stderr.contains("(3 more groups hidden by built-in noise filters or report policy)"),
+        stderr.contains("(2 more groups hidden by built-in noise filters or report policy)"),
         "the contract clusters this fixture hides are suppressed by \
          Deslop's own polymorphic and signature-only filters, and the \
          summary must say so — no .deslop.toml exists in this scan root \

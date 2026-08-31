@@ -62,6 +62,7 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 - **Files < 500 lines. Functions < 20 lines.** Refactor when over.
 - **NAMED CONSTANTS - not literals** Give values names and REUSE them. THIS INCLUDES TESTS. TESTS MUST LEVERAGE NAMED CONSTANTS; NOT RAW STRINGS
 - **Calcs like percentage calc only exist in ONE PLACE: Rust** ZERO calculations outside the core Rust code. E.g. no calcs in Typescript. Any calcs outside Rust is a HARD VIOLATION.
+- **All threshold numbers are configurable** Define the defaults as constants but allow the user to override these in the config
 - **Act autonomously.** Do not stop for confirmation — except where the strict accuracy rule says STOP. Record assumptions and continue.
 - **Aggressively DRY.** This tool detects duplication; its own codebase must be exemplary. Move code, don't copy. Copying files is prohibited.
 - **Tree-sitter only.** Regex on source code or structured data is prohibited.
@@ -93,6 +94,7 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 - Each spec section must have a unique, heirarchical non-numeric spec Id
 - Spec ids must be cross referenced across tests, code specs and plans
 - Code, specs, and tests MUST agree. Where they don't, 🛑 STOP and report the issue to the user
+- Remove line feeds from text that is only there to enforce text wrapping
 - Don't use line endings to force word wrap. Allow text to wrap naturally.
 - Keep PR documentation TIGHT and HUMAN READABLE (except for the AI section)
 - Remove line endings that only exist to wrap text

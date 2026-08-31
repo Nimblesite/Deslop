@@ -1,4 +1,4 @@
-//! [FUSION-CONTENT-GATE] × [AUTOFIX-EXTRACT-PRECONDITIONS] rule 1: the
+//! [FUSED-CONTENT-GATE] × [AUTOFIX-EXTRACT-PRECONDITIONS] rule 1: the
 //! refactor gates decide on the *measured* content evidence, never on
 //! the bucket label alone (gh #344).
 //!
@@ -54,12 +54,12 @@ fn sole_cluster(fixture_name: &str) -> Result<ReportCluster> {
 }
 
 /// Measured content support — the stronger of the two independent
-/// populations, exactly as [FUSION-CONTENT-GATE] routes on it.
+/// populations, exactly as [FUSED-CONTENT-GATE] routes on it.
 fn support(cluster: &ReportCluster) -> f64 {
     cluster
         .signals
-        .agreement
-        .max(cluster.signals.rename_consistency)
+        .pair_agreement
+        .max(cluster.signals.pair_rename_consistency)
 }
 
 /// The single-file fixture's source bytes.
@@ -108,14 +108,14 @@ fn shape_only_same_file_family_is_refused_with_the_measured_reason() -> Result<(
         cluster.signals.token_jaccard
     );
     ensure!(
-        (0.17..0.19).contains(&cluster.signals.agreement),
+        (0.17..0.19).contains(&cluster.signals.pair_agreement),
         "measured byte agreement is ~0.18, got {:.3}",
-        cluster.signals.agreement
+        cluster.signals.pair_agreement
     );
     ensure!(
-        cluster.signals.rename_consistency == 0.0,
+        cluster.signals.pair_rename_consistency == 0.0,
         "no corroborated rename explains the differences, got {:.3}",
-        cluster.signals.rename_consistency
+        cluster.signals.pair_rename_consistency
     );
     ensure!(
         support(&cluster) < CONTENT_SUPPORT_FLOOR,
@@ -185,11 +185,11 @@ fn shape_only_cross_file_family_is_not_a_consolidation_candidate() -> Result<()>
         "the family must span two files for the consolidation screen to apply"
     );
     ensure!(
-        (0.16..0.18).contains(&cluster.signals.agreement)
-            && cluster.signals.rename_consistency == 0.0,
+        (0.16..0.18).contains(&cluster.signals.pair_agreement)
+            && cluster.signals.pair_rename_consistency == 0.0,
         "measured evidence is ~0.17 agreement and no rename proof, got {:.3} / {:.3}",
-        cluster.signals.agreement,
-        cluster.signals.rename_consistency
+        cluster.signals.pair_agreement,
+        cluster.signals.pair_rename_consistency
     );
     ensure!(
         !preconditions::consolidation_candidate(&cluster),
@@ -231,9 +231,9 @@ fn content_proven_clone_still_reaches_the_verbatim_extract() -> Result<()> {
         cluster.bucket
     );
     ensure!(
-        (0.94..0.97).contains(&cluster.signals.agreement),
+        (0.94..0.97).contains(&cluster.signals.pair_agreement),
         "measured byte agreement is ~0.96, got {:.3}",
-        cluster.signals.agreement
+        cluster.signals.pair_agreement
     );
     ensure!(
         support(&cluster) >= CONTENT_SUPPORT_FLOOR,
@@ -285,17 +285,17 @@ fn proven_rename_survives_the_gate_that_agreement_alone_would_fail() -> Result<(
         "the shape saturates here exactly as it does for the scaffolding family"
     );
     ensure!(
-        cluster.signals.agreement < CONTENT_SUPPORT_FLOOR,
+        cluster.signals.pair_agreement < CONTENT_SUPPORT_FLOOR,
         "pooled agreement {:.3} must sit below the floor for this test to bite",
-        cluster.signals.agreement
+        cluster.signals.pair_agreement
     );
     ensure!(
-        cluster.signals.rename_consistency >= 0.99,
+        cluster.signals.pair_rename_consistency >= 0.99,
         "a textbook Type-2 rename is corroborated at 1.0 — every authored \
          position differs and every difference is a consistent rename \
          ([PIPELINE-NORMALIZE-AST-OPERATOR] keeps shared operators out of \
          the ratio), got {:.3}",
-        cluster.signals.rename_consistency
+        cluster.signals.pair_rename_consistency
     );
     ensure!(
         !lacks_content_support(cluster.signals),
@@ -422,8 +422,8 @@ fn no_genuine_clone_fixture_is_convicted_by_the_content_gate() -> Result<()> {
                 cluster.bucket,
                 cluster.signals.structural,
                 cluster.signals.token_jaccard,
-                cluster.signals.agreement,
-                cluster.signals.rename_consistency
+                cluster.signals.pair_agreement,
+                cluster.signals.pair_rename_consistency
             );
             ensure!(
                 preconditions::content_refusal(cluster).is_none(),

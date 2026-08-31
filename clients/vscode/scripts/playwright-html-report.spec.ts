@@ -23,6 +23,7 @@ interface ViewportCase {
 const repoRoot = findRepoRoot(process.cwd());
 const fixtureDir = path.join(repoRoot, "clients", "vscode", "src", "test", "fixtures", "csharp-small");
 const screenshotDir = path.join(repoRoot, "target", "playwright-html-report");
+const ELECTED_PAIR_ATTRIBUTION = "elected pair: occurrences 1 and 2 — Alpha.cs and Beta.cs";
 
 const viewports: readonly ViewportCase[] = [
   { name: "desktop", width: 1280, height: 900 },
@@ -48,6 +49,8 @@ test.describe("standalone HTML report", () => {
       assertThemeAndStylesheet(styles);
       assertLayoutAndAccents(styles);
       assertNoHorizontalOverflow(styles, viewport);
+      const runDetails = await page.locator(".run-details").textContent();
+      assert.ok(runDetails?.includes(ELECTED_PAIR_ATTRIBUTION), "every HTML signal row must name the exact elected pair");
 
       fs.mkdirSync(screenshotDir, { recursive: true });
       await page.screenshot({

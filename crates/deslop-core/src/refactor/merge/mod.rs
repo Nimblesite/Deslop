@@ -123,7 +123,7 @@ fn mechanical_plan(
 /// Why the cluster never reached the merge machinery
 /// ([`preconditions::eligible_ranges`]). A cluster the measured content
 /// gate refused states that evidence in its own numbers
-/// ([FUSION-CONTENT-GATE], gh #344) — telling a user their two methods
+/// ([FUSED-CONTENT-GATE], gh #344) — telling a user their two methods
 /// are "not mergeable" when the engine actually found 18% raw-content
 /// agreement hides the one fact that would let them judge the verdict.
 /// Every other pre-screen failure is a shape fact about the cluster

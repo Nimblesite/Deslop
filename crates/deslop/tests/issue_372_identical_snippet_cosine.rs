@@ -48,7 +48,7 @@ const TALLY: &str = "namespace Ledger\n\
     \x20   }\n\
     }\n";
 
-/// [FUSION-EMBED-PROVIDER] Two byte-identical files share one embedding
+/// [FUSED-EMBED-PROVIDER] Two byte-identical files share one embedding
 /// vector, so the rendered cosine is exactly `1.0` — not `0.999998`.
 /// Every other embedding cosine in the report stays inside `[0, 1]`.
 #[test]

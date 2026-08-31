@@ -1,11 +1,14 @@
-//! Rendered-truth cluster signal measurement ([FUSION-CLUSTER-SIGNALS]).
+//! Rendered-truth cluster signal measurement ([FUSED-CLUSTER-SIGNALS]).
 //!
-//! A cluster's signal triple is measured between the occurrences the
-//! report actually shows — the per-signal mean over every unordered
-//! pair of rendered occurrences. The surviving discovery edges of the
-//! transitive-closure component are never averaged: their mix is an
-//! artifact of discovery topology (structural star buckets, ANN top-k
-//! fan-out, LSH band width), and under that mean a byte-identical file
+//! A cluster's signal triple is measured **between the admitted pairs** —
+//! the surviving discovery edges of the transitive-closure component —
+//! never between every unordered pair of rendered occurrences. The pair
+//! with the strongest `q = max(S, J, E)` is elected once and all three of
+//! its axes render together; a pair that never cleared admission contributes
+//! nothing (gh #458). Averaging is wrong on both counts:
+//! Baker (1995) defines duplication as a per-pair predicate with no
+//! class-level average to take, and averaging closure-only pairs lets
+//! one unrelated member dilute N proven copies — a byte-identical file
 //! pair once rendered `structural = 0.36` and routed `same_behavior`
 //! (corpus, pinned by `issue_343_sum_clamp_saturation.rs`).
 
@@ -25,66 +28,126 @@ use crate::{
 #[cfg(test)]
 mod tests;
 
-/// Number of distinct values in the one-group fast path.
-const SINGLE_GROUP_COUNT: usize = 1;
+mod cache;
 
-/// Compact pair key for that sole group.
-const SINGLE_GROUP_PAIR: (usize, usize) = (0, 0);
+use cache::PairValueCache;
 
-/// Members required for two distinct same-group occurrence pairs.
-const SAME_GROUP_CACHE_MIN_MEMBERS: usize = 3;
-
-/// Members required for a cross-group pair value to repeat.
-const CROSS_GROUP_CACHE_MIN_MEMBERS: usize = 2;
-
-/// Measures the [FUSION-CLUSTER-SIGNALS] triple over the rendered
-/// occurrence indices.
+/// The measured rendered signal triple plus the pair that earned it.
 ///
-/// Per occurrence pair: `structural` is Merkle-hash equality — `1.0` —
+/// [FUSED-CLUSTER-SIGNALS] gh #458: the rendered triple is one
+/// admitted pair's own measurement — the strongest one, in a
+/// deterministic order — so the report can name the pair whose
+/// evidence it shows instead of an anonymous cluster average and
+/// instead of a per-axis stitch that no single pair ever earned.
+pub(super) struct MeasuredSignals {
+    /// The rendered triple: the elected admitted pair's own axes
+    /// together, never assembled from different pairs (a pair whose
+    /// signal input is absent renders 0.0 on that axis).
+    pub score: PairScore,
+    /// The admitted pair (corpus indices) whose measurement the
+    /// rendered triple displays, in a deterministic order; `None` when
+    /// no admitted pair survives the same-file collapse.
+    pub source_pair: Option<(usize, usize)>,
+}
+
+/// Measures the [FUSED-CLUSTER-SIGNALS] triple over the **admitted**
+/// pair set: the pair with the highest bounded report-election quality,
+/// ties resolved to the earliest pair in corpus order.
+///
+/// Per admitted pair: `structural` is Merkle-hash equality — `1.0` —
 /// or, for a non-equal pair, the measured shared-subtree overlap
-/// ([FUSION-SHARED-SUBTREE]): the best-achievable subtree overlap the
+/// ([FUSED-SHARED-SUBTREE]): the best-achievable subtree overlap the
 /// axis has always claimed to be. `token_jaccard` is the `MinHash`
 /// estimate between the two signatures, and `embedding_cos` is
 /// [`cosine_similarity`] of the two vectors — the same arithmetic that
-/// admitted the ANN pair evidence. A pair missing an input for a
-/// signal (no vector: embeddings off, oversized input, provider
-/// failure) is excluded from that signal's numerator and denominator
-/// both, so absence never masquerades as a measured 0.0 inside the
-/// mean.
+/// admitted the pair evidence. A pair missing an input for a signal
+/// (no vector: embeddings off, oversized input, provider failure)
+/// renders 0.0 on that axis, so absence never masquerades as a
+/// measured value.
 ///
 /// The left occurrence is resolved once per row rather than once per
 /// pair ([PERF-FLUTTER-TODO-PAIRS]). A wide cluster measures hundreds
-/// of thousands of pairs against the same left side, and each
+/// of thousands of admitted pairs against the same left side, and each
 /// resolution is a segment binary search plus a hash lookup; the pairs
 /// measured and the order they fold in are unchanged.
 pub(super) fn measured_signals<S: BuildHasher>(
     occurrence_indices: &[usize],
+    admitted_pairs: &[(usize, usize)],
     fingerprints: &[Fingerprint],
     signatures: &dyn SignatureLookup,
     embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     overlap: &mut OverlapMeasurer<'_>,
-) -> PairScore {
+) -> MeasuredSignals {
     let corpus = SignalCorpus {
         fingerprints,
         signatures,
         embedding_vectors,
     };
     let (sides, mut values) = grouped_sides(&corpus, occurrence_indices, overlap);
-    let mut totals = SignalTotals::default();
-    fold_pairs(&sides, &mut values, &mut totals, overlap);
-    totals.means()
+    let positions: HashMap<usize, usize> = occurrence_indices
+        .iter()
+        .enumerate()
+        .map(|(position, &index)| (index, position))
+        .collect();
+    let mut best: Option<BestPair> = None;
+    fold_pairs(
+        &sides,
+        &positions,
+        admitted_pairs,
+        &mut values,
+        &mut best,
+        overlap,
+    );
+    MeasuredSignals {
+        // A cluster whose every admitted pair skipped renders an
+        // explicit 0.0 triple with no named source — never a silent
+        // empty ([FUSED-CLUSTER-SIGNALS] gh #458).
+        score: best.map_or(
+            PairScore {
+                structural: 0.0,
+                token_jaccard: 0.0,
+                embedding_cos: 0.0,
+            },
+            BestPair::score,
+        ),
+        source_pair: best.map(|pair| (pair.left, pair.right)),
+    }
 }
 
-/// Folds cached valuations in the original occurrence-pair order.
+/// Folds only the admitted pairs, in their deterministic edge order.
+///
+/// A pair whose endpoint was collapsed away by the same-file overlap
+/// collapse is skipped: its evidence described within-file duplication,
+/// which never needs to survive a same-file collapse to stay reported
+/// (#339). When every admitted pair skips, the cluster renders a
+/// 0.0 triple with no named source — the `None` case is explicit, never
+/// a silent empty.
 fn fold_pairs(
     sides: &[GroupedSignalSide<'_>],
+    positions: &HashMap<usize, usize>,
+    admitted_pairs: &[(usize, usize)],
     values: &mut SignalValues,
-    totals: &mut SignalTotals,
+    best: &mut Option<BestPair>,
     overlap: &mut OverlapMeasurer<'_>,
 ) {
-    for (position, &left) in sides.iter().enumerate() {
-        for &right in sides.iter().skip(position.saturating_add(1)) {
-            totals.add_pair(left, right, values, overlap);
+    for &(left, right) in admitted_pairs {
+        let (Some(&left_position), Some(&right_position)) =
+            (positions.get(&left), positions.get(&right))
+        else {
+            continue;
+        };
+        let (Some(left_side), Some(right_side)) = (
+            sides.get(left_position).copied(),
+            sides.get(right_position).copied(),
+        ) else {
+            continue;
+        };
+        let pair = BestPair::measure(left, right, left_side, right_side, values, overlap);
+        if best
+            .as_ref()
+            .map_or(true, |current| pair.stronger_than(current))
+        {
+            *best = Some(pair);
         }
     }
 }
@@ -304,138 +367,84 @@ impl SignalValues {
     }
 }
 
-/// Values retained only when a group pair occurs more than once.
-struct PairValueCache {
-    /// Population per compact group id.
-    group_sizes: Vec<usize>,
-    /// Value for the overwhelmingly common one-group cluster, avoiding
-    /// a hash-table lookup for every logical pair.
-    single_value: Option<f64>,
-    /// Already measured repeated group pairs.
-    values: HashMap<(usize, usize), f64>,
+/// One admitted pair's measured triple, and the deterministic ordering
+/// that elects the named signal source ([FUSED-CLUSTER-SIGNALS]). The
+/// elected pair's axes render together; the other admitted pairs only
+/// contest the election.
+#[derive(Debug, Clone, Copy)]
+struct BestPair {
+    /// Lower corpus index of the pair.
+    left: usize,
+    /// Higher corpus index of the pair.
+    right: usize,
+    /// Measured structural value, when the pair has the input.
+    structural: Option<f64>,
+    /// Measured token-Jaccard value, when the pair has the input.
+    token_jaccard: Option<f64>,
+    /// Measured embedding cosine, when the pair has the input.
+    embedding_cos: Option<f64>,
 }
 
-impl PairValueCache {
-    /// Cache over one signal's group populations.
-    fn new(group_sizes: Vec<usize>) -> Self {
-        Self {
-            group_sizes,
-            single_value: None,
-            values: HashMap::new(),
-        }
-    }
-
-    /// Returns one value, retaining it only when another pair reuses it.
-    fn value(&mut self, groups: (usize, usize), compute: impl FnOnce() -> f64) -> f64 {
-        let key = ordered_group_pair(groups);
-        if self.group_sizes.len() == SINGLE_GROUP_COUNT && key == SINGLE_GROUP_PAIR {
-            return self.single(compute);
-        }
-        if !self.repeats(key) {
-            return compute();
-        }
-        if let Some(&cached) = self.values.get(&key) {
-            return cached;
-        }
-        let value = compute();
-        let _previous = self.values.insert(key, value);
-        value
-    }
-
-    /// Returns or initializes the sole group's cached value.
-    fn single(&mut self, compute: impl FnOnce() -> f64) -> f64 {
-        if let Some(cached) = self.single_value {
-            return cached;
-        }
-        let value = compute();
-        self.single_value = Some(value);
-        value
-    }
-
-    /// Whether more than one occurrence pair shares this group pair.
-    fn repeats(&self, (left, right): (usize, usize)) -> bool {
-        let left_size = self.group_sizes.get(left).copied().unwrap_or(0);
-        let right_size = self.group_sizes.get(right).copied().unwrap_or(0);
-        if left == right {
-            return left_size >= SAME_GROUP_CACHE_MIN_MEMBERS;
-        }
-        left_size >= CROSS_GROUP_CACHE_MIN_MEMBERS || right_size >= CROSS_GROUP_CACHE_MIN_MEMBERS
-    }
-}
-
-/// Order-insensitive cache identity for two compact groups.
-fn ordered_group_pair((left, right): (usize, usize)) -> (usize, usize) {
-    if left <= right {
-        (left, right)
-    } else {
-        (right, left)
-    }
-}
-
-/// Per-signal running sums over the measurable occurrence pairs.
-#[derive(Debug, Default)]
-struct SignalTotals {
-    /// Merkle-hash equality mean input.
-    structural: MeanAccumulator,
-    /// `MinHash` Jaccard mean input.
-    token_jaccard: MeanAccumulator,
-    /// Vector cosine mean input.
-    embedding_cos: MeanAccumulator,
-}
-
-impl SignalTotals {
-    /// Folds one occurrence pair into every signal it is measurable for.
-    fn add_pair(
-        &mut self,
-        left: GroupedSignalSide<'_>,
-        right: GroupedSignalSide<'_>,
+impl BestPair {
+    /// Measures one admitted pair's triple from its sides.
+    fn measure(
+        left: usize,
+        right: usize,
+        left_side: GroupedSignalSide<'_>,
+        right_side: GroupedSignalSide<'_>,
         values: &mut SignalValues,
         overlap: &mut OverlapMeasurer<'_>,
-    ) {
-        if let Some(value) = values.structural(left, right, overlap) {
-            self.structural.add(value);
-        }
-        if let Some(value) = values.token(left, right) {
-            self.token_jaccard.add(value);
-        }
-        if let (Some(left_vec), Some(right_vec)) = (left.inputs.vector, right.inputs.vector) {
-            self.embedding_cos
-                .add(cosine_similarity(left_vec, right_vec));
+    ) -> Self {
+        Self {
+            left,
+            right,
+            structural: values.structural(left_side, right_side, overlap),
+            token_jaccard: values.token(left_side, right_side),
+            embedding_cos: left_side
+                .inputs
+                .vector
+                .zip(right_side.inputs.vector)
+                .map(|(left_vec, right_vec)| cosine_similarity(left_vec, right_vec)),
         }
     }
 
-    /// Returns the measured per-signal means.
-    fn means(&self) -> PairScore {
+    /// The rendered score: this pair's own triple together, with an
+    /// absent signal input rendered 0.0 — the embeddings-off rendering
+    /// convention. Never assembled from different pairs.
+    fn score(self) -> PairScore {
         PairScore {
-            structural: self.structural.mean(),
-            token_jaccard: self.token_jaccard.mean(),
-            embedding_cos: self.embedding_cos.mean(),
+            structural: self.structural.unwrap_or(0.0),
+            token_jaccard: self.token_jaccard.unwrap_or(0.0),
+            embedding_cos: self.embedding_cos.unwrap_or(0.0),
         }
     }
-}
 
-/// Sum + count pair yielding a mean of exactly the measured values.
-#[derive(Debug, Default)]
-struct MeanAccumulator {
-    /// Sum of measured values.
-    sum: f64,
-    /// Count of measured values.
-    count: u32,
-}
-
-impl MeanAccumulator {
-    /// Folds one measured value in.
-    fn add(&mut self, value: f64) {
-        self.sum += value;
-        self.count = self.count.saturating_add(1);
+    /// Whether this pair beats `current` in the deterministic
+    /// strongest-pair order: report-election quality first, ties
+    /// resolved to the earliest pair in corpus order (#301), so a
+    /// byte-identical pair (`90, 360`) is named over a same-shape pair
+    /// (`90, 630`) that measures identically after normalisation. The
+    /// election quality is the pair's own bounded `max(S, J, E)`
+    /// ([FUSED-CLUSTER-SIGNALS]). It is not the pre-rescue admission
+    /// quantity `fused = max(H, J, E)`.
+    fn stronger_than(self, current: &BestPair) -> bool {
+        let rank = |pair: &BestPair| {
+            (
+                pair.quality(),
+                std::cmp::Reverse(pair.left),
+                std::cmp::Reverse(pair.right),
+            )
+        };
+        rank(&self) > rank(current)
     }
 
-    /// Mean over the measured values; 0.0 when nothing was measurable,
-    /// matching the embeddings-off rendering convention.
-    fn mean(&self) -> f64 {
-        if self.count == 0 {
-            return 0.0;
-        }
-        self.sum / f64::from(self.count)
+    /// The pair's bounded report-election quality: the strongest measured
+    /// report axis, clamped to `[0, 1]`.
+    fn quality(self) -> f64 {
+        self.structural
+            .unwrap_or(0.0)
+            .max(self.token_jaccard.unwrap_or(0.0))
+            .max(self.embedding_cos.unwrap_or(0.0))
+            .clamp(0.0, 1.0)
     }
 }

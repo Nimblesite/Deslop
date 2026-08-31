@@ -44,9 +44,7 @@ use anyhow::{anyhow, Result};
 use serde_json::Value;
 
 use crate::common::{
-    signals::{
-        rank_of, signal_dump, ACT_NOW_BUCKETS, ACT_NOW_FUSED, IDENTICAL_BUCKET, REUSE_FUSED,
-    },
+    signals::{rank_of, signal_dump, CONFIRMED_DUPLICATE_BUCKETS, IDENTICAL_BUCKET},
     verdict::{
         assert_cluster_mentions, assert_type1_identical_signals, duplicated_loc, loc_as_f64,
     },
@@ -120,7 +118,7 @@ const PAIR_SIGNALS: [(&str, f64); 6] = [
     ("token_jaccard", 1.0),
     ("shape", 1.0),
     ("embedding_cos", 0.0),
-    ("rename_consistency", 1.0),
+    ("pair_rename_consistency", 1.0),
     ("literal_fraction", 0.0),
 ];
 
@@ -156,7 +154,7 @@ fn a_copy_pasted_endpoint_pair_is_reported_beside_the_control() -> Result<()> {
     assert_pair_occurrences(pair);
     assert_pair_reports_the_copied_code(&scan_root, pair)?;
     assert_pair_signals(pair);
-    assert_the_pair_is_actionable(pair);
+    assert_pair_has_duplicate_verdict(pair);
     assert_ranking(&report, control, pair)?;
     assert_repo_metrics(&report)?;
     assert_pair_file_metrics(&report)?;
@@ -328,33 +326,22 @@ fn assert_pair_signals(pair: &Value) {
         );
     }
     assert!(
-        approx(signal(pair, "agreement"), PAIR_AGREEMENT),
+        approx(signal(pair, "pair_agreement"), PAIR_AGREEMENT),
         "{LABEL}: content agreement must be {PAIR_AGREEMENT}, got {actual}: {dump}",
-        actual = signal(pair, "agreement"),
+        actual = signal(pair, "pair_agreement"),
         dump = signal_dump(pair),
     );
 }
 
-/// The agent-facing half ([FUSED-THRESHOLD]). A finding published below
-/// the act-now line tells an agent asking `find-similar` to go ahead and
-/// write the second copy, which is the same false negative wearing a
-/// different label.
-fn assert_the_pair_is_actionable(pair: &Value) {
-    let fused = signal(pair, "fused");
+/// The agent-facing half ([FUSED-THRESHOLD]). The explicit bucket is the
+/// public verdict; elected-pair evidence explains it without reconstructing
+/// a deleted cluster-confidence scalar.
+fn assert_pair_has_duplicate_verdict(pair: &Value) {
     assert!(
-        ACT_NOW_BUCKETS.contains(&cluster_bucket(pair)),
-        "{LABEL}: two copies one literal apart belong in an act-now bucket, got \
+        CONFIRMED_DUPLICATE_BUCKETS.contains(&cluster_bucket(pair)),
+        "{LABEL}: two copies one literal apart require a duplicate bucket, got \
          {bucket}: {dump}",
         bucket = cluster_bucket(pair),
-        dump = signal_dump(pair),
-    );
-    assert!(
-        fused >= ACT_NOW_FUSED,
-        "{LABEL}: fused={fused:.4} must clear the act-now line {ACT_NOW_FUSED}, \
-         the stronger of the two agent-facing bars — clearing it clears the \
-         reuse-bias line {REUSE_FUSED} with it. Below either, an agent asking \
-         find-similar is told to go ahead and author the copy this fixture \
-         stages: {dump}",
         dump = signal_dump(pair),
     );
 }

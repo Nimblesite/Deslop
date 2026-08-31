@@ -21,7 +21,7 @@ interface Props {
   verdict: string;
 }
 
-// [FUSION-CONTENT-GATE] Four confidence scores, the three pieces of measured
+// [FUSED-CONTENT-GATE] Four confidence scores, the three pieces of measured
 // content evidence behind them, and one plain-English reading of the two
 // together. Drawing the confidence alone is what made a corroborated rename
 // and an anchor-poor scaffolding family look identical here: both render

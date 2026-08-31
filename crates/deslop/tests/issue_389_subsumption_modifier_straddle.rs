@@ -1,5 +1,5 @@
 //! gh #389 — one physical duplication, published exactly once
-//! ([PIPELINE-CLUSTER-SUBSUME], [FUSION-SHARED-SUBTREE]).
+//! ([PIPELINE-CLUSTER-SUBSUME], [FUSED-SHARED-SUBTREE]).
 //!
 //! `incremental-multilang` at `--min-nodes 8` used to carry **two**
 //! `identical` clusters over the same C# file pair: the 44-node authored

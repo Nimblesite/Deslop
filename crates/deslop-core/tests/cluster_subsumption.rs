@@ -186,11 +186,22 @@ fn regions_that_merely_touch_are_all_published() {
     ];
     for case in cases {
         let clusters = published([case.first, case.first], [case.second, case.second]);
-        let expected: Vec<Vec<(usize, usize)>> = case
+        let mut expected: Vec<Vec<(usize, usize)>> = case
             .expected
             .iter()
             .map(|span| vec![*span, *span])
             .collect();
-        assert_eq!(spans(&clusters), expected, "{}", case.why);
+        let mut actual = spans(&clusters);
+        expected.sort_unstable();
+        actual.sort_unstable();
+        assert_eq!(actual, expected, "{}", case.why);
+        assert!(
+            clusters.windows(2).all(|pair| match pair {
+                [left, right] => left.id < right.id,
+                _ => true,
+            }),
+            "equal-mass clusters sort by id after subsumption: {}",
+            case.why
+        );
     }
 }

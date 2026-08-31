@@ -1,4 +1,4 @@
-// Unit: the shared VS Code signal renderer ([FUSION-CONTENT-GATE], #344).
+// Unit: the shared VS Code signal renderer ([FUSED-CONTENT-GATE], #344).
 //
 // A corroborated Type-2 rename and an anchor-poor scaffolding family render
 // the identical confidence triple — structural 1.00, jaccard 1.00 — so a panel
@@ -33,34 +33,31 @@ const STRUCTURAL_TOPIC = "structural";
 const JACCARD_TOPIC = "jaccard";
 const EMBEDDING_TOPIC = "embedding";
 const ZERO_CONFIDENCE_TEXT = "0.00";
-const FUSED_TOPIC = "fused";
 const AGREEMENT_TOPIC = "agreement";
 const CONTENT_EVIDENCE_TOPIC = "content-evidence";
 
 // Shape saturates, content does not back it up: the scaffolding family the
-// engine demotes. Rendered by `deslop-core::buckets::content_gated_signals`
-// as a perfect shape match discounted to a sixth of itself.
+// engine demotes. The elected pair shares almost none of its content, so
+// support falls under the content floor the engine routes by.
 const SCAFFOLDING: ReportSignals = {
   structural: 1,
   token_jaccard: 1,
   shape: 1,
   embedding_cos: 0,
-  fused: 0.16,
-  agreement: 0.08,
-  rename_consistency: 0,
+  pair_agreement: 0.08,
+  pair_rename_consistency: 0,
   literal_fraction: 0.91,
 };
 
 // The same shape reading, opposite verdict: one consistent renaming explains
-// every difference, so the confidence survives the gate.
+// every difference, so the elected pair's content evidence corroborates it.
 const PROVEN_RENAME: ReportSignals = {
   structural: 1,
   token_jaccard: 1,
   shape: 1,
   embedding_cos: 0,
-  fused: 0.9,
-  agreement: 0.1,
-  rename_consistency: 1,
+  pair_agreement: 0.1,
+  pair_rename_consistency: 1,
   literal_fraction: 0,
 };
 
@@ -69,9 +66,8 @@ const VERBATIM: ReportSignals = {
   token_jaccard: 1,
   shape: 1,
   embedding_cos: 0,
-  fused: 1,
-  agreement: 1,
-  rename_consistency: 1,
+  pair_agreement: 1,
+  pair_rename_consistency: 1,
   literal_fraction: 0,
 };
 
@@ -80,9 +76,8 @@ const SEMANTIC: ReportSignals = {
   token_jaccard: 0.3,
   shape: 0.3,
   embedding_cos: 0.9,
-  fused: 0.9,
-  agreement: 0.05,
-  rename_consistency: 0,
+  pair_agreement: 0.05,
+  pair_rename_consistency: 0,
   literal_fraction: 0,
 };
 
@@ -93,15 +88,15 @@ const SEMANTIC: ReportSignals = {
 const SCAFFOLDING_VERDICT =
   "The shapes match at 1.00 but the content behind them does not agree: " +
   "the locations share only 0.08 of their content and consistent renaming " +
-  "explains 0.00 of what differs, so confidence fell to 0.16. A matching " +
-  "shape over content that does not agree is what sibling boilerplate " +
-  "looks like — read both locations before extracting anything.";
+  "explains 0.00 of what differs, so support falls below the 0.70 content " +
+  "floor. A matching shape over content that does not agree is what " +
+  "sibling boilerplate looks like — read both locations before extracting " +
+  "anything.";
 
 const PROVEN_RENAME_VERDICT =
-  "The shapes match at 1.00 but the locations are not byte for byte the " +
-  "same: they share 0.10 of their content and one consistent identifier " +
-  "renaming explains 1.00 of what differs. That measured evidence is what " +
-  "holds confidence at 0.90 instead of the full shape match.";
+  "The shapes match at 1.00 and the content evidence vouches for it: the " +
+  "locations share 0.10 of their content and consistent renaming explains " +
+  "1.00 of what differs, so the match clears the 0.70 content floor.";
 
 function rendered(rows: SignalRow[]): [string, string][] {
   return rows.map((row) => [row.label, formatSignal(row.value)]);
@@ -117,7 +112,6 @@ suite("signal evidence rendering", () => {
       [STRUCTURAL_TOPIC, FULL_CONFIDENCE_TEXT],
       [JACCARD_TOPIC, FULL_CONFIDENCE_TEXT],
       [EMBEDDING_TOPIC, ZERO_CONFIDENCE_TEXT],
-      [FUSED_TOPIC, "0.16"],
     ]);
     assert.deepEqual(rendered(evidenceRows(SCAFFOLDING)), [
       [AGREEMENT_TOPIC, "0.08"],
@@ -128,7 +122,6 @@ suite("signal evidence rendering", () => {
       STRUCTURAL_TOPIC,
       JACCARD_TOPIC,
       EMBEDDING_TOPIC,
-      FUSED_TOPIC,
     ]);
     assert.deepEqual(topics(evidenceRows(SCAFFOLDING)), [
       AGREEMENT_TOPIC,
@@ -144,7 +137,6 @@ suite("signal evidence rendering", () => {
       [STRUCTURAL_TOPIC, FULL_CONFIDENCE_TEXT],
       [JACCARD_TOPIC, FULL_CONFIDENCE_TEXT],
       [EMBEDDING_TOPIC, ZERO_CONFIDENCE_TEXT],
-      [FUSED_TOPIC, FULL_CONFIDENCE_TEXT],
     ]);
     assert.equal(VERBATIM.shape, 1, "a byte-proven cluster carries a saturated shape reading");
   });
@@ -245,7 +237,6 @@ suite("signal evidence rendering", () => {
       AGREEMENT_TOPIC,
       CONTENT_EVIDENCE_TOPIC,
       EMBEDDING_TOPIC,
-      FUSED_TOPIC,
       JACCARD_TOPIC,
       "literal-fraction",
       "rename-consistency",
@@ -257,7 +248,10 @@ suite("signal evidence rendering", () => {
     }
     assert.match(SIGNAL_HELP[CONTENT_EVIDENCE_TOPIC], /structural 1\.00 and jaccard 1\.00/);
     assert.match(SIGNAL_HELP[CONTENT_EVIDENCE_TOPIC], /sibling boilerplate/);
-    assert.match(SIGNAL_HELP.fused, /discounted by the content evidence/);
+    assert.ok(
+      !("fused" in SIGNAL_HELP),
+      "the help vocabulary must not carry a combined-score topic: there is no fused on the wire",
+    );
   });
 
   test("the strip renders through the shared formatter, not a second copy", () => {
@@ -307,9 +301,8 @@ const SIGNAL_FIELDS = new Set([
   "token_jaccard",
   "shape",
   "embedding_cos",
-  "fused",
-  "agreement",
-  "rename_consistency",
+  "pair_agreement",
+  "pair_rename_consistency",
   "literal_fraction",
 ]);
 

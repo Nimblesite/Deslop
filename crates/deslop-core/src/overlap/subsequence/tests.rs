@@ -1,4 +1,4 @@
-//! [FUSION-SHARED-SUBTREE-BOUND-ORDER] The ordered bound, pinned two
+//! [FUSED-SHARED-SUBTREE-BOUND-ORDER] The ordered bound, pinned two
 //! ways: it must equal the textbook longest-common-subsequence dynamic
 //! program, and it must never fall below the shared node mass the
 //! alignment it stands in for actually measures.
@@ -93,7 +93,7 @@ fn sequence(source: &mut Lcg, length: usize) -> Vec<&'static str> {
         .collect()
 }
 
-/// The kind multiset intersection — the [FUSION-SHARED-SUBTREE-BOUND]
+/// The kind multiset intersection — the [FUSED-SHARED-SUBTREE-BOUND]
 /// bound, recomputed here independently so the ordered bound can be
 /// shown to be no looser than it.
 fn multiset_shared(left: &[&'static str], right: &[&'static str]) -> usize {
@@ -134,7 +134,7 @@ fn corpus() -> Vec<RefTree> {
         .collect()
 }
 
-/// [FUSION-SHARED-SUBTREE-BOUND-ORDER] The bit-parallel row must return
+/// [FUSED-SHARED-SUBTREE-BOUND-ORDER] The bit-parallel row must return
 /// exactly the textbook table's answer, at and around every word
 /// boundary, in both argument orders — the subsequence length is
 /// symmetric and a carry-chain bug usually is not.
@@ -179,7 +179,7 @@ fn the_bit_parallel_row_matches_the_textbook_table() {
     );
 }
 
-/// [FUSION-SHARED-SUBTREE-BOUND-ORDER] The accuracy assertion: the
+/// [FUSED-SHARED-SUBTREE-BOUND-ORDER] The accuracy assertion: the
 /// bound may never state less than the alignment achieves. Every
 /// ordered pair of the shape corpus is measured both ways — the exact
 /// Zhang–Shasha shared mass the rescue would have computed, and the
@@ -221,7 +221,7 @@ fn the_bound_never_understates_what_the_alignment_measures() {
     );
 }
 
-/// [FUSION-SHARED-SUBTREE-BOUND-ORDER] The bound is never looser than
+/// [FUSED-SHARED-SUBTREE-BOUND-ORDER] The bound is never looser than
 /// the multiset bound it joins, and on scrambled order it is strictly
 /// tighter — which is the whole reason it exists. Two endpoints holding
 /// the same kinds in reversed order share every kind by multiset and

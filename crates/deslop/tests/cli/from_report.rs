@@ -71,17 +71,19 @@ fn from_report_preserves_current_empty_bucket_issue_85() -> Result<()> {
     Ok(())
 }
 
-// A report written before the content gate and per-occurrence embedding
-// coverage existed carries neither the `agreement` /
-// `rename_consistency` / `literal_fraction` signals nor
-// `succeeded_subtrees`. `--from-report` must replay it: the content
-// signals default to the unmeasured convention (full agreement, no
-// rename proof, no literal dominance — `ContentEvidence::unmeasured`),
-// and `succeeded_subtrees` is reconstructed from the
-// `attempted = succeeded + failed` invariant, so the replayed figures
-// stay honest instead of claiming a measured zero.
+const ANONYMOUS_PAIR_SIGNAL_AXES: [&str; 7] = [
+    "structural",
+    "token_jaccard",
+    "shape",
+    "embedding_cos",
+    "pair_agreement",
+    "pair_rename_consistency",
+    "literal_fraction",
+];
+
+// A report written before pair attribution and per-occurrence embedding coverage names no `signal_source` and no `succeeded_subtrees`. `--from-report` must not publish those anonymous measurements as cluster evidence; it clears every pair axis and verdict while reconstructing embedding coverage from `attempted = succeeded + failed`.
 #[test]
-fn from_report_replays_legacy_report_predating_content_signals() -> Result<()> {
+fn from_report_removes_legacy_anonymous_pair_signals() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let legacy_report = "{\n\
               \"tool_version\": \"legacy\",\n\
@@ -127,15 +129,26 @@ fn from_report_replays_legacy_report_predating_content_signals() -> Result<()> {
         Some("identical"),
         "schema-carried bucket must be preserved on replay"
     );
-    assert_eq!(signal("structural"), Some(1.0));
-    assert_eq!(signal("fused"), Some(1.0));
     assert_eq!(
-        signal("agreement"),
-        Some(1.0),
-        "absent agreement is unmeasured, and unmeasured never demotes"
+        signal("fused"),
+        None,
+        "no cluster-level fused may survive on the wire, even from a legacy \
+         report ([FUSED-SCOPE])"
     );
-    assert_eq!(signal("rename_consistency"), Some(0.0));
-    assert_eq!(signal("literal_fraction"), Some(0.0));
+    assert_eq!(cluster.get("signal_source"), None);
+    for axis in ANONYMOUS_PAIR_SIGNAL_AXES {
+        assert_eq!(
+            signal(axis),
+            Some(0.0),
+            "anonymous pair axis {axis} must be erased during replay"
+        );
+    }
+    assert_eq!(
+        cluster
+            .get("evidence_verdict")
+            .and_then(serde_json::Value::as_str),
+        Some("")
+    );
     let provenance = json
         .get("embedding_provenance")
         .context("legacy embedding provenance should survive --from-report")?;

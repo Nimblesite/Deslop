@@ -86,7 +86,7 @@ pub(crate) fn cross_file_identical_cluster(
 /// The content-evidence fields carry `ContentEvidence::unmeasured()`
 /// — full pooled agreement, no rename proof, no literal dominance —
 /// because no measurement pass ever ran over a hand-built cluster, and
-/// [FUSION-CONTENT-GATE]'s contract is that a missing measurement never
+/// [FUSED-CONTENT-GATE]'s contract is that a missing measurement never
 /// demotes. Zeroes here would read as "measured, and found nothing" and
 /// would make every refusal in `refactor_extract_negative.rs` pass
 /// through the content gate instead of through the rule each case was

@@ -40,6 +40,13 @@ pub(crate) const CALL_COPY: [&str; 2] = [CALL_ORIGIN, CALL_TWIN];
 /// The stranger whose only relation to [`CALL_COPY`] is its shape.
 pub(crate) const CALL_STRANGER: &str = "refund_emitter.py";
 
+/// Anchor positions of the call-run pair's elected measurement: the two
+/// five-line emitters carry enough consistent literals and explained
+/// identifiers to clear the ten-anchor certification point, so the rename
+/// proof certifies to `1.0` ([FUSED-CONTENT-GATE]). Ten is the floor the
+/// anchor mass reaches `content_gate.support_floor` at — `10 / 14 ≥ 0.70`.
+pub(crate) const CALL_PAIR_ANCHORS: u32 = 10;
+
 /// Lines each copy of the call run covers — the whole five-line `emit`
 /// function, not only the four `persist` calls inside it.
 ///
@@ -53,6 +60,40 @@ pub(crate) const CALL_STRANGER: &str = "refund_emitter.py";
 /// ([PIPELINE-CLUSTER-EXACT-SCOPE], gh #408). The undercount was the
 /// artifact; five is what the two files actually share.
 pub(crate) const CALL_LOC_PER_FILE: u64 = 5;
+
+/// Every elected-pair axis fixed by a byte-identical copy with embeddings off.
+/// `literal_fraction` is corpus content, not evidence strength, so each fixture
+/// asserts its own authored value where that value matters.
+///
+/// `pair_rename_consistency` is deliberately absent: a byte-identical pair
+/// carries perfect literal consistency and coverage, but the rename proof is
+/// scaled by the anchor mass `anchors / (anchors + 4)`, certified to `1.0` only
+/// at ten anchors ([FUSED-CONTENT-GATE]). A small byte-identical table (four
+/// assignments = eight anchors) therefore renders `0.6667` — honest, not
+/// saturated — so each caller asserts its own authored value.
+const VERBATIM_PAIR_SIGNALS: &[(&str, f64)] = &[
+    ("structural", 1.0),
+    ("token_jaccard", 1.0),
+    ("shape", 1.0),
+    ("embedding_cos", 0.0),
+    ("pair_agreement", 1.0),
+];
+
+/// The exact rendered `pair_rename_consistency` for a byte-identical copy
+/// whose elected pair carries `anchors` consistent positions: the anchor mass
+/// `anchors / (anchors + 4)`, certified to 1.0 at or above ten anchors
+/// ([FUSED-CONTENT-GATE]). The ten-anchor certification point is where the
+/// mass reaches `content_gate.support_floor` (0.70) — the same operating
+/// point `deslop_core::buckets::CONTENT_SUPPORT_FLOOR` names.
+pub(crate) fn rename_consistency_for(anchors: u32) -> f64 {
+    let anchor_mass = f64::from(anchors);
+    let weight = anchor_mass / (anchor_mass + 4.0);
+    if weight >= 0.70 {
+        1.0
+    } else {
+        weight
+    }
+}
 
 /// Renders one `verbatim-subgroup` case.
 pub(crate) fn render(case: &str, min_nodes: u32) -> Result<Value> {
@@ -97,6 +138,7 @@ pub(crate) fn assert_copy_survives_alone(
     label: &str,
     copy: &[&str; 2],
     stranger: &str,
+    rename_consistency: f64,
 ) -> Result<()> {
     let cluster = expect_cluster_spanning(report, copy)?;
     let dump = signal_dump(cluster);
@@ -111,12 +153,20 @@ pub(crate) fn assert_copy_survives_alone(
         2,
         "{label}: exactly the two copies are shown — {dump}"
     );
+    for (name, expected) in VERBATIM_PAIR_SIGNALS {
+        assert!(
+            approx(signal(cluster, name), *expected),
+            "{label}: byte-proven signal `{name}` must be {expected} — {dump}"
+        );
+    }
     assert!(
-        approx(signal(cluster, "structural"), 1.0)
-            && approx(signal(cluster, "token_jaccard"), 1.0)
-            && approx(signal(cluster, "fused"), 1.0),
-        "{label}: byte-proven duplication saturates every axis it was \
-         measured on — {dump}"
+        approx(
+            signal(cluster, "pair_rename_consistency"),
+            rename_consistency
+        ),
+        "{label}: the byte-identical pair's rename consistency must be the \
+         anchor-scaled value {rename_consistency}, never a saturated stand-in — \
+         {dump}"
     );
     assert_eq!(
         cluster_file_set(cluster),

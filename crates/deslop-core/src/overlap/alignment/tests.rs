@@ -1,4 +1,4 @@
-//! [FUSION-SHARED-SUBTREE] The alignment's arithmetic, pinned against an
+//! [FUSED-SHARED-SUBTREE] The alignment's arithmetic, pinned against an
 //! independent reference.
 //!
 //! `tree_edit_distance` is a keyroot-decomposed dynamic program with a
@@ -169,7 +169,7 @@ fn promote(rest: &[RefTree], children: &[RefTree]) -> Vec<RefTree> {
     promoted
 }
 
-/// [FUSION-SHARED-SUBTREE] The keyroot-decomposed dynamic program must
+/// [FUSED-SHARED-SUBTREE] The keyroot-decomposed dynamic program must
 /// return exactly the textbook recurrence's distance, on every shape.
 ///
 /// The corpus is every ordered pair drawn from [`GENERATED_SHAPES`]
@@ -222,7 +222,7 @@ fn the_dynamic_program_matches_the_textbook_recurrence() {
     );
 }
 
-/// [FUSION-SHARED-SUBTREE] A distance is zero exactly when the two
+/// [FUSED-SHARED-SUBTREE] A distance is zero exactly when the two
 /// sequences are the same shape with the same kinds. Pinned separately
 /// because the reference agreeing on generated shapes cannot show that
 /// *identity* is the zero case rather than some other coincidence.

@@ -6,7 +6,7 @@
 //! optional chaining, destructuring, and regex literals — proving the
 //! feature parses through `tree-sitter-javascript` and that identifier and
 //! literal normalisation keeps the clone detectable across the rename. The
-//! bucket asserted for each follows [FUSION-CONTENT-GATE]: measured
+//! bucket asserted for each follows [FUSED-CONTENT-GATE]: measured
 //! content evidence decides. A rename whose surviving content corroborates
 //! its identifier mapping reaches the act-now `nearly_identical` bucket.
 //! `js-classes` is the maximal case ([REPAIR-RENAME-LITERAL-ECHO], #409):
@@ -63,7 +63,7 @@ fn javascript_template_literal_clone_is_detected() -> Result<()> {
     // ("Hello ", " totalling ", " dollars has shipped.", …) survives the
     // rename verbatim, and `firstName`/`lastName`/`id`/`total`/
     // `trackingUrl`/`email` map through one substitution. That is a proven
-    // Type-2 rename, so [FUSION-CONTENT-GATE] must keep it out of the
+    // Type-2 rename, so [FUSED-CONTENT-GATE] must keep it out of the
     // demoted bucket — the exact promotion the content gate exists to make.
     assert_bucketed_clone(
         "js-template-literals",

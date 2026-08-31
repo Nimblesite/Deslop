@@ -28,7 +28,7 @@ use std::collections::HashMap;
 
 use crate::{
     ast::NormalizedNode,
-    boilerplate::{is_import_boilerplate_carrier, is_import_boilerplate_only_subtree},
+    boilerplate::is_boilerplate,
     fingerprint::Fingerprint,
     lsh::{minhash_signature, Signature, SIGNATURE_LEN},
     sibling::MAX_WINDOW_WIDTH,
@@ -113,10 +113,7 @@ impl Filled {
 /// language-aware top-down walk ([`crate::tokens`]), so the fold skips
 /// them too — their bytes never enter any signature.
 fn token_skipped(node: &NormalizedNode, language: Option<&str>) -> bool {
-    language.is_some_and(|language| {
-        is_import_boilerplate_carrier(language, node.kind)
-            || is_import_boilerplate_only_subtree(language, node)
-    })
+    is_boilerplate(language, node)
 }
 
 /// Closes the top fold frame: folds the node's own state over its

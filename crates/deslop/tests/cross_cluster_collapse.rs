@@ -191,16 +191,21 @@ fn assert_content_proven(cluster: &serde_json::Value) {
         "the clone must span exactly two files"
     );
     assert_eq!(cluster_bucket(cluster), "identical");
-    for name in ["structural", "token_jaccard", "agreement", "fused"] {
+    for name in ["structural", "token_jaccard", "pair_agreement"] {
         assert!(
             approx(signal(cluster, name), 1.0),
             "content-proven clone must render {name}=1: {cluster:#}"
         );
     }
+    assert_eq!(
+        field(cluster, "signal_source"),
+        &serde_json::json!({"left": 0, "right": 1}),
+        "the rendered evidence must name the admitted pair it measured: {cluster:#}"
+    );
 }
 
 /// A low-content enclosing shape must not delete a byte-proven inner clone
-/// before [FUSION-CONTENT-GATE] can measure either view.
+/// before [FUSED-CONTENT-GATE] can measure either view.
 /// [REPAIR-SUBSUME-CONTENT-FIRST]
 #[test]
 fn content_proven_nested_clone_survives_content_poor_enclosing_view() -> Result<()> {

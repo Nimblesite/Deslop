@@ -240,7 +240,7 @@ fn mapped_column_walk(
     {
         // A docstring is not a declaration. It only became reachable
         // here once an occurrence could span a whole module
-        // ([FUSION-SHARED-SUBTREE] widened which view wins): a bare
+        // ([FUSED-SHARED-SUBTREE] widened which view wins): a bare
         // string parses as an `expression_statement`, the walk read it
         // as an alien statement, and the whole ORM filter stopped
         // firing — so two modules declaring entirely different tables

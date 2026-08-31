@@ -10,7 +10,7 @@ use thiserror::Error;
 /// How aggressively the pipeline should run the embedding pass.
 ///
 /// - `Off`: skip embeddings entirely; fused scores rely on the two
-///   deterministic signals. The shipped CLI default ([FUSION-SIGNALS-
+///   deterministic signals. The shipped CLI default ([FUSED-SIGNALS-
 ///   THREE-LAYER]): the batch tool must produce a report on a machine
 ///   that has no reachable provider, and a first run must never block
 ///   on one.

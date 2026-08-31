@@ -91,12 +91,6 @@ mod fsharp_issue_336_data_table_category;
 mod fsharp_issue_339_sibling_window_rename;
 #[path = "fsharp_issue_339_token_fallback_rename.rs"]
 mod fsharp_issue_339_token_fallback_rename;
-#[path = "fused_golden_bands.rs"]
-mod fused_golden_bands;
-#[path = "fused_golden_invariants.rs"]
-mod fused_golden_invariants;
-#[path = "fused_score_bounds.rs"]
-mod fused_score_bounds;
 #[path = "go_vendor_exclusion.rs"]
 mod go_vendor_exclusion;
 #[path = "incremental_equivalence.rs"]
@@ -167,8 +161,12 @@ mod metrics_folder_rollup;
 mod ollama_failures;
 #[path = "operator_drift_is_not_duplication.rs"]
 mod operator_drift_is_not_duplication;
+#[path = "pair_consistent_signals.rs"]
+mod pair_consistent_signals;
 #[path = "pair_size_coherence.rs"]
 mod pair_size_coherence;
+#[path = "perf_sample.rs"]
+mod perf_sample;
 #[path = "polymorphic_gate_hides_rename_clone.rs"]
 mod polymorphic_gate_hides_rename_clone;
 #[path = "python_dict_assert_payload_proof.rs"]
@@ -219,6 +217,8 @@ mod python_literal_variation_calls;
 mod python_same_shape_backends;
 #[path = "python_signatures.rs"]
 mod python_signatures;
+#[path = "rank_mass.rs"]
+mod rank_mass;
 #[path = "rank_structural_only_policy.rs"]
 mod rank_structural_only_policy;
 #[path = "regex_literal_delimiters.rs"]
@@ -271,6 +271,8 @@ mod type2_rename_anchor_floor;
 mod type3_enclosing_method;
 #[path = "typescript_features.rs"]
 mod typescript_features;
+#[path = "verbatim_family_survives_stranger.rs"]
+mod verbatim_family_survives_stranger;
 #[path = "verbatim_subgroup_idiom_price.rs"]
 mod verbatim_subgroup_idiom_price;
 #[path = "verbatim_subgroup_survives_noise.rs"]

@@ -1,9 +1,9 @@
-//! Endpoint view construction for [FUSION-SHARED-SUBTREE].
+//! Endpoint view construction for [FUSED-SHARED-SUBTREE].
 //!
 //! An [`EndpointView`] is one endpoint's resolved measurement state:
 //! the post-order kind sequence the alignment consumes, the creditable
 //! subtrees the large-tree fallback consumes, and the kind multiset the
-//! admission bound consumes ([FUSION-SHARED-SUBTREE-BOUND]). Built once
+//! admission bound consumes ([FUSED-SHARED-SUBTREE-BOUND]). Built once
 //! per endpoint and memoised by the measurer.
 
 use std::collections::HashMap;
@@ -31,11 +31,11 @@ pub(super) struct EndpointView {
     /// sides' entries.
     pub(super) entries: Vec<Fingerprint>,
     /// Node-kind multiset, excluding the synthetic root, for the
-    /// admission upper bound ([FUSION-SHARED-SUBTREE-BOUND]).
+    /// admission upper bound ([FUSED-SHARED-SUBTREE-BOUND]).
     pub(super) kind_counts: HashMap<&'static str, usize>,
     /// Post-order positions by kind, excluding the synthetic root, for
     /// the ordered admission bound
-    /// ([FUSION-SHARED-SUBTREE-BOUND-ORDER]). Built with the view so an
+    /// ([FUSED-SHARED-SUBTREE-BOUND-ORDER]). Built with the view so an
     /// endpoint appearing in many pairs is indexed once.
     pub(super) kind_positions: KindPositions,
 }
@@ -135,12 +135,12 @@ fn creditable_entries(members: &[&NormalizedNode]) -> Vec<Fingerprint> {
     // endpoints left to right and never looks backwards, so it needs
     // its candidates in position order, and it should be offered a
     // container before the subtrees nested inside it
-    // ([FUSION-SHARED-SUBTREE]).
+    // ([FUSED-SHARED-SUBTREE]).
     entries.sort_by(super::credit::credit_order);
     entries
 }
 
-/// Kind-multiset of a post-order sequence ([FUSION-SHARED-SUBTREE-BOUND]).
+/// Kind-multiset of a post-order sequence ([FUSED-SHARED-SUBTREE-BOUND]).
 /// Called before the synthetic root is appended so the multiset holds
 /// exactly the window's own nodes.
 fn count_kinds(postorder: &[PostNode]) -> HashMap<&'static str, usize> {

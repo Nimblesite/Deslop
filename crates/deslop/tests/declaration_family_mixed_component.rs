@@ -14,9 +14,9 @@
 //! window here covers exactly one declaration, and every body carries a
 //! loop, an accumulator, a branch and arithmetic, so no member proves
 //! the forwarding shape and the plurality proof fails on every path
-//! ([RANK-STRUCTURAL-ONLY-FORWARDING]). The whole component stays
-//! visible, honestly demoted: mixed evidence earns a `structural_only`
-//! verdict below the act-now line, not silence.
+//! ([RANK-STRUCTURAL-ONLY-FORWARDING]). The whole component stays visible
+//! and renders the evidence of one admitted pair. The divergent closure
+//! member must neither dilute that pair nor erase it.
 
 use anyhow::Result;
 
@@ -64,9 +64,9 @@ fn a_divergent_sibling_does_not_erase_the_real_pair() -> Result<()> {
 
     assert_eq!(
         cluster_bucket(cluster),
-        "structural_only",
-        "mixed content evidence cannot vouch for the whole component, so the \
-         honest verdict is the demoted shape-only bucket: {cluster:#}"
+        "nearly_identical",
+        "routing reads the elected pair, never a mean over the divergent \
+         closure member: {cluster:#}"
     );
     assert!(
         signal(cluster, "structural") >= 0.99,
@@ -78,8 +78,15 @@ fn a_divergent_sibling_does_not_erase_the_real_pair() -> Result<()> {
          route into structural_only, not the evidence-free one: {cluster:#}"
     );
     assert!(
-        signal(cluster, "fused") < 0.85,
-        "a demoted mixed component must stay below the act-now line: {cluster:#}"
+        approx(signal(cluster, "pair_rename_consistency"), 1.0),
+        "the elected domestic/regional pair is a complete consistent rename: \
+         {cluster:#}"
+    );
+    assert_eq!(
+        field(cluster, "signal_source"),
+        &serde_json::json!({"left": 0, "right": 1}),
+        "all five rendered axes must come from the domestic/regional pair: \
+         {cluster:#}"
     );
 
     assert_eq!(

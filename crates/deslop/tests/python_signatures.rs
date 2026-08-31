@@ -1,5 +1,5 @@
 //! Tests proving that the `MinHash` signature pipeline works correctly for
-//! Python after the XOF-based fix ([FUSION-SIGNALS-THREE-LAYER]).
+//! Python after the XOF-based fix ([FUSED-SIGNALS-THREE-LAYER]).
 //!
 //! Bug 1 — `minhash_signature` produced 128 separate blake3 calls per
 //! k-gram.  Fixed to use blake3 XOF (one call, 128 slots from extended
@@ -34,7 +34,7 @@ fn is_exact_one(value: f64) -> bool {
     (value - 1.0).abs() <= f64::EPSILON
 }
 
-// [FUSION-SIGNALS-THREE-LAYER] Type-2 Python clones (identical after
+// [FUSED-SIGNALS-THREE-LAYER] Type-2 Python clones (identical after
 // normalisation) must produce token_jaccard = 1.0 — proves
 // minhash_signature maps identical k-gram sets to identical signatures.
 // If the XOF produces wrong values (e.g. all-MAX sentinel), Jaccard
@@ -64,7 +64,7 @@ fn python_type2_clone_has_token_jaccard_of_one() -> Result<()> {
     Ok(())
 }
 
-// [FUSION-SIGNALS-THREE-LAYER] Two Python functions sharing structural
+// [FUSED-SIGNALS-THREE-LAYER] Two Python functions sharing structural
 // subtrees (normalised `_ = _ + _` and `if _ < _: return _` patterns)
 // must produce a cross-file cluster with token_jaccard > 0.
 //

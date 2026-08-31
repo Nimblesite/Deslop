@@ -1,5 +1,5 @@
 //! Candidate pair construction, streamed and admission-gated
-//! ([FUSION-STRATEGY-BOUNDED-MAX], [PERF-FLUTTER-TODO-PAIRS]).
+//! ([FUSED-STRATEGY-BOUNDED-MAX], [PERF-FLUTTER-TODO-PAIRS]).
 //!
 //! The historical construction materialised every unique pair the three
 //! discovery sources surface — on the Flutter corpus, ~50 million
@@ -248,7 +248,7 @@ fn same_language_indexes<S: BuildHasher>(
 }
 
 /// True when the pair's endpoints live in different files — the rescue
-/// route's scope ([FUSION-SHARED-SUBTREE]).
+/// route's scope ([FUSED-SHARED-SUBTREE]).
 fn pair_crosses_files(pair: &CandidatePair, fingerprints: &[Fingerprint]) -> bool {
     match (fingerprints.get(pair.left), fingerprints.get(pair.right)) {
         (Some(left), Some(right)) => left.file_id != right.file_id,

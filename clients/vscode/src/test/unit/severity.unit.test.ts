@@ -25,7 +25,7 @@ import {
   SEVERITIES,
   Severity,
   clusterBand,
-  isActNow,
+  isLiveBubbleBucket,
 } from "../../types/report";
 import { wireCluster } from "../cluster.helpers";
 import { signalsWith } from "../signals.helpers";
@@ -37,7 +37,7 @@ const ERROR_SEVERITY = "error" as const;
 
 function cluster(
   id: string,
-  fused = 0,
+  pairAgreement = 0,
   bucket: Bucket = IDENTICAL_BUCKET,
   band: Severity = FAINT_BAND,
   rank = 1,
@@ -50,7 +50,7 @@ function cluster(
     size: 0,
     canonical_node_count: 0,
     bucket,
-    signals: signalsWith(IDENTICAL_BUCKET, { fused }),
+    signals: signalsWith(IDENTICAL_BUCKET, { pair_agreement: pairAgreement }),
     occurrences: [],
   });
 }
@@ -103,7 +103,7 @@ suite("severity", () => {
   // forbids. That contradiction is not a product decision — it is a category
   // error, the same one `classifyCluster` made, and the spec already resolved
   // it. Colour carries the bucket; glyph density carries the percentile; the
-  // two are orthogonal ([FUSION-CONTENT-GATE], #344).
+  // two are orthogonal ([FUSED-CONTENT-GATE], #344).
   test("a demoted shape-only family is not painted with act-now severity", () => {
     // The engine ranks the demoted family first and bands it `worst`
     // accordingly — rank 1 of 10 sits at the top of the percentile.
@@ -123,8 +123,9 @@ suite("severity", () => {
       "fixture: the demoted family is the top-ranked cluster",
     );
     assert.ok(
-      (clusters[0]?.signals.fused ?? 1) < (clusters[1]?.signals.fused ?? 0),
-      "fixture: it also carries strictly lower confidence than the proven clone",
+      (clusters[0]?.signals.pair_agreement ?? 1) <
+        (clusters[1]?.signals.pair_agreement ?? 0),
+      "fixture: it also carries strictly weaker elected content evidence than the proven clone",
     );
 
     // The paint. This is the assertion the defect was about.
@@ -197,14 +198,14 @@ suite("severity", () => {
     assert.equal(clusterSeverity(cluster("b", 0, "same_behavior")), HINT_SEVERITY);
   });
 
-  test("only act-now buckets may wear an act-now colour", () => {
+  test("only bubble-eligible buckets may wear an act-now colour", () => {
     // The one-line statement of the defect, so a future remap cannot quietly
     // hand crimson back to a bucket the engine refused to vouch for.
     for (const bucket of BUCKETS) {
       const level = deslopSeverityOf(bucket);
       if (level === ERROR_SEVERITY) {
         assert.ok(
-          isActNow(bucket),
+          isLiveBubbleBucket(bucket),
           `${bucket} resolves to the loudest paint but the engine does not call it actionable`,
         );
       }

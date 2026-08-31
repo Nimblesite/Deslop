@@ -1,5 +1,5 @@
 //! The blast-radius pins for `[REPAIR-COSINE-MERGE]` /
-//! [FUSION-CLUSTER-SIGNALS]: restoring a pair's measured cosine must not
+//! [FUSED-CLUSTER-SIGNALS]: restoring a pair's measured cosine must not
 //! cost a finding.
 //!
 //! A measured cosine belongs to the pair, not to the pass that surfaced
@@ -87,7 +87,7 @@ fn published(report: &serde_json::Value) -> Published {
     out
 }
 
-/// [FUSION-CLUSTER-SIGNALS] Restored cosines may add findings. They may
+/// [FUSED-CLUSTER-SIGNALS] Restored cosines may add findings. They may
 /// never remove one: every file set the embeddings-off run reported as
 /// duplicated must still be reported when the same pairs arrive
 /// carrying their measured cosine — through the mega-cluster hide, the

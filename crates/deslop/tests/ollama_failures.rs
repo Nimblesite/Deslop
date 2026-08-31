@@ -37,7 +37,7 @@ fn mock_provider_rejected_subtrees_are_reported() -> Result<()> {
     Ok(())
 }
 
-// [FUSION-EMBED-PROVIDER] A context-length rejection on an aggregate Ollama
+// [FUSED-EMBED-PROVIDER] A context-length rejection on an aggregate Ollama
 // batch must bisect and retry rather than marking all subtrees as failed.
 #[test]
 fn ollama_context_rejection_retries_small_subtrees_individually() -> Result<()> {

@@ -63,7 +63,7 @@ fn issue_91_embedding_only_pair_survives_when_lsh_misses_match() -> Result<()> {
     let cluster = clusters.first().context("one cluster expected")?;
     assert_eq!(cluster.members, vec![0, 1]);
 
-    // [FUSION-CLUSTER-SIGNALS] The report must show the cosine measured
+    // [FUSED-CLUSTER-SIGNALS] The report must show the cosine measured
     // between the two rendered occurrences, not an average over the
     // discovery edges that assembled the component.
     let vectors = HashMap::from([(0, vec![1.0, 0.0]), (1, vec![0.99, 0.141_067_36])]);

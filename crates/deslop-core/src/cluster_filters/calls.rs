@@ -6,7 +6,7 @@ use tree_sitter::Node;
 
 use std::sync::Arc;
 
-use super::{enclosing_kind, parse_for, snippets::CallSequence, NoiseStage, ParseCache, Snippet};
+use super::{enclosing_kind, parse_for, NoiseStage, ParseCache, Snippet};
 use crate::ast::{named_children, ByteRange};
 
 use args::collect_argument_shapes;
@@ -16,6 +16,12 @@ mod args;
 
 /// Assertion admission for the covered-statement rule.
 mod asserts;
+
+/// Bound-result flow for invariant adapter calls in scenario scaffolding.
+mod dataflow;
+
+/// Ordered-call scenario scaffolding classification.
+mod sequence;
 
 /// Detects literal-variation call scaffolding
 /// ([CLONE-NOISE-LITERAL-VARIATION-CALLS]): a cluster whose members all
@@ -42,7 +48,7 @@ pub(super) fn is_literal_variation_call_cluster(
     if is_literal_variation_call_set(calls) {
         return true;
     }
-    is_literal_variation_call_sequence(snippets, cache)
+    sequence::is_literal_variation_call_sequence(snippets, cache)
 }
 
 /// Applies the literal-variation rule to one comparable call per
@@ -79,6 +85,10 @@ pub(crate) struct CallShape {
     keywords: Vec<Option<Vec<u8>>>,
     /// Per-argument summary used for literal-variation detection.
     arguments: Vec<ArgShape>,
+    /// Local name this call's result is assigned to, when any.
+    result_binding: Option<Vec<u8>>,
+    /// Raw identifier arguments this call consumes.
+    argument_identifiers: Vec<Vec<u8>>,
 }
 
 /// Per-argument summary recorded for each call.
@@ -116,61 +126,9 @@ fn call_shape_from_node(call: Node<'_>, source: &[u8], language: &str) -> Option
         callee,
         keywords,
         arguments,
+        result_binding: dataflow::assigned_binding(call, source),
+        argument_identifiers: dataflow::argument_identifiers(call, source),
     })
-}
-
-/// Detects body-range clusters whose contained call sequence has the
-/// same callees but intentionally different literal test data.
-///
-/// Every position must vary. A sequence in which some calls carry
-/// differing literals while others are invariant is not payload — the
-/// invariant calls are shared logic the members genuinely duplicate, and
-/// hiding the cluster would lose a real Type-2 clone. Two `[Fact]` tests
-/// that fetch different URLs and then run the same four assertions are
-/// the case this distinguishes: one varying call, four invariant ones.
-/// Scaffolding has nothing left once the literals are removed.
-fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>], cache: &ParseCache) -> bool {
-    let cells: Option<Vec<Arc<CallSequence>>> = snippets
-        .iter()
-        .map(|snippet| cache.call_sequence(snippet, || Some(call_sequence(snippet))))
-        .collect();
-    let Some(cells) = cells else {
-        return false;
-    };
-    if !cells.iter().all(|cell| cell.statements_admissible) {
-        return false;
-    }
-    let sequences: Option<Vec<&[CallShape]>> =
-        cells.iter().map(|cell| cell.shapes.as_deref()).collect();
-    sequences.is_some_and(|sequences| every_sequence_position_varies(&sequences))
-}
-
-/// True when the members share one non-empty ordered call header and
-/// every position in it carries differing string literals — except a
-/// two-member pair whose differing literal is authored interpolation,
-/// which publishes (gh #467).
-fn every_sequence_position_varies(sequences: &[&[CallShape]]) -> bool {
-    let Some(first) = sequences.first() else {
-        return false;
-    };
-    if first.is_empty() || !sequences.iter().all(|seq| same_call_headers(seq, first)) {
-        return false;
-    }
-    (0..first.len()).all(|index| sequence_position_differs(sequences, index))
-        && !sequence_pair_is_copy_paste(sequences)
-}
-
-/// The sequence form of [`pair_is_copy_paste`]: same position, same
-/// callee, two members, differing interpolated literal.
-fn sequence_pair_is_copy_paste(sequences: &[&[CallShape]]) -> bool {
-    sequences.len() == 2
-        && sequences.first().is_some_and(|first| {
-            (0..first.len()).any(|index| {
-                let position: Vec<&CallShape> =
-                    sequences.iter().filter_map(|seq| seq.get(index)).collect();
-                pair_is_copy_paste(&position)
-            })
-        })
 }
 
 /// Computes the fused literal-variation sequence cell for one snippet:

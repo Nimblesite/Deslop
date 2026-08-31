@@ -8,7 +8,12 @@
   "ceilings": {
     "max_wall_seconds": 700,
     "max_peak_rss_mb": 9000,
-    "rationale": "Ceilings tolerated for now, enforced by the corpus harness [PERF-FLUTTER-TODO-GATE]: sized above this repository's current measured scan so the gate catches regressions. These figures live here and only here — any document that needs them points at this manifest instead of restating them. Tighten by re-deriving from a fresh measured scan; ceilings are always a function of the repository's own size."
+    "rationale": "Enforced by the corpus harness [PERF-FLUTTER-TODO-GATE], re-derived from the measured scan at the pinned sha: 295 s wall / 7947 MB peak RSS on the recording machine (release binary). The wall ceiling stays deliberately loose - it exists to catch a hang, not to police throughput. These figures live here and only here — any document that needs them points at this manifest instead of restating them. Tighten by re-deriving from a fresh measured scan; ceilings are always a function of the repository's own size."
+  },
+  "expect_files_min": 4673,
+  "expect_clusters": {
+    "min": 16490,
+    "max": 66000
   },
   "must_find": [
     {

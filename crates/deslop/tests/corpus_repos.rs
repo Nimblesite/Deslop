@@ -58,8 +58,7 @@ use deslop_test_support::{
         manifest, scan, string_field, u64_field, Baseline, CorpusRun, Failure,
     },
     corpus_confidence::{
-        check_curated_recall, check_fused_bounded_max, check_type2_curated_recall,
-        check_type2_gate_liveness,
+        check_curated_recall, check_type2_curated_recall, check_type2_gate_liveness,
     },
     corpus_determinism::check_reports_agree,
     corpus_precision::{check_boilerplate_not_ranked_first, check_curated_precision},
@@ -70,9 +69,10 @@ use serde_json::Value;
 #[test]
 #[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-PRECISION] \
             docs/plans/corpus-assertion.md — clones flutter/flutter at its pinned commit and \
-            scans the whole Dart tree: the largest in the corpus, roughly 9.5 GB peak and \
-            9m44s on a laptop (#166). The release gate compiles this target and never runs \
-            it. `make test-corpus` runs it, single-threaded, via `-- --ignored`."]
+            scans the whole Dart tree: the largest in the corpus, measured at 295 s wall / \
+            7947 MB peak RSS (gh #166 fixed; ceilings live in corpus/flutter.json). The \
+            release gate compiles this target and never runs it. `make test-corpus` runs it, \
+            single-threaded, via `-- --ignored`."]
 fn corpus_flutter_dart() -> Result<()> {
     gate("flutter")
 }
@@ -260,13 +260,12 @@ fn gate(name: &str) -> Result<()> {
     check_curated_precision(&manifest, &run.report, &mut failures);
     check_boilerplate_not_ranked_first(&manifest, &root, &run, &mut failures)?;
     check_data_tables_not_ranked_as_logic(&root, &run, &mut failures)?;
-    // [CORPUS-BASELINE] The confidence checks. The first two read no
-    // manifest — they judge the *shape* of the rendered report, so they run
+    // [CORPUS-BASELINE] The confidence checks. The first reads no
+    // manifest — it judges the *shape* of the rendered report, so it runs
     // on every repository including the ones whose recall is not yet
     // curated. The third is the curated Type-2 recall assertion
     // ([CORPUS-RECALL]): it reads `must_find_type2` and asserts nothing
     // where the manifest curates nothing.
-    check_fused_bounded_max(&run.report, &mut failures);
     check_type2_gate_liveness(&run.report, &mut failures);
     check_type2_curated_recall(&manifest, &run.report, &mut failures);
     check_ceilings(&manifest, &run, &mut failures)?;

@@ -1,7 +1,8 @@
-//! Regression coverage for GH #124 Type-4 node-count ranking inflation.
+//! Final-contract replacement for GH #124's retired confidence-weighted
+//! ranking: duplicated mass outranks confidence ([RANK-MASS-SUM]).
 //!
 //! The fixture no longer declares a signal triple: under
-//! [FUSION-CLUSTER-SIGNALS] a cluster's signals are measured between the
+//! [FUSED-CLUSTER-SIGNALS] a cluster's signals are measured between the
 //! occurrences the report renders, so the fixture must supply the
 //! evidence that produces them — identical Merkle hashes for the exact
 //! pair, partially agreeing `MinHash` signatures for the Type-4 pair, and
@@ -16,6 +17,7 @@ use deslop_core::{
     fingerprint::Fingerprint,
     lsh::{Signature, SignatureIndex, SIGNATURE_LEN},
     pair::FusedCluster,
+    pair::FusedEdge,
     state::{FileId, FileRegistry},
 };
 
@@ -27,9 +29,13 @@ const TYPE4_JACCARD: f64 = 0.359_375;
 const TYPE4_COSINE: f64 = 0.94;
 /// Float slack for measured signal comparisons (`f32` vector arithmetic).
 const SIGNAL_TOLERANCE: f64 = 1e-5;
+/// Exact duplicated mass of the semantic cluster.
+const SEMANTIC_WEIGHT: f64 = 814.0;
+/// Exact duplicated mass of the structural cluster.
+const EXACT_WEIGHT: f64 = 182.0;
 
 #[test]
-fn issue_124_type4_node_count_does_not_dominate_refactor_ranking() -> Result<()> {
+fn rank_mass_never_discounts_a_large_semantic_clone_by_confidence() -> Result<()> {
     let fixture = type4_weight_fixture();
 
     let signature_index = SignatureIndex::from_slice(&fixture.signatures);
@@ -76,16 +82,24 @@ fn issue_124_type4_node_count_does_not_dominate_refactor_ranking() -> Result<()>
         182,
         "fixture must model the smaller actionable exact duplicate"
     );
+    assert_eq!(
+        semantic.weight.to_bits(),
+        SEMANTIC_WEIGHT.to_bits(),
+        "semantic duplicated mass is exact"
+    );
+    assert_eq!(
+        exact.weight.to_bits(),
+        EXACT_WEIGHT.to_bits(),
+        "exact duplicated mass is exact"
+    );
     assert!(
-        exact.weight > semantic.weight,
-        "issue #124: low-structural Type-4 span should not outrank a smaller exact duplicate; semantic={} exact={}",
-        semantic.weight,
-        exact.weight
+        semantic.weight > exact.weight,
+        "confidence never discounts mass"
     );
     assert_eq!(
         clusters.first().map(|cluster| cluster.id.as_str()),
-        Some(exact.id.as_str()),
-        "issue #124: the actionable exact duplicate should be ranked first"
+        Some(semantic.id.as_str()),
+        "the larger duplicated mass ranks first regardless of confidence"
     );
 
     assert_measured_signals(semantic, exact);
@@ -93,7 +107,7 @@ fn issue_124_type4_node_count_does_not_dominate_refactor_ranking() -> Result<()>
     Ok(())
 }
 
-/// [FUSION-CLUSTER-SIGNALS]: every rendered signal is measured between
+/// [FUSED-CLUSTER-SIGNALS]: every rendered signal is measured between
 /// the rendered occurrences, so each one must equal the evidence the
 /// fixture supplied — not a discovery-edge average.
 fn assert_measured_signals(semantic: &Cluster, exact: &Cluster) {
@@ -169,11 +183,19 @@ fn type4_weight_fixture() -> Type4Fixture {
         fused_clusters: vec![
             FusedCluster {
                 members: vec![0, 1],
-                edges: Vec::new(),
+                edges: vec![FusedEdge {
+                    left: 0,
+                    right: 1,
+                    strength: TYPE4_COSINE,
+                }],
             },
             FusedCluster {
                 members: vec![2, 3],
-                edges: Vec::new(),
+                edges: vec![FusedEdge {
+                    left: 2,
+                    right: 3,
+                    strength: 1.0,
+                }],
             },
         ],
     }

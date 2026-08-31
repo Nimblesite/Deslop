@@ -1,5 +1,5 @@
 // Unit: multi-step live-surface journeys ([VSIX-LIVE-BUBBLE],
-// [FUSION-CONTENT-GATE]).
+// [FUSED-CLUSTER-SIGNALS]).
 //
 // The per-step suites pin one transition each. These drive a whole
 // editing session — cursor moves, rescans, mode switches, dismissals,
@@ -10,7 +10,6 @@
 import * as assert from "node:assert/strict";
 import { bucketLabels } from "../../types/report";
 import {
-  ENGINE_FUSED_CUTOFF,
   assertBubbleShows,
   bubbleCluster,
   bubbleFixture,
@@ -22,8 +21,8 @@ import { repoMetrics, reportWithClusters } from "./report.helpers";
 const SHAPE_ONLY_TITLE = bucketLabels("structural_only").plainTitle;
 const PROVEN_CLONE_TITLE = bucketLabels("nearly_identical").plainTitle;
 
-function provenClone(id: string, fused: number) {
-  return bubbleCluster(id, 40, fused, {
+function provenClone(id: string, pairAgreement: number) {
+  return bubbleCluster(id, 40, pairAgreement, {
     bucket: "nearly_identical",
     structural: 1,
     token: 1,
@@ -61,9 +60,10 @@ suite("LiveBubble journeys", () => {
       bubble.render(capture.editor, span(6), [family]);
       assert.equal(capture.visible(), undefined, "step 2: a demoted family offers nothing");
       assert.ok(
-        family.signals.fused < ENGINE_FUSED_CUTOFF,
-        "step 2: fixture is genuinely demoted",
+        family.signals.pair_agreement < 1,
+        "step 2: fixture carries weak content evidence",
       );
+      assert.equal(family.bucket, "structural_only", "step 2: fixture is genuinely demoted");
       assert.ok(
         capture.history().every((text) => !text.includes(SHAPE_ONLY_TITLE)),
         `step 2: no demoted title was ever painted: ${capture.history().join(" | ")}`,

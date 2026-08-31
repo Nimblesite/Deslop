@@ -1,5 +1,5 @@
 //! The deterministic embedding vector [`MockOllama`] serves
-//! ([FUSION-EMBED-PROVIDER], GH #369).
+//! ([FUSED-EMBED-PROVIDER], GH #369).
 //!
 //! Split from `mock_ollama.rs` so the HTTP mock owns the transport and
 //! this module owns the one question that decides every embedding

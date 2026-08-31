@@ -1,6 +1,6 @@
 //! End-to-end regression coverage for #339: the token layer must be
 //! rename-invariant for sibling-window fingerprints
-//! ([FUSION-SIGNALS-THREE-LAYER], [DECISION-TYPE3-TWO-PASS]).
+//! ([FUSED-SIGNALS-THREE-LAYER], [DECISION-TYPE3-TWO-PASS]).
 //!
 //! A fingerprint whose byte range is a synthetic sibling window (an F#
 //! module body, a JS statement run) resolved its token stream through
@@ -18,6 +18,8 @@
 //! `nearly_identical` clone.
 
 use serde_json::Value;
+
+use deslop_core::buckets::CONTENT_SUPPORT_FLOOR;
 
 use crate::common::{corpora::*, *};
 
@@ -45,14 +47,21 @@ fn assert_rename_invariant(report: &Value) -> Result<()> {
         "nearly_identical",
         "a renamed copy whose content agrees must stay act-now: {report:#}"
     );
+    let support = signal(clone, "pair_agreement").max(signal(clone, "pair_rename_consistency"));
     assert!(
-        signal(clone, "fused") >= 0.85,
-        "content-supported rename must keep act-now confidence: {report:#}"
+        support >= CONTENT_SUPPORT_FLOOR,
+        "the elected pair's content evidence must support the nearly-identical \
+         route: {report:#}"
+    );
+    assert_eq!(
+        field(clone, "signal_source"),
+        &serde_json::json!({"left": 0, "right": 1}),
+        "the rendered axes must name the pair that measured them: {report:#}"
     );
     Ok(())
 }
 
-// [FUSION-SIGNALS-THREE-LAYER] / #339: a module rename that grows the
+// [FUSED-SIGNALS-THREE-LAYER] / #339: a module rename that grows the
 // name by one character shifts every byte offset after it. The token
 // signal must not change — only the fallback-signature artifact did.
 #[test]

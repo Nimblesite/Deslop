@@ -8,7 +8,7 @@ use deslop_core::{
     config::ExclusionConfig,
     report::{
         ActionHint, CacheStats, EmbeddingProvenance, Report, ReportCluster, ReportOccurrence,
-        ReportSignals,
+        ReportSignalSource, ReportSignals,
     },
     report_boilerplate::build_boilerplate_hints,
     report_metrics::RepoMetrics,
@@ -17,17 +17,72 @@ use deslop_core::{
 
 #[test]
 fn truncate_for_wire_caps_occurrences_and_blanks_derivable_text() {
-    let report = sample_report().truncate_for_wire(2).truncate_for_wire(2);
+    let report = sample_report()
+        .truncate_for_wire(WIRE_OCCURRENCE_CAP)
+        .truncate_for_wire(WIRE_OCCURRENCE_CAP);
     assert!(report.schema_doc.is_empty());
     let Some(cluster) = report.clusters.first() else {
         assert_eq!(report.clusters.len(), 1);
         return;
     };
-    assert_eq!(cluster.occurrences.len(), 2);
-    assert_eq!(cluster.occurrences_total, 3);
+    assert_eq!(cluster.occurrences.len(), WIRE_OCCURRENCE_CAP);
+    assert_eq!(cluster.occurrences_total, FULL_OCCURRENCE_COUNT);
     assert!(cluster.occurrences_truncated);
+    assert_eq!(
+        cluster
+            .occurrences
+            .iter()
+            .map(|occurrence| occurrence.path.as_path())
+            .collect::<Vec<_>>(),
+        EXPECTED_SOURCE_PATHS.map(std::path::Path::new),
+        "truncation must retain the elected evidence endpoints, not merely the first occurrences"
+    );
+    assert_eq!(
+        cluster.signal_source,
+        Some(ReportSignalSource { left: 0, right: 1 }),
+        "signal_source must be reindexed into the truncated occurrence list"
+    );
     assert!(cluster.summary.is_empty());
     assert!(cluster.interpretation.is_empty());
+}
+
+/// Requested live-wire occurrence budget.
+const WIRE_OCCURRENCE_CAP: usize = 2;
+/// A wire budget that cannot carry both endpoints of pair evidence.
+const SINGLE_OCCURRENCE_CAP: usize = 1;
+/// Occurrences carried by the untruncated sample cluster.
+const FULL_OCCURRENCE_COUNT: usize = 3;
+/// Original occurrence positions elected as the signal source.
+const ORIGINAL_SIGNAL_SOURCE: ReportSignalSource = ReportSignalSource { left: 1, right: 2 };
+/// Paths belonging to the elected source after the first occurrence is discarded.
+const EXPECTED_SOURCE_PATHS: [&str; 2] = ["file-1.cs", "file-2.cs"];
+
+#[test]
+fn truncate_for_wire_removes_pair_evidence_when_the_source_pair_cannot_fit() -> anyhow::Result<()> {
+    let report = sample_report().truncate_for_wire(SINGLE_OCCURRENCE_CAP);
+    let [cluster] = report.clusters.as_slice() else {
+        anyhow::bail!("the sample report must retain exactly one cluster");
+    };
+    assert_eq!(cluster.occurrences.len(), SINGLE_OCCURRENCE_CAP);
+    assert_eq!(cluster.signal_source, None);
+    assert_eq!(cluster.signals.structural.to_bits(), 0.0_f64.to_bits());
+    assert_eq!(cluster.signals.token_jaccard.to_bits(), 0.0_f64.to_bits());
+    assert_eq!(cluster.signals.embedding_cos.to_bits(), 0.0_f64.to_bits());
+    assert_eq!(cluster.signals.shape.to_bits(), 0.0_f64.to_bits());
+    assert_eq!(cluster.signals.pair_agreement.to_bits(), 0.0_f64.to_bits());
+    assert_eq!(
+        cluster.signals.pair_rename_consistency.to_bits(),
+        0.0_f64.to_bits()
+    );
+    assert_eq!(
+        cluster.signals.literal_fraction.to_bits(),
+        0.0_f64.to_bits()
+    );
+    assert!(
+        cluster.evidence_verdict.is_empty(),
+        "an anonymous pair verdict must not survive wire truncation"
+    );
+    Ok(())
 }
 
 #[test]
@@ -102,9 +157,8 @@ fn sample_cluster() -> ReportCluster {
         token_jaccard: 1.0,
         shape: 1.0,
         embedding_cos: 0.0,
-        fused: 1.0,
-        agreement: 0.0,
-        rename_consistency: 0.0,
+        pair_agreement: 0.0,
+        pair_rename_consistency: 0.0,
         literal_fraction: 0.0,
     };
     ReportCluster {
@@ -115,10 +169,10 @@ fn sample_cluster() -> ReportCluster {
         size: 3,
         canonical_node_count: 12,
         signals,
+        signal_source: Some(ORIGINAL_SIGNAL_SOURCE),
         bucket: "identical".to_owned(),
         category: "logic".to_owned(),
         language: "rust".to_owned(),
-        meets_fused_gate: true,
         evidence_verdict: deslop_core::render::signals::content_evidence_verdict(signals),
         occurrences: sample_occurrences(),
         occurrences_total: 0,

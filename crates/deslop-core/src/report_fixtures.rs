@@ -26,9 +26,8 @@ pub fn identical_signals() -> ReportSignals {
         token_jaccard: 1.0,
         shape: 1.0,
         embedding_cos: 0.0,
-        fused: 1.0,
-        agreement: 1.0,
-        rename_consistency: 0.0,
+        pair_agreement: 1.0,
+        pair_rename_consistency: 0.0,
         literal_fraction: 0.0,
     }
 }
@@ -66,10 +65,10 @@ pub fn fixture_cluster(id: &str, occurrences: Vec<ReportOccurrence>) -> ReportCl
         size: occurrences.len(),
         canonical_node_count: 4,
         signals: identical_signals(),
+        signal_source: None,
         bucket: "identical".to_owned(),
         category: "logic".to_owned(),
         language: "rust".to_owned(),
-        meets_fused_gate: false,
         evidence_verdict: String::new(),
         occurrences_total: occurrences.len(),
         occurrences,

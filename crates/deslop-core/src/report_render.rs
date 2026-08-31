@@ -24,7 +24,7 @@ use crate::{
     content::ContentEvidence,
     fingerprint::Fingerprint,
     pair::PairScore,
-    report::{ReportCluster, ReportOccurrence, ReportSignals},
+    report::{ReportCluster, ReportOccurrence, ReportSignalSource, ReportSignals},
     report_location::format_occurrence,
     state::{FileId, FileRegistry},
 };
@@ -194,6 +194,9 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         size: cluster.members.len(),
         canonical_node_count,
         signals,
+        signal_source: cluster
+            .signal_source
+            .map(|(left, right)| ReportSignalSource { left, right }),
         bucket,
         // Default category; `render_report` re-parses the members and
         // stamps the authoritative `CloneCategory` ([RANK-CATEGORY]) using
@@ -205,7 +208,6 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         // Stamped below by the one derived-field pass
         // ([`crate::report_restamp`]) so the render path and the
         // `--from-report` replay path can never compute them differently.
-        meets_fused_gate: false,
         evidence_verdict: String::new(),
         occurrences,
         occurrences_total,
@@ -374,14 +376,14 @@ fn proven_identical_signals(signals: ReportSignals, kind: ClusterKind) -> Report
 }
 
 /// True when every member of the cluster carries the same
-/// normalised-subtree digest ([FUSION-CONTENT-GATE], gh #431).
+/// normalised-subtree digest ([FUSED-CONTENT-GATE], gh #431).
 ///
 /// This is the Merkle fact the token-axis correction in
 /// [`crate::buckets::content_gated_signals`] rests on: one shared digest
 /// means the members' normalised kind streams are equal by
 /// construction, whatever a `MinHash` estimate over a fallback signature
 /// reported. Nothing in the rendered signal triple can stand in for it —
-/// `structural` grades subtree *overlap* ([FUSION-SHARED-SUBTREE]), so
+/// `structural` grades subtree *overlap* ([FUSED-SHARED-SUBTREE]), so
 /// it saturates by ratio as well as by digest equality and reads high
 /// for members that provably differ.
 fn members_share_one_digest(members: &[Fingerprint]) -> bool {
@@ -689,9 +691,8 @@ mod tests {
             token_jaccard: 1.0,
             shape: 1.0,
             embedding_cos: 0.0,
-            fused: 1.0,
-            agreement: 0.0,
-            rename_consistency: 0.0,
+            pair_agreement: 0.0,
+            pair_rename_consistency: 0.0,
             literal_fraction: 0.0,
         }
     }

@@ -18,19 +18,20 @@ URLs:
 - Simple token-based approaches **remain competitive with tree-based detectors on runtime and simplicity**, per recent evals.
 
 URLs:
-- [SourcererCC: Scaling Code Clone Detection to Big-Code (Semantic Scholar)](https://www.semanticscholar.org/paper/SourcererCC:-Scaling-Code-Clone-Detection-to-Sajnani-Saini/e1abe96610cb3bc989e727f0b59cebedb14260f1)
+- [SourcererCC: Scaling Code Clone Detection to Big-Code (ICSE 2016 PDF)](https://cs.uwaterloo.ca/~m2nagapp/courses/CS846/1171/papers/sajnani_icse16.pdf)
 - [The NiCad Clone Detector (ResearchGate)](https://www.researchgate.net/publication/221219568_The_NiCad_clone_detector)
 - [TACC vs SourcererCC/NiCad, ICSE 2023 (PDF)](https://wu-yueming.github.io/Files/ICSE2023_TACC.pdf)
 - [Scalable clone detection via adaptive prefix filtering (PDF)](https://damevski.github.io/files/nishi_scalable_2017_preprint.pdf)
 
 ### [TECH-AST-FINGERPRINT] AST fingerprinting (Baxter 1998, Chilowicz 2009)
 
-- **Baxter et al.** — seminal work: hash AST subtrees, cluster by hash, then extend to near-miss via tree edit distance.
+- **Baxter et al.** — seminal work: hash AST subtrees, cluster by hash, then compare near misses with a leaf-ignoring hash and `2S/(2S+L+R)`. Zhang–Shasha, not Baxter, supplies Deslop's ordered tree-edit-distance recurrence; `1 − TED/max(nodes)` is Deslop's normalisation.
 - **Chilowicz et al.** — *"each node of an AST is associated with a fingerprint based on a hash value (incrementally computed) of the subtree rooted at the node"* — allows exact subtree clustering + approximate extension over sibling sequences. This is effectively what Deslop is building.
 - **ASPDup** — AST-sequence-based progressive duplicate detection; recent practical variant.
 
 URLs:
 - [Baxter et al., Clone Detection Using Abstract Syntax Trees, ICSM 1998 (PDF)](https://leodemoura.github.io/files/ICSM98.pdf)
+- [Zhang and Shasha, Simple Fast Algorithms for the Editing Distance Between Trees and Related Problems (SIAM 1989)](https://doi.org/10.1137/0218082)
 - [Chilowicz et al., Syntax Tree Fingerprinting, ICPC 2009 (PDF)](https://igm.univ-mlv.fr/~chilowi/research/syntax_tree_fingerprinting/syntax_tree_fingerprinting_ICPC09.pdf)
 - [Chilowicz et al. — Foundation paper (CORE PDF)](https://core.ac.uk/download/pdf/48343903.pdf)
 - [Syntax tree fingerprinting (IEEE)](https://ieeexplore.ieee.org/document/5090050/)
@@ -51,7 +52,7 @@ These are the building blocks used inside token-based and AST-based detectors fo
 Empirically, **MinHash outperforms SimHash** on binarized feature datasets.
 
 URLs:
-- [MinHash (Wikipedia)](https://en.wikipedia.org/wiki/MinHash)
+- [Broder, On the Resemblance and Containment of Documents (IEEE 1997)](https://ieeexplore.ieee.org/document/666900/)
 - [SimHash (Wikipedia)](https://en.wikipedia.org/wiki/SimHash)
 - [Locality-Sensitive Hashing (Wikipedia)](https://en.wikipedia.org/wiki/Locality-sensitive_hashing)
 - [In Defense of MinHash Over SimHash (PMLR)](http://proceedings.mlr.press/v33/shrivastava14.pdf)

@@ -106,7 +106,7 @@ suite("occurrence display locations", () => {
     const occurrences = enriched.clusters[0]?.occurrences ?? [];
     assert.equal(occurrences.length, 2, "both occurrences survive the enrichment pass");
     assert.ok(
-      occurrences.every((occurrence) => occurrence.displayLocation?.label.startsWith(file)),
+      occurrences.every((item) => item.displayLocation?.label.startsWith(file)),
       "every occurrence in the shared file is enriched with a display location",
     );
     assert.equal(reads.get(file), 1, "the shared source file is read exactly once for the whole pass");

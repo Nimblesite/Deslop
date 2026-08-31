@@ -1,7 +1,7 @@
 //! Clone cluster materialisation and ranking.
 //!
 //! Implements [PIPELINE-CLUSTER-EXACT], the fused-clustering output of
-//! [FUSION-STRATEGY-BOUNDED-MAX], and the "worst offenders first" scoring of
+//! [FUSED-STRATEGY-BOUNDED-MAX], and the "worst offenders first" scoring of
 //! [PIPELINE-RANK-WORST-FIRST]. Consumes [`FusedCluster`]s from
 //! [`crate::pair::cluster_by_transitive_closure`] — the two inputs
 //! contributing to those clusters are (a) exact structural buckets per
@@ -31,7 +31,7 @@ pub mod benchmark;
 /// The authored declaration an occurrence sits inside
 /// ([PIPELINE-CLUSTER-EXACT-SCOPE]).
 mod scope;
-/// Rendered-truth signal measurement ([FUSION-CLUSTER-SIGNALS]).
+/// Rendered-truth signal measurement ([FUSED-CLUSTER-SIGNALS]).
 mod signals;
 /// Cross-cluster subsumption ([PIPELINE-CLUSTER-SUBSUME]).
 mod subsume;
@@ -52,17 +52,22 @@ pub struct Cluster {
     pub members: Vec<Fingerprint>,
     /// Weight from [PIPELINE-RANK-WORST-FIRST]. Higher = worse offender.
     pub weight: f64,
-    /// Measured signal breakdown ([FUSION-CLUSTER-SIGNALS]): the
-    /// per-signal mean over every unordered pair of the rendered
-    /// members — Merkle-hash equality for `structural`, `MinHash`
-    /// Jaccard for `token_jaccard`, vector cosine for `embedding_cos`.
-    /// Never aggregated from the discovery edges that glued the
-    /// transitive-closure component together.
+    /// Measured signal breakdown ([FUSED-CLUSTER-SIGNALS]): one elected
+    /// admitted pair's three axes together — Merkle-hash equality /
+    /// shared-subtree overlap for `structural`, `MinHash` Jaccard for
+    /// `token_jaccard`, vector cosine for `embedding_cos`. Per-axis
+    /// maxima are forbidden because they could describe no real pair;
+    /// a pair that never cleared admission contributes nothing (gh #458).
     pub signals: PairScore,
-    /// Measured raw-content evidence across the members'
-    /// normalisation-collapsed leaves ([FUSION-CONTENT-GATE]):
-    /// pooled byte agreement, Type-2 rename consistency, and literal
-    /// dominance ([CLONE-NOISE-LITERAL-TABLE]). Starts
+    /// The admitted pair — as positions into [`Self::members`], which
+    /// is the rendered occurrence order — whose evidence the signals
+    /// display ([FUSED-CLUSTER-SIGNALS] gh #458). `None` when no
+    /// admitted pair survives the same-file overlap collapse.
+    pub signal_source: Option<(usize, usize)>,
+    /// The elected pair's measured raw-content evidence from its
+    /// normalisation-collapsed leaves ([FUSED-CONTENT-GATE]): byte
+    /// agreement, Type-2 rename consistency, and literal dominance
+    /// ([CLONE-NOISE-LITERAL-TABLE]). Starts
     /// [`ContentEvidence::unmeasured`];
     /// [`crate::content::attach_content_evidence`] measures it inside
     /// [`build_ranked_fused_clusters`], before cross-cluster
@@ -82,10 +87,10 @@ const MIN_REPORTABLE_MEMBERS: usize = 2;
 /// how the cluster was discovered.
 ///
 /// The signal breakdown is measured between each cluster's rendered
-/// occurrences ([FUSION-CLUSTER-SIGNALS]) from the inputs' `signatures`
+/// occurrences ([FUSED-CLUSTER-SIGNALS]) from the inputs' `signatures`
 /// and `embedding_vectors`, and each cluster's [`ContentEvidence`] is
 /// measured from `trees` and `sources` **before** cross-cluster
-/// subsumption elects the surviving view ([FUSION-CONTENT-GATE],
+/// subsumption elects the surviving view ([FUSED-CONTENT-GATE],
 /// [PIPELINE-CLUSTER-SUBSUME]). Cluster ids hash the smallest member's
 /// digest together with every member's workspace-relative path
 /// ([PIPELINE-DETERMINISM], gh #430), so identical fused clusters across
@@ -101,7 +106,7 @@ pub struct ClusterBuildInputs<'a, S: BuildHasher, H: BuildHasher, L: BuildHasher
     pub fingerprints: &'a [Fingerprint],
     /// Per-fingerprint `MinHash` signatures, positionally aligned.
     pub signatures: &'a dyn SignatureLookup,
-    /// Embedding vectors by corpus index ([FUSION-CLUSTER-SIGNALS]).
+    /// Embedding vectors by corpus index ([FUSED-CLUSTER-SIGNALS]).
     pub embedding_vectors: &'a HashMap<usize, Vec<f32>, S>,
     /// Transitive-closure components to rehydrate.
     pub fused_clusters: &'a [FusedCluster],
@@ -140,11 +145,16 @@ pub fn build_ranked_fused_clusters<
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| left.id.cmp(&right.id))
     });
-    // [FUSION-CONTENT-GATE] before [PIPELINE-CLUSTER-SUBSUME] (#367,
+    // [FUSED-CONTENT-GATE] before [PIPELINE-CLUSTER-SUBSUME] (#367,
     // #408): subsumption deletes whole views, and the choice must see
     // the same measured content evidence the report will render — a
     // survivor elected on raw geometry cannot be re-elected later.
-    attach_content_evidence(&mut clusters, inputs.trees, inputs.sources);
+    attach_content_evidence(
+        &mut clusters,
+        inputs.trees,
+        inputs.sources,
+        inputs.file_languages,
+    );
     let collapsed = collapse_cross_cluster_overlap(clusters);
     log_ranked_cluster_distribution(
         &collapsed,
@@ -166,7 +176,7 @@ const SIGNAL_CHUNK_CLUSTERS: usize = 8;
 /// Materialises every fused cluster that remains reportable.
 ///
 /// A corpus-scale run pays for this stage in the O(k²) per-cluster pair
-/// measurement ([FUSION-CLUSTER-SIGNALS]): one 877-member scaffold
+/// measurement ([FUSED-CLUSTER-SIGNALS]): one 877-member scaffold
 /// cluster measures 384k pairs, most of them full tree alignments.
 /// Clusters are independent, every measurement is a pure function of
 /// the corpus, and each occurrence belongs to exactly one component —
@@ -271,7 +281,7 @@ impl BuildSpent {
 /// Emits the cluster-signal overlap measurement counters and substage
 /// wall time, so memo effectiveness and cost attribution across the
 /// whole ranked build are readable from one event
-/// ([FUSION-SHARED-SUBTREE-MEMO], [PIPELINE-OBSERVABILITY-STAGES]).
+/// ([FUSED-SHARED-SUBTREE-MEMO], [PIPELINE-OBSERVABILITY-STAGES]).
 fn log_signal_measurement(stats: crate::overlap::MeasureStats, spent: &BuildSpent) {
     tracing::info!(
         alignments = stats.alignments,
@@ -332,8 +342,14 @@ fn build_fused_cluster<S: BuildHasher + Sync, H: BuildHasher + Sync, L: BuildHas
         return None;
     }
     let signals_started = std::time::Instant::now();
+    let admitted_pairs: Vec<(usize, usize)> = fused
+        .edges
+        .iter()
+        .map(|edge| (edge.left, edge.right))
+        .collect();
     let measured = measured_signals(
         &occurrence_indices,
+        &admitted_pairs,
         fingerprints,
         inputs.signatures,
         inputs.embedding_vectors,
@@ -345,7 +361,15 @@ fn build_fused_cluster<S: BuildHasher + Sync, H: BuildHasher + Sync, L: BuildHas
         .iter()
         .filter_map(|index| fingerprints.get(*index).cloned())
         .collect();
-    let cluster = materialize_cluster(members, measured, inputs.file_paths);
+    // The source pair is in corpus-index terms; the report reads it as
+    // positions into the rendered occurrence order, which is exactly
+    // `members`.
+    let signal_source = measured.source_pair.and_then(|(left, right)| {
+        let left_position = occurrence_indices.binary_search(&left).ok()?;
+        let right_position = occurrence_indices.binary_search(&right).ok()?;
+        Some((left_position, right_position))
+    });
+    let cluster = materialize_cluster(members, measured.score, signal_source, inputs.file_paths);
     spent.materialize = spent
         .materialize
         .saturating_add(materialize_started.elapsed());
@@ -356,19 +380,19 @@ fn build_fused_cluster<S: BuildHasher + Sync, H: BuildHasher + Sync, L: BuildHas
 fn materialize_cluster(
     members: Vec<Fingerprint>,
     signals: PairScore,
+    signal_source: Option<(usize, usize)>,
     file_paths: &HashMap<FileId, PathBuf>,
 ) -> Cluster {
     let size = members.len();
     let smallest_nodes = smallest_node_count(&members);
-    let rank_nodes = refactor_potential_node_count(smallest_nodes, signals);
-    let spanned_bytes = spanned_byte_count(&members);
-    let weight = rank_weight(rank_nodes, size, spanned_bytes);
+    let weight = mass_weight(smallest_nodes, size);
     let id_source = cluster_id_source(&members, file_paths);
     Cluster {
         id: encode_short_id(id_source),
         members,
         weight,
         signals,
+        signal_source,
         content: ContentEvidence::unmeasured(),
     }
 }
@@ -380,34 +404,6 @@ fn smallest_node_count(members: &[Fingerprint]) -> usize {
         .map(|member| member.node_count)
         .min()
         .unwrap_or(0)
-}
-
-/// Sums physical byte spans for the ranking formula.
-fn spanned_byte_count(members: &[Fingerprint]) -> u64 {
-    members
-        .iter()
-        .map(|member| u64::try_from(member.byte_range.len()).unwrap_or(u64::MAX))
-        .fold(0_u64, u64::saturating_add)
-}
-
-/// Returns the node count used for ranking.
-///
-/// Low-structural Type-4 clusters often span a large interface-shaped AST
-/// region while only a small body fragment is actually refactorable. Keep the
-/// rendered `canonical_node_count` unchanged, but rank those clusters by a
-/// conservative refactor-potential fraction so exact duplicates stay ahead.
-fn refactor_potential_node_count(clone_node_count: usize, signals: PairScore) -> usize {
-    if signals.structural < LOW_STRUCTURAL_TYPE4_CEILING
-        && signals.embedding_cos >= TYPE4_EMBEDDING_FLOOR
-    {
-        clone_node_count
-            .saturating_mul(LOW_STRUCTURAL_TYPE4_WEIGHT_NUMERATOR)
-            .checked_div(LOW_STRUCTURAL_TYPE4_WEIGHT_DENOMINATOR)
-            .unwrap_or(clone_node_count)
-            .max(1)
-    } else {
-        clone_node_count
-    }
 }
 
 /// Selects the deterministic hash source for the public cluster id
@@ -711,19 +707,22 @@ impl OverlapRun {
     }
 }
 
-/// Implements the [PIPELINE-RANK-WORST-FIRST] formula.
+/// Implements the [RANK-MASS-SUM] formula: duplicated mass only.
 ///
-/// `weight = clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes)`
+/// `weight = clone_node_count × (cluster_size − 1)`
 ///
-/// Values are capped at `f64`'s mantissa precision (2^53) before conversion;
-/// real-world inputs are orders of magnitude below that, so the clamp only
-/// protects against pathological inputs rather than reshaping the formula.
+/// The visible re-rank in `report_weight.rs` is the authoritative final
+/// weight (it folds the category and structural-only policy multipliers
+/// and the `report_hide` visibility); this is the mass a cluster carries
+/// before that pass, used to keep the pre-render order stable. No
+/// `log2(1 + spanned)` term and no confidence factor survives
+/// ([RANK-MASS-SUM], gh #458): a duplicate's extent is the mass to fix,
+/// never a confidence-scaled figure.
 #[must_use]
-fn rank_weight(clone_node_count: usize, cluster_size: usize, spanned_bytes: u64) -> f64 {
+fn mass_weight(clone_node_count: usize, cluster_size: usize) -> f64 {
     let nodes = lossless_f64_from_usize(clone_node_count);
     let size_minus_one = lossless_f64_from_usize(cluster_size.saturating_sub(1));
-    let spanned = lossless_f64_from_u64(spanned_bytes.saturating_add(1));
-    nodes * size_minus_one * spanned.log2()
+    nodes * size_minus_one
 }
 
 /// Converts `usize` to `f64`, clamping to 2^53 (the largest integer that
@@ -749,14 +748,6 @@ const F64_MAX_EXACT_INTEGER: f64 = 9_007_199_254_740_992.0;
 /// 2^32 as an `f64`. Used by [`lossless_f64_from_u64`] to reassemble 64-bit
 /// values without a direct `u64 as f64` cast.
 const F64_TWO_POW_32: f64 = 4_294_967_296.0;
-/// Structural ceiling below which Type-4 span size is treated as low-signal.
-const LOW_STRUCTURAL_TYPE4_CEILING: f64 = 0.10;
-/// Semantic confidence floor for Type-4 ranking dampening.
-const TYPE4_EMBEDDING_FLOOR: f64 = 0.90;
-/// Rank low-structural Type-4 clusters at 10% of their AST node span.
-const LOW_STRUCTURAL_TYPE4_WEIGHT_NUMERATOR: usize = 1;
-/// Denominator for the low-structural Type-4 ranking fraction.
-const LOW_STRUCTURAL_TYPE4_WEIGHT_DENOMINATOR: usize = 10;
 
 /// Shortens a full 32-byte hash to an 8-byte hex stable id for reporting.
 #[must_use]

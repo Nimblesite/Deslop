@@ -165,7 +165,7 @@ fn canonical_navigation_survives_via_additive_clone_diagnostics() -> Result<()> 
          survives without overloading F12: {response}"
     );
 
-    // [FUSION-CONTENT-GATE] #344: the Problems panel is a decision surface.
+    // [FUSED-CONTENT-GATE] #344: the Problems panel is a decision surface.
     // The bucket title alone is unfalsifiable — a corroborated Type-2 rename
     // and an anchor-poor scaffolding family both render structural 1.00 — so
     // the message must also state the fused score and the measured evidence.
@@ -220,7 +220,7 @@ fn additive_code_lens_carries_deslops_own_jump_command_not_definition() -> Resul
         "the lens must navigate via Deslop's own command, never textDocument/definition: {response}"
     );
 
-    // [FUSION-CONTENT-GATE] #344: the lens is the inline decision surface, so
+    // [FUSED-CONTENT-GATE] #344: the lens is the inline decision surface, so
     // it carries the same explanation the Problems panel does.
     let cluster_id = first_lens
         .pointer("/command/arguments/0")
@@ -340,21 +340,20 @@ fn cluster_signals(report: &Value, cluster_id: &str) -> Result<ReportSignals> {
     Ok(serde_json::from_value(signals.clone())?)
 }
 
-/// The confidence explanation [FUSION-CONTENT-GATE] every plain-text Deslop
+/// The confidence explanation [FUSED-CONTENT-GATE] every plain-text Deslop
 /// surface must carry. Spelled out here rather than borrowed from the
-/// renderer, so a surface that quietly drops the fused score or the measured
-/// content evidence fails this test instead of agreeing with itself.
+/// renderer, so a surface that quietly drops the measured content evidence
+/// fails this test instead of agreeing with itself. There is no cluster
+/// `fused` to state ([FUSED-SCOPE]).
 fn expected_explanation(signals: ReportSignals) -> String {
     format!(
         "structural {structural:.2} · jaccard {jaccard:.2} · embedding {embedding:.2} · \
-         fused {fused:.2} · agreement {agreement:.2} · rename {rename:.2} · \
-         literal {literal:.2}",
+         agreement {agreement:.2} · rename {rename:.2} · literal {literal:.2}",
         structural = signals.structural,
         jaccard = signals.token_jaccard,
         embedding = signals.embedding_cos,
-        fused = signals.fused,
-        agreement = signals.agreement,
-        rename = signals.rename_consistency,
+        agreement = signals.pair_agreement,
+        rename = signals.pair_rename_consistency,
         literal = signals.literal_fraction,
     )
 }
@@ -370,11 +369,11 @@ fn assert_explains_confidence(rendered: &str, signals: ReportSignals, surface: &
     );
     assert!(
         rendered.contains(&expected),
-        "the {surface} must state the fused confidence and the measured content evidence \
-         [FUSION-CONTENT-GATE]: expected `{expected}` inside `{rendered}`"
+        "the {surface} must state the measured content evidence \
+         [FUSED-CONTENT-GATE]: expected `{expected}` inside `{rendered}`"
     );
     assert!(
-        signals.fused > 0.0 && signals.structural > 0.0,
+        signals.structural > 0.0,
         "a published clone must carry positive support, else the {surface} pins nothing: \
          {signals:?}"
     );

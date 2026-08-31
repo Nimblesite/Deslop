@@ -2,7 +2,7 @@
 //! must NOT be labeled `nearly_identical`. The fixture is three
 //! handlers sharing one 96-node skeleton whose renamed identifiers map
 //! consistently but whose loop strides (`+ 1` / `+ 2` / `+ 3`) diverge
-//! at the aligned literal position: [FUSION-CONTENT-GATE] measures zero
+//! at the aligned literal position: [FUSED-CONTENT-GATE] measures zero
 //! literal preservation, so no content evidence vouches for the family
 //! and it stays a hidden structural-only match (test scaffolding,
 //! generated boilerplate). The divergent literal is what separates this

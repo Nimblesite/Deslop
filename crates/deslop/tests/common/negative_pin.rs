@@ -37,7 +37,7 @@ use super::{
     clusters_hidden, expect_cluster_spanning, field, metric_field, occurrence_files,
     occurrence_is_hidden, occurrences, signal,
     signals::{
-        signal_dump, ACT_NOW_BUCKETS, ACT_NOW_FUSED, HONEST_SHAPE_ONLY_BUCKETS, IDENTICAL_BUCKET,
+        signal_dump, CONFIRMED_DUPLICATE_BUCKETS, HONEST_SHAPE_ONLY_BUCKETS, IDENTICAL_BUCKET,
     },
     verdict::{assert_type1_identical_signals, duplicated_loc, loc_as_f64},
     visible_cluster_lines, visible_duplicated_lines, Result,
@@ -114,18 +114,18 @@ fn assert_control_visible(report: &Value, label: &str, control_files: &[&str]) -
     Ok(())
 }
 
-/// Bucket half. The act-now membership test admits three buckets where
+/// Bucket half. The duplicate-bucket membership test admits three buckets where
 /// the fixture determines one, so both are asserted: the wide one names
 /// the failure a reader recognises, the exact one is what actually
 /// holds.
 fn assert_control_verdict(control: &Value, label: &str) {
     assert!(
-        ACT_NOW_BUCKETS.contains(&cluster_bucket(control)),
+        CONFIRMED_DUPLICATE_BUCKETS.contains(&cluster_bucket(control)),
         "{label}: the control clone is copied byte for byte; a suppression wide \
          enough to demote it has eaten real duplication — bucket={bucket} \
-         fused={fused:.4}",
+         agreement={agreement:.4}",
         bucket = cluster_bucket(control),
-        fused = signal(control, "fused"),
+        agreement = signal(control, "pair_agreement"),
     );
     assert_control_is_byte_proven(control, label);
 }
@@ -141,7 +141,7 @@ fn assert_control_is_byte_proven(control: &Value, label: &str) {
         cluster_bucket(control),
         IDENTICAL_BUCKET,
         "{label}: the control is copied byte for byte, so `{IDENTICAL_BUCKET}` is \
-         the only honest bucket — any other act-now label claims the copies differ \
+         the only honest bucket — any other duplicate label claims the copies differ \
          somewhere they do not: {dump}",
         dump = signal_dump(control),
     );
@@ -370,12 +370,12 @@ fn published_summary(report: &Value) -> Vec<(&str, &str, Vec<String>)> {
 /// hide**. Same two sides — the control must still be visible — but the
 /// family half is stated as what is true today rather than what should
 /// be: every cluster over the family is labelled shape-only, none of
-/// them reaches the act-now line, and there are exactly
+/// none of them makes a duplication claim, and there are exactly
 /// `expected_demoted` of them.
 ///
 /// The exact count is what makes this a pin rather than a shrug: a
 /// *new* family cluster fails it, and so does an existing one climbing
-/// into an act-now bucket. `expected_hidden` holds the same bar for the
+/// into a duplicate bucket. `expected_hidden` holds the same bar for the
 /// suppression counter, for the reason [`assert_family_hidden`] gives.
 /// The residual itself is recorded against its issue in each caller's
 /// module doc, so a reader can tell a known, bounded gap from a passing
@@ -421,7 +421,7 @@ fn clusters_over_family<'a>(report: &'a Value, family_files: &[&str]) -> Vec<&'a
 }
 
 /// A family the tool cannot act on must at least be labelled shape-only
-/// and stay below the act-now line.
+/// and stay outside the duplicate buckets.
 fn assert_each_family_cluster_is_demoted(over_family: &[&Value], label: &str) {
     for cluster in over_family {
         assert!(
@@ -432,11 +432,13 @@ fn assert_each_family_cluster_is_demoted(over_family: &[&Value], label: &str) {
             bucket = cluster_bucket(cluster),
         );
         assert!(
-            signal(cluster, "fused") < ACT_NOW_FUSED,
-            "{label}: {id} reached the act-now line at {fused:.4}; an agent told \
-             not to write this code would be told wrong",
+            signal(cluster, "pair_agreement") < 1.0
+                && signal(cluster, "pair_rename_consistency") < 1.0,
+            "{label}: {id} is a scaffolding family — no elected pair's content \
+             evidence may claim full duplication (agreement=1.0 or a certified \
+             rename=1.0) while the cluster wears a demoted label: {dump}",
             id = cluster_id(cluster),
-            fused = signal(cluster, "fused"),
+            dump = signal_dump(cluster),
         );
     }
 }

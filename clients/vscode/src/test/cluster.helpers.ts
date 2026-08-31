@@ -1,23 +1,24 @@
 // One `ReportCluster` fixture builder for every VS Code suite.
 //
-// A cluster now carries the figures the engine computed for it — the
-// global rank, the severity band, the shape reading, the occurrence
-// count, the fused-gate verdict and the evidence sentence — and every
-// surface reads them verbatim. A suite that hand-rolled its own literal
-// would be free to omit one, and a surface reading an omitted field
-// renders a zero instead of failing, which is exactly the silent wrong
-// answer the accuracy contract forbids. One builder means one place
-// where a new wire field has to be answered for.
+// A cluster carries the figures the engine computed for it — the global
+// rank, the severity band, the elected pair's measured axes, the
+// occurrence count and the evidence sentence — and every surface reads
+// them verbatim. A suite that hand-rolled its own literal would be free
+// to omit one, and a surface reading an omitted field renders a zero
+// instead of failing, which is exactly the silent wrong answer the
+// accuracy contract forbids. One builder means one place where a new
+// wire field has to be answered for.
 //
 // The defaults describe a single-cluster report of the given bucket;
 // suites override whatever they are pinning.
 
-import { bucketMeetsFusedGate, bucketSignals } from "./signals.helpers";
+import { bucketSignals } from "./signals.helpers";
 import type {
   Bucket,
   ReportCluster,
   ReportOccurrence,
   ReportSignals,
+  ReportSignalSource,
   Severity,
 } from "../types/report";
 
@@ -34,7 +35,7 @@ export interface ClusterFixture {
   category?: string;
   language?: string;
   signals?: ReportSignals;
-  meets_fused_gate?: boolean;
+  signal_source?: ReportSignalSource;
   evidence_verdict?: string;
   occurrences_total?: number;
   occurrence_count?: number;
@@ -66,10 +67,18 @@ export function wireCluster(fixture: ClusterFixture): ReportCluster {
     size,
     canonical_node_count: fixture.canonical_node_count ?? 4,
     signals: fixture.signals ?? bucketSignals(bucket),
+    // The elected pair whose measurement `signals` carries
+    // ([FUSED-CLUSTER-SIGNALS]). Default: the fixture's first two
+    // occurrences, the pair a multi-member fixture elects; a
+    // single-occurrence fixture has no admitted pair and carries no
+    // source, matching the engine's no-pair convention. Every rendered
+    // axis must trace to a real pair, so a fixture without one is a
+    // fixture lying about where its numbers came from.
+    signal_source:
+      fixture.signal_source ?? (occurrences.length >= 2 ? { left: 0, right: 1 } : undefined),
     bucket,
     category: fixture.category ?? "logic",
     language: fixture.language ?? "csharp",
-    meets_fused_gate: fixture.meets_fused_gate ?? bucketMeetsFusedGate(bucket),
     evidence_verdict: fixture.evidence_verdict ?? "",
     occurrences,
     occurrences_total: fixture.occurrences_total ?? count,

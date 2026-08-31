@@ -281,7 +281,7 @@ fn detects_type2_clone_in_go_fixture() -> Result<()> {
     Ok(())
 }
 
-// Implements [FUSION-SIGNALS-THREE-LAYER] for F#: a genuine Type-3
+// Implements [FUSED-SIGNALS-THREE-LAYER] for F#: a genuine Type-3
 // near-miss. `delta.fs`'s loop body runs two accumulator updates per
 // iteration; `epsilon.fs`'s runs one. The shared control-flow subtrees
 // (`_ < 0 then 0`, `_ <- _ + _`, `_ in 0 .. _`) surface as a cross-file
@@ -356,7 +356,7 @@ fn assert_enclosing_near_miss(
     Ok(())
 }
 
-// Implements [FUSION-SIGNALS-THREE-LAYER] for Go ([LANG-CAND-GO]): a
+// Implements [FUSED-SIGNALS-THREE-LAYER] for Go ([LANG-CAND-GO]): a
 // genuine Type-3 near-miss. `delta.go` and `epsilon.go` run the same
 // guarded accumulator algorithm, but `delta.go`'s loop body performs two
 // updates per iteration and `epsilon.go`'s performs one. The shared
@@ -660,7 +660,7 @@ fn handles_mixed_language_fixture() -> Result<()> {
     Ok(())
 }
 
-// Implements [DECISION-TYPE3-TWO-PASS] + [FUSION-STRATEGY-BOUNDED-MAX]:
+// Implements [DECISION-TYPE3-TWO-PASS] + [FUSED-STRATEGY-BOUNDED-MAX]:
 // Type-3 near-miss cross-file cluster with `structural=0.0`.
 #[test]
 fn detects_type3_clone_in_csharp_fixture() -> Result<()> {
@@ -671,7 +671,7 @@ fn detects_type3_clone_in_csharp_fixture() -> Result<()> {
     // is the issue filed against: the two methods share ~90% of their
     // AST, and the zero was the candidate layer writing a literal for
     // every cross-bucket pair rather than a measurement
-    // ([FUSION-SHARED-SUBTREE]). Asserting the zero asserted the defect.
+    // ([FUSED-SHARED-SUBTREE]). Asserting the zero asserted the defect.
     // The honest contract is the two-sided one — real shape evidence,
     // short of the Merkle equality a near-miss cannot have.
     let clusters = report_clusters(&json)?;

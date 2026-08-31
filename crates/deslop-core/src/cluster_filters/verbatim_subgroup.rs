@@ -321,7 +321,16 @@ fn split_one<S: BuildHasher>(
 ) -> Option<Vec<FusedCluster>> {
     let families = splittable_families(fused, fingerprints, sources)?;
     let members = resolved_members(fused, fingerprints)?;
-    let filter = is_noise_pattern(&members, sources, file_languages, cache, NoiseStage::Split)?;
+    let Some(filter) =
+        is_noise_pattern(&members, sources, file_languages, cache, NoiseStage::Split)
+    else {
+        // [CLONE-NOISE-VERBATIM-SUBGROUP]: a component the noise filters
+        // do not suppress is handed on untouched — no split, no member
+        // dropped, no panic. The pairwise admission that built the
+        // closure decides its fate
+        // ([FUSED-STRATEGY-BOUNDED-MAX] step 4).
+        return None;
+    };
     let keepable: Vec<&Vec<usize>> = families
         .iter()
         .filter(|family| is_copied_family(family, fingerprints, filter))

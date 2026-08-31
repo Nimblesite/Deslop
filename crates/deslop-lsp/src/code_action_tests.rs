@@ -27,9 +27,8 @@ const IDENTICAL_SIGNALS: ReportSignals = ReportSignals {
     token_jaccard: 1.0,
     shape: 1.0,
     embedding_cos: 0.0,
-    fused: 1.0,
-    agreement: 0.0,
-    rename_consistency: 0.0,
+    pair_agreement: 1.0,
+    pair_rename_consistency: 0.0,
     literal_fraction: 0.0,
 };
 

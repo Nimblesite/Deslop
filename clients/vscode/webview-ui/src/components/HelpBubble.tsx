@@ -41,7 +41,7 @@ const PANEL_HELP: Record<PanelTopic, string> = {
   "keyboard-shortcuts": "Keyboard actions available while focus is in the panel.",
 };
 
-// [FUSION-CONTENT-GATE] The signal copy is not restated here. `SIGNAL_HELP`
+// [FUSED-CONTENT-GATE] The signal copy is not restated here. `SIGNAL_HELP`
 // is the one definition the strip, its tooltips and the docs anchors all
 // read, so the confidence scores and the content evidence behind them can
 // never be explained two different ways.

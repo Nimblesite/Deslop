@@ -10,7 +10,7 @@
 //! constants as duplication at `duplication_percent: 40.0`.
 //!
 //! The delimiters are what must go, not the literal's parts. Its named
-//! parts stay: [FUSION-CONTENT-GATE] reads literal leaves as content
+//! parts stay: [FUSED-CONTENT-GATE] reads literal leaves as content
 //! evidence, so collapsing `regex_pattern` into its parent would erase the
 //! only thing that tells `/[a-z]+@[a-z]+/i` from `/[0-9]{3}-[0-9]{4}/g`.
 

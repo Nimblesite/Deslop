@@ -13,7 +13,7 @@ import {
 } from "../store";
 import { COLOR, FONT, GLOBAL_CSS, SEVERITY_COLOR } from "../theme";
 import { HelpAction } from "../components/HelpAction";
-import { SignalStrip } from "../components/SignalStrip";
+import { electedPairEvidence, PairEvidence } from "../components/PairEvidence";
 import { SeverityBadge } from "../components/SeverityBadge";
 import {
   DocTextLink,
@@ -22,10 +22,17 @@ import {
   helpCopy,
   type HelpTopic,
 } from "../components/HelpBubble";
-import { bucketLabels, clusterSlug, occurrenceCount, resolveBucket } from "../../../src/types/report";
+import {
+  bucketLabels,
+  clusterInterpretation,
+  clusterSlug,
+  occurrenceCount,
+  resolveBucket,
+} from "../../../src/types/report";
 import { formatScore } from "../../../src/types/format";
 import { helpValueTitle } from "../../../src/types/signals";
 import type { ReportCluster, ReportOccurrence } from "../../../src/types/report";
+import { OccurrenceList } from "./OccurrenceList";
 
 const focusedOccurrenceIndex = signal(0);
 const shortcutHelpExpanded = signal(false);
@@ -49,13 +56,11 @@ const LABEL_CLASS = "label";
 const WITH_HELP_CLASS = "with-help";
 const CLONE_BUCKET_TOPIC = "clone-bucket";
 const CLUSTER_ID_TOPIC = "cluster-id";
-const OCCURRENCE_LOCATION_TOPIC = "occurrence-location";
 const CLUSTER_NAVIGATION_TOPIC = "cluster-navigation";
 const CANONICAL_TOPIC = "canonical";
 const OCCURRENCES_TOPIC = "occurrences";
 const WEIGHT_TOPIC = "weight";
 const SIZE_TOPIC = "size";
-const FULL_WIDTH = "100%";
 const BADGE_PADDING = "2px 6px";
 const BOLD_FONT_WEIGHT = 700;
 
@@ -119,6 +124,7 @@ function ClusterApp() {
 
   const canonical = cluster.occurrences[0];
   const bucketInfo = bucketLabels(resolveBucket(cluster));
+  const evidence = clusterInterpretation(cluster);
   const focusedIndex = focusedIndexFor(cluster);
 
   return (
@@ -187,9 +193,9 @@ function ClusterApp() {
               fontWeight: BOLD_FONT_WEIGHT,
               letterSpacing: "-0.02em",
             }}
-            title={`${bucketInfo.plainTitle}: ${bucketInfo.actionSentence}`}
+            title={`${bucketInfo.plainTitle}: ${evidence}`}
           >
-            <HelpedText topic={CLONE_BUCKET_TOPIC} title={`${bucketInfo.plainTitle}: ${bucketInfo.actionSentence}`}>
+            <HelpedText topic={CLONE_BUCKET_TOPIC} title={`${bucketInfo.plainTitle}: ${evidence}`}>
               <DocTextLink topic={CLONE_BUCKET_TOPIC}>{bucketInfo.plainTitle}</DocTextLink>
             </HelpedText>
           </h1>
@@ -200,9 +206,9 @@ function ClusterApp() {
               fontFamily: FONT.ui,
               fontSize: "15px",
             }}
-            title={`Recommended reading for this bucket: ${bucketInfo.actionSentence}`}
+            title={`Engine interpretation for this bucket: ${evidence}`}
           >
-            <HelpedText topic={CLONE_BUCKET_TOPIC}>{bucketInfo.actionSentence}</HelpedText>
+            <HelpedText topic={CLONE_BUCKET_TOPIC}>{evidence}</HelpedText>
           </p>
         </div>
         <div style={{ textAlign: "right", minWidth: 0, overflowWrap: ANYWHERE_WRAP }}>
@@ -249,109 +255,13 @@ function ClusterApp() {
         </div>
       </header>
 
-      <section style={{ background: COLOR.surfaceContainerLow, padding: "16px 24px" }}>
-        <div class={LABEL_CLASS} style={{ marginBottom: SMALL_SPACING, fontFamily: FONT.mono }}>
-          <HelpedText topic="signals">SIGNALS</HelpedText>
-        </div>
-        <SignalStrip signals={cluster.signals} verdict={cluster.evidence_verdict} />
-      </section>
+      <PairEvidence evidence={electedPairEvidence(cluster)} />
 
-      <section style={{ marginTop: LARGE_SPACING }}>
-        <div
-          class={LABEL_CLASS}
-          style={{ color: COLOR.onSurfaceMuted, marginBottom: TWELVE_PIXEL_SIZE, fontFamily: FONT.mono }}
-        >
-          <HelpedText topic={OCCURRENCES_TOPIC}>OCCURRENCES</HelpedText>
-        </div>
-        {cluster.occurrences.map((o, i) => (
-          <article
-            key={`${o.path}-${o.start_byte}`}
-            title={occurrenceTitle(o, i)}
-            style={{
-              background: i % 2 === 0 ? COLOR.surfaceContainerLow : COLOR.surface,
-              padding: "14px 20px",
-              display: GRID_DISPLAY,
-              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
-              gap: "16px",
-              alignItems: CENTER_ALIGNMENT,
-              outline: i === focusedIndex ? `1px solid ${SEVERITY_COLOR[severity]}` : "none",
-            }}
-          >
-            <div style={{ minWidth: 0 }}>
-              <div
-                class={WITH_HELP_CLASS}
-                style={{ fontFamily: FONT.mono, fontSize: TWELVE_PIXEL_SIZE, maxWidth: FULL_WIDTH }}
-                title={locationTitle(o)}
-              >
-                <button
-                  class="text-action"
-                  onClick={() => post({ kind: OPEN_OCCURRENCE_MESSAGE, occurrence: o })}
-                  title={openTitle(o)}
-                  aria-label={openTitle(o)}
-                  style={{ maxWidth: FULL_WIDTH, overflowWrap: ANYWHERE_WRAP }}
-                >
-                  {o.displayLocation?.label ?? o.path}
-                </button>
-                <HelpBubble topic={OCCURRENCE_LOCATION_TOPIC} />
-              </div>
-              <div
-                style={{
-                  fontFamily: FONT.mono,
-                  color: COLOR.onSurfaceMuted,
-                  fontSize: ELEVEN_PIXEL_FONT_SIZE,
-                  marginTop: "2px",
-                }}
-                title={locationDescriptionTitle(o)}
-              >
-                <HelpedText
-                  topic={o.hidden ? "hidden-occurrence" : OCCURRENCE_LOCATION_TOPIC}
-                  title={locationDescriptionTitle(o)}
-                >
-                  {o.displayLocation?.description ??
-                    "line and column unavailable until the file is loaded"}
-                  {o.hidden ? " · hidden" : ""}
-                </HelpedText>
-              </div>
-            </div>
-            {/* [VSIX-WEBVIEW-ACTIONS-CONTEXT] Open / Compare per occurrence
-                (prev/next cluster live in the footer); each posts a typed
-                message the host acts on. */}
-            <div
-              style={{
-                display: FLEX_DISPLAY,
-                gap: SMALL_SPACING,
-                flexWrap: WRAP_LAYOUT,
-                justifyContent: END_ALIGNMENT,
-              }}
-            >
-              <HelpAction topic="open-action">
-                <button
-                  onClick={() => post({ kind: OPEN_OCCURRENCE_MESSAGE, occurrence: o })}
-                  title={openTitle(o)}
-                  aria-label={openTitle(o)}
-                >
-                  Open
-                </button>
-              </HelpAction>
-              <HelpAction topic="compare-action">
-                <button
-                  class={i === 0 ? "" : "primary"}
-                  onClick={() => {
-                    if (i === 0) return;
-                    post({ kind: "compare/canonical", clusterId: cluster.id });
-                  }}
-                  aria-disabled={i === 0}
-                  style={i === 0 ? { opacity: 0.3 } : { color: "inherit" }}
-                  title={compareTitle(i)}
-                  aria-label={compareTitle(i)}
-                >
-                  Compare
-                </button>
-              </HelpAction>
-            </div>
-          </article>
-        ))}
-      </section>
+      <OccurrenceList
+        cluster={cluster}
+        focusedIndex={focusedIndex}
+        accent={SEVERITY_COLOR[severity]}
+      />
 
       <div style={{ marginTop: "auto", paddingTop: LARGE_SPACING }}>
         <footer
@@ -500,34 +410,6 @@ function clusterStatsTitle(cluster: ReportCluster): string {
 
 function canonicalTitle(occurrence: ReportOccurrence): string {
   return `Canonical occurrence: Deslop uses this first occurrence as the comparison anchor for this cluster. Location: ${occurrence.displayLocation?.label ?? occurrence.path}.`;
-}
-
-function occurrenceTitle(occurrence: ReportOccurrence, index: number): string {
-  const role = index === 0 ? "Canonical occurrence" : `Occurrence ${index + 1}`;
-  const hidden = occurrence.hidden
-    ? " This occurrence is hidden by report_hide configuration but shown because the cluster also contains visible code."
-    : "";
-  return `${role}: ${occurrence.displayLocation?.label ?? occurrence.path}. ${occurrence.displayLocation?.description ?? "Line and column are unavailable until the file can be read."}${hidden}`;
-}
-
-function locationTitle(occurrence: ReportOccurrence): string {
-  return `Editor target: ${occurrence.displayLocation?.label ?? occurrence.path}. This is the file and human line/column that Open will navigate to.`;
-}
-
-function locationDescriptionTitle(occurrence: ReportOccurrence): string {
-  const hidden = occurrence.hidden ? " Hidden means this path matched report_hide configuration." : "";
-  return `${occurrence.displayLocation?.description ?? "Line and column unavailable because the source file could not be read by the extension host."}${hidden}`;
-}
-
-function openTitle(occurrence: ReportOccurrence): string {
-  return `Open this occurrence in VS Code at ${occurrence.displayLocation?.label ?? occurrence.path}. The editor selection will cover the clone range.`;
-}
-
-function compareTitle(index: number): string {
-  if (index === 0) {
-    return "Compare is disabled on the canonical occurrence because comparing the anchor to itself would not show a useful diff.";
-  }
-  return "Compare this cluster against its canonical occurrence in VS Code's diff editor using Deslop's occurrence-range virtual documents.";
 }
 
 wireMessagePump();

@@ -1,4 +1,4 @@
-//! Large-tree coverage fallback for [FUSION-SHARED-SUBTREE].
+//! Large-tree coverage fallback for [FUSED-SHARED-SUBTREE].
 //!
 //! Endpoints past [`super::ALIGNMENT_MAX_NODES`] are too large for the
 //! Zhang–Shasha alignment, so their shared mass is estimated instead —

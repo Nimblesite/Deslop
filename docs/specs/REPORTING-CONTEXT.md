@@ -22,8 +22,8 @@ Every cluster in this report belongs to exactly one of five buckets. The human l
 |-------------------|------------------------------------------|------------------|------------------------------------------------------------------------------------------|
 | `Identical`       | Identical code                           | Type-1, Type-2   | Identical after normalization (ignoring whitespace, comments, renamed identifiers).      |
 | `NearlyIdentical` | Nearly identical code                    | Type-3           | Type-2 + added/removed/modified statements. Small differences may matter — review both.  |
-| `StructuralOnly`  | Same shape, different content            | structural-only  | The AST shape is the *only* positive evidence (no token overlap, no semantic support). Usually a sibling boilerplate family (REST CRUD, settings getters); weight-demoted in the ranking by default. Verify before extracting. |
-| `LooselySimilar`  | Loosely similar code                     | weak LSH-only    | Loose textual overlap below the near-miss bar. Treat as a hint, not a directive.         |
+| `StructuralOnly`  | Same shape, different content            | structural-only  | The AST shape is the *only* positive evidence (no token overlap, no semantic support). Usually a sibling boilerplate family (REST CRUD, settings getters); weight-demoted in the ranking by default. |
+| `LooselySimilar`  | Loosely similar code                     | weak LSH-only    | Loose textual overlap below the near-miss bar; no other axis corroborates it.            |
 | `SameBehavior`    | Same behavior, different code *(AI)*     | Type-4           | Semantically equivalent, syntactically different. Requires the embedding pass.           |
 
 `SameBehavior` is populated only when the embedding pass ran. If `embedding_cos` is `0.00` across the whole report, the pass was disabled and the `SameBehavior` bucket is empty — structural / token-based clusters (`Identical`, `NearlyIdentical`, `StructuralOnly`, `LooselySimilar`) are unaffected.
@@ -63,8 +63,7 @@ Fields:
 | `size` | How many copies of this subtree exist. `size=20` means the same pattern appears 20 times. |
 | `occurrence_count` | The authoritative display count of a cluster's occurrences. Live-wire responses cap `occurrences[]`, so this is the number to show — never `occurrences.length`. |
 | `language` | The language id the parser registry resolved for the cluster (`csharp`, `rust`, `python`, `dart`, `javascript`, `typescript`, `tsx`, `php`, `fsharp`, `go`, or `unknown`). Group and filter on this rather than on a file extension. |
-| `meets_fused_gate` | Whether `signals.fused` clears the engine's reportable confidence line. Read this instead of comparing `fused` to a threshold of your own. |
-| `evidence_verdict` | One plain-English sentence reading the shape score against the measured content evidence — why confidence stayed, fell, or came from the embedding pass. Engine-authored; render it verbatim. |
+| `evidence_verdict` | One plain-English sentence reading the shape score against the measured content evidence — why the bucket held, fell, or came from the embedding pass. Engine-authored; render it verbatim. |
 | `nodes` | AST node count of one canonical copy. Bigger subtree = more meaningful clone. |
 | `path:line:column` | Human-readable occurrence location in text/HTML/hover summaries. JSON keeps `start_byte` / `end_byte` for machine navigation. |
 | `structural` | `[0, 1]`. `1.0` = exact Merkle hash match. `0.0` = no exact structural match (found via LSH only). |
@@ -87,8 +86,8 @@ Byte ranges come from `tree-sitter` and remain in JSON/tool payloads. Human-faci
 | `1.00` | `< 0.05` | `< 0.05` | `StructuralOnly` → **Same shape, different content** | Shape-only match: the exact-structural pass leaves `token_jaccard` unscored at `0.00`, so there is no token or semantic evidence. Sibling method families (REST CRUD, settings getters) live here; byte-equivalent copies are upgraded to `Identical` instead. Demoted in ranking by default. |
 | `0.00` | `≥ 0.90` | `<0.80` or disabled | `NearlyIdentical` → **Nearly identical code** *(Type-3)* | Similar token content, different structure. Review before merging — may differ in a semantically important way (loop vs recursion, added guard, etc.). |
 | `<0.50` | any | `≥ 0.80` | `SameBehavior` → **Same behavior, different code** *(Type-4, AI match)* | The embedding pass noticed these do the same thing written two syntactically distinct ways. Read both before merging. |
-| `0.00` | `0.70 – 0.90` | `<0.80` or disabled | `LooselySimilar` → **Loosely similar code** | Weak signal. Likely rejected; if present, endpoints were substantial (≥ 40 nodes). Treat as a hint, not a directive. |
-| `0.20 – 0.80` | `≥ 0.95` | any | `NearlyIdentical` → **Nearly identical code** *(Type-3)* | Fused cluster spanning multiple exact-clone bands. Transitive closure merged several smaller exact clusters via near-miss links. Usually genuine duplication across a family of variants. |
+| `0.00` | `0.70 – 0.90` | `<0.80` or disabled | `LooselySimilar` → **Loosely similar code** | Weak signal. Likely rejected; if present, endpoints were substantial (≥ 40 nodes). |
+| `0.20 – 0.80` | `≥ 0.95` | any | `NearlyIdentical` → **Nearly identical code** *(Type-3)* | Transitive closure merged several smaller exact clusters via near-miss links. Usually genuine duplication across a family of variants. |
 
 `SameBehavior` is tested before `NearlyIdentical` when the embedding pass is enabled, so a strong semantic signal on syntactically divergent code gets the AI-match label rather than being absorbed into near-miss. Full routing table: [taxonomy.md §[CLONE-BUCKETS-ROUTING]](taxonomy.md).
 
@@ -104,8 +103,8 @@ The report header carries one honest number: `metrics.duplication_percent = 100 
 ## Thresholds (typical defaults)
 
 - `min-nodes = 15` — smaller subtrees are excluded to cut noise. The header of the report will state the value actually used.
-- `FUSED_THRESHOLD = 0.85` — the **default admission** bar. A same-language *pair* must reach it on `PairScore::bounded_fused` — the strongest single axis of `structural`, `token_jaccard`, `embedding_cos`, bounded to `[0,1]` ([FUSION-STRATEGY-BOUNDED-MAX]) — to enter a cluster. It is a per-pair value (`CandidatePair::fused_min_score`), not a global constant: explicit **cross-language** candidates with **no structural anchor** (`structural <= 0.0` — LSH and direct-signature matches) lower it to `CROSS_LANGUAGE_MIN_JACCARD` (0.10) so a lower-overlap port can surface at all; a structurally anchored cross-language pair keeps the default 0.85 assigned by `finalise_pairs`. Do not write a regression test asserting that nothing below 0.85 was admitted — a cross-language audit legitimately admits far below it.
-- `signals.fused` on a rendered cluster is **not** that quantity, despite the shared name. It is the *rendered confidence*: shape evidence scaled by measured content evidence ([FUSION-CONTENT-GATE]), so a proven Type-2 rename legitimately renders **below** 0.85 while still routing to an act-now bucket. Do not filter reported clusters on `fused >= FUSED_THRESHOLD` — that discards findings the engine already admitted and vouched for. Filter on `bucket` instead, which is the engine's verdict.
+- `FUSED_THRESHOLD = 0.85` — the default **pair admission** bar, decided pair by pair on `bounded_fused`, the strongest single axis ([FUSED-STRATEGY-BOUNDED-MAX]); per-pair data (`CandidatePair::fused_min_score`), never a global constant — explicit cross-language candidates with no structural anchor lower it to 0.10. Every threshold is a configurable default, never hard-coded. Do not assert that nothing below 0.85 was admitted — a cross-language audit legitimately admits far below it.
+- **There is no cluster-level `fused`** — it exists at the level of the pair only ([FUSED-SCOPE](fused.md#fused-scope)). Clusters carry their `bucket` (the engine's verdict), the elected pair's measured axes, and their content evidence. Filter reported clusters on `bucket`, never on any confidence value.
 - `LSH_ONLY_MIN_JACCARD = 0.90` and `LSH_ONLY_MIN_NODE_COUNT = 40` — extra gates for LSH-only candidates (no structural anchor), to keep tiny trivial windows from mega-clustering.
 - Cross-language comparison is off by default. Enable `[analysis] allow_cross_language_comparison = true` only when intentionally auditing ports, generated clients, or semantic equivalents across ecosystems.
 
@@ -115,8 +114,8 @@ The report header carries one honest number: `metrics.duplication_percent = 100 
 2. **Check if it's generated code.** Generated files (e.g. `.g.cs`, `.generated.cs`, OpenAPI clients, protobuf output) are hidden by default because they duplicate by design; visible generated-handwritten overlap is still worth reviewing.
 3. **Treat import/using-only repetition as hygiene, not duplication.** For C#, the preferred remediation is usually a shared `GlobalUsings.cs` or project-file `<Using Include="..." />`, not extraction.
 4. **Check byte ranges for overlap.** Adjacent/overlapping ranges in the same file mean the sibling-extension pass is firing on several enclosing contexts of the same physical code — count it as one logical clone, not N.
-5. **For `structural=1.00` clusters** — safe to extract. Identical subtree after normalization.
-6. **For `structural=0.00, token_jaccard≥0.95` clusters** — Type-3 candidate. Read both occurrences. The differences are meaningful. Decide whether to (a) unify via a parameter / strategy, or (b) accept them as intentionally divergent.
+5. **For `Identical` clusters** — the engine verified byte-identical occurrences; extract or consolidate them unless their surrounding ownership makes the duplication intentional.
+6. **For `NearlyIdentical` clusters** — read the elected pair and every occurrence before refactoring. The pair passed admission, but its differences may still be meaningful; decide whether to unify them through a parameter or strategy, or keep them intentionally divergent.
 7. **Ignore clusters where `weight` is low and `size` is 2 and node counts are tiny.** Those are usually boilerplate (constructors, test setup, property accessors) that don't reward extraction.
 
 ## Things to keep in mind when interpreting a report
@@ -128,5 +127,5 @@ The report header carries one honest number: `metrics.duplication_percent = 100 
 ## Tool metadata
 
 - Tool: `deslop`. The report header states the tool version.
-- The text report is a pretty-printer over the canonical JSON schema. For machine consumption prefer `--format json`, which includes full `occurrences[]` arrays, per-cluster `signals { structural, token_jaccard, shape, embedding_cos, fused, agreement, rename_consistency, literal_fraction }`, and an agent-oriented `summary` string per cluster.
-- **Every figure is stated, not implied.** Rank, band, occurrence count, language, the fused-gate verdict, the shape reading and the evidence sentence are all carried on the cluster because they are the engine's answers. Recomputing one from the other fields is how a consumer ends up disagreeing with the report it is quoting.
+- The text report is a pretty-printer over the canonical JSON schema. For machine consumption prefer `--format json`, which includes full `occurrences[]` arrays, per-cluster `signals { structural, token_jaccard, shape, embedding_cos, agreement, rename_consistency, literal_fraction }`, and an agent-oriented `summary` string per cluster.
+- **Every figure is stated, not implied.** Rank, bucket, occurrence count, language, the shape reading and the evidence sentence are all carried on the cluster because they are the engine's answers. Recomputing one from the other fields is how a consumer ends up disagreeing with the report it is quoting.

@@ -1,5 +1,5 @@
 //! The deterministic mock-embedder entry point shared by every
-//! embedding suite ([FUSION-EMBED-PROVIDER]).
+//! embedding suite ([FUSED-EMBED-PROVIDER]).
 //!
 //! Imported explicitly with `use crate::common::embeddings::*;`, for the
 //! same reason as `signals`: a glob re-export would be an unused import
@@ -12,7 +12,7 @@ use serde_json::Value;
 use super::{deslop_cmd, load_json, seed, Result};
 
 /// Runs a scan with the deterministic mock embedder wired in and
-/// returns the parsed report ([FUSION-EMBED-PROVIDER]).
+/// returns the parsed report ([FUSED-EMBED-PROVIDER]).
 ///
 /// Every embedding suite reaches the pipeline through the same four
 /// flags — the provider, model and `--embeddings required` mode are
@@ -45,7 +45,7 @@ pub(crate) fn run_mock_embedding_report(
 }
 
 /// Seeds a private copy of `fixture_root` under a throwaway temp dir and
-/// scans that copy with the mock embedder ([FUSION-EMBED-PROVIDER]).
+/// scans that copy with the mock embedder ([FUSED-EMBED-PROVIDER]).
 ///
 /// `--embeddings required` writes `.deslop/cache/embeddings/` into the
 /// *scan root* ([OUTPUT-DIR]), so scanning a copy is what keeps the

@@ -1,5 +1,5 @@
 //! Transitive-closure clustering over surviving candidate pairs
-//! ([FUSION-STRATEGY-BOUNDED-MAX]). Split from the parent module, which
+//! ([FUSED-STRATEGY-BOUNDED-MAX]). Split from the parent module, which
 //! owns the pair types, thresholds, and the survival decision.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -44,7 +44,7 @@ fn build_clusters(
             left: pair.left,
             right: pair.right,
             // The overlap is admission evidence for the pair it was
-            // measured on ([FUSION-SHARED-SUBTREE]), so the edge
+            // measured on ([FUSED-SHARED-SUBTREE]), so the edge
             // carries it. This is what lets the same-file collapse
             // elect the *enclosing* method of a Type-3 near-miss over
             // the windows nested inside it: the same insertion costs

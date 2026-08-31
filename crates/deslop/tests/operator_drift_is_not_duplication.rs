@@ -6,11 +6,11 @@
 //! `alpha + beta` and `alpha - beta` normalised to the same subtree with
 //! the same identifier frontier and the same literals: nothing
 //! downstream had any evidence they differed. The pair rendered
-//! `structural = 1.00`, `token_jaccard = 1.00`, `agreement = 1.00` and
-//! `fused = 1.00` — the engine's strongest possible claim, made about
+//! `structural = 1.00`, `token_jaccard = 1.00` and `pair_agreement =
+//! 1.00` — the engine's strongest possible claim, made about
 //! code that computes a different answer.
 //!
-//! That is the [FUSED-THRESHOLD] act-now line, so a `find-similar`
+//! That is a duplicate verdict, so a `find-similar`
 //! consumer is told to reuse one where the other is meant, and an agent
 //! following `docs/snippets/agents-md-recipe.md` deletes a subtraction
 //! in favour of an addition. Sign errors, inverted comparisons and
@@ -21,16 +21,15 @@
 //! (`comparison_operator`) and boolean (`boolean_operator`) — and none
 //! of them clusters once the operator reaches the digest. The fourth,
 //! `ledger`, is a twelve-line body differing in exactly one `+`/`-`,
-//! which is what a real sign error looks like: it *does* cluster, so it
-//! is the only one that measures what the report may claim about a
-//! published operator-drift pair.
+//! which is what a real sign error looks like. Its byte-identical regions
+//! still cluster, but no published occurrence pair may cover the changed
+//! operator line.
 //!
 //! The contract is *not* "never cluster them". Two functions that share
 //! a shape and differ in an operator may well be worth a reader's
 //! attention. The contract is that the report must not claim the
-//! content is duplicated: the pair must stay out of the act-now
-//! buckets, and its rendered confidence must stay under the act-now
-//! line.
+//! content is duplicated: the pair must stay out of the explicit
+//! duplicate buckets, and its elected-pair evidence must remain honest.
 //!
 //! # Why this fixture cannot pass by going blind
 //!
@@ -47,31 +46,10 @@ use crate::common::{signals::*, *};
 /// candidate window.
 const MIN_NODES: u32 = 8;
 
-/// The operator families, with the disposition each one is pinned to.
-///
-/// `is_published` is what stops this suite passing by disappearance.
-/// Measured on the fixture, the first three families reach the report as
-/// nothing at all, with `clusters_hidden` at 0 — so "no cluster" is the
-/// current, deliberate answer and is asserted as such. Skipping a
-/// missing family instead, as this test did, made a recall hole and a
-/// correct exclusion look identical.
-///
-/// A family that changes disposition fails here, which is the point:
-/// whether these pairs should be shown at all is a judgement for a
-/// person, and the signal assertions below still bound what may be
-/// claimed if one ever is.
-///
-/// The `ledger` family is pinned **published**, and it is there because
-/// the other three cannot exercise those bounds. A four-statement body
-/// over one operator does not cluster at all once the operator reaches
-/// the digest, so `found` is `None` for each of them and every bound
-/// below it — bucket, fused, agreement — was unreachable in any passing
-/// run. The claim that they were pinned was untrue. `ledger_credit.py`
-/// and `ledger_debit.py` share a twelve-line body and differ in exactly
-/// one token, `+` against `-` on the `shifted` line, which is the shape
-/// a real sign error takes: large enough to pair on everything it does
-/// share, so the report does publish it and the bounds are measured on
-/// a live cluster.
+/// The operator families and one source line on which their computations
+/// disagree. A file-pair lookup is insufficient: the ledger files also
+/// contain genuine byte-identical subregions, and mistaking one of those
+/// for the operator-bearing enclosure condemned correct duplication.
 const FAMILIES: [Family; 4] = [
     Family {
         label: "arithmetic + / -",
@@ -79,7 +57,7 @@ const FAMILIES: [Family; 4] = [
         right: "arithmetic_sub.py",
         left_leaves: &["__op__+", "__op__+", "__op__+", "__op__+"],
         right_leaves: &["__op__-", "__op__-", "__op__-", "__op__-"],
-        is_published: false,
+        changed_line: 2,
     },
     Family {
         label: "comparison == / !=",
@@ -87,7 +65,7 @@ const FAMILIES: [Family; 4] = [
         right: "comparison_ne.py",
         left_leaves: &["__op__==", "__op__==", "__op__==", "__op__=="],
         right_leaves: &["__op__!=", "__op__!=", "__op__!=", "__op__!="],
-        is_published: false,
+        changed_line: 2,
     },
     Family {
         label: "boolean and / or",
@@ -95,7 +73,7 @@ const FAMILIES: [Family; 4] = [
         right: "boolean_or.py",
         left_leaves: &["__op__and", "__op__and", "__op__and", "__op__and"],
         right_leaves: &["__op__or", "__op__or", "__op__or", "__op__or"],
-        is_published: false,
+        changed_line: 2,
     },
     Family {
         label: "ledger + / - inside a shared body",
@@ -103,12 +81,12 @@ const FAMILIES: [Family; 4] = [
         right: "ledger_debit.py",
         left_leaves: &["__op__*", "__op__+", "__op__+", "__op__/", "__op__-"],
         right_leaves: &["__op__*", "__op__-", "__op__+", "__op__/", "__op__-"],
-        is_published: true,
+        changed_line: 6,
     },
 ];
 
 /// One operator family: the pair, the operator leaves each member must
-/// normalise to, and whether the report publishes the pair.
+/// normalise to, and a source line carrying the changed computation.
 struct Family {
     /// Human label used in every assertion message.
     label: &'static str,
@@ -120,8 +98,8 @@ struct Family {
     left_leaves: &'static [&'static str],
     /// Every operator leaf `right` normalises to, in dump order.
     right_leaves: &'static [&'static str],
-    /// The pinned disposition: whether a cluster spans the pair.
-    is_published: bool,
+    /// A line whose operator differs between the two members.
+    changed_line: u64,
 }
 
 /// The byte-identical pair that must survive whatever separates the
@@ -136,25 +114,48 @@ const CONTROL: [&str; 2] = ["control_alpha.py", "control_beta.py"];
 /// pipeline at all, which a control in other files cannot say.
 const FIXTURE_FILE_COUNT: u64 = 10;
 
+/// Exact agreement expected from byte-identical control and subregion pairs.
+const SATURATED_EVIDENCE: f64 = 1.0;
+
 /// Renders the fixture.
 fn render() -> Result<Value> {
     run_report(&fixture("operator-drift"), MIN_NODES)
 }
 
-/// Every visible cluster as `id [bucket] fused files`.
+/// Every visible cluster as `id [bucket] agreement files`.
 fn published(report: &Value) -> Vec<String> {
     clusters(report)
         .iter()
         .map(|cluster| {
             format!(
-                "{id} [{bucket}] fused={fused:.4} {files:?}",
+                "{id} [{bucket}] agreement={agreement:.4} {files:?}",
                 id = cluster_id(cluster),
                 bucket = cluster_bucket(cluster),
-                fused = signal(cluster, "fused"),
+                agreement = signal(cluster, "pair_agreement"),
                 files = occurrence_files(cluster),
             )
         })
         .collect()
+}
+
+/// Whether one occurrence covers `line` in the named fixture file.
+fn occurrence_covers(occurrence: &Value, file: &str, line: u64) -> bool {
+    let path_matches = field(occurrence, "path")
+        .as_str()
+        .and_then(|path| std::path::Path::new(path).file_name())
+        .is_some_and(|name| name == file);
+    let start = field(occurrence, "start_line").as_u64().unwrap_or(0);
+    let end = field(occurrence, "end_line").as_u64().unwrap_or(0);
+    path_matches && start <= line && line <= end
+}
+
+/// Whether a published cluster pairs both sides of a family's changed line.
+fn covers_operator_pair(cluster: &Value, family: &Family) -> bool {
+    [family.left, family.right].iter().all(|file| {
+        occurrences(cluster)
+            .iter()
+            .any(|occurrence| occurrence_covers(occurrence, file, family.changed_line))
+    })
 }
 
 // The defect: an operator-only difference must not be published as
@@ -175,11 +176,7 @@ fn published(report: &Value) -> Vec<String> {
 // and `clusters_hidden` was 0, so the test was green while pinning
 // nothing.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #432 [FUSED-THRESHOLD] \
-     docs/plans/fused-score-followups.md — operator-only drift rides #408's graded structural \
-     overlap to the act-now tier; the confidence blend needs the operator-disagreement \
-     signal. Run via `-- --ignored`."]
-fn an_operator_only_difference_never_reaches_the_act_now_line() -> Result<()> {
+fn an_operator_only_difference_never_claims_duplication() -> Result<()> {
     let report = render()?;
     assert_eq!(
         field(&report, "files_analysed").as_u64(),
@@ -198,52 +195,26 @@ fn an_operator_only_difference_never_reaches_the_act_now_line() -> Result<()> {
         published = published(&report),
     );
     assert!(
-        approx(signal(control, "agreement"), 1.0),
-        "the control's agreement must stay saturated in this run — a \
+        approx(signal(control, "pair_agreement"), SATURATED_EVIDENCE),
+        "the control's pair agreement must stay saturated in this run — a \
          separation that lowered every score has distinguished nothing: {dump}",
         dump = signal_dump(control),
     );
     for family in FAMILIES {
-        let Family {
-            label,
-            left,
-            right,
-            is_published,
-            ..
-        } = family;
-        let found = cluster_spanning(&report, &[left, right]);
-        assert_eq!(
-            found.is_some(),
-            is_published,
-            "{label}: {left} and {right} changed disposition. The pinned answer \
-             is {is_published}, the run says {actual}. Either the pair started \
-             being published — read the signals below and decide whether that \
-             is right — or it stopped, which is a recall hole this suite exists \
-             to catch: {published:#?}",
-            actual = found.is_some(),
+        let offenders: Vec<&Value> = clusters(&report)
+            .iter()
+            .filter(|cluster| covers_operator_pair(cluster, &family))
+            .collect();
+        assert!(
+            offenders.is_empty(),
+            "{label}: {left} and {right} compute different answers on line \
+             {line}. No duplicate cluster may pair occurrences covering both \
+             changed operators: {offenders:#?}\nall clusters: {published:#?}",
+            label = family.label,
+            left = family.left,
+            right = family.right,
+            line = family.changed_line,
             published = published(&report),
-        );
-        let Some(cluster) = found else { continue };
-        let dump = signal_dump(cluster);
-        assert!(
-            !ACT_NOW_BUCKETS.contains(&cluster_bucket(cluster)),
-            "{label}: {left} and {right} compute different answers. A \
-             cluster in an act-now bucket tells a `find-similar` consumer \
-             to write one where the other is meant — {dump}"
-        );
-        assert!(
-            signal(cluster, "fused") < ACT_NOW_FUSED,
-            "{label}: rendered confidence {fused:.4} is at or above the \
-             act-now line of {ACT_NOW_FUSED}; the engine is making its \
-             strongest claim about code whose behaviour differs — {dump}",
-            fused = signal(cluster, "fused"),
-        );
-        assert!(
-            signal(cluster, "agreement") < 1.0,
-            "{label}: `agreement` is the measured proof that the members \
-             share their content, and these members do not — a saturated \
-             agreement here is the measurement itself going blind to the \
-             operator — {dump}"
         );
     }
     Ok(())
@@ -267,30 +238,38 @@ fn the_byte_identical_control_survives_in_the_same_run() -> Result<()> {
         "both copies of the control must be shown — {dump}"
     );
     assert!(
-        approx(signal(control, "fused"), 1.0) && approx(signal(control, "agreement"), 1.0),
-        "byte-proven duplication saturates confidence and agreement; a fix \
-         that lowered every score has distinguished nothing — {dump}"
+        approx(signal(control, "pair_agreement"), SATURATED_EVIDENCE),
+        "byte-proven duplication saturates agreement; a fix that lowered \
+         every score has distinguished nothing — {dump}"
     );
     Ok(())
 }
 
-// Neither operator family may be published as the report's worst
-// offender while a real clone sits in the same run.
+// A genuine exact subregion may outrank the small control. Every cluster
+// ahead of it must be byte-identical and must exclude the ledger's changed
+// operator line; otherwise ranking would still elevate the false positive.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #432 [FUSED-THRESHOLD] \
-     docs/plans/fused-score-followups.md — operator-only drift rides #408's graded structural \
-     overlap to the act-now tier, so the real clone no longer outranks every operator \
-     family. Run via `-- --ignored`."]
-fn the_real_clone_outranks_every_operator_family() -> Result<()> {
+fn every_cluster_ahead_of_the_control_is_proven_duplication() -> Result<()> {
     let report = render()?;
     let control = expect_cluster_spanning(&report, &CONTROL)?;
-    assert_eq!(
-        cluster_id(clusters(&report).first().unwrap_or(&Value::Null)),
-        cluster_id(control),
-        "the one real duplication in this corpus must rank first: \
-         {published:#?}",
-        published = published(&report),
-    );
+    let control_rank = rank_of(&report, control)?;
+    let scan_root = fixture("operator-drift");
+    let ledger = &FAMILIES[3];
+    for cluster in clusters(&report).iter().take(control_rank) {
+        assert_eq!(
+            distinct_texts(&scan_root, cluster)?.len(),
+            1,
+            "a cluster may outrank the control only with byte-identical \
+             source proof: {}",
+            signal_dump(cluster),
+        );
+        assert!(
+            !covers_operator_pair(cluster, ledger),
+            "the changed ledger operator must never enter a higher-ranked \
+             duplicate cluster: {}",
+            signal_dump(cluster),
+        );
+    }
     Ok(())
 }
 

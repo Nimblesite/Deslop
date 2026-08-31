@@ -1,6 +1,6 @@
 //! `EmbeddingProvider` trait and supporting types.
 //!
-//! Implements [FUSION-EMBED-PROVIDER]: the core surface every embedding
+//! Implements [FUSED-EMBED-PROVIDER]: the core surface every embedding
 //! backend implements so the pipeline stays agnostic of *how* vectors
 //! are produced. A provider reports three identity fields —
 //! `provider_id` (short registry key, e.g. `"ollama"`), `model_id`
@@ -102,7 +102,7 @@ pub trait EmbeddingProvider: std::fmt::Debug + Send + Sync {
 
     /// Maximum source characters this provider accepts in one input.
     /// Subtrees longer than this are counted as failures and never
-    /// dispatched ([FUSION-EMBED-PROVIDER]).
+    /// dispatched ([FUSED-EMBED-PROVIDER]).
     ///
     /// The budget belongs to the provider because it is a property of
     /// the model behind it — `nomic-embed-text` reports a 2,048-token

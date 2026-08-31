@@ -1,4 +1,4 @@
-//! Ordered tree alignment for [FUSION-SHARED-SUBTREE].
+//! Ordered tree alignment for [FUSED-SHARED-SUBTREE].
 //!
 //! Zhang–Shasha tree edit distance over post-order sequences of
 //! normalised node kinds, with unit insert/delete/relabel costs. Kept

@@ -36,10 +36,7 @@ occurrences it kept — no signal is inherited from the members that left, and t
 disjoint copies inside one suppressed component come out as two findings rather than
 one merged cluster or none.
 
-A component the filters do **not** suppress is handed on untouched, so a
-consistently-renamed three-way clone stays one three-way clone. Implemented in
-`cluster_filters/verbatim_subgroup.rs`, pinned by
-`crates/deslop/tests/verbatim_subgroup_survives_noise.rs`.
+A component the filters do **not** suppress is handed on untouched, so a consistently-renamed three-way clone stays one three-way clone. **The contract is exhaustive.** A component a filter convicts is replaced by one cluster per qualifying byte-identical family it holds, and the members outside those families are dropped; a component no filter convicts is handed on untouched — it is never split, silently dropped, or panicked. The split exists only to protect a byte-identical family from a suppression that would eat it; it is never unconditional, and no generic fallback may classify an unrecognised component as suppressible or splittable. This is the post-closure suppression stage; admission and closure formation are governed by [FUSED-STRATEGY-BOUNDED-MAX] step 4, which acts earlier and is unchanged. Implemented in `cluster_filters/verbatim_subgroup.rs`, pinned by `crates/deslop/tests/verbatim_subgroup_survives_noise.rs` and `crates/deslop/tests/verbatim_family_survives_stranger.rs`.
 
 #### [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] A verbatim family must be a copy, and usually a copy spans files
 
@@ -172,7 +169,7 @@ across at least two files, with bodies that differ in normalised node-kind shape
 abstract/interface implementation pattern: the contract forces the signatures to
 agree, and what differs is each implementation's behaviour, so nothing can share
 a refactor. The widened resolution direction exists because
-[FUSION-SHARED-SUBTREE](fusion.md#fusion-shared-subtree) admits module-wide
+[FUSED-SHARED-SUBTREE](fused.md#fused-shared-subtree) admits module-wide
 views: a whole-file view of a single-method class was promoted to a
 near-identical pair on the strength of the bytes the contract forces to agree,
 reporting two different backends 100% duplicated
@@ -217,10 +214,10 @@ reaches.** A method implementing a *framework* interface has no declaring base
 in the index — Flutter's `State<T>.build` is not in the user's repository — so
 the index alone reads every `@override` implementation as an ordinary same-named
 function and clusters it as duplication. Six distinct Flutter widgets did
-exactly that, two of their `build` overrides rendering `nearly_identical` at
-`fused = 0.889` on `structural = 0.889, token_jaccard = 0.797` while the
+exactly that, two of their `build` overrides routing `nearly_identical` on
+`structural = 0.889, token_jaccard = 0.797` while the
 measured content evidence said `agreement = 0.25, rename_consistency = 0.0`
-([FUSION-CONTENT-GATE] keys on saturation and this pair sits under it). The
+([FUSED-CONTENT-GATE] keys on saturation and this pair sits under it). The
 languages that spell the relationship — Dart `@override`, C# `override`,
 TypeScript `override` — reject the marker outright when nothing is being
 overridden, so its presence is compiler-enforced evidence the index cannot
@@ -272,7 +269,7 @@ member's role cannot be resolved.
 
 It engages wherever **embedding evidence is what carried the cluster into an
 act-now bucket**, leaving the deterministic Type-1/2/3 buckets untouched. That
-is the `same_behavior` bucket, and — since [FUSION-SHARED-SUBTREE](fusion.md#fusion-shared-subtree)
+is the `same_behavior` bucket, and — since [FUSED-SHARED-SUBTREE](fused.md#fused-shared-subtree)
 — also a [CLONE-BUCKETS-ROUTING](taxonomy.md#clone-buckets-routing) row-4b
 near-miss whose shape was corroborated by the embedding axis rather than the
 token axis (`structural < 0.99`, `token_jaccard` below the corroboration floor,
@@ -282,14 +279,7 @@ role-mismatch pair reached an act-now bucket through the new door and walked
 straight past the gate written to catch it.
 
 ### [CLONE-NOISE-LITERAL-VARIATION-CALLS] Literal-variation call scaffolding
-Scaffolding repeats one call shape varying only its string-literal arguments —
-`setenv` keys, event names, endpoint paths — so after literal normalisation the
-members collapse to one subtree even though the differing literals are payload,
-not extractable logic. A cluster is suppressed when every member resolves to the
-same callee and arity (one enclosing call per member, or the same ordered call
-sequence contained in each member's range) and at least one argument position
-differs in string-literal bytes. Members whose literals all agree never match,
-so byte-identical copies keep the family's verbatim escape hatch.
+Scaffolding repeats one call shape varying only its string-literal arguments — `setenv` keys, event names, endpoint paths — so after literal normalisation the members collapse to one subtree even though the differing literals are payload, not extractable logic. A cluster is suppressed when every member resolves to the same callee and arity (one enclosing call per member, or the same ordered call sequence contained in each member's range), at least one literal-bearing call position differs in string-literal bytes, and every literal-bearing position differs. A call position that carries no string literal is neutral: it neither proves variation nor blocks the sequence. An invariant literal-bearing position is shared authored logic and blocks suppression. Members whose literals all agree never match, so byte-identical copies keep the family's verbatim escape hatch.
 
 #### [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT] The covered-statement precondition
 

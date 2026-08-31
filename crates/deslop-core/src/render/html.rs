@@ -345,7 +345,7 @@ fn kind_title(kind: ClusterKind, occurrences: usize) -> String {
 
 /// Plain-visual action sentence shown under the card title.
 fn kind_action(kind: ClusterKind) -> &'static str {
-    bucket_labels(kind).action_sentence
+    bucket_labels(kind).evidence_sentence
 }
 
 /// Dispatches between the single ranked list and the per-language

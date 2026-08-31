@@ -65,13 +65,13 @@ const GEOMETRY_LABEL: &str = "[CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] idiom-p
 /// figure at 0.0, describes the literal-poor `settle_ledger` controls and
 /// not this copy. Naming the saturating six keeps the strong half strong
 /// without claiming the wrong thing about the seventh.
-const SATURATED_SIGNALS: [&str; 6] = [
-    "structural",
-    "token_jaccard",
-    "shape",
-    "fused",
-    "agreement",
-    "rename_consistency",
+const DETERMINED_SIGNALS: [(&str, f64); 6] = [
+    ("structural", 1.0),
+    ("token_jaccard", 1.0),
+    ("shape", 1.0),
+    ("embedding_cos", 0.0),
+    ("pair_agreement", 1.0),
+    ("pair_rename_consistency", 1.0),
 ];
 
 /// Every Python source byte in one `verbatim-subgroup` case,
@@ -150,7 +150,13 @@ fn assert_cross_file_copy_is_published(report: &Value) -> Result<()> {
         Some(GEOMETRY_CROSS_FILES),
         "{GEOMETRY_LABEL}: the same source, now spread over three files: {report:#}"
     );
-    assert_copy_survives_alone(report, GEOMETRY_LABEL, &CALL_COPY, CALL_STRANGER)?;
+    assert_copy_survives_alone(
+        report,
+        GEOMETRY_LABEL,
+        &CALL_COPY,
+        CALL_STRANGER,
+        rename_consistency_for(CALL_PAIR_ANCHORS),
+    )?;
     let copy = expect_cluster_spanning(report, &CALL_COPY)?;
     assert_copy_is_saturated(report, copy)?;
     assert_cross_file_metrics_charge_only_the_copy(report);
@@ -160,11 +166,11 @@ fn assert_cross_file_copy_is_published(report: &Value) -> Result<()> {
 /// Every axis a byte-proven copy is measured on reads full, and the copy
 /// heads the report ([RANK-SCORE]).
 fn assert_copy_is_saturated(report: &Value, copy: &Value) -> Result<()> {
-    for name in SATURATED_SIGNALS {
+    for (name, expected) in DETERMINED_SIGNALS {
         assert!(
-            approx(signal(copy, name), 1.0),
+            approx(signal(copy, name), expected),
             "{GEOMETRY_LABEL}: nothing differs between the two copies, so `{name}` \
-             has nothing to be uncertain about — {dump}",
+             must read {expected} with embeddings off — {dump}",
             dump = signal_dump(copy),
         );
     }

@@ -1,5 +1,5 @@
 //! Renaming a literal *alongside the symbol it names* is part of the
-//! rename, not evidence against it ([FUSION-CONTENT-GATE],
+//! rename, not evidence against it ([FUSED-CONTENT-GATE],
 //! [TECH-PMATCH-BAKER], [REPAIR-RENAME-LITERAL-ECHO], gh #409).
 //!
 //! `content::rename` scores rename evidence as

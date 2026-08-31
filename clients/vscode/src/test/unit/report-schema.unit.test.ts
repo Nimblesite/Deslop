@@ -7,9 +7,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as reportModule from "../../types/report";
 import {
-  ACT_NOW_BUCKETS,
+  LIVE_BUBBLE_BUCKETS,
   bucketLabels,
-  isActNow,
+  clusterInterpretation,
+  electedPairForCluster,
+  isLiveBubbleBucket,
   occurrenceCount,
   resolveBucket,
   type ReportCluster,
@@ -23,7 +25,7 @@ const NEARLY_IDENTICAL_BUCKET = "nearly_identical";
 const STRUCTURAL_ONLY_BUCKET = "structural_only";
 const LOOSELY_SIMILAR_BUCKET = "loosely_similar";
 const SAME_BEHAVIOR_BUCKET = "same_behavior";
-const LOOSE_ACTION_SENTENCE = "Loose textual overlap. Treat as a hint.";
+const LOOSE_INTERPRETATION = "Engine-authored loose-match evidence.";
 const UTF8_ENCODING = "utf8";
 const LOW_SCORE = 0.2;
 const SHAPE_SCORE = 0.3;
@@ -31,25 +33,23 @@ const MID_SCORE = 0.4;
 const HIGH_SCORE = 0.9;
 const TOKEN_ANCHOR_SCORE = 0.95;
 const NEAR_TOKEN_SCORE = 0.96;
-const DEMOTED_FUSED_SCORE = 0.31;
 const FIXTURE_TEN = 10;
 const ENGINE_OCCURRENCE_COUNT = 35;
 const PAIR_COUNT = 2;
-const HINT_ACTION_ASSERTION =
-  "the user must not be told to act on a pair the engine ranked as a hint";
+const HINT_INTERPRETATION_ASSERTION =
+  "the client must carry the engine's hint interpretation unchanged";
 const STRUCTURAL_ONLY_TITLE = "Same shape, different content";
 const LEGACY_WORD_SUFFIX = "ict";
 
-// `fused` is a confidence in [0,1], never a raw sum — the engine's gate
-// multiplies shape evidence by content evidence ([FUSION-CONTENT-GATE]).
-// Tests that need a specific band pass it explicitly.
+// The elected pair's evidence axes, staged exactly as the engine stamps
+// them ([FUSED-CLUSTER-SIGNALS]). There is no combined score to stage:
+// `fused` is deleted from the wire, and no client fixture may carry one.
 const signals = (
   s: number,
   j: number,
   e: number,
-  fused = Math.min(1, Math.max(s, j, e)),
   // What the engine would have stamped as this triple's shape reading.
-  // Staged here, never derived by the client ([FUSION-CONTENT-GATE]).
+  // Staged here, never derived by the client ([FUSED-CONTENT-GATE]).
   shape = Math.max(s, j),
 ): ReportSignals =>
   signalsWith(IDENTICAL_BUCKET, {
@@ -57,7 +57,6 @@ const signals = (
     token_jaccard: j,
     shape,
     embedding_cos: e,
-    fused,
   });
 
 // Some rows here deliberately stage a bucket label the wire type
@@ -119,14 +118,15 @@ function assertCarriesBucket(
 }
 
 suite("report schema helpers", () => {
-  // The reportable-confidence cutoff and the severity cut points were
-  // both client constants. They are the engine's, and the assertions that
-  // pinned their values moved with them: the cutoff to
-  // `deslop-core::pair::FUSED_THRESHOLD` (read here through the wire flag
-  // `meets_fused_gate`), the four band cut points to
-  // `deslop-core::report_weight::rank_band` and its `rank_band_cut_points`
-  // test. What is pinned here is that no copy of either survived.
-  test("the client owns neither the fused cutoff nor the severity cut points", () => {
+  // The severity cut points were once client constants; the assertions
+  // that pinned their values moved with them to
+  // `deslop-core::report_weight::rank_band` and its
+  // `rank_band_cut_points` test. The fused cutoff has a different fate:
+  // it is deleted outright — from the engine, the wire, and this client —
+  // because admission is the engine's bucket and nothing else. The test
+  // below pins that no copy of either survived, and that the wire types
+  // carry no fused field for a copy to hang off.
+  test("the client owns neither a fused cutoff nor the severity cut points", () => {
     assert.ok(
       !("FUSED_THRESHOLD" in reportModule),
       "the reportable-confidence cutoff must exist only in the engine",
@@ -139,15 +139,37 @@ suite("report schema helpers", () => {
       !("rankPercentile" in reportModule),
       "the rank percentile must exist only in the engine",
     );
+    const proven = cluster({ bucket: IDENTICAL_BUCKET }) as Record<string, unknown>;
+    const demoted = cluster({ bucket: STRUCTURAL_ONLY_BUCKET }) as Record<string, unknown>;
     assert.equal(
-      cluster({ bucket: IDENTICAL_BUCKET }).meets_fused_gate,
-      true,
-      "a byte-proven cluster arrives already judged against the cutoff",
+      "meets_fused_gate" in proven,
+      false,
+      "no cluster carries a gate verdict: admission is the bucket, not a flag",
     );
     assert.equal(
-      cluster({ bucket: STRUCTURAL_ONLY_BUCKET }).meets_fused_gate,
+      "meets_fused_gate" in demoted,
       false,
-      "and a demoted one arrives judged the other way",
+      "the demoted family is demoted by its bucket label alone",
+    );
+  });
+
+  // The wire contract itself: the generated types are the single source
+  // the extension compiles against. If a fused field ever reappears on
+  // them, every admission surface regains a threshold to argue with —
+  // the exact defect this cutover removed.
+  test("the generated wire types carry no fused field on signals or clusters", () => {
+    const source = reportTypesSource();
+    assert.doesNotMatch(source, /\bfused\b/, "no fused on the wire types");
+    assert.doesNotMatch(source, /\bmeets_fused_gate\b/, "no gate flag on the wire types");
+    const generated = fs.readFileSync(
+      path.resolve(__dirname, "../../../src/types/wire-generated.ts"),
+      UTF8_ENCODING,
+    );
+    assert.doesNotMatch(generated, /\bfused\b/, "no fused in the generated wire model");
+    assert.doesNotMatch(
+      generated,
+      /\bmeets_fused_gate\b/,
+      "no gate flag in the generated wire model",
     );
   });
 
@@ -169,7 +191,7 @@ suite("report schema helpers", () => {
   // ⚠️ INVERTED. This row used to assert `nearly_identical` for
   // `structural 0.00, token 0.95`. The engine calls that
   // `loosely_similar` — `classify_signals` requires `structural >= 0.20`
-  // before a token signal can reach an act-now bucket and has no
+  // before a token signal can reach a confirmed duplicate bucket and has no
   // low-structural arm at all — so the old expectation encoded the very
   // divergence this change removes. Every assertion is kept; the
   // expected value now agrees with the engine instead of contradicting it.
@@ -177,16 +199,17 @@ suite("report schema helpers", () => {
     const weakShape = cluster({
       bucket: LOOSELY_SIMILAR_BUCKET,
       signals: signals(0.0, TOKEN_ANCHOR_SCORE, 0),
+      interpretation: LOOSE_INTERPRETATION,
     });
     assert.equal(resolveBucket(weakShape), LOOSELY_SIMILAR_BUCKET);
     assert.equal(
-      bucketLabels(resolveBucket(weakShape)).actionSentence,
-      LOOSE_ACTION_SENTENCE,
-      HINT_ACTION_ASSERTION,
+      clusterInterpretation(weakShape),
+      LOOSE_INTERPRETATION,
+      HINT_INTERPRETATION_ASSERTION,
     );
   });
 
-  test("resolveBucket carries the engine's fused-family near-miss verdict", () => {
+  test("resolveBucket carries the engine's elected-pair near-miss verdict", () => {
     assertCarriesBucket(NEARLY_IDENTICAL_BUCKET, MID_SCORE, NEAR_TOKEN_SCORE, 0);
   });
 
@@ -216,31 +239,42 @@ suite("report schema helpers", () => {
     );
   });
 
-  test("fused is a confidence in [0,1] that the content gate may pull below shape", () => {
-    // A fused value outside the unit interval is not a confidence, and a
-    // fixture carrying one silently invalidates every band built on it.
-    // The gate is one-directional: content evidence can only discount
-    // shape evidence, never inflate it past full confidence.
-    const gated = signals(1.0, SHAPE_SCORE, 0, DEMOTED_FUSED_SCORE);
-    for (const triple of [
-      signals(1.0, 1.0, 0),
-      signals(LOW_SCORE, SHAPE_SCORE, HIGH_SCORE),
-      gated,
-    ]) {
-      assert.ok(
-        triple.fused >= 0 && triple.fused <= 1,
-        `fused must be a confidence in [0,1], got ${triple.fused}`,
+  test("elected-pair evidence is measured, and no combined score rides beside it", () => {
+    // The pair evidence axes are measurements in [0,1]; a fixture carrying
+    // anything else invalidates every family built on them. There is no
+    // fused field left to bound: the type-level proof lives in the
+    // generated-types test above, and the value-level proof is that the
+    // staged fixtures cannot even spell the field.
+    const staged = signals(1.0, SHAPE_SCORE, 0) as unknown as Record<string, unknown>;
+    assert.equal("fused" in staged, false, "no staged fixture carries a fused value");
+    for (const triple of [signals(1.0, 1.0, 0), signals(LOW_SCORE, SHAPE_SCORE, HIGH_SCORE)]) {
+      for (const [axis, value] of Object.entries(triple)) {
+        assert.ok(
+          value >= 0 && value <= 1,
+          `${axis} must be a measurement in [0,1], got ${value}`,
+        );
+      }
+    }
+  });
+
+  test("pair evidence resolves only from two distinct carried occurrences", () => {
+    const candidate = cluster();
+    assert.deepEqual(electedPairForCluster(candidate), {
+      source: { left: 0, right: 1 },
+      occurrences: candidate.occurrences,
+    });
+    const rejectedSources: ReportCluster["signal_source"][] = [
+      undefined,
+      { left: 0, right: 0 },
+      { left: 0, right: PAIR_COUNT },
+    ];
+    for (const signalSource of rejectedSources) {
+      assert.equal(
+        electedPairForCluster({ ...candidate, signal_source: signalSource }),
+        undefined,
+        "anonymous, self-referential, and out-of-range evidence must stay hidden",
       );
     }
-    assert.ok(
-      gated.fused < gated.structural,
-      "a demoted cluster's confidence must sit below its shape evidence",
-    );
-    assert.equal(
-      signals(1.0, 1.0, 0).fused,
-      1,
-      "byte-identical evidence carries full confidence",
-    );
   });
 
   // [CLONE-BUCKETS-ROUTING] The routing divergence found 17 Aug, pinned
@@ -249,20 +283,25 @@ suite("report schema helpers", () => {
   // the engine never carried: it gated on `structural > 0.0` where the
   // engine gates on `structural >= 0.20`, and added
   // `structural <= 0.01 && token >= 0.9` outright. Both triples below are
-  // `loosely_similar` in the engine, so a hint was repainted as an
-  // act-now "Review the locations" on the flagship surface.
-  test("a weak-shape pair the engine called a hint is never promoted to act-now", () => {
+  // `loosely_similar` in the engine, so a hint was repainted as a
+  // confirmed near-miss on the flagship surface.
+  test("a weak-shape pair keeps the engine's hint interpretation", () => {
     for (const triple of [signals(0.1, NEAR_TOKEN_SCORE, 0), signals(0.0, 0.92, 0)]) {
-      const routed = resolveBucket(cluster({ bucket: LOOSELY_SIMILAR_BUCKET, signals: triple }));
+      const candidate = cluster({
+        bucket: LOOSELY_SIMILAR_BUCKET,
+        signals: triple,
+        interpretation: LOOSE_INTERPRETATION,
+      });
+      const routed = resolveBucket(candidate);
       assert.equal(
         routed,
         LOOSELY_SIMILAR_BUCKET,
         `the engine's hint verdict must survive the triple ${JSON.stringify(triple)}`,
       );
       assert.equal(
-        bucketLabels(routed).actionSentence,
-        LOOSE_ACTION_SENTENCE,
-        HINT_ACTION_ASSERTION,
+        clusterInterpretation(candidate),
+        LOOSE_INTERPRETATION,
+        HINT_INTERPRETATION_ASSERTION,
       );
       assert.equal(bucketLabels(routed).aiMatch, false);
     }
@@ -275,35 +314,54 @@ suite("report schema helpers", () => {
   // extract — every copy is the same" about code whose identifiers all
   // differ. Every assertion is preserved; the surface under test is the
   // one the extension calls.
-  // → docs/plans/fused-score-followups.md § "Where fused stands against it"
+  // → docs/plans/fused-score-followups.md § "Elected-pair evidence"
   test("a content-gated rename is never labelled byte-identical", () => {
     // A maximal Type-2 rename proven by its literal anchors: the engine
-    // routes `nearly_identical` at fused 0.9 and renders token_jaccard
-    // 1.0 because the Merkle match already proves the token multiset
-    // (#232). The triple alone therefore reads "identical" — this is the
-    // exact shape that produced the false claim.
-    const rename = signals(1.0, 1.0, 0, HIGH_SCORE);
-    assert.ok(rename.fused < 1.0, "fixture: a proven rename is not full confidence");
+    // renders token_jaccard 1.0 because the Merkle match already proves
+    // the token multiset (#232), while the elected pair's content
+    // evidence shows the renaming. The structural axes alone therefore
+    // read "identical" — this is the exact shape that produced the false
+    // claim, and the bucket is what separates it.
+    const rename = signalsWith(NEARLY_IDENTICAL_BUCKET, {
+      structural: 1.0,
+      token_jaccard: 1.0,
+      shape: 1.0,
+      embedding_cos: 0,
+      pair_agreement: HIGH_SCORE,
+      pair_rename_consistency: 1,
+      literal_fraction: 0,
+    });
+    assert.ok(
+      rename.pair_agreement < 1,
+      "fixture: a renamed copy does not share every byte of matched content",
+    );
+    assert.equal(rename.token_jaccard, 1.0, "#232: the Merkle proof carries token_jaccard to 1.0");
     assert.equal(
       rename.structural,
       signals(1.0, 1.0, 0, 1.0).structural,
       "fixture: its shape evidence is indistinguishable from a verbatim copy",
     );
-    const routed = resolveBucket(cluster({ bucket: NEARLY_IDENTICAL_BUCKET, signals: rename }));
+    const nearMissInterpretation = "Engine-authored near-miss evidence.";
+    const renamedCluster = cluster({
+      bucket: NEARLY_IDENTICAL_BUCKET,
+      signals: rename,
+      interpretation: nearMissInterpretation,
+    });
+    const routed = resolveBucket(renamedCluster);
     assert.equal(
       routed,
       NEARLY_IDENTICAL_BUCKET,
       "a rename below full confidence must not be labelled byte-identical",
     );
     assert.equal(
-      bucketLabels(routed).actionSentence,
-      "Review the locations — small differences may matter.",
-      "the user must be told to review, not that extraction is safe",
+      clusterInterpretation(renamedCluster),
+      nearMissInterpretation,
+      "the client must render the engine-authored interpretation",
     );
     assert.notEqual(
-      bucketLabels(routed).actionSentence,
-      bucketLabels(IDENTICAL_BUCKET).actionSentence,
-      "the rename must not borrow the byte-identical action sentence",
+      clusterInterpretation(renamedCluster),
+      LOOSE_INTERPRETATION,
+      "the near miss must not borrow a different cluster's interpretation",
     );
   });
 
@@ -311,17 +369,20 @@ suite("report schema helpers", () => {
   // family fell through the old `structural >= 0.99` arm into an act-now
   // bucket — the exact false positive #341 exists to stop — because
   // `lacks_content_support` is invisible from the signal triple.
-  // → docs/plans/fused-score-followups.md § "Where fused stands against it"
+  // → docs/plans/fused-score-followups.md § "Elected-pair evidence"
   test("a shape-only family the content gate demoted is never promoted", () => {
-    // Sibling boilerplate: shape saturates, content evidence is absent,
-    // so the engine demotes it to `structural_only` at fused 0.31.
-    const shapeOnly = signals(1.0, SHAPE_SCORE, 0, DEMOTED_FUSED_SCORE);
+    // Sibling boilerplate: shape saturates, the elected pair shares almost
+    // no content, so the engine demotes the family to `structural_only`.
+    const shapeOnly = signalsWith(STRUCTURAL_ONLY_BUCKET, {
+      structural: 1.0,
+      token_jaccard: SHAPE_SCORE,
+      shape: 1.0,
+      embedding_cos: 0,
+      pair_agreement: LOW_SCORE,
+      pair_rename_consistency: 0,
+      literal_fraction: 0.91,
+    });
     const demoted = cluster({ bucket: STRUCTURAL_ONLY_BUCKET, signals: shapeOnly });
-    assert.equal(
-      demoted.meets_fused_gate,
-      false,
-      "fixture: the engine judged it under its own reportable cutoff",
-    );
     assert.ok(
       shapeOnly.structural >= 0.99,
       "fixture: its shape signal is exactly what used to promote it",
@@ -346,15 +407,20 @@ suite("report schema helpers", () => {
   // come back as the hint bucket — any surviving re-derivation would
   // answer "identical" here.
   test("an unlabelled cluster is a hint, however loudly its signals saturate", () => {
-    const unlabelled = resolveBucket(cluster({ bucket: "", signals: signals(1.0, 1.0, 1.0, 1.0) }));
+    const candidate = cluster({
+      bucket: "",
+      signals: signals(1.0, 1.0, 1.0, 1.0),
+      interpretation: LOOSE_INTERPRETATION,
+    });
+    const unlabelled = resolveBucket(candidate);
     assert.equal(
       unlabelled,
       LOOSELY_SIMILAR_BUCKET,
       "a report with no engine verdict carries no verdict to render",
     );
     assert.equal(
-      bucketLabels(unlabelled).actionSentence,
-      LOOSE_ACTION_SENTENCE,
+      clusterInterpretation(candidate),
+      LOOSE_INTERPRETATION,
     );
     assert.equal(
       resolveBucket(cluster({ bucket: "not_a_bucket", signals: signals(1.0, 1.0, 1.0, 1.0) })),
@@ -383,7 +449,7 @@ suite("report schema helpers", () => {
         bucket: SAME_BEHAVIOR_BUCKET,
       },
       {
-        signals: signals(1.0, 0.0, 0.0, DEMOTED_FUSED_SCORE),
+        signals: signals(1.0, 0.0, 0.0),
         bucket: STRUCTURAL_ONLY_BUCKET,
       },
       {
@@ -418,11 +484,6 @@ suite("report schema helpers", () => {
       assert.ok(
         labels.hybridTitle.startsWith(labels.plainTitle),
         `${routed}: the hybrid title must extend the plain title, not restate it`,
-      );
-      assert.match(
-        labels.actionSentence,
-        /\.$/,
-        `${routed}: the action sentence must be a complete sentence`,
       );
       assert.equal(
         labels.aiMatch,
@@ -525,33 +586,54 @@ suite("report schema helpers", () => {
     }
   });
 
-  // [VSIX-LIVE-BUBBLE] The act-now set is what the live bubble admits
+  // [VSIX-LIVE-BUBBLE] The live-bubble set is what the bubble admits
   // without a second opinion, so it must be exactly the buckets whose
-  // action sentence tells the user to do something now, and nothing else.
-  test("the act-now set is exactly the buckets that tell the user to act", () => {
-    assert.deepEqual([...ACT_NOW_BUCKETS], [IDENTICAL_BUCKET, NEARLY_IDENTICAL_BUCKET]);
-    assert.ok(isActNow(IDENTICAL_BUCKET), "a byte-proven copy is act-now");
-    assert.ok(isActNow(NEARLY_IDENTICAL_BUCKET), "a proven near miss is act-now");
-    assert.equal(
-      isActNow(STRUCTURAL_ONLY_BUCKET),
-      false,
-      "the demoted tier says 'verify before extracting' — that is not act-now",
+  // engine-authored interpretation tells the user to act, and nothing
+  // else. The interpretation is wire data ([VSIX-COMMON-RENDERING]): the
+  // client passes it through untouched, and each eligible bucket's
+  // engine sentence (staged here verbatim from
+  // `deslop-core::buckets`) is the one that asks for an action.
+  test("the live-bubble set is exactly the buckets whose engine verdict demands action", () => {
+    assert.deepEqual([...LIVE_BUBBLE_BUCKETS], [IDENTICAL_BUCKET, NEARLY_IDENTICAL_BUCKET]);
+    assert.ok(isLiveBubbleBucket(IDENTICAL_BUCKET), "a byte-proven copy is bubble-eligible");
+    assert.ok(
+      isLiveBubbleBucket(NEARLY_IDENTICAL_BUCKET),
+      "a proven near miss is bubble-eligible",
     );
     assert.equal(
-      isActNow(LOOSELY_SIMILAR_BUCKET),
+      isLiveBubbleBucket(STRUCTURAL_ONLY_BUCKET),
+      false,
+      "the demoted tier says 'verify before extracting' — the bubble must not render it",
+    );
+    assert.equal(
+      isLiveBubbleBucket(LOOSELY_SIMILAR_BUCKET),
       false,
       "a hint is not something to act on",
     );
     assert.equal(
-      isActNow(SAME_BEHAVIOR_BUCKET),
+      isLiveBubbleBucket(SAME_BEHAVIOR_BUCKET),
       false,
-      "an AI match says 'read both before merging' — it earns its place on confidence, not on a verdict",
+      "an AI match earns its place on confidence, not on a verdict",
     );
-    for (const bucket of ACT_NOW_BUCKETS) {
+    const ENGINE_SENTENCES: { bucket: string; sentence: string }[] = [
+      { bucket: IDENTICAL_BUCKET, sentence: "Safe to extract — every copy is the same." },
+      {
+        bucket: NEARLY_IDENTICAL_BUCKET,
+        sentence: "Review the locations — small differences may matter.",
+      },
+    ];
+    for (const { bucket, sentence } of ENGINE_SENTENCES) {
+      const routed = cluster({ bucket, interpretation: sentence });
+      const interpretation = clusterInterpretation(routed);
+      assert.equal(
+        interpretation,
+        sentence,
+        `${bucket}: the client must pass the engine's sentence through untouched`,
+      );
       assert.match(
-        bucketLabels(bucket).actionSentence,
+        interpretation,
         /extract|Review/,
-        `${bucket}: an act-now bucket must actually ask for an action`,
+        `${bucket}: a bubble-eligible bucket must carry an engine sentence that asks for action`,
       );
     }
   });

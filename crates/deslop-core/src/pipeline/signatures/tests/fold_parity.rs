@@ -134,7 +134,7 @@ fn fold_signatures_match_top_down_over_a_real_parse() -> Result<(), String> {
     Ok(())
 }
 
-// #339 ([FUSION-SIGNALS-THREE-LAYER]). Isolated at the signature layer on
+// #339 ([FUSED-SIGNALS-THREE-LAYER]). Isolated at the signature layer on
 // purpose: `content_gated_signals` overwrites a shape-identical cluster's
 // rendered `token_jaccard` to 1.0, so NO end-to-end assertion on a
 // rendered signal can distinguish real token evidence from the renderer
