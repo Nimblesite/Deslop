@@ -1,4 +1,5 @@
 use super::support::*;
+use crate::common::signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair};
 
 /// Runs the CLI against `fixture(fixture_name)` with `--min-nodes
 /// <min_nodes>`, asserts the process succeeded, and returns the raw
@@ -31,12 +32,35 @@ fn run_with_args(fixture_name: &str, extra_args: &[&str]) -> Result<(PathBuf, se
 
 /// Asserts the canonical Type-2 report shape shared by every
 /// per-language `*-small` fixture: both files analysed, both file
-/// names present, and a structural = 1.0 cluster signal.
-fn assert_type2_report(json: &str, first_file: &str, second_file: &str) {
+/// names present, and at least one reported duplicate cluster that
+/// carries the mass-only wire fields ([RANK-MASS-SUM],
+/// [SEVERITY-BAND]). The old `structural: 1.0` cluster signal is
+/// retired from the wire; the mass fields it was removed with must
+/// never silently disappear.
+fn assert_type2_report(json: &str, first_file: &str, second_file: &str) -> Result<()> {
     assert!(json.contains("\"files_analysed\": 2"));
     assert!(json.contains(first_file));
     assert!(json.contains(second_file));
-    assert!(json.contains("\"structural\": 1.0"));
+    let report: serde_json::Value = serde_json::from_str(json)?;
+    let clusters = require_array(&report, "/clusters", "report")?;
+    assert!(
+        !clusters.is_empty(),
+        "a Type-2 fixture must surface a cluster: {json}"
+    );
+    for cluster in clusters {
+        let band = cluster
+            .get("rank_band")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| anyhow::anyhow!("cluster carries no rank band: {cluster}"))?;
+        assert!(
+            ["worst", "top10", "mid", "faint"].contains(&band),
+            "cluster {} carries no rank band: {cluster}",
+            cluster_id(cluster)
+        );
+        let mass = require_u64(cluster, "/mass", "cluster")?;
+        assert!(mass >= 1, "cluster mass must be positive: {cluster}");
+    }
+    Ok(())
 }
 
 /// The array `owner` carries at `pointer`, or an error dumping the whole
@@ -140,38 +164,20 @@ fn require_cluster_spanning<'a>(
         })
 }
 
-/// Asserts the Type-3 near-miss contract on a cross-file cluster: the
-/// reported view is the *near-miss itself* — shape evidence above the
-/// admission floor but short of Merkle equality — with at least two
-/// occurrences and a `token_jaccard` signal present.
-///
-/// The bound is two-sided on purpose, and the upper half is the half
-/// that matters. This assertion used to demand `structural == 1.0`,
-/// which is satisfiable only by a byte-identical *fragment* nested
-/// inside the near-miss — the run of statements the inserted line did
-/// not disturb. That is precisely the finding gh #408 declares wrong:
-/// the enclosing method is the duplication, the fragment re-describes a
-/// piece of it, and a Type-3 near-miss can never be Merkle-exact by
-/// construction. Asserting exactness therefore asserted that the
-/// detector had missed the clone. Measured on the fixtures this guards:
-/// `go-type3` 0.906, `csharp-type3` 0.898, `fsharp-type3` 0.851.
-fn assert_type3_signals(cluster: &serde_json::Value) {
-    let structural = cluster
-        .pointer("/signals/structural")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or(f64::NAN);
-    assert!(
-        structural >= deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
-        "the near-miss cluster must clear the shared-subtree admission floor {floor}, \
-         got {structural}",
-        floor = deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
-    );
-    assert!(
-        structural < 1.0,
-        "the reported view must be the near-miss itself, not a byte-identical \
-         fragment nested inside it: structural = 1.0 means a Merkle-exact match, \
-         which a one-statement Type-3 near-miss cannot be (gh #408), got {structural}",
-    );
+/// Asserts the Type-3 near-miss contract on a cross-file cluster:
+/// at least two occurrences and the mass-only wire fields. The
+/// admission-floor and not-Merkle-exact bounds this helper used to
+/// pin via `signals.structural` moved to the pair surface when the
+/// cluster wire went mass-only: a cluster names components, pair
+/// evidence names edges ([FUSED-PAIR-SIGNALS]). The not-verbatim half
+/// is proven by the byte truth — a one-statement Type-3 near-miss can
+/// never be Merkle-exact by construction (gh #408) — and the clean
+/// surface keeps pair-only fields off the cluster.
+fn assert_type3_signals(
+    scan_root: &Path,
+    cluster: &serde_json::Value,
+    language: &str,
+) -> Result<()> {
     let occurrences = cluster
         .pointer("/occurrences")
         .and_then(serde_json::Value::as_array)
@@ -181,9 +187,13 @@ fn assert_type3_signals(cluster: &serde_json::Value) {
         "a clone cluster must have at least two occurrences, got {occurrences}",
     );
     assert!(
-        cluster.pointer("/signals/token_jaccard").is_some(),
-        "the cross-file cluster must carry a token_jaccard signal",
+        !has_verbatim_pair(scan_root, cluster)?,
+        "the reported view must be the near-miss itself, not a byte-identical pair: \
+         a one-statement Type-3 near-miss cannot be Merkle-exact by construction (gh #408); \
+         got {cluster:#}",
     );
+    assert_no_pair_surface_on_cluster(cluster, &format!("{language} type-3 near-miss"));
+    Ok(())
 }
 
 /// Zero-false-positive guard shared by every `*-dissimilar-functions`
@@ -213,7 +223,7 @@ fn assert_every_cluster_single_file(json: &str, language_label: &str) -> Result<
 #[test]
 fn detects_type2_clone_in_csharp_fixture() -> Result<()> {
     let json = run_min_nodes("csharp-small", "8")?;
-    assert_type2_report(&json, "Alpha.cs", "Beta.cs");
+    assert_type2_report(&json, "Alpha.cs", "Beta.cs")?;
     Ok(())
 }
 
@@ -221,7 +231,7 @@ fn detects_type2_clone_in_csharp_fixture() -> Result<()> {
 #[test]
 fn detects_type2_clone_in_rust_fixture() -> Result<()> {
     let json = run_min_nodes("rust-small", "10")?;
-    assert_type2_report(&json, "alpha.rs", "beta.rs");
+    assert_type2_report(&json, "alpha.rs", "beta.rs")?;
     Ok(())
 }
 
@@ -229,55 +239,39 @@ fn detects_type2_clone_in_rust_fixture() -> Result<()> {
 #[test]
 fn detects_type2_clone_in_python_fixture() -> Result<()> {
     let json = run_min_nodes("python-small", "10")?;
-    assert_type2_report(&json, "alpha.py", "beta.py");
+    assert_type2_report(&json, "alpha.py", "beta.py")?;
     Ok(())
 }
 
-// Implements [PIPELINE-LANG-TRAIT] for Dart ([LANG-CAND-DART]): Type-2
-// renamed-clone detection. `alpha.dart` and `beta.dart` are the same
-// accumulate loop with every identifier renamed; Dart normalisation
-// collapses identifiers/literals so the two functions fingerprint
-// identically and cluster at structural = 1.0.
+// [PIPELINE-LANG-TRAIT] Dart Type-2 fixture: the report cluster is mass-only; any pair measurements require explicit endpoints.
 #[test]
 fn detects_type2_clone_in_dart_fixture() -> Result<()> {
     let json = run_min_nodes("dart-small", "10")?;
-    assert_type2_report(&json, "alpha.dart", "beta.dart");
+    assert_type2_report(&json, "alpha.dart", "beta.dart")?;
     Ok(())
 }
 
-// Implements [PIPELINE-LANG-TRAIT] for PHP ([PARSE-PHP-NORMALIZE]):
-// Type-2 renamed-clone detection. `alpha.php` and `beta.php` implement
-// the same accumulate loop with every identifier renamed; PHP
-// normalisation collapses identifiers/literals so the two functions
-// fingerprint identically and cluster at structural = 1.0.
+// [PIPELINE-LANG-TRAIT] PHP Type-2 fixture: the report cluster is mass-only; any pair measurements require explicit endpoints.
 #[test]
 fn detects_type2_clone_in_php_fixture() -> Result<()> {
     let json = run_min_nodes("php-small", "10")?;
-    assert_type2_report(&json, "alpha.php", "beta.php");
+    assert_type2_report(&json, "alpha.php", "beta.php")?;
     Ok(())
 }
 
-// Implements [PIPELINE-LANG-TRAIT] for F# ([PARSE-FSHARP-NORMALIZE]):
-// Type-2 renamed-clone detection. `alpha.fs` and `beta.fs` implement the
-// same accumulate loop with every identifier renamed and the integer
-// literals changed; F# normalisation collapses identifiers/literals so the
-// two functions fingerprint identically and cluster at structural = 1.0.
+// [PIPELINE-LANG-TRAIT] F# Type-2 fixture: the report cluster is mass-only; any pair measurements require explicit endpoints.
 #[test]
 fn detects_type2_clone_in_fsharp_fixture() -> Result<()> {
     let json = run_min_nodes("fsharp-small", "10")?;
-    assert_type2_report(&json, "alpha.fs", "beta.fs");
+    assert_type2_report(&json, "alpha.fs", "beta.fs")?;
     Ok(())
 }
 
-// Implements [PIPELINE-LANG-TRAIT] for Go ([LANG-CAND-GO]): Type-2
-// renamed-clone detection. `alpha.go` and `beta.go` implement the same
-// accumulate loop with every identifier renamed and the integer literals
-// changed; Go normalisation collapses identifiers/literals so the two
-// functions fingerprint identically and cluster at structural = 1.0.
+// [PIPELINE-LANG-TRAIT] Go Type-2 fixture: the report cluster is mass-only; any pair measurements require explicit endpoints.
 #[test]
 fn detects_type2_clone_in_go_fixture() -> Result<()> {
     let json = run_min_nodes("go-small", "10")?;
-    assert_type2_report(&json, "alpha.go", "beta.go");
+    assert_type2_report(&json, "alpha.go", "beta.go")?;
     Ok(())
 }
 
@@ -285,16 +279,17 @@ fn detects_type2_clone_in_go_fixture() -> Result<()> {
 // near-miss. `delta.fs`'s loop body runs two accumulator updates per
 // iteration; `epsilon.fs`'s runs one. The shared control-flow subtrees
 // (`_ < 0 then 0`, `_ <- _ + _`, `_ in 0 .. _`) surface as a cross-file
-// cluster at structural = 1.0, while the signature-only sibling match
+// cluster, while the signature-only sibling match
 // (`f (_: int) : int`, whose bodies differ) is correctly suppressed
 // ([CLONE-NOISE-SIGNATURE-ONLY], #154) — proving both the structural
 // near-miss path and the signature filter are wired for F#.
 #[test]
 fn detects_type3_clone_in_fsharp_fixture() -> Result<()> {
     let json = run_min_nodes("fsharp-type3", "8")?;
+    let scan_root = fixture("fsharp-type3");
     let clusters = report_clusters(&json)?;
     let cluster = require_cluster_spanning(&clusters, "delta.fs", "epsilon.fs")?;
-    assert_type3_signals(cluster);
+    assert_type3_signals(&scan_root, cluster, "F#")?;
     Ok(())
 }
 
@@ -383,7 +378,7 @@ fn detects_type3_clone_in_go_fixture() -> Result<()> {
         "the go-type3 fixture is a two-file pair; anything else means discovery missed a file",
     );
     let cluster = require_cluster_spanning(&clusters, "delta.go", "epsilon.go")?;
-    assert_type3_signals(cluster);
+    assert_type3_signals(&scan_root, cluster, "Go")?;
     for cluster in &clusters {
         let files = cluster_file_basenames(cluster);
         if files.len() > 1 {
@@ -457,10 +452,19 @@ fn go_package_and_import_prologue_never_becomes_a_cross_file_cluster() -> Result
         6,
         "all six package files must be analysed; report={report:#?}",
     );
+    // Liveness proof on the mass-only wire: the fixture's six files
+    // genuinely diverge below the shared prologue, so the honest report
+    // carries no clusters at all — the old "some cluster must appear"
+    // bound was satisfied by the very over-clustering this regression
+    // exists to kill. What proves the scan was live is the metrics: the
+    // parser consumed the whole corpus (analysed_loc > 0) and the
+    // boilerplate carriers were counted, so a detector that stopped
+    // looking would fail `files_analysed`, not pass it.
+    let analysed_loc = require_u64(&report, "/metrics/analysed_loc", "report")?;
     assert!(
-        !require_array(&report, "/clusters", "report")?.is_empty(),
-        "the fixture must still produce clone candidates below the prologue, otherwise \
-         the guard proves only that nothing was fingerprinted at all",
+        analysed_loc >= 180,
+        "the six divergent Go files must all be parsed (analysed_loc >= 180, got \
+         {analysed_loc}) — the prologue guard must never double as a silence guard",
     );
     assert_no_cross_file_prologue_cluster(&report, &scan_root, "go prologue");
     Ok(())
@@ -665,6 +669,7 @@ fn handles_mixed_language_fixture() -> Result<()> {
 #[test]
 fn detects_type3_clone_in_csharp_fixture() -> Result<()> {
     let json = run_min_nodes("csharp-type3", "15")?;
+    let scan_root = fixture("csharp-type3");
     assert!(json.contains("Delta.cs"));
     assert!(json.contains("Epsilon.cs"));
     // This asserted the raw literal `"structural": 0.0`, which gh #408
@@ -676,7 +681,7 @@ fn detects_type3_clone_in_csharp_fixture() -> Result<()> {
     // short of the Merkle equality a near-miss cannot have.
     let clusters = report_clusters(&json)?;
     let cluster = require_cluster_spanning(&clusters, "Delta.cs", "Epsilon.cs")?;
-    assert_type3_signals(cluster);
+    assert_type3_signals(&scan_root, cluster, "C#")?;
     Ok(())
 }
 

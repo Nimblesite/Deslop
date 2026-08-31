@@ -3,6 +3,7 @@ pub(crate) use assert_cmd::Command;
 pub(crate) use predicates::str::contains;
 pub(crate) use serde_json::Value;
 pub(crate) use std::{fs, path::Path, path::PathBuf};
+pub(crate) use tempfile::TempDir;
 
 /// Shared CLI flag selecting the minimum AST node count.
 pub(crate) const MIN_NODES_FLAG: &str = "--min-nodes";
@@ -63,6 +64,46 @@ pub(crate) fn fixture_command(name: &str, output_prefix: &Path) -> Result<Comman
     let mut cmd = deslop_command(&fixture(name), output_prefix)?;
     let _cmd = cmd.arg("--no-incremental");
     Ok(cmd)
+}
+
+/// Creates the temp workspace with an empty `<dir_name>` scan root
+/// inside it and returns both. The temp directory must outlive every
+/// read of the returned paths, so callers bind the [`TempDir`] —
+/// dropping it deletes the workspace.
+///
+/// Every CLI test needs this pairing; hand-rolling the three lines per
+/// test was the suite's largest scaffolding duplication cluster
+/// ([CI-DESLOP] ledger, gh #397).
+pub(crate) fn temp_scan_dir(dir_name: &str) -> Result<(TempDir, PathBuf)> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join(dir_name);
+    fs::create_dir_all(&scan_root)?;
+    Ok((tmp, scan_root))
+}
+
+/// Creates the temp workspace, builds a `<dir_name>` scan root inside
+/// it, seeds the root with `seed`, and renders the output paths under
+/// the same temp root. `seed` may be a fixture-writer function directly
+/// or a closure composing several writes; a no-op seed (`|_| Ok(())`)
+/// leaves the root empty.
+pub(crate) fn seeded_scan(
+    dir_name: &str,
+    seed: impl FnOnce(&Path) -> Result<()>,
+) -> Result<(TempDir, PathBuf, RunOutputs)> {
+    let (tmp, scan_root) = temp_scan_dir(dir_name)?;
+    seed(&scan_root)?;
+    let out = outputs_under(tmp.path());
+    Ok((tmp, scan_root, out))
+}
+
+/// Runs the CLI against `scan_root` with `--output <output_prefix>` and
+/// `args`, asserting the process succeeded. Callers that must inspect
+/// stderr/stdout build their own [`deslop_command`] instead — inspecting
+/// the streams is the point of those tests.
+pub(crate) fn run_scan(scan_root: &Path, output_prefix: &Path, args: &[&str]) -> Result<()> {
+    let mut cmd = deslop_command(scan_root, output_prefix)?;
+    let _assertion = cmd.args(args).assert().success();
+    Ok(())
 }
 
 /// Appends `.<ext>` to `base` by cloning and replacing the file name.

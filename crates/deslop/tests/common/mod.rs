@@ -82,6 +82,12 @@ pub(crate) mod golden;
 /// same reason as `signals`.
 pub(crate) mod seeded;
 
+/// The temp-workspace scaffold: a bound [`tempfile::TempDir`] plus an
+/// empty scan root inside it. Imported explicitly with
+/// `use crate::common::scan_dir::*;`, for the same reason as
+/// `signals`.
+pub(crate) mod scan_dir;
+
 /// Reading the on-disk parse store and a run's tracing log. Imported
 /// explicitly with `use crate::common::store::*;`, for the same reason
 /// as `signals`.

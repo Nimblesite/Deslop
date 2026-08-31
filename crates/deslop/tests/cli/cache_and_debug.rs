@@ -99,10 +99,17 @@ fn incremental_cache_hits_on_second_run() -> Result<()> {
     );
     // Deduplication must still fire even when the fingerprints came
     // from the cache — the rehydration is only useful if downstream
-    // clustering sees identical results.
+    // clustering sees identical results. The mass-only wire proves the
+    // Type-2 cluster by its presence with the mass fields and both
+    // occurrences ([RANK-MASS-SUM]); the retired `structural: 1.0`
+    // cluster signal no longer exists.
     assert!(
-        second_json.contains("\"structural\": 1.0"),
+        second_json.contains("\"mass\":"),
         "cached run must still detect the Type-2 cluster: {second_json}"
+    );
+    assert!(
+        second_json.contains("\"Alpha.cs\"") && second_json.contains("\"Beta.cs\""),
+        "cached run must report both copies of the Type-2 cluster: {second_json}"
     );
     let second_txt = fs::read_to_string(tmp.path().join("second.txt"))?;
     assert!(
@@ -118,11 +125,13 @@ fn incremental_cache_hits_on_second_run() -> Result<()> {
 // land under `.deslop/cache/fingerprints/`.
 #[test]
 fn default_run_uses_the_cache() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
+    let (tmp, scan_root, _out) =
+        seeded_scan("src", |root| seed_scan_root(&fixture("csharp-small"), root))?;
+    run_scan(
+        &scan_root,
+        &tmp.path().join("report"),
+        &[MIN_NODES_FLAG, MIN_NODES_VALUE],
+    )?;
     let json = fs::read_to_string(tmp.path().join("report.json"))?;
     assert!(
         json.contains("\"misses\": 2"),
@@ -144,14 +153,13 @@ fn default_run_uses_the_cache() -> Result<()> {
 // must not mutate the tree has an explicit way to say so.
 #[test]
 fn no_incremental_flag_skips_the_cache() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .args(["--min-nodes", "8", "--no-incremental"])
-        .assert()
-        .success();
+    let (tmp, scan_root, _out) =
+        seeded_scan("src", |root| seed_scan_root(&fixture("csharp-small"), root))?;
+    run_scan(
+        &scan_root,
+        &tmp.path().join("report"),
+        &[MIN_NODES_FLAG, MIN_NODES_VALUE, "--no-incremental"],
+    )?;
     let json = fs::read_to_string(tmp.path().join("report.json"))?;
     assert!(
         json.contains("\"hits\": 0"),
@@ -200,8 +208,8 @@ fn corrupt_cache_entry_degrades_to_miss() -> Result<()> {
         "corrupt entries must be treated as misses: {second_json}"
     );
     assert!(
-        second_json.contains("\"structural\": 1.0"),
-        "analysis still produces the cluster after recovery: {second_json}"
+        second_json.contains("\"mass\":") && second_json.contains("\"Alpha.cs\""),
+        "analysis still produces the Type-2 cluster after recovery: {second_json}"
     );
     Ok(())
 }
@@ -370,9 +378,10 @@ fn synthetic_corpus_scale_smoke_test() -> Result<()> {
     );
     // Every file shares the identical method template, so the
     // ranked output must contain at least one cluster — catches
-    // pipelines that silently drop everything.
+    // pipelines that silently drop everything. The mass-only wire
+    // carries the mass fields instead of the retired `weight`.
     assert!(
-        json.contains("\"weight\":"),
+        json.contains("\"mass\":") && json.contains("\"rank\":"),
         "synthetic corpus produced no clusters: {json}"
     );
     Ok(())

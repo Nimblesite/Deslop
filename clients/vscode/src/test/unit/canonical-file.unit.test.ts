@@ -3,7 +3,7 @@
 
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
-import * as os from "node:os";
+import { tempFile } from "./temp-file.helpers";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
@@ -42,8 +42,7 @@ suite("canonical file command", () => {
   });
 
   test("openCanonicalOccurrence opens the first occurrence at its line and column", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-canon-"));
-    const canonical = path.join(dir, "Canonical.cs");
+    const { dir, file: canonical } = tempFile("cdd-canon-", "Canonical.cs");
     const sibling = path.join(dir, "Sibling.cs");
     const source = "zero\n  canonical target\n";
     const startByte = Buffer.byteLength("zero\n  ", "utf8");

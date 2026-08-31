@@ -256,15 +256,14 @@ fn no_color_env_overrides_force_color() -> Result<()> {
 // `write_cache_line` and is otherwise unreachable.
 #[test]
 fn technical_mode_surfaces_raw_cache_stats_line() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     seed_scan_root(&fixture(CSHARP_SMALL_FIXTURE), &scan_root)?;
     // First run populates the cache.
-    let mut first = deslop_command(&scan_root, &tmp.path().join("first"))?;
-    let _assertion = first
-        .args([MIN_NODES_FLAG, MIN_NODES_VALUE])
-        .assert()
-        .success();
+    run_scan(
+        &scan_root,
+        &tmp.path().join("first"),
+        &[MIN_NODES_FLAG, MIN_NODES_VALUE],
+    )?;
     let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
     let assertion = second
         .args([
@@ -291,8 +290,7 @@ fn technical_mode_surfaces_raw_cache_stats_line() -> Result<()> {
 #[test]
 fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
     let server = crate::mock_ollama::MockOllama::spawn()?;
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     seed_scan_root(&fixture(CSHARP_SMALL_FIXTURE), &scan_root)?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
     let assertion = cmd
@@ -320,12 +318,14 @@ fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
 }
 
 // Implements [UX-TECHNICAL-BREAKDOWN]: `--technical` prints the
-// researcher breakdown row with bracketed taxonomy labels. Plain mode
-// uses friendly wording; this test guards the taxonomy string the
-// technical branch emits. The csharp-small pair is a maximal Type-2
-// rename with every literal preserved, so [FUSED-CONTENT-GATE] rename
-// consistency routes it to the act-now `nearly_identical` bucket's
-// hybrid title ([CLONE-BUCKETS-DUAL-LABEL]).
+// researcher breakdown row with the mass-only column legend. Plain
+// mode uses friendly wording; this test guards the technical branch's
+// wire facts — cluster id, mass, occurrence count, canonical node
+// count and files — the fields the mass-only wire carries
+// ([RANK-MASS-SUM], [SEVERITY-BAND]). Taxonomy bucket labels were
+// retired with the cluster signals they named; pair-only values
+// (structural/Jaccard/embedding/content) appear only under an
+// explicit endpoint comparison.
 #[test]
 fn technical_mode_uses_type_taxonomy_in_breakdown_row() -> Result<()> {
     let tmp = tempfile::tempdir()?;
@@ -341,12 +341,18 @@ fn technical_mode_uses_type_taxonomy_in_breakdown_row() -> Result<()> {
         .success();
     let stderr = stderr_text(&assertion)?;
     assert!(
-        stderr.contains("1 × Nearly identical code [Type-3]"),
-        "--technical must print the bracketed-taxonomy breakdown: {stderr}"
+        stderr.contains("columns: rank, id, mass, occurrences, canonical AST nodes, files"),
+        "--technical must print the mass-only column legend: {stderr}"
     );
     assert!(
-        stderr.contains("#1  ● Nearly identical code [Type-3]"),
-        "--technical must print the bracketed taxonomy in the ranked row: {stderr}"
+        stderr.contains("#1  Duplicate code [")
+            && stderr.contains("· mass 58 · 2 occurrences · 58 AST nodes"),
+        "--technical must print the mass-ranked cluster row with id, mass, occurrences, \
+         nodes and files: {stderr}"
+    );
+    assert!(
+        stderr.contains("Alpha.cs, Beta.cs"),
+        "--technical cluster row must name both files: {stderr}"
     );
     Ok(())
 }

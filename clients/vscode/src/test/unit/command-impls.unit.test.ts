@@ -7,6 +7,7 @@ import * as vscode from "vscode";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import { tempFile } from "./temp-file.helpers";
 import type { LanguageClient } from "vscode-languageclient/node";
 import {
   openWorstCluster,
@@ -201,8 +202,7 @@ suite("register command implementations", () => {
   });
 
   test("openOccurrence opens the referenced file at the byte range", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-occ-"));
-    const file = path.join(dir, "occ.txt");
+    const { dir, file } = tempFile("cdd-occ-", "occ.txt");
     fs.writeFileSync(file, "hello\nworld\n", UTF8_ENCODING);
     await openOccurrence(
       fixtureOccurrence({
@@ -321,12 +321,11 @@ suite("register command implementations", () => {
   });
 
   test("comparePairEndpoints opens distinct diff sides for two occurrences that live inside the same file", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-cmp-same-"));
+    const { dir, file } = tempFile("cdd-cmp-same-", "same.cs");
     // Two clone regions inside a single source file. This is the case the
     // user reported: the old implementation handed `vscode.diff` the same
     // file URI twice, so the diff editor rendered the whole file against
     // itself. The fix must ensure each side shows only the clone bytes.
-    const file = path.join(dir, "same.cs");
     const source =
       "OCCURRENCE_A_____________________________\n" +
       "middle middle middle middle middle middle\n" +
@@ -646,8 +645,7 @@ suite("tree menu renderers", () => {
   });
 
   test("sourceSnippetText header is path line column only for humans (#27)", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-snip-"));
-    const file = path.join(dir, "snippet.cs");
+    const { dir, file } = tempFile("cdd-snip-", "snippet.cs");
     const source = "public class Snippet { int x = 1; }\n";
     fs.writeFileSync(file, source, UTF8_ENCODING);
 
@@ -733,8 +731,7 @@ suite("tree menu handlers", () => {
   });
 
   test("copyHumanLocation copies path:line:column for the occurrence", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-hloc-"));
-    const file = path.join(dir, "hum.cs");
+    const { dir, file } = tempFile("cdd-hloc-", "hum.cs");
     fs.writeFileSync(file, "line-a\nline-b\n", UTF8_ENCODING);
 
     const node = occurrenceNodeFor(
@@ -807,8 +804,7 @@ suite("tree menu handlers", () => {
   });
 
   test("copySourceSnippet copies the fenced source block to the clipboard", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-snip2-"));
-    const file = path.join(dir, "src.py");
+    const { dir, file } = tempFile("cdd-snip2-", "src.py");
     fs.writeFileSync(file, "def hi(): return 42\n", UTF8_ENCODING);
 
     await copySourceSnippet(
@@ -827,8 +823,7 @@ suite("tree menu handlers", () => {
   });
 
   test("revealOccurrenceInExplorer calls revealInExplorer for an existing file", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-rev-"));
-    const file = path.join(dir, "reveal.cs");
+    const { dir, file } = tempFile("cdd-rev-", "reveal.cs");
     fs.writeFileSync(file, "x\n", UTF8_ENCODING);
     const node = occurrenceNodeFor(
       fixtureOccurrence({ path: file, start_byte: 0, end_byte: 1 }),

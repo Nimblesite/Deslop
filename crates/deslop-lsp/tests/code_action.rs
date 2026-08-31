@@ -18,7 +18,7 @@ use std::{
 use anyhow::{anyhow, ensure, Context, Result};
 use common::{
     call, code_action_params, handshake, rewrite_offer, spawn_lsp_on_fixture_guarded,
-    wait_for_actions, ANALYSIS_TIMEOUT, POLL_INTERVAL,
+    wait_for_actions, workspace_file_uri, ANALYSIS_TIMEOUT, POLL_INTERVAL,
 };
 use serde_json::{json, Value};
 
@@ -102,9 +102,7 @@ fn csharp_type1_fixture_offers_and_applies_extract_action() -> Result<()> {
         "lazy resolve must be advertised ([AUTOFIX-MERGE-CODE-ACTION])"
     );
 
-    let file = workspace.path().join("InvoiceMath.cs");
-    let uri = tower_lsp::lsp_types::Url::from_file_path(&file)
-        .map_err(|()| anyhow!("fixture path is absolute"))?;
+    let uri = workspace_file_uri(workspace.path(), "InvoiceMath.cs")?;
     // Lines 4..6 sit inside the first duplicated method body.
     let params = code_action_params(uri.as_str(), 4, 6);
     let actions = wait_for_actions(&mut stdin, &mut stdout, &params)?;
@@ -144,6 +142,7 @@ fn csharp_type1_fixture_offers_and_applies_extract_action() -> Result<()> {
         "helper name must embed the cluster id prefix, got: {inserted}"
     );
 
+    let file = workspace.path().join("InvoiceMath.cs");
     let source = fs::read_to_string(&file).context("fixture source")?;
     let applied = apply_text_edits(&source, &edits)?;
     let expected = fs::read_to_string(golden("InvoiceMath.applied.cs")).context("golden")?;
@@ -165,9 +164,7 @@ fn assert_language_case(
 ) -> Result<()> {
     let (workspace, _guard, mut stdin, mut stdout) = spawn_lsp_on_fixture_guarded(fixture_name)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
-    let file = workspace.path().join(file_name);
-    let uri = tower_lsp::lsp_types::Url::from_file_path(&file)
-        .map_err(|()| anyhow!("fixture path is absolute"))?;
+    let uri = workspace_file_uri(workspace.path(), file_name)?;
     let params = code_action_params(uri.as_str(), body_lines.0, body_lines.1);
     let actions = wait_for_actions(&mut stdin, &mut stdout, &params)?;
     let edits = actions
@@ -182,6 +179,7 @@ fn assert_language_case(
         })
         .cloned()
         .context("extract action carries edits for the fixture document")?;
+    let file = workspace.path().join(file_name);
     let source = fs::read_to_string(&file).context("fixture source")?;
     let applied = apply_text_edits(&source, &edits)?;
     let expected = fs::read_to_string(golden(golden_name)).context("golden")?;
@@ -247,9 +245,7 @@ fn assert_no_action_over_file(fixture_name: &str, file_name: &str) -> Result<()>
     let (workspace, _guard, mut stdin, mut stdout) = spawn_lsp_on_fixture_guarded(fixture_name)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
     wait_for_analysis(&mut stdin, &mut stdout)?;
-    let file = workspace.path().join(file_name);
-    let uri = tower_lsp::lsp_types::Url::from_file_path(&file)
-        .map_err(|()| anyhow!("fixture path is absolute"))?;
+    let uri = workspace_file_uri(workspace.path(), file_name)?;
     let params = code_action_params(uri.as_str(), 0, 40);
     let response = call(&mut stdin, &mut stdout, "textDocument/codeAction", &params)?;
     let result = response.pointer("/result").context("result present")?;
@@ -295,9 +291,7 @@ fn range_outside_occurrences_offers_no_action() -> Result<()> {
         spawn_lsp_on_fixture_guarded("csharp-extract-type1")?;
     let _init = handshake(&mut stdin, &mut stdout)?;
 
-    let file = workspace.path().join("InvoiceMath.cs");
-    let uri = tower_lsp::lsp_types::Url::from_file_path(&file)
-        .map_err(|()| anyhow!("fixture path is absolute"))?;
+    let uri = workspace_file_uri(workspace.path(), "InvoiceMath.cs")?;
     // First wait until analysis is live (the in-body range offers an
     // action), then probe the class-declaration line.
     let in_body = code_action_params(uri.as_str(), 4, 6);
@@ -321,9 +315,7 @@ fn merge_fixture_offers_and_resolves_rewrite_action() -> Result<()> {
     let (workspace, _guard, mut stdin, mut stdout) =
         spawn_lsp_on_fixture_guarded("csharp-merge-leafgap")?;
     let _init = handshake(&mut stdin, &mut stdout)?;
-    let file = workspace.path().join("RateLimits.cs");
-    let uri = tower_lsp::lsp_types::Url::from_file_path(&file)
-        .map_err(|()| anyhow!("fixture path is absolute"))?;
+    let uri = workspace_file_uri(workspace.path(), "RateLimits.cs")?;
     let params = code_action_params(uri.as_str(), 4, 6);
     let actions = wait_for_actions(&mut stdin, &mut stdout, &params)?;
     let offer = rewrite_offer(&actions, "Merge duplicates into one parameterised helper")?;
@@ -339,6 +331,7 @@ fn merge_fixture_offers_and_resolves_rewrite_action() -> Result<()> {
         "insertion + two rewrites, got {}",
         edits.len()
     );
+    let file = workspace.path().join("RateLimits.cs");
     let source = fs::read_to_string(&file)?;
     let applied = apply_text_edits(&source, &edits)?;
     let expected = fs::read_to_string(golden("RateLimits.merged.cs")).context("golden")?;
@@ -358,9 +351,7 @@ fn cross_file_fixture_offers_and_resolves_consolidate_action() -> Result<()> {
     let (workspace, _guard, mut stdin, mut stdout) =
         spawn_lsp_on_fixture_guarded("rust-consolidate")?;
     let _init = handshake(&mut stdin, &mut stdout)?;
-    let file = workspace.path().join("pricing_b.rs");
-    let uri = tower_lsp::lsp_types::Url::from_file_path(&file)
-        .map_err(|()| anyhow!("fixture path is absolute"))?;
+    let uri = workspace_file_uri(workspace.path(), "pricing_b.rs")?;
     let params = code_action_params(uri.as_str(), 2, 5);
     let actions = wait_for_actions(&mut stdin, &mut stdout, &params)?;
     let offer = rewrite_offer(
@@ -406,9 +397,7 @@ fn drifted_fixture_resolve_disables_with_reason() -> Result<()> {
     let (workspace, _guard, mut stdin, mut stdout) =
         spawn_lsp_on_fixture_guarded("csharp-merge-drift")?;
     let _init = handshake(&mut stdin, &mut stdout)?;
-    let file = workspace.path().join("DriftLimits.cs");
-    let uri = tower_lsp::lsp_types::Url::from_file_path(&file)
-        .map_err(|()| anyhow!("fixture path is absolute"))?;
+    let uri = workspace_file_uri(workspace.path(), "DriftLimits.cs")?;
     let params = code_action_params(uri.as_str(), 4, 6);
     let actions = wait_for_actions(&mut stdin, &mut stdout, &params)?;
     let offer = rewrite_offer(&actions, "Merge duplicates into one parameterised helper")?;

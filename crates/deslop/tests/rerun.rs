@@ -13,6 +13,7 @@ use anyhow::Result;
 use assert_cmd::Command;
 use predicates::str::contains;
 
+use crate::common::scan_dir::temp_scan_dir;
 use crate::common::{rerun_ops::*, *};
 
 /// Config body that excludes the `Beta.cs` half of the seeded clone pair.
@@ -83,9 +84,7 @@ fn rerun_touch_with_unchanged_sources_emits_empty_delta() -> Result<()> {
 // sees the post-edit state, so the rerun is an idempotent refresh.
 #[test]
 fn rerun_touch_on_existing_file_reparses_via_update_files() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    fs::create_dir_all(&scan_root)?;
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     fs::write(
         scan_root.join("Alpha.cs"),
         "namespace Alpha\n{\n    public class Solo\n    {\n        public int Compute(int x)\n        {\n            return x + 1;\n        }\n    }\n}\n",
@@ -144,9 +143,7 @@ fn rerun_touch_ignores_unsupported_and_out_of_root_paths() -> Result<()> {
 // `apply_one_change` plus the `clusters_added` branch of `between`.
 #[test]
 fn rerun_add_introduces_new_file_and_reports_cluster_added() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    fs::create_dir_all(&scan_root)?;
+    let (tmp, scan_root) = temp_scan_dir("src")?;
     // Seed with only Alpha.cs so the initial corpus has no clones.
     let alpha = fixture("csharp-small").join("Alpha.cs");
     let _bytes = fs::copy(&alpha, scan_root.join("Alpha.cs"))?;

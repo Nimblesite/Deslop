@@ -5,8 +5,7 @@
 
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
+import { tempFile } from "../unit/temp-file.helpers";
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
 import {
@@ -175,8 +174,7 @@ suite("extension activation glue", () => {
   });
 
   test("wireDirtyDocuments hides a file's occurrences on edit and restores them on save", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "deslop-dirty-"));
-    const dirtyFile = path.join(dir, "Edited.cs");
+    const { dir, file: dirtyFile } = tempFile("deslop-dirty-", "Edited.cs");
     fs.writeFileSync(dirtyFile, "code\n", "utf8");
 
     const store = new ReportStore();

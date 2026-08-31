@@ -5,6 +5,7 @@
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { tempFile } from "../unit/temp-file.helpers";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
@@ -46,8 +47,7 @@ suite("tree context menu commands", () => {
   });
 
   test("deslop.copyHumanLocation writes path:line:column to the clipboard", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-e2e-hum-"));
-    const file = path.join(dir, "hum.cs");
+    const { dir, file } = tempFile("cdd-e2e-hum-", "hum.cs");
     fs.writeFileSync(file, "a\nb\nc\n", UTF8_ENCODING);
 
     const node = occurrenceNode(occurrence(file, 2, 3));

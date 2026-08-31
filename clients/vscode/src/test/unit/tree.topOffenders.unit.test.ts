@@ -7,8 +7,7 @@
 
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
+import { tempFile } from "../unit/temp-file.helpers";
 import * as vscode from "vscode";
 import {
   FileNode,
@@ -714,8 +713,7 @@ suite("TopOffendersProvider", () => {
   test("occurrence row reports and opens the exact file, line, and column", async () => {
     // [VSIX-ACTIVITY-BAR] Issue #8: tree occurrence rows must show
     // path:line:column, not machine-oriented start_byte..end_byte.
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "deslop-issue-8-tree-"));
-    const occurrencePath = path.join(dir, "ChatProtocol.cs");
+    const { dir, file: occurrencePath } = tempFile("deslop-issue-8-tree-", "ChatProtocol.cs");
     const source = "namespace Demo;\n\npublic sealed class ChatProtocol {\n    void Send() {}\n}\n";
     const startByte = Buffer.byteLength(source.slice(0, source.indexOf("void Send")), "utf8");
     const endByte = startByte + Buffer.byteLength("void Send", "utf8");

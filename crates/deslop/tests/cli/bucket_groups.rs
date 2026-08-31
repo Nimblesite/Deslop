@@ -112,12 +112,9 @@ fn html_report_groups_clusters_into_one_neutral_expander() -> Result<()> {
 // category facet control ([FACET-MODEL]: the category axis is retired).
 #[test]
 fn html_report_summary_breaks_down_by_mass_severity_and_cards_stay_neutral() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    write_dart_data_table_fixture(&scan_root)?;
-    let out = outputs_under(tmp.path());
+    let (tmp, scan_root, out) = seeded_scan("src", write_dart_data_table_fixture)?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let assertion = cmd.args(["--min-nodes", "30"]).assert().success();
+    let assertion = cmd.args([MIN_NODES_FLAG, "30"]).assert().success();
     // [FACET-CLI]: the stderr summary carries the mass-severity breakdown.
     let stderr = String::from_utf8_lossy(&assertion.get_output().stderr).into_owned();
     assert!(
