@@ -251,15 +251,15 @@ pub struct FusedCluster {
 }
 
 /// One surviving discovery edge inside a [`FusedCluster`]: the two
-/// fingerprint indices it connects and its pre-rescue fused strength.
+/// fingerprint indices it connects. Pair-scoped admission evidence
+/// stays on the pair (`PairScore`); the cluster never selects, grades,
+/// or ranks an edge by it ([PIPELINE-CLUSTER-CLOSURE]).
 #[derive(Debug, Clone, Copy)]
 pub struct FusedEdge {
     /// Lower fingerprint index of the surviving pair.
     pub left: usize,
     /// Higher fingerprint index of the surviving pair.
     pub right: usize,
-    /// The pair's [`PairScore::bounded_fused`] score.
-    pub strength: f64,
 }
 
 /// Reason one candidate pair did or did not enter transitive closure.

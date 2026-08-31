@@ -12,7 +12,7 @@ import {
   openWorstCluster,
   openOccurrence,
   jumpToNextOccurrence,
-  compareWithCanonical,
+  comparePairEndpoints,
   openSchemaDoc,
   openCpuReport,
   renderCpuReport,
@@ -78,7 +78,7 @@ async function findDiffTab(): Promise<vscode.TabInputTextDiff> {
       setTimeout(resolve, 50);
     });
   }
-  throw new Error("no diff tab opened after compareWithCanonical");
+  throw new Error("no diff tab opened after comparePairEndpoints");
 }
 
 async function closeAllDiffs(): Promise<void> {
@@ -286,7 +286,7 @@ suite("register command implementations", () => {
     await jumpToNextOccurrence(store);
   });
 
-  test("compareWithCanonical opens a diff whose two sides are distinct resources with the matching occurrence bytes", async () => {
+  test("comparePairEndpoints opens a diff whose two sides are distinct resources with the matching occurrence bytes", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-cmp-"));
     const fileA = path.join(dir, FILE_A_NAME);
     const fileB = path.join(dir, FILE_B_NAME);
@@ -296,19 +296,13 @@ suite("register command implementations", () => {
     fs.writeFileSync(fileA, "public class A { int x = 1; }\n", UTF8_ENCODING);
     fs.writeFileSync(fileB, "public class B { int y = 2; }\n", UTF8_ENCODING);
 
-    const store = new ReportStore();
-    store.setSnapshot(
-      report([
-        clusterWithRanges("c-diff", [
-          { path: fileA, start_byte: 0, end_byte: CYCLE_OCCURRENCE_END_BYTE },
-          { path: fileB, start_byte: 0, end_byte: CYCLE_OCCURRENCE_END_BYTE },
-        ]),
-      ]),
-      0,
-    );
-
     await closeAllDiffs();
-    await compareWithCanonical(store, "c-diff");
+    // [VSIX-PAIR-COMPARE] Both endpoints are explicit; the host never
+    // invents a canonical side.
+    await comparePairEndpoints(
+      { path: fileA, start_byte: 0, end_byte: CYCLE_OCCURRENCE_END_BYTE },
+      { path: fileB, start_byte: 0, end_byte: CYCLE_OCCURRENCE_END_BYTE },
+    );
     const diff = await findDiffTab();
 
     assert.notEqual(
@@ -326,7 +320,7 @@ suite("register command implementations", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  test("compareWithCanonical opens distinct diff sides for two occurrences that live inside the same file", async () => {
+  test("comparePairEndpoints opens distinct diff sides for two occurrences that live inside the same file", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-cmp-same-"));
     // Two clone regions inside a single source file. This is the case the
     // user reported: the old implementation handed `vscode.diff` the same
@@ -342,19 +336,11 @@ suite("register command implementations", () => {
     const thirdLineStart = source.indexOf("OCCURRENCE_B");
     const thirdLineEnd = source.indexOf("\n", thirdLineStart);
 
-    const store = new ReportStore();
-    store.setSnapshot(
-      report([
-        clusterWithRanges("c-same", [
-          { path: file, start_byte: 0, end_byte: firstLineEnd },
-          { path: file, start_byte: thirdLineStart, end_byte: thirdLineEnd },
-        ]),
-      ]),
-      0,
-    );
-
     await closeAllDiffs();
-    await compareWithCanonical(store, "c-same");
+    await comparePairEndpoints(
+      { path: file, start_byte: 0, end_byte: firstLineEnd },
+      { path: file, start_byte: thirdLineStart, end_byte: thirdLineEnd },
+    );
     const diff = await findDiffTab();
 
     assert.notEqual(
@@ -383,16 +369,19 @@ suite("register command implementations", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  test("compareWithCanonical bails for a non-existent id", async () => {
-    const store = new ReportStore();
-    store.setSnapshot(report([]), 0);
-    await compareWithCanonical(store, "nope");
-  });
-
-  test("compareWithCanonical bails for a single-occurrence cluster", async () => {
-    const store = new ReportStore();
-    store.setSnapshot(report([cluster("c-single", ["/only"])]), 0);
-    await compareWithCanonical(store, "c-single");
+  test("comparePairEndpoints is a no-op for missing, malformed, or identical endpoints", async () => {
+    // [VSIX-PAIR-COMPARE] There is no canonical fallback: a missing,
+    // malformed, or identical endpoint pair must never open a diff.
+    await closeAllDiffs();
+    await comparePairEndpoints(undefined, undefined);
+    await comparePairEndpoints({ path: "a.ts", start_byte: 0, end_byte: 1 }, undefined);
+    await comparePairEndpoints(undefined, { path: "a.ts", start_byte: 0, end_byte: 1 });
+    await comparePairEndpoints({ path: "a.ts", start_byte: 0, end_byte: 1 }, "not-an-object");
+    await comparePairEndpoints(
+      { path: "a.ts", start_byte: 0, end_byte: 1 },
+      { path: "a.ts", start_byte: 0, end_byte: 1 },
+    );
+    assert.equal(vscode.window.tabGroups.all.flatMap((group) => group.tabs).length, 0);
   });
 
   test("compare provider renders a friendly fallback for a stale occurrence file", async () => {
@@ -403,14 +392,13 @@ suite("register command implementations", () => {
         end_byte: TEST_TWENTY,
       }),
       "a",
-      "stale-cluster",
     );
 
     const doc = await vscode.workspace.openTextDocument(uri);
     const text = doc.getText();
     assert.match(text, /Deslop could not load this compare occurrence/);
     assert.match(text, /Refresh the Deslop report and try Compare again/);
-    assert.match(text, /stale-cluster/);
+    assert.match(text, /selected-pair/);
   });
 
   test("openSchemaDoc prefers packaged docs over a stale snapshot", async () => {

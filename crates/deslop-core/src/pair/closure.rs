@@ -43,20 +43,6 @@ fn build_clusters(
         edges.entry(root).or_default().push(FusedEdge {
             left: pair.left,
             right: pair.right,
-            // The overlap is admission evidence for the pair it was
-            // measured on ([FUSED-SHARED-SUBTREE]), so the edge
-            // carries it. This is what lets the same-file collapse
-            // elect the *enclosing* method of a Type-3 near-miss over
-            // the windows nested inside it: the same insertion costs
-            // proportionally less over the wider context, so the
-            // enclosing pair's overlap outranks every sub-window's —
-            // and outranks their token estimates, which reward the
-            // window precisely for excluding the difference.
-            strength: pair
-                .score
-                .finite()
-                .bounded_fused()
-                .max(pair.shared_subtree_overlap),
         });
     }
     groups

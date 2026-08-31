@@ -83,7 +83,6 @@ fn component(size: usize) -> FusedCluster {
                 .map(move |right| FusedEdge {
                     left: *left,
                     right: *right,
-                    strength: 1.0,
                 })
         })
         .collect();

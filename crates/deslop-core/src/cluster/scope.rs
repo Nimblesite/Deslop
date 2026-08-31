@@ -1,15 +1,12 @@
 //! [PIPELINE-CLUSTER-EXACT-SCOPE] Which authored declaration an
 //! occurrence sits inside.
 //!
-//! The same-file overlap collapse ranks two views of one region by the
-//! cross-file evidence each carries ([`super::cross_file_edge_strengths`]).
-//! That comparison is only meaningful between views of comparable
-//! scope. Inside one function a narrower view scores higher *because*
-//! it excludes the statements that differ, so ranking by grade there
-//! elects whichever window omits the most — the same non-comparability
-//! [`crate::cluster::subsume`] already documents between nesting
-//! cluster views, one stage earlier and with no content evidence yet
-//! measured.
+//! The same-file overlap collapse selects its representative by authored
+//! scope and width only ([`super::collapse_overlapping_per_file`]): an
+//! enclosing view inside the same authored declaration stays, otherwise
+//! the wider byte range wins. Pair grades never enter the selection — a
+//! bridge that should not connect two components must fail pair
+//! admission ([PIPELINE-CLUSTER-CLOSURE]).
 //!
 //! Declarations are read off the normalised tree, keyed by the file's
 //! language ([`function_kinds`]), so a production name that means

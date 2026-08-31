@@ -232,16 +232,19 @@ fn cluster_id_source(members: &[Fingerprint], file_paths: &HashMap<FileId, PathB
 /// files never collapse, no matter how their byte ranges relate. Two
 /// non-overlapping occurrences inside the same file also survive —
 /// only a transitively overlapping chain collapses to one canonical
-/// member. Within a run, the member carrying the strongest cross-file
-/// discovery edge always beats a wider, more weakly matched one; width
-/// only breaks ties between peers (see [`cross_file_edge_strengths`]).
+/// member. Within a run the representative is selected by authored
+/// scope and width only ([PIPELINE-CLUSTER-EXACT-SCOPE]): an enclosing
+/// view inside the same authored declaration stays; otherwise the
+/// wider byte range wins, with stable byte-range ordering as the
+/// tie-breaker. Pair grades never choose a view — a bridge that should
+/// not connect two components must fail pair admission, not be hidden
+/// by the collapse.
 #[must_use]
 fn collapse_overlapping_per_file(
     fused: &FusedCluster,
     fingerprints: &[Fingerprint],
     scopes: &DeclarationScopes<'_, impl BuildHasher>,
 ) -> Vec<usize> {
-    let strengths = cross_file_edge_strengths(fused, fingerprints);
     let mut by_file: BTreeMap<FileId, Vec<(usize, Fingerprint)>> = BTreeMap::new();
     for index in fused.members.iter().copied() {
         let Some(member) = fingerprints.get(index) else {
@@ -254,7 +257,7 @@ fn collapse_overlapping_per_file(
     }
     let mut out: Vec<usize> = Vec::new();
     for bucket in by_file.into_values() {
-        out.extend(collapse_overlapping_single_file(bucket, &strengths, scopes));
+        out.extend(collapse_overlapping_single_file(bucket, scopes));
     }
     // Corpus-index order, not `FileId` order: ids encode registration
     // history (a removed-and-restored file gets a fresh id), while the
@@ -265,48 +268,13 @@ fn collapse_overlapping_per_file(
     out
 }
 
-/// The strongest surviving-edge strength each member holds to a member
-/// in a *different file*, from the component's discovery edges.
-///
-/// This is what the same-file overlap collapse ranks representatives
-/// by. A transitive-closure component can chain several views of one
-/// region together — an exact sibling-window match and a whole-file
-/// root that merely token-matched the window in the other file — and
-/// the collapse must keep the occurrence that carries the strongest
-/// cross-file evidence (#339). Choosing by width alone let the weakly
-/// matched root displace the exact window, drop the cluster's measured
-/// `structural` from 1.0 to 0.0, and hand subsumption a reason to
-/// delete the only view of the duplicate. Same-file edges deliberately
-/// do not count: they describe within-file duplication, which never
-/// needs to survive a *same-file* collapse to stay reported.
-fn cross_file_edge_strengths(
-    fused: &FusedCluster,
-    fingerprints: &[Fingerprint],
-) -> HashMap<usize, f64> {
-    let mut strengths: HashMap<usize, f64> = HashMap::new();
-    for edge in &fused.edges {
-        let (Some(left), Some(right)) = (fingerprints.get(edge.left), fingerprints.get(edge.right))
-        else {
-            continue;
-        };
-        if left.file_id == right.file_id {
-            continue;
-        }
-        for index in [edge.left, edge.right] {
-            let best = strengths.entry(index).or_insert(0.0);
-            *best = best.max(edge.strength);
-        }
-    }
-    strengths
-}
-
 /// Greedy sweep over one file's occurrences: sort by `(start, -end)`
-/// and keep one canonical member per overlapping run. The member with
-/// the strongest cross-file discovery edge wins
-/// ([`cross_file_edge_strengths`]); between equals the widest byte
-/// range (largest physical clone) wins, and equal-width ties keep the
-/// first-encountered member so the result stays deterministic across
-/// runs.
+/// and keep one canonical member per overlapping run. The representative
+/// is the enclosing view when it shares an authored declaration with
+/// the candidate; otherwise the widest byte range (largest physical
+/// clone) wins, and equal-width ties keep the first-encountered member
+/// so the result stays deterministic across runs
+/// ([PIPELINE-CLUSTER-EXACT-SCOPE]).
 ///
 /// The run's frontier is tracked separately from its representative
 /// ([PIPELINE-CLUSTER-EXACT]). Overlap is transitive, and the window
@@ -318,7 +286,6 @@ fn cross_file_edge_strengths(
 /// duplication percentage.
 fn collapse_overlapping_single_file(
     mut bucket: Vec<(usize, Fingerprint)>,
-    strengths: &HashMap<usize, f64>,
     scopes: &DeclarationScopes<'_, impl BuildHasher>,
 ) -> Vec<usize> {
     bucket.sort_by_key(|(_, member)| {
@@ -332,7 +299,6 @@ fn collapse_overlapping_single_file(
         let candidate = Occurrence {
             index,
             range: member.byte_range,
-            strength: strengths.get(&index).copied().unwrap_or(0.0),
             declaration: scopes.enclosing(&member),
         };
         match runs.last_mut() {
@@ -352,9 +318,6 @@ struct Occurrence {
     index: usize,
     /// Byte range this occurrence claims.
     range: ByteRange,
-    /// Strongest cross-file discovery edge it carries
-    /// ([`cross_file_edge_strengths`]).
-    strength: f64,
     /// The authored declaration it sits strictly inside, when the
     /// grammar names one ([`DeclarationScopes::enclosing`]).
     declaration: Option<ByteRange>,
@@ -362,28 +325,16 @@ struct Occurrence {
 
 impl Occurrence {
     /// True when the two occupy one authored declaration's worth of
-    /// scope, so a grade measured over one describes the other's code
-    /// too.
+    /// scope, so the enclosing view describes the other's code too.
     ///
     /// Two occurrences strictly inside the *same* declaration qualify.
     /// So does the asymmetric case: `self` at or above declaration
     /// level (no function production encloses it) against `other`
     /// inside one. A whole-file view holding a function whole, against
     /// an interior window of that same function, is the same
-    /// non-comparability seen from one level up — the window scores
-    /// higher only by dropping part of what the file says. `ledger_left`
-    /// and `ledger_right` reorder every statement of one function: the
-    /// file view measured 0.850 and an interior 80..438 window measured
-    /// 0.897, and electing the window published `structural 0.730,
-    /// token 0.727`, which buckets `loosely_similar` and is hidden —
-    /// two fully duplicated files reported as nothing
-    /// (`lsh_only_nearmiss_recall`).
-    ///
-    /// Two occurrences that are both at or above declaration level do
-    /// **not** qualify. They span whole declarations, so what one
-    /// excludes is other declarations rather than part of one, and the
-    /// grades describe comparable code — which is what keeps #339's
-    /// exact sibling window ahead of the wider token-matched view.
+    /// non-comparability seen from one level up — the window covers
+    /// less of what the file says, so the wider authored scope stays
+    /// the representative (`lsh_only_nearmiss_recall`).
     fn shares_declaration_with(&self, other: &Self) -> bool {
         match (self.declaration, other.declaration) {
             (Some(mine), Some(theirs)) => mine == theirs,
@@ -438,45 +389,40 @@ impl OverlapRun {
         }
     }
 
-    /// Strictly stronger cross-file evidence displaces the incumbent;
-    /// between equals, only a strictly wider byte span wins.
+    /// The wider authored scope displaces the incumbent; equal widths
+    /// keep the incumbent ([PIPELINE-CLUSTER-EXACT-SCOPE]).
     ///
-    /// **Inside one declaration the grades are not comparable**
-    /// ([PIPELINE-CLUSTER-EXACT-SCOPE], gh #408). A window nested in
-    /// the occurrence it competes with scores a higher cross-file edge
-    /// exactly to the extent that it drops the statements the two
-    /// copies disagree on, so the strength contest inside one authored
-    /// declaration elects whichever window omits the most. In
-    /// `typescript-type3` the enclosing view of `accumulate`/`aggregate`
-    /// measured 0.857 against the 37-node run nested in it at 1.00, and
-    /// the 1.00 was the interior `let` + `for` with the extra
-    /// `running = running + 2` cut off the end: the pair was published
-    /// as Merkle-equal, and the one statement that makes it a Type-3
-    /// near-miss disappeared from the report
-    /// (`js_ts_signatures::typescript_near_miss_produces_cross_file_structural_cluster`,
-    /// `js_ts_clone_buckets::javascript_near_miss_extra_guard_is_a_proven_rename`).
+    /// **Inside one declaration grades are never compared** (gh #408).
+    /// A window nested in the occurrence it competes with measures a
+    /// higher cross-file edge exactly to the extent that it drops the
+    /// statements the two copies disagree on, so a grade contest inside
+    /// one authored declaration elects whichever window omits the most.
+    /// The enclosing view therefore stays when it shares the authored
+    /// declaration with the candidate — `typescript-type3` pins the
+    /// enclosing `accumulate`/`aggregate` view winning over the 37-node
+    /// interior run that dropped the extra `running = running + 2` and
+    /// reported a Merkle-equal pair
+    /// (`js_ts_signatures::typescript_near_miss_produces_cross_file_structural_cluster`).
     ///
-    /// Across declarations the two spans describe genuinely different
-    /// amounts of authored code and the grade is the honest
-    /// discriminator, which is what keeps #339 intact: there the
-    /// enclosing view is a run of *top-level bindings* whose tail
-    /// differs in shape, no function production encloses either view,
-    /// and the exact sibling window at 1.00 must still displace the
-    /// weakly token-matched wider view at 0.879
-    /// (`fsharp_issue_339_sibling_window_rename`). The numbers alone
-    /// cannot separate the two — 0.857 must win and 0.879 must lose —
-    /// so the scope is what decides, never a threshold.
+    /// Between views that do not share a declaration, width alone
+    /// decides; a bridge that should not connect two files must fail
+    /// pair admission, never be hidden by the collapse.
+    /// `fsharp_issue_339_sibling_window_rename` keeps passing because
+    /// the wider whole-module view never reaches the component (its
+    /// pair to the other module fails admission), so the exact sibling
+    /// window remains the only view of the region.
     fn displaces(&self, candidate: &Occurrence) -> bool {
         if self.representative.encloses(candidate)
             && self.representative.shares_declaration_with(candidate)
         {
             return false;
         }
-        match candidate.strength.total_cmp(&self.representative.strength) {
-            std::cmp::Ordering::Greater => true,
-            std::cmp::Ordering::Less => false,
-            std::cmp::Ordering::Equal => candidate.range.len() > self.representative.range.len(),
-        }
+        // Authored scope and width only ([PIPELINE-CLUSTER-EXACT-SCOPE]).
+        // Pair grades cannot choose a view: a bridge that should not
+        // connect must fail pair admission, not be hidden by the
+        // collapse. Equal-width ties keep the incumbent, so the run
+        // stays deterministic across runs.
+        candidate.range.len() > self.representative.range.len()
     }
 }
 

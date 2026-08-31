@@ -382,7 +382,7 @@ function clusterStatsTitle(cluster: ReportCluster): string {
 }
 
 function canonicalTitle(occurrence: ReportOccurrence): string {
-  return `Canonical occurrence: Deslop uses this first occurrence as the comparison anchor for this cluster. Location: ${occurrence.displayLocation?.label ?? occurrence.path}.`;
+  return `Canonical occurrence: the first occurrence of the cluster, the canonical extent its mass is measured over. Location: ${occurrence.displayLocation?.label ?? occurrence.path}.`;
 }
 
 wireMessagePump();
