@@ -411,6 +411,26 @@ impl OverlapRun {
     /// the wider whole-module view never reaches the component (its
     /// pair to the other module fails admission), so the exact sibling
     /// window remains the only view of the region.
+    ///
+    /// **Inside one declaration grades are never compared** (gh #408).
+    /// A window nested in the occurrence it competes with measures a
+    /// higher cross-file edge exactly to the extent that it drops the
+    /// statements the two copies disagree on, so a grade contest inside
+    /// one authored declaration elects whichever window omits the most.
+    /// The enclosing view therefore stays when it shares the authored
+    /// declaration with the candidate — `typescript-type3` pins the
+    /// enclosing `accumulate`/`aggregate` view winning over the 37-node
+    /// interior run that dropped the extra `running = running + 2` and
+    /// reported a Merkle-equal pair
+    /// (`js_ts_signatures::typescript_near_miss_produces_cross_file_structural_cluster`).
+    ///
+    /// Between views that do not share a declaration, width alone
+    /// decides; a bridge that should not connect two files must fail
+    /// pair admission, never be hidden by the collapse.
+    /// `fsharp_issue_339_sibling_window_rename` keeps passing because
+    /// the wider whole-module view never reaches the component (its
+    /// pair to the other module fails admission), so the exact sibling
+    /// window remains the only view of the region.
     fn displaces(&self, candidate: &Occurrence) -> bool {
         if self.representative.encloses(candidate)
             && self.representative.shares_declaration_with(candidate)

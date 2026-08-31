@@ -24,7 +24,11 @@
 
 use anyhow::Result;
 
-use crate::common::{verdict::*, *};
+use crate::common::{
+    signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract},
+    verdict::*,
+    *,
+};
 
 #[test]
 fn a_non_bijective_single_method_pair_is_not_a_declaration_family() -> Result<()> {
@@ -46,9 +50,10 @@ fn a_non_bijective_single_method_pair_is_not_a_declaration_family() -> Result<()
     )?;
     assert_duplicated_loc_at_least(&report, 10);
 
-    assert!(
-        signal(cluster, "structural") >= 0.99,
-        "the two bodies share a shape, so the structural signal is saturated: {cluster:#}"
-    );
+    // [PIPELINE-CLUSTER-CLOSURE] The shape axis is pair-scoped; the wire
+    // facts that hold the acceptance: the family is admitted, mass-honest
+    // and clean-surfaced.
+    assert_structural_only_contract(cluster, "declaration family plurality");
+    assert_no_pair_surface_on_cluster(cluster, "declaration family plurality");
     Ok(())
 }

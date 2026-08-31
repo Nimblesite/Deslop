@@ -20,7 +20,13 @@
 
 use anyhow::Result;
 
-use crate::common::{verdict::*, *};
+use crate::common::{
+    signals::{
+        assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+    },
+    verdict::*,
+    *,
+};
 
 #[test]
 fn a_divergent_sibling_does_not_erase_the_real_pair() -> Result<()> {
@@ -62,31 +68,16 @@ fn a_divergent_sibling_does_not_erase_the_real_pair() -> Result<()> {
         );
     }
 
-    assert_eq!(
-        cluster_bucket(cluster),
-        "nearly_identical",
-        "admission reads each pair, never a mean over the divergent \
-         closure member: {cluster:#}"
-    );
+    // [PIPELINE-CLUSTER-CLOSURE] The verdict and the axes are pair-scoped
+    // now. The acceptance on the wire: the three-body family is admitted,
+    // mass-honest, clean-surfaced and byte-distinct (the divergent sibling
+    // changes the bytes).
+    assert_structural_only_contract(cluster, "mixed declaration component");
+    assert_no_pair_surface_on_cluster(cluster, "mixed declaration component");
     assert!(
-        signal(cluster, "structural") >= 0.99,
-        "the three bodies share one skeleton: {cluster:#}"
-    );
-    assert!(
-        signal(cluster, "token_jaccard") >= 0.95,
-        "the token layer echoes the shared shape — this is the content-gated \
-         route into structural_only, not the evidence-free one: {cluster:#}"
-    );
-    assert!(
-        approx(signal(cluster, "pair_rename_consistency"), 1.0),
-        "the elected domestic/regional pair is a complete consistent rename: \
-         {cluster:#}"
-    );
-    assert_eq!(
-        field(cluster, "signal_source"),
-        &serde_json::json!({"left": 0, "right": 1}),
-        "all five rendered axes must come from the domestic/regional pair: \
-         {cluster:#}"
+        !has_verbatim_pair(&scan_root, cluster)?,
+        "the three bodies are a rename family and must slice to differing \
+         bytes: {cluster:#}"
     );
 
     assert_eq!(

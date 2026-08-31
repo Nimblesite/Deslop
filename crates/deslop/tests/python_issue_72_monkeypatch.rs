@@ -30,6 +30,9 @@ use anyhow::Result;
 
 use crate::common::{
     negative_pin::{assert_suppressed_family, SuppressedFamily},
+    signals::{
+        assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+    },
     *,
 };
 
@@ -102,7 +105,6 @@ const COMPUTED_OCCURRENCES: usize = 3;
 
 /// The bucket the family carries: three functions of one shape, with no
 /// rename evidence to promote them.
-const COMPUTED_BUCKET: &str = "structural_only";
 
 // [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT-TAUTOLOGY]
 // The boundary. A clause widened past `name = <literal>` would hide this
@@ -137,11 +139,16 @@ fn a_computed_value_is_not_a_tautology_and_keeps_its_cluster() -> Result<()> {
         "{COMPUTED_LABEL}: every one of the three tests must be shown, not a \
          subset a filter trimmed: {report:#}"
     );
-    assert_eq!(
-        cluster_bucket(family),
-        COMPUTED_BUCKET,
-        "{COMPUTED_LABEL}: shape agreement is all the evidence there is here, \
-         so the cluster is shape-only: {report:#}"
+    // [PIPELINE-CLUSTER-CLOSURE] The structural_only bucket is gone; the
+    // wire facts that hold the acceptance: the family is admitted,
+    // mass-honest and clean-surfaced, and its occurrences are byte-distinct
+    // (shape agreement only — the bodies differ).
+    assert_structural_only_contract(family, COMPUTED_LABEL);
+    assert_no_pair_surface_on_cluster(family, COMPUTED_LABEL);
+    assert!(
+        !has_verbatim_pair(&fixture(FIXTURE), family)?,
+        "{COMPUTED_LABEL}: the computed family differs in bytes (shape only): \
+         {report:#}"
     );
     Ok(())
 }

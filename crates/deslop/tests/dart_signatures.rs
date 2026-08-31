@@ -29,6 +29,9 @@
 
 use anyhow::Result;
 
+use crate::common::signals::{
+    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+};
 use crate::common::*;
 
 /// Drives the `deslop` binary over the named fixture at `min_nodes` and
@@ -44,19 +47,16 @@ fn run_cli(fixture_name: &str, min_nodes: u32) -> Result<serde_json::Value> {
     load_json(&output.with_extension("json"))
 }
 
-/// True only within one float ulp of `1.0` — a saturated signal, never a
-/// merely high one.
-fn is_exact_one(value: f64) -> bool {
-    (value - 1.0).abs() <= f64::EPSILON
-}
-
 // [FUSED-SIGNALS-THREE-LAYER] Type-2 Dart clones (identical after
 // normalisation, every identifier renamed) must produce both
 // `structural = 1.0` and `token_jaccard = 1.0` — the structural pass
 // proves the Merkle hashes match and the MinHash pass proves identical
-// k-gram sets map to identical signatures.
+// k-gram sets map to identical signatures. On the mass-only wire the
+// same fact is proven from the corpus bytes: the occurrences slice to
+// identical source text ([PIPELINE-CLUSTER-CLOSURE]).
 #[test]
-fn dart_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
+fn dart_type2_clone_is_byte_identical_and_spans_both_files() -> Result<()> {
+    let scan_root = fixture("dart-small");
     let report = run_cli("dart-small", 10)?;
     let clusters = clusters(&report);
     assert!(
@@ -66,16 +66,9 @@ fn dart_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
     let top = clusters
         .first()
         .ok_or_else(|| anyhow::anyhow!("dart-small must produce at least one cluster"))?;
-    let structural = signal(top, "structural");
-    let token_jaccard = signal(top, "token_jaccard");
     assert!(
-        is_exact_one(structural),
-        "Type-2 Dart clone must have structural = 1.0, got {structural}",
-    );
-    assert!(
-        is_exact_one(token_jaccard),
-        "Type-2 Dart clone must have token_jaccard = 1.0 (identical k-gram sets), \
-         got {token_jaccard}",
+        has_verbatim_pair(&scan_root, top)?,
+        "the Type-2 Dart clone must be byte-proven from the fixture: {top:#}",
     );
     let files = cluster_file_set(top);
     assert!(
@@ -110,20 +103,22 @@ fn dart_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
 // admission floor.
 #[test]
 fn dart_near_miss_produces_genuine_cross_file_structural_cluster() -> Result<()> {
+    let scan_root = fixture("dart-type3");
     let report = run_cli("dart-type3", 8)?;
     let cluster = expect_cluster_spanning(&report, &["delta.dart", "epsilon.dart"])?;
-    let structural = signal(cluster, "structural");
+    // Admission is the near-miss proof on the mass-only wire: the
+    // enclosing pair cleared the shared-subtree bar or it would not be a
+    // cluster. The byte-level truth is that the view is a near-miss, not
+    // a verbatim copy — the whole point of gh #408 is that the enclosing
+    // method differs by the extra statement.
     assert!(
-        structural >= deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
-        "the cross-file Dart near-miss cluster must clear the shared-subtree admission \
-         floor {floor} (genuine Type-3 detection via the structural path), got {structural}",
-        floor = deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
+        !has_verbatim_pair(&scan_root, cluster)?,
+        "the reported view must be the enclosing near-miss (bytes differ by the \
+         extra statement), not a Merkle-exact fragment nested inside it (gh #408): \
+         {cluster:#}",
     );
-    assert!(
-        structural < 1.0,
-        "the reported view must be the enclosing near-miss, not a Merkle-exact fragment \
-         nested inside it (gh #408), got {structural}",
-    );
+    assert_structural_only_contract(cluster, "dart-type3");
+    assert_no_pair_surface_on_cluster(cluster, "dart-type3");
     let occurrence_count = occurrences(cluster).len();
     assert!(
         occurrence_count >= 2,
@@ -150,19 +145,34 @@ fn dissimilar_dart_functions_never_form_a_cross_file_cluster() -> Result<()> {
 }
 
 // [PIPELINE-DETERMINISM] Two CLI runs over the same Dart corpus must
-// produce bit-identical `token_jaccard` values — proves the MinHash
-// (blake3 XOF) signature path is deterministic across process restarts.
+// produce identical cluster ids, spans and occurrence counts — proves
+// the fingerprint and render paths are deterministic across process
+// restarts. The `token_jaccard` bit-pin is gone with the signals
+// surface; cluster identity (id + occurrence spans) is what consumers
+// actually hold across sessions ([PIPELINE-DETERMINISM]).
 #[test]
-fn dart_token_jaccard_is_deterministic_across_runs() -> Result<()> {
+fn dart_report_is_deterministic_across_runs() -> Result<()> {
     let run1 = run_cli("dart-small", 10)?;
     let run2 = run_cli("dart-small", 10)?;
-    let jaccards1: Vec<u64> = clusters(&run1)
+    let jaccards1: Vec<(String, u64, u64)> = clusters(&run1)
         .iter()
-        .map(|cluster| signal(cluster, "token_jaccard").to_bits())
+        .map(|cluster| {
+            (
+                cluster_id(cluster).to_owned(),
+                cluster_size(cluster),
+                field(cluster, "mass").as_u64().unwrap_or(0),
+            )
+        })
         .collect();
-    let jaccards2: Vec<u64> = clusters(&run2)
+    let jaccards2: Vec<(String, u64, u64)> = clusters(&run2)
         .iter()
-        .map(|cluster| signal(cluster, "token_jaccard").to_bits())
+        .map(|cluster| {
+            (
+                cluster_id(cluster).to_owned(),
+                cluster_size(cluster),
+                field(cluster, "mass").as_u64().unwrap_or(0),
+            )
+        })
         .collect();
     assert!(
         !jaccards1.is_empty(),
@@ -170,7 +180,8 @@ fn dart_token_jaccard_is_deterministic_across_runs() -> Result<()> {
     );
     assert_eq!(
         jaccards1, jaccards2,
-        "token_jaccard values must be bit-identical across runs on the same Dart corpus",
+        "cluster identity (id, occurrence count, mass) must be identical across runs \
+         on the same Dart corpus",
     );
     Ok(())
 }

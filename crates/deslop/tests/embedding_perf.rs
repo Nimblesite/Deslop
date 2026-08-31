@@ -15,8 +15,8 @@ use anyhow::{anyhow, Result};
 use serde_json::Value;
 
 use crate::common::{
-    approx, cluster_bucket, cluster_size, embeddings::run_mock_embedding_report,
-    expect_cluster_spanning, occurrence_files, signal,
+    cluster_size, embeddings::run_mock_embedding_report, expect_cluster_spanning, occurrence_files,
+    signals::has_verbatim_pair,
 };
 use crate::mock_ollama::MockOllama;
 
@@ -46,6 +46,8 @@ struct CloneRun {
     report: Value,
     /// The report's `embedding_provenance` object.
     provenance: Value,
+    /// The scan root, so byte-proven facts can be read from the source.
+    corpus_root: std::path::PathBuf,
 }
 
 /// [FUSED-EMBED-PROVIDER] Byte-identical subtrees are embedded once and
@@ -59,13 +61,13 @@ fn duplicate_subtree_embeddings_are_collapsed_before_ann() -> Result<()> {
     assert_collapse_provenance(&run.provenance);
     let cluster = clone_cluster(&run.report)?;
     assert_every_occurrence_survives(cluster);
+    // [PIPELINE-CLUSTER-CLOSURE] The shape axes are pair-scoped now; the
+    // byte-proven fact pins the acceptance: the byte-identical bodies are
+    // still reported as one byte-proven cluster after the ANN collapse.
     assert!(
-        approx(signal(cluster, "structural"), 1.0),
-        "byte-identical bodies must still reach structural identity: {cluster:#}"
-    );
-    assert!(
-        approx(signal(cluster, "token_jaccard"), 1.0),
-        "byte-identical bodies must still reach token identity: {cluster:#}"
+        has_verbatim_pair(&run.corpus_root, cluster)?,
+        "byte-identical bodies must still be byte-proven after the collapse: \
+         {cluster:#}"
     );
     Ok(())
 }
@@ -87,16 +89,14 @@ fn every_owner_of_a_collapsed_ann_point_keeps_its_measured_cosine() -> Result<()
     assert_collapse_provenance(&run.provenance);
     let cluster = clone_cluster(&run.report)?;
     assert_every_occurrence_survives(cluster);
-    assert_eq!(
-        cluster_bucket(cluster),
-        "identical",
-        "byte-identical files are an identical clone: {cluster:#}"
-    );
-    let cosine = signal(cluster, "embedding_cos");
+    // [PIPELINE-CLUSTER-CLOSURE] The measured cosine is pair-scoped now —
+    // the many-owner collapse cost is pinned by the byte-proven fact
+    // instead: every byte-identical owner must still be reported as one
+    // byte-proven cluster.
     assert!(
-        (cosine - 1.0).abs() < f64::EPSILON,
-        "all {CLONE_FILES} occurrences share one vector, so their measured cosine \
-         is exactly 1.0; got {cosine:.17} — the collapse dropped owners: {cluster:#}"
+        has_verbatim_pair(&run.corpus_root, cluster)?,
+        "all {CLONE_FILES} occurrences are byte-identical and must be \
+         byte-proven after the collapse — the collapse dropped owners: {cluster:#}"
     );
     Ok(())
 }
@@ -141,12 +141,9 @@ fn within_file_duplication_survives_the_collapsed_index() -> Result<()> {
         "every repeated statement must still be reported: {report:#}"
     );
     assert!(
-        approx(signal(cluster, "structural"), 1.0),
-        "the repeated statements are byte-identical: {cluster:#}"
-    );
-    assert!(
-        approx(signal(cluster, "embedding_cos"), 1.0),
-        "they share one collapsed vector, so their cosine is 1.0: {cluster:#}"
+        has_verbatim_pair(&scan_root, cluster)?,
+        "the repeated statements are byte-identical and must be byte-proven: \
+         {cluster:#}"
     );
     Ok(())
 }
@@ -237,7 +234,11 @@ fn run_clone_corpus(namespace: Namespace) -> Result<CloneRun> {
         server.endpoint(),
     )?;
     let provenance = embedding_provenance(tmp.path())?;
-    Ok(CloneRun { report, provenance })
+    Ok(CloneRun {
+        report,
+        provenance,
+        corpus_root: scan_root,
+    })
 }
 
 fn write_duplicate_fixture(dir: &Path, namespace: Namespace) -> Result<()> {

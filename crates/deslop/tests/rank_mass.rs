@@ -21,6 +21,7 @@
 use anyhow::Result;
 use serde_json::Value;
 
+use crate::common::signals::assert_no_pair_surface_on_cluster;
 use crate::common::*;
 
 /// Finds a rendered cluster by its stable id.
@@ -74,22 +75,14 @@ fn mass_outranks_confidence_when_mass_is_larger() -> Result<()> {
         MID_FILES.iter().map(|path| (*path).to_owned()).collect(),
         "the five near-miss files must all be reported"
     );
-    assert_eq!(
-        cluster_bucket(mid),
-        "nearly_identical",
-        "the five-member cluster keeps its act-now bucket"
-    );
+    assert_no_pair_surface_on_cluster(mid, "rank-mass");
     assert_eq!(occurrences(big).len(), 2, "the pair cluster holds one pair");
     assert_eq!(
         cluster_file_set(big),
         BIG_FILES.iter().map(|path| (*path).to_owned()).collect(),
         "the byte-identical pair must be reported"
     );
-    assert_eq!(
-        cluster_bucket(big),
-        "identical",
-        "the byte-identical pair is identical code"
-    );
+    assert_no_pair_surface_on_cluster(big, "rank-mass");
 
     // The mass arithmetic, asserted as numbers — no calcs outside Rust.
     let mid_nodes = field(mid, "canonical_node_count").as_u64().unwrap_or(0);

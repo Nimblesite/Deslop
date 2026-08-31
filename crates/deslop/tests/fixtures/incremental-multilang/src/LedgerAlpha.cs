@@ -2,10 +2,8 @@
 
 namespace Ledger;
 
-public sealed class LedgerAlpha
+public sealed class LedgerReconciler
 {
-    public const string Tag = "alpha";
-
     public static long ReconcileEntries(long[] entries, long floor)
     {
         long balance = 0;

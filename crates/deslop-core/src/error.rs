@@ -93,6 +93,23 @@ pub enum CoreError {
         message: String,
     },
 
+    /// An explicit pair comparison named an endpoint that is not an exact
+    /// fingerprint occurrence in the current analysis generation.
+    #[error("unknown pair endpoint {path:?} at bytes {start_byte}..{end_byte}")]
+    UnknownPairEndpoint {
+        /// Workspace-relative or absolute endpoint path.
+        path: PathBuf,
+        /// Inclusive byte offset.
+        start_byte: usize,
+        /// Exclusive byte offset.
+        end_byte: usize,
+    },
+
+    /// An explicit pair comparison repeated one occurrence instead of
+    /// selecting two distinct endpoints.
+    #[error("pair comparison requires two distinct endpoints")]
+    SamePairEndpoint,
+
     /// `--debug-ast` was invoked on a file whose extension no
     /// registered [`crate::lang::LanguageParser`] claims.
     #[error("no language parser matches extension for {path}")]

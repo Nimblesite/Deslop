@@ -73,8 +73,23 @@ pub fn measure_pair_content<S: BuildHasher, L: BuildHasher>(
     languages: &HashMap<FileId, &'static str, L>,
 ) -> ContentEvidence {
     let tree_index = tree_index_of(trees);
-    let left = member_content(left, &tree_index, sources, languages);
-    let right = member_content(right, &tree_index, sources, languages);
+    measure_pair_content_indexed(left, right, &tree_index, sources, languages)
+}
+
+/// Measures both content axes using a caller-owned tree index.
+///
+/// The pre-closure admission gate evaluates many candidate pairs against one
+/// tree population. Building the same file-id index per edge would turn a
+/// pairwise measurement into an accidental corpus walk.
+pub(crate) fn measure_pair_content_indexed<S: BuildHasher, L: BuildHasher>(
+    left: &Fingerprint,
+    right: &Fingerprint,
+    tree_index: &HashMap<FileId, &NormalizedNode>,
+    sources: &HashMap<FileId, Vec<u8>, S>,
+    languages: &HashMap<FileId, &'static str, L>,
+) -> ContentEvidence {
+    let left = member_content(left, tree_index, sources, languages);
+    let right = member_content(right, tree_index, sources, languages);
     pair_evidence(left.as_ref().zip(right.as_ref()), sources)
 }
 

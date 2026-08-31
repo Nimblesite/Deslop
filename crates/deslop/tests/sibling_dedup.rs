@@ -330,15 +330,14 @@ fn first_cluster_count_mismatch(report: &serde_json::Value) -> Option<String> {
     })
 }
 
-fn first_unbounded_signal(report: &serde_json::Value) -> Option<String> {
+fn first_bad_mass(report: &serde_json::Value) -> Option<String> {
     first_cluster_finding(report, |cluster| {
         let id = cluster_id(cluster);
-        let fused = cluster
-            .get("signals")?
-            .get("fused")?
-            .as_f64()
-            .unwrap_or(f64::NAN);
-        (!(0.0..=1.0).contains(&fused)).then(|| format!("cluster {id} reports fused={fused}"))
+        let nodes = cluster.get("canonical_node_count")?.as_u64()?;
+        let count = cluster.get("occurrence_count")?.as_u64()?;
+        let mass = cluster.get("mass")?.as_u64()?;
+        let expected = nodes.saturating_mul(count.saturating_sub(1));
+        (mass != expected).then(|| format!("cluster {id} mass={mass} expected={expected}"))
     })
 }
 
@@ -497,9 +496,9 @@ fn phantom_occurrence_fixture_respects_report_invariants() -> Result<()> {
         first_cluster_count_mismatch(&report).unwrap_or_default()
     );
     assert!(
-        first_unbounded_signal(&report).is_none(),
-        "fused scores must be bounded: {}",
-        first_unbounded_signal(&report).unwrap_or_default()
+        first_bad_mass(&report).is_none(),
+        "every cluster mass must be canonical_node_count × (occurrence_count − 1): {}",
+        first_bad_mass(&report).unwrap_or_default()
     );
     let duplication = duplication_percent(&report);
     assert!(

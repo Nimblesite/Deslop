@@ -16,16 +16,15 @@ const LARGE_NODES: usize = 814;
 const SMALL_NODES: usize = 182;
 
 #[test]
-fn rank_mass_orders_by_extent_times_additional_occurrences() {
+fn rank_mass_orders_by_extent_times_additional_occurrences() -> Result<(), &'static str> {
     let mut registry = FileRegistry::new();
-    let file_ids: Vec<FileId> = (0..4)
-        .map(|index| registry.register(format!("file-{index}.rs").into()))
-        .collect();
+    let [large_left, large_right, small_left, small_right]: [FileId; 4] =
+        std::array::from_fn(|index| registry.register(format!("file-{index}.rs").into()));
     let fingerprints = vec![
-        member(file_ids[0], LARGE_NODES, 1),
-        member(file_ids[1], LARGE_NODES, 2),
-        member(file_ids[2], SMALL_NODES, 3),
-        member(file_ids[3], SMALL_NODES, 4),
+        member(large_left, LARGE_NODES, 1),
+        member(large_right, LARGE_NODES, 2),
+        member(small_left, SMALL_NODES, 3),
+        member(small_right, SMALL_NODES, 4),
     ];
     let fused = [
         FusedCluster {
@@ -45,15 +44,12 @@ fn rank_mass_orders_by_extent_times_additional_occurrences() {
         file_paths: &HashMap::new(),
     });
     assert_eq!(clusters.len(), 2);
-    assert_eq!(
-        clusters[0].mass,
-        u64::try_from(LARGE_NODES).unwrap_or(u64::MAX)
-    );
-    assert_eq!(
-        clusters[1].mass,
-        u64::try_from(SMALL_NODES).unwrap_or(u64::MAX)
-    );
-    assert!(clusters[0].mass > clusters[1].mass);
+    let larger = clusters.first().ok_or("larger cluster must rank first")?;
+    let smaller = clusters.get(1).ok_or("smaller cluster must rank second")?;
+    assert_eq!(larger.mass, u64::try_from(LARGE_NODES).unwrap_or(u64::MAX));
+    assert_eq!(smaller.mass, u64::try_from(SMALL_NODES).unwrap_or(u64::MAX));
+    assert!(larger.mass > smaller.mass);
+    Ok(())
 }
 
 /// Builds one exact member with a distinct file and digest.

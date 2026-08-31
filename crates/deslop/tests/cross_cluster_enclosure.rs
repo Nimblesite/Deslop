@@ -18,6 +18,7 @@
 use anyhow::Result;
 use deslop_test_support::enclosure::{first_nested_view as first_nested, spans_of as spans, Span};
 
+use crate::common::signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair};
 use crate::common::*;
 
 /// The published clusters as `(id, spans)`, the shape the shared
@@ -76,11 +77,7 @@ fn a_whole_method_clone_outranks_its_nested_statement_view() -> Result<()> {
              replaced it: {report:#}"
         );
     }
-    assert_eq!(
-        cluster_bucket(cluster),
-        "identical",
-        "byte-identical method bodies must bucket as identical: {report:#}"
-    );
+    assert_no_pair_surface_on_cluster(cluster, "enclosure");
     Ok(())
 }
 
@@ -144,33 +141,17 @@ fn ts_mixed_band_renders_a_distinct_confidence_per_band() -> Result<()> {
         "one visible cluster cannot express three degrees of duplication: \
          {report:#}"
     );
-    let buckets: std::collections::BTreeSet<String> = published
-        .iter()
-        .map(|cluster| cluster_bucket(cluster).to_owned())
-        .collect();
-    assert!(
-        buckets.len() >= 2,
-        "three degrees of duplication cannot all render one bucket, got \
-         {buckets:?}: {report:#}"
-    );
-    let verdicts: std::collections::BTreeSet<String> = published
-        .iter()
-        .map(|cluster| {
-            field(cluster, "evidence_verdict")
-                .as_str()
-                .unwrap_or_default()
-                .to_owned()
-        })
-        .collect();
-    assert!(
-        verdicts.len() >= 2,
-        "three degrees of duplication cannot all render one evidence verdict, \
-         got {verdicts:?}: {report:#}"
-    );
+    // [PIPELINE-CLUSTER-CLOSURE] The buckets and evidence verdicts are
+    // gone; the wire fact that holds the acceptance: the byte-proven
+    // family must reach the report, and every cluster carries a clean
+    // surface.
+    for cluster in published {
+        assert_no_pair_surface_on_cluster(cluster, "ts-mixed-band");
+    }
     assert!(
         published
             .iter()
-            .any(|cluster| approx(signal(cluster, "structural"), 1.0)),
+            .any(|cluster| has_verbatim_pair(&fixture("ts-mixed-band"), cluster).unwrap_or(false)),
         "the byte-proven family must reach the report: {report:#}"
     );
     Ok(())
@@ -189,8 +170,8 @@ fn enclosure_collapse_preserves_every_duplicated_file() -> Result<()> {
     );
     let cluster = expect_cluster_spanning(&report, &["Alpha.cs", "Beta.cs"])?;
     assert!(
-        approx(signal(cluster, "structural"), 1.0),
-        "byte-identical methods must measure structural 1.0: {report:#}"
+        has_verbatim_pair(&fixture("csharp-enclosing-method-clone"), cluster)?,
+        "byte-identical methods must be byte-proven: {report:#}"
     );
     assert_eq!(
         clusters_hidden(&report),

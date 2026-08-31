@@ -1,6 +1,6 @@
 // ledger_alpha.ts — the canonical copy of the TypeScript reconciliation routine.
 
-export const ALPHA_LEDGER_TAG = "alpha";
+export const LEDGER_TAG = "ledger";
 
 export function reconcileEntries(entries: number[], floor: number): number {
   let balance = 0;

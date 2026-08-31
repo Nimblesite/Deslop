@@ -27,9 +27,9 @@ use std::{
 use serde_json::Value;
 
 use super::{
-    approx, cluster_bucket, cluster_count, cluster_file_set, cluster_size, clusters,
-    clusters_hidden, expect_cluster_spanning, field, incremental::*, metric_field,
-    occurrence_paths, occurrences, per_file_metrics, signal, Result,
+    cluster_count, cluster_file_set, cluster_size, clusters, clusters_hidden,
+    expect_cluster_spanning, field, incremental::*, metric_field, occurrence_paths, occurrences,
+    per_file_metrics, signals::assert_no_pair_surface_on_cluster, Result,
 };
 
 /// `--min-nodes` low enough that the eleven-line clone body fingerprints
@@ -229,16 +229,15 @@ fn assert_clone_lines(clone: &Value, report: &Value, label: &str) {
     }
 }
 
-/// Asserts the clone cluster spanning exactly `files`: bucket
-/// `identical`, one occurrence per file, saturated structural and token
-/// signals, and the clone's line span in every occurrence.
+/// Asserts the clone cluster spanning exactly `files`: one occurrence
+/// per file, the clone's line span in every occurrence, and a clean
+/// cluster surface ([PIPELINE-CLUSTER-CLOSURE]) — the byte-proven
+/// verbatim fact the `identical` bucket and signal block used to proxy
+/// is asserted from the corpus by [`assert_report_shape`]'s caller
+/// (`incremental_equivalence` / `live_session_equivalence` author the
+/// corpus as byte-identical copies).
 fn assert_identical_cluster(report: &Value, files: &[&str], label: &str) -> Result<()> {
     let clone = expect_cluster_spanning(report, files)?;
-    assert_eq!(
-        cluster_bucket(clone),
-        "identical",
-        "{label}: clone bucket: {report}"
-    );
     assert_eq!(
         cluster_size(clone),
         expected_count(files),
@@ -250,14 +249,7 @@ fn assert_identical_cluster(report: &Value, files: &[&str], label: &str) -> Resu
         expected_files,
         "{label}: files the clone spans: {report}"
     );
-    assert!(
-        approx(signal(clone, "structural"), 1.0),
-        "{label}: byte-identical copies must saturate the structural signal: {report}"
-    );
-    assert!(
-        approx(signal(clone, "token_jaccard"), 1.0),
-        "{label}: byte-identical copies must saturate the token signal: {report}"
-    );
+    assert_no_pair_surface_on_cluster(clone, label);
     assert_clone_lines(clone, report, label);
     assert_occurrences_in_path_order(clone, label);
     Ok(())

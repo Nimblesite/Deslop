@@ -31,6 +31,7 @@
 //! in `content-gate-unsaturated` proves the digest-equal population
 //! separately.
 
+use deslop_core::report::{PairClassification, PairComparison};
 use serde_json::Value;
 
 use crate::common::{signals::*, *};
@@ -58,13 +59,9 @@ const SATURATED_CONTROL_PAIR: [&str; 2] = ["control_alpha.rs", "control_beta.rs"
 /// gate measures its observations but does not use them for routing.
 const ACCESSOR_PAIR: [&str; 2] = ["accessor_argument.rs", "accessor_assignment.rs"];
 
-/// Renders the deliberately near-saturated Type-3 fixture.
-fn render_saturation_band() -> Result<Value> {
-    run_report(
-        &fixture("content-gate-saturation-band"),
-        SATURATION_BAND_MIN_NODES,
-    )
-}
+const EXACT_SCORE: f64 = 1.0;
+
+const SHAPE_SATURATION_FLOOR: f64 = 0.99;
 
 /// Renders the unsaturated-gate fixture once per assertion below. Both
 /// of its pairs are single function bodies, so they cluster at the same
@@ -108,13 +105,13 @@ fn assert_no_pair_surface_on_cluster(cluster: &Value, label: &str) {
 /// ([RANK-MASS-SUM]). The positive, human-readable half of every
 /// guarantee this suite makes; the negative half is
 /// [`assert_no_pair_surface_on_cluster`].
-fn assert_admitted_pair(cluster: &Value, label: &str) {
+fn assert_reported_cluster(cluster: &Value, label: &str) {
     let canonical_nodes = field(cluster, "canonical_node_count").as_u64().unwrap_or(0);
     let occurrence_count = field(cluster, "occurrence_count").as_u64().unwrap_or(0);
     let mass = field(cluster, "mass").as_u64().unwrap_or(0);
     assert!(
         canonical_nodes > 0 && occurrence_count >= 2,
-        "{label}: an admitted cluster must carry canonical_node_count and \
+        "{label}: a reported cluster must carry canonical_node_count and \
          occurrence_count — {dump}",
         dump = signal_dump(cluster)
     );
@@ -132,6 +129,21 @@ fn assert_admitted_pair(cluster: &Value, label: &str) {
     );
 }
 
+/// Compares the exact pair named by the fixture contract.
+fn explicit_pair(
+    scan_root: &std::path::Path,
+    min_nodes: u32,
+    cluster: &Value,
+    files: [&str; 2],
+) -> Result<PairComparison> {
+    compare_pair(
+        scan_root,
+        min_nodes,
+        occurrence_for_file(cluster, files[0])?,
+        occurrence_for_file(cluster, files[1])?,
+    )
+}
+
 // The pair this fixture exists for: a Type-3 near-miss inside the
 // [0.99, 1.0) band. The old defect published it carrying a fabricated
 // `token_jaccard = 1.00` and a `shape = 1.00` derived from it, because
@@ -142,7 +154,8 @@ fn assert_admitted_pair(cluster: &Value, label: &str) {
 // and no pair-only field has crept back onto the cluster.
 #[test]
 fn the_content_gate_publishes_no_token_jaccard_it_did_not_measure() -> Result<()> {
-    let report = render_saturation_band()?;
+    let scan_root = fixture("content-gate-saturation-band");
+    let report = run_report(&scan_root, SATURATION_BAND_MIN_NODES)?;
     let ledger = clusters(&report)
         .iter()
         .find(|cluster| {
@@ -153,8 +166,37 @@ fn the_content_gate_publishes_no_token_jaccard_it_did_not_measure() -> Result<()
         .ok_or_else(|| {
             anyhow::anyhow!("expected the ledger pair admitted on the report: {report:#}")
         })?;
-    assert_admitted_pair(ledger, "ledger pair");
+    assert_reported_cluster(ledger, "ledger closure");
     assert_no_pair_surface_on_cluster(ledger, "ledger pair");
+    let comparison = explicit_pair(
+        &scan_root,
+        SATURATION_BAND_MIN_NODES,
+        ledger,
+        SATURATION_BAND_PAIR,
+    )?;
+    let evidence = &comparison.evidence;
+    assert!(
+        (SHAPE_SATURATION_FLOOR..EXACT_SCORE).contains(&evidence.structural),
+        "fixture must exercise the near-saturated structural band: {comparison:#?}"
+    );
+    assert!(
+        evidence.token_jaccard < EXACT_SCORE,
+        "pair comparison must publish measured Jaccard, never a fabricated saturation: {comparison:#?}"
+    );
+    assert!(
+        evidence.content_required,
+        "near-saturated shape must require pair content: {comparison:#?}"
+    );
+    assert!(
+        evidence.content_ok,
+        "the renamed ledger pair must clear pair content: {comparison:#?}"
+    );
+    assert!(!evidence.admitted, "the explicit ledger pair lacks the LSH-only floor and must not be an edge: {comparison:#?}");
+    assert_eq!(evidence.classification, None);
+    assert_eq!(
+        evidence.explanation,
+        "rejected: pair fails the LSH-only guards"
+    );
     assert!(
         !clusters(&report)
             .iter()
@@ -171,15 +213,35 @@ fn the_content_gate_publishes_no_token_jaccard_it_did_not_measure() -> Result<()
 // with the wire mass formula.
 #[test]
 fn a_digest_equal_pair_keeps_its_saturated_signals() -> Result<()> {
-    let report = render_unsaturated()?;
+    let scan_root = fixture("content-gate-unsaturated");
+    let report = run_report(&scan_root, MIN_NODES)?;
     let control = expect_cluster_spanning(&report, &SATURATED_CONTROL_PAIR)?;
-    assert_admitted_pair(control, "byte-identical control");
+    assert_reported_cluster(control, "byte-identical control");
     assert_no_pair_surface_on_cluster(control, "byte-identical control");
     assert_eq!(
         field(control, "rank").as_u64().unwrap_or(0),
         1,
         "the byte-identical control must lead the fixture's report: {report:#}"
     );
+    let comparison = explicit_pair(&scan_root, MIN_NODES, control, SATURATED_CONTROL_PAIR)?;
+    let evidence = &comparison.evidence;
+    assert_pair_metric(
+        evidence.structural,
+        EXACT_SCORE,
+        "control structural overlap",
+    );
+    assert_pair_metric(evidence.token_jaccard, EXACT_SCORE, "control token Jaccard");
+    assert_pair_metric(evidence.agreement, EXACT_SCORE, "control content agreement");
+    assert_pair_metric(
+        evidence.rename_consistency,
+        EXACT_SCORE,
+        "control rename consistency",
+    );
+    assert!(
+        evidence.content_required && evidence.content_ok && evidence.admitted,
+        "the exact control must clear every pair gate: {comparison:#?}"
+    );
+    assert_eq!(evidence.classification, Some(PairClassification::Identical));
     Ok(())
 }
 
@@ -192,18 +254,36 @@ fn a_digest_equal_pair_keeps_its_saturated_signals() -> Result<()> {
 // surface claims anything about its content.
 #[test]
 fn a_cluster_whose_evidence_did_not_corroborate_is_not_told_it_agreed() -> Result<()> {
-    let report = render_unsaturated()?;
+    let scan_root = fixture("content-gate-unsaturated");
+    let report = run_report(&scan_root, MIN_NODES)?;
     let accessor = expect_cluster_spanning(&report, &ACCESSOR_PAIR)?;
-    assert_admitted_pair(accessor, "accessor pair");
+    assert_reported_cluster(accessor, "accessor pair");
     assert_no_pair_surface_on_cluster(accessor, "accessor pair");
-    let control_rank = field(expect_cluster_spanning(&report, &SATURATED_CONTROL_PAIR)?, "rank")
-        .as_u64()
-        .unwrap_or(0);
+    let control_rank = field(
+        expect_cluster_spanning(&report, &SATURATED_CONTROL_PAIR)?,
+        "rank",
+    )
+    .as_u64()
+    .unwrap_or(0);
     let accessor_rank = field(accessor, "rank").as_u64().unwrap_or(0);
     assert!(
         accessor_rank > control_rank,
         "the below-saturation accessor pair must rank after the corroborated \
          control (control={control_rank}, accessor={accessor_rank}): {report:#}"
+    );
+    let comparison = explicit_pair(&scan_root, MIN_NODES, accessor, ACCESSOR_PAIR)?;
+    let evidence = &comparison.evidence;
+    assert!(
+        evidence.structural < SHAPE_SATURATION_FLOOR,
+        "accessor control must remain below the saturated content gate: {comparison:#?}"
+    );
+    assert!(
+        !evidence.content_required,
+        "unsaturated pair must not claim content was required: {comparison:#?}"
+    );
+    assert!(
+        evidence.admitted,
+        "the accessor pair must retain its admitted edge: {comparison:#?}"
     );
     Ok(())
 }
@@ -218,8 +298,8 @@ fn a_gated_cluster_still_reports_the_evidence_that_corroborated_it() -> Result<(
     let report = render_unsaturated()?;
     let control = expect_cluster_spanning(&report, &SATURATED_CONTROL_PAIR)?;
     let accessor = expect_cluster_spanning(&report, &ACCESSOR_PAIR)?;
-    assert_admitted_pair(control, "byte-identical control");
-    assert_admitted_pair(accessor, "accessor pair");
+    assert_reported_cluster(control, "byte-identical control");
+    assert_reported_cluster(accessor, "accessor pair");
     assert_no_pair_surface_on_cluster(control, "byte-identical control");
     assert_no_pair_surface_on_cluster(accessor, "accessor pair");
     assert_ne!(

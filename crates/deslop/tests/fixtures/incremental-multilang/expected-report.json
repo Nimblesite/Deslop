@@ -8,9 +8,9 @@
     "misses": 0
   },
   "metrics": {
-    "analysed_loc": 210,
-    "duplicated_loc": 136,
-    "duplication_percent": 64.76190476190476,
+    "analysed_loc": 197,
+    "duplicated_loc": 172,
+    "duplication_percent": 87.30964467005076,
     "clusters_total": 6,
     "duplicated_files": 12,
     "threshold": {
@@ -20,397 +20,256 @@
     },
     "per_file": [
       {
-        "path": "ledger_alpha.dart",
-        "analysed_loc": 15,
-        "duplicated_loc": 11,
-        "duplication_percent": 73.33333333333333
+        "path": "LedgerAlpha.cs",
+        "analysed_loc": 23,
+        "duplicated_loc": 21,
+        "duplication_percent": 91.30434782608695
       },
       {
-        "path": "ledger_alpha.rs",
-        "analysed_loc": 15,
-        "duplicated_loc": 11,
-        "duplication_percent": 73.33333333333333
-      },
-      {
-        "path": "ledger_alpha.ts",
-        "analysed_loc": 15,
-        "duplicated_loc": 11,
-        "duplication_percent": 73.33333333333333
+        "path": "LedgerBeta.cs",
+        "analysed_loc": 23,
+        "duplicated_loc": 21,
+        "duplication_percent": 91.30434782608695
       },
       {
         "path": "ledger_alpha.go",
         "analysed_loc": 17,
-        "duplicated_loc": 11,
-        "duplication_percent": 64.70588235294117
+        "duplicated_loc": 15,
+        "duplication_percent": 88.23529411764706
+      },
+      {
+        "path": "ledger_beta.go",
+        "analysed_loc": 17,
+        "duplicated_loc": 15,
+        "duplication_percent": 88.23529411764706
+      },
+      {
+        "path": "ledger_alpha.dart",
+        "analysed_loc": 15,
+        "duplicated_loc": 13,
+        "duplication_percent": 86.66666666666667
+      },
+      {
+        "path": "ledger_alpha.rs",
+        "analysed_loc": 15,
+        "duplicated_loc": 13,
+        "duplication_percent": 86.66666666666667
+      },
+      {
+        "path": "ledger_alpha.ts",
+        "analysed_loc": 15,
+        "duplicated_loc": 13,
+        "duplication_percent": 86.66666666666667
       },
       {
         "path": "ledger_beta.dart",
-        "analysed_loc": 17,
-        "duplicated_loc": 11,
-        "duplication_percent": 64.70588235294117
+        "analysed_loc": 15,
+        "duplicated_loc": 13,
+        "duplication_percent": 86.66666666666667
       },
       {
         "path": "ledger_beta.rs",
-        "analysed_loc": 17,
-        "duplicated_loc": 11,
-        "duplication_percent": 64.70588235294117
+        "analysed_loc": 15,
+        "duplicated_loc": 13,
+        "duplication_percent": 86.66666666666667
       },
       {
         "path": "ledger_beta.ts",
-        "analysed_loc": 17,
-        "duplicated_loc": 11,
-        "duplication_percent": 64.70588235294117
-      },
-      {
-        "path": "LedgerAlpha.cs",
-        "analysed_loc": 25,
-        "duplicated_loc": 16,
-        "duplication_percent": 64.0
-      },
-      {
-        "path": "LedgerBeta.cs",
-        "analysed_loc": 25,
-        "duplicated_loc": 16,
-        "duplication_percent": 64.0
+        "analysed_loc": 15,
+        "duplicated_loc": 13,
+        "duplication_percent": 86.66666666666667
       },
       {
         "path": "ledger_alpha.py",
         "analysed_loc": 13,
-        "duplicated_loc": 8,
-        "duplication_percent": 61.53846153846154
-      },
-      {
-        "path": "ledger_beta.go",
-        "analysed_loc": 19,
         "duplicated_loc": 11,
-        "duplication_percent": 57.89473684210527
+        "duplication_percent": 84.61538461538461
       },
       {
         "path": "ledger_beta.py",
-        "analysed_loc": 15,
-        "duplicated_loc": 8,
-        "duplication_percent": 53.333333333333336
+        "analysed_loc": 14,
+        "duplicated_loc": 11,
+        "duplication_percent": 78.57142857142857
       }
     ],
     "folders": []
   },
   "schema_doc": "",
-  "action_hints": [
-    {
-      "pattern": "bucket=identical",
-      "recommendation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
-    },
-    {
-      "pattern": "bucket=nearly-identical",
-      "recommendation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
-    },
-    {
-      "pattern": "bucket=structural-only",
-      "recommendation": "Same shape, different content. Only the code shape matches — usually sibling boilerplate. Verify before extracting. (structural-only match (unverified Type-2/3 candidate))"
-    },
-    {
-      "pattern": "bucket=loosely-similar",
-      "recommendation": "Loosely similar code. Loose textual overlap. Treat as a hint. (weak LSH-only signal (sub-Type-3))"
-    },
-    {
-      "pattern": "bucket=same-behavior",
-      "recommendation": "Same behavior, different code. The AI noticed these do the same thing written two ways — read both before merging. (Type-4 semantic clone (AI match))"
-    },
-    {
-      "pattern": "category=data",
-      "recommendation": "Repeated data rows, not duplicated logic. Consider a builder with default arguments, or move the rows to a JSON/CSV/asset file."
-    }
-  ],
   "boilerplate_hints": [],
   "embedding_provenance": null,
   "clusters": [
     {
-      "id": "f44d1ebae4c45e3a",
+      "id": "0510baf76d677672",
       "rank": 1,
       "rank_band": "worst",
-      "weight": 57.0,
-      "size": 2,
-      "canonical_node_count": 57,
-      "signals": {
-        "structural": 1.0,
-        "token_jaccard": 1.0,
-        "shape": 1.0,
-        "embedding_cos": 0.0,
-        "pair_agreement": 1.0,
-        "pair_rename_consistency": 1.0,
-        "literal_fraction": 0.0
-      },
-      "signal_source": {
-        "left": 0,
-        "right": 1
-      },
-      "bucket": "identical",
-      "category": "logic",
-      "language": "go",
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
+      "mass": 66,
+      "canonical_node_count": 66,
       "occurrences": [
         {
           "path": "ledger_alpha.go",
-          "start_byte": 125,
-          "end_byte": 345,
-          "start_line": 7,
+          "start_byte": 77,
+          "end_byte": 341,
+          "start_line": 3,
           "end_line": 17,
           "hidden": false
         },
         {
           "path": "ledger_beta.go",
-          "start_byte": 135,
-          "end_byte": 355,
-          "start_line": 9,
-          "end_line": 19,
-          "hidden": false
-        }
-      ],
-      "occurrences_total": 2,
-      "occurrence_count": 2,
-      "occurrences_truncated": false,
-      "summary": "2 copies of a 57-node subtree at ledger_alpha.go:7:1, ledger_beta.go:9:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
-      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
-    },
-    {
-      "id": "ffa9824eae18b341",
-      "rank": 2,
-      "rank_band": "mid",
-      "weight": 57.0,
-      "size": 2,
-      "canonical_node_count": 57,
-      "signals": {
-        "structural": 1.0,
-        "token_jaccard": 1.0,
-        "shape": 1.0,
-        "embedding_cos": 0.0,
-        "pair_agreement": 1.0,
-        "pair_rename_consistency": 1.0,
-        "literal_fraction": 0.0
-      },
-      "signal_source": {
-        "left": 0,
-        "right": 1
-      },
-      "bucket": "identical",
-      "category": "logic",
-      "language": "typescript",
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
-      "occurrences": [
-        {
-          "path": "ledger_alpha.ts",
-          "start_byte": 127,
-          "end_byte": 391,
-          "start_line": 5,
-          "end_line": 15,
-          "hidden": false
-        },
-        {
-          "path": "ledger_beta.ts",
-          "start_byte": 138,
-          "end_byte": 402,
-          "start_line": 7,
+          "start_byte": 73,
+          "end_byte": 337,
+          "start_line": 3,
           "end_line": 17,
           "hidden": false
         }
       ],
       "occurrences_total": 2,
       "occurrence_count": 2,
-      "occurrences_truncated": false,
-      "summary": "2 copies of a 57-node subtree at ledger_alpha.ts:5:1, ledger_beta.ts:7:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
-      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+      "occurrences_truncated": false
     },
     {
-      "id": "7c61b26360939eaa",
-      "rank": 3,
+      "id": "ba5ac1e17942e874",
+      "rank": 2,
       "rank_band": "mid",
-      "weight": 55.0,
-      "size": 2,
-      "canonical_node_count": 55,
-      "signals": {
-        "structural": 1.0,
-        "token_jaccard": 1.0,
-        "shape": 1.0,
-        "embedding_cos": 0.0,
-        "pair_agreement": 1.0,
-        "pair_rename_consistency": 1.0,
-        "literal_fraction": 0.0
-      },
-      "signal_source": {
-        "left": 0,
-        "right": 1
-      },
-      "bucket": "identical",
-      "category": "logic",
-      "language": "dart",
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
+      "mass": 65,
+      "canonical_node_count": 65,
       "occurrences": [
         {
           "path": "ledger_alpha.dart",
-          "start_byte": 121,
-          "end_byte": 350,
-          "start_line": 5,
+          "start_byte": 81,
+          "end_byte": 346,
+          "start_line": 3,
           "end_line": 15,
           "hidden": false
         },
         {
           "path": "ledger_beta.dart",
-          "start_byte": 123,
-          "end_byte": 352,
-          "start_line": 7,
-          "end_line": 17,
+          "start_byte": 77,
+          "end_byte": 342,
+          "start_line": 3,
+          "end_line": 15,
           "hidden": false
         }
       ],
       "occurrences_total": 2,
       "occurrence_count": 2,
-      "occurrences_truncated": false,
-      "summary": "2 copies of a 55-node subtree at ledger_alpha.dart:5:1, ledger_beta.dart:7:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
-      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+      "occurrences_truncated": false
     },
     {
-      "id": "927b05fad1c1cc0f",
+      "id": "9f984fffed253679",
+      "rank": 3,
+      "rank_band": "mid",
+      "mass": 64,
+      "canonical_node_count": 64,
+      "occurrences": [
+        {
+          "path": "ledger_alpha.ts",
+          "start_byte": 85,
+          "end_byte": 386,
+          "start_line": 3,
+          "end_line": 15,
+          "hidden": false
+        },
+        {
+          "path": "ledger_beta.ts",
+          "start_byte": 81,
+          "end_byte": 382,
+          "start_line": 3,
+          "end_line": 15,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrence_count": 2,
+      "occurrences_truncated": false
+    },
+    {
+      "id": "801a025dc48d6e25",
       "rank": 4,
       "rank_band": "faint",
-      "weight": 51.0,
-      "size": 2,
-      "canonical_node_count": 51,
-      "signals": {
-        "structural": 1.0,
-        "token_jaccard": 1.0,
-        "shape": 1.0,
-        "embedding_cos": 0.0,
-        "pair_agreement": 1.0,
-        "pair_rename_consistency": 1.0,
-        "literal_fraction": 0.0
-      },
-      "signal_source": {
-        "left": 0,
-        "right": 1
-      },
-      "bucket": "identical",
-      "category": "logic",
-      "language": "rust",
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
+      "mass": 59,
+      "canonical_node_count": 59,
+      "occurrences": [
+        {
+          "path": "LedgerAlpha.cs",
+          "start_byte": 76,
+          "end_byte": 504,
+          "start_line": 3,
+          "end_line": 23,
+          "hidden": false
+        },
+        {
+          "path": "LedgerBeta.cs",
+          "start_byte": 72,
+          "end_byte": 500,
+          "start_line": 3,
+          "end_line": 23,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrence_count": 2,
+      "occurrences_truncated": false
+    },
+    {
+      "id": "e5d3840dece47ea3",
+      "rank": 5,
+      "rank_band": "faint",
+      "mass": 59,
+      "canonical_node_count": 59,
       "occurrences": [
         {
           "path": "ledger_alpha.rs",
-          "start_byte": 124,
-          "end_byte": 381,
-          "start_line": 5,
+          "start_byte": 79,
+          "end_byte": 376,
+          "start_line": 3,
           "end_line": 15,
           "hidden": false
         },
         {
           "path": "ledger_beta.rs",
-          "start_byte": 131,
-          "end_byte": 388,
-          "start_line": 7,
-          "end_line": 17,
-          "hidden": false
-        }
-      ],
-      "occurrences_total": 2,
-      "occurrence_count": 2,
-      "occurrences_truncated": false,
-      "summary": "2 copies of a 51-node subtree at ledger_alpha.rs:5:1, ledger_beta.rs:7:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
-      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
-    },
-    {
-      "id": "dc672f7f39f21ba4",
-      "rank": 5,
-      "rank_band": "faint",
-      "weight": 51.0,
-      "size": 2,
-      "canonical_node_count": 51,
-      "signals": {
-        "structural": 1.0,
-        "token_jaccard": 1.0,
-        "shape": 1.0,
-        "embedding_cos": 0.0,
-        "pair_agreement": 1.0,
-        "pair_rename_consistency": 1.0,
-        "literal_fraction": 0.0
-      },
-      "signal_source": {
-        "left": 0,
-        "right": 1
-      },
-      "bucket": "identical",
-      "category": "logic",
-      "language": "csharp",
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
-      "occurrences": [
-        {
-          "path": "LedgerAlpha.cs",
-          "start_byte": 173,
-          "end_byte": 537,
-          "start_line": 9,
-          "end_line": 24,
-          "hidden": false
-        },
-        {
-          "path": "LedgerBeta.cs",
-          "start_byte": 180,
-          "end_byte": 544,
-          "start_line": 9,
-          "end_line": 24,
-          "hidden": false
-        }
-      ],
-      "occurrences_total": 2,
-      "occurrence_count": 2,
-      "occurrences_truncated": false,
-      "summary": "2 copies of a 51-node subtree at LedgerAlpha.cs:9:5, LedgerBeta.cs:9:5 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
-      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
-    },
-    {
-      "id": "b63105455a75704b",
-      "rank": 6,
-      "rank_band": "faint",
-      "weight": 40.0,
-      "size": 2,
-      "canonical_node_count": 40,
-      "signals": {
-        "structural": 1.0,
-        "token_jaccard": 1.0,
-        "shape": 1.0,
-        "embedding_cos": 0.0,
-        "pair_agreement": 1.0,
-        "pair_rename_consistency": 1.0,
-        "literal_fraction": 0.0
-      },
-      "signal_source": {
-        "left": 0,
-        "right": 1
-      },
-      "bucket": "identical",
-      "category": "logic",
-      "language": "python",
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
-      "occurrences": [
-        {
-          "path": "ledger_alpha.py",
-          "start_byte": 109,
-          "end_byte": 315,
-          "start_line": 6,
-          "end_line": 13,
-          "hidden": false
-        },
-        {
-          "path": "ledger_beta.py",
-          "start_byte": 118,
-          "end_byte": 324,
-          "start_line": 8,
+          "start_byte": 75,
+          "end_byte": 372,
+          "start_line": 3,
           "end_line": 15,
           "hidden": false
         }
       ],
       "occurrences_total": 2,
       "occurrence_count": 2,
-      "occurrences_truncated": false,
-      "summary": "2 copies of a 40-node subtree at ledger_alpha.py:6:1, ledger_beta.py:8:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
-      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+      "occurrences_truncated": false
+    },
+    {
+      "id": "424ee46873157cd9",
+      "rank": 6,
+      "rank_band": "faint",
+      "mass": 48,
+      "canonical_node_count": 48,
+      "occurrences": [
+        {
+          "path": "ledger_alpha.py",
+          "start_byte": 80,
+          "end_byte": 310,
+          "start_line": 3,
+          "end_line": 13,
+          "hidden": false
+        },
+        {
+          "path": "ledger_beta.py",
+          "start_byte": 77,
+          "end_byte": 307,
+          "start_line": 4,
+          "end_line": 14,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrence_count": 2,
+      "occurrences_truncated": false
     }
-  ]
+  ],
+  "literal_findings": [],
+  "literal_findings_total": 0,
+  "literal_findings_hidden": 0,
+  "literal_findings_capped": false,
+  "literal_max_findings": 0
 }

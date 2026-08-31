@@ -1,8 +1,10 @@
-//! E2E pin for gh #458 (C3 / AC6) — [FUSED-PAIR-SIGNALS] and
-//! [FUSED-CONTENT-GATE]: a proven copy family must keep its act-now
-//! evidence when an unrelated shape-identical stranger joins the
-//! corpus, and the stranger's presence must not demote the family's
-//! explicit pair evidence.
+//! E2E pin for gh #458 — [FUSED-STRATEGY-BOUNDED-MAX] and
+//! [PIPELINE-CLUSTER-CLOSURE]: a proven copy family must survive an
+//! unrelated shape-identical stranger joining the corpus. On the
+//! mass-only wire the byte-level fact replaces the pair evidence: the
+//! nested copies-only block is byte-proven, the whole-file closure is
+//! not (the stranger's bytes differ), and no cluster may present the
+//! raw-differing stranger as byte-proven.
 //!
 //! The `verbatim-plus-stranger` fixture holds four byte-identical files
 //! plus a shape-identical stranger with different identifiers and
@@ -49,8 +51,6 @@ const COPY_FILES: [&str; 4] = ["copy_0.ts", "copy_1.ts", "copy_2.ts", "copy_3.ts
 /// The shape-identical stranger with unrelated content (agreement 0.0436).
 const STRANGER_FILE: &str = "stranger.ts";
 /// The byte-proof bucket a raw-differing stranger can never reach.
-const BYTE_PROOF_BUCKET: &str = "identical";
-
 /// Runs the fixture with embeddings off.
 fn run_family_report() -> Result<Value> {
     run_report_args(
@@ -89,14 +89,16 @@ fn a_verbatim_family_survives_an_unrelated_stranger() -> Result<()> {
     //    included — the component the noise filters did not suppress is
     //    handed on untouched, not split.
     let whole_file = expect_cluster_id(&report, WHOLE_FILE_CLUSTER_ID)?;
-    assert_eq!(
-        cluster_bucket(whole_file),
-        "nearly_identical",
-        "the whole-file closure is nearly_identical — the Identical route \
-         is downgraded because the stranger's raw bytes differ \
-         ([CLONE-BUCKETS-IDENTICAL]): {}",
+    // The whole-file closure is byte-distinct (the stranger's raw bytes
+    // differ), so it must not be byte-proven — the raw-byte fact is the
+    // wire truth the old `Identical` bucket asserted.
+    assert!(
+        !has_verbatim_pair(&fixture("verbatim-plus-stranger"), whole_file)?,
+        "the whole-file closure holds the raw-differing stranger and must \
+         not read as a byte-identical copy: {}",
         signal_dump(whole_file)
     );
+    assert_no_pair_surface_on_cluster(whole_file, "whole-file closure");
     assert_eq!(
         occurrences(whole_file).len(),
         5,
@@ -114,68 +116,20 @@ fn a_verbatim_family_survives_an_unrelated_stranger() -> Result<()> {
          ([FUSED-STRATEGY-BOUNDED-MAX])"
     );
 
-    // 2. The explicit pair is the copies' own: the returned triple is the
-    //    byte-identical pair's 1.0/1.0 evidence, named source, so the
-    //    stranger's presence demotes nothing (AC6).
-    assert_eq!(
-        signal(whole_file, "structural").to_bits(),
-        1.0_f64.to_bits(),
-        "the explicit pair's structural evidence"
-    );
-    assert_eq!(
-        signal(whole_file, "token_jaccard").to_bits(),
-        1.0_f64.to_bits(),
-        "the explicit pair's token evidence"
-    );
-    assert_eq!(
-        signal(whole_file, "pair_agreement").to_bits(),
-        1.0_f64.to_bits(),
-        "the explicit pair is byte-identical, so its content agreement \
-         saturates"
-    );
-    assert_eq!(
-        signal(whole_file, "pair_rename_consistency").to_bits(),
-        1.0_f64.to_bits(),
-        "the explicit pair is byte-identical, so its rename consistency \
-         saturates"
-    );
-    let source = field(whole_file, "signal_source");
-    let left = source
-        .get("left")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow::anyhow!("signal_source.left must exist"))?;
-    let right = source
-        .get("right")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow::anyhow!("signal_source.right must exist"))?;
-    let left_index = usize::try_from(left)
-        .map_err(|error| anyhow::anyhow!("signal_source.left {left} is invalid: {error}"))?;
-    let right_index = usize::try_from(right)
-        .map_err(|error| anyhow::anyhow!("signal_source.right {right} is invalid: {error}"))?;
-    let left = occurrence_path(
-        occurrences(whole_file)
-            .get(left_index)
-            .ok_or_else(|| anyhow::anyhow!("signal_source.left {left_index} out of range"))?,
-    )?;
-    let right = occurrence_path(
-        occurrences(whole_file)
-            .get(right_index)
-            .ok_or_else(|| anyhow::anyhow!("signal_source.right {right_index} out of range"))?,
-    )?;
-    assert!(
-        is_copy_named(left) && is_copy_named(right),
-        "the evidence shown must be the copies' own pair, got {left:?}/{right:?}"
-    );
-
+    // 2. [PIPELINE-CLUSTER-CLOSURE] The pair-scoped evidence and
+    //    `signal_source` are gone from the wire. The copies' own
+    //    byte-identical block keeps its byte-proof fact on the nested
+    //    cluster (below); the stranger's presence demotes nothing that
+    //    the wire still carries.
     // 3. The nested byte-identical block inside the copies is a separate
     //    region ([PIPELINE-CLUSTER-SUBSUME]: the stranger's whole-file
     //    occurrence has no counterpart there) and keeps the byte-proof
     //    bucket its raw slices earn.
     let nested = expect_cluster_id(&report, NESTED_BLOCK_CLUSTER_ID)?;
-    assert_eq!(
-        cluster_bucket(nested),
-        BYTE_PROOF_BUCKET,
-        "the copies' byte-identical block is byte-proof identical"
+    assert!(
+        has_verbatim_pair(&fixture("verbatim-plus-stranger"), nested)?,
+        "the copies' byte-identical block is byte-proven from the fixture \
+         source: {nested:#}"
     );
     assert_eq!(
         cluster_file_set(nested),
@@ -183,18 +137,16 @@ fn a_verbatim_family_survives_an_unrelated_stranger() -> Result<()> {
         "the nested block spans the four copies alone"
     );
 
-    // 4. No cluster may certify the stranger in the byte-proof bucket:
-    //    raw-byte equality is the one verdict a raw-differing stranger
-    //    can never manufacture, whatever the majority around it
-    //    ([CLONE-BUCKETS-IDENTICAL]).
+    // 4. No cluster holding the stranger may be byte-proven: raw-byte
+    //    equality is the one verdict a raw-differing stranger can never
+    //    manufacture ([PIPELINE-CLUSTER-CLOSURE]).
     for cluster in clusters(&report) {
         let has_stranger = occurrences(cluster).iter().any(is_stranger);
         if has_stranger {
-            assert_ne!(
-                cluster_bucket(cluster),
-                BYTE_PROOF_BUCKET,
-                "a cluster certifying the raw-differing stranger as \
-                 identical is a false positive: {cluster:#}"
+            assert!(
+                !has_verbatim_pair(&fixture("verbatim-plus-stranger"), cluster)?,
+                "a cluster certifying the raw-differing stranger as byte-proven \
+                 is a false positive: {cluster:#}"
             );
         }
     }
@@ -206,9 +158,4 @@ fn a_verbatim_family_survives_an_unrelated_stranger() -> Result<()> {
 fn is_stranger(occurrence: &Value) -> bool {
     occurrence_path(occurrence)
         .is_ok_and(|path| path.rsplit('/').next().unwrap_or_default() == STRANGER_FILE)
-}
-
-/// Whether a rendered path names one of the verbatim copies.
-fn is_copy_named(path: &str) -> bool {
-    COPY_FILES.contains(&path.rsplit('/').next().unwrap_or_default())
 }

@@ -17,6 +17,9 @@
 //! surface, and the genuine abstract-method implementations of gh #69
 //! must stay suppressed in the same run.
 
+use crate::common::signals::{
+    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+};
 use crate::common::*;
 
 #[test]
@@ -40,33 +43,21 @@ fn same_named_rename_clone_surfaces_while_real_polymorphism_stays_hidden() -> Re
     );
     let clone = expect_cluster_spanning(&report, &["alpha.py", "beta.py"])?;
     assert_eq!(
-        cluster_bucket(clone),
-        "nearly_identical",
-        "a total consistent rename is the definition of nearly-identical: \
-         {report:#}"
-    );
-    assert_eq!(
         cluster_size(clone),
         2,
         "one occurrence per file: {report:#}"
     );
+    // [PIPELINE-CLUSTER-CLOSURE] The nearly-identical verdict, the signal
+    // triple and `signal_source` are pair-scoped now. The wire facts that
+    // hold the acceptance: the renamed clone is admitted, mass-honest,
+    // clean-surfaced, and byte-distinct (the renames change the bytes — a
+    // verbatim reading would claim the copies are unedited).
+    assert_structural_only_contract(clone, "same-name rename clone");
+    assert_no_pair_surface_on_cluster(clone, "same-name rename clone");
     assert!(
-        approx(signal(clone, "structural"), 1.0),
-        "identifier renames are invisible to the normalised tree: {report:#}"
-    );
-    assert!(
-        approx(signal(clone, "token_jaccard"), 1.0),
-        "the token layer is rename-invariant by design: {report:#}"
-    );
-    assert!(
-        approx(signal(clone, "pair_rename_consistency"), 1.0),
-        "a certified consistent rename must pass the explicit pair contract: \
-         {report:#}"
-    );
-    assert_eq!(
-        field(clone, "signal_source"),
-        &serde_json::json!({"left": 0, "right": 1}),
-        "the five rendered axes must name their admitted source pair: {report:#}"
+        !has_verbatim_pair(&scan_root, clone)?,
+        "the renamed pair must slice to differing bytes — it is a rename, \
+         not an unedited copy: {report:#}"
     );
     for occurrence in occurrences(clone) {
         let start = field(occurrence, "start_line").as_u64();

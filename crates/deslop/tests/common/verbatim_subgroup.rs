@@ -11,8 +11,8 @@
 use serde_json::Value;
 
 use super::{
-    cluster_bucket, cluster_file_set, cluster_id, cluster_size, clusters,
-    expect_cluster_spanning, field, fixture, occurrence_files, per_file_metrics, run_report,
+    cluster_file_set, cluster_id, cluster_size, clusters, expect_cluster_spanning, field, fixture,
+    occurrence_files, per_file_metrics, run_report,
     signals::{assert_no_pair_surface_on_cluster, signal_dump},
     Result,
 };
@@ -114,9 +114,8 @@ pub(crate) fn published(report: &Value) -> Vec<String> {
         .iter()
         .map(|cluster| {
             format!(
-                "{id} [{bucket}] {files:?}",
+                "{id} {files:?}",
                 id = cluster_id(cluster),
-                bucket = cluster_bucket(cluster),
                 files = occurrence_files(cluster),
             )
         })

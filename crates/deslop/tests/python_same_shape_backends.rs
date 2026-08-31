@@ -22,6 +22,9 @@
 //! report satisfies the absence half and fails the presence half, so a
 //! detector that went blind cannot pass this test.
 
+use crate::common::signals::{
+    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+};
 use crate::common::*;
 
 /// The fixture holding the contract pair and the rename clone.
@@ -46,9 +49,6 @@ const ALPHA_QUEUE: &str = "alpha_queue.py";
 
 /// The rename clone's copy, with every local and parameter renamed.
 const BETA_QUEUE: &str = "beta_queue.py";
-
-/// The bucket a total consistent rename lands in.
-const NEARLY_IDENTICAL: &str = "nearly_identical";
 
 /// First line of `drain_queue` in both halves of the clone.
 const CLONE_FIRST_LINE: u64 = 1;
@@ -95,30 +95,20 @@ fn same_shaped_backends_stay_hidden_while_the_renamed_helper_surfaces() -> Resul
          fixture: {visible:#?}"
     );
     assert_eq!(
-        cluster_bucket(clone),
-        NEARLY_IDENTICAL,
-        "a total consistent rename is the definition of \
-         nearly-identical: {report:#}"
-    );
-    assert_eq!(
         cluster_size(clone),
         CLONE_OCCURRENCES,
         "one occurrence per file: {report:#}"
     );
+    // [PIPELINE-CLUSTER-CLOSURE] The nearly-identical verdict and the
+    // content axes are pair-scoped now. The wire facts that hold the
+    // acceptance: the renamed pair is admitted, mass-honest,
+    // clean-surfaced and byte-distinct.
+    assert_structural_only_contract(clone, "same-shape backends");
+    assert_no_pair_surface_on_cluster(clone, "same-shape backends");
     assert!(
-        approx(signal(clone, "structural"), 1.0),
-        "identifier renames are invisible to the normalised tree: \
-         {report:#}"
-    );
-    assert!(
-        approx(signal(clone, "token_jaccard"), 1.0),
-        "the token layer is rename-invariant by design: {report:#}"
-    );
-    assert!(
-        approx(signal(clone, "pair_rename_consistency"), 1.0),
-        "a total consistent rename is certified by the explicit pair's own \
-         rename evidence — suppressing the contract pair must not cost the \
-         rename clone its rank: {report:#}"
+        !has_verbatim_pair(&scan_root, clone)?,
+        "`drain_queue` is a rename across the two backends and must slice to \
+         differing bytes: {report:#}"
     );
     for occurrence in occurrences(clone) {
         assert_eq!(

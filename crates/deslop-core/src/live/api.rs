@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 use crate::{
     delta::ReportDelta,
     embedding::{EmbeddingProvider, ProviderRegistry, RegistryError},
-    report::{EmbeddingProvenance, Report, ReportCluster},
+    report::{EmbeddingProvenance, PairComparison, PairComparisonParams, Report, ReportCluster},
 };
 
 use super::{
@@ -53,6 +53,17 @@ pub trait LiveApi: Send + Sync + std::fmt::Debug {
     ///
     /// Returns [`LiveError::UnknownCluster`] when no cluster matches.
     async fn cluster_by_id(&self, id: &str) -> Result<ReportCluster, LiveError>;
+
+    /// `pair/compare` — evidence for exactly two caller-selected endpoints.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LiveError`] when an endpoint is absent from the current
+    /// generation or active embedding evidence cannot be measured.
+    async fn pair_compare(
+        &self,
+        params: &PairComparisonParams,
+    ) -> Result<PairComparison, LiveError>;
 
     /// `merge/plan` — the mechanical call-site merge for a cluster
     /// ([AUTOFIX-MERGE-MCP]). Read-only; refusals arrive as
@@ -228,6 +239,15 @@ impl LiveApi for LiveService {
         let mut guard = self.inner.lock().await;
         guard.refresh_if_stale();
         guard.cluster_by_id(id)
+    }
+
+    async fn pair_compare(
+        &self,
+        params: &PairComparisonParams,
+    ) -> Result<PairComparison, LiveError> {
+        let mut guard = self.inner.lock().await;
+        guard.refresh_if_stale();
+        guard.compare_pair(params)
     }
 
     async fn merge_plan(

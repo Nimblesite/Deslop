@@ -9,8 +9,8 @@ use deslop_core::{
     render::{render_cluster_markdown, render_text},
     report::{occurrence_count, Report, ReportCluster, LIVE_WIRE_OCCURRENCE_CAP},
     wire_generated::{
-        ClusterIdParams, PathParams, RangeParams, ReportDeltaParams, SetModelParams,
-        VirtualDocumentParams,
+        ClusterIdParams, PairComparisonParams, PathParams, RangeParams, ReportDeltaParams,
+        SetModelParams, VirtualDocumentParams,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -54,6 +54,8 @@ pub const REPORT_FOR_FILE: &str = "deslop/reportForFile";
 pub const REPORT_FOR_RANGE: &str = "deslop/reportForRange";
 /// Method name for `deslop/clusterById`.
 pub const CLUSTER_BY_ID: &str = "deslop/clusterById";
+/// Method name for `deslop/pairCompare`.
+pub const PAIR_COMPARE: &str = "deslop/pairCompare";
 /// Method name for `deslop/duplicatesFindSimilar`.
 pub const FIND_SIMILAR: &str = "deslop/duplicatesFindSimilar";
 /// Method name for `deslop/embeddingListModels`.
@@ -244,6 +246,22 @@ pub async fn cluster_by_id(
 ) -> LspResult<serde_json::Value> {
     match backend.service().cluster_by_id(&params.id).await {
         Ok(cluster) => Ok(serde_json::to_value(cluster).unwrap_or(serde_json::Value::Null)),
+        Err(error) => Err(into_jsonrpc(&error)),
+    }
+}
+
+/// Recomputes evidence for exactly the two requested occurrence endpoints.
+///
+/// # Errors
+///
+/// Returns a JSON-RPC error when either endpoint is absent from the current
+/// analysis generation or active embedding evidence cannot be measured.
+pub async fn pair_compare(
+    backend: &LspBackend,
+    params: PairComparisonParams,
+) -> LspResult<serde_json::Value> {
+    match backend.service().pair_compare(&params).await {
+        Ok(comparison) => Ok(serde_json::to_value(comparison).unwrap_or(serde_json::Value::Null)),
         Err(error) => Err(into_jsonrpc(&error)),
     }
 }

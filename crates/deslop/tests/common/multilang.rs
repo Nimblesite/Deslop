@@ -15,8 +15,8 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 use super::{
-    cluster_bucket, cluster_size, clusters, expect_cluster_spanning, field, fixture,
-    occurrence_files, seed, Result,
+    cluster_size, clusters, expect_cluster_spanning, field, fixture, occurrence_files, seed,
+    signals::assert_no_pair_surface_on_cluster, Result,
 };
 
 /// Subtree-size floor the fixture is scanned at. Every authored clone
@@ -111,55 +111,55 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         "rust",
         "ledger_alpha.rs",
         "ledger_beta.rs",
-        "927b05fad1c1cc0f",
-        51,
-        (5, 15, 124, 381),
-        (7, 17, 131, 388),
+        "e5d3840dece47ea3",
+        59,
+        (3, 15, 79, 376),
+        (3, 15, 75, 372),
     ),
     LangCase::row(
         "python",
         "ledger_alpha.py",
         "ledger_beta.py",
-        "b63105455a75704b",
-        40,
-        (6, 13, 109, 315),
-        (8, 15, 118, 324),
+        "424ee46873157cd9",
+        48,
+        (3, 13, 80, 310),
+        (4, 14, 77, 307),
     ),
     LangCase::row(
         "typescript",
         "ledger_alpha.ts",
         "ledger_beta.ts",
-        "ffa9824eae18b341",
-        57,
-        (5, 15, 127, 391),
-        (7, 17, 138, 402),
+        "9f984fffed253679",
+        64,
+        (3, 15, 85, 386),
+        (3, 15, 81, 382),
     ),
     LangCase::row(
         "dart",
         "ledger_alpha.dart",
         "ledger_beta.dart",
-        "7c61b26360939eaa",
-        55,
-        (5, 15, 121, 350),
-        (7, 17, 123, 352),
+        "ba5ac1e17942e874",
+        65,
+        (3, 15, 81, 346),
+        (3, 15, 77, 342),
     ),
     LangCase::row(
         "csharp",
         "LedgerAlpha.cs",
         "LedgerBeta.cs",
-        "dc672f7f39f21ba4",
-        51,
-        (9, 24, 173, 537),
-        (9, 24, 180, 544),
+        "801a025dc48d6e25",
+        59,
+        (3, 23, 76, 504),
+        (3, 23, 72, 500),
     ),
     LangCase::row(
         "go",
         "ledger_alpha.go",
         "ledger_beta.go",
-        "f44d1ebae4c45e3a",
-        57,
-        (7, 17, 125, 345),
-        (9, 19, 135, 355),
+        "0510baf76d677672",
+        66,
+        (3, 17, 77, 341),
+        (3, 17, 73, 337),
     ),
 ];
 
@@ -209,17 +209,12 @@ pub(crate) fn assert_multilang_contract(report: &Value, label: &str) -> Result<(
         let language = case.language;
         let clone = expect_lang_clone(report, case)?;
         assert_eq!(
-            cluster_bucket(clone),
-            "identical",
-            "{label}/{language}: the authored pair is a byte-identical body \
-             in two distinct files: {report:#}"
-        );
-        assert_eq!(
             cluster_size(clone),
             2,
             "{label}/{language}: the clone must span exactly the two authored \
              occurrences: {report:#}"
         );
+        assert_no_pair_surface_on_cluster(clone, &format!("{label}/{language}"));
         let mut files = occurrence_files(clone);
         files.sort();
         let mut expected = case.files().map(ToOwned::to_owned).to_vec();

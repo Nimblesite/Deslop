@@ -1,22 +1,35 @@
 //! End-to-end regression coverage for the categorisation half of #336
-//! ([RANK-CATEGORY], [CLONE-NOISE-LITERAL-TABLE]): data-table
-//! classification must be language-agnostic. `CloneCategory::DataTable`
-//! shipped with a Dart-only classifier, so an F# numeric array family —
-//! the exact shape that tops the `dotnet/fsharp` report — carried
-//! `category: "logic"` at full weight and the `[ranking] data_clones`
-//! policy had nothing to act on.
+//! ([RANK-CATEGORY], [CLONE-NOISE-LITERAL-TABLE]).
 //!
-//! Correct behaviour pinned here: a cluster of same-shape,
-//! different-value numeric tables is labelled `data` in any language,
-//! the default policy demotes it below genuine logic clones while
-//! keeping it visible, `ignore` drops it, `data_clone_weight = 1.0`
-//! restores it — and the #190 verbatim escape hatch still routes a
-//! byte-for-byte copied table to `logic`, because copied data is real
-//! duplication.
+//! [RANK-CATEGORY] says a detection-time finding kind may drive an
+//! explicit exclusion *before* ranking but is not carried as
+//! clone-cluster similarity metadata, and [RANK-STRUCTURAL-ONLY]
+//! retired the `data_clone_weight` / `data_clones` ranking modes:
+//! weight means mass and nothing else. The `category` wire label and
+//! the data-table policy are therefore gone.
+//!
+//! What this suite still pins, at full strength, on the mass-only wire:
+//! - the distinct-value F# table family and the genuine byte-identical
+//!   clone both publish, ranked by pure mass ([RANK-MASS-SUM]);
+//! - the table family is byte-distinct (same shape, different values —
+//!   never a copy-paste of itself) and the genuine clone is byte-proven;
+//! - the retired `data_clones` / `data_clone_weight` knobs still parse
+//!   (backwards compatibility) but must not change the report;
+//! - the #190 verbatim escape hatch: a byte-for-byte copied table is
+//!   proven duplication and is byte-proven like any copy.
 
+use std::path::PathBuf;
+
+use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::{corpora::*, *};
+use crate::common::{
+    corpora::*,
+    signals::{
+        assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+    },
+    *,
+};
 
 /// True for the distinct-value table files in the shared #336 corpus.
 fn is_table_file(name: &str) -> bool {
@@ -24,105 +37,111 @@ fn is_table_file(name: &str) -> bool {
 }
 
 /// Renders the shared #336 corpus with an optional `.deslop.toml` body.
-fn tables_report(config: Option<&str>) -> Result<Value> {
+fn tables_report(config: Option<&str>) -> Result<(PathBuf, Value)> {
     let mut files = fsharp_tables_corpus();
     if let Some(body) = config {
         files.push((".deslop.toml".to_owned(), body.to_owned()));
     }
-    report_for(&files, 20)
+    report_for_with_root(&files, 20)
 }
 
-// [RANK-CATEGORY] / #336: the distinct-value F# array family must carry
-// the `data` category so the data policy governs it, stay visible under
-// the default demote policy, and rank below the genuine logic clone.
+// [RANK-MASS-SUM] / #336: the distinct-value F# array family (four
+// members) and the genuine two-copy logic clone both publish; mass
+// ranks the four-member table family first (`24 × 3 = 72` vs
+// `22 × 1 = 44`), and each cluster is byte-honest on the wire.
 #[test]
-fn fsharp_numeric_tables_carry_data_category_and_demote_by_default() -> Result<()> {
-    let report = tables_report(None)?;
-    assert_eq!(
-        category_where(&report, is_table_file),
-        "data",
-        "distinct-value F# arrays must be categorised data: {report:#}"
-    );
-    let table_rank = rank_where(&report, is_table_file);
+fn fsharp_numeric_tables_and_clone_publish_ranked_by_mass() -> Result<()> {
+    let (root, report) = tables_report(None)?;
+    let table = rank_where(&report, is_table_file);
+    let clone = rank_where(&report, |name| name.starts_with("parse_"));
     assert!(
-        table_rank.is_some(),
-        "the default demote policy keeps the data table visible: {report:#}"
+        table.is_some() && clone.is_some(),
+        "both the table family and the genuine clone must publish: {report:#}"
     );
-    let clone_rank = rank_where(&report, |name| name.starts_with("parse_"));
     assert!(
-        clone_rank < table_rank,
-        "the genuine logic clone must outrank the demoted data table: \
-         clone at {clone_rank:?}, table at {table_rank:?}\n{report:#}"
+        clone > table,
+        "[RANK-MASS-SUM]: the four-member table family (rank {table:?}) \
+         out-ranks the two-copy clone (rank {clone:?}) by pure mass: {report:#}"
     );
-    assert_eq!(
-        category_where(&report, |name| name.starts_with("parse_")),
-        "logic",
-        "the genuine clone stays logic: {report:#}"
-    );
+    for cluster in clusters(&report) {
+        let is_table = cluster_file_set(cluster)
+            .iter()
+            .any(|name| is_table_file(name));
+        assert_eq!(
+            has_verbatim_pair(&root, cluster)?,
+            !is_table,
+            "the table family is byte-distinct (same shape, different values) \
+             and the clone is byte-proven — the byte truth must match which \
+             cluster this is: {cluster:#}"
+        );
+        assert_structural_only_contract(cluster, "fsharp #336");
+        assert_no_pair_surface_on_cluster(cluster, "fsharp #336");
+    }
     Ok(())
 }
 
-// [RANK-CATEGORY] ignore mode: the labelled table is dropped outright
-// while the genuine clone survives.
+/// The retired `data_clones` / `data_clone_weight` knobs still parse for
+/// backwards compatibility but [RANK-STRUCTURAL-ONLY] forbids them from
+/// changing weight: every legacy body must render the identical report.
 #[test]
-fn ignore_mode_drops_fsharp_tables_and_keeps_the_logic_clone() -> Result<()> {
-    let report = tables_report(Some("[ranking]\ndata_clones = \"ignore\"\n"))?;
-    assert!(
-        rank_where(&report, is_table_file).is_none(),
-        "ignore mode must drop the F# data table from the report: {report:#}"
-    );
-    assert!(
-        rank_where(&report, |name| name.starts_with("parse_")).is_some(),
-        "the genuine clone must survive ignore mode: {report:#}"
-    );
-    assert!(
-        clusters_hidden(&report) >= 1,
-        "the dropped table must be counted under clusters_hidden: {report:#}"
-    );
+fn retired_data_clone_knobs_do_not_change_the_report() -> Result<()> {
+    let (_, baseline) = tables_report(None)?;
+    let ranked_baseline = rankable(&baseline);
+    for (body, label) in [
+        (
+            "[ranking]\ndata_clones = \"ignore\"\n",
+            "data_clones ignore",
+        ),
+        ("[ranking]\ndata_clone_weight = 1.0\n", "data_clone_weight"),
+    ] {
+        let (_, report) = tables_report(Some(body))?;
+        assert_eq!(
+            rankable(&report),
+            ranked_baseline,
+            "{label}: the retired {label} knob must not change mass or order — \
+             weight means mass and nothing else ([RANK-STRUCTURAL-ONLY]): {report:#}"
+        );
+        assert_eq!(
+            field(&report, "clusters_hidden").as_u64(),
+            Some(0),
+            "{label}: the retired knob must not hide the table family: {report:#}"
+        );
+    }
+    assert!(!ranked_baseline.is_empty());
     Ok(())
 }
 
-// [RANK-CATEGORY] keep mode: `data_clone_weight = 1.0` restores the
-// table's full weight, which out-ranks the two-file logic clone —
-// proving the knob now drives F# tables, not just Dart ones.
-#[test]
-fn full_data_clone_weight_restores_fsharp_tables_to_the_top() -> Result<()> {
-    let report = tables_report(Some("[ranking]\ndata_clone_weight = 1.0\n"))?;
-    let table_rank = rank_where(&report, is_table_file);
-    let clone_rank = rank_where(&report, |name| name.starts_with("parse_"));
-    assert!(table_rank.is_some(), "table must appear: {report:#}");
-    assert!(clone_rank.is_some(), "clone must appear: {report:#}");
-    assert!(
-        table_rank < clone_rank,
-        "full data weight must let the larger table family out-rank the \
-         clone: table at {table_rank:?}, clone at {clone_rank:?}\n{report:#}"
-    );
-    assert_eq!(
-        category_where(&report, is_table_file),
-        "data",
-        "the table stays labelled data at full weight: {report:#}"
-    );
-    Ok(())
+/// The stable, order-insensitive fingerprint of a report's ranking:
+/// `(rank, id, mass)` per cluster.
+fn rankable(report: &Value) -> Vec<(u64, &str, u64)> {
+    let mut rows: Vec<(u64, &str, u64)> = clusters(report)
+        .iter()
+        .map(|cluster| {
+            (
+                field(cluster, "rank").as_u64().unwrap_or(0),
+                cluster_id(cluster),
+                field(cluster, "mass").as_u64().unwrap_or(0),
+            )
+        })
+        .collect();
+    rows.sort_unstable();
+    rows
 }
 
 // [CLONE-NOISE-LITERAL-TABLE] verbatim escape hatch (#190): a
-// byte-for-byte copied table is genuine duplication and must stay
-// `logic` at the `identical` bucket — never demoted as data.
+// byte-for-byte copied table is genuine duplication and is byte-proven
+// like any copy — never misread as a shape-only family.
 #[test]
-fn verbatim_copied_fsharp_table_stays_logic() -> Result<()> {
+fn verbatim_copied_fsharp_table_is_byte_proven() -> Result<()> {
     let table = fsharp_table_file("SharedTable", 2);
     let files = genuine_pair("copy_a.fs", "copy_b.fs", &table);
-    let report = report_for(&files, 20)?;
+    let (root, report) = report_for_with_root(&files, 20)?;
     let copy = expect_cluster_spanning(&report, &["copy_a.fs", "copy_b.fs"])?;
-    assert_eq!(
-        cluster_bucket(copy),
-        "identical",
+    assert!(
+        has_verbatim_pair(&root, copy)?,
         "a byte-identical table pair is a proven copy: {report:#}"
     );
-    assert_eq!(
-        category_where(&report, |name| name.starts_with("copy_")),
-        "logic",
-        "a verbatim-copied table is real duplication, not demotable data: {report:#}"
-    );
+    assert_structural_only_contract(copy, "fsharp copied table");
+    assert_no_pair_surface_on_cluster(copy, "fsharp copied table");
     Ok(())
 }

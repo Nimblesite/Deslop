@@ -33,6 +33,7 @@
 
 use serde_json::Value;
 
+use crate::common::signals::assert_no_pair_surface_on_cluster;
 use crate::common::{multilang::*, *};
 
 /// The floor gh #389 reproduces at. The 13-node signature window only
@@ -103,11 +104,7 @@ fn assert_published_once(report: &Value, case: &LangCase) -> Result<()> {
         count = over_pair.len(),
         published = over_pair
             .iter()
-            .map(|cluster| (
-                cluster_id(cluster),
-                cluster_bucket(cluster),
-                cluster_size(cluster)
-            ))
+            .map(|cluster| (cluster_id(cluster), cluster_size(cluster)))
             .collect::<Vec<_>>(),
     );
     let [cluster] = over_pair.as_slice() else {
@@ -116,12 +113,7 @@ fn assert_published_once(report: &Value, case: &LangCase) -> Result<()> {
             case.files()
         );
     };
-    assert_eq!(
-        cluster_bucket(cluster),
-        "identical",
-        "{language}: the authored pair is byte-identical — {dump}",
-        dump = cluster_id(cluster)
-    );
+    assert_no_pair_surface_on_cluster(cluster, "issue #389");
     assert_eq!(
         cluster_size(cluster),
         2,

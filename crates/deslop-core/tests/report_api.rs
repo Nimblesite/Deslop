@@ -32,12 +32,20 @@ const FORBIDDEN_CLUSTER_FIELDS: [&str; 11] = [
 ];
 
 #[test]
-fn truncate_for_wire_caps_occurrences_without_inventing_a_pair() {
-    let original_mass = sample_report().clusters[0].mass;
+fn truncate_for_wire_caps_occurrences_without_inventing_a_pair() -> anyhow::Result<()> {
+    let original = sample_report();
+    let original_mass = original
+        .clusters
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("sample report must contain a cluster"))?
+        .mass;
     let report = sample_report()
         .truncate_for_wire(WIRE_OCCURRENCE_CAP)
         .truncate_for_wire(WIRE_OCCURRENCE_CAP);
-    let cluster = &report.clusters[0];
+    let cluster = report
+        .clusters
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("truncated report must retain its cluster"))?;
     assert!(report.schema_doc.is_empty());
     assert_eq!(cluster.occurrences.len(), WIRE_OCCURRENCE_CAP);
     assert_eq!(cluster.occurrences_total, FULL_OCCURRENCE_COUNT);
@@ -45,15 +53,33 @@ fn truncate_for_wire_caps_occurrences_without_inventing_a_pair() {
     assert!(cluster.occurrences_truncated);
     assert_eq!(cluster.mass, original_mass);
     assert_eq!(cluster.rank, 1);
+    Ok(())
 }
 
 #[test]
 fn report_cluster_serialises_only_mass_membership_and_diff_state() -> anyhow::Result<()> {
     let value = serde_json::to_value(sample_report())?;
-    let cluster = &value["clusters"][0];
-    assert_eq!(cluster["mass"], 8);
-    assert_eq!(cluster["canonical_node_count"], 4);
-    assert_eq!(cluster["occurrence_count"], FULL_OCCURRENCE_COUNT);
+    let cluster = value
+        .get("clusters")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|clusters| clusters.first())
+        .ok_or_else(|| anyhow::anyhow!("serialized report must contain its cluster"))?;
+    assert_eq!(
+        cluster.get("mass").and_then(serde_json::Value::as_u64),
+        Some(8)
+    );
+    assert_eq!(
+        cluster
+            .get("canonical_node_count")
+            .and_then(serde_json::Value::as_u64),
+        Some(4)
+    );
+    assert_eq!(
+        cluster
+            .get("occurrence_count")
+            .and_then(serde_json::Value::as_u64),
+        Some(u64::try_from(FULL_OCCURRENCE_COUNT).unwrap_or(u64::MAX))
+    );
     for field in FORBIDDEN_CLUSTER_FIELDS {
         assert!(
             cluster.get(field).is_none(),
@@ -107,8 +133,11 @@ fn boilerplate_hints_use_default_recommendation_for_future_languages() -> anyhow
     let ranges = vec![range(file_id, "go", 0, 10), range(file_id, "go", 11, 20)];
     let hints = build_boilerplate_hints(&ranges, &registry, tmp.path(), &config);
     assert_eq!(hints.len(), 1);
-    assert_eq!(hints[0].language, "go");
-    assert!(hints[0].recommendation.contains("harder to read"));
+    let hint = hints
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("the fixture must produce one hint"))?;
+    assert_eq!(hint.language, "go");
+    assert!(hint.recommendation.contains("harder to read"));
     Ok(())
 }
 
@@ -149,6 +178,6 @@ fn sample_report() -> deslop_core::Report {
         })
         .collect();
     let mut report = fixture_report(vec![fixture_cluster("abcdef", occurrences)]);
-    report.schema_doc = "schema".to_owned();
+    "schema".clone_into(&mut report.schema_doc);
     report
 }

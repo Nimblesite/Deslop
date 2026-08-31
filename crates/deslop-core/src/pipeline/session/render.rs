@@ -18,7 +18,9 @@ use crate::{
     error::CoreError,
     lsh::BandCollisionSource,
     overlap::apply_shared_subtree_rescue,
-    pair::{candidate_pairs_for_language_policy, cluster_by_transitive_closure},
+    pair::{
+        apply_pair_content_gate, candidate_pairs_for_language_policy, cluster_by_transitive_closure,
+    },
     report::{render_report, CacheStats, Report, ReportInputs},
     state::FileId,
 };
@@ -141,6 +143,21 @@ impl PipelineSession {
         ledger.record(
             "shared_subtree_rescue",
             rescue_input,
+            pairs.len(),
+            stage_started,
+        );
+        let content_input = pairs.len();
+        let stage_started = Instant::now();
+        apply_pair_content_gate(
+            &mut pairs,
+            fingerprints,
+            trees,
+            &self.sources,
+            &self.file_languages,
+        );
+        ledger.record(
+            "pair_content_gate",
+            content_input,
             pairs.len(),
             stage_started,
         );

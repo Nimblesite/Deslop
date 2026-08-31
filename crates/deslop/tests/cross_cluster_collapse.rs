@@ -17,6 +17,7 @@ use std::{
 
 use anyhow::Result;
 
+use crate::common::signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract};
 use crate::common::*;
 
 fn report_path(tmp: &Path) -> PathBuf {
@@ -190,13 +191,8 @@ fn assert_content_proven(cluster: &serde_json::Value) {
         2,
         "the clone must span exactly two files"
     );
-    assert_eq!(cluster_bucket(cluster), "identical");
-    for name in ["structural", "token_jaccard", "pair_agreement"] {
-        assert!(
-            approx(signal(cluster, name), 1.0),
-            "content-proven clone must render {name}=1: {cluster:#}"
-        );
-    }
+    assert_structural_only_contract(cluster, "cross-cluster collapse");
+    assert_no_pair_surface_on_cluster(cluster, "cross-cluster collapse");
     assert_eq!(
         field(cluster, "signal_source"),
         &serde_json::json!({"left": 0, "right": 1}),
@@ -279,12 +275,7 @@ fn rendered_clusters(report: &serde_json::Value, needle: &str) -> Vec<String> {
                 .iter()
                 .map(|occurrence| format!("{}..{}", occurrence.start, occurrence.end))
                 .collect();
-            format!(
-                "{} [{}] {}",
-                cluster_id(cluster),
-                cluster_bucket(cluster),
-                spans.join(",")
-            )
+            format!("{} {}", cluster_id(cluster), spans.join(","))
         })
         .collect()
 }
@@ -355,11 +346,6 @@ fn byte_identical_clone_survives_a_demoted_enclosing_view_in_one_file() -> Resul
              occurrence means a mis-scoped view was elected: {clone:#}"
         );
     }
-    assert_eq!(
-        cluster_bucket(clone),
-        "identical",
-        "a byte-for-byte equal duplicate is Type-1 `identical`, never a \
-         demoted near-miss: {clone:#}"
-    );
+    assert_no_pair_surface_on_cluster(clone, "cross-cluster collapse");
     Ok(())
 }

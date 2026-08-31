@@ -9,6 +9,7 @@
 
 use std::{fs, path::Path};
 
+use crate::common::signals::assert_no_pair_surface_on_cluster;
 use crate::common::*;
 
 /// The clone body shared verbatim by `src/a/alpha.rs` and
@@ -126,7 +127,7 @@ fn folder_rollup_rows_are_engine_computed() -> Result<()> {
         "the clone pair is the only duplication"
     );
     let clone = expect_cluster_spanning(&report, &["alpha.rs", "beta.rs"])?;
-    assert_eq!(cluster_bucket(clone), "identical");
+    assert_no_pair_surface_on_cluster(clone, "folder rollup");
 
     // Repo headline first — 14 duplicated of 35 analysed lines = 40%.
     assert_eq!(metric_field(&report, "analysed_loc").as_u64(), Some(35));

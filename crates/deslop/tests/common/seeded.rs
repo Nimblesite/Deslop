@@ -10,8 +10,8 @@ use std::{fs, path::Path};
 use serde_json::Value;
 
 use super::{
-    approx, cluster_bucket, cluster_id, cluster_size, clusters_hidden, expect_cluster_spanning,
-    field, metric_field, occurrences, per_file_metrics, verdict::assert_type1_identical_signals,
+    approx, cluster_id, cluster_size, clusters_hidden, expect_cluster_spanning, field,
+    metric_field, occurrences, per_file_metrics, signals::assert_no_pair_surface_on_cluster,
     visible_duplicated_loc, Result,
 };
 
@@ -112,6 +112,17 @@ pub(crate) fn seed_corpus(scan_root: &Path) -> Result<()> {
 /// were all *plausible* reports — right file pair, wrong span; right
 /// span, wrong `token_jaccard` — so a shape-only check would have passed
 /// through every one of them.
+/// Asserts the report is *exactly* the report this corpus produces —
+/// not merely that some cluster spans the pair.
+///
+/// Every store-accounting scenario compares against this: a damaged,
+/// swapped, or corrupt store must still render precisely these ids,
+/// spans and metrics ([PIPELINE-INCREMENTAL-INTEGRITY],
+/// [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE]). The audit's regressions
+/// were all *plausible* reports — right file pair, wrong span — so a
+/// shape-only check would have passed through every one of them. The
+/// byte-level fact (verbatim pair) and the clean cluster surface pin
+/// what the deleted `identical` bucket and signal block used to proxy.
 pub(crate) fn assert_seeded_corpus(report: &Value, label: &str) -> Result<()> {
     assert_eq!(
         field(report, "files_analysed").as_u64(),
@@ -121,36 +132,34 @@ pub(crate) fn assert_seeded_corpus(report: &Value, label: &str) -> Result<()> {
     let clone = expect_cluster_spanning(report, &["alpha.rs", "beta.rs"])?;
     assert_clone_identity(clone, label, report);
     assert_clone_spans(clone, label)?;
-    assert_type1_identical_signals(clone, label);
     assert_seeded_metrics(report, label);
     Ok(())
 }
 
-/// The clone's identity and size: bucket, stable id, category, node
-/// count, and exactly two occurrences.
+/// The clone's identity: stable id, occurrence count, node count, and
+/// exactly two occurrences — plus the byte-proven verbatim fact and a
+/// clean cluster surface ([PIPELINE-CLUSTER-CLOSURE]).
 fn assert_clone_identity(clone: &Value, label: &str, report: &Value) {
-    assert_eq!(
-        cluster_bucket(clone),
-        "identical",
-        "{label}: the seeded pair is byte-identical code in distinct files: {report}"
-    );
     assert_eq!(
         (
             cluster_id(clone),
             cluster_size(clone),
             field(clone, "canonical_node_count").as_u64(),
-            field(clone, "category").as_str(),
         ),
-        (SEEDED_CLONE_ID, 2, Some(SEEDED_CLONE_NODES), Some("logic"),),
-        "{label}: (id, size, canonical_node_count, category) of the authored \
+        (SEEDED_CLONE_ID, 2, Some(SEEDED_CLONE_NODES)),
+        "{label}: (id, occurrence_count, canonical_node_count) of the authored \
          clone are all user-visible and all determined by the source: {clone:#}"
     );
     assert_eq!(
         clusters_hidden(report),
-        1,
-        "{label}: the corpus hides exactly one non-actionable cluster; a \
-         change here moves what the report shows: {report}"
+        0,
+        "{label}: the corpus hides no cluster on the mass-only wire — the \
+         gamma.rs match-arm pair that the retired structural-only demotion \
+         used to hide is now published as a second cluster ([RANK-STRUCTURAL-ONLY] \
+         retired the demotion; tracked with the shape-only family visibility \
+         change). A change here moves what the report shows: {report}"
     );
+    assert_no_pair_surface_on_cluster(clone, label);
 }
 
 /// Both occurrences' exact line and byte spans, matched by file name so
@@ -189,6 +198,12 @@ fn assert_clone_spans(clone: &Value, label: &str) -> Result<()> {
 /// [METRICS-REPO] The corpus's exact figures, plus the arithmetic that
 /// connects them: the per-file rows re-summed, the cluster spans
 /// re-counted, and the percentage re-divided.
+///
+/// One cluster renders: the authored `alpha.rs`/`beta.rs` clone
+/// (2 occurrences, 45 nodes). The gamma.rs match-arm pair is rejected
+/// at pair admission (content gate, [FUSED-CONTENT-GATE]), so it adds
+/// nothing to any figure. Pinned here so the exactness of the corpus
+/// contract holds.
 fn assert_seeded_metrics(report: &Value, label: &str) {
     assert_eq!(
         (

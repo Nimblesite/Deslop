@@ -9,15 +9,124 @@
 //! [`super::signal`]'s quarantine panic until migrated to
 //! admission/visibility + mass/membership.
 
-use std::{collections::BTreeSet, path::Path};
+use std::{collections::BTreeSet, path::Path, sync::Arc};
 
 use anyhow::anyhow;
+use deslop_core::{
+    embedding::{test_support::StubProvider, EmbeddingMode},
+    live::AnalysisSession,
+    report::{PairComparison, PairComparisonParams, PairEndpoint},
+};
 use serde_json::Value;
 
 use super::{
     cluster_file_set, cluster_id, clusters, field, occurrence_is_hidden, occurrence_texts,
     occurrences, Result,
 };
+
+/// Recomputes pair evidence for two explicitly supplied report occurrences.
+pub(crate) fn compare_pair(
+    scan_root: &Path,
+    min_nodes: u32,
+    left: &Value,
+    right: &Value,
+) -> Result<PairComparison> {
+    compare_endpoints_with_mode(
+        scan_root,
+        min_nodes,
+        pair_endpoint(left)?,
+        pair_endpoint(right)?,
+        EmbeddingMode::Off,
+    )
+}
+
+/// Explicit pair comparison with the deterministic test embedding provider.
+pub(crate) fn compare_pair_with_embeddings(
+    scan_root: &Path,
+    min_nodes: u32,
+    left: &Value,
+    right: &Value,
+) -> Result<PairComparison> {
+    compare_endpoints_with_mode(
+        scan_root,
+        min_nodes,
+        pair_endpoint(left)?,
+        pair_endpoint(right)?,
+        EmbeddingMode::Required,
+    )
+}
+
+/// Compares two exact endpoints without deriving either endpoint from a cluster.
+pub(crate) fn compare_endpoints(
+    scan_root: &Path,
+    min_nodes: u32,
+    left: PairEndpoint,
+    right: PairEndpoint,
+) -> Result<PairComparison> {
+    compare_endpoints_with_mode(scan_root, min_nodes, left, right, EmbeddingMode::Off)
+}
+
+/// Returns the occurrence for the caller's explicit file choice.
+pub(crate) fn occurrence_for_file<'a>(cluster: &'a Value, file: &str) -> Result<&'a Value> {
+    occurrences(cluster)
+        .iter()
+        .find(|occurrence| {
+            field(occurrence, "path")
+                .as_str()
+                .is_some_and(|path| path.ends_with(file))
+        })
+        .ok_or_else(|| anyhow!("cluster has no occurrence for {file}: {cluster:#}"))
+}
+
+/// Builds one analysis generation and compares only the requested endpoints.
+fn compare_endpoints_with_mode(
+    scan_root: &Path,
+    min_nodes: u32,
+    left: PairEndpoint,
+    right: PairEndpoint,
+    mode: EmbeddingMode,
+) -> Result<PairComparison> {
+    let provider = Arc::new(StubProvider::new());
+    let session = AnalysisSession::new_with_mode(
+        scan_root.to_path_buf(),
+        min_nodes,
+        false,
+        None,
+        provider,
+        mode,
+    )?;
+    Ok(session.compare_pair(&PairComparisonParams { left, right })?)
+}
+
+/// Converts one report occurrence into an exact pair endpoint.
+fn pair_endpoint(occurrence: &Value) -> Result<PairEndpoint> {
+    let path = occurrence
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("occurrence has no path: {occurrence:#}"))?;
+    Ok(PairEndpoint {
+        path: path.into(),
+        start_byte: endpoint_offset(occurrence, "start_byte")?,
+        end_byte: endpoint_offset(occurrence, "end_byte")?,
+    })
+}
+
+/// Reads one required byte offset from an occurrence.
+fn endpoint_offset(occurrence: &Value, field_name: &str) -> Result<usize> {
+    occurrence
+        .get(field_name)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("occurrence has no numeric {field_name}: {occurrence:#}"))
+        .and_then(|value| usize::try_from(value).map_err(Into::into))
+}
+
+/// Asserts an exact pair metric without float-equality lint suppression.
+pub(crate) fn assert_pair_metric(actual: f64, expected: f64, label: &str) {
+    assert!(
+        (actual - expected).abs() <= f64::EPSILON,
+        "{label}: expected {expected}, got {actual}"
+    );
+}
 
 /// Asserts the admission + visibility + mass contract the wire still
 /// exposes for a shape-only fixture ([RANK-MASS-SUM],

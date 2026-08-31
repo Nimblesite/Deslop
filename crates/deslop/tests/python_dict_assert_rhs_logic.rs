@@ -21,7 +21,11 @@
 
 use anyhow::Result;
 
-use crate::common::{verdict::*, *};
+use crate::common::{
+    signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract},
+    verdict::*,
+    *,
+};
 
 #[test]
 fn a_computed_right_operand_is_not_payload_noise() -> Result<()> {
@@ -72,9 +76,10 @@ fn a_computed_right_operand_is_not_payload_noise() -> Result<()> {
          counted in the metrics: duplicated_loc={duplicated_loc}, report={report:#}"
     );
 
-    assert!(
-        signal(cluster, "structural") >= 0.99,
-        "the two assert runs share a shape, so structural is saturated: {cluster:#}"
-    );
+    // [PIPELINE-CLUSTER-CLOSURE] The shape axis is pair-scoped; the wire
+    // facts that hold the acceptance: the cluster is admitted, mass-honest
+    // and clean-surfaced.
+    assert_structural_only_contract(cluster, "python dict assert rhs");
+    assert_no_pair_surface_on_cluster(cluster, "python dict assert rhs");
     Ok(())
 }

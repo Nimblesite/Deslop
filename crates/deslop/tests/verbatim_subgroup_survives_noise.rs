@@ -155,9 +155,8 @@ fn two_identical_collection_cells_survive_a_differing_sibling_cell() -> Result<(
     let report = render(CELL_CASE, CELL_MIN_NODES)?;
     let cluster = expect_cluster_spanning(&report, &[CELL_FILE])?;
     let dump = signal_dump(cluster);
-    assert_eq!(
-        cluster_bucket(cluster),
-        "identical",
+    assert!(
+        has_verbatim_pair(&fixture("verbatim-subgroup").join(CELL_CASE), cluster)?,
         "the first two cells are byte-identical — {dump}"
     );
     assert_eq!(
@@ -251,10 +250,7 @@ fn start_lines(ranges: &[(u64, u64)]) -> BTreeSet<u64> {
 fn adding_a_differing_sibling_never_deletes_a_visible_copy() -> Result<()> {
     let alone = render(MONOTONIC_CASE, CELL_MIN_NODES)?;
     let uncontested = expect_cluster_spanning(&alone, &[CELL_FILE])?;
-    assert_no_pair_surface_on_cluster(
-        uncontested,
-        "every cell is the same bytes — {dump}",
-    );
+    assert_no_pair_surface_on_cluster(uncontested, "every cell is the same bytes — {dump}");
     assert_eq!(
         occurrence_ranges(uncontested),
         MONOTONIC_COPY_LINES.to_vec(),

@@ -64,6 +64,8 @@ mod live_merge_plan;
 mod live_session_status;
 #[path = "pair_admission_bounded_max.rs"]
 mod pair_admission_bounded_max;
+#[path = "pair_comparison.rs"]
+mod pair_comparison;
 #[path = "pair_evidence_merge.rs"]
 mod pair_evidence_merge;
 #[path = "refactor_ast_access.rs"]

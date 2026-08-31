@@ -28,8 +28,8 @@ use crate::mock_ollama::MockOllama;
 use anyhow::{Context, Result};
 
 use crate::common::{
-    cluster_bucket, cluster_file_set, clusters, embeddings::run_mock_embedding_report, field,
-    fixture, run_report, seed,
+    cluster_file_set, cluster_id, clusters, embeddings::run_mock_embedding_report, field, fixture,
+    run_report, seed,
 };
 
 /// Corpora swept, with the node floor each is sized for. C# leads
@@ -80,9 +80,9 @@ fn published(report: &serde_json::Value) -> Published {
     let mut out = Published::new();
     for cluster in clusters(report) {
         let files: Vec<String> = cluster_file_set(cluster).into_iter().collect();
-        let buckets = out.entry(files).or_default();
-        buckets.push(cluster_bucket(cluster).to_owned());
-        buckets.sort();
+        let ids = out.entry(files).or_default();
+        ids.push(cluster_id(cluster).to_owned());
+        ids.sort();
     }
     out
 }

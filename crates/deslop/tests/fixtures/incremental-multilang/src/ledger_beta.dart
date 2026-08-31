@@ -1,8 +1,6 @@
 // ledger_beta.dart — the pasted copy of the Dart reconciliation routine.
 
-class BetaLedgerCursor {
-  int offset = 0;
-}
+const String ledgerTag = 'ledger';
 
 int reconcileEntries(List<int> entries, int floor) {
   var balance = 0;

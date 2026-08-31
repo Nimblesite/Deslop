@@ -29,32 +29,17 @@ fn javascript_class_method_clone_is_a_proven_rename() -> Result<()> {
     // positive" echoes `amount -> value`). Before #409 the blind literal
     // count read those echoes as disproof and demoted the pair to
     // `structural_only` — a false negative on a textbook Type-2 clone.
-    assert_bucketed_clone(
-        "js-classes",
-        8,
-        &["account.js", "wallet.js"],
-        false,
-    )
+    assert_bucketed_clone("js-classes", 8, &["account.js", "wallet.js"], false)
 }
 
 #[test]
 fn javascript_async_await_clone_is_detected() -> Result<()> {
-    assert_bucketed_clone(
-        "js-async",
-        8,
-        &["fetch_team.js", "fetch_user.js"],
-        false,
-    )
+    assert_bucketed_clone("js-async", 8, &["fetch_team.js", "fetch_user.js"], false)
 }
 
 #[test]
 fn javascript_generator_clone_is_nearly_identical() -> Result<()> {
-    assert_bucketed_clone(
-        "js-generators",
-        8,
-        &["range_gen.js", "walk_gen.js"],
-        false,
-    )
+    assert_bucketed_clone("js-generators", 8, &["range_gen.js", "walk_gen.js"], false)
 }
 
 #[test]

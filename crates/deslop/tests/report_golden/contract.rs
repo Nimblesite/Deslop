@@ -6,7 +6,7 @@ use anyhow::{anyhow, Context as _};
 use serde_json::Value;
 
 use super::{corpus_dir, golden_report_path, BLESS, GOLDEN_MIN_NODES, PAIR_FILES, TRIO_FILES};
-use crate::common::{golden::*, verdict::*, *};
+use crate::common::{golden::*, signals::assert_no_pair_surface_on_cluster, verdict::*, *};
 
 // [PIPELINE-DETERMINISM] Half two: correct. Byte equality alone only
 // proves the tool still agrees with a file the tool wrote; these
@@ -172,10 +172,9 @@ fn validated_occurrence_slice(occurrence: &Value) -> Result<Vec<u8>> {
 }
 
 /// The two authored clusters and the ranking between them: the 3-copy
-/// 68-node `settle_invoice` cluster must outrank the 2-copy 38-node
-/// `merge_labels` cluster, weights must be finite, positive, and
-/// non-increasing down the report, and every cluster must clear
-/// `--min-nodes`.
+/// 72-node `settle_invoice` cluster must outrank the 2-copy 44-node
+/// `merge_labels` cluster, masses must be positive and non-increasing
+/// down the report, and every cluster must clear `--min-nodes`.
 fn assert_ranking_and_cluster_shape(golden: &Value) -> Result<()> {
     let cluster_list = clusters(golden);
     assert_eq!(
@@ -208,29 +207,31 @@ fn assert_ranking_and_cluster_shape(golden: &Value) -> Result<()> {
     Ok(())
 }
 
-/// Weights down the report: finite, strictly positive, non-increasing.
+/// Masses down the report: strictly positive and non-increasing — the
+/// mass-only ranking contract ([RANK-MASS-SUM]). `weight` was removed
+/// with the bucket surface; mass is the wire figure consumers rank by.
 fn assert_weights_ranked(cluster_list: &[Value], golden: &Value) {
-    let weights: Vec<f64> = cluster_list
+    let masses: Vec<u64> = cluster_list
         .iter()
-        .map(|cluster| field(cluster, "weight").as_f64().unwrap_or(f64::NAN))
+        .map(|cluster| field(cluster, "mass").as_u64().unwrap_or(0))
         .collect();
     assert!(
-        weights
-            .iter()
-            .all(|weight| weight.is_finite() && *weight > 0.0),
-        "every cluster weight must be finite and positive: {weights:?} in {golden}"
+        masses.iter().all(|mass| *mass > 0),
+        "every cluster mass must be positive: {masses:?} in {golden}"
     );
     assert!(
-        weights
+        masses
             .windows(2)
             .all(|pair| matches!(pair, [left, right] if left >= right)),
-        "clusters must be ranked weight-non-increasing: {weights:?} in {golden}"
+        "clusters must be ranked mass-non-increasing: {masses:?} in {golden}"
     );
 }
 
-/// One authored Type-1 cluster: exact occurrence count, `identical`
-/// bucket, and full-strength structural and token signals with the
-/// embedding channel switched off.
+/// One authored Type-1 cluster: exact occurrence count, byte-identical
+/// occurrence slices (proven in [`assert_occurrences_are_real_type1_clones`])
+/// and a clean cluster surface ([PIPELINE-CLUSTER-CLOSURE]) — the
+/// mass-only wire carries cluster facts, never the deleted bucket or
+/// signal block.
 fn assert_authored_cluster(cluster_list: &[Value], rank: usize, copies: u64) -> Result<()> {
     let cluster = cluster_list
         .get(rank)
@@ -240,31 +241,14 @@ fn assert_authored_cluster(cluster_list: &[Value], rank: usize, copies: u64) -> 
         copies,
         "authored cluster must have exactly {copies} occurrences: {cluster}"
     );
-    assert_eq!(
-        cluster_bucket(cluster),
-        "identical",
-        "byte-identical clones must land in the identical bucket: {cluster}"
-    );
-    assert!(
-        approx(signal(cluster, "structural"), 1.0),
-        "byte-identical clones must reach structural identity: {cluster}"
-    );
-    assert!(
-        approx(signal(cluster, "token_jaccard"), 1.0),
-        "byte-identical clones must reach token identity: {cluster}"
-    );
-    assert!(
-        approx(signal(cluster, "embedding_cos"), 0.0),
-        "--embeddings off must zero the embedding signal: {cluster}"
-    );
+    assert_no_pair_surface_on_cluster(cluster, "report-golden");
     Ok(())
 }
 
 /// Every figure the report states about a cluster that a consumer would
 /// otherwise have to derive: the worst-first rank and its severity band
-/// ([SEVERITY-BAND]), the language ([PIPELINE-LANG-TRAIT]), the display
-/// occurrence count, the shape reading and the evidence sentence
-/// ([FUSED-CONTENT-GATE]).
+/// ([SEVERITY-BAND]), the display occurrence count, and the byte-proven
+/// clone fact with a clean cluster surface.
 ///
 /// Every one of these is carried precisely so no client recomputes it,
 /// so a report that omits one — or states one the rest of the report
@@ -280,11 +264,6 @@ fn assert_engine_derived_fields(golden: &Value) {
             "clusters must carry their one-based worst-first rank: {cluster}"
         );
         assert_eq!(
-            field(cluster, "language").as_str(),
-            Some("rust"),
-            "the golden corpus is Rust, and the engine stamps the language it parsed: {cluster}"
-        );
-        assert_eq!(
             field(cluster, "occurrence_count").as_u64(),
             Some(cluster_size(cluster)),
             "the stated occurrence count must equal the occurrences the report carries: {cluster}"
@@ -295,19 +274,7 @@ fn assert_engine_derived_fields(golden: &Value) {
             "no cluster-level fused or fused-gate field may survive on the wire \
              ([FUSED-SCOPE]): {cluster}"
         );
-        assert_type1_identical_signals(cluster, "report-golden");
-        let verdict = field(cluster, "evidence_verdict")
-            .as_str()
-            .unwrap_or_default()
-            .to_owned();
-        assert!(
-            verdict.contains("The shapes match at 1.00"),
-            "every cluster must carry the engine's reading of its own signals: {verdict}"
-        );
-        assert!(
-            !verdict.contains("boilerplate"),
-            "a byte-proven clone must never be described as boilerplate: {verdict}"
-        );
+        assert_no_pair_surface_on_cluster(cluster, "report-golden");
     }
     // Two clusters: the worse of them tops the percentile, the other
     // closes it ([SEVERITY-BAND]).

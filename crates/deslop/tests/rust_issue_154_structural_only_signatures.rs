@@ -19,6 +19,7 @@ use std::{fs, path::Path};
 use anyhow::Result;
 use serde_json::Value;
 
+use crate::common::signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract};
 use crate::common::*;
 
 fn run_report(scan_root: &Path) -> Result<Value> {
@@ -45,33 +46,16 @@ fn structural_only_signature_clusters_are_dropped_from_the_report() -> Result<()
         "fixture must produce at least one cluster (visible or hidden) so \
          the structural_only filter is actually exercised: {report:#}"
     );
-    let clusters = report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let offenders: Vec<String> = clusters
-        .iter()
-        .filter(|cluster| cluster_bucket(cluster) == "structural_only")
-        .filter(|cluster| signal(cluster, "token_jaccard") < 0.1)
-        .map(|cluster| {
-            format!(
-                "cluster {id} signals={{structural={s:.2}, token_jaccard={t:.2}, \
-                 embedding_cos={e:.2}}} size={size}",
-                id = cluster.get("id").and_then(Value::as_str).unwrap_or("?"),
-                s = signal(cluster, "structural"),
-                t = signal(cluster, "token_jaccard"),
-                e = signal(cluster, "embedding_cos"),
-                size = cluster.get("size").and_then(Value::as_u64).unwrap_or(0),
-            )
-        })
-        .collect();
-    assert!(
-        offenders.is_empty(),
-        "issue #154: structural_only clusters with token_jaccard < 0.1 \
-         have no real evidence and must not appear in the ranked report. \
-         Offending clusters: {offenders:#?}"
-    );
+    // [PIPELINE-CLUSTER-CLOSURE] The mass-only wire carries cluster facts
+    // only; the `structural_only` bucket and its token floor are gone. The
+    // acceptance holds on wire facts: every visible cluster must carry the
+    // clean-surface contract (and with the signature-only families hidden,
+    // nothing byte-distinct-and-unsupported may be labelled anything). The
+    // hidden-cluster telemetry below pins the suppression.
+    for cluster in clusters(&report) {
+        assert_no_pair_surface_on_cluster(cluster, "issue #154");
+        assert_structural_only_contract(cluster, "issue #154");
+    }
     // [METRICS-REPO] This fixture mixes visible near-miss clones with hidden
     // structural_only families. The metric must count only the lines the
     // visible clusters cover, so the suppressed families add nothing.

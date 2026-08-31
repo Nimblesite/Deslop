@@ -18,6 +18,10 @@ use crate::fingerprint::Fingerprint;
 mod candidates;
 pub use candidates::{candidate_pairs, candidate_pairs_for_language_policy, LshPairs};
 
+/// Pair-content admission guard applied before transitive closure.
+mod content_gate;
+pub(crate) use content_gate::apply_pair_content_gate;
+
 /// Transitive-closure clustering over surviving pairs.
 mod closure;
 pub use closure::cluster_by_transitive_closure;

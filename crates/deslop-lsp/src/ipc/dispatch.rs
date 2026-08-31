@@ -37,6 +37,7 @@ pub(super) fn dispatch(
         "report/forFile" => dispatch_report_for_file(params, service, handle),
         "report/forRange" => dispatch_report_for_range(params, service, handle),
         "cluster/byId" => dispatch_cluster_by_id(params, service, handle),
+        "pair/compare" => dispatch_pair_compare(params, service, handle),
         "merge/plan" => dispatch_merge_plan(params, service, handle),
         "session/config" => dispatch_session_config(service, handle),
         "duplicates/findSimilar" => dispatch_find_similar(params, service, handle),
@@ -92,6 +93,20 @@ fn dispatch_cluster_by_id(
         .block_on(service.cluster_by_id(id))
         .map_err(|error| rpc_error(INTERNAL_ERROR_CODE, error.to_string()))?;
     serde_json::to_value(&cluster).map_err(|err| rpc_serialise_error(&err))
+}
+
+/// Delegates `pair/compare` to [`LiveApi::pair_compare`].
+fn dispatch_pair_compare(
+    params: &Value,
+    service: &Arc<LiveService>,
+    handle: &Handle,
+) -> Result<Value, Value> {
+    let request: deslop_core::report::PairComparisonParams = serde_json::from_value(params.clone())
+        .map_err(|error| rpc_error(INVALID_PARAMS_CODE, format!("invalid params: {error}")))?;
+    let comparison = handle
+        .block_on(service.pair_compare(&request))
+        .map_err(|error| rpc_error(INTERNAL_ERROR_CODE, error.to_string()))?;
+    serde_json::to_value(&comparison).map_err(|error| rpc_serialise_error(&error))
 }
 
 /// Delegates `merge/plan` to [`LiveApi::merge_plan`]

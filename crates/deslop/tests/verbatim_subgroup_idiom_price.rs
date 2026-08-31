@@ -65,15 +65,6 @@ const GEOMETRY_LABEL: &str = "[CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] idiom-p
 /// figure at 0.0, describes the literal-poor `settle_ledger` controls and
 /// not this copy. Naming the saturating six keeps the strong half strong
 /// without claiming the wrong thing about the seventh.
-const DETERMINED_SIGNALS: [(&str, f64); 6] = [
-    ("structural", 1.0),
-    ("token_jaccard", 1.0),
-    ("shape", 1.0),
-    ("embedding_cos", 0.0),
-    ("pair_agreement", 1.0),
-    ("pair_rename_consistency", 1.0),
-];
-
 /// Every Python source byte in one `verbatim-subgroup` case,
 /// concatenated in ascending file-name order — the whole corpus as one
 /// string, so two corpora can be compared for equality however many
@@ -157,17 +148,15 @@ fn assert_cross_file_copy_is_published(report: &Value) -> Result<()> {
     Ok(())
 }
 
-/// Every axis a byte-proven copy is measured on reads full, and the copy
-/// heads the report ([RANK-SCORE]).
+/// A byte-proven copy heads the report ([RANK-SCORE]) and is
+/// byte-proven from the source.
 fn assert_copy_is_saturated(report: &Value, copy: &Value) -> Result<()> {
-    for (name, expected) in DETERMINED_SIGNALS {
-        assert!(
-            approx(signal(copy, name), expected),
-            "{GEOMETRY_LABEL}: nothing differs between the two copies, so `{name}` \
-             must read {expected} with embeddings off — {dump}",
-            dump = signal_dump(copy),
-        );
-    }
+    assert!(
+        has_verbatim_pair(&fixture("verbatim-subgroup"), copy)?,
+        "{GEOMETRY_LABEL}: the two copies are byte-identical and must be \
+         byte-proven — {dump}",
+        dump = signal_dump(copy),
+    );
     assert_eq!(
         rank_of(report, copy)?,
         0,

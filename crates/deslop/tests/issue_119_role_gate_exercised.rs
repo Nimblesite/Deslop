@@ -33,7 +33,12 @@ use crate::mock_ollama::MockOllama;
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::{embeddings::scan_fixture_copy_with_mock, role_gate::*, *};
+use crate::common::{
+    embeddings::scan_fixture_copy_with_mock,
+    role_gate::*,
+    signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract},
+    *,
+};
 
 /// Scans a private copy of `fixture_root` with `--embeddings off`, the
 /// baseline the embedding pass must measurably move.
@@ -168,18 +173,12 @@ fn same_role_pair_clearing_the_embedding_floor_stays_visible() -> Result<()> {
             "the occurrences must be DIFFERENT code: byte-identical occurrences \
              belong in an identical bucket, not a near-miss one: {texts:#?}"
         );
-        let structural = signal(cluster, "structural");
-        let embedding = signal(cluster, "embedding_cos");
-        assert!(
-            structural >= deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
-            "the shared accumulator chain must register as real shape evidence, \
-             got structural={structural}"
-        );
-        assert!(
-            embedding >= deslop_core::pair::EMBEDDING_SUPPORT_FLOOR,
-            "the pair must carry the embedding support that admitted it, \
-             got embedding_cos={embedding}"
-        );
+        // [PIPELINE-CLUSTER-CLOSURE] The shape/embedding evidence is
+        // pair-scoped now; the wire facts that hold the acceptance: the
+        // near-miss is admitted, mass-honest and clean-surfaced, and its
+        // occurrences are byte-distinct (already asserted above).
+        assert_structural_only_contract(cluster, "dart #119 role gate");
+        assert_no_pair_surface_on_cluster(cluster, "dart #119 role gate");
     }
     Ok(())
 }

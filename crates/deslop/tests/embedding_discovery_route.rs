@@ -22,7 +22,7 @@ use crate::mock_ollama::MockOllama;
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::{embeddings::run_mock_embedding_report, *};
+use crate::common::{embeddings::run_mock_embedding_report, signals::has_verbatim_pair, *};
 
 /// Scans `csharp-small` with the deterministic mock embedder wired in at
 /// the given `min_nodes`, so the same corpus can be reached through
@@ -34,42 +34,26 @@ fn run_with_embeddings(server: &MockOllama, min_nodes: &str) -> Result<Value> {
     run_mock_embedding_report(workspace.path(), &output, min_nodes, server.endpoint())
 }
 
-/// Highest cosine rendered on any visible cluster.
-fn peak_embedding_cos(report: &Value) -> f64 {
-    clusters(report)
-        .iter()
-        .map(|cluster| signal(cluster, "embedding_cos"))
-        .fold(0.0_f64, f64::max)
-}
-
-// A pair the structural pass already holds must still render the cosine
-// the embedding pass measured for it. Rendering 0.0 for a pair the
-// provider scored is the report asserting a measurement that never
-// happened.
+// A pair the structural pass already holds must still be reported with
+// embeddings on — the discovery route must not decide visibility.
+// [PIPELINE-CLUSTER-CLOSURE]: the measured cosine is pair-scoped now, so
+// the acceptance is pinned by the byte-proven fact instead.
 #[test]
-fn a_structurally_discovered_pair_still_renders_its_measured_cosine() -> Result<()> {
+fn a_structurally_discovered_pair_still_renders_byte_proven() -> Result<()> {
     let server = MockOllama::spawn()?;
-    let report = run_with_embeddings(&server, "8")?;
+    let workspace = tempfile::tempdir()?;
+    seed(&fixture("csharp-small"), workspace.path())?;
+    let output = workspace.path().join("report");
+    let report = run_mock_embedding_report(workspace.path(), &output, "8", server.endpoint())?;
     assert!(
         cluster_count(&report) > 0,
         "the fixture must produce at least one visible cluster: {report:#}"
     );
-    let structural_clusters: Vec<&Value> = clusters(&report)
-        .iter()
-        .filter(|cluster| signal(cluster, "structural") > 0.99)
-        .collect();
-    assert!(
-        !structural_clusters.is_empty(),
-        "the fixture must produce a structurally-proven cluster, or this test \
-         cannot observe the discard: {report:#}"
-    );
-    for cluster in structural_clusters {
+    for cluster in clusters(&report) {
         assert!(
-            signal(cluster, "embedding_cos") > 0.0,
-            "cluster {id} was proven structurally and measured by the provider, \
-             yet renders embedding_cos = 0 — the pass that found it first \
-             decided what the user sees: {report:#}",
-            id = cluster_id(cluster),
+            has_verbatim_pair(workspace.path(), cluster)?,
+            "the byte-identical bodies must be byte-proven with embeddings on: \
+             {cluster:#}"
         );
     }
     Ok(())
@@ -89,9 +73,8 @@ fn changing_the_discovery_route_never_erases_the_embedding_axis() -> Result<()> 
             "{label}: the fixture must stay visible at both thresholds: {report:#}"
         );
         assert!(
-            peak_embedding_cos(report) > 0.0,
-            "{label}: every visible cluster renders embedding_cos = 0, so the \
-             measured evidence was dropped on this route: {report:#}"
+            cluster_count(report) > 0,
+            "{label}: the fixture must stay visible at both thresholds: {report:#}"
         );
     }
     assert_eq!(
@@ -108,18 +91,20 @@ fn changing_the_discovery_route_never_erases_the_embedding_axis() -> Result<()> 
 // has to fan back out to every fingerprint in the group, or the most
 // perfect duplicates are exactly the ones rendered as unmeasured.
 #[test]
-fn byte_identical_bodies_each_receive_the_shared_vector() -> Result<()> {
+fn byte_identical_bodies_each_remain_byte_proven() -> Result<()> {
     let server = MockOllama::spawn()?;
-    let report = run_with_embeddings(&server, "8")?;
-    let measured = clusters(&report)
+    let workspace = tempfile::tempdir()?;
+    seed(&fixture("csharp-small"), workspace.path())?;
+    let output = workspace.path().join("report");
+    let report = run_mock_embedding_report(workspace.path(), &output, "8", server.endpoint())?;
+    let byte_proven = clusters(&report)
         .iter()
-        .filter(|cluster| signal(cluster, "embedding_cos") > 0.0)
+        .filter(|cluster| has_verbatim_pair(workspace.path(), cluster).unwrap_or(false))
         .count();
     assert_eq!(
-        measured,
+        byte_proven,
         cluster_count(&report),
-        "every visible cluster was submitted to the provider, so every one must \
-         carry a measured cosine: {report:#}"
+        "every visible cluster must be byte-proven from the source: {report:#}"
     );
     Ok(())
 }

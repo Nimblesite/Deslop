@@ -19,24 +19,15 @@
 
 use std::path::Path;
 
-use deslop_core::pair::EMBEDDING_SUPPORT_FLOOR;
 use serde_json::Value;
 
 use super::{
-    cluster_bucket, cluster_id, clusters, clusters_hidden, embeddings::scan_fixture_copy_with_mock,
-    fixture, occurrence_texts, signal, Result,
+    clusters, clusters_hidden, embeddings::scan_fixture_copy_with_mock, fixture, occurrence_texts,
+    signals::assert_structural_only_contract, Result,
 };
 
 /// Subtree-size floor every #119 fixture is scanned at.
 pub(crate) const ROLE_GATE_MIN_NODES: &str = "5";
-
-/// Visible clusters carrying the `same_behavior` bucket.
-pub(crate) fn same_behavior(report: &Value) -> Vec<&Value> {
-    clusters(report)
-        .iter()
-        .filter(|cluster| cluster_bucket(cluster) == "same_behavior")
-        .collect()
-}
 
 /// [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH] acceptance: an embedding-dominant
 /// pair whose members have different top-level roles — a `class`
@@ -69,19 +60,16 @@ pub(crate) fn assert_role_mismatch_is_suppressed(
          clusters_hidden, got {}",
         clusters_hidden(&report)
     );
-    assert!(
-        same_behavior(&report).is_empty(),
-        "no same_behavior cluster may remain visible for the {language} \
-         role-mismatch fixture: {:#?}",
-        clusters(&report)
-    );
+    // No visible cluster may cover both roles — `cross_role_pairs` above
+    // already asserts that, so there is nothing left to re-check here:
+    // the bucket that used to name the survivors is gone from the wire.
     Ok(())
 }
 
 /// Over-suppression guard: two genuinely behaviour-equivalent functions
 /// share one top-level role, so the gate must not hide them. They surface
-/// as `same_behavior`, pairing both named functions, carrying the
-/// embedding support that bucket claims.
+/// pairing both named functions; the same-role admission is proven from
+/// the rendered text (black-box), not from a bucket label.
 pub(crate) fn assert_same_role_pair_surfaces(
     fixture_name: &str,
     language: &str,
@@ -91,12 +79,19 @@ pub(crate) fn assert_same_role_pair_surfaces(
 ) -> Result<()> {
     let scan_root = fixture(fixture_name);
     let report = scan_fixture_copy_with_mock(&scan_root, ROLE_GATE_MIN_NODES, endpoint)?;
-    let surviving = same_behavior(&report);
+    let surviving: Vec<&Value> = clusters(&report)
+        .iter()
+        .filter(|cluster| {
+            occurrence_texts(&scan_root, cluster).is_ok_and(|texts| {
+                texts.iter().any(|text| text.contains(recursive_marker))
+                    && texts.iter().any(|text| text.contains(iterative_marker))
+            })
+        })
+        .collect();
     assert!(
         !surviving.is_empty(),
         "two same-role behaviour-equivalent {language} functions must surface \
-         as same_behavior — the role gate must not over-suppress. Visible \
-         clusters: {:#?}",
+         — the role gate must not over-suppress. Visible clusters: {:#?}",
         clusters(&report)
     );
     assert_pairs_both_members(
@@ -106,7 +101,9 @@ pub(crate) fn assert_same_role_pair_surfaces(
         iterative_marker,
         language,
     )?;
-    assert_embedding_support(&surviving, language);
+    for cluster in &surviving {
+        assert_structural_only_contract(cluster, language);
+    }
     Ok(())
 }
 
@@ -145,24 +142,8 @@ fn assert_pairs_both_members(
     })?;
     assert!(
         paired,
-        "the surviving {language} same_behavior cluster must pair `{left}` with \
+        "the surviving {language} same-role cluster must pair `{left}` with \
          `{right}`: {surviving:#?}"
     );
     Ok(())
-}
-
-/// Asserts every surviving `same_behavior` cluster carries the embedding
-/// evidence its bucket claims.
-pub(crate) fn assert_embedding_support(surviving: &[&Value], language: &str) {
-    for cluster in surviving {
-        let cos = signal(cluster, "embedding_cos");
-        assert!(
-            cos >= EMBEDDING_SUPPORT_FLOOR,
-            "a visible {language} same_behavior cluster must carry embedding \
-             support at or above {EMBEDDING_SUPPORT_FLOOR}, got {cos} on {}. A \
-             same_behavior bucket without measured cosine is a bucket asserted \
-             from nothing.",
-            cluster_id(cluster)
-        );
-    }
 }

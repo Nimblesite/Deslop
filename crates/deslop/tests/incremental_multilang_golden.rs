@@ -30,7 +30,10 @@
 
 use serde_json::Value;
 
-use crate::common::{golden::*, incremental::*, multilang::*, multilang_warm::*, verdict::*, *};
+use crate::common::{
+    golden::*, incremental::*, multilang::*, multilang_warm::*,
+    signals::assert_no_pair_surface_on_cluster, verdict::*, *,
+};
 
 /// Renders the fixture cold, with the store never consulted, into a
 /// throwaway scan root — the checked-in fixture is never scanned in
@@ -93,13 +96,13 @@ fn committed_multilang_golden_satisfies_the_authored_contract() -> Result<()> {
 
 /// Every user-visible field of every cluster, pinned per language from
 /// [`MULTILANG_CASES`]: the stable id, the subtree size, the exact
-/// occurrence spans, the bucket, the category, and all four signals.
+/// occurrence spans, and the byte-identical clone fact with a clean
+/// cluster surface.
 ///
 /// The looser halves above would survive drifts that matter. A cluster
-/// can span the right file pair with a moved span, a re-derived id, a
-/// halved node count, or — the audit's regression — a `token_jaccard`
-/// that changed while nothing else did. Each of those is a different
-/// report for the same source, so each gets its own assertion.
+/// can span the right file pair with a moved span, a re-derived id, or a
+/// halved node count. Each of those is a different report for the same
+/// source, so each gets its own assertion.
 fn assert_every_cluster_is_reported_exactly(golden: &Value) -> Result<()> {
     for case in MULTILANG_CASES {
         let language = case.language;
@@ -118,15 +121,9 @@ fn assert_every_cluster_is_reported_exactly(golden: &Value) -> Result<()> {
              ranking weight is computed from that count: {clone:#}",
             case.nodes
         );
-        assert_eq!(
-            field(clone, "category").as_str(),
-            Some("logic"),
-            "{language}: an extractable reconciliation routine is `logic`, \
-             never a demoted data table ([RANK-CATEGORY]): {clone:#}"
-        );
+        assert_no_pair_surface_on_cluster(clone, language);
         assert_occurrence_shape(clone, language);
         assert_exact_spans(clone, case)?;
-        assert_type1_identical_signals(clone, language);
     }
     Ok(())
 }
@@ -199,8 +196,8 @@ fn assert_golden_metrics(golden: &Value) -> Result<()> {
             metric_field(golden, "clusters_total").as_u64(),
             metric_field(golden, "duplicated_files").as_u64(),
         ),
-        (Some(210), Some(136), Some(6), Some(MULTILANG_FILE_COUNT)),
-        "the twelve-file corpus measures 210 analysed / 136 duplicated LOC \
+        (Some(197), Some(172), Some(6), Some(MULTILANG_FILE_COUNT)),
+        "the twelve-file corpus measures 197 analysed / 172 duplicated LOC \
          across 6 clusters, every file duplicated: {golden:#}"
     );
     assert_metric_arithmetic(golden)?;

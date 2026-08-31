@@ -93,6 +93,7 @@
 use anyhow::Result;
 use serde_json::Value;
 
+use crate::common::signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract};
 use crate::common::*;
 
 /// The whole-method span the surviving cluster must cover in one file,
@@ -163,24 +164,13 @@ fn assert_fragments_absorbed(report: &Value, survivor: &Value, files: [&str; 2])
 /// The enclosing pair's final-contract evidence: a measured rescue, not
 /// a reconstructed cluster-confidence scalar.
 fn assert_rescued_pair_evidence(cluster: &Value) {
-    let source = field(cluster, "signal_source");
-    assert_eq!(
-        (
-            field(source, "left").as_u64(),
-            field(source, "right").as_u64()
-        ),
-        (Some(0), Some(1)),
-        "the two enclosing occurrences must be the elected evidence pair: {cluster:#}"
-    );
-    assert!(
-        signal(cluster, "structural") >= deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
-        "the rescue must carry measured shared-subtree overlap: {cluster:#}"
-    );
-    assert!(
-        signal(cluster, "token_jaccard") >= deslop_core::pair::SHARED_SUBTREE_MIN_JACCARD,
-        "the rescue must carry token corroboration: {cluster:#}"
-    );
-    assert!(approx(signal(cluster, "embedding_cos"), 0.0));
+    // The rescue's proof was admission: the enclosing pair cleared the
+    // shared-subtree bar, so the cluster exists. On the mass-only wire
+    // the honest reading is the admission + mass + clean-surface
+    // contract; the pair-grade numbers that used to live in
+    // `signal_source` are pair-scoped now ([PIPELINE-CLUSTER-CLOSURE]).
+    assert_structural_only_contract(cluster, "#408 enclosing pair");
+    assert_no_pair_surface_on_cluster(cluster, "#408 enclosing pair");
 }
 
 /// The full #408 contract for one language fixture.
@@ -211,12 +201,8 @@ fn assert_enclosing_pair_visible(name: &str, left: &MethodSpan, right: &MethodSp
         2,
         "the method pair must span exactly two occurrences: {cluster:#}"
     );
-    assert_eq!(
-        cluster_bucket(cluster),
-        "nearly_identical",
-        "a one-statement Type-3 near-miss must render as a credible near-identical \
-         clone, not a demoted shape match: {cluster:#}"
-    );
+    assert_structural_only_contract(cluster, name);
+    assert_no_pair_surface_on_cluster(cluster, name);
     assert_rescued_pair_evidence(cluster);
     assert_fragments_absorbed(&report, cluster, [left.path, right.path]);
     Ok(())

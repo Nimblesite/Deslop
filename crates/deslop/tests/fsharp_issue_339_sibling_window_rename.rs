@@ -32,6 +32,7 @@
 use anyhow::anyhow;
 use serde_json::Value;
 
+use crate::common::signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair};
 use crate::common::*;
 
 /// The duplicated region: two consecutive top-level bindings, verbatim in
@@ -147,7 +148,7 @@ fn window_cluster(report: &Value, range_a: (u64, u64), range_b: (u64, u64)) -> R
 
 /// Writes both fixture files, runs the scan, and returns the report plus
 /// each file's `--debug-ast` dump for the no-exact-node assertion.
-fn scan_with_dumps(sources: (&str, &str)) -> Result<(Value, String, String)> {
+fn scan_with_dumps(sources: (&str, &str)) -> Result<(std::path::PathBuf, Value, String, String)> {
     let tmp = tempfile::tempdir()?;
     let root = tmp.path().join("src");
     std::fs::create_dir_all(&root)?;
@@ -156,7 +157,7 @@ fn scan_with_dumps(sources: (&str, &str)) -> Result<(Value, String, String)> {
     std::fs::write(&path_a, sources.0)?;
     std::fs::write(&path_b, sources.1)?;
     let report = run_report(&root, 20)?;
-    Ok((report, ast_dump(&path_a)?, ast_dump(&path_b)?))
+    Ok((root, report, ast_dump(&path_a)?, ast_dump(&path_b)?))
 }
 
 /// The normalised-AST dump of `path` via the CLI's `--debug-ast` flag.
@@ -176,8 +177,8 @@ fn ast_dump(path: &std::path::Path) -> Result<String> {
 /// Asserts the reported clone really is the shared window — at the exact
 /// expected boundaries, boundaries no single normalised subtree owns —
 /// and that it reaches an act-now bucket.
-fn assert_window_clone(sources: (&str, &str), expected: &str) -> Result<()> {
-    let (report, dump_a, dump_b) = scan_with_dumps(sources)?;
+fn assert_window_clone(sources: (&str, &str)) -> Result<()> {
+    let (root, report, dump_a, dump_b) = scan_with_dumps(sources)?;
     let range_a = expected_window_range(sources.0)?;
     let range_b = expected_window_range(sources.1)?;
     let clone = window_cluster(&report, range_a, range_b)?;
@@ -191,36 +192,17 @@ fn assert_window_clone(sources: (&str, &str), expected: &str) -> Result<()> {
          sibling-window path:\n{dump_a}\n{dump_b}"
     );
 
+    // [PIPELINE-CLUSTER-CLOSURE] The shape axis and the act-now buckets are
+    // gone. Issue #339's acceptance on the wire: the duplicated window is
+    // reported at its exact synthetic boundaries — a byte-identical
+    // Merkle-match window, proven from the source bytes. The demotion
+    // question (structural_only vs act-now) no longer has a surface.
     assert!(
-        approx(signal(clone, "structural"), 1.0),
-        "the shared window is a Merkle match — structural must be 1.0: {report:#}"
+        has_verbatim_pair(&root, clone)?,
+        "the shared window is byte-identical and must be byte-proven: {report:#}"
     );
-    assert_ne!(
-        cluster_bucket(clone),
-        "structural_only",
-        "issue #339: a duplicated window whose content agrees must not be demoted to the \
-         shape-only tier by a fallback-signature artifact: {report:#}"
-    );
-    // Actionability is asserted by bucket, deliberately, not by
-    // `fused >= FUSED_THRESHOLD`. [REPORTING-CONTEXT] is explicit that a
-    // proven Type-2 clone may render *below* the admission bar while
-    // remaining actionable, so gating this on the rendered confidence would
-    // assert the opposite of the documented contract.
-    assert_eq!(
-        cluster_bucket(clone),
-        expected,
-        "a duplicated window whose content agrees must stay act-now: {report:#}"
-    );
-    assert!(
-        is_act_now(cluster_bucket(clone)),
-        "and `{expected}` must be an act-now bucket: {report:#}"
-    );
+    assert_no_pair_surface_on_cluster(clone, "fsharp #339");
     Ok(())
-}
-
-/// The wire bucket labels [CLONE-BUCKETS] calls actionable.
-fn is_act_now(bucket: &str) -> bool {
-    matches!(bucket, "identical" | "nearly_identical")
 }
 
 // [FUSED-SIGNALS-THREE-LAYER] / #339: `module ParseHelpersB` is one character
@@ -230,7 +212,7 @@ fn is_act_now(bucket: &str) -> bool {
 fn issue_339_sibling_window_survives_offset_shifting_rename() -> Result<()> {
     let source_a = module_with_shared_window("ParseHelpers", TAIL_A);
     let source_b = module_with_shared_window("ParseHelpersB", TAIL_B);
-    assert_window_clone((&source_a, &source_b), "nearly_identical")
+    assert_window_clone((&source_a, &source_b))
 }
 
 // The control: identical module names keep the two windows at identical byte
@@ -243,5 +225,5 @@ fn issue_339_sibling_window_survives_offset_shifting_rename() -> Result<()> {
 fn issue_339_sibling_window_routing_is_offset_independent() -> Result<()> {
     let source_a = module_with_shared_window("ParseHelpers", TAIL_A);
     let source_b = module_with_shared_window("ParseHelpers", TAIL_B);
-    assert_window_clone((&source_a, &source_b), "identical")
+    assert_window_clone((&source_a, &source_b))
 }

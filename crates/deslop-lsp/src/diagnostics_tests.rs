@@ -44,8 +44,23 @@ fn write_source(dir: &Path, name: &str, body: &str) -> Result<PathBuf> {
 /// membership. No signals, no bucket, no weight — the cluster carries
 /// membership and mass only ([FUSED-PAIR-SIGNALS]).
 fn sample_cluster(id: &str, mass: u64, occurrences: Vec<ReportOccurrence>) -> ReportCluster {
+    // restamp_fixture recomputes mass as canonical_node_count × (count − 1),
+    // so the canonical extent is derived from the requested mass and the
+    // cluster's membership ([RANK-MASS-SUM]).
+    let visible = occurrences
+        .iter()
+        .filter(|occurrence| !occurrence.hidden)
+        .count();
     let mut cluster = deslop_core::report_fixtures::fixture_cluster(id, occurrences);
-    cluster.canonical_node_count = 25;
+    let copies = u64::try_from(visible.saturating_sub(1)).unwrap_or(0).max(1);
+    let canonical_node_count = mass
+        .checked_div(copies)
+        .and_then(|nodes| usize::try_from(nodes).ok());
+    assert!(
+        canonical_node_count.is_some(),
+        "fixture mass must be divisible by its visible-copy count and fit usize"
+    );
+    cluster.canonical_node_count = canonical_node_count.unwrap_or_default();
     cluster.mass = mass;
     deslop_core::report_fixtures::restamp_fixture(&mut cluster);
     cluster
@@ -186,7 +201,10 @@ fn diagnostic_data_stores_cluster_id_and_mass_for_machine_readers() -> Result<()
     let cluster = sample_cluster(
         "abc123",
         LIGHT_CLUSTER_MASS,
-        vec![occurrence(ALPHA_FILE, 0, FIXTURE_END_BYTE)],
+        vec![
+            occurrence(ALPHA_FILE, 0, FIXTURE_END_BYTE),
+            occurrence("b.cs", 0, FIXTURE_END_BYTE),
+        ],
     );
     let data = diagnostic_data(&cluster);
     assert_eq!(cluster_id_of(Some(&data))?, "abc123");
@@ -210,7 +228,7 @@ fn diagnostic_message_shows_count_and_mass() {
         "neutral title and instance count first: {message}"
     );
     assert!(
-        message.contains(&format!("mass {}", HEAVY_CLUSTER_MASS)),
+        message.contains(&format!("mass {HEAVY_CLUSTER_MASS}")),
         "message carries the duplicated mass: {message}"
     );
     assert!(

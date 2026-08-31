@@ -35,10 +35,6 @@ fn run_report(tmp: &Path, scan_root: &Path) -> Result<Value> {
     Ok(serde_json::from_str(&body)?)
 }
 
-fn cluster_bucket(cluster: &Value) -> &str {
-    cluster.get("bucket").and_then(Value::as_str).unwrap_or("?")
-}
-
 fn cluster_paths(cluster: &Value) -> Vec<String> {
     cluster
         .get("occurrences")
@@ -68,29 +64,24 @@ fn rust_test_boilerplate_files_never_surface_as_loosely_similar() -> Result<()> 
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
+    // [PIPELINE-CLUSTER-CLOSURE] The loosely_similar bucket is gone. Issue
+    // #58's acceptance on the wire: test files sharing only boilerplate
+    // must not surface as a *cross-file* clone at all — no visible cluster
+    // may span two distinct test files (a single file repeating its own
+    // boilerplate is not a cross-file clone).
     let offenders: Vec<String> = clusters
         .iter()
-        .filter(|c| cluster_bucket(c) == "loosely_similar")
-        .filter(|c| cluster_paths(c).len() >= 2)
-        .map(|c| {
-            let paths = cluster_paths(c);
-            let structural = c
-                .pointer("/signals/structural")
-                .and_then(Value::as_f64)
-                .unwrap_or(0.0);
-            let token_j = c
-                .pointer("/signals/token_jaccard")
-                .and_then(Value::as_f64)
-                .unwrap_or(0.0);
-            format!(
-                "loosely_similar cluster spans {paths:?} (structural={structural:.3}, \
-                 token_jaccard={token_j:.3})"
-            )
+        .filter(|c| {
+            let mut files = cluster_paths(c);
+            files.sort_unstable();
+            files.dedup();
+            files.len() >= 2
         })
+        .map(|c| format!("cross-file cluster spans {:?}", cluster_paths(c)))
         .collect();
     assert!(
         offenders.is_empty(),
-        "test-boilerplate-only matches must not appear as loosely_similar top offenders \
+        "test-boilerplate-only matches must not appear as cross-file clones \
          (issue #58). Offending clusters: {offenders:#?}"
     );
     Ok(())

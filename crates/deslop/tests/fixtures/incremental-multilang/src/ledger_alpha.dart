@@ -1,6 +1,6 @@
 // ledger_alpha.dart — the canonical copy of the Dart reconciliation routine.
 
-const String alphaLedgerTag = 'alpha';
+const String ledgerTag = 'ledger';
 
 int reconcileEntries(List<int> entries, int floor) {
   var balance = 0;

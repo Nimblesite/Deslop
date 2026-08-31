@@ -17,12 +17,7 @@ fn typescript_generic_functions_with_renamed_type_params_cluster() -> Result<()>
     // Two generic container helpers, every type parameter and value
     // identifier renamed; the generic shape is preserved so the token layer
     // stays invariant and the clone is `nearly_identical`.
-    assert_bucketed_clone(
-        "ts-generics",
-        12,
-        &["cache.ts", "store.ts"],
-        false,
-    )
+    assert_bucketed_clone("ts-generics", 12, &["cache.ts", "store.ts"], false)
 }
 
 #[test]
@@ -62,12 +57,7 @@ fn typescript_decorated_classes_clone_is_nearly_identical() -> Result<()> {
 
 #[test]
 fn typescript_enums_with_renamed_members_cluster() -> Result<()> {
-    assert_bucketed_clone(
-        "ts-enums",
-        10,
-        &["http-status.ts", "task-state.ts"],
-        false,
-    )
+    assert_bucketed_clone("ts-enums", 10, &["http-status.ts", "task-state.ts"], false)
 }
 
 #[test]

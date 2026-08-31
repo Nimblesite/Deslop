@@ -27,7 +27,12 @@ use std::{
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::deslop_cmd;
+use crate::common::{
+    deslop_cmd,
+    signals::{
+        assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+    },
+};
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -47,19 +52,8 @@ fn run_report(scan_root: &Path) -> Result<Value> {
     Ok(serde_json::from_str(&body)?)
 }
 
-fn cluster_bucket(cluster: &Value) -> &str {
-    cluster.get("bucket").and_then(Value::as_str).unwrap_or("?")
-}
-
-fn signal(cluster: &Value, key: &str) -> f64 {
-    cluster
-        .pointer(&format!("/signals/{key}"))
-        .and_then(Value::as_f64)
-        .unwrap_or_default()
-}
-
 #[test]
-fn identical_bucket_byte_clones_report_token_jaccard_near_one() -> Result<()> {
+fn byte_identical_clones_are_byte_proven_from_the_fixture() -> Result<()> {
     let scan_root = fixture("rust-issue-232-token-jaccard");
     let report = run_report(&scan_root)?;
     let clusters = report
@@ -67,42 +61,30 @@ fn identical_bucket_byte_clones_report_token_jaccard_near_one() -> Result<()> {
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
-
-    let identical: Vec<&Value> = clusters
-        .iter()
-        .filter(|cluster| cluster_bucket(cluster) == "identical")
-        .collect();
     assert!(
-        !identical.is_empty(),
-        "fixture must produce the byte-identical clone in the `identical` \
-         bucket so the token_jaccard signal is exercised: {report:#}"
+        !clusters.is_empty(),
+        "fixture must produce the byte-identical clone so the byte-proven \
+         fact is exercised: {report:#}"
     );
-
-    let zeroed: Vec<String> = identical
+    // #232 acceptance on the mass-only wire: every reported cluster whose
+    // occurrences slice to identical source bytes must be byte-proven —
+    // the `token_jaccard` value that used to assert it is pair-scoped now
+    // ([PIPELINE-CLUSTER-CLOSURE]).
+    for cluster in &clusters {
+        if has_verbatim_pair(&scan_root, cluster)? {
+            assert_structural_only_contract(cluster, "rust-issue-232");
+            assert_no_pair_surface_on_cluster(cluster, "rust-issue-232");
+        }
+    }
+    let byte_proven = clusters
         .iter()
-        .filter(|cluster| signal(cluster, "token_jaccard") < 0.9)
-        .map(|cluster| {
-            format!(
-                "cluster {id} bucket=identical signals={{structural={s:.2}, \
-                 token_jaccard={t:.2}, embedding_cos={e:.2}}} \
-                 canonical_node_count={nodes}",
-                id = cluster.get("id").and_then(Value::as_str).unwrap_or("?"),
-                s = signal(cluster, "structural"),
-                t = signal(cluster, "token_jaccard"),
-                e = signal(cluster, "embedding_cos"),
-                nodes = cluster
-                    .get("canonical_node_count")
-                    .and_then(Value::as_u64)
-                    .unwrap_or(0),
-            )
-        })
-        .collect();
+        .filter(|cluster| has_verbatim_pair(&scan_root, cluster).unwrap_or(false))
+        .count();
     assert!(
-        zeroed.is_empty(),
-        "issue #232: byte-identical (`identical`-bucket) clones must report \
-         token_jaccard ≈ 1.0, not the 0.0 sibling-window fallback. The \
-         Jaccard of two identical token multisets is 1.0 by definition. \
-         Offending clusters: {zeroed:#?}"
+        byte_proven >= 1,
+        "the fixture's render_header + render_footer window is byte-identical \
+         across alpha.rs and beta.rs and must be reported as a byte-proven \
+         clone: {report:#}"
     );
     Ok(())
 }

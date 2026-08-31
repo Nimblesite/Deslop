@@ -60,10 +60,13 @@ fn shape_only_same_file_family_is_refused_by_exact_source_proof() -> Result<()> 
     );
     let plans = merge_plans("csharp-shape-only-samefile", "Scaffold.cs")?;
     assert_eq!(plans.len(), 1);
-    let MergeVerdict::AiOrHuman { reason } = &plans[0].verdict else {
+    let plan = plans
+        .first()
+        .ok_or_else(|| anyhow!("the fixture must produce one merge plan"))?;
+    let MergeVerdict::AiOrHuman { reason } = &plan.verdict else {
         return Err(anyhow!("unequal source must never merge mechanically"));
     };
-    assert!(plans[0].workspace_edit.is_none());
+    assert!(plan.workspace_edit.is_none());
     assert!(!reason.is_empty());
     Ok(())
 }

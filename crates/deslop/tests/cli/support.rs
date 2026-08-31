@@ -1,4 +1,4 @@
-pub(crate) use anyhow::{Context, Result};
+pub(crate) use anyhow::Result;
 pub(crate) use assert_cmd::Command;
 pub(crate) use predicates::str::contains;
 pub(crate) use serde_json::Value;
