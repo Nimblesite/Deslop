@@ -52,7 +52,9 @@ suite("cluster document", () => {
 
     assert.ok(body.includes("# Deslop cluster cluster-for-test"));
     assert.ok(body.includes("Occurrences: 4"));
-    assert.ok(body.includes("Weight: 12.35"));
+    // [SEVERITY-BAND] The document names the cluster's mass — the engine's
+    // ranking metric — with the shared formatter ([PRINCIPLES-ONE-CALCULATION]).
+    assert.ok(body.includes("Mass: 12.35"));
     assert.ok(body.includes("1. /repo/Alpha.cs:2:6"));
     assert.ok(body.includes("2. /repo/Beta.cs hidden"));
   });

@@ -798,7 +798,12 @@ suite("tree menu handlers", () => {
     const clipboard = await vscode.env.clipboard.readText();
     assert.match(clipboard, /occurrence_path: src\/foo\.cs/);
     assert.match(clipboard, /cluster_id: c-occ-ctx/);
-    assert.match(clipboard, /bucket: identical/);
+    // [VSIX-PAIR-COMPARE] The AI payload carries the engine's cluster
+    // facts — rank, mass, node count — and no similarity bucket.
+    assert.match(clipboard, /rank: 1/);
+    assert.match(clipboard, /mass: /);
+    assert.match(clipboard, /canonical_nodes: /);
+    assert.doesNotMatch(clipboard, /bucket:/);
   });
 
   test("copySourceSnippet copies the fenced source block to the clipboard", async () => {

@@ -42,7 +42,7 @@ pub(super) fn write_bucket_groups<'c>(
     let clusters: Vec<&ReportCluster> = clusters.into_iter().collect();
     let _ = write!(
         out,
-        "<details class=\"bucket-group\" open><summary>Duplicate code — {} group(s)</summary>",
+        "<details class=\"clone-group\" open><summary>Duplicate code — {} group(s)</summary>",
         clusters.len()
     );
     for cluster in clusters {

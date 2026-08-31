@@ -23,7 +23,7 @@ import {
 // The inline bubble and ghost-line decorations are pure-visual
 // surfaces (rendered only in the editor, never scraped by agents); the
 // short verdict is the spec'd `DUPLICATION` label ([VSIX-LIVE-BUBBLE]).
-const SHORT_VERDICT = "DUPLICATION";
+export const SHORT_VERDICT = "DUPLICATION";
 
 export interface BubbleRenderParts {
   inline: string;

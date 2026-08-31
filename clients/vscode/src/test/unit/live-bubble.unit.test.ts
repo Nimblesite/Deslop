@@ -18,6 +18,8 @@ import {
   setBubbleMode as setMode,
   span,
 } from "./bubble.helpers";
+import { SHORT_VERDICT } from "../../bubble/renderParts";
+import { reportWithClusters } from "./report.helpers";
 
 const DISMISSIBLE_CLUSTER_ID = "c-dismiss";
 const SHORT_SPAN_LENGTH = 6;
@@ -244,13 +246,19 @@ suite("LiveBubble render", () => {
   });
 
   test("deslop.bubble.dismissCluster command hides the dismissed cluster from future renders", async () => {
-    const { capture, bubble } = await bubbleFixture();
+    // [VSIX-LIVE-BUBBLE] Both clusters are reported by the snapshot: the
+    // gate admits reported clusters only, and dismissal is per-cluster.
+    const dismissed = cluster(DISMISSIBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_MASS);
+    const survivor = cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_MASS, 5);
+    const { capture, bubble } = await bubbleFixture({
+      snapshot: reportWithClusters([dismissed, survivor]),
+    });
     try {
       renderFullConfidenceBubble(capture, bubble, 0, DISMISSIBLE_CLUSTER_ID);
 
       bubble.dismissCluster(DISMISSIBLE_CLUSTER_ID);
       // The dismissedClusters filter drops it before the sort step, so
-      // even at unchanged confidence it must not come back.
+      // even though the report still carries it, it must not come back.
       bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [
         cluster(DISMISSIBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_MASS),
       ]);
@@ -260,16 +268,21 @@ suite("LiveBubble render", () => {
         "a dismissed cluster must stay hidden on re-render",
       );
 
-      // Dismissal is per-cluster, not a global mute.
-      const visible = renderFullConfidenceBubble(capture, bubble, 12, "c-other");
-      assert.match(visible, /×\s*5/, "and keep its count");
+      // Dismissal is per-cluster, not a global mute: the reported survivor
+      // still renders its full inline title and hover card.
+      const visible = renderFullConfidenceBubble(capture, bubble, 12, PRIMARY_BUBBLE_CLUSTER_ID);
+      assert.match(visible, new RegExp(SHORT_VERDICT), "and the survivor keeps its rendered title");
+      assert.match(visible, /×\s*5/, "and the survivor keeps its report count");
     } finally {
       bubble.dispose();
     }
   });
 
   test("deslop.bubble.dismiss command clears the active bubble", async () => {
-    const { capture, bubble } = await bubbleFixture();
+    const clearable = cluster("c-clear", DEFAULT_BUBBLE_CLUSTER_MASS);
+    const { capture, bubble } = await bubbleFixture({
+      snapshot: reportWithClusters([clearable]),
+    });
     try {
       renderFullConfidenceBubble(capture, bubble, 0, "c-clear");
 

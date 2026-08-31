@@ -364,9 +364,14 @@ function bestBubbleCluster(
   retractedClusters: ReadonlySet<string>,
 ): ReportCluster | undefined {
   const byId = new Map(reportClusters.map((cluster) => [cluster.id, cluster]));
+  // [VSIX-LIVE-BUBBLE] The bubble fires only when the range belongs to a
+  // reported duplicate component: a probe hit that the visible report
+  // does not confirm has no engine verdict behind it and does not render.
+  // Counts come from the report's cluster, never the probe's own shape.
   return probeClusters
+    .map((cluster) => byId.get(cluster.id))
+    .filter((cluster): cluster is ReportCluster => cluster !== undefined)
     .filter((cluster) => !retractedClusters.has(cluster.id))
-    .map((cluster) => byId.get(cluster.id) ?? cluster)
     .filter((cluster) => !dismissedClusters.has(cluster.id))
     // Worst first is the engine's ranking, tie-break included.
     .sort((a, b) => a.rank - b.rank)[0];

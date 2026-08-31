@@ -24,14 +24,19 @@ suite("decorations helpers", () => {
   test("hoverFor renders the shared card design without raw AI data", () => {
     const md = hoverFor(cluster());
     const text = md.value;
-    // Category label and count visible. The count is the engine's
+    // Neutral verdict label and count visible. The count is the engine's
     // `occurrence_count` — the fixture carries four copies and ships two
     // of them, exactly as the live wire does when it caps the list — so
     // this also pins that the hover shows the cluster's real size rather
     // than the length of the slice it happens to hold. The hover and the
     // hover provider used to answer this question with two different
     // helpers ([PRINCIPLES-ONE-CALCULATION]).
-    assert.match(text, /Same behavior, different code/);
+    assert.match(text, /Duplicate code/);
+    assert.doesNotMatch(
+      text,
+      /Same behavior, different code|Identical code|Nearly identical/,
+      "clone-kind bucket labels are retired — the hover is neutral",
+    );
     assert.equal(cluster().occurrences.length, 2, "fixture: only two occurrences travelled");
     assert.match(text, /×\s*4/, "instance count must be the engine's, not the carried list's");
     // Canonical section present.

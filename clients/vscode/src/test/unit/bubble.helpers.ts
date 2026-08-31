@@ -9,6 +9,7 @@ import { BudgetScheduler, LiveBubble } from "../../bubble/live";
 import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster } from "../../types/report";
 import { DUPLICATION_VERDICT } from "../../clusterHover";
+import { SHORT_VERDICT } from "../../bubble/renderParts";
 import { repoMetrics, reportWithClusters } from "./report.helpers";
 import { occurrence, wireCluster } from "../cluster.helpers";
 
@@ -297,11 +298,21 @@ export function renderFullConfidenceBubble(
   bubble.render(capture.editor, span(startChar), [
     probeCluster(clusterId, DEFAULT_BUBBLE_CLUSTER_MASS),
   ]);
-  return assertBubbleShows(
+  // [VSIX-LIVE-BUBBLE] The inline surface renders the short verdict; the
+  // hover card carries the full neutral title. Both must be present.
+  const visible = assertBubbleShows(
     capture,
-    DUPLICATION_VERDICT,
+    SHORT_VERDICT,
     `expected ${clusterId} at character ${startChar}`,
   );
+  const hover = capture.visibleHover();
+  assert.ok(hover !== undefined, "a rendered bubble must attach its hover card");
+  assert.match(
+    hover?.value ?? "",
+    new RegExp(DUPLICATION_VERDICT),
+    "the hover card must carry the full Duplicate code title",
+  );
+  return visible;
 }
 
 export function retractCluster(store: ReportStore, clusterId: string): void {

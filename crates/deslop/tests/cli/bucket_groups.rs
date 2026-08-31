@@ -38,171 +38,138 @@ fn render_two_bucket_report(tmp: &Path) -> Result<(String, Value)> {
     Ok((fs::read_to_string(&out.html)?, read_json_report(&out.json)?))
 }
 
-/// The `bucket` wire labels of every cluster in `report`, in rank order.
-fn cluster_buckets(report: &Value) -> Vec<String> {
-    field(report, "clusters")
-        .as_array()
-        .map(|clusters| {
-            clusters
-                .iter()
-                .filter_map(|cluster| field(cluster, "bucket").as_str())
-                .map(str::to_owned)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-// Implements [FACET-HTML] / #257: clusters are grouped by bucket into
-// collapsible expanders whose summaries carry the shared plain titles,
-// with a CSS-only facet checkbox per bucket present — no JS, so the
-// report stays inert in the script-disabled VSIX tab and on file://.
+// Implements [FACET-HTML] / #257, re-pinned to the mass-only wire: every
+// reported cluster renders inside ONE neutral collapsible expander whose
+// summary carries the live group count — no JS, so the report stays inert
+// in the script-disabled VSIX tab and on file://. Cards show the neutral
+// verdict and the cluster's mass; no similarity classification exists.
 #[test]
-fn html_report_groups_clusters_into_bucket_expanders_with_facets() -> Result<()> {
+fn html_report_groups_clusters_into_one_neutral_expander() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let (html, json) = render_two_bucket_report(tmp.path())?;
 
-    // Corpus guard: the seeded pairs must land in two distinct buckets,
-    // otherwise every assertion below would fail for the wrong reason.
-    let buckets = cluster_buckets(&json);
+    // Corpus guard: the seeded pairs must yield two ranked clusters, and
+    // the engine stamps every cluster with a mass band.
+    let clusters = field(&json, "clusters")
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(clusters.len(), 2, "corpus must yield two clusters");
+    for cluster in &clusters {
+        let band = cluster.get("rank_band").and_then(|v| v.as_str());
+        assert!(
+            band.is_some(),
+            "every cluster carries the engine's rank band"
+        );
+    }
+
+    // Grouping: one collapsible neutral expander holding both groups,
+    // expanded by default so the top offender stays one glance away.
     assert!(
-        buckets.iter().any(|bucket| bucket == "identical")
-            && buckets.iter().any(|bucket| bucket == "nearly_identical"),
-        "corpus must yield one identical and one nearly_identical cluster, got {buckets:?}"
+        html.contains(
+            "<details class=\"clone-group\" open><summary>Duplicate code — 2 group(s)</summary>"
+        ),
+        "all clusters render inside the single neutral expander with the live count"
+    );
+    assert_eq!(
+        html.matches(">Duplicate code</h3>").count(),
+        2,
+        "each cluster card carries the neutral verdict title"
+    );
+    assert!(
+        html.contains("mass "),
+        "each card names the cluster's mass — the ranking metric"
     );
 
-    // Grouping: one collapsible expander per bucket present.
-    assert!(
-        html.contains("<details class=\"bucket-group kind-identical\""),
-        "identical clusters must render inside a collapsible bucket group"
-    );
-    assert!(
-        html.contains("<details class=\"bucket-group kind-nearly-identical\""),
-        "nearly-identical clusters must render inside a collapsible bucket group"
-    );
-    let identical_count = buckets
-        .iter()
-        .filter(|bucket| *bucket == "identical")
-        .count();
-    let nearly_count = buckets
-        .iter()
-        .filter(|bucket| *bucket == "nearly_identical")
-        .count();
-    assert!(
-        html.contains(&format!("Identical code — {identical_count} group(s)")),
-        "the identical expander summary must carry the shared plain title and the \
-         canonical JSON's live count ({identical_count})"
-    );
-    assert!(
-        html.contains(&format!("Nearly identical code — {nearly_count} group(s)")),
-        "the nearly-identical expander summary must carry the shared plain title and \
-         the canonical JSON's live count ({nearly_count})"
-    );
-    assert!(
-        html.contains("\" open><summary"),
-        "the worst bucket group starts expanded so the top offender stays one glance away"
-    );
+    // Retired axes: no bucket/category facet controls or classes remain.
+    for retired in [
+        "facet-identical",
+        "facet-nearly-identical",
+        "facet-same-behavior",
+        "facet-structural-only",
+        "facet-cat-",
+        "kind-identical",
+        "Identical code",
+        "Nearly identical code",
+    ] {
+        assert!(
+            !html.contains(retired),
+            "retired bucket facet trace must stay gone: {retired}"
+        );
+    }
 
-    // Facet controls: one checkbox per bucket present, labelled with the
-    // panel's words; absent buckets get no control.
-    assert!(
-        html.contains("id=\"facet-identical\"") && html.contains("id=\"facet-nearly-identical\""),
-        "a bucket facet checkbox is rendered for each bucket present"
-    );
-    assert!(
-        html.contains("<label class=\"facet-chip\" for=\"facet-identical\">Identical code</label>"),
-        "the facet label uses the shared bucket plain title"
-    );
-    assert!(
-        !html.contains("facet-same-behavior") && !html.contains("facet-structural-only"),
-        "buckets absent from the report get no facet control"
-    );
-
-    // CSS-only contract: unchecking a facet hides its group via a sibling
-    // selector — never a script.
-    assert!(
-        html.contains(".facet-identical:not(:checked)"),
-        "the inline CSS carries the facet hide rule"
-    );
+    // CSS-only contract stays intact: the report must remain script-free.
     assert!(
         !html.contains("<script"),
         "the report must stay script-free ([OUTPUT-HUMAN-HTML])"
     );
-    // Single-category corpus: the category axis contributes no controls
-    // and leaves zero traces — a filter with one choice filters nothing.
-    assert!(
-        !html.contains("facet-cat-"),
-        "a single-category report gets no category facet controls"
-    );
     Ok(())
 }
 
-/// The `category` wire labels of every cluster in `report`, in rank order.
-fn cluster_categories(report: &Value) -> Vec<String> {
-    field(report, "clusters")
-        .as_array()
-        .map(|clusters| {
-            clusters
-                .iter()
-                .filter_map(|cluster| field(cluster, "category").as_str())
-                .map(str::to_owned)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-// Implements [FACET-HTML] / [FACET-MODEL]: the category axis facets the
-// report alongside the bucket axis — every card carries a `cat-<wire>`
-// class, and a CSS-only chip per category present hides that category's
-// cards. Labels come from the shared registry (`group_title`), so the
-// chip-less logic category reads "Code clones" here and in the panel.
+// Implements [FACET-HTML] / [FACET-CLI], re-pinned to the mass-only wire:
+// the stderr summary breaks the report down by mass severity band — never
+// by similarity category — and no card carries a category class or a
+// category facet control ([FACET-MODEL]: the category axis is retired).
 #[test]
-fn html_report_carries_category_facets_and_card_classes() -> Result<()> {
+fn html_report_summary_breaks_down_by_mass_severity_and_cards_stay_neutral() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
     write_dart_data_table_fixture(&scan_root)?;
     let out = outputs_under(tmp.path());
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let assertion = cmd.args(["--min-nodes", "30"]).assert().success();
-    // [FACET-CLI]: the stderr summary carries a category breakdown line
-    // for non-logic categories, driven by the same registry as the chips.
+    // [FACET-CLI]: the stderr summary carries the mass-severity breakdown.
     let stderr = String::from_utf8_lossy(&assertion.get_output().stderr).into_owned();
     assert!(
-        stderr.contains("1 × data table"),
-        "stderr summary must carry the category breakdown line, got:\n{stderr}"
+        stderr.contains("mass severity:"),
+        "stderr summary must carry the mass-severity breakdown line, got:\n{stderr}"
     );
+    for retired in ["data table", "code clones", "category"] {
+        assert!(
+            !stderr.to_lowercase().contains(retired),
+            "stderr summary must not carry the retired {retired} breakdown"
+        );
+    }
     let html = fs::read_to_string(&out.html)?;
     let json = read_json_report(&out.json)?;
 
-    // Corpus guard: both categories must be present, otherwise the facet
-    // assertions below would fail for the wrong reason.
-    let categories = cluster_categories(&json);
+    // Corpus guard: the engine reports the verbatim scorer pair and stamps
+    // its band; the data table no longer survives the noise/collapse rules.
+    let clusters = field(&json, "clusters")
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(clusters.len(), 1, "corpus yields the single verbatim pair");
     assert!(
-        categories.iter().any(|category| category == "data")
-            && categories.iter().any(|category| category == "logic"),
-        "corpus must yield one data and one logic cluster, got {categories:?}"
+        clusters
+            .first()
+            .and_then(|cluster| cluster.get("rank_band"))
+            .and_then(|v| v.as_str())
+            == Some("worst"),
+        "the surviving pair is the report's worst cluster"
+    );
+    assert!(
+        stderr.contains("1 × worst"),
+        "the breakdown names the surviving band, got:\n{stderr}"
     );
 
+    for retired in [
+        "cat-data",
+        "cat-logic",
+        "facet-cat-",
+        "bucket:",
+        "\"signals\"",
+    ] {
+        assert!(
+            !html.contains(retired),
+            "cards must not carry the retired classification {retired}"
+        );
+    }
+    // Every card still renders the neutral verdict and a mass figure.
     assert!(
-        html.contains(" cat-data\"") && html.contains(" cat-logic\""),
-        "every cluster card carries its category class"
+        html.contains(">Duplicate code</h3>"),
+        "neutral card titles render"
     );
-    assert!(
-        html.contains("id=\"facet-cat-data\"") && html.contains("id=\"facet-cat-logic\""),
-        "a category facet checkbox is rendered per category present"
-    );
-    assert!(
-        html.contains("<label class=\"facet-chip\" for=\"facet-cat-logic\">Code clones</label>"),
-        "the chip-less logic category uses the shared plain group title"
-    );
-    assert!(
-        html.contains("<label class=\"facet-chip\" for=\"facet-cat-data\">data table</label>"),
-        "the data category chip reuses the shared category chip label"
-    );
-    assert!(
-        html.contains(
-            ".facet-cat-data:not(:checked)~section .cluster-card.cat-data{display:none;}"
-        ),
-        "the inline CSS hides a category's cards when its facet is unchecked"
-    );
+    assert!(html.contains("mass "), "mass figures render on every card");
     Ok(())
 }
