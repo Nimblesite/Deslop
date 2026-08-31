@@ -542,7 +542,7 @@ suite("tree menu renderers", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  test("aiPayloadForCluster encodes id, bucket, rank, signals, and byte ranges", () => {
+  test("aiPayloadForCluster encodes id, bucket, rank, and byte ranges", () => {
     const c = clusterWithRanges("c-ai", [
       { path: TEST_SOURCE_PATH, start_byte: DEFAULT_CLUSTER_WEIGHT, end_byte: 200 },
       { path: SECOND_TEST_SOURCE_PATH, start_byte: 5, end_byte: 80 },
@@ -558,14 +558,17 @@ suite("tree menu renderers", () => {
     assert.match(text, /cluster_id: c-ai/);
     assert.match(text, /rank: 7/);
     assert.match(text, /bucket: same_behavior/);
-    assert.match(text, /elected_pair: occurrence 1 \(src\/foo\.cs\) <-> occurrence 2 \(src\/bar\.cs\)/);
-    assert.match(text, /pair_signals: structural=0\.1000/);
+    // [FUSED-PAIR-SIGNALS] No cluster surface — including copy-for-AI —
+    // renders pair evidence.
+    for (const gone of ["elected_pair:", "measured_pair:", "pair_signals:", "structural=0.1000"]) {
+      assert.doesNotMatch(text, new RegExp(gone), `pair evidence must not reach the AI payload: ${gone}`);
+    }
     assert.match(text, /embed=0\.9000/);
     assert.match(text, /10\.\.200/);
     assert.match(text, /Use these byte ranges as precise edit anchors/);
   });
 
-  test("AI payloads omit every pair score when the cluster has no elected source", () => {
+  test("AI payloads omit every pair score", () => {
     const c = clusterWithRanges("c-unsourced", [
       { path: TEST_SOURCE_PATH, start_byte: 0, end_byte: DEFAULT_OCCURRENCE_END_BYTE },
       { path: SECOND_TEST_SOURCE_PATH, start_byte: 5, end_byte: 80 },
@@ -576,7 +579,7 @@ suite("tree menu renderers", () => {
       assert.equal(
         clusterText.split("\n").some((line) => line.startsWith(prefix)),
         false,
-        "cluster copy-for-AI must not publish pair evidence without a named pair",
+        "cluster copy-for-AI must never publish pair evidence",
       );
     }
 
@@ -589,7 +592,7 @@ suite("tree menu renderers", () => {
       assert.equal(
         occurrenceText.split("\n").some((line) => line.startsWith(prefix)),
         false,
-        "occurrence copy-for-AI must not publish its parent pair evidence without a named pair",
+        "occurrence copy-for-AI must never publish parent pair evidence",
       );
     }
   });

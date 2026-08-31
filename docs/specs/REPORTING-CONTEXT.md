@@ -104,7 +104,7 @@ The report header carries one honest number: `metrics.duplication_percent = 100 
 
 - `min-nodes = 15` — smaller subtrees are excluded to cut noise. The header of the report will state the value actually used.
 - `FUSED_THRESHOLD = 0.85` — the default **pair admission** bar, decided pair by pair on `bounded_fused`, the strongest single axis ([FUSED-STRATEGY-BOUNDED-MAX]); per-pair data (`CandidatePair::fused_min_score`), never a global constant — explicit cross-language candidates with no structural anchor lower it to 0.10. Every threshold is a configurable default, never hard-coded. Do not assert that nothing below 0.85 was admitted — a cross-language audit legitimately admits far below it.
-- **There is no cluster-level `fused`** — it exists at the level of the pair only ([FUSED-SCOPE](fused.md#fused-scope)). Clusters carry their `bucket` (the engine's verdict), the elected pair's measured axes, and their content evidence. Filter reported clusters on `bucket`, never on any confidence value.
+- **There is no cluster similarity score or representative pair.** Structural, Jaccard, embedding, and content evidence belong only to the exact pair used for admission or explicit comparison ([FUSED-PAIR-SIGNALS]). A cluster carries occurrence membership and mass; weight is mass exactly.
 - `LSH_ONLY_MIN_JACCARD = 0.90` and `LSH_ONLY_MIN_NODE_COUNT = 40` — extra gates for LSH-only candidates (no structural anchor), to keep tiny trivial windows from mega-clustering.
 - Cross-language comparison is off by default. Enable `[analysis] allow_cross_language_comparison = true` only when intentionally auditing ports, generated clients, or semantic equivalents across ecosystems.
 
@@ -114,13 +114,12 @@ The report header carries one honest number: `metrics.duplication_percent = 100 
 2. **Check if it's generated code.** Generated files (e.g. `.g.cs`, `.generated.cs`, OpenAPI clients, protobuf output) are hidden by default because they duplicate by design; visible generated-handwritten overlap is still worth reviewing.
 3. **Treat import/using-only repetition as hygiene, not duplication.** For C#, the preferred remediation is usually a shared `GlobalUsings.cs` or project-file `<Using Include="..." />`, not extraction.
 4. **Check byte ranges for overlap.** Adjacent/overlapping ranges in the same file mean the sibling-extension pass is firing on several enclosing contexts of the same physical code — count it as one logical clone, not N.
-5. **For `Identical` clusters** — the engine verified byte-identical occurrences; extract or consolidate them unless their surrounding ownership makes the duplication intentional.
-6. **For `NearlyIdentical` clusters** — read the elected pair and every occurrence before refactoring. The pair passed admission, but its differences may still be meaningful; decide whether to unify them through a parameter or strategy, or keep them intentionally divergent.
-7. **Ignore clusters where `weight` is low and `size` is 2 and node counts are tiny.** Those are usually boilerplate (constructors, test setup, property accessors) that don't reward extraction.
+5. **Inspect concrete pairs before refactoring.** A cluster proves that admitted pair edges connect the occurrences; it does not claim that one edge represents the component. Open an explicit comparison to read that pair's evidence and differences.
+6. **Work in mass order.** Higher mass means more duplicated extent to maintain. Similarity evidence never boosts or discounts that order.
 
 ## Things to keep in mind when interpreting a report
 
-- **Type-4 detection may be disabled.** If `embedding_cos` is `0.00` across the entire report, the semantic-embedding pass was not run — semantically equivalent but syntactically different code (iterative vs recursive, LINQ vs foreach) will not appear.
+- **Type-4 detection may be disabled.** When embeddings are off, pair admission cannot use semantic evidence, so semantically equivalent but syntactically different code may not enter any cluster. Cluster surfaces still contain no embedding score.
 - **Overlapping byte ranges** are expected. The sibling-extension pass emits fingerprints for nested windows of the same physical code. Same cluster id → same clone; different cluster ids over the same bytes → different granularities of the same match.
 - **Only supported languages are analyzed.** Files in languages the tool does not support are skipped silently. The report header lists which languages were active for this run.
 

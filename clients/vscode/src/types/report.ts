@@ -36,16 +36,16 @@ export type Report = Omit<WireReport, "clusters"> & {
   clusters: ReportCluster[];
 };
 
-/** Resolves the elected evidence pair named by the engine, rejecting an
+/** Resolves the pair named by the engine's `signal_source`, rejecting an
  * absent, self-referential, or out-of-range source. Every client surface
  * uses this guard before rendering pair-scoped scores
  * ([FUSED-CLUSTER-SIGNALS]). */
-export interface ElectedSignalPair {
+export interface MeasuredSignalPair {
   source: WireReportSignalSource;
   occurrences: readonly [ReportOccurrence, ReportOccurrence];
 }
 
-export function electedPairForCluster(cluster: ReportCluster): ElectedSignalPair | undefined {
+export function measuredPairForCluster(cluster: ReportCluster): MeasuredSignalPair | undefined {
   const source = cluster.signal_source;
   if (!source || source.left === source.right) return undefined;
   const left = cluster.occurrences[source.left];
@@ -245,8 +245,8 @@ export function bucketLabels(bucket: Bucket): BucketLabels {
 // place it can be decided. `deslop-core::report_render::report_bucket_kind`
 // weighs the *raw* signal triple, measured `ContentEvidence`, raw-source
 // byte-equivalence, and the member spread — and the triple that reaches
-// this client is the elected pair's own measurement, projected by the
-// engine: `content_gated_signals` overwrites `token_jaccard` to 1.0 for a
+// this client is the measured pair's own projection by the engine:
+// `content_gated_signals` overwrites `token_jaccard` to 1.0 for a
 // shape-identical near miss (#232). Re-running the engine's raw-signal
 // table over rendered signals is therefore a category error, and every
 // arm that tried it shipped a defect: a proven rename read back as

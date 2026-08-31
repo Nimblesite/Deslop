@@ -5,7 +5,6 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as ts from "typescript";
-import { SIGNAL_HELP, signalTitle } from "../../types/signals";
 
 const DOC_TEXT_LINK_COMPONENT = "DocTextLink";
 const CLUSTER_ID_TOPIC_CONSTANT = "CLUSTER_ID_TOPIC";
@@ -19,10 +18,6 @@ function clusterWebviewSourcePath(): string {
 
 function occurrenceListSourcePath(): string {
   return path.resolve(__dirname, "../../../webview-ui/src/cluster/OccurrenceList.tsx");
-}
-
-function signalStripSourcePath(): string {
-  return path.resolve(__dirname, "../../../webview-ui/src/components/SignalStrip.tsx");
 }
 
 function helpBubbleSourcePath(): string {
@@ -44,10 +39,6 @@ function parseOccurrenceList(): ts.SourceFile {
 
 function parseClusterRenderer(): ts.SourceFile[] {
   return [parseClusterWebview(), parseOccurrenceList()];
-}
-
-function parseSignalStrip(): ts.SourceFile {
-  return parseSource(signalStripSourcePath());
 }
 
 function parseHelpBubble(): ts.SourceFile {
@@ -279,7 +270,7 @@ suite("cluster webview occurrence locations", () => {
     for (const phrase of [
       "Cluster ",
       "Rank ",
-      "Weight is Deslop's duplication impact score",
+      "Weight is this cluster's duplicated mass",
       "Canonical occurrence",
       "Hidden means this path matched report_hide configuration",
       "Open this occurrence in VS Code",
@@ -294,9 +285,11 @@ suite("cluster webview occurrence locations", () => {
   });
 
   test("cluster webview links visible explanations to website docs", () => {
-    // The panel is the cluster view plus the signal strip it embeds; both
-    // carry docs topics, so both are in scope for this assertion.
-    const corpus = `${clusterRendererCorpus()}\n${stringCorpus(parseSignalStrip())}`;
+    // The panel is the cluster view plus its help bubble; every docs topic
+    // it carries is a cluster-level fact. Pair-only signal topics have no
+    // place here because the panel renders no pair evidence
+    // ([FUSED-PAIR-SIGNALS]).
+    const corpus = clusterRendererCorpus();
     for (const phrase of [
       "cluster-id",
       "clone-bucket",
@@ -306,8 +299,6 @@ suite("cluster webview occurrence locations", () => {
       "size",
       "occurrence-count",
       "canonical",
-      "signals",
-      "content-evidence",
       "occurrences",
       "occurrence-location",
       "hidden-occurrence",
@@ -317,6 +308,20 @@ suite("cluster webview occurrence locations", () => {
       "keyboard-shortcuts",
     ]) {
       assert.match(corpus, new RegExp(escapeRegExp(phrase)), `missing docs topic: ${phrase}`);
+    }
+    for (const gone of [
+      "content-evidence",
+      "structural",
+      "jaccard",
+      "agreement",
+      "rename-consistency",
+      "literal-fraction",
+    ]) {
+      assert.doesNotMatch(
+        corpus,
+        new RegExp(escapeRegExp(gone)),
+        `pair-only signal topic must not appear on the cluster panel: ${gone}`,
+      );
     }
   });
 
@@ -379,35 +384,30 @@ suite("cluster webview occurrence locations", () => {
     }
   });
 
-  test("signal strip hover copy explains every score", () => {
-    // The signal copy moved into the shared `types/signals` formatter
-    // (#344) so the strip, its tooltips and the docs anchors cannot
-    // describe the same number two ways. The corpus follows it there and
-    // covers the three content-evidence axes. There is no combined-score
-    // hover: that axis is gone from the wire, and its old hover copy with
-    // it — asserted negatively so it cannot quietly return.
-    const corpus = [
-      stringCorpus(parseSignalStrip()),
-      stringCorpus(parseHelpBubble()),
-      Object.values(SIGNAL_HELP).join("\n"),
-      signalTitle({ topic: "agreement", label: "agreement", value: 0.08 }),
-    ].join("\n");
-    assert.doesNotMatch(
-      corpus,
-      /Combined clone score/,
-      "the combined-score hover must stay deleted with the fused axis",
-    );
-    for (const phrase of [
+  test("the cluster panel renders no signal hover copy", () => {
+    // The admission signals are pair measurements and never touch the
+    // cluster ([FUSED-PAIR-SIGNALS]). The panel carries no signal strip,
+    // no signal formatter, and no signal help copy — asserted negatively so
+    // the leak cannot quietly return.
+    const corpus = [stringCorpus(parseClusterWebview()), stringCorpus(parseHelpBubble())].join("\n");
+    for (const gone of [
+      "Combined clone score",
       "AST-shape similarity",
       "Token-overlap similarity",
       "Semantic similarity",
       "Current value",
-      "How much of the matched content the locations genuinely share",
-      "one consistent identifier renaming explains every difference",
+      "How much of the matched content",
+      "consistent identifier renaming",
       "literal data rather than logic",
-      "sibling boilerplate",
+      "CONTENT EVIDENCE",
+      "ELECTED PAIR",
+      "SignalStrip",
     ]) {
-      assert.match(corpus, new RegExp(escapeRegExp(phrase)), `missing signal hover: ${phrase}`);
+      assert.doesNotMatch(
+        corpus,
+        new RegExp(escapeRegExp(gone)),
+        `pair-only signal copy must not render on the cluster panel: ${gone}`,
+      );
     }
   });
 

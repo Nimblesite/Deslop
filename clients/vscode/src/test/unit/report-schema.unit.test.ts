@@ -10,7 +10,7 @@ import {
   LIVE_BUBBLE_BUCKETS,
   bucketLabels,
   clusterInterpretation,
-  electedPairForCluster,
+  measuredPairForCluster,
   isLiveBubbleBucket,
   occurrenceCount,
   resolveBucket,
@@ -259,7 +259,7 @@ suite("report schema helpers", () => {
 
   test("pair evidence resolves only from two distinct carried occurrences", () => {
     const candidate = cluster();
-    assert.deepEqual(electedPairForCluster(candidate), {
+    assert.deepEqual(measuredPairForCluster(candidate), {
       source: { left: 0, right: 1 },
       occurrences: candidate.occurrences,
     });
@@ -270,7 +270,7 @@ suite("report schema helpers", () => {
     ];
     for (const signalSource of rejectedSources) {
       assert.equal(
-        electedPairForCluster({ ...candidate, signal_source: signalSource }),
+        measuredPairForCluster({ ...candidate, signal_source: signalSource }),
         undefined,
         "anonymous, self-referential, and out-of-range evidence must stay hidden",
       );

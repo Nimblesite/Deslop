@@ -1,10 +1,9 @@
 import type { ComponentChildren, JSX } from "preact";
-import { SIGNAL_HELP, type SignalTopic } from "../../../src/types/signals";
 
 const DOCS_BASE = "https://deslop.live/docs/vscode-cluster-panel/";
 
-/** Every helped element of the cluster panel that is not a signal. */
-export type PanelTopic =
+/** Every helped element of the cluster panel. */
+export type HelpTopic =
   | "cluster-id"
   | "clone-bucket"
   | "ai-match"
@@ -21,14 +20,12 @@ export type PanelTopic =
   | "cluster-navigation"
   | "keyboard-shortcuts";
 
-export type HelpTopic = PanelTopic | SignalTopic;
-
-const PANEL_HELP: Record<PanelTopic, string> = {
+const PANEL_HELP: Record<HelpTopic, string> = {
   "cluster-id": "Stable identifier for this duplicate-code cluster.",
   "clone-bucket": "Human label for the kind of clone Deslop detected.",
   "ai-match": "The embedding pass found a semantic match, not only a syntactic one.",
   rank: "Worst-first position of this cluster in the current report.",
-  weight: "Duplication impact score used for worst-first ranking.",
+  weight: "This cluster's duplicated mass — the worst-first ranking metric.",
   size: "Number of cloned AST members represented by this cluster.",
   "occurrence-count": "Number of editor locations in this cluster.",
   canonical: "First occurrence used as the comparison anchor.",
@@ -41,11 +38,11 @@ const PANEL_HELP: Record<PanelTopic, string> = {
   "keyboard-shortcuts": "Keyboard actions available while focus is in the panel.",
 };
 
-// [FUSED-CONTENT-GATE] The signal copy is not restated here. `SIGNAL_HELP`
-// is the one definition the strip, its tooltips and the docs anchors all
-// read, so the confidence scores and the content evidence behind them can
-// never be explained two different ways.
-const HELP_COPY: Record<HelpTopic, string> = { ...PANEL_HELP, ...SIGNAL_HELP };
+// [FUSED-CLUSTER-SIGNALS] The cluster panel renders cluster facts, never
+// signal bars: the measured axes describe one pair of occurrences and have
+// nothing to do with the cluster ([FUSED-CONTENT-GATE]). No signal help copy
+// lives here because no signal is rendered here.
+const HELP_COPY: Record<HelpTopic, string> = PANEL_HELP;
 
 interface HelpBubbleProps {
   topic: HelpTopic;

@@ -66,9 +66,6 @@ suite("cluster document", () => {
     assert.ok(body.includes("# Deslop cluster cluster-for-test"));
     assert.ok(body.includes("Occurrences: 4"));
     assert.ok(body.includes("Weight: 12.35"));
-    assert.ok(body.includes("structural 1.00"));
-    assert.ok(body.includes("jaccard 0.88"));
-    assert.ok(body.includes("embedding 0.25"));
     assert.ok(body.includes("1. /repo/Alpha.cs:2:6"));
     assert.ok(body.includes("2. /repo/Beta.cs hidden"));
   });
@@ -80,17 +77,21 @@ suite("cluster document", () => {
     );
 
     assert.ok(body.includes("# Deslop cluster cluster-for-test"));
-    assert.ok(body.includes("Elected pair: 1."));
-    assert.ok(body.includes("Pair signals: structural"));
+    // [FUSED-PAIR-SIGNALS] The cluster document is a cluster surface and
+    // renders no pair evidence — no pair line, no signal values.
+    for (const gone of ["Elected pair:", "Measured pair:", "Pair signals:", "structural", "jaccard", "embedding", "pair_agreement"]) {
+      assert.equal(body.includes(gone), false, `cluster document must not render ${gone}`);
+    }
   });
 
-  test("omits pair signals when the cluster has no elected source", () => {
+  test("the cluster document never carries pair signals", () => {
     const body = clusterDocumentContent(
       vscode.Uri.parse("deslop://cluster/cluster-for-test"),
       report([cluster({ occurrences: [] })]),
     );
 
     assert.equal(body.includes("Elected pair:"), false);
+    assert.equal(body.includes("Measured pair:"), false);
     assert.equal(body.includes("Pair signals:"), false);
     assert.equal(body.includes("structural"), false);
   });

@@ -13,7 +13,6 @@ import {
 } from "../store";
 import { COLOR, FONT, GLOBAL_CSS, SEVERITY_COLOR } from "../theme";
 import { HelpAction } from "../components/HelpAction";
-import { electedPairEvidence, PairEvidence } from "../components/PairEvidence";
 import { SeverityBadge } from "../components/SeverityBadge";
 import {
   DocTextLink,
@@ -255,8 +254,6 @@ function ClusterApp() {
         </div>
       </header>
 
-      <PairEvidence evidence={electedPairEvidence(cluster)} />
-
       <OccurrenceList
         cluster={cluster}
         focusedIndex={focusedIndex}
@@ -405,7 +402,7 @@ function rankTitle(rank: number, total: number, severity: string): string {
 }
 
 function clusterStatsTitle(cluster: ReportCluster): string {
-  return `Weight is Deslop's duplication impact score. Size is the number of cloned AST members. Occurrences is the number of editor locations in this cluster: weight ${formatScore(cluster.weight)}, size ${cluster.size}, occurrences ${occurrenceCount(cluster)}.`;
+  return `Weight is this cluster's duplicated mass, the worst-first ranking metric. Size is the number of cloned AST members. Occurrences is the number of editor locations in this cluster: weight ${formatScore(cluster.weight)}, size ${cluster.size}, occurrences ${occurrenceCount(cluster)}.`;
 }
 
 function canonicalTitle(occurrence: ReportOccurrence): string {

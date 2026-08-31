@@ -30,11 +30,13 @@ declare global {
 const repoRoot = findRepoRoot(process.cwd());
 const webviewDir = path.join(repoRoot, "clients", "vscode", "media", "webview");
 const screenshotDir = path.join(repoRoot, "target", "playwright-webview");
-const ELECTED_PAIR_HEADING = "ELECTED PAIR EVIDENCE";
+const PAIR_EVIDENCE_HEADING = "PAIR EVIDENCE";
 const ELECTED_PAIR_LEFT = "src/dart/alpha.dart:12:3";
 const ELECTED_PAIR_RIGHT = "src/dart/beta.dart:31:5";
-const ELECTED_PAIR_SOURCE = `${ELECTED_PAIR_LEFT} ↔ ${ELECTED_PAIR_RIGHT}`;
 const PAIR_EVIDENCE_UNAVAILABLE = "PAIR EVIDENCE UNAVAILABLE";
+const CONTENT_EVIDENCE_HEADING = "CONTENT EVIDENCE";
+const CONTENT_EVIDENCE_VERDICT = "Its content evidence is 0.05 shared content";
+const CONTENT_EVIDENCE_LABELS = ["AGREEMENT", "RENAME", "LITERAL"] as const;
 
 const viewports: readonly ViewportCase[] = [
   { name: "desktop", width: 1280, height: 900 },
@@ -71,9 +73,18 @@ test.describe("VSIX webview bundles", () => {
 
       await expect(page.getByText("CLUSTER").first()).toBeVisible();
       await expect(page.getByRole("heading", { name: "Same behavior, different code" })).toBeVisible();
-      await expect(page.getByText(ELECTED_PAIR_HEADING, { exact: true })).toBeVisible();
-      await expect(page.getByText(ELECTED_PAIR_SOURCE, { exact: true })).toBeVisible();
-      await expect(page.getByText(ELECTED_PAIR_LEFT, { exact: true })).toBeVisible();
+      // [FUSED-PAIR-SIGNALS] The admission signals are pair measurements and
+      // never touch the cluster. The cluster card renders no pair-evidence
+      // panel, no pair source, and no content metrics.
+      await expect(page.getByText(CONTENT_EVIDENCE_HEADING, { exact: true })).toHaveCount(0);
+      for (const label of CONTENT_EVIDENCE_LABELS) {
+        await expect(page.getByText(label, { exact: true })).toHaveCount(0);
+      }
+      await expect(page.getByText(CONTENT_EVIDENCE_VERDICT, { exact: false })).toHaveCount(0);
+      await expect(page.getByText(PAIR_EVIDENCE_HEADING, { exact: false })).toHaveCount(0);
+      await expect(page.getByText(PAIR_EVIDENCE_UNAVAILABLE, { exact: false })).toHaveCount(0);
+      await expect(page.getByText(ELECTED_PAIR_LEFT, { exact: false })).toHaveCount(0);
+      await expect(page.getByText(ELECTED_PAIR_RIGHT, { exact: false })).toHaveCount(0);
 
       await page.keyboard.press("n");
       await expect(page.getByRole("heading", { name: "Nearly identical code" })).toBeVisible();
@@ -122,14 +133,16 @@ test.describe("VSIX webview bundles", () => {
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("a cluster without an elected source cannot render pair scores", async ({ page }) => {
+  test("a cluster renders no pair scores with or without a signal source", async ({ page }) => {
     const errors = await loadView(page, "cluster", viewports[0]);
 
     await postHostMessage(page, { kind: "report/snapshot", report: reportWithoutSignalSource });
     await postHostMessage(page, { kind: "select/cluster", id: sampleReport.clusters[0].id });
 
-    await expect(page.getByText(PAIR_EVIDENCE_UNAVAILABLE, { exact: true })).toBeVisible();
-    await expect(page.getByText(ELECTED_PAIR_HEADING, { exact: true })).toHaveCount(0);
+    // [FUSED-PAIR-SIGNALS] No cluster surface renders pair evidence; an
+    // absent source changes nothing on the card.
+    await expect(page.getByText(PAIR_EVIDENCE_UNAVAILABLE, { exact: false })).toHaveCount(0);
+    await expect(page.getByText(PAIR_EVIDENCE_HEADING, { exact: false })).toHaveCount(0);
     await expect(page.getByText("0.91", { exact: true })).toHaveCount(0);
     expect(errors, errors.join("\n")).toEqual([]);
   });

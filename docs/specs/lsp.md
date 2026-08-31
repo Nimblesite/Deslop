@@ -84,9 +84,9 @@ Within each bucket, a cluster is only published as a diagnostic if its weight pe
 
 Because severity depends on the global weight set, the diagnostic provider declares `inter_file_dependencies: true` ([LSP-CAPABILITIES]); editing one file shifts every other file's percentile, and the client must refresh the corresponding diagnostics.
 
-Clusters below their bucket's percentile floor remain visible via code lens, hover, and the VSIX tree — they are not published as diagnostics but are not hidden.
+Clusters below the configured mass percentile remain visible via code lens, hover, and the VSIX tree; pair classifications do not affect diagnostic publication.
 
-**Diagnostic resolution is stateless per cluster**: `gate_enabled → bucket → configured_severity (≠ none) → percentile_check → publish or suppress` ([severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate)). Resolution lives in `crates/deslop-lsp/src/diagnostics.rs` and is the single source of truth — every client (VSIX, Neovim, Helix, agents) consumes the published diagnostics rather than recomputing them from raw weights.
+**Diagnostic resolution is stateless per cluster**: `gate_enabled → mass percentile → configured severity → publish or suppress` ([severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate)). Resolution lives in `crates/deslop-lsp/src/diagnostics.rs`; no pair score, content evidence, or pair classification is legal input.
 
 ### [LSP-DIAGNOSTICS] Diagnostic content
 
@@ -94,8 +94,8 @@ Each published diagnostic carries:
 
 - `range` — derived from `(start_byte, end_byte)` of the occurrence on this file, using the open buffer's line-index.
 - `severity` — per [LSP-SEVERITY].
-- `data` — `{ "cluster_id": <16-char cluster id>, "taxonomy": <academic label> }`. The cluster id (stable across runs, same one used in text/HTML reports) rides the machine-facing `data` so an agent can call `deslop/clusterById` without parsing the message ([LSP-AGENT-FRIENDLY]); `code` and `codeDescription` are left unset, and the cluster's `deslop://cluster/<id>` view is reached through [LSP-VIRTUAL-DOC].
-- `message` — `"<bucket title> × <count> — <evidence sentence> — <evidence explanation>"`, the same human-readable, agent-readable line the other surfaces show ([PRINCIPLES-AUDIENCE-AGENT]). The evidence explanation is `deslop-core::render::signals::plain_explanation` — the elected pair's axes `structural`, `jaccard`, `embedding`, then the measured content evidence `agreement`, `rename`, `literal`, each to two decimal places ([FUSED-CONTENT-GATE]). It is the reason the bucket title is falsifiable: a corroborated Type-2 rename and an anchor-poor scaffolding family both render `structural 1.00`, and only the evidence tells them apart. Every surface renders it through that one function, so the Problems panel, the code lens, the Markdown report and the HTML footer can never describe the same numbers differently.
+- `data` — `{ "cluster_id": <16-char cluster id> }`. The stable cluster id lets an agent call `deslop/clusterById` without parsing the message ([LSP-AGENT-FRIENDLY]); cluster diagnostics carry no pair taxonomy or evidence.
+- `message` — `"Duplicate code × <count> — mass <weight>"`. The message states only cluster membership and mass. Pair scores and explanations appear only after an explicit comparison identifies both endpoints ([FUSED-PAIR-SIGNALS]).
 - `source` — `"deslop"`.
 - `tags` — never `Unnecessary` or `Deprecated`; duplication isn't dead code.
 - `relatedInformation` — one entry per *other* occurrence of the cluster, with its `Location` and "occurrence N of M" label. This is what makes the Problems panel jumpable across occurrences.

@@ -18,7 +18,6 @@ import {
   ReportOccurrence,
   bucketLabels,
   clusterSlug,
-  electedPairForCluster,
   occurrenceCount,
   resolveBucket,
 } from "../types/report";
@@ -161,7 +160,6 @@ export function aiPayloadForCluster(
     `size: ${cluster.size}`,
     `canonical_node_count: ${cluster.canonical_node_count}`,
     `occurrences: ${occurrenceCount(cluster)}`,
-    ...pairSignalLines(cluster),
   ];
   const rows = cluster.occurrences.map(
     (o) => `- ${o.path} | ${humanLocation(o)} | ${o.start_byte}..${o.end_byte}`,
@@ -213,22 +211,6 @@ function humanLocation(occurrence: ReportOccurrence): string {
   return occurrenceDisplayLocation(occurrence)?.label ?? occurrence.path;
 }
 
-function pairSignalLines(cluster: ReportCluster): string[] {
-  const elected = electedPairForCluster(cluster);
-  if (!elected) return [];
-  const s = cluster.signals;
-  const [left, right] = elected.occurrences;
-  return [
-    `elected_pair: occurrence ${elected.source.left + 1} (${left.path}) <-> ` +
-      `occurrence ${elected.source.right + 1} (${right.path})`,
-    `pair_signals: structural=${formatScorePrecise(s.structural)} ` +
-    `token=${formatScorePrecise(s.token_jaccard)} ` +
-    `embed=${formatScorePrecise(s.embedding_cos)} ` +
-    `agreement=${formatScorePrecise(s.pair_agreement)} ` +
-    `rename=${formatScorePrecise(s.pair_rename_consistency)}`,
-  ];
-}
-
 function parentClusterLines(
   parent: ReportCluster,
   store: ReportStore,
@@ -243,7 +225,6 @@ function parentClusterLines(
     `bucket: ${bucket} (${labels.taxonomyLabel})`,
     `weight: ${formatScorePrecise(parent.weight)}`,
     `size: ${parent.size}`,
-    ...pairSignalLines(parent),
     `sibling_occurrences: ${Math.max(parent.occurrences.length - 1, 0)}`,
   ];
 }

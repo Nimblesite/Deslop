@@ -68,6 +68,6 @@ Replace the embedding candidate subsystem in one indivisible cutover. Delete the
 
 ## Completion
 
-This plan is complete when the #369 and #407 pins run without ignores, Type-3 rescue works with embeddings off, the specified exact-pair guard protects small corpora, unanchored false positives fail the documented gates, embeddings-on preserves existing structural/token results, real semantic recall is measured rather than mocked lexically, repeated runs are deterministic, and every reported cosine is the elected pair’s canonical `f64` measurement.
+This plan is complete when the #369 and #407 pins run without ignores, Type-3 rescue works with embeddings off, the specified exact-pair guard protects small corpora, unanchored false positives fail the documented gates, embeddings-on preserves existing structural/token results, real semantic recall is measured rather than mocked lexically, repeated runs are deterministic, and every reported cosine is the measured pair’s canonical `f64` measurement.
 
 Related ownership: cluster-level fused removal and elected content evidence live in [fused-score-followups.md](fused-score-followups.md); token-representation redesign beyond the specified rescue requires `rename-recall-plan.md`; corpus adjudication lives in [corpus-assertion.md](corpus-assertion.md).
