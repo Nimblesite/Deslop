@@ -92,25 +92,6 @@ pub(super) struct IndexedEmbedding {
     vector: Vec<f32>,
 }
 
-/// Consumes successful embeddings into a fingerprint-index → vector map
-/// for cluster-level signal measurement.
-///
-/// The ANN index holds one point per distinct snippet; the rendered
-/// signals do not. `measured_signals` reads this map for *every* rendered
-/// occurrence pair, so each owner of a collapsed point gets its own entry
-/// and a byte-identical clone still measures `embedding_cos = 1.0`. Each
-/// fingerprint belongs to exactly one snippet group, so no key collides.
-pub(super) fn vectors_by_fingerprint(indexed: Vec<IndexedEmbedding>) -> HashMap<usize, Vec<f32>> {
-    indexed
-        .into_iter()
-        .flat_map(|item| {
-            item.fingerprint_indices
-                .into_iter()
-                .map(move |fingerprint_index| (fingerprint_index, item.vector.clone()))
-        })
-        .collect()
-}
-
 /// Builds ANN pairs from successfully embedded snippets.
 ///
 /// The index is queried over one point per distinct snippet, and each hit

@@ -33,18 +33,11 @@
 //! one-line statement family nested inside them, which also reaches a
 //! file the functions never mention.
 //!
-//! *Which view survives?* Measured content credibility first
-//! ([`precision_preference`], [REPAIR-SUBSUME-CONTENT-FIRST], #367/#408),
-//! then physical enclosure —
-//! never ranking weight. A whole-method clone and the run of
-//! single-statement clones inside it cover the same bytes in both
-//! directions, and the fine-grained view always ranks heavier because
-//! it contributes one occurrence per statement. Choosing by weight
-//! therefore rendered a duplicated 60-statement method as 120 one-line
-//! occurrences and dropped the method itself — the only extractable
-//! duplicate in the corpus, reported as unactionable line noise. Within
-//! one credibility tier the enclosing view is the duplication; the
-//! nested view re-describes it.
+//! *Which view survives?* File coverage, physical enclosure,
+//! occurrence coverage, duplicated mass, then stable cluster id, in
+//! that order. Pair evidence is forbidden because the component owns
+//! none. A nested fragment cannot displace an enclosing authored view
+//! merely because the fragment's pair happened to score more highly.
 //!
 //! *Before either question, file coverage.* A view that names a file
 //! the survivor does not name is never dropped, however deeply it nests
@@ -57,16 +50,14 @@ use crate::fingerprint::Fingerprint;
 
 use super::Cluster;
 
-/// Survivor election ([PIPELINE-CLUSTER-SUBSUME]).
-mod election;
-pub(crate) use election::VERBATIM_OVERTURN_MIN_NODES;
-use election::{covers_same_region, demoted, preferred_view, Preference};
+/// Deterministic survivor selection ([PIPELINE-CLUSTER-SUBSUME]).
+mod survivor;
+use survivor::{covers_same_region, preferred_view, Preference};
 
 /// Collapses redundant clusters that cover the same physical bytes.
 ///
-/// Runs after ranking, so `outer` is always the heavier cluster of a
-/// pair — weight orders the scan, [PIPELINE-CLUSTER-SUBSUME] decides the
-/// survivor.
+/// Runs after mass ranking; [PIPELINE-CLUSTER-SUBSUME] decides which
+/// physical view survives.
 pub(super) fn collapse_cross_cluster_overlap(clusters: Vec<Cluster>) -> Vec<Cluster> {
     let len = clusters.len();
     let mut dropped = vec![false; len];
@@ -132,11 +123,9 @@ fn scan_inner_pairs(clusters: &[Cluster], dropped: &mut [bool], outer: usize, le
 /// absorbed views die with their absorber and *nothing* reports their
 /// bytes — the "orphan" this module's history already records
 /// (`issue_343_sum_clamp_saturation` counted one). Measuring
-/// `structural` honestly ([FUSED-SHARED-SUBTREE]) made it routine
-/// rather than rare: a whole-file view is now admitted, absorbs the
-/// genuine method-level view, and is then overturned by one verbatim
-/// core nested inside it — so `javascript-type3` reported a byte-equal
-/// loop body in place of the near-identical function that encloses it.
+/// A later survivor replacement makes this routine rather than rare:
+/// a whole-file view can absorb the genuine method-level view and then
+/// be replaced by another covering component.
 ///
 /// The survivor is exempt: it is not an orphan, it is the reason the
 /// absorber died. Restored views are re-judged because each is scanned
@@ -157,18 +146,12 @@ fn log_subsumption(survivor: &Cluster, discarded: &Cluster, decision: &'static s
         decision,
         survivor = survivor.id.as_str(),
         survivor_size = survivor.members.len(),
-        survivor_structural = survivor.signals.structural,
+        survivor_mass = survivor.mass,
         discarded = discarded.id.as_str(),
         discarded_size = discarded.members.len(),
-        discarded_structural = discarded.signals.structural,
+        discarded_mass = discarded.mass,
         survivor_spans = span_summary(&survivor.members).as_str(),
         discarded_spans = span_summary(&discarded.members).as_str(),
-        survivor_demoted = demoted(survivor),
-        discarded_demoted = demoted(discarded),
-        survivor_verbatim = survivor.content.verbatim_dominated,
-        discarded_verbatim = discarded.content.verbatim_dominated,
-        survivor_content_measured = survivor.content.measured,
-        discarded_content_measured = discarded.content.measured,
         "cross-cluster subsumption",
     );
 }
@@ -194,17 +177,9 @@ fn evaluate_pair(outer: &Cluster, inner: &Cluster) -> PairDecision {
     if !covers_same_region(outer, inner) {
         return PairDecision::Keep;
     }
-    // Enclosure is nominated in **both** directions. `outer`/`inner`
-    // are scan positions ordered by weight, not by nesting, so testing
-    // only one direction left the case where the enclosing view is
-    // also the heavier one — which is exactly the whole-method Type-3
-    // near-miss now that its `structural` is a measured overlap
-    // ([FUSED-SHARED-SUBTREE]). There, the untested direction fell
-    // through to `structural_precision`, and a byte-identical fragment
-    // nested inside the method deleted it on `structural 1.00 > 0.88`
-    // — a comparison across two different scopes, where the fragment
-    // scores 1.00 *because* it excludes the inserted statement. Whole
-    // methods vanished from `ts-type3-stmt` entirely (gh #408).
+    // Enclosure is nominated in both directions. `outer` and `inner`
+    // are mass-order positions, not nesting roles, so either may be the
+    // physical encloser.
     if strictly_encloses(&inner.members, &outer.members) {
         return match preferred_view(inner, outer, Nesting::ProposedEncloses) {
             Preference::First => PairDecision::DropOuter,

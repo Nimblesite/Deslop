@@ -46,11 +46,9 @@ pub mod report;
 pub mod report_boilerplate;
 #[cfg(any(test, feature = "test-support"))]
 pub mod report_fixtures;
-pub mod report_hints;
 pub mod report_location;
 pub mod report_metrics;
 mod report_render;
-pub mod report_restamp;
 mod report_weight;
 mod shard;
 pub mod sibling;
@@ -63,7 +61,6 @@ pub mod version_contract;
 /// `OllamaModelInfo` from here.
 pub mod wire_generated;
 
-pub use buckets::{bucket_labels, classify, classify_signals, BucketLabels, ClusterKind};
 pub use clone_category::CloneCategory;
 pub use cluster_filters::ParseCache;
 pub use config::{

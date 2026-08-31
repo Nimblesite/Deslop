@@ -18,6 +18,8 @@ interface ViewportCase {
 
 interface PostedMessage {
   readonly kind?: string;
+  readonly left?: { readonly path?: string; readonly start_byte?: number; readonly end_byte?: number };
+  readonly right?: { readonly path?: string; readonly start_byte?: number; readonly end_byte?: number };
 }
 
 declare global {
@@ -31,12 +33,17 @@ const repoRoot = findRepoRoot(process.cwd());
 const webviewDir = path.join(repoRoot, "clients", "vscode", "media", "webview");
 const screenshotDir = path.join(repoRoot, "target", "playwright-webview");
 const PAIR_EVIDENCE_HEADING = "PAIR EVIDENCE";
-const ELECTED_PAIR_LEFT = "src/dart/alpha.dart:12:3";
-const ELECTED_PAIR_RIGHT = "src/dart/beta.dart:31:5";
+const PAIR_CONJOINED_SEPARATOR = "↔";
 const PAIR_EVIDENCE_UNAVAILABLE = "PAIR EVIDENCE UNAVAILABLE";
 const CONTENT_EVIDENCE_HEADING = "CONTENT EVIDENCE";
 const CONTENT_EVIDENCE_VERDICT = "Its content evidence is 0.05 shared content";
 const CONTENT_EVIDENCE_LABELS = ["AGREEMENT", "RENAME", "LITERAL"] as const;
+const DUPLICATE_CODE_TITLE = "Duplicate code";
+const LEGACY_CLUSTER_TITLES = ["Same behavior, different code", "Nearly identical code", "Identical code"] as const;
+const MASS_LABEL = "mass";
+const WEIGHT_LABEL = "weight";
+const SELECT_FOR_COMPARISON = "Select for comparison";
+const COMPARE_SELECTED = "Compare selected occurrences";
 
 const viewports: readonly ViewportCase[] = [
   { name: "desktop", width: 1280, height: 900 },
@@ -52,14 +59,17 @@ test.describe("VSIX webview bundles", () => {
 
       await expect(page.getByText("DESLOP").first()).toBeVisible();
       await expect(page.getByRole("heading", { name: /18\.4%/ })).toBeVisible();
-      await expect(page.getByText("Same behavior, different code")).toBeVisible();
+      await expect(page.getByText(DUPLICATE_CODE_TITLE).first()).toBeVisible();
+      for (const title of LEGACY_CLUSTER_TITLES) {
+        await expect(page.getByText(title, { exact: true })).toHaveCount(0);
+      }
 
       await clearPostedMessages(page);
       await page.getByRole("button", { name: "Refresh" }).click();
       await expectPosted(page, "refresh");
 
       await clearPostedMessages(page);
-      await page.getByText("Same behavior, different code").click();
+      await page.getByText(DUPLICATE_CODE_TITLE).first().click();
       await expectPosted(page, "open/cluster");
 
       await expectHealthyRender(page, errors, `report-${viewport.name}`);
@@ -72,7 +82,12 @@ test.describe("VSIX webview bundles", () => {
       await postHostMessage(page, { kind: "select/cluster", id: sampleReport.clusters[0].id });
 
       await expect(page.getByText("CLUSTER").first()).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Same behavior, different code" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: DUPLICATE_CODE_TITLE })).toBeVisible();
+      await expect(page.getByText(MASS_LABEL, { exact: true })).toBeVisible();
+      await expect(page.getByText(WEIGHT_LABEL, { exact: true })).toHaveCount(0);
+      for (const title of LEGACY_CLUSTER_TITLES) {
+        await expect(page.getByText(title, { exact: true })).toHaveCount(0);
+      }
       // [FUSED-PAIR-SIGNALS] The admission signals are pair measurements and
       // never touch the cluster. The cluster card renders no pair-evidence
       // panel, no pair source, and no content metrics.
@@ -83,21 +98,29 @@ test.describe("VSIX webview bundles", () => {
       await expect(page.getByText(CONTENT_EVIDENCE_VERDICT, { exact: false })).toHaveCount(0);
       await expect(page.getByText(PAIR_EVIDENCE_HEADING, { exact: false })).toHaveCount(0);
       await expect(page.getByText(PAIR_EVIDENCE_UNAVAILABLE, { exact: false })).toHaveCount(0);
-      await expect(page.getByText(ELECTED_PAIR_LEFT, { exact: false })).toHaveCount(0);
-      await expect(page.getByText(ELECTED_PAIR_RIGHT, { exact: false })).toHaveCount(0);
+      // The occurrence list shows single editor locations (cluster membership
+      // facts); only a pair-evidence line joins two of them with the arrow.
+      await expect(page.getByText(PAIR_CONJOINED_SEPARATOR, { exact: false })).toHaveCount(0);
 
       await page.keyboard.press("n");
-      await expect(page.getByRole("heading", { name: "Nearly identical code" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: DUPLICATE_CODE_TITLE })).toBeVisible();
       await page.keyboard.press("p");
-      await expect(page.getByRole("heading", { name: "Same behavior, different code" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: DUPLICATE_CODE_TITLE })).toBeVisible();
 
       await clearPostedMessages(page);
       await page.locator("button", { hasText: "Open" }).first().click();
       await expectPosted(page, "open/occurrence");
 
       await clearPostedMessages(page);
-      await page.locator("button", { hasText: "Compare" }).nth(1).click();
-      await expectPosted(page, "compare/canonical");
+      const compareSelected = page.getByRole("button", { name: COMPARE_SELECTED });
+      await expect(compareSelected).toBeDisabled();
+      const selectors = page.getByRole("button", { name: SELECT_FOR_COMPARISON });
+      await selectors.nth(0).click();
+      await expect(compareSelected).toBeDisabled();
+      await selectors.nth(1).click();
+      await expect(compareSelected).toBeEnabled();
+      await compareSelected.click();
+      await expectPostedPair(page, sampleReport.clusters[0].occurrences[0], sampleReport.clusters[0].occurrences[1]);
 
       await expectHealthyRender(page, errors, `cluster-${viewport.name}`);
     });
@@ -127,7 +150,7 @@ test.describe("VSIX webview bundles", () => {
     await postHostMessage(page, { kind: "report/snapshot", report: sampleReport });
     await postHostMessage(page, { kind: "select/cluster", id: sampleReport.clusters[0].id });
 
-    await expect(page.getByRole("heading", { name: "Same behavior, different code" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: DUPLICATE_CODE_TITLE })).toBeVisible();
     await expect(page.getByText("CLUSTER").first()).toBeVisible();
     await expect(page.getByText("No cluster selected.")).toHaveCount(0);
     expect(errors, errors.join("\n")).toEqual([]);
@@ -185,6 +208,22 @@ async function expectPosted(page: Page, kind: string): Promise<void> {
       return await page.evaluate(() => window.__deslopPosts?.map((message) => message.kind) ?? []);
     })
     .toContain(kind);
+}
+
+async function expectPostedPair(
+  page: Page,
+  left: { readonly path: string; readonly start_byte: number; readonly end_byte: number },
+  right: { readonly path: string; readonly start_byte: number; readonly end_byte: number },
+): Promise<void> {
+  await expect
+    .poll(async () => {
+      return await page.evaluate(() => window.__deslopPosts?.find((message) => message.kind === "compare/pair"));
+    })
+    .toEqual({
+      kind: "compare/pair",
+      left: { path: left.path, start_byte: left.start_byte, end_byte: left.end_byte },
+      right: { path: right.path, start_byte: right.start_byte, end_byte: right.end_byte },
+    });
 }
 
 async function expectHealthyRender(

@@ -21,10 +21,10 @@ Stale UI is a correctness bug and has the same priority as wrong analysis output
 AI coding agents are the primary report consumer, while human renderers use the same data:
 
 - Structured output is the product. JSON is the canonical format; the text renderer is a pretty-printer over the same data. Never emit information in text that isn't also in JSON.
-- Every cluster carries enough context for an agent to act without re-reading the whole repo: exact byte ranges, file paths, a canonical representative snippet, the reason signals fired (structural / LSH / embedding with scores), and a suggested refactor hint where one is reliably inferrable (e.g. "extract as shared function," "move to module X," "both call sites are in the same crate").
+- Every cluster carries exact occurrence ranges, file paths, canonical extent, and duplicated mass. Pair evidence is requested separately for two explicit occurrences; no cluster record contains structural, token, embedding, or content scores.
 - The report is strictly typed so agents can parse without heuristics. Persisted state that does not match the current shape is discarded and recreated.
 - No ANSI colour codes, no unicode box-drawing, no paging — the agent needs a clean stream. The `text` format is ASCII-only and line-oriented.
-- Per-cluster entries include an agent-readable `summary` computed from the same locations and signals as the structured fields.
+- Per-cluster summaries describe occurrence membership and mass only. Pair-comparison summaries describe only the two named endpoints and their pair evidence.
 
 See [OUTPUT-SCHEMA-JSON] for the JSON schema. The report format is a first-class interface — changes go through the same review bar as the ranking formula.
 
@@ -43,13 +43,13 @@ Deslop v1 is a batch CLI, but the architecture must not foreclose a future daemo
 
 Deslop states what it measured and how it computed it. It never tells the reader what to do about a finding — not a human, not an agent.
 
-**Banned on every surface** — bucket sentences, severity copy, hover text, MCP responses, logs:
+**Banned on every surface** — pair evidence copy, severity copy, hover text, MCP responses, logs:
 
 - Directives: *"Safe to extract"*, *"Verify before extracting"*, *"Review the locations"*, *"read both before merging"*, *"treat as a hint"*.
 - Names that are directives: *act-now*, *action sentence*, *recommendation*.
 - Safety and worth claims: *"safe to"*, *"worth extracting"*, *"you should"*. Whether extraction is safe depends on facts Deslop never measured.
 
-**Required instead:** what was measured. *"Every copy is the same after normalisation."* *"Only the code shape matches; the content does not agree."*
+**Required instead:** cluster surfaces state membership and mass. An explicit pair surface may state what those two endpoints measured, such as *"These two slices are byte-equivalent after whitespace folding."*
 
 A threshold may describe where **Deslop's own** behaviour changes — what it admits, hides, or how it ranks. Never what the reader's should.
 
@@ -76,8 +76,7 @@ What a client may do:
 - **Render one wire value.** Choosing decimal places, truncating a percentage to a
   whole number for a narrow row, quantising one value to a glyph or a CSS width,
   thousands separators. One value in, one presentation out.
-- **Look up a static label.** Bucket to colour token, language id to display name,
-  severity band to glyph. A lookup table is not a calculation.
+- **Look up a static label.** Language id to display name, severity band to glyph, or pair classification to a title inside an explicit pair view. A lookup table is not a calculation.
 - **Run view mechanics.** Loop indices, spinner frames, path-segment splitting for a
   tree, byte offsets to editor coordinates, and comparators or aggregates over a
   *client-filtered* subset — the engine cannot see the user's active facet filter, so
@@ -94,8 +93,4 @@ a colour and no figure, the engine has no duplication heat band to carry, and th
 prints the exact percentage beside the tint. It is the only such site; a second one is
 a defect, and if the engine ever gains a heat band this moves onto it.
 
-What a client may never do: apply any other threshold constant, classify a value into
-bands, combine two wire values into a third that a user sees, or word a verdict about
-the evidence. Those arrive stamped — `rank`, `rank_band`, `shape`, `bucket`,
-`evidence_verdict`, `occurrence_count`, `language`, `percent` — and are rendered
-verbatim.
+What a client may never do: apply another threshold constant, classify a value into bands, combine two wire values into a third visible figure, or word its own verdict. Cluster identity, canonical extent, occurrence membership, `mass`, `rank`, and `rank_band` arrive stamped. Pair fields such as structural, Jaccard, embedding, content, admission result, and classification arrive only in an explicit two-endpoint response. Each is rendered in its own surface without crossing the boundary.

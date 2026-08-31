@@ -13,13 +13,10 @@
 //! *chosen representative* loses that bridge the moment the bridge is
 //! not the representative, and reports one region as two.
 
-use std::collections::HashMap;
-
 use deslop_core::{
     ast::ByteRange,
     cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs},
     fingerprint::Fingerprint,
-    lsh::{Signature, SignatureIndex},
     pair::{FusedCluster, FusedEdge},
     state::{FileId, FileRegistry},
 };
@@ -46,22 +43,16 @@ fn member(file_id: FileId, start: usize, end: usize) -> Fingerprint {
 /// rather than the thing under test, and a divergent respelling would
 /// mean two tests disagreeing about what the stage was actually fed.
 fn ranked_with_edges(members: &[Fingerprint], edges: Vec<FusedEdge>) -> Vec<Cluster> {
-    let signatures: Vec<Signature> = members.iter().map(|_| [11_u64; 128]).collect();
-    let signature_index = SignatureIndex::from_slice(&signatures);
     let fused = [FusedCluster {
         members: (0..members.len()).collect(),
         edges,
     }];
-    let vectors: HashMap<usize, Vec<f32>> = HashMap::new();
     build_ranked_fused_clusters(&ClusterBuildInputs {
         fingerprints: members,
-        signatures: &signature_index,
-        embedding_vectors: &vectors,
         fused_clusters: &fused,
         trees: &[],
-        sources: &HashMap::new(),
-        file_languages: &HashMap::new(),
-        file_paths: &HashMap::new(),
+        file_languages: &std::collections::HashMap::new(),
+        file_paths: &std::collections::HashMap::new(),
     })
 }
 

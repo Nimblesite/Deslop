@@ -15,13 +15,10 @@
 //! findings. This suite pins both directions: the shapes that must
 //! collapse, and the shapes that must not.
 
-use std::collections::HashMap;
-
 use deslop_core::{
     ast::ByteRange,
     cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs},
     fingerprint::Fingerprint,
-    lsh::{Signature, SignatureIndex},
     pair::FusedCluster,
     state::{FileId, FileRegistry},
 };
@@ -56,8 +53,6 @@ fn published(left: [(usize, usize); 2], right: [(usize, usize); 2]) -> Vec<Clust
         member(alpha, right[0], 2),
         member(beta, right[1], 2),
     ];
-    let signatures: Vec<Signature> = members.iter().map(|_| [11_u64; 128]).collect();
-    let signature_index = SignatureIndex::from_slice(&signatures);
     let fused = [
         FusedCluster {
             members: vec![0, 1],
@@ -68,16 +63,12 @@ fn published(left: [(usize, usize); 2], right: [(usize, usize); 2]) -> Vec<Clust
             edges: Vec::new(),
         },
     ];
-    let vectors: HashMap<usize, Vec<f32>> = HashMap::new();
     build_ranked_fused_clusters(&ClusterBuildInputs {
         fingerprints: &members,
-        signatures: &signature_index,
-        embedding_vectors: &vectors,
         fused_clusters: &fused,
         trees: &[],
-        sources: &HashMap::new(),
-        file_languages: &HashMap::new(),
-        file_paths: &HashMap::new(),
+        file_languages: &std::collections::HashMap::new(),
+        file_paths: &std::collections::HashMap::new(),
     })
 }
 

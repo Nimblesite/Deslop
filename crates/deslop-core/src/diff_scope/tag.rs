@@ -98,7 +98,7 @@ mod tests {
     fn cluster(occurrences: Vec<ReportOccurrence>) -> ReportCluster {
         let mut cluster = crate::report_fixtures::fixture_cluster("cluster", occurrences);
         cluster.canonical_node_count = 10;
-        "csharp".clone_into(&mut cluster.language);
+        crate::report_fixtures::restamp_fixture(&mut cluster);
         cluster
     }
 
@@ -178,11 +178,15 @@ mod tests {
             cache_stats: crate::wire_generated::CacheStats::default(),
             metrics: crate::report_metrics::RepoMetrics::empty(),
             schema_doc: String::new(),
-            action_hints: Vec::new(),
             boilerplate_hints: Vec::new(),
             embedding_provenance: None,
             clusters: vec![touched, untouched],
             clusters_outside_diff: None,
+            literal_findings: Vec::new(),
+            literal_findings_total: 0,
+            literal_findings_hidden: 0,
+            literal_findings_capped: false,
+            literal_max_findings: 0,
         };
         report.metrics.clusters_total = 2;
         apply_only_changed(&mut report);

@@ -24,28 +24,14 @@ report_hide = ["**/Migrations/**/*.cs"]
 report_hide = ["**/target/**"]
 ```
 
-**`[ranking]` section.** Controls the clone-category policy of [RANK-CATEGORY]:
+**`[visibility]` section.** Controls explicit pre-ranking exclusion without changing the mass of anything that survives:
 
 ```toml
-[ranking]
-data_clones = "demote"      # "demote" (default) | "ignore" | "keep"
-data_clone_weight = 0.15    # multiplier in demote mode; finite, in (0.0, 1.0]
+[visibility]
+data_clones = "keep"        # "keep" (default) | "ignore"
 ```
 
-`data_clones` selects how `data`-category clusters ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]) are ranked: `demote` (default) down-weights them by `data_clone_weight`, `ignore` drops them from the report, `keep` ranks them at full weight. `data_clone_weight` must be finite and strictly inside `(0.0, 1.0]`; `NaN`, infinity, `0.0`, and values above `1.0` are rejected with a `ConfigThreshold`-style error naming the config path. The weight is consulted only in `demote` mode. Both keys are omittable; absence yields the default `demote` / `0.15`.
-
-**`[metrics]` section** (lands with gh #344, [pipeline.md §METRICS-REPO-WEIGHTED](pipeline.md#metrics-repo-weighted)). Overrides the evidence weights of the weighted duplication percentage:
-
-```toml
-[metrics.bucket_weights]
-structural_only = 0.15      # each key optional; defaults per [METRICS-REPO-WEIGHTED]
-same_behavior = 0.5
-
-[metrics.category_weights]
-data = 0.15
-```
-
-Every value must be finite and in `[0.0, 1.0]`, rejected otherwise with the same `ConfigThreshold`-style error as `[ranking]`. `0.0` is legal here (unlike the ranking multipliers): it removes that class from the weighted numerator only. Nothing in this section can alter the mechanical `duplication_percent` — that figure has no configuration surface, by design.
+`data_clones = "ignore"` removes a proven data-table finding before ranking; `keep` leaves it visible at its full [RANK-MASS-SUM] mass. `demote`, `data_clone_weight`, and every evidence-weighted `[metrics]` table are invalid because ranking uses mass alone and the repository duplication percentage is unweighted.
 
 **`[tuning]` section.** Every accuracy lever of the detector, one sub-table per pipeline stage. The levers, their defaults, and the provenance of each default are specified in [fused.md §FUSED-TUNING-LEVERS](fused.md#fused-tuning-levers); this section defines only the file surface. Migration is planned in [`plans/unhardcode-tuning-plan.md`](../plans/unhardcode-tuning-plan.md).
 
@@ -62,11 +48,11 @@ promote_floor = 0.85
 kgram_width = 5
 ```
 
-Similarity, agreement, and cosine keys must be finite and in `[0.0, 1.0]`; multiplier keys finite and in `(0.0, 1.0]`; count keys `≥ 1`. Violations are rejected with the same `ConfigThreshold`-style error as `[ranking]`, naming the key and the invariant. Clamping a bad value is prohibited — it would produce a report the config does not describe.
+Similarity, agreement, and cosine keys must be finite and in `[0.0, 1.0]`; count keys must be `≥ 1`. Ranking multipliers do not exist. Violations are rejected with a named configuration error that identifies the key and invariant. Clamping a bad value is prohibited — it would produce a report the config does not describe.
 
 **Cross-key invariants**, each rejected at load because violating it makes a downstream stage unreachable: `content_gate.support_floor ≤ content_gate.promote_floor` (or the middle zone of [FUSED-CONTENT-GATE] is empty); `content_gate.structural_only_max_support < content_gate.support_floor` (or the two routes into `structural_only` stop being distinguishable); `admission.lsh_only_min_jaccard ≥ admission.fused_threshold` (or the unanchored-pair guard is dead code); `candidates.embedding_min_cosine ≤ admission.fused_threshold` (or embedding candidates are filtered by a bar admission never applies); `content_gate.saturating_token_floor ≤ routing.identical_token_floor` (or a shape match routes `identical` without the gate firing); `representation.minhash_signature_len % representation.lsh_bands == 0`.
 
-**Precedence**, highest first: `--tune <table>.<key>=<value>` CLI flag, then the editor settings channel (`crate::state`, as [VSIX-SETTINGS-RANKING] already does for `structural_only`), then `[tuning]`, then the compiled default. Resolution happens once at config load into one immutable value; no stage reads a global at comparison time.
+**Precedence**, highest first: `--tune <table>.<key>=<value>` CLI flag, then the editor settings channel in `crate::state`, then `[tuning]`, then the compiled default. Resolution happens once at config load into one immutable value; no stage reads a global at comparison time.
 
 ### [CONFIG-TUNING-CACHE] Representation keys are cache-keyed
 
@@ -90,21 +76,19 @@ The corpus gate and its known-failures ratchet ([CORPUS-*]) run at defaults, alw
 
 ### [CLONE-NOISE-DART-DATA-TABLE-LITERAL] Dart collection-literal data tables
 
-A top-level Dart collection literal whose elements are repeated near-identical data — `List<Highlight> highlights = [ Highlight(title: …, wonder: …), Highlight(title: …, wonder: …), … ]`, a `Set` of constructor calls, or a `Map` of literal entries — clusters via the sibling-window pass because Type-2 normalisation collapses every field value to the same shape. This is real repetition, but it is *data*, not extractable logic: the constructor's purpose is to enumerate per-row fields. The class-field registry filter (#169, [pipeline.md §PIPELINE-RANK-WORST-FIRST](pipeline.md#pipeline-rank-worst-first)) only covers runs of declarations inside a `class_body`; a top-level `List`/`Set`/`Map` literal has no enclosing `class_body`, so those tables previously fell through at full weight and dominated the ranking.
+A top-level Dart collection literal whose elements are repeated near-identical data — `List<Highlight> highlights = [ Highlight(title: …, wonder: …), Highlight(title: …, wonder: …), … ]`, a `Set` of constructor calls, or a `Map` of literal entries — clusters via the sibling-window pass because Type-2 normalisation collapses every field value to the same shape. This is real repetition, but it is *data*, not extractable logic: the constructor's purpose is to enumerate per-row fields. The class-field registry filter (#169, [pipeline.md §PIPELINE-RANK-WORST-FIRST](pipeline.md#pipeline-rank-worst-first)) only covers runs of declarations inside a `class_body`; a top-level `List`/`Set`/`Map` literal has no enclosing `class_body`, so those tables previously fell through at full mass and dominated the ranking.
 
-**Predicate.** A cluster is classified `data` ([RANK-CATEGORY]) when, for every member, the member's reported range covers a run of one or more sibling elements inside a `list_literal` or `set_or_map_literal`, and every covered element is a pure data shape — a constructor/factory invocation (`call_expression`), a `record_literal`, a map `pair`, or a bare literal — with **no** embedded `function_body` or `function_expression` (a closure-bearing element keeps clustering as logic). Reuses the same CST-walk helpers as #169 (`enclosing_kind`, `node_contains_kind`, `node_intersects_range`).
+**Predicate.** A finding is recognized as a data table for detection-time visibility when every member's reported range covers one or more sibling elements inside a `list_literal` or `set_or_map_literal`, every covered element is a pure data shape, and no covered element contains a function body or expression. This predicate is not carried on a visible cluster and never changes mass.
 
-**Verbatim escape hatch.** Classification requires at least two members to differ in raw bytes (`raw_snippet_texts_differ`), matching #104/#133/#169. A *verbatim*-copied table is genuine copy-paste duplication and must still surface at full `logic` weight, never demoted.
+**Verbatim escape hatch.** Classification requires at least two members to differ in raw bytes (`raw_snippet_texts_differ`), matching #104/#133/#169. A verbatim-copied table is genuine copy-paste duplication and remains visible at its full mass.
 
 ### [CLONE-NOISE-LITERAL-TABLE] Language-agnostic literal-dominated tables
 
-The Dart predicate above ships per-grammar CST knowledge, so every other language reported data tables at full `logic` weight (gh #336: an F# integer array literal family ranked #1 on `dotnet/fsharp`). The language-agnostic test needs no grammar tables: the pipeline already walks each cluster member's **normalised** tree for the content gate ([fused.md §FUSED-CONTENT-GATE](fused.md#fused-content-gate)), and a subtree whose collapsed leaves are overwhelmingly `__literal__` positions *is* a data literal in any language.
+The Dart predicate above ships per-grammar CST knowledge, so every other language reported data tables at full mass (gh #336: an F# integer array literal family ranked #1 on `dotnet/fsharp`). The language-agnostic test needs no grammar tables: fingerprinting retains each occurrence's normalised tree, and a subtree whose collapsed leaves are overwhelmingly `__literal__` positions *is* a data literal in any language. This member-local predicate is separate from the endpoint-pair content calculation in [FUSED-CONTENT-GATE].
 
-**Predicate.** A cluster is classified `data` ([RANK-CATEGORY]) when the canonical member's collapsed leaves are ≥ 0.8 literal positions with at least 8 literals (so a tiny literal-heavy subtree — a tuple return, a short argument list — never registers as a table), and at least two members differ in raw bytes — the same verbatim escape hatch as the Dart predicate. The fraction is measured in the pipeline, where normalised trees live, and travels on the cluster; the classifier composes with the per-language predicates rather than replacing them (identifier-heavy constructor-row tables stay Dart-specific).
+**Predicate.** A finding is recognized as a data table for detection-time visibility when the candidate member's collapsed leaves are at least 0.8 literal positions with at least eight literals and at least two members differ in raw bytes. The fraction is consumed before rendering and is not carried on a cluster.
 
-**Routing interaction.** A literal-dominated shape-only family stays in the surfaced `structural_only` tier instead of the hidden cross-file-scaffolding one: the `[ranking] data_clones` policy ([RANK-CATEGORY]) owns its visibility — demoted by default, dropped under `ignore`, restored by `data_clone_weight = 1.0` — and a policy knob cannot govern a cluster the renderer already hid.
-
-This predicate feeds the [RANK-CATEGORY] policy: under the default **demote** mode the table is down-weighted and labelled `category="data"`; under **ignore** it is dropped; under **keep** it ranks at full weight.
+**Routing interaction.** A literal-dominated family that passes pair admission remains a closure component. `[visibility] data_clones = "ignore"` may drop the finding before ranking; `keep` leaves its membership and mass untouched. No pair classification or data-table predicate changes its mass.
 
 ### [CONFIG-EXCLUDE-BUILTIN] Built-in component exclusion
 

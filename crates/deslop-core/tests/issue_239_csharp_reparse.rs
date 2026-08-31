@@ -22,7 +22,7 @@ use std::{fmt::Write as _, time::Instant};
 
 use anyhow::{anyhow, Result};
 use common::ReportFixture;
-use deslop_core::{ast::ByteRange, cluster::Cluster, pair::PairScore};
+use deslop_core::{ast::ByteRange, cluster::Cluster};
 
 /// Methods generated per C# file; the stress cluster carries two files'
 /// worth of members. High enough that a per-member full-file re-parse
@@ -74,10 +74,6 @@ fn csharp_equivalence_fallback_scales_with_files_not_members_issue_239() -> Resu
         .iter()
         .find(|cluster| cluster.id == "issue-239-stress")
         .ok_or_else(|| anyhow!("stress cluster must stay visible in the ranked report"))?;
-    assert_eq!(
-        rendered.bucket, "nearly_identical",
-        "renamed Type-2 members must not classify as byte-identical"
-    );
     assert_eq!(
         rendered.occurrences.len(),
         METHODS_PER_FILE * 2,
@@ -162,14 +158,9 @@ fn cluster_over(id: &str, members: &[(deslop_core::state::FileId, ByteRange)]) -
                 ReportFixture::fingerprint_at(*file_id, *range, 120, index)
             })
             .collect(),
-        weight: 10_000.0,
-        signals: PairScore {
-            structural: 1.0,
-            token_jaccard: 0.97,
-            embedding_cos: 0.0,
-        },
-        signal_source: None,
-        content: deslop_core::content::ContentEvidence::unmeasured(),
+        mass: u64::try_from(120_usize)
+            .unwrap_or(u64::MAX)
+            .saturating_mul(u64::try_from(members.len().saturating_sub(1)).unwrap_or(u64::MAX)),
     }
 }
 

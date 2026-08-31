@@ -111,8 +111,7 @@ on drift. Coverage floors are owned by `coverage-thresholds.json`
   (`./target/release/deslop . --no-color`) against this repository. The binary
   reads the ratcheted `[threshold] max_duplication_percent` from `.deslop.toml`
   (the single source of truth — never hardcoded in CI) and exits 3
-  ([pipeline.md §EXIT-CODES](pipeline.md)) the moment repo-wide weighted
-  duplication climbs past it. The same threshold surfaces as a single LSP startup
+  ([pipeline.md §EXIT-CODES](pipeline.md)) the moment the unweighted repo duplication percentage climbs past it. The same threshold surfaces as a single LSP startup
   warning ([CI-DESLOP] is a CLI-only *gate*; the live LSP surface only *warns*).
   Provenance is contract-tested by `scripts/repository/dup-gate-source.test.mjs`, which
   `make lint` runs: `dup-gate` must depend on `build` and invoke
@@ -273,7 +272,7 @@ than `v*` so a bare major alias can never re-fire the pipeline — see
   GitHub Releases with `GITHUB_TOKEN`, and renders `/releases/` plus
   `/zh/releases/` from the current release metadata on every website publish.
 
-## GitHub Marketplace action
+## [RELEASE-GITHUB-MARKETPLACE] GitHub Marketplace action
 
 **[ACTION-METADATA] One action, at the repository root.** The Marketplace lists
 exactly one metadata file per repository and only at the root, so `action.yml`

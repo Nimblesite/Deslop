@@ -125,7 +125,7 @@ suite("severity", () => {
     assert.ok(
       (clusters[0]?.signals.pair_agreement ?? 1) <
         (clusters[1]?.signals.pair_agreement ?? 0),
-      "fixture: it also carries strictly weaker elected content evidence than the proven clone",
+      "fixture: it also carries strictly weaker pair content evidence than the proven clone",
     );
 
     // The paint. This is the assertion the defect was about.

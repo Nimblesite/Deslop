@@ -1,13 +1,9 @@
-//! Unit tests for [`super`] — the `fused_bounded_max`,
-//! `type2_gate_liveness` and curated `type2_recall` corpus confidence
-//! checks ([CORPUS-BASELINE], [CORPUS-RECALL]).
+//! Unit tests for mass-only corpus confidence assertions.
 
 use super::*;
-use serde_json::{json, Map};
+use serde_json::{json, Value};
 
-/// The single reported failure, or `None` when there is not exactly one.
-/// Returning an `Option` keeps the assertions in the tests, where their
-/// messages can name the report that produced them.
+/// Returns the single failure when exactly one was reported.
 fn only(failures: &[Failure]) -> Option<&Failure> {
     match failures {
         [single] => Some(single),
@@ -15,21 +11,17 @@ fn only(failures: &[Failure]) -> Option<&Failure> {
     }
 }
 
-/// The check id of the single reported failure, for direct comparison.
+/// Returns the check id of the single failure.
 fn only_check(failures: &[Failure]) -> Option<&str> {
     only(failures).map(|failure| failure.check.as_str())
 }
 
-/// True when the single reported failure's detail contains `needle`.
+/// Whether the single failure detail contains `needle`.
 fn detail_mentions(failures: &[Failure], needle: &str) -> bool {
     only(failures).is_some_and(|failure| failure.detail.contains(needle))
 }
 
-/// Asserts `failures` is exactly one failure of `check` whose detail
-/// mentions `needle`. The curated, liveness and fused suites each
-/// respelled this same triple; Deslop scored the copies against this
-/// repo's own corpus. Both messages stay per-call so no suite loses the
-/// sentence that says what its case is actually proving.
+/// Asserts one named failure with useful detail.
 fn assert_only_failure(
     failures: &[Failure],
     check: &str,
@@ -45,94 +37,42 @@ fn assert_only_failure(
     );
 }
 
-/// One cluster with the given bucket, signal triple and rendered fused.
-fn cluster(bucket: &str, structural: f64, token: f64, fused: f64) -> Value {
-    with_embedding(bucket, structural, token, 0.0, fused)
-}
-
-/// The same, with the semantic axis set too.
-fn with_embedding(bucket: &str, structural: f64, token: f64, embedding: f64, fused: f64) -> Value {
-    json!({
-        "bucket": bucket,
-        "signals": {
-            "structural": structural,
-            "token_jaccard": token,
-            "embedding_cos": embedding,
-            "fused": fused,
-        },
-        "occurrences": [{ "hidden": false }, { "hidden": false }],
-    })
-}
-
-/// The same cluster with every occurrence hidden, so it renders nothing.
-fn hide(mut cluster: Value) -> Value {
-    if let Some(entry) = cluster.get_mut("occurrences") {
-        *entry = json!([{ "hidden": true }, { "hidden": true }]);
-    }
-    cluster
-}
-
-fn report(clusters: &[Value]) -> Value {
-    json!({ "clusters": clusters })
-}
-
-/// Smallest cluster that can credibly *be* the whole-module rename the
-/// curated entries in these tests describe, in `canonical_node_count`.
-///
-/// A floor, not a pin: the legitimate whole-module view of one curated
-/// pair measured 348 and 395 nodes on two different builds of the same
-/// pinned tokio commit, so the extent a correct engine reports moves.
-/// What does not move is the two orders of magnitude between that view
-/// and the fragments gh #439 shows satisfying the check —
-/// [`curated::ACCESSOR_NODES`] and [`curated::FRAGMENT_NODES`]. No
-/// operating point is being tuned here; any value in the wide gap
-/// separates them.
-const CURATED_MIN_NODES: u64 = 300;
-
-/// The whole-module view of a curated pair, as tokio renders it today.
-const MODULE_NODES: u64 = 348;
-
-/// One cluster whose occurrences carry the given rendered paths, at the
-/// extent a credible whole-module rename carries. [`sized`] overrides it.
-fn spanning(bucket: &str, structural: f64, token: f64, files: &[&str]) -> Value {
+/// One valid mass-only cluster over the supplied visible files.
+fn spanning(id: &str, nodes: u64, rank: u64, files: &[&str]) -> Value {
     let occurrences: Vec<Value> = files
         .iter()
-        .map(|file| json!({ "path": file, "hidden": false }))
+        .map(|file| json!({"path": file, "hidden": false}))
         .collect();
+    let occurrence_count = u64::try_from(files.len()).unwrap_or(u64::MAX);
     json!({
-        "bucket": bucket,
-        CANONICAL_NODE_COUNT: MODULE_NODES,
-        "signals": {
-            "structural": structural,
-            "token_jaccard": token,
-            "embedding_cos": 0.0,
-            "fused": token.max(structural),
-        },
+        "id": id,
+        "rank": rank,
+        "rank_band": "worst",
+        "mass": nodes.saturating_mul(occurrence_count.saturating_sub(1)),
+        "canonical_node_count": nodes,
+        "occurrence_count": occurrence_count,
         "occurrences": occurrences,
     })
 }
 
-/// The same cluster reported at `nodes` instead, so a case can vary the
-/// extent alone and leave every other rendered field identical.
-fn sized(cluster: Value, nodes: u64) -> Value {
-    let mut fields = match cluster {
-        Value::Object(fields) => fields,
-        _ => Map::new(),
-    };
-    let _replaced = fields.insert(CANONICAL_NODE_COUNT.to_owned(), json!(nodes));
-    Value::Object(fields)
+/// One mass-only report.
+fn report(clusters: &[Value]) -> Value {
+    json!({"clusters": clusters})
 }
 
-/// A manifest curating one hand-verified Type-2 pair, with the extent
-/// [CORPUS-RECALL] requires an entry to curate.
-fn manifest_with_type2(files: &[&str]) -> Value {
-    json!({
-        "must_find_type2": [{
-            "files": files,
-            "min_nodes": CURATED_MIN_NODES,
-            "why": "hand-verified rename pair for the unit test",
-        }]
-    })
+/// Marks one matching occurrence hidden.
+fn hide_occurrence(mut cluster: Value, path: &str) -> Value {
+    let Some(occurrences) = cluster.get_mut("occurrences").and_then(Value::as_array_mut) else {
+        return cluster;
+    };
+    for occurrence in occurrences {
+        if occurrence.get("path").and_then(Value::as_str) == Some(path) {
+            let _old = occurrence
+                .as_object_mut()
+                .and_then(|fields| fields.insert("hidden".to_owned(), Value::Bool(true)));
+        }
+    }
+    cluster
 }
 
 mod curated;

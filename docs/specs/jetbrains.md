@@ -6,7 +6,7 @@ Official platform constraints: the IntelliJ Platform's *native* LSP API (`com.in
 
 ### [JETBRAINS-PRINCIPLES] Client principles
 
-1. **One engine.** The plugin launches `deslop-lsp` and consumes standard LSP diagnostics, hover, code lens, document links, and commands. No clone detection, ranking, byte-range conversion, or bucket routing lives in Kotlin.
+1. **One engine.** The plugin launches `deslop-lsp` and consumes standard LSP diagnostics, hover, code lens, document links, and commands. No clone detection, ranking, byte-range conversion, or pair classification lives in Kotlin.
 2. **One artifact, platform always.** A single LSP4IJ-based plugin serves every IDE family. Source code uses only `com.intellij.modules.platform` APIs plus LSP4IJ — never Rider-only or Ultimate-only APIs — so the one build loads everywhere.
 3. **Native surfaces.** JetBrains users see Deslop through familiar IDE surfaces: editor highlighting, Problems, hover, code lens, the LSP4IJ status surface, and a **Deslop Tool Window** hosting the live report. The plugin renders the engine's HTML report in an embedded browser; it does not import the VSIX webview UI.
 4. **Offline install.** Public plugin zips must include `shipwright.json` and the `deslop-lsp` binary for every supported OS/architecture, because JetBrains Marketplace cannot publish OS-specific plugin zips and activation must not download executable code.
@@ -43,7 +43,7 @@ deslop-lsp <workspace-root>
 Initial scope:
 
 - `textDocument/diagnostic` lights up duplicate occurrences through JetBrains' native error/warning/highlight pipeline.
-- `textDocument/hover` displays cluster id, interpretation, signals, and occurrences once the LSP implementation provides them.
+- `textDocument/hover` displays cluster id, duplicated mass, and occurrences. Pair evidence appears only in an explicit two-occurrence comparison.
 - `textDocument/codeLens` carries inline clone summaries on 2026.1+ IDEs.
 
 The plugin must not parse hover markdown to recover structured data. Native Tool Window and settings work must call the `deslop/*` custom LSP methods once the IntelliJ LSP client wrapper is extended for custom requests.
@@ -106,7 +106,7 @@ First public UX:
 
 Post-scaffold UX:
 
-- A richer native-tree tool window with Top Offenders, Focused File, and Session tabs, consuming the canonical `Report` from `deslop/reportGet` instead of HTML — it would never re-rank clusters or recompute buckets.
+- A richer native-tree tool window with Top Offenders, Focused File, and Session tabs, consuming the canonical `Report` from `deslop/reportGet` instead of HTML. It would never rerank clusters or infer pair classification.
 - Worst-offender action from Search Everywhere / Find Action.
 - Embedding model picker using JetBrains' native popup list.
 - Compare-with-canonical action using the IDE diff viewer.

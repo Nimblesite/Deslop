@@ -281,14 +281,20 @@ pub struct ReportDelta {
     pub clusters_added: Vec<ReportCluster>,
     pub clusters_removed: Vec<String>,
     pub clusters_updated: Vec<ReportCluster>,
+    pub literal_findings_added: Vec<LiteralFinding>,
+    pub literal_findings_removed: Vec<String>,
+    pub literal_findings_updated: Vec<LiteralFinding>,
+    pub metrics: RepoMetrics,
     pub cache_stats: CacheStats,
     pub tool_version: String,
 }
 ```
 
+`ChangeSummary` reports the three clone-cluster counts, the three literal-finding counts, and `worst_mass`; it contains no evidence score.
+
 Cluster ids are stable across runs ([REPORTING-CONTEXT §"How to read the report format"]). Clients that miss generations ask for a full snapshot via `report/get`, then resume delta consumption at the snapshot's generation.
 
-**A cluster whose id survived is *updated* when any field of it changed.** The comparison used to be a hand-written list of "the fields a subscriber actually observes", and the list had drifted out of date: `bucket`, `category`, `occurrences_total`, `occurrences_truncated`, `intersects_diff` and `is_newly_introduced` were absent from it, as were the content axes of `ReportSignals` (`agreement`, `rename_consistency`, `literal_fraction`) and each occurrence's `start_line`, `end_line` and `in_diff`. A cluster could change bucket, be re-categorised as data, gain or lose a diff tag, or move to different lines, and the delta said nothing — so every live subscriber kept rendering the previous generation's answer, and a second identical generation produced no delta either, so the stale view never healed.
+**A cluster whose id survived is updated when any cluster field changed.** Cluster diffing covers occurrence membership and locations, canonical extent, mass, truncation, diff tags, and rank. Pair evidence and pair classification are not cluster fields and travel only in an explicit pair-comparison response. The comparison is derived from the wire model rather than a hand-written observed-field list, so new cluster fields cannot silently bypass live refresh.
 
 `ReportCluster` therefore derives `PartialEq` in the generated wire module and the delta compares whole values. A field added to `docs/models/live-ipc.td` is covered the day it lands. `is_empty` — which gates the `report/changed` notification ([LIVE-NOTIFICATIONS]) — reads the same verdict. Pinned by `crates/deslop-core/tests/live_delta_field_coverage.rs`, which walks the rendered cluster's own JSON and mutates one scalar leaf at a time rather than naming the fields, so the test cannot drift either.
 
@@ -299,10 +305,12 @@ The `live` module exposes the `LiveApi` trait. The LSP holds a `LiveApi` impl an
 | Method | Input | Output | Purpose |
 |---|---|---|---|
 | `report/get` | `{}` | `Report` | Full current snapshot. |
+| `report/schemaDoc` | `{}` | `SchemaDocPayload` | Return the canonical report and pair-evidence schema markdown without embedding it in every report page. |
 | `report/delta` | `{ since_generation: u64 }` | `ReportDelta \| null` | Pull changes since a known generation. |
 | `report/forFile` | `{ path }` | `FileReport` | Clusters touching this file. |
 | `report/forRange` | `{ path, start_byte, end_byte }` | `Vec<ReportCluster>` | Clusters overlapping the byte range. |
 | `cluster/byId` | `{ id }` | `ReportCluster` | Fetch by stable id. |
+| `pair/compare` | `{ left: { path, start_byte, end_byte }, right: { path, start_byte, end_byte } }` | `PairComparison` | Recompute and return admission evidence for exactly the two named occurrences; never infer endpoints from a cluster. |
 | `duplicates/findSimilar` | `{ path, start_byte, end_byte }` or `{ snippet, language }` | `Vec<ReportCluster>` | Parse + fingerprint + LSH + embedding against the live index. No cache mutation. |
 | `embedding/listModels` | `{}` | `Vec<EmbeddingModelInfo>` | Enumerate available Ollama models. |
 | `embedding/setModel` | `{ provider_id, model_id, endpoint? }` | `EmbeddingProvenance \| null` | Switch the live embedding model; write workspace settings. |
@@ -370,13 +378,15 @@ The MCP resolves the endpoint per call: try the Unix socket where the platform h
 
 | Method | MCP tool consumer |
 |---|---|
-| `report/get` | `report-get`, `report-query`, top-offenders bookkeeping |
-| `report/forFile` | `report-for-file` |
-| `report/forRange` | `report-for-range` |
+| `report/get` | `duplicates` |
+| `report/schemaDoc` | `schema-doc` |
+| `report/forFile` | `duplicates { path, … }` |
+| `report/forRange` | `duplicates { path, start_byte, end_byte, … }` |
 | `cluster/byId` | `cluster-by-id` |
-| `session/config` | `session-config` |
+| `pair/compare` | `compare-pair` |
+| `session/config` | `session` |
 | `duplicates/findSimilar` | `find-similar` |
-| `embedding/listModels` | `list-embedding-models` |
+| `embedding/listModels` / `embedding/setModel` | `session` |
 | `deslop.lsp.refreshReport` | `rescan` |
 
 **Long-lived subscription**:

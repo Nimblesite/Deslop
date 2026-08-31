@@ -8,7 +8,6 @@
 use std::fmt::Write as _;
 
 use crate::{
-    clone_category::CloneCategory,
     report::{Report, ReportCluster},
     report_location::diff_badge,
     report_metrics::ThresholdSource,
@@ -23,10 +22,9 @@ pub fn render_text(report: &Report) -> String {
     write_diff_metrics(&mut out, report);
     write_provenance(&mut out, report);
     write_cache_stats(&mut out, report);
-    write_action_hints(&mut out, report);
     write_boilerplate_hints(&mut out, report);
-    for (idx, cluster) in report.clusters.iter().enumerate() {
-        write_cluster(&mut out, idx, cluster);
+    for cluster in &report.clusters {
+        write_cluster(&mut out, cluster);
     }
     out
 }
@@ -167,17 +165,6 @@ fn write_provenance(out: &mut String, report: &Report) {
     );
 }
 
-/// Writes the playbook header so an agent can consult the decision
-/// table before walking the cluster list. `action_hints` is
-/// guaranteed non-empty by the report builder, so there is no empty
-/// guard.
-fn write_action_hints(out: &mut String, report: &Report) {
-    let _ = writeln!(out, "-- action hints --");
-    for hint in &report.action_hints {
-        let _ = writeln!(out, "  [{}] {}", hint.pattern, hint.recommendation);
-    }
-}
-
 /// Writes import/prologue hygiene hints when report mode is enabled.
 fn write_boilerplate_hints(out: &mut String, report: &Report) {
     if report.boilerplate_hints.is_empty() {
@@ -196,41 +183,18 @@ fn write_boilerplate_hints(out: &mut String, report: &Report) {
     }
 }
 
-/// Writes a single cluster block. A `data`-category cluster carries a
-/// `[data table]` chip on the header line and the category-specific action
-/// sentence (builder / asset hint) on the interpretation line, both sourced
-/// from [`CloneCategory`] so every surface renders the same words
-/// ([RANK-CATEGORY]).
-fn write_cluster(out: &mut String, idx: usize, cluster: &ReportCluster) {
-    let category = CloneCategory::from_wire_label(&cluster.category);
-    let chip = category
-        .chip()
-        .map_or(String::new(), |label| format!(" [{label}]"));
-    let interpretation = match category {
-        CloneCategory::DataTable => category.action_sentence(),
-        CloneCategory::Logic => cluster.interpretation.as_str(),
-    };
+/// Writes a neutral mass-only cluster block.
+fn write_cluster(out: &mut String, cluster: &ReportCluster) {
     let _ = writeln!(
         out,
-        "#{rank} [{id}]{chip} weight={weight:.2} size={size} nodes={nodes}\n  {summary}\n  :: {interpretation}",
-        rank = idx.saturating_add(1),
+        "#{rank} [{id}] mass={mass} occurrences={occurrences} canonical_nodes={nodes}",
+        rank = cluster.rank,
         id = cluster.id,
-        weight = cluster.weight,
-        size = cluster.size,
+        mass = cluster.mass,
+        occurrences = cluster.occurrence_count,
         nodes = cluster.canonical_node_count,
-        summary = cluster.summary,
     );
-    write_pair_evidence(out, cluster);
     write_cluster_occurrences(out, cluster);
-}
-
-/// Writes content evidence only when the report identifies its exact pair.
-fn write_pair_evidence(out: &mut String, cluster: &ReportCluster) {
-    let Some(attribution) = crate::render::signals::elected_pair_attribution(cluster) else {
-        return;
-    };
-    let evidence = crate::render::signals::evidence_summary(cluster.signals);
-    let _ = writeln!(out, "  content evidence: {evidence} ({attribution})");
 }
 
 /// Writes one badged row per occurrence on a `--diff` run, through the

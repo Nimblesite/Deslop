@@ -18,8 +18,6 @@ use std::{
 };
 
 use crate::{
-    buckets::{bucket_labels, classify, ClusterKind},
-    clone_category::CloneCategory,
     pipeline::language_for_path,
     render::{
         highlight::highlight_snippet,
@@ -282,13 +280,11 @@ fn intro_summary(report: &Report) -> String {
     let groups = report.clusters.len();
     let files = report.files_analysed;
     let hidden = report.clusters_hidden;
-    let kinds = classify_groups(&report.clusters);
     if groups == 0 {
         return format!("Scanned {files} file(s). No duplicated code worth reporting was found.");
     }
     let mut sentence =
         format!("Scanned {files} file(s) and found {groups} group(s) of duplicated code. ");
-    sentence.push_str(&kinds);
     sentence.push_str(
         " Worst offenders are listed first — each card shows one example with syntax \
          highlighting and tells you where else the same code appears.",
@@ -297,55 +293,6 @@ fn intro_summary(report: &Report) -> String {
         let _ = write!(sentence, " ({hidden} group(s) were hidden by your config.)");
     }
     sentence
-}
-
-/// Returns a one-line breakdown of how many groups fall into each
-/// [CLONE-BUCKETS] bucket. Pure-visual surface (HTML report body) so
-/// uses `plain_title` lower-cased — no `Type-N` per
-/// [CLONE-BUCKETS-DUAL-LABEL].
-fn classify_groups(clusters: &[ReportCluster]) -> String {
-    let parts: Vec<String> = ClusterKind::all()
-        .into_iter()
-        .filter_map(|kind| {
-            let count = clusters
-                .iter()
-                .filter(|cluster| classify(cluster) == kind)
-                .count();
-            if count == 0 {
-                return None;
-            }
-            let labels = bucket_labels(kind);
-            Some(format!("{count} {}", labels.plain_title.to_lowercase()))
-        })
-        .collect();
-    if parts.is_empty() {
-        String::new()
-    } else {
-        format!("Breakdown: {}.", parts.join(" · "))
-    }
-}
-
-/// CSS class suffix for the card's left border. Drives the band
-/// colour family per [CLONE-BUCKETS]: green/crimson for identical,
-/// yellow/blue for nearly identical, neutral for loosely similar,
-/// purple/cyan for same-behavior.
-fn kind_class(kind: ClusterKind) -> String {
-    format!("kind-{}", bucket_labels(kind).css_suffix)
-}
-
-/// Plain-visual title for the card head, e.g.
-/// `"Identical code in 12 places"`. Pure-visual surface — no `Type-N`
-/// ever per [CLONE-BUCKETS-DUAL-LABEL].
-fn kind_title(kind: ClusterKind, occurrences: usize) -> String {
-    format!(
-        "{} in {occurrences} places",
-        bucket_labels(kind).plain_title
-    )
-}
-
-/// Plain-visual action sentence shown under the card title.
-fn kind_action(kind: ClusterKind) -> &'static str {
-    bucket_labels(kind).evidence_sentence
 }
 
 /// Dispatches between the single ranked list and the per-language
@@ -444,46 +391,22 @@ fn language_display_name(language: &str) -> &'static str {
     }
 }
 
-/// Writes a single cluster as a Terminal Card: title plus action sentence
-/// plus one expanded example snippet plus a compact "also found in …" list.
-/// A `data`-category cluster ([RANK-CATEGORY]) carries a "data table" chip in
-/// the header and the category-specific builder/asset action sentence, both
-/// sourced from [`CloneCategory`] so the HTML, text, and tree surfaces render
-/// identical words.
+/// Writes a neutral mass-only duplicate card.
 pub(super) fn write_cluster_card(
     out: &mut String,
     cluster: &ReportCluster,
     snippets: &mut SnippetLoader<'_>,
 ) {
-    let kind = classify(cluster);
-    let labels = bucket_labels(kind);
-    let category = CloneCategory::from_wire_label(&cluster.category);
     let occurrences = &cluster.occurrences;
-    let ai_badge = if labels.ai_match {
-        "<span class=\"cluster-card__ai-badge\" title=\"Detected by the AI embedding pass — semantically equivalent, syntactically different.\">AI match</span>"
-    } else {
-        ""
-    };
-    let action = match category {
-        CloneCategory::DataTable => category.action_sentence(),
-        CloneCategory::Logic => kind_action(kind),
-    };
     let _ = write!(
         out,
-        "<article class=\"cluster-card {kind_class} cat-{category_class}{diff_class}\">\
+        "<article class=\"cluster-card{diff_class}\">\
          <header class=\"cluster-card__head\">\
-         <h3 class=\"cluster-card__title\">{title}</h3>\
-         {ai_badge}{category_chip}\
+         <h3 class=\"cluster-card__title\">Duplicate code</h3>\
          <span class=\"cluster-card__cost\">{cost}</span>\
-         </header>\
-         <p class=\"cluster-card__action\">{action}</p>",
-        kind_class = kind_class(kind),
-        category_class = category.wire_label(),
+         </header>",
         diff_class = diff_card_class(cluster),
-        title = escape(&kind_title(kind, occurrences.len())),
-        category_chip = category_chip(category),
         cost = escape(&cost_chip(cluster)),
-        action = escape(action),
     );
     write_example(out, occurrences, snippets);
     write_also_list(out, occurrences, snippets);
@@ -512,26 +435,12 @@ fn diff_badge_markup(in_diff: Option<bool>) -> String {
     })
 }
 
-/// Renders the `data table` category chip for the card header, or an empty
-/// string for an ordinary logic clone. Reuses the `cluster-card__ai-badge`
-/// pill style — same visual treatment, zero duplicate CSS — and sources the
-/// label from [`CloneCategory::chip`] so it never drifts from the text
-/// renderer ([RANK-CATEGORY]).
-fn category_chip(category: CloneCategory) -> String {
-    category.chip().map_or_else(String::new, |label| {
-        format!(
-            "<span class=\"cluster-card__ai-badge\" \
-             title=\"Repeated data rows, not duplicated logic — demoted in the ranking.\">{}</span>",
-            escape(label),
-        )
-    })
-}
-
-/// Returns a compact "scope" chip text — number of AST nodes the
-/// canonical example covers, in plain language.
+/// Returns the exact cluster mass and canonical extent.
 fn cost_chip(cluster: &ReportCluster) -> String {
-    let nodes = cluster.canonical_node_count;
-    format!("~{nodes} AST nodes per copy")
+    format!(
+        "mass {} · {} canonical nodes · {} occurrences",
+        cluster.mass, cluster.canonical_node_count, cluster.occurrence_count
+    )
 }
 
 /// Renders the canonical example: file path label + highlighted

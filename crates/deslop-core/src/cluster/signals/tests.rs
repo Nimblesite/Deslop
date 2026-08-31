@@ -433,7 +433,7 @@ fn the_rendered_triple_is_one_admitted_pairs_own_axes() {
 // a pure function of the admitted pair set: identical inputs twice
 // produce identical scores and the identical named pair.
 #[test]
-fn the_source_pair_election_is_deterministic() {
+fn the_source_pair_selection_is_deterministic() {
     let mut registry = FileRegistry::new();
     let first = registry.register(PathBuf::from("det_a.rs"));
     let second = registry.register(PathBuf::from("det_b.rs"));

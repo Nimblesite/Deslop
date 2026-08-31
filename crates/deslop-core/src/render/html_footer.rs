@@ -2,8 +2,7 @@
 //!
 //! Per [OUTPUT-HUMAN-HTML] the body of the report stays scannable —
 //! the verbose run metadata (tool version, embedding
-//! provenance, per-cluster signal numbers, action-hints playbook,
-//! schema doc) lives inside a single collapsed `<details>` tucked at
+//! provenance and schema documentation lives inside one collapsed `<details>` tucked at
 //! the bottom of the page. Humans can ignore it; agents and
 //! `--from-report` consumers can still read everything they need.
 
@@ -15,7 +14,7 @@ use crate::report::Report;
 pub fn write_run_details(out: &mut String, report: &Report, escape: fn(&str) -> String) {
     let _ = write!(
         out,
-        "<details class=\"run-details\"><summary>Run details, signals, and schema reference</summary>\
+        "<details class=\"run-details\"><summary>Run details and schema reference</summary>\
          <dl>\
          <dt>Tool</dt><dd>{tool}</dd>\
          <dt>Files analysed</dt><dd>{files}</dd>\
@@ -29,50 +28,9 @@ pub fn write_run_details(out: &mut String, report: &Report, escape: fn(&str) -> 
         hidden = report.clusters_hidden,
         embeddings = escape(&format_provenance(report)),
     );
-    write_signals(out, report, escape);
-    write_action_hints(out, report, escape);
     write_boilerplate_hints(out, report, escape);
     write_schema(out, report, escape);
     let _ = write!(out, "</details>");
-}
-
-/// Per-cluster signal table. Only included when there's at least one
-/// cluster.
-fn write_signals(out: &mut String, report: &Report, escape: fn(&str) -> String) {
-    let rows: Vec<String> = report
-        .clusters
-        .iter()
-        .filter_map(crate::render::signals::scoped_table_row)
-        .collect();
-    if rows.is_empty() {
-        return;
-    }
-    let _ = write!(
-        out,
-        "<h3>Per-group signals</h3><pre>{header}",
-        header = escape(crate::render::signals::TABLE_HEADER),
-    );
-    for row in rows {
-        let _ = writeln!(out, "{}", escape(&row));
-    }
-    let _ = write!(out, "</pre>");
-}
-
-/// Agent-oriented action-hints playbook.
-fn write_action_hints(out: &mut String, report: &Report, escape: fn(&str) -> String) {
-    if report.action_hints.is_empty() {
-        return;
-    }
-    let _ = write!(out, "<h3>Action hints</h3><ul>");
-    for hint in &report.action_hints {
-        let _ = write!(
-            out,
-            "<li><code>{pattern}</code> — {rec}</li>",
-            pattern = escape(&hint.pattern),
-            rec = escape(&hint.recommendation),
-        );
-    }
-    let _ = write!(out, "</ul>");
 }
 
 /// Low-noise import/prologue hygiene hints.

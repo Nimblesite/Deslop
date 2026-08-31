@@ -41,8 +41,7 @@ const HINT_INTERPRETATION_ASSERTION =
 const STRUCTURAL_ONLY_TITLE = "Same shape, different content";
 const LEGACY_WORD_SUFFIX = "ict";
 
-// The elected pair's evidence axes, staged exactly as the engine stamps
-// them ([FUSED-CLUSTER-SIGNALS]). There is no combined score to stage:
+// The pair's evidence axes, staged exactly as the engine stamps them. There is no combined score to stage:
 // `fused` is deleted from the wire, and no client fixture may carry one.
 const signals = (
   s: number,
@@ -239,7 +238,7 @@ suite("report schema helpers", () => {
     );
   });
 
-  test("elected-pair evidence is measured, and no combined score rides beside it", () => {
+  test("pair evidence is measured, and no combined score rides beside it", () => {
     // The pair evidence axes are measurements in [0,1]; a fixture carrying
     // anything else invalidates every family built on them. There is no
     // fused field left to bound: the type-level proof lives in the

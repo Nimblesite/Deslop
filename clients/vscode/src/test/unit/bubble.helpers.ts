@@ -31,13 +31,13 @@ export interface ClusterSignalOptions {
 
 const FIXTURE_TEN = 10;
 export const DEFAULT_BUBBLE_CLUSTER_WEIGHT = FIXTURE_TEN;
-export const HIGH_ELECTED_AGREEMENT = 0.95;
+export const HIGH_PAIR_AGREEMENT = 0.95;
 export const PRIMARY_BUBBLE_CLUSTER_ID = "c-a";
 const FIXTURE_OCCURRENCE_END_BYTE = FIXTURE_TEN;
 const FIXTURE_ANALYSED_LOC = FIXTURE_TEN;
 const FIXTURE_LINE_LENGTH = FIXTURE_TEN;
 
-// Builds a two-occurrence cluster whose elected pair's byte agreement is
+// Builds a two-occurrence cluster whose pair's byte agreement is
 // explicit, so a test can stage the exact content evidence it is
 // asserting ([FUSED-CONTENT-GATE]). Admission is the engine's bucket
 // alone; no signal value influences whether a cluster renders.
@@ -94,7 +94,7 @@ export function probeCluster(
 // so a probe claiming a different count is visibly wrong.
 export function probeReport(): Report {
   return reportWithClusters(
-    [probeCluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT, 5)],
+    [probeCluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_PAIR_AGREEMENT, 5)],
     {},
     {
       analysed_loc: FIXTURE_ANALYSED_LOC,
@@ -237,7 +237,7 @@ export async function resolveProbe(
   request: DeferredProbeRequest | undefined,
   probe: Promise<void>,
   cancellationExpected?: boolean,
-  clusters: ReportCluster[] = [probeCluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT)],
+  clusters: ReportCluster[] = [probeCluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_PAIR_AGREEMENT)],
 ): Promise<void> {
   assert.ok(request !== undefined, "probe request must exist");
   if (cancellationExpected !== undefined) {
@@ -322,7 +322,7 @@ export function renderFullConfidenceBubble(
   clusterId: string,
 ): string {
   bubble.render(capture.editor, span(startChar), [
-    probeCluster(clusterId, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT),
+    probeCluster(clusterId, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_PAIR_AGREEMENT),
   ]);
   return assertBubbleShows(
     capture,

@@ -118,11 +118,8 @@ mod calls;
 mod constant_table;
 mod contract_index;
 mod dart;
-mod dart_data_table;
-mod declaration_family;
 mod ecmascript;
 mod family;
-mod forwarding;
 mod override_marker;
 mod polymorphic;
 mod python;
@@ -132,7 +129,6 @@ mod python_dict_assert;
 mod python_idioms;
 mod python_module_preamble;
 mod python_orm;
-mod role_compat;
 mod rust;
 mod snippets;
 mod structural_families;
@@ -146,7 +142,6 @@ use std::{
 
 use tree_sitter::Node;
 
-pub(crate) use declaration_family::is_single_file_declaration_family;
 pub use snippets::ParseCache;
 use snippets::{collect_snippets, parse_for, uniform_language, Snippet};
 pub(crate) use structural_families::split_structural_families;
@@ -154,7 +149,6 @@ pub(crate) use verbatim_subgroup::split_noise_verbatim_families;
 
 use crate::{
     ast::{named_children, ByteRange},
-    clone_category::CloneCategory,
     fingerprint::Fingerprint,
     state::FileId,
 };
@@ -168,8 +162,6 @@ use crate::{
 pub(crate) enum NoiseStage {
     /// The noise-split pass, over fused components pre-report.
     Split,
-    /// The report render pass, over ranked report clusters.
-    Render,
 }
 
 /// Decides whether `cluster` is a known noise pattern that must not be
@@ -344,62 +336,6 @@ impl NoiseFilter {
     }
 }
 
-/// Classifies a cluster's [`CloneCategory`] ([RANK-CATEGORY]) by re-parsing
-/// its member sources the same way [`is_noise_pattern`] does. Returns
-/// [`CloneCategory::DataTable`] for a data-structure literal whose repeated
-/// rows are un-refactorable data; otherwise [`CloneCategory::Logic`]. The
-/// verbatim escape hatch (`raw_snippet_texts_differ`) lives inside each
-/// per-language predicate, so a byte-for-byte copied table stays `Logic`.
-///
-/// Distinct from `is_noise_pattern`: a `DataTable` is real repetition the
-/// user *may* act on (a builder, an asset file), so the policy demotes or
-/// drops it per config rather than silently hiding it.
-pub(crate) fn classify_clone_category<S: BuildHasher>(
-    members: &[Fingerprint],
-    literal_fraction: f64,
-    sources: &HashMap<FileId, Vec<u8>>,
-    file_languages: &HashMap<FileId, &'static str, S>,
-    cache: &ParseCache,
-) -> CloneCategory {
-    let Some(language) = uniform_language(members, file_languages) else {
-        return CloneCategory::Logic;
-    };
-    let Some(snippets) = collect_snippets(members, sources, language, cache) else {
-        return CloneCategory::Logic;
-    };
-    if is_data_table_cluster(language, literal_fraction, &snippets) {
-        CloneCategory::DataTable
-    } else {
-        CloneCategory::Logic
-    }
-}
-
-/// Dispatches data-table detection. The language-agnostic
-/// literal-dominance test ([CLONE-NOISE-LITERAL-TABLE]) covers
-/// pure value tables in every language; the Dart predicate additionally
-/// recognises collection literals of constructor rows
-/// ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]), whose identifier-heavy rows
-/// sit below the literal-dominance floor.
-fn is_data_table_cluster(language: &str, literal_fraction: f64, snippets: &[Snippet<'_>]) -> bool {
-    is_literal_dominated_table(literal_fraction, snippets)
-        || match language {
-            "dart" => dart_data_table::is_dart_collection_data_table_cluster(snippets),
-            _ => false,
-        }
-}
-
-/// Language-agnostic data-table test ([CLONE-NOISE-LITERAL-TABLE]): the
-/// cluster's normalised leaves are overwhelmingly literal positions —
-/// measured in the pipeline, where the normalised trees live — and at
-/// least two members differ in raw bytes. The verbatim escape hatch is
-/// the same #190 rule the Dart predicate applies: a byte-for-byte
-/// copied table is genuine duplication and stays `logic`.
-fn is_literal_dominated_table(literal_fraction: f64, snippets: &[Snippet<'_>]) -> bool {
-    literal_fraction >= crate::buckets::LITERAL_TABLE_MIN_FRACTION
-        && snippets.len() >= 2
-        && raw_snippet_texts_differ(snippets)
-}
-
 /// Language-specific idiom filters, dispatched by language so a cluster is
 /// only walked by matchers that can fire for it. C# has no idiom filter
 /// today; Dart suppresses const-data-registry field clusters. Both
@@ -472,29 +408,6 @@ fn rust_noise(snippets: &[Snippet<'_>]) -> bool {
         || rust::is_rust_iter_collect_idiom_cluster(snippets)
         || rust::is_rust_match_dispatch_cluster(snippets)
         || rust::is_rust_struct_field_declaration_cluster(snippets)
-}
-
-/// Decides whether an embedding-dominant `same_behavior` cluster pairs
-/// members of incompatible top-level roles — a class/type definition
-/// with a function/method (issue
-/// [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]). Returns `true` when the
-/// cluster should be hidden. The caller restricts this to the
-/// `same_behavior` bucket so deterministic Type-1/2/3 clusters are
-/// untouched. Falls through to `false` when sources or a uniform
-/// language are unavailable.
-pub(crate) fn is_embedding_role_mismatch<S: BuildHasher>(
-    members: &[Fingerprint],
-    sources: &HashMap<FileId, Vec<u8>>,
-    file_languages: &HashMap<FileId, &'static str, S>,
-    cache: &ParseCache,
-) -> bool {
-    let Some(language) = uniform_language(members, file_languages) else {
-        return false;
-    };
-    let Some(snippets) = collect_snippets(members, sources, language, cache) else {
-        return false;
-    };
-    role_compat::is_role_incompatible_embedding_match(&snippets)
 }
 
 /// Trims surrounding ASCII whitespace from a reported snippet range so

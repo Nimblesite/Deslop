@@ -1,7 +1,8 @@
 // One `ReportCluster` fixture builder for every VS Code suite.
 //
 // A cluster carries the figures the engine computed for it — the global
-// rank, the severity band, the elected pair's measured axes, the
+// rank, the severity band, the measured pair axes while the wire still
+// carries them, the
 // occurrence count and the evidence sentence — and every surface reads
 // them verbatim. A suite that hand-rolled its own literal would be free
 // to omit one, and a surface reading an omitted field renders a zero
@@ -67,9 +68,8 @@ export function wireCluster(fixture: ClusterFixture): ReportCluster {
     size,
     canonical_node_count: fixture.canonical_node_count ?? 4,
     signals: fixture.signals ?? bucketSignals(bucket),
-    // The elected pair whose measurement `signals` carries
-    // ([FUSED-CLUSTER-SIGNALS]). Default: the fixture's first two
-    // occurrences, the pair a multi-member fixture elects; a
+    // The pair whose measurement `signals` carries. Default: the fixture's
+    // first two occurrences; a
     // single-occurrence fixture has no admitted pair and carries no
     // source, matching the engine's no-pair convention. Every rendered
     // axis must trace to a real pair, so a fixture without one is a

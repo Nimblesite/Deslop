@@ -28,6 +28,7 @@ use deslop_core::{
         FindSimilarInput as WireFindSimilarInput, FindSimilarRequest, SessionConfig,
     },
     report::ReportCluster,
+    wire_generated::{PairComparison, PairComparisonParams},
     EmbeddingProvenance, EmbeddingSpec, Report,
 };
 use serde_json::{json, Value};
@@ -272,6 +273,15 @@ impl McpBackend for LiveBackend {
         Ok(cluster)
     }
 
+    fn compare_pair(&self, params: &PairComparisonParams) -> Result<PairComparison, BackendError> {
+        let params = serde_json::to_value(params)
+            .map_err(|error| BackendError::StateFileCorrupt(format!("ipc serialise: {error}")))?;
+        let result = ipc_call(&self.root, "pair/compare", &params)?;
+        serde_json::from_value(result).map_err(|error| {
+            BackendError::StateFileCorrupt(format!("ipc pair comparison parse: {error}"))
+        })
+    }
+
     fn merge_plan(&self, id: &str) -> Result<deslop_core::wire_generated::MergePlan, BackendError> {
         let result = cluster_scoped_ipc(&self.root, "merge/plan", id)?;
         let plan: deslop_core::wire_generated::MergePlan =
@@ -399,7 +409,10 @@ fn refresh_progress_from_result(result: &Value) -> Result<RescanProgress, Backen
             clusters_added: required_usize(result, "clustersAdded")?,
             clusters_removed: required_usize(result, "clustersRemoved")?,
             clusters_updated: required_usize(result, "clustersUpdated")?,
-            worst_weight: 0.0,
+            literal_findings_added: required_usize(result, "literalFindingsAdded")?,
+            literal_findings_removed: required_usize(result, "literalFindingsRemoved")?,
+            literal_findings_updated: required_usize(result, "literalFindingsUpdated")?,
+            worst_mass: required_u64(result, "worstMass")?,
         },
     })
 }

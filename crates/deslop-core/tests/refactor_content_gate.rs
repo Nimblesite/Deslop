@@ -28,8 +28,7 @@ use deslop_core::{
         consolidate::{compute_consolidation_plan, ConsolidationOutcome},
         preconditions,
     },
-    render::signals::plain_explanation,
-    report::ReportCluster,
+    report::{ReportCluster, ReportSignals},
     wire_generated::MergeVerdict,
 };
 
@@ -155,10 +154,8 @@ fn shape_only_same_file_family_is_refused_with_the_measured_reason() -> Result<(
         "the reason must name the content gate, got {reason}"
     );
     ensure!(
-        reason.contains(&plain_explanation(cluster.signals)),
-        "the reason must quote the shared render::signals explanation \
-         `{}`, got {reason}",
-        plain_explanation(cluster.signals)
+        reason.contains(&expected_six_axis_explanation(cluster.signals)),
+        "the reason must quote the measured explanation, got {reason}"
     );
     ensure!(
         reason.contains("agreement 0.18") && reason.contains("rename 0.00"),
@@ -212,10 +209,27 @@ fn shape_only_cross_file_family_is_not_a_consolidation_candidate() -> Result<()>
         ));
     };
     ensure!(
-        reason.contains("shapes match") && reason.contains(&plain_explanation(cluster.signals)),
+        reason.contains("shapes match")
+            && reason.contains(&expected_six_axis_explanation(cluster.signals)),
         "the consolidation refusal must carry the measured explanation, got {reason}"
     );
     Ok(())
+}
+
+/// The six-axis `label value` line the refactor gate's refusal reason
+/// embeds, spelled out here rather than borrowed from the renderer so a
+/// gate that quietly drops the pair evidence fails this test.
+fn expected_six_axis_explanation(signals: ReportSignals) -> String {
+    format!(
+        "structural {structural:.2} · jaccard {jaccard:.2} · embedding {embedding:.2} · \
+         agreement {agreement:.2} · rename {rename:.2} · literal {literal:.2}",
+        structural = signals.structural,
+        jaccard = signals.token_jaccard,
+        embedding = signals.embedding_cos,
+        agreement = signals.pair_agreement,
+        rename = signals.pair_rename_consistency,
+        literal = signals.literal_fraction,
+    )
 }
 
 /// The allow direction. The verbatim extract fixture is a real

@@ -43,7 +43,7 @@ pub(crate) fn restamp_cluster(cluster: &mut ReportCluster) {
     crate::report::enforce_pair_evidence_scope(cluster);
     cluster.signals.shape = cluster.signals.shape_score();
     cluster.occurrence_count = occurrence_count(cluster);
-    if crate::report::elected_signal_pair(cluster).is_some() {
+    if crate::report::measured_signal_pair(cluster).is_some() {
         cluster.evidence_verdict =
             crate::render::signals::content_evidence_verdict(cluster.signals);
     }

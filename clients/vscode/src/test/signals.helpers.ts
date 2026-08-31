@@ -1,10 +1,10 @@
-// Seven-field elected-pair `ReportSignals` fixtures ([FUSED-CLUSTER-SIGNALS]).
+// Seven-field pair `ReportSignals` fixtures.
 //
-// Every axis is one admitted pair's measurement — the elected pair named by
-// `signal_source` — never a cluster mean. One builder instead of twenty
+// Every axis is one admitted pair's measurement — the pair named by
+// `signal_source`, when the wire names one — never a cluster mean. One builder instead of twenty
 // copy-pasted literals, keyed by the engine's bucket so the evidence a
 // fixture claims stays coherent with the bucket: an `identical` cluster's
-// elected pair shares all of its content, a `structural_only` cluster's
+// pair shares all of its content, a `structural_only` cluster's
 // shares almost none of it. There is no combined score on the wire to
 // fixture: admission and routing are the engine's bucket verdict.
 

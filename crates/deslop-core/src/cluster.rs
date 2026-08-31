@@ -17,11 +17,8 @@ use std::{
 
 use crate::{
     ast::{ByteRange, NormalizedNode},
-    content::{attach_content_evidence, ContentEvidence},
     fingerprint::Fingerprint,
-    lsh::SignatureLookup,
-    overlap::OverlapMeasurer,
-    pair::{FusedCluster, PairScore},
+    pair::FusedCluster,
     state::FileId,
 };
 
@@ -31,14 +28,10 @@ pub mod benchmark;
 /// The authored declaration an occurrence sits inside
 /// ([PIPELINE-CLUSTER-EXACT-SCOPE]).
 mod scope;
-/// Rendered-truth signal measurement ([FUSED-CLUSTER-SIGNALS]).
-mod signals;
 /// Cross-cluster subsumption ([PIPELINE-CLUSTER-SUBSUME]).
 mod subsume;
 use scope::DeclarationScopes;
-use signals::measured_signals;
 use subsume::collapse_cross_cluster_overlap;
-pub(crate) use subsume::VERBATIM_OVERTURN_MIN_NODES;
 
 /// A set of fingerprints that share the same hash, i.e. a detected
 /// (structural) clone cluster.
@@ -50,30 +43,8 @@ pub struct Cluster {
     pub id: String,
     /// Members of the cluster, in discovery order.
     pub members: Vec<Fingerprint>,
-    /// Weight from [PIPELINE-RANK-WORST-FIRST]. Higher = worse offender.
-    pub weight: f64,
-    /// Measured signal breakdown ([FUSED-CLUSTER-SIGNALS]): one elected
-    /// admitted pair's three axes together — Merkle-hash equality /
-    /// shared-subtree overlap for `structural`, `MinHash` Jaccard for
-    /// `token_jaccard`, vector cosine for `embedding_cos`. Per-axis
-    /// maxima are forbidden because they could describe no real pair;
-    /// a pair that never cleared admission contributes nothing (gh #458).
-    pub signals: PairScore,
-    /// The admitted pair — as positions into [`Self::members`], which
-    /// is the rendered occurrence order — whose evidence the signals
-    /// display ([FUSED-CLUSTER-SIGNALS] gh #458). `None` when no
-    /// admitted pair survives the same-file overlap collapse.
-    pub signal_source: Option<(usize, usize)>,
-    /// The elected pair's measured raw-content evidence from its
-    /// normalisation-collapsed leaves ([FUSED-CONTENT-GATE]): byte
-    /// agreement, Type-2 rename consistency, and literal dominance
-    /// ([CLONE-NOISE-LITERAL-TABLE]). Starts
-    /// [`ContentEvidence::unmeasured`];
-    /// [`crate::content::attach_content_evidence`] measures it inside
-    /// [`build_ranked_fused_clusters`], before cross-cluster
-    /// subsumption elects the surviving view and before bucket routing
-    /// and the ranking weight read it (#367).
-    pub content: ContentEvidence,
+    /// Duplicated mass from [RANK-MASS-SUM]. Higher = more code to fix.
+    pub mass: u64,
 }
 
 /// Minimum number of logical locations required for a reportable
@@ -101,19 +72,13 @@ const MIN_REPORTABLE_MEMBERS: usize = 2;
 /// borrowed for the whole build so one struct keeps the call sites
 /// name-checked.
 #[derive(Debug)]
-pub struct ClusterBuildInputs<'a, S: BuildHasher, H: BuildHasher, L: BuildHasher> {
+pub struct ClusterBuildInputs<'a, L: BuildHasher> {
     /// Every live fingerprint, flat, in corpus order.
     pub fingerprints: &'a [Fingerprint],
-    /// Per-fingerprint `MinHash` signatures, positionally aligned.
-    pub signatures: &'a dyn SignatureLookup,
-    /// Embedding vectors by corpus index ([FUSED-CLUSTER-SIGNALS]).
-    pub embedding_vectors: &'a HashMap<usize, Vec<f32>, S>,
     /// Transitive-closure components to rehydrate.
     pub fused_clusters: &'a [FusedCluster],
     /// Normalised trees the fingerprints walk.
     pub trees: &'a [NormalizedNode],
-    /// Source bytes keyed by the file id each fingerprint references.
-    pub sources: &'a HashMap<FileId, Vec<u8>, H>,
     /// `FileId → language_id` for declaration-scope matching.
     pub file_languages: &'a HashMap<FileId, &'static str, L>,
     /// `FileId → workspace-relative path` — the second input of the
@@ -126,12 +91,8 @@ pub struct ClusterBuildInputs<'a, S: BuildHasher, H: BuildHasher, L: BuildHasher
 /// references fingerprint indices; this materialises the full [`Cluster`]
 /// so ranking and rendering need not know how the cluster was discovered.
 #[must_use]
-pub fn build_ranked_fused_clusters<
-    S: BuildHasher + Sync,
-    H: BuildHasher + Sync,
-    L: BuildHasher + Sync,
->(
-    inputs: &ClusterBuildInputs<'_, S, H, L>,
+pub fn build_ranked_fused_clusters<L: BuildHasher + Sync>(
+    inputs: &ClusterBuildInputs<'_, L>,
 ) -> Vec<Cluster> {
     let mut clusters = reportable_clusters(
         inputs,
@@ -140,21 +101,10 @@ pub fn build_ranked_fused_clusters<
     let dropped_below_min_members = inputs.fused_clusters.len().saturating_sub(clusters.len());
     clusters.sort_by(|left, right| {
         right
-            .weight
-            .partial_cmp(&left.weight)
-            .unwrap_or(std::cmp::Ordering::Equal)
+            .mass
+            .cmp(&left.mass)
             .then_with(|| left.id.cmp(&right.id))
     });
-    // [FUSED-CONTENT-GATE] before [PIPELINE-CLUSTER-SUBSUME] (#367,
-    // #408): subsumption deletes whole views, and the choice must see
-    // the same measured content evidence the report will render — a
-    // survivor elected on raw geometry cannot be re-elected later.
-    attach_content_evidence(
-        &mut clusters,
-        inputs.trees,
-        inputs.sources,
-        inputs.file_languages,
-    );
     let collapsed = collapse_cross_cluster_overlap(clusters);
     log_ranked_cluster_distribution(
         &collapsed,
@@ -164,236 +114,64 @@ pub fn build_ranked_fused_clusters<
     collapsed
 }
 
-/// Fewest fused clusters worth sharding the signal build across
-/// threads — below this the spawn cost outweighs the measurement.
-const SIGNAL_SHARD_MIN_CLUSTERS: usize = 256;
-
-/// Fused clusters per claimed chunk. Kept small because the cost of a
-/// chunk is dominated by its widest cluster: the fewer clusters share a
-/// chunk, the less an unlucky draw can hold the stage open.
-const SIGNAL_CHUNK_CLUSTERS: usize = 8;
-
 /// Materialises every fused cluster that remains reportable.
-///
-/// A corpus-scale run pays for this stage in the O(k²) per-cluster pair
-/// measurement ([FUSED-CLUSTER-SIGNALS]): one 877-member scaffold
-/// cluster measures 384k pairs, most of them full tree alignments.
-/// Clusters are independent, every measurement is a pure function of
-/// the corpus, and each occurrence belongs to exactly one component —
-/// so the build runs sharded over the cluster list with one
-/// [`OverlapMeasurer`] per worker, and results merge in input order
-/// ([PERF-FLUTTER-TODO-PAIRS]). Threads change who computes a value,
-/// never the value: the same pairs feed the same measurer arithmetic.
-fn reportable_clusters<S: BuildHasher + Sync, H: BuildHasher + Sync, L: BuildHasher + Sync>(
-    inputs: &ClusterBuildInputs<'_, S, H, L>,
+fn reportable_clusters<L: BuildHasher + Sync>(
+    inputs: &ClusterBuildInputs<'_, L>,
     scopes: &DeclarationScopes<'_, impl BuildHasher + Sync>,
 ) -> Vec<Cluster> {
-    let workers = signal_worker_count(inputs.fused_clusters.len());
-    if workers <= 1 {
-        let mut overlap = OverlapMeasurer::new(inputs.trees);
-        let mut spent = BuildSpent::default();
-        let clusters = inputs
-            .fused_clusters
-            .iter()
-            .filter_map(|fused| {
-                build_fused_cluster(inputs, fused, &mut overlap, scopes, &mut spent)
-            })
-            .collect();
-        log_signal_measurement(overlap.stats(), &spent);
-        return clusters;
-    }
-    // [PERF-FLUTTER-TODO-PAIRS] Many small chunks claimed on demand
-    // rather than one contiguous block per worker. A cluster's signal
-    // build is quadratic in its member count, so a handful of wide
-    // scaffold clusters dominate the stage and a contiguous split
-    // strands them on one worker (13.6 s against a 3.9 s balanced
-    // ideal on the Flutter framework slice). Each worker keeps one
-    // measurer across every chunk it claims, so the alignment memos
-    // still accumulate; results reassemble in cluster order, so the
-    // report is unchanged ([PIPELINE-DETERMINISM]).
-    let (shards, states) = crate::shard::map_chunks(
-        inputs.fused_clusters.chunks(SIGNAL_CHUNK_CLUSTERS),
-        workers,
-        || (OverlapMeasurer::new(inputs.trees), BuildSpent::default()),
-        |(overlap, shard_spent), chunk| {
-            chunk
-                .iter()
-                .filter_map(|fused| {
-                    build_fused_cluster(inputs, fused, overlap, scopes, shard_spent)
-                })
-                .collect::<Vec<Cluster>>()
-        },
-    );
-    let mut totals = crate::overlap::MeasureStats::default();
-    let mut spent = BuildSpent::default();
-    for (overlap, shard_spent) in &states {
-        totals = totals.add(overlap.stats());
-        spent.absorb(shard_spent);
-    }
-    log_signal_measurement(totals, &spent);
-    let mut clusters = Vec::with_capacity(inputs.fused_clusters.len());
-    for shard in shards {
-        clusters.extend(shard);
-    }
-    clusters
-}
-
-/// Worker count for the sharded signal build: available parallelism,
-/// capped so every shard carries whole clusters worth of work.
-fn signal_worker_count(clusters: usize) -> usize {
-    if clusters < SIGNAL_SHARD_MIN_CLUSTERS {
-        return 1;
-    }
-    // Capped below full parallelism: each worker carries its own
-    // measurer with memo populations, and a corpus-scale run's memory
-    // ceiling buys more from one fewer worker than the wall loses
-    // ([PERF-FLUTTER-TODO-MEMORY]).
-    std::thread::available_parallelism()
-        .map_or(1, std::num::NonZeroUsize::get)
-        .min(SIGNAL_SHARD_MAX_WORKERS)
-}
-
-/// Most workers the signal build will use, whatever the core count.
-const SIGNAL_SHARD_MAX_WORKERS: usize = 14;
-
-/// Wall time the ranked build spent per substage, accumulated across
-/// every cluster so the signal event can attribute the stage
-/// ([PIPELINE-OBSERVABILITY-STAGES]).
-#[derive(Debug, Default)]
-struct BuildSpent {
-    /// Same-file overlap collapse.
-    collapse: std::time::Duration,
-    /// Pairwise signal measurement.
-    signals: std::time::Duration,
-    /// Cluster materialisation (weight, id, member copies).
-    materialize: std::time::Duration,
-}
-
-impl BuildSpent {
-    /// Folds one shard's substage times into the run total.
-    fn absorb(&mut self, other: &Self) {
-        self.collapse = self.collapse.saturating_add(other.collapse);
-        self.signals = self.signals.saturating_add(other.signals);
-        self.materialize = self.materialize.saturating_add(other.materialize);
-    }
-}
-
-/// Emits the cluster-signal overlap measurement counters and substage
-/// wall time, so memo effectiveness and cost attribution across the
-/// whole ranked build are readable from one event
-/// ([FUSED-SHARED-SUBTREE-MEMO], [PIPELINE-OBSERVABILITY-STAGES]).
-fn log_signal_measurement(stats: crate::overlap::MeasureStats, spent: &BuildSpent) {
-    tracing::info!(
-        alignments = stats.alignments,
-        credit_fallbacks = stats.credit_fallbacks,
-        hash_equal = stats.hash_equal,
-        exact_hits = stats.exact_hits,
-        unresolved = stats.unresolved,
-        collapse_ms = crate::observe::duration_ms(spent.collapse),
-        signals_ms = crate::observe::duration_ms(spent.signals),
-        materialize_ms = crate::observe::duration_ms(spent.materialize),
-        "cluster signal overlaps measured"
-    );
+    inputs
+        .fused_clusters
+        .iter()
+        .filter_map(|fused| build_fused_cluster(inputs, fused, scopes))
+        .collect()
 }
 
 /// Emits the structured GH#45 ranked-cluster distribution summary.
 fn log_ranked_cluster_distribution(clusters: &[Cluster], input_total: usize, dropped: usize) {
-    let (largest_weight, mean_weight) = weight_summary(clusters);
+    let largest_mass = clusters.first().map_or(0, |cluster| cluster.mass);
     tracing::info!(
         total = clusters.len(),
         input_total,
         dropped_below_min_members = dropped,
-        largest_weight,
-        mean_weight,
+        largest_mass,
         "ranked clusters built",
     );
-}
-
-/// Returns `(largest_weight, mean_weight)` for a ranked cluster slice.
-fn weight_summary(clusters: &[Cluster]) -> (f64, f64) {
-    let largest = clusters.first().map_or(0.0, |cluster| cluster.weight);
-    let total = clusters.iter().map(|cluster| cluster.weight).sum::<f64>();
-    let divisor = u32::try_from(clusters.len()).map_or(f64::from(u32::MAX), f64::from);
-    let mean = if clusters.is_empty() {
-        0.0
-    } else {
-        total / divisor
-    };
-    (largest, mean)
 }
 
 /// Rehydrates a single `FusedCluster` into a reportable [`Cluster`].
 /// Same-file overlap collapse can reduce a fused group to one logical
 /// location; those groups are artifacts, not duplicates, and are
-/// dropped before ranking. Signals are measured **after** the collapse
-/// so they describe exactly the occurrences the report shows.
-fn build_fused_cluster<S: BuildHasher + Sync, H: BuildHasher + Sync, L: BuildHasher + Sync>(
-    inputs: &ClusterBuildInputs<'_, S, H, L>,
+/// dropped before ranking.
+fn build_fused_cluster<L: BuildHasher + Sync>(
+    inputs: &ClusterBuildInputs<'_, L>,
     fused: &FusedCluster,
-    overlap: &mut OverlapMeasurer<'_>,
     scopes: &DeclarationScopes<'_, impl BuildHasher>,
-    spent: &mut BuildSpent,
 ) -> Option<Cluster> {
     let fingerprints = inputs.fingerprints;
-    let collapse_started = std::time::Instant::now();
     let occurrence_indices = collapse_overlapping_per_file(fused, fingerprints, scopes);
-    spent.collapse = spent.collapse.saturating_add(collapse_started.elapsed());
     if occurrence_indices.len() < MIN_REPORTABLE_MEMBERS {
         return None;
     }
-    let signals_started = std::time::Instant::now();
-    let admitted_pairs: Vec<(usize, usize)> = fused
-        .edges
-        .iter()
-        .map(|edge| (edge.left, edge.right))
-        .collect();
-    let measured = measured_signals(
-        &occurrence_indices,
-        &admitted_pairs,
-        fingerprints,
-        inputs.signatures,
-        inputs.embedding_vectors,
-        overlap,
-    );
-    spent.signals = spent.signals.saturating_add(signals_started.elapsed());
-    let materialize_started = std::time::Instant::now();
     let members: Vec<Fingerprint> = occurrence_indices
         .iter()
         .filter_map(|index| fingerprints.get(*index).cloned())
         .collect();
-    // The source pair is in corpus-index terms; the report reads it as
-    // positions into the rendered occurrence order, which is exactly
-    // `members`.
-    let signal_source = measured.source_pair.and_then(|(left, right)| {
-        let left_position = occurrence_indices.binary_search(&left).ok()?;
-        let right_position = occurrence_indices.binary_search(&right).ok()?;
-        Some((left_position, right_position))
-    });
-    let cluster = materialize_cluster(members, measured.score, signal_source, inputs.file_paths);
-    spent.materialize = spent
-        .materialize
-        .saturating_add(materialize_started.elapsed());
-    Some(cluster)
+    Some(materialize_cluster(members, inputs.file_paths))
 }
 
 /// Builds the final reportable cluster from already-filtered members.
 fn materialize_cluster(
     members: Vec<Fingerprint>,
-    signals: PairScore,
-    signal_source: Option<(usize, usize)>,
     file_paths: &HashMap<FileId, PathBuf>,
 ) -> Cluster {
     let size = members.len();
     let smallest_nodes = smallest_node_count(&members);
-    let weight = mass_weight(smallest_nodes, size);
+    let mass = duplicate_mass(smallest_nodes, size);
     let id_source = cluster_id_source(&members, file_paths);
     Cluster {
         id: encode_short_id(id_source),
         members,
-        weight,
-        signals,
-        signal_source,
-        content: ContentEvidence::unmeasured(),
+        mass,
     }
 }
 
@@ -709,45 +487,13 @@ impl OverlapRun {
 
 /// Implements the [RANK-MASS-SUM] formula: duplicated mass only.
 ///
-/// `weight = clone_node_count × (cluster_size − 1)`
-///
-/// The visible re-rank in `report_weight.rs` is the authoritative final
-/// weight (it folds the category and structural-only policy multipliers
-/// and the `report_hide` visibility); this is the mass a cluster carries
-/// before that pass, used to keep the pre-render order stable. No
-/// `log2(1 + spanned)` term and no confidence factor survives
-/// ([RANK-MASS-SUM], gh #458): a duplicate's extent is the mass to fix,
-/// never a confidence-scaled figure.
+/// `mass = canonical_node_count × max(visible_occurrences − 1, 0)`
 #[must_use]
-fn mass_weight(clone_node_count: usize, cluster_size: usize) -> f64 {
-    let nodes = lossless_f64_from_usize(clone_node_count);
-    let size_minus_one = lossless_f64_from_usize(cluster_size.saturating_sub(1));
-    nodes * size_minus_one
+pub(crate) fn duplicate_mass(canonical_node_count: usize, visible_occurrences: usize) -> u64 {
+    let nodes = u64::try_from(canonical_node_count).unwrap_or(u64::MAX);
+    let copies = u64::try_from(visible_occurrences.saturating_sub(1)).unwrap_or(u64::MAX);
+    nodes.saturating_mul(copies)
 }
-
-/// Converts `usize` to `f64`, clamping to 2^53 (the largest integer that
-/// round-trips through `f64`) to keep the cast precision-safe.
-fn lossless_f64_from_usize(value: usize) -> f64 {
-    u64::try_from(value).map_or(F64_MAX_EXACT_INTEGER, lossless_f64_from_u64)
-}
-
-/// Converts `u64` to `f64`, clamping to 2^53.
-fn lossless_f64_from_u64(value: u64) -> f64 {
-    let clamped = value.min(F64_MAX_EXACT_INTEGER_U64);
-    // `clamped` fits in 53 bits — split into two `u32` halves so no cast
-    // loses precision.
-    let high = u32::try_from(clamped >> 32).unwrap_or(u32::MAX);
-    let low = u32::try_from(clamped & u64::from(u32::MAX)).unwrap_or(u32::MAX);
-    f64::from(high) * F64_TWO_POW_32 + f64::from(low)
-}
-
-/// 2^53: largest integer exactly representable by `f64`.
-const F64_MAX_EXACT_INTEGER_U64: u64 = 1_u64 << 53;
-/// Same value as [`F64_MAX_EXACT_INTEGER_U64`], pre-converted.
-const F64_MAX_EXACT_INTEGER: f64 = 9_007_199_254_740_992.0;
-/// 2^32 as an `f64`. Used by [`lossless_f64_from_u64`] to reassemble 64-bit
-/// values without a direct `u64 as f64` cast.
-const F64_TWO_POW_32: f64 = 4_294_967_296.0;
 
 /// Shortens a full 32-byte hash to an 8-byte hex stable id for reporting.
 #[must_use]

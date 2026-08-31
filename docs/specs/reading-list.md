@@ -115,10 +115,10 @@ IDE refactoring delivery + trust (LSP, previews, HCI):
 
 <a id="read-list-metrics"></a>
 
-**Duplication metrics & gate weighting.**
+**Duplication metrics and pair-evidence limits.**
 
-Grounds [METRICS-REPO-WEIGHTED] / [EXIT-CODES-WEIGHTED] — why the mechanical line-density percentage stays the default gate, and why the weighted companion discounts shape-only and semantic-only evidence. (Bellon et al. 2007 and Roy, Cordy & Koschke 2009 — the per-type benchmark and the Type-1..4 taxonomy — are already listed under *Clone-type theory*; Juergens et al. 2009 under *Inconsistency & drift*.)
+Grounds [METRICS-REPO] and the prohibition in [METRICS-REPO-WEIGHTED]: repository duplication is unweighted line density, while evidence quality belongs to pair admission and cannot be projected onto closure components. Bellon et al. 2007 and Roy, Cordy & Koschke 2009 are already listed under clone-type theory; Juergens et al. 2009 appears under inconsistency and drift.
 
-- [Svajlenko & Roy 2015 — Evaluating clone detection tools with BigCloneBench (ICSME)](https://doi.org/10.1109/ICSM.2015.7332459) — splits Type-3/4 into VST3/ST3/MT3/WT3-4 syntactic-similarity bands; tool precision and recall degrade monotonically as similarity falls, so findings from different evidence classes are not equally reliable
+- [Svajlenko & Roy 2015 — Evaluating clone detection tools with BigCloneBench (ICSME)](https://doi.org/10.1109/ICSM.2015.7332459) — splits clone pairs into VST3/ST3/MT3/WT3-4 syntactic-similarity bands and reports detector recall by band; it does not define Deslop's thresholds or justify projecting a pair band onto a closure component
 - [Kapser & Godfrey 2008 — "Cloning considered harmful" considered harmful (EMSE)](https://doi.org/10.1007/s10664-008-9076-6) — case-studied cloning patterns (forking, templating, boilerplate) are frequently deliberate and benign; shape-level repetition is the weakest ground for a failing verdict
 - [SonarQube metric definitions — duplicated lines density](https://docs.sonarsource.com/sonarqube-server/latest/user-guide/code-metrics/metrics-definition/) — the industry-standard CI gate is unweighted duplicated-line density; the precedent for keeping the mechanical percentage the comparable default

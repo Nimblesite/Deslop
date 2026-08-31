@@ -42,7 +42,7 @@ fn pytest_fixture_row_builders_stay_out_of_ranked_report() -> Result<()> {
     let visible_clusters = report
         .clusters
         .iter()
-        .map(|cluster| (&cluster.id, &cluster.bucket, cluster.size, cluster.signals))
+        .map(|cluster| (&cluster.id, cluster.mass, cluster.occurrence_count))
         .collect::<Vec<_>>();
 
     assert_eq!(
@@ -60,7 +60,7 @@ fn pytest_fixture_row_builders_stay_out_of_ranked_report() -> Result<()> {
     assert!(
         visible_clusters
             .iter()
-            .all(|(id, _, _, _)| *id != "pytest-fixture-row-builders"),
+            .all(|(id, _, _)| *id != "pytest-fixture-row-builders"),
         "GH #121 fixture builder cluster leaked into the ranked report"
     );
 

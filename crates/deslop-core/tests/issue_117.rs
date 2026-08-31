@@ -72,6 +72,8 @@ async fn live_update_removes_cluster_when_one_occurrence_remains() -> Result<()>
 
 fn all_reported_clusters_have_peers(clusters: &[ReportCluster]) -> bool {
     clusters.iter().all(|cluster| {
-        cluster.size >= 2 && cluster.occurrences.len() >= 2 && cluster.occurrences_total >= 2
+        cluster.occurrence_count >= 2
+            && cluster.occurrences.len() >= 2
+            && cluster.occurrences_total >= 2
     })
 }

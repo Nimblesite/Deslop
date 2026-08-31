@@ -69,7 +69,6 @@ impl PipelineSession {
         // rescue below.
         let PairingOutcome {
             trees,
-            cross_language_signatures,
             pairs,
             embedding_outcome,
         } = self.build_candidate_pairs(config, fingerprints, &signatures, &lsh_source)?;
@@ -88,22 +87,7 @@ impl PipelineSession {
         };
         let fused_clusters =
             self.partition_and_split(fingerprints, pairs, &trees, &parse_cache, &mut ledger);
-        // [FUSED-CLUSTER-SIGNALS] One signature space per run: the
-        // cross-language space compares any pair when the audit mode is
-        // on; the per-language space is exact otherwise. Mixing spaces
-        // inside one cluster measurement would compare incomparable values.
-        let built_alias_space = cross_language_signatures
-            .as_deref()
-            .map(|space| crate::lsh::SignatureIndex::from_segments([space]));
-        let measurement_signatures = built_alias_space.as_ref().unwrap_or(&signatures);
-        let clusters = self.ranked_clusters(
-            fingerprints,
-            measurement_signatures,
-            &embedding_outcome.vectors,
-            &fused_clusters,
-            &trees,
-            &mut ledger,
-        );
+        let clusters = self.ranked_clusters(fingerprints, &fused_clusters, &trees, &mut ledger);
         tracing::info!(
             ranked_clusters = clusters.len(),
             fingerprints = fingerprints.len(),
@@ -111,7 +95,6 @@ impl PipelineSession {
         );
         ledger.log_summary();
         Ok(render_report(ReportInputs {
-            parse_cache: &parse_cache,
             clusters: &clusters,
             registry: &self.registry,
             file_languages: &self.file_languages,
@@ -258,7 +241,6 @@ impl PipelineSession {
         );
         Ok(PairingOutcome {
             trees,
-            cross_language_signatures,
             pairs,
             embedding_outcome,
         })
@@ -350,8 +332,6 @@ impl PipelineSession {
     fn ranked_clusters(
         &self,
         fingerprints: &[crate::fingerprint::Fingerprint],
-        signatures: &crate::lsh::SignatureIndex<'_>,
-        embedding_vectors: &std::collections::HashMap<usize, Vec<f32>>,
         fused_clusters: &[crate::pair::FusedCluster],
         trees: &[crate::ast::NormalizedNode],
         ledger: &mut StageLedger,
@@ -373,11 +353,8 @@ impl PipelineSession {
         let ranked_input = fused_clusters.len();
         let clusters = build_ranked_fused_clusters(&ClusterBuildInputs {
             fingerprints,
-            signatures,
-            embedding_vectors,
             fused_clusters,
             trees,
-            sources: &self.sources,
             file_languages: &self.file_languages,
             file_paths: &file_paths,
         });
@@ -393,8 +370,6 @@ struct PairingOutcome {
     /// needed them before pairing; otherwise `None` and the caller
     /// materialises them after pair construction.
     trees: Option<Vec<crate::ast::NormalizedNode>>,
-    /// Cross-language alias signatures, audit mode only.
-    cross_language_signatures: Option<Vec<crate::lsh::Signature>>,
     /// The admission-gated candidate pairs.
     pairs: Vec<crate::pair::CandidatePair>,
     /// The embedding pass outcome (empty when embeddings are off).

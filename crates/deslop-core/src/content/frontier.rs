@@ -106,10 +106,6 @@ pub(super) struct MemberContent {
 }
 
 /// The key slice of a resolved member, `None` when unresolvable.
-pub(super) fn keys_of(content: Option<&MemberContent>) -> Option<&[LeafKey]> {
-    content.map(|content| content.keys.as_slice())
-}
-
 /// Raw source bytes of one collapsed leaf, by frontier index.
 pub(super) fn leaf_bytes<'src, S: BuildHasher>(
     content: &MemberContent,

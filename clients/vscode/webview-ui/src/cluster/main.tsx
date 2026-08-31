@@ -390,7 +390,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 function clusterIdTitle(id: string, rank: number, total: number): string {
-  return `Cluster ${id}. Ranked ${rank || UNKNOWN_RANK} of ${total} by Deslop's worst-first duplication impact score.`;
+  return `Cluster ${id}. Ranked ${rank || UNKNOWN_RANK} of ${total} by Deslop's worst-first duplicated mass.`;
 }
 
 function aiMatchTitle(): string {

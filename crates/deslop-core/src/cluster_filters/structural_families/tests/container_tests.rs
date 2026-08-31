@@ -4,7 +4,8 @@
 //! suites cannot isolate.
 
 use super::*;
-use crate::cluster::VERBATIM_OVERTURN_MIN_NODES;
+/// Minimum copied-block size used by the production container election.
+const COPIED_BLOCK_MIN_NODES: usize = 16;
 
 /// [`placed_corpus`] with an explicit node count per member, so a test
 /// can hold a family under the idiom-mass floor.
@@ -119,7 +120,7 @@ fn a_padded_window_over_the_same_files_is_a_container() {
 // [CLONE-NOISE-LITERAL-VARIATION-CALLS]).
 #[test]
 fn an_idiom_sized_family_does_not_unseat_its_umbrella() {
-    let idiom_nodes = VERBATIM_OVERTURN_MIN_NODES - 1;
+    let idiom_nodes = COPIED_BLOCK_MIN_NODES.saturating_sub(1);
     let fingerprints = placed_with_nodes(&[
         (QUOTIENT_HASH, 0, 0, 300, NODE_COUNT),
         (QUOTIENT_HASH, 1, 0, 300, NODE_COUNT),

@@ -460,8 +460,8 @@ impl ReportFixture {
         id: &str,
         snippets: Vec<(&str, &str)>,
         node_count: usize,
-        signals: PairScore,
-        content: deslop_core::content::ContentEvidence,
+        _signals: PairScore,
+        _content: deslop_core::content::ContentEvidence,
     ) -> Cluster {
         let (assembled, spans) = assemble_member_files(snippets);
         let registered: Vec<(&str, FileId)> = assembled
@@ -479,19 +479,16 @@ impl ReportFixture {
         Cluster {
             id: id.to_owned(),
             members,
-            weight: 10_000.0,
-            signals,
-            signal_source: Some((0, 1)),
-            content,
+            mass: u64::try_from(node_count)
+                .unwrap_or(u64::MAX)
+                .saturating_mul(u64::try_from(spans.len().saturating_sub(1)).unwrap_or(u64::MAX)),
         }
     }
 
     /// Renders `clusters` through the production report pipeline.
     pub(crate) fn render(&self, clusters: &[Cluster]) -> deslop_core::Report {
         let exclusion = ExclusionConfig::empty();
-        let parse_cache = deslop_core::ParseCache::new();
         render_report(ReportInputs {
-            parse_cache: &parse_cache,
             clusters,
             registry: &self.registry,
             file_languages: &self.file_languages,

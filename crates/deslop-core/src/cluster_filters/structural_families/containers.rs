@@ -17,10 +17,7 @@
 
 use std::collections::HashMap;
 
-use crate::{
-    cluster::VERBATIM_OVERTURN_MIN_NODES, fingerprint::Fingerprint, pair::FusedCluster,
-    state::FileId,
-};
+use crate::{fingerprint::Fingerprint, pair::FusedCluster, state::FileId};
 
 use super::super::family::{families_by, restrict};
 use super::MIN_FAMILY_MEMBERS;
@@ -54,6 +51,8 @@ const CONTAINER_SHARE_NUMERATOR: usize = 2;
 /// and "the nested view re-describes a fragment of a finding that is
 /// real at full extent".
 const CONTAINER_SHARE_DENOMINATOR: usize = 3;
+/// Minimum normalised nodes for a copied block to displace a container.
+const COPIED_BLOCK_MIN_NODES: usize = 16;
 
 /// [PIPELINE-CLUSTER-ELECT-CONTAINER] — the component without its
 /// concatenation members, or `None` when it holds none.
@@ -124,7 +123,7 @@ fn log_elected_containers(fused: &FusedCluster, kept: &[usize], fingerprints: &[
 /// so the family a container is measured against always survives it.
 ///
 /// Only a family of copied *blocks* confers container status: every
-/// occurrence must carry [`VERBATIM_OVERTURN_MIN_NODES`] normalised
+/// occurrence must carry [`COPIED_BLOCK_MIN_NODES`] normalised
 /// nodes, the same standing floor [PIPELINE-CLUSTER-SUBSUME] demands
 /// before a nested view may unseat its encloser. Without it, a run of
 /// byte-equal idiom lines — four `assert` statements that are most of a
@@ -150,7 +149,7 @@ fn is_family_container(
 }
 
 /// True when every occurrence of `family` carries at least
-/// [`VERBATIM_OVERTURN_MIN_NODES`] normalised nodes — the minimum over
+/// [`COPIED_BLOCK_MIN_NODES`] normalised nodes — the minimum over
 /// occurrences, never the sum, so a family of many tiny repeats gains
 /// no standing from its cardinality.
 fn family_has_standing(family: &[usize], fingerprints: &[Fingerprint]) -> bool {
@@ -158,7 +157,7 @@ fn family_has_standing(family: &[usize], fingerprints: &[Fingerprint]) -> bool {
         .iter()
         .map(|index| fingerprints.get(*index).map_or(0, |occ| occ.node_count))
         .min()
-        .is_some_and(|smallest| smallest >= VERBATIM_OVERTURN_MIN_NODES)
+        .is_some_and(|smallest| smallest >= COPIED_BLOCK_MIN_NODES)
 }
 
 /// True when `member` strictly encloses at least

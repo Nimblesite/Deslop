@@ -45,25 +45,30 @@ The host pushes the **visible projection** for the report and duplication webvie
 
 Command `deslop.openCluster` opens a webview tab. The tab renders a single cluster with:
 
-- Header: cluster id, rank, weight, size, severity badge, jump-to-next-cluster / jump-to-prev-cluster arrows.
-- Interpretation and action hints (the same fields the JSON carries).
-- Signal breakdown as six tiny bars, each labelled with its numeric value to two decimals: the pair's axes — structural, token Jaccard, embedding cosine — then, under a `CONTENT EVIDENCE` heading, the three measured fields the gate scored that shape against — agreement, rename consistency, literal fraction ([FUSED-CONTENT-GATE]). The pair axes alone cannot separate a corroborated Type-2 rename from an anchor-poor scaffolding family: both render `structural 1.00` and `jaccard 1.00`, and only the content evidence tells the reader which one is on screen. The strip closes with one plain-English reading of the shape score against that evidence, derived only from the numbers already rendered — it never re-derives the engine's bucket ([CLONE-BUCKETS-ROUTING]).
+- Header: cluster id, rank, mass, occurrence count, mass severity badge, and jump-to-next-cluster / jump-to-prev-cluster arrows.
+- Cluster membership and mass only. The panel carries no pair evidence, pair classification, interpretation derived from pair evidence, or source-pair selection.
 - One collapsible panel per occurrence, each containing:
   - File path plus human position (`line:column`), clickable to open the file at that exact editor position.
   - Line-numbered, syntax-highlighted source snippet (reusing the [OUTPUT-HUMAN-HTML](pipeline.md#output-human-html) rendering path — the daemon returns the snippet as pre-highlighted HTML so the webview stays dumb).
-  - "Open in editor" and "Reveal in Explorer" buttons.
+  - "Open in editor", "Reveal in Explorer", and "Compare" buttons. Compare opens a separate view for two explicit occurrences; only that pair view may render structural, Jaccard, embedding, and content evidence.
 
 Navigation is keyboard-first: `j/k` move occurrence focus, `n/p` move cluster focus, `Enter` opens the file at the focused occurrence, `?` shows the shortcut help. The webview is self-contained — no network fetches, no external CDNs, CSP locked to the extension origin.
 
 ### [VSIX-WEBVIEW-ACTIONS-CONTEXT] Action wiring and hover context
 
-Cluster detail controls must either execute a real command or not render. `Open` dispatches `deslop.openOccurrence` for the row's occurrence. `Compare` dispatches `deslop.compareWithCanonical` for the row's cluster and stays disabled on the canonical occurrence because comparing the canonical row to itself is meaningless. `Previous cluster` and `Next cluster` update the webview's selected cluster through the same signal path as the `p` and `n` keyboard shortcuts; the extension host must not keep a second copy of cluster selection state.
+Cluster detail controls must either execute a real command or not render. `Open` dispatches `deslop.openOccurrence` for the row's occurrence. `Compare` dispatches `deslop.comparePair` with two explicit occurrence identities and stays disabled until two distinct endpoints exist. `Previous cluster` and `Next cluster` update the webview's selected cluster through the same signal path as the `p` and `n` keyboard shortcuts; the extension host must not keep a second copy of cluster selection state.
 
-Every visible data item and action in the cluster detail webview carries a human-readable hover explanation. Signal labels explain what the score means and how to interpret high or low values. Occurrence rows explain the target file, line, column, hidden status, and whether the row is canonical. Rank, weight, size, occurrence count, bucket label, AI-match badge, and keyboard shortcut hints explain their purpose without exposing raw byte offsets as the primary user-facing location.
+Every visible data item and action in the cluster detail webview carries a human-readable hover explanation. Occurrence rows explain the target file, line, column, hidden status, and canonical status. Rank, mass, size, occurrence count, and keyboard shortcut hints explain their purpose without exposing raw byte offsets as the primary user-facing location. No hover synthesizes a cluster verdict from pair evidence.
+
+### [VSIX-PAIR-EVIDENCE] Explicit pair comparison
+
+The pair view opens only after the user explicitly selects two distinct occurrences. Its heading is `PAIR EVIDENCE` followed by both file-and-position endpoints. The view renders that exact pair's structural similarity, token Jaccard, embedding similarity, content agreement, rename consistency, and literal fraction. Content evidence is a compact secondary line beneath the three admission axes, using muted labels and values rather than a large panel or promotional verdict sentence. The same pair response supplies every number; TypeScript performs no calculation.
+
+Closing the pair view removes the evidence from the surface. Pair evidence never changes the parent cluster's mass, rank, severity, label, membership, or occurrence ordering.
 
 ### [VSIX-CLUSTER-DOCUMENT] Cluster link documents
 
-Cluster references rendered anywhere (copy-for-AI payloads, hovers, report text) are emitted as `deslop://cluster/<id>` URIs. The extension registers a read-only `TextDocumentContentProvider` for the `deslop` scheme so clicking such a link opens a virtual document summarising that cluster — occurrence list, weight, and the structural/jaccard/embedding signals — drawn from the store's visible projection ([vsix.md §VSIX-STATE-DIRTY](vsix.md#vsix-state-dirty)); an unknown or unparseable id renders an explicit placeholder document rather than throwing.
+Cluster references rendered anywhere are emitted as `deslop://cluster/<id>` URIs. The read-only virtual document contains the occurrence list and duplicated mass only. Pair evidence is absent until a user explicitly compares two occurrences; an unknown id renders a placeholder rather than throwing.
 
 ### [VSIX-CLUSTER-ID-CONSISTENCY] One short identity across every surface
 

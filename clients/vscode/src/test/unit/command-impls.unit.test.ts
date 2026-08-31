@@ -559,11 +559,18 @@ suite("tree menu renderers", () => {
     assert.match(text, /rank: 7/);
     assert.match(text, /bucket: same_behavior/);
     // [FUSED-PAIR-SIGNALS] No cluster surface — including copy-for-AI —
-    // renders pair evidence.
-    for (const gone of ["elected_pair:", "measured_pair:", "pair_signals:", "structural=0.1000"]) {
+    // renders pair evidence: no structural, jaccard, or embedding score,
+    // in any wire format the payload ever used.
+    for (const gone of [
+      "elected_pair:",
+      "measured_pair:",
+      "pair_signals:",
+      "structural=0.1000",
+      "token_jaccard=0.2000",
+      "embed=0.9000",
+    ]) {
       assert.doesNotMatch(text, new RegExp(gone), `pair evidence must not reach the AI payload: ${gone}`);
     }
-    assert.match(text, /embed=0\.9000/);
     assert.match(text, /10\.\.200/);
     assert.match(text, /Use these byte ranges as precise edit anchors/);
   });

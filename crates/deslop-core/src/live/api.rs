@@ -98,13 +98,8 @@ pub trait LiveApi: Send + Sync + std::fmt::Debug {
     /// `session/config` — resolved configuration snapshot.
     async fn session_config(&self) -> SessionConfig;
 
-    /// Returns every cluster weight in the live report, in cluster-id
-    /// order. Used by transports that need to bucket per-cluster
-    /// signals (e.g. LSP severity at [LSP-SEVERITY]) against the global
-    /// distribution rather than re-cloning the whole report. Cheaper
-    /// than `report_get().clusters.iter().map(weight).collect()`
-    /// because no cluster body is touched.
-    async fn all_cluster_weights(&self) -> Vec<f64>;
+    /// Returns every cluster mass in report order.
+    async fn all_cluster_masses(&self) -> Vec<u64>;
 }
 
 /// Concrete [`LiveApi`] implementation backed by an [`AnalysisSession`].
@@ -275,13 +270,13 @@ impl LiveApi for LiveService {
         guard.session_config()
     }
 
-    async fn all_cluster_weights(&self) -> Vec<f64> {
+    async fn all_cluster_masses(&self) -> Vec<u64> {
         let guard = self.inner.lock().await;
         guard
             .report()
             .clusters
             .iter()
-            .map(|cluster| cluster.weight)
+            .map(|cluster| cluster.mass)
             .collect()
     }
 }

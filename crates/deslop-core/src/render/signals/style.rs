@@ -1,4 +1,5 @@
-//! Surface-specific punctuation for elected-pair signal values.
+//! Surface punctuation for pair-evidence values quoted by the refactor
+//! gate.
 
 /// How one surface punctuates a `label`/`value` pair and joins pairs.
 pub(super) struct PairStyle {
@@ -10,16 +11,8 @@ pub(super) struct PairStyle {
     joiner: &'static str,
 }
 
-/// Markdown surfaces put every value in a code span.
-pub(super) const MARKDOWN_STYLE: PairStyle = PairStyle {
-    separator: "=`",
-    terminator: "`",
-    joiner: " ",
-};
-
-/// Surfaces the client renders verbatim — LSP diagnostic messages and
-/// code lens titles — carry no markup, so a backtick would show up as a
-/// literal character in the Problems panel and in the lens.
+/// The refactor gate's refusal line renders verbatim — no markup, so a
+/// backtick would show up as a literal character.
 pub(super) const PLAIN_STYLE: PairStyle = PairStyle {
     separator: " ",
     terminator: "",

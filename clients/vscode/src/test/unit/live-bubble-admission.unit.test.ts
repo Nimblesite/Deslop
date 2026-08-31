@@ -5,11 +5,11 @@
 // either side of a UI-restated fused cutoff; that gate is gone from the
 // wire and from this client. These tests pin what the user must see:
 // an act-now bucket always renders, a demoted bucket never renders —
-// however high its signals — and the signal strip shows the elected
-// pair's own evidence.
+// however high its signals — and no surface renders pair evidence,
+// which is pair-only ([FUSED-PAIR-SIGNALS]).
 
 import * as assert from "node:assert/strict";
-import { signalStrip } from "../../bubble/live";
+import { ghostText, inlineText } from "../../bubble/live";
 import { bucketLabels } from "../../types/report";
 import {
   BubbleCapture,
@@ -45,7 +45,7 @@ function assertShowing(
 suite("LiveBubble admission", () => {
   test("an act-now near miss with weak content evidence still reaches the bubble", async () => {
     // A genuine Type-3 near miss: identical shape, real edits, so the
-    // elected pair's byte agreement is ~0.8 while the engine still
+    // pair's byte agreement is ~0.8 while the engine still
     // routes `nearly_identical`. The bubble must follow the engine's
     // routing — no signal value, however low, may hide an act-now
     // cluster from the flagship live surface.
@@ -97,7 +97,16 @@ suite("LiveBubble admission", () => {
       bubble.render(capture.editor, span(12), [near]);
       const ghost = assertShowing(capture, "Nearly identical code", "in ghost mode");
       assert.match(ghost, /└─/, "ghost mode renders the tree-branch prefix");
-      assert.match(ghost, /[▁▂▃▄▅▆▇█]{3}/u, "ghost mode renders the signal strip");
+      assert.equal(
+        ghost.includes("pair"),
+        false,
+        "ghost mode must not render a pair label",
+      );
+      assert.doesNotMatch(
+        ghost,
+        /[▁▂▃▄▅▆▇█]/u,
+        "ghost mode must not render any signal bar glyph",
+      );
       assert.equal(capture.visibleHover(), undefined, "ghost decorations carry no hover");
 
       // 4. The user dismisses it; the act-now cluster must stay gone.
@@ -234,12 +243,15 @@ suite("LiveBubble admission", () => {
     }
   });
 
-  test("the signal strip distinguishes a proven rename from a verbatim copy", () => {
+  test("no bubble surface renders pair evidence, even where it would separate clones", () => {
     // Both render structural 1.0 and token 1.0 — the rename's token
     // signal is corrected upward by the Merkle argument (#232) — so the
-    // shape and semantic bars collapse them. The elected pair's byte
-    // agreement is what separates a "safe to extract" copy from renamed
-    // code whose identifiers differ, and the strip draws it.
+    // former strip's shape and semantic bars collapsed them, and only
+    // the pair agreement bar told a "safe to extract" copy from renamed
+    // code whose identifiers differ. That bar drew pair evidence on a
+    // cluster surface, which is illegal ([FUSED-PAIR-SIGNALS]): the
+    // engine's bucket is now the only thing that tells them apart, and
+    // no surface may render the pair's values.
     const verbatim = bubbleCluster("v", 10, 1.0, { bucket: "identical" });
     const rename = bubbleCluster("r", 10, 0.9, { bucket: "nearly_identical" });
     const demoted = bubbleCluster("d", 10, 0.16, {
@@ -261,58 +273,58 @@ suite("LiveBubble admission", () => {
     assert.notEqual(
       verbatim.signals.pair_agreement,
       rename.signals.pair_agreement,
-      "fixture: the elected pair's content evidence is what separates them",
+      "fixture: the pair's content evidence differs, yet must not render",
     );
-    assert.match(signalStrip(verbatim), /^pair 1↔2 [▁▂▃▄▅▆▇█]{3}$/u);
-    assert.match(signalStrip(demoted), /[▁▂▃▄▅▆▇█]{3}/u, "every bar comes from the ramp");
-    assert.notEqual(
-      signalStrip(verbatim),
-      signalStrip(demoted),
-      "a demoted family must at least be distinguishable by its weaker agreement bar",
+
+    for (const [context, cluster] of [
+      ["verbatim clone", verbatim],
+      ["proven rename", rename],
+      ["demoted family", demoted],
+    ] as const) {
+      const inline = inlineText(cluster, "top10");
+      const ghost = ghostText(cluster, "top10");
+      assert.equal(inline.includes("pair"), false, `${context}: inline line`);
+      assert.equal(ghost.includes("pair"), false, `${context}: ghost line`);
+      assert.doesNotMatch(
+        ghost,
+        /[▁▂▃▄▅▆▇█]/u,
+        `${context}: ghost line renders no bar glyph`,
+      );
+      assert.equal(
+        ghost.includes("↔"),
+        false,
+        `${context}: ghost line renders no pair separator`,
+      );
+    }
+
+    // What does separate the two proven clones is the engine's own
+    // bucket title, which is exactly what the bubble renders.
+    assert.match(
+      inlineText(verbatim, "top10"),
+      new RegExp(bucketLabels("identical").plainTitle),
     );
-    assert.notEqual(
-      signalStrip(verbatim),
-      signalStrip(rename),
-      `the strip must show the content evidence that separates a verbatim copy ` +
-        `(agreement ${verbatim.signals.pair_agreement}) from a proven rename ` +
-        `(agreement ${rename.signals.pair_agreement}); both render "${signalStrip(rename)}"`,
+    assert.match(
+      inlineText(rename, "top10"),
+      new RegExp(bucketLabels("nearly_identical").plainTitle),
     );
   });
 
-  test("the full block is reserved for proof, so 0.96 and 1.00 stay apart", () => {
-    // `bar()` rounded `value * 7`, which handed `█` to everything from
-    // ~0.929 up — so the third bar, added precisely to separate proof
-    // from near-proof, drew the same glyph for both. These are real
-    // rendered values: a scan of two F# modules one identifier apart
-    // renders `nearly_identical` at agreement 0.956 beside `identical`
-    // at 1.00.
-    const proven = bubbleCluster("p", 10, 1.0, { bucket: "identical" });
-    const nearly = bubbleCluster("n", 10, 0.956, { bucket: "nearly_identical" });
-
-    assert.notEqual(
-      signalStrip(proven),
-      signalStrip(nearly),
-      `agreement 1.00 and 0.956 must not render the same strip; both drew ` +
-        `"${signalStrip(nearly)}" before the top glyph was reserved`,
-    );
-    assert.ok(
-      signalStrip(proven).endsWith("█"),
-      "an exact 1.0 earns the full block",
-    );
-    assert.equal(
-      signalStrip(nearly).endsWith("█"),
-      false,
-      "and anything short of proof must not",
-    );
-
-    // The reservation is on the value, not on the bucket: every band below
-    // 1.0 has to stay off the top glyph, however close it sits.
-    for (const value of [0.929, 0.95, 0.99, 0.999]) {
+  test("no signal value renders a pair bar at any agreement", () => {
+    // The former bar ramp rendered pair evidence and reserved `█` for an
+    // exact 1.0. Pair evidence is gone from every cluster surface, so no
+    // agreement value — proof or near-proof — may draw any glyph.
+    for (const value of [1.0, 0.999, 0.99, 0.956, 0.95, 0.929, 0.5, 0.1]) {
       const cluster = bubbleCluster("x", 10, value, { bucket: "nearly_identical" });
+      const ghost = ghostText(cluster, "top10");
+      assert.doesNotMatch(
+        ghost,
+        /[▁▂▃▄▅▆▇█]/u,
+        `agreement ${value} must not render any bar glyph`,
+      );
       assert.equal(
-        signalStrip(cluster).endsWith("█"),
+        ghost.includes("pair"),
         false,
-        `agreement ${value} is not proof and must not draw the proof glyph`,
+        `agreement ${value} must not render a pair label`,
       );
     }
   });
@@ -321,7 +333,7 @@ suite("LiveBubble admission", () => {
     // Admission reads the bucket and nothing else. The old suite let a
     // `loosely_similar` hint through once its confidence cleared a
     // cutoff; there is no cutoff anymore, so the hint stays hidden even
-    // carrying perfect elected evidence — if the engine wanted it shown
+    // carrying perfect pair evidence — if the engine wanted it shown
     // it would have routed it act-now.
     const perfectHint = bubbleCluster("c-hint", 20, 1.0, {
       bucket: "loosely_similar",

@@ -10,7 +10,7 @@
 //! There is no cluster-level `fused` and no content-confidence
 //! multiply ([FUSED-SCOPE], [FUSED-CONTENT-GATE]). `fused` is the pair
 //! admission score, decided pair by pair at admission
-//! ([FUSED-STRATEGY-BOUNDED-MAX]); the report carries the elected
+//! ([FUSED-STRATEGY-BOUNDED-MAX]); the report carries the measured
 //! pair's measured axes and its content evidence, never a rendered
 //! cluster confidence. Routing reads `support = max(agreement,
 //! rename_consistency)` directly — no discount, no shape scaling.
@@ -141,7 +141,7 @@ pub fn lacks_content_support(signals: ReportSignals) -> bool {
 pub const SATURATING_TOKEN_FLOOR: f64 = 0.95;
 
 /// The final render transform for a shape-identical cluster's signal
-/// triple: stamps the elected pair's measured content evidence and
+/// triple: stamps the measured pair's content evidence and
 /// applies the token-axis correction where the members share one
 /// digest. There is no cluster `fused` to compute — admission decided
 /// the pair, the report names it, and routing reads `support =

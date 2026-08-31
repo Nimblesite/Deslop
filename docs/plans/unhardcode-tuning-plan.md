@@ -36,23 +36,23 @@ This phase changes no value and adds no plumbing. Goldens prove it.
 
 `PipelineSession` already holds `Arc<ExclusionConfig>`, and `session/render.rs:68`/`:81` are the two admission call sites, so the reach is short. `CandidatePair` already carries per-pair `fused_min_score`, `lsh_only_min_jaccard`, and `lsh_only_node_floor` — the constants only *populate* those fields, so `pair/candidates.rs` sources them from the policy instead and the comparison sites never change.
 
-`candidate_pairs_for_language_policy` and `cluster_by_transitive_closure` take `&TuningPolicy`. The cross-language arm (`candidates.rs:84`–`86`, `:181`–`183`) reads `candidates.cross_language_min_jaccard` from the same policy.
+`candidate_pairs_for_language_policy` and `cluster_by_transitive_closure` take `&TuningPolicy`. The cross-language arm (`candidates.rs:84`–`86`, `:181`–`183`) reads `admission.cross_language_fused_threshold` from the same policy because it thresholds `max(S,J,E)`, not Jaccard alone.
 
-Tests: a fixture where a pair sits between two `fused_threshold` values, asserted to cluster under the lower and not under the default — the first test in this plan that would fail if the plumbing were fake. Same shape for `lsh_only_min_jaccard`, `lsh_only_min_node_count`, and `max_endpoint_node_ratio`, each with the cluster id, occurrence count, file paths, and bucket asserted.
+Tests: a fixture where one named endpoint pair sits between two `fused_threshold` values, asserted admitted under the lower and rejected under the default — the first test in this plan that would fail if the plumbing were fake. Use the same shape for `lsh_only_min_jaccard`, `lsh_only_min_node_count`, and `max_endpoint_node_ratio`: assert both endpoints and the exact pair admission result, then separately assert the resulting cluster membership and mass when admitted. Never read a pair classification from the cluster.
 
 ## Phase 4 — content gate and routing
 
 The widest blast radius: `classify_signals`, `is_structural_only_signals`, `lacks_content_support`, `has_saturating_shape_evidence`, and `attach_content_evidence` all take the policy, and `classify_signals` has many callers.
 
-Tests: the routing-line fixtures exist and are asserted by bucket and rank. Each gains a tuned variant asserting a cluster crosses a bucket boundary when and only when its governing key moves — bucket and ranking position all asserted, since content evidence ([FUSED-CONTENT-GATE]) makes them move together.
+Tests: the routing-line fixtures identify two exact endpoints and assert their pair classification and admission result. Each gains a tuned variant asserting that exact pair changes classification or admission only when its governing key moves. If admission changes closure membership, assert the resulting cluster membership, exact mass, and mass-derived order separately; pair content never changes rank directly.
 
 Watch for the #197 and #331 fixtures specifically: they are what the defaults are calibrated against, so they must hold at defaults and shift predictably off them.
 
-## Phase 5 — candidate generation, ranking, suppression
+## Phase 5 — candidate generation and pair guards
 
-`embedding/pairs.rs` (`embedding_min_cosine`, `embedding_top_k`, `embedding_exact_pair_limit`) via `run_embedding_pass`; `cluster.rs` Type-4 dampeners; `report.rs::is_low_structure_embedding_mega_cluster`.
+`embedding/pairs.rs` (`embedding_min_cosine`, `embedding_top_k`, `embedding_exact_pair_limit`) via `run_embedding_pass`, plus endpoint-keyed role and size guards in pair admission. Cluster Type-4 dampeners and `report.rs::is_low_structure_embedding_mega_cluster` are deleted because they project pair evidence onto a component.
 
-The suppression gate is four literals in one boolean and is the easiest place in the codebase to change accuracy by accident — its tuned test asserts the mega-cluster is suppressed at defaults and surfaces when the ceiling is raised, by cluster id.
+Each tuned admission guard test names both endpoints and asserts rejection at the default and admission only when the relevant pair guard is deliberately changed. Cluster mass remains mechanical and has no tuning key.
 
 ## Phase 6 — representation tier and the cache key
 

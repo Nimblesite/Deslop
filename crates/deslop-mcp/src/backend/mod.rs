@@ -15,6 +15,7 @@ use deslop_core::{
     live::wire::ChangeSummary,
     live::wire::EmbeddingModelInfo,
     report::{CacheStats, ReportCluster},
+    wire_generated::{PairComparison, PairComparisonParams},
     CoreError, EmbeddingProvenance, EmbeddingSpec, Report,
 };
 use thiserror::Error;
@@ -142,6 +143,13 @@ pub trait McpBackend: Send + Sync {
     /// Returns [`BackendError::UnknownCluster`] when `id` is not in
     /// the current report.
     fn cluster_by_id(&self, id: &str) -> Result<ReportCluster, BackendError>;
+
+    /// Recomputes evidence for two exact caller-selected endpoints.
+    ///
+    /// # Errors
+    ///
+    /// Returns a backend error when either endpoint cannot be resolved.
+    fn compare_pair(&self, params: &PairComparisonParams) -> Result<PairComparison, BackendError>;
 
     /// Computes the mechanical merge plan for a cluster
     /// ([AUTOFIX-MERGE-MCP]). Read-only; refusals arrive inside the

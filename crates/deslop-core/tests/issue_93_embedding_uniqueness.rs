@@ -16,7 +16,7 @@ use std::{collections::HashMap, path::PathBuf};
 use anyhow::{Context, Result};
 use deslop_core::{
     ast::ByteRange,
-    cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs},
+    cluster::{build_ranked_fused_clusters, ClusterBuildInputs},
     embedding::EmbeddingPair,
     fingerprint::Fingerprint,
     lsh::{Signature, SignatureIndex, SIGNATURE_LEN},
@@ -122,33 +122,19 @@ fn issue_93_embedding_pass_recalls_lsh_missed_clusters_and_credits_every_cosine(
         "the LSH-missed pair must remain its own component"
     );
 
-    assert_rendered_signals_are_measured(&fingerprints, &signatures, &clusters)
+    assert_materialised_clusters_are_mass_only(&fingerprints, &clusters)
 }
 
-/// [FUSED-CLUSTER-SIGNALS] Rendered signals are measured between the
-/// rendered occurrences. The LSH-visible pair's *discovery edge*
-/// deliberately withholds embedding credit (asserted by the caller), but
-/// the report still shows the true cosine of the two vectors — discovery
-/// bookkeeping never becomes a rendered figure.
-fn assert_rendered_signals_are_measured(
+/// [FUSED-RANK-MASS] Pair evidence stays on the candidate pairs; a
+/// materialised component contains membership and duplicated mass only.
+fn assert_materialised_clusters_are_mass_only(
     fingerprints: &[Fingerprint],
-    signatures: &[Signature],
     clusters: &[FusedCluster],
 ) -> Result<()> {
-    let vectors = HashMap::from([
-        (0, vec![1.0, 0.0]),
-        (1, vec![0.99, 0.141_067_36]),
-        (2, vec![1.0, 0.0]),
-        (3, vec![0.98, 0.198_997_49]),
-    ]);
-    let signature_index = SignatureIndex::from_slice(signatures);
     let rendered = build_ranked_fused_clusters(&ClusterBuildInputs {
         fingerprints,
-        signatures: &signature_index,
-        embedding_vectors: &vectors,
         fused_clusters: clusters,
         trees: &[],
-        sources: &HashMap::new(),
         file_languages: &HashMap::new(),
         file_paths: &HashMap::new(),
     });
@@ -157,48 +143,14 @@ fn assert_rendered_signals_are_measured(
         2,
         "both clusters must survive materialisation"
     );
-    let rendered_unique = find_by_leading_hash(&rendered, 2)
+    let rendered_unique = rendered.iter().find(|cluster| {
+        cluster.members.iter().any(|member| member.hash == [2; 32])
+    })
         .context("expected the rendered embedding-only cluster")?;
-    assert!(
-        rendered_unique.signals.embedding_cos > 0.95,
-        "issue #93: embedding pass must keep at least one LSH-missed cluster; got {}",
-        rendered_unique.signals.embedding_cos
-    );
-    assert!(
-        (rendered_unique.signals.embedding_cos - 0.98).abs() < 1e-5,
-        "rendered cosine must equal the measured vector cosine (0.98); got {}",
-        rendered_unique.signals.embedding_cos
-    );
-    assert!(
-        rendered_unique.signals.token_jaccard.abs() < f64::EPSILON,
-        "the LSH-missed cluster must render zero token evidence; got {}",
-        rendered_unique.signals.token_jaccard
-    );
-
-    let rendered_lsh =
-        find_by_leading_hash(&rendered, 0).context("expected the rendered LSH-visible cluster")?;
-    assert!(
-        (rendered_lsh.signals.token_jaccard - 1.0).abs() < f64::EPSILON,
-        "identical signatures must render Jaccard exactly 1.0; got {}",
-        rendered_lsh.signals.token_jaccard
-    );
-    assert!(
-        (rendered_lsh.signals.embedding_cos - 0.99).abs() < 1e-5,
-        "issue #93: withholding unique-recall credit on the discovery edge must not erase the measured cosine of the rendered pair; got {}",
-        rendered_lsh.signals.embedding_cos
-    );
+    assert_eq!(rendered_unique.members.len(), 2);
+    assert_eq!(rendered_unique.mass, LSH_ONLY_MIN_NODE_COUNT);
 
     Ok(())
-}
-
-/// Finds a rendered cluster by the hash seed of its lowest member.
-fn find_by_leading_hash(clusters: &[Cluster], seed: u8) -> Option<&Cluster> {
-    clusters.iter().find(|cluster| {
-        cluster
-            .members
-            .iter()
-            .any(|member| member.hash == [seed; 32])
-    })
 }
 
 fn embedding_roi_fixture() -> (Vec<Fingerprint>, Vec<Signature>) {

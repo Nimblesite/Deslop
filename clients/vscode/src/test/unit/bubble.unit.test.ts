@@ -5,7 +5,6 @@ import * as assert from "node:assert/strict";
 import {
   inlineText,
   ghostText,
-  signalStrip,
   shortPath,
   bubbleHover,
 } from "../../bubble/live";
@@ -59,26 +58,57 @@ suite("bubble rendering helpers", () => {
     assert.match(text, /×\s*4/);
   });
 
-  test("signalStrip attributes its clamped bars to the elected pair", () => {
-    const strip = signalStrip(
-      cluster(
-        signalsWith("identical", {
-          structural: 2,
-          token_jaccard: -1,
-          shape: 2,
-          embedding_cos: 0.5,
-          pair_agreement: -1,
-        }),
-      ),
+  test("the ghost line renders no pair evidence for a sourced cluster", () => {
+    // [FUSED-PAIR-SIGNALS] Admission signals (structural, token, embedding,
+    // content similarity) are pair-only and never touch a cluster surface.
+    // The ghost line carries the bucket, slug and count — never the former
+    // `pair 1↔2` bar strip, whatever the cluster's signal_source says.
+    const c = cluster(
+      signalsWith("identical", {
+        structural: 2,
+        token_jaccard: -1,
+        shape: 2,
+        embedding_cos: 0.5,
+        pair_agreement: -1,
+      }),
     );
-    assert.equal(strip, "pair 1↔2 █▄▁");
+    const ghost = ghostText(c, "top10");
+    assert.equal(ghost.includes("pair"), false, "no pair label may render");
+    assert.equal(ghost.includes("↔"), false, "no pair separator may render");
+    assert.match(ghost, /└─/);
+    assert.match(ghost, /×\s*4/);
+    for (const glyph of ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]) {
+      assert.equal(
+        ghost.includes(glyph),
+        false,
+        `signal bar glyph ${glyph} must not render on a cluster surface`,
+      );
+    }
   });
 
-  test("signalStrip renders no pair scores without an elected source", () => {
-    const c = cluster();
-    c.signal_source = undefined;
-    assert.equal(signalStrip(c), "");
-    assert.equal(ghostText(c, "top10").includes("█"), false);
+  test("no cluster renders pair scores, with or without a signal source", () => {
+    // The former strip showed the elected pair's bars when a source was
+    // named and nothing otherwise. Pair evidence now renders on no cluster
+    // surface at all, so both arms assert the same absence.
+    const sourced = cluster();
+    const unsourced = cluster();
+    unsourced.signal_source = undefined;
+    for (const [context, c] of [
+      ["sourced cluster", sourced],
+      ["unsourced cluster", unsourced],
+    ] as const) {
+      assert.equal(ghostText(c, "top10").includes("pair"), false, context);
+      assert.equal(
+        ghostText(c, "top10").includes("█"),
+        false,
+        `${context}: no bar glyph`,
+      );
+      assert.equal(
+        inlineText(c, "top10").includes("pair"),
+        false,
+        `${context}: inline line carries no pair label`,
+      );
+    }
   });
 
   test("shortPath returns the basename for posix and windows separators", () => {
@@ -202,8 +232,12 @@ suite("bubble rendering helpers", () => {
     const parts = renderBubbleParts(c, "top10");
     assert.equal(inlineText(c, "top10"), parts.inline);
     assert.equal(ghostText(c, "top10"), parts.ghost);
-    assert.equal(signalStrip(c), parts.signalStrip);
     assert.equal(bubbleHover(c).value, parts.hover.value);
+    assert.equal(
+      "signalStrip" in parts,
+      false,
+      "no bubble render part may carry a pair signal strip",
+    );
     assert.match(parts.inline, /\babcdef0\b/);
     assert.match(parts.ghost, /\babcdef0\b/);
     assert.match(parts.hover.value, /^\*\*abcdef0 /);

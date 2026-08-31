@@ -67,7 +67,7 @@ pub fn resolve_cluster_by_id_prefix<'a>(
 #[cfg(test)]
 mod tests {
     use super::{resolve_cluster_by_id_prefix, MIN_CLUSTER_ID_PREFIX_LEN};
-    use crate::{live::errors::LiveError, report::ReportCluster, wire_generated::ReportSignals};
+    use crate::{live::errors::LiveError, report::ReportCluster};
 
     /// Builds a `ReportCluster` with just the canonical id populated.
     /// Every other field is zeroed so the prefix-resolution helper is
@@ -76,17 +76,7 @@ mod tests {
     /// field explicitly.
     fn cluster_with_id(id: &str) -> ReportCluster {
         let mut cluster = crate::report_fixtures::fixture_cluster(id, Vec::new());
-        cluster.weight = 0.0;
         cluster.canonical_node_count = 0;
-        cluster.signals = ReportSignals {
-            structural: 0.0,
-            token_jaccard: 0.0,
-            shape: 0.0,
-            embedding_cos: 0.0,
-            pair_agreement: 0.0,
-            pair_rename_consistency: 0.0,
-            literal_fraction: 0.0,
-        };
         crate::report_fixtures::restamp_fixture(&mut cluster);
         cluster
     }

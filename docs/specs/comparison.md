@@ -2,9 +2,9 @@
 
 This document compares Deslop's deterministic hybrid core, LSP daemon, MCP surface, and VSIX with existing clone detectors.
 
-### The field (2024–2026)
+### [COMPARISON-FIELD] The field (2024–2026)
 
-#### Established detectors
+#### [COMPARISON-FIELD-ESTABLISHED] Established detectors
 
 | Tool | Approach | Delivery | Live? | Clone types | Maintenance | Weakness |
 |---|---|---|---|---|---|---|
@@ -14,7 +14,7 @@ This document compares Deslop's deterministic hybrid core, LSP daemon, MCP surfa
 | **SonarQube / SonarLint** | Token with per-language tokenisers | SaaS + self-host + IDE plugin | Near-live on save | Type-1/2 | Commercial | File-level metric, no cross-file refactor targeting, no MCP, expensive enterprise tier. |
 | **JetBrains "Duplicated Code" inspection** | AST (PSI) with anonymisation | Bundled in IntelliJ/Rider/PyCharm/RustRover | In-IDE live on open file | Good Type-2/3 | Active | Ultimate-only for project-wide; no headless CLI; no MCP; no export; locked to JetBrains IDEs. |
 
-#### Research prototypes
+#### [COMPARISON-FIELD-RESEARCH] Research prototypes
 
 | Tool | Status |
 |---|---|
@@ -23,7 +23,7 @@ This document compares Deslop's deterministic hybrid core, LSP daemon, MCP surfa
 | **SourcererCC** | Apache-2.0 Java tool, scales to 250 MLOC, unmaintained since ~2020. |
 | **SSCD / HyClone / SCOTT / Rator** | Research prototypes (2023–2025 papers). GitHub research dumps with no releases. Deslop already cites their findings in [fused.md](fused.md) and [landscape.md](landscape.md) — we adopt the algorithms, not the artifacts. |
 
-#### Literal & constant rules (linter lineage — the [literals.md](literals.md) competitors)
+#### [COMPARISON-FIELD-LITERALS] Literal and constant rules
 
 PMD and Sonar appear above through their CPD-style fragment engines; their literal rules are a
 distinct competitor class ([DECISION-LITERALS] records why this lineage matters):
@@ -42,7 +42,7 @@ first-class participants (`shadowed_constant` / `constant_duplicate` / `constant
 the fragment clones, live in the agent loop via [MCP-TOOL-FILTERS], and the monorepo
 unused-public-constant marker ([LITERAL-UNUSED-MARKER]) that no linter in this table attempts.
 
-#### Adjacent / AI-native
+#### [COMPARISON-FIELD-AI] Adjacent and AI-native tools
 
 | Tool | Status for clone detection |
 |---|---|
@@ -53,7 +53,7 @@ unused-public-constant marker ([LITERAL-UNUSED-MARKER]) that no linter in this t
 | **GitHub Advanced Security / CodeQL** | No first-party clone detection. |
 | **Copilot / Cursor / Claude Code** | Conversational "find duplicates" only — no index, no ranking, no watcher, no deterministic output. |
 
-### The unclaimed combination
+### [COMPARISON-POSITION] The unclaimed combination
 
 Breaking the niche into four axes:
 
@@ -64,47 +64,47 @@ Breaking the niche into four axes:
 
 No compared product ships all four axes.
 
-### Features we must clear
+### [COMPARISON-BAR] Features we must clear
 
 Axis-by-axis, the bar we are held to — and the plus-one that wins the category:
 
-#### vs. jscpd (OSS leader on breadth)
+#### [COMPARISON-BAR-JSCPD] vs. jscpd
 
 - **Match:** three initial languages (C#, Rust, Python), `.gitignore`-respecting discovery, CI-friendly JSON output. ✅ shipped in P1–P4.
-- **Beat:** real tree-sitter parsers (no regex tokenisation), AST-level Type-3 via sibling-extension + MinHash, Type-4 via embeddings, stable cluster ids across runs, weight-ranked worst-first output, agent-readable `interpretation` + `action_hints`. ✅ shipped in P2–P5.
+- **Beat:** real tree-sitter parsers (no regex tokenisation), AST-level Type-3 via sibling-extension + MinHash, Type-4 via embeddings, stable cluster ids across runs, mass-ranked worst-first output, and exact endpoint-pair explanations on demand. ✅ shipped in P2–P5.
 - **Category-winning feature:** **live watcher + MCP surface** — jscpd is CI-only; we're live-in-editor.
 
-#### vs. PMD CPD (ubiquity)
+#### [COMPARISON-BAR-PMD] vs. PMD CPD
 
 - **Match:** permissively licensed (we're MIT), scriptable CLI, exit codes suitable for CI gating.
-- **Beat:** ranked worst-first output (PMD CPD dumps unranked), byte-range-addressable occurrences (PMD emits line ranges), deterministic cluster ids, per-cluster signal breakdown, human-readable HTML renderer, exclusion tiers (`exclude` vs `report_hide`). ✅ shipped P2–P4.2.
+- **Beat:** ranked worst-first output (PMD CPD dumps unranked), byte-range-addressable occurrences (PMD emits line ranges), deterministic cluster ids, explicit pair-evidence comparison, human-readable HTML renderer, exclusion tiers (`exclude` vs `report_hide`). ✅ shipped P2–P4.2.
 - **Category-winning feature:** **the always-on incremental fingerprint cache** — PMD CPD reruns from scratch every time.
 
-#### vs. SonarLint / SonarQube (commercial IDE integration)
+#### [COMPARISON-BAR-SONAR] vs. SonarLint and SonarQube
 
 - **Match:** VS Code extension with live in-editor feedback.
-- **Beat:** free and local-only by default (no SaaS account, no telemetry), Type-3/4 via embeddings (Sonar is token-only), code-lens with per-cluster signal breakdown, jump-across-occurrences via the Deslop-owned `deslop.jumpToNextOccurrence` code lens (never by overloading the editor's Go To Definition — see [LSP-NON-INTERFERENCE]), stable cluster ids for cross-session diffing.
+- **Beat:** free and local-only by default (no SaaS account, no telemetry), Type-3/4 via embeddings (Sonar is token-only), explicit pair-evidence comparison, jump-across-occurrences via the Deslop-owned `deslop.jumpToNextOccurrence` code lens (never by overloading the editor's Go To Definition — see [LSP-NON-INTERFERENCE]), and stable cluster ids for cross-session diffing.
 - **Category-winning feature:** **MCP shell + Ollama model picker** — neither SonarLint nor SonarQube expose an MCP surface or allow local embedding-model selection.
 
-#### vs. JetBrains "Duplicated Code" inspection (strongest IDE incumbent)
+#### [COMPARISON-BAR-JETBRAINS] vs. JetBrains Duplicated Code inspection
 
 - **Match:** AST-based detection with identifier/literal anonymisation, live in-editor surfaces.
 - **Beat:** editor-agnostic (works in VS Code, Neovim, Helix, Zed, any LSP client — JetBrains is IDE-locked), headless CLI + CI (JetBrains has none), MCP for agents (JetBrains has none), cross-repo stable cluster ids (JetBrains is per-project), local embedding-model choice, exportable JSON/HTML reports.
 - **Category-winning feature:** **VSIX + LSP + MCP + CLI from one core** — JetBrains' inspection is trapped inside the IDE.
 
-#### vs. Teamscale (enterprise commercial daemon)
+#### [COMPARISON-BAR-TEAMSCALE] vs. Teamscale
 
 - **Match:** long-running daemon with watcher, incremental re-analysis, ranked report.
 - **Beat:** single-machine / local-first (Teamscale is a server product), free/OSS, MCP for AI agents, Ollama embeddings, LSP surface, no licensing friction.
 - **Category-winning feature:** **$0 + local-only + MCP + LSP** — we compete on cost, privacy, and agent-readiness at once.
 
-#### vs. ambient AI coding assistants (Copilot / Cursor / Claude Code conversational "find duplicates")
+#### [COMPARISON-BAR-AI-ASSISTANTS] vs. ambient AI coding assistants
 
 - **Match:** surfaces clone information to an AI agent.
-- **Beat:** deterministic ranked index (not token-guessing from chat context), stable cluster ids, cross-repo scan, watcher-driven re-analysis, exact byte ranges, signal-breakdown explainability — everything required for an agent to act reliably rather than guess.
+- **Beat:** deterministic mass-ranked index, stable cluster ids, cross-repo scan, watcher-driven re-analysis, exact byte ranges, and explicit pair-evidence explainability — everything required for an agent to act reliably rather than guess.
 - **Category-winning feature:** **agent-facing MCP tool schema** designed around when the agent should call each tool (see [MCP-AGENT-PROMPT-GUIDANCE]), not a general-purpose code search.
 
-### Must-beat feature checklist
+### [COMPARISON-CHECKLIST] Must-beat feature checklist
 
 Things no competitor does that we commit to ship. If any of these slip, we are no longer the obvious choice on our axis:
 
@@ -120,7 +120,7 @@ Things no competitor does that we commit to ship. If any of these slip, we are n
 - [ ] **Free + OSS licence** — undercuts every commercial competitor on friction.
 - [ ] **VS Code extension UX that's worth opening for its own sake** — [VSIX-PRINCIPLES]; the reference client should be one Marketplace reviewers call out.
 
-### What we deliberately don't chase
+### [COMPARISON-NONGOALS] What we deliberately do not chase
 
 Feature-superiority is bounded. The following are explicit non-goals, and we decline to build them even if a competitor has them:
 
@@ -130,7 +130,7 @@ Feature-superiority is bounded. The following are explicit non-goals, and we dec
 - **Execution-based Type-4 validation (HyClone-style).** Research-interesting, product-risky. [DECISION-CROSS-LANGUAGE] and [fused.md](fused.md) explain the scope cut.
 - **Cloud-hosted embedding provider by default.** We allow one via [FUSED-EMBED-PROVIDER] but we never ship it as the default. Privacy is a feature.
 
-### One-sentence positioning
+### [COMPARISON-POSITIONING] One-sentence positioning
 
 > "The only clone detector that runs as a live daemon in your editor and as an MCP tool for your AI agent — deterministic AST + token fusion + your choice of local Ollama embedding model — no SaaS, no telemetry, no licence."
 

@@ -124,7 +124,9 @@ suite("LiveBubble journeys", () => {
       bubble.render(capture.editor, span(6), [proven]);
       const ghost = assertBubbleShows(capture, PROVEN_CLONE_TITLE, "ghost");
       assert.match(ghost, /└─/, "ghost: renders the tree-branch prefix");
-      assert.match(ghost, /[▁▂▃▄▅▆▇█]{3}/u, "ghost: renders the three-bar strip");
+      // [FUSED-PAIR-SIGNALS] Admission signals are pair measurements; a cluster
+      // surface never renders the three-bar signal strip.
+      assert.doesNotMatch(ghost, /[▁▂▃▄▅▆▇█]/u, "ghost: renders no pair signal strip");
       assert.match(ghost, /×\s*4/, "ghost: carries the same count");
       assert.equal(capture.visibleHover(), undefined, "ghost: carries no hover card");
 

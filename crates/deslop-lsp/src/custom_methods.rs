@@ -42,8 +42,6 @@ fn truncate_cluster_for_wire(cluster: &mut ReportCluster) {
         cluster.occurrences.truncate(LIVE_WIRE_OCCURRENCE_CAP);
         cluster.occurrences_truncated = true;
     }
-    cluster.summary.clear();
-    cluster.interpretation.clear();
 }
 
 /// Method name for `deslop/reportGet`.

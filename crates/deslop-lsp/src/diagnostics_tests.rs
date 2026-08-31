@@ -252,43 +252,67 @@ fn diagnostic_message_shows_category_count_and_action() {
     );
 }
 
-// [FUSED-CONTENT-GATE] #344: the bucket title alone cannot tell a
-// corroborated Type-2 rename from an anchor-poor scaffolding family — both
-// render structural=1.00. The diagnostic must state the measured content
-// evidence the gate scored, using the one shared
-// `render::signals` rendering.
+// [FUSED-PAIR-SIGNALS] The admission signals are pair measurements and
+// never touch the cluster. An LSP diagnostic on one occurrence must not
+// render them: the message quotes the bucket title, the count, and the
+// bucket's evidence sentence, and nothing else.
 #[test]
-fn diagnostic_message_states_measured_content_evidence() {
+fn diagnostic_message_renders_no_pair_evidence() {
     let cluster = two_file_cluster();
     let message = diagnostic_message(&cluster);
     assert!(
         message.contains("Nearly identical code × 2"),
-        "the existing human label and count survive the addition: {message}"
+        "the human label and count survive: {message}"
     );
-    for (evidence, axis) in SAMPLE_EVIDENCE_AXES {
-        assert!(message.contains(evidence), "{axis}: {message}");
-    }
     assert!(
         !message.contains("fused"),
         "no cluster fused score on any surface: {message}"
     );
+    for (evidence, _axis) in SAMPLE_EVIDENCE_AXES {
+        assert!(
+            !message.contains(evidence),
+            "pair evidence must not reach the diagnostic: {evidence}"
+        );
+    }
     assert!(
-        message.contains(&deslop_core::render::signals::plain_explanation(
-            cluster.signals
-        )),
-        "the explanation must be the shared render::signals rendering, never a \
-         second hand-rolled formatter: {message}"
+        !message.contains("measured pair") && !message.contains("occurrences 1 and 2"),
+        "no pair attribution on a cluster surface: {message}"
     );
-    let attribution = deslop_core::render::signals::elected_pair_attribution(&cluster);
+}
+
+// A diagnostic on a cluster whose signals differ still quotes the same
+// bucket sentence — the message reads the cluster's bucket, never its
+// pair measurements ([FUSED-PAIR-SIGNALS]).
+#[test]
+fn diagnostic_message_quotes_the_bucket_sentence_not_pair_signals() {
+    let mut anchor_poor = sample_cluster(
+        "scaffolding",
+        HEAVY_CLUSTER_WEIGHT,
+        vec![occurrence(A_FILE, 0, 1), occurrence("b.cs", 0, 1)],
+        "structural_only",
+    );
+    anchor_poor.signals = ReportSignals {
+        structural: PERFECT_SIGNAL,
+        token_jaccard: 0.0,
+        shape: PERFECT_SIGNAL,
+        embedding_cos: 0.0,
+        pair_agreement: 0.04,
+        pair_rename_consistency: 0.02,
+        literal_fraction: 0.77,
+    };
+    let message = diagnostic_message(&anchor_poor);
     assert!(
-        attribution.is_some(),
-        "the fixture must name its elected pair"
+        !message.contains("structural 1.00"),
+        "shape signals must not reach the diagnostic: {message}"
     );
     assert!(
-        message.ends_with(attribution.as_deref().unwrap_or_default()),
-        "content evidence is a pair quantity — the message must close by naming \
-         the elected pair that earned it, never leave the numbers looking like a \
-         cluster measurement ([FUSED-CLUSTER-SIGNALS]): {message}"
+        !message.contains("agreement 0.04"),
+        "content evidence must not reach the diagnostic: {message}"
+    );
+    assert_eq!(
+        message,
+        diagnostic_message(&anchor_poor),
+        "same bucket, same sentence: {message}"
     );
 }
 
@@ -309,40 +333,6 @@ fn diagnostic_without_an_elected_pair_omits_every_pair_score() {
     assert!(
         !message.contains("agreement"),
         "unsourced content score leaked: {message}"
-    );
-}
-
-// A cluster with different evidence must produce a different message — pins
-// that the text reads this cluster's signals, not a constant.
-#[test]
-fn diagnostic_message_tracks_each_clusters_own_evidence() {
-    let mut anchor_poor = sample_cluster(
-        "scaffolding",
-        HEAVY_CLUSTER_WEIGHT,
-        vec![occurrence(A_FILE, 0, 1), occurrence("b.cs", 0, 1)],
-        "structural_only",
-    );
-    anchor_poor.signals = ReportSignals {
-        structural: PERFECT_SIGNAL,
-        token_jaccard: 0.0,
-        shape: PERFECT_SIGNAL,
-        embedding_cos: 0.0,
-        pair_agreement: 0.04,
-        pair_rename_consistency: 0.02,
-        literal_fraction: 0.77,
-    };
-    let message = diagnostic_message(&anchor_poor);
-    assert!(
-        message.contains("structural 1.00 · jaccard 0.00 · embedding 0.00"),
-        "shape-only support: {message}"
-    );
-    assert!(
-        message.contains("agreement 0.04 · rename 0.02 · literal 0.77"),
-        "anchor-poor evidence is what separates this from a real rename: {message}"
-    );
-    assert!(
-        !message.contains("agreement 0.58"),
-        "must not echo another cluster's evidence: {message}"
     );
 }
 
@@ -372,13 +362,11 @@ fn build_for_file_emits_error_for_identical_cluster_with_canonical_link() -> Res
         .first()
         .ok_or_else(|| anyhow!("diagnostic present"))?;
     assert_eq!(diagnostic.source.as_deref(), Some("deslop"));
-    // [FUSED-CONTENT-GATE] #344: the evidence reaches the published
-    // Diagnostic, not merely the formatter.
+    // [FUSED-PAIR-SIGNALS] The diagnostic is a cluster surface and renders
+    // no pair signals.
     assert!(
-        diagnostic
-            .message
-            .contains("agreement 0.58 · rename 0.72 · literal 0.24"),
-        "published diagnostic carries the content evidence: {}",
+        !diagnostic.message.contains("agreement 0.58"),
+        "published diagnostic must not carry content evidence: {}",
         diagnostic.message
     );
     assert!(

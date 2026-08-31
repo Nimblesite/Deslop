@@ -8,7 +8,7 @@ import * as vscode from "vscode";
 import { LiveBubble } from "../../bubble/live";
 import {
   DEFAULT_BUBBLE_CLUSTER_WEIGHT,
-  HIGH_ELECTED_AGREEMENT,
+  HIGH_PAIR_AGREEMENT,
   PRIMARY_BUBBLE_CLUSTER_ID,
   bubbleCluster,
   bubbleFixture,
@@ -28,12 +28,12 @@ suite("LiveBubble render", () => {
   test("inline mode renders the bubble decoration", async () => {
     const { capture, bubble } = await bubbleFixture();
     try {
-      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT)]);
+      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_PAIR_AGREEMENT)]);
       const visible = capture.visible();
 
       assert.ok(
         visible !== undefined,
-        `an act-now bucket renders at agreement ${HIGH_ELECTED_AGREEMENT}`,
+        `an act-now bucket renders at agreement ${HIGH_PAIR_AGREEMENT}`,
       );
       assert.match(visible ?? "", /Identical code/, "bubble carries the wire bucket title");
       assert.match(visible ?? "", /×\s*5/, "count comes from the authoritative report");
@@ -45,7 +45,7 @@ suite("LiveBubble render", () => {
 
       // Idempotent re-render (same cluster + range) must not repaint.
       const before = capture.calls.length;
-      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT)]);
+      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_PAIR_AGREEMENT)]);
       assert.equal(
         capture.calls.length,
         before,
@@ -92,7 +92,7 @@ suite("LiveBubble render", () => {
     const { capture, bubble } = await bubbleFixture();
 
     try {
-      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, 100, HIGH_ELECTED_AGREEMENT, 35)]);
+      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, 100, HIGH_PAIR_AGREEMENT, 35)]);
       const visible = capture.visible() ?? "";
 
       assert.equal(
@@ -120,15 +120,20 @@ suite("LiveBubble render", () => {
   test("ghost mode renders the ghost-line decoration", async () => {
     const { capture, bubble } = await bubbleFixture({ mode: "ghost" });
     try {
-      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT)]);
+      bubble.render(capture.editor, span(0), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_PAIR_AGREEMENT)]);
       const ghost = capture.visible() ?? "";
 
       assert.match(ghost, /└─/, "ghost mode renders the tree-branch prefix");
       assert.match(ghost, /Identical code/, "ghost line carries the bucket title");
-      assert.match(
+      assert.doesNotMatch(
         ghost,
-        /[▁▂▃▄▅▆▇█]{3}/u,
-        "ghost line carries the three-bar signal strip",
+        /[▁▂▃▄▅▆▇█]/u,
+        "ghost line renders no signal bar: pair evidence is pair-only ([FUSED-PAIR-SIGNALS])",
+      );
+      assert.equal(
+        ghost.includes("pair"),
+        false,
+        "ghost line renders no pair label",
       );
       assert.match(ghost, /×\s*5/, "ghost line carries the occurrence count");
       assert.equal(
@@ -140,7 +145,7 @@ suite("LiveBubble render", () => {
       // Switching mode mid-session must move the same cluster to the
       // other surface rather than leaving both painted.
       await setMode("inline");
-      bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT)]);
+      bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_PAIR_AGREEMENT)]);
       const inline = capture.visible() ?? "";
       assert.doesNotMatch(inline, /└─/, "inline mode drops the ghost prefix");
       assert.match(inline, /Identical code/, "the bucket title survives the mode switch");
@@ -157,7 +162,7 @@ suite("LiveBubble render", () => {
   test("render without a report is a no-op", async () => {
     const { store, capture, bubble } = await bubbleFixture({ snapshot: null });
     try {
-      bubble.render(capture.editor, span(0), [cluster("x", 1, HIGH_ELECTED_AGREEMENT)]);
+      bubble.render(capture.editor, span(0), [cluster("x", 1, HIGH_PAIR_AGREEMENT)]);
 
       assert.equal(
         capture.calls.length,
@@ -247,7 +252,7 @@ suite("LiveBubble render", () => {
       retractCluster(store, PRIMARY_BUBBLE_CLUSTER_ID);
       assert.equal(capture.visible(), undefined, "the delta must clear the bubble");
 
-      bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT)]);
+      bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [cluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_PAIR_AGREEMENT)]);
       assert.equal(
         capture.visible(),
         undefined,
@@ -298,7 +303,7 @@ suite("LiveBubble render", () => {
       bubble.dismissCluster(DISMISSIBLE_CLUSTER_ID);
       // The dismissedClusters filter drops it before the sort step, so
       // even at unchanged confidence it must not come back.
-      bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [cluster(DISMISSIBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT)]);
+      bubble.render(capture.editor, span(SHORT_SPAN_LENGTH), [cluster(DISMISSIBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_PAIR_AGREEMENT)]);
       assert.equal(
         capture.visible(),
         undefined,
@@ -332,22 +337,22 @@ suite("LiveBubble render", () => {
     }
   });
 
-  test("inlay hints provider emits a Type hint after render is populated", async () => {
+  test("no inlay hint provider remains after render is populated", async () => {
     const { doc, editor, store } = await openLiveDocument("line one\nline two\n");
     const bubble = new LiveBubble(store, () => undefined);
     try {
       const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));
-      bubble.render(editor, range, [cluster("c-inlay", DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT)]);
+      bubble.render(editor, range, [cluster("c-inlay", DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_PAIR_AGREEMENT)]);
       const hints = await vscode.commands.executeCommand<vscode.InlayHint[]>(
         "vscode.executeInlayHintProvider",
         doc.uri,
         new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 8)),
       );
-      assert.ok(Array.isArray(hints), "inlay hint provider must return an array");
-      const ours = hints.filter((h) => h.kind === vscode.InlayHintKind.Type);
-      assert.ok(
-        ours.length >= 1,
-        `expected at least one Type inlay hint from LiveBubble, got ${JSON.stringify(hints)}`,
+      assert.ok(Array.isArray(hints), "inlay hint query must return an array");
+      assert.equal(
+        hints.length,
+        0,
+        `LiveBubble registers no inlay provider — pair signals render on no editor surface ([FUSED-PAIR-SIGNALS]), got ${JSON.stringify(hints)}`,
       );
     } finally {
       bubble.dispose();
