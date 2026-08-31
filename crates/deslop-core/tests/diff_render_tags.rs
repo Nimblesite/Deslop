@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 use deslop_core::{
     render::{render_html, render_text},
-    report::{ActionHint, CacheStats, Report, ReportCluster, ReportOccurrence},
+    report::{CacheStats, Report, ReportCluster, ReportOccurrence},
     report_metrics::{DiffMetrics, RepoMetrics, ThresholdSource, ThresholdSummary},
 };
 
@@ -82,11 +82,8 @@ fn cluster(id: &str, first: &str, second: &str, tags: Tags) -> ReportCluster {
             occurrence(second, 30, tags.second),
         ],
     );
-    cluster.weight = 4.5;
     cluster.canonical_node_count = 12;
-    "csharp".clone_into(&mut cluster.language);
-    "two identical copies".clone_into(&mut cluster.summary);
-    "extract a shared helper".clone_into(&mut cluster.interpretation);
+    cluster.mass = 12;
     cluster.intersects_diff = tags.intersects;
     cluster.is_newly_introduced = tags.newly;
     cluster
@@ -159,14 +156,15 @@ fn report(
         cache_stats: CacheStats::default(),
         metrics: metrics(diff),
         schema_doc: "schema".to_owned(),
-        action_hints: vec![ActionHint {
-            pattern: "bucket=identical".to_owned(),
-            recommendation: "extract".to_owned(),
-        }],
         boilerplate_hints: Vec::new(),
         embedding_provenance: None,
         clusters,
         clusters_outside_diff: outside,
+        literal_findings: Vec::new(),
+        literal_findings_total: 0,
+        literal_findings_hidden: 0,
+        literal_findings_capped: false,
+        literal_max_findings: 0,
     }
 }
 

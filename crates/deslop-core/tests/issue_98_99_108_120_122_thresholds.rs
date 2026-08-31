@@ -18,7 +18,7 @@ fn low_structure_token_and_embedding_noise_stays_out_of_ranked_report() -> Resul
     let visible_clusters = report
         .clusters
         .iter()
-        .map(|cluster| (&cluster.id, &cluster.bucket, cluster.size, cluster.signals))
+        .map(|cluster| (&cluster.id, cluster.mass, cluster.occurrence_count))
         .collect::<Vec<_>>();
 
     assert_eq!(
@@ -26,12 +26,7 @@ fn low_structure_token_and_embedding_noise_stays_out_of_ranked_report() -> Resul
         4,
         "fixture must exercise all threshold false-positive shapes"
     );
-    assert!(
-        clusters
-            .iter()
-            .all(|cluster| cluster.signals.bounded_fused() >= 0.85),
-        "each fixture cluster models a pair that clears the current fused gate"
-    );
+    assert!(clusters.iter().all(|cluster| cluster.mass > 0));
     assert_eq!(
         report.clusters_hidden, 4,
         "all threshold false positives should be hidden from the ranked report; visible clusters: {visible_clusters:#?}"
@@ -39,38 +34,31 @@ fn low_structure_token_and_embedding_noise_stays_out_of_ranked_report() -> Resul
     assert!(
         visible_clusters
             .iter()
-            .all(|(id, _, _, _)| *id != "schema-token-only"),
+            .all(|(id, _, _)| *id != "schema-token-only"),
         "GH #108 token-only JSON schema cluster leaked into the ranked report"
     );
     assert!(
         visible_clusters
             .iter()
-            .all(|(id, _, _, _)| *id != "json-fixture-mixed"),
+            .all(|(id, _, _)| *id != "json-fixture-mixed"),
         "GH #98 mixed test fixture cluster leaked into the ranked report"
     );
     assert!(
         visible_clusters
             .iter()
-            .all(|(id, _, _, _)| *id != "assertion-only"),
+            .all(|(id, _, _)| *id != "assertion-only"),
         "GH #99 assertion-only cluster leaked into the ranked report"
     );
     assert!(
         visible_clusters
             .iter()
-            .all(|(id, _, _, _)| *id != "embedding-mega"),
+            .all(|(id, _, _)| *id != "embedding-mega"),
         "GH #120/#122 embedding mega-cluster leaked into the ranked report"
     );
     assert!(
         report.clusters.is_empty(),
         "ranked report must not surface low-structure token/embedding noise: {visible_clusters:#?}"
     );
-    assert!(
-        report.clusters.iter().all(
-            |cluster| cluster.bucket != "same_behavior" && cluster.bucket != "nearly_identical"
-        ),
-        "false positives must not be relabelled into actionable buckets"
-    );
-
     Ok(())
 }
 
