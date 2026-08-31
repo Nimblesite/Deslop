@@ -5,11 +5,7 @@
 import { signal, computed, batch } from "@preact/signals";
 import {
   applyFacetFilter,
-  resolveBucket,
-  resolveCategory,
   type AnalysisState,
-  type Bucket,
-  type Category,
   type FacetFilter,
   type Report,
   type ReportCluster,
@@ -17,19 +13,17 @@ import {
   clusterBand,
 } from "../../src/types/report";
 
+// [SEVERITY-CONFIG] Filters are the mass severity band and a path glob
+// only. The language, bucket, and category axes are retired: the wire
+// carries no similarity classification or parser stamp on the cluster,
+// and a webview must never re-derive an axis the engine stopped sending.
 export type Filters = {
-  language: string | null;
   severity: Severity | null;
-  bucket: Bucket | null;
-  category: Category | null;
   pathGlob: string;
 };
 
 export const EMPTY_FILTERS: Filters = {
-  language: null,
   severity: null,
-  bucket: null,
-  category: null,
   pathGlob: "",
 };
 
@@ -39,7 +33,7 @@ export const analysisState = signal<AnalysisState>({ state: "idle" });
 export const filters = signal<Filters>(EMPTY_FILTERS);
 // [FACET-TOP-OFFENDERS-FILTER] Workspace facet filter pushed by the
 // extension host so this list agrees with the filtered tree.
-export const facetFilter = signal<FacetFilter>({ buckets: [], categories: [] });
+export const facetFilter = signal<FacetFilter>({ severities: [] });
 export const lastUpdatedAt = signal<number>(0);
 
 export const clusters = computed<ReportCluster[]>(() => report.value?.clusters ?? []);
@@ -62,19 +56,13 @@ export const selectedCluster = computed<ReportCluster | null>(() => {
 });
 
 export const filteredClusters = computed<ReportCluster[]>(() => {
-  const { language, severity, bucket, category, pathGlob } = filters.value;
+  const { severity, pathGlob } = filters.value;
   const byId = severityByClusterId.value;
   const glob = pathGlob.trim().toLowerCase();
   // Base slice: the workspace facet filter, shared with the tree and
   // status bar; the webview's own selects refine it below.
   return applyFacetFilter(clusters.value, facetFilter.value).filter((cluster) => {
-    // The language is the engine's, stamped from the parser registry
-    // that actually parsed the file ([PIPELINE-LANG-TRAIT]); this filter
-    // never re-derives one from a path extension.
-    if (language && cluster.language !== language) return false;
     if (severity && byId.get(cluster.id) !== severity) return false;
-    if (bucket && resolveBucket(cluster) !== bucket) return false;
-    if (category && resolveCategory(cluster) !== category) return false;
     if (glob && !cluster.occurrences.some((o) => o.path.toLowerCase().includes(glob))) {
       return false;
     }

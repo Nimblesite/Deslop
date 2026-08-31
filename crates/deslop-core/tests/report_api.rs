@@ -6,9 +6,7 @@ use deslop_core::{
     ast::ByteRange,
     boilerplate::BoilerplateRange,
     config::ExclusionConfig,
-    report::{
-        PairClassification, PairComparison, PairEndpoint, PairEvidence, ReportOccurrence,
-    },
+    report::{PairClassification, PairComparison, PairEndpoint, PairEvidence, ReportOccurrence},
     report_boilerplate::build_boilerplate_hints,
     report_fixtures::{fixture_cluster, fixture_report},
     state::FileRegistry,

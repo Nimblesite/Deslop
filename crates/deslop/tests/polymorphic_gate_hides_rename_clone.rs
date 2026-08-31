@@ -60,7 +60,7 @@ fn same_named_rename_clone_surfaces_while_real_polymorphism_stays_hidden() -> Re
     );
     assert!(
         approx(signal(clone, "pair_rename_consistency"), 1.0),
-        "a certified consistent rename must publish its elected-pair proof: \
+        "a certified consistent rename must pass the explicit pair contract: \
          {report:#}"
     );
     assert_eq!(

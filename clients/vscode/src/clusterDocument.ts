@@ -72,7 +72,7 @@ function renderClusterDocument(cluster: ReportCluster): string {
     `# Deslop cluster ${cluster.id}`,
     "",
     `Occurrences: ${occurrenceCount(cluster)}`,
-    `Weight: ${formatScore(cluster.weight)}`,
+    `Mass: ${formatScore(cluster.mass)}`,
     "",
     "## Occurrences",
     ...cluster.occurrences.map(renderOccurrence),

@@ -50,7 +50,7 @@ fn assert_rename_invariant(report: &Value) -> Result<()> {
     let support = signal(clone, "pair_agreement").max(signal(clone, "pair_rename_consistency"));
     assert!(
         support >= CONTENT_SUPPORT_FLOOR,
-        "the elected pair's content evidence must support the nearly-identical \
+        "the explicit pair's content evidence must support admission to the closure: \
          route: {report:#}"
     );
     assert_eq!(

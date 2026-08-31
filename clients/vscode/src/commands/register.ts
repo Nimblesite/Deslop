@@ -15,7 +15,6 @@ import {
   clearTopOffendersFilter,
   setTopOffendersGroupBy,
   setTopOffendersSortBy,
-  toggleTopOffendersSplitByLanguage,
 } from "./topOffendersView";
 import { Report, ReportCluster, ReportOccurrence } from "../types/report";
 import { buildCompareUri } from "../compare/provider";
@@ -88,7 +87,7 @@ const COMMAND_BINDINGS: readonly CommandBinding[] = [
   { id: "deslop.topOffenders.showByCluster", run: () => setTopOffendersGroupBy("cluster") },
   { id: "deslop.topOffenders.showByFile", run: () => setTopOffendersGroupBy("file") },
   { id: "deslop.topOffenders.showByFolder", run: () => setTopOffendersGroupBy("folder") },
-  { id: "deslop.topOffenders.showByType", run: () => setTopOffendersGroupBy("type") },
+  { id: "deslop.topOffenders.showBySeverity", run: () => setTopOffendersGroupBy("severity") },
   { id: "deslop.topOffenders.chooseFilter", run: ({ store }) => chooseTopOffendersFilter(store) },
   // Same handler as chooseFilter; separate id so the toolbar can swap in
   // the active-filter icon via the deslop.topOffendersFiltered context key.
@@ -96,7 +95,6 @@ const COMMAND_BINDINGS: readonly CommandBinding[] = [
   { id: "deslop.topOffenders.clearFilter", run: () => clearTopOffendersFilter() },
   { id: "deslop.topOffenders.sortByImpact", run: () => setTopOffendersSortBy("impact") },
   { id: "deslop.topOffenders.sortByPath", run: () => setTopOffendersSortBy("path") },
-  { id: "deslop.topOffenders.toggleSplitByLanguage", run: () => toggleTopOffendersSplitByLanguage() },
   { id: "deslop.openDuplicationReport", run: ({ context, store }) => openDuplicationReportPanel(context, store) },
   { id: "deslop.openHtmlReport", run: ({ clientOf }) => openHtmlReport(clientOf) },
   { id: "deslop.copyContextForAI", run: ({ store }, node) => copyContextForAI(node as ClusterNode | OccurrenceNode, store) },

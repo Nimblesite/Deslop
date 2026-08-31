@@ -1,24 +1,29 @@
 // Shared hover card renderer — [VSIX-HOVER-SHARED].
-// Two layouts controlled by `showCategory`:
+// Two layouts controlled by `showVerdict`:
 //   Full (bubble, no adjacent diagnostic):
-//     **{slug} Category** × count  /  Canonical: `path`  /  links + Dismiss
+//     **{slug} Duplicate code** × count  /  Canonical: `path`  /  links + Dismiss
 //   Compact (squiggle hover, alongside diagnostic):
 //     **{slug}** × count  /  Canonical: `path`  /  links + Copy for AI
-//   The compact form omits the category label — the diagnostic already shows it.
+//   The compact form omits the verdict — the diagnostic already shows it.
 // Slug is the first 7 hex chars of cluster.id — stable across runs.
 // Rank must never take the id slot: Deslop#149, Deslop#349.
 
 import * as vscode from "vscode";
 
-import { bucketLabels, clusterSlug, occurrenceCount, ReportCluster, resolveBucket } from "./types/report";
+import { clusterSlug, occurrenceCount, ReportCluster } from "./types/report";
 
 export { clusterSlug };
+
+// [REPORTING-CONTEXT] There is no clone-kind classification to quote on
+// a cluster surface; the verdict is the spec'd short label.
+/** The only title a cluster surface may carry. */
+export const DUPLICATION_VERDICT = "Duplicate code";
 
 export interface ClusterHoverOptions {
   readonly showDismiss?: boolean;
   readonly count?: number;
-  /// When false, the category label is omitted (use alongside a diagnostic).
-  readonly showCategory?: boolean;
+  /// When false, the verdict label is omitted (use alongside a diagnostic).
+  readonly showVerdict?: boolean;
 }
 
 export function clusterHoverMarkdown(
@@ -29,14 +34,11 @@ export function clusterHoverMarkdown(
   md.isTrusted = true;
   const count = options.count ?? occurrenceCount(cluster);
   const slug = clusterSlug(cluster);
-  const showCategory = options.showCategory ?? true;
+  const showVerdict = options.showVerdict ?? true;
 
-  if (showCategory) {
-    const labels = bucketLabels(resolveBucket(cluster));
-    md.appendMarkdown(`**${slug} ${labels.plainTitle}** × ${count}\n\n`);
-  } else {
-    md.appendMarkdown(`**${slug}** × ${count}\n\n`);
-  }
+  md.appendMarkdown(
+    showVerdict ? `**${slug} ${DUPLICATION_VERDICT}** × ${count}\n\n` : `**${slug}** × ${count}\n\n`,
+  );
 
   const canonical = cluster.occurrences[0];
   if (canonical) {
@@ -49,7 +51,7 @@ export function clusterHoverMarkdown(
     `[Compare with canonical](command:deslop.compareWithCanonical?${openArgs})`,
     `[View cluster](command:deslop.openCluster?${openArgs})`,
   ];
-  if (!showCategory) {
+  if (!showVerdict) {
     links.push(`[Copy for AI](command:deslop.copyClusterContextById?${openArgs})`);
   }
   if (options.showDismiss) {

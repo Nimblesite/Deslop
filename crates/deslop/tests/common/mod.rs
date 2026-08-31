@@ -11,7 +11,7 @@
 
 #![allow(dead_code)]
 
-/// Elected-pair signal and bucket assertion vocabulary.
+/// Legacy pair-signal assertion vocabulary pending explicit compare migration.
 /// Suites that assert on reported evidence import it explicitly with
 /// `use crate::common::signals::*;` — a glob re-export here would be an
 /// unused import in every binary that never touches that vocabulary.
@@ -256,7 +256,7 @@ pub(crate) fn cluster_size(cluster: &Value) -> u64 {
     field(cluster, "size").as_u64().unwrap_or(0)
 }
 
-/// One component of a cluster's elected-pair `signals` block (e.g. `token_jaccard`),
+/// One component of a legacy cluster `signals` block (e.g. `token_jaccard`),
 /// or `0.0` when the named signal is absent.
 pub(crate) fn signal(cluster: &Value, key: &str) -> f64 {
     cluster

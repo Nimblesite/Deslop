@@ -1,11 +1,9 @@
 //! `textDocument/codeLens` provider ([LSP-CODE-LENS]).
 //!
 //! Emits one code lens per occurrence in the requested file. The lens
-//! title carries the cluster count and the elected pair's measured
-//! axes plus content evidence
-//! ([FUSED-CONTENT-GATE]) — so a reader sees the full context without
-//! opening the report view, and the attached command jumps to the next
-//! occurrence.
+//! title carries only the cluster count, and the attached command jumps
+//! to the next occurrence. Pair evidence belongs exclusively to explicit
+//! two-endpoint comparison ([FUSED-PAIR-SIGNALS]).
 
 use std::path::Path;
 
@@ -84,35 +82,14 @@ fn zero_range() -> Range {
 mod tests {
     use super::*;
     use anyhow::{anyhow, Result};
-    use deslop_core::report::{ReportOccurrence, ReportSignalSource, ReportSignals};
+    use deslop_core::report::{ReportCluster, ReportOccurrence};
     use std::path::PathBuf;
 
     const ALPHA_FILE: &str = "Alpha.cs";
     const PAIR_SIZE: usize = 2;
 
-    fn make_cluster(id: &str, size: usize, occurrences: Vec<ReportOccurrence>) -> ReportCluster {
-        let signals = ReportSignals {
-            structural: 0.87,
-            token_jaccard: 0.72,
-            shape: 0.87,
-            embedding_cos: 0.55,
-            pair_agreement: 0.63,
-            pair_rename_consistency: 0.94,
-            literal_fraction: 0.11,
-        };
-        let mut cluster = deslop_core::report_fixtures::fixture_cluster(id, occurrences);
-        cluster.weight = 10.0;
-        cluster.size = size;
-        cluster.canonical_node_count = 20;
-        cluster.signals = signals;
-        "nearly_identical".clone_into(&mut cluster.bucket);
-        "s".clone_into(&mut cluster.summary);
-        "i".clone_into(&mut cluster.interpretation);
-        if cluster.occurrences.len() >= PAIR_SIZE {
-            cluster.signal_source = Some(ReportSignalSource { left: 0, right: 1 });
-        }
-        deslop_core::report_fixtures::restamp_fixture(&mut cluster);
-        cluster
+    fn make_cluster(id: &str, occurrences: Vec<ReportOccurrence>) -> ReportCluster {
+        deslop_core::report_fixtures::fixture_cluster(id, occurrences)
     }
 
     fn occurrence(path: &str, start: usize, end: usize) -> ReportOccurrence {
@@ -131,7 +108,6 @@ mod tests {
     fn build_for_file_emits_one_lens_per_matching_occurrence_with_full_command() -> Result<()> {
         let cluster = make_cluster(
             "cluster-alpha",
-            3,
             vec![
                 occurrence(ALPHA_FILE, 0, 10),
                 occurrence(ALPHA_FILE, 50, 80),
@@ -228,7 +204,7 @@ mod tests {
 
     #[test]
     fn build_for_file_with_no_matching_cluster_returns_empty_vec() {
-        let cluster = make_cluster("c", PAIR_SIZE, vec![occurrence("Other.cs", 0, 5)]);
+        let cluster = make_cluster("c", vec![occurrence("Other.cs", 0, 5)]);
         let total_occurrences = cluster.occurrences.len();
         let report = FileReport {
             path: PathBuf::from("Alpha.cs"),
@@ -241,7 +217,7 @@ mod tests {
 
     #[test]
     fn lens_for_occurrence_preserves_cluster_id_and_index() -> Result<()> {
-        let cluster = make_cluster("xyz-789", 5, vec![occurrence("A.cs", 0, 1)]);
+        let cluster = make_cluster("xyz-789", vec![occurrence("A.cs", 0, 1)]);
         let lens = lens_for_occurrence(&cluster, 4);
         let command = lens.command.ok_or_else(|| anyhow!("command populated"))?;
         let arguments = command
@@ -251,7 +227,7 @@ mod tests {
         let second_arg = arguments.get(1).ok_or_else(|| anyhow!("second argument"))?;
         assert_eq!(*first_arg, serde_json::json!("xyz-789"));
         assert_eq!(*second_arg, serde_json::json!(4_usize));
-        assert!(command.title.contains("●● 5 copies"), "{}", command.title);
+        assert!(command.title.contains("●● 1 copies"), "{}", command.title);
         Ok(())
     }
 
@@ -269,11 +245,10 @@ mod tests {
     fn title_for_renders_copy_count_only() {
         let cluster = make_cluster(
             "c",
-            7,
             vec![occurrence("A.cs", 0, 1), occurrence("B.cs", 0, 1)],
         );
         let title = title_for(&cluster);
-        assert_eq!(title, "●● 7 copies — jump to next");
+        assert_eq!(title, "●● 2 copies — jump to next");
         assert!(title.ends_with("jump to next"), "{}", title);
     }
 
@@ -284,11 +259,10 @@ mod tests {
     fn title_for_renders_no_pair_evidence() {
         let cluster = make_cluster(
             "c",
-            7,
             vec![occurrence("A.cs", 0, 1), occurrence("B.cs", 0, 1)],
         );
         let title = title_for(&cluster);
-        assert_eq!(title, "●● 7 copies — jump to next");
+        assert_eq!(title, "●● 2 copies — jump to next");
         for (gone, axis) in [
             ("structural", "shape"),
             ("jaccard", "token"),
@@ -310,10 +284,10 @@ mod tests {
     }
 
     #[test]
-    fn title_without_an_elected_pair_omits_every_pair_score() {
-        let cluster = make_cluster("unsourced", 7, vec![]);
+    fn title_never_renders_pair_scores() {
+        let cluster = make_cluster("unsourced", vec![]);
         let title = title_for(&cluster);
-        assert_eq!(title, "●● 7 copies — jump to next");
+        assert_eq!(title, "●● 0 copies — jump to next");
         assert!(!title.contains("structural"));
         assert!(!title.contains("agreement"));
     }

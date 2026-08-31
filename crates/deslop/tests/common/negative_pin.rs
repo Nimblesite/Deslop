@@ -434,7 +434,7 @@ fn assert_each_family_cluster_is_demoted(over_family: &[&Value], label: &str) {
         assert!(
             signal(cluster, "pair_agreement") < 1.0
                 && signal(cluster, "pair_rename_consistency") < 1.0,
-            "{label}: {id} is a scaffolding family — no elected pair's content \
+            "{label}: {id} is a scaffolding family — no explicit pair's content \
              evidence may claim full duplication (agreement=1.0 or a certified \
              rename=1.0) while the cluster wears a demoted label: {dump}",
             id = cluster_id(cluster),

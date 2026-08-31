@@ -212,7 +212,7 @@ fn a_cluster_whose_evidence_did_not_corroborate_is_not_told_it_agreed() -> Resul
     let structural = signal(accessor, "structural");
     assert!(
         structural < STRUCTURAL_SATURATION_FLOOR,
-        "the content gate must be skipped only because the elected pair stays \
+        "the content gate must be skipped only because the explicit pair stays \
          below the saturation floor: {accessor:#}"
     );
     let support =

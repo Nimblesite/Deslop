@@ -5,7 +5,7 @@ use crate::common;
 
 use anyhow::Result;
 use common::ReportFixture;
-use deslop_core::{cluster::Cluster, pair::PairScore};
+use deslop_core::cluster::Cluster;
 
 #[test]
 fn low_structure_token_and_embedding_noise_stays_out_of_ranked_report() -> Result<()> {
@@ -79,11 +79,6 @@ fn json_schema_cluster(fixture: &mut ReportFixture) -> Cluster {
             ("schemas.py", "def schema_top_offenders():\n    return {\"type\": \"object\", \"properties\": {\"limit\": {\"type\": \"integer\"}}, \"required\": [\"limit\"]}\n"),
         ],
         56,
-        PairScore {
-            structural: 0.0,
-            token_jaccard: 0.96,
-            embedding_cos: 0.0,
-        },
     )
 }
 
@@ -95,11 +90,6 @@ fn mixed_fixture_cluster(fixture: &mut ReportFixture) -> Cluster {
             ("test_docker.py", "container = {\"id\": \"abc\", \"image\": \"runner\", \"ports\": {\"http\": 8080}, \"status\": \"running\"}\n"),
         ],
         72,
-        PairScore {
-            structural: 0.11,
-            token_jaccard: 0.96,
-            embedding_cos: 0.53,
-        },
     )
 }
 
@@ -111,11 +101,6 @@ fn assertion_cluster(fixture: &mut ReportFixture) -> Cluster {
             ("test_config.py", "def test_fly_config(cfg):\n    assert cfg.api_token == \"t\"\n    assert cfg.app_name == \"a\"\n"),
         ],
         44,
-        PairScore {
-            structural: 1.0,
-            token_jaccard: 1.0,
-            embedding_cos: 0.0,
-        },
     )
 }
 
@@ -136,10 +121,5 @@ fn embedding_mega_cluster(fixture: &mut ReportFixture) -> Cluster {
             ("test_sandbox_dispatcher_e2e.py", "async def test_dispatcher_routes_message(dispatcher):\n    result = await dispatcher.send('hello')\n    assert result\n"),
         ],
         1040,
-        PairScore {
-            structural: 0.02,
-            token_jaccard: 0.79,
-            embedding_cos: 0.86,
-        },
     )
 }

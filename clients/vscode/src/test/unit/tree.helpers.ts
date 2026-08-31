@@ -2,61 +2,35 @@
 // Non-`.test.ts` so the Mocha glob does not load this as a suite.
 
 import * as vscode from "vscode";
-import { Bucket, FileMetric, RepoMetrics, Report, ReportCluster } from "../../types/report";
+import {
+  FileMetric,
+  RepoMetrics,
+  Report,
+  ReportCluster,
+  Severity,
+} from "../../types/report";
 import { emptyReport, metrics as zeroMetrics } from "./report-store.helpers";
 import { occurrence, stampRanks, wireCluster } from "../cluster.helpers";
-import { bucketSignals } from "../signals.helpers";
-
-/** Re-exported so a tree suite needs one helper module, not two. */
-export { bucketSignals };
 
 export function cluster(
   id: string,
-  weight: number,
+  mass: number,
   occurrencePath: string,
   startByte = 0,
   endByte = 20,
-  bucket: Bucket = "identical",
-  category?: string,
+  rankBand: Severity = "mid",
   rank = 1,
 ): ReportCluster {
   return wireCluster({
     id,
     rank,
-    weight,
-    size: 2,
-    signals: bucketSignals(bucket),
-    bucket,
-    ...(category === undefined ? {} : { category }),
-    language: languageOfPath(occurrencePath),
+    rank_band: rankBand,
+    mass,
     occurrences: [
       occurrence(occurrencePath, startByte, endByte),
       occurrence(`${occurrencePath}.other`, startByte, endByte),
     ],
-    interpretation: `dup in ${occurrencePath}`,
   });
-}
-
-// The language id the engine would have stamped for a fixture path. A
-// literal table, not a derivation: production code reads the id off the
-// cluster, and the real extension mapping is the parser registry's
-// ([PIPELINE-LANG-TRAIT]). Unlisted extensions read as the engine's own
-// unresolvable label.
-const FIXTURE_LANGUAGES: ReadonlyArray<readonly [string, string]> = [
-  [".cs", "csharp"],
-  [".rs", "rust"],
-  [".py", "python"],
-  [".dart", "dart"],
-  [".js", "javascript"],
-  [".ts", "typescript"],
-  [".tsx", "tsx"],
-  [".go", "go"],
-  [".php", "php"],
-  [".fs", "fsharp"],
-];
-
-function languageOfPath(path: string): string {
-  return FIXTURE_LANGUAGES.find(([extension]) => path.endsWith(extension))?.[1] ?? "unknown";
 }
 
 export function labelText(item: vscode.TreeItem): string {
@@ -149,7 +123,7 @@ export async function withSetting<T>(
 }
 
 export function withGroupBy(
-  value: "cluster" | "file" | "folder" | "type",
+  value: "cluster" | "file" | "folder" | "severity",
   body: () => Promise<void> | void,
 ): Promise<void> {
   return withSetting("topOffenders.groupBy", value, body);

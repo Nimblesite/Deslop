@@ -162,7 +162,7 @@ fn representative_fingerprint(
 /// slots for *different* snippets, and in a single file the nearest
 /// different snippets are the enclosing statement, the sibling window and
 /// the sub-expression. Measured on six identical statements in one C#
-/// file: the per-pair guard passed the representative pair, the component
+/// file: the per-pair guard passed one ANN endpoint pair, the component
 /// swallowed every nested window, the same-file overlap collapse reduced
 /// it to one occurrence, and a six-occurrence `identical` cluster that
 /// both the embeddings-off run and the pre-collapse run report vanished

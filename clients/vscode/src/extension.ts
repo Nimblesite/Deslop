@@ -165,9 +165,7 @@ export async function activate(
       if (
         !event.affectsConfiguration("deslop.topOffenders.groupBy") &&
         !event.affectsConfiguration("deslop.topOffenders.sortBy") &&
-        !event.affectsConfiguration("deslop.topOffenders.splitByLanguage") &&
-        !event.affectsConfiguration("deslop.topOffenders.filterBuckets") &&
-        !event.affectsConfiguration("deslop.topOffenders.filterCategories")
+        !event.affectsConfiguration("deslop.topOffenders.filterSeverities")
       ) {
         return;
       }
@@ -316,14 +314,8 @@ export function syncTopOffendersContext(): void {
   const cfg = vscode.workspace.getConfiguration(DESLOP_CONFIGURATION_NAMESPACE);
   const groupBy = normalizeGroupBy(cfg.get<string>("topOffenders.groupBy", "cluster"));
   const sortBy = cfg.get<string>("topOffenders.sortBy", "impact") === "path" ? "path" : "impact";
-  const splitByLanguage = cfg.get<boolean>("topOffenders.splitByLanguage", false) === true;
   void vscode.commands.executeCommand(SET_CONTEXT_COMMAND, "deslop.topOffendersGroupBy", groupBy);
   void vscode.commands.executeCommand(SET_CONTEXT_COMMAND, "deslop.topOffendersSortBy", sortBy);
-  void vscode.commands.executeCommand(
-    SET_CONTEXT_COMMAND,
-    "deslop.topOffendersSplitByLanguage",
-    splitByLanguage,
-  );
   void vscode.commands.executeCommand(
     SET_CONTEXT_COMMAND,
     "deslop.topOffendersFiltered",

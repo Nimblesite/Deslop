@@ -39,9 +39,8 @@ fn assert_no_plan(fixture_name: &str, file_name: &str) -> Result<()> {
         let plan = refactor::compute_plan(cluster, &source, parser.as_ref())?;
         ensure!(
             plan.is_none(),
-            "{fixture_name}: cluster {} (bucket {}) must be refused, got a plan",
-            cluster.id,
-            cluster.bucket
+            "{fixture_name}: cluster {} must be refused, got a plan",
+            cluster.id
         );
     }
     Ok(())

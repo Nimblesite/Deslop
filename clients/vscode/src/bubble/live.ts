@@ -1,9 +1,9 @@
 // Live duplication bubble — [VSIX-LIVE-BUBBLE].
 // Fires after every coalesced buffer edit. Calls deslop/duplicatesFindSimilar
-// on the most-recently-touched range; admission is `bubbleAdmits`: only an
-// explicitly eligible duplicate bucket renders — the engine's own verdict, reached with content
+// on the most-recently-touched range; admission is `bubbleAdmits`: a
+// reported cluster renders — the engine's verdict, reached with content
 // evidence and byte proof this client never sees. Surfaces:
-//   primary: after-text decoration (severity dot + bucket label + count + canonical)
+//   primary: after-text decoration (severity dot + short verdict + count + canonical)
 // Ghost-line mode renders a whole-line after-text decoration instead.
 // Pair admission signals never render here ([FUSED-PAIR-SIGNALS]).
 
@@ -14,12 +14,7 @@ import type { LanguageClient } from "vscode-languageclient/node";
 import { COLOR, DESLOP_SEVERITY_COLOR } from "../design";
 import { ReportStore } from "../reportStore";
 import { clusterSeverity } from "../severity";
-import {
-  ReportCluster,
-  clusterBand,
-  isLiveBubbleBucket,
-  resolveBucket,
-} from "../types/report";
+import { ReportCluster, clusterBand } from "../types/report";
 import { bubbleHover, ghostText, inlineText } from "./renderParts";
 
 export { shortPath } from "../pathUtils";
@@ -323,10 +318,9 @@ export class LiveBubble implements vscode.Disposable {
           renderOptions: {
             after: {
               contentText: inlineText(best, severity),
-              // [SEVERITY-COLOR] Colour is the bucket channel; the dot inside
-              // `inlineText` is the percentile channel. The bubble carries both
-              // facts at once — a demoted family topping the report is a grey
-              // `●●`, never the crimson that means "safe to extract".
+              // [SEVERITY-COLOR] Colour is the severity channel; the dot inside
+              // `inlineText` is the same channel. The bubble carries the
+              // cluster's mass severity, never a clone-kind classification.
               color: DESLOP_SEVERITY_COLOR[clusterSeverity(best)],
               fontStyle: "normal",
               fontWeight: "600",
@@ -373,22 +367,9 @@ function bestBubbleCluster(
   return probeClusters
     .filter((cluster) => !retractedClusters.has(cluster.id))
     .map((cluster) => byId.get(cluster.id) ?? cluster)
-    .filter(bubbleAdmits)
     .filter((cluster) => !dismissedClusters.has(cluster.id))
     // Worst first is the engine's ranking, tie-break included.
     .sort((a, b) => a.rank - b.rank)[0];
-}
-
-// One gate: the bucket ([VSIX-LIVE-BUBBLE], [FUSED-CONTENT-GATE]). An
-// eligible bucket is the engine's own duplicate verdict,
-// reached with content evidence and byte proof this client never sees.
-// There is no second admission path: the fused gate is gone from the wire,
-// and no UI-local threshold stands in for it — an ineligible cluster
-// simply has no engine verdict behind it and does not render. The
-// threshold constant exists once, in Rust, and this client never mirrors
-// it.
-function bubbleAdmits(cluster: ReportCluster): boolean {
-  return isLiveBubbleBucket(resolveBucket(cluster));
 }
 
 // The probe's budget deadline fired: record the expiry so the completion

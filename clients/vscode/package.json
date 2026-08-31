@@ -168,9 +168,9 @@
         "icon": "$(folder)"
       },
       {
-        "command": "deslop.topOffenders.showByType",
-        "title": "Deslop: Group Top Offenders by Type",
-        "icon": "$(group-by-ref-type)"
+        "command": "deslop.topOffenders.showBySeverity",
+        "title": "Deslop: Group Top Offenders by Severity",
+        "icon": "$(list-ordered)"
       },
       {
         "command": "deslop.topOffenders.chooseFilter",
@@ -246,7 +246,7 @@
           "group": "navigation@1"
         },
         {
-          "command": "deslop.topOffenders.showByType",
+          "command": "deslop.topOffenders.showBySeverity",
           "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'folder'",
           "group": "navigation@1"
         },

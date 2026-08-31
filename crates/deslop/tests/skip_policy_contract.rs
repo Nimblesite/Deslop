@@ -64,7 +64,7 @@ const TEST_TARGET_KIND: &str = "test";
 /// (gh #422, blocked on the memory work in #166); the two gh #369 entries
 /// are red on purpose against unfinished fusion and embedding behaviour. The
 /// gh #432 operator-drift pins were un-ignored when the fused-score
-/// follow-ups landed their elected-pair contract — `operator_drift_is_not_duplication`
+/// follow-ups landed their explicit-pair contract — `operator_drift_is_not_duplication`
 /// now runs live.
 ///
 /// Those counts are prose, and prose drifts. [`SKIPS_PER_ISSUE`] is what

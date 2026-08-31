@@ -1,8 +1,8 @@
-//! E2E pin for gh #458 (C3 / AC6) — [FUSED-CLUSTER-SIGNALS] and
+//! E2E pin for gh #458 (C3 / AC6) — [FUSED-PAIR-SIGNALS] and
 //! [FUSED-CONTENT-GATE]: a proven copy family must keep its act-now
 //! evidence when an unrelated shape-identical stranger joins the
 //! corpus, and the stranger's presence must not demote the family's
-//! elected-pair evidence.
+//! explicit pair evidence.
 //!
 //! The `verbatim-plus-stranger` fixture holds four byte-identical files
 //! plus a shape-identical stranger with different identifiers and
@@ -21,7 +21,7 @@
 //! - **[CLONE-NOISE-VERBATIM-SUBGROUP]**: no noise filter recognises the
 //!   component, so it is handed on untouched — no split, no member
 //!   dropped. The stranger rides in the closure.
-//! - **[FUSED-CLUSTER-SIGNALS]**: the elected pair is the earliest with
+//! - **[FUSED-PAIR-SIGNALS]**: explicit comparison uses exactly the endpoints
 //!   `q = max(S,J,E) = 1.0` — the copies' own pair — so the rendered
 //!   triple is `1.0/1.0/1.0` and the stranger does not demote it
 //!   (AC6). A byte-identical pair inside a lookalike cluster keeps its
@@ -67,14 +67,14 @@ fn expect_cluster_id<'a>(report: &'a Value, id: &str) -> Result<&'a Value> {
         .ok_or_else(|| anyhow::anyhow!("cluster {id} missing from report: {report:#}"))
 }
 
-/// [FUSED-CLUSTER-SIGNALS] gh #458 C3 — the stranger cannot demote the
+/// [FUSED-PAIR-SIGNALS] gh #458 C3 — the stranger cannot demote the
 /// proven family's evidence, and the copies' byte-identical pair keeps
 /// its act-now evidence wherever it renders:
 /// 1. the whole-file closure is ONE 5-member cluster carrying the
 ///    stranger — handed on untouched ([CLONE-NOISE-VERBATIM-SUBGROUP]),
 ///    downgraded to `nearly_identical` only because the stranger's raw
 ///    bytes differ ([CLONE-BUCKETS-IDENTICAL]),
-/// 2. the elected pair is the copies' own pair: `structural 1.0`,
+/// 2. the explicit pair is the copies' own pair: `structural 1.0`,
 ///    `token_jaccard 1.0`, `pair_agreement 1.0`, `pair_rename_consistency 1.0`,
 ///    `signal_source` naming two copies — the family's evidence is
 ///    preserved in full (AC6),
@@ -114,29 +114,29 @@ fn a_verbatim_family_survives_an_unrelated_stranger() -> Result<()> {
          ([FUSED-STRATEGY-BOUNDED-MAX])"
     );
 
-    // 2. The elected pair is the copies' own: the rendered triple is the
+    // 2. The explicit pair is the copies' own: the returned triple is the
     //    byte-identical pair's 1.0/1.0 evidence, named source, so the
     //    stranger's presence demotes nothing (AC6).
     assert_eq!(
         signal(whole_file, "structural").to_bits(),
         1.0_f64.to_bits(),
-        "the elected pair's structural evidence"
+        "the explicit pair's structural evidence"
     );
     assert_eq!(
         signal(whole_file, "token_jaccard").to_bits(),
         1.0_f64.to_bits(),
-        "the elected pair's token evidence"
+        "the explicit pair's token evidence"
     );
     assert_eq!(
         signal(whole_file, "pair_agreement").to_bits(),
         1.0_f64.to_bits(),
-        "the elected pair is byte-identical, so its content agreement \
+        "the explicit pair is byte-identical, so its content agreement \
          saturates"
     );
     assert_eq!(
         signal(whole_file, "pair_rename_consistency").to_bits(),
         1.0_f64.to_bits(),
-        "the elected pair is byte-identical, so its rename consistency \
+        "the explicit pair is byte-identical, so its rename consistency \
          saturates"
     );
     let source = field(whole_file, "signal_source");

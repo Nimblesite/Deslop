@@ -26,7 +26,6 @@ use deslop_core::{
     ast::ByteRange,
     cluster::Cluster,
     fingerprint::Fingerprint,
-    pair::PairScore,
     render_report,
     report::CacheStats,
     report_metrics::AnalysedLines,
@@ -434,34 +433,12 @@ impl ReportFixture {
         }
     }
 
-    /// Registers each snippet and clusters them with no content
-    /// measurement — the common case for suites that pin routing on the
-    /// shape and token axes alone.
+    /// Registers each snippet and returns one mass-only cluster.
     pub(crate) fn cluster(
         &mut self,
         id: &str,
         snippets: Vec<(&str, &str)>,
         node_count: usize,
-        signals: PairScore,
-    ) -> Cluster {
-        let content = deslop_core::content::ContentEvidence::unmeasured();
-        self.cluster_with_content(id, snippets, node_count, signals, content)
-    }
-
-    /// Registers each distinct path exactly once — assembling its
-    /// source from the member texts it carries, in order — and clusters
-    /// one member per snippet over that member's own byte slice. One
-    /// path is one file with one [`FileId`], so a same-file cluster
-    /// reaches [CLONE-BUCKETS-ROUTING] as same-file and the metrics
-    /// count each path once (gh #398,
-    /// `report_fixture_file_identity.rs`).
-    pub(crate) fn cluster_with_content(
-        &mut self,
-        id: &str,
-        snippets: Vec<(&str, &str)>,
-        node_count: usize,
-        _signals: PairScore,
-        _content: deslop_core::content::ContentEvidence,
     ) -> Cluster {
         let (assembled, spans) = assemble_member_files(snippets);
         let registered: Vec<(&str, FileId)> = assembled

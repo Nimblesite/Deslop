@@ -81,6 +81,6 @@ export function clusterPanelFeed(
   if (visible.clusters.some((cluster) => cluster.id === resolved.id)) {
     return { report: visible, selectedId: resolved.id };
   }
-  const clusters = [resolved, ...visible.clusters].sort((left, right) => right.weight - left.weight);
+  const clusters = [resolved, ...visible.clusters].sort((left, right) => right.mass - left.mass);
   return { report: { ...visible, clusters }, selectedId: resolved.id };
 }

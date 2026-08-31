@@ -18,7 +18,6 @@ use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
 use crate::common::{call, handshake, spawn_lsp_on_fixture_guarded, LspGuard};
-use deslop_core::report::ReportSignals;
 
 const DEFINITION: &str = "textDocument/definition";
 const HOVER: &str = "textDocument/hover";
@@ -135,7 +134,7 @@ fn canonical_navigation_survives_via_additive_clone_diagnostics() -> Result<()> 
     // navigation: the additive clone diagnostic still links to the
     // canonical occurrence in the sibling file via `relatedInformation`.
     let (_workspace, _guard, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
-    let report = wait_for_clusters(&mut stdin, &mut stdout)?;
+    let _report = wait_for_clusters(&mut stdin, &mut stdout)?;
 
     let response = call(
         &mut stdin,
@@ -165,28 +164,25 @@ fn canonical_navigation_survives_via_additive_clone_diagnostics() -> Result<()> 
     );
 
     // [FUSED-PAIR-SIGNALS] The diagnostic is a cluster surface: it quotes
-    // the bucket title, count, and evidence sentence, and renders no pair
-    // evidence.
+    // the neutral `Duplicate code × count — mass` contract and renders no
+    // pair evidence.
     let deslop_item = items
         .iter()
         .find(|item| item.get("source").and_then(Value::as_str) == Some("deslop"))
         .ok_or_else(|| anyhow!("a deslop-sourced diagnostic: {response}"))?;
-    let cluster_id = deslop_item
-        .pointer("/data/cluster_id")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("diagnostic data carries the cluster id: {deslop_item}"))?;
     let message = deslop_item
         .get("message")
         .and_then(Value::as_str)
         .ok_or_else(|| anyhow!("diagnostic carries a message: {deslop_item}"))?;
     assert!(
-        message.contains(" × ") && message.contains("code"),
-        "the pre-existing bucket title and occurrence count survive: {message}"
+        message.contains(" × ") && message.contains("code") && message.contains("mass"),
+        "the neutral count and mass survive: {message}"
     );
-    let signals = cluster_signals(&report, cluster_id)?;
     assert!(
-        !message.contains(&format!("structural {:.2}", signals.structural))
-            && !message.contains(&format!("agreement {:.2}", signals.pair_agreement)),
+        !message.contains("structural")
+            && !message.contains("agreement")
+            && !message.contains("jaccard")
+            && !message.contains("embedding"),
         "pair signals must not reach the diagnostic message: {message}"
     );
     Ok(())
@@ -197,7 +193,7 @@ fn additive_code_lens_carries_deslops_own_jump_command_not_definition() -> Resul
     // The additive clone code lens is how Deslop offers occurrence
     // navigation — via its own command, never by overloading F12.
     let (_workspace, _guard, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
-    let report = wait_for_clusters(&mut stdin, &mut stdout)?;
+    let _report = wait_for_clusters(&mut stdin, &mut stdout)?;
 
     let response = call(
         &mut stdin,
@@ -225,10 +221,6 @@ fn additive_code_lens_carries_deslops_own_jump_command_not_definition() -> Resul
 
     // [FUSED-PAIR-SIGNALS] The lens is a cluster surface: it states the
     // copy count and the jump action, and renders no pair evidence.
-    let cluster_id = first_lens
-        .pointer("/command/arguments/0")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("lens command names its cluster: {first_lens}"))?;
     let title = first_lens
         .pointer("/command/title")
         .and_then(Value::as_str)
@@ -242,10 +234,11 @@ fn additive_code_lens_carries_deslops_own_jump_command_not_definition() -> Resul
         "a lens title is rendered verbatim — Markdown code spans would show as \
          literal backticks: {title}"
     );
-    let signals = cluster_signals(&report, cluster_id)?;
     assert!(
-        !title.contains(&format!("structural {:.2}", signals.structural))
-            && !title.contains(&format!("agreement {:.2}", signals.pair_agreement)),
+        !title.contains("structural")
+            && !title.contains("agreement")
+            && !title.contains("jaccard")
+            && !title.contains("embedding"),
         "pair signals must not reach the lens title: {title}"
     );
     Ok(())
@@ -331,21 +324,6 @@ fn wait_for_clusters(
         thread::sleep(Duration::from_millis(500));
     }
     Err(anyhow!("no clusters produced within 30s"))
-}
-
-/// Reads the wire signals of `cluster_id` out of a `deslop/reportGet`
-/// response.
-fn cluster_signals(report: &Value, cluster_id: &str) -> Result<ReportSignals> {
-    let clusters = report
-        .pointer("/result/clusters")
-        .and_then(Value::as_array)
-        .ok_or_else(|| anyhow!("report carries no clusters: {report}"))?;
-    let signals = clusters
-        .iter()
-        .find(|cluster| cluster.get("id").and_then(Value::as_str) == Some(cluster_id))
-        .and_then(|cluster| cluster.get("signals"))
-        .ok_or_else(|| anyhow!("cluster {cluster_id} missing from report: {report}"))?;
-    Ok(serde_json::from_value(signals.clone())?)
 }
 
 fn file_uri(path: &Path) -> Result<String> {

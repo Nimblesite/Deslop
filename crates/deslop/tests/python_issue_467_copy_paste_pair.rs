@@ -334,7 +334,7 @@ fn assert_pair_signals(pair: &Value) {
 }
 
 /// The agent-facing half ([FUSED-THRESHOLD]). The explicit bucket is the
-/// public verdict; elected-pair evidence explains it without reconstructing
+/// pair admission; explicit endpoint evidence explains it without reconstructing
 /// a deleted cluster-confidence scalar.
 fn assert_pair_has_duplicate_verdict(pair: &Value) {
     assert!(

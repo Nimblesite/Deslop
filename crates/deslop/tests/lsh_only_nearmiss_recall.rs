@@ -16,21 +16,19 @@
 //! pins the recall it owed.
 //!
 //! **The precision half lives in `issue_331_336_shape_only_saturation.rs`
-//! and this file is its counterweight.** The elected pair clears the
-//! shared-subtree rescue with corroborating token evidence. Its shape is
-//! below the content-gate saturation floor, so the measured content axes
-//! remain observable but do not change the near-miss route.
+//! and this file is its counterweight.** The pair clears the shared-subtree
+//! rescue with corroborating token evidence and therefore joins the closure.
 
 use std::fs;
 use std::path::Path;
 
 use crate::common::{
-    approx, cluster_bucket, cluster_size, expect_cluster_spanning, field,
+    cluster_size, expect_cluster_spanning, field,
     incremental::{
         assert_pass, assert_reports_equal, assert_warm_pass, cold_then_warm,
         edit_preserving_offsets, run_store_on, ColdThenWarm,
     },
-    metric_field, run_report, signal,
+    metric_field, run_report,
     verdict::loc_as_f64,
     Result,
 };
@@ -97,31 +95,6 @@ const RIGHT_SOURCE: &str = "import os\nimport sys\n\n\ndef settle(entries, floor
 /// The file the mixed pass edits — the right-hand member of the pair.
 const RIGHT_FILE: &str = "ledger_right.py";
 
-/// Token-Jaccard the pair measures (`MinHash` estimate, deterministic per
-/// [PIPELINE-DETERMINISM]) — captured from the reproducing run. Measured
-/// again after #408 made `structural` a subtree-overlap grade and
-/// [PIPELINE-NORMALIZE-AST-OPERATOR] added operator kinds to the token
-/// stream: the pair now admits through the **anchored** near-miss row
-/// (`structural` 59/73 shared-subtree overlap) rather than the anchor-free
-/// row 4, and the richer token stream lowers the k-gram estimate to
-/// 89/128 components. The recall contract this file pins is the visible
-/// `nearly_identical` bucket with the elected pair's measured axes.
-const MEASURED_JACCARD: f64 = 89.0 / 128.0;
-
-/// Graded shared-subtree overlap of the elected pair.
-const MEASURED_STRUCTURAL: f64 = 59.0 / 73.0;
-
-/// Raw-content agreement measured on the elected pair. The endpoints'
-/// Merkle digests differ, so [FUSED-CONTENT-GATE] requires key-set
-/// Jaccard rather than a fictitious positional alignment: 12/13 keys.
-const MEASURED_AGREEMENT: f64 = 12.0 / 13.0;
-
-/// Shape-mismatched endpoints have no positional rename evidence.
-const MEASURED_RENAME_CONSISTENCY: f64 = 0.0;
-
-/// Embeddings are disabled for the fixture.
-const MEASURED_EMBEDDING: f64 = 0.0;
-
 /// Seeds the two-file Python corpus.
 fn seed(scan_root: &Path) -> Result<()> {
     fs::create_dir_all(scan_root)?;
@@ -155,17 +128,11 @@ fn assert_pair_verdict(report: &serde_json::Value, label: &str) -> Result<()> {
     );
     let cluster = expect_cluster_spanning(report, &["ledger_left.py", "ledger_right.py"])?;
     assert_eq!(
-        cluster_bucket(cluster),
-        "nearly_identical",
-        "{label}: the admitted statement-reorder pair must retain the \
-         nearly-identical route: {cluster:#}"
-    );
-    assert_eq!(
         cluster_size(cluster),
         2,
         "{label}: exactly the two reordered functions form the pair: {cluster:#}"
     );
-    assert_elected_pair_axes(cluster);
+    assert_mass_only_cluster(cluster);
     assert_recall_metrics(report)
 }
 
@@ -233,53 +200,8 @@ fn right_file_fingerprint_count(tmp: &Path) -> Result<u64> {
     Ok(events.fingerprints)
 }
 
-/// The elected pair's five exact public axes and their source.
-fn assert_elected_pair_axes(cluster: &serde_json::Value) {
-    let structural = signal(cluster, "structural");
-    assert!(
-        approx(structural, MEASURED_STRUCTURAL),
-        "the elected pair must retain its measured shared-subtree overlap \
-         {MEASURED_STRUCTURAL}, got {structural}: {cluster:#}"
-    );
-    // The bound is two-sided. `<= 0.01` was the old form, and it read as
-    // "no structural evidence" — which was only ever true because
-    // `structural` was Merkle equality. A statement reorder shares every
-    // statement subtree; only their order differs, so it measures real
-    // overlap ([FUSED-SHARED-SUBTREE]). Asserting the zero asserted that
-    // the shared statements did not exist.
-    assert!(
-        structural >= deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
-        "the reordered statements are shared subtrees and must register as \
-         shape evidence, got {structural}: {cluster:#}"
-    );
-    let jaccard = signal(cluster, "token_jaccard");
-    assert!(
-        approx(jaccard, MEASURED_JACCARD),
-        "token_jaccard must be the measured {MEASURED_JACCARD}, got \
-         {jaccard}: {cluster:#}"
-    );
-    let cosine = signal(cluster, "embedding_cos");
-    assert!(
-        approx(cosine, MEASURED_EMBEDDING),
-        "embeddings are off, so the cosine must be {MEASURED_EMBEDDING}, got {cosine}: {cluster:#}"
-    );
-    let agreement = signal(cluster, "pair_agreement");
-    assert!(
-        approx(agreement, MEASURED_AGREEMENT),
-        "the elected pair must publish measured agreement \
-         {MEASURED_AGREEMENT}, got {agreement}: {cluster:#}"
-    );
-    let rename = signal(cluster, "pair_rename_consistency");
-    assert!(
-        approx(rename, MEASURED_RENAME_CONSISTENCY),
-        "the elected pair must publish measured rename consistency \
-         {MEASURED_RENAME_CONSISTENCY}, got {rename}: {cluster:#}"
-    );
-    assert_eq!(
-        field(cluster, "signal_source"),
-        &serde_json::json!({"left": 0, "right": 1}),
-        "all five axes must name the admitted pair they describe: {cluster:#}"
-    );
+/// The rendered closure exposes mass and membership, never admission evidence.
+fn assert_mass_only_cluster(cluster: &serde_json::Value) {
     let nodes = field(cluster, "canonical_node_count").as_u64().unwrap_or(0);
     assert!(
         nodes >= LSH_ONLY_NODE_FLOOR,
@@ -287,6 +209,19 @@ fn assert_elected_pair_axes(cluster: &serde_json::Value) {
          floor to survive, so the canonical count must too, got {nodes}: \
          {cluster:#}"
     );
+    assert_eq!(field(cluster, "mass").as_u64(), Some(nodes));
+    for forbidden in [
+        "signals",
+        "signal_source",
+        "bucket",
+        "classification",
+        "weight",
+    ] {
+        assert!(
+            cluster.get(forbidden).is_none(),
+            "cluster field {forbidden} is forbidden: {cluster:#}"
+        );
+    }
 }
 
 /// [METRICS-REPO] The recall half: a reported pair must move every
@@ -315,7 +250,7 @@ fn assert_recall_metrics(report: &serde_json::Value) -> Result<()> {
         .unwrap_or(-1.0);
     let expected = 100.0 * loc_as_f64(duplicated)? / loc_as_f64(analysed)?;
     assert!(
-        approx(reported, expected),
+        (reported - expected).abs() <= f64::EPSILON,
         "duplication_percent must be duplicated/analysed × 100 \
          ({duplicated}/{analysed}), got {reported}: {report}"
     );

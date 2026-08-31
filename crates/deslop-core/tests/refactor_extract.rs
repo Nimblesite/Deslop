@@ -74,12 +74,6 @@ fn assert_extract_case(case: &ExtractCase) -> Result<()> {
 
     assert_planned_from_enclosing_view(&report, &cluster)?;
     ensure!(
-        ["identical", "nearly_identical", "structural_only"].contains(&cluster.bucket.as_str()),
-        "extract plans must come from exact-structural buckets \
-         ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 1), got bucket {}",
-        cluster.bucket
-    );
-    ensure!(
         plan.free_variables == case.free_variables,
         "{}: free variables must be {:?} in first-reference order, got {:?}",
         case.fixture,

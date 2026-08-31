@@ -57,15 +57,10 @@ const MIN_REPORTABLE_MEMBERS: usize = 2;
 /// [`Cluster`] so the ranking and rendering stages do not have to know
 /// how the cluster was discovered.
 ///
-/// The signal breakdown is measured between each cluster's rendered
-/// occurrences ([FUSED-CLUSTER-SIGNALS]) from the inputs' `signatures`
-/// and `embedding_vectors`, and each cluster's [`ContentEvidence`] is
-/// measured from `trees` and `sources` **before** cross-cluster
-/// subsumption elects the surviving view ([FUSED-CONTENT-GATE],
-/// [PIPELINE-CLUSTER-SUBSUME]). Cluster ids hash the smallest member's
-/// digest together with every member's workspace-relative path
-/// ([PIPELINE-DETERMINISM], gh #430), so identical fused clusters across
-/// runs always report the same id while same-shape findings in different
+/// Cluster ids hash the smallest member's digest together with every
+/// member's workspace-relative path ([PIPELINE-DETERMINISM], gh #430),
+/// so identical fused clusters across runs always report the same id
+/// while same-shape findings in different workspaces remain distinct.
 /// Inputs accepted by [`build_ranked_fused_clusters`]. Grouped for the
 /// same reason [`crate::report::ReportInputs`] exists: the list
 /// outgrew the 7-argument function budget, and every field here is

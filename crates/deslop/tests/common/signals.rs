@@ -6,7 +6,7 @@
 //! same contract in every suite that asserts on a rendered cluster, so
 //! they live here rather than being restated per binary. There is no
 //! cluster-level `fused` to band ([FUSED-SCOPE]): the report carries
-//! the elected pair's measured axes and its content evidence, and
+//! exact endpoint-pair evidence belongs to explicit comparison, while
 //! routing reads `support = max(pair_agreement, pair_rename_consistency)`
 //! directly ([FUSED-CONTENT-GATE]).
 

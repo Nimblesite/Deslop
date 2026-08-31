@@ -79,7 +79,7 @@ export class ReportStore implements vscode.Disposable {
   private readonly _lifecycle = signal<LifecyclePhase>({ kind: "starting" });
   private readonly _pendingEmbeddingModel = signal<string | null>(null);
   private readonly _embeddingProgress = signal<EmbeddingProgress | null>(null);
-  private readonly _facetFilter = signal<FacetFilter>({ buckets: [], categories: [] });
+  private readonly _facetFilter = signal<FacetFilter>({ severities: [] });
   private readonly _retractedClusters = signal<ReadonlySet<string>>(new Set());
 
   private readonly _visibleReport: ReadonlySignal<Report | null> = computed(() =>
@@ -366,7 +366,6 @@ function projectVisible(canonical: Report | null, dirty: ReadonlySet<string>): R
     const projectedCount = Math.max(kept.length, cluster.occurrence_count - removed);
     clusters.push({
       ...cluster,
-      size: projectedCount,
       occurrences: kept,
       occurrence_count: projectedCount,
       occurrences_total: projectedCount,

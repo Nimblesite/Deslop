@@ -61,7 +61,7 @@ pub(crate) const CALL_PAIR_ANCHORS: u32 = 10;
 /// artifact; five is what the two files actually share.
 pub(crate) const CALL_LOC_PER_FILE: u64 = 5;
 
-/// Every elected-pair axis fixed by a byte-identical copy with embeddings off.
+/// Every explicit-pair axis fixed by a byte-identical copy with embeddings off.
 /// `literal_fraction` is corpus content, not evidence strength, so each fixture
 /// asserts its own authored value where that value matters.
 ///
@@ -80,7 +80,7 @@ const VERBATIM_PAIR_SIGNALS: &[(&str, f64)] = &[
 ];
 
 /// The exact rendered `pair_rename_consistency` for a byte-identical copy
-/// whose elected pair carries `anchors` consistent positions: the anchor mass
+/// whose explicit pair carries `anchors` consistent positions: the anchor mass
 /// `anchors / (anchors + 4)`, certified to 1.0 at or above ten anchors
 /// ([FUSED-CONTENT-GATE]). The ten-anchor certification point is where the
 /// mass reaches `content_gate.support_floor` (0.70) — the same operating

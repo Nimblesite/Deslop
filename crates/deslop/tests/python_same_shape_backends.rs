@@ -116,7 +116,7 @@ fn same_shaped_backends_stay_hidden_while_the_renamed_helper_surfaces() -> Resul
     );
     assert!(
         approx(signal(clone, "pair_rename_consistency"), 1.0),
-        "a total consistent rename is certified by the elected pair's own \
+        "a total consistent rename is certified by the explicit pair's own \
          rename evidence — suppressing the contract pair must not cost the \
          rename clone its rank: {report:#}"
     );

@@ -45,8 +45,14 @@ fn rank_mass_orders_by_extent_times_additional_occurrences() {
         file_paths: &HashMap::new(),
     });
     assert_eq!(clusters.len(), 2);
-    assert_eq!(clusters[0].mass, u64::try_from(LARGE_NODES).unwrap_or(u64::MAX));
-    assert_eq!(clusters[1].mass, u64::try_from(SMALL_NODES).unwrap_or(u64::MAX));
+    assert_eq!(
+        clusters[0].mass,
+        u64::try_from(LARGE_NODES).unwrap_or(u64::MAX)
+    );
+    assert_eq!(
+        clusters[1].mass,
+        u64::try_from(SMALL_NODES).unwrap_or(u64::MAX)
+    );
     assert!(clusters[0].mass > clusters[1].mass);
 }
 
@@ -55,7 +61,10 @@ fn member(file_id: FileId, nodes: usize, digest: u8) -> Fingerprint {
     Fingerprint {
         hash: [digest; 32],
         file_id,
-        byte_range: ByteRange { start: 0, end: nodes },
+        byte_range: ByteRange {
+            start: 0,
+            end: nodes,
+        },
         node_count: nodes,
     }
 }

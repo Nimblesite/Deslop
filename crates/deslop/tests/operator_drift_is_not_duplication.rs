@@ -29,7 +29,7 @@
 //! a shape and differ in an operator may well be worth a reader's
 //! attention. The contract is that the report must not claim the
 //! content is duplicated: the pair must stay out of the explicit
-//! duplicate buckets, and its elected-pair evidence must remain honest.
+//! duplicate admission, and explicit pair evidence must remain honest.
 //!
 //! # Why this fixture cannot pass by going blind
 //!

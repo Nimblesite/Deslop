@@ -22,14 +22,10 @@ import {
   type HelpTopic,
 } from "../components/HelpBubble";
 import {
-  bucketLabels,
-  clusterInterpretation,
   clusterSlug,
   occurrenceCount,
-  resolveBucket,
 } from "../../../src/types/report";
 import { formatScore } from "../../../src/types/format";
-import { helpValueTitle } from "../../../src/types/signals";
 import type { ReportCluster, ReportOccurrence } from "../../../src/types/report";
 import { OccurrenceList } from "./OccurrenceList";
 
@@ -53,13 +49,13 @@ const FAINT_SEVERITY = "faint";
 const KEYDOWN_EVENT = "keydown";
 const LABEL_CLASS = "label";
 const WITH_HELP_CLASS = "with-help";
-const CLONE_BUCKET_TOPIC = "clone-bucket";
+const CLONE_BUCKET_TOPIC = "duplicate-code";
 const CLUSTER_ID_TOPIC = "cluster-id";
 const CLUSTER_NAVIGATION_TOPIC = "cluster-navigation";
 const CANONICAL_TOPIC = "canonical";
 const OCCURRENCES_TOPIC = "occurrences";
-const WEIGHT_TOPIC = "weight";
-const SIZE_TOPIC = "size";
+const MASS_TOPIC = "mass";
+const NODES_TOPIC = "nodes";
 const BADGE_PADDING = "2px 6px";
 const BOLD_FONT_WEIGHT = 700;
 
@@ -122,8 +118,6 @@ function ClusterApp() {
   }
 
   const canonical = cluster.occurrences[0];
-  const bucketInfo = bucketLabels(resolveBucket(cluster));
-  const evidence = clusterInterpretation(cluster);
   const focusedIndex = focusedIndexFor(cluster);
 
   return (
@@ -166,23 +160,6 @@ function ClusterApp() {
                 {cluster.id}
               </DocTextLink>
             </HelpedText>
-            {bucketInfo.aiMatch ? (
-              <HelpedText topic="ai-match" title={aiMatchTitle()}>
-                <span
-                  style={{
-                    background: COLOR.secondaryContainer ?? COLOR.surfaceContainerLow,
-                    color: COLOR.onSurface,
-                    padding: BADGE_PADDING,
-                    borderRadius: "3px",
-                    fontSize: TEN_PIXEL_SIZE,
-                    letterSpacing: "0.1em",
-                    fontWeight: BOLD_FONT_WEIGHT,
-                  }}
-                >
-                  AI MATCH
-                </span>
-              </HelpedText>
-            ) : null}
           </div>
           <h1
             style={{
@@ -192,10 +169,10 @@ function ClusterApp() {
               fontWeight: BOLD_FONT_WEIGHT,
               letterSpacing: "-0.02em",
             }}
-            title={`${bucketInfo.plainTitle}: ${evidence}`}
+            title="Duplicate code"
           >
-            <HelpedText topic={CLONE_BUCKET_TOPIC} title={`${bucketInfo.plainTitle}: ${evidence}`}>
-              <DocTextLink topic={CLONE_BUCKET_TOPIC}>{bucketInfo.plainTitle}</DocTextLink>
+            <HelpedText topic={CLONE_BUCKET_TOPIC} title="Duplicate code">
+              <DocTextLink topic={CLONE_BUCKET_TOPIC}>Duplicate code</DocTextLink>
             </HelpedText>
           </h1>
           <p
@@ -205,9 +182,12 @@ function ClusterApp() {
               fontFamily: FONT.ui,
               fontSize: "15px",
             }}
-            title={`Engine interpretation for this bucket: ${evidence}`}
+            title={`Mass ${formatScore(cluster.mass)} across ${occurrenceCount(cluster)} occurrences in this report.`}
           >
-            <HelpedText topic={CLONE_BUCKET_TOPIC}>{evidence}</HelpedText>
+            <HelpedText topic={CLONE_BUCKET_TOPIC}>
+              This cluster repeats code across the report with mass{" "}
+              {formatScore(cluster.mass)}.
+            </HelpedText>
           </p>
         </div>
         <div style={{ textAlign: "right", minWidth: 0, overflowWrap: ANYWHERE_WRAP }}>
@@ -232,8 +212,8 @@ function ClusterApp() {
             }}
             title={clusterStatsTitle(cluster)}
           >
-            <StatItem topic={WEIGHT_TOPIC} label={WEIGHT_TOPIC} value={formatScore(cluster.weight)} />
-            <StatItem topic={SIZE_TOPIC} label={SIZE_TOPIC} value={String(cluster.size)} />
+            <StatItem topic={MASS_TOPIC} label={MASS_TOPIC} value={formatScore(cluster.mass)} />
+            <StatItem topic={NODES_TOPIC} label={NODES_TOPIC} value={String(cluster.canonical_node_count)} />
             <StatItem topic="occurrence-count" label={OCCURRENCES_TOPIC} value={`× ${occurrenceCount(cluster)}`} />
           </div>
           {canonical ? (
@@ -393,16 +373,12 @@ function clusterIdTitle(id: string, rank: number, total: number): string {
   return `Cluster ${id}. Ranked ${rank || UNKNOWN_RANK} of ${total} by Deslop's worst-first duplicated mass.`;
 }
 
-function aiMatchTitle(): string {
-  return "AI match: Deslop's embedding pass found semantic equivalence. Review both locations before merging.";
-}
-
 function rankTitle(rank: number, total: number, severity: string): string {
-  return `Rank ${rank || UNKNOWN_RANK} of ${total}. Severity bucket ${severity} is based on this cluster's relative weight in the current report.`;
+  return `Rank ${rank || UNKNOWN_RANK} of ${total}. Severity band ${severity} is based on this cluster's relative mass in the current report.`;
 }
 
 function clusterStatsTitle(cluster: ReportCluster): string {
-  return `Weight is this cluster's duplicated mass, the worst-first ranking metric. Size is the number of cloned AST members. Occurrences is the number of editor locations in this cluster: weight ${formatScore(cluster.weight)}, size ${cluster.size}, occurrences ${occurrenceCount(cluster)}.`;
+  return `Mass is this cluster's duplicated mass, the worst-first ranking metric. Nodes is the number of cloned AST members in the canonical occurrence. Occurrences is the number of editor locations in this cluster: mass ${formatScore(cluster.mass)}, nodes ${cluster.canonical_node_count}, occurrences ${occurrenceCount(cluster)}.`;
 }
 
 function canonicalTitle(occurrence: ReportOccurrence): string {

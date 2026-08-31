@@ -65,7 +65,7 @@ fn a_divergent_sibling_does_not_erase_the_real_pair() -> Result<()> {
     assert_eq!(
         cluster_bucket(cluster),
         "nearly_identical",
-        "routing reads the elected pair, never a mean over the divergent \
+        "admission reads each pair, never a mean over the divergent \
          closure member: {cluster:#}"
     );
     assert!(

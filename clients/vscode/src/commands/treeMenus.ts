@@ -16,10 +16,8 @@ import { ReportStore } from "../reportStore";
 import {
   ReportCluster,
   ReportOccurrence,
-  bucketLabels,
   clusterSlug,
   occurrenceCount,
-  resolveBucket,
 } from "../types/report";
 import { ClusterNode, OccurrenceNode } from "../tree/providers";
 import { resolveOccurrenceUri } from "./register";
@@ -138,8 +136,7 @@ async function openOccurrenceNonPreview(
 
 /// Builds the clipboard text for [`copyClusterLocations`].
 export function clusterLocationsText(cluster: ReportCluster): string {
-  const bucket = bucketLabels(resolveBucket(cluster)).plainTitle;
-  const header = `cluster ${cluster.id} · ${bucket} · ${occurrenceCount(cluster)} occurrences`;
+  const header = `cluster ${cluster.id} · mass ${formatScorePrecise(cluster.mass)} · ${occurrenceCount(cluster)} occurrences`;
   const rows = cluster.occurrences.map(humanLocation);
   return [header, ...rows].join("\n");
 }
@@ -149,15 +146,11 @@ export function aiPayloadForCluster(
   cluster: ReportCluster,
   rank: number,
 ): string {
-  const bucket = resolveBucket(cluster);
-  const labels = bucketLabels(bucket);
   const header = [
     `slug: ${clusterSlug(cluster)}`,
     `cluster_id: ${cluster.id}`,
     `rank: ${rank}`,
-    `bucket: ${bucket} (${labels.taxonomyLabel})`,
-    `weight: ${formatScorePrecise(cluster.weight)}`,
-    `size: ${cluster.size}`,
+    `mass: ${cluster.mass}`,
     `canonical_node_count: ${cluster.canonical_node_count}`,
     `occurrences: ${occurrenceCount(cluster)}`,
   ];
@@ -215,16 +208,13 @@ function parentClusterLines(
   parent: ReportCluster,
   store: ReportStore,
 ): string[] {
-  const bucket = resolveBucket(parent);
-  const labels = bucketLabels(bucket);
   const all = store.current.report?.clusters ?? [];
   const rankIndex = all.findIndex((c) => c.id === parent.id);
   return [
     `cluster_id: ${parent.id}`,
     `rank: ${rankIndex >= 0 ? rankIndex + 1 : "?"}`,
-    `bucket: ${bucket} (${labels.taxonomyLabel})`,
-    `weight: ${formatScorePrecise(parent.weight)}`,
-    `size: ${parent.size}`,
+    `mass: ${formatScorePrecise(parent.mass)}`,
+    `canonical_nodes: ${parent.canonical_node_count}`,
     `sibling_occurrences: ${Math.max(parent.occurrences.length - 1, 0)}`,
   ];
 }

@@ -339,7 +339,7 @@ impl<'corpus> OverlapMeasurer<'corpus> {
     /// Whether this endpoint's byte range resolves to a measurable
     /// view, resolving (and memoising) it on first ask. Resolvability
     /// partitions equal-hash members for the grouped signal
-    /// measurement ([FUSED-CLUSTER-SIGNALS]): an equal-hash pair is
+    /// measurement ([FUSED-PAIR-SIGNALS]): an equal-hash pair is
     /// `1.0` by short-circuit either way, but a *different*-hash pair
     /// with an unresolvable side is `0.0`, so one representative may
     /// only stand for members that resolve the same way.

@@ -110,7 +110,7 @@ pub const SHARED_SUBTREE_MIN_NODE_COUNT: usize = 30;
 pub const RESCUE_MIN_CONTENT_AGREEMENT: f64 = 0.10;
 /// Cosine at or above which a measured `embedding_cos` counts as the
 /// embedding pass *vouching for* a cluster rather than merely having
-/// measured it ([FUSED-CLUSTER-SIGNALS]).
+/// measured it ([FUSED-PAIR-SIGNALS]).
 ///
 /// A cosine belongs to the pair, not to the pass that surfaced it
 /// ([REPAIR-COSINE-MERGE], gh #351), so once embeddings are on every
@@ -138,13 +138,13 @@ pub const RESCUE_MIN_CONTENT_AGREEMENT: f64 = 0.10;
 pub const EMBEDDING_SUPPORT_FLOOR: f64 = 0.80;
 
 /// Per-pair score breakdown in `[0, 1]`. Candidate admission stores exact
-/// Merkle evidence in `structural`; report election stores measured overlap
-/// there after the pair has already been admitted. Only the former is an
-/// input to [`Self::bounded_fused`] ([FUSED-STRATEGY-BOUNDED-MAX]).
+/// Merkle evidence in `structural`. Explicit pair comparison may instead
+/// report measured overlap for the two requested endpoints. Only admission
+/// calls [`Self::bounded_fused`] ([FUSED-STRATEGY-BOUNDED-MAX]).
 #[derive(Debug, Clone, Copy)]
 pub struct PairScore {
     /// Exact Merkle evidence `H` during admission; measured overlap `S`
-    /// after admission when the same shape is used for report evidence.
+    /// when comparing two explicitly requested endpoints.
     pub structural: f64,
     /// Estimated k-gram Jaccard in `[0, 1]`.
     pub token_jaccard: f64,
@@ -239,13 +239,9 @@ pub struct CandidatePair {
 /// A cluster discovered via transitive closure of surviving candidate pairs.
 ///
 /// Carries membership plus the surviving discovery edges. Every edge is
-/// an admitted pair — it survived one of the admission routes
-/// (`Survived` or the [FUSED-SHARED-SUBTREE] rescue) — and the rendered
-/// signal breakdown is measured over exactly these edges: one elected
-/// pair's own triple, never a mean over the component
-/// ([FUSED-CLUSTER-SIGNALS], gh #458). The same-file overlap collapse in
-/// `crate::cluster` still reads the edges to keep the occurrence carrying
-/// the component's strongest cross-file evidence (#339).
+/// an admitted pair: it survived either normal admission or the
+/// [FUSED-SHARED-SUBTREE] rescue. Edges exist only to define transitive
+/// closure; they are never promoted into cluster-level evidence.
 #[derive(Debug, Clone)]
 pub struct FusedCluster {
     /// Members of the cluster, sorted ascending by fingerprint index.

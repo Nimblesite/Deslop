@@ -143,12 +143,15 @@ fn assert_materialised_clusters_are_mass_only(
         2,
         "both clusters must survive materialisation"
     );
-    let rendered_unique = rendered.iter().find(|cluster| {
-        cluster.members.iter().any(|member| member.hash == [2; 32])
-    })
+    let rendered_unique = rendered
+        .iter()
+        .find(|cluster| cluster.members.iter().any(|member| member.hash == [2; 32]))
         .context("expected the rendered embedding-only cluster")?;
     assert_eq!(rendered_unique.members.len(), 2);
-    assert_eq!(rendered_unique.mass, LSH_ONLY_MIN_NODE_COUNT);
+    assert_eq!(
+        rendered_unique.mass,
+        u64::try_from(LSH_ONLY_MIN_NODE_COUNT)?
+    );
 
     Ok(())
 }

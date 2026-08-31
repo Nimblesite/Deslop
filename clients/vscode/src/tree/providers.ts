@@ -10,11 +10,10 @@ import type { LanguageClient } from "vscode-languageclient/node";
 import { ReportStore, LifecyclePhase } from "../reportStore";
 import {
   applyFacetFilter,
-  bucketLabels,
-  categoryLabels,
   FacetFilter,
   ReportCluster,
   RepoMetrics,
+  severityLabel,
 } from "../types/report";
 import { readTopOffendersFilter } from "../commands/topOffendersView";
 import {
@@ -23,7 +22,6 @@ import {
   FolderMetricNode,
   FolderNode,
   GroupNode,
-  LanguageGroupNode,
   MetricsHeadlineNode,
   Node,
   OccurrenceNode,
@@ -33,17 +31,15 @@ import {
 import {
   buildClusterMode,
   buildFileMode,
-  buildTypeMode,
+  buildSeverityMode,
   getFileNodeChildren,
   getGroupNodeChildren,
   GroupBy,
   normalizeGroupBy,
   orderedOccurrences,
-  worstCluster,
 } from "./grouping";
 import { buildFolderMode } from "./folder";
 import { buildMetricRows } from "./metrics";
-import { groupByLanguage, normalizeSplitByLanguage } from "./language";
 import { normalizeSortBy, SortBy } from "./sort";
 import { thresholdStatus } from "./threshold";
 
@@ -51,17 +47,16 @@ import { thresholdStatus } from "./threshold";
 // (commands/register.ts, commands/treeMenus.ts, tests, e2e suites)
 // keep working without import-path churn.
 export {
-  BucketGroupNode,
   ClusterNode,
   FileMetricNode,
   FileNode,
   FolderMetricNode,
   FolderNode,
   GroupNode,
-  LanguageGroupNode,
   MetricsHeadlineNode,
   OccurrenceNode,
   SessionFieldNode,
+  SeverityGroupNode,
   StatusNode,
 } from "./nodes";
 
@@ -233,21 +228,12 @@ function readSortBy(): SortBy {
   );
 }
 
-// [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] Reads `deslop.topOffenders.splitByLanguage`.
-function readSplitByLanguage(): boolean {
-  return normalizeSplitByLanguage(
-    vscode.workspace
-      .getConfiguration(DESLOP_CONFIGURATION_NAMESPACE)
-      .get<boolean>("topOffenders.splitByLanguage", false),
-  );
-}
-
 export class TopOffendersProvider extends LifecycleAwareProvider {
   getChildren(node?: Node): Node[] {
-    if (node instanceof FolderNode || node instanceof LanguageGroupNode) return node.children;
+    if (node instanceof FolderNode) return node.children;
     if (node instanceof FileNode) return getFileNodeChildren(node);
-    // One machinery for both group axes: file-mode bucket sections and
-    // type-mode category roots ([FACET-GROUP-BY-TYPE]).
+    // One machinery for both group axes: file-mode severity sections and
+    // severity-mode roots.
     if (node instanceof GroupNode) return getGroupNodeChildren(node);
     if (node instanceof ClusterNode) {
       // [VSIX-TOP-OFFENDERS-SORT] Order occurrences by the active axis while
@@ -299,30 +285,10 @@ function buildRoots(clusters: ReportCluster[]): Node[] {
   const build = (subset: ReportCluster[]): Node[] => {
     if (groupBy === "file") return buildFileMode(subset, sortBy);
     if (groupBy === "folder") return buildFolderMode(subset, sortBy);
-    if (groupBy === "type") return buildTypeMode(subset, sortBy);
+    if (groupBy === "severity") return buildSeverityMode(subset, sortBy);
     return buildClusterMode(subset, sortBy);
   };
-  const roots = readSplitByLanguage()
-    ? groupByLanguage(visible).flatMap(({ language, clusters: members }) =>
-        languageGroup(language, members, build(members)),
-      )
-    : build(visible);
-  return [...filterStatusRow(filter), ...roots];
-}
-
-// One per-language root. Its headline weight is the weight of the
-// language's worst cluster, read off the engine's lowest-ranked member
-// rather than recomputed as a maximum here
-// ([VSIX-TOP-OFFENDERS-LANGUAGE-GROUP]).
-function languageGroup(
-  language: string,
-  members: ReportCluster[],
-  children: Node[],
-): Node[] {
-  const worst = worstCluster(members);
-  return worst
-    ? [new LanguageGroupNode(language, children, worst.weight, members.length)]
-    : [];
+  return [...filterStatusRow(filter), ...build(visible)];
 }
 
 // [FACET-TOP-OFFENDERS-FILTER-EMPTY] A non-collapsible status row leads
@@ -330,10 +296,7 @@ function languageGroup(
 // bound — a filtered-empty tree must never be mistakable for the
 // "No duplication detected" clean state.
 function filterStatusRow(filter: FacetFilter): Node[] {
-  const parts = [
-    ...filter.buckets.map((bucket) => bucketLabels(bucket).plainTitle),
-    ...filter.categories.map((category) => categoryLabels(category).groupTitle),
-  ];
+  const parts = filter.severities.map((severity) => severityLabel(severity));
   if (parts.length === 0) return [];
   const row = new StatusNode(
     `Filtered: ${parts.join(" · ")} — Clear filter`,

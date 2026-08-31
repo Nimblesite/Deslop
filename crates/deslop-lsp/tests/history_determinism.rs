@@ -14,10 +14,6 @@ use serde_json::Value;
 
 const REPORT_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// The elected pair is the first pair in corpus order when every
-/// candidate ties on `max(S, J, E)` ([FUSED-CLUSTER-SIGNALS]).
-const ELECTED_PAIR: (u64, u64) = (0, 1);
-const FULL_EVIDENCE: f64 = 1.0;
 const ORIGINAL_CONFIG: &[u8] = b"[defaults]\nexclude = []\n";
 const SOURCE_LAYOUT: [(&str, &str, &str); 4] = [
     ("move/tax_alpha.ts", "ts-type2-loop", "tax_alpha.ts"),
@@ -117,39 +113,26 @@ fn assert_clean_control(report: &Value) -> Result<()> {
     let cluster = clusters
         .first()
         .ok_or_else(|| anyhow!("cluster list is empty: {report}"))?;
-    assert_eq!(at(cluster, "size"), 4, "{cluster:#}");
+    assert_eq!(at(cluster, "occurrence_count"), 4, "{cluster:#}");
     assert_eq!(at(cluster, "occurrences_total"), 4, "{cluster:#}");
     assert_eq!(at(cluster, "occurrences_truncated"), false, "{cluster:#}");
+    assert_eq!(at(cluster, "rank"), 1, "{cluster:#}");
+    assert_eq!(at(cluster, "rank_band"), "worst", "{cluster:#}");
+    let canonical_nodes = at(cluster, "canonical_node_count")
+        .as_u64()
+        .ok_or_else(|| anyhow!("cluster has no canonical node count: {cluster:#}"))?;
+    assert!(canonical_nodes > 0, "{cluster:#}");
     assert_eq!(
-        json_path(cluster, &["signals", "structural"]),
-        1.0,
+        at(cluster, "mass"),
+        canonical_nodes.saturating_mul(3),
         "{cluster:#}"
     );
-    assert_eq!(
-        json_path(cluster, &["signals", "token_jaccard"]),
-        1.0,
-        "{cluster:#}"
-    );
-    assert!(
-        json_path(cluster, &["signals", "fused"]).is_null(),
-        "cluster fused confidence was deleted from the report contract: {cluster:#}"
-    );
-    assert_eq!(
-        (
-            json_path(cluster, &["signals", "pair_agreement"]).as_f64(),
-            json_path(cluster, &["signals", "pair_rename_consistency"]).as_f64(),
-        ),
-        (Some(FULL_EVIDENCE), Some(FULL_EVIDENCE)),
-        "the elected pair's measured content evidence must survive the history cycle: {cluster:#}"
-    );
-    assert_eq!(
-        (
-            json_path(cluster, &["signal_source", "left"]).as_u64(),
-            json_path(cluster, &["signal_source", "right"]).as_u64(),
-        ),
-        (Some(ELECTED_PAIR.0), Some(ELECTED_PAIR.1)),
-        "the rendered axes must name the one elected pair: {cluster:#}"
-    );
+    for forbidden in ["signals", "signal_source", "bucket", "category", "weight"] {
+        assert!(
+            cluster.get(forbidden).is_none(),
+            "cluster field {forbidden} is forbidden: {cluster:#}"
+        );
+    }
     assert_eq!(
         json_path(report, &["metrics", "clusters_total"]),
         1,

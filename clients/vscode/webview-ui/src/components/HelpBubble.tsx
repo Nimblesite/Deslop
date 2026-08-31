@@ -38,7 +38,7 @@ const PANEL_HELP: Record<HelpTopic, string> = {
   "keyboard-shortcuts": "Keyboard actions available while focus is in the panel.",
 };
 
-// [FUSED-CLUSTER-SIGNALS] The cluster panel renders cluster facts, never
+// [FUSED-PAIR-SIGNALS] The cluster panel renders cluster facts, never
 // signal bars: the measured axes describe one pair of occurrences and have
 // nothing to do with the cluster ([FUSED-CONTENT-GATE]). No signal help copy
 // lives here because no signal is rendered here.

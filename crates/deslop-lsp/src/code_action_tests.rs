@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::{anyhow, ensure, Context, Result};
 use deslop_core::{
-    report::{CacheStats, Report, ReportCluster, ReportOccurrence, ReportSignals},
+    report::{CacheStats, Report, ReportCluster, ReportOccurrence},
     report_metrics::RepoMetrics,
     wire_generated::{MergePlan, MergeVerdict},
 };
@@ -18,19 +18,6 @@ type OccurrenceSpans = ((usize, usize), (usize, usize));
 
 /// Cluster id every report built here carries.
 const CLUSTER_ID: &str = "abcdef0123456789";
-
-/// Byte-proven signals for the fixture cluster: shape saturated, so
-/// `shape` is 1.0 and the evidence verdict comes from the engine rather
-/// than a second reading of the same numbers here.
-const IDENTICAL_SIGNALS: ReportSignals = ReportSignals {
-    structural: 1.0,
-    token_jaccard: 1.0,
-    shape: 1.0,
-    embedding_cos: 0.0,
-    pair_agreement: 1.0,
-    pair_rename_consistency: 0.0,
-    literal_fraction: 0.0,
-};
 
 /// Builds an LSP range from `(line, character)` pairs.
 fn range(start: (u32, u32), end: (u32, u32)) -> Range {
@@ -85,11 +72,15 @@ fn report_with_cluster(path: &Path, spans: OccurrenceSpans) -> Report {
         cache_stats: CacheStats::default(),
         metrics: RepoMetrics::default(),
         schema_doc: String::new(),
-        action_hints: Vec::new(),
         boilerplate_hints: Vec::new(),
         embedding_provenance: None,
         clusters: vec![fixture_target_cluster(occurrences)],
         clusters_outside_diff: None,
+        literal_findings: Vec::new(),
+        literal_findings_total: 0,
+        literal_findings_hidden: 0,
+        literal_findings_capped: false,
+        literal_max_findings: 0,
     }
 }
 
@@ -97,9 +88,7 @@ fn report_with_cluster(path: &Path, spans: OccurrenceSpans) -> Report {
 /// address it by.
 fn fixture_target_cluster(occurrences: Vec<ReportOccurrence>) -> ReportCluster {
     let mut cluster = deslop_core::report_fixtures::fixture_cluster(CLUSTER_ID, occurrences);
-    cluster.weight = 10.0;
     cluster.canonical_node_count = 40;
-    cluster.signals = IDENTICAL_SIGNALS;
     deslop_core::report_fixtures::restamp_fixture(&mut cluster);
     cluster
 }

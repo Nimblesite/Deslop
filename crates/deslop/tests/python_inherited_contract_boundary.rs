@@ -126,7 +126,7 @@ fn an_inherited_method_no_base_declares_is_not_a_contract_implementation() -> Re
     assert!(
         signal(clone, "pair_rename_consistency") >= CONTENT_SUPPORT_FLOOR,
         "`CommonWorker` never declares `synchronise`, so nothing forces \
-         these two bodies to agree and the elected pair must support its bucket: \
+         these two bodies to agree and the explicit pair must fail admission: \
          {report:#}"
     );
     assert_eq!(
