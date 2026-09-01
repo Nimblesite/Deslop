@@ -52,9 +52,13 @@ Group `NormalizedNode` fingerprints by `hash` to propose exact candidate pairs. 
 
 ### [PIPELINE-CLUSTER-EXACT-SCOPE] Inside one declaration the widest view is the finding
 
-One duplication is fingerprinted at many depths, so several candidate views can cover the same region. Before pair admission, a same-file overlap run selects its physical view by authored scope and width only. When one view encloses another inside the same authored declaration, the enclosing view is proposed; otherwise the wider view is proposed, with stable byte-range ordering as the tie-breaker. Pair scores cannot choose a view because no pair has been admitted yet.
+One duplication is fingerprinted at many depths, so several candidate views can cover the same region. Before pair admission, a same-file overlap run selects its physical view by authored scope and width only. When one view encloses another inside the same authored declaration, the enclosing view is proposed; otherwise the wider view is proposed, with stable byte-range ordering as the tie-breaker — except where two views straddle each other and one of them is a declaration ([PIPELINE-CLUSTER-EXACT-SCOPE-STRADDLE]). Pair scores cannot choose a view because no pair has been admitted yet.
 
 Declarations are read from the normalised tree and keyed by language. A view that is the declaration is treated as the enclosing authored scope. Pinned by the TypeScript, JavaScript, and F# scope fixtures, which assert proposed ranges and eventual admitted pairs without attaching a grade to a cluster.
+
+#### [PIPELINE-CLUSTER-EXACT-SCOPE-STRADDLE] A view that is the declaration beats a view that cuts through it
+
+Two views can overlap without either containing the other: one starts at a `namespace` line and ends in the middle of a method, the other is that method, modifier through closing brace. The first welds a cut-off body to whatever sits beside it — a namespace line, a class shell, a sibling member — and no author wrote that region. When two views straddle each other like this, the view whose range **is** a function-like declaration is the finding, whatever its width. Views where one contains the other are untouched by this rule: a whole file that holds a method whole is still the wider authored scope and still wins. Pinned by `issue_389_subsumption_modifier_straddle` (C#: the namespace-to-mid-method window loses to the authored `ReconcileEntries` method) and the `incremental-multilang` expectation table.
 
 ### [PIPELINE-CLUSTER-CLOSURE] Clusters are exactly the transitive closure of admitted pairs
 

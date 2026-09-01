@@ -55,7 +55,7 @@ const MIN_REPORTABLE_MEMBERS: usize = 2;
 /// how the cluster was discovered.
 ///
 /// Cluster ids hash the smallest member's digest together with every
-/// member's workspace-relative path ([PIPELINE-DETERMINISM], gh #430),
+/// member's workspace-relative path ([PIPELINE-DETERMINISM]),
 /// so identical fused clusters across runs always report the same id
 /// while same-shape findings in different workspaces remain distinct.
 /// Inputs accepted by [`build_ranked_fused_clusters`]. Grouped for the
@@ -74,7 +74,7 @@ pub struct ClusterBuildInputs<'a, L: BuildHasher> {
     /// `FileId → language_id` for declaration-scope matching.
     pub file_languages: &'a HashMap<FileId, &'static str, L>,
     /// `FileId → workspace-relative path` — the second input of the
-    /// cluster id digest ([PIPELINE-DETERMINISM], gh #430).
+    /// cluster id digest ([PIPELINE-DETERMINISM]).
     pub file_paths: &'a HashMap<FileId, PathBuf>,
 }
 
@@ -177,7 +177,7 @@ fn smallest_node_count(members: &[Fingerprint]) -> usize {
 }
 
 /// Selects the deterministic hash source for the public cluster id
-/// ([PIPELINE-DETERMINISM], gh #430).
+/// ([PIPELINE-DETERMINISM]).
 ///
 /// The smallest member's digest alone names every cluster that shares a
 /// normalised subtree: the #107 fixture stamps three unrelated
@@ -293,21 +293,11 @@ fn collapse_overlapping_single_file(
     });
     let mut runs: Vec<OverlapRun> = Vec::with_capacity(bucket.len());
     for (index, member) in bucket {
-        // W22-PROBE (gh #486 diagnosis, remove before push)
-        tracing::debug!(
-            probe = "collapse",
-            index,
-            start = member.byte_range.start,
-            end = member.byte_range.end,
-            aligned = scopes.aligned_function(&member).is_some(),
-            crosses = scopes.crosses_function_boundary(&member),
-        );
         let candidate = Occurrence {
             index,
             range: member.byte_range,
             declaration: scopes.enclosing(&member),
             aligned: scopes.aligned_function(&member).is_some(),
-            crosses_boundary: scopes.crosses_function_boundary(&member),
         };
         match runs.last_mut() {
             Some(run) if run.reaches(candidate.range) => run.absorb(candidate),
@@ -329,14 +319,9 @@ struct Occurrence {
     /// The authored declaration it sits strictly inside, when the
     /// grammar names one ([`DeclarationScopes::enclosing`]).
     declaration: Option<ByteRange>,
-    /// The occurrence sits exactly on an authored function — its range
-    /// equals a function-like declaration's ([
-    /// `DeclarationScopes::aligned_function`]).
+    /// The occurrence is an authored function — its range equals a
+    /// function-like declaration's ([`DeclarationScopes::aligned_function`]).
     aligned: bool,
-    /// The occurrence's range strictly spans a function-like
-    /// declaration's boundary ([
-    /// `DeclarationScopes::crosses_function_boundary`]).
-    crosses_boundary: bool,
 }
 
 impl Occurrence {
@@ -363,6 +348,12 @@ impl Occurrence {
     /// least one side.
     fn encloses(&self, other: &Self) -> bool {
         self.range.strictly_encloses(other.range)
+    }
+
+    /// True when the two share bytes but neither covers the other, so
+    /// each starts or ends inside the other's region.
+    fn straddles(&self, other: &Self) -> bool {
+        self.range.partially_overlaps(other.range)
     }
 }
 
@@ -406,7 +397,7 @@ impl OverlapRun {
     /// The wider authored scope displaces the incumbent; equal widths
     /// keep the incumbent ([PIPELINE-CLUSTER-EXACT-SCOPE]).
     ///
-    /// **Inside one declaration grades are never compared** (gh #408).
+    /// **Inside one declaration grades are never compared.**
     /// A window nested in the occurrence it competes with measures a
     /// higher cross-file edge exactly to the extent that it drops the
     /// statements the two copies disagree on, so a grade contest inside
@@ -426,19 +417,8 @@ impl OverlapRun {
     /// pair to the other module fails admission), so the exact sibling
     /// window remains the only view of the region.
     fn displaces(&self, candidate: &Occurrence) -> bool {
-        // An exact authored-function view outranks a wider view that
-        // crosses a declaration boundary: under
-        // [PIPELINE-CLUSTER-EXACT-SCOPE] a view that is the declaration
-        // is the enclosing authored scope, so the function is what the
-        // author wrote and the crossing view welds unrelated code — a
-        // divergent namespace, sibling members — onto the clone
-        // (root cause of gh #486). Same-kind views keep the width
-        // contest below: an interior window is not fn-aligned, and an
-        // exact function never displaces another exact function by
-        // this rule (each candidate is compared only against the
-        // incumbent representative).
-        if candidate.aligned && self.representative.crosses_boundary {
-            return true;
+        if let Some(verdict) = self.declaration_verdict(candidate) {
+            return verdict;
         }
         if self.representative.encloses(candidate)
             && self.representative.shares_declaration_with(candidate)
@@ -451,6 +431,26 @@ impl OverlapRun {
         // collapse. Equal-width ties keep the incumbent, so the run
         // stays deterministic across runs.
         candidate.range.len() > self.representative.range.len()
+    }
+
+    /// [PIPELINE-CLUSTER-EXACT-SCOPE-STRADDLE] Between two views that
+    /// straddle each other, the one that *is* an authored declaration is
+    /// the finding. The other starts or ends inside a function it does
+    /// not contain, so it welds a cut-off body to whatever sits beside
+    /// it — a namespace line, a class shell, a sibling member — and no
+    /// width can make that region something the author wrote. Views
+    /// where one contains the other never reach this rule: a whole file
+    /// holding a method whole is still the wider authored scope.
+    /// `None` where the rule does not decide.
+    fn declaration_verdict(&self, candidate: &Occurrence) -> Option<bool> {
+        if !self.representative.straddles(candidate) {
+            return None;
+        }
+        match (self.representative.aligned, candidate.aligned) {
+            (true, _) => Some(false),
+            (false, true) => Some(true),
+            (false, false) => None,
+        }
     }
 }
 
