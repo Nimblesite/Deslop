@@ -77,8 +77,3 @@ path = "tests/suite.rs"
 name = "shared_subtree_alignment"
 harness = false
 required-features = ["benchmark"]
-
-[[bench]]
-name = "cluster_signals"
-harness = false
-required-features = ["benchmark"]

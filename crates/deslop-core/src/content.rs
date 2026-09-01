@@ -88,15 +88,17 @@ pub(crate) fn measure_pair_content_indexed<S: BuildHasher, L: BuildHasher>(
     sources: &HashMap<FileId, Vec<u8>, S>,
     languages: &HashMap<FileId, &'static str, L>,
 ) -> ContentEvidence {
+    let same_file = left.file_id == right.file_id;
     let left = member_content(left, tree_index, sources, languages);
     let right = member_content(right, tree_index, sources, languages);
-    pair_evidence(left.as_ref().zip(right.as_ref()), sources)
+    pair_evidence(left.as_ref().zip(right.as_ref()), sources, same_file)
 }
 
 /// Builds pair evidence from two resolved content frontiers.
 fn pair_evidence<S: BuildHasher>(
     pair: Option<(&MemberContent, &MemberContent)>,
     sources: &HashMap<FileId, Vec<u8>, S>,
+    same_file: bool,
 ) -> ContentEvidence {
     let Some((left, right)) = pair else {
         return ContentEvidence::unmeasured();
@@ -110,7 +112,12 @@ fn pair_evidence<S: BuildHasher>(
     }
     ContentEvidence {
         agreement: pair_agreement(Some(left), Some(right)),
-        rename_consistency: rename::pair_rename_consistency(Some(left), Some(right), sources),
+        rename_consistency: rename::pair_rename_consistency(
+            Some(left),
+            Some(right),
+            sources,
+            same_file,
+        ),
         literal_fraction: pair_literal_fraction(left, right),
         measured: true,
         contradiction: ContentContradiction::None,
@@ -165,14 +172,6 @@ fn pair_agreement(left: Option<&MemberContent>, right: Option<&MemberContent>) -
         return key_set_jaccard(&left.keys, &right.keys);
     }
     positional_agreement(&left.keys, &right.keys)
-}
-
-/// Counts equal literal anchors for rename evidence.
-fn preserved_literal_count(literals: &[(u64, u64)]) -> usize {
-    literals
-        .iter()
-        .filter(|(left, right)| left == right)
-        .count()
 }
 
 /// Returns a share, treating an empty evidence population as consistent.

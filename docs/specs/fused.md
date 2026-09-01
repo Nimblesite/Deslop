@@ -99,9 +99,9 @@ An explicit pair comparison identifies both endpoints and may render that pair's
 1. For each candidate pair, walk both occurrences' normalised subtrees and hash the **raw source bytes** of every collapsed leaf, keeping the leaf's population (identifier vs literal position).
 2. Measure two independent populations for those exact two occurrences, both in `[0, 1]`:
    - `agreement` — fraction of all collapsed positions whose raw bytes match, identifiers and literals pooled. Byte-identical members score 1.0; lightly-edited copies stay high; framework-mandated scaffolding (every name differs) and data tables (every literal differs) fall low. A disagreement between behaviour-bearing operators is a hard content contradiction and makes `agreement = 0.0`: `+` and `-` compute different answers, so the surrounding matching positions cannot outvote the operation that changed.
-   - `rename_consistency` — the Type-2 discriminator, [TECH-PMATCH-BAKER] quantified: the lesser of literal consistency and rename-mapping coverage, scaled by the smooth anchor factor `anchors / (anchors + content_gate.rename_evidence_half_anchors)`. A literal echo ([REPAIR-RENAME-LITERAL-ECHO]) corroborates a bijection-explained substitution. Positions the bijection cannot explain count against coverage; a consistent substitution seen once is unconstrained and belongs to neither numerator nor denominator. Missing positional alignment or a behaviour-bearing operator disagreement makes the value zero. Certification removes the coincidence discount only when consistency and coverage are perfect and the configured anchor support is met. Every input and output belongs to this pair only.
+   - `rename_consistency` — the Type-2 discriminator, [TECH-PMATCH-BAKER] quantified: one pooled coverage over every constrained position of the pair — the identifier positions the bijection must explain plus every aligned literal position — scaled by the smooth anchor factor `anchors / (anchors + content_gate.rename_evidence_half_anchors)`. Preserved literals, literal echoes of a bijection-explained substitution ([REPAIR-RENAME-LITERAL-ECHO]), identity identifiers, and substitutions corroborated by repetition are explained; a drifted literal that echoes nothing and an inconsistent substitution are constrained positions the evidence cannot explain, so each weakens the proof in proportion to the evidence around it instead of vetoing it — one changed threshold inside an otherwise fully-anchored rename is a near-miss edit, not proof the copy is coincidence. A consistent substitution seen once is unconstrained and belongs to neither numerator nor denominator. Missing positional alignment or a behaviour-bearing operator disagreement makes the value zero. Certification removes the coincidence discount only when coverage is perfect and the configured anchor support is met. Every input and output belongs to this pair only.
 
-3. **Pair routing uses `support = max(agreement, rename_consistency)`** (either population may vouch; never their mean). A cross-file pair uses `content_gate.support_floor` (0.70), while a same-file pair uses `content_gate.promote_floor` (0.85). The content guard applies when normalized shape or token evidence saturates, and also to an unanchored LSH-only pair that clears its own Jaccard floor without reaching shared-subtree rescue; no independent semantic route applies in either case. A gate-eligible pair below its content floor is not admitted. `E` is never relabelled as content support: a qualifying embedding route makes the shape-echo guard inapplicable rather than making `content_ok` true. This happens before transitive closure; no content score is stamped onto the resulting cluster.
+3. **Pair routing uses `support = max(agreement, rename_consistency)`** (either population may vouch; never their mean). A cross-file pair uses `content_gate.support_floor` (0.70), while a same-file pair uses `content_gate.promote_floor` (0.85). An unanchored LSH-only pair pays `promote_floor` in every scope: with no structural anchor, no embedding support, and no shared-subtree alignment, the token echo is the pair's whole case, and it must be corroborated as strongly as a same-file promotion before it may weld two views into one closure — at cross-file support strength this route admits whole-file-against-interior-window pairs and manufactures mixed-extent clusters (#339). The content guard applies when normalized shape or token evidence saturates, and also to an unanchored LSH-only pair that clears its own Jaccard floor without reaching shared-subtree rescue; no independent semantic route applies in either case. A gate-eligible pair below its content floor is not admitted. `E` is never relabelled as content support: a qualifying embedding route makes the shape-echo guard inapplicable rather than making `content_ok` true. This happens before transitive closure; no content score is stamped onto the resulting cluster.
 4. **Token-signal correction.** A pair whose endpoints share one Merkle hash has equal normalised k-gram sets by construction; a lower `token_jaccard` is a fallback-signature artifact and is corrected to 1.0 for that pair only.
 
 The correction is scoped by that digest equality, tested directly on the members, and by nothing else. No reading of `structural` can stand in for it: since [FUSED-SHARED-SUBTREE] the axis grades subtree *overlap*, so it saturates by ratio as well as by hash equality, and every value below saturation means the subtrees provably differ. Scoping the correction to `content_gate.structural_saturation_floor` — a near-miss **routing** tolerance — published `token_jaccard = 1.0`, and the `shape` reading derived from it, across the whole `[0.99, 1.0)` band on no evidence. Routing tolerance is not proof of identity. Pinned by `crates/deslop/tests/content_gate_signal_honesty.rs`.
@@ -213,7 +213,7 @@ $$
 \begin{aligned}
 \mathrm{size\_ok}(p) &\iff M(p)=1 \lor \max(n_l,n_r) \le
 \text{max\_endpoint\_node\_ratio}\,\min(n_l,n_r) \\
-\mathrm{content\_floor}(p) & = \begin{cases} \text{support\_floor} & \text{if cross-file}(p) \\ \text{promote\_floor} & \text{otherwise} \end{cases} \\
+\mathrm{content\_floor}(p) & = \begin{cases} \text{support\_floor} & \text{if cross-file}(p) \land \neg\mathrm{lsh\_only}(p) \\ \text{promote\_floor} & \text{otherwise} \end{cases} \\
 \mathrm{content\_required}(p) &\iff E(p)<\text{candidates.embedding\_support\_floor}\land\bigl(M(p)=1\lor S(p)\ge\text{routing.shape\_identical\_floor}\lor J(p)\ge\text{content\_gate.saturating\_token\_floor}\bigr) \\
 \mathrm{content\_ok}(p) &\iff \neg\mathrm{content\_required}(p) \lor C(p) \ge \mathrm{content\_floor}(p) \\
 \mathrm{admit}(p) &\iff \mathrm{size\_ok}(p)
@@ -260,10 +260,10 @@ $$
 q_{\text{anchors}} = \frac{\text{anchors}}{\text{anchors} + \text{rename\_evidence\_half\_anchors}}
 $$
 
-Evidence is certified only when it is airtight: literal consistency and coverage are both perfect, and the anchor factor clears the support floor.
+Evidence is certified only when it is airtight: every aligned literal is preserved or echoes an explained substitution, every constrained identifier position is explained, and the anchor factor clears the support floor.
 
 $$
-\mathrm{certified} \iff \min(\text{literal\_consistency},\, \text{coverage}) = 1.0 \land q_{\text{anchors}} \ge \text{support\_floor}
+\mathrm{certified} \iff \text{coverage} = 1.0 \land q_{\text{anchors}} \ge \text{support\_floor}
 $$
 
 Certified evidence receives full strength; everything else keeps the asymptotic anchor factor. Routing reads `R` exactly as computed below; no later confidence multiplier exists.
@@ -272,10 +272,15 @@ $$
 q = \begin{cases} 1.0 & \text{if certified} \\ q_{\text{anchors}} & \text{otherwise} \end{cases}
 $$
 
-Rename consistency is the weaker of consistency and coverage, scaled by the anchor factor above.
+Rename consistency is the pooled coverage scaled by the anchor factor above. Coverage pools the pair's constrained positions: identifier positions the bijection must explain, plus every aligned literal position — $L_{ab}$, the positions where both members carry a literal. Explained identifiers and affirming literals (preserved, or echoing an explained substitution) fill the numerator; a drifted literal and an inconsistent substitution stay in the denominator as constrained positions the evidence cannot explain. A zero denominator is vacuously $1.0$ and leaves the verdict to the anchor factor.
+
+The pool opens only where the literal population affirms at all. When aligned literal positions exist and none of them is preserved or echoes an explained substitution, the rename axis is zero: every substantive byte the pair carries disagrees, and nothing the substitution did not itself supply vouches for the copy — the #134 stride family, where a fully-consistent rename dresses up three handlers whose one meaningful literal diverges. One affirming literal switches the axis from contradiction to coverage, and from there each further preservation or echo raises it monotonically.
+
+The pool is also cross-file only, matching the promote floor's conservatism. A same-file pair keeps the stricter form — the lesser of the literal-affirmation share and identifier coverage — because a same-file rename family is the #197 sibling shape this spec spends a dedicated proof suppressing: its literal axis must vouch on its own before a same-file pair is promoted.
 
 $$
-R = \begin{cases} 0 & \text{if } O_{ab}=1 \\ \min(\text{literal\_consistency},\, \text{coverage}) \times q & \text{otherwise} \end{cases}
+\text{coverage} = \frac{\text{explained identifier positions} + \text{affirming literal positions}}{\text{constrained identifier positions} + |L_{ab}|} \qquad
+R = \begin{cases} 0 & \text{if } O_{ab}=1 \\ 0 & \text{if } |L_{ab}|>0 \land \text{affirming} = 0 \\ \min\bigl(\tfrac{\text{affirming}}{|L_{ab}|},\, \text{coverage}_{\text{id}}\bigr) \times q & \text{same-file} \\ \text{coverage} \times q & \text{otherwise} \end{cases}
 $$
 
 Support is whichever population vouches harder — matched lines or rename consistency. Never a mean, never pooled: averaging would let two lukewarm signals impersonate one strong one.

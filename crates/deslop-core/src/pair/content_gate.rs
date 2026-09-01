@@ -67,7 +67,7 @@ fn pair_passes_content_gate<L: BuildHasher>(
         return true;
     }
     let evidence = measure_pair_content_indexed(left, right, tree_index, sources, languages);
-    evidence.measured && evidence.support() >= content_floor(left, right)
+    evidence.measured && evidence.support() >= content_floor(pair, left, right)
 }
 
 /// Whether this pair needs embedding evidence rather than structural or
@@ -105,8 +105,17 @@ fn lsh_only_pair_needs_content(
 }
 
 /// Scope-specific content floor for this exact pair.
-fn content_floor(left: &Fingerprint, right: &Fingerprint) -> f64 {
-    if left.file_id == right.file_id {
+///
+/// An unanchored LSH-only pair pays the promote floor in every scope:
+/// with no structural anchor, no embedding support, and no
+/// shared-subtree alignment, the token echo is its whole case, and a
+/// token echo must be corroborated as strongly as a same-file
+/// promotion before it may weld two views into one closure
+/// ([FUSED-CONTENT-GATE]). The whole-file-against-interior-window
+/// pairs of the #339 corpus ride exactly this route at cross-file
+/// support strength and manufacture mixed-extent clusters.
+fn content_floor(pair: &CandidatePair, left: &Fingerprint, right: &Fingerprint) -> f64 {
+    if left.file_id == right.file_id || lsh_only_pair_needs_content(pair, left, right) {
         CONTENT_PROMOTE_FLOOR
     } else {
         CONTENT_SUPPORT_FLOOR

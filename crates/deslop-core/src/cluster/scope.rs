@@ -72,7 +72,7 @@ fn smallest_enclosing(
     range: ByteRange,
     kinds: &[&str],
 ) -> Option<ByteRange> {
-    if !strictly_encloses(node.byte_range, range) {
+    if !node.byte_range.strictly_encloses(range) {
         return None;
     }
     let deeper = node
@@ -80,11 +80,4 @@ fn smallest_enclosing(
         .iter()
         .find_map(|child| smallest_enclosing(child, range, kinds));
     deeper.or_else(|| kinds.contains(&node.kind).then_some(node.byte_range))
-}
-
-/// True when `outer` covers `inner` and is wider on at least one side.
-fn strictly_encloses(outer: ByteRange, inner: ByteRange) -> bool {
-    outer.start <= inner.start
-        && inner.end <= outer.end
-        && (outer.start < inner.start || inner.end < outer.end)
 }

@@ -2,9 +2,8 @@
 //! [REPAIR-RENAME-LITERAL-ECHO]).
 //!
 //! One product per member pair:
-//! `min(literal_consistency, mapping_coverage) * anchor_weight`, where
-//! the first factor is gh #409's subject and the anchor mass is
-//! gh #410's. A literal renamed *alongside the symbol it names* is part
+//! `pooled_coverage * anchor_weight`, where the literal positions in
+//! the pool are gh #409's subject and the anchor mass is gh #410's. A literal renamed *alongside the symbol it names* is part
 //! of the rename, not evidence against it: `"OrderService"` renamed to
 //! `"UserService"` with the `OrderService` symbol is the rename done
 //! *thoroughly*, and counting it as a differing literal inverted the
@@ -24,7 +23,7 @@ use super::{
     frontier::{
         frontiers_aligned, leaf_bytes, member_count, population, MemberContent, Population,
     },
-    preserved_literal_count, vacuous_share,
+    vacuous_share,
 };
 
 /// Minimum occurrences of a substituted identifier pair before it counts
@@ -50,9 +49,20 @@ const RENAME_CORROBORATION_MIN_OCCURRENCES: usize = 2;
 /// routing floor.
 const RENAME_EVIDENCE_HALF_MASS: f64 = 4.0;
 
-/// Type-2 rename evidence between two members ([TECH-PMATCH-BAKER]): the
-/// lesser of literal consistency and corroborated rename-mapping
-/// coverage, scaled by the smooth anchor-mass weight.
+/// Type-2 rename evidence between two members ([TECH-PMATCH-BAKER]): one
+/// pooled coverage over the pair's constrained identifier positions and
+/// every aligned literal position, scaled by the smooth anchor-mass
+/// weight. On a cross-file pair a drifted literal that echoes nothing
+/// stays in the denominator, weakening the proof in proportion to the
+/// evidence around it instead of vetoing an otherwise fully-anchored
+/// rename. A same-file pair keeps the stricter min of the
+/// literal-affirmation share and identifier coverage, matching the
+/// promote floor's conservatism: a same-file rename family is the #197
+/// sibling shape, and its literal axis must vouch on its own.
+/// The pool opens only where the literal population affirms at all:
+/// aligned literals with zero preservation and zero echoes are the
+/// #134 stride family — every substantive byte disagrees and nothing
+/// outside the substitution vouches, so the axis is `0.0`.
 ///
 /// Baker's prev-encoding is the discriminator the deleted literal-anchor
 /// cliff could not provide: a substituted identifier pair seen once is
@@ -74,6 +84,7 @@ pub(super) fn pair_rename_consistency<S: BuildHasher>(
     canonical: Option<&MemberContent>,
     member: Option<&MemberContent>,
     sources: &HashMap<FileId, Vec<u8>, S>,
+    same_file: bool,
 ) -> f64 {
     let (Some(canonical), Some(member)) = (canonical, member) else {
         return 0.0;
@@ -81,35 +92,43 @@ pub(super) fn pair_rename_consistency<S: BuildHasher>(
     if !frontiers_aligned(canonical, member) {
         return 0.0;
     }
-    let literals = population(&canonical.keys, &member.keys, Population::Literal);
     let echoes = literal_echoes(canonical, member, sources);
-    let echo_count: usize = echoes.values().sum();
     let mapping = rename_mapping(
         &population(&canonical.keys, &member.keys, Population::Identifier),
-        &echoes,
+        &echoes.per_substitution,
     );
-    let consistent_literals = preserved_literal_count(&literals).saturating_add(echo_count);
-    let anchors = consistent_literals.saturating_add(mapping.explained);
-    let consistency = vacuous_share(consistent_literals, literals.len()).min(mapping.coverage);
-    consistency * evidence_weight(consistency, anchors)
+    let literal_total = population(&canonical.keys, &member.keys, Population::Literal).len();
+    let affirming_literals = affirming_literal_count(canonical, member, &echoes);
+    if affirming_literals == 0 && literal_total > 0 {
+        return 0.0;
+    }
+    let anchors = affirming_literals.saturating_add(mapping.explained);
+    let coverage = if same_file {
+        vacuous_share(affirming_literals, literal_total)
+            .min(vacuous_share(mapping.explained, mapping.constrained))
+    } else {
+        let explained = mapping.explained.saturating_add(affirming_literals);
+        let constrained = mapping.constrained.saturating_add(literal_total);
+        vacuous_share(explained, constrained)
+    };
+    coverage * evidence_weight(coverage, anchors)
 }
 
 /// Rename-mapping evidence over one pair's aligned identifier positions
 /// ([TECH-PMATCH-BAKER]), produced by [`rename_mapping`].
 struct RenameMapping {
-    /// Fraction of *constrained* identifier positions explained by
-    /// admissible evidence: raw-byte identity (a fixed-symbol match,
-    /// witnessed by the position itself), or a substitution that is
-    /// bidirectionally modal *among the substituted pairs* and
-    /// corroborated by repetition. A consistent substitution seen once
-    /// is Baker's unconstrained first occurrence — `prev = 0` matches
-    /// any other first occurrence — so it belongs to neither the
-    /// numerator nor the denominator: a renamed one-shot declaration
-    /// name is not evidence against the clone, and an inconsistent
-    /// position still is. Vacuously 1.0 when nothing is constrained —
-    /// an all-literal or all-wildcard subtree leaves the anchor weight
-    /// to carry the verdict.
-    coverage: f64,
+    /// Constrained identifier positions: raw-byte identity (a
+    /// fixed-symbol match, witnessed by the position itself), a
+    /// substitution that is bidirectionally modal *among the
+    /// substituted pairs* and corroborated by repetition, and every
+    /// inconsistent position. A consistent substitution seen once is
+    /// Baker's unconstrained first occurrence — `prev = 0` matches any
+    /// other first occurrence — so it belongs to neither the numerator
+    /// nor the denominator: a renamed one-shot declaration name is not
+    /// evidence against the clone, and an inconsistent position still
+    /// is. The caller pools these with the pair's aligned literal
+    /// positions into one coverage share ([FUSED-CONTENT-GATE]).
+    constrained: usize,
     /// Explained positions — the identifier anchors [`anchor_weight`]
     /// prices. Identity positions are backed by byte equality at the
     /// position itself; substituted positions by repetition. Wildcards
@@ -158,7 +177,7 @@ fn rename_mapping(
         }
     }
     RenameMapping {
-        coverage: vacuous_share(explained, constrained),
+        constrained,
         explained,
     }
 }
@@ -198,12 +217,12 @@ fn anchor_weight(anchors: usize) -> f64 {
 /// (`deslop/tests/fused_golden_bands.rs`). Two discounts were stacked
 /// to produce that, and only one of them was designed to.
 ///
-/// `consistency` is `min(literal_consistency, coverage)`. At exactly
-/// `1.0` every aligned literal is preserved or echoes a bijection-explained
-/// substitution, and every *constrained* identifier position is either
-/// byte-identical or a bijection-explained substitution corroborated by
-/// repetition: the bijection is total, contradiction-free and
-/// literal-preserving, and nothing in the pair disputes it. The
+/// `consistency` is the pooled coverage. At exactly `1.0` every aligned
+/// literal is preserved or echoes a bijection-explained substitution,
+/// and every *constrained* identifier position is either byte-identical
+/// or a bijection-explained substitution corroborated by repetition:
+/// the bijection is total, contradiction-free and literal-preserving,
+/// and nothing in the pair disputes it. The
 /// remaining doubt the mass term prices is coincidence — and that doubt
 /// is discharged by mass, which is the same quantity. So the
 /// certification is granted only where the mass term **already vouches
@@ -240,11 +259,11 @@ fn literal_echoes<S: BuildHasher>(
     canonical: &MemberContent,
     member: &MemberContent,
     sources: &HashMap<FileId, Vec<u8>, S>,
-) -> BTreeMap<(u64, u64), usize> {
+) -> LiteralEchoes {
     let identifiers = population(&canonical.keys, &member.keys, Population::Identifier);
     let bijection = ModalBijection::over(&substituted_pairs(&identifiers));
     let substitutions = explained_substitution_bytes(canonical, member, &bijection, sources);
-    let mut echoes: BTreeMap<(u64, u64), usize> = BTreeMap::new();
+    let mut echoes = LiteralEchoes::default();
     for index in substituted_literal_positions(canonical, member) {
         let bytes = leaf_bytes(canonical, index, sources).zip(leaf_bytes(member, index, sources));
         let Some((left, right)) = bytes else {
@@ -254,11 +273,61 @@ fn literal_echoes<S: BuildHasher>(
             .iter()
             .find(|(_, (from, to))| replaced_matches(left, from, to, right));
         if let Some((keys, _)) = explained_by {
-            let slot = echoes.entry(*keys).or_insert(0_usize);
+            let slot = echoes.per_substitution.entry(*keys).or_insert(0_usize);
             *slot = slot.saturating_add(1);
+            let _newly = echoes.positions.insert(index);
         }
     }
     echoes
+}
+
+/// Aligned literal positions that affirm the copy under the
+/// authored-literal group discipline: a position affirms when its raw
+/// bytes are preserved or an echo explains them, **and** every fragment
+/// of the same authored literal affirms too. A preserved fragment of a
+/// composite literal whose sibling fragment drifted is the literal
+/// changing, not evidence of the copy — the shared URL prefix of a
+/// sibling accessor family must not open the rename pool.
+fn affirming_literal_count(
+    canonical: &MemberContent,
+    member: &MemberContent,
+    echoes: &LiteralEchoes,
+) -> usize {
+    let positions: Vec<(usize, bool, Option<u32>)> = canonical
+        .keys
+        .iter()
+        .zip(member.keys.iter())
+        .enumerate()
+        .filter(|(_, (left, right))| {
+            left.population == Population::Literal && right.population == Population::Literal
+        })
+        .map(|(index, (left, right))| {
+            let affirmed = left.key == right.key || echoes.positions.contains(&index);
+            (index, affirmed, left.literal_group)
+        })
+        .collect();
+    let broken: std::collections::BTreeSet<u32> = positions
+        .iter()
+        .filter(|(_, affirmed, _)| !affirmed)
+        .filter_map(|(_, _, group)| *group)
+        .collect();
+    positions
+        .iter()
+        .filter(|(_, affirmed, group)| {
+            *affirmed && !group.is_some_and(|inside| broken.contains(&inside))
+        })
+        .count()
+}
+
+/// The echo evidence of one pair (#409): per-substitution counts for
+/// mapping corroboration, plus the frontier positions the echoes
+/// affirmed, for the authored-literal group discipline.
+#[derive(Default)]
+struct LiteralEchoes {
+    /// Echo count per bijection-explained substitution.
+    per_substitution: BTreeMap<(u64, u64), usize>,
+    /// Frontier indices whose literal bytes an echo explained.
+    positions: std::collections::BTreeSet<usize>,
 }
 
 /// Frontier indices of aligned positions where both members carry a

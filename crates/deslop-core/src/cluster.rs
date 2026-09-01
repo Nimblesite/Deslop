@@ -22,9 +22,6 @@ use crate::{
     state::FileId,
 };
 
-/// Deterministic grouped-signal benchmark workload.
-#[cfg(feature = "benchmark")]
-pub mod benchmark;
 /// The authored declaration an occurrence sits inside
 /// ([PIPELINE-CLUSTER-EXACT-SCOPE]).
 mod scope;
@@ -346,9 +343,7 @@ impl Occurrence {
     /// True when this occurrence covers `other` and is wider on at
     /// least one side.
     fn encloses(&self, other: &Self) -> bool {
-        self.range.start <= other.range.start
-            && other.range.end <= self.range.end
-            && (self.range.start < other.range.start || other.range.end < self.range.end)
+        self.range.strictly_encloses(other.range)
     }
 }
 

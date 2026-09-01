@@ -86,6 +86,9 @@ pub(super) struct LeafKey {
     pub(super) population: Population,
     /// Truncated blake3 hash of the leaf's raw source bytes.
     pub(super) key: u64,
+    /// Authored-literal group for a composite literal's fragments
+    /// ([`crate::tokens::CollapsedLeaf::literal_group`]).
+    pub(super) literal_group: Option<u32>,
 }
 
 /// One member's resolved content frontier: the per-leaf keys plus the
@@ -278,14 +281,17 @@ pub(super) fn member_content<S: BuildHasher, L: BuildHasher>(
     let leaves = collapsed_leaves(root, member, language)?;
     let keys = leaves
         .iter()
-        .map(|(kind, range)| {
-            source.get(range.start..range.end).map(|bytes| LeafKey {
-                population: Population::of(kind),
-                key: truncated_hash(bytes),
-            })
+        .map(|leaf| {
+            source
+                .get(leaf.range.start..leaf.range.end)
+                .map(|bytes| LeafKey {
+                    population: Population::of(leaf.kind),
+                    key: truncated_hash(bytes),
+                    literal_group: leaf.literal_group,
+                })
         })
         .collect::<Option<Vec<LeafKey>>>()?;
-    let ranges = leaves.iter().map(|(_, range)| *range).collect();
+    let ranges = leaves.iter().map(|leaf| leaf.range).collect();
     Some(MemberContent {
         file: member.file_id,
         shape: member.hash,
