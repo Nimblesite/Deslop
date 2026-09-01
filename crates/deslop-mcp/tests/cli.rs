@@ -871,11 +871,17 @@ fn duplicates_returns_full_clusters_ranked_by_mass() -> Result<()> {
         "duplicates full detail must return the occurrences array: {first}"
     );
     assert!(
-        first.get(MASS_FIELD).and_then(Value::as_u64).is_some_and(|mass| mass > 0),
+        first
+            .get(MASS_FIELD)
+            .and_then(Value::as_u64)
+            .is_some_and(|mass| mass > 0),
         "duplicates must return positive mass: {first}"
     );
     assert!(
-        first.get(ID_FIELD).and_then(Value::as_str).is_some_and(|id| !id.is_empty()),
+        first
+            .get(ID_FIELD)
+            .and_then(Value::as_str)
+            .is_some_and(|id| !id.is_empty()),
         "duplicates must return the stable cluster id: {first}"
     );
     assert!(
@@ -885,7 +891,13 @@ fn duplicates_returns_full_clusters_ranked_by_mass() -> Result<()> {
             .is_some_and(|band| !band.is_empty()),
         "duplicates must return the mass-derived rank band: {first}"
     );
-    for retired in [BUCKET_FIELD, "interpretation", "weight", "signals", "verdict"] {
+    for retired in [
+        BUCKET_FIELD,
+        "interpretation",
+        "weight",
+        "signals",
+        "verdict",
+    ] {
         assert!(
             first.get(retired).is_none(),
             "mass-only wire must not carry per-cluster {retired}: {first}"
@@ -923,10 +935,7 @@ fn duplicates_defaults_to_five_pages_worst_first_by_mass() -> Result<()> {
     let sorted = masses
         .windows(PAIR_WINDOW_SIZE)
         .all(|pair| matches!(pair, [first, second] if first >= second));
-    assert!(
-        sorted,
-        "clusters must be worst-first by mass: {masses:?}"
-    );
+    assert!(sorted, "clusters must be worst-first by mass: {masses:?}");
     let _ = child.finish();
     Ok(())
 }
@@ -1058,9 +1067,17 @@ fn duplicates_clusters_carry_no_per_cluster_labels() -> Result<()> {
         !clusters.is_empty(),
         "fixture must surface at least one cluster for the label check"
     );
-    for retired in [BUCKET_FIELD, "signals", "verdict", "weight", "interpretation"] {
+    for retired in [
+        BUCKET_FIELD,
+        "signals",
+        "verdict",
+        "weight",
+        "interpretation",
+    ] {
         assert!(
-            clusters.iter().all(|cluster| cluster.get(retired).is_none()),
+            clusters
+                .iter()
+                .all(|cluster| cluster.get(retired).is_none()),
             "mass-only wire must not carry per-cluster {retired} on any cluster: {clusters:#?}"
         );
     }
@@ -1152,8 +1169,7 @@ fn issue_113_find_similar_description_leads_with_prevention() -> Result<()> {
     // Rule-zero gate for newly detected languages. `session` reports the
     // live set, so the enum must match it exactly.
     let mut advertised: Vec<String> = languages.iter().map(|value| (*value).to_owned()).collect();
-    let session =
-        structured_tool_result(&call_tool(&mut child, SESSION_TOOL, &json!({}))?)?;
+    let session = structured_tool_result(&call_tool(&mut child, SESSION_TOOL, &json!({}))?)?;
     let mut detected: Vec<String> = value_get(&session, LANGUAGES_POINTER)?
         .as_array()
         .ok_or_else(|| anyhow!("session-config languages must be an array"))?
@@ -1191,7 +1207,10 @@ fn duplicates_returns_paginated_page() -> Result<()> {
         .as_u64()
         .ok_or_else(|| anyhow!("page.returned missing"))?;
     assert_eq!(value_get(&page, "/page/offset")?, json!(0));
-    assert_eq!(value_get(&page, PAGE_LIMIT_POINTER)?, json!(STANDARD_PAGE_LIMIT));
+    assert_eq!(
+        value_get(&page, PAGE_LIMIT_POINTER)?,
+        json!(STANDARD_PAGE_LIMIT)
+    );
     assert!(
         returned <= STANDARD_PAGE_LIMIT,
         "returned ({returned}) must respect requested limit"
@@ -1601,14 +1620,12 @@ fn duplicates_filters_by_path_contains() -> Result<()> {
             .pointer("/occurrences")
             .and_then(Value::as_array)
             .is_some_and(|occurrences| {
-                occurrences
-                    .iter()
-                    .any(|occurrence| {
-                        occurrence
-                            .pointer("/path")
-                            .and_then(Value::as_str)
-                            .is_some_and(|path| path.contains("Alpha"))
-                    })
+                occurrences.iter().any(|occurrence| {
+                    occurrence
+                        .pointer("/path")
+                        .and_then(Value::as_str)
+                        .is_some_and(|path| path.contains("Alpha"))
+                })
             });
         assert!(
             matched,
@@ -1808,10 +1825,8 @@ fn duplicates_echoes_filters_in_response() -> Result<()> {
 
 #[test]
 fn duplicates_scope_path_returns_only_matching_clusters() -> Result<()> {
-    let (child, payload) = init_and_tool_payload(
-        DUPLICATES_TOOL,
-        &json!({ (PATH_FIELD): ALPHA_FILE_NAME }),
-    )?;
+    let (child, payload) =
+        init_and_tool_payload(DUPLICATES_TOOL, &json!({ (PATH_FIELD): ALPHA_FILE_NAME }))?;
     let clusters = value_get(&payload, CLUSTERS_POINTER)?;
     let array = clusters
         .as_array()
@@ -2635,10 +2650,8 @@ fn report_for_file_accepts_nonexistent_leaf_but_resolves_parent() -> Result<()> 
     // Query a file that doesn't exist but whose *parent* (the scan
     // root) does. This exercises safety::canonicalise_best_effort's
     // nonexistent-leaf branch, returning an empty cluster set.
-    let (child, payload) = init_and_tool_payload(
-        DUPLICATES_TOOL,
-        &json!({ (PATH_FIELD): "NeverCreated.cs" }),
-    )?;
+    let (child, payload) =
+        init_and_tool_payload(DUPLICATES_TOOL, &json!({ (PATH_FIELD): "NeverCreated.cs" }))?;
     let clusters = value_get(&payload, CLUSTERS_POINTER)?;
     assert!(
         clusters.as_array().is_some_and(Vec::is_empty),
@@ -2790,8 +2803,7 @@ fn issue_77_session_reports_incremental_true_after_mutation_reload() -> Result<(
         .as_u64()
         .unwrap_or(0);
     assert!(before_count >= 1, "expected a cluster before mutation");
-    let before_config =
-        structured_tool_result(&call_tool(&mut child, SESSION_TOOL, &json!({}))?)?;
+    let before_config = structured_tool_result(&call_tool(&mut child, SESSION_TOOL, &json!({}))?)?;
     let before_generation = value_get(&before_config, "/generation")?
         .as_u64()
         .unwrap_or(0);
@@ -2821,8 +2833,7 @@ fn issue_77_session_reports_incremental_true_after_mutation_reload() -> Result<(
         after_count < before_count,
         "mutation reload should remove the stale duplicate cluster"
     );
-    let after_config =
-        structured_tool_result(&call_tool(&mut child, SESSION_TOOL, &json!({}))?)?;
+    let after_config = structured_tool_result(&call_tool(&mut child, SESSION_TOOL, &json!({}))?)?;
     // [MCP-IPC-CLIENT] min_nodes now comes from the live LSP, not
     // the test's `generate_state_file` invocation — LSP defaults
     // to 30.

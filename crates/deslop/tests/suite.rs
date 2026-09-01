@@ -31,6 +31,8 @@ mod cache_key_lossy_utf8_collision;
 mod cache_retention;
 #[path = "cli.rs"]
 mod cli;
+#[path = "cluster_extent_alignment.rs"]
+mod cluster_extent_alignment;
 #[path = "cluster_id_uniqueness.rs"]
 mod cluster_id_uniqueness;
 #[path = "config_include_dependencies.rs"]
