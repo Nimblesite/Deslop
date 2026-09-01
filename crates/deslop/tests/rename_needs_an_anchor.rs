@@ -14,7 +14,7 @@
 //!
 //! # The mechanism
 //!
-//! The elected window is lines 12-15 of each method, and the endpoint
+//! The selected window is lines 12-15 of each method, and the endpoint
 //! literal is on line 11. Every position the window keeps is a local
 //! whose name was substituted wholesale (`stockRows` -> `bannerRows`),
 //! and the one position that would have contradicted the substitution
@@ -28,7 +28,7 @@
 //! substitution. The claim is its own evidence.
 //!
 //! `'/catalog/$uid/settings/{endpoint}'` is what makes the window land
-//! there: with the interpolation removed the elected window covers the
+//! there: with the interpolation removed the selected window covers the
 //! literal, the family measures `rename_consistency = 0.000` and is
 //! correctly published as `structural_only`. Nothing about the authored
 //! duplication changed between those two runs — only which bytes the

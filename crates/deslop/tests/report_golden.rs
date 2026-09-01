@@ -37,7 +37,7 @@ mod contract;
 /// Fixed `--min-nodes` the golden is rendered at. 16 sits below both
 /// authored clone declarations (68 and 38 nodes), so exactly the two
 /// authored clusters render. The 12-node `settle_invoice` signature
-/// subtree is contained by the declaration around it and is elected
+/// subtree is contained by the declaration around it and is selected
 /// away by [PIPELINE-CLUSTER-SUBSUME] rather than published as a third
 /// cluster: measured at `--min-nodes` 12, 13 and 16, this corpus renders
 /// the same two clusters and the same 57 duplicated LOC at every floor.

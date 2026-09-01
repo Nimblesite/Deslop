@@ -129,7 +129,7 @@ fn live_session_consolidates_cross_file_cluster() -> Result<()> {
     let report = session.report();
     let cluster = crate::common::clusters::cross_file_identical_cluster(&report)?;
     // The reported view is the whole-file near-miss the subsumption
-    // elects ([PIPELINE-CLUSTER-SUBSUME]); its definition runs disagree
+    // selects ([PIPELINE-CLUSTER-SUBSUME]); its definition runs disagree
     // (`normalise_labels` shared, `describe_*` divergent), so the
     // consolidation engine must refuse with the reason named — the
     // safe refusal, never a mechanical plan that would rewrite

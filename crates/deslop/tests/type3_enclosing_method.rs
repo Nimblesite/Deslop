@@ -7,7 +7,7 @@
 //! single inserted statement. The insertion rehashes every ancestor
 //! Merkle node, so the enclosing pair carries `structural = 0.0` while
 //! saturated fragments nested inside it carry `structural = 1.0` by
-//! construction. Pre-#367, destructive subsumption elected on that raw
+//! construction. Pre-#367, destructive subsumption selected on that raw
 //! geometry and deleted the method pair before content was measured;
 //! the report then showed only `structural_only` fragments — or, for
 //! `ts-type3-stmt`, nothing at all.
@@ -21,7 +21,7 @@
 //! # How all five came to pass (GH #408)
 //!
 //! Four of the five once failed here, and the cause was **admission,
-//! not subsumption**: no election order can elect a pair that was never
+//! not subsumption**: no selection order can select a pair that was never
 //! built. `bounded_fused()` is `max(structural, token_jaccard,
 //! embedding_cos)`, the LSH path wrote a literal `structural = 0.0`,
 //! embeddings are off, and the exact whole-method k-gram Jaccard falls
@@ -97,7 +97,7 @@ use crate::common::signals::{assert_no_pair_surface_on_cluster, assert_structura
 use crate::common::*;
 
 /// The whole-method span the surviving cluster must cover in one file,
-/// and the exact extent the elected occurrence must publish.
+/// and the exact extent the selected occurrence must publish.
 struct MethodSpan {
     path: &'static str,
     first_line: u64,

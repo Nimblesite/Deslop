@@ -187,7 +187,7 @@ fn enclosure_collapse_preserves_every_duplicated_file() -> Result<()> {
     let cluster = expect_cluster_spanning(&report, &["Alpha.cs", "Beta.cs"])?;
     assert!(
         !has_verbatim_pair(&fixture("csharp-enclosing-method-clone"), cluster)?,
-        "the enclosing class view differs by class name, so a nested method must not elect itself: {report:#}"
+        "the enclosing class view differs by class name, so a nested method must not become the selected view: {report:#}"
     );
     let names: std::collections::BTreeSet<String> = occurrences(cluster)
         .iter()

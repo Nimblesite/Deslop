@@ -186,7 +186,7 @@ fn call_free_admissible(
         [tautology, assertion] => {
             asserts::is_literal_tautology_pair([tautology, assertion], with_call, covered, snippet)
         }
-        // A whole scenario *run*: the widest-window election
+        // A whole scenario *run*: the widest-window selection
         // ([PIPELINE-RANK-WORST-FIRST]) may sweep several scenario cells
         // into one member, and each cell carries its own trailing
         // acceptance assert. Every call-free statement must be an

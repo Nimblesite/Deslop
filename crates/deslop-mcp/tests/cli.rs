@@ -908,7 +908,7 @@ fn duplicates_defaults_to_five_pages_worst_first_by_mass() -> Result<()> {
         .as_array()
         .ok_or_else(|| anyhow!(CLUSTERS_ARRAY_ERROR))?;
     assert!(
-        clusters_arr.len() <= SMALL_PAGE_LIMIT as usize,
+        u64::try_from(clusters_arr.len()).is_ok_and(|len| len <= SMALL_PAGE_LIMIT),
         "default limit=5 must not return more than 5 clusters"
     );
     let masses: Vec<u64> = clusters_arr
@@ -1583,26 +1583,37 @@ fn duplicates_filters_by_unknown_language_returns_empty() -> Result<()> {
 }
 
 #[test]
-fn report_query_filters_by_path_contains() -> Result<()> {
+fn duplicates_filters_by_path_contains() -> Result<()> {
     let (mut child, page) = init_and_tool_payload(
-        REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, "path_contains": "Alpha" }),
+        DUPLICATES_TOOL,
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, (PATH_CONTAINS_FIELD): "Alpha" }),
     )?;
     let array = value_array(&page, CLUSTERS_POINTER)?;
     assert!(
         !array.is_empty(),
         "Alpha.cs participates in the planted clone family"
     );
+    // Every cluster on a path-filtered page must have at least one
+    // occurrence whose path matches the filter — the filter narrows by
+    // any occurrence, not only first_occurrence.
     for cluster in &array {
-        let first_path = cluster
-            .pointer("/first_occurrence/path")
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        // first_occurrence is one representative — path_contains may match
-        // any occurrence, so we can't assert on first_occurrence alone.
-        // Instead prove the filter narrowed the result by checking
-        // total_clusters dropped vs the unfiltered baseline.
-        let _ = first_path;
+        let matched = cluster
+            .pointer("/occurrences")
+            .and_then(Value::as_array)
+            .is_some_and(|occurrences| {
+                occurrences
+                    .iter()
+                    .any(|occurrence| {
+                        occurrence
+                            .pointer("/path")
+                            .and_then(Value::as_str)
+                            .is_some_and(|path| path.contains("Alpha"))
+                    })
+            });
+        assert!(
+            matched,
+            "path_contains=Alpha page must only carry clusters with an Alpha occurrence: {cluster}"
+        );
     }
     let unfiltered = structured_tool_result(&call_tool(
         &mut child,

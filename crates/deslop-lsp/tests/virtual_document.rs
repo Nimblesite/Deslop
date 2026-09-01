@@ -64,8 +64,14 @@ fn virtual_document_report_returns_canonical_text() -> Result<()> {
         "expected render_text summary header; got: {body}"
     );
     assert!(
-        body.contains("\nrepo: ") && body.contains("\n-- action hints --\n"),
+        body.contains("\nrepo: ") && body.contains("\ncache: ") && body.contains("\n#1 ["),
         "expected canonical report sections from render_text; got: {body}"
+    );
+    // The mass-only cutover retired the action-hints block from the
+    // rendered report; if it returns, the fat surface leaked back in.
+    assert!(
+        !body.contains("-- action hints --"),
+        "retired action-hints section must not leak into render_text; got: {body}"
     );
     let _status = deslop_test_support::reap::reap_with_stdin(&mut child, stdin);
     Ok(())

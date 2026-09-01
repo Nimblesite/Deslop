@@ -305,7 +305,7 @@ fn one_location_seen_twice_is_not_a_splittable_family() {
 // The positive control for the same rule: a family that really does
 // cover two locations is still splittable, and it keeps every view of
 // them. Dropping the second view here would rob the same-file overlap
-// collapse of the candidate it elects a representative from
+// collapse of the candidate it selects a representative from
 // ([PIPELINE-CLUSTER-EXACT]).
 #[test]
 fn a_copy_stays_splittable_and_keeps_both_views_of_its_locations() {

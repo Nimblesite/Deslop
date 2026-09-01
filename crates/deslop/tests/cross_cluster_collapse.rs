@@ -219,8 +219,9 @@ fn wider_cross_file_view_survives_subsumption() -> Result<()> {
         "the wider cross-file view must enclose the nested shared block"
     );
     assert_ne!(
-        texts[0], texts[1],
-        "the nested exact block must not elect itself"
+        texts.first(),
+        texts.last(),
+        "the nested exact block must not become the selected view"
     );
     assert_no_pair_surface_on_cluster(clone, "cross-cluster collapse");
     Ok(())
@@ -338,7 +339,8 @@ fn widest_same_declaration_view_is_the_published_finding() -> Result<()> {
         "each occurrence must resolve to source bytes"
     );
     assert_ne!(
-        texts[0], texts[1],
+        texts.first(),
+        texts.last(),
         "the smaller byte-identical fingerprint must not displace the wider authored view"
     );
     let spans: Vec<u64> = occurrences

@@ -248,7 +248,7 @@ fn compile_two_module_crate(file_a: &str, file_b: &str) -> Result<()> {
 /// crate compiles (`rustc --emit=metadata`).
 ///
 /// The reported view on the mass-only wire is the whole-file near-miss
-/// the subsumption elects ([PIPELINE-CLUSTER-SUBSUME] — member count,
+/// the subsumption selects ([PIPELINE-CLUSTER-SUBSUME] — member count,
 /// then mass, then id), and a near-miss whose definition runs disagree
 /// must refuse rather than rewrite ([AUTOFIX-CONSOLIDATE-GATE] v1.1).
 /// The byte-identical `normalise_labels` core is inside both reported

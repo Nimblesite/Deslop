@@ -3,7 +3,7 @@
 //!
 //! Two passes split a component before signals are measured —
 //! [CLONE-NOISE-VERBATIM-SUBGROUP] by the source bytes a member covers,
-//! [PIPELINE-CLUSTER-ELECT] by the normalised subtree it hashes to — and
+//! [PIPELINE-CLUSTER-EXACT-SCOPE] by the normalised subtree it hashes to — and
 //! both need the same two operations: group the members by a key in
 //! first-appearance order, then rebuild the component around one group
 //! keeping only the discovery edges whose endpoints stayed. The key is

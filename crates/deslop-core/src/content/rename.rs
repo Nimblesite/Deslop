@@ -21,7 +21,9 @@ use std::{collections::BTreeMap, collections::HashMap, hash::BuildHasher};
 use crate::{buckets::CONTENT_SUPPORT_FLOOR, state::FileId};
 
 use super::{
-    frontier::{frontiers_aligned, leaf_bytes, member_count, population, MemberContent, Population},
+    frontier::{
+        frontiers_aligned, leaf_bytes, member_count, population, MemberContent, Population,
+    },
     preserved_literal_count, vacuous_share,
 };
 

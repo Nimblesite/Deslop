@@ -46,7 +46,7 @@ fn sequence_is_scenario_scaffolding(sequences: &[&[CallShape]]) -> bool {
         return false;
     }
     // Every member must carry the same ordered call header as a prefix.
-    // The overlap collapse elects the *widest* window per run
+    // The overlap collapse selects the *widest* window per run
     // ([PIPELINE-RANK-WORST-FIRST]), so one occurrence may sweep several
     // scenario members: the shared skeleton is the shortest sequence, and
     // the longer members are more of the same scenario, never a reason to

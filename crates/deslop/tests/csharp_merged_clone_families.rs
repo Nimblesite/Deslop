@@ -1,4 +1,4 @@
-//! E2E regression for [PIPELINE-CLUSTER-ELECT] — one cluster may not
+//! E2E regression for [PIPELINE-CLUSTER-EXACT-SCOPE] — one cluster may not
 //! swallow two unrelated clone families and take both down with it.
 //!
 //! The `csharp-mcp` corpus holds two independent Type-2 pairs. Alpha's
@@ -73,18 +73,18 @@ const EXPECTED_CLUSTERS: usize = 2;
 /// The multiplying pair renames nothing at all, so almost every byte of
 /// substance is shared.
 /// Nothing is hidden: every view of this corpus is either published or
-/// elected away by a view of the same region.
+/// selected away by a view of the same region.
 /// This was one. A four-occurrence `for`-loop family spanned all four
 /// files, because `total = total + index` and `product = product *
 /// factor` normalised to the same subtree while operators collapsed to
 /// a shared placeholder ([PIPELINE-NORMALIZE-AST-OPERATOR]). Spanning
 /// both families, it nested inside neither method cluster and could
-/// not be elected against either, so it survived to be hidden. With
+/// not be selected against either, so it survived to be hidden. With
 /// each operator leaf carrying its own token the four-way view does not
 /// exist: it is two two-occurrence views, each nested inside its own
-/// method cluster and elected away there.
+/// method cluster and selected away there.
 /// Zero is the stronger pin, and the assertion's purpose is unchanged —
-/// anything hidden here is a family suppressed rather than elected.
+/// anything hidden here is a family suppressed rather than selected.
 const HIDDEN_CLUSTERS: u64 = 0;
 
 #[test]
@@ -103,7 +103,7 @@ fn two_clone_families_in_one_corpus_do_not_erase_each_other() -> Result<()> {
     let scan_root = fixture(FIXTURE);
     let summing = expect_cluster_spanning(&report, &[ALPHA, BETA])?;
     let multiplying = expect_cluster_spanning(&report, &[DELTA, GAMMA])?;
-    assert_families_were_elected_apart(&report, &visible);
+    assert_families_were_selected_apart(&report, &visible);
     assert_near_identical_pair(&scan_root, summing, ALPHA, BETA, &report)?;
     assert_near_identical_pair(&scan_root, multiplying, DELTA, GAMMA, &report)?;
     assert_content_axes_separate_strictly(&scan_root, summing, multiplying, &report)?;
@@ -111,8 +111,8 @@ fn two_clone_families_in_one_corpus_do_not_erase_each_other() -> Result<()> {
     Ok(())
 }
 
-/// The election itself: two clusters, neither spanning both families.
-fn assert_families_were_elected_apart(report: &Value, visible: &[String]) {
+/// The selection itself: two clusters, neither spanning both families.
+fn assert_families_were_selected_apart(report: &Value, visible: &[String]) {
     assert!(
         cluster_spanning(report, &[ALPHA, DELTA]).is_none(),
         "a summing loop and a multiplying loop are not occurrences of \
@@ -127,9 +127,9 @@ fn assert_families_were_elected_apart(report: &Value, visible: &[String]) {
     assert_eq!(
         clusters_hidden(report),
         HIDDEN_CLUSTERS,
-        "every view of this corpus is published or elected away by a \
+        "every view of this corpus is published or selected away by a \
          view of the same region; a hidden view means a family was \
-         suppressed rather than elected: {visible:#?}"
+         suppressed rather than selected: {visible:#?}"
     );
 }
 
@@ -186,7 +186,7 @@ fn assert_content_axes_separate_strictly(
     Ok(())
 }
 
-/// The repo-wide figures must count what the election restored.
+/// The repo-wide figures must count what the selection restored.
 fn assert_headline_counts_both_families(report: &Value) {
     assert!(
         visible_duplicated_loc(report) > 0,

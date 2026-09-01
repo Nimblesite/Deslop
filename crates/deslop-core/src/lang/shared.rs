@@ -49,12 +49,12 @@ pub const LITERAL_KIND: &str = "__literal__";
 /// rests on. Identifiers and literals collapse because a rename and a
 /// constant edit preserve behaviour, so equal hashes mean "the same code
 /// up to renames" and unequal hashes mean the code itself differs
-/// ([`crate::cluster_filters`] states that premise and elects on it). An
+/// ([`crate::cluster_filters`] states that premise and selects on it). An
 /// operator swap is neither a rename nor a literal edit, so a shared
 /// placeholder makes `alpha + beta` and `alpha - beta` hash identically
 /// and the fingerprint asserts sameness that does not exist. Everything
 /// reading the digest then inherits it: `structural` saturates at 1.00,
-/// `token_jaccard` echoes it, the LSH bands collide, subsumption elects
+/// `token_jaccard` echoes it, the LSH bands collide, subsumption selects
 /// between views of code that computes different answers, and
 /// [FUSED-CONTENT-GATE] is left pricing four disagreeing frontier
 /// positions out of twenty as a ten-percent discount — `fused = 0.90`,

@@ -8,7 +8,7 @@
 //! [`rename_literal_monotonicity`] pins that it must never score below
 //! the half-finished version.
 //!
-//! Substituting the elected identifier *anywhere in the bytes* buys that
+//! Substituting the substituted identifier *anywhere in the bytes* buys that
 //! certification far too cheaply. `id -> key` rewrites `"invalid
 //! request"` into `"invalkey request"` — a changed message no developer
 //! renamed and no reader would accept — and the echo rule then reads the

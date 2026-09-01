@@ -39,7 +39,7 @@ pub(crate) const CALL_COPY: [&str; 2] = [CALL_ORIGIN, CALL_TWIN];
 /// The stranger whose only relation to [`CALL_COPY`] is its shape.
 pub(crate) const CALL_STRANGER: &str = "refund_emitter.py";
 
-/// Anchor positions of the call-run pair's elected measurement: the two
+/// Anchor positions of the call-run pair's selected measurement: the two
 /// five-line emitters carry enough consistent literals and explained
 /// identifiers to clear the ten-anchor certification point, so the rename
 /// proof certifies to `1.0` ([FUSED-CONTENT-GATE]). Ten is the floor the
@@ -52,7 +52,7 @@ pub(crate) const CALL_PAIR_ANCHORS: u32 = 10;
 /// `invoice_emitter.py` and `invoice_emitter_copy.py` are byte-identical
 /// files, so `def emit():` is as duplicated as the calls under it, and
 /// the published `identical` cluster spans L1-5 of both. Four was what
-/// the same-file overlap collapse elected while it ranked an
+/// the same-file overlap collapse selected while it ranked an
 /// overlapping run by cross-file edge strength: the four-call window
 /// scored higher than the function enclosing it purely by carrying less
 /// code, and the `def` line went uncounted

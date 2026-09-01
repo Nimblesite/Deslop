@@ -142,7 +142,7 @@ fn javascript_near_miss_extra_statement_keeps_shared_subtree_and_excludes_unrela
     // The reported view is the enclosing function, which contains the
     // extra map writes. The byte-level near-miss contract proves it is a
     // real shared-subtree clone whose bytes differ ([FUSED-SHARED-SUBTREE],
-    // gh #408) — a Merkle-exact fragment elected in its place would be
+    // gh #408) — a Merkle-exact fragment selected in its place would be
     // byte-identical and fail `assert_rename_is_not_a_copy`.
     assert_near_miss_rename_contract(&root, clone, "js-type3-stmt")?;
     // The unrelated random-token generator in the same directory must never

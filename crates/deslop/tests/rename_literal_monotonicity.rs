@@ -29,7 +29,7 @@
 //! negative, and the whole of gh #409 in one variable.
 //!
 //! Green since [REPAIR-RENAME-LITERAL-ECHO]: a substituted literal whose
-//! bytes transform into the partner's by an elected identifier
+//! bytes transform into the partner's by a mapped identifier
 //! substitution counts as consistent, and corroborates that
 //! substitution. Do not weaken this suite, and never raise or lower a
 //! threshold to keep it passing — the monotonicity assertion is true

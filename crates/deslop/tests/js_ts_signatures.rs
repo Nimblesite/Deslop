@@ -5,7 +5,7 @@
 //! normalisation function. These black-box CLI tests pin that contract:
 //! renamed Type-2 clones are admitted and reported as byte-distinct
 //! renames (never as verbatim copies), and Type-3 near misses still
-//! surface through shared subtrees — with the *enclosing* view elected,
+//! surface through shared subtrees — with the *enclosing* view selected,
 //! never the Merkle-equal fragment the gh #408 recall hole would publish
 //! in its place. On the mass-only wire the byte-level fact is the honest
 //! proof of both: a reported rename must slice to differing bytes
@@ -48,9 +48,9 @@ fn javascript_near_miss_produces_cross_file_structural_cluster() -> Result<()> {
     // because the same-file overlap collapse ranked an overlapping run
     // by cross-file edge strength, and a window scores higher exactly to
     // the extent that it drops what the two copies disagree on
-    // ([PIPELINE-CLUSTER-EXACT-SCOPE]). Both languages now elect the
+    // ([PIPELINE-CLUSTER-EXACT-SCOPE]). Both languages now select the
     // enclosing view, which is what #427 asked for. The byte-level pin
-    // below keeps it honest: a byte-identical fragment elected in place
+    // below keeps it honest: a byte-identical fragment selected in place
     // of the enclosing near-miss would slice to identical bytes and fail.
     assert_type3_clone("javascript-type3", 8, "delta.js", "epsilon.js")
 }
@@ -93,7 +93,7 @@ fn assert_type3_clone(fixture_name: &str, min_nodes: u32, left: &str, right: &st
 /// ([PIPELINE-CLUSTER-CLOSURE]): admitted and mass-honest, no pair-only
 /// surface on the cluster, and — the byte-level truth the deleted
 /// `structural`/`token_jaccard` axes used to proxy — the occurrences
-/// slice to *differing* source bytes. A Merkle-equal fragment elected in
+/// slice to *differing* source bytes. A Merkle-equal fragment selected in
 /// place of the enclosing view would slice to identical bytes and fail
 /// here, which is exactly the gh #408/#427 recall hole.
 fn assert_admitted_rename_cluster(
@@ -110,7 +110,7 @@ fn assert_admitted_rename_cluster(
         !has_verbatim_pair(scan_root, cluster)?,
         "{fixture_name}: {left} and {right} are a rename / near-miss and must \
          slice to differing bytes — a verbatim (byte-identical) reading means \
-         the fragment view was elected in place of the enclosing pair, the \
+         the fragment view was selected in place of the enclosing pair, the \
          gh #408 recall hole: {report:#}"
     );
     assert!(

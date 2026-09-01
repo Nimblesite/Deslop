@@ -18,7 +18,7 @@
 //! `LedgerAlpha.cs` bytes **173–537**, which starts at `public`. The
 //! method-declaration fingerprint's range now *includes* the leading
 //! modifier, so both views describe the same span convention, ordinary
-//! containment holds, and the election collapses the pair with no
+//! containment holds, and subsumption collapses the pair with no
 //! straddle tolerance added to the predicate. That is the range-convention
 //! answer, and this suite is what stops it regressing to the other one —
 //! a subsumption predicate loosened to bare intersection is exactly what

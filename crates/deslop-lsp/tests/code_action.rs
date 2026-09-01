@@ -345,7 +345,7 @@ fn merge_fixture_offers_and_resolves_rewrite_action() -> Result<()> {
 /// [AUTOFIX-CONSOLIDATE-SURFACE] (issue #277): a cross-file identical
 /// definition offers a lazily resolved `refactor.rewrite`. On the
 /// mass-only wire the reported view for `rust-consolidate` is the
-/// whole-file near-miss the subsumption elects
+/// whole-file near-miss the subsumption selects
 /// ([PIPELINE-CLUSTER-SUBSUME]); its definition runs disagree
 /// (`normalise_labels` shared, `describe_*` divergent), so resolving
 /// refuses with a human-readable reason rather than attaching an edit
