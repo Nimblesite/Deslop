@@ -285,7 +285,7 @@ fn timed_language_specific(
 /// One cluster-noise sub-check, for [`ParseCache`]'s aggregate counters
 /// ([PERF-FLUTTER-TODO-OBSERVABILITY]): which filter the corpus-scale
 /// time actually goes to, and which of them ever fire.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NoiseFilter {
     /// The uniform-language pre-gate.
     UniformLanguage,
@@ -598,6 +598,56 @@ pub(super) const fn function_kinds(language: &str) -> &'static [&'static str] {
         // the signature-only and polymorphic-signature filters
         // can compare bodies after a signature-only structural match.
         b"go" => &["function_declaration", "method_declaration", "func_literal"],
+        _ => &[],
+    }
+}
+
+/// The declaration shell the widened polymorphic-subject resolution may
+/// walk through ([CLONE-NOISE-POLYMORPHIC-SIGNATURE]): when a member
+/// view is wider than any single function, the subject is the sole
+/// function the range contains with nothing but declaration scaffolding
+/// around it. A row lists the grammar's inert shell kinds — the file
+/// root, the class/mixin/enum/extension containers, and constructor
+/// signatures, none of which execute; kinds that can carry behaviour
+/// (function bodies, field initialisers) are deliberately absent, so a
+/// member containing them vetoes the widened resolution and keeps the
+/// component surfaced. A language with no row keeps the
+/// containing-function behaviour.
+pub(super) const fn declaration_shell_kinds(language: &str) -> &'static [&'static str] {
+    match language.as_bytes() {
+        b"python" => &[
+            "module",
+            "class_definition",
+            "block",
+            "decorated_definition",
+            "decorator",
+        ],
+        b"dart" => &[
+            "source_file",
+            "class_declaration",
+            "class_body",
+            "class_member",
+            "declaration",
+            "constant_constructor_signature",
+            "constructor_signature",
+            "constructor_param",
+            "formal_parameter_list",
+            "optional_formal_parameters",
+            "formal_parameter",
+            "super_formal_parameter",
+            "super",
+            "superclass",
+            "type",
+            "type_identifier",
+            "identifier",
+            "annotation",
+            "enum_declaration",
+            "enum_body",
+            "mixin_declaration",
+            "extension_declaration",
+            "extension_body",
+            "function_signature",
+        ],
         _ => &[],
     }
 }

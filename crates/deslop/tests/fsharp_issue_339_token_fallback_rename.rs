@@ -19,6 +19,8 @@
 
 use serde_json::Value;
 
+use std::path::Path;
+
 use crate::common::signals::{
     assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
 };
@@ -31,8 +33,10 @@ fn renamed_clone() -> String {
 }
 
 /// Asserts the renamed pair keeps full structural and token identity
-/// and routes to the act-now bucket.
-fn assert_rename_invariant(report: &Value) -> Result<()> {
+/// and routes to the act-now bucket. The byte proof reads the same
+/// scanned root the report was computed from — never a separate
+/// checked-in fixture, which would prove nothing about this scan.
+fn assert_rename_invariant(scan_root: &Path, report: &Value) -> Result<()> {
     let clone = expect_cluster_spanning(report, &["parse_a.fs", "parse_b.fs"])?;
     // [PIPELINE-CLUSTER-CLOSURE] The axes and act-now bucket are pair-scoped
     // now. The acceptance on the wire: the renamed pair is admitted,
@@ -42,10 +46,7 @@ fn assert_rename_invariant(report: &Value) -> Result<()> {
     assert_structural_only_contract(clone, "fsharp #339 token fallback");
     assert_no_pair_surface_on_cluster(clone, "fsharp #339 token fallback");
     assert!(
-        !has_verbatim_pair(
-            &fixture("fsharp-339-token-fallback-rename").join("src"),
-            clone
-        )?,
+        !has_verbatim_pair(scan_root, clone)?,
         "the renamed pair must slice to differing bytes: {report:#}"
     );
     Ok(())
@@ -60,6 +61,6 @@ fn issue_339_offset_shifting_rename_keeps_token_signal_and_act_now_bucket() -> R
         ("parse_a.fs".to_owned(), FSHARP_GENUINE_CLONE.to_owned()),
         ("parse_b.fs".to_owned(), renamed_clone()),
     ];
-    let report = report_for(&files, 20)?;
-    assert_rename_invariant(&report)
+    let (_workspace, root, report) = report_for_with_root(&files, 20)?;
+    assert_rename_invariant(&root, &report)
 }

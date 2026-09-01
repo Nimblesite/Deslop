@@ -15,7 +15,7 @@ use std::sync::Arc;
 use super::{
     body_shape::{body_kind_stream, ShapeToken},
     contract_index::{declared_bases, enclosing_container, function_name_node},
-    enclosing_kind, function_kinds,
+    declaration_shell_kinds, enclosing_kind, function_kinds,
     override_marker::carries_override_marker,
     parse_for, spans_multiple_files, ParseCache, Snippet,
 };
@@ -235,8 +235,9 @@ fn polymorphic_subject<'tree>(root: Node<'tree>, snippet: &Snippet<'_>) -> Optio
     if let Some(function) = enclosing_kind(root, snippet.range, kinds) {
         return Some(function);
     }
+    let shell = declaration_shell_kinds(snippet.language);
     let mut functions = Vec::new();
-    if !scaffolding_besides_functions(root, snippet.range, kinds, &mut functions) {
+    if !scaffolding_besides_functions(root, snippet.range, kinds, shell, &mut functions) {
         return None;
     }
     match functions.as_slice() {
@@ -249,13 +250,14 @@ fn polymorphic_subject<'tree>(root: Node<'tree>, snippet: &Snippet<'_>) -> Optio
 /// definitions and vetting the residue. Returns false the moment any
 /// executable residue appears — only import statements, docstrings, and
 /// the declaration shell around a class body may surround the subject.
-/// The container and scaffolding kind names are Python's, the one
-/// language measured for the widened direction; members in other
-/// languages keep the containing-function behaviour.
+/// The shell kinds a range may be walked through are the language's row
+/// of [`declaration_shell_kinds`]; a language with no row keeps the
+/// containing-function behaviour.
 fn scaffolding_besides_functions<'tree>(
     node: Node<'tree>,
     range: ByteRange,
     kinds: &[&str],
+    shell: &[&str],
     functions: &mut Vec<Node<'tree>>,
 ) -> bool {
     if node.end_byte() <= range.start || node.start_byte() >= range.end {
@@ -282,12 +284,14 @@ fn scaffolding_besides_functions<'tree>(
         functions.push(node);
         return true;
     }
+    if shell.contains(&node.kind()) {
+        return named_children(node)
+            .into_iter()
+            .all(|child| {
+                scaffolding_besides_functions(child, range, kinds, shell, functions)
+            });
+    }
     match node.kind() {
-        "module" | "class_definition" | "block" | "decorated_definition" | "decorator" => {
-            named_children(node)
-                .into_iter()
-                .all(|child| scaffolding_besides_functions(child, range, kinds, functions))
-        }
         "expression_statement" => is_docstring(node),
         kind => is_inert_declaration_kind(kind),
     }
@@ -318,3 +322,6 @@ fn is_docstring(node: Node<'_>) -> bool {
             .named_child(0)
             .is_some_and(|child| child.kind() == "string")
 }
+
+#[cfg(test)]
+mod tests;
