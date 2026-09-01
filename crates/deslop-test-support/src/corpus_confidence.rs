@@ -16,6 +16,14 @@ const MASS: &str = "mass";
 const RANK: &str = "rank";
 /// Curated manifest extent floor.
 const CURATED_EXTENT_FIELD: &str = "min_nodes";
+/// Curated manifest rank ceiling, inclusive and optional per entry.
+const CURATED_RANK_FIELD: &str = "max_rank";
+/// Check id for curated exact-copy membership.
+const RECALL: &str = "recall";
+/// Check id for the quality clauses on a curated exact copy.
+const RECALL_QUALITY: &str = "recall_quality";
+/// Check id for curated Type-2 rename recall.
+const TYPE2_RECALL: &str = "type2_recall";
 /// Fields forbidden because they belong to pairs or retired presentation policy.
 const FORBIDDEN_CLUSTER_FIELDS: [&str; 11] = [
     "signals",
@@ -118,12 +126,27 @@ fn check_one_curated_clone(entry: &Value, report: &Value, failures: &mut Vec<Fai
         .find(|(_, cluster)| cluster_shows_span(cluster, &files))
     else {
         failures.push(Failure::new(
-            "recall",
+            RECALL,
             format!("no cluster spans {files:?}. Verified duplicate: {why}"),
         ));
         return;
     };
-    check_rank_ceiling(entry, rank.saturating_add(1), &files, why, failures);
+    check_rank_ceiling(
+        entry,
+        rank.saturating_add(1),
+        &files,
+        why,
+        RECALL_QUALITY,
+        failures,
+    );
+}
+
+/// Where the curated extent floor landed among the spanning clusters.
+enum CuratedExtent {
+    /// Best report position of a spanning cluster at or above the floor.
+    Reached(usize),
+    /// Widest spanning extent found, still short of the floor.
+    Short(u64),
 }
 
 /// Checks one curated Type-2 family without asking a cluster for pair evidence.
@@ -131,40 +154,86 @@ fn check_one_curated_type2(entry: &Value, report: &Value, failures: &mut Vec<Fai
     let files = curated_files(entry);
     let why = entry.get("why").and_then(Value::as_str).unwrap_or("");
     let Some(min_nodes) = entry.get(CURATED_EXTENT_FIELD).and_then(Value::as_u64) else {
-        failures.push(Failure::new("type2_recall", format!("entry for {files:?} lacks `{CURATED_EXTENT_FIELD}`. Hand-verified Type-2 rename: {why}")));
+        failures.push(Failure::new(TYPE2_RECALL, format!("entry for {files:?} lacks `{CURATED_EXTENT_FIELD}`. Hand-verified Type-2 rename: {why}")));
         return;
     };
     if !reports_clone_spanning(report, &files) {
         failures.push(Failure::new(
-            "type2_recall",
+            TYPE2_RECALL,
             format!("no cluster spans {files:?}. Hand-verified Type-2 rename: {why}"),
         ));
         return;
     }
-    let widest = visible_clusters(report)
-        .into_iter()
-        .filter(|cluster| cluster_shows_span(cluster, &files))
-        .map(|cluster| field_u64(cluster, CANONICAL_NODE_COUNT))
-        .max()
-        .unwrap_or_default();
-    if widest < min_nodes {
-        failures.push(Failure::new("type2_recall", format!("widest cluster spanning {files:?} has {widest} canonical nodes; expected at least {min_nodes}. Hand-verified Type-2 rename: {why}")));
+    match curated_extent(report, &files, min_nodes) {
+        CuratedExtent::Short(widest) => failures.push(Failure::new(TYPE2_RECALL, format!("widest cluster spanning {files:?} has {widest} canonical nodes; expected at least {min_nodes}. Hand-verified Type-2 rename: {why}"))),
+        CuratedExtent::Reached(rank) => {
+            check_rank_ceiling(entry, rank, &files, why, TYPE2_RECALL, failures);
+        }
     }
 }
 
-/// Applies an optional curated maximum rank.
+/// Resolves the curated extent clause, carrying the rank of the cluster
+/// that satisfies it.
+///
+/// The rank asserted must belong to the cluster that *is* the curated
+/// duplicate. A sub-extent fragment ranking first cannot answer the
+/// ceiling for the module buried behind it — gh #439 witness 2 is exactly
+/// that shape, a 39-node fragment standing in for the whole-module view.
+fn curated_extent(report: &Value, files: &[String], min_nodes: u64) -> CuratedExtent {
+    let spanning = spanning_extents(report, files);
+    spanning
+        .iter()
+        .filter(|(_, nodes)| *nodes >= min_nodes)
+        .map(|(rank, _)| *rank)
+        .min()
+        .map_or_else(
+            || {
+                CuratedExtent::Short(
+                    spanning
+                        .iter()
+                        .map(|(_, nodes)| *nodes)
+                        .max()
+                        .unwrap_or_default(),
+                )
+            },
+            CuratedExtent::Reached,
+        )
+}
+
+/// One-based report position and canonical extent of every visible
+/// cluster whose shown occurrences span the curated files.
+fn spanning_extents(report: &Value, files: &[String]) -> Vec<(usize, u64)> {
+    visible_clusters(report)
+        .into_iter()
+        .enumerate()
+        .filter(|(_, cluster)| cluster_shows_span(cluster, files))
+        .map(|(index, cluster)| {
+            (
+                index.saturating_add(1),
+                field_u64(cluster, CANONICAL_NODE_COUNT),
+            )
+        })
+        .collect()
+}
+
+/// Applies an optional curated maximum rank, inclusive.
+///
+/// Ranking is the product: a finding a user never scrolls to is a finding
+/// they do not get, so a curated pair reported past its ceiling is a
+/// recall failure and not a number to print (gh #439).
 fn check_rank_ceiling(
     entry: &Value,
     rank: usize,
     files: &[String],
     why: &str,
+    check: &str,
     failures: &mut Vec<Failure>,
 ) {
-    let Some(ceiling) = entry.get("max_rank").and_then(Value::as_u64) else {
+    let Some(ceiling) = entry.get(CURATED_RANK_FIELD).and_then(Value::as_u64) else {
         return;
     };
     if u64::try_from(rank).unwrap_or(u64::MAX) > ceiling {
-        failures.push(Failure::new("recall_quality", format!("verified duplicate spanning {files:?} ranks {rank} below curated ceiling {ceiling}. Verified duplicate: {why}")));
+        failures.push(Failure::new(check, format!("verified duplicate spanning {files:?} ranks {rank}, past its curated ceiling of {ceiling}. Verified duplicate: {why}")));
     }
 }
 

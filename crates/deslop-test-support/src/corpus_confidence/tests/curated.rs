@@ -6,23 +6,64 @@ use super::*;
 const PAIR: [&str; 2] = ["src/a.ts", "src/b.ts"];
 /// Minimum normalised extent curated for the pair.
 const MIN_NODES: u64 = 300;
+/// Rank ceiling curated for the pair.
+const CURATED_CEILING: u64 = 4;
+/// A report position past [`CURATED_CEILING`].
+const RANK_PAST_CEILING: u64 = 5;
+/// A report position inside [`CURATED_CEILING`].
+const RANK_WITHIN_CEILING: u64 = 3;
 
 /// Manifest containing one hand-verified renamed pair.
-fn manifest(min_nodes: Option<u64>) -> Value {
+fn manifest(min_nodes: Option<u64>, max_rank: Option<u64>) -> Value {
     json!({
         "must_find_type2": [{
             "files": PAIR,
             "min_nodes": min_nodes,
+            "max_rank": max_rank,
             "why": "hand-verified renamed module pair"
         }]
     })
 }
 
-/// Runs the curated Type-2 assertion.
+/// Runs the curated Type-2 assertion with no curated rank ceiling.
 fn judge(clusters: &[Value], min_nodes: Option<u64>) -> Vec<Failure> {
+    judge_ranked(clusters, min_nodes, None)
+}
+
+/// Runs the curated Type-2 assertion against a curated rank ceiling.
+fn judge_ranked(clusters: &[Value], min_nodes: Option<u64>, max_rank: Option<u64>) -> Vec<Failure> {
     let mut failures = Vec::new();
-    check_type2_curated_recall(&manifest(min_nodes), &report(clusters), &mut failures);
+    check_type2_curated_recall(
+        &manifest(min_nodes, max_rank),
+        &report(clusters),
+        &mut failures,
+    );
     failures
+}
+
+/// Unrelated clusters filling `count` report positions from `first_rank`,
+/// so a curated pair can be placed at a chosen position in report order.
+fn padding(first_rank: u64, count: u64) -> Vec<Value> {
+    (0..count)
+        .map(|offset| {
+            let rank = first_rank.saturating_add(offset);
+            let left = format!("src/pad{rank}a.ts");
+            let right = format!("src/pad{rank}b.ts");
+            spanning(
+                &format!("pad{rank}"),
+                MIN_NODES,
+                rank,
+                &[left.as_str(), right.as_str()],
+            )
+        })
+        .collect()
+}
+
+/// Report order placing the curated pair at `position` with `nodes` extent.
+fn pair_at(position: u64, nodes: u64) -> Vec<Value> {
+    let mut clusters = padding(1, position.saturating_sub(1));
+    clusters.push(spanning("pair", nodes, position, &PAIR));
+    clusters
 }
 
 #[test]
@@ -102,4 +143,60 @@ fn empty_curated_list_asserts_nothing() {
     let mut failures = Vec::new();
     check_type2_curated_recall(&json!({"must_find_type2": []}), &report(&[]), &mut failures);
     assert!(failures.is_empty());
+}
+
+/// [CORPUS-RECALL] Ranking is the product. A curated rename reported at
+/// full extent but buried past its curated ceiling is a finding the user
+/// never scrolls to — gh #439 witness 2 sat at rank 1628 of 2155 while
+/// `type2_recall` stayed green, because the check read no rank at all.
+#[test]
+fn a_curated_pair_ranked_past_its_ceiling_is_not_recall() {
+    assert_only_failure(
+        &judge_ranked(
+            &pair_at(RANK_PAST_CEILING, MIN_NODES),
+            Some(MIN_NODES),
+            Some(CURATED_CEILING),
+        ),
+        "type2_recall",
+        "a curated rename buried past its curated ceiling is not recall",
+        "ranks 5",
+        "the failure names the rank the curated pair reached",
+    );
+}
+
+/// The ceiling is inclusive, and a pair inside it is clean recall.
+#[test]
+fn a_curated_pair_inside_its_ceiling_passes() {
+    assert!(judge_ranked(
+        &pair_at(RANK_WITHIN_CEILING, MIN_NODES),
+        Some(MIN_NODES),
+        Some(CURATED_CEILING),
+    )
+    .is_empty());
+}
+
+/// The rank asserted must be the rank of the cluster that actually reaches
+/// the curated extent. A sub-extent fragment ranking first must not answer
+/// the ceiling for the module buried behind it — that is gh #439 witness 2
+/// exactly, where a 39-node fragment stood in for the whole-module view.
+#[test]
+fn a_fragment_ranked_first_does_not_answer_the_ceiling_for_the_buried_module() {
+    let mut clusters = vec![spanning("fragment", MIN_NODES.saturating_sub(1), 1, &PAIR)];
+    clusters.extend(padding(2, RANK_PAST_CEILING.saturating_sub(2)));
+    clusters.push(spanning("module", MIN_NODES, RANK_PAST_CEILING, &PAIR));
+    assert_only_failure(
+        &judge_ranked(&clusters, Some(MIN_NODES), Some(CURATED_CEILING)),
+        "type2_recall",
+        "the ceiling must be judged on the cluster that reaches the curated extent",
+        "ranks 5",
+        "the failure names the buried module's rank, not the fragment's",
+    );
+}
+
+/// An entry curating no ceiling still asserts membership and extent — the
+/// ceiling is optional per entry, because only a human-ranked pair earns a
+/// rank assertion.
+#[test]
+fn an_entry_curating_no_ceiling_still_passes_on_extent() {
+    assert!(judge(&pair_at(RANK_PAST_CEILING, MIN_NODES), Some(MIN_NODES)).is_empty());
 }

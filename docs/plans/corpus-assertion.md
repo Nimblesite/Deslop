@@ -74,9 +74,9 @@ Seven open false-positive issues (#71 #79 #103 #283 #284 #285 #336) all say *"th
 
 [CORPUS-CI] sizes the scheduled slice to finish in about a minute. The summary is supposed to name what was skipped. Nothing asserts it does, so a three-repo run reads as a nine-repo pass.
 
-### L9. #439 — `type2_recall` curates paths but not extent — CLOSED by [CORPUS-RECALL]
+### L9. #439 — `type2_recall` curated paths but neither extent nor rank — CLOSED by [CORPUS-RECALL]
 
-`check_one_curated_type2` asks two questions: does a visible cluster span the curated files, and is it gate-vouched. Neither says the cluster *is* the curated duplicate. A curated entry claims "these two files are one module written twice"; any cluster touching both files satisfies it, however small.
+`check_one_curated_type2` used to ask one question: does a visible cluster span the curated files. That does not say the cluster *is* the curated duplicate. A curated entry claims "these two files are one module written twice"; any cluster touching both files satisfies it, however small.
 
 Measured on tokio. At `7bb29d4`, deleting the curated 395-node whole-module rename from the report leaves the check green — a 31-node `as_raw_fd` accessor family spanning both curated files *and eleven unrelated ones* answers for it. At `7332719` the same pair was reported only as a 39-node fragment ranked 1628 of 2155, a finding no user scrolls to, and the check was green there too. A recall check that cannot tell the module from a five-line boilerplate sprawl is not measuring recall.
 
@@ -84,6 +84,7 @@ Measured on tokio. At `7bb29d4`, deleting the curated 395-node whole-module rena
 
 - [x] **#439** teach `check_one_curated_type2` the extent predicate; the three pins in `corpus_confidence/tests/curated.rs` run un-`#[ignore]`d. An entry curating no `min_nodes` fails, and `corpus_manifest_contract.rs::assert_curated_extent` refuses such a manifest before any scan is paid for.
 - [x] Curate a measured `min_nodes` into the three existing entries (`nest.json` ×2, `tokio.json` ×1). Measured with this tree's `target/release/deslop` against the pinned clones under the gate's exact scan flags: tokio stderr/stdout rendered `canonical_node_count` 348 (348 and 395 on two earlier builds of the same commit — floor **300**, below measured drift, ~10× the 31-node accessor family); nest shutdown hooks rendered 255, with a 44-node sprawl cluster spanning the same pair plus three unrelated files in the same report (floor **200**); the nest exception family rendered 70 across its 17 stamped files (floor **50**, above the 31–39-node boilerplate scale the witnesses set, under drift for a genuinely small module).
+- [x] Apply `max_rank` to `must_find_type2` as `check_curated_recall` already does for `must_find`, and judge it on the cluster that reaches `min_nodes` — never on the first cluster touching both paths. In the pinned tokio report five smaller clusters span the curated pair ahead of the module view, the worst a 30-node family across 80 files at rank **1**, so a ceiling read off path overlap alone would assert nothing. The module view measured rank **144 of 2019**; ceiling **400**. Verified to bite: tightened to 100, `corpus_tokio_rust` fails naming rank 144.
 
 ## Part 2 — Assert a fuckload
 
@@ -94,7 +95,7 @@ The target state: **every repository, every run, asserts every row below.** Ids 
 | `files_analysed` | the scan parsed a plausible number of files, never zero | `expect_files_min` | ✅ |
 | `recall` | curated byte-identical clones are reported | `must_find` | 🟡 span only (L5) |
 | `recall_quality` | every curated pair is admitted, every curated occurrence is **shown**, and the resulting cluster stays within `max_rank` by mass | `must_find` | ❌ missing |
-| `type2_recall` | curated renames reported, gate-vouched, shown, at the curated `min_nodes` extent | `must_find_type2` | ✅ |
+| `type2_recall` | curated renames reported, shown, at the curated `min_nodes` extent and within `max_rank` | `must_find_type2` | ✅ (no evidence clause — gh #488) |
 | `precision` | curated non-duplicates never share a cluster | `must_not_cluster` | ❌ missing (L4) |
 | `boilerplate_rank` | framework-mandated shapes never rank first | `must_not_rank_first` | 🛑 unsound (L3) |
 | `data_table_visibility` | curated data-table shapes follow the configured detection-time visibility rule without changing survivor mass | none | ✅ |
@@ -116,12 +117,12 @@ The target state: **every repository, every run, asserts every row below.** Ids 
 
 ### B. Strengthen recall to the Type-2 bar — `[CORPUS-RECALL]` — LANDED
 
-- [x] `check_curated_recall` replaces the span-only `check_recall` and splits the verdict in two: `recall` (some cluster spans the paths) and `recall_quality` (every curated byte-identical endpoint relation is classified `identical`, every curated occurrence is shown in that component, and it is within `max_rank`).
-- [x] `identical` is the *only* admissible bucket, not merely an act-now one — [CORPUS-RECALL] defines `must_find` as byte-for-byte verified, so anything else is the engine contradicting a verified fact about the source. No prose is parsed to decide it.
+- [x] `check_curated_recall` replaces the span-only `check_recall` and splits the verdict in two: `recall` (some cluster spans the paths) and `recall_quality` (every curated occurrence is shown in that component, and it is within `max_rank`).
+- [ ] `identical` is the *only* admissible classification — [CORPUS-RECALL] defines `must_find` as byte-for-byte verified, so anything else is the engine contradicting a verified fact about the source. **Not asserted today:** the mass-only wire carries no classification on a cluster and the rendered report has no pair record to read one from. Tracked as gh #488.
 - [x] Curated occurrences must be shown, through the same `cluster_shows_span` predicate as precision and `type2_recall`.
 - [x] Optional `max_rank` per entry, inclusive.
 - [x] Six unit tests in `corpus_confidence/tests/recall.rs`, including all four demotion buckets and the half-hidden pair — each of them a report the old span-only check passed.
-- [ ] **`max_rank` values** — no entry curates one yet. That is item F.
+- [x] **`max_rank` values** — curated for `must_find_type2`: tokio **400**, nest **100** and **60**, each measured against the pinned clone under the gate's scan flags. `must_find` still curates none; that half stays item F.
 
 ### C. 🛑 #401 — replace the text-matching ranking rule — LANDED
 

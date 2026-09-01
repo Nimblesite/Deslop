@@ -20,7 +20,8 @@
         "packages/core/hooks/before-app-shutdown.hook.ts",
         "packages/core/hooks/on-app-shutdown.hook.ts"
       ],
-      "min_nodes": 200
+      "min_nodes": 200,
+      "max_rank": 100
     },
     {
       "why": "The built-in HTTP exception classes are one class body stamped out once per status code. Each extends HttpException, destructures extractDescriptionAndOptionsFrom(descriptionOrOptions), and calls super(HttpException.createBody(objectOrError, description!, HttpStatus.X), HttpStatus.X, httpExceptionOptions).",
@@ -29,10 +30,11 @@
         "packages/common/exceptions/bad-request.exception.ts",
         "packages/common/exceptions/not-found.exception.ts"
       ],
-      "min_nodes": 50
+      "min_nodes": 50,
+      "max_rank": 60
     }
   ],
-  "must_find_type2_status": "CURATED. Both entries were hand-verified by diffing the two files and confirming the only differences are renamed identifiers and literals - Type-2 by definition, and not byte-identical, so neither can reach the `identical` bucket. A miss on either is a false negative on proven ground truth. min_nodes values are floors, not pins, measured on this tree's release binary against the pinned sha with the gate's scan flags: the shutdown-hook module view rendered canonical_node_count 255 (floor 200 leaves single-measurement drift headroom and is 4.5x the 44-node sprawl cluster that spans the same pair plus three unrelated files); the exception-family view rendered 70 across its 17 stamped files (floor 50 leaves drift headroom on a genuinely small module while staying above the five-line boilerplate scale gh #439 documents at 31-39 nodes).",
+  "must_find_type2_status": "CURATED. Both entries were hand-verified by diffing the two files and confirming the only differences are renamed identifiers and literals - Type-2 by definition, and not byte-identical, so neither can reach the `identical` bucket. A miss on either is a false negative on proven ground truth. min_nodes values are floors, not pins, measured on this tree's release binary against the pinned sha with the gate's scan flags: the shutdown-hook module view rendered canonical_node_count 255 (floor 200 leaves single-measurement drift headroom and is 4.5x the 44-node sprawl cluster that spans the same pair plus three unrelated files); the exception-family view rendered 70 across its 17 stamped files (floor 50 leaves drift headroom on a genuinely small module while staying above the five-line boilerplate scale gh #439 documents at 31-39 nodes). max_rank ceilings are judged on the cluster that reaches min_nodes, not on the first cluster touching both paths. Measured in the same run, of 950 visible clusters: the shutdown-hook module view ranked 30 (ceiling 100) and the exception family ranked 17 (ceiling 60). Both are single measurements, so each ceiling carries roughly 3x headroom - wider in proportion than tokio's, which has three measurements behind it.",
   "expect_files_min": 1290,
   "expect_clusters": {
     "min": 550,

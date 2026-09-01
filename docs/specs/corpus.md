@@ -40,13 +40,19 @@ An absent bound is not a repository with no opinion about its own size — it is
 `must_find` lists duplicates a human confirmed byte-for-byte, each with the `diff` that proved it. Two check ids judge it:
 
 - `recall` — some cluster spans every path in the entry. Anything less is a false negative on code known to be duplicated.
-- `recall_quality` — every curated byte-identical endpoint relation is classified `identical`, every curated occurrence is shown in the same component, and that component is within the entry's optional `max_rank` ceiling.
+- `recall_quality` — every curated occurrence is shown in the same component, and that component is within the entry's optional `max_rank` ceiling.
 
-`recall` alone used to be the whole assertion. A 137-line byte-identical pair that compared as `loosely_similar`, hid one of its two occurrences and landed in a component ranked #900 satisfied it completely. The byte-identical case is the easier proof and must not hold the weaker contract. `identical` is the only classification a byte-identical pair may reach; that classification is asserted on the exact curated endpoints, never on their closure component. `max_rank` is optional per entry, because only the entries a human ranked get a rank assertion — ranking is the product, and a finding a user never scrolls to is a finding they do not get.
+`recall` alone used to be the whole assertion. A 137-line byte-identical pair that hid one of its two occurrences and landed in a component ranked #900 satisfied it completely. The byte-identical case is the easier proof and must not hold the weaker contract. `max_rank` is optional per entry, because only the entries a human ranked get a rank assertion — ranking is the product, and a finding a user never scrolls to is a finding they do not get.
+
+`identical` is the only classification a byte-identical pair may reach, and that is **not asserted today** — the mass-only cluster wire carries no classification, and the rendered report carries no pair record to read one from. Tracked as gh #488.
 
 **An empty `must_find` asserts nothing, and the suite says so out loud** — such a run prints `ACCURACY UNASSERTED` and has proven only that the scan fit its budget. A green corpus test is not evidence of accuracy unless the repository has curated entries. An entry that lists no files fails rather than passing vacuously.
 
-`must_find_type2` is the same contract for renames: each human-verified pair carries `verified`, `why`, `files`, and `min_nodes`. The entry passes only when that exact pair is admitted with the required structural and content evidence, both curated occurrences are visible in the same closure component, and the reported extent reaches the node floor. Assertions read the pair record for evidence and the cluster record for visibility, extent, and mass; they never read pair scores from a cluster.
+`must_find_type2` is the same contract for renames: each human-verified pair carries `verified`, `why`, `files`, a required `min_nodes` and an optional `max_rank`. The entry passes only when some cluster spans the curated paths, both curated occurrences are visible in the same component, the widest such component reaches the `min_nodes` floor, and the component that reaches that floor sits within `max_rank`.
+
+The rank clause is judged on the component that *is* the curated duplicate, never on the first one touching both paths. In the pinned tokio report five smaller clusters span the curated pair ahead of the module view — the worst a 30-node family across 80 files at rank 1 — so a ceiling read off path overlap alone would assert nothing, in the rank dimension exactly as the extent clause found for size. An entry that curates no `min_nodes` fails rather than passing on a path overlap, the same stance [CORPUS-SCOPE] takes on a missing `expect_files_min`.
+
+Admission evidence is **not asserted today**: a cluster carries none — the mass-only wire forbids it — and the rendered report has no pair record, so no check can tell an admitted rename from any other component of the same extent. Tracked as gh #488.
 
 `must_find_type2_status` states the curation position in words and must not contradict the list. Because an empty list silently asserts nothing, the manifests are themselves under test: curated Type-2 ground truth must exist in at least two languages, and every entry must name at least two distinct files with its human evidence and its `min_nodes` extent attached.
 

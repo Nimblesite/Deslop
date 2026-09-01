@@ -20,10 +20,11 @@
         "tokio/src/io/stderr.rs",
         "tokio/src/io/stdout.rs"
       ],
-      "min_nodes": 300
+      "min_nodes": 300,
+      "max_rank": 400
     }
   ],
-  "must_find_type2_status": "CURATED. Hand-verified by diffing the two files: the differences are renamed identifiers plus doc prose, so this is Type-2 and not byte-identical - it cannot reach the `identical` bucket. This is the Rust half of the curated Type-2 ground truth; nest carries the TypeScript half, so a language-specific recall regression cannot hide behind the other. min_nodes is a floor, not a pin: the whole-module view rendered canonical_node_count 348 on this tree's release binary and 395 on an earlier build of the same pinned sha, so 300 sits below measured drift while staying an order of magnitude above the 31-node accessor boilerplate and 39-node fragment that once answered for the pair (gh #439).",
+  "must_find_type2_status": "CURATED. Hand-verified by diffing the two files: the differences are renamed identifiers plus doc prose, so this is Type-2 and not byte-identical - it cannot reach the `identical` bucket. This is the Rust half of the curated Type-2 ground truth; nest carries the TypeScript half, so a language-specific recall regression cannot hide behind the other. min_nodes is a floor, not a pin: the whole-module view rendered canonical_node_count 348 on this tree's release binary and 395 on an earlier build of the same pinned sha, so 300 sits below measured drift while staying an order of magnitude above the 31-node accessor boilerplate and 39-node fragment that once answered for the pair (gh #439). max_rank is a ceiling with the same drift headroom, and it is judged on the cluster that reaches min_nodes, never on the first cluster touching both paths: five smaller clusters span this pair ahead of the module view in the same report, the worst a 30-node family across 80 files at rank 1, so a ceiling read off path overlap alone would assert nothing. The module view itself measured rank 144 of 2019 on this tree's release binary, 136 of 1984 and 78 of 2249 on two earlier builds of the same pinned sha; 400 clears the worst of those by 2.8x and still fails the 1628-of-2155 burial that gh #439 witness 2 records.",
   "expect_files_min": 560,
   "expect_clusters": {
     "min": 1280,
