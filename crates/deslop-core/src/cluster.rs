@@ -297,6 +297,8 @@ fn collapse_overlapping_single_file(
             index,
             range: member.byte_range,
             declaration: scopes.enclosing(&member),
+            aligned: scopes.aligned_function(&member).is_some(),
+            crosses_boundary: scopes.crosses_function_boundary(&member),
         };
         match runs.last_mut() {
             Some(run) if run.reaches(candidate.range) => run.absorb(candidate),
@@ -318,6 +320,14 @@ struct Occurrence {
     /// The authored declaration it sits strictly inside, when the
     /// grammar names one ([`DeclarationScopes::enclosing`]).
     declaration: Option<ByteRange>,
+    /// The occurrence sits exactly on an authored function — its range
+    /// equals a function-like declaration's ([
+    /// `DeclarationScopes::aligned_function`]).
+    aligned: bool,
+    /// The occurrence's range strictly spans a function-like
+    /// declaration's boundary ([
+    /// `DeclarationScopes::crosses_function_boundary`]).
+    crosses_boundary: bool,
 }
 
 impl Occurrence {
@@ -407,6 +417,20 @@ impl OverlapRun {
     /// pair to the other module fails admission), so the exact sibling
     /// window remains the only view of the region.
     fn displaces(&self, candidate: &Occurrence) -> bool {
+        // An exact authored-function view outranks a wider view that
+        // crosses a declaration boundary: under
+        // [PIPELINE-CLUSTER-EXACT-SCOPE] a view that is the declaration
+        // is the enclosing authored scope, so the function is what the
+        // author wrote and the crossing view welds unrelated code — a
+        // divergent namespace, sibling members — onto the clone
+        // (root cause of gh #486). Same-kind views keep the width
+        // contest below: an interior window is not fn-aligned, and an
+        // exact function never displaces another exact function by
+        // this rule (each candidate is compared only against the
+        // incumbent representative).
+        if candidate.aligned && self.representative.crosses_boundary {
+            return true;
+        }
         if self.representative.encloses(candidate)
             && self.representative.shares_declaration_with(candidate)
         {

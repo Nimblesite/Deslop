@@ -1,24 +1,30 @@
-//! End-to-end regression coverage for the categorisation half of #336
-//! ([RANK-CATEGORY], [CLONE-NOISE-LITERAL-TABLE]).
+//! End-to-end regression coverage for the F# data-table false positive
+//! ([CLONE-NOISE-LITERAL-TABLE],
+//! [FUSED-CONTENT-GATE], [RANK-MASS-SUM]).
 //!
-//! [RANK-CATEGORY] says a detection-time finding kind may drive an
-//! explicit exclusion *before* ranking but is not carried as
-//! clone-cluster similarity metadata, and [RANK-STRUCTURAL-ONLY]
-//! retired the `data_clone_weight` / `data_clones` ranking modes:
-//! weight means mass and nothing else. The `category` wire label and
-//! the data-table policy are therefore gone.
+//! The defect was a false positive: an F# integer array literal family —
+//! same 24-slot shape, different values in every file — ranked #1 on
+//! `dotnet/fsharp`, above every genuine clone. [CLONE-NOISE-LITERAL-TABLE]
+//! names that report as the defect, and [FUSED-CONTENT-GATE] states the
+//! rule that closes it: a data table's literals all differ, so a
+//! shape-saturated table pair "falls low" on content and is not admitted.
+//! [RANK-MASS-SUM] then orders whatever *is* admitted by mass alone.
 //!
-//! What this suite still pins, at full strength, on the mass-only wire:
-//! - the distinct-value F# table family and the genuine byte-identical
-//!   clone both publish, ranked by pure mass ([RANK-MASS-SUM]);
-//! - the table family is byte-distinct (same shape, different values —
-//!   never a copy-paste of itself) and the genuine clone is byte-proven;
+//! What this suite pins on the mass-only wire:
+//! - the genuine byte-identical clone is the report's first cluster,
+//!   byte-proven, spanning exactly its two files;
+//! - no cluster touching a distinct-value table ranks at or above it —
+//!   the original report, asserted as the bug it is;
+//! - two tables that share no literal value never weld: with zero
+//!   agreement and nothing to rename, no admission route can carry them;
+//! - any table cluster that does publish is byte-distinct, and every
+//!   cluster keeps the structural-only contract;
 //! - the retired `data_clones` / `data_clone_weight` knobs still parse
 //!   (backwards compatibility) but must not change the report;
 //! - the #190 verbatim escape hatch: a byte-for-byte copied table is
 //!   proven duplication and is byte-proven like any copy.
 
-use std::{collections::BTreeSet, path::PathBuf};
+use std::path::PathBuf;
 
 use anyhow::Result;
 use serde_json::Value;
@@ -31,26 +37,38 @@ use crate::common::{
     *,
 };
 
-/// Every distinct-value table file the #336 corpus stages. All four hold
-/// the same 24-slot array shape and differ only in their values, so they
-/// are one family and must publish as one.
-const TABLE_FILES: [&str; 4] = ["tables_0.fs", "tables_1.fs", "tables_2.fs", "tables_3.fs"];
+/// The genuine clone: two byte-identical F# modules.
+const CLONE_FILES: [&str; 2] = ["parse_a.fs", "parse_b.fs"];
 
-/// How many members the table family owes the report.
-const TABLE_FILE_COUNT: usize = TABLE_FILES.len();
+/// Where the genuine clone must sit on the wire: first, ahead of every
+/// table. Report ranks are one-based.
+const CLONE_RANK: u64 = 1;
+
+/// Table pairs whose 24 values are pairwise disjoint. `fsharp_table_file`
+/// fills slot `i` of seed `s` with `(37s + 13i) mod 97`; since
+/// `13⁻¹ ≡ 15 (mod 97)` each file is the window `13·[k, k+23]` with
+/// `k = 0, 70, 43, 16` for seeds `0..3`, and only the seed-0 and seed-3
+/// windows overlap (eight values). Every other pair shares nothing, so
+/// its content agreement is the module keyword and the `lookup` name —
+/// far below every admission floor ([FUSED-CONTENT-GATE]).
+const DISJOINT_TABLE_PAIRS: [(&str, &str); 5] = [
+    ("tables_0.fs", "tables_1.fs"),
+    ("tables_0.fs", "tables_2.fs"),
+    ("tables_1.fs", "tables_2.fs"),
+    ("tables_1.fs", "tables_3.fs"),
+    ("tables_2.fs", "tables_3.fs"),
+];
 
 /// True for the distinct-value table files in the shared #336 corpus.
 fn is_table_file(name: &str) -> bool {
     name.starts_with("tables_")
 }
 
-/// The files carried by the published table-family cluster, empty when
-/// no cluster touches a table file at all.
-fn table_family_files(report: &Value) -> BTreeSet<String> {
-    rank_where(report, is_table_file)
-        .and_then(|rank| clusters(report).get(rank).cloned())
-        .map(|cluster| cluster_file_set(&cluster))
-        .unwrap_or_default()
+/// Whether the cluster carries a distinct-value table file.
+fn touches_table(cluster: &Value) -> bool {
+    cluster_file_set(cluster)
+        .iter()
+        .any(|name| is_table_file(name))
 }
 
 /// Renders the shared #336 corpus with an optional `.deslop.toml` body.
@@ -62,48 +80,54 @@ fn tables_report(config: Option<&str>) -> Result<(tempfile::TempDir, PathBuf, Va
     report_for_with_root(&files, 20)
 }
 
-// [RANK-MASS-SUM] / #336: the distinct-value F# array family (four
-// members) and the genuine two-copy logic clone both publish; mass
-// ranks the four-member table family first (`24 × 3 = 72` vs
-// `22 × 1 = 44`), and each cluster is byte-honest on the wire.
+/// [CLONE-NOISE-LITERAL-TABLE] / [RANK-MASS-SUM]: the genuine
+/// clone is the first cluster and no distinct-value table outranks it.
+/// [FUSED-CONTENT-GATE]: tables sharing no literal never weld. Each
+/// cluster is byte-honest on the wire.
 #[test]
 fn fsharp_numeric_tables_and_clone_publish_ranked_by_mass() -> Result<()> {
     let (_workspace, root, report) = tables_report(None)?;
-    let table = rank_where(&report, is_table_file);
-    let clone = rank_where(&report, |name| name.starts_with("parse_"));
-    assert!(
-        table.is_some() && clone.is_some(),
-        "both the table family and the genuine clone must publish: {report:#}"
-    );
+    let clone = expect_cluster_spanning(&report, &CLONE_FILES)?;
     assert_eq!(
-        table_family_files(&report),
-        TABLE_FILES
-            .iter()
-            .map(|name| (*name).to_owned())
-            .collect::<BTreeSet<String>>(),
-        "[RANK-MASS-SUM]: all {TABLE_FILE_COUNT} distinct-value tables are one shape-identical \
-         family. Publishing a subset is a false negative — the members that share \
-         no literal with any sibling are the ones dropped, and mass computed over \
-         a truncated family cannot rank correctly: {report:#}"
+        field(clone, "rank").as_u64(),
+        Some(CLONE_RANK),
+        "[RANK-MASS-SUM]: the byte-identical clone is the heaviest \
+         genuine finding and must lead the report: {report:#}"
     );
     assert!(
-        clone > table,
-        "[RANK-MASS-SUM]: the four-member table family (rank {table:?}) \
-         out-ranks the two-copy clone (rank {clone:?}) by pure mass: {report:#}"
+        has_verbatim_pair(&root, clone)?,
+        "the genuine clone is byte-proven from the fixture source: {clone:#}"
     );
     for cluster in clusters(&report) {
-        let is_table = cluster_file_set(cluster)
-            .iter()
-            .any(|name| is_table_file(name));
-        assert_eq!(
-            has_verbatim_pair(&root, cluster)?,
-            !is_table,
-            "the table family is byte-distinct (same shape, different values) \
-             and the clone is byte-proven — the byte truth must match which \
-             cluster this is: {cluster:#}"
-        );
+        if touches_table(cluster) {
+            assert_table_cluster_is_honest(&root, cluster)?;
+        }
         assert_structural_only_contract(cluster, "fsharp #336");
         assert_no_pair_surface_on_cluster(cluster, "fsharp #336");
+    }
+    Ok(())
+}
+
+/// One published table cluster: it ranks below the clone, it is
+/// byte-distinct, and it never welds two tables that share no value.
+fn assert_table_cluster_is_honest(root: &PathBuf, cluster: &Value) -> Result<()> {
+    assert!(
+        field(cluster, "rank").as_u64() > Some(CLONE_RANK),
+        "[CLONE-NOISE-LITERAL-TABLE]: a distinct-value table family \
+         ranking at or above the genuine clone is the reported defect: {cluster:#}"
+    );
+    assert!(
+        !has_verbatim_pair(root, cluster)?,
+        "the table family is byte-distinct — same shape, different values — \
+         and must not read as a copy: {cluster:#}"
+    );
+    let files = cluster_file_set(cluster);
+    for (left, right) in DISJOINT_TABLE_PAIRS {
+        assert!(
+            !(files.contains(left) && files.contains(right)),
+            "[FUSED-CONTENT-GATE]: {left} and {right} share no literal value; a \
+             cluster welding them admitted a pair with no content support: {cluster:#}"
+        );
     }
     Ok(())
 }

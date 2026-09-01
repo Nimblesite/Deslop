@@ -2,7 +2,9 @@
 
 namespace Ledger;
 
-public sealed class LedgerReconciler
+public sealed record LedgerBetaCursor(int Offset);
+
+public sealed class LedgerBeta
 {
     public static long ReconcileEntries(long[] entries, long floor)
     {

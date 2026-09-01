@@ -49,6 +49,7 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 - **Many user interactions per test, MANY assertions per user interaction**
 - **Every confirmed false positive or false negative earns a fixture** that would have caught it.
 - **Never delete a failing test, never skip one, never remove an assertion.** Reducing assertiveness is prohibited. Add failing tests for broken or missing functionality.
+- **Avoid EXPLICIT regression test names / file names** Put regression tests in logical groupings with other tests, but you can subtley mention the gh issue number
 - **Unit tests are only for isolating behavior of functions**
 - **Meaningful assertions only.** `assert!(true)` is banned. Assert positive, human-readable values — not the absence of AI-style labels.
 - **No try/catch that swallows an error and then asserts success.**
@@ -63,6 +64,7 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 - **NAMED CONSTANTS - not literals** Give values names and REUSE them. THIS INCLUDES TESTS. TESTS MUST LEVERAGE NAMED CONSTANTS; NOT RAW STRINGS
 - **Calcs like percentage calc only exist in ONE PLACE: Rust** ZERO calculations outside the core Rust code. E.g. no calcs in Typescript. Any calcs outside Rust is a HARD VIOLATION.
 - **All threshold numbers are configurable** Define the defaults as constants but allow the user to override these in the config
+- **Never reference gh issues in code** Reference SPEC IDS only. A test can refer to a gh issue only if it's an explicit regression
 - **Act autonomously.** Do not stop for confirmation — except where the strict accuracy rule says STOP. Record assumptions and continue.
 - **Aggressively DRY.** This tool detects duplication; its own codebase must be exemplary. Move code, don't copy. Copying files is prohibited.
 - **Tree-sitter only.** Regex on source code or structured data is prohibited.
@@ -89,10 +91,10 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 
 ## Documentation
 
+- ***Spec ids must be cross referenced across tests, code specs and plans ALWAYS***
 - Specs are for HUMANS first and foremost. If you have to add jargon, add a separate "For AI" section
 - On the point above, MAKE SPECS READABLE TO HUMANs. Less jargon
 - Each spec section must have a unique, heirarchical non-numeric spec Id
-- Spec ids must be cross referenced across tests, code specs and plans
 - Code, specs, and tests MUST agree. Where they don't, 🛑 STOP and report the issue to the user
 - Remove line feeds from text that is only there to enforce text wrapping
 - Don't use line endings to force word wrap. Allow text to wrap naturally.

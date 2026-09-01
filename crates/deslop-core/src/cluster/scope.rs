@@ -63,6 +63,47 @@ impl<'trees, L: BuildHasher> DeclarationScopes<'trees, L> {
             .then(|| smallest_enclosing(tree, member.byte_range, kinds))
             .flatten()
     }
+
+    /// The full byte range of the function-like declaration whose range
+    /// **equals** the occurrence's range, when the grammar names one.
+    ///
+    /// An occurrence aligned like this sits exactly on an authored
+    /// function — modifier through closing brace — so it names the
+    /// function the author wrote rather than an arbitrary window. Under
+    /// [PIPELINE-CLUSTER-EXACT-SCOPE] a view that is the declaration is
+    /// treated as the enclosing authored scope (root cause of gh #486);
+    /// `None` marks windows, wrappers and whole files.
+    ///
+    /// This is one side of a mirrored bucket: the sibling file's
+    /// collapse runs over the same fingerprints, so an exact function
+    /// view elects the same alignment in every occurrence of the pair.
+    pub(super) fn aligned_function(&self, member: &Fingerprint) -> Option<ByteRange> {
+        let tree = self.trees.get(&member.file_id)?;
+        let language = self.languages.get(&member.file_id)?;
+        let kinds = function_kinds(language);
+        (!kinds.is_empty())
+            .then(|| aligned_function_at(tree, member.byte_range, kinds))
+            .flatten()
+    }
+
+    /// Whether the occurrence's range strictly contains a function-like
+    /// declaration — that is, it crosses that declaration's boundary
+    /// without sitting on it.
+    ///
+    /// A whole-file or class-body view crosses the boundary of every
+    /// function it spans; an exact function view crosses nothing (a
+    /// nested function inside it is also a boundary it straddles, which
+    /// conservatively keeps the width contest for that view).
+    pub(super) fn crosses_function_boundary(&self, member: &Fingerprint) -> bool {
+        let Some(tree) = self.trees.get(&member.file_id) else {
+            return false;
+        };
+        let Some(language) = self.languages.get(&member.file_id) else {
+            return false;
+        };
+        let kinds = function_kinds(language);
+        !kinds.is_empty() && crosses_function_boundary_at(tree, member.byte_range, kinds)
+    }
 }
 
 /// The smallest descendant of `node` whose kind is in `kinds` and whose
@@ -80,4 +121,40 @@ fn smallest_enclosing(
         .iter()
         .find_map(|child| smallest_enclosing(child, range, kinds));
     deeper.or_else(|| kinds.contains(&node.kind).then_some(node.byte_range))
+}
+
+/// The range of the deepest descendant of `node` whose kind is in
+/// `kinds` and whose range **equals** `range`.
+fn aligned_function_at(
+    node: &NormalizedNode,
+    range: ByteRange,
+    kinds: &[&str],
+) -> Option<ByteRange> {
+    if node.byte_range.start > range.start || node.byte_range.end < range.end {
+        return None;
+    }
+    let deeper = node
+        .children
+        .iter()
+        .find_map(|child| aligned_function_at(child, range, kinds));
+    deeper.or_else(|| {
+        (kinds.contains(&node.kind) && node.byte_range == range).then_some(node.byte_range)
+    })
+}
+
+/// Whether any descendant of `node` whose kind is in `kinds` lies
+/// strictly inside `range` — contained by it without coinciding.
+fn crosses_function_boundary_at(node: &NormalizedNode, range: ByteRange, kinds: &[&str]) -> bool {
+    if node.byte_range.start >= range.end || node.byte_range.end <= range.start {
+        return false;
+    }
+    let strictly_inside = node.byte_range.start >= range.start
+        && node.byte_range.end <= range.end
+        && (node.byte_range.start > range.start || node.byte_range.end < range.end);
+    if kinds.contains(&node.kind) && strictly_inside {
+        return true;
+    }
+    node.children
+        .iter()
+        .any(|child| crosses_function_boundary_at(child, range, kinds))
 }
