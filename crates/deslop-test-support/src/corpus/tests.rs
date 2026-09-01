@@ -6,9 +6,13 @@
 //! assertion in `corpus_repos.rs`, because a harness that cannot launch the
 //! scan never reaches them.
 
-use std::{env::consts::EXE_SUFFIX, path::Path};
+use std::{
+    env::consts::EXE_SUFFIX,
+    path::{Path, MAIN_SEPARATOR, MAIN_SEPARATOR_STR},
+};
 
 use anyhow::Result;
+use serde_json::{json, Value};
 
 use super::{measurement, peak_rss_mb, release_binary_path, Measurement};
 
@@ -114,4 +118,99 @@ fn the_harness_measures_peak_rss_on_this_platform() {
             script.display()
         ),
     }
+}
+
+/// The separator every rendered report path carries.
+const WIRE_SEPARATOR: char = '/';
+
+/// The forward-slash form every `corpus/*.json` manifest curates, and the
+/// form every rendered report path must carry on every platform.
+const CURATED_PAIR: [&str; 2] = ["tokio/src/io/stderr.rs", "tokio/src/io/stdout.rs"];
+
+/// The curated files as the checks receive them.
+fn curated_files() -> Vec<String> {
+    CURATED_PAIR.iter().map(ToString::to_string).collect()
+}
+
+/// One visible cluster spanning the curated pair, in wire form.
+fn report_spanning_pair() -> Value {
+    let occurrences: Vec<Value> = CURATED_PAIR
+        .iter()
+        .map(|file| json!({ "path": file, "hidden": false }))
+        .collect();
+    json!({ "clusters": [{ "occurrences": occurrences }] })
+}
+
+/// The same report with occurrences carrying the platform separator —
+/// the form the renderer emitted on Windows before gh #439, and one no
+/// correct report can contain.
+fn report_spanning_pair_with_native_separators() -> Value {
+    let occurrences: Vec<Value> = CURATED_PAIR
+        .iter()
+        .map(|file| json!({ "path": file.replace(WIRE_SEPARATOR, MAIN_SEPARATOR_STR), "hidden": false }))
+        .collect();
+    json!({ "clusters": [{ "occurrences": occurrences }] })
+}
+
+/// The one visible cluster of `report`, or `None` when it renders none.
+fn only_cluster(report: &Value) -> Option<&Value> {
+    super::visible_clusters(report).into_iter().next()
+}
+
+/// True when the report's one visible cluster is shown spanning the pair.
+/// A report rendering no visible cluster is false, so a vanished cluster
+/// fails a positive case instead of satisfying a negative one.
+fn only_cluster_shows_pair(report: &Value) -> bool {
+    only_cluster(report).is_some_and(|cluster| super::cluster_shows_span(cluster, &curated_files()))
+}
+
+/// [CORPUS-RECALL] [CORPUS-PRECISION-CURATED] A report in wire form is
+/// matched against the manifest exactly. This is the case the whole gate
+/// rests on, and on Windows it was unreachable: the renderer emitted the
+/// platform separator, so `type2_recall` reported `no cluster spans`
+/// against a tokio report that held the curated whole-module rename with
+/// both occurrences shown, while `precision` — the same predicate read
+/// backwards — found no breach whatever the report clustered (gh #439).
+#[test]
+fn a_curated_pair_rendered_in_wire_form_is_spanned_and_shown() {
+    let report = report_spanning_pair();
+    assert!(
+        super::reports_clone_spanning(&report, &curated_files()),
+        "a cluster spanning the curated pair must satisfy recall; the report is {report}"
+    );
+    assert!(
+        only_cluster_shows_pair(&report),
+        "the same cluster must breach a curated precision entry naming those files; \
+         the report is {report}"
+    );
+}
+
+/// The predicates stay exact. A path carrying the platform separator is a
+/// path the renderer must never have emitted, and it misses here rather
+/// than being quietly reinterpreted — repairing it inside the harness
+/// would hide the renderer defect gh #439 records from every corpus run.
+/// `location_rendering::every_reported_path_is_joined_with_the_wire_separator`
+/// is what holds the renderer to the wire form.
+///
+/// Asserts nothing where the platform separator is already the wire
+/// separator, because there is no distinct native form to reject.
+#[test]
+fn a_native_separator_path_is_not_silently_reinterpreted() {
+    if MAIN_SEPARATOR == WIRE_SEPARATOR {
+        return;
+    }
+    let report = report_spanning_pair_with_native_separators();
+    assert!(
+        only_cluster(&report).is_some(),
+        "the negative case needs a visible cluster, or it passes for the wrong reason: {report}"
+    );
+    assert!(
+        !super::reports_clone_spanning(&report, &curated_files()),
+        "a `{MAIN_SEPARATOR}`-separated occurrence path is not the curated path and must not \
+         satisfy recall; the report is {report}"
+    );
+    assert!(
+        !only_cluster_shows_pair(&report),
+        "nor may it breach a curated precision entry; the report is {report}"
+    );
 }

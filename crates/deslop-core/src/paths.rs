@@ -70,3 +70,51 @@ pub fn report_base(root: &Path) -> PathBuf {
 pub fn logs_dir(report_dir: &Path) -> PathBuf {
     report_dir.join(LOGS_DIR_NAME)
 }
+
+/// The separator every path Deslop *reports* is joined with, on every
+/// platform — occurrence paths, `metrics.per_file`, `metrics.folders`,
+/// boilerplate rows, and the paths its refusals name.
+///
+/// A reported path is a wire value: the corpus manifests, the VSIX links,
+/// the MCP `path_contains` filter and every AI consumer all name a file
+/// this way. Serialising the platform separator instead made one tree
+/// render two different reports, and made every consumer's path
+/// comparison platform-conditional — `metrics.folders` had always joined
+/// with `/`, so a Windows report shipped both conventions at once
+/// (gh #439).
+pub const WIRE_PATH_SEPARATOR: char = '/';
+
+/// Rewrites `path` into the form every consumer of a reported path reads:
+/// [`WIRE_PATH_SEPARATOR`]-joined, on every platform.
+///
+/// Lossless by construction. It rewrites only where the platform
+/// separator is not already [`WIRE_PATH_SEPARATOR`], and no such platform
+/// admits one in a file name. On a POSIX platform a backslash *is* a
+/// legal file-name character, so the path is returned untouched.
+#[must_use]
+pub fn wire_path(path: &Path) -> PathBuf {
+    if std::path::MAIN_SEPARATOR == WIRE_PATH_SEPARATOR {
+        return path.to_path_buf();
+    }
+    PathBuf::from(rewrite_separators(
+        &path.to_string_lossy(),
+        std::path::MAIN_SEPARATOR,
+    ))
+}
+
+/// The rewrite behind [`wire_path`], taking the platform separator as an
+/// argument rather than reading it.
+///
+/// gh #439 is invisible on a platform that already separates with
+/// [`WIRE_PATH_SEPARATOR`], so an assertion that reads the running
+/// platform's separator can only pin the contract on Windows. Passing it
+/// in lets the unit tests pin both directions everywhere.
+fn rewrite_separators(text: &str, native: char) -> String {
+    if native == WIRE_PATH_SEPARATOR {
+        return text.to_owned();
+    }
+    text.replace(native, &WIRE_PATH_SEPARATOR.to_string())
+}
+
+#[cfg(test)]
+mod tests;

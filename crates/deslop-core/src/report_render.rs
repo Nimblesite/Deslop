@@ -180,11 +180,18 @@ fn occurrence<S: BuildHasher>(
     }
 }
 
-/// Renders `absolute` relative to `scan_root` when it lies inside.
+/// Renders `absolute` relative to `scan_root` when it lies inside, and
+/// always joined with [`crate::paths::WIRE_PATH_SEPARATOR`].
+///
+/// Occurrences, boilerplate rows and per-file metrics all resolve through
+/// here, so one report can never mix relative with absolute forms, nor
+/// the platform separator with the wire separator `metrics.folders` has
+/// always used (gh #439).
 pub(crate) fn relative_to_scan_root(absolute: &Path, scan_root: &Path) -> PathBuf {
-    absolute
+    let resolved = absolute
         .strip_prefix(scan_root)
-        .map_or_else(|_| absolute.to_path_buf(), Path::to_path_buf)
+        .map_or_else(|_| absolute.to_path_buf(), Path::to_path_buf);
+    crate::paths::wire_path(&resolved)
 }
 
 /// Resolves the report path for `file_id`.

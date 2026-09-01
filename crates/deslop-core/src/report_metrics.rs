@@ -16,6 +16,7 @@ use crate::{
     cluster::Cluster,
     config::ExclusionConfig,
     diff_scope::DiffScope,
+    paths::WIRE_PATH_SEPARATOR,
     report_render::{relative_to_scan_root, LineIndex, LineIndices},
     state::{FileId, FileRegistry},
 };
@@ -221,9 +222,9 @@ fn sort_worst_first(rows: &mut [FileMetric]) {
     });
 }
 
-/// Every folder prefix of `path`, shallowest first, joined with `/` on
-/// every platform so folder-row paths group the same segments a client
-/// splits a file-row path into. Root and current-dir markers contribute
+/// Every folder prefix of `path`, shallowest first, joined with
+/// [`WIRE_PATH_SEPARATOR`] so folder-row paths group the same segments a
+/// client splits a file-row path into. Root and current-dir markers contribute
 /// nothing; a Windows drive prefix is kept as its own segment.
 fn folder_prefixes(path: &Path) -> Vec<String> {
     let segments: Vec<String> = path
@@ -240,7 +241,7 @@ fn folder_prefixes(path: &Path) -> Vec<String> {
     let mut accumulated = String::new();
     for segment in segments.iter().take(segments.len().saturating_sub(1)) {
         if !accumulated.is_empty() {
-            accumulated.push('/');
+            accumulated.push(WIRE_PATH_SEPARATOR);
         }
         accumulated.push_str(segment);
         prefixes.push(accumulated.clone());

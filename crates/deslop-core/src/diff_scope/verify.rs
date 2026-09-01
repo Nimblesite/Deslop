@@ -195,7 +195,10 @@ fn verify_line(
 fn resolve_to_scan_root(new_path: &str, cwd: &Path, scan_root: &Path) -> Option<PathBuf> {
     let joined = cwd.join(new_path);
     let absolute = std::fs::canonicalize(&joined).unwrap_or(joined);
-    absolute.strip_prefix(scan_root).ok().map(Path::to_path_buf)
+    absolute
+        .strip_prefix(scan_root)
+        .ok()
+        .map(crate::paths::wire_path)
 }
 
 /// Splits source bytes into lines on `\n`, excluding the terminator.
