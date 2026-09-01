@@ -244,22 +244,26 @@ fn edges_survive_only_where_both_endpoints_did() {
     );
 }
 
-// [CLONE-NOISE-VERBATIM-SUBGROUP-GEOMETRY] Exact byte identity at two
-// distinct locations qualifies independently of file layout.
+// [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] The price the arbitration
+// names, charged where a reader can see it. Members 0 and 1 share every
+// byte, so the old predicate protected them; they also share a file,
+// which is proof of the idiom the filter just recognised rather than
+// proof of a paste.
 #[test]
-fn an_intra_file_verbatim_family_survives_a_convicted_component() {
+fn an_intra_file_verbatim_family_takes_the_suppression_with_its_component() {
     let corpus = Corpus::across_files(&[&[RETRY_DEFAULTS, RETRY_DEFAULTS, THEME_TOKENS]]);
     assert_eq!(
         member_lists(&corpus.split_all()),
-        vec![vec![0, 1]],
-        "the exact-byte family survives even though both locations share one file"
+        vec![vec![0, 1, 2]],
+        "a byte-identical family that never leaves its file is not a copy —          nothing is partitioned off it, and the whole component is handed on          for the report to hide"
     );
 }
 
-// [CLONE-NOISE-VERBATIM-SUBGROUP-GEOMETRY] Every qualifying exact-byte
-// family survives the convicted component, regardless of its layout.
+// The discriminating case: one suppressed component holding both kinds
+// of family at once. Only the family that crossed a file boundary is a
+// copy, and only it escapes.
 #[test]
-fn every_qualifying_family_survives_a_convicted_component() {
+fn only_the_cross_file_family_escapes_a_suppressed_component() {
     let corpus = Corpus::across_files(&[
         &[RETRY_DEFAULTS],
         &[RETRY_DEFAULTS],
@@ -267,8 +271,11 @@ fn every_qualifying_family_survives_a_convicted_component() {
     ]);
     assert_eq!(
         member_lists(&corpus.split_all()),
-        vec![vec![0, 1], vec![2, 3]],
-        "the filter drops only the stranger; both qualifying exact-byte families survive"
+        vec![vec![0, 1]],
+        "the retry table is byte-identical across two files, so it is a paste and \
+         survives the suppression its cluster-mates earned; the theme table is \
+         byte-identical twice inside one file, so it is the idiom and leaves with \
+         the component — a pass that kept it would republish scaffolding as a clone"
     );
 }
 

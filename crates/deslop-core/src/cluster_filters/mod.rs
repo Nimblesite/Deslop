@@ -320,6 +320,21 @@ impl NoiseFilter {
             Self::PyCollectionSiblingCells => "py_collection_sibling_cells",
         }
     }
+
+    /// Whether a byte-identical family must span two files before it
+    /// escapes this filter ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE]).
+    ///
+    /// Every filter here recognises a family that *may* be spread over
+    /// many files, so byte-identity confined to one file is better
+    /// explained by the idiom than by a paste — except the sibling-cell
+    /// filter, whose members must already share one file and one literal
+    /// node. Asking a family that is single-file by construction to span
+    /// two files is a question with one answer, and it closed the escape
+    /// hatch on that route permanently
+    /// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]).
+    pub(crate) const fn demands_cross_file_copy(self) -> bool {
+        !matches!(self, Self::PyCollectionSiblingCells)
+    }
 }
 
 /// Language-specific idiom filters, dispatched by language so a cluster is
