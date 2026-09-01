@@ -433,3 +433,6 @@ fn subscript_key_is_literal(subscript: Node<'_>) -> bool {
         .child_by_field_name("subscript")
         .is_some_and(is_literal_constant)
 }
+
+#[cfg(test)]
+mod tests;

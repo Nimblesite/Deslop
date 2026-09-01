@@ -24,7 +24,7 @@ fn issue_157_lsp_not_running_carries_structured_recovery_data() -> Result<()> {
     let mut mcp = initialized_mcp(workspace.path())?;
     let response = mcp.request(
         "tools/call",
-        &json!({ "name": "top-offenders", "arguments": { "n": 5 } }),
+        &json!({ "name": "duplicates", "arguments": { "offset": 0, "limit": 5, "detail": "summary" } }),
     )?;
     let (error, message) = error_and_message(&response)?;
 

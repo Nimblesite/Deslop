@@ -24,7 +24,7 @@ fn issue_151_top_offenders_error_names_socket_path_when_lsp_absent() -> Result<(
     let mut mcp = initialized_mcp(workspace.path())?;
     let response = mcp.request(
         "tools/call",
-        &json!({ "name": "top-offenders", "arguments": { "n": 5 } }),
+        &json!({ "name": "duplicates", "arguments": { "offset": 0, "limit": 5, "detail": "summary" } }),
     )?;
     let (_error, message) = error_and_message(&response)?;
 

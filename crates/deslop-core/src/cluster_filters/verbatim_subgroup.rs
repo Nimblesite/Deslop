@@ -51,7 +51,7 @@ use super::{
     family::{families_by, restrict},
     is_noise_pattern,
     snippets::ParseCache,
-    spans_multiple_files, NoiseFilter, NoiseStage,
+    spans_multiple_files, NoiseFilter,
 };
 
 /// Smallest byte-identical family worth keeping, counted in *distinct
@@ -326,7 +326,7 @@ fn split_one<S: BuildHasher>(
     // dropped, no panic. The pairwise admission that built the
     // closure decides its fate
     // ([FUSED-STRATEGY-BOUNDED-MAX] step 4).
-    let filter = is_noise_pattern(&members, sources, file_languages, cache, NoiseStage::Split)?;
+    let filter = is_noise_pattern(&members, sources, file_languages, cache)?;
     let keepable: Vec<&Vec<usize>> = families
         .iter()
         .filter(|family| is_copied_family(family, fingerprints, filter))

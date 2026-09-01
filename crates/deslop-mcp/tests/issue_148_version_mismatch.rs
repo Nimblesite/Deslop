@@ -33,7 +33,7 @@ fn issue_148_top_offenders_reports_version_mismatch_when_lsp_rejects_report_get(
     let mut mcp = initialized_mcp(workspace.path())?;
     let response = mcp.request(
         "tools/call",
-        &json!({ "name": "top-offenders", "arguments": { "n": 5 } }),
+        &json!({ "name": "duplicates", "arguments": { "offset": 0, "limit": 5, "detail": "summary" } }),
     )?;
 
     let (_error, message) = error_and_message(&response)?;

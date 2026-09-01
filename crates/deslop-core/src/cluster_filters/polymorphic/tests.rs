@@ -13,7 +13,7 @@
 
 use std::collections::HashMap;
 
-use super::super::{is_noise_pattern, NoiseFilter, NoiseStage, ParseCache};
+use super::super::{is_noise_pattern, NoiseFilter, ParseCache};
 use crate::ast::ByteRange;
 use crate::fingerprint::Fingerprint;
 use crate::state::{FileId, FileRegistry};
@@ -92,13 +92,7 @@ impl Component {
     /// The noise verdict for this component: `Some(filter)` when a
     /// noise pattern convicted it, `None` when it must surface.
     fn verdict(&self, cache: &ParseCache) -> Option<NoiseFilter> {
-        is_noise_pattern(
-            &self.members,
-            &self.sources,
-            &self.languages,
-            cache,
-            NoiseStage::Split,
-        )
+        is_noise_pattern(&self.members, &self.sources, &self.languages, cache)
     }
 }
 

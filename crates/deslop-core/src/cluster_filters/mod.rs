@@ -155,19 +155,6 @@ use crate::{
     state::FileId,
 };
 
-/// Which pipeline stage is asking, so a filter can defer work to the
-/// stage that owns it. The noise-split pass suppresses fused components
-/// early; the render pass suppresses report clusters late. A family the
-/// split suppresses never reaches render, so each filter must convict in
-/// the stage its contract names.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum NoiseStage {
-    /// The noise-split pass, over fused components pre-report.
-    Split,
-    /// The report render pass, over ranked report clusters.
-    Render,
-}
-
 /// Decides whether `cluster` is a known noise pattern that must not be
 /// surfaced as duplication. Returns **which** filter recognised it, and
 /// `None` when none did.
@@ -180,7 +167,6 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
-    stage: NoiseStage,
 ) -> Option<NoiseFilter> {
     let language = pre_gate(
         uniform_language(members, file_languages),
@@ -194,7 +180,7 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
         members.len(),
         cache,
     )?;
-    run_noise_checks(language, &snippets, sources, file_languages, cache, stage)
+    run_noise_checks(language, &snippets, sources, file_languages, cache)
 }
 
 /// Records a pre-gate that could not even reach the filters, and passes
@@ -228,12 +214,11 @@ fn run_noise_checks<S: BuildHasher>(
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
-    stage: NoiseStage,
 ) -> Option<NoiseFilter> {
     let polymorphic =
         || polymorphic::is_polymorphic_signature_cluster(snippets, sources, file_languages, cache);
     let signature_only = || is_signature_only_cluster(snippets, cache);
-    let literal_calls = || calls::is_literal_variation_call_cluster(snippets, cache, stage);
+    let literal_calls = || calls::is_literal_variation_call_cluster(snippets, cache);
     let constant_table = || constant_table::is_constant_table_cluster(snippets);
     let checks: [(NoiseFilter, &dyn Fn() -> bool); 4] = [
         (NoiseFilter::Polymorphic, &polymorphic),

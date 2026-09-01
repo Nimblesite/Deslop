@@ -178,9 +178,9 @@ fn rescan_via_mcp_triggers_lsp_reanalysis() -> Result<()> {
     )?;
     let before = mcp.request(
         TOOLS_CALL_METHOD,
-        &json!({ (NAME_FIELD): "top-offenders", (ARGUMENTS_FIELD): { "n": 100 } }),
+        &json!({ (NAME_FIELD): "duplicates", (ARGUMENTS_FIELD): { "offset": 0, "limit": 100, "detail": "summary" } }),
     )?;
-    let before_structured = structured_content(&before, "top-offenders")?;
+    let before_structured = structured_content(&before, "duplicates")?;
     let before_count = before_structured
         .get("total_clusters")
         .and_then(Value::as_u64)

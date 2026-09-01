@@ -74,7 +74,7 @@ fn call_report_get(mcp: &mut McpHandle) -> Result<Value> {
     mcp.request(
         "tools/call",
         &json!({
-            "name": "report-get",
+            "name": "duplicates",
             "arguments": { "offset": 0, "limit": 0 }
         }),
     )

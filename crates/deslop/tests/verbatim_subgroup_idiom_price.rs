@@ -1,4 +1,32 @@
-//! [CLONE-NOISE-VERBATIM-SUBGROUP] E2E coverage for a convicted noise component that contains a byte-identical call family. The family survives whether its copies occupy one file or two; only the literal-varying stranger is dropped.
+//! [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] — the price of the idiom
+//! proof, charged where a reader can see it.
+//!
+//! `docs/specs/noise.md` records what the cross-file arbitration
+//! knowingly gives up: *"a genuine intra-file byte-identical copy sitting
+//! inside a component the filters suppressed stays hidden; that is the
+//! price of the idiom proof, paid once, visibly, in the pins."*
+//!
+//! A pin that only shows the hidden side cannot charge that price. "The
+//! family was suppressed and nothing published" is satisfied just as well
+//! by a detector that never found the copy at all, so the assertion says
+//! nothing about the arbitration — it says the report was empty.
+//!
+//! So this suite runs the **same source bytes twice** and changes one
+//! thing: how many files they are spread across. It proves the byte
+//! equality rather than assuming it, then asserts the two opposite
+//! outcomes:
+//!
+//! - **cross-file** — byte-identity is proof of copying, because
+//!   independently authored code does not coincide byte for byte. The
+//!   copy publishes, saturated, ranked first, and charged to the
+//!   duplication gate.
+//! - **intra-file** — byte-identity is proof of the *idiom* the filter
+//!   has just recognised. The copy is hidden and charged nothing.
+//!
+//! Those two outcomes over identical bytes *are* the arbitration. A
+//! change that collapses them into one answer fails here whichever answer
+//! it picks, and a detector that has gone blind fails the cross-file half
+//! outright.
 
 use std::{fs, path::PathBuf};
 
@@ -16,20 +44,18 @@ const GEOMETRY_INTRA_FILES: u64 = 2;
 /// The two copies and the same stranger, in three files.
 const GEOMETRY_CROSS_FILES: u64 = 3;
 
-/// The surviving family replaces the convicted component rather than adding a hidden report row.
-const GEOMETRY_INTRA_HIDDEN: u64 = 0;
+/// Components suppressed in the intra-file half: the one call family.
+const GEOMETRY_INTRA_HIDDEN: u64 = 1;
 
-/// The one qualifying byte-identical family rendered from the component.
-const GEOMETRY_INTRA_VISIBLE: usize = 1;
+/// Clusters the intra-file half may publish. The copy is real and the
+/// tool saw it; the arbitration still declines to report it.
+const NOTHING_PUBLISHED: usize = 0;
 
-/// The literal-varying stranger contributes no duplicated lines.
-const STRANGER_DUPLICATED_LOC: u64 = 0;
-
-/// Both intra-file copy occurrences contribute their five copied lines.
-const GEOMETRY_INTRA_DUPLICATED_LOC: u64 = 10;
+/// Duplicated lines a copy the report will not show may contribute.
+const NOTHING_DUPLICATED: u64 = 0;
 
 /// What every failure message here names itself as.
-const GEOMETRY_LABEL: &str = "[CLONE-NOISE-VERBATIM-SUBGROUP] verbatim-family geometry";
+const GEOMETRY_LABEL: &str = "[CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] idiom-proof price";
 
 /// The signals a byte-identical copy saturates whatever its literal
 /// density.
@@ -56,8 +82,9 @@ fn corpus_source(case: &str) -> Result<String> {
     Ok(source)
 }
 
-/// The intra-file half: the convicted filter replaces its component with the qualifying copy family.
-fn assert_intra_file_copy_survives(report: &Value) -> Result<()> {
+/// The intra-file half: the copy is real, the tool saw it, and the report
+/// declines to show it. That is the price, stated as a value.
+fn assert_intra_file_copy_stays_hidden(report: &Value) {
     assert_eq!(
         field(report, "files_analysed").as_u64(),
         Some(GEOMETRY_INTRA_FILES),
@@ -67,49 +94,43 @@ fn assert_intra_file_copy_survives(report: &Value) -> Result<()> {
     );
     assert_eq!(
         clusters(report).len(),
-        GEOMETRY_INTRA_VISIBLE,
-        "{GEOMETRY_LABEL}: a convicted component renders its qualifying byte-identical family: {published:#?}",
+        NOTHING_PUBLISHED,
+        "{GEOMETRY_LABEL}: the copy sits inside a component the literal-variation \
+         filter suppressed, and an intra-file family never reaches the verbatim \
+         hatch — so nothing may publish: {published:#?}",
         published = published(report),
     );
-    let copy = clusters(report)
-        .iter()
-        .find(|cluster| cluster_file_set(cluster) == [CALL_ORIGIN.to_owned()].into())
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "{GEOMETRY_LABEL}: the surviving intra-file family is missing: {report:#}"
-            )
-        })?;
-    assert_eq!(
-        occurrences(copy).len(),
-        2,
-        "{GEOMETRY_LABEL}: the surviving family contains both byte-identical occurrences"
-    );
-    assert!(
-        has_verbatim_pair(
-            &fixture("verbatim-subgroup").join(GEOMETRY_INTRA_CASE),
-            copy
-        )?,
-        "{GEOMETRY_LABEL}: the retained family must be byte-proven: {copy:#}"
-    );
-    assert_structural_only_contract(copy, GEOMETRY_LABEL);
-    assert_no_pair_surface_on_cluster(copy, GEOMETRY_LABEL);
     assert_eq!(
         clusters_hidden(report),
         GEOMETRY_INTRA_HIDDEN,
-        "{GEOMETRY_LABEL}: replacement does not add a hidden row: {report:#}"
+        "{GEOMETRY_LABEL}: the component must be hidden *and counted*. Zero means \
+         the family was never recognised — an empty report for the wrong reason — \
+         and more means the filter reached past the one component this corpus \
+         stages: {report:#}"
     );
+    assert_intra_file_metrics_are_empty(report);
+}
+
+/// The metric half of the price: a copy the report will not show may not
+/// reach the duplication gate either, in any file or in the total.
+fn assert_intra_file_metrics_are_empty(report: &Value) {
+    for file in [CALL_ORIGIN, CALL_STRANGER] {
+        assert_eq!(
+            duplicated_loc_for(report, file),
+            NOTHING_DUPLICATED,
+            "{GEOMETRY_LABEL}: {file} earns nothing while the copy inside it is \
+             hidden — a line no reader can see in the report may not be charged \
+             in the CI gate: {lines:#?}",
+            lines = visible_cluster_lines(report),
+        );
+    }
     assert_eq!(
-        duplicated_loc_for(report, CALL_ORIGIN),
-        GEOMETRY_INTRA_DUPLICATED_LOC,
-        "{GEOMETRY_LABEL}: both visible intra-file copies contribute their five copied lines: {lines:#?}",
-        lines = visible_cluster_lines(report),
+        visible_duplicated_loc(report),
+        NOTHING_DUPLICATED,
+        "{GEOMETRY_LABEL}: nothing is published, so nothing is duplicated: \
+         {metrics:#}",
+        metrics = field(report, "metrics"),
     );
-    assert_eq!(
-        duplicated_loc_for(report, CALL_STRANGER),
-        STRANGER_DUPLICATED_LOC,
-        "{GEOMETRY_LABEL}: the literal-varying stranger remains uncharged"
-    );
-    Ok(())
 }
 
 /// The cross-file half: the same bytes, split across two files, are proof
@@ -131,7 +152,7 @@ fn assert_cross_file_copy_is_published(report: &Value) -> Result<()> {
 /// byte-proven from the source.
 fn assert_copy_is_saturated(report: &Value, copy: &Value) -> Result<()> {
     assert!(
-        has_verbatim_pair(&fixture("verbatim-subgroup").join(CALL_CASE), copy)?,
+        has_verbatim_pair(&fixture("verbatim-subgroup"), copy)?,
         "{GEOMETRY_LABEL}: the two copies are byte-identical and must be \
          byte-proven — {dump}",
         dump = signal_dump(copy),
@@ -161,7 +182,7 @@ fn assert_cross_file_metrics_charge_only_the_copy(report: &Value) {
     }
     assert_eq!(
         duplicated_loc_for(report, CALL_STRANGER),
-        STRANGER_DUPLICATED_LOC,
+        NOTHING_DUPLICATED,
         "{GEOMETRY_LABEL}: {CALL_STRANGER} varies its literals — it is the family \
          the filter exists to suppress, and it earns nothing on either side of \
          the A/B: {lines:#?}",
@@ -169,9 +190,10 @@ fn assert_cross_file_metrics_charge_only_the_copy(report: &Value) {
     );
 }
 
-// [CLONE-NOISE-VERBATIM-SUBGROUP] The source is identical across the two layouts; both qualifying families survive.
+// [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] The arbitration itself,
+// stated as the only difference between two runs over one source.
 #[test]
-fn a_verbatim_family_survives_a_convicted_filter_in_any_file_geometry() -> Result<()> {
+fn an_intra_file_verbatim_copy_pays_the_idiom_proof_price() -> Result<()> {
     assert_eq!(
         corpus_source(GEOMETRY_INTRA_CASE)?,
         corpus_source(CALL_CASE)?,
@@ -179,6 +201,6 @@ fn a_verbatim_family_survives_a_convicted_filter_in_any_file_geometry() -> Resul
          once the bytes differ, the opposite outcomes below stop being about file \
          geometry and this test stops proving anything"
     );
-    assert_intra_file_copy_survives(&render(GEOMETRY_INTRA_CASE, MIN_NODES)?)?;
+    assert_intra_file_copy_stays_hidden(&render(GEOMETRY_INTRA_CASE, MIN_NODES)?);
     assert_cross_file_copy_is_published(&render(CALL_CASE, MIN_NODES)?)
 }

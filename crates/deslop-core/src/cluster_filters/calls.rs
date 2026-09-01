@@ -6,7 +6,7 @@ use tree_sitter::Node;
 
 use std::sync::Arc;
 
-use super::{enclosing_kind, parse_for, NoiseStage, ParseCache, Snippet};
+use super::{enclosing_kind, parse_for, ParseCache, Snippet};
 use crate::ast::{named_children, ByteRange};
 
 use args::collect_argument_shapes;
@@ -36,11 +36,7 @@ mod sequence;
 pub(super) fn is_literal_variation_call_cluster(
     snippets: &[Snippet<'_>],
     cache: &ParseCache,
-    stage: NoiseStage,
 ) -> bool {
-    if snippets.len() == 2 && stage == NoiseStage::Split {
-        return false;
-    }
     let calls: Option<Vec<Arc<CallShape>>> = snippets
         .iter()
         .map(|snippet| cache.call_shape(snippet, || call_shape(snippet)))
@@ -479,3 +475,6 @@ fn pair_is_copy_paste(calls: &[&CallShape]) -> bool {
             })
         })
 }
+
+#[cfg(test)]
+mod tests;
