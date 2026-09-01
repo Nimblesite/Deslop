@@ -2,7 +2,7 @@
 
 package ledger
 
-const LedgerTag = "ledger"
+const AlphaLedgerTag = "alpha"
 
 func ReconcileEntries(entries []int64, floor int64) int64 {
 	var balance int64 = 0

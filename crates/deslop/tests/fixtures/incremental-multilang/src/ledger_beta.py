@@ -1,7 +1,8 @@
 # ledger_beta.py — the pasted copy of the Python reconciliation routine.
 
 
-LEDGER_TAG = "ledger"
+class BetaLedgerCursor:
+    offset = 0
 
 
 def reconcile_entries(entries, floor):

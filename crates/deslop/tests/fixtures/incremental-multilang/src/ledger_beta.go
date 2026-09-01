@@ -2,7 +2,9 @@
 
 package ledger
 
-const LedgerTag = "ledger"
+type BetaLedgerCursor struct {
+	Offset int
+}
 
 func ReconcileEntries(entries []int64, floor int64) int64 {
 	var balance int64 = 0

@@ -1,6 +1,8 @@
 // ledger_beta.ts — the pasted copy of the TypeScript reconciliation routine.
 
-export const LEDGER_TAG = "ledger";
+export interface BetaLedgerCursor {
+  offset: number;
+}
 
 export function reconcileEntries(entries: number[], floor: number): number {
   let balance = 0;

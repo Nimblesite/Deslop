@@ -1,6 +1,6 @@
 # ledger_alpha.py — the canonical copy of the Python reconciliation routine.
 
-LEDGER_TAG = "ledger"
+ALPHA_LEDGER_TAG = "alpha"
 
 
 def reconcile_entries(entries, floor):
