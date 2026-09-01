@@ -293,6 +293,15 @@ fn collapse_overlapping_single_file(
     });
     let mut runs: Vec<OverlapRun> = Vec::with_capacity(bucket.len());
     for (index, member) in bucket {
+        // W22-PROBE (gh #486 diagnosis, remove before push)
+        tracing::debug!(
+            probe = "collapse",
+            index,
+            start = member.byte_range.start,
+            end = member.byte_range.end,
+            aligned = scopes.aligned_function(&member).is_some(),
+            crosses = scopes.crosses_function_boundary(&member),
+        );
         let candidate = Occurrence {
             index,
             range: member.byte_range,

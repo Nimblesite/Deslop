@@ -24,7 +24,7 @@
 //! - the #190 verbatim escape hatch: a byte-for-byte copied table is
 //!   proven duplication and is byte-proven like any copy.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use serde_json::Value;
@@ -110,7 +110,7 @@ fn fsharp_numeric_tables_and_clone_publish_ranked_by_mass() -> Result<()> {
 
 /// One published table cluster: it ranks below the clone, it is
 /// byte-distinct, and it never welds two tables that share no value.
-fn assert_table_cluster_is_honest(root: &PathBuf, cluster: &Value) -> Result<()> {
+fn assert_table_cluster_is_honest(root: &Path, cluster: &Value) -> Result<()> {
     assert!(
         field(cluster, "rank").as_u64() > Some(CLONE_RANK),
         "[CLONE-NOISE-LITERAL-TABLE]: a distinct-value table family \
