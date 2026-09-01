@@ -63,14 +63,11 @@ fn pair_passes_content_gate<L: BuildHasher>(
     {
         return false;
     }
-    let required = content_is_required(pair, left, right);
+    if !content_is_required(pair, left, right) {
+        return true;
+    }
     let evidence = measure_pair_content_indexed(left, right, tree_index, sources, languages);
-    let verdict = !required || (evidence.measured && evidence.support() >= content_floor(pair, left, right));
-    eprintln!("PROBE L={:?}:{}-{}({}) R={:?}:{}-{}({}) hash_eq={} S={:.3} J={:.3} shared={:.3} req={} A={:.3} R={:.3} floor={:.2} verdict={}",
-        left.file_id, left.byte_range.start, left.byte_range.end, left.node_count, right.file_id, right.byte_range.start, right.byte_range.end, right.node_count,
-        left.hash == right.hash, pair.score.structural, pair.score.token_jaccard, pair.shared_subtree_overlap, required,
-        evidence.agreement, evidence.rename_consistency, content_floor(pair, left, right), verdict);
-    verdict
+    evidence.measured && evidence.support() >= content_floor(pair, left, right)
 }
 
 /// Whether this pair needs embedding evidence rather than structural or
