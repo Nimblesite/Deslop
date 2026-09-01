@@ -18,7 +18,7 @@
 //! - the #190 verbatim escape hatch: a byte-for-byte copied table is
 //!   proven duplication and is byte-proven like any copy.
 
-use std::path::PathBuf;
+use std::{collections::BTreeSet, path::PathBuf};
 
 use anyhow::Result;
 use serde_json::Value;
@@ -31,9 +31,26 @@ use crate::common::{
     *,
 };
 
+/// Every distinct-value table file the #336 corpus stages. All four hold
+/// the same 24-slot array shape and differ only in their values, so they
+/// are one family and must publish as one.
+const TABLE_FILES: [&str; 4] = ["tables_0.fs", "tables_1.fs", "tables_2.fs", "tables_3.fs"];
+
+/// How many members the table family owes the report.
+const TABLE_FILE_COUNT: usize = TABLE_FILES.len();
+
 /// True for the distinct-value table files in the shared #336 corpus.
 fn is_table_file(name: &str) -> bool {
     name.starts_with("tables_")
+}
+
+/// The files carried by the published table-family cluster, empty when
+/// no cluster touches a table file at all.
+fn table_family_files(report: &Value) -> BTreeSet<String> {
+    rank_where(report, is_table_file)
+        .and_then(|rank| clusters(report).get(rank).cloned())
+        .map(|cluster| cluster_file_set(&cluster))
+        .unwrap_or_default()
 }
 
 /// Renders the shared #336 corpus with an optional `.deslop.toml` body.
@@ -57,6 +74,17 @@ fn fsharp_numeric_tables_and_clone_publish_ranked_by_mass() -> Result<()> {
     assert!(
         table.is_some() && clone.is_some(),
         "both the table family and the genuine clone must publish: {report:#}"
+    );
+    assert_eq!(
+        table_family_files(&report),
+        TABLE_FILES
+            .iter()
+            .map(|name| (*name).to_owned())
+            .collect::<BTreeSet<String>>(),
+        "[RANK-MASS-SUM]: all {TABLE_FILE_COUNT} distinct-value tables are one shape-identical \
+         family. Publishing a subset is a false negative — the members that share \
+         no literal with any sibling are the ones dropped, and mass computed over \
+         a truncated family cannot rank correctly: {report:#}"
     );
     assert!(
         clone > table,
