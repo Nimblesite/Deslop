@@ -287,9 +287,7 @@ fn scaffolding_besides_functions<'tree>(
     if shell.contains(&node.kind()) {
         return named_children(node)
             .into_iter()
-            .all(|child| {
-                scaffolding_besides_functions(child, range, kinds, shell, functions)
-            });
+            .all(|child| scaffolding_besides_functions(child, range, kinds, shell, functions));
     }
     match node.kind() {
         "expression_statement" => is_docstring(node),

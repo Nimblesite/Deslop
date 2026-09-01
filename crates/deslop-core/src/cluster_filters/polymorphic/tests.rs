@@ -73,7 +73,8 @@ impl Component {
             languages: HashMap::new(),
         };
         for body in bodies {
-            let file_id = registry.register(format!("example_{}.dart", component.members.len()).into());
+            let file_id =
+                registry.register(format!("example_{}.dart", component.members.len()).into());
             let source = body.clone().into_bytes();
             let end = source.len();
             let _previous = component.sources.insert(file_id, source);
@@ -109,7 +110,10 @@ impl Component {
 /// component so it never surfaces as duplication.
 #[test]
 fn framework_stamped_dart_widget_scaffolds_are_convicted_by_the_override_marker() {
-    let bodies: Vec<String> = STAMPED_BODIES.iter().map(|body| widget_scaffold(body)).collect();
+    let bodies: Vec<String> = STAMPED_BODIES
+        .iter()
+        .map(|body| widget_scaffold(body))
+        .collect();
     let component = Component::across_files(&bodies);
     assert_eq!(
         component.verdict(&ParseCache::new()),
