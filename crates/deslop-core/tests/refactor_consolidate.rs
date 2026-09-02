@@ -247,50 +247,100 @@ fn compile_two_module_crate(file_a: &str, file_b: &str) -> Result<()> {
 /// canonical copy, the duplicate file imports it, and the rewritten
 /// crate compiles (`rustc --emit=metadata`).
 ///
-/// The reported view on the mass-only wire is the whole-file near-miss
-/// the subsumption selects ([PIPELINE-CLUSTER-SUBSUME] — member count,
-/// then mass, then id), and a near-miss whose definition runs disagree
-/// must refuse rather than rewrite ([AUTOFIX-CONSOLIDATE-GATE] v1.1).
-/// The byte-identical `normalise_labels` core is inside both reported
-/// occurrences; the mechanical positive path is pinned by
-/// [`definition_run_spanning_two_functions_consolidates`] on synthetic
-/// whole-definition windows.
+/// The reported view is the byte-identical `normalise_labels`
+/// definition itself: the whole-file near-miss that wraps it in both
+/// modules is a container echo the rescue refuses
+/// ([FUSED-SHARED-SUBTREE-ECHO]), so the report names the copy, not
+/// the file around it. A cross-file identical definition consolidates
+/// mechanically ([AUTOFIX-CONSOLIDATE-SURFACE]); the compile backstop
+/// is pinned on the synthetic crate by
+/// [`definition_run_spanning_two_functions_consolidates`]. The
+/// near-miss is still owed its
+/// refusal: a cluster over the whole files, whose `describe_*`
+/// definition runs disagree, must refuse rather than rewrite
+/// ([AUTOFIX-CONSOLIDATE-GATE] v1.1) — pinned here on the same corpus.
 #[test]
 fn rust_cross_file_definition_consolidates_and_compiles() -> Result<()> {
     let root = fixture("rust-consolidate");
     let report = analyse(&root)?;
     let cluster = cross_file_cluster(&report)?;
     let sources = sources_for(&root, &cluster)?;
-    // The byte-identical core must be inside the reported occurrences.
-    let slice_contains = sources
+    let slices = cluster
+        .occurrences
         .iter()
-        .map(|(path, bytes)| {
-            let occurrence = cluster
-                .occurrences
-                .iter()
-                .find(|occurrence| occurrence.path == *path)
-                .ok_or_else(|| anyhow!("no occurrence for {}", path.display()))?;
-            let text = bytes
-                .get(occurrence.start_byte..occurrence.end_byte)
-                .ok_or_else(|| anyhow!("occurrence out of bounds for {}", path.display()))?;
-            Ok::<_, anyhow::Error>(std::str::from_utf8(text)?.contains("normalise_labels"))
+        .map(|occurrence| {
+            sources
+                .get(&occurrence.path)
+                .and_then(|bytes| bytes.get(occurrence.start_byte..occurrence.end_byte))
+                .ok_or_else(|| {
+                    anyhow!("occurrence out of bounds for {}", occurrence.path.display())
+                })
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>>>()?;
     ensure!(
-        slice_contains.iter().all(|found| *found),
-        "the byte-identical normalise_labels core must sit inside every reported occurrence"
+        slices
+            .iter()
+            .all(|slice| slice.starts_with(b"pub fn normalise_labels")),
+        "the reported occurrences are the authored normalise_labels definition"
     );
-    let outcome = compute_consolidation_plan(&cluster, &sources, &RustParser::new())?;
-    let ConsolidationOutcome::Refused(reason) = outcome else {
-        return Err(anyhow!(
-            "the near-miss must refuse consolidation, not rewrite"
-        ));
-    };
+    ensure!(
+        slices
+            .windows(2)
+            .all(|pair| matches!(pair, [first, second] if first == second)),
+        "both reported occurrences are byte-identical"
+    );
+    let plan = plan_for(
+        "the identical definition",
+        &cluster,
+        &sources,
+        &RustParser::new(),
+    )?;
+    let file_a = std::str::from_utf8(
+        sources
+            .get(Path::new("pricing_a.rs"))
+            .context("pricing_a.rs")?,
+    )?;
+    let file_b = std::str::from_utf8(
+        sources
+            .get(Path::new("pricing_b.rs"))
+            .context("pricing_b.rs")?,
+    )?;
+    let mut edits = plan.edits.clone();
+    edits.sort_unstable_by_key(|edit| std::cmp::Reverse(edit.start_byte));
+    let buffer = apply_checked_edits(file_b, &edits, Path::new("pricing_b.rs"))?;
+    ensure!(
+        !buffer.contains("pub fn normalise_labels"),
+        "duplicate no longer defines the consolidated `normalise_labels`:\n{buffer}"
+    );
+    let (near_miss, near_miss_sources) = whole_file_cluster(file_a, file_b)?;
+    let reason = reason_for(
+        "the whole-file near-miss",
+        &near_miss,
+        &near_miss_sources,
+        &RustParser::new(),
+    )?;
     ensure!(
         reason.contains("definition run"),
         "the refusal names the definition-run mismatch, got {reason}"
     );
     Ok(())
+}
+
+/// A cluster over the entire text of two files that share a prefix but
+/// diverge later — the near-miss view the container-echo rule keeps out
+/// of the report.
+fn whole_file_cluster(file_a: &str, file_b: &str) -> Result<(ReportCluster, Sources)> {
+    let mut sources = HashMap::new();
+    let occurrences = vec![
+        report_occurrence("pricing_a.rs", (0, file_a.len()), false),
+        report_occurrence("pricing_b.rs", (0, file_b.len()), false),
+    ];
+    let _inserted = sources.insert(PathBuf::from("pricing_a.rs"), file_a.as_bytes().to_vec());
+    let _inserted = sources.insert(PathBuf::from("pricing_b.rs"), file_b.as_bytes().to_vec());
+    Ok((
+        synthetic_report_cluster(occurrences, "nearly_identical"),
+        sources,
+    ))
 }
 
 /// A private canonical definition refuses — the duplicates' modules

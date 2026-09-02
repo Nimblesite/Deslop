@@ -37,14 +37,6 @@ pub(super) fn is_literal_variation_call_cluster(
     snippets: &[Snippet<'_>],
     cache: &ParseCache,
 ) -> bool {
-    // PROBE(py72): temporary — member windows entering the SET path.
-    for snippet in snippets {
-        tracing::debug!(
-            range_start = snippet.range.start,
-            range_end = snippet.range.end,
-            "PROBE literal_calls member window"
-        );
-    }
     let calls: Option<Vec<Arc<CallShape>>> = snippets
         .iter()
         .map(|snippet| cache.call_shape(snippet, || call_shape(snippet)))
@@ -166,13 +158,6 @@ fn covered_statements_admissible(snippet: &Snippet<'_>) -> bool {
     };
     let mut statements = Vec::new();
     collect_covered_statements(tree.root_node(), snippet.range, &mut statements);
-    // PROBE(py72): temporary — member window and covered-statement split.
-    tracing::debug!(
-        range_start = snippet.range.start,
-        range_end = snippet.range.end,
-        statements = statements.len(),
-        "PROBE covered_statements_admissible entry"
-    );
     let kinds = call_kinds(snippet.language);
     let (with_call, without_call): (Vec<&Node<'_>>, Vec<&Node<'_>>) = statements
         .iter()

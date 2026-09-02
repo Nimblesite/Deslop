@@ -119,51 +119,32 @@ fn cache_seed_window_refuses_with_reason() -> Result<()> {
     Ok(())
 }
 
-/// [AUTOFIX-CONSOLIDATE-SURFACE] (issue #277): a cross-file identical
-/// definition routes through the live glue to the consolidation engine
-/// and answers a mechanical plan carrying the multi-file
-/// `WorkspaceEdit` and the consolidated symbol.
+/// [AUTOFIX-CONSOLIDATE-SURFACE]: a cross-file identical definition
+/// routes through the live glue to the consolidation engine and answers
+/// a mechanical plan carrying the multi-file `WorkspaceEdit`. The
+/// reported cluster is the byte-identical `normalise_labels` definition
+/// — the whole-file near-miss around it is a container echo the rescue
+/// refuses ([FUSED-SHARED-SUBTREE-ECHO]) — so the plan is mechanical,
+/// never a refusal that would leave a proven copy unconsolidated.
 #[test]
 fn live_session_consolidates_cross_file_cluster() -> Result<()> {
     let (_workspace, session) = live_session("rust-consolidate")?;
     let report = session.report();
     let cluster = crate::common::clusters::cross_file_identical_cluster(&report)?;
-    // The reported view is the whole-file near-miss the subsumption
-    // selects ([PIPELINE-CLUSTER-SUBSUME]); its definition runs disagree
-    // (`normalise_labels` shared, `describe_*` divergent), so the
-    // consolidation engine must refuse with the reason named — the
-    // safe refusal, never a mechanical plan that would rewrite
-    // differing modules ([AUTOFIX-CONSOLIDATE-GATE] v1.1). The
-    // byte-identical core is inside both reported occurrences.
-    let workspace_root = session.root().to_path_buf();
-    let mut sources = std::collections::HashMap::new();
-    for path in cluster
-        .occurrences
-        .iter()
-        .map(|occurrence| occurrence.path.clone())
-        .collect::<std::collections::BTreeSet<_>>()
-    {
-        let absolute = if path.is_absolute() {
-            path.clone()
-        } else {
-            workspace_root.join(&path)
-        };
-        let bytes = std::fs::read(&absolute)?;
-        let _ = sources.insert(path, bytes);
-    }
-    let outcome = deslop_core::refactor::consolidate::compute_consolidation_plan(
-        &cluster,
-        &sources,
-        &deslop_core::lang::rust_lang::RustParser::new(),
-    )?;
-    let deslop_core::refactor::consolidate::ConsolidationOutcome::Refused(reason) = outcome else {
-        return Err(anyhow!(
-            "the near-miss must refuse consolidation, got a mechanical plan"
-        ));
-    };
     ensure!(
-        reason.contains("definition run"),
-        "the refusal names the definition-run mismatch, got {reason}"
+        cluster.occurrences.len() == 2,
+        "the identical definition is reported once per module"
+    );
+    let plan = merge_plan_for(&session, &cluster.id)
+        .map_err(|error| anyhow!("merge_plan_for: {error}"))?;
+    ensure!(
+        matches!(plan.verdict, MergeVerdict::Mechanical),
+        "the identical `normalise_labels` definition consolidates mechanically, got {:?}",
+        plan.verdict
+    );
+    ensure!(
+        plan.workspace_edit.is_some(),
+        "mechanical plans carry the wire WorkspaceEdit"
     );
     Ok(())
 }
