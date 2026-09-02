@@ -480,10 +480,12 @@ suite("TopOffendersProvider", () => {
       const groupLabels = groups.map(labelText);
       assert.equal(groups.length, presentBands.length, "one group per present band");
       for (let index = 0; index < presentBands.length; index += 1) {
+        const band = presentBands[index];
+        assert.ok(band, "presentBands must not contain gaps");
         assert.match(
           groupLabels[index] ?? "",
-          new RegExp(`Severity ${presentBands[index]}`),
-          `group ${index} must be the ${presentBands[index]} band, in stamped band order`,
+          new RegExp(`Severity ${band}`),
+          `group ${index} must be the ${band} band, in stamped band order`,
         );
       }
     });

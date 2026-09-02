@@ -966,7 +966,9 @@ suite("command target resolution", () => {
   });
 
   test("openOccurrenceTarget accepts a raw occurrence, an occurrence node, and informs on junk", async () => {
-    const raw = occurrence(TEST_SOURCE_PATH, 0, DEFAULT_OCCURRENCE_END_BYTE);
+    const made = tempFile("deslop-occ-target-", "target.cs");
+    fs.writeFileSync(made.file, "const target = 1;\n");
+    const raw = occurrence(made.file, 0, DEFAULT_OCCURRENCE_END_BYTE);
     await openOccurrenceTarget(raw);
 
     const node = { cluster: null, occurrence: raw } as unknown as OccurrenceNode;
@@ -974,6 +976,7 @@ suite("command target resolution", () => {
 
     await openOccurrenceTarget({ occurrence: { path: TEST_THREE } });
     await openOccurrenceTarget("not-even-an-object");
+    await vscode.commands.executeCommand("workbench.action.closeAllEditors");
   });
 
   test("jumpToNextOccurrence wraps from the last occurrence back to the first", async () => {
@@ -1009,19 +1012,15 @@ suite("command target resolution", () => {
 
   test("openSchemaDoc consults the RPC fallback and survives a failing client", async () => {
     const accepting = (): LanguageClient | undefined =>
-      ({ sendRequest: async () => "rpc-doc" }) as unknown as LanguageClient;
+      ({ sendRequest: () => Promise.resolve("rpc-doc") }) as unknown as LanguageClient;
     await openSchemaDoc(fakeCtx(), seededStore([cluster(FILE_A_NAME, [FILE_A_NAME])]), accepting);
 
     const rejecting = (): LanguageClient | undefined =>
-      ({
-        sendRequest: async () => {
-          throw new Error("lsp gone");
-        },
-      }) as unknown as LanguageClient;
+      ({ sendRequest: () => Promise.reject(new Error("lsp gone")) }) as unknown as LanguageClient;
     await openSchemaDoc(fakeCtx(), seededStore([]), rejecting);
 
     const nonString = (): LanguageClient | undefined =>
-      ({ sendRequest: async () => 42 }) as unknown as LanguageClient;
+      ({ sendRequest: () => Promise.resolve(42) }) as unknown as LanguageClient;
     await openSchemaDoc(fakeCtx(), seededStore([]), nonString);
   });
 

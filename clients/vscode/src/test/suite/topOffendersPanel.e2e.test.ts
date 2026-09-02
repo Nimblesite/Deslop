@@ -25,7 +25,7 @@ const GROUP_BY_AXES: Array<"cluster" | "file" | "folder" | "severity"> = [
   "severity",
 ];
 
-async function readConfig<T>(key: string): Promise<T | undefined> {
+function readConfig<T>(key: string): T | undefined {
   return vscode.workspace
     .getConfiguration(DESLOP_CONFIGURATION_NAMESPACE)
     .get<T>(key);
@@ -78,7 +78,7 @@ suite("top offenders panel and node commands", () => {
   async function requireCluster(): Promise<ReportCluster> {
     const client = api.client;
     assert.ok(client, "extension must expose the real LanguageClient");
-    return waitForMultiOccurrenceCluster(client);
+    return await waitForMultiOccurrenceCluster(client);
   }
 
   suiteTeardown(async () => {

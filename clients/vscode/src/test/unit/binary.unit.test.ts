@@ -399,9 +399,16 @@ suite("deployment manifest probe edges", () => {
       ...component("ghost", "formatter", undefined),
       id: "ghost",
       kind: "formatter",
-    } as (typeof base.components)[number]);
+    });
+    base.hosts = { vscode: { activationVerifies: ["ghost"] } };
+    // resolvedBinary stamps the kind only after a fully verified binary,
+    // so the probe target must exist with the expected version first.
+    const ghost = resolve(tmp, BINARY_DIRECTORY, platformId(), "ghost");
+    mkdirSync(resolve(ghost, ".."), { recursive: true });
+    writeFileSync(ghost, `#!/bin/sh\necho 'ghost ${EXPECTED_VERSION}'\n`);
+    chmodSync(ghost, EXECUTABLE_MODE);
     assert.throws(
-      () => resolveHostBinaries(tmp, "vscode", manifestWithHostVerification(["ghost"])),
+      () => resolveHostBinaries(tmp, "vscode", base),
       (err: unknown) =>
         err instanceof Error && err.message.includes("kind formatter is not executable"),
     );
