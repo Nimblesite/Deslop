@@ -22,6 +22,18 @@ So the two questions are asked of two different things. **Conviction** reads the
 
 Nothing here admits a pair the gate rejected, and no component is invented: a shape family with no admitted component contributes nothing. Implemented in `pipeline/session/render.rs` (the pre-gate closure) and `cluster_filters/verbatim_subgroup.rs`; pinned by `python_issue_107_chained_dict_assert` and `verbatim_subgroup_idiom_price`.
 
+#### [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY] A filter judges the shape family, admission still decides the clusters
+
+The noise filters recognise an *idiom*: seven accessors, four codec-diagnostic tests, a run of chained assertions. Pair admission ([FUSED-CONTENT-GATE]) rightly refuses most edges inside such a family — the members differ in every literal — so the admitted components are fragments of it: one same-file pair, a six-node subscript two asserts share. A fragment of an idiom, seen alone, is not the idiom; the filter cannot convict it, and the fragment publishes as a duplicate the family never was.
+
+So the filters are handed the **shape family**: the transitive closure of every candidate pair that cleared the fused threshold or the shared-subtree rescue *before* the content gate ran. Admission is unchanged — the content gate still decides which edges weld, and the clusters the report ranks are exactly the admitted components. What changes is what the filter looks at:
+
+- A shape family no filter convicts hands on its admitted components untouched.
+- A convicted shape family holding a qualifying byte-identical copy ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE]) is replaced by one cluster per such copy, exactly as before.
+- A convicted shape family holding no such copy hands on its admitted components **carrying the conviction**: the report hides them and counts them in `clusters_hidden`. Nothing is dropped by bookkeeping, and nothing is re-judged from a fragment.
+
+Implemented in `pipeline/session/render.rs` (the pre-gate closure) and `cluster_filters/verbatim_subgroup.rs`; the flag rides `FusedCluster::convicted` into `report/hidden.rs`. Pinned by `python_issue_107_chained_dict_assert`, whose same-file subscript fragment escaped exactly this way.
+
 #### [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] A verbatim family must be a copy, and usually a copy spans files
 
 Two failure modes were measured against this pass (gh #434). On `python-issue-72` the filter fired and an **intra-file** byte-identical core of the very family it recognised escaped as a visible component — scaffolding passing through the hatch built to protect copies and counting its 15 lines in `duplicated_loc`. The arbitration: **a byte-identical family escapes suppression only when its occurrences span at least two files** — except where the filter that recognised it only ever sees one file, which [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL] below carves out.

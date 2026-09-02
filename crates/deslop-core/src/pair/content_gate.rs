@@ -194,48 +194,18 @@ mod tests {
 
     #[test]
     fn embedding_role_mismatch_is_rejected_before_closure() {
-        let (fingerprints, sources, languages) = role_fixture(RUST, TYPE_SOURCE, FUNCTION_SOURCE);
-        let mut pairs = vec![embedding_pair()];
+        let survivors = surviving_role_pairs(RUST, TYPE_SOURCE, FUNCTION_SOURCE);
         assert_eq!(
-            pairs.len(),
-            1,
-            "the fixture must begin with one candidate edge"
-        );
-        apply_pair_content_gate(
-            &mut pairs,
-            &fingerprints,
-            &[],
-            &sources,
-            &languages,
-            &ParseCache::new(),
-        );
-        assert!(
-            pairs.is_empty(),
+            survivors, 0,
             "a type/function pair carried only by embedding evidence must not reach closure"
         );
     }
 
     #[test]
     fn embedding_same_role_pair_reaches_closure() {
-        let (fingerprints, sources, languages) =
-            role_fixture(RUST, FUNCTION_SOURCE, FUNCTION_SOURCE);
-        let mut pairs = vec![embedding_pair()];
+        let survivors = surviving_role_pairs(RUST, FUNCTION_SOURCE, FUNCTION_SOURCE);
         assert_eq!(
-            pairs.len(),
-            1,
-            "the fixture must begin with one candidate edge"
-        );
-        apply_pair_content_gate(
-            &mut pairs,
-            &fingerprints,
-            &[],
-            &sources,
-            &languages,
-            &ParseCache::new(),
-        );
-        assert_eq!(
-            pairs.len(),
-            1,
+            survivors, 1,
             "the role guard must not reject two function endpoints"
         );
     }
@@ -244,11 +214,19 @@ mod tests {
     /// edge may not weld an unrelated embedding-discovered component.
     #[test]
     fn embedding_mega_class_function_edge_is_rejected_before_closure() {
-        let (fingerprints, sources, languages) = role_fixture(
+        let survivors = surviving_role_pairs(
             PYTHON,
             EMBEDDING_MEGA_TYPE_SOURCE,
             EMBEDDING_MEGA_FUNCTION_SOURCE,
         );
+        assert_eq!(
+            survivors, 0,
+            "a class/function edge must be rejected before it can form an embedding component"
+        );
+    }
+
+    fn surviving_role_pairs(language: &'static str, left: &str, right: &str) -> usize {
+        let (fingerprints, sources, languages) = role_fixture(language, left, right);
         let mut pairs = vec![embedding_pair()];
         assert_eq!(
             pairs.len(),
@@ -263,10 +241,7 @@ mod tests {
             &languages,
             &ParseCache::new(),
         );
-        assert!(
-            pairs.is_empty(),
-            "a class/function edge must be rejected before it can form an embedding component"
-        );
+        pairs.len()
     }
 
     /// Fixture corpus for the role-gate unit test: fingerprints, sources
