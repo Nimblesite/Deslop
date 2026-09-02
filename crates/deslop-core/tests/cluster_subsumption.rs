@@ -57,12 +57,12 @@ fn published(left: [(usize, usize); 2], right: [(usize, usize); 2]) -> Vec<Clust
         FusedCluster {
             members: vec![0, 1],
             edges: Vec::new(),
-            convicted: false,
+            shape_family: None,
         },
         FusedCluster {
             members: vec![2, 3],
             edges: Vec::new(),
-            convicted: false,
+            shape_family: None,
         },
     ];
     build_ranked_fused_clusters(&ClusterBuildInputs {

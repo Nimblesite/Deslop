@@ -42,9 +42,10 @@ pub struct Cluster {
     pub members: Vec<Fingerprint>,
     /// Duplicated mass from [RANK-MASS-SUM]. Higher = more code to fix.
     pub mass: u64,
-    /// Convicted with its shape family by a noise filter
-    /// ([CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY]); the report hides it.
-    pub convicted: bool,
+    /// The shape family this cluster was admitted out of, for the
+    /// report's family-level noise verdict
+    /// ([CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY]).
+    pub shape_family: Option<usize>,
 }
 
 /// Minimum number of logical locations required for a reportable
@@ -154,7 +155,7 @@ fn build_fused_cluster<L: BuildHasher + Sync>(
     Some(materialize_cluster(
         members,
         inputs.file_paths,
-        fused.convicted,
+        fused.shape_family,
     ))
 }
 
@@ -162,7 +163,7 @@ fn build_fused_cluster<L: BuildHasher + Sync>(
 fn materialize_cluster(
     members: Vec<Fingerprint>,
     file_paths: &HashMap<FileId, PathBuf>,
-    convicted: bool,
+    shape_family: Option<usize>,
 ) -> Cluster {
     let size = members.len();
     let smallest_nodes = smallest_node_count(&members);
@@ -172,7 +173,7 @@ fn materialize_cluster(
         id: encode_short_id(id_source),
         members,
         mass,
-        convicted,
+        shape_family,
     }
 }
 

@@ -18,7 +18,9 @@
 use std::hash::BuildHasher;
 
 use crate::{
-    cluster_filters::{is_noise_pattern, is_single_file_declaration_family, ParseCache},
+    cluster_filters::{
+        escapes_as_copy, is_noise_pattern, is_single_file_declaration_family, ParseCache,
+    },
     report_render::{cluster_to_report, ReportSources},
 };
 
@@ -32,8 +34,9 @@ use super::{ReportCluster, ReportInputs};
 /// re-parse checks below, so those are skipped. Without this a large
 /// generated file is re-walked once per cluster only to be hidden anyway
 /// ([CLONE-NOISE-REPARSE-CACHE]). The remaining rules:
-/// - a conviction carried from the shape family the cluster was
-///   admitted out of ([CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY]);
+/// - the shape family the cluster was admitted out of, when the
+///   cluster alone is only a fragment of an idiom the filters would
+///   convict whole ([CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY]);
 /// - the recognised noise families of [CLONE-NOISE-*] — struct-field
 ///   runs, match-dispatch tables, signature-only matches, literal
 ///   variation calls, constant tables, generated-suffix scaffolds and
@@ -51,20 +54,46 @@ pub(crate) fn cluster_is_hidden<S: BuildHasher>(
     if occurrences_all_hidden {
         return true;
     }
-    cluster.convicted
-        || is_noise_pattern(
-            &cluster.members,
-            inputs.sources,
-            inputs.file_languages,
-            parse_cache,
-        )
-        .is_some()
+    is_noise_pattern(
+        &cluster.members,
+        inputs.sources,
+        inputs.file_languages,
+        parse_cache,
+    )
+    .is_some()
+        || shape_family_convicts(cluster, inputs, parse_cache)
         || is_single_file_declaration_family(
             cluster,
             inputs.sources,
             inputs.file_languages,
             parse_cache,
         )
+}
+
+/// [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY] Whether the shape family the
+/// cluster was admitted out of is a convicted idiom the cluster is a
+/// fragment of.
+///
+/// A byte-identical copy the escape hatch protects is never hidden this
+/// way: a cluster whose occurrences share exact bytes, spanning two
+/// files where the convicting filter demands it, is the copy the family
+/// was split to protect.
+fn shape_family_convicts<S: BuildHasher>(
+    cluster: &crate::cluster::Cluster,
+    inputs: &ReportInputs<'_, S>,
+    parse_cache: &ParseCache,
+) -> bool {
+    let Some(family) = cluster
+        .shape_family
+        .and_then(|index| inputs.shape_families.get(index))
+    else {
+        return false;
+    };
+    if family.len() <= cluster.members.len() {
+        return false;
+    }
+    is_noise_pattern(family, inputs.sources, inputs.file_languages, parse_cache)
+        .is_some_and(|filter| !escapes_as_copy(&cluster.members, inputs.sources, filter))
 }
 
 /// Materialises one cluster and its visibility decision together, so

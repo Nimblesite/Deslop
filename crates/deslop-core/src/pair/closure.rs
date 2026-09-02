@@ -50,7 +50,7 @@ fn build_clusters(
         .map(|(root, members)| FusedCluster {
             members: members.into_iter().collect(),
             edges: edges.remove(&root).unwrap_or_default(),
-            convicted: false,
+            shape_family: None,
         })
         .collect()
 }

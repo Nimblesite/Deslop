@@ -114,7 +114,8 @@ fn pair_passes_content_gate<L: BuildHasher>(
         context.sources,
         context.languages,
     );
-    evidence.measured && evidence.support() >= content_floor(pair, left, right)
+    let verdict = evidence.measured && evidence.support() >= content_floor(pair, left, right);
+    verdict
 }
 
 /// Whether this pair needs embedding evidence rather than structural or

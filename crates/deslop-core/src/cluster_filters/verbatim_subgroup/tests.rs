@@ -105,7 +105,6 @@ impl Corpus {
     fn split(&self, component: &FusedCluster) -> Vec<FusedCluster> {
         split_noise_verbatim_families(
             std::slice::from_ref(component),
-            std::slice::from_ref(component),
             &self.fingerprints,
             &self.sources,
             &self.languages,
@@ -132,7 +131,7 @@ fn component(size: usize) -> FusedCluster {
     FusedCluster {
         members,
         edges,
-        convicted: false,
+        shape_family: None,
     }
 }
 

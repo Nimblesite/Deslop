@@ -46,7 +46,7 @@ fn ranked_with_edges(members: &[Fingerprint], edges: Vec<FusedEdge>) -> Vec<Clus
     let fused = [FusedCluster {
         members: (0..members.len()).collect(),
         edges,
-        convicted: false,
+        shape_family: None,
     }];
     build_ranked_fused_clusters(&ClusterBuildInputs {
         fingerprints: members,

@@ -152,7 +152,7 @@ fn assert_cross_file_copy_is_published(report: &Value) -> Result<()> {
 /// byte-proven from the source.
 fn assert_copy_is_saturated(report: &Value, copy: &Value) -> Result<()> {
     assert!(
-        has_verbatim_pair(&fixture("verbatim-subgroup"), copy)?,
+        has_verbatim_pair(&fixture("verbatim-subgroup").join(CALL_CASE), copy)?,
         "{GEOMETRY_LABEL}: the two copies are byte-identical and must be \
          byte-proven — {dump}",
         dump = signal_dump(copy),

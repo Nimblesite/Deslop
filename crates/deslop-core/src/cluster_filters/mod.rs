@@ -147,7 +147,7 @@ use tree_sitter::Node;
 pub(crate) use declaration_family::is_single_file_declaration_family;
 pub use snippets::ParseCache;
 use snippets::{collect_snippets, parse_for, uniform_language, Snippet};
-pub(crate) use verbatim_subgroup::split_noise_verbatim_families;
+pub(crate) use verbatim_subgroup::{escapes_as_copy, split_noise_verbatim_families};
 
 use crate::{
     ast::{named_children, ByteRange},

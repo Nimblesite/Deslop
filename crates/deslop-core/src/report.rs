@@ -6,6 +6,7 @@ use crate::{
     boilerplate::BoilerplateRange,
     cluster::Cluster,
     config::ExclusionConfig,
+    fingerprint::Fingerprint,
     report_boilerplate::build_boilerplate_hints,
     report_metrics::{compute_repo_metrics, AnalysedLines, MetricsInputs},
     report_render::ReportSources,
@@ -72,6 +73,9 @@ pub fn distinct_visible_path_count(cluster: &ReportCluster) -> usize {
 pub struct ReportInputs<'a, S: BuildHasher> {
     /// Final closure components.
     pub clusters: &'a [Cluster],
+    /// The shape families the clusters were admitted out of, indexed by
+    /// [`Cluster::shape_family`] ([CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY]).
+    pub shape_families: &'a [Vec<Fingerprint>],
     /// Registry resolving file identities to paths.
     pub registry: &'a FileRegistry,
     /// Language id by file.

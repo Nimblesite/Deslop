@@ -87,7 +87,7 @@ impl PipelineSession {
             Some(already) => already,
             None => self.materialize_trees()?,
         };
-        let fused_clusters =
+        let (fused_clusters, shape_families) =
             self.partition_and_split(fingerprints, pairs, &trees, &parse_cache, &mut ledger);
         let clusters = self.ranked_clusters(fingerprints, &fused_clusters, &trees, &mut ledger);
         tracing::info!(
@@ -98,6 +98,7 @@ impl PipelineSession {
         ledger.log_summary();
         Ok(render_report(ReportInputs {
             clusters: &clusters,
+            shape_families: &shape_families,
             registry: &self.registry,
             file_languages: &self.file_languages,
             files_analysed: self.files_analysed,
@@ -125,7 +126,10 @@ impl PipelineSession {
         trees: &[crate::ast::NormalizedNode],
         parse_cache: &ParseCache,
         ledger: &mut StageLedger,
-    ) -> Vec<crate::pair::FusedCluster> {
+    ) -> (
+        Vec<crate::pair::FusedCluster>,
+        Vec<Vec<crate::fingerprint::Fingerprint>>,
+    ) {
         // [FUSED-SHARED-SUBTREE] (gh #408): measure the structural
         // overlap the anchor axis discards before survival drops the
         // enclosing Type-3 pair and leaves only its fragment views. The
@@ -190,7 +194,6 @@ impl PipelineSession {
         let stage_started = Instant::now();
         let noise_input = fused_clusters.len();
         let fused_clusters = split_noise_verbatim_families(
-            &shape_families,
             &fused_clusters,
             fingerprints,
             &self.sources,
@@ -203,7 +206,7 @@ impl PipelineSession {
             fused_clusters.len(),
             stage_started,
         );
-        fused_clusters
+        attach_shape_families(fused_clusters, &shape_families, fingerprints)
     }
 
     /// The LSH/pair construction half of the render: materialises trees
@@ -449,4 +452,44 @@ impl StageLedger {
             );
         }
     }
+}
+
+/// [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY] Stamps each admitted component
+/// with the shape family it was admitted out of and materialises the
+/// families' members for the report's family-level noise verdict.
+///
+/// Every admitted pair is a pre-gate pair, so a component's first member
+/// names its family; a component that resolves to none stays `None` and
+/// is judged on its own, exactly as before.
+fn attach_shape_families(
+    mut admitted: Vec<crate::pair::FusedCluster>,
+    shape_families: &[crate::pair::FusedCluster],
+    fingerprints: &[crate::fingerprint::Fingerprint],
+) -> (
+    Vec<crate::pair::FusedCluster>,
+    Vec<Vec<crate::fingerprint::Fingerprint>>,
+) {
+    let family_of: std::collections::HashMap<usize, usize> = shape_families
+        .iter()
+        .enumerate()
+        .flat_map(|(family, shape)| shape.members.iter().map(move |member| (*member, family)))
+        .collect();
+    for component in &mut admitted {
+        component.shape_family = component
+            .members
+            .first()
+            .and_then(|member| family_of.get(member))
+            .copied();
+    }
+    let members = shape_families
+        .iter()
+        .map(|shape| {
+            shape
+                .members
+                .iter()
+                .filter_map(|member| fingerprints.get(*member).cloned())
+                .collect()
+        })
+        .collect();
+    (admitted, members)
 }

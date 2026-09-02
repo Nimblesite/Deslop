@@ -459,7 +459,7 @@ impl ReportFixture {
             mass: u64::try_from(node_count)
                 .unwrap_or(u64::MAX)
                 .saturating_mul(u64::try_from(spans.len().saturating_sub(1)).unwrap_or(u64::MAX)),
-            convicted: false,
+            shape_family: None,
         }
     }
 
@@ -468,6 +468,7 @@ impl ReportFixture {
         let exclusion = ExclusionConfig::empty();
         let parse_cache = ParseCache::new();
         render_report(ReportInputs {
+            shape_families: &[],
             clusters,
             registry: &self.registry,
             file_languages: &self.file_languages,
