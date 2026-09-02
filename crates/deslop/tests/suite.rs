@@ -159,6 +159,7 @@ mod metric_excludes_hidden_clusters;
 mod metric_language_agnostic;
 #[path = "metrics_folder_rollup.rs"]
 mod metrics_folder_rollup;
+mod metrics_weighted_wire_refusal;
 #[path = "ollama_failures.rs"]
 mod ollama_failures;
 #[path = "operator_drift_is_not_duplication.rs"]
