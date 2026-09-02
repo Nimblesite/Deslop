@@ -73,7 +73,7 @@ pub fn measure_pair_content<S: BuildHasher, L: BuildHasher>(
     languages: &HashMap<FileId, &'static str, L>,
 ) -> ContentEvidence {
     let tree_index = tree_index_of(trees);
-    measure_pair_content_indexed(left, right, &tree_index, sources, languages)
+    measure_pair_content_indexed(left, right, &tree_index, sources, languages, false)
 }
 
 /// Measures both content axes using a caller-owned tree index.
@@ -87,18 +87,33 @@ pub(crate) fn measure_pair_content_indexed<S: BuildHasher, L: BuildHasher>(
     tree_index: &HashMap<FileId, &NormalizedNode>,
     sources: &HashMap<FileId, Vec<u8>, S>,
     languages: &HashMap<FileId, &'static str, L>,
+    interior: bool,
 ) -> ContentEvidence {
-    let same_file = left.file_id == right.file_id;
+    let scope = PairScope {
+        same_file: left.file_id == right.file_id,
+        interior,
+    };
     let left = member_content(left, tree_index, sources, languages);
     let right = member_content(right, tree_index, sources, languages);
-    pair_evidence(left.as_ref().zip(right.as_ref()), sources, same_file)
+    pair_evidence(left.as_ref().zip(right.as_ref()), sources, scope)
+}
+
+/// Where the two endpoints sit, for the rename axis's scope rules
+/// ([FUSED-CONTENT-GATE]).
+#[derive(Clone, Copy)]
+pub(crate) struct PairScope {
+    /// Both endpoints are in one file, so the promote floor applies.
+    pub(crate) same_file: bool,
+    /// Both endpoints are windows strictly inside an authored function,
+    /// so a rename over a literal-free window cannot vouch for itself.
+    pub(crate) interior: bool,
 }
 
 /// Builds pair evidence from two resolved content frontiers.
 fn pair_evidence<S: BuildHasher>(
     pair: Option<(&MemberContent, &MemberContent)>,
     sources: &HashMap<FileId, Vec<u8>, S>,
-    same_file: bool,
+    scope: PairScope,
 ) -> ContentEvidence {
     let Some((left, right)) = pair else {
         return ContentEvidence::unmeasured();
@@ -116,7 +131,7 @@ fn pair_evidence<S: BuildHasher>(
             Some(left),
             Some(right),
             sources,
-            same_file,
+            scope,
         ),
         literal_fraction: pair_literal_fraction(left, right),
         measured: true,

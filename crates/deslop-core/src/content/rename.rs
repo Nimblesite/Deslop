@@ -17,7 +17,7 @@
 
 use std::{collections::BTreeMap, collections::HashMap, hash::BuildHasher};
 
-use crate::{buckets::CONTENT_SUPPORT_FLOOR, state::FileId};
+use crate::{buckets::CONTENT_SUPPORT_FLOOR, content::PairScope, state::FileId};
 
 use super::{
     frontier::{
@@ -84,7 +84,7 @@ pub(super) fn pair_rename_consistency<S: BuildHasher>(
     canonical: Option<&MemberContent>,
     member: Option<&MemberContent>,
     sources: &HashMap<FileId, Vec<u8>, S>,
-    same_file: bool,
+    scope: PairScope,
 ) -> f64 {
     let (Some(canonical), Some(member)) = (canonical, member) else {
         return 0.0;
@@ -102,8 +102,20 @@ pub(super) fn pair_rename_consistency<S: BuildHasher>(
     if affirming_literals == 0 && literal_total > 0 {
         return 0.0;
     }
-    let anchors = affirming_literals.saturating_add(mapping.explained);
-    let coverage = if same_file {
+    // A window carved from inside a function that carries no literal at
+    // all offers the substitution nothing to contradict — the literal
+    // that would is on the line the window left out — so a substitution
+    // corroborated only by its own repetition cannot anchor it. Its
+    // anchors are the positions the rename did not supply: identity
+    // identifiers ([FUSED-CONTENT-GATE-INTERIOR]). A whole authored
+    // function or module with no literal is judged as before.
+    let identifier_anchors = if scope.interior && literal_total == 0 {
+        mapping.identity
+    } else {
+        mapping.explained
+    };
+    let anchors = affirming_literals.saturating_add(identifier_anchors);
+    let coverage = if scope.same_file {
         vacuous_share(affirming_literals, literal_total)
             .min(vacuous_share(mapping.explained, mapping.constrained))
     } else {
@@ -134,6 +146,9 @@ struct RenameMapping {
     /// position itself; substituted positions by repetition. Wildcards
     /// are backed by nothing and never count.
     explained: usize,
+    /// The explained positions whose raw bytes are equal on both sides —
+    /// evidence the substitution did not supply.
+    identity: usize,
 }
 
 /// Measures [`RenameMapping`] for one pair's identifier positions,
@@ -159,7 +174,7 @@ fn rename_mapping(
     let substitutions = substituted_pairs(identifiers);
     let bijection = ModalBijection::over(&substitutions);
     let counts = pair_counts(substitutions.iter().copied());
-    let (mut constrained, mut explained) = (0_usize, 0_usize);
+    let (mut constrained, mut explained, mut identity) = (0_usize, 0_usize, 0_usize);
     for pair in identifiers {
         let substituted = pair.0 != pair.1;
         let occurrences = counts
@@ -175,10 +190,14 @@ fn rename_mapping(
         if !substituted || bijection.explains(pair) {
             explained = explained.saturating_add(1);
         }
+        if !substituted {
+            identity = identity.saturating_add(1);
+        }
     }
     RenameMapping {
         constrained,
         explained,
+        identity,
     }
 }
 
@@ -281,19 +300,20 @@ fn literal_echoes<S: BuildHasher>(
     echoes
 }
 
-/// Aligned literal positions that affirm the copy under the
-/// authored-literal group discipline: a position affirms when its raw
-/// bytes are preserved or an echo explains them, **and** every fragment
-/// of the same authored literal affirms too. A preserved fragment of a
-/// composite literal whose sibling fragment drifted is the literal
-/// changing, not evidence of the copy — the shared URL prefix of a
-/// sibling accessor family must not open the rename pool.
+/// Aligned literal positions that affirm the copy: positions whose raw
+/// bytes are preserved or whose bytes an echo explains. Every collapsed
+/// literal position counts on its own, the fragments of an interpolated
+/// string included — the frontier is positional, and
+/// [FUSED-CONTENT-GATE] pools each aligned literal position into the
+/// same coverage as the identifier positions. A preserved fragment is a
+/// preserved literal; the drifted fragment beside it is a drifted one,
+/// and weakens the proof in proportion like any other.
 fn affirming_literal_count(
     canonical: &MemberContent,
     member: &MemberContent,
     echoes: &LiteralEchoes,
 ) -> usize {
-    let positions: Vec<(usize, bool, Option<u32>)> = canonical
+    canonical
         .keys
         .iter()
         .zip(member.keys.iter())
@@ -301,21 +321,7 @@ fn affirming_literal_count(
         .filter(|(_, (left, right))| {
             left.population == Population::Literal && right.population == Population::Literal
         })
-        .map(|(index, (left, right))| {
-            let affirmed = left.key == right.key || echoes.positions.contains(&index);
-            (index, affirmed, left.literal_group)
-        })
-        .collect();
-    let broken: std::collections::BTreeSet<u32> = positions
-        .iter()
-        .filter(|(_, affirmed, _)| !affirmed)
-        .filter_map(|(_, _, group)| *group)
-        .collect();
-    positions
-        .iter()
-        .filter(|(_, affirmed, group)| {
-            *affirmed && !group.is_some_and(|inside| broken.contains(&inside))
-        })
+        .filter(|(index, (left, right))| left.key == right.key || echoes.positions.contains(index))
         .count()
 }
 

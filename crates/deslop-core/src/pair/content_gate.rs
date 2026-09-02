@@ -50,6 +50,7 @@ pub(crate) fn apply_pair_content_gate<L>(
             &GateContext {
                 tree_index: &tree_index,
                 anchors: &anchors,
+                scopes: &scopes,
                 sources,
                 languages,
                 cache,
@@ -65,6 +66,9 @@ struct GateContext<'a, L: BuildHasher> {
     /// The exact whole-function clones a token-only pair may not merely
     /// wrap ([FUSED-SHARED-SUBTREE-ECHO]).
     anchors: &'a ExactFunctionAnchors,
+    /// Authored declarations per file, for the interior-window rule
+    /// ([FUSED-CONTENT-GATE-INTERIOR]).
+    scopes: &'a DeclarationScopes<'a, L>,
     /// Raw source per file.
     sources: &'a HashMap<FileId, Vec<u8>>,
     /// Language per file.
@@ -83,7 +87,60 @@ fn pair_passes_content_gate<L: BuildHasher>(
     else {
         return false;
     };
+    let verdict = gate_verdict(pair, left, right, context);
+    log_gate_verdict(left, right, &verdict);
+    verdict.admitted()
+}
 
+/// The route one candidate edge took through the content guard and the
+/// decision that route produced.
+enum GateVerdict {
+    /// Refused: the endpoints play different roles under embedding
+    /// support ([CLONE-NOISE-EMBEDDING-ROLE]).
+    RoleMismatch,
+    /// Refused: a token-only pair that merely wraps an exact
+    /// whole-function clone ([FUSED-SHARED-SUBTREE-ECHO]).
+    ContainerEcho,
+    /// Admitted without measurement: no route saturated, so the pair's
+    /// own shape or semantic evidence is not an echo of normalisation.
+    NotRequired,
+    /// Measured against the scope-specific floor.
+    Measured {
+        /// The pair's content evidence.
+        evidence: ContentEvidence,
+        /// The floor the evidence had to clear.
+        floor: f64,
+    },
+}
+
+impl GateVerdict {
+    /// Whether the edge survives the guard.
+    fn admitted(&self) -> bool {
+        match self {
+            Self::RoleMismatch | Self::ContainerEcho => false,
+            Self::NotRequired => true,
+            Self::Measured { evidence, floor } => evidence.measured && evidence.support() >= *floor,
+        }
+    }
+
+    /// The route's name for the trace.
+    fn route(&self) -> &'static str {
+        match self {
+            Self::RoleMismatch => "role_mismatch",
+            Self::ContainerEcho => "container_echo",
+            Self::NotRequired => "not_required",
+            Self::Measured { .. } => "measured",
+        }
+    }
+}
+
+/// Decides one candidate edge's route through the content guard.
+fn gate_verdict<L: BuildHasher>(
+    pair: &CandidatePair,
+    left: &Fingerprint,
+    right: &Fingerprint,
+    context: &GateContext<'_, L>,
+) -> GateVerdict {
     if embedding_needs_role_guard(pair)
         && is_embedding_role_mismatch(
             left,
@@ -93,7 +150,7 @@ fn pair_passes_content_gate<L: BuildHasher>(
             context.cache,
         )
     {
-        return false;
+        return GateVerdict::RoleMismatch;
     }
     // [FUSED-SHARED-SUBTREE-ECHO] A token echo of an exact function plus
     // scraps is a wider view of that function, not a second clone.
@@ -102,35 +159,39 @@ fn pair_passes_content_gate<L: BuildHasher>(
             .anchors
             .wraps_within(left, right, SHARED_SUBTREE_MIN_NODE_COUNT)
     {
-        return false;
+        return GateVerdict::ContainerEcho;
     }
     if !content_is_required(pair, left, right) {
-        return true;
+        return GateVerdict::NotRequired;
     }
+    let interior =
+        context.scopes.enclosing(left).is_some() && context.scopes.enclosing(right).is_some();
     let evidence = measure_pair_content_indexed(
         left,
         right,
         context.tree_index,
         context.sources,
         context.languages,
+        interior,
     );
-    let floor = content_floor(pair, left, right);
-    let verdict = evidence.measured && evidence.support() >= floor;
-    log_gate_verdict(left, right, &evidence, floor, verdict);
-    verdict
+    GateVerdict::Measured {
+        evidence,
+        floor: content_floor(pair, left, right),
+    }
 }
 
-/// Records one measured content verdict so a surprising admission or
-/// refusal is traceable without re-running the pipeline. Byte offsets
-/// and counts only — never source text ([PRINCIPLES-LOGGING]).
-fn log_gate_verdict(
-    left: &Fingerprint,
-    right: &Fingerprint,
-    evidence: &ContentEvidence,
-    floor: f64,
-    admitted: bool,
-) {
+/// Records one content verdict so a surprising admission or refusal is
+/// traceable without re-running the pipeline. Byte offsets and counts
+/// only — never source text ([PRINCIPLES-LOGGING]).
+fn log_gate_verdict(left: &Fingerprint, right: &Fingerprint, verdict: &GateVerdict) {
+    let (agreement, rename, floor) = match verdict {
+        GateVerdict::Measured { evidence, floor } => {
+            (evidence.agreement, evidence.rename_consistency, *floor)
+        }
+        _ => (0.0, 0.0, 0.0),
+    };
     tracing::trace!(
+        route = verdict.route(),
         left_file = ?left.file_id,
         left_start = left.byte_range.start,
         left_end = left.byte_range.end,
@@ -139,11 +200,10 @@ fn log_gate_verdict(
         right_start = right.byte_range.start,
         right_end = right.byte_range.end,
         right_nodes = right.node_count,
-        agreement = evidence.agreement,
-        rename = evidence.rename_consistency,
-        contradiction = ?evidence.contradiction,
+        agreement,
+        rename,
         floor,
-        admitted,
+        admitted = verdict.admitted(),
         "content gate verdict",
     );
 }
