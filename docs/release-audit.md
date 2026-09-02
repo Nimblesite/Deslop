@@ -1,45 +1,48 @@
-# 0.33.0 release accuracy review
+# 0.33.0 release accuracy audit
 
-**Verdict: GO, pending CI.** The current tip is more accurate than [0.32.0 (`f92300e5`)](https://github.com/Nimblesite/Deslop/commit/f92300e5e1004ef6c53a94174a0d7e842232ec80) on every Dart, C#, F#, JavaScript, TypeScript and Python fixture in the suite. Every row below is closed; the two embedding rows are curated skips with their assertions intact.
+**Verdict: GO once CI on PR #494 is green and the paired 0.32.0 scan of every fixture reports no lost finding.** The reviewed worktree is more accurate than 0.32.0 on every paired fixture below, including the same-file Type-3 false negative found during this audit; code, spec and pins cite the same ids.
 
-## Blocking evidence
+## Audit point
 
-`cargo check --workspace --all-targets`, `cargo fmt --check` and `cargo clippy --workspace --all-targets -- -D warnings` pass. `cargo test -p deslop --test suite --release` passes: **456 passed, 0 failed, 4 ignored** (the four ignores are curated skips owned by gh #369, #422, #489 and #491).
+- Baseline: 0.32.0, `f92300e5e1004ef6c53a94174a0d7e842232ec80`.
+- Merged 0.33 line: `1ecfc99712b06d92f7c237acdc5b6421208be96f` (PR #485).
+- Reviewed worktree: `fixes-2` (PR #494), which carries the #492 and #493 corrections.
+- `0fca6f6d38badb95429e67c9ec2620d711c8cebe` does **not** fix #492. It changed cluster scope/election and the content gate, not shared-subtree candidate admission. The defect remained through merged `1ecfc997`; it is fixed only by the current worktree changes to candidate admission and rescue measurement.
 
-| Severity | Defect proven by the failing suite | Required action |
+## Blocking findings
+
+| Severity | Finding | Evidence | Action |
+|---|---|---|---|
+| ~~P0~~ Fixed | Same-file Type-3 methods were false negatives. | The new black-box pin first failed with fragments only, then passed after valid same-file candidates reached rescue measurement. The authored pair measures structural overlap 0.8205. Its content support is 0.5625, proving that the 0.85 ordinary fused threshold must not be misapplied as the rescue content floor. | The configurable rescue agreement floor, the ordinary 0.85 fused threshold and the disjoint-range guard stay as they are; `[FUSED-SHARED-SUBTREE-SAME-FILE]` is specified in `fused.md`. The exact-function echo index now holds same-file clones too ([FUSED-SHARED-SUBTREE-ECHO]), so two sibling classes wrapping one byte-identical method publish the method and never the classes (`same_file_rescue`, new fixture `csharp-same-file-class-echo`). |
+| P1 | Four ignored E2E tests leave accuracy/performance routes outside the release proof. | `embedding_perf::duplicate_subtree_embeddings_are_collapsed_before_ann`, `embedding_route_invariance::embeddings_on_reports_every_file_set_embeddings_off_reported`, `issue_343_sum_clamp_saturation::mid_band_pair_stays_visible_with_a_real_bucket`, and `perf_sample::perf_sample_bounded_scan`. | Keep them explicitly excluded from the 0.33 accuracy claim; do not describe an ignored route as green. No embedding work is part of this fix. |
+| P1 | The previous audit overstated test integrity. | Several passing fixes changed fixtures or test inputs: Python shape-only fixtures became genuine copies, `python_same_shape_backends` moved to node floor 10, and LSP merge-refusal coverage moved off `csharp-merge-drift`. Assertions were retained, but “no test was weakened” is not proven by assertion count alone. | Preserve the new #492 black-box pin, and require the final paired-baseline run to prove the changed inputs did not hide a 0.32 finding. |
+
+## Accuracy comparison with 0.32.0
+
+| Area | 0.33.0 result | Decision |
 |---|---|---|
-| ~~P0~~ Fixed | `python_dict_assert_payload_proof` (×4) and `python_issue_72_monkeypatch::a_computed_value…` were red because their fixtures were shape-only pairs — every identifier and literal differed, agreement 0.06–0.63 — which [FUSED-CONTENT-GATE] refuses before closure exactly as it refuses `issue_134`. The filters never saw them, so nothing was hidden and nothing was published; 0.32.0 admitted shape alone. | The fixtures are now genuine copies that clear the gate on agreement (three quarters or more of every position preserved, one value varied so no statement is byte-identical) and the assertions are unchanged: computed payloads, executable decorator arguments and decorated class bodies publish; the static parametrize table is hidden and counted. `python_issue_72`'s computed family spans three modules under the cross-file floor. |
-| ~~P0~~ Fixed | `ts_issue_285`: two of the seven scenarios share the same `expectErrorMessages` literal, so the pair alone is an invariant literal-bearing position; the family verdict did not reach it because the pre-gate family mixed view depths and its call sequences shared no header. `python_same_shape_backends`: a byte-identical nine-node `pending.append(job.identifier)` repeated inside one function published at the test's floor of 8. | [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY] now reads the members that share the admitted component's shape (same Merkle hash), so the seven-scenario family is convicted whole and its fragment is hidden and counted. The same-shape fixture scans at floor 10, above the one-line statement the gate admits verbatim at any floor it reaches; its assertions are unchanged. |
-| ~~P0~~ Fixed | Dart accessor family published as literal-free windows (lines 12-15) that omit the endpoint each method calls, glued to class-shell and method-body views of the same methods. | Judge the rename on the whole method ([FUSED-CONTENT-GATE-INTERIOR]), refuse shell-and-body echoes of an exact function ([FUSED-SHARED-SUBTREE-ECHO]), publish the seven whole methods. Ranking is duplicated mass alone ([RANK-MASS-SUM]): six copies of a method out-weigh one copy of the control, so the family ranks first by design. |
-| ~~P0~~ Fixed | C# Type-1 ranges cover different namespaces/classes, so two identical methods slice to unequal bytes. F# sibling-window ranges likewise expand asymmetrically to near-whole files. | Fixed by [PIPELINE-CLUSTER-EXACT-SCOPE-STRADDLE], [FUSED-SHARED-SUBTREE-ECHO] on function runs, and the JavaScript/JSX symmetric-extent pin; `csharp_type1_type2_byte_truth`, `fsharp_issue_339_sibling_window_rename`, `issue_389` and `js_ts_extensions` are green. |
-| P2 | ANN representative collapse finds all eight copies but loses the byte-verbatim proof. | Embedding routes are a 0.33.0 non-goal: curated skip under gh #489 (and gh #491 for the embeddings-on/off file-set invariant), assertions intact, plan section in `docs/plans/embedding-accuracy-plan.md`. |
-| ~~P1~~ Fixed | `verbatim_subgroup_idiom_price` cannot run because a required fixture path is missing (`No such file or directory`). | Fixture restored; both halves execute and pass. |
+| TypeScript noise and mixed-band fixtures | The #285 scenario family is hidden as noise; the shape-only `ledger_b` is refused while the four real ledger copies form the authored view. | Improved precision and recall. |
+| Python computed payload and backend fixtures | Genuine computed copies publish; shape-only contracts are suppressed; the real queue clone survives at the intentional node floor. | Improved, subject to the changed-input baseline check above. |
+| Dart accessor family | Seven whole methods publish; fragment echoes are refused; ranking uses duplicated mass. | Improved extent and ranking with 0.32 coverage retained. |
+| C# and F# authored extents | Asymmetric namespace/file expansion is replaced by authored method extents; byte-truth pins pass. | Improved precision. |
+| JavaScript `.js`/`.mjs`/`.cjs` family | The three byte-identical functions publish at function extent; the real whole-file `.js`/`.mjs` pair remains separate; `.cjs` import/export lines are not counted. The focused E2E passes. | #493 is fixed in the reviewed worktree; improved precision over the widened 0.33 output without losing the real pair. |
+| C# same-file merge drift (`csharp-merge-drift`) | 0.32.0 publishes four fragment clusters — two-line pairs at L7-8/L9-10/L19-20/L25-26, seven single statements, L9-12/L25-28 and L5-8/L17-20 — and never the methods. The current worktree publishes `DriftLimits.cs:3-13` and `:15-29` as one cluster and absorbs every fragment view. | Improved recall and precision without weakening the content or range guards. |
+| C# same-file read-after drift (`csharp-merge-readafter`) | 0.32.0 publishes the shared six-line prefix window (L5-10 / L16-21) beside a ten-occurrence single-statement family. The current worktree publishes `ApplyStandard` L3-12 and `ApplyPremium` L14-26 as one cluster; the window and the statements are its fragments. | Improved recall and precision; `widest_same_declaration_view_is_the_published_finding` is repinned from the window to the two methods under [FUSED-SHARED-SUBTREE-SAME-FILE]. |
+| C# sibling classes wrapping one exact method (`csharp-same-file-class-echo`, new) | Both versions publish the byte-identical `Reconcile` method at L7-22 and L31-46. The same-file rescue could have admitted the two class shells and let enclosure widen the finding to L3-25 / L27-49; the echo index refuses them. | Same extents as 0.32.0; the new route is held to the echo rule. |
 
-## Direct 0.32.0 comparison
+## Verification run
 
-Both binaries scanned the same current fixtures with identical node floors and incremental analysis disabled. The 0.32.0 binary was built from tag `v0.32.0` for this review; every row was re-run on the final tip.
-
-| Fixture | 0.32.0 | 0.33.0 tip | Decision |
-|---|---:|---:|---|
-| ts-issue-285 diagnostic scenarios | Control plus the seven-scenario family and its sub-statement family published (the #285 false positive) | Control only; the family is convicted whole and hidden (`clusters_hidden` 1) | **Improved precision.** |
-| ts-mixed-band | `ledger_b` (the shape-only rewrite) clustered with `ledger_a`; the four near-identical ledgers were not one view | `ledger_b` refused; one whole-file view over `a`, `c`, `d`, `e` plus the byte-identical `d`/`e` pair | **Improved precision and recall.** |
-| js-mjs-cjs family | Three function extents (lines 3–17) | Whole-file extents (1–17, 1–17, 1–19) | **Range widened.** The import and `module.exports` lines are not duplicated; the same three copies are reported. Tracked as gh #493, not a lost or invented finding. |
-| history-determinism control corpus (four TypeScript ledgers) | One whole-file cluster; the byte-identical five-line window three files share was welded into it | The whole-file cluster plus that window as its own three-file cluster, the same way `ts-mixed-band` keeps its byte-identical tail family ([PIPELINE-CLUSTER-SUBSUME], [FUSED-SHARED-SUBTREE-ECHO]) | **Consistent with the nested-verbatim doctrine the suite pins; no finding lost.** |
-| csharp-merge-drift | The four-line prefix window (agreement 0.82) published beside the exact tail | Exact tail only; the prefix is below the same-file floor ([FUSED-CONTENT-GATE]) | **By spec.** The whole near-miss methods cluster in neither version: shared-subtree rescue is cross-file only (gh #492). |
-| rust-consolidate, csharp-merge-leafgap, csharp-issue-134, js-jsx family | Same extents as the tip | Same extents | **Same.** |
-| Python computed dict payload | 1 correct cross-file cluster; 14/14 duplicated LOC (100%) | 1 correct cross-file cluster on the genuine-copy fixture; the former shape-only fixture (agreement 0.06) is refused like `issue_134` | **Fixed.** 0.32.0 admitted shape alone; the gate now demands content and the fixture demands content. |
-| Dart rename without anchors | Real clone ranked first; 116 duplicated LOC (85.29%) | Seven whole accessors (mass 612) first, shared class prefix second, real clone third; 116 duplicated LOC (85.29%) | **Fixed.** Same coverage as 0.32.0; every published range holds its endpoint literal; order follows [RANK-MASS-SUM]. |
-| Python same-shape backends | Wrong backend pair; real queue clone missed | Real queue clone found; the contract pair is suppressed and counted; nothing else publishes at floor 10 | **Fixed.** |
-
-## Test-integrity check
-
-No assertion was deleted or relaxed. The extension-host coverage floor is main's 87: this branch had raised it to 95 with no new extension tests while the host measures 87.4%, so every CI run failed the gate; the ratchet stays at main's value until the extension earns more. Three pins were corrected to the extent the pipeline now publishes: `js_and_jsx` asserts the symmetric function extent is byte-identical (it is); `rename_needs_an_anchor` asserts mass order and exact spans; the LSP `cross_file_fixture_offers_and_resolves_consolidate_action` asserts the consolidation edit, because its refusal only ever held while the cluster was the whole file rather than the identical function. Two LSP merge-refusal tests moved to `csharp-merge-leafdrift`, a same-file pair the gate admits whose `ceiling` literals are an integer and a real, so the refusal they pin is a leaf drift the merge cannot parameterise; the old `csharp-merge-drift` fixture keeps its engine-level pins. Five Python fixtures that were shape-only pairs became genuine copies. Twelve `deslop-mcp` integration tests still spoke the retired twelve-tool wire (`report-get`, `report-query`, `session-config`, `set-embedding-model`, `list-embedding-models`, a flat `rescan` payload); CI's fail-fast had never reached them on this branch. They now drive the seven-tool surface [MCP-TOOLS] specifies (`duplicates`, `session` actions, `rescan` wrapping its page), with every assertion kept. The full workspace suite (`cargo test --release --workspace --all-targets` with the CI features), the LSP suite and the mcp suite pass; `make lint` and the repository duplication gate pass.
+- `cargo check --workspace --all-targets`: pass.
+- `cargo fmt --check`: pass.
+- `javascript_family_clusters_across_js_mjs_and_cjs_extensions`: pass.
+- `csharp_same_file_type3_reports_both_methods_in_one_cluster`: pass after first being observed red on the pre-fix code.
+- Focused release-profile runs on the reviewed tree — `same_file_rescue`, `cross_cluster_collapse`, `type3_enclosing_method`, `js_ts_extensions`, `python_dict_assert_payload_proof`, `csharp_merged_clone_families`, `issue_389`, `fsharp_issue_339`, `incremental_multilang_golden`, `rename_needs_an_anchor`: pass. `cargo clippy --release -p deslop-core -p deslop --all-targets -- -D warnings`: pass.
+- Full workspace/CI run: CI on PR #494; no green claim is made from an earlier commit.
 
 ## Release gate
 
-- All failures pass without deleted assertions or relaxed values: 456 passed, 0 failed, 4 curated skips.
-- Paired fixtures meet or exceed 0.32.0 for precision, recall, ranges, ranking, and Rust-calculated metrics.
-- The missing verbatim fixture is restored and both arbitration paths execute.
-- A fixed candidate reruns the full suite and immutable baseline comparison.
+1. ~~Synchronize `[FUSED-SHARED-SUBTREE-SAME-FILE]` in `docs/specs/fused.md`~~ — done; code, spec and pins cite the same id.
+2. Re-run the paired 0.32.0/current fixture matrix with identical inputs and node floors.
+3. Run the complete CI feature matrix and record exact pass/fail/ignored counts.
 
-**Release decision: GO once CI on PR #485 is green.**
+**Release decision: GO when gates 2 and 3 pass.**

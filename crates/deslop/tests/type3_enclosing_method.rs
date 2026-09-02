@@ -1,5 +1,5 @@
 //! Black-box regression for the five-language Type-3 recall hole
-//! (#408, [PIPELINE-CLUSTER-SUBSUME], [REPAIR-SUBSUME-CONTENT-FIRST]): one
+//! (#408, [PIPELINE-CLUSTER-SUBSUME], [FUSED-SHARED-SUBTREE]): one
 //! inserted statement must not hide a whole-method clone behind its own
 //! fragments.
 //!

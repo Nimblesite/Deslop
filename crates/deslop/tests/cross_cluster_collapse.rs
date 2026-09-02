@@ -22,8 +22,12 @@ use anyhow::Result;
 use crate::common::signals::assert_no_pair_surface_on_cluster;
 use crate::common::*;
 
-const STANDARD_VIEW_BYTES: u64 = 190;
-const PREMIUM_VIEW_BYTES: u64 = 189;
+/// The 1-based lines of `Prefix.ApplyStandard`, the whole authored method.
+const STANDARD_METHOD_LINES: RangeInclusive<u64> = 3..=12;
+/// The 1-based lines of `Prefix.ApplyPremium`, which grew an archive branch.
+const PREMIUM_METHOD_LINES: RangeInclusive<u64> = 14..=26;
+/// The five statements both methods carry byte for byte after their label.
+const SHARED_PREFIX_RUN: &str = "        var ticket = policy.Load(label);\n        policy.Stage(ticket);\n        policy.Validate(ticket);\n        policy.Record(ticket);\n        policy.Publish(ticket);\n";
 /// The 1-based lines `SHARED_LOGIC` occupies in both wrappers.
 const SHARED_LOGIC_LINES: RangeInclusive<u64> = 8..=13;
 
@@ -304,18 +308,17 @@ fn rendered_clusters(report: &serde_json::Value, needle: &str) -> Vec<String> {
         .collect()
 }
 
-/// [REPAIR-SUBSUME-CONTENT-FIRST] / [PIPELINE-CLUSTER-SUBSUME]: the
-/// single-file half of the contract
-/// `content_proven_nested_clone_survives_content_poor_enclosing_view`
-/// holds across files.
+/// [FUSED-SHARED-SUBTREE-SAME-FILE] / [PIPELINE-CLUSTER-SUBSUME]: two
+/// near-miss methods in one file are the finding, not the window they share.
 ///
-/// `csharp-merge-readafter` holds one byte-identical five-statement run
-/// duplicated between two methods of the same class — `Prefix.cs` L6-10
-/// and L17-21, 158 bytes each, byte-for-byte equal. The larger authored view
-/// starts at the local `label` declaration and ends after `Publish`: it is
-/// 190 bytes in both methods, consistently renamed only at the label literal.
-/// [PIPELINE-CLUSTER-EXACT-SCOPE] selects that wider view before pair
-/// admission; a nested exact fingerprint must not override the authored scope.
+/// `csharp-merge-readafter` holds `ApplyStandard` (L3-12) and
+/// `ApplyPremium` (L14-26) in one class. Both open with a label declaration
+/// and five byte-identical statements; the standard copy then sends and
+/// the premium copy grew an archive branch. The same-file rescue admits the
+/// authored method pair, and every narrower view of the shared prefix — the
+/// byte-identical run, the label-renamed window — is a fragment of it
+/// ([PIPELINE-CLUSTER-EXACT-SCOPE]): one cluster, both whole methods,
+/// byte-distinct texts.
 #[test]
 fn widest_same_declaration_view_is_the_published_finding() -> Result<()> {
     let tmp = tempfile::tempdir()?;
@@ -336,9 +339,9 @@ fn widest_same_declaration_view_is_the_published_finding() -> Result<()> {
     let clone = candidates
         .first()
         .ok_or_else(|| anyhow::anyhow!("candidate count asserted to be one above"))?;
-    let occurrences = cluster_occurrences(clone);
+    let views = cluster_occurrences(clone);
     assert_eq!(
-        occurrences.len(),
+        views.len(),
         2,
         "the canonical same-file view must retain both method occurrences: {clone:#}"
     );
@@ -351,16 +354,34 @@ fn widest_same_declaration_view_is_the_published_finding() -> Result<()> {
     assert_ne!(
         texts.first(),
         texts.last(),
-        "the smaller byte-identical fingerprint must not displace the wider authored view"
+        "the premium method grew an archive branch, so the two methods stay byte-distinct"
     );
-    let spans: Vec<u64> = occurrences
+    for text in &texts {
+        assert!(
+            text.contains(SHARED_PREFIX_RUN),
+            "each method carries the byte-identical run the near-miss is built on: {text}"
+        );
+    }
+    let lines: Vec<(u64, u64)> = occurrences(clone)
         .iter()
-        .map(|occurrence| occurrence.end.saturating_sub(occurrence.start))
-        .collect();
+        .map(|occurrence| {
+            Ok((
+                field(occurrence, "start_line")
+                    .as_u64()
+                    .ok_or_else(|| anyhow::anyhow!("start_line missing: {occurrence:#}"))?,
+                field(occurrence, "end_line")
+                    .as_u64()
+                    .ok_or_else(|| anyhow::anyhow!("end_line missing: {occurrence:#}"))?,
+            ))
+        })
+        .collect::<Result<_>>()?;
     assert_eq!(
-        spans,
-        vec![STANDARD_VIEW_BYTES, PREMIUM_VIEW_BYTES],
-        "the two wider authored ranges differ only by their literal byte length: {clone:#}"
+        lines,
+        vec![
+            (*STANDARD_METHOD_LINES.start(), *STANDARD_METHOD_LINES.end()),
+            (*PREMIUM_METHOD_LINES.start(), *PREMIUM_METHOD_LINES.end()),
+        ],
+        "the finding is the two authored methods, not the prefix window nested in them: {clone:#}"
     );
     assert_no_pair_surface_on_cluster(clone, "cross-cluster collapse");
     Ok(())

@@ -12,8 +12,7 @@ use super::super::{
     FUSED_THRESHOLD, LSH_ONLY_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT,
 };
 use super::{
-    candidate_ranges_are_valid, endpoint_node_counts, jaccard_for, order, pair_crosses_files,
-    same_language_indexes,
+    candidate_ranges_are_valid, endpoint_node_counts, jaccard_for, order, same_language_indexes,
 };
 use crate::{
     embedding::EmbeddingPair, fingerprint::Fingerprint, lsh::SignatureLookup, state::FileId,
@@ -283,7 +282,8 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
         if !candidate_ranges_are_valid(pair, self.fingerprints) {
             return false;
         }
-        construction_survives(pair)
-            || (rescue_eligible(pair) && pair_crosses_files(pair, self.fingerprints))
+        // [FUSED-SHARED-SUBTREE-SAME-FILE] Scope changes the rescue's
+        // content floor, not whether a valid pair reaches measurement.
+        construction_survives(pair) || rescue_eligible(pair)
     }
 }

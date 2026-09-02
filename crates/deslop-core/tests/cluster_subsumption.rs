@@ -63,9 +63,10 @@ fn published_views(views: &[[(usize, usize); 2]]) -> Vec<Cluster> {
             ]
         })
         .collect();
-    let fused: Vec<FusedCluster> = (0..views.len())
-        .map(|view| FusedCluster {
-            members: vec![view * 2, view * 2 + 1],
+    let fused: Vec<FusedCluster> = (0..members.len())
+        .step_by(2)
+        .map(|left| FusedCluster {
+            members: vec![left, left.saturating_add(1)],
             edges: Vec::new(),
             shape_family: None,
         })

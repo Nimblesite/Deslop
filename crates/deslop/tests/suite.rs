@@ -251,6 +251,7 @@ mod rust_issue_232_token_jaccard_identical;
 mod rust_test_boilerplate_false_positive;
 #[path = "rust_trait_boilerplate_false_positive.rs"]
 mod rust_trait_boilerplate_false_positive;
+mod same_file_rescue;
 #[path = "showstoppers.rs"]
 mod showstoppers;
 #[path = "sibling_dedup.rs"]

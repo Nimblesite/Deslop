@@ -8,9 +8,11 @@
 //! *because of that function*, and admitting the container hands
 //! subsumption a wider, byte-divergent view that then eats the exact
 //! one ([PIPELINE-CLUSTER-SUBSUME] prefers enclosure). The index below
-//! records every candidate pair that is Merkle-equal, cross-file, and a
-//! run of whole authored functions on both sides, so the rescue can ask
-//! how much of a container's shared mass is already claimed.
+//! records every candidate pair that is Merkle-equal and a run of whole
+//! authored functions on both sides — across files or, since
+//! [FUSED-SHARED-SUBTREE-SAME-FILE] admits same-file rescues, two sibling
+//! containers in one file — so the rescue can ask how much of a
+//! container's shared mass is already claimed.
 
 use std::collections::HashMap;
 
@@ -24,9 +26,9 @@ use super::CandidatePair;
 /// the ordered file pair, and the nodes it claims.
 #[derive(Clone, Copy)]
 struct ExactFunctionPair {
-    /// Range in the lower-numbered file.
+    /// The endpoint that comes first in `(file, byte offset)` order.
     first: ByteRange,
-    /// Range in the higher-numbered file.
+    /// The endpoint that comes second in that order.
     second: ByteRange,
     /// Nodes of the clone — both endpoints agree, being Merkle-equal.
     nodes: usize,
@@ -40,8 +42,8 @@ pub(crate) struct ExactFunctionAnchors {
 }
 
 impl ExactFunctionAnchors {
-    /// Indexes the Merkle-equal, cross-file, function-aligned pairs of
-    /// `pairs`.
+    /// Indexes the Merkle-equal, function-aligned pairs of `pairs`,
+    /// whichever files their endpoints sit in.
     pub(crate) fn index<L: std::hash::BuildHasher>(
         pairs: &[CandidatePair],
         fingerprints: &[Fingerprint],
@@ -54,8 +56,7 @@ impl ExactFunctionAnchors {
             else {
                 continue;
             };
-            if left.file_id == right.file_id
-                || left.hash != right.hash
+            if left.hash != right.hash
                 || !scopes.aligned_function_run(left)
                 || !scopes.aligned_function_run(right)
             {
@@ -141,10 +142,11 @@ fn claimed_by(
     }
 }
 
-/// The pair's file key and ranges in file order, so a container pair and
-/// the exact pair it wraps line up whichever way each was enumerated.
+/// The pair's file key and ranges in `(file, byte offset)` order, so a
+/// container pair and the exact pair it wraps line up whichever way each
+/// was enumerated — two disjoint containers in one file included.
 fn ordered(left: &Fingerprint, right: &Fingerprint) -> ((FileId, FileId), ByteRange, ByteRange) {
-    if left.file_id <= right.file_id {
+    if (left.file_id, left.byte_range.start) <= (right.file_id, right.byte_range.start) {
         (
             (left.file_id, right.file_id),
             left.byte_range,
