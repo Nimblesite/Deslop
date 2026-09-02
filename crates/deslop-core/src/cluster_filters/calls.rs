@@ -401,10 +401,12 @@ const fn call_kinds(language: &str) -> &'static [&'static str] {
     }
 }
 
-/// Returns true when at least one positional argument index has
-/// differing string-literal bytes across the cluster. Non-string
-/// arguments are ignored — the heuristic only fires when the
-/// distinguishing variation is in literal text.
+/// Returns true when the calls vary as literal-variation scaffolding:
+/// **every** literal-bearing argument position differs across the
+/// cluster, and at least one does. A position that carries no string
+/// literal is neutral. An invariant literal-bearing position is shared
+/// authored logic and blocks suppression
+/// ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
 fn has_differing_string_literals<'c>(calls: impl IntoIterator<Item = &'c CallShape>) -> bool {
     let calls: Vec<&CallShape> = calls.into_iter().collect();
     let Some(first) = calls.first() else {
@@ -414,6 +416,7 @@ fn has_differing_string_literals<'c>(calls: impl IntoIterator<Item = &'c CallSha
         .map(|index| literal_agreement(&calls, index))
         .collect();
     !agreements.contains(&LiteralAgreement::Incomparable)
+        && !agreements.contains(&LiteralAgreement::Same)
         && agreements.contains(&LiteralAgreement::Differs)
 }
 

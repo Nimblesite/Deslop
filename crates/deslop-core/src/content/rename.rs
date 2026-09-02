@@ -99,6 +99,9 @@ pub(super) fn pair_rename_consistency<S: BuildHasher>(
     );
     let literal_total = population(&canonical.keys, &member.keys, Population::Literal).len();
     let affirming_literals = affirming_literal_count(canonical, member, &echoes);
+    if affirming_literals == 0 && literal_total > 0 {
+        return 0.0;
+    }
     let anchors = affirming_literals.saturating_add(mapping.explained);
     let coverage = if same_file {
         vacuous_share(affirming_literals, literal_total)

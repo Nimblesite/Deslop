@@ -312,7 +312,7 @@ fn rust_cross_file_definition_consolidates_and_compiles() -> Result<()> {
         !buffer.contains("pub fn normalise_labels"),
         "duplicate no longer defines the consolidated `normalise_labels`:\n{buffer}"
     );
-    let (near_miss, near_miss_sources) = whole_file_cluster(file_a, file_b)?;
+    let (near_miss, near_miss_sources) = whole_file_cluster(file_a, file_b);
     let reason = reason_for(
         "the whole-file near-miss",
         &near_miss,
@@ -329,7 +329,7 @@ fn rust_cross_file_definition_consolidates_and_compiles() -> Result<()> {
 /// A cluster over the entire text of two files that share a prefix but
 /// diverge later — the near-miss view the container-echo rule keeps out
 /// of the report.
-fn whole_file_cluster(file_a: &str, file_b: &str) -> Result<(ReportCluster, Sources)> {
+fn whole_file_cluster(file_a: &str, file_b: &str) -> (ReportCluster, Sources) {
     let mut sources = HashMap::new();
     let occurrences = vec![
         report_occurrence("pricing_a.rs", (0, file_a.len()), false),
@@ -337,10 +337,10 @@ fn whole_file_cluster(file_a: &str, file_b: &str) -> Result<(ReportCluster, Sour
     ];
     let _inserted = sources.insert(PathBuf::from("pricing_a.rs"), file_a.as_bytes().to_vec());
     let _inserted = sources.insert(PathBuf::from("pricing_b.rs"), file_b.as_bytes().to_vec());
-    Ok((
+    (
         synthetic_report_cluster(occurrences, "nearly_identical"),
         sources,
-    ))
+    )
 }
 
 /// A private canonical definition refuses — the duplicates' modules
