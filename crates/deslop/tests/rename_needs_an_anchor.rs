@@ -1,6 +1,7 @@
 //! [FUSED-CONTENT-GATE] / [FUSED-CONTENT-GATE-INTERIOR] /
-//! [FUSED-SHARED-SUBTREE-ECHO] / [RANK-MASS-SUM] — a rename is only
-//! *proven* by evidence the rename itself did not supply, and it is
+//! [FUSED-SHARED-SUBTREE-ECHO] / [FUSED-CANDIDATE-BUCKET-STAR] /
+//! [PIPELINE-CLUSTER-EXACT-SCOPE-SCRAPS] / [RANK-MASS-SUM] — a rename is
+//! only *proven* by evidence the rename itself did not supply, and it is
 //! judged on the whole method it lives in.
 //!
 //! `InventoryApi` and `CatalogApi` are the Dart sibling-method idiom:
@@ -27,8 +28,13 @@
 //! strictly inside a function anchors a rename on identity identifiers
 //! and affirming literals only. [FUSED-SHARED-SUBTREE-ECHO] keeps the
 //! class shell and the method body from welding into the family as
-//! wider or narrower views of the same method. What remains is the
-//! authored view, judged with the endpoint inside it.
+//! wider or narrower views of the same method. [FUSED-CANDIDATE-BUCKET-STAR]
+//! gives the second and third accessors of the first file a cross-file
+//! candidate instead of only the within-file pair the promote floor
+//! refuses, and [PIPELINE-CLUSTER-EXACT-SCOPE-SCRAPS] keeps the two
+//! field declarations above the first accessor from widening it into a
+//! "fields plus method" window. What remains is the authored view,
+//! judged with the endpoint inside it.
 //!
 //! # The contract
 //!

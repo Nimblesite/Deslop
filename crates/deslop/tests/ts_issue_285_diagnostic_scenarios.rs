@@ -1,5 +1,6 @@
 //! gh #285 — independent codec diagnostics are not one clone
-//! ([CLONE-NOISE-LITERAL-VARIATION-CALLS], [RANK-STRUCTURAL-ONLY]).
+//! ([CLONE-NOISE-LITERAL-VARIATION-CALLS],
+//! [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY], [RANK-STRUCTURAL-ONLY]).
 //!
 //! Reported against `Nimblesite/typeDiagram` as `#7 Nearly identical
 //! code [Type-3] 7 copies, structural = 1.00, token_jaccard = 1.00,
@@ -18,6 +19,11 @@
 //! call sites, the first because ECMAScript was missing from
 //! `call_kinds` entirely, the second because a pure literal collection
 //! carrying text is a payload exactly as a bare string is.
+//!
+//! Two of the seven scenarios share one message, so their pair alone is
+//! an invariant literal-bearing position; [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY]
+//! judges the family that shares the pair's shape — all seven blocks —
+//! and the fragment is hidden with it.
 //!
 //! **Fixed completely:** the four whole `test(…)` blocks are suppressed
 //! without weakening the xUnit control. Their sole invariant call,
