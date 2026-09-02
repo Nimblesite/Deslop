@@ -22,12 +22,16 @@ use anyhow::Result;
 use crate::common::signals::assert_no_pair_surface_on_cluster;
 use crate::common::*;
 
-/// The 1-based lines of `Prefix.ApplyStandard`, the whole authored method.
-const STANDARD_METHOD_LINES: RangeInclusive<u64> = 3..=12;
-/// The 1-based lines of `Prefix.ApplyPremium`, which grew an archive branch.
-const PREMIUM_METHOD_LINES: RangeInclusive<u64> = 14..=26;
-/// The five statements both methods carry byte for byte after their label.
-const SHARED_PREFIX_RUN: &str = "        var ticket = policy.Load(label);\n        policy.Stage(ticket);\n        policy.Validate(ticket);\n        policy.Record(ticket);\n        policy.Publish(ticket);\n";
+/// The bytes of the wider authored view inside `ApplyStandard`.
+const STANDARD_VIEW_BYTES: u64 = 190;
+/// The same view inside `ApplyPremium`, one literal shorter.
+const PREMIUM_VIEW_BYTES: u64 = 189;
+/// The 1-based lines that view covers in each method.
+const STANDARD_VIEW_LINES: RangeInclusive<u64> = 5..=10;
+/// The same view's lines in the premium copy.
+const PREMIUM_VIEW_LINES: RangeInclusive<u64> = 16..=21;
+/// The statement run both methods carry byte for byte after their label.
+const SHARED_PREFIX_RUN: &str = "policy.Stage(ticket);\n        policy.Validate(ticket);\n        policy.Record(ticket);\n        policy.Publish(ticket);";
 /// The 1-based lines `SHARED_LOGIC` occupies in both wrappers.
 const SHARED_LOGIC_LINES: RangeInclusive<u64> = 8..=13;
 
@@ -308,17 +312,18 @@ fn rendered_clusters(report: &serde_json::Value, needle: &str) -> Vec<String> {
         .collect()
 }
 
-/// [FUSED-SHARED-SUBTREE-SAME-FILE] / [PIPELINE-CLUSTER-SUBSUME]: two
-/// near-miss methods in one file are the finding, not the window they share.
+/// [PIPELINE-CLUSTER-EXACT-SCOPE] / [PIPELINE-CLUSTER-SUBSUME]: one
+/// physical duplication publishes one canonical view.
 ///
 /// `csharp-merge-readafter` holds `ApplyStandard` (L3-12) and
-/// `ApplyPremium` (L14-26) in one class. Both open with a label declaration
-/// and five byte-identical statements; the standard copy then sends and
-/// the premium copy grew an archive branch. The same-file rescue admits the
-/// authored method pair, and every narrower view of the shared prefix — the
-/// byte-identical run, the label-renamed window — is a fragment of it
-/// ([PIPELINE-CLUSTER-EXACT-SCOPE]): one cluster, both whole methods,
-/// byte-distinct texts.
+/// `ApplyPremium` (L14-26) in one class. Both open with a label
+/// declaration and five byte-identical statements. The larger authored
+/// view runs from that declaration to `Publish` — 190 bytes and 189,
+/// consistently renamed only at the label literal — and is selected
+/// before pair admission, so the exact fingerprint nested inside it must
+/// not displace it. The methods themselves cluster in neither this
+/// version nor 0.32.0: the rescue that would admit them is cross-file
+/// only (gh #492).
 #[test]
 fn widest_same_declaration_view_is_the_published_finding() -> Result<()> {
     let tmp = tempfile::tempdir()?;
@@ -378,10 +383,19 @@ fn widest_same_declaration_view_is_the_published_finding() -> Result<()> {
     assert_eq!(
         lines,
         vec![
-            (*STANDARD_METHOD_LINES.start(), *STANDARD_METHOD_LINES.end()),
-            (*PREMIUM_METHOD_LINES.start(), *PREMIUM_METHOD_LINES.end()),
+            (*STANDARD_VIEW_LINES.start(), *STANDARD_VIEW_LINES.end()),
+            (*PREMIUM_VIEW_LINES.start(), *PREMIUM_VIEW_LINES.end()),
         ],
-        "the finding is the two authored methods, not the prefix window nested in them: {clone:#}"
+        "each occurrence is the wider authored view, not the exact run inside it: {clone:#}"
+    );
+    let spans: Vec<u64> = views
+        .iter()
+        .map(|occurrence| occurrence.end.saturating_sub(occurrence.start))
+        .collect();
+    assert_eq!(
+        spans,
+        vec![STANDARD_VIEW_BYTES, PREMIUM_VIEW_BYTES],
+        "the two wider authored ranges differ only by their literal byte length: {clone:#}"
     );
     assert_no_pair_surface_on_cluster(clone, "cross-cluster collapse");
     Ok(())

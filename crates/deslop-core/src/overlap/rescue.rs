@@ -37,7 +37,7 @@ use super::{tally::RescueTally, OverlapMeasurer};
 
 /// Everything a rescue measurement reads besides the pair itself,
 /// resolved once per pass and shared read-only by every shard.
-pub(super) struct RescueContext<'a, S, L> {
+pub(super) struct RescueContext<'a, S, L: BuildHasher> {
     /// Every member's normalised tree by file, for content agreement.
     tree_index: HashMap<FileId, &'a NormalizedNode>,
     /// Raw source per file.
@@ -59,6 +59,7 @@ impl<'a, S: BuildHasher, L: BuildHasher> RescueContext<'a, S, L> {
         languages: &'a HashMap<FileId, &'static str, L>,
     ) -> Self {
         let scopes = DeclarationScopes::new(trees, languages);
+
         Self {
             tree_index: trees.iter().map(|tree| (tree.file_id, tree)).collect(),
             sources,
@@ -162,8 +163,8 @@ fn report_shards(shards: &[(RescueTally, OverlapMeasurer<'_>)]) {
     merged.report_total(totals);
 }
 
-/// Measures one pair when it is eligible and resolvable, recording every
-/// gate it passes.
+/// Measures one pair when it is eligible, resolvable, and cross-file,
+/// recording every gate it passes.
 ///
 /// A pair whose overlap cleared the floor still has to carry its own
 /// content through the gate ([FUSED-CONTENT-GATE]): the overlap floor
@@ -184,14 +185,15 @@ fn measure_one<S: BuildHasher, L: BuildHasher>(
     if !rescue_eligible(pair) {
         return;
     }
-    tally.eligible();
     let (Some(left), Some(right)) = (fingerprints.get(pair.left), fingerprints.get(pair.right))
     else {
         return;
     };
-    if crosses_files(left, right) {
-        tally.cross_file();
+    tally.eligible();
+    if !crosses_files(left, right) {
+        return;
     }
+    tally.cross_file();
     pair.shared_subtree_overlap = measurer.rescue_overlap(left, right);
     record_rescue_verdict(pair, left, right, context, measurer, tally);
 }
@@ -206,11 +208,6 @@ fn record_rescue_verdict<S: BuildHasher, L: BuildHasher>(
     tally: &mut RescueTally,
 ) {
     let clears_overlap = pair.shared_subtree_overlap >= SHARED_SUBTREE_MIN_OVERLAP;
-    // [FUSED-SHARED-SUBTREE-SAME-FILE] Scope does not weaken the rescue's
-    // pair-local corroboration: same-file and cross-file candidates pay the
-    // configured rescue agreement floor. The ordinary pair threshold remains
-    // 0.85; applying the content promote floor here would reject the pinned
-    // method pair whose Type-3 insertion makes max(A, R) 0.5625.
     let clears_content = !clears_overlap
         || pair_content_agreement(
             left,

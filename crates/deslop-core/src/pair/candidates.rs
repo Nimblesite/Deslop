@@ -247,6 +247,15 @@ fn same_language_indexes<S: BuildHasher>(
     }
 }
 
+/// True when the pair's endpoints live in different files — the rescue
+/// route's scope ([FUSED-SHARED-SUBTREE]).
+fn pair_crosses_files(pair: &CandidatePair, fingerprints: &[Fingerprint]) -> bool {
+    match (fingerprints.get(pair.left), fingerprints.get(pair.right)) {
+        (Some(left), Some(right)) => left.file_id != right.file_id,
+        _ => false,
+    }
+}
+
 /// Keeps non-structural candidates from connecting nested same-file ranges.
 fn candidate_ranges_are_valid(pair: &CandidatePair, fingerprints: &[Fingerprint]) -> bool {
     if pair.score.structural > 0.0 {

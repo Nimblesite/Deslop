@@ -366,13 +366,18 @@ function nonBlank(value: string | undefined): string | undefined {
 const X64_ARCHITECTURE = "x64";
 const WINDOWS_PLATFORM = "win32";
 
-function currentPlatform(): Platform {
-  const platform = process.platform;
-  const arch = process.arch;
+/** [DEPLOY-MANIFEST] Pure platform resolution so every host arm — and the
+ * unsupported-platform refusal — is unit-testable without stubbing the
+ * running process. */
+export function currentPlatformFor(platform: string, arch: string): Platform {
   if (platform === "darwin" && arch === "arm64") return "darwin-arm64";
   if (platform === "darwin" && arch === X64_ARCHITECTURE) return "darwin-x64";
   if (platform === "linux" && arch === X64_ARCHITECTURE) return "linux-x64";
   if (platform === "linux" && arch === "arm64") return "linux-arm64";
   if (platform === WINDOWS_PLATFORM && arch === X64_ARCHITECTURE) return "win32-x64";
   throw new UnsupportedPlatformError(platform, arch);
+}
+
+function currentPlatform(): Platform {
+  return currentPlatformFor(process.platform, process.arch);
 }

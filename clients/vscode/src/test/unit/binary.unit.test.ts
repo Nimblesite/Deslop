@@ -2,6 +2,7 @@
 
 import * as assert from "node:assert/strict";
 import {
+  currentPlatformFor,
   resolveBinary,
   resolveHostBinaries,
   loadDeploymentManifest,
@@ -9,6 +10,7 @@ import {
   BinaryMissingError,
   UnsupportedPlatformError,
   BinaryVerificationError,
+  type BinaryKind,
   type DeploymentManifest,
 } from "../../binary";
 import { mkdirSync, mkdtempSync, writeFileSync, chmodSync, rmSync, existsSync } from "node:fs";
@@ -35,12 +37,9 @@ const MISSING_BINARY_PATH = "/nope";
 const EMPTY_PATH_ENV_VALUE = "";
 
 function platformId(): string {
-  if (process.platform === DARWIN_PLATFORM && process.arch === ARM64_ARCH) return "darwin-arm64";
-  if (process.platform === DARWIN_PLATFORM && process.arch === X64_ARCH) return "darwin-x64";
-  if (process.platform === LINUX_PLATFORM && process.arch === X64_ARCH) return "linux-x64";
-  if (process.platform === LINUX_PLATFORM && process.arch === ARM64_ARCH) return "linux-arm64";
-  if (process.platform === "win32") return "win32-x64";
-  throw new Error(`unsupported ${process.platform}-${process.arch}`);
+  // [DEPLOY-MANIFEST] The resolver owns platform naming; the suite drives
+  // the pure seam instead of keeping a second copy of the table.
+  return currentPlatformFor(process.platform, process.arch);
 }
 
 function writeVersionScript(filePath: string, name: string, version: string): void {
@@ -281,5 +280,92 @@ suite("binary resolver", () => {
       (err: unknown) =>
         err instanceof BinaryMissingError && /was not found at/.test(err.message),
     );
+  });
+});
+
+// [DEPLOY-MANIFEST] Host-contract and platform-table edges that the
+// happy-path resolver suite never reaches.
+suite("deployment manifest edges", () => {
+  const tmp = mkdtempSync(join(tmpdir(), "deslop-binary-edges-"));
+
+  suiteTeardown(() => {
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  test("resolveHostBinaries refuses a host the manifest does not declare", () => {
+    assert.throws(
+      () => resolveHostBinaries(tmp, "jetbrains", manifest()),
+      (err: unknown) =>
+        err instanceof Error &&
+        err.message.includes(`no jetbrains host contract`),
+    );
+  });
+
+  test("resolveBinary refuses a component kind the manifest does not ship", () => {
+    assert.throws(
+      () => resolveBinary(tmp, "formatter" as BinaryKind, manifest()),
+      (err: unknown) =>
+        err instanceof Error &&
+        err.message.includes(`no formatter component`),
+    );
+  });
+
+  test("currentPlatformFor names every shipped host triple", () => {
+    assert.equal(currentPlatformFor(DARWIN_PLATFORM, ARM64_ARCH), "darwin-arm64");
+    assert.equal(currentPlatformFor(DARWIN_PLATFORM, X64_ARCH), "darwin-x64");
+    assert.equal(currentPlatformFor(LINUX_PLATFORM, X64_ARCH), "linux-x64");
+    assert.equal(currentPlatformFor(LINUX_PLATFORM, ARM64_ARCH), "linux-arm64");
+    assert.equal(currentPlatformFor("win32", X64_ARCH), "win32-x64");
+  });
+
+  test("currentPlatformFor refuses an unsupported platform with both coordinates", () => {
+    assert.throws(
+      () => currentPlatformFor("sunos", "sparc"),
+      (err: unknown) =>
+        err instanceof UnsupportedPlatformError &&
+        err.message.includes("sunos") &&
+        err.message.includes("sparc"),
+    );
+  });
+
+  test("a binary that exits non-zero fails verification with its stderr", () => {
+    const dir = resolve(tmp, "crash");
+    mkdirSync(dir, { recursive: true });
+    const probe = resolve(dir, LSP_BINARY_NAME);
+    writeFileSync(probe, "#!/bin/sh\necho 'boom' >&2\nexit 3\n");
+    chmodSync(probe, EXECUTABLE_MODE);
+    assert.throws(
+      () => resolveBinary(dir, LSP_KIND, manifest()),
+      (err: unknown) =>
+        err instanceof BinaryVerificationError && err.message.includes("boom"),
+    );
+  });
+
+  test("a binary that prints an unparsable version line fails verification with the raw line", () => {
+    const dir = resolve(tmp, "garbage");
+    mkdirSync(dir, { recursive: true });
+    const probe = resolve(dir, MCP_BINARY_NAME);
+    writeFileSync(probe, `#!/bin/sh\necho 'totally-unparsable'\n`);
+    chmodSync(probe, EXECUTABLE_MODE);
+    assert.throws(
+      () => resolveBinary(dir, MCP_KIND, manifest()),
+      (err: unknown) =>
+        err instanceof BinaryVerificationError &&
+        err.message.includes("totally-unparsable"),
+    );
+  });
+
+  test("loadDeploymentManifest reads shipwright.json two levels above the extension path", () => {
+    const outer = resolve(tmp, "packaged");
+    const ext = resolve(outer, "ext");
+    mkdirSync(ext, { recursive: true });
+    writeFileSync(
+      resolve(outer, "shipwright.json"),
+      JSON.stringify(manifest()),
+    );
+    const loaded = loadDeploymentManifest(ext);
+    assert.equal(loaded.product.id, PRODUCT_ID);
+    assert.equal(loaded.product.version, EXPECTED_VERSION);
+    assert.ok(loaded.hosts.vscode?.activationVerifies.includes(LSP_BINARY_NAME));
   });
 });

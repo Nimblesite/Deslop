@@ -10,6 +10,7 @@ import * as os from "node:os";
 import { tempFile } from "./temp-file.helpers";
 import type { LanguageClient } from "vscode-languageclient/node";
 import {
+  COMMAND_BINDINGS,
   openWorstCluster,
   openOccurrence,
   jumpToNextOccurrence,
@@ -35,6 +36,7 @@ import {
 } from "../../commands/treeMenus";
 import { buildCompareUri } from "../../compare/provider";
 import { ReportStore } from "../../reportStore";
+import { seededStore } from "./report-store.helpers";
 import { activateExtension } from "../suite/helpers";
 import { ClusterNode, OccurrenceNode } from "../../tree/providers";
 import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
@@ -67,6 +69,10 @@ const SHORT_OCCURRENCE_END_BYTE = TEST_THREE;
 const CPU_WORK_MILLISECONDS = TEST_THREE;
 const THREE_LINE_COUNT = TEST_THREE;
 const THIRD_RANK = TEST_THREE;
+const TEST_ONE = 1;
+// [VSIX-ACTIVATION] Commands only activation itself registers — the
+// status-bar and title-bar refresh plus the active-binary reveal.
+const ACTIVATION_OWNED_COMMAND_IDS = ["deslop.refresh", "deslop.revealActiveBinary"];
 
 async function findDiffTab(): Promise<vscode.TabInputTextDiff> {
   for (let i = 0; i < TEST_TWENTY; i += 1) {
@@ -849,5 +855,70 @@ suite("tree menu handlers", () => {
 
   test("OPEN_ALL_THRESHOLD is the small-cluster confirmation boundary", () => {
     assert.equal(OPEN_ALL_THRESHOLD, 5);
+  });
+});
+
+
+
+// [VSIX-COMMANDS] The palette contract: every command id the package
+// declares must have exactly one binding, and the shared deps must
+// route a dispatch to the client and the persisted view state. Pinned
+// against the binding table itself because the integration host also
+// runs the real extension, whose registrations cannot be shadowed.
+suite("command dispatch wiring", () => {
+  test("every declared palette id has exactly one binding and vice versa", () => {
+    const declared: string[] = (
+      JSON.parse(
+        fs.readFileSync(path.resolve(extensionRoot(), "package.json"), UTF8_ENCODING),
+      ) as { contributes: { commands: { command: string }[] } }
+    ).contributes.commands.map((entry) => entry.command);
+    const bound = COMMAND_BINDINGS.map((binding) => binding.id);
+    // Every binding must be contributed — VS Code refuses command: hover
+    // links and menu entries for uncontributed ids.
+    const orphan = bound.filter((id) => !declared.includes(id));
+    assert.deepEqual(
+      orphan,
+      [],
+      `bindings without a package.json contribution are unreachable: ${orphan}`,
+    );
+    // The reverse direction: whatever activation registers beyond the
+    // table must be exactly the status-bar/title-bar pair owned by
+    // extension.ts — a new declared id with no handler anywhere fails here.
+    const activationOwned = declared.filter((id) => !bound.includes(id));
+    assert.deepEqual(
+      [...activationOwned].sort(),
+      [...ACTIVATION_OWNED_COMMAND_IDS].sort(),
+      "declared ids outside COMMAND_BINDINGS must stay the activation-owned set",
+    );
+    assert.equal(new Set(bound).size, bound.length, "a duplicate binding id");
+  });
+
+  test("binding dispatch routes through the shared client and the persisted view axis", async () => {
+    let clientCalls = 0;
+    const deps = {
+      context: fakeCtx(),
+      store: seededStore([]),
+      clientOf: (): LanguageClient | undefined => {
+        clientCalls += 1;
+        return { sendRequest: async () => "# refreshed" } as unknown as LanguageClient;
+      },
+    };
+    const refresh = COMMAND_BINDINGS.find((b) => b.id === REFRESH_REPORT_COMMAND);
+    assert.ok(refresh, "the refresh binding went missing");
+    await refresh.run(deps);
+    assert.equal(clientCalls, TEST_ONE);
+
+    const showByCluster = COMMAND_BINDINGS.find(
+      (b) => b.id === "deslop.topOffenders.showByCluster",
+    );
+    assert.ok(showByCluster, "the grouping binding went missing");
+    await showByCluster.run(deps);
+    assert.equal(
+      vscode.workspace.getConfiguration("deslop").get<string>("topOffenders.groupBy"),
+      "cluster",
+    );
+    await vscode.workspace
+      .getConfiguration("deslop")
+      .update("topOffenders.groupBy", undefined, vscode.ConfigurationTarget.Workspace);
   });
 });
