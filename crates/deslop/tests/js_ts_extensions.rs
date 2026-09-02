@@ -59,12 +59,12 @@ fn javascript_family_clusters_across_js_mjs_and_cjs_extensions() -> Result<()> {
 fn js_and_jsx_cluster_as_the_same_javascript_language() -> Result<()> {
     // A `.jsx` file and a `.js` file carrying the same logic are both the
     // `javascript` language, so the same-language filter lets them cluster.
-    assert_bucketed_clone(
-        "js-jsx-family",
-        10,
-        &["BadgeList.jsx", "useBadge.js"],
-        false,
-    )
+    // Both occurrences publish at the same authored extent — the
+    // `buildBadgeModel` declaration, which the two files share byte for
+    // byte ([PIPELINE-CLUSTER-EXACT-SCOPE]). The `export` keyword in front
+    // of one copy is not part of the function and must not widen one
+    // occurrence into a byte-distinct view of the other.
+    assert_bucketed_clone("js-jsx-family", 10, &["BadgeList.jsx", "useBadge.js"], true)
 }
 
 #[test]

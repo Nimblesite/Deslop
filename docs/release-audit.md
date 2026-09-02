@@ -10,7 +10,7 @@
 |---|---|---|
 | P0 | Python executable payloads are hidden or missed: computed dictionary values, executable decorator arguments, decorated class-body logic, and computed monkeypatch values. Static-decorator suppression also disappears from `clusters_hidden`. | Make the language-specific idiom proof recursively reject executable values and decorated class bodies; preserve detection telemetry for genuinely suppressed static payloads. |
 | P0 | False positives remain in Python same-file queue statements and TypeScript diagnostic scaffolding. | Reject same-file scaffolding before publication while retaining the positive cross-file controls and exact cluster-count assertions. |
-| P0 | Dart accessor scaffolding ranks first and second; the real byte-identical clone ranks third. Published accessor windows omit the endpoint literals that distinguish the methods. | Admit and rank only ranges containing the authored distinguishing evidence; the real clone must rank first. |
+| P0 | Dart accessor family published as literal-free windows (lines 12-15) that omit the endpoint each method calls, glued to class-shell and method-body views of the same methods. | Judge the rename on the whole method ([FUSED-CONTENT-GATE-INTERIOR]), refuse shell-and-body echoes of an exact function ([FUSED-SHARED-SUBTREE-ECHO]), publish the seven whole methods. Ranking is duplicated mass alone ([RANK-MASS-SUM]): six copies of a method out-weigh one copy of the control, so the family ranks first by design. |
 | P0 | C# Type-1 ranges cover different namespaces/classes, so two identical methods slice to unequal bytes. F# sibling-window ranges likewise expand asymmetrically to near-whole files. | Select one symmetric authored extent before closure and derive metrics/IDs only from final ranges. Keep the strengthened byte-equality and exact-range assertions. |
 | P0 | ANN representative collapse finds all eight copies but loses the byte-verbatim proof. | Carry byte identity through collapse and assert it on the published cluster. |
 | P1 | `verbatim_subgroup_idiom_price` cannot run because a required fixture path is missing (`No such file or directory`). | Restore the complete fixture and make both cross-file and intra-file halves execute; do not ignore or relax the test. |
@@ -22,7 +22,7 @@ Both binaries scanned the same current fixtures with identical node floors and i
 | Fixture | 0.32.0 | 0.33.0 tip | Decision |
 |---|---:|---:|---|
 | Python computed dict payload | 1 correct cross-file cluster; 14/14 duplicated LOC (100%) | 0 visible clusters; 0/14 duplicated LOC (0%) | **Recall regression.** A real clone is hidden. |
-| Dart rename without anchors | Real clone ranked first; 116 duplicated LOC (85.29%) | Accessor families rank first/second; real clone third; 97 duplicated LOC (71.32%) | **Ranking and range regression.** |
+| Dart rename without anchors | Real clone ranked first; 116 duplicated LOC (85.29%) | Seven whole accessors (mass 612) first, shared class prefix second, real clone third; 116 duplicated LOC (85.29%) | **Fixed.** Same coverage as 0.32.0; every published range holds its endpoint literal; order follows [RANK-MASS-SUM]. |
 | Python same-shape backends | Wrong backend pair; real queue clone missed | Real queue clone found, but an extra same-file cluster remains | Improved recall, still fails precision and release ground truth. |
 
 ## Test-integrity check

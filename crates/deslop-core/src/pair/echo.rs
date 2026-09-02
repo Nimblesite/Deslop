@@ -90,21 +90,32 @@ impl ExactFunctionAnchors {
         })
     }
 
-    /// The most nodes any exact whole-function clone enclosed by both
-    /// `left` and `right` claims, or `None` when the pair wraps none. A
-    /// pair is never its own anchor: only a clone strictly narrower on at
-    /// least one side is something the pair could merely wrap.
+    /// The most nodes any exact whole-function clone claims of the
+    /// pair's shared mass, or `None` when the pair wraps or sits inside
+    /// none. A container on both sides — each endpoint encloses the
+    /// clone — has the whole clone claimed. A pair on both sides inside
+    /// the clone — each endpoint covered by it — can share nothing the
+    /// clone does not already hold, so the smaller endpoint is claimed.
+    /// A pair is never its own anchor: only a clone that differs from
+    /// the pair on at least one side is something the pair could merely
+    /// echo. One side enclosing and the other inside is left to the
+    /// per-file election ([PIPELINE-CLUSTER-EXACT-SCOPE-SCRAPS]).
     pub(crate) fn claimed_nodes(&self, left: &Fingerprint, right: &Fingerprint) -> Option<usize> {
         let (key, first, second) = ordered(left, right);
+        let smaller = left.node_count.min(right.node_count);
         self.by_files
             .get(&key)?
             .iter()
-            .filter(|exact| {
-                first.covers(exact.first)
-                    && second.covers(exact.second)
-                    && (first != exact.first || second != exact.second)
+            .filter(|exact| first != exact.first || second != exact.second)
+            .filter_map(|exact| {
+                if first.covers(exact.first) && second.covers(exact.second) {
+                    Some(exact.nodes)
+                } else if exact.first.covers(first) && exact.second.covers(second) {
+                    Some(smaller)
+                } else {
+                    None
+                }
             })
-            .map(|exact| exact.nodes)
             .max()
     }
 }

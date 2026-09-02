@@ -18,7 +18,7 @@ use std::{
 use crate::{
     ast::{ByteRange, NormalizedNode},
     fingerprint::Fingerprint,
-    pair::FusedCluster,
+    pair::{FusedCluster, SHARED_SUBTREE_MIN_NODE_COUNT},
     state::FileId,
 };
 
@@ -306,8 +306,10 @@ fn collapse_overlapping_single_file(
         let candidate = Occurrence {
             index,
             range: member.byte_range,
+            nodes: member.node_count,
             declaration: scopes.enclosing(&member),
             aligned: scopes.aligned_function(&member).is_some(),
+            authored: scopes.is_authored_node(&member),
         };
         match runs.last_mut() {
             Some(run) if run.reaches(candidate.range) => run.absorb(candidate),
@@ -326,12 +328,17 @@ struct Occurrence {
     index: usize,
     /// Byte range this occurrence claims.
     range: ByteRange,
+    /// Normalised nodes the occurrence holds.
+    nodes: usize,
     /// The authored declaration it sits strictly inside, when the
     /// grammar names one ([`DeclarationScopes::enclosing`]).
     declaration: Option<ByteRange>,
     /// The occurrence is an authored function — its range equals a
     /// function-like declaration's ([`DeclarationScopes::aligned_function`]).
     aligned: bool,
+    /// The occurrence is a node the author wrote rather than a window
+    /// cut over a run of siblings ([`DeclarationScopes::is_authored_node`]).
+    authored: bool,
 }
 
 impl Occurrence {
@@ -358,6 +365,17 @@ impl Occurrence {
     /// least one side.
     fn encloses(&self, other: &Self) -> bool {
         self.range.strictly_encloses(other.range)
+    }
+
+    /// True when this occurrence is a window — not a node the author
+    /// wrote — that encloses the authored function `function` with
+    /// fewer than the rescue node floor of sibling nodes around it: the
+    /// function plus scraps ([PIPELINE-CLUSTER-EXACT-SCOPE-SCRAPS]).
+    fn is_scraps_around(&self, function: &Self) -> bool {
+        !self.authored
+            && function.aligned
+            && self.encloses(function)
+            && self.nodes.saturating_sub(function.nodes) < SHARED_SUBTREE_MIN_NODE_COUNT
     }
 
     /// True when the two share bytes but neither covers the other, so
@@ -430,6 +448,9 @@ impl OverlapRun {
         if let Some(verdict) = self.declaration_verdict(candidate) {
             return verdict;
         }
+        if let Some(verdict) = self.scraps_verdict(candidate) {
+            return verdict;
+        }
         if self.representative.encloses(candidate)
             && self.representative.shares_declaration_with(candidate)
         {
@@ -441,6 +462,24 @@ impl OverlapRun {
         // collapse. Equal-width ties keep the incumbent, so the run
         // stays deterministic across runs.
         candidate.range.len() > self.representative.range.len()
+    }
+
+    /// [PIPELINE-CLUSTER-EXACT-SCOPE-SCRAPS] Between an authored function
+    /// and a window that encloses it with fewer than the rescue node
+    /// floor of siblings around it, the function is the finding. The
+    /// window is the function plus scraps — two field declarations, a
+    /// constructor line — and reporting it would publish one method of
+    /// a family at a different extent from its siblings. A node the
+    /// author wrote — a class body, a whole file — keeps the width rule.
+    /// `None` where the rule does not decide.
+    fn scraps_verdict(&self, candidate: &Occurrence) -> Option<bool> {
+        if self.representative.is_scraps_around(candidate) {
+            return Some(true);
+        }
+        if candidate.is_scraps_around(&self.representative) {
+            return Some(false);
+        }
+        None
     }
 
     /// [PIPELINE-CLUSTER-EXACT-SCOPE-STRADDLE] Between two views that

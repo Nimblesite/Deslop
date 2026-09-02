@@ -75,6 +75,16 @@ impl<'trees, L: BuildHasher> DeclarationScopes<'trees, L> {
         aligned_function_at(tree, member.byte_range, kinds)
     }
 
+    /// Whether the occurrence is a node the author wrote — its range
+    /// equals some node of the normalised tree — rather than a window
+    /// Deslop cut over a run of siblings
+    /// ([PIPELINE-CLUSTER-EXACT-SCOPE-SCRAPS]).
+    pub(crate) fn is_authored_node(&self, member: &Fingerprint) -> bool {
+        self.trees
+            .get(&member.file_id)
+            .is_some_and(|tree| node_aligned_at(tree, member.byte_range))
+    }
+
     /// Whether the occurrence is a run of whole authored functions: its
     /// range opens on a function-like declaration and closes on one
     /// (the same one, for a single function), so it is an authored unit
@@ -113,6 +123,19 @@ fn smallest_enclosing(
         .iter()
         .find_map(|child| smallest_enclosing(child, range, kinds));
     deeper.or_else(|| kinds.contains(&node.kind).then_some(node.byte_range))
+}
+
+/// Whether `node` or some descendant of it has a range that **equals**
+/// `range`, whatever its kind.
+fn node_aligned_at(node: &NormalizedNode, range: ByteRange) -> bool {
+    if node.byte_range.start > range.start || node.byte_range.end < range.end {
+        return false;
+    }
+    node.byte_range == range
+        || node
+            .children
+            .iter()
+            .any(|child| node_aligned_at(child, range))
 }
 
 /// The range of the deepest descendant of `node` whose kind is in

@@ -44,6 +44,13 @@ This plan owns embedding candidate recall, pair measurement, false-positive cont
 - [ ] Build and install the current VSIX without killing VS Code. Verify clusters show membership and mass only; explicitly compare two occurrences and verify the pair-only embedding value; switch the embedding model through the real UI and verify provenance plus reactive refresh.
 - [ ] Search the repository for cluster embedding fields, AI-match cluster labels, component edge selection by embedding, compatibility shims, and test-only providers in production registries; all must be absent.
 
+## Skips this plan owns
+
+Embedding routes are a 0.33.0 non-goal, so two suites are `#[ignore]`d with their assertions intact. Each ends when the item it names lands.
+
+- #489 — `embedding_perf::duplicate_subtree_embeddings_are_collapsed_before_ann`: the ANN representative collapse finds every copy but the published cluster no longer carries the byte-verbatim proof. Ends when the collapse carries byte identity through to the published cluster (the exact endpoint-keyed pipeline above) and the test runs green.
+- #491 — `embedding_route_invariance::embeddings_on_reports_every_file_set_embeddings_off_reported`: with embeddings on, cosine-carried pairs skip the shared-subtree echo test and weld the byte-identical `ledger_d`/`ledger_e` pair into the `ts-mixed-band` near-miss family that embeddings off keeps separate. Ends when embedding-carried edges pass the same echo and content guards as every other route and the file-set invariant holds on every corpus.
+
 ## Completion
 
 This plan is complete when exact and ANN candidate paths agree within the specified recall contract, every embedding value belongs to two named endpoints, no cluster or rank consumes embedding evidence, provider and cache behavior are fully pinned, and the installed VSIX proves the pair-only UI.
