@@ -41,10 +41,17 @@ pub(super) fn is_literal_variation_call_cluster(
         .iter()
         .map(|snippet| cache.call_shape(snippet, || call_shape(snippet)))
         .collect();
-    if is_literal_variation_call_set(calls) {
-        return true;
-    }
-    sequence::is_literal_variation_call_sequence(snippets, cache)
+    let set = is_literal_variation_call_set(calls.clone());
+    let seq = sequence::is_literal_variation_call_sequence(snippets, cache);
+    // PROBE(285): temporary — which path convicts, and the sequence gate.
+    tracing::debug!(
+        members = snippets.len(),
+        set_fire = set,
+        seq_fire = seq,
+        calls_none = calls.is_none(),
+        "PROBE literal_calls verdict"
+    );
+    set || seq
 }
 
 /// Applies the literal-variation rule to one comparable call per
@@ -132,9 +139,20 @@ fn call_shape_from_node(call: Node<'_>, source: &[u8], language: &str) -> Option
 /// functions of `(file, range)` and memoised together
 /// ([PERF-FLUTTER-TODO-CORPUS]).
 fn call_sequence(snippet: &Snippet<'_>) -> super::snippets::CallSequence {
+    let shapes = call_shapes_in_range(snippet);
+    let admissible = covered_statements_admissible(snippet);
+    // PROBE(285): temporary — per-member sequence cell.
+    tracing::debug!(
+        range_start = snippet.range.start,
+        range_end = snippet.range.end,
+        shapes_some = shapes.is_some(),
+        shapes_len = shapes.as_ref().map_or(0, Vec::len),
+        statements_admissible = admissible,
+        "PROBE call_sequence cell"
+    );
     super::snippets::CallSequence {
-        statements_admissible: covered_statements_admissible(snippet),
-        shapes: call_shapes_in_range(snippet),
+        statements_admissible: admissible,
+        shapes,
     }
 }
 

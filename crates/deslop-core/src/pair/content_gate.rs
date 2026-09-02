@@ -7,7 +7,7 @@ use crate::{
     buckets::{CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR},
     cluster::scope::DeclarationScopes,
     cluster_filters::{is_embedding_role_mismatch, ParseCache},
-    content::measure_pair_content_indexed,
+    content::{measure_pair_content_indexed, ContentEvidence},
     fingerprint::Fingerprint,
     state::FileId,
 };
@@ -114,7 +114,38 @@ fn pair_passes_content_gate<L: BuildHasher>(
         context.sources,
         context.languages,
     );
-    evidence.measured && evidence.support() >= content_floor(pair, left, right)
+    let floor = content_floor(pair, left, right);
+    let verdict = evidence.measured && evidence.support() >= floor;
+    log_gate_verdict(left, right, &evidence, floor, verdict);
+    verdict
+}
+
+/// Records one measured content verdict so a surprising admission or
+/// refusal is traceable without re-running the pipeline. Byte offsets
+/// and counts only — never source text ([PRINCIPLES-LOGGING]).
+fn log_gate_verdict(
+    left: &Fingerprint,
+    right: &Fingerprint,
+    evidence: &ContentEvidence,
+    floor: f64,
+    admitted: bool,
+) {
+    tracing::trace!(
+        left_file = ?left.file_id,
+        left_start = left.byte_range.start,
+        left_end = left.byte_range.end,
+        left_nodes = left.node_count,
+        right_file = ?right.file_id,
+        right_start = right.byte_range.start,
+        right_end = right.byte_range.end,
+        right_nodes = right.node_count,
+        agreement = evidence.agreement,
+        rename = evidence.rename_consistency,
+        contradiction = ?evidence.contradiction,
+        floor,
+        admitted,
+        "content gate verdict",
+    );
 }
 
 /// Whether this pair needs embedding evidence rather than structural or

@@ -29,10 +29,12 @@
 //! shape-only tier by a fallback-signature artifact or displaced by a
 //! wider token-matched view (the #339 anchored-representative collapse).
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use serde_json::Value;
 
-use crate::common::signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair};
+use crate::common::signals::{
+    assert_no_pair_surface_on_cluster, assert_proven_rename_contract, has_verbatim_pair,
+};
 use crate::common::*;
 
 /// The duplicated region: two consecutive top-level bindings, verbatim in
@@ -146,18 +148,37 @@ fn window_cluster(report: &Value, range_a: (u64, u64), range_b: (u64, u64)) -> R
         })
 }
 
-/// Writes both fixture files, runs the scan, and returns the report plus
-/// each file's `--debug-ast` dump for the no-exact-node assertion.
-fn scan_with_dumps(sources: (&str, &str)) -> Result<(std::path::PathBuf, Value, String, String)> {
-    let tmp = tempfile::tempdir()?;
+/// Everything one scan of the two-file corpus produced: the workspace
+/// guard (dropping it deletes the corpus, and the byte proof reads it
+/// after the scan), the scan root, the report, and each file's
+/// `--debug-ast` dump for the no-exact-node assertion.
+struct WindowScan {
+    _workspace: tempfile::TempDir,
+    root: std::path::PathBuf,
+    report: Value,
+    dump_a: String,
+    dump_b: String,
+}
+
+/// Writes both fixture files, runs the scan, and dumps both trees.
+fn scan_with_dumps(sources: (&str, &str)) -> Result<WindowScan> {
+    let tmp = tempfile::tempdir().context("temp scan root")?;
     let root = tmp.path().join("src");
-    std::fs::create_dir_all(&root)?;
+    std::fs::create_dir_all(&root).context("create scan root")?;
     let path_a = root.join("window_a.fs");
     let path_b = root.join("window_b.fs");
-    std::fs::write(&path_a, sources.0)?;
-    std::fs::write(&path_b, sources.1)?;
-    let report = run_report(&root, 20)?;
-    Ok((root, report, ast_dump(&path_a)?, ast_dump(&path_b)?))
+    std::fs::write(&path_a, sources.0).context("write window_a.fs")?;
+    std::fs::write(&path_b, sources.1).context("write window_b.fs")?;
+    let report = run_report(&root, 20).context("scan the window corpus")?;
+    let dump_a = ast_dump(&path_a).context("debug-ast window_a.fs")?;
+    let dump_b = ast_dump(&path_b).context("debug-ast window_b.fs")?;
+    Ok(WindowScan {
+        _workspace: tmp,
+        root,
+        report,
+        dump_a,
+        dump_b,
+    })
 }
 
 /// The normalised-AST dump of `path` via the CLI's `--debug-ast` flag.
@@ -176,9 +197,17 @@ fn ast_dump(path: &std::path::Path) -> Result<String> {
 
 /// Asserts the reported clone really is the shared window — at the exact
 /// expected boundaries, boundaries no single normalised subtree owns —
-/// and that it reaches an act-now bucket.
-fn assert_window_clone(sources: (&str, &str)) -> Result<()> {
-    let (root, report, dump_a, dump_b) = scan_with_dumps(sources)?;
+/// and carries the byte truth the corpus authored: byte-proven when the
+/// two windows are the same bytes (`verbatim`), a proven rename when the
+/// module name inside the window differs.
+fn assert_window_clone(sources: (&str, &str), verbatim: bool) -> Result<()> {
+    let WindowScan {
+        _workspace,
+        root,
+        report,
+        dump_a,
+        dump_b,
+    } = scan_with_dumps(sources)?;
     let range_a = expected_window_range(sources.0)?;
     let range_b = expected_window_range(sources.1)?;
     let clone = window_cluster(&report, range_a, range_b)?;
@@ -193,15 +222,20 @@ fn assert_window_clone(sources: (&str, &str)) -> Result<()> {
     );
 
     // [PIPELINE-CLUSTER-CLOSURE] The shape axis and the act-now buckets are
-    // gone. Issue #339's acceptance on the wire: the duplicated window is
-    // reported at its exact synthetic boundaries — a byte-identical
-    // Merkle-match window, proven from the source bytes. The demotion
-    // question (structural_only vs act-now) no longer has a surface.
-    assert!(
-        has_verbatim_pair(&root, clone)?,
-        "the shared window is byte-identical and must be byte-proven: {report:#}"
-    );
-    assert_no_pair_surface_on_cluster(clone, "fsharp #339");
+    // gone. The acceptance on the wire: the duplicated window is reported
+    // at its exact synthetic boundaries, and the byte truth matches the
+    // corpus — the control's windows are the same bytes and must be
+    // byte-proven; the renamed module's windows differ by the module
+    // name they open on, so they are a proven rename, never a copy.
+    if verbatim {
+        assert!(
+            has_verbatim_pair(&root, clone)?,
+            "the shared window is byte-identical and must be byte-proven: {report:#}"
+        );
+    } else {
+        assert_proven_rename_contract(&root, clone, "fsharp sibling window rename")?;
+    }
+    assert_no_pair_surface_on_cluster(clone, "fsharp sibling window");
     Ok(())
 }
 
@@ -212,7 +246,7 @@ fn assert_window_clone(sources: (&str, &str)) -> Result<()> {
 fn issue_339_sibling_window_survives_offset_shifting_rename() -> Result<()> {
     let source_a = module_with_shared_window("ParseHelpers", TAIL_A);
     let source_b = module_with_shared_window("ParseHelpersB", TAIL_B);
-    assert_window_clone((&source_a, &source_b))
+    assert_window_clone((&source_a, &source_b), false)
 }
 
 // The control: identical module names keep the two windows at identical byte
@@ -225,5 +259,5 @@ fn issue_339_sibling_window_survives_offset_shifting_rename() -> Result<()> {
 fn issue_339_sibling_window_routing_is_offset_independent() -> Result<()> {
     let source_a = module_with_shared_window("ParseHelpers", TAIL_A);
     let source_b = module_with_shared_window("ParseHelpers", TAIL_B);
-    assert_window_clone((&source_a, &source_b))
+    assert_window_clone((&source_a, &source_b), true)
 }

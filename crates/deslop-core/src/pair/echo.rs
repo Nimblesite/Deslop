@@ -8,9 +8,9 @@
 //! *because of that function*, and admitting the container hands
 //! subsumption a wider, byte-divergent view that then eats the exact
 //! one ([PIPELINE-CLUSTER-SUBSUME] prefers enclosure). The index below
-//! records every candidate pair that is Merkle-equal, cross-file, and an
-//! authored function on both sides, so the rescue can ask how much of a
-//! container's shared mass is already claimed.
+//! records every candidate pair that is Merkle-equal, cross-file, and a
+//! run of whole authored functions on both sides, so the rescue can ask
+//! how much of a container's shared mass is already claimed.
 
 use std::collections::HashMap;
 
@@ -56,8 +56,8 @@ impl ExactFunctionAnchors {
             };
             if left.file_id == right.file_id
                 || left.hash != right.hash
-                || scopes.aligned_function(left).is_none()
-                || scopes.aligned_function(right).is_none()
+                || !scopes.aligned_function_run(left)
+                || !scopes.aligned_function_run(right)
             {
                 continue;
             }

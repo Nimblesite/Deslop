@@ -103,6 +103,10 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
     /// ([PERF-FLUTTER-TODO-MEMORY]); the emitted pair set is identical
     /// because each bucket's star is (minimum index, each other) in
     /// index order either way.
+    ///
+    /// Each bucket is then paired by [`Self::pair_bucket`], which adds
+    /// the cross-file candidate every member is owed
+    /// ([FUSED-CANDIDATE-BUCKET-STAR]).
     pub(super) fn add_structural_pairs(&mut self) {
         let mut tagged: Vec<([u8; 32], usize)> = self
             .fingerprints
@@ -121,14 +125,37 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
                 .map_or(tagged.len(), |offset| {
                     run_start.saturating_add(1).saturating_add(offset)
                 });
-            let run = tagged.get(run_start..run_end).unwrap_or(&[]);
-            let Some(canonical) = run.first().map(|(_, index)| *index) else {
-                break;
-            };
-            for (_, other) in run.iter().skip(1) {
-                self.add_evidence(canonical, *other, 1.0, 0.0);
-            }
+            let run: Vec<usize> = tagged
+                .get(run_start..run_end)
+                .unwrap_or(&[])
+                .iter()
+                .map(|(_, index)| *index)
+                .collect();
+            self.pair_bucket(&run);
             run_start = run_end;
+        }
+    }
+
+    /// Pairs one structural-hash bucket ([FUSED-CANDIDATE-BUCKET-STAR]):
+    /// every member with the bucket's first member, and every member
+    /// that shares the first member's file with the bucket's first
+    /// member in another file, so no member of a bucket that spans files
+    /// is judged on a within-file pair alone.
+    fn pair_bucket(&mut self, run: &[usize]) {
+        let Some(&canonical) = run.first() else {
+            return;
+        };
+        let file_of = |index: usize| self.fingerprints.get(index).map(|entry| entry.file_id);
+        let canonical_file = file_of(canonical);
+        let foreign = run
+            .iter()
+            .copied()
+            .find(|index| file_of(*index) != canonical_file);
+        for &other in run.iter().skip(1) {
+            self.add_evidence(canonical, other, 1.0, 0.0);
+            if let Some(foreign) = foreign.filter(|_| file_of(other) == canonical_file) {
+                self.add_evidence(other, foreign, 1.0, 0.0);
+            }
         }
     }
 
