@@ -234,6 +234,20 @@ fn csharp_type3_reports_the_enclosing_method_pair() -> Result<()> {
     )
 }
 
+// [FUSED-SHARED-SUBTREE-SAME-FILE] A shared-subtree rescue is evidence
+// about the two authored methods, independent of whether they share a file.
+#[test]
+fn csharp_same_file_type3_reports_both_methods_in_one_cluster() -> Result<()> {
+    const FIXTURE: &str = "csharp-merge-drift";
+    const FILE: &str = "DriftLimits.cs";
+
+    assert_enclosing_pair_visible(
+        FIXTURE,
+        &span(FILE, 3, 13, 3, 13),
+        &span(FILE, 15, 29, 15, 29),
+    )
+}
+
 #[test]
 
 fn dart_type3_reports_the_enclosing_method_pair() -> Result<()> {
