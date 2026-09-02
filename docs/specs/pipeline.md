@@ -87,6 +87,14 @@ When two components describe the same duplication, the survivor is selected by f
 
 Pinned by `crates/deslop-core/tests/cluster_subsumption.rs` and end-to-end overlap fixtures. Assertions must prove the survivor's files, occurrences, ranges, and mass; pair scores cannot be asserted on a cluster.
 
+#### [PIPELINE-CLUSTER-SUBSUME-STRADDLE] Two views that straddle a nested view are padded readings of it
+
+Two admitted windows can overlap without either containing the other: a byte-identical block with one differing statement kept on its left in one view and one differing statement kept on its right in the other. Each window clears the content floor on the strength of the block it shares, and their union does not, so neither can absorb the other and both would reach the report — the same block published twice, under two extents that each count a line the other refuses.
+
+When two components name the same files, every occurrence of each overlaps an occurrence of the other in its file, and a third component lies strictly inside both in every file, the two straddling views are dropped and the nested view is the finding. Whatever the dropped views had absorbed is released and judged again, so the nested view collects its own nested rivals. Two overlapping regions with no admitted view nested in both stay two findings, exactly as before: a shared byte, a half overlap, or an overhang is never enough on its own.
+
+Implemented in `cluster/subsume.rs`; pinned by `two_windows_straddling_one_nested_view_publish_that_view` in `crates/deslop-core/tests/cluster_subsumption.rs` and by `cross_cluster_collapse::padded_windows_straddling_a_verbatim_block_publish_the_block` end to end.
+
 ### [PIPELINE-DETERMINISM] Cross-run determinism
 Two runs of the pipeline over an unchanged corpus produce bit-identical deterministic output: identical MinHash signatures (blake3 XOF, fixed k-gram ordering), identical pair evidence (`token_jaccard` compared bit-for-bit), identical admitted pairs, closure components, cluster ids, mass, and ranking. Determinism is what makes persisted processing ([PIPELINE-INCREMENTAL]) sound and cluster ids stable across sessions. The embedding/ANN layer is the only approximate stage and is bounded separately ([FUSED-EMBED-PROVIDER]); a missed ANN neighbour only loses recall, never changes an already admitted pair.
 

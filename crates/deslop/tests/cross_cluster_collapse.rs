@@ -11,7 +11,9 @@
 //! per duplicated region.
 
 use std::{
+    collections::BTreeSet,
     fs,
+    ops::RangeInclusive,
     path::{Path, PathBuf},
 };
 
@@ -20,10 +22,18 @@ use anyhow::Result;
 use crate::common::signals::assert_no_pair_surface_on_cluster;
 use crate::common::*;
 
+/// The bytes of the wider authored view inside `ApplyStandard`.
 const STANDARD_VIEW_BYTES: u64 = 190;
+/// The same view inside `ApplyPremium`, one literal shorter.
 const PREMIUM_VIEW_BYTES: u64 = 189;
-const ALPHA_WIDE_VIEW_BYTES: u64 = 493;
-const BETA_WIDE_VIEW_BYTES: u64 = 532;
+/// The 1-based lines that view covers in each method.
+const STANDARD_VIEW_LINES: RangeInclusive<u64> = 5..=10;
+/// The same view's lines in the premium copy.
+const PREMIUM_VIEW_LINES: RangeInclusive<u64> = 16..=21;
+/// The statement run both methods carry byte for byte after their label.
+const SHARED_PREFIX_RUN: &str = "policy.Stage(ticket);\n        policy.Validate(ticket);\n        policy.Record(ticket);\n        policy.Publish(ticket);";
+/// The 1-based lines `SHARED_LOGIC` occupies in both wrappers.
+const SHARED_LOGIC_LINES: RangeInclusive<u64> = 8..=13;
 
 fn report_path(tmp: &Path) -> PathBuf {
     let mut path = tmp.join("report");
@@ -173,11 +183,15 @@ fn write_content_subsumption_fixture(root: &Path) -> Result<()> {
     Ok(())
 }
 
-/// [PIPELINE-CLUSTER-SUBSUME] selects the enclosing cross-file view by
-/// physical enclosure and duplicated mass; it never promotes pair evidence
-/// or preserves a nested view merely because that view is byte-identical.
+/// [PIPELINE-CLUSTER-SUBSUME-STRADDLE] The two wrappers agree on nothing
+/// but the block they share: every other statement keeps its shape and
+/// changes its names and numbers, so the whole functions fail the content
+/// floor ([FUSED-CONTENT-GATE]) and the block plus one neighbouring
+/// statement clears it — on either side. Those two padded windows straddle
+/// the block; neither may be published, and the byte-identical block is
+/// the one finding, at its own extent, in both files.
 #[test]
-fn wider_cross_file_view_survives_subsumption() -> Result<()> {
+fn padded_windows_straddling_a_verbatim_block_publish_the_block() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("corpus");
     write_content_subsumption_fixture(&scan_root)?;
@@ -186,13 +200,13 @@ fn wider_cross_file_view_survives_subsumption() -> Result<()> {
     assert_eq!(
         candidates.len(),
         1,
-        "one cross-file duplication must retain one canonical view: {report:#}"
+        "one shared block must be published once, not once per padded window: {report:#}"
     );
     let clone = candidates
         .first()
         .ok_or_else(|| anyhow::anyhow!("candidate count asserted to be one above"))?;
     let occurrences = cluster_occurrences(clone);
-    assert_eq!(cluster_size(clone), 2, "the clone must span both files");
+    assert_eq!(cluster_size(clone), 2, "the block must span both files");
     assert_eq!(occurrences.len(), 2, "both visible occurrences must render");
     let paths: Vec<&str> = occurrences
         .iter()
@@ -201,27 +215,31 @@ fn wider_cross_file_view_survives_subsumption() -> Result<()> {
     assert_eq!(
         paths,
         vec!["alpha.ts", "beta.ts"],
-        "the canonical view must preserve file coverage"
+        "the finding must preserve file coverage"
     );
+    let block_bytes = u64::try_from(SHARED_LOGIC.len())?;
     let spans: Vec<u64> = occurrences
         .iter()
         .map(|occurrence| occurrence.end.saturating_sub(occurrence.start))
         .collect();
-    assert_eq!(spans, vec![ALPHA_WIDE_VIEW_BYTES, BETA_WIDE_VIEW_BYTES]);
-    let texts = occurrence_texts(&scan_root, clone)?;
     assert_eq!(
-        texts.len(),
-        2,
-        "both occurrence ranges must resolve to source bytes"
+        spans,
+        vec![block_bytes, block_bytes],
+        "each occurrence is the block and nothing around it: {clone:#}"
     );
-    assert!(
-        texts.iter().all(|text| text.len() > SHARED_LOGIC.len()),
-        "the wider cross-file view must enclose the nested shared block"
-    );
-    assert_ne!(
-        texts.first(),
-        texts.last(),
-        "the nested exact block must not become the selected view"
+    let block_lines: BTreeSet<u64> = SHARED_LOGIC_LINES.collect();
+    let published = visible_duplicated_lines(&report);
+    for file in ["alpha.ts", "beta.ts"] {
+        assert_eq!(
+            published.get(file),
+            Some(&block_lines),
+            "{file} must publish the block's lines alone: {report:#}"
+        );
+    }
+    assert_eq!(
+        occurrence_texts(&scan_root, clone)?,
+        vec![SHARED_LOGIC.to_owned(), SHARED_LOGIC.to_owned()],
+        "the finding is the shared block, byte for byte, in both files"
     );
     assert_no_pair_surface_on_cluster(clone, "cross-cluster collapse");
     Ok(())
@@ -294,18 +312,18 @@ fn rendered_clusters(report: &serde_json::Value, needle: &str) -> Vec<String> {
         .collect()
 }
 
-/// [REPAIR-SUBSUME-CONTENT-FIRST] / [PIPELINE-CLUSTER-SUBSUME]: the
-/// single-file half of the contract
-/// `content_proven_nested_clone_survives_content_poor_enclosing_view`
-/// holds across files.
+/// [PIPELINE-CLUSTER-EXACT-SCOPE] / [PIPELINE-CLUSTER-SUBSUME]: one
+/// physical duplication publishes one canonical view.
 ///
-/// `csharp-merge-readafter` holds one byte-identical five-statement run
-/// duplicated between two methods of the same class — `Prefix.cs` L6-10
-/// and L17-21, 158 bytes each, byte-for-byte equal. The larger authored view
-/// starts at the local `label` declaration and ends after `Publish`: it is
-/// 190 bytes in both methods, consistently renamed only at the label literal.
-/// [PIPELINE-CLUSTER-EXACT-SCOPE] selects that wider view before pair
-/// admission; a nested exact fingerprint must not override the authored scope.
+/// `csharp-merge-readafter` holds `ApplyStandard` (L3-12) and
+/// `ApplyPremium` (L14-26) in one class. Both open with a label
+/// declaration and five byte-identical statements. The larger authored
+/// view runs from that declaration to `Publish` — 190 bytes and 189,
+/// consistently renamed only at the label literal — and is selected
+/// before pair admission, so the exact fingerprint nested inside it must
+/// not displace it. The methods themselves cluster in neither this
+/// version nor 0.32.0: the rescue that would admit them is cross-file
+/// only (gh #492).
 #[test]
 fn widest_same_declaration_view_is_the_published_finding() -> Result<()> {
     let tmp = tempfile::tempdir()?;
@@ -326,9 +344,9 @@ fn widest_same_declaration_view_is_the_published_finding() -> Result<()> {
     let clone = candidates
         .first()
         .ok_or_else(|| anyhow::anyhow!("candidate count asserted to be one above"))?;
-    let occurrences = cluster_occurrences(clone);
+    let views = cluster_occurrences(clone);
     assert_eq!(
-        occurrences.len(),
+        views.len(),
         2,
         "the canonical same-file view must retain both method occurrences: {clone:#}"
     );
@@ -341,9 +359,36 @@ fn widest_same_declaration_view_is_the_published_finding() -> Result<()> {
     assert_ne!(
         texts.first(),
         texts.last(),
-        "the smaller byte-identical fingerprint must not displace the wider authored view"
+        "the premium method grew an archive branch, so the two methods stay byte-distinct"
     );
-    let spans: Vec<u64> = occurrences
+    for text in &texts {
+        assert!(
+            text.contains(SHARED_PREFIX_RUN),
+            "each method carries the byte-identical run the near-miss is built on: {text}"
+        );
+    }
+    let lines: Vec<(u64, u64)> = occurrences(clone)
+        .iter()
+        .map(|occurrence| {
+            Ok((
+                field(occurrence, "start_line")
+                    .as_u64()
+                    .ok_or_else(|| anyhow::anyhow!("start_line missing: {occurrence:#}"))?,
+                field(occurrence, "end_line")
+                    .as_u64()
+                    .ok_or_else(|| anyhow::anyhow!("end_line missing: {occurrence:#}"))?,
+            ))
+        })
+        .collect::<Result<_>>()?;
+    assert_eq!(
+        lines,
+        vec![
+            (*STANDARD_VIEW_LINES.start(), *STANDARD_VIEW_LINES.end()),
+            (*PREMIUM_VIEW_LINES.start(), *PREMIUM_VIEW_LINES.end()),
+        ],
+        "each occurrence is the wider authored view, not the exact run inside it: {clone:#}"
+    );
+    let spans: Vec<u64> = views
         .iter()
         .map(|occurrence| occurrence.end.saturating_sub(occurrence.start))
         .collect();

@@ -66,7 +66,10 @@ interface CommandBinding {
 }
 
 // [VSIX-COMMANDS] Single source of truth for every command-palette entry.
-const COMMAND_BINDINGS: readonly CommandBinding[] = [
+// [VSIX-COMMANDS] Single source of truth for every command-palette entry.
+// Exported read-only so tests can pin the palette contract without
+// colliding with the real extension's registrations in a shared host.
+export const COMMAND_BINDINGS: readonly CommandBinding[] = [
   { id: "deslop.openReport", run: ({ context, store }) => openReportPanel(context, store) },
   { id: "deslop.openWorstCluster", run: ({ context, store }) => openWorstCluster(context, store) },
   { id: "deslop.openCluster", run: ({ context, store }, id) => openClusterPanel(context, store, id as string) },

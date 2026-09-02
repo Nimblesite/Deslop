@@ -44,27 +44,33 @@ fn member(file_id: FileId, span: (usize, usize), digest: u8) -> Fingerprint {
 /// predicate: the file-coverage guard cannot be what decides the
 /// outcome, because neither view names a file the other omits.
 fn published(left: [(usize, usize); 2], right: [(usize, usize); 2]) -> Vec<Cluster> {
+    published_views(&[left, right])
+}
+
+/// [`published`] for any number of same-shape views over the same two
+/// files; view `n` carries digest `n + 1`.
+fn published_views(views: &[[(usize, usize); 2]]) -> Vec<Cluster> {
     let mut registry = FileRegistry::new();
     let alpha = registry.register("alpha.ts".into());
     let beta = registry.register("beta.ts".into());
-    let members = vec![
-        member(alpha, left[0], 1),
-        member(beta, left[1], 1),
-        member(alpha, right[0], 2),
-        member(beta, right[1], 2),
-    ];
-    let fused = [
-        FusedCluster {
-            members: vec![0, 1],
+    let members: Vec<Fingerprint> = views
+        .iter()
+        .zip(1u8..)
+        .flat_map(|(view, digest)| {
+            [
+                member(alpha, view[0], digest),
+                member(beta, view[1], digest),
+            ]
+        })
+        .collect();
+    let fused: Vec<FusedCluster> = (0..members.len())
+        .step_by(2)
+        .map(|left| FusedCluster {
+            members: vec![left, left.saturating_add(1)],
             edges: Vec::new(),
             shape_family: None,
-        },
-        FusedCluster {
-            members: vec![2, 3],
-            edges: Vec::new(),
-            shape_family: None,
-        },
-    ];
+        })
+        .collect();
     build_ranked_fused_clusters(&ClusterBuildInputs {
         fingerprints: &members,
         fused_clusters: &fused,
@@ -197,4 +203,41 @@ fn regions_that_merely_touch_are_all_published() {
             case.why
         );
     }
+}
+
+/// [PIPELINE-CLUSTER-SUBSUME-STRADDLE] Two windows that overhang one
+/// nested view on different sides are padded readings of it: the nested
+/// view is the finding, and the padding it never shared goes with the
+/// windows. The straddlers are ranked first (more mass), so the nested
+/// view is absorbed by the first of them before the straddle is met and
+/// must come back when both die.
+#[test]
+fn two_windows_straddling_one_nested_view_publish_that_view() {
+    let left_padded = [(0, 200), (0, 200)];
+    let right_padded = [(50, 250), (50, 250)];
+    let nested = [(50, 200), (50, 200)];
+    let clusters = published_views(&[left_padded, right_padded, nested]);
+    assert_eq!(
+        spans(&clusters),
+        vec![vec![(50, 200), (50, 200)]],
+        "the view both straddlers contain is the one finding"
+    );
+}
+
+/// [PIPELINE-CLUSTER-SUBSUME-STRADDLE] A view nested in one straddler
+/// only is not what the two share, so the overlap stays two findings.
+#[test]
+fn a_view_nested_in_only_one_straddler_leaves_both_published() {
+    let left_padded = [(0, 200), (0, 200)];
+    let right_padded = [(50, 250), (50, 250)];
+    let nested_in_left_only = [(10, 40), (10, 40)];
+    let clusters = published_views(&[left_padded, right_padded, nested_in_left_only]);
+    let mut actual = spans(&clusters);
+    actual.sort_unstable();
+    assert_eq!(
+        actual,
+        vec![vec![(0, 200), (0, 200)], vec![(50, 250), (50, 250)]],
+        "without a view inside both, the straddlers are two findings and \
+         the left-only nested view collapses into its encloser"
+    );
 }

@@ -10,6 +10,7 @@ import * as os from "node:os";
 import { tempFile } from "./temp-file.helpers";
 import type { LanguageClient } from "vscode-languageclient/node";
 import {
+  COMMAND_BINDINGS,
   openWorstCluster,
   openOccurrence,
   jumpToNextOccurrence,
@@ -17,6 +18,8 @@ import {
   openSchemaDoc,
   openCpuReport,
   renderCpuReport,
+  resolveOccurrenceUri,
+  openOccurrenceTarget,
 } from "../../commands/register";
 import { reportWithClusters } from "./report.helpers";
 import {
@@ -35,6 +38,7 @@ import {
 } from "../../commands/treeMenus";
 import { buildCompareUri } from "../../compare/provider";
 import { ReportStore } from "../../reportStore";
+import { seededStore } from "./report-store.helpers";
 import { activateExtension } from "../suite/helpers";
 import { ClusterNode, OccurrenceNode } from "../../tree/providers";
 import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
@@ -67,6 +71,25 @@ const SHORT_OCCURRENCE_END_BYTE = TEST_THREE;
 const CPU_WORK_MILLISECONDS = TEST_THREE;
 const THREE_LINE_COUNT = TEST_THREE;
 const THIRD_RANK = TEST_THREE;
+const TEST_ONE = 1;
+const RELATIVE_OCCURRENCE_PATH = "src/relative.cs";
+// [VSIX-ACTIVATION] Commands only activation itself registers — the
+// status-bar and title-bar refresh, the active-binary reveal, and the
+// Top Offenders toolbar expand/collapse pair.
+const ACTIVATION_OWNED_COMMAND_IDS = [
+  "deslop.refresh",
+  "deslop.revealActiveBinary",
+  "deslop.topOffenders.expandAll",
+  "deslop.topOffenders.collapseAll",
+];
+// [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] declares the per-language split
+// toggle, and `package.json` contributes it as a title-bar button, but
+// nothing registers a handler and no `splitByLanguage` setting exists —
+// clicking it raises "command not found" (gh #495). Named here so the
+// contract stays truthful about the one id that has no handler rather
+// than silently accepting any; the entry comes out when the handler
+// lands and the assertion below then covers it like every other id.
+const PENDING_LANGUAGE_SPLIT_TOGGLE = ["deslop.topOffenders.toggleSplitByLanguage"];
 
 async function findDiffTab(): Promise<vscode.TabInputTextDiff> {
   for (let i = 0; i < TEST_TWENTY; i += 1) {
@@ -849,5 +872,159 @@ suite("tree menu handlers", () => {
 
   test("OPEN_ALL_THRESHOLD is the small-cluster confirmation boundary", () => {
     assert.equal(OPEN_ALL_THRESHOLD, 5);
+  });
+});
+
+
+
+// [VSIX-COMMANDS] The palette contract: every command id the package
+// declares must have exactly one binding, and the shared deps must
+// route a dispatch to the client and the persisted view state. Pinned
+// against the binding table itself because the integration host also
+// runs the real extension, whose registrations cannot be shadowed.
+suite("command dispatch wiring", () => {
+  test("every declared palette id has exactly one binding and vice versa", () => {
+    const declared: string[] = (
+      JSON.parse(
+        fs.readFileSync(path.resolve(extensionRoot(), "package.json"), UTF8_ENCODING),
+      ) as { contributes: { commands: { command: string }[] } }
+    ).contributes.commands.map((entry) => entry.command);
+    const bound = COMMAND_BINDINGS.map((binding) => binding.id);
+    // Every binding must be contributed — VS Code refuses command: hover
+    // links and menu entries for uncontributed ids.
+    const orphan = bound.filter((id) => !declared.includes(id));
+    assert.deepEqual(
+      orphan,
+      [],
+      `bindings without a package.json contribution are unreachable: ${orphan.join(", ")}`,
+    );
+    // The reverse direction: whatever activation registers beyond the
+    // table must be exactly the activation-owned set plus the spec'd but
+    // still unwired language-split toggle — a new declared id with no
+    // handler anywhere fails here.
+    const activationOwned = declared.filter(
+      (id) =>
+        !bound.includes(id) && !PENDING_LANGUAGE_SPLIT_TOGGLE.includes(id),
+    );
+    assert.deepEqual(
+      [...activationOwned].sort(),
+      [...ACTIVATION_OWNED_COMMAND_IDS].sort(),
+      "declared ids outside COMMAND_BINDINGS must stay the activation-owned set",
+    );
+    assert.equal(new Set(bound).size, bound.length, "a duplicate binding id");
+  });
+
+  test("binding dispatch routes through the shared client and the persisted view axis", async () => {
+    let clientCalls = 0;
+    const deps = {
+      context: fakeCtx(),
+      store: seededStore([]),
+      clientOf: (): LanguageClient | undefined => {
+        clientCalls += 1;
+        return {
+          sendRequest: () => Promise.resolve("# refreshed"),
+        } as unknown as LanguageClient;
+      },
+    };
+    const refresh = COMMAND_BINDINGS.find((b) => b.id === REFRESH_REPORT_COMMAND);
+    assert.ok(refresh, "the refresh binding went missing");
+    await refresh.run(deps);
+    assert.equal(clientCalls, TEST_ONE);
+
+    const showByCluster = COMMAND_BINDINGS.find(
+      (b) => b.id === "deslop.topOffenders.showByCluster",
+    );
+    assert.ok(showByCluster, "the grouping binding went missing");
+    await showByCluster.run(deps);
+    assert.equal(
+      vscode.workspace.getConfiguration("deslop").get<string>("topOffenders.groupBy"),
+      "cluster",
+    );
+    await vscode.workspace
+      .getConfiguration("deslop")
+      .update("topOffenders.groupBy", undefined, vscode.ConfigurationTarget.Workspace);
+  });
+});
+
+// [VSIX-CODE-LENS] The remaining command-target guards: an argument that
+// reaches the palette from a lens, a hover link, or a stale tree row
+// must resolve to an editor opening — never to a thrown error.
+suite("command target resolution", () => {
+  test("resolveOccurrenceUri keeps absolute paths and roots relative ones", () => {
+    const made = tempFile("deslop-abs-", "abs.cs");
+    fs.writeFileSync(made.file, "const absolute = 1;\n");
+    const absolute = resolveOccurrenceUri(made.file);
+    assert.equal(absolute.fsPath, made.file);
+
+    const relative = resolveOccurrenceUri(RELATIVE_OCCURRENCE_PATH);
+    const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+    assert.ok(
+      relative.fsPath.startsWith(root),
+      `relative occurrence must resolve under the workspace root: ${relative.fsPath}`,
+    );
+    assert.ok(relative.fsPath.endsWith(RELATIVE_OCCURRENCE_PATH));
+  });
+
+  test("openOccurrenceTarget accepts a raw occurrence, an occurrence node, and informs on junk", async () => {
+    const made = tempFile("deslop-occ-target-", "target.cs");
+    fs.writeFileSync(made.file, "const target = 1;\n");
+    const raw = occurrence(made.file, 0, DEFAULT_OCCURRENCE_END_BYTE);
+    await openOccurrenceTarget(raw);
+
+    const node = { cluster: null, occurrence: raw } as unknown as OccurrenceNode;
+    await openOccurrenceTarget(node);
+
+    await openOccurrenceTarget({ occurrence: { path: TEST_THREE } });
+    await openOccurrenceTarget("not-even-an-object");
+    await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+  });
+
+  test("jumpToNextOccurrence wraps from the last occurrence back to the first", async () => {
+    const first = tempFile("deslop-wrap-a-", "wrap-a.cs");
+    fs.writeFileSync(first.file, "const alpha = 1;\n");
+    const second = tempFile("deslop-wrap-b-", "wrap-b.cs");
+    fs.writeFileSync(second.file, "const beta = 2;\n");
+    const doc = await vscode.workspace.openTextDocument(second.file);
+    await vscode.window.showTextDocument(doc);
+    const store = new ReportStore();
+    store.setSnapshot(
+      reportWithClusters([
+        clusterWithRanges(CYCLE_CLUSTER_ID, [
+          { path: first.file, start_byte: 0, end_byte: SHORT_OCCURRENCE_END_BYTE },
+          { path: second.file, start_byte: 0, end_byte: SHORT_OCCURRENCE_END_BYTE },
+        ]),
+      ]),
+      1,
+    );
+    // Index 1 is the last occurrence: modulo wrap must land on index 0.
+    await jumpToNextOccurrence(store, CYCLE_CLUSTER_ID, 1);
+    await closeAllDiffs();
+    await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+  });
+
+  test("comparePairEndpoints is a no-op when either endpoint is malformed", async () => {
+    const good = { path: TEST_SOURCE_PATH, start_byte: 0, end_byte: TEST_TEN };
+    await comparePairEndpoints(good, { path: "", start_byte: 0, end_byte: 1 });
+    await comparePairEndpoints(good, { path: TEST_SOURCE_PATH, start_byte: 1.5, end_byte: 2 });
+    await comparePairEndpoints(good, { path: TEST_SOURCE_PATH, start_byte: "0", end_byte: 2 });
+    await comparePairEndpoints(good, null);
+  });
+
+  test("openSchemaDoc consults the RPC fallback and survives a failing client", async () => {
+    const accepting = (): LanguageClient | undefined =>
+      ({ sendRequest: () => Promise.resolve("rpc-doc") }) as unknown as LanguageClient;
+    await openSchemaDoc(fakeCtx(), seededStore([cluster(FILE_A_NAME, [FILE_A_NAME])]), accepting);
+
+    const rejecting = (): LanguageClient | undefined =>
+      ({ sendRequest: () => Promise.reject(new Error("lsp gone")) }) as unknown as LanguageClient;
+    await openSchemaDoc(fakeCtx(), seededStore([]), rejecting);
+
+    const nonString = (): LanguageClient | undefined =>
+      ({ sendRequest: () => Promise.resolve(42) }) as unknown as LanguageClient;
+    await openSchemaDoc(fakeCtx(), seededStore([]), nonString);
+  });
+
+  test("openCpuReport without a client informs instead of throwing", async () => {
+    await openCpuReport(() => undefined);
   });
 });

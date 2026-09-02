@@ -61,11 +61,10 @@ use survivor::{covers_same_region, preferred_view, Preference};
 pub(super) fn collapse_cross_cluster_overlap(clusters: Vec<Cluster>) -> Vec<Cluster> {
     let len = clusters.len();
     let mut dropped = vec![false; len];
-    for outer in 0..len {
-        if !cluster_dropped(&dropped, outer) {
-            scan_inner_pairs(&clusters, &mut dropped, outer, len);
-        }
-    }
+    // A straddle releases views into a scan that may already have passed
+    // them ([PIPELINE-CLUSTER-SUBSUME-STRADDLE]); every pass that releases
+    // drops two straddlers for good, so the passes run out.
+    while scan_all_pairs(&clusters, &mut dropped, len) {}
     clusters
         .into_iter()
         .enumerate()
@@ -74,44 +73,126 @@ pub(super) fn collapse_cross_cluster_overlap(clusters: Vec<Cluster>) -> Vec<Clus
 }
 
 /// Decision produced by [`evaluate_pair`] for one `(outer, inner)` pair.
+#[derive(Clone, Copy)]
 enum PairDecision {
     /// Discard the inner cluster; the outer subsumes it.
     DropInner,
     /// Discard the outer cluster; the inner subsumes it.
     DropOuter,
+    /// Discard both: they straddle a view nested in each, and that view
+    /// is the finding ([PIPELINE-CLUSTER-SUBSUME-STRADDLE]).
+    DropBoth,
     /// Retain both clusters.
     Keep,
 }
 
+/// One pass of `(outer, inner)` scans over every surviving `outer`.
+/// Returns `true` when a straddle released views that need a pass of
+/// their own.
+fn scan_all_pairs(clusters: &[Cluster], dropped: &mut [bool], len: usize) -> bool {
+    (0..len).fold(false, |released, outer| {
+        if cluster_dropped(dropped, outer) {
+            return released;
+        }
+        let released_now = scan_inner_pairs(clusters, dropped, outer, len);
+        released_now || released
+    })
+}
+
 /// Evaluates every `(outer, inner)` pair for the given `outer` index and
-/// updates `dropped`. Breaks early when `outer` itself is dropped.
-fn scan_inner_pairs(clusters: &[Cluster], dropped: &mut [bool], outer: usize, len: usize) {
+/// updates `dropped`. Stops when `outer` itself is dropped, returning
+/// `true` when that drop released views the scan had already passed.
+fn scan_inner_pairs(clusters: &[Cluster], dropped: &mut [bool], outer: usize, len: usize) -> bool {
     let mut absorbed: Vec<usize> = Vec::new();
     for inner in (outer.saturating_add(1))..len {
         if cluster_dropped(dropped, inner) {
             continue;
         }
-        let Some(outer_cluster) = clusters.get(outer) else {
+        let (Some(outer_cluster), Some(inner_cluster)) = (clusters.get(outer), clusters.get(inner))
+        else {
             continue;
         };
-        let Some(inner_cluster) = clusters.get(inner) else {
-            continue;
+        let decision = evaluate_pair(clusters, outer_cluster, inner_cluster);
+        let scan = Scan {
+            clusters,
+            outer: (outer, outer_cluster),
+            inner: (inner, inner_cluster),
         };
-        match evaluate_pair(outer_cluster, inner_cluster) {
-            PairDecision::DropInner => {
-                log_subsumption(outer_cluster, inner_cluster, "drop_inner");
-                drop_cluster(dropped, inner);
-                absorbed.push(inner);
-            }
-            PairDecision::DropOuter => {
-                log_subsumption(inner_cluster, outer_cluster, "drop_outer");
-                drop_cluster(dropped, outer);
-                restore_absorbed(dropped, &absorbed, inner);
-                break;
-            }
-            PairDecision::Keep => {}
+        match apply_decision(decision, &scan, dropped, &mut absorbed) {
+            Flow::Continue => {}
+            Flow::Stop => return false,
+            Flow::StopReleased => return true,
         }
     }
+    false
+}
+
+/// The pair one decision applies to: mass-order indices with their
+/// clusters, and the whole list a straddle searches for its core.
+struct Scan<'a> {
+    /// Every cluster, in mass order.
+    clusters: &'a [Cluster],
+    /// The `outer` index and cluster.
+    outer: (usize, &'a Cluster),
+    /// The `inner` index and cluster.
+    inner: (usize, &'a Cluster),
+}
+
+/// What a decision does to the scan of one `outer`.
+enum Flow {
+    /// Keep scanning `outer` against later clusters.
+    Continue,
+    /// `outer` is gone; nothing was released.
+    Stop,
+    /// `outer` is gone and views were released into passed territory.
+    StopReleased,
+}
+
+/// Applies one [`PairDecision`] to `dropped` and the running `absorbed`
+/// list of `outer`.
+fn apply_decision(
+    decision: PairDecision,
+    scan: &Scan<'_>,
+    dropped: &mut [bool],
+    absorbed: &mut Vec<usize>,
+) -> Flow {
+    let (outer, outer_cluster) = scan.outer;
+    let (inner, inner_cluster) = scan.inner;
+    match decision {
+        PairDecision::DropInner => {
+            log_subsumption(outer_cluster, inner_cluster, "drop_inner");
+            drop_cluster(dropped, inner);
+            absorbed.push(inner);
+            Flow::Continue
+        }
+        PairDecision::DropOuter => {
+            log_subsumption(inner_cluster, outer_cluster, "drop_outer");
+            drop_cluster(dropped, outer);
+            restore_absorbed(dropped, absorbed, Some(inner));
+            Flow::Stop
+        }
+        PairDecision::DropBoth => drop_both(scan, dropped, absorbed),
+        PairDecision::Keep => Flow::Continue,
+    }
+}
+
+/// [PIPELINE-CLUSTER-SUBSUME-STRADDLE] Drops both straddlers and brings
+/// back everything they stood in front of: the views `outer` absorbed and
+/// every view nested in both, so the finding they were padded readings
+/// of is judged on its own.
+fn drop_both(scan: &Scan<'_>, dropped: &mut [bool], absorbed: &[usize]) -> Flow {
+    let (outer, outer_cluster) = scan.outer;
+    let (inner, inner_cluster) = scan.inner;
+    log_subsumption(inner_cluster, outer_cluster, "drop_both_straddle");
+    drop_cluster(dropped, inner);
+    drop_cluster(dropped, outer);
+    restore_absorbed(dropped, absorbed, None);
+    for (index, core) in scan.clusters.iter().enumerate() {
+        if is_core_of(core, outer_cluster, inner_cluster) {
+            restore_cluster(dropped, index);
+        }
+    }
+    Flow::StopReleased
 }
 
 /// Un-drops every view `outer` had absorbed before it was itself
@@ -127,15 +208,20 @@ fn scan_inner_pairs(clusters: &[Cluster], dropped: &mut [bool], outer: usize, le
 /// a whole-file view can absorb the genuine method-level view and then
 /// be replaced by another covering component.
 ///
-/// The survivor is exempt: it is not an orphan, it is the reason the
-/// absorber died. Restored views are re-judged because each is scanned
-/// again in its own turn as an `outer`, so a genuinely redundant one is
-/// re-absorbed by whichever view legitimately covers it.
-fn restore_absorbed(dropped: &mut [bool], absorbed: &[usize], survivor: usize) {
-    for index in absorbed.iter().copied().filter(|index| *index != survivor) {
-        if let Some(slot) = dropped.get_mut(index) {
-            *slot = false;
-        }
+/// The survivor, when there is one, is exempt: it is not an orphan, it
+/// is the reason the absorber died. Two straddling views die without a
+/// survivor between them ([PIPELINE-CLUSTER-SUBSUME-STRADDLE]), so
+/// everything either absorbed comes back. Restored views are re-judged
+/// because each is scanned again in its own turn as an `outer`, so a
+/// genuinely redundant one is re-absorbed by whichever view
+/// legitimately covers it.
+fn restore_absorbed(dropped: &mut [bool], absorbed: &[usize], survivor: Option<usize>) {
+    for index in absorbed
+        .iter()
+        .copied()
+        .filter(|index| Some(*index) != survivor)
+    {
+        restore_cluster(dropped, index);
     }
 }
 
@@ -172,10 +258,16 @@ fn span_summary(members: &[Fingerprint]) -> String {
 }
 
 /// Decides which cluster survives when their occurrences cover the same
-/// bytes. Returns [`PairDecision::Keep`] when they are separate regions.
-fn evaluate_pair(outer: &Cluster, inner: &Cluster) -> PairDecision {
+/// bytes. Returns [`PairDecision::Keep`] when they are separate regions,
+/// and [`PairDecision::DropBoth`] when they are two padded readings of a
+/// third view nested in each.
+fn evaluate_pair(clusters: &[Cluster], outer: &Cluster, inner: &Cluster) -> PairDecision {
     if !covers_same_region(outer, inner) {
-        return PairDecision::Keep;
+        return if straddle_over_a_core(clusters, outer, inner) {
+            PairDecision::DropBoth
+        } else {
+            PairDecision::Keep
+        };
     }
     // Enclosure is nominated in both directions. `outer` and `inner`
     // are mass-order positions, not nesting roles, so either may be the
@@ -197,6 +289,51 @@ fn evaluate_pair(outer: &Cluster, inner: &Cluster) -> PairDecision {
         Preference::Second => PairDecision::DropOuter,
         Preference::Neither => PairDecision::Keep,
     }
+}
+
+/// [PIPELINE-CLUSTER-SUBSUME-STRADDLE] Whether `first` and `second` are
+/// two padded readings of one view nested in both: they name the same
+/// files, every occurrence of each overlaps an occurrence of the other in
+/// its file, neither contains the other, and some third cluster lies
+/// strictly inside both in every file. That third view is the
+/// duplication; each straddler adds bytes on a side the other does not
+/// share, and publishing both would report the nested view twice under
+/// two different extents.
+fn straddle_over_a_core(clusters: &[Cluster], first: &Cluster, second: &Cluster) -> bool {
+    covers_every_file(&first.members, &second.members)
+        && covers_every_file(&second.members, &first.members)
+        && all_occurrences_overlap(&first.members, &second.members)
+        && all_occurrences_overlap(&second.members, &first.members)
+        && clusters.iter().any(|core| is_core_of(core, first, second))
+}
+
+/// Whether `core` is a distinct view strictly inside both `first` and
+/// `second` that still names every file they name.
+fn is_core_of(core: &Cluster, first: &Cluster, second: &Cluster) -> bool {
+    core.id != first.id
+        && core.id != second.id
+        && covers_every_file(&core.members, &first.members)
+        && strictly_encloses(&first.members, &core.members)
+        && strictly_encloses(&second.members, &core.members)
+}
+
+/// Returns `true` when every occurrence in `covered` shares at least one
+/// byte with an occurrence in `cover` in the same file.
+fn all_occurrences_overlap(covered: &[Fingerprint], cover: &[Fingerprint]) -> bool {
+    !covered.is_empty()
+        && covered.iter().all(|candidate| {
+            cover
+                .iter()
+                .any(|other| occurrences_overlap(other, candidate))
+        })
+}
+
+/// Returns `true` when two occurrences in the same file share at least
+/// one byte.
+fn occurrences_overlap(left: &Fingerprint, right: &Fingerprint) -> bool {
+    left.file_id == right.file_id
+        && left.byte_range.start < right.byte_range.end
+        && right.byte_range.start < left.byte_range.end
 }
 
 /// Whether the nominated view physically encloses its rival.
@@ -281,5 +418,12 @@ fn cluster_dropped(dropped: &[bool], index: usize) -> bool {
 fn drop_cluster(dropped: &mut [bool], index: usize) {
     if let Some(slot) = dropped.get_mut(index) {
         *slot = true;
+    }
+}
+
+/// Clears the removal mark on `index` when the slot exists.
+fn restore_cluster(dropped: &mut [bool], index: usize) {
+    if let Some(slot) = dropped.get_mut(index) {
+        *slot = false;
     }
 }

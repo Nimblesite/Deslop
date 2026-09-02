@@ -1,5 +1,5 @@
 //! Black-box regression for the five-language Type-3 recall hole
-//! (#408, [PIPELINE-CLUSTER-SUBSUME], [REPAIR-SUBSUME-CONTENT-FIRST]): one
+//! (#408, [PIPELINE-CLUSTER-SUBSUME], [FUSED-SHARED-SUBTREE]): one
 //! inserted statement must not hide a whole-method clone behind its own
 //! fragments.
 //!
@@ -231,6 +231,29 @@ fn csharp_type3_reports_the_enclosing_method_pair() -> Result<()> {
         "csharp-type3",
         &span("Delta.cs", 5, 18, 1, 20),
         &span("Epsilon.cs", 5, 17, 1, 19),
+    )
+}
+
+// [FUSED-SHARED-SUBTREE] A shared-subtree rescue is evidence about the
+// two authored methods, and the file boundary records where the copy was
+// pasted rather than whether it is a copy. The rescue is cross-file only,
+// so `DriftLimits.cs` publishes the statement fragments its two methods
+// share and never the methods.
+#[test]
+#[ignore = "[SKIP-UNFINISHED] GH #492 [FUSED-SHARED-SUBTREE] docs/plans/same-file-rescue-plan.md — \
+            shared-subtree rescue is cross-file only, so two methods that drifted apart \
+            inside one file publish as fragments. Admitting every disjoint same-file pair \
+            ranks shape families above real clones (the settings-getter and helper-call-site \
+            fixtures), so the route needs a discriminator this release does not have. \
+            Assertions are intact — run with `-- --ignored`."]
+fn csharp_same_file_type3_reports_both_methods_in_one_cluster() -> Result<()> {
+    const FIXTURE: &str = "csharp-merge-drift";
+    const FILE: &str = "DriftLimits.cs";
+
+    assert_enclosing_pair_visible(
+        FIXTURE,
+        &span(FILE, 3, 13, 3, 13),
+        &span(FILE, 15, 29, 15, 29),
     )
 }
 

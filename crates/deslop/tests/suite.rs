@@ -159,6 +159,7 @@ mod metric_excludes_hidden_clusters;
 mod metric_language_agnostic;
 #[path = "metrics_folder_rollup.rs"]
 mod metrics_folder_rollup;
+mod metrics_weighted_wire_refusal;
 #[path = "ollama_failures.rs"]
 mod ollama_failures;
 #[path = "operator_drift_is_not_duplication.rs"]
@@ -251,6 +252,7 @@ mod rust_issue_232_token_jaccard_identical;
 mod rust_test_boilerplate_false_positive;
 #[path = "rust_trait_boilerplate_false_positive.rs"]
 mod rust_trait_boilerplate_false_positive;
+mod same_file_rescue;
 #[path = "showstoppers.rs"]
 mod showstoppers;
 #[path = "sibling_dedup.rs"]

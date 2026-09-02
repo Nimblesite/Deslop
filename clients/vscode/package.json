@@ -125,6 +125,10 @@
         "title": "Copy Context For AI"
       },
       {
+        "command": "deslop.copyClusterContextById",
+        "title": "Copy Context For AI"
+      },
+      {
         "command": "deslop.copyHumanLocation",
         "title": "Copy Human Location"
       },

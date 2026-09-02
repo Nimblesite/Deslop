@@ -37,7 +37,7 @@ use super::{tally::RescueTally, OverlapMeasurer};
 
 /// Everything a rescue measurement reads besides the pair itself,
 /// resolved once per pass and shared read-only by every shard.
-pub(super) struct RescueContext<'a, S, L> {
+pub(super) struct RescueContext<'a, S, L: BuildHasher> {
     /// Every member's normalised tree by file, for content agreement.
     tree_index: HashMap<FileId, &'a NormalizedNode>,
     /// Raw source per file.
@@ -59,6 +59,7 @@ impl<'a, S: BuildHasher, L: BuildHasher> RescueContext<'a, S, L> {
         languages: &'a HashMap<FileId, &'static str, L>,
     ) -> Self {
         let scopes = DeclarationScopes::new(trees, languages);
+
         Self {
             tree_index: trees.iter().map(|tree| (tree.file_id, tree)).collect(),
             sources,
@@ -184,16 +185,28 @@ fn measure_one<S: BuildHasher, L: BuildHasher>(
     if !rescue_eligible(pair) {
         return;
     }
-    tally.eligible();
     let (Some(left), Some(right)) = (fingerprints.get(pair.left), fingerprints.get(pair.right))
     else {
         return;
     };
+    tally.eligible();
     if !crosses_files(left, right) {
         return;
     }
     tally.cross_file();
     pair.shared_subtree_overlap = measurer.rescue_overlap(left, right);
+    record_rescue_verdict(pair, left, right, context, measurer, tally);
+}
+
+/// Applies content and echo guards to one measured rescue candidate.
+fn record_rescue_verdict<S: BuildHasher, L: BuildHasher>(
+    pair: &mut CandidatePair,
+    left: &Fingerprint,
+    right: &Fingerprint,
+    context: &RescueContext<'_, S, L>,
+    measurer: &OverlapMeasurer<'_>,
+    tally: &mut RescueTally,
+) {
     let clears_overlap = pair.shared_subtree_overlap >= SHARED_SUBTREE_MIN_OVERLAP;
     let clears_content = !clears_overlap
         || pair_content_agreement(
