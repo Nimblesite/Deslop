@@ -16,7 +16,7 @@ use serde_json::Value;
 
 use crate::common::signals::{
     assert_no_pair_surface_on_cluster, assert_structural_only_contract, distinct_texts,
-    has_verbatim_pair,
+    has_verbatim_pair, rank_of,
 };
 use crate::common::*;
 
@@ -129,7 +129,10 @@ fn assert_whole_file_copy_survives_beside_the_family(
         .iter()
         .map(occurrence_path)
         .collect::<Result<_>>()?;
-    assert_eq!(copy_files, JS_FAMILY_WHOLE_FILE_COPIES, "the copy is the .js/.mjs pair");
+    assert_eq!(
+        copy_files, JS_FAMILY_WHOLE_FILE_COPIES,
+        "the copy is the .js/.mjs pair"
+    );
     for occurrence in occurrences(copy) {
         assert_eq!(
             (

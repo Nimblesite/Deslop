@@ -73,6 +73,7 @@ pub(super) fn collapse_cross_cluster_overlap(clusters: Vec<Cluster>) -> Vec<Clus
 }
 
 /// Decision produced by [`evaluate_pair`] for one `(outer, inner)` pair.
+#[derive(Clone, Copy)]
 enum PairDecision {
     /// Discard the inner cluster; the outer subsumes it.
     DropInner,
