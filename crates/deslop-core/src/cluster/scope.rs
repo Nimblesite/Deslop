@@ -23,7 +23,7 @@ use crate::{
 
 /// The authored declaration enclosing an occurrence, resolved against
 /// the normalised trees the corpus already holds.
-pub(super) struct DeclarationScopes<'trees, L: BuildHasher> {
+pub(crate) struct DeclarationScopes<'trees, L: BuildHasher> {
     /// Normalised root per file.
     trees: HashMap<FileId, &'trees NormalizedNode>,
     /// Language per file, for the declaration productions to look for.
@@ -33,7 +33,7 @@ pub(super) struct DeclarationScopes<'trees, L: BuildHasher> {
 impl<'trees, L: BuildHasher> DeclarationScopes<'trees, L> {
     /// Indexes `trees` by file so each lookup is one map hit plus a
     /// descent, rather than a scan of the corpus.
-    pub(super) fn new(
+    pub(crate) fn new(
         trees: &'trees [NormalizedNode],
         languages: &'trees HashMap<FileId, &'static str, L>,
     ) -> Self {
@@ -55,7 +55,7 @@ impl<'trees, L: BuildHasher> DeclarationScopes<'trees, L> {
     /// top-level bindings, a class body, a whole file. Those views span
     /// genuinely different amounts of authored code, so their measured
     /// grades are comparable and the strength contest stands (#339).
-    pub(super) fn enclosing(&self, member: &Fingerprint) -> Option<ByteRange> {
+    pub(crate) fn enclosing(&self, member: &Fingerprint) -> Option<ByteRange> {
         let tree = self.trees.get(&member.file_id)?;
         let language = self.languages.get(&member.file_id)?;
         let kinds = function_kinds(language);
@@ -74,7 +74,7 @@ impl<'trees, L: BuildHasher> DeclarationScopes<'trees, L> {
     /// [PIPELINE-CLUSTER-EXACT-SCOPE-STRADDLE] it outranks any view that
     /// cuts through that declaration. `None` marks windows, wrappers and
     /// whole files.
-    pub(super) fn aligned_function(&self, member: &Fingerprint) -> Option<ByteRange> {
+    pub(crate) fn aligned_function(&self, member: &Fingerprint) -> Option<ByteRange> {
         let tree = self.trees.get(&member.file_id)?;
         let language = self.languages.get(&member.file_id)?;
         let kinds = function_kinds(language);

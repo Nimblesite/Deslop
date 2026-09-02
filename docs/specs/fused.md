@@ -72,6 +72,18 @@ The cap counts normalised-tree nodes, including operator leaves from [PIPELINE-N
 
 [PIPELINE-CLUSTER-SUBSUME] never compares pair grades. It selects between duplicate component views only by file coverage, physical enclosure, occurrence coverage, duplicated mass, and stable cluster id; structural, Jaccard, embedding, content, rename, literal, and pair classification evidence are forbidden inputs. `type3_enclosing_method.rs` pins the enclosing authored view in all five languages without attaching pair evidence to a cluster.
 
+### [FUSED-SHARED-SUBTREE-ECHO] A rescue must rescue something the anchor axis has not already proved
+
+A class shell, a module preamble, or a whole file that wraps a Merkle-equal authored function in both files measures high overlap *because of that function*. Admitting the container as a near-miss does not find a second duplication; it hands [PIPELINE-CLUSTER-SUBSUME] a wider, byte-divergent view of the same clone, and enclosure then lets that view replace the exact one — the `incremental-multilang` C# pair published as `LedgerAlpha` class 5–25 against `LedgerBeta` class 7–25 while the byte-identical `ReconcileEntries` method sat inside both.
+
+The rule: when both endpoints of a rescue-eligible pair enclose the endpoints of a candidate pair that is Merkle-equal, cross-file, and an authored function-like declaration on both sides, the rescue counts only the shared mass *beyond* the largest such clone — `S × max(n) − nodes(clone)`. If that remainder is below `admission.shared_subtree_min_node_count` (the same floor every rescued endpoint must clear), the rescue refuses the pair exactly as the content floor would: the overlap is left unset and the pair drops. A container that shares substantially more than the clone it wraps — two classes with three identical methods each — keeps its remainder and is still rescued. Pairs that wrap no exact function, including every Type-3 near-miss method whose only exact sub-blocks are statements, are untouched.
+
+The same echo rides the token-only route: an unanchored LSH pair whose one endpoint is the exact function and whose other endpoint is that function plus a few scraps of the enclosing body — a class brace, a trailing blank — clears the token floor on the strength of the function it wraps. There is no measured overlap on that route, so the endpoint's own size bounds it: when the larger endpoint holds fewer than `admission.shared_subtree_min_node_count` nodes beyond the clone, the pair is refused before content is measured. A Merkle-equal wider pair is not a token echo and is untouched — a verbatim copy of a struct plus its function is one clone at its full width.
+
+The anchor is an authored **function**, never a sub-block: a Type-3 near-miss method whose only exact sub-blocks are statements keeps its rescue, because refusing it would publish the fragment instead of the method (`type3_enclosing_method` across every language pins this).
+
+Implemented in `pair/echo.rs`, applied in `overlap/rescue.rs` and `pair/content_gate.rs`; pinned by `issue_389_subsumption_modifier_straddle` and the `incremental-multilang` golden across all six languages.
+
 ### [FUSED-SHARED-SUBTREE-MEMO] Overlap is memoised by ordered Merkle hash pair
 
 Memoise once per ordered endpoint-Merkle-hash pair, not per byte-range pair; equal hashes pin equal normalised structures, so this changes cost but not values or admission. `a_fleet_of_identical_windows_costs_one_alignment` pins 36 byte-range pairs to one alignment. Memoise exact and bound results separately because bounds answer only rescue admission.

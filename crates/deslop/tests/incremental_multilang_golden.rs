@@ -196,8 +196,8 @@ fn assert_golden_metrics(golden: &Value) -> Result<()> {
             metric_field(golden, "clusters_total").as_u64(),
             metric_field(golden, "duplicated_files").as_u64(),
         ),
-        (Some(197), Some(172), Some(6), Some(MULTILANG_FILE_COUNT)),
-        "the twelve-file corpus measures 197 analysed / 172 duplicated LOC \
+        (Some(210), Some(136), Some(6), Some(MULTILANG_FILE_COUNT)),
+        "the twelve-file corpus measures 210 analysed / 136 duplicated LOC \
          across 6 clusters, every file duplicated: {golden:#}"
     );
     assert_metric_arithmetic(golden)?;

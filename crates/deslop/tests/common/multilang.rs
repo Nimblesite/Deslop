@@ -15,8 +15,8 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 use super::{
-    cluster_bucket, cluster_size, clusters, expect_cluster_spanning, field, fixture,
-    occurrence_files, seed, Result,
+    cluster_size, clusters, expect_cluster_spanning, field, fixture, occurrence_files, seed,
+    signals::assert_no_pair_surface_on_cluster, Result,
 };
 
 /// Subtree-size floor the fixture is scanned at. Every authored clone
@@ -209,17 +209,12 @@ pub(crate) fn assert_multilang_contract(report: &Value, label: &str) -> Result<(
         let language = case.language;
         let clone = expect_lang_clone(report, case)?;
         assert_eq!(
-            cluster_bucket(clone),
-            "identical",
-            "{label}/{language}: the authored pair is a byte-identical body \
-             in two distinct files: {report:#}"
-        );
-        assert_eq!(
             cluster_size(clone),
             2,
             "{label}/{language}: the clone must span exactly the two authored \
              occurrences: {report:#}"
         );
+        assert_no_pair_surface_on_cluster(clone, &format!("{label}/{language}"));
         let mut files = occurrence_files(clone);
         files.sort();
         let mut expected = case.files().map(ToOwned::to_owned).to_vec();

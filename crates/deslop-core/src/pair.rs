@@ -20,7 +20,9 @@ pub use candidates::{candidate_pairs, candidate_pairs_for_language_policy, LshPa
 
 /// Pair-content admission guard applied before transitive closure.
 mod content_gate;
+mod echo;
 pub(crate) use content_gate::apply_pair_content_gate;
+pub(crate) use echo::ExactFunctionAnchors;
 
 /// Transitive-closure clustering over surviving pairs.
 mod closure;

@@ -58,6 +58,12 @@ pub(super) struct RescueTally {
     /// those would launder a false duplicate into a proven family's
     /// act-now cluster.
     pub(super) content_gate_rejected: u64,
+    /// Measured pairs whose overlap cleared the floor but whose shared
+    /// mass, beyond an exact whole-function clone both endpoints
+    /// enclose, fell short of [`crate::pair::SHARED_SUBTREE_MIN_NODE_COUNT`]
+    /// ([FUSED-SHARED-SUBTREE-ECHO]): a container echoing a clone the
+    /// anchor axis already proved, refused so it cannot eat that clone.
+    pub(super) container_echo_rejected: u64,
     /// Stage start, for the throughput a reader needs to tell slow from
     /// stuck.
     started: Instant,
@@ -73,6 +79,7 @@ impl RescueTally {
             measured: 0,
             rescued: 0,
             content_gate_rejected: 0,
+            container_echo_rejected: 0,
             started: Instant::now(),
         }
     }
@@ -109,6 +116,11 @@ impl RescueTally {
         bump(&mut self.content_gate_rejected);
     }
 
+    /// Records a pair the container-echo rule refused.
+    pub(super) fn container_echo_rejected(&mut self) {
+        bump(&mut self.container_echo_rejected);
+    }
+
     /// Folds another tally's counts into this one. The stage clock stays
     /// this tally's own — shard tallies share the pass start, so the
     /// merged elapsed time is the pass's ([PERF-FLUTTER-TODO-RESCUE]).
@@ -121,6 +133,9 @@ impl RescueTally {
         self.content_gate_rejected = self
             .content_gate_rejected
             .saturating_add(other.content_gate_rejected);
+        self.container_echo_rejected = self
+            .container_echo_rejected
+            .saturating_add(other.container_echo_rejected);
     }
 
     /// Emits the pass's totals. Always emitted, including when the stage
@@ -142,6 +157,7 @@ impl RescueTally {
             measured = self.measured,
             rescued_pairs = self.rescued,
             content_gate_rejected = self.content_gate_rejected,
+            container_echo_rejected = self.container_echo_rejected,
             alignments = measure.alignments,
             credit_fallbacks = measure.credit_fallbacks,
             hash_equal = measure.hash_equal,

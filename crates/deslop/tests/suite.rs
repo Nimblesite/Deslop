@@ -53,8 +53,8 @@ mod cross_language;
 mod csharp_issue_66_route_mapping;
 #[path = "csharp_merged_clone_families.rs"]
 mod csharp_merged_clone_families;
-#[path = "csharp_type1_type2_distinct_buckets.rs"]
-mod csharp_type1_type2_distinct_buckets;
+#[path = "csharp_type1_type2_byte_truth.rs"]
+mod csharp_type1_type2_byte_truth;
 #[path = "csharp_unrelated_xunit_classes.rs"]
 mod csharp_unrelated_xunit_classes;
 #[path = "dart_forwarding_fail_open.rs"]

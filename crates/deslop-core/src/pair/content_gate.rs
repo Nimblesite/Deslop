@@ -5,6 +5,7 @@ use std::{collections::HashMap, hash::BuildHasher};
 use crate::{
     ast::NormalizedNode,
     buckets::{CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR},
+    cluster::scope::DeclarationScopes,
     cluster_filters::{is_embedding_role_mismatch, ParseCache},
     content::measure_pair_content_indexed,
     fingerprint::Fingerprint,
@@ -12,7 +13,8 @@ use crate::{
 };
 
 use super::{
-    CandidatePair, EMBEDDING_SUPPORT_FLOOR, LSH_ONLY_MIN_JACCARD, SHARED_SUBTREE_MIN_OVERLAP,
+    CandidatePair, ExactFunctionAnchors, EMBEDDING_SUPPORT_FLOOR, LSH_ONLY_MIN_JACCARD,
+    SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
 };
 
 /// Structural overlap at which normalised shape saturates the content guard.
@@ -39,19 +41,43 @@ pub(crate) fn apply_pair_content_gate<L>(
 {
     let tree_index: HashMap<FileId, &NormalizedNode> =
         trees.iter().map(|tree| (tree.file_id, tree)).collect();
+    let scopes = DeclarationScopes::new(trees, languages);
+    let anchors = ExactFunctionAnchors::index(pairs, fingerprints, &scopes);
     pairs.retain(|pair| {
-        pair_passes_content_gate(pair, fingerprints, &tree_index, sources, languages, cache)
+        pair_passes_content_gate(
+            pair,
+            fingerprints,
+            &GateContext {
+                tree_index: &tree_index,
+                anchors: &anchors,
+                sources,
+                languages,
+                cache,
+            },
+        )
     });
+}
+
+/// Pass-wide inputs every gate verdict reads.
+struct GateContext<'a, L: BuildHasher> {
+    /// Every member's normalised tree by file.
+    tree_index: &'a HashMap<FileId, &'a NormalizedNode>,
+    /// The exact whole-function clones a token-only pair may not merely
+    /// wrap ([FUSED-SHARED-SUBTREE-ECHO]).
+    anchors: &'a ExactFunctionAnchors,
+    /// Raw source per file.
+    sources: &'a HashMap<FileId, Vec<u8>>,
+    /// Language per file.
+    languages: &'a HashMap<FileId, &'static str, L>,
+    /// Parse cache for the role guard.
+    cache: &'a ParseCache,
 }
 
 /// Applies the content guard to one candidate edge.
 fn pair_passes_content_gate<L: BuildHasher>(
     pair: &CandidatePair,
     fingerprints: &[Fingerprint],
-    tree_index: &HashMap<FileId, &NormalizedNode>,
-    sources: &HashMap<FileId, Vec<u8>>,
-    languages: &HashMap<FileId, &'static str, L>,
-    cache: &ParseCache,
+    context: &GateContext<'_, L>,
 ) -> bool {
     let (Some(left), Some(right)) = (fingerprints.get(pair.left), fingerprints.get(pair.right))
     else {
@@ -59,14 +85,35 @@ fn pair_passes_content_gate<L: BuildHasher>(
     };
 
     if embedding_needs_role_guard(pair)
-        && is_embedding_role_mismatch(left, right, sources, languages, cache)
+        && is_embedding_role_mismatch(
+            left,
+            right,
+            context.sources,
+            context.languages,
+            context.cache,
+        )
+    {
+        return false;
+    }
+    // [FUSED-SHARED-SUBTREE-ECHO] A token echo of an exact function plus
+    // scraps is a wider view of that function, not a second clone.
+    if lsh_only_pair_needs_content(pair, left, right)
+        && context
+            .anchors
+            .wraps_within(left, right, SHARED_SUBTREE_MIN_NODE_COUNT)
     {
         return false;
     }
     if !content_is_required(pair, left, right) {
         return true;
     }
-    let evidence = measure_pair_content_indexed(left, right, tree_index, sources, languages);
+    let evidence = measure_pair_content_indexed(
+        left,
+        right,
+        context.tree_index,
+        context.sources,
+        context.languages,
+    );
     evidence.measured && evidence.support() >= content_floor(pair, left, right)
 }
 

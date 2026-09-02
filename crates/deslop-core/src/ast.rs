@@ -48,12 +48,14 @@ impl ByteRange {
 
     /// True when `self` covers every byte of `inner`, equal ranges
     /// included.
+    #[must_use]
     pub const fn covers(self, inner: Self) -> bool {
         self.start <= inner.start && inner.end <= self.end
     }
 
     /// True when the two ranges share bytes but neither covers the
     /// other — each one starts or ends inside the other.
+    #[must_use]
     pub const fn partially_overlaps(self, other: Self) -> bool {
         self.start < other.end
             && other.start < self.end
