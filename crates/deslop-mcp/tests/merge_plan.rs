@@ -29,7 +29,7 @@ fn mcp_session(fixture: &str) -> Result<(tempfile::TempDir, ChildKillOnDrop, Mcp
 fn request_top_offenders(mcp: &mut McpHandle, count: u32) -> Result<Value> {
     let offenders = mcp.request(
         "tools/call",
-        &json!({ "name": "duplicates", "arguments": { "offset": 0, "limit": count, "detail": "summary" } }),
+        &json!({ "name": "duplicates", "arguments": { "offset": 0, "limit": count, "detail": "full" } }),
     )?;
     structured_content(&offenders, "duplicates")
 }

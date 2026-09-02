@@ -102,6 +102,20 @@ fn wait_for_files(
     })
 }
 
+/// The control corpus publishes two views: the four near-identical
+/// ledgers as one whole-file cluster, and the byte-identical five-line
+/// window (lines 14–18) that three of them share as its own cluster.
+/// The window names no file the whole-file view does not, but
+/// `inventory_gamma` has no copy of it, so [PIPELINE-CLUSTER-SUBSUME]
+/// keeps both; a byte-identical family inside a near-miss view is a
+/// finding of its own ([PIPELINE-CLUSTER-CLOSURE]).
+const CONTROL_CLUSTERS: usize = 2;
+const WHOLE_FILE_OCCURRENCES: u64 = 4;
+const WINDOW_OCCURRENCES: u64 = 3;
+const WINDOW_FIRST_LINE: u64 = 14;
+const WINDOW_LAST_LINE: u64 = 18;
+const WINDOW_FILES: [&str; 3] = ["move/tax_alpha.ts", "move/tax_beta.ts", "stay/tax_alpha.ts"];
+
 fn assert_clean_control(report: &Value) -> Result<()> {
     assert_eq!(at(report, "files_analysed"), 4, "{report:#}");
     assert_eq!(at(report, "clusters_hidden"), 0, "{report:#}");
@@ -109,12 +123,24 @@ fn assert_clean_control(report: &Value) -> Result<()> {
     let clusters = at(report, "clusters")
         .as_array()
         .ok_or_else(|| anyhow!("clusters is not an array: {report}"))?;
-    assert_eq!(clusters.len(), 1, "control corpus must form one cluster");
+    assert_eq!(
+        clusters.len(),
+        CONTROL_CLUSTERS,
+        "control corpus: the whole-file view and the shared window: {report:#}"
+    );
     let cluster = clusters
         .first()
         .ok_or_else(|| anyhow!("cluster list is empty: {report}"))?;
-    assert_eq!(at(cluster, "occurrence_count"), 4, "{cluster:#}");
-    assert_eq!(at(cluster, "occurrences_total"), 4, "{cluster:#}");
+    assert_eq!(
+        at(cluster, "occurrence_count"),
+        WHOLE_FILE_OCCURRENCES,
+        "{cluster:#}"
+    );
+    assert_eq!(
+        at(cluster, "occurrences_total"),
+        WHOLE_FILE_OCCURRENCES,
+        "{cluster:#}"
+    );
     assert_eq!(at(cluster, "occurrences_truncated"), false, "{cluster:#}");
     assert_eq!(at(cluster, "rank"), 1, "{cluster:#}");
     assert_eq!(at(cluster, "rank_band"), "worst", "{cluster:#}");
@@ -124,7 +150,7 @@ fn assert_clean_control(report: &Value) -> Result<()> {
     assert!(canonical_nodes > 0, "{cluster:#}");
     assert_eq!(
         at(cluster, "mass"),
-        canonical_nodes.saturating_mul(3),
+        canonical_nodes.saturating_mul(WHOLE_FILE_OCCURRENCES.saturating_sub(1)),
         "{cluster:#}"
     );
     for forbidden in ["signals", "signal_source", "bucket", "category", "weight"] {
@@ -133,9 +159,14 @@ fn assert_clean_control(report: &Value) -> Result<()> {
             "cluster field {forbidden} is forbidden: {cluster:#}"
         );
     }
+    assert_shared_window(
+        clusters
+            .get(1)
+            .ok_or_else(|| anyhow!("window cluster missing"))?,
+    )?;
     assert_eq!(
         json_path(report, &["metrics", "clusters_total"]),
-        1,
+        CONTROL_CLUSTERS,
         "{report:#}"
     );
     assert_eq!(
@@ -148,6 +179,48 @@ fn assert_clean_control(report: &Value) -> Result<()> {
             .as_u64()
             .unwrap_or_default()
             > 0
+    );
+    Ok(())
+}
+
+/// The second control view: lines 14–18, byte for byte the same in
+/// three of the four ledgers, ranked below the whole-file view on mass.
+fn assert_shared_window(cluster: &Value) -> Result<()> {
+    assert_eq!(
+        at(cluster, "occurrence_count"),
+        WINDOW_OCCURRENCES,
+        "{cluster:#}"
+    );
+    assert_eq!(at(cluster, "rank"), 2, "{cluster:#}");
+    let canonical_nodes = at(cluster, "canonical_node_count")
+        .as_u64()
+        .ok_or_else(|| anyhow!("window cluster has no canonical node count: {cluster:#}"))?;
+    assert_eq!(
+        at(cluster, "mass"),
+        canonical_nodes.saturating_mul(WINDOW_OCCURRENCES.saturating_sub(1)),
+        "{cluster:#}"
+    );
+    let occurrences = at(cluster, "occurrences")
+        .as_array()
+        .ok_or_else(|| anyhow!("occurrences is not an array: {cluster:#}"))?;
+    let mut spans: Vec<(String, u64, u64)> = occurrences
+        .iter()
+        .filter_map(|occurrence| {
+            Some((
+                occurrence.get("path")?.as_str()?.to_owned(),
+                occurrence.get("start_line")?.as_u64()?,
+                occurrence.get("end_line")?.as_u64()?,
+            ))
+        })
+        .collect();
+    spans.sort();
+    let expected: Vec<(String, u64, u64)> = WINDOW_FILES
+        .iter()
+        .map(|path| ((*path).to_owned(), WINDOW_FIRST_LINE, WINDOW_LAST_LINE))
+        .collect();
+    assert_eq!(
+        spans, expected,
+        "the shared window at its authored lines: {cluster:#}"
     );
     Ok(())
 }

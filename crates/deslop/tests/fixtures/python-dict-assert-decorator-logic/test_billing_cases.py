@@ -5,6 +5,6 @@ import pytest
 
 @pytest.mark.parametrize("case", build_cases("billing"))
 def test_billing_case_shape(case):
-    payload = {"case": {"total": 500, "state": "open"}}
+    payload = {"case": {"total": 500, "state": "open", "currency": "USD", "region": "eu"}}
     assert payload["case"]["total"] == 500
     assert payload["case"]["state"] == "open"

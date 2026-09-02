@@ -68,17 +68,28 @@ fn monkeypatch_setenv_chains_are_suppressed_while_a_real_clone_survives() -> Res
     assert_suppressed_family(&report, LABEL, &PIN)
 }
 
-/// The same three tests, the same two varying `setenv` calls, the same
-/// trailing assertion — with one difference: the asserted value is built
-/// (`host_prefix + "1"`) instead of written down. Building it is
-/// authored data handling, so the tautology clause must not reach it.
+/// The same test three times, the same two `setenv` calls varying their
+/// values, the same trailing assertion — with one difference: the
+/// asserted value is built (`host_prefix + "1"`) instead of written
+/// down. Building it is authored data handling, so the tautology clause
+/// must not reach it. One copy per module: the copies keep the same
+/// keys and name so the pairs clear [FUSED-CONTENT-GATE] on agreement
+/// (three quarters of every position preserved) and the verdict below
+/// is the filter's, not the gate's.
 const COMPUTED_FIXTURE: &str = "python-computed-value-not-a-tautology";
 const COMPUTED_LABEL: &str = "gh #72 computed-value boundary";
 
-/// The one file this fixture holds. There is no control pair here: the
-/// pin's own assertion *is* the false-negative side, failing the moment
-/// the family stops publishing.
-const COMPUTED_FILES_ANALYSED: u64 = 1;
+/// The three modules this fixture holds, one copy each. There is no
+/// control pair here: the pin's own assertion *is* the false-negative
+/// side, failing the moment the family stops publishing.
+const COMPUTED_FILES_ANALYSED: u64 = 3;
+
+/// The three modules the computed family spans.
+const COMPUTED_FAMILY: [&str; 3] = [
+    "test_fly_host_token.py",
+    "test_fly_host_region.py",
+    "test_fly_host_org.py",
+];
 
 /// Nothing may be suppressed on this fixture.
 const COMPUTED_HIDDEN: u64 = 0;
@@ -116,7 +127,7 @@ fn a_computed_value_is_not_a_tautology_and_keeps_its_cluster() -> Result<()> {
         "{COMPUTED_LABEL}: the three sibling tests are one published cluster: \
          {report:#}"
     );
-    let family = expect_cluster_spanning(&report, &FAMILY)?;
+    let family = expect_cluster_spanning(&report, &COMPUTED_FAMILY)?;
     assert_eq!(
         occurrences(family).len(),
         COMPUTED_OCCURRENCES,

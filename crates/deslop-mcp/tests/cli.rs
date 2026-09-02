@@ -53,6 +53,10 @@ const CLUSTERS_POINTER: &str = "/clusters";
 const ERROR_CODE_POINTER: &str = "/error/code";
 const INVALID_PARAMS_CODE_MAGNITUDE: i64 = 32_602;
 const TOTAL_CLUSTERS_POINTER: &str = "/total_clusters";
+/// [MCP-TOOLS] `rescan` wraps the fresh page: `{ generation, summary, page }`.
+const RESCAN_TOTAL_CLUSTERS_POINTER: &str = "/page/total_clusters";
+const RESCAN_CLUSTERS_POINTER: &str = "/page/clusters";
+const RESCAN_PAGE_LIMIT_POINTER: &str = "/page/page/limit";
 const PATH_FIELD: &str = "path";
 const LANGUAGE_FIELD: &str = "language";
 const NAME_FIELD: &str = "name";
@@ -2903,7 +2907,7 @@ fn issue_89_rescan_tool_reloads_state_file_and_returns_fresh_duplicates() -> Res
             (LIMIT_PARAM): BROAD_RESULT_LIMIT
         }),
     )?)?;
-    let after_count = value_get(&after, TOTAL_CLUSTERS_POINTER)?
+    let after_count = value_get(&after, RESCAN_TOTAL_CLUSTERS_POINTER)?
         .as_u64()
         .unwrap_or(0);
     assert!(
@@ -2911,12 +2915,12 @@ fn issue_89_rescan_tool_reloads_state_file_and_returns_fresh_duplicates() -> Res
         "issue #89: rescan must synchronously trigger LSP re-analysis and return a fresh page; was {before_count}, now {after_count}"
     );
     assert_eq!(
-        value_get(&after, PAGE_LIMIT_POINTER)?.as_u64(),
+        value_get(&after, RESCAN_PAGE_LIMIT_POINTER)?.as_u64(),
         Some(BROAD_RESULT_LIMIT),
         "issue #89: rescan must echo the requested page limit"
     );
     assert!(
-        value_get(&after, CLUSTERS_POINTER)?.is_array(),
+        value_get(&after, RESCAN_CLUSTERS_POINTER)?.is_array(),
         "issue #89: rescan must return a clusters page"
     );
     let _ = child.finish();

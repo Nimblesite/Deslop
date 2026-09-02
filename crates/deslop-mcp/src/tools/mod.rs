@@ -122,7 +122,7 @@ pub fn tools_list_payload(languages: &[String]) -> Value {
 }
 
 /// Rewrites the closed `language` enum of every tool schema that filters
-/// by language (`find-similar`, `report-query`) to `languages` — the
+/// by language (`find-similar`, `duplicates`) to `languages` — the
 /// live engine's registered set. Schemas ship a compile-time enum as a
 /// fallback; this override keeps the advertised gate in lock-step with
 /// the runtime validator so it can never reject a language the engine

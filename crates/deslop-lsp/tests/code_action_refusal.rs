@@ -26,7 +26,7 @@ const WARNING: u64 = 2;
 #[test]
 fn refused_resolve_surfaces_showmessage_warning() -> Result<()> {
     let (workspace, _guard, mut stdin, mut stdout) =
-        spawn_lsp_on_fixture_guarded("csharp-merge-drift")?;
+        spawn_lsp_on_fixture_guarded("csharp-merge-leafdrift")?;
     let _init = handshake(&mut stdin, &mut stdout)?;
     let uri = workspace_file_uri(workspace.path(), "DriftLimits.cs")?;
     let params = code_action_params(uri.as_str(), 4, 6);

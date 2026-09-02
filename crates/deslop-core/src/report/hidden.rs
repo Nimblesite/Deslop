@@ -89,11 +89,36 @@ fn shape_family_convicts<S: BuildHasher>(
     else {
         return false;
     };
-    if family.len() <= cluster.members.len() {
+    let same_shape = same_shape_members(family, &cluster.members);
+    if same_shape.len() <= cluster.members.len() {
         return false;
     }
-    is_noise_pattern(family, inputs.sources, inputs.file_languages, parse_cache)
-        .is_some_and(|filter| !escapes_as_copy(&cluster.members, inputs.sources, filter))
+    is_noise_pattern(
+        &same_shape,
+        inputs.sources,
+        inputs.file_languages,
+        parse_cache,
+    )
+    .is_some_and(|filter| !escapes_as_copy(&cluster.members, inputs.sources, filter))
+}
+
+/// The members of a pre-gate family that share a shape with the admitted
+/// cluster: the same normalised subtree, by Merkle hash. The pre-gate
+/// closure also carries the containers and sub-windows rescued around
+/// those shapes; a filter reading an ordered call sequence across mixed
+/// depths sees no common header and convicts nothing, so the idiom's own
+/// copies are what it is asked about ([CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY]).
+fn same_shape_members(
+    family: &[crate::fingerprint::Fingerprint],
+    members: &[crate::fingerprint::Fingerprint],
+) -> Vec<crate::fingerprint::Fingerprint> {
+    let shapes: std::collections::HashSet<[u8; 32]> =
+        members.iter().map(|member| member.hash).collect();
+    family
+        .iter()
+        .filter(|member| shapes.contains(&member.hash))
+        .cloned()
+        .collect()
 }
 
 /// Materialises one cluster and its visibility decision together, so

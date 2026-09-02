@@ -31,7 +31,7 @@ fn issue_156_cluster_by_id_returns_post_edit_offsets() -> Result<()> {
     // Force a refresh first so the baseline is deterministic.
     let baseline = rescan_call(&mut mcp, &[])?;
     let baseline_clusters = baseline
-        .get("clusters")
+        .pointer("/page/clusters")
         .and_then(Value::as_array)
         .ok_or_else(|| anyhow!("baseline rescan missing clusters: {baseline}"))?;
     ensure!(

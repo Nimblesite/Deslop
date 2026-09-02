@@ -31,8 +31,11 @@ use crate::common::*;
 const FIXTURE: &str = "python-same-shape-backends";
 
 /// Node floor for the scan. Low enough to admit both twelve-line
-/// subjects, so neither half of the test can pass by not matching.
-const MIN_NODES: u32 = 8;
+/// subjects, so neither half of the test can pass by not matching, and
+/// above the nine-node single call `pending.append(job.identifier)`
+/// that `drain_queue` legitimately repeats inside itself — a
+/// byte-identical statement the gate admits at any floor it reaches.
+const MIN_NODES: u32 = 10;
 
 /// Every `.py` file in the fixture: the abstract base, the two
 /// implementations, and the two halves of the rename clone.

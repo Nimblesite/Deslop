@@ -342,16 +342,16 @@ fn merge_fixture_offers_and_resolves_rewrite_action() -> Result<()> {
     Ok(())
 }
 
-/// [AUTOFIX-CONSOLIDATE-SURFACE] (issue #277): a cross-file identical
-/// definition offers a lazily resolved `refactor.rewrite`. On the
-/// mass-only wire the reported view for `rust-consolidate` is the
-/// whole-file near-miss the subsumption selects
-/// ([PIPELINE-CLUSTER-SUBSUME]); its definition runs disagree
-/// (`normalise_labels` shared, `describe_*` divergent), so resolving
-/// refuses with a human-readable reason rather than attaching an edit
-/// that would rewrite differing modules
-/// ([AUTOFIX-CONSOLIDATE-GATE] v1.1). The mechanical edit path is
-/// pinned by the synthetic consolidation suites in
+/// [AUTOFIX-CONSOLIDATE-CODE-ACTION] The cross-file Rust fixture holds
+/// one byte-identical `normalise_labels` in two sibling modules whose
+/// other definitions differ. The cluster is the function itself, not
+/// the module around it ([FUSED-SHARED-SUBTREE-ECHO]), so the
+/// definition-run gate sees one symbol on each side and the
+/// consolidation resolves to a transactional edit: the duplicate module
+/// imports the canonical definition and drops its own copy, and its
+/// differing neighbour stays untouched ([AUTOFIX-CONSOLIDATE-GATE] v1.1,
+/// [AUTOFIX-CONSOLIDATE-EDIT]). The mechanical edit path is pinned by
+/// the synthetic consolidation suites in
 /// `deslop-core/tests/refactor_consolidate.rs`.
 #[test]
 fn cross_file_fixture_offers_and_resolves_consolidate_action() -> Result<()> {
@@ -367,26 +367,52 @@ fn cross_file_fixture_offers_and_resolves_consolidate_action() -> Result<()> {
     )?;
     let resolved = call(&mut stdin, &mut stdout, "codeAction/resolve", offer)?;
     ensure!(
-        resolved.pointer("/result/edit").is_none(),
-        "no edit attaches to the refused consolidation"
+        resolved.pointer("/result/disabled").is_none(),
+        "a consolidation the gate admits carries no refusal: {resolved}"
     );
-    let reason = resolved
-        .pointer("/result/disabled/reason")
-        .and_then(Value::as_str)
-        .context("refusal reason surfaces on the action")?;
+    let changes = resolved
+        .pointer("/result/edit/documentChanges")
+        .and_then(Value::as_array)
+        .context("resolve attaches the transactional edit")?;
+    let edits = changes
+        .iter()
+        .find(|change| {
+            change
+                .pointer("/textDocument/uri")
+                .and_then(Value::as_str)
+                .is_some_and(|target| target.ends_with("pricing_b.rs"))
+        })
+        .and_then(|change| change.pointer("/edits"))
+        .and_then(Value::as_array)
+        .cloned()
+        .context("the duplicate module is rewritten")?;
+    let source = fs::read_to_string(workspace.path().join("pricing_b.rs"))?;
+    let applied = apply_text_edits(&source, &edits)?;
     ensure!(
-        reason.contains("definition run"),
-        "refusal names the definition-run mismatch, got {reason}"
+        applied.contains("use crate::pricing_a::normalise_labels;"),
+        "the duplicate module imports the canonical definition:\n{applied}"
+    );
+    ensure!(
+        !applied.contains("fn normalise_labels"),
+        "the duplicate definition is deleted:\n{applied}"
+    );
+    ensure!(
+        applied.contains("fn describe_ledger"),
+        "the module's own differing definition survives:\n{applied}"
     );
     Ok(())
 }
 
 /// Resolving a drifted cluster disables the action with the routing
-/// reason instead of attaching an edit.
+/// reason instead of attaching an edit. The two methods are one shape
+/// and the content gate admits them as one same-file cluster; the
+/// merge then refuses because the differing `ceiling` literals are an
+/// integer and a real — a leaf drift no helper parameter can carry
+/// ([AUTOFIX-MERGE-GATE]).
 #[test]
 fn drifted_fixture_resolve_disables_with_reason() -> Result<()> {
     let (workspace, _guard, mut stdin, mut stdout) =
-        spawn_lsp_on_fixture_guarded("csharp-merge-drift")?;
+        spawn_lsp_on_fixture_guarded("csharp-merge-leafdrift")?;
     let _init = handshake(&mut stdin, &mut stdout)?;
     let uri = workspace_file_uri(workspace.path(), "DriftLimits.cs")?;
     let params = code_action_params(uri.as_str(), 4, 6);
@@ -401,6 +427,9 @@ fn drifted_fixture_resolve_disables_with_reason() -> Result<()> {
         .pointer("/result/disabled/reason")
         .and_then(Value::as_str)
         .context("refusal reason surfaces on the action")?;
-    ensure!(!reason.is_empty(), "reason is human-readable");
+    ensure!(
+        reason.contains("type"),
+        "the refusal names the literal type drift, got `{reason}`"
+    );
     Ok(())
 }

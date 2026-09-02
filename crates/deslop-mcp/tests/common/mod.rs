@@ -11,7 +11,7 @@
 
 #![allow(dead_code)]
 
-/// The per-cluster `language` label contract over `report-query`,
+/// The per-cluster `language` label contract over `duplicates`,
 /// shared by every language whose label regressed.
 pub mod language_label;
 
@@ -328,7 +328,7 @@ pub fn structured_content(response: &Value, tool: &str) -> Result<Value> {
         .ok_or_else(|| anyhow!("response missing structuredContent: {response}"))
 }
 
-/// Returns the cluster ids on a `report-get` page in stable order.
+/// Returns the cluster ids on a `duplicates` page in stable order.
 pub fn cluster_ids(page: &Value) -> Vec<String> {
     page.get("clusters")
         .and_then(Value::as_array)
@@ -350,7 +350,7 @@ pub fn rescan_call(mcp: &mut McpHandle, paths: &[String]) -> Result<Value> {
             "name": "rescan",
             "arguments": {
                 "paths": paths,
-                "n": 8,
+                "limit": 8,
             }
         }),
     )?;
