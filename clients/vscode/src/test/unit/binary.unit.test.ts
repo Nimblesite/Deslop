@@ -330,8 +330,8 @@ suite("deployment manifest edges", () => {
 
   test("a binary that exits non-zero fails verification with its stderr", () => {
     const dir = resolve(tmp, "crash");
-    mkdirSync(dir, { recursive: true });
-    const probe = resolve(dir, LSP_BINARY_NAME);
+    const probe = resolve(dir, BINARY_DIRECTORY, platformId(), LSP_BINARY_NAME);
+    mkdirSync(resolve(probe, ".."), { recursive: true });
     writeFileSync(probe, "#!/bin/sh\necho 'boom' >&2\nexit 3\n");
     chmodSync(probe, EXECUTABLE_MODE);
     assert.throws(
@@ -343,8 +343,8 @@ suite("deployment manifest edges", () => {
 
   test("a binary that prints an unparsable version line fails verification with the raw line", () => {
     const dir = resolve(tmp, "garbage");
-    mkdirSync(dir, { recursive: true });
-    const probe = resolve(dir, MCP_BINARY_NAME);
+    const probe = resolve(dir, BINARY_DIRECTORY, platformId(), MCP_BINARY_NAME);
+    mkdirSync(resolve(probe, ".."), { recursive: true });
     writeFileSync(probe, `#!/bin/sh\necho 'totally-unparsable'\n`);
     chmodSync(probe, EXECUTABLE_MODE);
     assert.throws(
@@ -357,15 +357,66 @@ suite("deployment manifest edges", () => {
 
   test("loadDeploymentManifest reads shipwright.json two levels above the extension path", () => {
     const outer = resolve(tmp, "packaged");
-    const ext = resolve(outer, "ext");
+    const ext = resolve(outer, "ext", "extension");
     mkdirSync(ext, { recursive: true });
     writeFileSync(
-      resolve(outer, "shipwright.json"),
+      resolve(ext, "..", "..", "shipwright.json"),
       JSON.stringify(manifest()),
     );
     const loaded = loadDeploymentManifest(ext);
     assert.equal(loaded.product.id, PRODUCT_ID);
     assert.equal(loaded.product.version, EXPECTED_VERSION);
     assert.ok(loaded.hosts.vscode?.activationVerifies.includes(LSP_BINARY_NAME));
+  });
+});
+
+// [DEPLOY-MANIFEST] Host-contract edges: an id the manifest does not
+// ship, a component whose kind is not executable, and a probe target
+// that exists but cannot run.
+suite("deployment manifest probe edges", () => {
+  const tmp = mkdtempSync(join(tmpdir(), "deslop-binary-probe-"));
+
+  suiteTeardown(() => {
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  function manifestWithHostVerification(ids: string[]): DeploymentManifest {
+    const base = manifest();
+    return { ...base, hosts: { vscode: { activationVerifies: ids } } };
+  }
+
+  test("a host contract naming an unshipped component id aborts activation", () => {
+    assert.throws(
+      () => resolveHostBinaries(tmp, "vscode", manifestWithHostVerification(["ghost"])),
+      (err: unknown) =>
+        err instanceof Error && err.message.includes("no component ghost"),
+    );
+  });
+
+  test("a component whose kind is not executable aborts activation", () => {
+    const base = manifest();
+    base.components.push({
+      ...component("ghost", "formatter", undefined),
+      id: "ghost",
+      kind: "formatter",
+    } as (typeof base.components)[number]);
+    assert.throws(
+      () => resolveHostBinaries(tmp, "vscode", manifestWithHostVerification(["ghost"])),
+      (err: unknown) =>
+        err instanceof Error && err.message.includes("kind formatter is not executable"),
+    );
+  });
+
+  test("an existing but non-executable probe target fails verification with the spawn error", () => {
+    const dir = resolve(tmp, "noexec");
+    const probe = resolve(dir, BINARY_DIRECTORY, platformId(), LSP_BINARY_NAME);
+    mkdirSync(resolve(probe, ".."), { recursive: true });
+    writeFileSync(probe, "#!/bin/sh\necho 'deslop-lsp 0.1.0'\n");
+    chmodSync(probe, 0o644);
+    assert.throws(
+      () => resolveBinary(dir, LSP_KIND, manifest()),
+      (err: unknown) =>
+        err instanceof BinaryVerificationError && /EACCES|Permission denied/.test(err.message),
+    );
   });
 });
