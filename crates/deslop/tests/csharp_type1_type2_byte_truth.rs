@@ -29,10 +29,14 @@ const TALLY_BODY_TAIL: &str = "return total;";
 const RUN_SIGNATURE: &str = "public int Run(int limit)";
 const COMPUTE_SIGNATURE: &str = "public int Compute(int input)";
 
-/// The authored identifier renames between the two Type-2 bodies, in
-/// application order. Every needle is a whole token in the source, so
-/// plain substitution models the rename mapping exactly.
-const TYPE2_RENAMES: [(&str, &str); 4] = [
+/// The authored identifier renames between the two Type-2 copies, in
+/// application order. The report window spans the enclosing namespace
+/// and class, so the mapping covers those identifiers as well. Every
+/// needle is a whole token in the source, so plain substitution models
+/// the rename mapping exactly.
+const TYPE2_RENAMES: [(&str, &str); 6] = [
+    ("Beta", "Alpha"),
+    ("Summer", "Processor"),
     ("Run", "Compute"),
     ("limit", "input"),
     ("accumulator", "total"),
@@ -60,7 +64,7 @@ fn apply_type2_renames(text: &str) -> String {
 
 /// Asserts the cluster reports exactly the fixture's two copies, once
 /// each, spanning `expected_files`.
-fn assert_two_copy_cluster(cluster: &Value, expected_files: &[&str; 2], label: &str) -> Result<()> {
+fn assert_two_copy_cluster(cluster: &Value, expected_files: &[&str; 2], label: &str) {
     let mut files = occurrence_files(cluster);
     files.sort();
     files.dedup();
@@ -72,7 +76,6 @@ fn assert_two_copy_cluster(cluster: &Value, expected_files: &[&str; 2], label: &
         Some(2),
         "{label} fixture must publish exactly two occurrences: {cluster:#}",
     );
-    Ok(())
 }
 
 /// Asserts the Type-2 report-sliced bodies differ in raw bytes and
@@ -150,14 +153,14 @@ fn type1_copies_slice_to_identical_bytes_while_type2_renames_do_not() -> Result<
         })?,
         &TYPE2_FILES,
         "Type-2",
-    )?;
+    );
     assert_two_copy_cluster(
         clusters(&type1_report).first().ok_or_else(|| {
             anyhow!("csharp-type1 must produce at least one cluster: {type1_report}")
         })?,
         &TYPE1_FILES,
         "Type-1",
-    )?;
+    );
 
     assert_type2_rename_relation(&type2_scan, &type2_report)?;
     assert_type1_byte_equal(&type1_scan, &type1_report)?;

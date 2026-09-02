@@ -377,10 +377,12 @@ fn split_one<S: BuildHasher>(
     let Some(members) = resolved_members(shape, fingerprints) else {
         return admitted.to_vec();
     };
-    let Some(filter) = is_noise_pattern(&members, sources, file_languages, cache) else {
+    let verdict = is_noise_pattern(&members, sources, file_languages, cache);
+    let Some(filter) = verdict else {
         return admitted.to_vec();
     };
-    let keepable: Vec<Vec<usize>> = verbatim_families(&shape.members, fingerprints, sources)
+    let keepable: Vec<Vec<usize>> = splittable_families(shape, fingerprints, sources)
+        .unwrap_or_default()
         .into_iter()
         .filter(|family| is_copied_family(family, fingerprints, filter))
         .collect();
@@ -397,6 +399,29 @@ fn split_one<S: BuildHasher>(
         .iter()
         .map(|family| restrict(shape, family))
         .collect()
+}
+
+/// The byte-identical families in `fused` a split could act on, or
+/// `None` when no split could change the component — it holds no family
+/// of two or more *distinct occurrences*, or the one it holds already
+/// *is* the whole component.
+///
+/// Answered from the corpus alone, before any re-parse
+/// ([CLONE-NOISE-REPARSE-CACHE]). Whether a family is a *copy* is a
+/// second question, asked in [`is_copied_family`] once the filter that
+/// recognised the component is known.
+fn splittable_families(
+    fused: &FusedCluster,
+    fingerprints: &[Fingerprint],
+    sources: &HashMap<FileId, Vec<u8>>,
+) -> Option<Vec<Vec<usize>>> {
+    let families: Vec<Vec<usize>> = verbatim_families(&fused.members, fingerprints, sources)
+        .into_iter()
+        .filter(|family| distinct_locations(family, fingerprints) >= MIN_FAMILY_OCCURRENCES)
+        .collect();
+    let covered: usize = families.iter().map(Vec::len).sum();
+    let already_whole = families.len() == 1 && covered == fused.members.len();
+    (!families.is_empty() && !already_whole).then_some(families)
 }
 
 /// Every member's fingerprint, or `None` when one of them does not

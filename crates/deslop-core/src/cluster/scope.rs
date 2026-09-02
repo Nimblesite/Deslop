@@ -56,12 +56,8 @@ impl<'trees, L: BuildHasher> DeclarationScopes<'trees, L> {
     /// genuinely different amounts of authored code, so their measured
     /// grades are comparable and the strength contest stands (#339).
     pub(crate) fn enclosing(&self, member: &Fingerprint) -> Option<ByteRange> {
-        let tree = self.trees.get(&member.file_id)?;
-        let language = self.languages.get(&member.file_id)?;
-        let kinds = function_kinds(language);
-        (!kinds.is_empty())
-            .then(|| smallest_enclosing(tree, member.byte_range, kinds))
-            .flatten()
+        let (tree, kinds) = self.function_grammar(member)?;
+        smallest_enclosing(tree, member.byte_range, kinds)
     }
 
     /// The byte range of the function-like declaration whose range
@@ -75,12 +71,20 @@ impl<'trees, L: BuildHasher> DeclarationScopes<'trees, L> {
     /// cuts through that declaration. `None` marks windows, wrappers and
     /// whole files.
     pub(crate) fn aligned_function(&self, member: &Fingerprint) -> Option<ByteRange> {
-        let tree = self.trees.get(&member.file_id)?;
-        let language = self.languages.get(&member.file_id)?;
-        let kinds = function_kinds(language);
-        (!kinds.is_empty())
-            .then(|| aligned_function_at(tree, member.byte_range, kinds))
-            .flatten()
+        let (tree, kinds) = self.function_grammar(member)?;
+        aligned_function_at(tree, member.byte_range, kinds)
+    }
+
+    /// The member's normalised tree and its language's function-like
+    /// productions, or `None` when the file is unknown or the grammar
+    /// names no such production.
+    fn function_grammar(
+        &self,
+        member: &Fingerprint,
+    ) -> Option<(&'trees NormalizedNode, &'static [&'static str])> {
+        let tree = *self.trees.get(&member.file_id)?;
+        let kinds = function_kinds(self.languages.get(&member.file_id)?);
+        (!kinds.is_empty()).then_some((tree, kinds))
     }
 }
 
