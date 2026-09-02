@@ -54,8 +54,9 @@ use std::{path::Path, time::Duration};
 use anyhow::{anyhow, Result};
 use deslop_test_support::{
     corpus::{
-        array, baseline_mode, classify, clone_dir, cluster_paths, field_u64, first_occurrence_text,
-        manifest, scan, string_field, u64_field, visible_clusters, Baseline, CorpusRun, Failure,
+        array, baseline_mode, classify, clone_dir, cluster_paths, cluster_shows_span, compare_pair,
+        field_u64, first_occurrence_text, manifest, occurrence_endpoint, scan, string_field,
+        u64_field, visible_clusters, Baseline, CorpusRun, Failure,
     },
     corpus_confidence::{
         check_cluster_mass_contract, check_curated_recall, check_type2_curated_recall,
@@ -66,7 +67,7 @@ use deslop_test_support::{
     corpus_scope::check_scan_scope,
     enclosure::Span,
 };
-use serde_json::Value;
+use serde_json::{json, Value};
 
 #[test]
 #[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-PRECISION] \
@@ -260,7 +261,8 @@ fn gate(name: &str) -> Result<()> {
     // empty report leaves empty: a scan that reached nothing satisfies all
     // of them at once (gh #342).
     check_scan_scope(&manifest, &run.report, &mut failures);
-    check_curated_recall(&manifest, &run.report, &mut failures);
+    let verdicts = curated_pair_verdicts(&manifest, &run.report, &root)?;
+    check_curated_recall(&manifest, &run.report, &verdicts, &mut failures);
     check_curated_precision(&manifest, &run.report, &mut failures);
     check_boilerplate_not_ranked_first(&manifest, &root, &run, &mut failures)?;
     check_data_tables_not_ranked_as_logic(&manifest, &root, &run, &mut failures)?;
@@ -271,7 +273,7 @@ fn gate(name: &str) -> Result<()> {
     // ([CORPUS-RECALL]): it reads `must_find_type2` and asserts nothing
     // where the manifest curates nothing.
     check_cluster_mass_contract(&run.report, &mut failures);
-    check_type2_curated_recall(&manifest, &run.report, &mut failures);
+    check_type2_curated_recall(&manifest, &run.report, &verdicts, &mut failures);
     check_ceilings(&manifest, &run, &mut failures)?;
 
     fail_on(name, GATE_CHECKS, &failures)
@@ -335,6 +337,49 @@ fn warn_when_accuracy_unasserted(name: &str, manifest: &Value) {
 /// precision checks. Ranking is the product, so the head of the report is
 /// where a false positive does the most damage.
 const RANKED_HEAD: usize = 10;
+
+/// [CORPUS-RECALL] Admission evidence for every curated Type-2 pair.
+///
+/// A cluster says two files share a shape; whether the engine *admitted
+/// this pair* as a rename lives in the pair record, which the mass-only
+/// wire keeps off clusters entirely. The gate therefore asks the measured
+/// binary directly, using the endpoints of the curated occurrences in the
+/// cluster it already found ([PAIR-COMPARE-CLI], gh #488).
+///
+/// An entry whose pair cannot be located yields no verdict, and the
+/// recall check fails it rather than passing on a missing measurement.
+fn curated_pair_verdicts(manifest: &Value, report: &Value, root: &Path) -> Result<Vec<Value>> {
+    let mut verdicts = Vec::new();
+    for entry in array(manifest, "must_find_type2") {
+        let files: Vec<String> = array(entry, "files")
+            .iter()
+            .filter_map(|file| file.as_str().map(ToOwned::to_owned))
+            .collect();
+        let Some(endpoints) = curated_endpoints(report, &files) else {
+            continue;
+        };
+        let verdict = compare_pair(root, &endpoints.0, &endpoints.1)?;
+        verdicts.push(json!({ "files": files, "evidence": verdict.get("evidence") }));
+    }
+    Ok(verdicts)
+}
+
+/// The two curated occurrences' endpoints, taken from the widest visible
+/// cluster that shows both files.
+fn curated_endpoints(report: &Value, files: &[String]) -> Option<(String, String)> {
+    let cluster = visible_clusters(report)
+        .into_iter()
+        .filter(|cluster| cluster_shows_span(cluster, files))
+        .max_by_key(|cluster| field_u64(cluster, "canonical_node_count"))?;
+    let endpoint_for = |wanted: &String| {
+        array(cluster, "occurrences")
+            .iter()
+            .find(|occurrence| occurrence.get("path").and_then(Value::as_str) == Some(wanted))
+            .and_then(|occurrence| occurrence_endpoint(occurrence).ok())
+    };
+    let [left, right] = [files.first()?, files.get(1)?];
+    Some((endpoint_for(left)?, endpoint_for(right)?))
+}
 
 /// [CORPUS-PRECISION] A table of literals must not reach the ranked head.
 ///

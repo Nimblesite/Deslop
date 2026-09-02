@@ -18,6 +18,10 @@ const RANK: &str = "rank";
 const CURATED_EXTENT_FIELD: &str = "min_nodes";
 /// Curated manifest rank ceiling, inclusive and optional per entry.
 const CURATED_RANK_FIELD: &str = "max_rank";
+/// The only classification a curated Type-2 rename may reach: it is not
+/// byte-identical by definition, so `identical` is unreachable, and
+/// anything looser means the content gate did not vouch for the rename.
+const VOUCHED_TYPE2_CLASSIFICATION: &str = "nearly_identical";
 /// Check id for curated exact-copy membership.
 const RECALL: &str = "recall";
 /// Check id for the quality clauses on a curated exact copy.
@@ -92,32 +96,52 @@ fn check_rank(cluster: &Value, index: usize, failures: &mut Vec<Failure>) {
     }
 }
 
+/// The only classification a curated byte-identical pair may reach.
+/// `must_find` entries are verified byte-for-byte, so anything looser is
+/// the engine contradicting a proven fact about the source.
+const VOUCHED_EXACT_CLASSIFICATION: &str = "identical";
+
 /// Verifies every curated exact-copy family is visible and within its rank ceiling.
-pub fn check_curated_recall(manifest: &Value, report: &Value, failures: &mut Vec<Failure>) {
+pub fn check_curated_recall(
+    manifest: &Value,
+    report: &Value,
+    verdicts: &[Value],
+    failures: &mut Vec<Failure>,
+) {
     let entries = manifest
         .get("must_find")
         .and_then(Value::as_array)
         .map(Vec::as_slice)
         .unwrap_or_default();
     for entry in entries {
-        check_one_curated_clone(entry, report, failures);
+        check_one_curated_clone(entry, report, verdicts, failures);
     }
 }
 
 /// Verifies every curated Type-2 family is visible at its curated extent.
-pub fn check_type2_curated_recall(manifest: &Value, report: &Value, failures: &mut Vec<Failure>) {
+pub fn check_type2_curated_recall(
+    manifest: &Value,
+    report: &Value,
+    verdicts: &[Value],
+    failures: &mut Vec<Failure>,
+) {
     let entries = manifest
         .get("must_find_type2")
         .and_then(Value::as_array)
         .map(Vec::as_slice)
         .unwrap_or_default();
     for entry in entries {
-        check_one_curated_type2(entry, report, failures);
+        check_one_curated_type2(entry, report, verdicts, failures);
     }
 }
 
 /// Checks one curated exact-copy family.
-fn check_one_curated_clone(entry: &Value, report: &Value, failures: &mut Vec<Failure>) {
+fn check_one_curated_clone(
+    entry: &Value,
+    report: &Value,
+    verdicts: &[Value],
+    failures: &mut Vec<Failure>,
+) {
     let files = curated_files(entry);
     let why = entry.get("why").and_then(Value::as_str).unwrap_or("");
     let Some((rank, _)) = visible_clusters(report)
@@ -139,6 +163,27 @@ fn check_one_curated_clone(entry: &Value, report: &Value, failures: &mut Vec<Fai
         RECALL_QUALITY,
         failures,
     );
+    check_pair_identical(&files, why, verdicts, failures);
+}
+
+/// The classification clause for a curated byte-identical pair.
+fn check_pair_identical(
+    files: &[String],
+    why: &str,
+    verdicts: &[Value],
+    failures: &mut Vec<Failure>,
+) {
+    let Some(evidence) = verdict_for(files, verdicts) else {
+        failures.push(Failure::new(RECALL_QUALITY, format!("no admission evidence was obtained for {files:?}, so the clause holding a byte-identical pair to `{VOUCHED_EXACT_CLASSIFICATION}` judged nothing. Verified duplicate: {why}")));
+        return;
+    };
+    let classification = evidence
+        .get("classification")
+        .and_then(Value::as_str)
+        .unwrap_or("absent");
+    if classification != VOUCHED_EXACT_CLASSIFICATION {
+        failures.push(Failure::new(RECALL_QUALITY, format!("the curated byte-identical pair spanning {files:?} is classified `{classification}`, not `{VOUCHED_EXACT_CLASSIFICATION}` — the engine is contradicting a fact verified byte-for-byte about the source. Verified duplicate: {why}")));
+    }
 }
 
 /// Where the curated extent floor landed among the spanning clusters.
@@ -150,7 +195,12 @@ enum CuratedExtent {
 }
 
 /// Checks one curated Type-2 family without asking a cluster for pair evidence.
-fn check_one_curated_type2(entry: &Value, report: &Value, failures: &mut Vec<Failure>) {
+fn check_one_curated_type2(
+    entry: &Value,
+    report: &Value,
+    verdicts: &[Value],
+    failures: &mut Vec<Failure>,
+) {
     let files = curated_files(entry);
     let why = entry.get("why").and_then(Value::as_str).unwrap_or("");
     let Some(min_nodes) = entry.get(CURATED_EXTENT_FIELD).and_then(Value::as_u64) else {
@@ -168,8 +218,49 @@ fn check_one_curated_type2(entry: &Value, report: &Value, failures: &mut Vec<Fai
         CuratedExtent::Short(widest) => failures.push(Failure::new(TYPE2_RECALL, format!("widest cluster spanning {files:?} has {widest} canonical nodes; expected at least {min_nodes}. Hand-verified Type-2 rename: {why}"))),
         CuratedExtent::Reached(rank) => {
             check_rank_ceiling(entry, rank, &files, why, TYPE2_RECALL, failures);
+            check_pair_vouched(&files, why, verdicts, failures);
         }
     }
+}
+
+/// The admission clause: the engine must have *vouched* for the curated
+/// relation, not merely produced a cluster of the right size spanning the
+/// right files.
+///
+/// A cluster is a component; it says two files share a shape. Whether the
+/// engine admitted *this pair* as a rename lives in the pair record, which
+/// the mass-only wire keeps off clusters entirely ([PIPELINE-FUSED]), so
+/// the gate obtains it from `deslop --compare` ([PAIR-COMPARE-CLI]).
+/// Without a verdict the clause judged nothing and must fail rather than
+/// pass, the stance [CORPUS-SCOPE] takes on a missing bound (gh #488).
+fn check_pair_vouched(
+    files: &[String],
+    why: &str,
+    verdicts: &[Value],
+    failures: &mut Vec<Failure>,
+) {
+    let Some(evidence) = verdict_for(files, verdicts) else {
+        failures.push(Failure::new(TYPE2_RECALL, format!("no admission evidence was obtained for {files:?}, so the clause that tells an admitted rename from a coincidental component judged nothing. Hand-verified Type-2 rename: {why}")));
+        return;
+    };
+    let classification = evidence
+        .get("classification")
+        .and_then(Value::as_str)
+        .unwrap_or("absent");
+    let admitted = evidence.get("admitted").and_then(Value::as_bool) == Some(true);
+    let content_ok = evidence.get("content_required").and_then(Value::as_bool) != Some(true)
+        || evidence.get("content_ok").and_then(Value::as_bool) == Some(true);
+    if !admitted || !content_ok || classification != VOUCHED_TYPE2_CLASSIFICATION {
+        failures.push(Failure::new(TYPE2_RECALL, format!("the cluster spanning {files:?} is reported at the curated extent, but the engine did not vouch for the pair: admitted {admitted}, content guard satisfied {content_ok}, classification `{classification}` where `{VOUCHED_TYPE2_CLASSIFICATION}` is the only one a curated rename may reach. Hand-verified Type-2 rename: {why}")));
+    }
+}
+
+/// The `evidence` object of the verdict curated for exactly `files`.
+fn verdict_for<'a>(files: &[String], verdicts: &'a [Value]) -> Option<&'a Value> {
+    verdicts
+        .iter()
+        .find(|verdict| curated_files(verdict) == files)
+        .and_then(|verdict| verdict.get("evidence"))
 }
 
 /// Resolves the curated extent clause, carrying the rank of the cluster

@@ -16,10 +16,25 @@ fn manifest(files: &[&str], max_rank: Option<u64>) -> Value {
     })
 }
 
-/// Runs exact-copy recall against a report.
+/// A verdict classifying the curated pair as byte-equivalent.
+fn identical() -> Value {
+    json!({ "files": PAIR, "evidence": { "classification": "identical" } })
+}
+
+/// Runs exact-copy recall against a report, with the pair vouched.
 fn judge(clusters: &[Value], max_rank: Option<u64>) -> Vec<Failure> {
+    judge_classified(clusters, max_rank, &[identical()])
+}
+
+/// Runs exact-copy recall against supplied pair verdicts.
+fn judge_classified(clusters: &[Value], max_rank: Option<u64>, verdicts: &[Value]) -> Vec<Failure> {
     let mut failures = Vec::new();
-    check_curated_recall(&manifest(&PAIR, max_rank), &report(clusters), &mut failures);
+    check_curated_recall(
+        &manifest(&PAIR, max_rank),
+        &report(clusters),
+        verdicts,
+        &mut failures,
+    );
     failures
 }
 
@@ -86,6 +101,7 @@ fn one_file_manifest_entry_fails() {
     check_curated_recall(
         &manifest(&[PAIR[0]], None),
         &report(&[spanning("curated", 137, 1, &PAIR)]),
+        &[identical()],
         &mut failures,
     );
     assert_only_failure(
@@ -94,5 +110,34 @@ fn one_file_manifest_entry_fails() {
         "one file does not describe duplication",
         "[]",
         "the malformed entry cannot pass vacuously",
+    );
+}
+
+/// [CORPUS-RECALL] `identical` is the only classification a byte-identical
+/// pair may reach: `must_find` entries are verified byte-for-byte, so
+/// anything looser is the engine contradicting a proven fact about the
+/// source. The clause went missing when the mass-only wire removed
+/// classification from clusters (gh #488).
+#[test]
+fn a_curated_exact_copy_classified_below_identical_fails() {
+    let demoted = json!({ "files": PAIR, "evidence": { "classification": "nearly_identical" } });
+    assert_only_failure(
+        &judge_classified(&[spanning("curated", 137, 1, &PAIR)], None, &[demoted]),
+        "recall_quality",
+        "a byte-identical pair reported as anything looser is an engine contradiction",
+        "nearly_identical",
+        "the failure names the classification the engine reached",
+    );
+}
+
+/// A verdict the gate never obtained asserts nothing, and must fail.
+#[test]
+fn a_curated_exact_copy_with_no_verdict_fails_rather_than_passing() {
+    assert_only_failure(
+        &judge_classified(&[spanning("curated", 137, 1, &PAIR)], None, &[]),
+        "recall_quality",
+        "no verdict means the classification clause judged nothing",
+        "no admission evidence",
+        "the failure says the verdict is missing",
     );
 }

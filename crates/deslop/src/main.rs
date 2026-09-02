@@ -10,6 +10,7 @@
 mod diff_input;
 mod logging;
 mod output;
+mod pair_input;
 mod rerun;
 mod summary;
 
@@ -17,6 +18,7 @@ use std::{env, fs, io::Write as _, path::PathBuf, str::FromStr};
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
+use deslop_core::wire_generated::PairComparisonParams;
 use deslop_core::{
     apply_only_changed, debug_ast_dump, validate_threshold_percent, version_contract_output,
     ComponentKind, EmbeddingMode, EmbeddingSettings, ExclusionConfig, OllamaProvider, ParsedDiff,
@@ -56,6 +58,14 @@ struct Cli {
     /// the scan root; logs follow the reports into `<dir>/logs/`.
     #[arg(long, value_name = "PATH_PREFIX")]
     output: Option<PathBuf>,
+
+    /// Report admission evidence for exactly two occurrences instead of
+    /// rendering a report. Pass twice, each as
+    /// `<path>:<start_byte>:<end_byte>` — the triple every rendered
+    /// occurrence already carries. A cluster id is not valid input
+    /// ([PAIR-COMPARE-CLI], gh #488).
+    #[arg(long, value_name = "PATH:START:END", action = clap::ArgAction::Append)]
+    compare: Vec<String>,
 
     /// Skip analysis and re-render the canonical JSON report at this
     /// path into `.txt` and `.html` (and, unless `--nojson` is set,
@@ -282,6 +292,9 @@ fn run_cli() -> Result<()> {
         return run_debug_ast(file);
     }
     validate_scan_path(&args.path)?;
+    if !args.compare.is_empty() {
+        return run_compare(&args, parse_embedding_mode(&args.embeddings)?);
+    }
     let formats = FormatSelection::from_args(&args)?;
     let output = OutputPaths::new(args.output.as_deref(), &args.path);
     let mode: EmbeddingMode = parse_embedding_mode(&args.embeddings)?;
@@ -425,6 +438,44 @@ fn validate_scan_path(path: &std::path::Path) -> Result<()> {
 /// Parses `file` and writes the normalised AST dump to stdout.
 /// Developer entry point for `--debug-ast` ([PIPELINE-NORMALIZE-AST]):
 /// no logging, no report, no cache mutation — just the tree.
+/// [PAIR-COMPARE-CLI] Recomputes admission evidence for exactly the two
+/// named occurrences and writes the verdict to stdout as JSON.
+///
+/// Evidence is pair-scoped and recomputed on demand — never stored on a
+/// cluster, never carried in a rendered report — so answering this needs a
+/// resolved corpus, which is why the scan runs first (gh #488).
+fn run_compare(args: &Cli, mode: EmbeddingMode) -> Result<()> {
+    let (left, right) = pair_input::parse_comparison(&args.compare)?;
+    let provider = configured_provider(args, mode)?;
+    let provider_ref: Option<&dyn deslop_core::EmbeddingProvider> = provider.as_deref();
+    let (session, _initial) = PipelineSession::initialise_with_diff(
+        args.path.clone(),
+        args.min_nodes,
+        args.behaviour.incremental(),
+        args.config.clone(),
+        EmbeddingSettings {
+            mode,
+            provider: provider_ref,
+            batch_yield: None,
+            progress: None,
+        },
+        None,
+    )
+    .map_err(pipeline_error)?;
+    let comparison = session
+        .compare_pair(&PairComparisonParams { left, right }, provider_ref)
+        .map_err(pipeline_error)?;
+    let rendered = serde_json::to_string_pretty(&comparison).context("render pair verdict")?;
+    let stdout = std::io::stdout();
+    let mut handle = stdout.lock();
+    handle
+        .write_all(rendered.as_bytes())
+        .context("write pair verdict to stdout")?;
+    handle.write_all(b"\n").context("terminate pair verdict")?;
+    Ok(())
+}
+
+/// Dumps the normalised AST of one file and exits, bypassing analysis.
 fn run_debug_ast(file: &std::path::Path) -> Result<()> {
     let dump = debug_ast_dump(file).with_context(|| format!("debug-ast {}", file.display()))?;
     let stdout = std::io::stdout();

@@ -102,6 +102,16 @@ unreachable), and `required` (hard-fail when the provider cannot be reached). An
 other value is a user error: the CLI exits non-zero before any analysis with
 `invalid --embeddings value <given>` rather than guessing a mode.
 
+### [PAIR-COMPARE-CLI] `--compare` pair verdict
+
+`--compare <path>:<start_byte>:<end_byte>`, passed exactly twice, asks the engine what it made of those two occurrences and prints one JSON `PairComparison` on stdout instead of rendering a report. The triple is the one every rendered occurrence already carries, so a caller pastes endpoints straight out of the JSON it just read.
+
+Admission evidence is pair-scoped and recomputed on demand. It is never stored on a cluster and never carried in a rendered report, because a cluster is a component — it says two files share a shape, not that the engine admitted any particular pair inside it. That is why a cluster id is not valid input here, and why the scan runs before the comparison: resolving an endpoint needs the corpus this generation fingerprinted. An endpoint naming a range the scan did not fingerprint is refused rather than measured.
+
+The verdict echoes both endpoints and carries that relation's `structural`, `token_jaccard`, `embedding_cos`, `agreement`, `rename_consistency`, `literal_fraction`, `fused_score`, `content_required`, `content_ok`, `admitted`, optional `classification`, and the engine's `explanation`. It carries no cluster mass, and nothing is cached back onto a cluster.
+
+This is the CLI half of the surface the LSP serves as `pair/compare` ([live.md](live.md)) and the MCP as `compare_pair` ([mcp.md](mcp.md)). It exists because the corpus gate drives the CLI black-box and had no way to tell a curated duplicate the engine *admitted* from one it merely reported (gh #488, [CORPUS-RECALL]).
+
 ### [OUTPUT-FORMAT-DERIVED] Derived output formats
 The canonical JSON report ([pipeline.md §OUTPUT-SCHEMA-JSON](pipeline.md)) is the
 single source of truth; the text and HTML reports are **derived views** rendered

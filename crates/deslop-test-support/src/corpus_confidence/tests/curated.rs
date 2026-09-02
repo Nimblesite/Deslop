@@ -25,6 +25,34 @@ fn manifest(min_nodes: Option<u64>, max_rank: Option<u64>) -> Value {
     })
 }
 
+/// A pair verdict the content gate vouched for as a Type-2 rename.
+fn vouched() -> Value {
+    json!({
+        "files": PAIR,
+        "evidence": {
+            "structural": 1.0,
+            "content_required": true,
+            "content_ok": true,
+            "admitted": true,
+            "classification": "nearly_identical"
+        }
+    })
+}
+
+/// The same pair, admitted without the content guard its route requires.
+fn unvouched() -> Value {
+    json!({
+        "files": PAIR,
+        "evidence": {
+            "structural": 1.0,
+            "content_required": true,
+            "content_ok": false,
+            "admitted": true,
+            "classification": "structural_only"
+        }
+    })
+}
+
 /// Runs the curated Type-2 assertion with no curated rank ceiling.
 fn judge(clusters: &[Value], min_nodes: Option<u64>) -> Vec<Failure> {
     judge_ranked(clusters, min_nodes, None)
@@ -32,10 +60,21 @@ fn judge(clusters: &[Value], min_nodes: Option<u64>) -> Vec<Failure> {
 
 /// Runs the curated Type-2 assertion against a curated rank ceiling.
 fn judge_ranked(clusters: &[Value], min_nodes: Option<u64>, max_rank: Option<u64>) -> Vec<Failure> {
+    judge_vouched(clusters, min_nodes, max_rank, &[vouched()])
+}
+
+/// Runs the curated Type-2 assertion against supplied pair verdicts.
+fn judge_vouched(
+    clusters: &[Value],
+    min_nodes: Option<u64>,
+    max_rank: Option<u64>,
+    verdicts: &[Value],
+) -> Vec<Failure> {
     let mut failures = Vec::new();
     check_type2_curated_recall(
         &manifest(min_nodes, max_rank),
         &report(clusters),
+        verdicts,
         &mut failures,
     );
     failures
@@ -141,7 +180,12 @@ fn extent_above_floor_passes() {
 #[test]
 fn empty_curated_list_asserts_nothing() {
     let mut failures = Vec::new();
-    check_type2_curated_recall(&json!({"must_find_type2": []}), &report(&[]), &mut failures);
+    check_type2_curated_recall(
+        &json!({"must_find_type2": []}),
+        &report(&[]),
+        &[],
+        &mut failures,
+    );
     assert!(failures.is_empty());
 }
 
@@ -199,4 +243,55 @@ fn a_fragment_ranked_first_does_not_answer_the_ceiling_for_the_buried_module() {
 #[test]
 fn an_entry_curating_no_ceiling_still_passes_on_extent() {
     assert!(judge(&pair_at(RANK_PAST_CEILING, MIN_NODES), Some(MIN_NODES)).is_empty());
+}
+
+/// [CORPUS-RECALL] Recall is not "a cluster of the right size spans the
+/// right files" — it is the engine *admitting* that pair as a rename. A
+/// cluster can span the curated paths at full extent while the content
+/// gate never vouched for the relation, and until the mass-only wire
+/// removed evidence from clusters this check said so (gh #488).
+#[test]
+fn a_curated_pair_the_content_gate_never_vouched_is_not_recall() {
+    assert_only_failure(
+        &judge_vouched(
+            &[spanning("pair", MIN_NODES, 1, &PAIR)],
+            Some(MIN_NODES),
+            None,
+            &[unvouched()],
+        ),
+        "type2_recall",
+        "an unvouched pair is not a reported rename, however large the cluster",
+        "structural_only",
+        "the failure names the classification the engine actually reached",
+    );
+}
+
+/// A verdict the gate never obtained asserts nothing, and must fail rather
+/// than pass — the stance [CORPUS-SCOPE] takes on a missing bound.
+#[test]
+fn a_curated_pair_with_no_verdict_fails_rather_than_passing() {
+    assert_only_failure(
+        &judge_vouched(
+            &[spanning("pair", MIN_NODES, 1, &PAIR)],
+            Some(MIN_NODES),
+            None,
+            &[],
+        ),
+        "type2_recall",
+        "no verdict means the evidence clause judged nothing",
+        "no admission evidence",
+        "the failure says the verdict is missing",
+    );
+}
+
+/// And a pair the gate did vouch for passes every clause.
+#[test]
+fn a_vouched_pair_at_extent_passes() {
+    assert!(judge_vouched(
+        &[spanning("pair", MIN_NODES, 1, &PAIR)],
+        Some(MIN_NODES),
+        None,
+        &[vouched()],
+    )
+    .is_empty());
 }

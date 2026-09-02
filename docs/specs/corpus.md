@@ -44,7 +44,7 @@ An absent bound is not a repository with no opinion about its own size — it is
 
 `recall` alone used to be the whole assertion. A 137-line byte-identical pair that hid one of its two occurrences and landed in a component ranked #900 satisfied it completely. The byte-identical case is the easier proof and must not hold the weaker contract. `max_rank` is optional per entry, because only the entries a human ranked get a rank assertion — ranking is the product, and a finding a user never scrolls to is a finding they do not get.
 
-`identical` is the only classification a byte-identical pair may reach, and that is **not asserted today** — the mass-only cluster wire carries no classification, and the rendered report carries no pair record to read one from. Tracked as gh #488.
+`identical` is the only classification a byte-identical pair may reach, and `recall_quality` asserts it. The classification is not on the cluster — the mass-only wire keeps evidence off components entirely — so the gate asks the engine for the pair verdict directly through `deslop --compare` ([PAIR-COMPARE-CLI]) and reads it from there. An entry for which no verdict could be obtained fails rather than passing on a measurement that was never taken.
 
 **An empty `must_find` asserts nothing, and the suite says so out loud** — such a run prints `ACCURACY UNASSERTED` and has proven only that the scan fit its budget. A green corpus test is not evidence of accuracy unless the repository has curated entries. An entry that lists no files fails rather than passing vacuously.
 
@@ -52,7 +52,7 @@ An absent bound is not a repository with no opinion about its own size — it is
 
 The rank clause is judged on the component that *is* the curated duplicate, never on the first one touching both paths. In the pinned tokio report five smaller clusters span the curated pair ahead of the module view — the worst a 30-node family across 80 files at rank 1 — so a ceiling read off path overlap alone would assert nothing, in the rank dimension exactly as the extent clause found for size. An entry that curates no `min_nodes` fails rather than passing on a path overlap, the same stance [CORPUS-SCOPE] takes on a missing `expect_files_min`.
 
-Admission evidence is **not asserted today**: a cluster carries none — the mass-only wire forbids it — and the rendered report has no pair record, so no check can tell an admitted rename from any other component of the same extent. Tracked as gh #488.
+Admission evidence is asserted, and separately from the cluster. A cluster says two files share a shape; whether the engine *admitted this pair* as a rename lives in the pair record, which the mass-only wire keeps off components. The gate takes the curated occurrences' endpoints out of the cluster it found and asks the engine for that pair's verdict through `deslop --compare` ([PAIR-COMPARE-CLI]): the pair must be admitted, its content guard satisfied where its route requires one, and classified `nearly_identical` — the only classification a rename may reach, since a Type-2 pair is not byte-identical by definition. An entry for which no verdict could be obtained fails rather than passing on a measurement that was never taken.
 
 `must_find_type2_status` states the curation position in words and must not contradict the list. Because an empty list silently asserts nothing, the manifests are themselves under test: curated Type-2 ground truth must exist in at least two languages, and every entry must name at least two distinct files with its human evidence and its `min_nodes` extent attached.
 

@@ -299,6 +299,59 @@ pub fn scan(scan_root: &Path, output_prefix: &Path) -> Result<CorpusRun> {
     })
 }
 
+/// [PAIR-COMPARE-CLI] Asks the measured binary for admission evidence on
+/// exactly two occurrences, returning the engine's verdict.
+///
+/// Evidence is pair-scoped and recomputed on demand, so it appears in no
+/// rendered report; the gate has to ask for it. Driven through the same
+/// binary the scan measured, so the gate stays black-box (gh #488).
+///
+/// # Errors
+///
+/// Returns an error when the binary is missing, the comparison fails, or
+/// the verdict is not JSON.
+pub fn compare_pair(scan_root: &Path, left: &str, right: &str) -> Result<Value> {
+    let binary = release_binary()?;
+    let output = Command::new(&binary)
+        .arg(scan_root)
+        .arg("--compare")
+        .arg(left)
+        .arg("--compare")
+        .arg(right)
+        .args(SCAN_FLAGS)
+        .output()
+        .with_context(|| format!("failed to spawn {}", binary.display()))?;
+    if !output.status.success() {
+        return Err(anyhow!(
+            "pair comparison of {left} against {right} failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    serde_json::from_slice(&output.stdout).with_context(|| {
+        format!(
+            "pair verdict is not JSON: {}",
+            String::from_utf8_lossy(&output.stdout)
+        )
+    })
+}
+
+/// The `<path>:<start_byte>:<end_byte>` endpoint of one occurrence.
+///
+/// # Errors
+///
+/// Returns an error when the occurrence lacks a path or either offset.
+pub fn occurrence_endpoint(occurrence: &Value) -> Result<String> {
+    let path = occurrence
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("occurrence has no path"))?;
+    Ok(format!(
+        "{path}:{}:{}",
+        byte_offset(occurrence, "start_byte")?,
+        byte_offset(occurrence, "end_byte")?
+    ))
+}
+
 /// Where the release binary the suite measures is expected to sit.
 ///
 /// The stem carries [`std::env::consts::EXE_SUFFIX`]: cargo writes

@@ -151,6 +151,7 @@ mod jwt_independent_verification_false_positive;
 mod live_session_equivalence;
 #[path = "location_rendering.rs"]
 mod location_rendering;
+
 #[path = "lsh_only_nearmiss_recall.rs"]
 mod lsh_only_nearmiss_recall;
 #[path = "metric_excludes_hidden_clusters.rs"]
@@ -163,6 +164,8 @@ mod metrics_folder_rollup;
 mod ollama_failures;
 #[path = "operator_drift_is_not_duplication.rs"]
 mod operator_drift_is_not_duplication;
+#[path = "pair_comparison_cli.rs"]
+mod pair_comparison_cli;
 #[path = "pair_consistent_signals.rs"]
 mod pair_consistent_signals;
 #[path = "pair_size_coherence.rs"]

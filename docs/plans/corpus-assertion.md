@@ -95,7 +95,7 @@ The target state: **every repository, every run, asserts every row below.** Ids 
 | `files_analysed` | the scan parsed a plausible number of files, never zero | `expect_files_min` | ✅ |
 | `recall` | curated byte-identical clones are reported | `must_find` | 🟡 span only (L5) |
 | `recall_quality` | every curated pair is admitted, every curated occurrence is **shown**, and the resulting cluster stays within `max_rank` by mass | `must_find` | ❌ missing |
-| `type2_recall` | curated renames reported, shown, at the curated `min_nodes` extent and within `max_rank` | `must_find_type2` | ✅ (no evidence clause — gh #488) |
+| `type2_recall` | curated renames reported, shown, at the curated `min_nodes` extent, within `max_rank`, and vouched by the engine's own pair verdict | `must_find_type2` | ✅ |
 | `precision` | curated non-duplicates never share a cluster | `must_not_cluster` | ❌ missing (L4) |
 | `boilerplate_rank` | framework-mandated shapes never rank first | `must_not_rank_first` | 🛑 unsound (L3) |
 | `data_table_rank` | a table of literals - judged from the AST, never from source text - never reaches the ranked head | none | ✅ |
@@ -118,7 +118,7 @@ The target state: **every repository, every run, asserts every row below.** Ids 
 ### B. Strengthen recall to the Type-2 bar — `[CORPUS-RECALL]` — LANDED
 
 - [x] `check_curated_recall` replaces the span-only `check_recall` and splits the verdict in two: `recall` (some cluster spans the paths) and `recall_quality` (every curated occurrence is shown in that component, and it is within `max_rank`).
-- [ ] `identical` is the *only* admissible classification — [CORPUS-RECALL] defines `must_find` as byte-for-byte verified, so anything else is the engine contradicting a verified fact about the source. **Not asserted today:** the mass-only wire carries no classification on a cluster and the rendered report has no pair record to read one from. Tracked as gh #488.
+- [x] `identical` is the *only* admissible classification — [CORPUS-RECALL] defines `must_find` as byte-for-byte verified, so anything else is the engine contradicting a verified fact about the source. Read from the engine's pair verdict via `deslop --compare` ([PAIR-COMPARE-CLI]), never from a cluster; an entry with no verdict fails rather than passing (gh #488).
 - [x] Curated occurrences must be shown, through the same `cluster_shows_span` predicate as precision and `type2_recall`.
 - [x] Optional `max_rank` per entry, inclusive.
 - [x] Six unit tests in `corpus_confidence/tests/recall.rs`, including all four demotion buckets and the half-hidden pair — each of them a report the old span-only check passed.
