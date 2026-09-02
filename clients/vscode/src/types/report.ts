@@ -7,13 +7,11 @@ import type {
   Report as WireReport,
   ReportCluster as WireReportCluster,
   ReportOccurrence as WireReportOccurrence,
-  ReportSignalSource as WireReportSignalSource,
 } from "./wire-generated";
 
 export type {
   CacheStats,
   EmbeddingProvenance,
-  ReportSignals,
 } from "./wire-generated";
 
 // Wire `ReportOccurrence` plus the VSIX-only display projection the
@@ -35,23 +33,6 @@ export type ReportCluster = Omit<WireReportCluster, "occurrences"> & {
 export type Report = Omit<WireReport, "clusters"> & {
   clusters: ReportCluster[];
 };
-
-/** Resolves the elected evidence pair named by the engine, rejecting an
- * absent, self-referential, or out-of-range source. Every client surface
- * uses this guard before rendering pair-scoped scores
- * ([FUSED-CLUSTER-SIGNALS]). */
-export interface ElectedSignalPair {
-  source: WireReportSignalSource;
-  occurrences: readonly [ReportOccurrence, ReportOccurrence];
-}
-
-export function electedPairForCluster(cluster: ReportCluster): ElectedSignalPair | undefined {
-  const source = cluster.signal_source;
-  if (!source || source.left === source.right) return undefined;
-  const left = cluster.occurrences[source.left];
-  const right = cluster.occurrences[source.right];
-  return left && right ? { source, occurrences: [left, right] } : undefined;
-}
 
 export interface OccurrenceDisplayLocation {
   line: number;
@@ -86,16 +67,19 @@ export function occurrenceCount(cluster: ReportCluster): number {
 // every consumer. The generated source is gitignored; `make
 // typediagram-gen` (chained into `make vsix-build`) regenerates it.
 export type {
-  ActionHint,
   AnalysisState,
   ChangeSummary,
   EmbeddingModelInfo,
   EmbeddingPhase,
   EmbeddingProgress,
   FileMetric,
+  PairClassification,
+  PairComparison,
+  PairComparisonParams,
+  PairEndpoint,
+  PairEvidence,
   ReportChangedNotification,
   ReportDelta,
-  ReportSignalSource,
   RepoMetrics,
   SessionConfig,
   ThresholdSource,
@@ -111,9 +95,9 @@ export type {
   ReportBoilerplateOccurrence as BoilerplateHintOccurrence,
 } from "./wire-generated";
 
-// Severity bucketing per [LSP-SEVERITY]. Orthogonal to Bucket:
-// severity = "how bad is this cluster in the ranking?", bucket =
-// "what kind of clone is it?".
+// Severity bucketing per [LSP-SEVERITY-BAND]. The band classifies the
+// cluster's rank percentile, which is a calculation, so it is computed
+// once in `report_weight::rank_band` and carried on the wire.
 export type Severity = "worst" | "top10" | "mid" | "faint";
 
 /** Every severity level in rank order. Filter surfaces enumerate this
@@ -133,236 +117,49 @@ export function severityLabel(severity: Severity): string {
 }
 
 /** The cluster's severity band as the engine stamped it
- * ([SEVERITY-BAND]). The band classifies the cluster's rank percentile,
- * which is a calculation, so it is computed once in
- * `report_weight::rank_band` and carried on the wire. A report written
- * before the field existed carries an empty string and reads as the
- * tail band. */
+ * ([SEVERITY-BAND]). A report written before the field existed carries
+ * an empty string and reads as the tail band. */
 export function clusterBand(cluster: ReportCluster): Severity {
   return SEVERITIES.find((band) => band === cluster.rank_band) ?? "faint";
 }
 
-// [SEVERITY-DESLOP-MAP] The Deslop severity level — the *other* visual
-// channel, and the one that answers "how alarming is this kind of
-// duplicate?". It is a function of the bucket alone, never of the ranking:
-// per [SEVERITY-COLOR] colour carries the bucket and glyph density carries
-// the weight percentile, and the two are orthogonal by design. A faint
-// identical clone is a red `○`; a high-impact shape-only family is a grey
-// `●●`. Collapsing them into one channel is what let a demoted family wear
-// the loudest paint in the editor.
-export type DeslopSeverity = "error" | "warning" | "information" | "hint";
-
-/** Every Deslop severity level, loudest first. */
-export const DESLOP_SEVERITIES: readonly DeslopSeverity[] = [
-  "error",
-  "warning",
-  "information",
-  "hint",
-] as const;
-
-// ---------------------------------------------------------------------------
-// Canonical clone buckets — mirrors deslop-core::buckets.
-// Single source of truth for every user-facing surface in the VS Code
-// extension per docs/specs/taxonomy.md [CLONE-BUCKETS-DUAL-LABEL].
-// ---------------------------------------------------------------------------
-
-// Wire label used in JSON `cluster.bucket`. Stable contract for the
-// current report shape.
-export type Bucket =
-  | "identical"
-  | "nearly_identical"
-  | "structural_only"
-  | "loosely_similar"
-  | "same_behavior";
-
-export const IDENTICAL_BUCKET_VALUE: Bucket = "identical";
-
-export const BUCKETS: readonly Bucket[] = [
-  IDENTICAL_BUCKET_VALUE,
-  "nearly_identical",
-  "structural_only",
-  "loosely_similar",
-  "same_behavior",
-] as const;
-
-export interface BucketLabels {
-  // Pure-visual surfaces (bubble, tree view, webview card titles) — no Type-N.
-  plainTitle: string;
-  // Shared-text surfaces (Problems panel, hover, diagnostic message) —
-  // plain prose + bracketed Type-N suffix for AI scrapers.
-  hybridTitle: string;
-  // Academic taxonomy reference composed into AI-only sentences.
-  taxonomyLabel: string;
-  // CSS class suffix for HTML / webview cards.
-  cssSuffix: string;
-  // True only for SameBehavior (Type-4, embedding-pass output).
-  aiMatch: boolean;
+/** The duplicated mass — the worst-first ranking metric. One formula
+ * lives in Rust ([RANK-MASS-SUM]); clients carry the value. */
+export function clusterMass(cluster: ReportCluster): number {
+  return cluster.mass;
 }
 
-const LABELS: Record<Bucket, BucketLabels> = {
-  identical: {
-    plainTitle: "Identical code",
-    hybridTitle: "Identical code [Type-1/2]",
-    taxonomyLabel: "Type-1 or Type-2 exact clone",
-    cssSuffix: IDENTICAL_BUCKET_VALUE,
-    aiMatch: false,
-  },
-  nearly_identical: {
-    plainTitle: "Nearly identical code",
-    hybridTitle: "Nearly identical code [Type-3]",
-    taxonomyLabel: "Type-3 near-miss",
-    cssSuffix: "nearly-identical",
-    aiMatch: false,
-  },
-  structural_only: {
-    plainTitle: "Same shape, different content",
-    hybridTitle: "Same shape, different content [structural-only]",
-    taxonomyLabel: "structural-only match (unverified Type-2/3 candidate)",
-    cssSuffix: "structural-only",
-    aiMatch: false,
-  },
-  loosely_similar: {
-    plainTitle: "Loosely similar code",
-    hybridTitle: "Loosely similar code [weak LSH]",
-    taxonomyLabel: "weak LSH-only signal (sub-Type-3)",
-    cssSuffix: "loosely-similar",
-    aiMatch: false,
-  },
-  same_behavior: {
-    plainTitle: "Same behavior, different code",
-    hybridTitle: "Same behavior, different code [Type-4, AI match]",
-    taxonomyLabel: "Type-4 semantic clone (AI match)",
-    cssSuffix: "same-behavior",
-    aiMatch: true,
-  },
-};
+// [FACET-TOP-OFFENDERS-FILTER] Facets filter on the mass severity band
+// only. Clone-kind axes (bucket, category) are retired: the report
+// carries no similarity classification, and the persisted per-bucket
+// filter settings are invalid configuration ([SEVERITY-CONFIG]).
 
-export function bucketLabels(bucket: Bucket): BucketLabels {
-  return LABELS[bucket];
-}
-
-// [CLONE-BUCKETS-ROUTING] The engine owns the routing and is the only
-// place it can be decided. `deslop-core::report_render::report_bucket_kind`
-// weighs the *raw* signal triple, measured `ContentEvidence`, raw-source
-// byte-equivalence, and the member spread — and the triple that reaches
-// this client is the elected pair's own measurement, projected by the
-// engine: `content_gated_signals` overwrites `token_jaccard` to 1.0 for a
-// shape-identical near miss (#232). Re-running the engine's raw-signal
-// table over rendered signals is therefore a category error, and every
-// arm that tried it shipped a defect: a proven rename read back as
-// byte-identical ("Safe to extract — every copy is the same" about code
-// whose identifiers all differ), a content-gated family promoted to
-// act-now, and two low-structural arms the engine never had. The UI reads
-// the engine's label and never manufactures one.
-export function resolveBucket(cluster: ReportCluster): Bucket {
-  if (
-    cluster.bucket &&
-    (BUCKETS as readonly string[]).includes(cluster.bucket)
-  ) {
-    return cluster.bucket as Bucket;
-  }
-  // A report carrying no engine label carries no verdict. `loosely_similar`
-  // is the only honest destination: it is the sole bucket whose action
-  // sentence claims nothing beyond "treat as a hint", so an unlabelled
-  // cluster can never be repainted as something to act on.
-  return "loosely_similar";
-}
-
-// The exact buckets eligible for the live bubble. Exported so the bubble and
-// its tests share one explicit engine-bucket contract ([VSIX-LIVE-BUBBLE]).
-export const LIVE_BUBBLE_BUCKETS: readonly Bucket[] = [
-  IDENTICAL_BUCKET_VALUE,
-  "nearly_identical",
-] as const;
-
-export function isLiveBubbleBucket(bucket: Bucket): boolean {
-  return LIVE_BUBBLE_BUCKETS.includes(bucket);
-}
-
-// ---------------------------------------------------------------------------
-// Canonical clone categories — mirrors deslop-core::clone_category.
-// Orthogonal to Bucket per [FACET-MODEL]: bucket = "how similar",
-// category = "what kind of repetition". The shipped registry is
-// logic + data; the literal families join when [LITERAL-CATEGORY] ships.
-// ---------------------------------------------------------------------------
-
-// Wire label carried in JSON `cluster.category`.
-export type Category = "logic" | "data";
-
-export const DATA_CATEGORY_VALUE: Category = "data";
-
-export const CATEGORIES: readonly Category[] = ["logic", DATA_CATEGORY_VALUE] as const;
-
-export interface CategoryLabels {
-  // Plain title for facet surfaces (filter QuickPick, webview category
-  // options, HTML facet chips): the shared chip for chip-carrying
-  // categories, "Code clones" for the chip-less logic default.
-  groupTitle: string;
-  // Short chip shown next to bucket titles; null for logic — the
-  // absence of a chip already communicates "ordinary logic clone".
-  chip: string | null;
-}
-
-const CATEGORY_LABELS: Record<Category, CategoryLabels> = {
-  logic: { groupTitle: "Code clones", chip: null },
-  data: { groupTitle: "data table", chip: "data table" },
-};
-
-export function categoryLabels(category: Category): CategoryLabels {
-  return CATEGORY_LABELS[category];
-}
-
-// Resolves a cluster's category from the wire label, defaulting to
-// "logic" for absent or unknown values — mirrors
-// deslop-core::clone_category::from_wire_label.
-export function resolveCategory(cluster: ReportCluster): Category {
-  return cluster.category === DATA_CATEGORY_VALUE ? DATA_CATEGORY_VALUE : "logic";
-}
-
-/** A sanitized facet filter: only registry-known values survive. */
+/** A sanitized facet filter: only registry-known severity bands
+ * survive. */
 export interface FacetFilter {
-  buckets: Bucket[];
-  categories: Category[];
+  severities: Severity[];
 }
 
 // [FACET-TOP-OFFENDERS-FILTER] Drops unknown values from the persisted
-// filter arrays (the typo fallback — a bad value must never yield an
-// empty tree). Both lists empty means the filter is inactive.
-export function sanitizeFacetFilter(
-  filterBuckets: readonly string[],
-  filterCategories: readonly string[],
-): FacetFilter {
+// filter array (the typo fallback — a bad value must never yield an
+// empty tree). An empty list means the filter is inactive.
+export function sanitizeFacetFilter(filterSeverities: readonly string[]): FacetFilter {
   return {
-    buckets: filterBuckets.filter((value): value is Bucket =>
-      (BUCKETS as readonly string[]).includes(value),
-    ),
-    categories: filterCategories.filter((value): value is Category =>
-      (CATEGORIES as readonly string[]).includes(value),
+    severities: filterSeverities.filter((value): value is Severity =>
+      (SEVERITIES as readonly string[]).includes(value),
     ),
   };
 }
 
 // [FACET-TOP-OFFENDERS-FILTER] The one facet-filter slice shared by the
 // Top Offenders tree, the report webview, and the status-bar count so
-// the three surfaces always agree. An empty value list means "show all"
-// for that axis; the two axes compose as an AND. Presentation-only:
-// never mutates the report.
+// the three surfaces always agree. An empty value list means "show all".
+// Presentation-only: never mutates the report.
 export function applyFacetFilter(
   clusters: ReportCluster[],
   filter: FacetFilter,
 ): ReportCluster[] {
-  const { buckets, categories } = filter;
-  if (buckets.length === 0 && categories.length === 0) return clusters;
-  return clusters.filter(
-    (cluster) =>
-      (buckets.length === 0 || buckets.includes(resolveBucket(cluster))) &&
-      (categories.length === 0 || categories.includes(resolveCategory(cluster))),
-  );
-}
-
-// Returns the engine-authored interpretation. `buckets.rs` is the only source
-// of evidence sentences; clients carry the wire text without reconstructing
-// or falling back to a TypeScript copy.
-export function clusterInterpretation(cluster: ReportCluster): string {
-  return cluster.interpretation;
+  const { severities } = filter;
+  if (severities.length === 0) return clusters;
+  return clusters.filter((cluster) => severities.includes(clusterBand(cluster)));
 }

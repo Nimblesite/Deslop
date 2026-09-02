@@ -20,9 +20,10 @@
 //! An empty report satisfies the absence half and fails the presence
 //! half, so a detector that went blind cannot pass this test.
 
+use crate::common::signals::{
+    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+};
 use crate::common::*;
-
-use deslop_core::buckets::CONTENT_SUPPORT_FLOOR;
 
 /// The fixture holding the real contract pair and the inherited-but-not-
 /// declared copy.
@@ -47,9 +48,6 @@ const INVOICE_WORKER: &str = "invoice_worker.py";
 
 /// The copy, with every local, parameter and collaborator renamed.
 const USER_WORKER: &str = "user_worker.py";
-
-/// The bucket a total consistent rename lands in.
-const NEARLY_IDENTICAL: &str = "nearly_identical";
 
 /// First line of the matched view in both copies — the whole module,
 /// because the import and the class shell around `synchronise` are
@@ -98,41 +96,21 @@ fn an_inherited_method_no_base_declares_is_not_a_contract_implementation() -> Re
          fixture: {visible:#?}"
     );
     assert_eq!(
-        cluster_bucket(clone),
-        NEARLY_IDENTICAL,
-        "a total consistent rename is the definition of \
-         nearly-identical: {report:#}"
-    );
-    assert_eq!(
         cluster_size(clone),
         CLONE_OCCURRENCES,
         "one occurrence per file: {report:#}"
     );
+    // [PIPELINE-CLUSTER-CLOSURE] The nearly-identical verdict and the
+    // content axes are pair-scoped now. The wire facts that hold the
+    // acceptance: the copied `synchronise` pair is admitted, mass-honest,
+    // clean-surfaced and byte-distinct — a total consistent rename, never
+    // a verbatim paste.
+    assert_structural_only_contract(clone, "inherited contract boundary");
+    assert_no_pair_surface_on_cluster(clone, "inherited contract boundary");
     assert!(
-        approx(signal(clone, "structural"), 1.0),
-        "identifier renames are invisible to the normalised tree: \
-         {report:#}"
-    );
-    assert!(
-        approx(signal(clone, "token_jaccard"), 1.0),
-        "the token layer is rename-invariant by design: {report:#}"
-    );
-    assert!(
-        approx(signal(clone, "pair_rename_consistency"), 1.0),
-        "every identifier is renamed the same way in every occurrence, \
-         which is what makes this a copy rather than an implementation: \
-         {report:#}"
-    );
-    assert!(
-        signal(clone, "pair_rename_consistency") >= CONTENT_SUPPORT_FLOOR,
-        "`CommonWorker` never declares `synchronise`, so nothing forces \
-         these two bodies to agree and the elected pair must support its bucket: \
-         {report:#}"
-    );
-    assert_eq!(
-        field(clone, "signal_source"),
-        &serde_json::json!({"left": 0, "right": 1}),
-        "the rendered evidence must identify the copied pair: {report:#}"
+        !has_verbatim_pair(&scan_root, clone)?,
+        "`synchronise` is renamed across the two workers and must slice to \
+         differing bytes: {report:#}"
     );
     for occurrence in occurrences(clone) {
         assert_eq!(

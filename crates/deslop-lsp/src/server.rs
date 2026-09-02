@@ -246,6 +246,7 @@ pub async fn run_stdio(
         custom_methods::report_for_range,
     )
     .custom_method(custom_methods::CLUSTER_BY_ID, custom_methods::cluster_by_id)
+    .custom_method(custom_methods::PAIR_COMPARE, custom_methods::pair_compare)
     .custom_method(custom_methods::FIND_SIMILAR, custom_methods::find_similar)
     .custom_method(
         custom_methods::LIST_MODELS,

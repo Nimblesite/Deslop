@@ -3,7 +3,7 @@
 
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
-import * as os from "node:os";
+import { tempFile } from "./temp-file.helpers";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
@@ -11,8 +11,7 @@ import { openCanonicalOccurrence } from "../../commands/register";
 import { canonicalOccurrenceForCluster } from "../../commands/treeMenus";
 import { ClusterNode } from "../../tree/providers";
 import { ReportCluster } from "../../types/report";
-import { wireCluster } from "../cluster.helpers";
-import { bucketSignals } from "../signals.helpers";
+import { occurrence, wireCluster } from "../cluster.helpers";
 
 function clusterWithRanges(
   id: string,
@@ -20,11 +19,10 @@ function clusterWithRanges(
 ): ReportCluster {
   return wireCluster({
     id,
-    weight: 10,
-    bucket: "identical",
-    signals: bucketSignals("identical"),
-    occurrences: occurrences.map((o) => ({ ...o, hidden: false })),
-    interpretation: "interp",
+    mass: 10,
+        occurrences: occurrences.map((o) =>
+    occurrence(o.path, o.start_byte, o.end_byte),
+  ),
   });
 }
 
@@ -35,8 +33,8 @@ function clusterNodeFor(c: ReportCluster): ClusterNode {
 suite("canonical file command", () => {
   test("canonicalOccurrenceForCluster returns the first occurrence", () => {
     const c = clusterWithRanges("c-canonical", [
-      { path: "src/canonical.cs", start_byte: 10, end_byte: 20 },
-      { path: "src/sibling.cs", start_byte: 30, end_byte: 40 },
+      {path: "src/canonical.cs", start_byte: 10, end_byte: 20},
+      {path: "src/sibling.cs", start_byte: 30, end_byte: 40},
     ]);
     const first = c.occurrences[0];
     assert.ok(first, "cluster must have a canonical occurrence");
@@ -44,8 +42,7 @@ suite("canonical file command", () => {
   });
 
   test("openCanonicalOccurrence opens the first occurrence at its line and column", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-canon-"));
-    const canonical = path.join(dir, "Canonical.cs");
+    const { dir, file: canonical } = tempFile("cdd-canon-", "Canonical.cs");
     const sibling = path.join(dir, "Sibling.cs");
     const source = "zero\n  canonical target\n";
     const startByte = Buffer.byteLength("zero\n  ", "utf8");

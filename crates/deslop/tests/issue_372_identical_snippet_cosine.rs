@@ -20,11 +20,23 @@
 
 use crate::mock_ollama::MockOllama;
 use anyhow::Result;
+use deslop_core::report::PairClassification;
 
 use crate::common::{
-    cluster_bucket, clusters, embeddings::run_mock_embedding_report, expect_cluster_spanning,
-    occurrence_files, signal, write_identical_pair,
+    clusters,
+    embeddings::run_mock_embedding_report,
+    expect_cluster_spanning, occurrence_files,
+    signals::{
+        assert_no_pair_surface_on_cluster, assert_pair_metric, compare_pair_with_embeddings,
+        has_verbatim_pair, occurrence_for_file,
+    },
+    write_identical_pair,
 };
+
+const MIN_NODES: u32 = 10;
+const LEFT_FILE: &str = "a.cs";
+const RIGHT_FILE: &str = "b.cs";
+const EXACT_SCORE: f64 = 1.0;
 
 /// A non-trivial C# method: a guard clause, an accumulator loop and a
 /// return, so the clone is a real code unit rather than a stub.
@@ -57,47 +69,75 @@ fn byte_identical_clone_pair_renders_embedding_cosine_of_exactly_one() -> Result
     let workspace = tempfile::tempdir()?;
     write_identical_pair(workspace.path(), "cs", TALLY)?;
     let output = workspace.path().join("report");
-    let report = run_mock_embedding_report(workspace.path(), &output, "10", server.endpoint())?;
+    let report = run_mock_embedding_report(
+        workspace.path(),
+        &output,
+        &MIN_NODES.to_string(),
+        server.endpoint(),
+    )?;
 
-    let cluster = expect_cluster_spanning(&report, &["a.cs", "b.cs"])?;
+    let cluster = expect_cluster_spanning(&report, &[LEFT_FILE, RIGHT_FILE])?;
     assert_eq!(
         occurrence_files(cluster),
         vec!["a.cs".to_owned(), "b.cs".to_owned()],
         "the identical files must cluster together: {cluster:#}",
     );
-    assert_eq!(
-        cluster_bucket(cluster),
-        "identical",
-        "a byte-identical file pair is an identical clone: {cluster:#}",
-    );
-
-    let cosine = signal(cluster, "embedding_cos");
+    // [PIPELINE-CLUSTER-CLOSURE] The embedding cosine is pair-scoped now —
+    // it renders only behind an explicit comparison. The wire fact that
+    // pins #372's acceptance is the byte-level one: the identical pair is
+    // byte-proven from the source, and no cluster surface carries an
+    // embedding figure at all.
     assert!(
-        cosine > 0.0,
-        "fixture never reached the embedder, so the cosine proves nothing: {cluster:#}",
+        has_verbatim_pair(workspace.path(), cluster)?,
+        "a byte-identical file pair must be byte-proven: {cluster:#}",
+    );
+    let comparison = compare_pair_with_embeddings(
+        workspace.path(),
+        MIN_NODES,
+        occurrence_for_file(cluster, LEFT_FILE)?,
+        occurrence_for_file(cluster, RIGHT_FILE)?,
+    )?;
+    let evidence = &comparison.evidence;
+    assert_pair_metric(
+        evidence.structural,
+        EXACT_SCORE,
+        "identical structural overlap",
+    );
+    assert_pair_metric(
+        evidence.token_jaccard,
+        EXACT_SCORE,
+        "identical token Jaccard",
+    );
+    assert_pair_metric(
+        evidence.embedding_cos,
+        EXACT_SCORE,
+        "identical embedding cosine",
+    );
+    assert_pair_metric(
+        evidence.agreement,
+        EXACT_SCORE,
+        "identical content agreement",
+    );
+    assert_pair_metric(
+        evidence.rename_consistency,
+        EXACT_SCORE,
+        "identity rename mapping",
     );
     assert!(
-        (cosine - 1.0).abs() < f64::EPSILON,
-        "byte-identical snippets share one vector, so the rendered cosine must be \
-         exactly 1.0, got {cosine:.17}: {cluster:#}",
+        !evidence.content_required,
+        "an exact embedding independently clears the pair content requirement: {comparison:#?}"
     );
-    let structural = signal(cluster, "structural");
     assert!(
-        (structural - 1.0).abs() < f64::EPSILON,
-        "an identical clone must be structurally exact, got {structural:.17}: {cluster:#}",
+        evidence.content_ok,
+        "identical pair content must clear the guard: {comparison:#?}"
     );
-    let jaccard = signal(cluster, "token_jaccard");
     assert!(
-        (jaccard - 1.0).abs() < f64::EPSILON,
-        "an identical clone must have exact token overlap, got {jaccard:.17}: {cluster:#}",
+        evidence.admitted,
+        "identical endpoints must form an admitted edge: {comparison:#?}"
     );
-
+    assert_eq!(evidence.classification, Some(PairClassification::Identical));
     for other in clusters(&report) {
-        let value = signal(other, "embedding_cos");
-        assert!(
-            (0.0..=1.0).contains(&value),
-            "embedding_cos escaped [0,1]: {other:#}",
-        );
+        assert_no_pair_surface_on_cluster(other, "issue #372");
     }
     Ok(())
 }

@@ -13,11 +13,13 @@ Carefully search for duplicate code, duplicate tests, and dead code across the R
 
 Before touching ANY code:
 
-1. **The Deslop MCP must be reachable and returning correct data.** This skill is
-   driven by the live MCP (`top-offenders`, `cluster-by-id`, `find-similar`). If
-   the MCP is unavailable, errors, or returns stale/wrong data, **STOP** — do not
-   dedup blind, and file a GitHub issue with `gh issue create` per
-   [CLAUDE.md](CLAUDE.md) Rule zero.
+1. **Dogfood Deslop before editing.** Prefer the live MCP (`top-offenders`,
+   `cluster-by-id`, `find-similar`). If MCP is unavailable, run the release CLI
+   against the assigned scope with `target/release/deslop <scope> --output
+   target/deslop-dedup --no-incremental` and inspect the generated JSON report.
+   Build that binary first when absent. A wrong or stale result from either
+   surface is an accuracy defect: stop and file a GitHub issue. Tool absence
+   alone is not a blocker while the other surface works.
 2. **Do NOT run `make test` — or any test — as part of this skill.** Deduping is a
    pure refactor. Tests run exactly once, at the very end, through the **ci-prep**
    skill (Step 6) — never before or between dedup edits.
@@ -29,7 +31,7 @@ Copy this checklist and track progress:
 
 ```
 Dedup Progress:
-- [ ] Step 1: MCP reachable, duplicate surface inventoried
+- [ ] Step 1: Deslop surface reachable, duplicate surface inventoried
 - [ ] Step 2: Dead code scan complete
 - [ ] Step 3: Duplicate code scan complete (via Deslop MCP)
 - [ ] Step 4: Duplicate test scan complete
@@ -40,7 +42,9 @@ Dedup Progress:
 ### Step 1 — Inventory the duplicate surface
 
 1. Query the Deslop MCP `top-offenders` (worst-first) and note the clusters you
-   intend to merge. This — not a test run — is where dedup starts.
+   intend to merge. When MCP is unavailable, scan the assigned scope with the
+   release CLI command from the prerequisite and inspect the JSON report. This
+   — not a test run — is where dedup starts.
 2. Identify which files have E2E coverage in [crates/deslop/tests](crates/deslop/tests);
    prefer deduping covered files. ci-prep enforces the coverage floor at the end.
 3. Do NOT run `make test` here. Do not run it anywhere except via ci-prep in Step 6.
@@ -56,7 +60,9 @@ Dedup Progress:
 1. Look for functions/methods with identical or near-identical logic across [crates/deslop-core/src](crates/deslop-core/src) and [crates/deslop/src](crates/deslop/src).
 2. Look for copy-pasted blocks (same structure, maybe different identifiers — Type-2 clones).
 3. Check across pipeline stages (discover → parse → normalize → fingerprint → cluster → LSH → embed → fuse → rank → render). Duplicates often hide between adjacent stages.
-4. Dogfood the live Deslop MCP — `top-offenders`, then `cluster-by-id` for each cluster you'll merge. This is the first-class duplicate signal. Do not shell out to the CLI or run tests for this.
+4. Dogfood the live Deslop MCP — `top-offenders`, then `cluster-by-id` for each
+   cluster you'll merge. If MCP is unavailable, use the release CLI fallback
+   from Step 1. Do not run tests for this inventory.
 5. For each duplicate pair: note both locations, what they do, and how they differ (if at all). Do NOT merge yet.
 
 ### Step 4 — Scan for duplicate tests

@@ -6,10 +6,10 @@
 
 Five authored Rust files under `src/`, two Type-1 (byte-identical) clusters with different occurrence counts so ranking order is exercised:
 
-- `settle_invoice` — 68-node declaration, three copies (`alpha.rs`, `beta.rs`, `gamma.rs`), the higher-weight cluster. The span covers the whole `pub fn`, not the body alone: an occurrence that starts at the function *name* is not extractable, and pinning one was how a 7-byte truncation stayed invisible.
-- `merge_labels` — 38-node body, two copies (`delta.rs`, `epsilon.rs`), the lower-weight cluster.
+- `settle_invoice` — 72-node declaration (68-node function plus the shared `RegionMarker`), three copies (`alpha.rs`, `beta.rs`, `gamma.rs`), the higher-weight cluster. The span covers the whole `pub fn` plus the marker, not the body alone: an occurrence that starts at the function *name* is not extractable, and pinning one was how a 7-byte truncation stayed invisible.
+- `merge_labels` — 44-node declaration (38-node body plus the shared `REGION_FLAG`), two copies (`delta.rs`, `epsilon.rs`), the lower-weight cluster.
 
-Each file also carries one tiny, structurally unique top-level item (const / struct / enum / type alias / static) so the normalised `__file__` nodes differ and no whole-file cluster forms. The fixed flag set is `--no-incremental --embeddings off --min-nodes 16 --notext --nohtml`; 16 sits below both clone declarations (68 and 38 nodes). The 12-node `settle_invoice` signature subtree never renders as a third cluster — the declaration around it contains it, so [PIPELINE-CLUSTER-SUBSUME] elects it away; scanned at `--min-nodes` 12, 13 and 16 this corpus renders the same two clusters and the same 57 duplicated LOC.
+Each file also carries one tiny top-level item — the same `pub struct RegionMarker;` in every `settle_invoice` file and the same `pub static REGION_FLAG: bool = true;` in both `merge_labels` files — so the files stay byte-distinct (the banner comments differ) while the wider same-file view the overlap collapse selects remains byte-identical across the pair ([PIPELINE-CLUSTER-EXACT-SCOPE]: scope and width decide the view, so the marker is part of every reported occurrence). The marker is too small to fingerprint, so no extra cluster forms. The fixed flag set is `--no-incremental --embeddings off --min-nodes 16 --notext --nohtml`; 16 sits below both clone declarations (72 and 44 nodes). The `settle_invoice` signature subtree never renders as a third cluster — the declaration around it contains it, so [PIPELINE-CLUSTER-SUBSUME] selects it away.
 
 The test never scans this directory in place — it copies `src/` into a throwaway temp root — so no run can drop a `.deslop/` cache here. Editing anything under `src/` invalidates the golden.
 

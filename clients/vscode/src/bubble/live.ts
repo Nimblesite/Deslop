@@ -1,11 +1,11 @@
 // Live duplication bubble — [VSIX-LIVE-BUBBLE].
 // Fires after every coalesced buffer edit. Calls deslop/duplicatesFindSimilar
-// on the most-recently-touched range; admission is `bubbleAdmits`: only an
-// explicitly eligible duplicate bucket renders — the engine's own verdict, reached with content
+// on the most-recently-touched range; admission is `bubbleAdmits`: a
+// reported cluster renders — the engine's verdict, reached with content
 // evidence and byte proof this client never sees. Surfaces:
-//   primary: after-text decoration (severity dot + bucket label + count + canonical)
-//   secondary: inlay hint with a 3-bar signal strip
+//   primary: after-text decoration (severity dot + short verdict + count + canonical)
 // Ghost-line mode renders a whole-line after-text decoration instead.
+// Pair admission signals never render here ([FUSED-PAIR-SIGNALS]).
 
 import * as vscode from "vscode";
 import { effect } from "@preact/signals-core";
@@ -14,14 +14,8 @@ import type { LanguageClient } from "vscode-languageclient/node";
 import { COLOR, DESLOP_SEVERITY_COLOR } from "../design";
 import { ReportStore } from "../reportStore";
 import { clusterSeverity } from "../severity";
-import { ANALYSED_LANGUAGE_IDS } from "../types/languages";
-import {
-  ReportCluster,
-  clusterBand,
-  isLiveBubbleBucket,
-  resolveBucket,
-} from "../types/report";
-import { bubbleHover, ghostText, inlineText, signalStrip } from "./renderParts";
+import { ReportCluster, clusterBand } from "../types/report";
+import { bubbleHover, ghostText, inlineText } from "./renderParts";
 
 export { shortPath } from "../pathUtils";
 // The pure text renderers live in ./renderParts; re-exported so every
@@ -84,7 +78,6 @@ const realBudgetScheduler: BudgetScheduler = (expire, ms) => {
 export class LiveBubble implements vscode.Disposable {
   private readonly bubbleDecoration: vscode.TextEditorDecorationType;
   private readonly ghostDecoration: vscode.TextEditorDecorationType;
-  private readonly inlayProvider: BubbleInlayProvider;
   private readonly disposables: vscode.Disposable[] = [];
   private active: ActiveBubble | null = null;
   private dismissedClusters = new Set<string>();
@@ -115,15 +108,10 @@ export class LiveBubble implements vscode.Disposable {
         color: COLOR.onSurfaceMuted,
       },
     });
-    this.inlayProvider = new BubbleInlayProvider();
 
     this.disposables.push(
       this.bubbleDecoration,
       this.ghostDecoration,
-      vscode.languages.registerInlayHintsProvider(
-        ANALYSED_LANGUAGE_IDS.map((language) => ({ language })),
-        this.inlayProvider,
-      ),
       // effect() tracks store.report (read inside clearRemovedActiveCluster).
       // Clears the bubble automatically when the active cluster disappears.
       { dispose: effect(() => this.clearRemovedActiveCluster()) },
@@ -330,10 +318,9 @@ export class LiveBubble implements vscode.Disposable {
           renderOptions: {
             after: {
               contentText: inlineText(best, severity),
-              // [SEVERITY-COLOR] Colour is the bucket channel; the dot inside
-              // `inlineText` is the percentile channel. The bubble carries both
-              // facts at once — a demoted family topping the report is a grey
-              // `●●`, never the crimson that means "safe to extract".
+              // [SEVERITY-COLOR] Colour is the severity channel; the dot inside
+              // `inlineText` is the same channel. The bubble carries the
+              // cluster's mass severity, never a clone-kind classification.
               color: DESLOP_SEVERITY_COLOR[clusterSeverity(best)],
               fontStyle: "normal",
               fontWeight: "600",
@@ -343,7 +330,6 @@ export class LiveBubble implements vscode.Disposable {
       ]);
     }
 
-    this.inlayProvider.set(editor.document.uri, range, best);
     this.active = { editor, clusterId: best.id, range };
   }
 
@@ -353,7 +339,6 @@ export class LiveBubble implements vscode.Disposable {
       editor.setDecorations(this.bubbleDecoration, []);
       editor.setDecorations(this.ghostDecoration, []);
     }
-    this.inlayProvider.clear();
     this.active = null;
   }
 
@@ -379,67 +364,17 @@ function bestBubbleCluster(
   retractedClusters: ReadonlySet<string>,
 ): ReportCluster | undefined {
   const byId = new Map(reportClusters.map((cluster) => [cluster.id, cluster]));
+  // [VSIX-LIVE-BUBBLE] The bubble fires only when the range belongs to a
+  // reported duplicate component: a probe hit that the visible report
+  // does not confirm has no engine verdict behind it and does not render.
+  // Counts come from the report's cluster, never the probe's own shape.
   return probeClusters
+    .map((cluster) => byId.get(cluster.id))
+    .filter((cluster): cluster is ReportCluster => cluster !== undefined)
     .filter((cluster) => !retractedClusters.has(cluster.id))
-    .map((cluster) => byId.get(cluster.id) ?? cluster)
-    .filter(bubbleAdmits)
     .filter((cluster) => !dismissedClusters.has(cluster.id))
     // Worst first is the engine's ranking, tie-break included.
     .sort((a, b) => a.rank - b.rank)[0];
-}
-
-// One gate: the bucket ([VSIX-LIVE-BUBBLE], [FUSED-CONTENT-GATE]). An
-// eligible bucket is the engine's own duplicate verdict,
-// reached with content evidence and byte proof this client never sees.
-// There is no second admission path: the fused gate is gone from the wire,
-// and no UI-local threshold stands in for it — an ineligible cluster
-// simply has no engine verdict behind it and does not render. The
-// threshold constant exists once, in Rust, and this client never mirrors
-// it.
-function bubbleAdmits(cluster: ReportCluster): boolean {
-  return isLiveBubbleBucket(resolveBucket(cluster));
-}
-
-class BubbleInlayProvider implements vscode.InlayHintsProvider {
-  private readonly changeEmitter = new vscode.EventEmitter<void>();
-  readonly onDidChangeInlayHints = this.changeEmitter.event;
-  private current: {
-    uri: vscode.Uri;
-    range: vscode.Range;
-    cluster: ReportCluster;
-  } | null = null;
-
-  set(
-    uri: vscode.Uri,
-    range: vscode.Range,
-    cluster: ReportCluster,
-  ): void {
-    this.current = { uri, range, cluster };
-    this.changeEmitter.fire();
-  }
-
-  clear(): void {
-    this.current = null;
-    this.changeEmitter.fire();
-  }
-
-  provideInlayHints(
-    document: vscode.TextDocument,
-    range: vscode.Range,
-  ): vscode.InlayHint[] {
-    if (!this.current) return [];
-    if (document.uri.toString() !== this.current.uri.toString()) return [];
-    if (!range.contains(this.current.range.start)) return [];
-    const strip = signalStrip(this.current.cluster);
-    const hint = new vscode.InlayHint(
-      this.current.range.end,
-      strip,
-      vscode.InlayHintKind.Type,
-    );
-    hint.paddingLeft = true;
-    hint.tooltip = bubbleHover(this.current.cluster);
-    return [hint];
-  }
 }
 
 // The probe's budget deadline fired: record the expiry so the completion

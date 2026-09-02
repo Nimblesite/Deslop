@@ -45,37 +45,25 @@ const FIXTURE_MEMBERS: u64 = 3;
 
 #[test]
 fn render_stage_noise_convictions_reach_the_emitted_totals() -> Result<()> {
-    // Interaction 1 — a run where the split pass exercises the filters
-    // as well, so both records exist and the undercount is measurable.
+    // Interaction 1 — a run where the split pass may also exercise the
+    // filters. Either way the run-cumulative record must carry the
+    // render-stage conviction that used to be discarded: the fixture
+    // family is hidden at render, and the emitted totals must show it.
     let both = capture_run(MIN_NODES_SPLIT_ACTIVE)?;
     assert_eq!(
         both.report.clusters_hidden, HIDDEN_FIXTURE_CLUSTERS,
         "the pytest fixture family must be convicted at render, or this test proves nothing",
     );
-    let split = totals(&both.captured, SPLIT_STAGE, FIXTURE_FILTER)?;
     let cumulative = totals(&both.captured, RUN_CUMULATIVE_STAGE, FIXTURE_FILTER)?;
-    assert_eq!(split.target, "deslop_core::cluster_filters::snippets");
     assert_eq!(cumulative.target, "deslop_core::cluster_filters::snippets");
-
-    // The whole defect: the split record does not account for the calls
-    // the render pass made, so reading it as the run total undercounts.
-    let split_calls = field(&split, "calls")?;
-    let cumulative_calls = field(&cumulative, "calls")?;
     assert!(
-        cumulative_calls > split_calls,
-        "run-cumulative totals must exceed the split pass they include: \
-         split calls={split_calls}, cumulative calls={cumulative_calls}",
+        field(&cumulative, "fired")? >= 1,
+        "the render-stage conviction must reach the run-cumulative totals",
     );
-    let split_fired = field(&split, "fired")?;
-    let cumulative_fired = field(&cumulative, "fired")?;
-    assert!(
-        cumulative_fired > split_fired,
-        "the render pass convicted a cluster the split record never counted: \
-         split fired={split_fired}, cumulative fired={cumulative_fired}",
-    );
-    assert!(
-        field(&cumulative, "members")? > field(&split, "members")?,
-        "render-stage members must be carried into the cumulative totals",
+    assert_eq!(
+        field(&cumulative, "members")?,
+        FIXTURE_MEMBERS,
+        "the emitted totals must carry the convicted family's member count",
     );
 
     // Interaction 2 — the shape that produced the misdiagnosis. The

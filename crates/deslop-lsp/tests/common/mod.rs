@@ -22,6 +22,7 @@ use std::{
 
 use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
+use tower_lsp::lsp_types::Url;
 
 /// JSON-RPC id counter shared across every harness call.
 static NEXT_ID: AtomicI64 = AtomicI64::new(10_000);
@@ -407,6 +408,19 @@ pub fn code_action_params(uri: &str, start_line: u32, end_line: u32) -> Value {
         },
         "context": { "diagnostics": [] }
     })
+}
+
+/// Resolves `file_name` inside the workspace root to an LSP `Url`.
+/// Every editor-surface scenario opens with the same join +
+/// `from_file_path` dance; the duplicated windows it used to form are
+/// collapsed here ([CI-DESLOP] ledger, gh #397).
+///
+/// # Errors
+///
+/// Returns an error when the workspace path is not absolute.
+pub fn workspace_file_uri(workspace_root: &Path, file_name: &str) -> Result<Url> {
+    let file = workspace_root.join(file_name);
+    Url::from_file_path(&file).map_err(|()| anyhow::anyhow!("fixture path is absolute"))
 }
 
 /// Polls `textDocument/codeAction` until the first analysis pass

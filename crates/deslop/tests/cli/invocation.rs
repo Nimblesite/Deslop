@@ -126,17 +126,14 @@ fn default_run_emits_all_three_formats() -> Result<()> {
     let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let json = fs::read_to_string(&out.json)?;
     assert!(json.contains("\"schema_doc\""), "schema_doc missing");
-    assert!(json.contains("\"action_hints\""), "action_hints missing");
-    assert!(
-        json.contains("\"interpretation\""),
-        "interpretation missing"
-    );
-    assert!(json.contains("\"hidden\""), "hidden flag missing");
+    assert!(json.contains("\"clusters\":"), "clusters missing");
+    assert!(json.contains("\"mass\":"), "mass field missing");
+    assert!(json.contains("\"metrics\":"), "metrics missing");
+    assert!(json.contains("\"hidden\":"), "hidden flag missing");
     let txt = fs::read_to_string(&out.txt)?;
     assert!(txt.contains("deslop"), "text header missing: {txt}");
     let html = fs::read_to_string(&out.html)?;
     assert!(html.contains("<!doctype html>"), "html doctype missing");
-    assert!(html.contains("Action hints"), "html action hints missing");
     assert!(html.contains("Deslop report"), "html human intro missing");
     assert!(
         html.contains("Duplicate groups"),

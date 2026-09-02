@@ -351,6 +351,23 @@ impl AnalysisSession {
         Arc::clone(&self.latest_report)
     }
 
+    /// Recomputes admission evidence for two explicitly named occurrences.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LiveError::AnalysisNotReady`] while a cache-seeded session
+    /// has no installed pipeline and forwards endpoint or provider errors
+    /// from [`PipelineSession::compare_pair`].
+    pub fn compare_pair(
+        &self,
+        params: &crate::report::PairComparisonParams,
+    ) -> Result<crate::report::PairComparison, LiveError> {
+        let pipeline = self.pipeline.as_ref().ok_or(LiveError::AnalysisNotReady)?;
+        let provider = (!matches!(self.embedding_mode, EmbeddingMode::Off))
+            .then_some(self.embedding_provider.as_ref());
+        pipeline.compare_pair(params, provider).map_err(Into::into)
+    }
+
     /// In-process view of the installed pipeline, used by the merge
     /// engine's AST accessors ([AUTOFIX-MERGE]) — `None` during the
     /// cache-seed window. Never serialised to the wire.

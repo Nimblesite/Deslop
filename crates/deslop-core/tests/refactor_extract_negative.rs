@@ -39,9 +39,8 @@ fn assert_no_plan(fixture_name: &str, file_name: &str) -> Result<()> {
         let plan = refactor::compute_plan(cluster, &source, parser.as_ref())?;
         ensure!(
             plan.is_none(),
-            "{fixture_name}: cluster {} (bucket {}) must be refused, got a plan",
-            cluster.id,
-            cluster.bucket
+            "{fixture_name}: cluster {} must be refused, got a plan",
+            cluster.id
         );
     }
     Ok(())
@@ -174,16 +173,22 @@ fn mid_expression_refused() -> Result<()> {
 
 /// Non-exact buckets (weak LSH / semantic) never reach the slice proof.
 #[test]
-fn loose_bucket_refused() -> Result<()> {
+fn non_byte_equivalent_cluster_refused() -> Result<()> {
+    // The bucket surface is gone from the mass-only wire; the extract
+    // refusal is the byte truth: a cluster whose occurrences are not
+    // byte-equivalent after whitespace canonicalisation has no single
+    // extractable run ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 1). The
+    // second span is cut short so the two copies disagree.
     let (source, first, second) = positive_fixture()?;
+    let truncated_second = (second.0, second.0 + 40);
     let cluster = synthetic_report_cluster(
         vec![
             report_occurrence(INVOICE_MATH_FILE, (first.0, first.1), false),
-            report_occurrence(INVOICE_MATH_FILE, (second.0, second.1), false),
+            report_occurrence(INVOICE_MATH_FILE, truncated_second, false),
         ],
-        "loosely_similar",
+        "non-byte-equivalent",
     );
-    assert_refused(&cluster, &source, "loosely_similar bucket")
+    assert_refused(&cluster, &source, "non-byte-equivalent spans")
 }
 
 /// Languages without refactor tables (F# today) are refused at the

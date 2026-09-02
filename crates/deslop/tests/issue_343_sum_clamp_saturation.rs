@@ -21,7 +21,15 @@ use crate::mock_ollama::MockOllama;
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::{embeddings::run_mock_embedding_report, signals::*, *};
+use crate::common::{
+    embeddings::run_mock_embedding_report,
+    signals::{
+        assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+        signal_dump,
+    },
+    verdict::duplicated_loc_for_path,
+    *,
+};
 
 /// Scans a private copy of just the LSH-plus-embedding pair from
 /// `ts-mixed-band` with the deterministic mock embedder wired in, so the
@@ -39,24 +47,19 @@ fn run_two_file_report(server: &MockOllama, scan_root: &Path) -> Result<Value> {
 /// near-duplicate with no structural anchor, a mid-band token signal,
 /// and no saturated axis. If these drift, the fixture no longer proves
 /// anything about the mid band — fail loudly rather than vacuously.
+///
+/// The axes themselves are pair-scoped and off the cluster wire
+/// ([PIPELINE-CLUSTER-CLOSURE]); what the cluster can still prove is
+/// that it is admitted, that its bytes are *not* a verbatim pair, and
+/// that it carries no pair-only surface a routing table could fabricate
+/// a saturated value through.
 fn assert_mid_band_evidence(scan_root: &Path, cluster: &Value) -> Result<()> {
-    let dump = signal_dump(cluster);
-    assert!(
-        signal(cluster, "structural") < 0.05,
-        "the head change must break every shared subtree — {dump}"
-    );
-    assert!(
-        signal(cluster, "token_jaccard") < 0.95,
-        "token evidence must stay below the content-gate corner — {dump}"
-    );
-    let embedding = signal(cluster, "embedding_cos");
-    assert!(
-        (0.80..=0.99).contains(&embedding),
-        "embedding must dominate without saturating — {dump}"
-    );
+    assert_structural_only_contract(cluster, "gh #343 mid-band pair");
+    assert_no_pair_surface_on_cluster(cluster, "gh #343 mid-band pair");
     assert!(
         !has_verbatim_pair(scan_root, cluster)?,
-        "the fixture pair must not contain byte-identical occurrences — {dump}"
+        "the fixture pair must not contain byte-identical occurrences — {dump}",
+        dump = signal_dump(cluster),
     );
     Ok(())
 }
@@ -94,7 +97,7 @@ fn mid_band_pair_stays_visible_with_a_real_bucket() -> Result<()> {
         "nothing routed to hidden: {report:#}"
     );
     let cluster = expect_cluster_spanning(&report, &["ledger_a.ts", "ledger_c.ts"])?;
-    assert_eq!(cluster_bucket(cluster), "same_behavior", "routing bucket");
+    assert_structural_only_contract(cluster, "gh #343 mid-band pair");
     assert_eq!(
         occurrences(cluster).len(),
         2,
@@ -116,11 +119,7 @@ fn mid_band_pair_stays_visible_with_a_real_bucket() -> Result<()> {
          got {duplication}"
     );
     assert_mid_band_evidence(tmp.path(), cluster)?;
-    assert!(
-        cluster.pointer("/signals/fused").is_none(),
-        "no cluster-level fused field may survive on the wire ([FUSED-SCOPE]): {dump}",
-        dump = signal_dump(cluster)
-    );
+    assert_no_pair_surface_on_cluster(cluster, "gh #343 mid-band pair");
     Ok(())
 }
 
@@ -139,27 +138,10 @@ fn byte_identical_pair_still_saturates_every_axis() -> Result<()> {
 
     assert_eq!(cluster_count(&report), 1, "one visible cluster");
     let cluster = expect_cluster_spanning(&report, &["ledger_a.ts", "ledger_a_copy.ts"])?;
-    assert_eq!(cluster_bucket(cluster), "identical", "byte-proven routing");
+    assert_structural_only_contract(cluster, "gh #343 byte-proven control");
     assert!(
         has_verbatim_pair(tmp.path(), cluster)?,
         "the control fixture must contain a byte-identical pair"
-    );
-    let dump = signal_dump(cluster);
-    assert!(
-        approx(signal(cluster, "structural"), 1.0),
-        "identical trees must saturate structural — {dump}"
-    );
-    assert!(
-        approx(signal(cluster, "token_jaccard"), 1.0),
-        "a shared Merkle hash proves the token multiset — {dump}"
-    );
-    assert!(
-        approx(signal(cluster, "embedding_cos"), 1.0),
-        "identical bytes embed identically — {dump}"
-    );
-    assert!(
-        approx(signal(cluster, "pair_agreement"), 1.0),
-        "byte-identical pair's content evidence must read 1.0 — {dump}"
     );
     Ok(())
 }
@@ -206,15 +188,8 @@ fn without_embeddings_the_mid_band_pair_is_visible() -> Result<()> {
     let cluster = visible
         .first()
         .ok_or_else(|| anyhow::anyhow!("the visible clone must be present: {report:#}"))?;
-    assert!(
-        cluster.pointer("/signals/fused").is_none(),
-        "no cluster-level fused field may survive on the wire ([FUSED-SCOPE]): {report:#}"
-    );
-    assert!(
-        CONFIRMED_DUPLICATE_BUCKETS.contains(&cluster_bucket(cluster))
-            || HONEST_SHAPE_ONLY_BUCKETS.contains(&cluster_bucket(cluster)),
-        "the pair must route to a real bucket: {report:#}"
-    );
+    assert_structural_only_contract(cluster, "gh #343 rename-plus-paren clone");
+    assert_no_pair_surface_on_cluster(cluster, "gh #343 rename-plus-paren clone");
     let duplication = metric_field(&report, "duplication_percent")
         .as_f64()
         .ok_or_else(|| anyhow::anyhow!("duplication_percent is not a number: {report:#}"))?;
@@ -225,12 +200,12 @@ fn without_embeddings_the_mid_band_pair_is_visible() -> Result<()> {
     Ok(())
 }
 
-// The whole mixed-band fixture, embeddings off: every visible cluster is
-// reported and no wire `fused` survives. This is the per-cluster form of
-// the scope contract, asserted against the exact corpus that exposed the
-// saturation.
+// The whole mixed-band fixture, embeddings off: every visible cluster has
+// the mass-only wire, and only the raw-content-supported family is
+// admitted. This is the per-cluster form of the scope contract, asserted
+// against the exact corpus that exposed saturation.
 #[test]
-fn every_visible_mixed_band_cluster_has_no_wire_fused_and_a_real_bucket() -> Result<()> {
+fn visible_mixed_band_clusters_have_no_pair_surface() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     seed(&fixture("ts-mixed-band"), tmp.path())?;
     let report = run_report(tmp.path(), 12)?;
@@ -244,31 +219,30 @@ fn every_visible_mixed_band_cluster_has_no_wire_fused_and_a_real_bucket() -> Res
         cluster_count(&report) > 0,
         "the fixture's rename family must stay visible: {report:#}"
     );
-    let family = expect_cluster_spanning(&report, &["ledger_a.ts", "ledger_b.ts"])?;
-    assert!(
-        CONFIRMED_DUPLICATE_BUCKETS.contains(&cluster_bucket(family))
-            || HONEST_SHAPE_ONLY_BUCKETS.contains(&cluster_bucket(family)),
-        "the a/b rename family must route to a real bucket — {dump}",
-        dump = signal_dump(family)
+    let family = expect_cluster_spanning(
+        &report,
+        &["ledger_a.ts", "ledger_c.ts", "ledger_d.ts", "ledger_e.ts"],
+    )?;
+    assert_eq!(
+        occurrence_files(family),
+        ["ledger_a.ts", "ledger_c.ts", "ledger_d.ts", "ledger_e.ts"],
+        "the supported wider family must be reported exactly: {report:#}"
     );
+    assert_eq!(
+        duplicated_loc_for_path(&report, "ledger_b.ts")?,
+        0,
+        "the shape-only rewrite must fail pair admission before closure: {report:#}"
+    );
+    assert_structural_only_contract(family, "gh #343 supported rename family");
+    assert_no_pair_surface_on_cluster(family, "gh #343 supported rename family");
     for cluster in clusters(&report) {
         let dump = signal_dump(cluster);
+        assert_structural_only_contract(cluster, "gh #343 mixed-band cluster");
+        assert_no_pair_surface_on_cluster(cluster, "gh #343 mixed-band cluster");
         assert!(
             cluster.pointer("/signals/fused").is_none(),
             "no cluster-level fused field may survive on the wire ([FUSED-SCOPE]) — {dump}"
         );
-        assert!(
-            CONFIRMED_DUPLICATE_BUCKETS.contains(&cluster_bucket(cluster))
-                || HONEST_SHAPE_ONLY_BUCKETS.contains(&cluster_bucket(cluster)),
-            "every visible cluster must route to a real bucket — {dump}"
-        );
-        for axis in ["structural", "token_jaccard", "embedding_cos"] {
-            let value = signal(cluster, axis);
-            assert!(
-                (0.0..=1.0).contains(&value),
-                "{axis} must stay in [0, 1] — {dump}"
-            );
-        }
     }
     Ok(())
 }

@@ -1,160 +1,98 @@
-//! [CORPUS-RECALL] curated `recall` / `recall_quality` — every
-//! hand-verified byte-identical duplicate in a manifest's `must_find` list
-//! must be reported, shown, labelled `identical`, and ranked where a user
-//! finds it.
-//!
-//! The check this replaces asked only whether *some* cluster's occurrence
-//! paths covered the curated files. Each case below is a report that
-//! satisfied that and should not have.
+//! Curated exact-copy recall asserts visibility and mass rank only.
 
 use super::*;
 
-/// The pair every case below curates.
-const PAIR: [&str; 2] = ["lib/slider_parts.dart", "lib/range_slider_parts.dart"];
+/// Curated exact-copy pair.
+const PAIR: [&str; 2] = ["lib/slider.dart", "lib/range_slider.dart"];
 
-/// A manifest curating one hand-verified byte-identical clone, with an
-/// optional rank ceiling.
-fn manifest_with_clone(files: &[&str], max_rank: Option<u64>) -> Value {
-    let ranked = match max_rank {
-        Some(rank) => json!(rank),
-        None => Value::Null,
-    };
+/// Manifest containing one verified exact-copy family.
+fn manifest(files: &[&str], max_rank: Option<u64>) -> Value {
     json!({
         "must_find": [{
             "files": files,
-            "why": "137 byte-identical lines, hand-verified by an empty diff",
-            "verified": "diff of the two ranges is empty",
-            "max_rank": ranked,
+            "why": "hand-verified exact copy",
+            "max_rank": max_rank
         }]
     })
 }
 
-/// Judges the curated `PAIR` against a report of `clusters`.
+/// Runs exact-copy recall against a report.
 fn judge(clusters: &[Value], max_rank: Option<u64>) -> Vec<Failure> {
     let mut failures = Vec::new();
-    check_curated_recall(
-        &manifest_with_clone(&PAIR, max_rank),
-        &report(clusters),
-        &mut failures,
-    );
+    check_curated_recall(&manifest(&PAIR, max_rank), &report(clusters), &mut failures);
     failures
 }
 
-/// A cluster spanning the curated pair in the given bucket.
-fn curated(bucket: &str) -> Value {
-    spanning(bucket, 1.0, 1.0, &PAIR)
-}
-
-/// A cluster spanning two other files entirely.
-fn elsewhere() -> Value {
-    spanning("identical", 1.0, 1.0, &["lib/other.dart", "lib/else.dart"])
+#[test]
+fn visible_curated_family_passes() {
+    let cluster = spanning("curated", 137, 1, &PAIR);
+    assert!(judge(&[cluster], None).is_empty());
 }
 
 #[test]
-fn a_curated_clone_reported_shown_and_identical_passes() {
-    assert!(
-        judge(&[curated("identical")], None).is_empty(),
-        "a shown `identical` cluster spanning the curated pair is exactly \
-         what the entry asserts; a check that fires here asserts nothing"
-    );
-}
-
-#[test]
-fn a_missing_curated_clone_is_a_false_negative() {
+fn missing_curated_family_fails() {
+    let cluster = spanning("elsewhere", 137, 1, &["lib/a.dart", "lib/b.dart"]);
     assert_only_failure(
-        &judge(&[elsewhere()], None),
+        &judge(&[cluster], None),
         "recall",
-        "an unreported curated duplicate must fail",
-        "lib/slider_parts.dart",
-        "the detail names the missed pair",
+        "a missing exact copy is a false negative",
+        "lib/slider.dart",
+        "the failure names the missed family",
     );
 }
 
-/// Every bucket short of `identical` that the engine can render. A
-/// byte-identical pair reaching any of them is the engine contradicting a
-/// verified fact about the source.
-const DEMOTIONS: [&str; 4] = [
-    "nearly_identical",
-    "structural_only",
-    "loosely_similar",
-    "same_behavior",
-];
-
 #[test]
-fn a_curated_clone_demoted_below_identical_is_a_quality_failure() {
-    for bucket in DEMOTIONS {
-        assert_only_failure(
-            &judge(&[curated(bucket)], None),
-            "recall_quality",
-            "a byte-identical pair rendering as anything else must fail — \
-             the old span-only check passed every one of these",
-            bucket,
-            "the detail names the bucket the pair was demoted into",
-        );
-    }
-}
-
-#[test]
-fn a_curated_clone_with_a_hidden_occurrence_is_a_quality_failure() {
-    let half_shown = json!({
-        "bucket": "identical",
-        "signals": { "structural": 1.0, "token_jaccard": 1.0, "embedding_cos": 0.0, "fused": 1.0 },
-        "occurrences": [
-            { "path": PAIR[0], "hidden": false },
-            { "path": PAIR[1], "hidden": true },
-        ],
-    });
+fn hidden_curated_side_fails() {
+    let cluster = hide_occurrence(spanning("curated", 137, 1, &PAIR), PAIR[1]);
     assert_only_failure(
-        &judge(&[half_shown], None),
-        "recall_quality",
-        "recall is what the report shows: a pair with one side suppressed \
-         is a pair the user never sees, however the JSON is shaped",
-        "lib/slider_parts.dart",
-        "the detail names the pair whose side was hidden",
+        &judge(&[cluster], None),
+        "recall",
+        "recall requires both visible sides",
+        "lib/slider.dart",
+        "the failure names the hidden family",
     );
 }
 
 #[test]
-fn a_curated_clone_ranked_below_its_ceiling_is_a_quality_failure() {
-    let mut clusters: Vec<Value> = (0..5).map(|_| elsewhere()).collect();
-    clusters.push(curated("identical"));
-    assert!(
-        judge(&clusters, Some(5)).is_empty(),
-        "rank 5 against a ceiling of 5 is inside it — the bound is inclusive"
-    );
+fn rank_at_inclusive_ceiling_passes() {
+    let first = spanning("other", 200, 1, &["lib/a.dart", "lib/b.dart"]);
+    let curated = spanning("curated", 137, 2, &PAIR);
+    assert!(judge(&[first, curated], Some(2)).is_empty());
+}
+
+#[test]
+fn rank_below_ceiling_fails() {
+    let first = spanning("other", 200, 1, &["lib/a.dart", "lib/b.dart"]);
+    let curated = spanning("curated", 137, 2, &PAIR);
     assert_only_failure(
-        &judge(&clusters, Some(4)),
+        &judge(&[first, curated], Some(1)),
         "recall_quality",
-        "a 137-line verified clone ranking below the scaffolding is a \
-         ranking defect the gate must name, not a number it prints",
-        "ranks 5",
-        "the detail names the rank it reached and the ceiling it broke",
-    );
-    assert!(
-        judge(&clusters, None).is_empty(),
-        "an entry with no curated ceiling asserts nothing about rank; only \
-         the entries a human ranked get a rank assertion"
+        "curated rank ceilings are enforceable",
+        "ranks 2",
+        "the failure names the rank",
     );
 }
 
 #[test]
-fn an_entry_naming_fewer_than_two_files_fails_rather_than_passing() {
+fn absent_rank_ceiling_asserts_no_rank() {
+    let first = spanning("other", 200, 1, &["lib/a.dart", "lib/b.dart"]);
+    let curated = spanning("curated", 137, 2, &PAIR);
+    assert!(judge(&[first, curated], None).is_empty());
+}
+
+#[test]
+fn one_file_manifest_entry_fails() {
     let mut failures = Vec::new();
     check_curated_recall(
-        &manifest_with_clone(&[PAIR[0]], None),
-        &report(&[curated("identical")]),
+        &manifest(&[PAIR[0]], None),
+        &report(&[spanning("curated", 137, 1, &PAIR)]),
         &mut failures,
     );
-    assert_eq!(
-        failures.len(),
-        1,
-        "a one-file entry describes no duplication. It must fail as \
-         uncurated, not pass by spanning trivially: {failures:?}"
-    );
-    assert_eq!(
-        failures.first().map(|failure| failure.check.as_str()),
-        Some("recall"),
-        "and it fails as a recall miss, so [CORPUS-BASELINE] cannot record \
-         it as a satisfied check"
+    assert_only_failure(
+        &failures,
+        "recall",
+        "one file does not describe duplication",
+        "[]",
+        "the malformed entry cannot pass vacuously",
     );
 }

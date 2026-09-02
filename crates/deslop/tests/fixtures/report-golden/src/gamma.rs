@@ -1,10 +1,7 @@
 //! Gamma billing module. Carries occurrence 3 of 3 of the
 //! `settle_invoice` clone (the larger cluster in the golden report).
 
-pub enum GammaState {
-    Idle,
-    Busy,
-}
+pub struct RegionMarker;
 
 pub fn settle_invoice(amounts: &[i64], tax_rate: i64) -> i64 {
     let mut total = 0;

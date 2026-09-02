@@ -53,9 +53,9 @@ On the rejected-refresh path the server emits no terminal `deslop/embeddingProgr
 > requires. Position is not order here — `Order and gates` below is, and it
 > says this fix is independent and may land first.
 
-Every noise filter's escape hatch compares **raw source bytes**, so only a *verbatim* copy survives and every renamed copy is hidden. The module header at `cluster_filters/mod.rs:88` claims "a verbatim/renamed copy survives" — the code has never done the renamed half.
+Every noise filter's generic raw-byte-divergence shortcut risks convicting a genuine consistently renamed clone. The module header at `cluster_filters/mod.rs:88` claims "a verbatim/renamed copy survives," but post-closure filters cannot inspect pair content evidence and a cluster owns no `ContentEvidence`.
 
-**Delete** `enclosing_function_bodies_differ` (`cluster_filters/mod.rs:471`) and all seven `raw_snippet_texts_differ` call sites: `mod.rs:221`, `dart.rs:101`, `dart_data_table.rs:37`, `ecmascript.rs:27`, `python_constants.rs:33`, `rust.rs:422`, `rust.rs:517`. **Replace** with one predicate over the `ContentEvidence` the pipeline already measures (`content.rs` — `agreement`, `rename_consistency`, `literal_fraction`): a cluster whose identifier mapping is bijective and whose literals align is a *proven copy* and is never filtered as noise. `cluster_is_hidden` already holds `cluster.content`; thread it into `is_noise_pattern` rather than re-deriving anything. One predicate, seven call sites, no per-language variants.
+**Delete** `enclosing_function_bodies_differ` (`cluster_filters/mod.rs:471`) and the generic `raw_snippet_texts_differ` conviction shortcut at its seven call sites: `mod.rs:221`, `dart.rs:101`, `dart_data_table.rs:37`, `ecmascript.rs:27`, `python_constants.rs:33`, `rust.rs:422`, `rust.rs:517`. Replace each with the filter family's positive, CST-based idiom predicate and the exhaustive [CLONE-NOISE-VERBATIM-SUBGROUP] result: an unconvicted component passes untouched; a convicted component yields only qualifying byte-identical families. Do not thread pair evidence into `is_noise_pattern`, do not synthesize cluster content, and do not add a fallback conviction.
 
 ## Order and gates
 
@@ -64,11 +64,11 @@ Every noise filter's escape hatch compares **raw source bytes**, so only a *verb
 ## Checklist
 
 - [ ] **0.** Promote the four scratchpad repros to committed fixtures (`ts-rename-paren` for #367, `py-renamed-helper` for #373); delete `docs/plans/embedding-accuracy-plan.md`
-- [ ] **1a.** Red E2E, no embeddings: rename + one paren pair, `--min-nodes 100` → 1 visible cluster, 2 occurrences spanning the whole function (`start_byte <= 9`, `end_byte >= 1200`), act-now bucket, `clusters_hidden == 0`
+- [ ] **1a.** Red E2E, no embeddings: rename + one paren pair, `--min-nodes 100` → the exact endpoint pair is admitted with the expected evidence; one visible cluster contains exactly both full-function occurrences (`start_byte <= 9`, `end_byte >= 1200`), has exact mass, and `clusters_hidden == 0`
 - [ ] **1b.** Delete the distinct-gram feed; replace with the ordinal-tagged multiset signature
 - [ ] **1c.** Corpus sweep both directions — recall up, zero new false positives, no threshold touched
-- [ ] **2a.** Red E2E: same-named helper, consistent rename, two files → 1 visible cluster, `clusters_hidden == 0`, `Nearly identical`; byte-identical control still `Identical`
-- [ ] **2b.** Delete `enclosing_function_bodies_differ` + all 7 `raw_snippet_texts_differ` call sites; replace with the single `ContentEvidence` copy-proof predicate
+- [ ] **2a.** Red E2E: same-named helper, consistent rename, two files → the exact pair is admitted and explicitly classified `NearlyIdentical`; one neutral cluster contains both occurrences with exact mass and `clusters_hidden == 0`; the byte-identical control pair is explicitly classified `Identical`
+- [ ] **2b.** Delete `enclosing_function_bodies_differ` and all seven generic raw-divergence conviction shortcuts; replace them with family-specific positive CST predicates and the exhaustive verbatim-subgroup result, never cluster content evidence
 - [ ] **2c.** Correct the `cluster_filters/mod.rs` header claims to match the code
 - [ ] **3.** Delete `embed_vector`; replace with the 128-lane shingle signature; recalibrate the ~88 `embedding_cos` assertions
 - [ ] **4.** Delete the `embedding_cos <= 0` conjunct in `survival_decision`; node floor always, Jaccard waiver only at `cos >= fused_min_score`

@@ -35,7 +35,9 @@ use crate::mock_ollama::MockOllama;
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::common::{embeddings::run_mock_embedding_report, signals::*, *};
+use crate::common::{
+    embeddings::run_mock_embedding_report, signals::*, verdict::duplicated_loc_for_path, *,
+};
 
 /// Largest byte span an occurrence may have relative to the smallest in
 /// the same cluster. A duplicate family is a set of copies; a member four
@@ -142,17 +144,15 @@ fn an_embedding_only_pair_does_not_join_occurrences_of_different_size() -> Resul
         "one occurrence per ledger — {dump}",
         dump = span_dump(family)?
     );
-    assert!(
-        ACT_NOW_BUCKETS.contains(&cluster_bucket(family)),
-        "the surviving family is a genuine near-duplicate — {dump}",
-        dump = signal_dump(family)
-    );
+    assert_structural_only_contract(family, "pair-size coherence near-duplicate");
+    assert_no_pair_surface_on_cluster(family, "pair-size coherence near-duplicate");
     Ok(())
 }
 
-// [PAIR-SIZE-COHERENCE] The size guard must not erase real duplication:
-// the whole five-ledger corpus still reports its rename family, and every
-// surviving cluster is internally coherent.
+// [PAIR-SIZE-COHERENCE] The size guard must not erase the
+// raw-content-supported family, and every surviving cluster is internally
+// coherent. The fifth ledger is a shape-only rewrite, rejected by
+// [FUSED-CONTENT-GATE] before closure.
 #[test]
 fn size_coherence_keeps_every_genuine_ledger_family_visible() -> Result<()> {
     let server = MockOllama::spawn()?;
@@ -170,13 +170,22 @@ fn size_coherence_keeps_every_genuine_ledger_family_visible() -> Result<()> {
         cluster_count(&report) > 0,
         "the rename family must stay visible: {report:#}"
     );
-    let family = expect_cluster_spanning(&report, &["ledger_a.ts", "ledger_b.ts"])?;
-    assert!(
-        ACT_NOW_BUCKETS.contains(&cluster_bucket(family))
-            || HONEST_SHAPE_ONLY_BUCKETS.contains(&cluster_bucket(family)),
-        "the a/b rename family must route to a real bucket — {dump}",
-        dump = signal_dump(family)
+    let family = expect_cluster_spanning(
+        &report,
+        &["ledger_a.ts", "ledger_c.ts", "ledger_d.ts", "ledger_e.ts"],
+    )?;
+    assert_eq!(
+        occurrence_files(family),
+        ["ledger_a.ts", "ledger_c.ts", "ledger_d.ts", "ledger_e.ts"],
+        "the supported wider family must be reported exactly: {report:#}"
     );
+    assert_eq!(
+        duplicated_loc_for_path(&report, "ledger_b.ts")?,
+        0,
+        "the shape-only rewrite must fail pair admission before closure: {report:#}"
+    );
+    assert_structural_only_contract(family, "pair-size coherence supported family");
+    assert_no_pair_surface_on_cluster(family, "pair-size coherence supported family");
     for cluster in clusters(&report) {
         assert_cluster_is_size_coherent(cluster)?;
     }

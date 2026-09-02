@@ -114,12 +114,19 @@ export const CORE_TYPE_CONFIG = {
       clusters_added: "usize",
       clusters_removed: "usize",
       clusters_updated: "usize",
+      literal_findings_added: "usize",
+      literal_findings_removed: "usize",
+      literal_findings_updated: "usize",
+      worst_mass: "u64",
     },
     fieldDocs: {
       clusters_added: "Number of clusters newly present in the latest generation.",
       clusters_removed: "Number of clusters removed in the latest generation.",
       clusters_updated: "Number of clusters whose payload changed.",
-      worst_weight: "Worst (highest) weight in the latest generation, `0.0` when empty.",
+      literal_findings_added: "Number of literal findings newly present in the latest generation.",
+      literal_findings_removed: "Number of literal findings removed in the latest generation.",
+      literal_findings_updated: "Number of literal findings whose payload changed.",
+      worst_mass: "Highest cluster mass in the latest generation, zero when empty.",
     },
   },
   ReportChangedNotification: {
@@ -172,14 +179,6 @@ export const CORE_TYPE_CONFIG = {
     fieldDocs: {
       started_at_ms: "Millisecond timestamp the pass started.",
       message: "Human-readable diagnostic.",
-    },
-  },
-  ActionHint: {
-    docs: "Short agent-oriented playbook entry surfaced at the top of every report.",
-    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
-    fieldDocs: {
-      pattern: "Matches one of the taxonomy rows (`type-1-2`, `type-3`, ...).",
-      recommendation: "One-line recommendation written for an agent reader.",
     },
   },
   ThresholdSource: {
@@ -297,6 +296,9 @@ export const CORE_TYPE_CONFIG = {
       clusters_added: "Clusters present in `to` but not in `from`, worst-first.",
       clusters_removed: "Cluster ids present in `from` but not in `to`.",
       clusters_updated: "Clusters present in both whose payload changed.",
+      literal_findings_added: "Literal findings present in `to` but not in `from`, mass-first.",
+      literal_findings_removed: "Literal-finding ids present in `from` but not in `to`.",
+      literal_findings_updated: "Literal findings present in both whose payload changed.",
       metrics: "Repo-wide duplication totals recomputed for the later generation, so live consumers refresh the headline instead of freezing at the seed (#199).",
       cache_stats: "Cache telemetry for the generation-producing run.",
       tool_version: "Producer version stamped on the later snapshot.",

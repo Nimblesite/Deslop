@@ -18,6 +18,7 @@ use anyhow::Context as _;
 use assert_cmd::{assert::Assert, Command};
 use serde_json::Value;
 
+use crate::common::signals::has_verbatim_pair;
 use crate::common::{clusters, field, load_json, occurrences, Result};
 
 /// A ten-line function duplicated byte-for-byte across the legacy
@@ -303,7 +304,13 @@ fn metadata_only_copy_counts_every_line_and_breaches_the_gate() -> Result<()> {
     );
     assert_eq!(field(&report, "clusters_outside_diff"), 0);
     let cluster = clusters(&report).first().context("the copy cluster")?;
-    assert_eq!(field(cluster, "bucket"), "identical");
+    // The bucket label is gone from the mass-only wire; the copied pair's
+    // identity is proven by its byte truth ([PIPELINE-CLUSTER-CLOSURE]).
+    let scan_root = scenario.root.path().join("repo");
+    assert!(
+        has_verbatim_pair(&scan_root, cluster)?,
+        "the metadata-only copy is byte-identical: {cluster:#}"
+    );
     assert_eq!(field(cluster, "intersects_diff"), true);
     assert_eq!(
         field(cluster, "is_newly_introduced"),

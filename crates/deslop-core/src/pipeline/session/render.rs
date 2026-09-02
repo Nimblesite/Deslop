@@ -14,11 +14,13 @@ use std::{collections::HashMap, path::PathBuf, time::Instant};
 
 use crate::{
     cluster::{build_ranked_fused_clusters, ClusterBuildInputs},
-    cluster_filters::{split_noise_verbatim_families, split_structural_families, ParseCache},
+    cluster_filters::{split_noise_verbatim_families, ParseCache},
     error::CoreError,
     lsh::BandCollisionSource,
     overlap::apply_shared_subtree_rescue,
-    pair::{candidate_pairs_for_language_policy, cluster_by_transitive_closure},
+    pair::{
+        apply_pair_content_gate, candidate_pairs_for_language_policy, cluster_by_transitive_closure,
+    },
     report::{render_report, CacheStats, Report, ReportInputs},
     state::FileId,
 };
@@ -69,7 +71,6 @@ impl PipelineSession {
         // rescue below.
         let PairingOutcome {
             trees,
-            cross_language_signatures,
             pairs,
             embedding_outcome,
         } = self.build_candidate_pairs(config, fingerprints, &signatures, &lsh_source)?;
@@ -86,24 +87,9 @@ impl PipelineSession {
             Some(already) => already,
             None => self.materialize_trees()?,
         };
-        let fused_clusters =
+        let (fused_clusters, shape_families) =
             self.partition_and_split(fingerprints, pairs, &trees, &parse_cache, &mut ledger);
-        // [FUSED-CLUSTER-SIGNALS] One signature space per run: the
-        // cross-language space compares any pair when the audit mode is
-        // on; the per-language space is exact otherwise. Mixing spaces
-        // inside one cluster measurement would compare incomparable values.
-        let built_alias_space = cross_language_signatures
-            .as_deref()
-            .map(|space| crate::lsh::SignatureIndex::from_segments([space]));
-        let measurement_signatures = built_alias_space.as_ref().unwrap_or(&signatures);
-        let clusters = self.ranked_clusters(
-            fingerprints,
-            measurement_signatures,
-            &embedding_outcome.vectors,
-            &fused_clusters,
-            &trees,
-            &mut ledger,
-        );
+        let clusters = self.ranked_clusters(fingerprints, &fused_clusters, &trees, &mut ledger);
         tracing::info!(
             ranked_clusters = clusters.len(),
             fingerprints = fingerprints.len(),
@@ -111,8 +97,8 @@ impl PipelineSession {
         );
         ledger.log_summary();
         Ok(render_report(ReportInputs {
-            parse_cache: &parse_cache,
             clusters: &clusters,
+            shape_families: &shape_families,
             registry: &self.registry,
             file_languages: &self.file_languages,
             files_analysed: self.files_analysed,
@@ -125,13 +111,14 @@ impl PipelineSession {
             analysed_lines: &self.analysed_lines,
             boilerplate_ranges: &self.boilerplate_ranges,
             diff: self.diff_scope.as_ref(),
+            parse_cache: &parse_cache,
         }))
     }
 
-    /// Runs rescue, transitive closure, the structural-family election
-    /// and the verbatim-subgroup split, and selects the signature space
-    /// the measurement pass reads — the middle of the render pipeline,
-    /// extracted so [`PipelineSession::render`] stays under the size bar.
+    /// Runs the shared-subtree rescue, the per-edge content gate, the
+    /// transitive closure and the verbatim-subgroup split — the middle of
+    /// the render pipeline, extracted so [`PipelineSession::render`]
+    /// stays under the size bar.
     fn partition_and_split(
         &self,
         fingerprints: &[crate::fingerprint::Fingerprint],
@@ -139,7 +126,10 @@ impl PipelineSession {
         trees: &[crate::ast::NormalizedNode],
         parse_cache: &ParseCache,
         ledger: &mut StageLedger,
-    ) -> Vec<crate::pair::FusedCluster> {
+    ) -> (
+        Vec<crate::pair::FusedCluster>,
+        Vec<Vec<crate::fingerprint::Fingerprint>>,
+    ) {
         // [FUSED-SHARED-SUBTREE] (gh #408): measure the structural
         // overlap the anchor axis discards before survival drops the
         // enclosing Type-3 pair and leaves only its fragment views. The
@@ -161,6 +151,27 @@ impl PipelineSession {
             pairs.len(),
             stage_started,
         );
+        // [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY] The shape family: every
+        // member the saturated candidates connect *before* the content
+        // gate decides which edges weld. Noise conviction reads this
+        // family; admission below still decides the clusters.
+        let shape_families = cluster_by_transitive_closure(&pairs);
+        let content_input = pairs.len();
+        let stage_started = Instant::now();
+        apply_pair_content_gate(
+            &mut pairs,
+            fingerprints,
+            trees,
+            &self.sources,
+            &self.file_languages,
+            parse_cache,
+        );
+        ledger.record(
+            "pair_content_gate",
+            content_input,
+            pairs.len(),
+            stage_started,
+        );
         let rescue_output = pairs.len();
         let stage_started = Instant::now();
         let fused_clusters = cluster_by_transitive_closure(&pairs);
@@ -175,22 +186,6 @@ impl PipelineSession {
         // candidate pairs on a corpus-scale run, freed before the
         // memory-hungry measurement stages ([PERF-FLUTTER-TODO-MEMORY]).
         drop(pairs);
-        // [PIPELINE-CLUSTER-ELECT] Transitive closure treats a token
-        // band collision like a shared subtree, so one such edge welds
-        // two structural families into a component that agrees with
-        // itself nowhere, buckets down, and is hidden — losing both
-        // families to the presence of each other. Elect the families
-        // back out before anything is measured.
-        let stage_started = Instant::now();
-        let split_input = fused_clusters.len();
-        let fused_clusters =
-            split_structural_families(fused_clusters, fingerprints, &self.file_languages);
-        ledger.record(
-            "structural_family_split",
-            split_input,
-            fused_clusters.len(),
-            stage_started,
-        );
         // [CLONE-NOISE-VERBATIM-SUBGROUP] Partition a noise family off
         // the byte-identical copy it swept up *before* signals are
         // measured, so the surviving cluster is measured, bucketed and
@@ -211,7 +206,7 @@ impl PipelineSession {
             fused_clusters.len(),
             stage_started,
         );
-        fused_clusters
+        attach_shape_families(fused_clusters, &shape_families, fingerprints)
     }
 
     /// The LSH/pair construction half of the render: materialises trees
@@ -258,7 +253,6 @@ impl PipelineSession {
         );
         Ok(PairingOutcome {
             trees,
-            cross_language_signatures,
             pairs,
             embedding_outcome,
         })
@@ -350,8 +344,6 @@ impl PipelineSession {
     fn ranked_clusters(
         &self,
         fingerprints: &[crate::fingerprint::Fingerprint],
-        signatures: &crate::lsh::SignatureIndex<'_>,
-        embedding_vectors: &std::collections::HashMap<usize, Vec<f32>>,
         fused_clusters: &[crate::pair::FusedCluster],
         trees: &[crate::ast::NormalizedNode],
         ledger: &mut StageLedger,
@@ -373,11 +365,8 @@ impl PipelineSession {
         let ranked_input = fused_clusters.len();
         let clusters = build_ranked_fused_clusters(&ClusterBuildInputs {
             fingerprints,
-            signatures,
-            embedding_vectors,
             fused_clusters,
             trees,
-            sources: &self.sources,
             file_languages: &self.file_languages,
             file_paths: &file_paths,
         });
@@ -393,8 +382,6 @@ struct PairingOutcome {
     /// needed them before pairing; otherwise `None` and the caller
     /// materialises them after pair construction.
     trees: Option<Vec<crate::ast::NormalizedNode>>,
-    /// Cross-language alias signatures, audit mode only.
-    cross_language_signatures: Option<Vec<crate::lsh::Signature>>,
     /// The admission-gated candidate pairs.
     pairs: Vec<crate::pair::CandidatePair>,
     /// The embedding pass outcome (empty when embeddings are off).
@@ -465,4 +452,44 @@ impl StageLedger {
             );
         }
     }
+}
+
+/// [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY] Stamps each admitted component
+/// with the shape family it was admitted out of and materialises the
+/// families' members for the report's family-level noise verdict.
+///
+/// Every admitted pair is a pre-gate pair, so a component's first member
+/// names its family; a component that resolves to none stays `None` and
+/// is judged on its own, exactly as before.
+fn attach_shape_families(
+    mut admitted: Vec<crate::pair::FusedCluster>,
+    shape_families: &[crate::pair::FusedCluster],
+    fingerprints: &[crate::fingerprint::Fingerprint],
+) -> (
+    Vec<crate::pair::FusedCluster>,
+    Vec<Vec<crate::fingerprint::Fingerprint>>,
+) {
+    let family_of: std::collections::HashMap<usize, usize> = shape_families
+        .iter()
+        .enumerate()
+        .flat_map(|(family, shape)| shape.members.iter().map(move |member| (*member, family)))
+        .collect();
+    for component in &mut admitted {
+        component.shape_family = component
+            .members
+            .first()
+            .and_then(|member| family_of.get(member))
+            .copied();
+    }
+    let members = shape_families
+        .iter()
+        .map(|shape| {
+            shape
+                .members
+                .iter()
+                .filter_map(|member| fingerprints.get(*member).cloned())
+                .collect()
+        })
+        .collect();
+    (admitted, members)
 }

@@ -69,7 +69,7 @@ suite("ReportStore dirty-file projection", () => {
       ["/repo/CleanA.cs", "/repo/CleanB.cs"],
       "visible cluster keeps clean peer occurrences outside the edited file",
     );
-    assert.equal(visible.clusters[0]?.size, 2, "visible count is reduced after pruning stale offsets");
+    assert.equal(visible.clusters[0]?.canonical_node_count, 2, "visible count is reduced after pruning stale offsets");
     assert.equal(visible.clusters[0]?.occurrences_total, 2, "wire total is reduced with visible count");
     assert.ok(
       visible.clusters.every((c) => c.occurrences.length >= 2),
@@ -105,7 +105,7 @@ suite("ReportStore dirty-file projection", () => {
   // Regression: #130 (VSIX-STATE-DIRTY). Editor-side dirty tracking must not
   // [PRINCIPLES-LIVE-IS-REACTIVE] Dirty-file projection must not
   // mutate the canonical report. Commands that resolve a cluster by id
-  // (compareWithCanonical, openCluster, openOccurrence, ...) read
+  // (comparePair, openCluster, openOccurrence, ...) read
   // store.current.report and break the moment a 2-occurrence cluster loses one
   // peer to an unsaved edit. The canonical report is owned by the LSP — only
   // deslop/reportChanged retracts a cluster.
@@ -123,7 +123,7 @@ suite("ReportStore dirty-file projection", () => {
     const found = canonical.clusters.find((x) => x.id === "only-cluster");
     assert.ok(
       found,
-      "cluster id must stay resolvable in canonical report after markFileDirty so compareWithCanonical / openCluster / openOccurrence keep working",
+      "cluster id must stay resolvable in canonical report after markFileDirty so comparePair / openCluster / openOccurrence keep working",
     );
     assert.equal(
       found.occurrences.length,

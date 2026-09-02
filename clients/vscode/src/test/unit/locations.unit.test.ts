@@ -12,7 +12,6 @@ import {
 } from "../../locations";
 import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
-import { bucketSignals } from "../signals.helpers";
 import { occurrence, wireCluster } from "../cluster.helpers";
 
 suite("occurrence display locations", () => {
@@ -20,12 +19,9 @@ suite("occurrence display locations", () => {
     const fixture = writeFixture();
     try {
       const startByte = fixture.source.indexOf("void Send");
-      const location = occurrenceDisplayLocation({
-        path: fixture.file,
-        start_byte: startByte,
-        end_byte: startByte + "void Send".length,
-        hidden: false,
-      });
+      const location = occurrenceDisplayLocation(
+        occurrence(fixture.file, startByte, startByte + "void Send".length),
+      );
       assert.deepEqual(location, {
         line: 4,
         column: 5,
@@ -61,12 +57,9 @@ suite("occurrence display locations", () => {
     const fixture = writeFixture();
     try {
       // Byte 7 lands at 'D' of 'Demo' on line 1 ('namespace Demo;').
-      const location = occurrenceDisplayLocation({
-        path: fixture.file,
-        start_byte: 7,
-        end_byte: 11,
-        hidden: false,
-      });
+      const location = occurrenceDisplayLocation(
+        occurrence(fixture.file, 7, 11),
+      );
       assert.equal(location?.line, 1, "first line must be line 1");
       assert.equal(location?.column, 8, "column is one-indexed past the prefix");
     } finally {
@@ -77,12 +70,10 @@ suite("occurrence display locations", () => {
   test("missing source file produces no display location", () => {
     // Covers the `readFileSync` catch → return undefined branch and
     // therefore the early-return in occurrenceDisplayLocation.
-    const location = occurrenceDisplayLocation({
-      path: "/definitely/not/a/real/path/XYZ.cs",
+    const location = occurrenceDisplayLocation({path: "/definitely/not/a/real/path/XYZ.cs",
       start_byte: 0,
       end_byte: 1,
-      hidden: false,
-    });
+      hidden: false, start_line: 1, end_line: 2});
     assert.equal(location, undefined);
   });
 
@@ -98,8 +89,8 @@ suite("occurrence display locations", () => {
     const shared = cluster(file, startByte);
     // Two occurrences in the SAME file — the old shape read it twice.
     shared.occurrences = [
-      { path: file, start_byte: startByte, end_byte: startByte + 4, hidden: false },
-      { path: file, start_byte: startByte + 5, end_byte: startByte + 9, hidden: false },
+      occurrence(file, startByte, startByte + 4),
+      occurrence(file, startByte + 5, startByte + 9),
     ];
 
     const enriched = reportWithDisplayLocations(report([shared]), reader);
@@ -124,11 +115,8 @@ function writeFixture(): { dir: string; file: string; source: string } {
 function cluster(file: string, startByte: number): ReportCluster {
   return wireCluster({
     id: "issue-8",
-    weight: 1,
-    size: 1,
+    mass: 1,
     canonical_node_count: 1,
-    bucket: "identical",
-    signals: bucketSignals("identical"),
     occurrences: [occurrence(file, startByte, startByte + 9)],
   });
 }

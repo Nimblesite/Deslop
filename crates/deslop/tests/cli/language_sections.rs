@@ -128,16 +128,19 @@ fn html_report_splits_into_language_sections_via_flag() -> Result<()> {
 // the CLI flag.
 #[test]
 fn html_report_splits_into_language_sections_via_config() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    write_polyglot_clones(&scan_root)?;
-    fs::write(
-        scan_root.join(".deslop.toml"),
-        "[report]\nsplit_by_language = true\n",
+    let (tmp, scan_root, out) = seeded_scan("src", |root| {
+        write_polyglot_clones(root)?;
+        fs::write(
+            root.join(".deslop.toml"),
+            "[report]\nsplit_by_language = true\n",
+        )?;
+        Ok(())
+    })?;
+    run_scan(
+        &scan_root,
+        &tmp.path().join("report"),
+        &[MIN_NODES_FLAG, MIN_NODES_VALUE],
     )?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let html = fs::read_to_string(&out.html)?;
     assert!(
         html.contains("<h2>Rust — ") && html.contains("<h2>Dart — "),

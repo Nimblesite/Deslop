@@ -29,7 +29,7 @@
 //! a shape and differ in an operator may well be worth a reader's
 //! attention. The contract is that the report must not claim the
 //! content is duplicated: the pair must stay out of the explicit
-//! duplicate buckets, and its elected-pair evidence must remain honest.
+//! duplicate admission, and explicit pair evidence must remain honest.
 //!
 //! # Why this fixture cannot pass by going blind
 //!
@@ -107,31 +107,26 @@ struct Family {
 const CONTROL: [&str; 2] = ["control_alpha.py", "control_beta.py"];
 
 /// Every file the fixture holds: four operator pairs plus the control.
-///
 /// Asserted per run so "the family published nothing" can only ever mean
 /// the pair was analysed and excluded. The control proves the *run* was
 /// still detecting; this proves these particular files reached the
 /// pipeline at all, which a control in other files cannot say.
 const FIXTURE_FILE_COUNT: u64 = 10;
 
-/// Exact agreement expected from byte-identical control and subregion pairs.
-const SATURATED_EVIDENCE: f64 = 1.0;
-
 /// Renders the fixture.
 fn render() -> Result<Value> {
     run_report(&fixture("operator-drift"), MIN_NODES)
 }
 
-/// Every visible cluster as `id [bucket] agreement files`.
+/// Every visible cluster as `id mass files`.
 fn published(report: &Value) -> Vec<String> {
     clusters(report)
         .iter()
         .map(|cluster| {
             format!(
-                "{id} [{bucket}] agreement={agreement:.4} {files:?}",
+                "{id} mass={mass} {files:?}",
                 id = cluster_id(cluster),
-                bucket = cluster_bucket(cluster),
-                agreement = signal(cluster, "pair_agreement"),
+                mass = field(cluster, "mass").as_u64().unwrap_or(0),
                 files = occurrence_files(cluster),
             )
         })
@@ -186,20 +181,14 @@ fn an_operator_only_difference_never_claims_duplication() -> Result<()> {
         published = published(&report),
     );
     let control = expect_cluster_spanning(&report, &CONTROL)?;
-    assert_eq!(
-        cluster_bucket(control),
-        "identical",
+    assert!(
+        has_verbatim_pair(&fixture("operator-drift"), control)?,
         "the byte-identical control must still be published as duplication in \
          this very run — without it, every assertion below is satisfied just \
          as well by a detector that produced no candidates: {published:#?}",
         published = published(&report),
     );
-    assert!(
-        approx(signal(control, "pair_agreement"), SATURATED_EVIDENCE),
-        "the control's pair agreement must stay saturated in this run — a \
-         separation that lowered every score has distinguished nothing: {dump}",
-        dump = signal_dump(control),
-    );
+    assert_structural_only_contract(control, "operator-drift control");
     for family in FAMILIES {
         let offenders: Vec<&Value> = clusters(&report)
             .iter()
@@ -227,20 +216,14 @@ fn the_byte_identical_control_survives_in_the_same_run() -> Result<()> {
     let report = render()?;
     let control = expect_cluster_spanning(&report, &CONTROL)?;
     let dump = signal_dump(control);
-    assert_eq!(
-        cluster_bucket(control),
-        "identical",
+    assert!(
+        has_verbatim_pair(&fixture("operator-drift"), control)?,
         "the control is copied byte for byte — {dump}"
     );
     assert_eq!(
         cluster_size(control),
         2,
         "both copies of the control must be shown — {dump}"
-    );
-    assert!(
-        approx(signal(control, "pair_agreement"), SATURATED_EVIDENCE),
-        "byte-proven duplication saturates agreement; a fix that lowered \
-         every score has distinguished nothing — {dump}"
     );
     Ok(())
 }
@@ -275,7 +258,6 @@ fn every_cluster_ahead_of_the_control_is_proven_duplication() -> Result<()> {
 
 /// The `--debug-ast` dump for one fixture file, as the exact sequence of
 /// normalised node kinds it names.
-///
 /// The dump prints one node per line as `<indent><kind> [start..end]`, so
 /// the kind is everything between the indent and the span. Reading it
 /// this way is what makes the assertions below exact: a `contains` test

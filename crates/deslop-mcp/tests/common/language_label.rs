@@ -1,12 +1,12 @@
-//! The per-cluster `language` label contract over the `report-query`
+//! The per-cluster `language` label contract over the `duplicates`
 //! wire, shared by every language that regressed it.
 //!
 //! The MCP page summary once derived each cluster's language from a
 //! hand-maintained extension → id map inside `deslop-mcp` — a drifted
 //! copy of the renderer's mapping. Whatever it omitted surfaced as
-//! `language: "unknown"`, breaking both the label and the
-//! `report-query` language filter: `.dart` (#164) and later `.fs`
-//! (#270), on a language the analyzer was actually running.
+//! `language: "unknown"`, breaking both the label and the `duplicates`
+//! language filter: `.dart` (#164) and later `.fs` (#270), on a language
+//! the analyzer was actually running.
 //!
 //! The recurrence is the point. The assertion is identical for every
 //! language — only the fixture, the extension and the expected id
@@ -37,8 +37,8 @@ pub fn assert_language_label_over_mcp(
     let mut mcp = initialized_mcp(workspace.path())?;
     let page = call_tool(
         &mut mcp,
-        "report-query",
-        &json!({ "offset": 0, "limit": 50 }),
+        "duplicates",
+        &json!({ "offset": 0, "limit": 50, "detail": "summary" }),
     )?;
     let languages = cluster_languages_for_extension(&page, extension);
 

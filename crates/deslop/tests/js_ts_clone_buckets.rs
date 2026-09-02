@@ -65,7 +65,7 @@ fn javascript_byte_identical_pair_is_identical_bucket() -> Result<()> {
         "js-type1-identical",
         10,
         &["tax_alpha.js", "tax_beta.js"],
-        "identical",
+        true,
     )
 }
 
@@ -75,7 +75,7 @@ fn typescript_byte_identical_pair_is_identical_bucket() -> Result<()> {
         "ts-type1-identical",
         12,
         &["tax_alpha.ts", "tax_beta.ts"],
-        "identical",
+        true,
     )
 }
 
@@ -107,12 +107,7 @@ fn javascript_renamed_map_reduce_arrow_is_nearly_identical() -> Result<()> {
     // the pair to the act-now `nearly_identical` bucket, and the
     // shape-identical Merkle match corrects the placeholder-dominated token
     // fallback to its true value of 1.0 (#232).
-    assert_bucketed_clone(
-        "js-type2-pipeline",
-        8,
-        &["invoices.js", "orders.js"],
-        "nearly_identical",
-    )
+    assert_bucketed_clone("js-type2-pipeline", 8, &["invoices.js", "orders.js"], false)
 }
 
 #[test]
@@ -139,24 +134,17 @@ fn javascript_near_miss_extra_guard_is_a_proven_rename() -> Result<()> {
 #[test]
 fn javascript_near_miss_extra_statement_keeps_shared_subtree_and_excludes_unrelated() -> Result<()>
 {
-    let report = run_report(&fixture("js-type3-stmt"), 10)?;
+    let root = fixture("js-type3-stmt");
+    let report = run_report(&root, 10)?;
     // The two URL-decode loops share an inner subtree that still clusters
     // even though one copy writes two extra map entries.
     let clone = expect_cluster_spanning(&report, &["parseHeaders.js", "parseQuery.js"])?;
     // The reported view is the enclosing function, which contains the
-    // extra map writes — so it clears the shared-subtree floor without
-    // being Merkle-exact. Demanding 1.0 demands the fragment view
-    // ([FUSED-SHARED-SUBTREE], gh #408).
-    let structural = signal(clone, "structural");
-    assert!(
-        structural >= deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
-        "the shared inner subtree must register as real shape evidence, got {structural}"
-    );
-    assert!(
-        structural < 1.0,
-        "the reported view spans the divergence, so it cannot be Merkle-exact, \
-         got {structural}"
-    );
+    // extra map writes. The byte-level near-miss contract proves it is a
+    // real shared-subtree clone whose bytes differ ([FUSED-SHARED-SUBTREE],
+    // gh #408) — a Merkle-exact fragment selected in its place would be
+    // byte-identical and fail `assert_rename_is_not_a_copy`.
+    assert_near_miss_rename_contract(&root, clone, "js-type3-stmt")?;
     // The unrelated random-token generator in the same directory must never
     // be pulled into a clone cluster.
     assert_never_clustered(
@@ -179,7 +167,7 @@ fn typescript_near_miss_reordered_statements_cluster_nearly_identical() -> Resul
         "ts-type3-reorder",
         10,
         &["normalizeContact.ts", "normalizeUser.ts"],
-        "nearly_identical",
+        false,
     )
 }
 
@@ -204,7 +192,8 @@ fn typescript_near_miss_surfaces_without_dragging_in_the_unrelated_file() -> Res
     // can still prove — and now does — is the precision half on the same
     // report: `formatDuration.ts` computes something else entirely and
     // must never be pulled in.
-    let report = run_report(&fixture("ts-type3-stmt"), 10)?;
+    let root = fixture("ts-type3-stmt");
+    let report = run_report(&root, 10)?;
     assert_eq!(
         field(&report, "files_analysed").as_u64(),
         Some(3),
@@ -212,12 +201,7 @@ fn typescript_near_miss_surfaces_without_dragging_in_the_unrelated_file() -> Res
     );
     let clone = cluster_spanning(&report, &["pointBoard.ts", "scoreBoard.ts"])
         .ok_or_else(|| anyhow::anyhow!("the near-miss pair must surface: {report:#}"))?;
-    assert_eq!(
-        cluster_bucket(clone),
-        "nearly_identical",
-        "one no-op line apart is a credible near-miss, not a demoted shape match: \
-         {clone:#}"
-    );
+    assert_near_miss_rename_contract(&root, clone, "ts-type3-stmt")?;
     assert_never_clustered(
         &report,
         "formatDuration.ts",

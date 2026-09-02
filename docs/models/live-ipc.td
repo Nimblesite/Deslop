@@ -71,7 +71,10 @@ type ChangeSummary {
   clusters_added: Int
   clusters_removed: Int
   clusters_updated: Int
-  worst_weight: Float
+  literal_findings_added: Int
+  literal_findings_removed: Int
+  literal_findings_updated: Int
+  worst_mass: Int
 }
 
 type ReportChangedNotification {
@@ -108,11 +111,6 @@ union AnalysisState {
 # writes to disk. Extracted from `crates/deslop-core/src/{report,delta,
 # report_metrics,report_boilerplate,report_hints}.rs`.
 # ---------------------------------------------------------------------------
-
-type ActionHint {
-  pattern: String
-  recommendation: String
-}
 
 union ThresholdSource {
   Cli
@@ -182,22 +180,6 @@ type EmbeddingProvenance {
   failed_subtrees: Int
 }
 
-type ReportSignals {
-  structural: Float
-  token_jaccard: Float
-  shape: Float
-  embedding_cos: Float
-  pair_agreement: Float
-  pair_rename_consistency: Float
-  literal_fraction: Float
-}
-
-# [FUSED-CLUSTER-SIGNALS]
-type ReportSignalSource {
-  left: Int
-  right: Int
-}
-
 type ReportOccurrence {
   path: String
   start_byte: Int
@@ -212,23 +194,94 @@ type ReportCluster {
   id: String
   rank: Int
   rank_band: String
-  weight: Float
-  size: Int
+  mass: Int
   canonical_node_count: Int
-  signals: ReportSignals
-  signal_source: Option<ReportSignalSource>
-  bucket: String
-  category: String
-  language: String
-  evidence_verdict: String
   occurrences: List<ReportOccurrence>
   occurrences_total: Int
   occurrence_count: Int
   occurrences_truncated: Bool
-  summary: String
-  interpretation: String
   intersects_diff: Option<Bool>
   is_newly_introduced: Option<Bool>
+}
+
+# [FUSED-PAIR-SIGNALS] Pair evidence exists only for the two exact endpoints
+# named by an explicit comparison. It is never copied to ReportCluster.
+type PairEndpoint {
+  path: String
+  start_byte: Int
+  end_byte: Int
+}
+
+type PairComparisonParams {
+  left: PairEndpoint
+  right: PairEndpoint
+}
+
+type PairEvidence {
+  structural: Float
+  token_jaccard: Float
+  embedding_cos: Float
+  agreement: Float
+  rename_consistency: Float
+  literal_fraction: Float
+  fused_score: Float
+  content_required: Bool
+  content_ok: Bool
+  admitted: Bool
+  classification: Option<PairClassification>
+  explanation: String
+}
+
+union PairClassification {
+  Identical
+  NearlyIdentical
+  StructuralOnly
+  LooselySimilar
+  SameBehavior
+}
+
+type PairComparison {
+  left: PairEndpoint
+  right: PairEndpoint
+  evidence: PairEvidence
+}
+
+# [LITERAL-WIRE] Literal findings are a separate report family. They never
+# carry clone-pair evidence and are never embedded in ReportCluster.
+union LiteralFindingKind {
+  MagicLiteral
+  ShadowedConstant
+  ConstantDuplicate
+  ConstantDrift
+  ConstantAlias
+}
+
+type CanonicalTarget {
+  path: String
+  line: Int
+  constant_name: Option<String>
+}
+
+type LiteralOccurrence {
+  path: String
+  start_byte: Int
+  end_byte: Int
+  start_line: Int
+  end_line: Int
+  hidden: Bool
+  constant_value: Option<String>
+  container: Option<String>
+  unused_confidence: Option<Int>
+}
+
+type LiteralFinding {
+  id: String
+  kind: LiteralFindingKind
+  mass: Int
+  occurrences: List<LiteralOccurrence>
+  constant_name: Option<String>
+  literal_value: Option<String>
+  canonical_target: Option<CanonicalTarget>
 }
 
 type Report {
@@ -239,11 +292,15 @@ type Report {
   cache_stats: CacheStats
   metrics: RepoMetrics
   schema_doc: String
-  action_hints: List<ActionHint>
   boilerplate_hints: List<ReportBoilerplateHint>
   embedding_provenance: Option<EmbeddingProvenance>
   clusters: List<ReportCluster>
   clusters_outside_diff: Option<Int>
+  literal_findings: List<LiteralFinding>
+  literal_findings_total: Int
+  literal_findings_hidden: Int
+  literal_findings_capped: Bool
+  literal_max_findings: Int
 }
 
 type ReportDelta {
@@ -252,6 +309,9 @@ type ReportDelta {
   clusters_added: List<ReportCluster>
   clusters_removed: List<String>
   clusters_updated: List<ReportCluster>
+  literal_findings_added: List<LiteralFinding>
+  literal_findings_removed: List<String>
+  literal_findings_updated: List<LiteralFinding>
   metrics: RepoMetrics
   cache_stats: CacheStats
   tool_version: String
@@ -376,10 +436,9 @@ type LiveErrorWire {
 }
 
 # ---------------------------------------------------------------------------
-# MCP `report-get` / `report-query` paginated page payload
-# ([MCP-TOOL-REPORT-PAGINATION], [MCP-TOOL-REPORT-QUERY]). The full
-# `ReportCluster` lives behind `cluster-by-id`; pages carry only slim
-# `ClusterSummary` rows so a single page survives a real workspace.
+# MCP `duplicates` page payload ([MCP-TOOL-DUPLICATES]). Summary and full
+# rows are untagged wire alternatives selected by `detail`; neither carries
+# pair evidence. `compare-pair` uses PairComparisonParams/PairComparison.
 # ---------------------------------------------------------------------------
 
 type OccurrenceSummary {
@@ -392,8 +451,9 @@ type OccurrenceSummary {
 
 type ClusterSummary {
   id: String
-  bucket: String
-  score: Float
+  rank: Int
+  rank_band: String
+  mass: Int
   size_nodes: Int
   occurrence_count: Int
   language: String
@@ -406,15 +466,19 @@ type ReportPageInfo {
   returned: Int
 }
 
-type ReportPageFilters {
-  language: Option<String>
-  bucket: Option<String>
+type DuplicatesFilters {
+  languages: Option<List<String>>
   path_contains: Option<String>
-  min_score: Option<Float>
+  severities: Option<List<String>>
   min_size: Option<Int>
 }
 
-type ReportPage {
+union DuplicateCluster {
+  Summary { value: ClusterSummary }
+  Full { value: ReportCluster }
+}
+
+type DuplicatesPage {
   tool_version: String
   generation: Int
   files_analysed: Int
@@ -423,11 +487,11 @@ type ReportPage {
   embedding_provenance: Option<EmbeddingProvenance>
   cache_stats: CacheStats
   metrics: RepoMetrics
-  action_hints: List<ActionHint>
   total_clusters: Int
+  total_occurrences: Int
   page: ReportPageInfo
-  clusters: List<ClusterSummary>
-  filters: Option<ReportPageFilters>
+  clusters: List<DuplicateCluster>
+  filters: DuplicatesFilters
 }
 
 # ---------------------------------------------------------------------------
@@ -440,43 +504,14 @@ type SchemaDocPayload {
 }
 
 # ---------------------------------------------------------------------------
-# MCP `top-offenders` payload ([MCP-TOOL-TOP-OFFENDERS]).
-# ---------------------------------------------------------------------------
-
-type TopOffendersPayload {
-  total_clusters: Int
-  n: Int
-  max_occurrences: Int
-  total_occurrences: Int
-  clusters: List<ReportCluster>
-}
-
-# ---------------------------------------------------------------------------
-# MCP `rescan` payload ([MCP-TOOL-RESCAN]). Mirrors top offenders and exposes
-# refresh progress so agents can tell whether edited-path clusters changed.
+# MCP `rescan` payload ([MCP-TOOLS]). The refreshed report uses the exact
+# `DuplicatesPage` shape; no parallel report-query payload survives.
 # ---------------------------------------------------------------------------
 
 type RescanPayload {
-  total_clusters: Int
-  n: Int
-  max_occurrences: Int
-  total_occurrences: Int
-  clusters: List<ReportCluster>
   generation: Int
   summary: ChangeSummary
-}
-
-# ---------------------------------------------------------------------------
-# MCP `report-for-range` payload. Echoes the request range so the agent
-# can correlate without rebuilding the call.
-# ---------------------------------------------------------------------------
-
-type RangeReport {
-  path: String
-  start_byte: Int
-  end_byte: Int
-  clusters: List<ReportCluster>
-  total_occurrences: Int
+  page: DuplicatesPage
 }
 
 # ---------------------------------------------------------------------------
@@ -500,7 +535,7 @@ type SetEmbeddingModelResponse {
 }
 
 # ---------------------------------------------------------------------------
-# MCP `session-config` tool payload. Distinct from the LSP `SessionConfig`
+# MCP `session` tool payload. Distinct from the LSP `SessionConfig`
 # above (richer, MCP-specific keys: `root` (not `workspace_root`),
 # `cache_stats`, `generation`).
 # ---------------------------------------------------------------------------

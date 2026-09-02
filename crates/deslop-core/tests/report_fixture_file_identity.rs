@@ -11,10 +11,7 @@ use crate::common;
 
 use anyhow::{bail, Result};
 use common::ReportFixture;
-use deslop_core::{
-    content::{ContentContradiction, ContentEvidence},
-    pair::PairScore,
-};
+use deslop_core::report::ReportCluster;
 
 /// Two same-shaped loaders in one file whose identifiers and literals
 /// diverge inconsistently: structural evidence saturates while the
@@ -24,40 +21,24 @@ use deslop_core::{
 const FIRST_FN: &str = "def load_alpha(cfg):\n    path = cfg.root + \"/alpha.json\"\n    data = read_json(path)\n    return data[\"alpha\"]\n";
 const SECOND_FN: &str = "def load_beta(cfg):\n    target = cfg.root + \"/beta.json\"\n    rows = read_json(target)\n    return rows[\"gamma\"]\n";
 
-fn saturated_shape() -> PairScore {
-    PairScore {
-        structural: 1.0,
-        token_jaccard: 1.0,
-        embedding_cos: 0.0,
-    }
-}
-
-/// Measured content evidence sitting between `CONTENT_SUPPORT_FLOOR`
-/// (0.7, the cross-file promotion bar) and `CONTENT_PROMOTE_FLOOR`
-/// (0.85, the single-file one), so the two routing branches disagree
-/// about the verdict — the discriminating input for gh #398.
-fn gap_content() -> ContentEvidence {
-    ContentEvidence {
-        agreement: 0.75,
-        rename_consistency: 0.0,
-        literal_fraction: 0.0,
-        substance_varies: true,
-        verbatim_dominated: false,
-        measured: true,
-        contradiction: ContentContradiction::None,
-    }
-}
-
 fn rendered_same_file_report(scan_root: &std::path::Path) -> deslop_core::Report {
     let mut fixture = ReportFixture::new(scan_root, "python");
-    let cluster = fixture.cluster_with_content(
+    let cluster = fixture.cluster(
         "same-file-pair",
         vec![("pair.py", FIRST_FN), ("pair.py", SECOND_FN)],
         24,
-        saturated_shape(),
-        gap_content(),
     );
     fixture.render(&[cluster])
+}
+
+fn only_cluster(report: &deslop_core::Report) -> Result<&ReportCluster> {
+    match report.clusters.as_slice() {
+        [cluster] => Ok(cluster),
+        clusters => bail!(
+            "exactly one fabricated cluster must render, got {}",
+            clusters.len()
+        ),
+    }
 }
 
 #[test]
@@ -68,12 +49,7 @@ fn same_file_cluster_is_one_file_with_distinct_member_spans() -> Result<()> {
         report.files_analysed, 1,
         "one path is one file, however many cluster members it carries"
     );
-    let [cluster] = report.clusters.as_slice() else {
-        bail!(
-            "exactly one fabricated cluster must render, got {}",
-            report.clusters.len()
-        );
-    };
+    let cluster = only_cluster(&report)?;
     let paths: Vec<&str> = cluster
         .occurrences
         .iter()
@@ -124,33 +100,16 @@ fn same_file_metrics_count_the_path_once() -> Result<()> {
 }
 
 #[test]
-fn same_file_cluster_promotes_only_at_the_single_file_floor() -> Result<()> {
+fn same_file_cluster_reports_mass_only() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let report = rendered_same_file_report(tmp.path());
-    let [cluster] = report.clusters.as_slice() else {
-        bail!(
-            "exactly one fabricated cluster must render, got {}",
-            report.clusters.len()
-        );
-    };
-    let support = cluster
-        .signals
-        .pair_agreement
-        .max(cluster.signals.pair_rename_consistency);
-    assert!(
-        (0.7..0.85).contains(&support),
-        "the supplied content evidence must land between \
-         CONTENT_SUPPORT_FLOOR and CONTENT_PROMOTE_FLOOR so the two \
-         routing branches disagree; rendered agreement={} \
-         rename_consistency={}",
-        cluster.signals.pair_agreement,
-        cluster.signals.pair_rename_consistency
-    );
+    let cluster = only_cluster(&report)?;
+    assert_eq!(cluster.canonical_node_count, 24);
+    assert_eq!(cluster.occurrence_count, 2);
+    assert_eq!(cluster.occurrences_total, 2);
     assert_eq!(
-        cluster.bucket, "structural_only",
-        "a single-file cluster below the single-file promotion floor \
-         must not promote to nearly_identical — promotion here means \
-         the router was told the members span two files"
+        cluster.mass, 24,
+        "mass is canonical nodes times duplicate copies"
     );
     Ok(())
 }

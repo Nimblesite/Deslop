@@ -86,11 +86,7 @@ fn unrelated_constant_tables_are_neither_reported_nor_counted() -> Result<()> {
          cluster may span {CONST_TABLES:?} (gh #362): {found:#?}",
         found = clusters(&report)
             .iter()
-            .map(|cluster| (
-                cluster_id(cluster),
-                cluster_bucket(cluster),
-                occurrence_files(cluster)
-            ))
+            .map(|cluster| (cluster_id(cluster), occurrence_files(cluster)))
             .collect::<Vec<_>>(),
     );
     for file in CONST_TABLES {
@@ -114,9 +110,8 @@ fn the_authored_clone_survives_the_suppression_and_ranks_first() -> Result<()> {
     let cluster = expect_cluster_spanning(&report, &REAL_CLONE)?;
     let dump = signal_dump(cluster);
 
-    assert_eq!(
-        cluster_bucket(cluster),
-        "identical",
+    assert!(
+        has_verbatim_pair(&fixture("two-file-const-tables").join("src"), cluster)?,
         "`apply_discount_schedule` is copied byte for byte — {dump}"
     );
     assert_eq!(
@@ -124,10 +119,6 @@ fn the_authored_clone_survives_the_suppression_and_ranks_first() -> Result<()> {
         2,
         "both copies must be shown; a suppression that eats one is a false \
          negative — {dump}"
-    );
-    assert!(
-        approx(signal(cluster, "pair_agreement"), 1.0),
-        "byte-proven duplication saturates the content evidence — {dump}"
     );
     assert_eq!(
         cluster_id(clusters(&report).first().unwrap_or(&Value::Null)),
@@ -139,8 +130,7 @@ fn the_authored_clone_survives_the_suppression_and_ranks_first() -> Result<()> {
             .iter()
             .map(|entry| (
                 cluster_id(entry),
-                cluster_bucket(entry),
-                signal(entry, "weight")
+                field(entry, "mass").as_u64().unwrap_or(0)
             ))
             .collect::<Vec<_>>(),
     );

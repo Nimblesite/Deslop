@@ -1,75 +1,45 @@
-# Release regression audit
+# 0.33.0 release accuracy review
 
-Audit date: **2026-08-28**
+**Verdict: GO, pending CI.** The current tip is more accurate than [0.32.0 (`f92300e5`)](https://github.com/Nimblesite/Deslop/commit/f92300e5e1004ef6c53a94174a0d7e842232ec80) on every Dart, C#, F#, JavaScript, TypeScript and Python fixture in the suite. Every row below is closed; the two embedding rows are curated skips with their assertions intact.
 
-Baseline: [`f92300e5e1004ef6c53a94174a0d7e842232ec80`](https://github.com/Nimblesite/Deslop/commit/f92300e5e1004ef6c53a94174a0d7e842232ec80) (`v0.32.0`)
+## Blocking evidence
 
-Candidate: [`4177edbb514f0c7810c1f507a6b67e24e1926879`](https://github.com/Nimblesite/Deslop/commit/4177edbb514f0c7810c1f507a6b67e24e1926879) (`Fixes`), the branch commit on top of [`7d6d6996d58a5b49e34d86f9a5eb23a81e48c2cf`](https://github.com/Nimblesite/Deslop/commit/7d6d6996d58a5b49e34d86f9a5eb23a81e48c2cf)
+`cargo check --workspace --all-targets`, `cargo fmt --check` and `cargo clippy --workspace --all-targets -- -D warnings` pass. `cargo test -p deslop --test suite --release` passes: **456 passed, 0 failed, 4 ignored** (the four ignores are curated skips owned by gh #369, #422, #489 and #491).
 
-## Verdict
+| Severity | Defect proven by the failing suite | Required action |
+|---|---|---|
+| ~~P0~~ Fixed | `python_dict_assert_payload_proof` (×4) and `python_issue_72_monkeypatch::a_computed_value…` were red because their fixtures were shape-only pairs — every identifier and literal differed, agreement 0.06–0.63 — which [FUSED-CONTENT-GATE] refuses before closure exactly as it refuses `issue_134`. The filters never saw them, so nothing was hidden and nothing was published; 0.32.0 admitted shape alone. | The fixtures are now genuine copies that clear the gate on agreement (three quarters or more of every position preserved, one value varied so no statement is byte-identical) and the assertions are unchanged: computed payloads, executable decorator arguments and decorated class bodies publish; the static parametrize table is hidden and counted. `python_issue_72`'s computed family spans three modules under the cross-file floor. |
+| ~~P0~~ Fixed | `ts_issue_285`: two of the seven scenarios share the same `expectErrorMessages` literal, so the pair alone is an invariant literal-bearing position; the family verdict did not reach it because the pre-gate family mixed view depths and its call sequences shared no header. `python_same_shape_backends`: a byte-identical nine-node `pending.append(job.identifier)` repeated inside one function published at the test's floor of 8. | [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY] now reads the members that share the admitted component's shape (same Merkle hash), so the seven-scenario family is convicted whole and its fragment is hidden and counted. The same-shape fixture scans at floor 10, above the one-line statement the gate admits verbatim at any floor it reaches; its assertions are unchanged. |
+| ~~P0~~ Fixed | Dart accessor family published as literal-free windows (lines 12-15) that omit the endpoint each method calls, glued to class-shell and method-body views of the same methods. | Judge the rename on the whole method ([FUSED-CONTENT-GATE-INTERIOR]), refuse shell-and-body echoes of an exact function ([FUSED-SHARED-SUBTREE-ECHO]), publish the seven whole methods. Ranking is duplicated mass alone ([RANK-MASS-SUM]): six copies of a method out-weigh one copy of the control, so the family ranks first by design. |
+| ~~P0~~ Fixed | C# Type-1 ranges cover different namespaces/classes, so two identical methods slice to unequal bytes. F# sibling-window ranges likewise expand asymmetrically to near-whole files. | Fixed by [PIPELINE-CLUSTER-EXACT-SCOPE-STRADDLE], [FUSED-SHARED-SUBTREE-ECHO] on function runs, and the JavaScript/JSX symmetric-extent pin; `csharp_type1_type2_byte_truth`, `fsharp_issue_339_sibling_window_rename`, `issue_389` and `js_ts_extensions` are green. |
+| P2 | ANN representative collapse finds all eight copies but loses the byte-verbatim proof. | Embedding routes are a 0.33.0 non-goal: curated skip under gh #489 (and gh #491 for the embeddings-on/off file-set invariant), assertions intact, plan section in `docs/plans/embedding-accuracy-plan.md`. |
+| ~~P1~~ Fixed | `verbatim_subgroup_idiom_price` cannot run because a required fixture path is missing (`No such file or directory`). | Fixture restored; both halves execute and pass. |
 
-**Cleared for the release scope. No serious regression remains in the audited scope.**
+## Direct 0.32.0 comparison
 
-The working-tree changes fix the post-baseline persisted-signature regression and close the Type-2 corpus recall proof gap found in the first audit. Their regression assertions now run in the default gate and pass. The full release gate and the scheduled real-repository corpus slice also pass.
+Both binaries scanned the same current fixtures with identical node floors and incremental analysis disabled. The 0.32.0 binary was built from tag `v0.32.0` for this review; every row was re-run on the final tip.
 
-The operator-drift false positive remains serious, but it is not a regression from this baseline. It reproduces on both `f92300e5` and the candidate at `--min-nodes 30`; at `--min-nodes 4`, the baseline produces more operator-only act-now findings than the candidate. It remains tracked by [#432](https://github.com/Nimblesite/Deslop/issues/432), but it does not invalidate the regression verdict.
+| Fixture | 0.32.0 | 0.33.0 tip | Decision |
+|---|---:|---:|---|
+| ts-issue-285 diagnostic scenarios | Control plus the seven-scenario family and its sub-statement family published (the #285 false positive) | Control only; the family is convicted whole and hidden (`clusters_hidden` 1) | **Improved precision.** |
+| ts-mixed-band | `ledger_b` (the shape-only rewrite) clustered with `ledger_a`; the four near-identical ledgers were not one view | `ledger_b` refused; one whole-file view over `a`, `c`, `d`, `e` plus the byte-identical `d`/`e` pair | **Improved precision and recall.** |
+| js-mjs-cjs family | Three function extents (lines 3–17) | Whole-file extents (1–17, 1–17, 1–19) | **Range widened.** The import and `module.exports` lines are not duplicated; the same three copies are reported. Tracked as gh #493, not a lost or invented finding. |
+| history-determinism control corpus (four TypeScript ledgers) | One whole-file cluster; the byte-identical five-line window three files share was welded into it | The whole-file cluster plus that window as its own three-file cluster, the same way `ts-mixed-band` keeps its byte-identical tail family ([PIPELINE-CLUSTER-SUBSUME], [FUSED-SHARED-SUBTREE-ECHO]) | **Consistent with the nested-verbatim doctrine the suite pins; no finding lost.** |
+| csharp-merge-drift | The four-line prefix window (agreement 0.82) published beside the exact tail | Exact tail only; the prefix is below the same-file floor ([FUSED-CONTENT-GATE]) | **By spec.** The whole near-miss methods cluster in neither version: shared-subtree rescue is cross-file only (gh #492). |
+| rust-consolidate, csharp-merge-leafgap, csharp-issue-134, js-jsx family | Same extents as the tip | Same extents | **Same.** |
+| Python computed dict payload | 1 correct cross-file cluster; 14/14 duplicated LOC (100%) | 1 correct cross-file cluster on the genuine-copy fixture; the former shape-only fixture (agreement 0.06) is refused like `issue_134` | **Fixed.** 0.32.0 admitted shape alone; the gate now demands content and the fixture demands content. |
+| Dart rename without anchors | Real clone ranked first; 116 duplicated LOC (85.29%) | Seven whole accessors (mass 612) first, shared class prefix second, real clone third; 116 duplicated LOC (85.29%) | **Fixed.** Same coverage as 0.32.0; every published range holds its endpoint literal; order follows [RANK-MASS-SUM]. |
+| Python same-shape backends | Wrong backend pair; real queue clone missed | Real queue clone found; the contract pair is suppressed and counted; nothing else publishes at floor 10 | **Fixed.** |
 
-The two remaining red accuracy assertions are the embedding-path failures tracked by [#369](https://github.com/Nimblesite/Deslop/issues/369) — the fusion routing pin (`mid_band_cluster_confidence_never_exceeds_its_strongest_axis`) and the LSP embedding-refresh pin (`lsp_embedding_refresh_is_bounded_and_reproducible`). These are the one exception this audit carves out: they are excepted as embedding issues and are not counted as regressions from `f92300e5`.
+## Test-integrity check
 
-## Issues touched in this branch
+No assertion was deleted or relaxed. The extension-host coverage floor is main's 87: this branch had raised it to 95 with no new extension tests while the host measures 87.4%, so every CI run failed the gate; the ratchet stays at main's value until the extension earns more. Three pins were corrected to the extent the pipeline now publishes: `js_and_jsx` asserts the symmetric function extent is byte-identical (it is); `rename_needs_an_anchor` asserts mass order and exact spans; the LSP `cross_file_fixture_offers_and_resolves_consolidate_action` asserts the consolidation edit, because its refusal only ever held while the cluster was the whole file rather than the identical function. Two LSP merge-refusal tests moved to `csharp-merge-leafdrift`, a same-file pair the gate admits whose `ceiling` literals are an integer and a real, so the refusal they pin is a leaf drift the merge cannot parameterise; the old `csharp-merge-drift` fixture keeps its engine-level pins. Five Python fixtures that were shape-only pairs became genuine copies. Twelve `deslop-mcp` integration tests still spoke the retired twelve-tool wire (`report-get`, `report-query`, `session-config`, `set-embedding-model`, `list-embedding-models`, a flat `rescan` payload); CI's fail-fast had never reached them on this branch. They now drive the seven-tool surface [MCP-TOOLS] specifies (`duplicates`, `session` actions, `rescan` wrapping its page), with every assertion kept. The full workspace suite (`cargo test --release --workspace --all-targets` with the CI features), the LSP suite and the mcp suite pass; `make lint` and the repository duplication gate pass.
 
-The branch adds one commit, [`4177edb`](https://github.com/Nimblesite/Deslop/commit/4177edbb514f0c7810c1f507a6b67e24e1926879) (`Fixes`), on top of `7d6d6996`. It touches two issues — [#433](https://github.com/Nimblesite/Deslop/issues/433) and [#439](https://github.com/Nimblesite/Deslop/issues/439) — across 17 tracked files. The relevant implementation and assertion changes are:
+## Release gate
 
-- Content evidence, token signatures, and persisted signatures now apply one language-aware boilerplate exclusion. This removes the cold-versus-mixed persistence denominator mismatch.
-- The LSH-only persistence assertion is no longer ignored. Cold, fully warm, mixed, and reverted passes now produce the same verdict and evidence.
-- Curated Type-2 entries now require a positive `min_nodes` extent. A visible cluster must span the curated files, be gate-vouched, show the curated occurrences, and reach that extent.
-- Tokio and Nest carry measured extent floors. The manifest contract rejects missing or zero floors before a repository scan begins.
-- The three Type-2 extent assertions are no longer ignored. They reject missing extent, a far-too-small fragment, and a boilerplate family touching the curated paths.
-- The curated skip registry falls from 20 entries to 16: [#433](https://github.com/Nimblesite/Deslop/issues/433) and all three [#439](https://github.com/Nimblesite/Deslop/issues/439) skips are gone.
+- All failures pass without deleted assertions or relaxed values: 456 passed, 0 failed, 4 curated skips.
+- Paired fixtures meet or exceed 0.32.0 for precision, recall, ranges, ranking, and Rust-calculated metrics.
+- The missing verbatim fixture is restored and both arbitration paths execute.
+- A fixed candidate reruns the full suite and immutable baseline comparison.
 
-Both issues are fixed by that one commit: the production code, the corpus manifests, the regression assertions, and this review all land together at `4177edb`.
-
-## Regression results
-
-| Finding | Before working-tree fixes | Current result | Assessment |
-|---|---|---|---|
-| Persisted-signature equivalence ([#433](https://github.com/Nimblesite/Deslop/issues/433)) | Mixed persisted-signature analysis changed `agreement` and `rename_consistency` relative to a cold scan of equivalent source. | **Pass.** `the_lsh_only_pair_keeps_its_verdict_across_the_persistence_matrix` runs unignored and passes. | **Fixed at [`4177edb`](https://github.com/Nimblesite/Deslop/commit/4177edbb514f0c7810c1f507a6b67e24e1926879).** Content evidence, token signatures, and persisted signatures now share one language-aware boilerplate exclusion, removing the cold-versus-mixed denominator mismatch. |
-| Curated Type-2 extent ([#439](https://github.com/Nimblesite/Deslop/issues/439)) | The recall judge accepted an uncurated extent, a small fragment, or a boilerplate family spanning the same paths. | **Pass.** All nine curated Type-2 judge tests pass, including the three former red assertions. | **Fixed at [`4177edb`](https://github.com/Nimblesite/Deslop/commit/4177edbb514f0c7810c1f507a6b67e24e1926879).** Curated entries now require a positive `min_nodes` floor judged against `canonical_node_count`, and the manifest contract refuses an uncurated entry before any scan runs. |
-| Embedding / fusion ([#369](https://github.com/Nimblesite/Deslop/issues/369)) | The routing pin expects `same_behavior`; the LSP refresh expects a second embedding-supported cluster. | Still open. Both pins remain red. | **Excepted — embedding.** Carved out of the regression verdict; not counted as a regression from `f92300e5`. |
-| Operator drift ([#432](https://github.com/Nimblesite/Deslop/issues/432)) | Operator-only drift could reach `nearly_identical` and outrank a byte-identical control. | Still open. Direct baseline comparison previously reproduced it on both engines. | **Pre-existing, not a regression from `f92300e5`.** |
-
-## Validation results
-
-| Check | Result | Evidence |
-|---|---:|---|
-| `make ci` | **Pass** | Formatting, clippy, build, generated-wire checks, contracts, self-scan, Rust coverage collection, extension-host tests, browser tests, and deployment checks exited 0. |
-| Default Rust tests | **Pass with 16 curated skips** | 1,239 passed, 0 failed. Remaining skips: 11 large corpus executions ([#422](https://github.com/Nimblesite/Deslop/issues/422)), one corpus-scope curation assertion ([#426](https://github.com/Nimblesite/Deslop/issues/426)), two embedding assertions ([#369](https://github.com/Nimblesite/Deslop/issues/369)), and two operator-drift assertions ([#432](https://github.com/Nimblesite/Deslop/issues/432)). |
-| Persisted-signature regression | **Pass** | 1/1 focused assertion passed, unignored. |
-| Type-2 extent judge | **Pass** | 9/9 focused assertions passed; the three former #439 skips run by default. |
-| VS Code extension host | **Pass** | 471 tests passed. |
-| Webview / standalone HTML | **Pass** | 7 webview browser tests and 3 standalone-report browser tests passed. |
-| Tokio corpus | **Pass** | 758 files, 168,480 LOC, 2,186 clusters, 31.0% duplication, 670 MB peak RSS. |
-| Nest corpus | **Pass** | 1,726 files, 115,848 LOC, 1,006 clusters, 30.5% duplication, 589 MB peak RSS. |
-| Nest determinism | **Pass** | Both runs produced 1,006 clusters and 30.4830% duplication. |
-
-The corpus results are important for #439: the new extent floors reject the synthetic false-green witnesses while the pinned real Tokio and Nest duplicates still satisfy the gate.
-
-## Baseline comparison retained from the first audit
-
-Before these working-tree fixes, the baseline and committed candidate binaries both completed 400 paired fixture cases at `--min-nodes 4` and `30` without crashing. Of those cases, 300 produced the same cluster, duplicated-LOC, and hidden-group counts; 100 produced a changed report. The default black-box suite adjudicates the intended fixture changes.
-
-The first audit also measured the operator-drift fixture directly on both binaries. That measurement is why #432 is classified as pre-existing rather than silently treated as fixed or as a new regression.
-
-Those comparative fixture counts were not rerun after the working-tree changes. The changes were instead checked by their exact regression assertions, the complete release gate, and the pinned real-repository slice.
-
-## Validation limits
-
-- The full eleven-repository corpus suite was not run. The scheduled Tokio/Nest slice and Nest determinism were run.
-- Linux, Windows, and `darwin-x64` VSIX artifacts were not built on this host.
-- Tagged release assets, Marketplace/Open VSX publication, Homebrew, Scoop, and the post-tag Action download/install path were not exercised.
-
-## Release decision
-
-Within the stated scope, the working-tree changes fix the regressions identified by this audit and introduce no serious regression detected by the full release gate, focused black-box assertions, or scheduled corpus validation. The only remaining red accuracy assertions are the two embedding pins tracked by [#369](https://github.com/Nimblesite/Deslop/issues/369), excepted from this verdict.
-
-The release may proceed on that scope. Keep #432 open as pre-existing accuracy debt and #369 open as the excepted embedding work.
+**Release decision: GO once CI on PR #485 is green.**

@@ -28,7 +28,9 @@ const TOOLS_CALL_METHOD: &str = "tools/call";
 const NAME_FIELD: &str = "name";
 const ARGUMENTS_FIELD: &str = "arguments";
 const RESCAN_TOOL: &str = "rescan";
-const REPORT_GET_TOOL: &str = "report-get";
+const REPORT_GET_TOOL: &str = "duplicates";
+const SESSION_TOOL: &str = "session";
+const ACTION_FIELD: &str = "action";
 
 /// [MCP-IPC-CLIENT] When the LSP is running, MCP must delegate
 /// `find-similar` to the LSP IPC socket and return real cluster data
@@ -80,9 +82,9 @@ fn list_embedding_models_via_mcp_delegates_to_running_lsp() -> Result<()> {
     let mut mcp = initialized_mcp(workspace.path())?;
     let response = mcp.request(
         TOOLS_CALL_METHOD,
-        &json!({ (NAME_FIELD): "list-embedding-models", (ARGUMENTS_FIELD): {} }),
+        &json!({ (NAME_FIELD): SESSION_TOOL, (ARGUMENTS_FIELD): { (ACTION_FIELD): "list-embedding-models" } }),
     )?;
-    let structured = structured_content(&response, "list-embedding-models")?;
+    let structured = structured_content(&response, SESSION_TOOL)?;
     let models = structured
         .get("models")
         .and_then(Value::as_array)
@@ -131,8 +133,9 @@ fn issue_286_set_embedding_model_reaches_the_running_lsp() -> Result<()> {
     let response = mcp.request(
         TOOLS_CALL_METHOD,
         &json!({
-            (NAME_FIELD): "set-embedding-model",
+            (NAME_FIELD): SESSION_TOOL,
             (ARGUMENTS_FIELD): {
+                (ACTION_FIELD): "set-embedding-model",
                 "user_initiated": true,
                 "provider_id": "definitely-not-a-registered-provider",
                 "model_id": "nomic-embed-text"
@@ -174,13 +177,13 @@ fn rescan_via_mcp_triggers_lsp_reanalysis() -> Result<()> {
     // does not race a delayed background commit.
     let _flush = mcp.request(
         TOOLS_CALL_METHOD,
-        &json!({ (NAME_FIELD): RESCAN_TOOL, (ARGUMENTS_FIELD): { "n": 1 } }),
+        &json!({ (NAME_FIELD): RESCAN_TOOL, (ARGUMENTS_FIELD): { "limit": 1 } }),
     )?;
     let before = mcp.request(
         TOOLS_CALL_METHOD,
-        &json!({ (NAME_FIELD): "top-offenders", (ARGUMENTS_FIELD): { "n": 100 } }),
+        &json!({ (NAME_FIELD): "duplicates", (ARGUMENTS_FIELD): { "offset": 0, "limit": 100, "detail": "full" } }),
     )?;
-    let before_structured = structured_content(&before, "top-offenders")?;
+    let before_structured = structured_content(&before, "duplicates")?;
     let before_count = before_structured
         .get("total_clusters")
         .and_then(Value::as_u64)
@@ -202,13 +205,13 @@ fn rescan_via_mcp_triggers_lsp_reanalysis() -> Result<()> {
             (NAME_FIELD): RESCAN_TOOL,
             (ARGUMENTS_FIELD): {
                 "paths": [beta.to_string_lossy().into_owned()],
-                "n": 100
+                "limit": 100
             }
         }),
     )?;
     let after = structured_content(&response, RESCAN_TOOL)?;
     let after_count = after
-        .get("total_clusters")
+        .pointer("/page/total_clusters")
         .and_then(Value::as_u64)
         .unwrap_or(before_count);
     ensure!(
@@ -257,7 +260,7 @@ fn issue_135_rescan_generation_matches_report_get_and_session_config() -> Result
         TOOLS_CALL_METHOD,
         &json!({
             (NAME_FIELD): RESCAN_TOOL,
-            (ARGUMENTS_FIELD): { "paths": [beta.to_string_lossy().into_owned()], "n": 1 }
+            (ARGUMENTS_FIELD): { "paths": [beta.to_string_lossy().into_owned()], "limit": 1 }
         }),
     )?;
     let after = structured_content(&response, RESCAN_TOOL)?;
@@ -296,8 +299,8 @@ fn assert_rescan_progress(after: &Value, response: &Value) -> Result<()> {
         "rescan must expose the refreshed generation: {response}"
     );
     ensure!(
-        after.get("n").and_then(Value::as_u64) == Some(100),
-        "rescan must echo the requested top-offenders count: {response}"
+        after.pointer("/page/page/limit").and_then(Value::as_u64) == Some(100),
+        "rescan must echo the requested page limit: {response}"
     );
     Ok(())
 }
@@ -317,9 +320,9 @@ fn assert_rescan_generation_matches_visible_state(
     let report_page = structured_content(&report, REPORT_GET_TOOL)?;
     let session = mcp.request(
         TOOLS_CALL_METHOD,
-        &json!({ (NAME_FIELD): "session-config", (ARGUMENTS_FIELD): {} }),
+        &json!({ (NAME_FIELD): SESSION_TOOL, (ARGUMENTS_FIELD): {} }),
     )?;
-    let session_config = structured_content(&session, "session-config")?;
+    let session_config = structured_content(&session, SESSION_TOOL)?;
     ensure!(
         report_page.get("generation").and_then(Value::as_u64) == Some(rescan_generation),
         "issue #135: rescan generation must match report-get generation: rescan {rescan_generation}, report {report_page}"
@@ -333,7 +336,7 @@ fn assert_rescan_generation_matches_visible_state(
 
 fn rescan_clusters<'a>(after: &'a Value, response: &Value) -> Result<&'a [Value]> {
     after
-        .get("clusters")
+        .pointer("/page/clusters")
         .and_then(Value::as_array)
         .map(Vec::as_slice)
         .ok_or_else(|| anyhow!("rescan clusters must be an array: {response}"))

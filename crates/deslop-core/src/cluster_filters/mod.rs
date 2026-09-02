@@ -118,7 +118,6 @@ mod calls;
 mod constant_table;
 mod contract_index;
 mod dart;
-mod dart_data_table;
 mod declaration_family;
 mod ecmascript;
 mod family;
@@ -135,7 +134,6 @@ mod python_orm;
 mod role_compat;
 mod rust;
 mod snippets;
-mod structural_families;
 mod verbatim_subgroup;
 
 use std::{
@@ -149,43 +147,26 @@ use tree_sitter::Node;
 pub(crate) use declaration_family::is_single_file_declaration_family;
 pub use snippets::ParseCache;
 use snippets::{collect_snippets, parse_for, uniform_language, Snippet};
-pub(crate) use structural_families::split_structural_families;
-pub(crate) use verbatim_subgroup::split_noise_verbatim_families;
+pub(crate) use verbatim_subgroup::{escapes_as_copy, split_noise_verbatim_families};
 
 use crate::{
     ast::{named_children, ByteRange},
-    clone_category::CloneCategory,
     fingerprint::Fingerprint,
     state::FileId,
 };
-
-/// Which pipeline stage is asking, so a filter can defer work to the
-/// stage that owns it. The noise-split pass suppresses fused components
-/// early; the render pass suppresses report clusters late. A family the
-/// split suppresses never reaches render, so each filter must convict in
-/// the stage its contract names.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum NoiseStage {
-    /// The noise-split pass, over fused components pre-report.
-    Split,
-    /// The report render pass, over ranked report clusters.
-    Render,
-}
 
 /// Decides whether `cluster` is a known noise pattern that must not be
 /// surfaced as duplication. Returns **which** filter recognised it, and
 /// `None` when none did.
 ///
-/// Callers that only need "hide this" use `.is_some()`. The identity
-/// matters to the verbatim-subgroup split, which asks a different
-/// question of a filter whose members must already share one file
-/// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]).
+/// Callers that only need "hide this" use `.is_some()`. The identity is
+/// retained for observability; the verbatim escape hatch applies every
+/// qualifying exact-byte family independently of the filter.
 pub(crate) fn is_noise_pattern<S: BuildHasher>(
     members: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
-    stage: NoiseStage,
 ) -> Option<NoiseFilter> {
     let language = pre_gate(
         uniform_language(members, file_languages),
@@ -199,7 +180,7 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
         members.len(),
         cache,
     )?;
-    run_noise_checks(language, &snippets, sources, file_languages, cache, stage)
+    run_noise_checks(language, &snippets, sources, file_languages, cache)
 }
 
 /// Records a pre-gate that could not even reach the filters, and passes
@@ -233,12 +214,11 @@ fn run_noise_checks<S: BuildHasher>(
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
-    stage: NoiseStage,
 ) -> Option<NoiseFilter> {
     let polymorphic =
         || polymorphic::is_polymorphic_signature_cluster(snippets, sources, file_languages, cache);
     let signature_only = || is_signature_only_cluster(snippets, cache);
-    let literal_calls = || calls::is_literal_variation_call_cluster(snippets, cache, stage);
+    let literal_calls = || calls::is_literal_variation_call_cluster(snippets, cache);
     let constant_table = || constant_table::is_constant_table_cluster(snippets);
     let checks: [(NoiseFilter, &dyn Fn() -> bool); 4] = [
         (NoiseFilter::Polymorphic, &polymorphic),
@@ -290,7 +270,7 @@ fn timed_language_specific(
 /// One cluster-noise sub-check, for [`ParseCache`]'s aggregate counters
 /// ([PERF-FLUTTER-TODO-OBSERVABILITY]): which filter the corpus-scale
 /// time actually goes to, and which of them ever fire.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NoiseFilter {
     /// The uniform-language pre-gate.
     UniformLanguage,
@@ -307,9 +287,7 @@ pub(crate) enum NoiseFilter {
     /// The language-specific idiom filters.
     LanguageSpecific,
     /// The Python sibling-cell filter, named apart from the rest of the
-    /// language-specific bank because its members share one file and one
-    /// literal node by construction
-    /// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL]).
+    /// language-specific bank for per-filter observability.
     PyCollectionSiblingCells,
 }
 
@@ -342,62 +320,6 @@ impl NoiseFilter {
     pub(crate) const fn demands_cross_file_copy(self) -> bool {
         !matches!(self, Self::PyCollectionSiblingCells)
     }
-}
-
-/// Classifies a cluster's [`CloneCategory`] ([RANK-CATEGORY]) by re-parsing
-/// its member sources the same way [`is_noise_pattern`] does. Returns
-/// [`CloneCategory::DataTable`] for a data-structure literal whose repeated
-/// rows are un-refactorable data; otherwise [`CloneCategory::Logic`]. The
-/// verbatim escape hatch (`raw_snippet_texts_differ`) lives inside each
-/// per-language predicate, so a byte-for-byte copied table stays `Logic`.
-///
-/// Distinct from `is_noise_pattern`: a `DataTable` is real repetition the
-/// user *may* act on (a builder, an asset file), so the policy demotes or
-/// drops it per config rather than silently hiding it.
-pub(crate) fn classify_clone_category<S: BuildHasher>(
-    members: &[Fingerprint],
-    literal_fraction: f64,
-    sources: &HashMap<FileId, Vec<u8>>,
-    file_languages: &HashMap<FileId, &'static str, S>,
-    cache: &ParseCache,
-) -> CloneCategory {
-    let Some(language) = uniform_language(members, file_languages) else {
-        return CloneCategory::Logic;
-    };
-    let Some(snippets) = collect_snippets(members, sources, language, cache) else {
-        return CloneCategory::Logic;
-    };
-    if is_data_table_cluster(language, literal_fraction, &snippets) {
-        CloneCategory::DataTable
-    } else {
-        CloneCategory::Logic
-    }
-}
-
-/// Dispatches data-table detection. The language-agnostic
-/// literal-dominance test ([CLONE-NOISE-LITERAL-TABLE]) covers
-/// pure value tables in every language; the Dart predicate additionally
-/// recognises collection literals of constructor rows
-/// ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]), whose identifier-heavy rows
-/// sit below the literal-dominance floor.
-fn is_data_table_cluster(language: &str, literal_fraction: f64, snippets: &[Snippet<'_>]) -> bool {
-    is_literal_dominated_table(literal_fraction, snippets)
-        || match language {
-            "dart" => dart_data_table::is_dart_collection_data_table_cluster(snippets),
-            _ => false,
-        }
-}
-
-/// Language-agnostic data-table test ([CLONE-NOISE-LITERAL-TABLE]): the
-/// cluster's normalised leaves are overwhelmingly literal positions —
-/// measured in the pipeline, where the normalised trees live — and at
-/// least two members differ in raw bytes. The verbatim escape hatch is
-/// the same #190 rule the Dart predicate applies: a byte-for-byte
-/// copied table is genuine duplication and stays `logic`.
-fn is_literal_dominated_table(literal_fraction: f64, snippets: &[Snippet<'_>]) -> bool {
-    literal_fraction >= crate::buckets::LITERAL_TABLE_MIN_FRACTION
-        && snippets.len() >= 2
-        && raw_snippet_texts_differ(snippets)
 }
 
 /// Language-specific idiom filters, dispatched by language so a cluster is
@@ -474,24 +396,22 @@ fn rust_noise(snippets: &[Snippet<'_>]) -> bool {
         || rust::is_rust_struct_field_declaration_cluster(snippets)
 }
 
-/// Decides whether an embedding-dominant `same_behavior` cluster pairs
-/// members of incompatible top-level roles — a class/type definition
-/// with a function/method (issue
-/// [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]). Returns `true` when the
-/// cluster should be hidden. The caller restricts this to the
-/// `same_behavior` bucket so deterministic Type-1/2/3 clusters are
-/// untouched. Falls through to `false` when sources or a uniform
-/// language are unavailable.
+/// Decides whether two exact pair endpoints hold incompatible top-level
+/// roles — a class/type definition and a function/method
+/// ([CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]). Unresolved roles do not
+/// reject the candidate pair.
 pub(crate) fn is_embedding_role_mismatch<S: BuildHasher>(
-    members: &[Fingerprint],
+    left: &Fingerprint,
+    right: &Fingerprint,
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
 ) -> bool {
-    let Some(language) = uniform_language(members, file_languages) else {
+    let members = [left.clone(), right.clone()];
+    let Some(language) = uniform_language(&members, file_languages) else {
         return false;
     };
-    let Some(snippets) = collect_snippets(members, sources, language, cache) else {
+    let Some(snippets) = collect_snippets(&members, sources, language, cache) else {
         return false;
     };
     role_compat::is_role_incompatible_embedding_match(&snippets)
@@ -678,6 +598,56 @@ pub(super) const fn function_kinds(language: &str) -> &'static [&'static str] {
         // the signature-only and polymorphic-signature filters
         // can compare bodies after a signature-only structural match.
         b"go" => &["function_declaration", "method_declaration", "func_literal"],
+        _ => &[],
+    }
+}
+
+/// The declaration shell the widened polymorphic-subject resolution may
+/// walk through ([CLONE-NOISE-POLYMORPHIC-SIGNATURE]): when a member
+/// view is wider than any single function, the subject is the sole
+/// function the range contains with nothing but declaration scaffolding
+/// around it. A row lists the grammar's inert shell kinds — the file
+/// root, the class/mixin/enum/extension containers, and constructor
+/// signatures, none of which execute; kinds that can carry behaviour
+/// (function bodies, field initialisers) are deliberately absent, so a
+/// member containing them vetoes the widened resolution and keeps the
+/// component surfaced. A language with no row keeps the
+/// containing-function behaviour.
+pub(super) const fn declaration_shell_kinds(language: &str) -> &'static [&'static str] {
+    match language.as_bytes() {
+        b"python" => &[
+            "module",
+            "class_definition",
+            "block",
+            "decorated_definition",
+            "decorator",
+        ],
+        b"dart" => &[
+            "source_file",
+            "class_declaration",
+            "class_body",
+            "class_member",
+            "declaration",
+            "constant_constructor_signature",
+            "constructor_signature",
+            "constructor_param",
+            "formal_parameter_list",
+            "optional_formal_parameters",
+            "formal_parameter",
+            "super_formal_parameter",
+            "super",
+            "superclass",
+            "type",
+            "type_identifier",
+            "identifier",
+            "annotation",
+            "enum_declaration",
+            "enum_body",
+            "mixin_declaration",
+            "extension_declaration",
+            "extension_body",
+            "function_signature",
+        ],
         _ => &[],
     }
 }

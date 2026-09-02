@@ -20,7 +20,7 @@ fn tsx_renamed_components_cluster_nearly_identical() -> Result<()> {
         "jsx-tsx-components",
         10,
         &["TeamPanel.tsx", "UserPanel.tsx"],
-        "nearly_identical",
+        false,
     )
 }
 
@@ -35,7 +35,7 @@ fn js_and_jsx_renamed_components_cluster_across_extensions() -> Result<()> {
         "jsx-js-components",
         10,
         &["OfferTile.js", "ProductCard.jsx"],
-        "nearly_identical",
+        false,
     )
 }
 
@@ -50,7 +50,7 @@ fn jsx_html_entity_and_plain_text_collapse_to_the_same_clone() -> Result<()> {
         "jsx-entity-invariance",
         8,
         &["Ampersand.jsx", "Plus.jsx"],
-        "nearly_identical",
+        false,
     )
 }
 

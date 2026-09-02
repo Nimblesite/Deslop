@@ -270,7 +270,7 @@ fn seed(span: ForestSpan<'_>, forest: &mut [u32]) {
     }
 }
 
-/// Cell value; [`u32::MAX`] out of range, so a min-fold can never elect
+/// Cell value; [`u32::MAX`] out of range, so a min-fold can never select
 /// an access the algorithm's own indexing never makes.
 fn read(cells: &[u32], slot: usize) -> u32 {
     cells.get(slot).copied().unwrap_or(u32::MAX)

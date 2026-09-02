@@ -93,13 +93,13 @@ The target state: **every repository, every run, asserts every row below.** Ids 
 |---|---|---|---|
 | `files_analysed` | the scan parsed a plausible number of files, never zero | `expect_files_min` | ✅ |
 | `recall` | curated byte-identical clones are reported | `must_find` | 🟡 span only (L5) |
-| `recall_quality` | …in an act-now bucket, every curated occurrence **shown**, within `max_rank` | `must_find` | ❌ missing |
+| `recall_quality` | every curated pair is admitted, every curated occurrence is **shown**, and the resulting cluster stays within `max_rank` by mass | `must_find` | ❌ missing |
 | `type2_recall` | curated renames reported, gate-vouched, shown, at the curated `min_nodes` extent | `must_find_type2` | ✅ |
 | `precision` | curated non-duplicates never share a cluster | `must_not_cluster` | ❌ missing (L4) |
 | `boilerplate_rank` | framework-mandated shapes never rank first | `must_not_rank_first` | 🛑 unsound (L3) |
-| `data_table_rank` | digit-dominated clusters carry `category: data` | none | ✅ |
+| `data_table_visibility` | curated data-table shapes follow the configured detection-time visibility rule without changing survivor mass | none | ✅ |
 | `fused_bounded_max` | the pair admission score never exceeds the strongest axis | none | ✅ |
-| `type2_gate_liveness` | the content gate produced *some* vouched evidence | none | ✅ |
+| `type2_gate_liveness` | each curated endpoint pair carries the required content support and admission result in its explicit pair record | none | ✅ |
 | `determinism` | two runs on an unchanged tree agree exactly | none | 🟡 2 of 9 (L6) |
 | `metrics_stable` | `duplication_percent` and cluster count reproduce exactly | none | 🟡 inside determinism |
 | `cluster_count_band` | cluster count sits inside a curated band | `expect_clusters` | ✅ |
@@ -116,7 +116,7 @@ The target state: **every repository, every run, asserts every row below.** Ids 
 
 ### B. Strengthen recall to the Type-2 bar — `[CORPUS-RECALL]` — LANDED
 
-- [x] `check_curated_recall` replaces the span-only `check_recall` and splits the verdict in two: `recall` (some cluster spans the paths) and `recall_quality` (it is labelled `identical`, every curated occurrence is shown, and it is within `max_rank`).
+- [x] `check_curated_recall` replaces the span-only `check_recall` and splits the verdict in two: `recall` (some cluster spans the paths) and `recall_quality` (every curated byte-identical endpoint relation is classified `identical`, every curated occurrence is shown in that component, and it is within `max_rank`).
 - [x] `identical` is the *only* admissible bucket, not merely an act-now one — [CORPUS-RECALL] defines `must_find` as byte-for-byte verified, so anything else is the engine contradicting a verified fact about the source. No prose is parsed to decide it.
 - [x] Curated occurrences must be shown, through the same `cluster_shows_span` predicate as precision and `type2_recall`.
 - [x] Optional `max_rank` per entry, inclusive.
@@ -141,11 +141,11 @@ The target state: **every repository, every run, asserts every row below.** Ids 
 - [x] Five unit tests in `corpus_scope/tests.rs`, both directions on both bounds plus the two uncurated shapes.
 - [x] **The curated numbers.** Measured against this tree's `target/release/deslop`, one cold pass per pinned clone under exactly the flags `corpus::scan` uses (`--no-incremental --embeddings off --no-fail-over --no-color --notext --nohtml`).
 
-  **Neither bound is the measurement.** A measurement is only what this detector reports today, and today's detector has known defects — `[PIPELINE-CLUSTER-ELECT]` moved tokio from 2,155 clusters to 2,568 in a single commit on this branch. Curating an hour earlier would have pinned 2,155 and left the corpus gate defending a false negative. So both bounds are loose rails sized to the failure each catches: `expect_files_min` at ~75% of measured `files_analysed`, `expect_clusters` from half the measured count to double it. See `[CORPUS-SCOPE]` in the spec for why those sizes and not tighter ones.
+  **Neither bound is the measurement.** A measurement is only what this detector reports today, and today's detector has known defects — `[PIPELINE-CLUSTER-CLOSURE]` moved tokio from 2,155 clusters to 2,568 in a single commit on this branch. Curating an hour earlier would have pinned 2,155 and left the corpus gate defending a false negative. So both bounds are loose rails sized to the failure each catches: `expect_files_min` at ~75% of measured `files_analysed`, `expect_clusters` from half the measured count to double it. See `[CORPUS-SCOPE]` in the spec for why those sizes and not tighter ones.
 
   flutter and fsharp are **not** curated, tracked as #426 and blocked on #166: both already fail the `memory` check for exceeding their per-repo ceilings, so measuring a bound for them spends twenty minutes to produce a number nothing in CI reads. `every_manifest_curates_a_non_vacuous_scan_scope` is `#[ignore]`d citing #426 with its assertions intact.
 
-  Re-measured after the family-election fix landed, never before it. django's earlier figure of 9,268 clusters was taken with the welding binary and is withdrawn; its `files_analysed` of 2,835 reproduced exactly, which is the expected result — the fix is downstream of discovery.
+  Re-measured after the structural-family fix landed, never before it. django's earlier figure of 9,268 clusters was taken with the welding binary and is withdrawn; its `files_analysed` of 2,835 reproduced exactly, which is the expected result — the fix is downstream of discovery.
 
 ### E. Determinism everywhere
 

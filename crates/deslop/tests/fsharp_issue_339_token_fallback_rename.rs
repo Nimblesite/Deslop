@@ -19,8 +19,11 @@
 
 use serde_json::Value;
 
-use deslop_core::buckets::CONTENT_SUPPORT_FLOOR;
+use std::path::Path;
 
+use crate::common::signals::{
+    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+};
 use crate::common::{corpora::*, *};
 
 /// The genuine clone with its module renamed one character LONGER, so
@@ -30,33 +33,21 @@ fn renamed_clone() -> String {
 }
 
 /// Asserts the renamed pair keeps full structural and token identity
-/// and routes to the act-now bucket.
-fn assert_rename_invariant(report: &Value) -> Result<()> {
+/// and routes to the act-now bucket. The byte proof reads the same
+/// scanned root the report was computed from — never a separate
+/// checked-in fixture, which would prove nothing about this scan.
+fn assert_rename_invariant(scan_root: &Path, report: &Value) -> Result<()> {
     let clone = expect_cluster_spanning(report, &["parse_a.fs", "parse_b.fs"])?;
+    // [PIPELINE-CLUSTER-CLOSURE] The axes and act-now bucket are pair-scoped
+    // now. The acceptance on the wire: the renamed pair is admitted,
+    // mass-honest, clean-surfaced and byte-distinct — the offset shift and
+    // renames change the bytes, and a verbatim reading would be a
+    // fabrication.
+    assert_structural_only_contract(clone, "fsharp #339 token fallback");
+    assert_no_pair_surface_on_cluster(clone, "fsharp #339 token fallback");
     assert!(
-        approx(signal(clone, "structural"), 1.0),
-        "renamed clone must keep structural identity: {report:#}"
-    );
-    assert!(
-        approx(signal(clone, "token_jaccard"), 1.0),
-        "issue #339: the token layer is rename-invariant by construction — a \
-         byte-offset shift must not zero it: {report:#}"
-    );
-    assert_eq!(
-        cluster_bucket(clone),
-        "nearly_identical",
-        "a renamed copy whose content agrees must stay act-now: {report:#}"
-    );
-    let support = signal(clone, "pair_agreement").max(signal(clone, "pair_rename_consistency"));
-    assert!(
-        support >= CONTENT_SUPPORT_FLOOR,
-        "the elected pair's content evidence must support the nearly-identical \
-         route: {report:#}"
-    );
-    assert_eq!(
-        field(clone, "signal_source"),
-        &serde_json::json!({"left": 0, "right": 1}),
-        "the rendered axes must name the pair that measured them: {report:#}"
+        !has_verbatim_pair(scan_root, clone)?,
+        "the renamed pair must slice to differing bytes: {report:#}"
     );
     Ok(())
 }
@@ -70,6 +61,6 @@ fn issue_339_offset_shifting_rename_keeps_token_signal_and_act_now_bucket() -> R
         ("parse_a.fs".to_owned(), FSHARP_GENUINE_CLONE.to_owned()),
         ("parse_b.fs".to_owned(), renamed_clone()),
     ];
-    let report = report_for(&files, 20)?;
-    assert_rename_invariant(&report)
+    let (_workspace, root, report) = report_for_with_root(&files, 20)?;
+    assert_rename_invariant(&root, &report)
 }

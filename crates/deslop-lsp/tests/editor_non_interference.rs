@@ -18,8 +18,6 @@ use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
 use crate::common::{call, handshake, spawn_lsp_on_fixture_guarded, LspGuard};
-use deslop_core::render::signals::plain_explanation;
-use deslop_core::report::ReportSignals;
 
 const DEFINITION: &str = "textDocument/definition";
 const HOVER: &str = "textDocument/hover";
@@ -136,7 +134,7 @@ fn canonical_navigation_survives_via_additive_clone_diagnostics() -> Result<()> 
     // navigation: the additive clone diagnostic still links to the
     // canonical occurrence in the sibling file via `relatedInformation`.
     let (_workspace, _guard, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
-    let report = wait_for_clusters(&mut stdin, &mut stdout)?;
+    let _report = wait_for_clusters(&mut stdin, &mut stdout)?;
 
     let response = call(
         &mut stdin,
@@ -165,27 +163,28 @@ fn canonical_navigation_survives_via_additive_clone_diagnostics() -> Result<()> 
          survives without overloading F12: {response}"
     );
 
-    // [FUSED-CONTENT-GATE] #344: the Problems panel is a decision surface.
-    // The bucket title alone is unfalsifiable — a corroborated Type-2 rename
-    // and an anchor-poor scaffolding family both render structural 1.00 — so
-    // the message must also state the fused score and the measured evidence.
+    // [FUSED-PAIR-SIGNALS] The diagnostic is a cluster surface: it quotes
+    // the neutral `Duplicate code × count — mass` contract and renders no
+    // pair evidence.
     let deslop_item = items
         .iter()
         .find(|item| item.get("source").and_then(Value::as_str) == Some("deslop"))
         .ok_or_else(|| anyhow!("a deslop-sourced diagnostic: {response}"))?;
-    let cluster_id = deslop_item
-        .pointer("/data/cluster_id")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("diagnostic data carries the cluster id: {deslop_item}"))?;
     let message = deslop_item
         .get("message")
         .and_then(Value::as_str)
         .ok_or_else(|| anyhow!("diagnostic carries a message: {deslop_item}"))?;
     assert!(
-        message.contains(" × ") && message.contains("code"),
-        "the pre-existing bucket title and occurrence count survive the addition: {message}"
+        message.contains(" × ") && message.contains("code") && message.contains("mass"),
+        "the neutral count and mass survive: {message}"
     );
-    assert_explains_confidence(message, cluster_signals(&report, cluster_id)?, "diagnostic");
+    assert!(
+        !message.contains("structural")
+            && !message.contains("agreement")
+            && !message.contains("jaccard")
+            && !message.contains("embedding"),
+        "pair signals must not reach the diagnostic message: {message}"
+    );
     Ok(())
 }
 
@@ -194,7 +193,7 @@ fn additive_code_lens_carries_deslops_own_jump_command_not_definition() -> Resul
     // The additive clone code lens is how Deslop offers occurrence
     // navigation — via its own command, never by overloading F12.
     let (_workspace, _guard, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
-    let report = wait_for_clusters(&mut stdin, &mut stdout)?;
+    let _report = wait_for_clusters(&mut stdin, &mut stdout)?;
 
     let response = call(
         &mut stdin,
@@ -220,26 +219,28 @@ fn additive_code_lens_carries_deslops_own_jump_command_not_definition() -> Resul
         "the lens must navigate via Deslop's own command, never textDocument/definition: {response}"
     );
 
-    // [FUSED-CONTENT-GATE] #344: the lens is the inline decision surface, so
-    // it carries the same explanation the Problems panel does.
-    let cluster_id = first_lens
-        .pointer("/command/arguments/0")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("lens command names its cluster: {first_lens}"))?;
+    // [FUSED-PAIR-SIGNALS] The lens is a cluster surface: it states the
+    // copy count and the jump action, and renders no pair evidence.
     let title = first_lens
         .pointer("/command/title")
         .and_then(Value::as_str)
         .ok_or_else(|| anyhow!("lens carries a title: {first_lens}"))?;
     assert!(
         title.starts_with("●● ") && title.ends_with(" — jump to next"),
-        "the pre-existing glyph, count and action survive the addition: {title}"
+        "the pre-existing glyph, count and action survive: {title}"
     );
     assert!(
         !title.contains('`'),
         "a lens title is rendered verbatim — Markdown code spans would show as \
          literal backticks: {title}"
     );
-    assert_explains_confidence(title, cluster_signals(&report, cluster_id)?, "code lens");
+    assert!(
+        !title.contains("structural")
+            && !title.contains("agreement")
+            && !title.contains("jaccard")
+            && !title.contains("embedding"),
+        "pair signals must not reach the lens title: {title}"
+    );
     Ok(())
 }
 
@@ -323,60 +324,6 @@ fn wait_for_clusters(
         thread::sleep(Duration::from_millis(500));
     }
     Err(anyhow!("no clusters produced within 30s"))
-}
-
-/// Reads the wire signals of `cluster_id` out of a `deslop/reportGet`
-/// response.
-fn cluster_signals(report: &Value, cluster_id: &str) -> Result<ReportSignals> {
-    let clusters = report
-        .pointer("/result/clusters")
-        .and_then(Value::as_array)
-        .ok_or_else(|| anyhow!("report carries no clusters: {report}"))?;
-    let signals = clusters
-        .iter()
-        .find(|cluster| cluster.get("id").and_then(Value::as_str) == Some(cluster_id))
-        .and_then(|cluster| cluster.get("signals"))
-        .ok_or_else(|| anyhow!("cluster {cluster_id} missing from report: {report}"))?;
-    Ok(serde_json::from_value(signals.clone())?)
-}
-
-/// The confidence explanation [FUSED-CONTENT-GATE] every plain-text Deslop
-/// surface must carry. Spelled out here rather than borrowed from the
-/// renderer, so a surface that quietly drops the measured content evidence
-/// fails this test instead of agreeing with itself. There is no cluster
-/// `fused` to state ([FUSED-SCOPE]).
-fn expected_explanation(signals: ReportSignals) -> String {
-    format!(
-        "structural {structural:.2} · jaccard {jaccard:.2} · embedding {embedding:.2} · \
-         agreement {agreement:.2} · rename {rename:.2} · literal {literal:.2}",
-        structural = signals.structural,
-        jaccard = signals.token_jaccard,
-        embedding = signals.embedding_cos,
-        agreement = signals.pair_agreement,
-        rename = signals.pair_rename_consistency,
-        literal = signals.literal_fraction,
-    )
-}
-
-/// Asserts the shared renderer and this test agree on the explanation, then
-/// that `rendered` carries it verbatim.
-fn assert_explains_confidence(rendered: &str, signals: ReportSignals, surface: &str) {
-    let expected = expected_explanation(signals);
-    assert_eq!(
-        plain_explanation(signals),
-        expected,
-        "the {surface} must use the shared render::signals rendering, never a second format"
-    );
-    assert!(
-        rendered.contains(&expected),
-        "the {surface} must state the measured content evidence \
-         [FUSED-CONTENT-GATE]: expected `{expected}` inside `{rendered}`"
-    );
-    assert!(
-        signals.structural > 0.0,
-        "a published clone must carry positive support, else the {surface} pins nothing: \
-         {signals:?}"
-    );
 }
 
 fn file_uri(path: &Path) -> Result<String> {

@@ -33,13 +33,11 @@ use std::collections::BTreeSet;
 use serde_json::Value;
 
 use super::{
-    approx, cluster_bucket, cluster_count, cluster_id, cluster_size, cluster_spanning, clusters,
-    clusters_hidden, expect_cluster_spanning, field, metric_field, occurrence_files,
-    occurrence_is_hidden, occurrences, signal,
-    signals::{
-        signal_dump, CONFIRMED_DUPLICATE_BUCKETS, HONEST_SHAPE_ONLY_BUCKETS, IDENTICAL_BUCKET,
-    },
-    verdict::{assert_type1_identical_signals, duplicated_loc, loc_as_f64},
+    approx, cluster_count, cluster_id, cluster_size, cluster_spanning, clusters,
+    expect_cluster_spanning, field, metric_field, occurrence_files, occurrence_is_hidden,
+    occurrences,
+    signals::{assert_no_pair_surface_on_cluster, signal_dump},
+    verdict::{duplicated_loc, loc_as_f64},
     visible_cluster_lines, visible_duplicated_lines, Result,
 };
 
@@ -54,51 +52,58 @@ const FILES_ANALYSED_FIELD: &str = "files_analysed";
 
 /// Asserts the two-sided contract: no visible cluster spans
 /// `family_files`, the suppression is counted **exactly**
-/// `expected_hidden` times, and the byte-identical control is published
+/// and the byte-identical control is published
 /// first, whole, and saturated.
 pub(crate) fn assert_family_hidden_with_control(
     report: &Value,
     label: &str,
     family_files: &[&str],
     control_files: &[&str],
-    expected_hidden: u64,
 ) -> Result<()> {
-    assert_family_hidden(report, label, family_files, expected_hidden);
+    assert_family_hidden(report, label, family_files);
     assert_control_visible(report, label, control_files)
 }
 
 /// The suppression half: nothing spanning the family reaches the report,
-/// and `clusters_hidden` records exactly the decisions the fixture
-/// determines.
+/// and every family file was parsed, so the absence is a decision, never
+/// a scan that never looked.
 ///
-/// The count is `==`, not `>=`. `clusters_hidden` is a whole-run
-/// counter ([`deslop_core::report`] derives it as the number of clusters
-/// the render pass hid), so `>= 1` cannot attribute a suppression to
-/// *this* family: it is equally satisfied when the family never
-/// clustered while something unrelated was hidden. Worse, `>=` is signed
-/// the wrong way — every over-suppression regression moves the number
-/// **up**, the one direction a lower bound cannot see, and
-/// over-suppression is the false-negative direction. Measured on
-/// `python-issue-107-chained-dict-assert`: with one of the three pytest
-/// modules deleted the run still reports `clusters_hidden == 1`, and
-/// every `>= 1` assertion in that pin still passes. The value is fixed
-/// by the checked-in fixture, `min_nodes`, `--embeddings off` and
-/// `--no-incremental`; nothing about it is environmental.
-fn assert_family_hidden(report: &Value, label: &str, family_files: &[&str], expected_hidden: u64) {
+/// The mass-only wire counts `clusters_hidden` only for clusters the
+/// render pass hid; a shape-only family the content gate rejects at
+/// admission ([FUSED-CONTENT-GATE]) leaves no counter to read. What
+/// proves the detector examined the family on the current wire is
+/// `metrics.per_file`: the report carries one row per analysed file,
+/// and a family file that was parsed but suppressed still carries its
+/// analysed lines there. A family file with no row, or a row with no
+/// analysed lines, is the detector stopping — exactly the failure the
+/// old counter existed to catch.
+fn assert_family_hidden(report: &Value, label: &str, family_files: &[&str]) {
     assert!(
         cluster_spanning(report, family_files).is_none(),
         "{label}: the family is scaffolding, not duplication — no cluster may span \
          {family_files:?}: {published:#?}",
         published = published_summary(report),
     );
-    assert_eq!(
-        clusters_hidden(report),
-        expected_hidden,
-        "{label}: the family must be actively hidden and counted, not merely absent \
-         — an uncounted disappearance is indistinguishable from a detector that \
-         stopped looking, and a *higher* count is a filter that has begun eating \
-         code this fixture never staged: {report:#}"
-    );
+    let per_file = metric_field(report, "per_file")
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    for family_file in family_files {
+        let row = per_file.iter().find(|entry| {
+            field(entry, "path")
+                .as_str()
+                .is_some_and(|path| path.ends_with(family_file))
+        });
+        let analysed = row
+            .and_then(|entry| field(entry, "analysed_loc").as_u64())
+            .unwrap_or(0);
+        assert!(
+            analysed > 0,
+            "{label}: the family file {family_file} must be parsed (analysed_loc > 0) — \
+             a file the scan never opened leaves the family just as absent while \
+             proving nothing was suppressed: {report:#}"
+        );
+    }
 }
 
 /// The false-negative control half: the authored copy in the same run
@@ -114,38 +119,36 @@ fn assert_control_visible(report: &Value, label: &str, control_files: &[&str]) -
     Ok(())
 }
 
-/// Bucket half. The duplicate-bucket membership test admits three buckets where
-/// the fixture determines one, so both are asserted: the wide one names
-/// the failure a reader recognises, the exact one is what actually
-/// holds.
+/// Cluster-surface half. The duplicate-bucket claim and the `identical`
+/// label are gone from the mass-only wire; what proves the control is
+/// the byte-level and visibility facts the report still exposes
+/// ([PIPELINE-CLUSTER-CLOSURE]): no pair-only field may sit on the
+/// cluster (so nothing can mislabel it), the reported membership is
+/// complete (nothing hidden or truncated), and the cluster is
+/// byte-proven by its occurrences.
 fn assert_control_verdict(control: &Value, label: &str) {
-    assert!(
-        CONFIRMED_DUPLICATE_BUCKETS.contains(&cluster_bucket(control)),
-        "{label}: the control clone is copied byte for byte; a suppression wide \
-         enough to demote it has eaten real duplication — bucket={bucket} \
-         agreement={agreement:.4}",
-        bucket = cluster_bucket(control),
-        agreement = signal(control, "pair_agreement"),
-    );
+    assert_no_pair_surface_on_cluster(control, label);
     assert_control_is_byte_proven(control, label);
 }
 
-/// Bucket and signals, exactly ([CLONE-BUCKETS-ROUTING],
-/// [FUSED-THRESHOLD]). Two byte-identical copies leave nothing for a
-/// signal to be uncertain about, so every one of them is determined.
-/// A fusion regression that stops saturating a byte-proven copy is
-/// precisely what `TYPE1_IDENTICAL_SIGNALS` exists to catch, and no
-/// noise pin was reaching for it.
+/// Byte-level and visibility half. Two byte-identical copies leave
+/// nothing for a wire field to be uncertain about; the strongest facts
+/// the report exposes are that every occurrence is shown, none is
+/// hidden, and the carried membership is untruncated.
 fn assert_control_is_byte_proven(control: &Value, label: &str) {
-    assert_eq!(
-        cluster_bucket(control),
-        IDENTICAL_BUCKET,
-        "{label}: the control is copied byte for byte, so `{IDENTICAL_BUCKET}` is \
-         the only honest bucket — any other duplicate label claims the copies differ \
-         somewhere they do not: {dump}",
+    assert!(
+        !occurrences(control).iter().any(occurrence_is_hidden),
+        "{label}: the control is copied byte for byte; hiding one of its \
+         occurrences is a false negative the cluster count cannot see: {dump}",
         dump = signal_dump(control),
     );
-    assert_type1_identical_signals(control, label);
+    assert_eq!(
+        field(control, "occurrence_count").as_u64().unwrap_or(0),
+        field(control, "occurrences_total").as_u64().unwrap_or(0),
+        "{label}: the byte-identical control must be carried untruncated — \
+         occurrence_count must equal occurrences_total: {dump}",
+        dump = signal_dump(control),
+    );
 }
 
 /// Occurrence count and span: one occurrence per copied file, and no
@@ -296,8 +299,6 @@ pub(crate) struct SuppressedFamily<'fixture> {
     pub(crate) family_files: &'fixture [&'fixture str],
     /// The byte-identical false-negative control staged beside it.
     pub(crate) control_files: &'fixture [&'fixture str],
-    /// Clusters the render pass must hide — exactly, never at least.
-    pub(crate) expected_hidden: u64,
     /// Duplicated lines the control accounts for, which is the whole of
     /// this report's duplication.
     pub(crate) control_loc: u64,
@@ -317,13 +318,7 @@ pub(crate) fn assert_suppressed_family(
     fixture: &SuppressedFamily<'_>,
 ) -> Result<()> {
     for family_file in fixture.family_files {
-        assert_family_hidden_with_control(
-            report,
-            label,
-            &[*family_file],
-            fixture.control_files,
-            fixture.expected_hidden,
-        )?;
+        assert_family_hidden_with_control(report, label, &[*family_file], fixture.control_files)?;
     }
     assert_control_is_the_only_published_cluster(
         report,
@@ -351,15 +346,16 @@ fn assert_every_file_was_analysed(report: &Value, label: &str, fixture: &Suppres
     );
 }
 
-/// Every visible cluster as `(id, bucket, files)` — the smallest dump
-/// that lets a failure be diagnosed without re-running the scan.
-fn published_summary(report: &Value) -> Vec<(&str, &str, Vec<String>)> {
+/// Every visible cluster as `(id, occurrence_count, files)` — the
+/// smallest dump that lets a failure be diagnosed without re-running
+/// the scan.
+fn published_summary(report: &Value) -> Vec<(&str, u64, Vec<String>)> {
     clusters(report)
         .iter()
         .map(|cluster| {
             (
                 cluster_id(cluster),
-                cluster_bucket(cluster),
+                field(cluster, "occurrence_count").as_u64().unwrap_or(0),
                 occurrence_files(cluster),
             )
         })
@@ -385,26 +381,13 @@ pub(crate) fn assert_family_demoted_with_control(
     label: &str,
     family_files: &[&str],
     control_files: &[&str],
-    expected_demoted: usize,
-    expected_hidden: u64,
 ) -> Result<()> {
-    let over_family = clusters_over_family(report, family_files);
-    assert_eq!(
-        over_family.len(),
-        expected_demoted,
-        "{label}: the family's known residual is {expected_demoted} demoted \
-         cluster(s); anything else is a change that must be looked at, not \
-         absorbed: {published:#?}",
-        published = published_summary(report),
-    );
-    assert_eq!(
-        clusters_hidden(report),
-        expected_hidden,
-        "{label}: the sub-families this fixture suppresses are a determined \
-         count, and a *higher* one is a filter that has begun eating code the \
-         fixture never staged: {report:#}"
-    );
-    assert_each_family_cluster_is_demoted(&over_family, label);
+    // The demotion bucket is gone from the mass-only wire: a shape-only
+    // family is either hidden at render or rejected at admission
+    // ([RANK-STRUCTURAL-ONLY]), and either way it publishes no cluster.
+    // The pin is the family's absence plus the liveness proof, exactly
+    // as for a render-hidden family.
+    assert_family_hidden(report, label, family_files);
     assert_control_visible(report, label, control_files)
 }
 
@@ -420,23 +403,23 @@ fn clusters_over_family<'a>(report: &'a Value, family_files: &[&str]) -> Vec<&'a
         .collect()
 }
 
-/// A family the tool cannot act on must at least be labelled shape-only
-/// and stay outside the duplicate buckets.
+/// A family the tool cannot act on stays outside every duplication
+/// claim: the mass-only wire gives it no bucket, no verdict, and no
+/// pair-only surface, and the report must carry it untruncated and
+/// unhidden.
 fn assert_each_family_cluster_is_demoted(over_family: &[&Value], label: &str) {
     for cluster in over_family {
+        assert_no_pair_surface_on_cluster(cluster, label);
         assert!(
-            HONEST_SHAPE_ONLY_BUCKETS.contains(&cluster_bucket(cluster)),
-            "{label}: a family the tool cannot act on must at least be labelled \
-             shape-only — {id} is {bucket}",
+            !occurrences(cluster).iter().any(occurrence_is_hidden),
+            "{label}: a reported family cluster may not hide an occurrence — {id}: {dump}",
             id = cluster_id(cluster),
-            bucket = cluster_bucket(cluster),
+            dump = signal_dump(cluster),
         );
-        assert!(
-            signal(cluster, "pair_agreement") < 1.0
-                && signal(cluster, "pair_rename_consistency") < 1.0,
-            "{label}: {id} is a scaffolding family — no elected pair's content \
-             evidence may claim full duplication (agreement=1.0 or a certified \
-             rename=1.0) while the cluster wears a demoted label: {dump}",
+        assert_eq!(
+            field(cluster, "occurrence_count").as_u64().unwrap_or(0),
+            field(cluster, "occurrences_total").as_u64().unwrap_or(0),
+            "{label}: a reported family cluster must be carried untruncated — {id}: {dump}",
             id = cluster_id(cluster),
             dump = signal_dump(cluster),
         );

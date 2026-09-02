@@ -11,10 +11,9 @@
 use serde_json::Value;
 
 use super::{
-    approx, cluster_bucket, cluster_file_set, cluster_id, cluster_size, clusters,
-    expect_cluster_spanning, field, fixture, occurrence_files, per_file_metrics, run_report,
-    signal,
-    signals::{signal_dump, IDENTICAL_BUCKET},
+    cluster_file_set, cluster_id, cluster_size, clusters, expect_cluster_spanning, field, fixture,
+    occurrence_files, per_file_metrics, run_report,
+    signals::{assert_no_pair_surface_on_cluster, signal_dump},
     Result,
 };
 
@@ -40,7 +39,7 @@ pub(crate) const CALL_COPY: [&str; 2] = [CALL_ORIGIN, CALL_TWIN];
 /// The stranger whose only relation to [`CALL_COPY`] is its shape.
 pub(crate) const CALL_STRANGER: &str = "refund_emitter.py";
 
-/// Anchor positions of the call-run pair's elected measurement: the two
+/// Anchor positions of the call-run pair's selected measurement: the two
 /// five-line emitters carry enough consistent literals and explained
 /// identifiers to clear the ten-anchor certification point, so the rename
 /// proof certifies to `1.0` ([FUSED-CONTENT-GATE]). Ten is the floor the
@@ -53,7 +52,7 @@ pub(crate) const CALL_PAIR_ANCHORS: u32 = 10;
 /// `invoice_emitter.py` and `invoice_emitter_copy.py` are byte-identical
 /// files, so `def emit():` is as duplicated as the calls under it, and
 /// the published `identical` cluster spans L1-5 of both. Four was what
-/// the same-file overlap collapse elected while it ranked an
+/// the same-file overlap collapse selected while it ranked an
 /// overlapping run by cross-file edge strength: the four-call window
 /// scored higher than the function enclosing it purely by carrying less
 /// code, and the `def` line went uncounted
@@ -61,30 +60,23 @@ pub(crate) const CALL_PAIR_ANCHORS: u32 = 10;
 /// artifact; five is what the two files actually share.
 pub(crate) const CALL_LOC_PER_FILE: u64 = 5;
 
-/// Every elected-pair axis fixed by a byte-identical copy with embeddings off.
+/// Every explicit-pair axis fixed by a byte-identical copy with embeddings off.
 /// `literal_fraction` is corpus content, not evidence strength, so each fixture
 /// asserts its own authored value where that value matters.
 ///
 /// `pair_rename_consistency` is deliberately absent: a byte-identical pair
 /// carries perfect literal consistency and coverage, but the rename proof is
-/// scaled by the anchor mass `anchors / (anchors + 4)`, certified to `1.0` only
-/// at ten anchors ([FUSED-CONTENT-GATE]). A small byte-identical table (four
-/// assignments = eight anchors) therefore renders `0.6667` — honest, not
-/// saturated — so each caller asserts its own authored value.
-const VERBATIM_PAIR_SIGNALS: &[(&str, f64)] = &[
-    ("structural", 1.0),
-    ("token_jaccard", 1.0),
-    ("shape", 1.0),
-    ("embedding_cos", 0.0),
-    ("pair_agreement", 1.0),
-];
-
 /// The exact rendered `pair_rename_consistency` for a byte-identical copy
-/// whose elected pair carries `anchors` consistent positions: the anchor mass
+/// whose explicit pair carries `anchors` consistent positions: the anchor mass
 /// `anchors / (anchors + 4)`, certified to 1.0 at or above ten anchors
 /// ([FUSED-CONTENT-GATE]). The ten-anchor certification point is where the
 /// mass reaches `content_gate.support_floor` (0.70) — the same operating
 /// point `deslop_core::buckets::CONTENT_SUPPORT_FLOOR` names.
+///
+/// The pair-scoped value is not on the cluster wire; callers retain it as
+/// the fixture-authored expectation for the explicit `PairComparison`
+/// surface, while the cluster assertions pin admission, size, and the
+/// clean-surface negative.
 pub(crate) fn rename_consistency_for(anchors: u32) -> f64 {
     let anchor_mass = f64::from(anchors);
     let weight = anchor_mass / (anchor_mass + 4.0);
@@ -122,51 +114,30 @@ pub(crate) fn published(report: &Value) -> Vec<String> {
         .iter()
         .map(|cluster| {
             format!(
-                "{id} [{bucket}] {files:?}",
+                "{id} {files:?}",
                 id = cluster_id(cluster),
-                bucket = cluster_bucket(cluster),
                 files = occurrence_files(cluster),
             )
         })
         .collect()
 }
 
-/// Asserts the copy spanning `copy` survives as one saturated,
-/// `identical`, size-2 cluster that the stranger is not part of.
+/// Asserts the copy spanning `copy` survives alone as a size-2 cluster
+/// that the stranger is not part of, carrying no pair-only surface
+/// ([PIPELINE-CLUSTER-CLOSURE]).
 pub(crate) fn assert_copy_survives_alone(
     report: &Value,
     label: &str,
     copy: &[&str; 2],
     stranger: &str,
-    rename_consistency: f64,
 ) -> Result<()> {
     let cluster = expect_cluster_spanning(report, copy)?;
     let dump = signal_dump(cluster);
-    assert_eq!(
-        cluster_bucket(cluster),
-        IDENTICAL_BUCKET,
-        "{label}: the pair is copied byte for byte, so `{IDENTICAL_BUCKET}` is \
-         the only label it may carry, whatever else joined its cluster — {dump}"
-    );
+    assert_no_pair_surface_on_cluster(cluster, label);
     assert_eq!(
         cluster_size(cluster),
         2,
         "{label}: exactly the two copies are shown — {dump}"
-    );
-    for (name, expected) in VERBATIM_PAIR_SIGNALS {
-        assert!(
-            approx(signal(cluster, name), *expected),
-            "{label}: byte-proven signal `{name}` must be {expected} — {dump}"
-        );
-    }
-    assert!(
-        approx(
-            signal(cluster, "pair_rename_consistency"),
-            rename_consistency
-        ),
-        "{label}: the byte-identical pair's rename consistency must be the \
-         anchor-scaled value {rename_consistency}, never a saturated stand-in — \
-         {dump}"
     );
     assert_eq!(
         cluster_file_set(cluster),

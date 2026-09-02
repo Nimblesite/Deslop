@@ -1,16 +1,14 @@
 import type { ComponentChildren, JSX } from "preact";
-import { SIGNAL_HELP, type SignalTopic } from "../../../src/types/signals";
 
 const DOCS_BASE = "https://deslop.live/docs/vscode-cluster-panel/";
 
-/** Every helped element of the cluster panel that is not a signal. */
-export type PanelTopic =
+/** Every helped element of the cluster panel. */
+export type HelpTopic =
   | "cluster-id"
-  | "clone-bucket"
+  | "duplicate-code"
   | "ai-match"
   | "rank"
-  | "weight"
-  | "size"
+  | "mass"
   | "occurrence-count"
   | "canonical"
   | "occurrences"
@@ -21,31 +19,28 @@ export type PanelTopic =
   | "cluster-navigation"
   | "keyboard-shortcuts";
 
-export type HelpTopic = PanelTopic | SignalTopic;
-
-const PANEL_HELP: Record<PanelTopic, string> = {
+const PANEL_HELP: Record<HelpTopic, string> = {
   "cluster-id": "Stable identifier for this duplicate-code cluster.",
-  "clone-bucket": "Human label for the kind of clone Deslop detected.",
+  "duplicate-code": "Every cluster carries the same neutral title. Severity comes from the cluster's mass rank band, never a similarity bucket label.",
   "ai-match": "The embedding pass found a semantic match, not only a syntactic one.",
   rank: "Worst-first position of this cluster in the current report.",
-  weight: "Duplication impact score used for worst-first ranking.",
-  size: "Number of cloned AST members represented by this cluster.",
+  mass: "This cluster's duplicated mass — the worst-first ranking metric.",
   "occurrence-count": "Number of editor locations in this cluster.",
-  canonical: "First occurrence used as the comparison anchor.",
+  canonical: "First occurrence of the cluster — its canonical extent. Compare never uses it implicitly; pair comparison is explicit two-endpoint selection only.",
   occurrences: "The concrete locations where this cluster appears.",
   "occurrence-location": "File, line, and column that Open will navigate to.",
   "hidden-occurrence": "This occurrence matched report_hide configuration.",
   "open-action": "Open selects the clone range in the editor.",
-  "compare-action": "Compare opens a diff against the canonical occurrence.",
+  "compare-action": "Compare opens a diff between the two occurrences you selected.",
   "cluster-navigation": "Move between clusters without leaving this panel.",
   "keyboard-shortcuts": "Keyboard actions available while focus is in the panel.",
 };
 
-// [FUSED-CONTENT-GATE] The signal copy is not restated here. `SIGNAL_HELP`
-// is the one definition the strip, its tooltips and the docs anchors all
-// read, so the confidence scores and the content evidence behind them can
-// never be explained two different ways.
-const HELP_COPY: Record<HelpTopic, string> = { ...PANEL_HELP, ...SIGNAL_HELP };
+// [FUSED-PAIR-SIGNALS] The cluster panel renders cluster facts, never
+// signal bars: the measured axes describe one pair of occurrences and have
+// nothing to do with the cluster ([FUSED-CONTENT-GATE]). No signal help copy
+// lives here because no signal is rendered here.
+const HELP_COPY: Record<HelpTopic, string> = PANEL_HELP;
 
 interface HelpBubbleProps {
   topic: HelpTopic;

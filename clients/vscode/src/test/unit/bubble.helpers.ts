@@ -7,22 +7,13 @@ import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 import { BudgetScheduler, LiveBubble } from "../../bubble/live";
 import { ReportStore } from "../../reportStore";
-import { Bucket, Report, ReportCluster } from "../../types/report";
+import { Report, ReportCluster } from "../../types/report";
+import { DUPLICATION_VERDICT } from "../../clusterHover";
+import { SHORT_VERDICT } from "../../bubble/renderParts";
 import { repoMetrics, reportWithClusters } from "./report.helpers";
 import { occurrence, wireCluster } from "../cluster.helpers";
-import { signalsWith } from "../signals.helpers";
 
-export interface ClusterSignalOptions {
-  // Engine-routed wire bucket. `resolveBucket` prefers it over
-  // re-deriving one from the signal triple.
-  bucket?: Bucket;
-  structural?: number;
-  token?: number;
-  /** The engine's shape reading. Defaults to the stronger shape axis,
-   * which is what the engine stamps, but a suite pinning the bubble's
-   * shape bar sets it outright. */
-  shape?: number;
-  embedding?: number;
+export interface ClusterFixtureOptions {
   /** The engine's global worst-first rank, when the suite stages more
    * than one candidate and pins which wins. */
   rank?: number;
@@ -30,61 +21,44 @@ export interface ClusterSignalOptions {
 }
 
 const FIXTURE_TEN = 10;
-export const DEFAULT_BUBBLE_CLUSTER_WEIGHT = FIXTURE_TEN;
-export const HIGH_ELECTED_AGREEMENT = 0.95;
+export const DEFAULT_BUBBLE_CLUSTER_MASS = FIXTURE_TEN;
 export const PRIMARY_BUBBLE_CLUSTER_ID = "c-a";
 const FIXTURE_OCCURRENCE_END_BYTE = FIXTURE_TEN;
 const FIXTURE_ANALYSED_LOC = FIXTURE_TEN;
 const FIXTURE_LINE_LENGTH = FIXTURE_TEN;
 
-// Builds a two-occurrence cluster whose elected pair's byte agreement is
-// explicit, so a test can stage the exact content evidence it is
-// asserting ([FUSED-CONTENT-GATE]). Admission is the engine's bucket
-// alone; no signal value influences whether a cluster renders.
+// Builds a two-occurrence cluster carrying only cluster-owned facts:
+// rank, mass, and the occurrence count. Admission is the engine's
+// rank-band decision; pair signals never ride on a cluster
+// ([FACET-MODEL]).
 export function bubbleCluster(
   id: string,
-  weight: number,
-  pairAgreement: number,
-  options: ClusterSignalOptions = {},
+  mass: number,
+  options: ClusterFixtureOptions = {},
 ): ReportCluster {
   const total = options.occurrenceTotal ?? 2;
-  const bucket = options.bucket ?? "identical";
-  const structural = options.structural ?? 1;
-  const token = options.token ?? 1;
   return wireCluster({
     id,
     rank: options.rank ?? 1,
-    weight,
-    size: total,
-    bucket,
-    signals: signalsWith(bucket, {
-      structural,
-      token_jaccard: token,
-      shape: options.shape ?? Math.max(structural, token),
-      embedding_cos: options.embedding ?? 0,
-      pair_agreement: pairAgreement,
-    }),
+    mass,
     occurrences: [
       occurrence("/tmp/A.cs", 0, FIXTURE_OCCURRENCE_END_BYTE),
       occurrence("/tmp/B.cs", 0, FIXTURE_OCCURRENCE_END_BYTE),
     ],
     occurrences_total: total,
     occurrence_count: total,
-    interpretation: "interp",
   });
 }
 
 // The probe-shaped cluster the live-surface suites drive renders with:
-// an embedding-bearing default whose occurrence total is only set when a
-// test is pinning the report-vs-probe count contract.
+// a default whose occurrence total is only set when a test is pinning
+// the report-vs-probe count contract.
 export function probeCluster(
   id: string,
-  weight: number,
-  pairAgreement: number,
+  mass: number,
   occurrenceTotal?: number,
 ): ReportCluster {
-  const built = bubbleCluster(id, weight, pairAgreement, {
-    embedding: 0.5,
+  const built = bubbleCluster(id, mass, {
     occurrenceTotal: occurrenceTotal ?? 2,
   });
   return { ...built, occurrences_total: occurrenceTotal ?? 0 };
@@ -94,7 +68,7 @@ export function probeCluster(
 // so a probe claiming a different count is visibly wrong.
 export function probeReport(): Report {
   return reportWithClusters(
-    [probeCluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT, 5)],
+    [probeCluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_MASS, 5)],
     {},
     {
       analysed_loc: FIXTURE_ANALYSED_LOC,
@@ -237,7 +211,7 @@ export async function resolveProbe(
   request: DeferredProbeRequest | undefined,
   probe: Promise<void>,
   cancellationExpected?: boolean,
-  clusters: ReportCluster[] = [probeCluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT)],
+  clusters: ReportCluster[] = [probeCluster(PRIMARY_BUBBLE_CLUSTER_ID, DEFAULT_BUBBLE_CLUSTER_MASS)],
 ): Promise<void> {
   assert.ok(request !== undefined, "probe request must exist");
   if (cancellationExpected !== undefined) {
@@ -322,13 +296,23 @@ export function renderFullConfidenceBubble(
   clusterId: string,
 ): string {
   bubble.render(capture.editor, span(startChar), [
-    probeCluster(clusterId, DEFAULT_BUBBLE_CLUSTER_WEIGHT, HIGH_ELECTED_AGREEMENT),
+    probeCluster(clusterId, DEFAULT_BUBBLE_CLUSTER_MASS),
   ]);
-  return assertBubbleShows(
+  // [VSIX-LIVE-BUBBLE] The inline surface renders the short verdict; the
+  // hover card carries the full neutral title. Both must be present.
+  const visible = assertBubbleShows(
     capture,
-    "Identical code",
+    SHORT_VERDICT,
     `expected ${clusterId} at character ${startChar}`,
   );
+  const hover = capture.visibleHover();
+  assert.ok(hover !== undefined, "a rendered bubble must attach its hover card");
+  assert.match(
+    hover?.value ?? "",
+    new RegExp(DUPLICATION_VERDICT),
+    "the hover card must carry the full Duplicate code title",
+  );
+  return visible;
 }
 
 export function retractCluster(store: ReportStore, clusterId: string): void {
@@ -338,6 +322,9 @@ export function retractCluster(store: ReportStore, clusterId: string): void {
     clusters_added: [],
     clusters_removed: [clusterId],
     clusters_updated: [],
+    literal_findings_added: [],
+    literal_findings_removed: [],
+    literal_findings_updated: [],
     metrics: repoMetrics({ analysed_loc: FIXTURE_ANALYSED_LOC }),
     cache_stats: { hits: 0, misses: 0 },
     tool_version: "v2",

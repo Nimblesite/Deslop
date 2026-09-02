@@ -8,9 +8,9 @@
     "misses": 0
   },
   "metrics": {
-    "analysed_loc": 85,
-    "duplicated_loc": 57,
-    "duplication_percent": 67.05882352941175,
+    "analysed_loc": 82,
+    "duplicated_loc": 67,
+    "duplication_percent": 81.70731707317073,
     "clusters_total": 2,
     "duplicated_files": 5,
     "threshold": {
@@ -22,169 +22,108 @@
       {
         "path": "alpha.rs",
         "analysed_loc": 20,
-        "duplicated_loc": 15,
-        "duplication_percent": 75.0
+        "duplicated_loc": 17,
+        "duplication_percent": 85.0
       },
       {
         "path": "beta.rs",
         "analysed_loc": 20,
-        "duplicated_loc": 15,
-        "duplication_percent": 75.0
+        "duplicated_loc": 17,
+        "duplication_percent": 85.0
       },
       {
         "path": "gamma.rs",
-        "analysed_loc": 23,
-        "duplicated_loc": 15,
-        "duplication_percent": 65.21739130434783
+        "analysed_loc": 20,
+        "duplicated_loc": 17,
+        "duplication_percent": 85.0
       },
       {
         "path": "delta.rs",
         "analysed_loc": 11,
-        "duplicated_loc": 6,
-        "duplication_percent": 54.54545454545454
+        "duplicated_loc": 8,
+        "duplication_percent": 72.72727272727273
       },
       {
         "path": "epsilon.rs",
         "analysed_loc": 11,
-        "duplicated_loc": 6,
-        "duplication_percent": 54.54545454545454
+        "duplicated_loc": 8,
+        "duplication_percent": 72.72727272727273
       }
     ],
     "folders": []
   },
   "schema_doc": "",
-  "action_hints": [
-    {
-      "pattern": "bucket=identical",
-      "recommendation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
-    },
-    {
-      "pattern": "bucket=nearly-identical",
-      "recommendation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
-    },
-    {
-      "pattern": "bucket=structural-only",
-      "recommendation": "Same shape, different content. Only the code shape matches — usually sibling boilerplate. Verify before extracting. (structural-only match (unverified Type-2/3 candidate))"
-    },
-    {
-      "pattern": "bucket=loosely-similar",
-      "recommendation": "Loosely similar code. Loose textual overlap. Treat as a hint. (weak LSH-only signal (sub-Type-3))"
-    },
-    {
-      "pattern": "bucket=same-behavior",
-      "recommendation": "Same behavior, different code. The AI noticed these do the same thing written two ways — read both before merging. (Type-4 semantic clone (AI match))"
-    },
-    {
-      "pattern": "category=data",
-      "recommendation": "Repeated data rows, not duplicated logic. Consider a builder with default arguments, or move the rows to a JSON/CSV/asset file."
-    }
-  ],
   "boilerplate_hints": [],
   "embedding_provenance": null,
   "clusters": [
     {
-      "id": "ce3dbe480e4ddc06",
+      "id": "2dd2cdd63ce33c26",
       "rank": 1,
       "rank_band": "worst",
-      "weight": 136.0,
-      "size": 3,
-      "canonical_node_count": 68,
-      "signals": {
-        "structural": 1.0,
-        "token_jaccard": 1.0,
-        "shape": 1.0,
-        "embedding_cos": 0.0,
-        "pair_agreement": 1.0,
-        "pair_rename_consistency": 1.0,
-        "literal_fraction": 0.0
-      },
-      "signal_source": {
-        "left": 0,
-        "right": 1
-      },
-      "bucket": "identical",
-      "category": "logic",
-      "language": "rust",
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
+      "mass": 144,
+      "canonical_node_count": 72,
       "occurrences": [
         {
           "path": "alpha.rs",
-          "start_byte": 171,
-          "end_byte": 508,
-          "start_line": 6,
+          "start_byte": 130,
+          "end_byte": 493,
+          "start_line": 4,
           "end_line": 20,
           "hidden": false
         },
         {
           "path": "beta.rs",
-          "start_byte": 153,
-          "end_byte": 490,
-          "start_line": 6,
+          "start_byte": 129,
+          "end_byte": 492,
+          "start_line": 4,
           "end_line": 20,
           "hidden": false
         },
         {
           "path": "gamma.rs",
-          "start_byte": 175,
-          "end_byte": 512,
-          "start_line": 9,
-          "end_line": 23,
+          "start_byte": 130,
+          "end_byte": 493,
+          "start_line": 4,
+          "end_line": 20,
           "hidden": false
         }
       ],
       "occurrences_total": 3,
       "occurrence_count": 3,
-      "occurrences_truncated": false,
-      "summary": "3 copies of a 68-node subtree at alpha.rs:6:1, beta.rs:6:1, gamma.rs:9:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
-      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+      "occurrences_truncated": false
     },
     {
-      "id": "611b775c257d2c5e",
+      "id": "3fb2a8328b849757",
       "rank": 2,
       "rank_band": "faint",
-      "weight": 38.0,
-      "size": 2,
-      "canonical_node_count": 38,
-      "signals": {
-        "structural": 1.0,
-        "token_jaccard": 1.0,
-        "shape": 1.0,
-        "embedding_cos": 0.0,
-        "pair_agreement": 1.0,
-        "pair_rename_consistency": 1.0,
-        "literal_fraction": 0.0
-      },
-      "signal_source": {
-        "left": 0,
-        "right": 1
-      },
-      "bucket": "identical",
-      "category": "logic",
-      "language": "rust",
-      "evidence_verdict": "The shapes match at 1.00 and the content evidence vouches for it: the locations share 1.00 of their content and consistent renaming explains 1.00 of what differs, so the match clears the 0.70 content floor.",
+      "mass": 44,
+      "canonical_node_count": 44,
       "occurrences": [
         {
           "path": "delta.rs",
-          "start_byte": 156,
-          "end_byte": 328,
-          "start_line": 6,
+          "start_byte": 131,
+          "end_byte": 341,
+          "start_line": 4,
           "end_line": 11,
           "hidden": false
         },
         {
           "path": "epsilon.rs",
-          "start_byte": 172,
-          "end_byte": 344,
-          "start_line": 6,
+          "start_byte": 133,
+          "end_byte": 343,
+          "start_line": 4,
           "end_line": 11,
           "hidden": false
         }
       ],
       "occurrences_total": 2,
       "occurrence_count": 2,
-      "occurrences_truncated": false,
-      "summary": "2 copies of a 38-node subtree at delta.rs:6:1, epsilon.rs:6:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
-      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+      "occurrences_truncated": false
     }
-  ]
+  ],
+  "literal_findings": [],
+  "literal_findings_total": 0,
+  "literal_findings_hidden": 0,
+  "literal_findings_capped": false,
+  "literal_max_findings": 0
 }

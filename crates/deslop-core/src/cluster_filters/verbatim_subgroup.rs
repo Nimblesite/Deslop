@@ -51,7 +51,7 @@ use super::{
     family::{families_by, restrict},
     is_noise_pattern,
     snippets::ParseCache,
-    spans_multiple_files, NoiseFilter, NoiseStage,
+    spans_multiple_files, NoiseFilter,
 };
 
 /// Smallest byte-identical family worth keeping, counted in *distinct
@@ -321,16 +321,12 @@ fn split_one<S: BuildHasher>(
 ) -> Option<Vec<FusedCluster>> {
     let families = splittable_families(fused, fingerprints, sources)?;
     let members = resolved_members(fused, fingerprints)?;
-    let Some(filter) =
-        is_noise_pattern(&members, sources, file_languages, cache, NoiseStage::Split)
-    else {
-        // [CLONE-NOISE-VERBATIM-SUBGROUP]: a component the noise filters
-        // do not suppress is handed on untouched — no split, no member
-        // dropped, no panic. The pairwise admission that built the
-        // closure decides its fate
-        // ([FUSED-STRATEGY-BOUNDED-MAX] step 4).
-        return None;
-    };
+    // [CLONE-NOISE-VERBATIM-SUBGROUP]: a component the noise filters
+    // do not suppress is handed on untouched — no split, no member
+    // dropped, no panic. The pairwise admission that built the
+    // closure decides its fate
+    // ([FUSED-STRATEGY-BOUNDED-MAX] step 4).
+    let filter = is_noise_pattern(&members, sources, file_languages, cache)?;
     let keepable: Vec<&Vec<usize>> = families
         .iter()
         .filter(|family| is_copied_family(family, fingerprints, filter))
@@ -388,7 +384,7 @@ fn resolved_members(
 
 /// Whether `family` is the copy the escape hatch exists to protect
 /// ([CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE]): a byte-identical
-/// family of at least two members which, for most filters, must also
+/// family at two distinct locations which, for most filters, must also
 /// span at least two files.
 ///
 /// Byte-identity **across files** is proof of copying — independently
@@ -429,9 +425,9 @@ fn is_copied_family(family: &[usize], fingerprints: &[Fingerprint], filter: Nois
 /// re-parsed a component no split could change, and counted the noise
 /// filters as having examined it ([CLONE-NOISE-VERBATIM-SUBGROUP-EXACT-BYTES],
 /// [PERF-FLUTTER-TODO-OBSERVABILITY]). The duplicate views stay in the
-/// family — the same-file overlap collapse elects the representative
-/// that carries the strongest cross-file edge, and it must still see
-/// every view to choose between them ([PIPELINE-CLUSTER-EXACT]).
+/// family — the same-file overlap collapse selects the authored physical
+/// view by scope and width, and it must still see every view
+/// ([PIPELINE-CLUSTER-EXACT-SCOPE]).
 fn distinct_locations(family: &[usize], fingerprints: &[Fingerprint]) -> usize {
     family
         .iter()
@@ -475,3 +471,42 @@ fn member_text<'a>(
 
 #[cfg(test)]
 mod tests;
+
+/// [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] Whether a reported
+/// cluster is the byte-identical copy the escape hatch protects from
+/// `filter`'s suppression: every occurrence shares exact source bytes,
+/// at two or more distinct locations, spanning two files where the
+/// filter demands a cross-file copy.
+pub(crate) fn escapes_as_copy(
+    members: &[Fingerprint],
+    sources: &HashMap<FileId, Vec<u8>>,
+    filter: NoiseFilter,
+) -> bool {
+    let texts: Vec<&[u8]> = members
+        .iter()
+        .filter_map(|member| {
+            sources
+                .get(&member.file_id)?
+                .get(member.byte_range.start..member.byte_range.end)
+        })
+        .collect();
+    let Some(first) = texts.first() else {
+        return false;
+    };
+    texts.len() == members.len()
+        && texts.iter().all(|text| text == first)
+        && members
+            .iter()
+            .map(|member| {
+                (
+                    member.file_id,
+                    member.byte_range.start,
+                    member.byte_range.end,
+                )
+            })
+            .collect::<HashSet<_>>()
+            .len()
+            >= MIN_FAMILY_OCCURRENCES
+        && (!filter.demands_cross_file_copy()
+            || spans_multiple_files(members.iter().map(|member| member.file_id)))
+}

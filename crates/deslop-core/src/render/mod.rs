@@ -13,7 +13,6 @@ mod html_css;
 mod html_escape;
 mod html_footer;
 pub mod markdown;
-pub mod signals;
 pub mod text;
 
 pub use ast::render_ast_dump;

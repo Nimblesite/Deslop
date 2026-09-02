@@ -1,4 +1,4 @@
-//! Public report/config API coverage.
+//! Public report and explicit-pair wire-contract coverage.
 
 use std::{fs, path::PathBuf};
 
@@ -6,82 +6,115 @@ use deslop_core::{
     ast::ByteRange,
     boilerplate::BoilerplateRange,
     config::ExclusionConfig,
-    report::{
-        ActionHint, CacheStats, EmbeddingProvenance, Report, ReportCluster, ReportOccurrence,
-        ReportSignalSource, ReportSignals,
-    },
+    report::{PairClassification, PairComparison, PairEndpoint, PairEvidence, ReportOccurrence},
     report_boilerplate::build_boilerplate_hints,
-    report_metrics::RepoMetrics,
+    report_fixtures::{fixture_cluster, fixture_report},
     state::FileRegistry,
 };
 
+/// Requested live-wire occurrence budget.
+const WIRE_OCCURRENCE_CAP: usize = 2;
+/// Occurrences carried by the untruncated sample cluster.
+const FULL_OCCURRENCE_COUNT: usize = 3;
+/// Pair and presentation fields forbidden on a cluster.
+const FORBIDDEN_CLUSTER_FIELDS: [&str; 11] = [
+    "signals",
+    "signal_source",
+    "content",
+    "evidence_verdict",
+    "bucket",
+    "category",
+    "classification",
+    "weight",
+    "summary",
+    "interpretation",
+    "language",
+];
+
 #[test]
-fn truncate_for_wire_caps_occurrences_and_blanks_derivable_text() {
+fn truncate_for_wire_caps_occurrences_without_inventing_a_pair() -> anyhow::Result<()> {
+    let original = sample_report();
+    let original_mass = original
+        .clusters
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("sample report must contain a cluster"))?
+        .mass;
     let report = sample_report()
         .truncate_for_wire(WIRE_OCCURRENCE_CAP)
         .truncate_for_wire(WIRE_OCCURRENCE_CAP);
+    let cluster = report
+        .clusters
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("truncated report must retain its cluster"))?;
     assert!(report.schema_doc.is_empty());
-    let Some(cluster) = report.clusters.first() else {
-        assert_eq!(report.clusters.len(), 1);
-        return;
-    };
     assert_eq!(cluster.occurrences.len(), WIRE_OCCURRENCE_CAP);
     assert_eq!(cluster.occurrences_total, FULL_OCCURRENCE_COUNT);
+    assert_eq!(cluster.occurrence_count, FULL_OCCURRENCE_COUNT);
     assert!(cluster.occurrences_truncated);
-    assert_eq!(
-        cluster
-            .occurrences
-            .iter()
-            .map(|occurrence| occurrence.path.as_path())
-            .collect::<Vec<_>>(),
-        EXPECTED_SOURCE_PATHS.map(std::path::Path::new),
-        "truncation must retain the elected evidence endpoints, not merely the first occurrences"
-    );
-    assert_eq!(
-        cluster.signal_source,
-        Some(ReportSignalSource { left: 0, right: 1 }),
-        "signal_source must be reindexed into the truncated occurrence list"
-    );
-    assert!(cluster.summary.is_empty());
-    assert!(cluster.interpretation.is_empty());
+    assert_eq!(cluster.mass, original_mass);
+    assert_eq!(cluster.rank, 1);
+    Ok(())
 }
 
-/// Requested live-wire occurrence budget.
-const WIRE_OCCURRENCE_CAP: usize = 2;
-/// A wire budget that cannot carry both endpoints of pair evidence.
-const SINGLE_OCCURRENCE_CAP: usize = 1;
-/// Occurrences carried by the untruncated sample cluster.
-const FULL_OCCURRENCE_COUNT: usize = 3;
-/// Original occurrence positions elected as the signal source.
-const ORIGINAL_SIGNAL_SOURCE: ReportSignalSource = ReportSignalSource { left: 1, right: 2 };
-/// Paths belonging to the elected source after the first occurrence is discarded.
-const EXPECTED_SOURCE_PATHS: [&str; 2] = ["file-1.cs", "file-2.cs"];
+#[test]
+fn report_cluster_serialises_only_mass_membership_and_diff_state() -> anyhow::Result<()> {
+    let value = serde_json::to_value(sample_report())?;
+    let cluster = value
+        .get("clusters")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|clusters| clusters.first())
+        .ok_or_else(|| anyhow::anyhow!("serialized report must contain its cluster"))?;
+    assert_eq!(
+        cluster.get("mass").and_then(serde_json::Value::as_u64),
+        Some(8)
+    );
+    assert_eq!(
+        cluster
+            .get("canonical_node_count")
+            .and_then(serde_json::Value::as_u64),
+        Some(4)
+    );
+    assert_eq!(
+        cluster
+            .get("occurrence_count")
+            .and_then(serde_json::Value::as_u64),
+        Some(u64::try_from(FULL_OCCURRENCE_COUNT).unwrap_or(u64::MAX))
+    );
+    for field in FORBIDDEN_CLUSTER_FIELDS {
+        assert!(
+            cluster.get(field).is_none(),
+            "cluster leaked pair/presentation field {field}: {cluster:#}"
+        );
+    }
+    Ok(())
+}
 
 #[test]
-fn truncate_for_wire_removes_pair_evidence_when_the_source_pair_cannot_fit() -> anyhow::Result<()> {
-    let report = sample_report().truncate_for_wire(SINGLE_OCCURRENCE_CAP);
-    let [cluster] = report.clusters.as_slice() else {
-        anyhow::bail!("the sample report must retain exactly one cluster");
+fn explicit_pair_comparison_round_trips_both_exact_endpoints_and_evidence() -> anyhow::Result<()> {
+    let comparison = PairComparison {
+        left: endpoint("left.rs", 10, 20),
+        right: endpoint("right.rs", 30, 40),
+        evidence: PairEvidence {
+            structural: 0.8,
+            token_jaccard: 0.9,
+            embedding_cos: 0.7,
+            agreement: 0.75,
+            rename_consistency: 0.6,
+            literal_fraction: 0.1,
+            fused_score: 0.9,
+            content_required: true,
+            content_ok: true,
+            admitted: true,
+            classification: Some(PairClassification::NearlyIdentical),
+            explanation: "pair clears admission".to_owned(),
+        },
     };
-    assert_eq!(cluster.occurrences.len(), SINGLE_OCCURRENCE_CAP);
-    assert_eq!(cluster.signal_source, None);
-    assert_eq!(cluster.signals.structural.to_bits(), 0.0_f64.to_bits());
-    assert_eq!(cluster.signals.token_jaccard.to_bits(), 0.0_f64.to_bits());
-    assert_eq!(cluster.signals.embedding_cos.to_bits(), 0.0_f64.to_bits());
-    assert_eq!(cluster.signals.shape.to_bits(), 0.0_f64.to_bits());
-    assert_eq!(cluster.signals.pair_agreement.to_bits(), 0.0_f64.to_bits());
-    assert_eq!(
-        cluster.signals.pair_rename_consistency.to_bits(),
-        0.0_f64.to_bits()
-    );
-    assert_eq!(
-        cluster.signals.literal_fraction.to_bits(),
-        0.0_f64.to_bits()
-    );
-    assert!(
-        cluster.evidence_verdict.is_empty(),
-        "an anonymous pair verdict must not survive wire truncation"
-    );
+    let encoded = serde_json::to_vec(&comparison)?;
+    let decoded: PairComparison = serde_json::from_slice(&encoded)?;
+    assert_eq!(decoded, comparison);
+    assert_ne!(decoded.left, decoded.right);
+    assert!(decoded.evidence.admitted);
+    assert!(decoded.evidence.content_ok);
     Ok(())
 }
 
@@ -100,13 +133,20 @@ fn boilerplate_hints_use_default_recommendation_for_future_languages() -> anyhow
     let ranges = vec![range(file_id, "go", 0, 10), range(file_id, "go", 11, 20)];
     let hints = build_boilerplate_hints(&ranges, &registry, tmp.path(), &config);
     assert_eq!(hints.len(), 1);
-    let Some(hint) = hints.first() else {
-        assert_eq!(hints.len(), 1);
-        return Ok(());
-    };
+    let hint = hints
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("the fixture must produce one hint"))?;
     assert_eq!(hint.language, "go");
     assert!(hint.recommendation.contains("harder to read"));
     Ok(())
+}
+
+fn endpoint(path: &str, start_byte: usize, end_byte: usize) -> PairEndpoint {
+    PairEndpoint {
+        path: PathBuf::from(path),
+        start_byte,
+        end_byte,
+    }
 }
 
 fn range(
@@ -122,71 +162,8 @@ fn range(
     }
 }
 
-fn sample_report() -> Report {
-    Report {
-        tool_version: "test".to_owned(),
-        min_nodes: 3,
-        files_analysed: 2,
-        clusters_hidden: 0,
-        cache_stats: CacheStats::default(),
-        metrics: RepoMetrics::default(),
-        schema_doc: "schema".to_owned(),
-        action_hints: vec![ActionHint {
-            pattern: "bucket=identical".to_owned(),
-            recommendation: "extract".to_owned(),
-        }],
-        boilerplate_hints: Vec::new(),
-        embedding_provenance: Some(EmbeddingProvenance {
-            provider_id: "stub".to_owned(),
-            model_id: "model".to_owned(),
-            model_version: "v1".to_owned(),
-            dimensions: 3,
-            attempted_subtrees: 0,
-            succeeded_subtrees: 0,
-            indexed_subtrees: 0,
-            failed_subtrees: 0,
-        }),
-        clusters: vec![sample_cluster()],
-        clusters_outside_diff: None,
-    }
-}
-
-fn sample_cluster() -> ReportCluster {
-    let signals = ReportSignals {
-        structural: 1.0,
-        token_jaccard: 1.0,
-        shape: 1.0,
-        embedding_cos: 0.0,
-        pair_agreement: 0.0,
-        pair_rename_consistency: 0.0,
-        literal_fraction: 0.0,
-    };
-    ReportCluster {
-        id: "abcdef".to_owned(),
-        rank: 1,
-        rank_band: "faint".to_owned(),
-        weight: 1.0,
-        size: 3,
-        canonical_node_count: 12,
-        signals,
-        signal_source: Some(ORIGINAL_SIGNAL_SOURCE),
-        bucket: "identical".to_owned(),
-        category: "logic".to_owned(),
-        language: "rust".to_owned(),
-        evidence_verdict: deslop_core::render::signals::content_evidence_verdict(signals),
-        occurrences: sample_occurrences(),
-        occurrences_total: 0,
-        occurrence_count: 3,
-        occurrences_truncated: false,
-        summary: "summary".to_owned(),
-        interpretation: "interpretation".to_owned(),
-        intersects_diff: None,
-        is_newly_introduced: None,
-    }
-}
-
-fn sample_occurrences() -> Vec<ReportOccurrence> {
-    (0_usize..3)
+fn sample_report() -> deslop_core::Report {
+    let occurrences = (0_usize..FULL_OCCURRENCE_COUNT)
         .map(|index| {
             let start_byte = index.saturating_mul(10);
             ReportOccurrence {
@@ -199,5 +176,8 @@ fn sample_occurrences() -> Vec<ReportOccurrence> {
                 in_diff: None,
             }
         })
-        .collect()
+        .collect();
+    let mut report = fixture_report(vec![fixture_cluster("abcdef", occurrences)]);
+    "schema".clone_into(&mut report.schema_doc);
+    report
 }

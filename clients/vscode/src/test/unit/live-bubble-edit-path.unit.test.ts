@@ -13,6 +13,8 @@ import {
   probeCluster as cluster,
   renderFullConfidenceBubble,
 } from "./bubble.helpers";
+import { SHORT_VERDICT } from "../../bubble/renderParts";
+import { reportWithClusters } from "./report.helpers";
 
 suite("LiveBubble onEdit path", () => {
   test("buffer edit path reaches probe and the LSP request is dispatched with byte offsets", async () => {
@@ -61,6 +63,12 @@ suite("LiveBubble onEdit path", () => {
     } as unknown as LanguageClient;
     const bubble = new LiveBubble(store, () => fakeClient);
     const capture = capturingEditor();
+    // [VSIX-LIVE-BUBBLE] Only reported clusters render, so seed the report
+    // with both clusters the test renders.
+    store.setSnapshot(
+      reportWithClusters([cluster("c-seed", 10), cluster("c-after", 10)]),
+      0,
+    );
     try {
       // Seed an active bubble so we can observe the rejection → clearBubble path
       // exercise the `active.editor` branch of clearBubble.
@@ -76,8 +84,8 @@ suite("LiveBubble onEdit path", () => {
       const visible = renderFullConfidenceBubble(capture, bubble, 6, "c-after");
       assert.match(
         visible,
-        /Identical code/,
-        "the recovered bubble keeps its bucket title",
+        new RegExp(SHORT_VERDICT),
+        "the recovered bubble keeps its short verdict",
       );
     } finally {
       bubble.dispose();

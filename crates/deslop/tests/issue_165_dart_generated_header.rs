@@ -15,6 +15,7 @@ use std::{
 use anyhow::Result;
 use serde_json::Value;
 
+use crate::common::scan_dir::temp_scan_dir;
 use crate::common::*;
 
 fn report_path(tmp: &Path) -> PathBuf {
@@ -37,9 +38,7 @@ fn cluster_spans(cluster: &Value, left: &str, right: &str) -> bool {
 
 #[test]
 fn dart_automatically_generated_banner_is_hidden() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let src = tmp.path().join("src");
-    fs::create_dir(&src)?;
+    let (tmp, src) = temp_scan_dir("src")?;
 
     // The Flutter framework banner verbatim, followed by a non-trivial
     // duplicated function body so a genuine clone cluster would surface

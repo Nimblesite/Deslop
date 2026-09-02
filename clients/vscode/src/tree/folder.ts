@@ -36,8 +36,8 @@ function childrenOf(tree: PathTree<FileAgg>, sortBy: SortBy): BuiltChild[] {
     children.push({
       weighted: {
         path: baseName(displayPath(file.path)),
-        weight: file.worst.weight,
-        weightTotal: file.weightTotal,
+        mass: file.worst.mass,
+        massTotal: file.massTotal,
       },
       worst: file.worst,
       node: fileNodeWithChildren(file),
@@ -56,13 +56,13 @@ function folderChild(folder: PathTree<FileAgg>, sortBy: SortBy): BuiltChild[] {
   const children = childrenOf(folder, sortBy);
   const worst = worstCluster(children.map((child) => child.worst));
   if (!worst) return [];
-  const weightTotal = children.reduce((sum, child) => sum + child.weighted.weightTotal, 0);
+  const massTotal = children.reduce((sum, child) => sum + child.weighted.massTotal, 0);
   const node = new FolderNode(
     folder.path,
     folder.label,
     children.map((child) => child.node),
-    worst.weight,
+    worst.mass,
     countLeaves(folder),
   );
-  return [{ weighted: { path: folder.label, weight: worst.weight, weightTotal }, worst, node }];
+  return [{ weighted: { path: folder.label, mass: worst.mass, massTotal }, worst, node }];
 }

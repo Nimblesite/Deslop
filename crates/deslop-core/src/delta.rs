@@ -10,7 +10,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::report::{Report, ReportCluster};
+use crate::{
+    report::{Report, ReportCluster},
+    wire_generated::LiteralFinding,
+};
 
 // `ReportDelta` is generated from `docs/models/live-ipc.td` by
 // `scripts/typediagram/generate.mjs`. The data shape lives in
@@ -54,6 +57,8 @@ impl ReportDelta {
             .map(|id| (*id).to_owned())
             .collect();
         clusters_removed.sort();
+        let (literal_findings_added, literal_findings_removed, literal_findings_updated) =
+            literal_changes(prev.map(|(_, report)| report), next);
 
         Self {
             from_generation,
@@ -61,6 +66,9 @@ impl ReportDelta {
             clusters_added,
             clusters_removed,
             clusters_updated,
+            literal_findings_added,
+            literal_findings_removed,
+            literal_findings_updated,
             metrics: next.metrics.clone(),
             cache_stats: next.cache_stats,
             tool_version: next.tool_version.clone(),
@@ -76,7 +84,50 @@ impl ReportDelta {
         self.clusters_added.is_empty()
             && self.clusters_removed.is_empty()
             && self.clusters_updated.is_empty()
+            && self.literal_findings_added.is_empty()
+            && self.literal_findings_removed.is_empty()
+            && self.literal_findings_updated.is_empty()
     }
+}
+
+/// Computes deterministic literal-finding changes separately from clone clusters.
+fn literal_changes(
+    previous: Option<&Report>,
+    next: &Report,
+) -> (Vec<LiteralFinding>, Vec<String>, Vec<LiteralFinding>) {
+    let previous = previous.map(literals_by_id).unwrap_or_default();
+    let next_by_id = literals_by_id(next);
+    let added = next
+        .literal_findings
+        .iter()
+        .filter(|finding| !previous.contains_key(finding.id.as_str()))
+        .cloned()
+        .collect();
+    let updated = next
+        .literal_findings
+        .iter()
+        .filter(|finding| {
+            previous
+                .get(finding.id.as_str())
+                .is_some_and(|old| *old != *finding)
+        })
+        .cloned()
+        .collect();
+    let removed = previous
+        .keys()
+        .filter(|id| !next_by_id.contains_key(**id))
+        .map(|id| (*id).to_owned())
+        .collect();
+    (added, removed, updated)
+}
+
+/// Indexes literal findings by stable id.
+fn literals_by_id(report: &Report) -> BTreeMap<&str, &LiteralFinding> {
+    report
+        .literal_findings
+        .iter()
+        .map(|finding| (finding.id.as_str(), finding))
+        .collect()
 }
 
 /// Indexes a report's clusters by id. `BTreeMap` keeps the iteration

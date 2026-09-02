@@ -569,7 +569,7 @@ fn struct_body_in_range_is_all_fields(struct_item: Node<'_>, range: ByteRange) -
 ///
 /// `use_declaration` is on that list because a sibling window over a data
 /// model starts where the file starts. `host.rs` and `manifest.rs` in the
-/// #224 fixture hold nothing but distinct serde structs, and the elected
+/// #224 fixture hold nothing but distinct serde structs, and the selected
 /// window opened on their shared `use serde::{Deserialize, Serialize};` —
 /// one non-struct sibling, and the whole 125-node view escaped the filter
 /// and published `structural_only` across both files. An import is already

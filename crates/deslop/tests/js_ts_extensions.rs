@@ -14,6 +14,9 @@ use std::{collections::BTreeSet, ffi::OsStr, path::Path};
 use anyhow::Result;
 use serde_json::Value;
 
+use crate::common::signals::{
+    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+};
 use crate::common::*;
 
 /// Asserts discovery reached every file the fixture holds. Without it a
@@ -38,14 +41,16 @@ fn javascript_family_clusters_across_js_mjs_and_cjs_extensions() -> Result<()> {
     // All three extensions carry the same reconciliation routine; because
     // they are one language they cluster together into a single family.
     let clone = expect_cluster_spanning(&report, &["inventory.js", "ledger.mjs", "stock.cjs"])?;
-    assert_eq!(cluster_bucket(clone), "nearly_identical");
-    assert!(approx(signal(clone, "structural"), 1.0));
-    assert!(approx(signal(clone, "token_jaccard"), 1.0));
-    assert!(approx(signal(clone, "pair_agreement"), 1.0));
-    assert!(approx(signal(clone, "pair_rename_consistency"), 1.0));
-    assert_eq!(
-        field(clone, "signal_source"),
-        &serde_json::json!({"left": 0, "right": 1})
+    // [PIPELINE-CLUSTER-CLOSURE] The nearly-identical verdict and the
+    // signal triple are pair-scoped; the wire facts that hold the
+    // acceptance: the family is admitted, mass-honest, clean-surfaced and
+    // byte-distinct (a rename across extensions, not an unedited copy).
+    assert_structural_only_contract(clone, "js-mjs-cjs family");
+    assert_no_pair_surface_on_cluster(clone, "js-mjs-cjs family");
+    assert!(
+        !has_verbatim_pair(&fixture("js-mjs-cjs-family"), clone)?,
+        "the family is a rename across .js/.mjs/.cjs and must slice to \
+         differing bytes: {clone:#}"
     );
     Ok(())
 }
@@ -54,12 +59,12 @@ fn javascript_family_clusters_across_js_mjs_and_cjs_extensions() -> Result<()> {
 fn js_and_jsx_cluster_as_the_same_javascript_language() -> Result<()> {
     // A `.jsx` file and a `.js` file carrying the same logic are both the
     // `javascript` language, so the same-language filter lets them cluster.
-    assert_bucketed_clone(
-        "js-jsx-family",
-        10,
-        &["BadgeList.jsx", "useBadge.js"],
-        "identical",
-    )
+    // Both occurrences publish at the same authored extent — the
+    // `buildBadgeModel` declaration, which the two files share byte for
+    // byte ([PIPELINE-CLUSTER-EXACT-SCOPE]). The `export` keyword in front
+    // of one copy is not part of the function and must not widen one
+    // occurrence into a byte-distinct view of the other.
+    assert_bucketed_clone("js-jsx-family", 10, &["BadgeList.jsx", "useBadge.js"], true)
 }
 
 #[test]
@@ -85,9 +90,15 @@ fn ts_and_tsx_clones_stay_in_separate_language_clusters() -> Result<()> {
     // The `.ts` pair clusters with the `.ts` pair and the `.tsx` pair with
     // the `.tsx` pair — two clusters that never share an occurrence.
     let typescript_pair = expect_cluster_spanning(&report, &["formatA.ts", "formatB.ts"])?;
-    assert_eq!(cluster_bucket(typescript_pair), "identical");
+    assert!(
+        has_verbatim_pair(&fixture("ts-tsx-language-split"), typescript_pair)?,
+        "the .ts pair is byte-proven: {typescript_pair:#}"
+    );
     let react_pair = expect_cluster_spanning(&report, &["BadgeA.tsx", "BadgeB.tsx"])?;
-    assert_eq!(cluster_bucket(react_pair), "identical");
+    assert!(
+        has_verbatim_pair(&fixture("ts-tsx-language-split"), react_pair)?,
+        "the .tsx pair is byte-proven: {react_pair:#}"
+    );
     for cluster in clusters(&report) {
         let extensions: BTreeSet<String> = cluster_file_set(cluster)
             .iter()

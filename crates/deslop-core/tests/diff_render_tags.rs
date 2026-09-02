@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 use deslop_core::{
     render::{render_html, render_text},
-    report::{ActionHint, CacheStats, Report, ReportCluster, ReportOccurrence},
+    report::{CacheStats, Report, ReportCluster, ReportOccurrence},
     report_metrics::{DiffMetrics, RepoMetrics, ThresholdSource, ThresholdSummary},
 };
 
@@ -82,11 +82,8 @@ fn cluster(id: &str, first: &str, second: &str, tags: Tags) -> ReportCluster {
             occurrence(second, 30, tags.second),
         ],
     );
-    cluster.weight = 4.5;
     cluster.canonical_node_count = 12;
-    "csharp".clone_into(&mut cluster.language);
-    "two identical copies".clone_into(&mut cluster.summary);
-    "extract a shared helper".clone_into(&mut cluster.interpretation);
+    cluster.mass = 12;
     cluster.intersects_diff = tags.intersects;
     cluster.is_newly_introduced = tags.newly;
     cluster
@@ -159,14 +156,15 @@ fn report(
         cache_stats: CacheStats::default(),
         metrics: metrics(diff),
         schema_doc: "schema".to_owned(),
-        action_hints: vec![ActionHint {
-            pattern: "bucket=identical".to_owned(),
-            recommendation: "extract".to_owned(),
-        }],
         boilerplate_hints: Vec::new(),
         embedding_provenance: None,
         clusters,
         clusters_outside_diff: outside,
+        literal_findings: Vec::new(),
+        literal_findings_total: 0,
+        literal_findings_hidden: 0,
+        literal_findings_capped: false,
+        literal_max_findings: 0,
     }
 }
 
@@ -228,51 +226,33 @@ const UNTAGGED_TEXT: &str = "deslop test -- 6 file(s), 3 cluster(s), 0 hidden
 repo: 20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files)
 threshold: 10.00% (breached)
 embeddings: off
--- action hints --
-  [bucket=identical] extract
-#1 [aaaa1111] weight=4.50 size=2 nodes=12
-  two identical copies
-  :: extract a shared helper
-#2 [bbbb2222] weight=4.50 size=2 nodes=12
-  two identical copies
-  :: extract a shared helper
-#3 [cccc3333] weight=4.50 size=2 nodes=12
-  two identical copies
-  :: extract a shared helper
+#1 [aaaa1111] mass=12 occurrences=2 canonical_nodes=12
+  - src/caller.rs:8:17
+  - src/helper.rs:30:39
+#1 [bbbb2222] mass=12 occurrences=2 canonical_nodes=12
+  - src/fresh_a.rs:8:17
+  - src/fresh_b.rs:30:39
+#1 [cccc3333] mass=12 occurrences=2 canonical_nodes=12
+  - src/legacy_a.rs:8:17
+  - src/legacy_b.rs:30:39
 ";
 
-/// A `--diff` run: the added-lines figure and one badged row per
-/// occurrence; no diff-threshold verdict (the repo gate governs) and
-/// no delta line (nothing was omitted).
 const DIFF_TEXT: &str = "deslop test -- 6 file(s), 3 cluster(s), 0 hidden
 repo: 20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files)
 threshold: 10.00% (breached)
 diff: 63.2% of added lines duplicated (24 / 38 added LOC)
 embeddings: off
--- action hints --
-  [bucket=identical] extract
-#1 [aaaa1111] weight=4.50 size=2 nodes=12
-  two identical copies
-  :: extract a shared helper
-  - src/caller.rs:8-17 [in diff]
-  - src/helper.rs:30-39 [existing]
-#2 [bbbb2222] weight=4.50 size=2 nodes=12
-  two identical copies
-  :: extract a shared helper
-  - src/fresh_a.rs:8-17 [in diff]
-  - src/fresh_b.rs:30-39 [in diff]
-#3 [cccc3333] weight=4.50 size=2 nodes=12
-  two identical copies
-  :: extract a shared helper
-  - src/legacy_a.rs:8-17 [existing]
-  - src/legacy_b.rs:30-39 [existing]
+#1 [aaaa1111] mass=12 occurrences=2 canonical_nodes=12
+  - src/caller.rs:8:17 [in diff]
+  - src/helper.rs:30:39 [existing]
+#1 [bbbb2222] mass=12 occurrences=2 canonical_nodes=12
+  - src/fresh_a.rs:8:17 [in diff]
+  - src/fresh_b.rs:30:39 [in diff]
+#1 [cccc3333] mass=12 occurrences=2 canonical_nodes=12
+  - src/legacy_a.rs:8:17 [existing]
+  - src/legacy_b.rs:30:39 [existing]
 ";
 
-/// A `--diff --only-changed` run: the governing diff gate renders its
-/// verdict, the delta line carries all four figures (intersecting =
-/// newly + cross-file; omitted named beside them), and the repo line
-/// still says 3 clusters — derived as `clusters_total +
-/// clusters_outside_diff`, since `clusters_total` follows the body.
 const ONLY_CHANGED_TEXT: &str = "deslop test -- 6 file(s), 2 cluster(s), 0 hidden
 repo: 20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files)
 threshold: 10.00% (ok)
@@ -280,22 +260,14 @@ diff: 63.2% of added lines duplicated (24 / 38 added LOC)
 diff threshold: 0.00% (breached)
 delta: 2 cluster(s) intersect the diff — 1 newly introduced, 1 cross-file with untouched code; 1 untouched cluster(s) omitted
 embeddings: off
--- action hints --
-  [bucket=identical] extract
-#1 [aaaa1111] weight=4.50 size=2 nodes=12
-  two identical copies
-  :: extract a shared helper
-  - src/caller.rs:8-17 [in diff]
-  - src/helper.rs:30-39 [existing]
-#2 [bbbb2222] weight=4.50 size=2 nodes=12
-  two identical copies
-  :: extract a shared helper
-  - src/fresh_a.rs:8-17 [in diff]
-  - src/fresh_b.rs:30-39 [in diff]
+#1 [aaaa1111] mass=12 occurrences=2 canonical_nodes=12
+  - src/caller.rs:8:17 [in diff]
+  - src/helper.rs:30:39 [existing]
+#1 [bbbb2222] mass=12 occurrences=2 canonical_nodes=12
+  - src/fresh_a.rs:8:17 [in diff]
+  - src/fresh_b.rs:30:39 [in diff]
 ";
 
-/// The untagged banner, closed at the threshold verdict — pinning the
-/// exact bytes forecloses any diff tail leaking into a no-diff run.
 const UNTAGGED_BANNER: &str = "<p class=\"metrics-banner metrics-banner--breached\">repo: \
      20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files) · threshold 10.00% \
      (breached)</p>";
@@ -333,7 +305,7 @@ fn untagged_report_renders_the_exact_pre_diff_bytes() {
         &[
             (UNTAGGED_BANNER, 1, "banner ends at the repo verdict"),
             (
-                "class=\"cluster-card kind-identical cat-logic\"",
+                "class=\"cluster-card\"",
                 3,
                 "all three cards carry the plain class list",
             ),
@@ -360,12 +332,12 @@ fn diff_tagged_html_marks_banner_cards_badges_and_facets() {
         &[
             (DIFF_BANNER, 1, "banner carries the added-lines figure"),
             (
-                "class=\"cluster-card kind-identical cat-logic in-diff\"",
+                "class=\"cluster-card in-diff\"",
                 2,
                 "the mixed and fresh cards are marked in-diff",
             ),
             (
-                "class=\"cluster-card kind-identical cat-logic\"",
+                "class=\"cluster-card\"",
                 1,
                 "the legacy card keeps the plain class list",
             ),

@@ -81,12 +81,8 @@
         "title": "Deslop: Jump to Next Occurrence in Cluster"
       },
       {
-        "command": "deslop.compareWithCanonical",
-        "title": "Compare With Canonical"
-      },
-      {
-        "command": "deslop.compareOccurrenceWithCanonical",
-        "title": "Compare With Canonical"
+        "command": "deslop.comparePair",
+        "title": "Deslop: Compare Selected Occurrences"
       },
       {
         "command": "deslop.pickEmbeddingModel",
@@ -168,9 +164,9 @@
         "icon": "$(folder)"
       },
       {
-        "command": "deslop.topOffenders.showByType",
-        "title": "Deslop: Group Top Offenders by Type",
-        "icon": "$(group-by-ref-type)"
+        "command": "deslop.topOffenders.showBySeverity",
+        "title": "Deslop: Group Top Offenders by Severity",
+        "icon": "$(list-ordered)"
       },
       {
         "command": "deslop.topOffenders.chooseFilter",
@@ -230,7 +226,7 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "deslop.compareOccurrenceWithCanonical",
+          "command": "deslop.comparePair",
           "when": "false"
         }
       ],
@@ -246,13 +242,13 @@
           "group": "navigation@1"
         },
         {
-          "command": "deslop.topOffenders.showByType",
+          "command": "deslop.topOffenders.showBySeverity",
           "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'folder'",
           "group": "navigation@1"
         },
         {
           "command": "deslop.topOffenders.showByCluster",
-          "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'type'",
+          "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'severity'",
           "group": "navigation@1"
         },
         {
@@ -323,19 +319,9 @@
           "group": "navigation@2"
         },
         {
-          "command": "deslop.compareOccurrenceWithCanonical",
-          "when": "viewItem == deslop.occurrence",
-          "group": "navigation@1"
-        },
-        {
           "command": "deslop.openAllOccurrences",
           "when": "viewItem == deslop.clusterComparable",
           "group": "navigation@3"
-        },
-        {
-          "command": "deslop.compareWithCanonical",
-          "when": "viewItem == deslop.clusterComparable",
-          "group": "navigation@4"
         },
         {
           "command": "deslop.openClusterDetails",
@@ -469,29 +455,26 @@
             "cluster",
             "file",
             "folder",
-            "type"
+            "severity"
           ],
           "default": "cluster",
           "scope": "window",
-          "description": "Top Offenders grouping. 'cluster' shows worst clusters as roots; 'file' groups by file then by clone type; 'folder' is a folder tree; 'type' groups flat by duplicate type (Identical, Nearly identical, ...). Workspace settings override the user-level default. See [VSIX-TOP-OFFENDERS-GROUPING] in docs/specs/vsix.md."
+          "description": "Top Offenders grouping. 'cluster' shows worst clusters as roots; 'file' groups by file then by severity band; 'folder' is a folder tree; 'severity' groups flat by mass severity band. Workspace settings override the user-level default. See [VSIX-TOP-OFFENDERS-GROUPING] in docs/specs/vsix.md."
         },
-        "deslop.topOffenders.filterBuckets": {
+        "deslop.topOffenders.filterSeverities": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "worst",
+              "top10",
+              "mid",
+              "faint"
+            ]
           },
           "default": [],
           "scope": "window",
-          "description": "Show only clusters in these clone buckets (wire labels, e.g. 'identical'). Empty shows all; unknown values are ignored. See [FACET-TOP-OFFENDERS-FILTER] in docs/specs/facets.md."
-        },
-        "deslop.topOffenders.filterCategories": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "scope": "window",
-          "description": "Show only clusters in these clone categories (wire labels, e.g. 'data'). Empty shows all; unknown values are ignored. See [FACET-TOP-OFFENDERS-FILTER] in docs/specs/facets.md."
+          "description": "Show only clusters in these mass severity bands (the engine's rank percentile: 'worst', 'top10', 'mid', 'faint'). Empty shows all; unknown values are ignored. See [FACET-TOP-OFFENDERS-FILTER] in docs/specs/facets.md."
         },
         "deslop.topOffenders.sortBy": {
           "type": "string",
@@ -502,12 +485,6 @@
           "default": "impact",
           "scope": "window",
           "description": "Top Offenders sort order in file and folder modes. 'impact' is worst-first; 'path' is alphabetical by file/folder path. See [VSIX-TOP-OFFENDERS-SORT] in docs/specs/vsix.md."
-        },
-        "deslop.topOffenders.splitByLanguage": {
-          "type": "boolean",
-          "default": false,
-          "scope": "window",
-          "description": "Split the Top Offenders tree into per-language groups, composed on top of the grouping mode. See [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] in docs/specs/vsix.md."
         },
         "deslop.configPath": {
           "type": "string",

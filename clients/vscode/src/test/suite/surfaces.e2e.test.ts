@@ -68,7 +68,7 @@ suite("surfaces", () => {
     // [VSIX-STATE-DIRTY] (#130): undo the synthetic edit before the suite exits
     // so the dirty set does not leak into the cluster navigation suite. Without
     // this, the visible projection elides any cluster whose only Alpha.cs peer
-    // gets filtered out, and compareWithCanonical's canonical-report lookup is
+    // gets filtered out, and comparePair's canonical-report lookup is
     // the contract that defends us — but tests must not rely on that alone.
     await editor.edit((b) =>
       b.delete(new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 1))),

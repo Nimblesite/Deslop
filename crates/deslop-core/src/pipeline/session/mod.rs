@@ -11,6 +11,7 @@
 mod ast_access;
 mod change;
 mod diff;
+mod pair_compare;
 mod render;
 mod store;
 

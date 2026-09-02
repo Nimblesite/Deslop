@@ -85,9 +85,9 @@ fn mcp_tools_work_over_tcp_transport() -> Result<()> {
 
     let response = mcp.request(
         "tools/call",
-        &json!({ "name": "top-offenders", "arguments": { "n": 3 } }),
+        &json!({ "name": "duplicates", "arguments": { "offset": 0, "limit": 3, "detail": "summary" } }),
     )?;
-    let offenders = structured_content(&response, "top-offenders")?;
+    let offenders = structured_content(&response, "duplicates")?;
     let total_clusters = offenders
         .get("total_clusters")
         .and_then(Value::as_u64)
@@ -196,7 +196,7 @@ fn stale_discovery_record_reports_lsp_not_running() -> Result<()> {
     let mut mcp = initialized_mcp(workspace.path())?;
     let response = mcp.request(
         "tools/call",
-        &json!({ "name": "top-offenders", "arguments": { "n": 3 } }),
+        &json!({ "name": "duplicates", "arguments": { "offset": 0, "limit": 3, "detail": "summary" } }),
     )?;
     let message = response
         .pointer("/error/message")

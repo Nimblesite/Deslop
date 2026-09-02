@@ -52,12 +52,6 @@ const CELL_MIN_NODES: u32 = 4;
 /// shares their normalised shape.
 const CONST_COPY: [&str; 2] = ["retry_defaults.py", "retry_defaults_copy.py"];
 
-/// Anchor positions of the constant-table pair's elected measurement: the
-/// four assignments hold four literals and four identifiers, so the rename
-/// proof scales by `8 / (8 + 4) = 0.6667` — below the ten-anchor
-/// certification point, which is exactly what the assertion pins
-/// ([FUSED-CONTENT-GATE]).
-const CONST_TABLE_ANCHORS: u32 = 8;
 /// The stranger whose only relation to [`CONST_COPY`] is its shape.
 const CONST_STRANGER: &str = "theme_tokens.py";
 
@@ -98,13 +92,7 @@ fn occurrence_ranges(cluster: &Value) -> Vec<(u64, u64)> {
 #[test]
 fn a_copied_constant_table_survives_an_unrelated_table_in_its_cluster() -> Result<()> {
     let report = render("constant-table", MIN_NODES)?;
-    assert_copy_survives_alone(
-        &report,
-        "constant table",
-        &CONST_COPY,
-        CONST_STRANGER,
-        rename_consistency_for(CONST_TABLE_ANCHORS),
-    )?;
+    assert_copy_survives_alone(&report, "constant table", &CONST_COPY, CONST_STRANGER)?;
     for file in CONST_COPY {
         assert_eq!(
             duplicated_loc_for(&report, file),
@@ -138,13 +126,7 @@ fn a_copied_constant_table_survives_an_unrelated_table_in_its_cluster() -> Resul
 #[test]
 fn a_copied_call_run_survives_a_literal_varying_run_in_its_cluster() -> Result<()> {
     let report = render(CALL_CASE, MIN_NODES)?;
-    assert_copy_survives_alone(
-        &report,
-        "literal calls",
-        &CALL_COPY,
-        CALL_STRANGER,
-        rename_consistency_for(CALL_PAIR_ANCHORS),
-    )?;
+    assert_copy_survives_alone(&report, "literal calls", &CALL_COPY, CALL_STRANGER)?;
     for file in CALL_COPY {
         assert_eq!(
             duplicated_loc_for(&report, file),
@@ -173,9 +155,8 @@ fn two_identical_collection_cells_survive_a_differing_sibling_cell() -> Result<(
     let report = render(CELL_CASE, CELL_MIN_NODES)?;
     let cluster = expect_cluster_spanning(&report, &[CELL_FILE])?;
     let dump = signal_dump(cluster);
-    assert_eq!(
-        cluster_bucket(cluster),
-        "identical",
+    assert!(
+        has_verbatim_pair(&fixture("verbatim-subgroup").join(CELL_CASE), cluster)?,
         "the first two cells are byte-identical — {dump}"
     );
     assert_eq!(
@@ -269,12 +250,7 @@ fn start_lines(ranges: &[(u64, u64)]) -> BTreeSet<u64> {
 fn adding_a_differing_sibling_never_deletes_a_visible_copy() -> Result<()> {
     let alone = render(MONOTONIC_CASE, CELL_MIN_NODES)?;
     let uncontested = expect_cluster_spanning(&alone, &[CELL_FILE])?;
-    assert_eq!(
-        cluster_bucket(uncontested),
-        IDENTICAL_BUCKET,
-        "every cell is the same bytes — {dump}",
-        dump = signal_dump(uncontested)
-    );
+    assert_no_pair_surface_on_cluster(uncontested, "every cell is the same bytes — {dump}");
     assert_eq!(
         occurrence_ranges(uncontested),
         MONOTONIC_COPY_LINES.to_vec(),
@@ -290,12 +266,10 @@ fn adding_a_differing_sibling_never_deletes_a_visible_copy() -> Result<()> {
 
     let joined = render(CELL_CASE, CELL_MIN_NODES)?;
     let contested = expect_cluster_spanning(&joined, &[CELL_FILE])?;
-    assert_eq!(
-        cluster_bucket(contested),
-        IDENTICAL_BUCKET,
+    assert_no_pair_surface_on_cluster(
+        contested,
         "the copy is still copied byte for byte once the stranger joins \
          — {dump}",
-        dump = signal_dump(contested)
     );
     assert_eq!(
         occurrence_ranges(contested),
@@ -374,11 +348,9 @@ fn the_copied_cells_publish_beside_the_cross_file_control() -> Result<()> {
     );
 
     let control = expect_cluster_spanning(&report, &CONTROL_COPY)?;
-    assert_eq!(
-        cluster_bucket(control),
-        IDENTICAL_BUCKET,
+    assert_no_pair_surface_on_cluster(
+        control,
         "{CONTROL_LABEL}: the control is a byte-for-byte paste — {dump}",
-        dump = signal_dump(control)
     );
     assert_eq!(
         clusters(&report).first().map(cluster_id),
@@ -390,11 +362,9 @@ fn the_copied_cells_publish_beside_the_cross_file_control() -> Result<()> {
     );
 
     let cells = expect_cluster_spanning(&report, &[CELL_FILE])?;
-    assert_eq!(
-        cluster_bucket(cells),
-        IDENTICAL_BUCKET,
+    assert_no_pair_surface_on_cluster(
+        cells,
         "{CONTROL_LABEL}: the two cells are byte-identical — {dump}",
-        dump = signal_dump(cells)
     );
     assert_eq!(
         occurrence_ranges(cells),

@@ -676,7 +676,7 @@ async fn live_service_round_trip_covers_the_query_surface() -> Result<()> {
 }
 
 /// Covers the transport-facing helpers on [`LiveService`] — the shared
-/// session lock, weight aggregation used by LSP severity bucketing,
+/// session lock, mass aggregation used by LSP rank-band presentation,
 /// and the snapshot cache that feeds delta replies.
 async fn exercise_transport_hooks(service: &LiveService) -> Result<()> {
     let session_handle = service.session();
@@ -684,14 +684,14 @@ async fn exercise_transport_hooks(service: &LiveService) -> Result<()> {
         let guard = session_handle.lock().await;
         guard.generation()
     };
-    let weights = service.all_cluster_weights().await;
+    let masses = service.all_cluster_masses().await;
     assert!(
-        !weights.is_empty(),
-        "fixture must produce at least one cluster weight"
+        !masses.is_empty(),
+        "fixture must produce at least one cluster mass"
     );
     assert!(
-        weights.iter().all(|weight| *weight >= 0.0),
-        "cluster weights are non-negative: {weights:?}"
+        masses.iter().all(|mass| *mass > 0),
+        "rendered duplicate clusters have positive mass: {masses:?}"
     );
     let snapshot = service.report_get().await;
     service

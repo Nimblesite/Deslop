@@ -1,171 +1,184 @@
 //! Final-contract assertion vocabulary shared by the accuracy suites
-//! ([FUSED-STRATEGY-BOUNDED-MAX], [FUSED-CONTENT-GATE],
-//! [FUSED-THRESHOLD]).
+//! ([PIPELINE-CLUSTER-CLOSURE], [RANK-MASS-SUM]).
 //!
-//! The honest shape-only bucket set and the diagnostic dump are the
-//! same contract in every suite that asserts on a rendered cluster, so
-//! they live here rather than being restated per binary. There is no
-//! cluster-level `fused` to band ([FUSED-SCOPE]): the report carries
-//! the elected pair's measured axes and its content evidence, and
-//! routing reads `support = max(pair_agreement, pair_rename_consistency)`
-//! directly ([FUSED-CONTENT-GATE]).
+//! Cluster-level signals, buckets, and evidence verdicts were removed
+//! from the report wire by the mass-only cutover: admission evidence is
+//! pair-scoped, and cluster surfaces carry cluster facts and mass only.
+//! The honest shape-only/act-now bucket sets are gone with the routing
+//! table; suites that still read a cluster signal fail fast on
+//! [`super::signal`]'s quarantine panic until migrated to
+//! admission/visibility + mass/membership.
 
-use std::{collections::BTreeSet, path::Path};
+use std::{collections::BTreeSet, path::Path, sync::Arc};
 
 use anyhow::anyhow;
 use deslop_core::{
-    buckets::{
-        CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR, SATURATING_TOKEN_FLOOR,
-        STRUCTURAL_ONLY_MAX_SUPPORT,
-    },
-    pair::EMBEDDING_SUPPORT_FLOOR,
+    embedding::{test_support::StubProvider, EmbeddingMode},
+    live::AnalysisSession,
+    report::{PairComparison, PairComparisonParams, PairEndpoint},
 };
 use serde_json::Value;
 
 use super::{
-    approx, cluster_bucket, cluster_file_set, cluster_size, clusters, field, occurrence_is_hidden,
-    occurrence_texts, occurrences, signal, Result,
+    cluster_file_set, cluster_id, clusters, field, occurrence_is_hidden, occurrence_texts,
+    occurrences, Result,
 };
 
-/// Evidence-verdict clause for the below-saturation routing boundary.
-const CONTENT_GATE_SKIPPED_CLAUSE: &str =
-    "the content check runs only where the shape match saturates";
+/// Recomputes pair evidence for two explicitly supplied report occurrences.
+pub(crate) fn compare_pair(
+    scan_root: &Path,
+    min_nodes: u32,
+    left: &Value,
+    right: &Value,
+) -> Result<PairComparison> {
+    compare_endpoints_with_mode(
+        scan_root,
+        min_nodes,
+        pair_endpoint(left)?,
+        pair_endpoint(right)?,
+        EmbeddingMode::Off,
+    )
+}
 
-/// Buckets that describe a shape-only match without claiming the
-/// *content* is duplicated ([RANK-STRUCTURAL-ONLY]).
-pub(crate) const HONEST_SHAPE_ONLY_BUCKETS: [&str; 2] = ["structural_only", "loosely_similar"];
+/// Explicit pair comparison with the deterministic test embedding provider.
+pub(crate) fn compare_pair_with_embeddings(
+    scan_root: &Path,
+    min_nodes: u32,
+    left: &Value,
+    right: &Value,
+) -> Result<PairComparison> {
+    compare_endpoints_with_mode(
+        scan_root,
+        min_nodes,
+        pair_endpoint(left)?,
+        pair_endpoint(right)?,
+        EmbeddingMode::Required,
+    )
+}
 
-/// The only bucket a byte-identical Type-1 copy may honestly carry
-/// ([CLONE-BUCKETS-ROUTING]). Named because the noise pins need to say
-/// "exactly this", not "one of the act-now three": their controls are
-/// copied byte for byte, so every other duplicate label claims the copies
-/// differ somewhere they do not.
-pub(crate) const IDENTICAL_BUCKET: &str = "identical";
+/// Compares two exact endpoints without deriving either endpoint from a cluster.
+pub(crate) fn compare_endpoints(
+    scan_root: &Path,
+    min_nodes: u32,
+    left: PairEndpoint,
+    right: PairEndpoint,
+) -> Result<PairComparison> {
+    compare_endpoints_with_mode(scan_root, min_nodes, left, right, EmbeddingMode::Off)
+}
 
-/// Buckets that make an explicit duplication claim.
-pub(crate) const ACT_NOW_BUCKETS: [&str; 3] =
-    [IDENTICAL_BUCKET, "nearly_identical", "same_behavior"];
+/// Returns the occurrence for the caller's explicit file choice.
+pub(crate) fn occurrence_for_file<'a>(cluster: &'a Value, file: &str) -> Result<&'a Value> {
+    occurrences(cluster)
+        .iter()
+        .find(|occurrence| {
+            field(occurrence, "path")
+                .as_str()
+                .is_some_and(|path| path.ends_with(file))
+        })
+        .ok_or_else(|| anyhow!("cluster has no occurrence for {file}: {cluster:#}"))
+}
 
-/// Alias kept for suites that read the bucket set by its older name;
-/// the report renders the wire labels, never these names.
-pub(crate) const CONFIRMED_DUPLICATE_BUCKETS: [&str; 3] = ACT_NOW_BUCKETS;
+/// Builds one analysis generation and compares only the requested endpoints.
+fn compare_endpoints_with_mode(
+    scan_root: &Path,
+    min_nodes: u32,
+    left: PairEndpoint,
+    right: PairEndpoint,
+    mode: EmbeddingMode,
+) -> Result<PairComparison> {
+    let provider = Arc::new(StubProvider::new());
+    let session = AnalysisSession::new_with_mode(
+        scan_root.to_path_buf(),
+        min_nodes,
+        false,
+        None,
+        provider,
+        mode,
+    )?;
+    Ok(session.compare_pair(&PairComparisonParams { left, right })?)
+}
 
-/// Asserts the full `structural_only` contract
-/// ([RANK-STRUCTURAL-ONLY], [FUSED-CONTENT-GATE]).
-///
-/// A cluster reaches this bucket by one of **two** routes, and a test
-/// that admits only one pins an implementation instead of the contract:
-///
-/// - **evidence-free** — token and embedding support below
-///   `STRUCTURAL_ONLY_MAX_SUPPORT`. Shape is the only signal, which is
-///   the #197 REST-family shape.
-/// - **content-gated** — shape evidence saturates while the measured
-///   content evidence refuses to vouch for it. The token layer may read
-///   anywhere in that case: it saturates when it echoes the structural
-///   pass's own normalised representation, and it can sit mid-band when
-///   the fingerprint-scoped fallback cost it part of its signature.
-///
-/// So `token_jaccard` alone identifies neither route. What both routes
-/// *do* share is the precondition that admits them:
-/// `has_saturating_shape_evidence` — a saturated structural fingerprint
-/// or a saturated token echo. The evidence-free route additionally
-/// requires `structural >= 0.99`, and the content-gated route is only
-/// reachable through that same predicate, so it holds universally and
-/// catches a mislabelled low-shape cluster the old band admitted.
-///
-/// Since #344 the measured content evidence *is* on the report wire, so
-/// this helper no longer has to guess which door a cluster came through
-/// — [`assert_reached_a_real_route`] checks each door by its own entry
-/// condition.
-pub(crate) fn assert_structural_only_contract(cluster: &Value, label: &str) {
-    let structural = signal(cluster, "structural");
-    let token = signal(cluster, "token_jaccard");
+/// Converts one report occurrence into an exact pair endpoint.
+fn pair_endpoint(occurrence: &Value) -> Result<PairEndpoint> {
+    let path = occurrence
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("occurrence has no path: {occurrence:#}"))?;
+    Ok(PairEndpoint {
+        path: path.into(),
+        start_byte: endpoint_offset(occurrence, "start_byte")?,
+        end_byte: endpoint_offset(occurrence, "end_byte")?,
+    })
+}
+
+/// Reads one required byte offset from an occurrence.
+fn endpoint_offset(occurrence: &Value, field_name: &str) -> Result<usize> {
+    occurrence
+        .get(field_name)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("occurrence has no numeric {field_name}: {occurrence:#}"))
+        .and_then(|value| usize::try_from(value).map_err(Into::into))
+}
+
+/// Asserts an exact pair metric without float-equality lint suppression.
+pub(crate) fn assert_pair_metric(actual: f64, expected: f64, label: &str) {
     assert!(
-        structural >= 0.99 || token >= SATURATING_TOKEN_FLOOR,
-        "{label}: both routes into structural_only require saturating shape \
-         evidence — structural >= 0.99, or a token echo >= \
-         {SATURATING_TOKEN_FLOOR}. Without it the bucket claims a shape match \
-         the signals do not show: {dump}",
-        dump = signal_dump(cluster)
-    );
-    assert!(
-        signal(cluster, "embedding_cos") < EMBEDDING_SUPPORT_FLOOR,
-        "{label}: a cosine that *vouches* for the cluster escapes the \
-         content gate entirely (`route_shape_identical`), so it can never \
-         co-exist with this bucket: {dump}",
-        dump = signal_dump(cluster)
-    );
-    assert_reached_a_real_route(cluster, label);
-    assert!(
-        HONEST_SHAPE_ONLY_BUCKETS.contains(&cluster_bucket(cluster)),
-        "{label}: structural_only is a demoted verdict and must stay in the \
-         demoted tier: {dump}",
-        dump = signal_dump(cluster)
+        (actual - expected).abs() <= f64::EPSILON,
+        "{label}: expected {expected}, got {actual}"
     );
 }
 
-/// Asserts the cluster satisfies the entry condition of **one of the two
-/// real doors** into `structural_only`, rather than merely wearing the
-/// label ([CLONE-BUCKETS-ROUTING]).
+/// Asserts the admission + visibility + mass contract the wire still
+/// exposes for a shape-only fixture ([RANK-MASS-SUM],
+/// [PIPELINE-CLUSTER-CLOSURE]).
 ///
-/// This is the assertion the helper could not make until #344. Its doc
-/// used to record that "content evidence is not on the report wire, so
-/// no helper reading three signals can reconstruct which route ran", and
-/// it stood in a single blanket bound — `embedding_cos <
-/// STRUCTURAL_ONLY_MAX_SUPPORT` — for both. That bound is only route
-/// 1's. Route 2 demotes on *content*, and `route_shape_identical` lets
-/// it hold any cosine short of [`EMBEDDING_SUPPORT_FLOOR`], so the
-/// blanket bound asserted a property the engine never promised: a
-/// content-gated cluster at cosine 0.61 is a correct `structural_only`
-/// and the old assertion called it a defect. It never fired only because
-/// its one caller runs with embeddings off. `pair_agreement` and
-/// `pair_rename_consistency` are now on the wire, so each door is
-/// checked by its own entry condition instead.
-fn assert_reached_a_real_route(cluster: &Value, label: &str) {
-    let evidence_free = signal(cluster, "token_jaccard") < STRUCTURAL_ONLY_MAX_SUPPORT
-        && signal(cluster, "embedding_cos") < STRUCTURAL_ONLY_MAX_SUPPORT;
-    // `route_shape_identical` promotes back out of the demoted tier at
-    // the Type-3 overlap cutoff when the cluster spans files, and at the
-    // near-total-agreement bar when it does not — the #197 in-file
-    // sibling families measure 0.72–0.80 and are API surface, not
-    // extractable duplication.
-    let promote_floor = if cluster_file_set(cluster).len() > 1 {
-        CONTENT_SUPPORT_FLOOR
-    } else {
-        CONTENT_PROMOTE_FLOOR
-    };
-    let support = signal(cluster, "pair_agreement").max(signal(cluster, "pair_rename_consistency"));
+/// The former `structural_only` bucket contract died with the routing
+/// table: clusters no longer carry a bucket, a category, or any
+/// cluster-level signal. What a rendered cluster can still prove about
+/// a shape-only fixture is that it was **admitted** (it is on the
+/// report), that every occurrence is **visible**, and that its **mass**
+/// is the wire formula `canonical_node_count × (occurrence_count − 1)`
+/// with `occurrence_count` equal to the visible membership. A suite
+/// that needs a stronger shape-only guarantee must assert it against
+/// the pair wire (explicit `PairComparison`), not against the cluster.
+pub(crate) fn assert_structural_only_contract(cluster: &Value, label: &str) {
+    let id = cluster_id(cluster);
+    let canonical_nodes = field(cluster, "canonical_node_count").as_u64().unwrap_or(0);
+    let occurrence_count = field(cluster, "occurrence_count").as_u64().unwrap_or(0);
+    let mass = field(cluster, "mass").as_u64().unwrap_or(0);
     assert!(
-        evidence_free || support < promote_floor,
-        "{label}: structural_only requires one of the two documented \
-         routes — evidence-free (token and embedding both below \
-         {STRUCTURAL_ONLY_MAX_SUPPORT}), or content-gated (measured \
-         support below {promote_floor}). This cluster satisfies neither, \
-         so the bucket claims a demotion the evidence does not support \
-         — a promoted clone wearing a demoted label is a false negative: \
-         support={support:.4} {dump}",
-        dump = signal_dump(cluster)
+        canonical_nodes > 0 && occurrence_count >= 2,
+        "{label}: an admitted cluster must carry canonical_node_count and \
+         occurrence_count — {id} reports nodes={canonical_nodes} count={occurrence_count}: {cluster:#}"
+    );
+    assert_eq!(
+        mass,
+        canonical_nodes.saturating_mul(occurrence_count.saturating_sub(1)),
+        "{label}: mass must be the wire formula canonical_node_count × \
+         (occurrence_count − 1) — {id} reports mass={mass} nodes={canonical_nodes} \
+         count={occurrence_count}: {cluster:#}"
+    );
+    assert!(
+        !occurrences(cluster).iter().any(occurrence_is_hidden),
+        "{label}: a reported cluster must not hide an occurrence behind \
+         report_hide — {id}: {cluster:#}"
     );
 }
 
 /// One-line dump of everything an accuracy assertion needs to explain
 /// itself, so a failure names the actual numbers instead of restating
-/// the expectation.
+/// the expectation. Wire fields only: cluster facts + mass
+/// ([PIPELINE-CLUSTER-CLOSURE]).
 pub(crate) fn signal_dump(cluster: &Value) -> String {
     format!(
-        "id={id} bucket={bucket} category={category} size={size} weight={weight:.3} \
-         structural={structural:.4} token_jaccard={token:.4} embedding_cos={embedding:.4} \
-         pair_agreement={agreement:.4} pair_rename_consistency={rename:.4} files={files:?}",
-        id = field(cluster, "id").as_str().unwrap_or("?"),
-        bucket = cluster_bucket(cluster),
-        category = field(cluster, "category").as_str().unwrap_or("?"),
-        size = cluster_size(cluster),
-        weight = field(cluster, "weight").as_f64().unwrap_or_default(),
-        structural = signal(cluster, "structural"),
-        token = signal(cluster, "token_jaccard"),
-        embedding = signal(cluster, "embedding_cos"),
-        agreement = signal(cluster, "pair_agreement"),
-        rename = signal(cluster, "pair_rename_consistency"),
+        "id={id} rank={rank} mass={mass} nodes={nodes} count={count} total={total} \
+         files={files:?}",
+        id = cluster_id(cluster),
+        rank = field(cluster, "rank").as_u64().unwrap_or(0),
+        mass = field(cluster, "mass").as_u64().unwrap_or(0),
+        nodes = field(cluster, "canonical_node_count").as_u64().unwrap_or(0),
+        count = field(cluster, "occurrence_count").as_u64().unwrap_or(0),
+        total = field(cluster, "occurrences_total").as_u64().unwrap_or(0),
         files = cluster_file_set(cluster),
     )
 }
@@ -198,29 +211,26 @@ pub(crate) fn has_verbatim_pair(scan_root: &Path, cluster: &Value) -> Result<boo
 /// [TECH-PMATCH-BAKER], `[REPAIR-RENAME-ANCHOR-MASS]`) — the mirror of
 /// [`assert_structural_only_contract`], and the reason both live here.
 ///
-/// The two contracts describe the same signal triple. A maximal Type-2
-/// rename and an anchor-poor scaffolding family both render
-/// `structural = 1.00, token_jaccard = 1.00`: the token LSH pass hashes
-/// the normalised representation the structural pass already collapsed,
-/// so neither deterministic axis can tell them apart. Only the measured
-/// content evidence separates them, and it is on the report wire (#344)
-/// — so a suite asserting one verdict is really asserting *which side
-/// of the content gate* the fixture falls on. Stating both contracts
-/// once, here, is what stops two suites drifting into asserting opposite
-/// verdicts about the same evidence, which is exactly what the
-/// pre-`[REPAIR-RENAME-ANCHOR-MASS]` literal-anchor cliff produced.
-///
-/// Demotion is the failure mode this guards: a renamed copy of real
-/// logic that lands in `HONEST_SHAPE_ONLY_BUCKETS` is a false negative
-/// at the agent surface — the recipe tells the agent to write the copy
-/// anyway.
+/// The two contracts described the same signal triple: a maximal Type-2
+/// rename and an anchor-poor scaffolding family both rendered
+/// `structural = 1.00, token_jaccard = 1.00`, and only the measured
+/// content evidence separated them. That evidence, the routing bucket,
+/// and the verdict sentence were cluster-surface facts; the mass-only
+/// wire removed all of them ([PIPELINE-CLUSTER-CLOSURE]). What a
+/// rendered cluster can still prove about a renamed fixture is that it
+/// was **admitted** (reported at all — a demoted or dropped rename is
+/// a false negative), that every occurrence is **visible**, that its
+/// **mass** is the wire formula, and that **no pair-only surface** has
+/// crept back onto the cluster to mislabel it. The byte-level half
+/// ([`assert_rename_is_not_a_copy`]) survives unchanged: every
+/// occurrence must differ in raw bytes, or the fixture proves nothing
+/// about renames.
 pub(crate) fn assert_proven_rename_contract(
     scan_root: &Path,
     cluster: &Value,
     label: &str,
 ) -> Result<()> {
-    assert_rename_shape(cluster, label);
-    assert_rename_verdict(cluster, label);
+    assert_admission_and_clean_surface(cluster, label);
     assert_rename_is_not_a_copy(scan_root, cluster, label)
 }
 
@@ -230,103 +240,79 @@ pub(crate) fn assert_proven_rename_contract(
 /// declaration and therefore includes the insertion
 /// ([FUSED-SHARED-SUBTREE], gh #408). Demanding Merkle exactness there
 /// demands the fragment view — the shared sub-range either side of the
-/// insertion — which is the recall hole #408 is filed against.
+/// insertion — which is the recall hole #408 is filed against. The
+/// wire-visible contract is the same as [`assert_proven_rename_contract`].
 pub(crate) fn assert_near_miss_rename_contract(
     scan_root: &Path,
     cluster: &Value,
     label: &str,
 ) -> Result<()> {
-    assert_near_miss_rename_shape(cluster, label);
-    assert_anchor_free_near_miss_verdict(cluster, label);
+    assert_admission_and_clean_surface(cluster, label);
     assert_rename_is_not_a_copy(scan_root, cluster, label)
 }
 
-/// Verdict for a below-saturation near miss. Its measured content is
-/// observable but does not route the cluster ([FUSED-CONTENT-GATE]).
-fn assert_anchor_free_near_miss_verdict(cluster: &Value, label: &str) {
-    let dump = signal_dump(cluster);
-    assert_eq!(
-        cluster_bucket(cluster),
-        "nearly_identical",
-        "{label}: the admitted below-saturation Type-3 pair keeps the \
-         anchor-free route — {dump}"
-    );
-    assert!(
-        field(cluster, "evidence_verdict")
-            .as_str()
-            .is_some_and(|verdict| verdict.contains(CONTENT_GATE_SKIPPED_CLAUSE)),
-        "{label}: the report must say that the measured content observations \
-         did not route the pair — {dump}"
-    );
+/// The admission + visibility + mass + no-pair-surface contract every
+/// fixture-level suite can still assert on a rendered cluster
+/// ([PIPELINE-CLUSTER-CLOSURE], [RANK-MASS-SUM]). Positive, readable
+/// numbers first; the negative pin closes the mislabelling path the
+/// routing table used to be able to fabricate.
+fn assert_admission_and_clean_surface(cluster: &Value, label: &str) {
+    assert_rename_verdict(cluster, label);
+    assert_no_pair_surface_on_cluster(cluster, label);
 }
 
-/// Shape half for a rename carrying an inserted statement: real shape
-/// evidence, bounded away from the Merkle exactness a near-miss cannot
-/// have, with the rename-invariant token stream still corroborating.
-fn assert_near_miss_rename_shape(cluster: &Value, label: &str) {
-    let dump = signal_dump(cluster);
-    let structural = signal(cluster, "structural");
-    assert!(
-        structural >= deslop_core::pair::SHARED_SUBTREE_MIN_OVERLAP,
-        "{label}: identifier normalisation makes the shared body structurally \
-         identical, so the enclosing view must clear the shared-subtree floor \
-         — {dump}"
-    );
-    assert!(
-        structural < 1.0,
-        "{label}: the inserted statement is inside the reported view, so the \
-         pair cannot be Merkle-exact; exactness here means the report fell back \
-         to the fragment view (gh #408) — {dump}"
-    );
-    assert!(
-        signal(cluster, "token_jaccard") >= deslop_core::pair::SHARED_SUBTREE_MIN_JACCARD,
-        "{label}: the normalised k-gram stream is rename-invariant, so tokens \
-         must still corroborate — {dump}"
-    );
+/// Asserts a cluster carries none of the pair-only or presentation
+/// fields the mass-only wire forbids. A cluster that grows a `signals`
+/// block, a bucket, an evidence verdict, a weight, or a category is the
+/// mislabelling/fabrication path reopening — the exact failure the old
+/// bucket and verdict assertions existed to catch.
+pub(crate) fn assert_no_pair_surface_on_cluster(cluster: &Value, label: &str) {
+    for field_name in [
+        "signals",
+        "signal_source",
+        "content",
+        "evidence_verdict",
+        "bucket",
+        "category",
+        "classification",
+        "weight",
+        "size",
+        "summary",
+        "interpretation",
+        "language",
+    ] {
+        assert!(
+            cluster.get(field_name).is_none(),
+            "{label}: the mass-only wire forbids {field_name} on a cluster — a \
+             routing table could fabricate a value through it again: {cluster:#}"
+        );
+    }
 }
 
-/// Shape half of the proven-rename contract: identifier normalisation
-/// makes a rename structurally identical, and the normalised k-gram
-/// stream is rename-invariant by construction.
-fn assert_rename_shape(cluster: &Value, label: &str) {
-    let dump = signal_dump(cluster);
-    assert!(
-        approx(signal(cluster, "structural"), 1.0),
-        "{label}: identifier normalisation makes a rename structurally \
-         identical — {dump}"
-    );
-    assert!(
-        approx(signal(cluster, "token_jaccard"), 1.0),
-        "{label}: the normalised k-gram stream is rename-invariant by \
-         construction — {dump}"
-    );
-}
-
-/// Verdict half: the bucket a rename whose identifier mapping is proven
-/// must carry, and the measured content evidence that proves it
-/// ([FUSED-CONTENT-GATE]). Routing reads `support = max(pair_agreement,
-/// pair_rename_consistency)`; a proven rename clears the cross-file
-/// support floor on its rename axis.
+/// Verdict half of the rename contracts. On the mass-only wire the
+/// cluster carries no bucket and no evidence verdict, so the honest
+/// assertion is the admission + visibility + mass contract
+/// ([PIPELINE-CLUSTER-CLOSURE], [RANK-MASS-SUM]) plus the byte-level
+/// not-a-copy checks in [`assert_rename_is_not_a_copy`]. The old
+/// `nearly_identical` verdict and content-gate routing were cluster-
+/// surface facts; what a rendered cluster can still prove about a
+/// fixture is that it was admitted with a consistent, visible
+/// membership.
 fn assert_rename_verdict(cluster: &Value, label: &str) {
     let dump = signal_dump(cluster);
+    let canonical_nodes = field(cluster, "canonical_node_count").as_u64().unwrap_or(0);
+    let occurrence_count = field(cluster, "occurrence_count").as_u64().unwrap_or(0);
+    let mass = field(cluster, "mass").as_u64().unwrap_or(0);
     assert!(
-        !HONEST_SHAPE_ONLY_BUCKETS.contains(&cluster_bucket(cluster)),
-        "{label}: a Type-2 rename of real logic is duplication, not \
-         shape-only evidence — demoting it is a false negative — {dump}"
+        canonical_nodes > 0 && occurrence_count >= 2,
+        "{label}: an admitted cluster must carry canonical_node_count and \
+         occurrence_count — {dump}"
     );
     assert_eq!(
-        cluster_bucket(cluster),
-        "nearly_identical",
-        "{label}: same shape, same logic, renamed identifiers is the \
-         textbook `nearly_identical` clone — {dump}"
-    );
-    let rename = signal(cluster, "pair_rename_consistency");
-    assert!(
-        rename >= CONTENT_SUPPORT_FLOOR,
-        "{label}: a renamed copy of real logic must carry measured rename \
-         evidence at or above the cross-file support floor \
-         ({CONTENT_SUPPORT_FLOOR}) — below it the content gate would demote \
-         the clone — {dump}"
+        mass,
+        canonical_nodes.saturating_mul(occurrence_count.saturating_sub(1)),
+        "{label}: mass must be canonical_node_count × (occurrence_count − 1) \
+         — {dump}"
     );
 }
 

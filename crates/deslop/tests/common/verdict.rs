@@ -15,8 +15,9 @@ use std::path::Path;
 use serde_json::Value;
 
 use super::{
-    cluster_size, clusters, clusters_hidden, expect_cluster_spanning, metric_field,
-    occurrence_files, occurrence_texts, signal, Result,
+    cluster_size, clusters, clusters_hidden, expect_cluster_spanning, field, metric_field,
+    occurrence_files, occurrence_texts, per_file_metrics,
+    signals::assert_no_pair_surface_on_cluster, signals::has_verbatim_pair, Result,
 };
 
 /// `metrics.duplicated_loc`, defaulting to `0` so a missing metric
@@ -25,6 +26,16 @@ pub(crate) fn duplicated_loc(report: &Value) -> u64 {
     metric_field(report, "duplicated_loc")
         .as_u64()
         .unwrap_or_default()
+}
+
+/// Reads a file's duplicated-line count, requiring its metric row and
+/// count to be present so an omitted file cannot masquerade as rejected.
+pub(crate) fn duplicated_loc_for_path(report: &Value, path: &str) -> Result<u64> {
+    per_file_metrics(report)
+        .iter()
+        .find(|metric| field(metric, "path").as_str() == Some(path))
+        .and_then(|metric| field(metric, "duplicated_loc").as_u64())
+        .ok_or_else(|| anyhow::anyhow!("missing duplicated_loc for {path}: {report:#}"))
 }
 
 /// Asserts the report attributes at least `minimum` duplicated lines —
@@ -126,26 +137,24 @@ pub(crate) fn assert_single_file_cluster(cluster: &Value, size: u64, file: &str)
 }
 
 /// Asserts the report publishes a cross-file duplicate spanning
-/// `files` with `size` occurrences, shape evidence at or above
-/// `min_structural`, and at least `minimum_loc` duplicated lines — the
-/// shared spine of every "this cross-file copy stayed visible" control.
-/// Returns the reported texts so each control can still pin *what* the
-/// duplication is.
+/// `files` with `size` occurrences and at least `minimum_loc` duplicated
+/// lines — the shared spine of every "this cross-file copy stayed
+/// visible" control. Returns the reported texts so each control can
+/// still pin *what* the duplication is.
 ///
-/// `min_structural` is a parameter rather than a fixed `0.99` because
-/// the two controls hold different bars honestly. A byte-identical copy
-/// still saturates and its caller still demands it. A near-copy's
-/// reported view spans the divergence, so it measures real but
-/// non-exact overlap ([FUSED-SHARED-SUBTREE]) — demanding saturation
-/// there demands the fragment view. Passing the bar in keeps the strong
-/// assertion strong where it is true, instead of lowering it for both.
+/// `byte_identical` is the byte-level truth the deleted structural bar
+/// used to proxy. A byte-identical copy is proven by the corpus itself
+/// ([`has_verbatim_pair`]); a byte-distinct near-copy (rename / literal
+/// drift) is asserted on the same evidence, negated. Either way the
+/// cluster must be admitted and carry the mass-only surface
+/// ([PIPELINE-CLUSTER-CLOSURE]).
 pub(crate) fn expect_cross_file_duplicate(
     scan_root: &Path,
     report: &Value,
     files: &[&str],
     size: u64,
     minimum_loc: u64,
-    min_structural: f64,
+    byte_identical: bool,
 ) -> Result<Vec<String>> {
     let cluster = expect_cluster_spanning(report, files)?;
     assert_eq!(
@@ -153,12 +162,14 @@ pub(crate) fn expect_cross_file_duplicate(
         size,
         "one occurrence per copied file: {cluster:#}"
     );
-    let structural = signal(cluster, "structural");
-    assert!(
-        structural >= min_structural,
-        "the copies share a shape, so the structural signal must reach \
-         {min_structural}, got {structural}: {cluster:#}"
+    assert_eq!(
+        has_verbatim_pair(scan_root, cluster)?,
+        byte_identical,
+        "the fixture bytes decide whether this is a byte-proven copy or a \
+         byte-distinct rename, and the report must carry the cluster \
+         either way: {cluster:#}"
     );
+    assert_no_pair_surface_on_cluster(cluster, "cross-file duplicate");
     assert_duplicated_loc_at_least(report, minimum_loc);
     occurrence_texts(scan_root, cluster)
 }
@@ -186,47 +197,4 @@ pub(crate) fn assert_cluster_mentions(
 /// assertion silently loses precision on the way to a comparison.
 pub(crate) fn loc_as_f64(value: u64) -> Result<f64> {
     Ok(f64::from(u32::try_from(value)?))
-}
-
-/// The complete signal vector a **byte-identical** Type-1 clone must
-/// render with embeddings off. Every value is determined by the authored
-/// corpus, so there is no band to hide inside ([FUSED-THRESHOLD]) and no
-/// signal is exempt from the pin.
-///
-/// The content triple (`pair_agreement`, `pair_rename_consistency`,
-/// `literal_fraction`) belongs here as much as the shape pair does: it
-/// feeds [FUSED-CONTENT-GATE] through the bucket router, so a
-/// value that drifts here can promote or demote a cluster. Nothing
-/// differs between two byte-identical copies, so there is nothing for a
-/// rename to fail to explain and `pair_rename_consistency` is exactly `1.0`;
-/// a discounted reading is the engine charging a byte-proven copy for
-/// evidence it is not missing ([REPAIR-RENAME-ANCHOR-MASS]). Pinning
-/// only the shape signals is how a stale content figure could survive
-/// while the contract declared it correct.
-pub(crate) const TYPE1_IDENTICAL_SIGNALS: &[(&str, f64)] = &[
-    ("structural", 1.0),
-    ("token_jaccard", 1.0),
-    ("shape", 1.0),
-    ("embedding_cos", 0.0),
-    ("pair_agreement", 1.0),
-    ("pair_rename_consistency", 1.0),
-    ("literal_fraction", 0.0),
-];
-
-/// Asserts `cluster` carries exactly [`TYPE1_IDENTICAL_SIGNALS`].
-/// `label` names the corpus or language under test so a failure says
-/// which byte-identical pair moved.
-pub(crate) fn assert_type1_identical_signals(cluster: &Value, label: &str) {
-    for (name, expected) in TYPE1_IDENTICAL_SIGNALS {
-        let actual = signal(cluster, name);
-        assert!(
-            (actual - expected).abs() <= 1e-9,
-            "{label}: signal `{name}` must be {expected}, got {actual}. Both \
-             copies are byte-identical, so every signal is determined. A \
-             signal that moves while the source does not is either a \
-             corrupted- or misaddressed-blob \
-             ([PIPELINE-INCREMENTAL-INTEGRITY]) or an unblessed engine \
-             change: {cluster:#}"
-        );
-    }
 }

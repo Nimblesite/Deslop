@@ -3,248 +3,155 @@
 //! Every rule here removes a cluster the pipeline built, so each one is
 //! a deliberate precision trade with a defect behind it — and a
 //! duplicate that silently disappears is the hardest defect class to
-//! notice. Split from [`super`] so the rules, and the trace that
-//! records which one fired, sit together rather than inside the
-//! rendering walk.
+//! notice. The rules run at report materialisation, after the noise
+//! split: a component the split convicted and split apart reaches this
+//! pass as its surviving byte-identical families, and a component the
+//! split could not change is convicted here or survives. Every hidden
+//! cluster is counted in `clusters_hidden`, so a suppression is
+//! observable telemetry, never a silent disappearance.
+//!
+//! The mass-only wire carries no bucket and no cluster signal, so the
+//! rules are keyed on facts the report still exposes: report-hide
+//! visibility, the language-agnostic and per-language noise patterns
+//! ([CLONE-NOISE-*]). The embedding role guard runs before closure.
 
-use std::{collections::HashMap, hash::BuildHasher};
+use std::hash::BuildHasher;
 
 use crate::{
-    buckets::{classify, is_shape_corroborated_nearmiss, is_token_carried_nearmiss, ClusterKind},
-    clone_category::CloneCategory,
-    cluster::Cluster,
     cluster_filters::{
-        is_embedding_role_mismatch, is_noise_pattern, is_single_file_declaration_family,
-        NoiseStage, ParseCache,
+        escapes_as_copy, is_noise_pattern, is_single_file_declaration_family, ParseCache,
     },
-    state::FileId,
+    report_render::{cluster_to_report, ReportSources},
 };
 
-use super::{ReportCluster, ReportInputs, ReportSignals};
+use super::{ReportCluster, ReportInputs};
 
-/// Records why a cluster left the visible report. A duplicate that
-/// silently disappears is the hardest defect class to notice, so the
-/// routing decision — signals and measured content evidence included —
-/// is traceable without re-running the pipeline.
-pub(super) fn log_hidden_cluster(
-    cluster: &ReportCluster,
-    content: crate::content::ContentEvidence,
-    as_data: bool,
-    as_structural_only: bool,
-) {
-    tracing::debug!(
-        cluster = cluster.id.as_str(),
-        bucket = cluster.bucket.as_str(),
-        category = cluster.category.as_str(),
-        occurrences = cluster.occurrences.len(),
-        structural = cluster.signals.structural,
-        token_jaccard = cluster.signals.token_jaccard,
-        embedding_cos = cluster.signals.embedding_cos,
-        content_agreement = content.agreement,
-        content_rename_consistency = content.rename_consistency,
-        content_substance_varies = content.substance_varies,
-        dropped_as_data = as_data,
-        dropped_as_structural_only = as_structural_only,
-        "cluster hidden from report",
-    );
-}
-
-/// Decides whether a cluster must be dropped from the ranked report.
+/// Decides whether one cluster must be dropped from the ranked report.
 ///
 /// The cheap test runs first: a cluster whose every occurrence sits in a
 /// report-hidden path (e.g. all members in generated `*.g.dart` /
 /// `*.freezed.dart` files) is dropped regardless of the expensive
 /// re-parse checks below, so those are skipped. Without this a large
-/// generated file is re-walked once per cluster only to be hidden anyway,
-/// dominating analysis time on codegen-heavy Dart/Flutter repos
+/// generated file is re-walked once per cluster only to be hidden anyway
 /// ([CLONE-NOISE-REPARSE-CACHE]). The remaining rules:
-/// - `#58`: `LooselySimilar` clusters carry only token overlap, no
-///   structural/semantic anchor — token-only boilerplate, not duplication.
-/// - `#120/#122`: low-structure embedding mega-clusters are report-dominating
-///   `Type-4` false positives.
-/// - `#69/#70/#71/#72`: re-parsed noise patterns (polymorphic interface
-///   impls, test-data variation, REST shape, scaffolding).
-/// - `#119`: embedding-dominant `same_behavior` pairs of incompatible roles.
-pub(super) fn cluster_is_hidden<S: BuildHasher>(
-    cluster: &Cluster,
+/// - the shape family the cluster was admitted out of, when the
+///   cluster alone is only a fragment of an idiom the filters would
+///   convict whole ([CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY]);
+/// - the recognised noise families of [CLONE-NOISE-*] — struct-field
+///   runs, match-dispatch tables, signature-only matches, literal
+///   variation calls, constant tables, generated-suffix scaffolds and
+///   every other shape-only pattern a filter convicts. Each filter
+///   guards its own verbatim escape hatch, so a byte-identical copy
+///   survives its filter.
+pub(crate) fn cluster_is_hidden<S: BuildHasher>(
+    cluster: &crate::cluster::Cluster,
     report_cluster: &ReportCluster,
     inputs: &ReportInputs<'_, S>,
     parse_cache: &ParseCache,
-    category: CloneCategory,
 ) -> bool {
     let occurrences_all_hidden = !report_cluster.occurrences.is_empty()
         && report_cluster.occurrences.iter().all(|occ| occ.hidden);
     if occurrences_all_hidden {
         return true;
     }
-    let kind = classify(report_cluster);
-    // [DECISION-CROSS-LANGUAGE] Cross-language clusters stay hidden unless the
-    // opt-in is enabled — off by default, no heuristics or type-system bridges.
-    let token_only_or_mega = (kind == ClusterKind::LooselySimilar
-        || is_low_structure_embedding_mega_cluster(report_cluster))
-        && !(inputs.exclusion.allows_cross_language_comparison()
-            && spans_multiple_languages(&cluster.members, inputs.file_languages));
-    let noise = is_noise_pattern(
+    is_noise_pattern(
         &cluster.members,
         inputs.sources,
         inputs.file_languages,
         parse_cache,
-        NoiseStage::Render,
     )
-    .is_some();
-    // [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH] The gate exists because
-    // *embedding* evidence can pair role-incompatible code — a reader
-    // against a writer that the model scores alike. It was keyed on the
-    // `same_behavior` bucket because that was the only route embedding
-    // evidence could carry a cluster through. It is no longer: a
-    // shared-subtree near-miss may now be corroborated by the embedding
-    // axis instead of the token axis ([FUSED-SHARED-SUBTREE]), so the
-    // same evidence reaches an act-now bucket by a second door and must
-    // meet the same gate. Keyed on the bucket alone, the Python
-    // role-mismatch pair walked straight through it.
-    let gate_signals: ReportSignals = cluster.signals.into();
-    let embedding_carried_nearmiss = kind == ClusterKind::NearlyIdentical
-        && gate_signals.structural < 0.99
-        && gate_signals.token_jaccard < crate::pair::SHARED_SUBTREE_MIN_JACCARD
-        && gate_signals.embedding_cos >= crate::pair::EMBEDDING_SUPPORT_FLOOR;
-    let role_mismatch = (kind == ClusterKind::SameBehavior || embedding_carried_nearmiss)
-        && is_embedding_role_mismatch(
-            &cluster.members,
-            inputs.sources,
-            inputs.file_languages,
-            parse_cache,
-        );
-    // [RANK-STRUCTURAL-ONLY] A single-file `structural_only` family of
-    // sibling declarations (REST CRUD / settings / builder methods) is the
-    // same evidence-free noise as the cross-file scaffolding in
-    // [CLONE-NOISE-SCAFFOLDING]. The content check confines this to members
-    // that provably differ in substance, so worth-extracting clones — a
-    // consistent rename over preserved literals — stay visible (demoted,
-    // not hidden).
-    //
-    // The anchor-free near-miss ([CLONE-BUCKETS-ROUTING] row 4, judged on
-    // the *raw* signals the routing itself used) must consult the same
-    // proof. The #197 settings family is one family whichever door it
-    // arrives through: the offset-invariant #339 sibling-window
-    // signatures inverted its triple from `structural=1.00,
-    // token_jaccard=0.00` to `structural=0.00, token_jaccard=0.91`, and
-    // gating the proof on the `structural_only` label alone let the very
-    // wrappers it was written to convict ride row 4 into the act-now
-    // tier as the top offender. The proof, not the bucket, is the
-    // discriminator: a genuine in-file Type-3 copy whose body binds
-    // locals, loops or branches fails `forwarding_body` and stays
-    // visible, so recall pays nothing.
-    // The near-miss legs are gated on the routed bucket, not read off
-    // the raw signals alone. This proof is about shape/token-only
-    // evidence, so a cluster the router sent to `same_behavior` — where
-    // the semantic axis is the strongest evidence ([CLONE-BUCKETS-ROUTING]
-    // row 2) — must not be convicted by it. Ungated, an honest
-    // `structural` made that routine: a `while` loop and a `for` loop
-    // over one accumulator chain measure 0.81 shape and 0.68 tokens, so
-    // the row-4b predicate fired on a Type-4 cluster and the single-file
-    // family gate hid it outright.
-    let signals: ReportSignals = cluster.signals.into();
-    let family_evidence_kind = kind == ClusterKind::StructuralOnly
-        || (kind == ClusterKind::NearlyIdentical
-            && (is_token_carried_nearmiss(signals) || is_shape_corroborated_nearmiss(signals)));
-    let single_file_declaration_family = family_evidence_kind
-        && is_single_file_declaration_family(
+    .is_some()
+        || shape_family_convicts(cluster, inputs, parse_cache)
+        || is_single_file_declaration_family(
             cluster,
-            category,
             inputs.sources,
             inputs.file_languages,
             parse_cache,
-        );
-    token_only_or_mega || noise || role_mismatch || single_file_declaration_family
+        )
 }
 
-/// Returns true for embedding-dominant mega-clusters that are too broad
-/// to be actionable. Keeps small Type-4 pairs available while suppressing
-/// the real-world "all pytest modules are related" closure failure.
-fn is_low_structure_embedding_mega_cluster(cluster: &ReportCluster) -> bool {
-    cluster.signals.structural < 0.10
-        && cluster.signals.embedding_cos >= crate::pair::EMBEDDING_SUPPORT_FLOOR
-        && cluster.size > 10
-        && cluster.canonical_node_count > 500
-}
-
-/// Returns true when a cluster contains more than one parser language id.
-fn spans_multiple_languages<S: BuildHasher>(
-    members: &[crate::fingerprint::Fingerprint],
-    file_languages: &HashMap<FileId, &'static str, S>,
+/// [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY] Whether the shape family the
+/// cluster was admitted out of is a convicted idiom the cluster is a
+/// fragment of.
+///
+/// A byte-identical copy the escape hatch protects is never hidden this
+/// way: a cluster whose occurrences share exact bytes, spanning two
+/// files where the convicting filter demands it, is the copy the family
+/// was split to protect.
+fn shape_family_convicts<S: BuildHasher>(
+    cluster: &crate::cluster::Cluster,
+    inputs: &ReportInputs<'_, S>,
+    parse_cache: &ParseCache,
 ) -> bool {
-    let mut languages = members
-        .iter()
-        .filter_map(|member| file_languages.get(&member.file_id).copied());
-    let Some(first) = languages.next() else {
+    let Some(family) = cluster
+        .shape_family
+        .and_then(|index| inputs.shape_families.get(index))
+    else {
         return false;
     };
-    languages.any(|language| language != first)
+    let same_shape = same_shape_members(family, &cluster.members);
+    if same_shape.len() <= cluster.members.len() {
+        return false;
+    }
+    is_noise_pattern(
+        &same_shape,
+        inputs.sources,
+        inputs.file_languages,
+        parse_cache,
+    )
+    .is_some_and(|filter| !escapes_as_copy(&cluster.members, inputs.sources, filter))
 }
 
-/// Bucket totals emitted for GH#45 classification observability.
-#[derive(Default)]
-pub(super) struct BucketDistribution {
-    /// Visible identical-code clusters.
-    identical: usize,
-    /// Visible nearly-identical clusters.
-    nearly_identical: usize,
-    /// Visible structural-only clusters.
-    structural_only: usize,
-    /// Visible loosely-similar clusters.
-    loosely_similar: usize,
-    /// Visible same-behavior clusters.
-    same_behavior: usize,
+/// The members of a pre-gate family that share a shape with the admitted
+/// cluster: the same normalised subtree, by Merkle hash. The pre-gate
+/// closure also carries the containers and sub-windows rescued around
+/// those shapes; a filter reading an ordered call sequence across mixed
+/// depths sees no common header and convicts nothing, so the idiom's own
+/// copies are what it is asked about ([CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY]).
+fn same_shape_members(
+    family: &[crate::fingerprint::Fingerprint],
+    members: &[crate::fingerprint::Fingerprint],
+) -> Vec<crate::fingerprint::Fingerprint> {
+    let shapes: std::collections::HashSet<[u8; 32]> =
+        members.iter().map(|member| member.hash).collect();
+    family
+        .iter()
+        .filter(|member| shapes.contains(&member.hash))
+        .cloned()
+        .collect()
 }
 
-impl BucketDistribution {
-    /// Counts visible report clusters by canonical bucket.
-    pub(super) fn from_clusters(clusters: &[ReportCluster]) -> Self {
-        let mut distribution = Self::default();
-        for cluster in clusters {
-            distribution.add(classify(cluster));
-        }
-        distribution
-    }
+/// Materialises one cluster and its visibility decision together, so
+/// the metrics count exactly the clusters the report renders.
+pub(crate) fn materialise_with_visibility<'a, S: BuildHasher>(
+    cluster: &'a crate::cluster::Cluster,
+    inputs: &ReportInputs<'_, S>,
+    report_sources: &ReportSources<'a>,
+    parse_cache: &ParseCache,
+) -> (ReportCluster, bool) {
+    let report_cluster = cluster_to_report(
+        cluster,
+        inputs.registry,
+        inputs.file_languages,
+        inputs.scan_root,
+        inputs.exclusion,
+        report_sources,
+    );
+    let hidden = cluster_is_hidden(cluster, &report_cluster, inputs, parse_cache);
+    (report_cluster, hidden)
+}
 
-    /// Increments one bucket.
-    fn add(&mut self, kind: ClusterKind) {
-        match kind {
-            ClusterKind::Identical => self.identical = self.identical.saturating_add(1),
-            ClusterKind::NearlyIdentical => {
-                self.nearly_identical = self.nearly_identical.saturating_add(1);
-            }
-            ClusterKind::StructuralOnly => {
-                self.structural_only = self.structural_only.saturating_add(1);
-            }
-            ClusterKind::LooselySimilar => {
-                self.loosely_similar = self.loosely_similar.saturating_add(1);
-            }
-            ClusterKind::SameBehavior => self.same_behavior = self.same_behavior.saturating_add(1),
-        }
-    }
+/// The stage label stamped on the run-cumulative noise totals emitted
+/// once every render-stage conviction has run.
+pub(crate) const NOISE_TOTALS_RUN_STAGE: &str = "run_cumulative_after_report_render";
 
-    /// Emits the structured classification distribution.
-    ///
-    /// The target is pinned to the *stage* rather than this module: the
-    /// [issue #45] observability contract names one target per pipeline
-    /// stage (`deslop_core::pair`, `::cluster`, `::report`), and this
-    /// event is the report stage's. Splitting `report.rs` for the
-    /// file-length rule moved the call site into `report::hidden` and
-    /// silently renamed the target with it — a file-organisation change
-    /// must not move an observable contract
-    /// (`issue_45_observability::issue_45_pipeline_emits_stage_observability_events`).
-    pub(super) fn log(self, visible: usize, hidden: usize) {
-        tracing::info!(
-            target: "deslop_core::report",
-            visible,
-            hidden,
-            identical = self.identical,
-            nearly_identical = self.nearly_identical,
-            structural_only = self.structural_only,
-            loosely_similar = self.loosely_similar,
-            same_behavior = self.same_behavior,
-            "bucket distribution",
-        );
-    }
+/// Writes one trace line per hidden cluster so the routing decision is
+/// recoverable without re-running the pipeline.
+pub(crate) fn log_hidden_cluster(cluster: &ReportCluster, why: &str) {
+    tracing::debug!(
+        cluster = cluster.id.as_str(),
+        occurrences = cluster.occurrences.len(),
+        why,
+        "cluster hidden from report",
+    );
 }

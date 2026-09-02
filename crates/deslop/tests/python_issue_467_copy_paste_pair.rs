@@ -44,10 +44,8 @@ use anyhow::{anyhow, Result};
 use serde_json::Value;
 
 use crate::common::{
-    signals::{rank_of, signal_dump, CONFIRMED_DUPLICATE_BUCKETS, IDENTICAL_BUCKET},
-    verdict::{
-        assert_cluster_mentions, assert_type1_identical_signals, duplicated_loc, loc_as_f64,
-    },
+    signals::{assert_no_pair_surface_on_cluster, rank_of, signal_dump},
+    verdict::{assert_cluster_mentions, duplicated_loc, loc_as_f64},
     *,
 };
 
@@ -95,9 +93,12 @@ const NOTHING_HIDDEN: u64 = 0;
 /// The cluster the render pass names when it hides one. Read off the
 /// run's own trace in the module doc above, so this pins the published
 /// cluster to the suppressed one rather than to a lookalike.
+/// The pair is `nearly_identical`; the mass-only wire removed the
+/// bucket, the category, and every cluster signal
+/// ([PIPELINE-CLUSTER-CLOSURE]). What pins the published cluster to
+/// this fixture's pair is its stable id, its size, its file set, and
+/// the clean-surface negative.
 const PAIR_CLUSTER_ID: &str = "846e93abd0adbe0c";
-const PAIR_BUCKET: &str = "nearly_identical";
-const PAIR_CATEGORY: &str = "logic";
 const PAIR_SIZE: u64 = 2;
 const CONTROL_SIZE: u64 = 2;
 
@@ -109,23 +110,6 @@ const PAIR_SPANS: [(u64, u64); 2] = [(8, 13), (16, 21)];
 /// scroll past demoted noise to reach is a finding they never read.
 const CONTROL_RANK: usize = 0;
 const PAIR_RANK: usize = 1;
-
-/// Signals fixed by the fixture bytes. Shape and token evidence both
-/// saturate — the two copies are the same subtree — and embeddings are
-/// off, so nothing here has a band to hide inside ([FUSED-THRESHOLD]).
-const PAIR_SIGNALS: [(&str, f64); 6] = [
-    ("structural", 1.0),
-    ("token_jaccard", 1.0),
-    ("shape", 1.0),
-    ("embedding_cos", 0.0),
-    ("pair_rename_consistency", 1.0),
-    ("literal_fraction", 0.0),
-];
-
-/// Content agreement, observed on this exact cluster in the run's own
-/// trace (`content_agreement=0.9333333333333333`): the two copies agree
-/// on fourteen of fifteen normalised positions.
-const PAIR_AGREEMENT: f64 = 14.0 / 15.0;
 
 /// The repeated unit, as a human reads it. Every reported copy must carry
 /// all three parts, or what was published is not the duplication.
@@ -153,7 +137,6 @@ fn a_copy_pasted_endpoint_pair_is_reported_beside_the_control() -> Result<()> {
     assert_pair_identity(pair);
     assert_pair_occurrences(pair);
     assert_pair_reports_the_copied_code(&scan_root, pair)?;
-    assert_pair_signals(pair);
     assert_pair_has_duplicate_verdict(pair);
     assert_ranking(&report, control, pair)?;
     assert_repo_metrics(&report)?;
@@ -186,25 +169,30 @@ fn assert_the_whole_fixture_was_analysed(report: &Value) {
 /// `negative_pin`'s control assertion is bound to the "control is the
 /// *sole* published cluster" contract every suppression pin asserts. This
 /// suite needs the opposite — the control sharing the report with the
-/// finding under test — so the bucket, size and occurrence halves are
-/// stated here and the full signal vector goes through the shared
-/// `assert_type1_identical_signals`.
+/// finding under test — so the size, visibility, and untruncated
+/// occurrence halves are stated here and the clean-surface negative goes
+/// through the shared `signals` helpers.
 fn expect_surviving_control(report: &Value) -> Result<&Value> {
     let control = expect_cluster_spanning(report, &CONTROL)?;
     assert_eq!(
-        (cluster_bucket(control), cluster_size(control)),
-        (IDENTICAL_BUCKET, CONTROL_SIZE),
+        cluster_size(control),
+        CONTROL_SIZE,
         "{LABEL}: `settle_ledger` is copied byte for byte into both control \
-         files, so `{IDENTICAL_BUCKET}` with both copies shown is the only \
-         honest verdict. Anything less and this run had stopped seeing \
-         duplication at all, which is not what this test is about: {dump}",
+         files, so both copies shown is the only honest verdict. Anything \
+         less and this run had stopped seeing duplication at all, which is \
+         not what this test is about: {dump}",
         dump = signal_dump(control),
     );
     assert!(
         !occurrences(control).iter().any(occurrence_is_hidden),
         "{LABEL}: a byte-proven copy may not carry a hidden occurrence: {control:#}"
     );
-    assert_type1_identical_signals(control, LABEL);
+    assert_eq!(
+        field(control, "occurrence_count").as_u64().unwrap_or(0),
+        field(control, "occurrences_total").as_u64().unwrap_or(0),
+        "{LABEL}: a byte-proven copy must be carried untruncated: {dump}",
+        dump = signal_dump(control),
+    );
     Ok(control)
 }
 
@@ -227,16 +215,16 @@ fn expect_pair(report: &Value) -> Result<&Value> {
 }
 
 /// Nothing in this fixture is scaffolding, so the run may not hide
-/// anything. The counter is what separates "never clustered" from "built,
-/// bucketed, and thrown away at render time".
+/// anything. The counter is what separates "never clustered" from "built
+/// and thrown away at render time".
 fn assert_nothing_was_suppressed(report: &Value) {
     assert_eq!(
         clusters_hidden(report),
         NOTHING_HIDDEN,
-        "{LABEL}: a non-zero count here is the engine building the pair, \
-         bucketing it `{PAIR_BUCKET}`, and the render pass discarding it — the \
-         shape was found and then unreported, which is the false negative this \
-         fixture exists to name: {report:#}"
+        "{LABEL}: a non-zero count here is the engine building the pair and \
+         the render pass discarding it — the shape was found and then \
+         unreported, which is the false negative this fixture exists to name: \
+         {report:#}"
     );
 }
 
@@ -245,18 +233,13 @@ fn assert_nothing_was_suppressed(report: &Value) {
 /// that says this is logic rather than a data table.
 fn assert_pair_identity(pair: &Value) {
     assert_eq!(
-        (cluster_id(pair), cluster_bucket(pair), cluster_size(pair)),
-        (PAIR_CLUSTER_ID, PAIR_BUCKET, PAIR_SIZE),
+        (cluster_id(pair), cluster_size(pair)),
+        (PAIR_CLUSTER_ID, PAIR_SIZE),
         "{LABEL}: the published cluster must be the very one the run hides \
-         today — same id, same bucket, both copies: {dump}",
+         today — same id, both copies: {dump}",
         dump = signal_dump(pair),
     );
-    assert_eq!(
-        field(pair, "category").as_str(),
-        Some(PAIR_CATEGORY),
-        "{LABEL}: an awaited request and the assertion on its response are \
-         `{PAIR_CATEGORY}`, not a data table: {pair:#}"
-    );
+    assert_no_pair_surface_on_cluster(pair, LABEL);
 }
 
 /// `(path, start_line, end_line)` of every occurrence, in report order.
@@ -312,38 +295,12 @@ fn assert_pair_reports_the_copied_code(scan_root: &Path, pair: &Value) -> Result
     Ok(())
 }
 
-/// Every signal the fixture bytes determine, plus the content agreement
-/// the run's own trace records for this cluster.
-fn assert_pair_signals(pair: &Value) {
-    for (name, expected) in PAIR_SIGNALS {
-        assert!(
-            approx(signal(pair, name), expected),
-            "{LABEL}: signal `{name}` must be {expected}, got {actual}. The two \
-             copies are one subtree with one literal changed, so this value is \
-             determined by the fixture: {dump}",
-            actual = signal(pair, name),
-            dump = signal_dump(pair),
-        );
-    }
-    assert!(
-        approx(signal(pair, "pair_agreement"), PAIR_AGREEMENT),
-        "{LABEL}: content agreement must be {PAIR_AGREEMENT}, got {actual}: {dump}",
-        actual = signal(pair, "pair_agreement"),
-        dump = signal_dump(pair),
-    );
-}
-
-/// The agent-facing half ([FUSED-THRESHOLD]). The explicit bucket is the
-/// public verdict; elected-pair evidence explains it without reconstructing
-/// a deleted cluster-confidence scalar.
+/// The clean-surface half ([PIPELINE-CLUSTER-CLOSURE]). The fixture's
+/// signal vector and content agreement are gone from the cluster wire;
+/// what remains provable is that no bucket, no signal, and no verdict
+/// sits on the pair's cluster to mislabel it.
 fn assert_pair_has_duplicate_verdict(pair: &Value) {
-    assert!(
-        CONFIRMED_DUPLICATE_BUCKETS.contains(&cluster_bucket(pair)),
-        "{LABEL}: two copies one literal apart require a duplicate bucket, got \
-         {bucket}: {dump}",
-        bucket = cluster_bucket(pair),
-        dump = signal_dump(pair),
-    );
+    assert_no_pair_surface_on_cluster(pair, LABEL);
 }
 
 /// Rank order, and that these two findings are the whole report.

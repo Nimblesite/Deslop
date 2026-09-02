@@ -17,7 +17,8 @@ use std::fs;
 use anyhow::Context as _;
 use serde_json::Value;
 
-use crate::common::{clusters, diff_scope::*, field, load_json, occurrences, Result};
+use crate::common::signals::has_verbatim_pair;
+use crate::common::{clusters, diff_scope::*, field, fixture, load_json, occurrences, Result};
 
 // [OUTPUT-SCHEMA-DIFF-TAGS] Without --diff, no diff field may appear —
 // per-run optionality means field absence, not `null` noise.
@@ -52,12 +53,18 @@ fn no_diff_run_omits_every_diff_field() -> Result<()> {
 fn diff_tags_the_four_populations_and_metrics_add_up() -> Result<()> {
     let (baseline, _base_out, _tmp_a) = run_ok(&[])?;
     let (report, _output, _tmp_b) = run_ok(&["--diff", "patches/change.patch"])?;
+    let scan_root = fixture("diff-scope").join("repo");
     assert_eq!(clusters(&report).len(), 3, "tagging never drops clusters");
 
     let fresh = cluster_with_paths(&report, &["src/fresh_a.rs", "src/fresh_b.rs"])?;
     assert_eq!(field(fresh, "intersects_diff"), true);
     assert_eq!(field(fresh, "is_newly_introduced"), true);
-    assert_eq!(field(fresh, "bucket"), "identical");
+    // The bucket label is gone from the mass-only wire; the byte truth is
+    // the copied pair's identity ([PIPELINE-CLUSTER-CLOSURE]).
+    assert!(
+        has_verbatim_pair(&scan_root, fresh)?,
+        "the fresh pair is a byte-identical copy: {fresh:#}"
+    );
     for path in ["src/fresh_a.rs", "src/fresh_b.rs"] {
         assert_eq!(
             field(occurrence_at(fresh, path)?, "in_diff"),
@@ -85,7 +92,10 @@ fn diff_tags_the_four_populations_and_metrics_add_up() -> Result<()> {
     let legacy = cluster_with_paths(&report, &["src/legacy_a.rs", "src/legacy_b.rs"])?;
     assert_eq!(field(legacy, "intersects_diff"), false);
     assert_eq!(field(legacy, "is_newly_introduced"), false);
-    assert_eq!(field(legacy, "bucket"), "identical");
+    assert!(
+        has_verbatim_pair(&scan_root, legacy)?,
+        "the legacy pair is a byte-identical copy: {legacy:#}"
+    );
     for path in ["src/legacy_a.rs", "src/legacy_b.rs"] {
         assert_eq!(field(occurrence_at(legacy, path)?, "in_diff"), false);
     }

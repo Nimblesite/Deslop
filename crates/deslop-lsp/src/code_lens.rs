@@ -1,16 +1,13 @@
 //! `textDocument/codeLens` provider ([LSP-CODE-LENS]).
 //!
 //! Emits one code lens per occurrence in the requested file. The lens
-//! title carries the cluster count and the elected pair's measured
-//! axes plus content evidence
-//! ([FUSED-CONTENT-GATE]) — so a reader sees the full context without
-//! opening the report view, and the attached command jumps to the next
-//! occurrence.
+//! title carries only the cluster count, and the attached command jumps
+//! to the next occurrence. Pair evidence belongs exclusively to explicit
+//! two-endpoint comparison ([FUSED-PAIR-SIGNALS]).
 
 use std::path::Path;
 
 use deslop_core::live::FileReport;
-use deslop_core::render::signals::elected_pair_explanation;
 use deslop_core::report::ReportCluster;
 use serde_json::json;
 use tower_lsp::lsp_types::{CodeLens, Command, Position, Range};
@@ -57,19 +54,13 @@ fn lens_for_occurrence(cluster: &ReportCluster, occurrence_index: usize) -> Code
 }
 
 /// Builds the lens title. Spec-compliant two-dot severity glyph at
-/// the front, cluster count, then the signal explanation.
+/// the front, cluster count, then the jump action.
 ///
-/// [FUSED-CONTENT-GATE] The signal breakdown is the one shared
-/// `render::signals` rendering, so the lens states the elected pair's
-/// measured axes and the content evidence rather than a hand-rolled
-/// subset that cannot separate a corroborated rename from a scaffolding
-/// family. There is no cluster `fused` to state ([FUSED-SCOPE]).
+/// [FUSED-PAIR-SIGNALS] The admission signals are pair measurements and
+/// never touch the cluster; a code lens on one occurrence must not render
+/// them. The title states the cluster's copy count only.
 fn title_for(cluster: &ReportCluster) -> String {
-    let prefix = format!("●● {} copies", cluster.size);
-    elected_pair_explanation(cluster).map_or_else(
-        || format!("{prefix} — jump to next"),
-        |evidence| format!("{prefix} — {evidence} — jump to next"),
-    )
+    format!("●● {} copies — jump to next", cluster.occurrence_count)
 }
 
 /// Returns a zero-width range at position `(0, 0)` — the lens anchor.
@@ -91,40 +82,14 @@ fn zero_range() -> Range {
 mod tests {
     use super::*;
     use anyhow::{anyhow, Result};
-    use deslop_core::report::{ReportOccurrence, ReportSignalSource, ReportSignals};
+    use deslop_core::report::{ReportCluster, ReportOccurrence};
     use std::path::PathBuf;
 
     const ALPHA_FILE: &str = "Alpha.cs";
     const PAIR_SIZE: usize = 2;
-    const PERFECT_SIGNAL: f64 = 1.0;
 
-    fn assert_title_contains(title: &str, expected: &str) {
-        assert!(title.contains(expected), "{}", title);
-    }
-
-    fn make_cluster(id: &str, size: usize, occurrences: Vec<ReportOccurrence>) -> ReportCluster {
-        let signals = ReportSignals {
-            structural: 0.87,
-            token_jaccard: 0.72,
-            shape: 0.87,
-            embedding_cos: 0.55,
-            pair_agreement: 0.63,
-            pair_rename_consistency: 0.94,
-            literal_fraction: 0.11,
-        };
-        let mut cluster = deslop_core::report_fixtures::fixture_cluster(id, occurrences);
-        cluster.weight = 10.0;
-        cluster.size = size;
-        cluster.canonical_node_count = 20;
-        cluster.signals = signals;
-        "nearly_identical".clone_into(&mut cluster.bucket);
-        "s".clone_into(&mut cluster.summary);
-        "i".clone_into(&mut cluster.interpretation);
-        if cluster.occurrences.len() >= PAIR_SIZE {
-            cluster.signal_source = Some(ReportSignalSource { left: 0, right: 1 });
-        }
-        deslop_core::report_fixtures::restamp_fixture(&mut cluster);
-        cluster
+    fn make_cluster(id: &str, occurrences: Vec<ReportOccurrence>) -> ReportCluster {
+        deslop_core::report_fixtures::fixture_cluster(id, occurrences)
     }
 
     fn occurrence(path: &str, start: usize, end: usize) -> ReportOccurrence {
@@ -143,7 +108,6 @@ mod tests {
     fn build_for_file_emits_one_lens_per_matching_occurrence_with_full_command() -> Result<()> {
         let cluster = make_cluster(
             "cluster-alpha",
-            3,
             vec![
                 occurrence(ALPHA_FILE, 0, 10),
                 occurrence(ALPHA_FILE, 50, 80),
@@ -190,23 +154,19 @@ mod tests {
                 "title starts with severity glyph + count: {}",
                 command.title
             );
-            assert!(
-                command
-                    .title
-                    .contains("structural 0.87 · jaccard 0.72 · embedding 0.55"),
-                "title carries three signals to 2dp: {}",
-                command.title
-            );
-            // [FUSED-CONTENT-GATE] #344: every lens states the measured
-            // content evidence behind the shape axes.
-            assert!(
-                command.title.contains(
-                    "structural 0.87 · jaccard 0.72 · embedding 0.55 · \
-                     agreement 0.63 · rename 0.94 · literal 0.11"
-                ),
-                "title carries all six signals via render::signals: {}",
-                command.title
-            );
+            // [FUSED-PAIR-SIGNALS] The lens is a cluster surface and
+            // renders no pair signals.
+            for (gone, axis) in [
+                ("structural 0.87", "shape"),
+                ("agreement 0.63", "content"),
+                ("rename 0.94", "rename"),
+            ] {
+                assert!(
+                    !command.title.contains(gone),
+                    "{axis} must not reach the lens title: {}",
+                    command.title
+                );
+            }
             assert!(
                 command.title.ends_with(" — jump to next"),
                 "title ends with action: {}",
@@ -244,7 +204,7 @@ mod tests {
 
     #[test]
     fn build_for_file_with_no_matching_cluster_returns_empty_vec() {
-        let cluster = make_cluster("c", PAIR_SIZE, vec![occurrence("Other.cs", 0, 5)]);
+        let cluster = make_cluster("c", vec![occurrence("Other.cs", 0, 5)]);
         let total_occurrences = cluster.occurrences.len();
         let report = FileReport {
             path: PathBuf::from("Alpha.cs"),
@@ -257,7 +217,7 @@ mod tests {
 
     #[test]
     fn lens_for_occurrence_preserves_cluster_id_and_index() -> Result<()> {
-        let cluster = make_cluster("xyz-789", 5, vec![occurrence("A.cs", 0, 1)]);
+        let cluster = make_cluster("xyz-789", vec![occurrence("A.cs", 0, 1)]);
         let lens = lens_for_occurrence(&cluster, 4);
         let command = lens.command.ok_or_else(|| anyhow!("command populated"))?;
         let arguments = command
@@ -267,7 +227,7 @@ mod tests {
         let second_arg = arguments.get(1).ok_or_else(|| anyhow!("second argument"))?;
         assert_eq!(*first_arg, serde_json::json!("xyz-789"));
         assert_eq!(*second_arg, serde_json::json!(4_usize));
-        assert!(command.title.contains("●● 5 copies"), "{}", command.title);
+        assert!(command.title.contains("●● 1 copies"), "{}", command.title);
         Ok(())
     }
 
@@ -282,95 +242,52 @@ mod tests {
     }
 
     #[test]
-    fn title_for_formats_all_signals_to_two_decimal_places() {
+    fn title_for_renders_copy_count_only() {
         let cluster = make_cluster(
             "c",
-            7,
             vec![occurrence("A.cs", 0, 1), occurrence("B.cs", 0, 1)],
         );
         let title = title_for(&cluster);
-        assert_title_contains(&title, "●● 7 copies");
-        assert_title_contains(&title, "structural 0.87");
-        assert_title_contains(&title, "jaccard 0.72");
-        assert_title_contains(&title, "embedding 0.55");
+        assert_eq!(title, "●● 2 copies — jump to next");
         assert!(title.ends_with("jump to next"), "{}", title);
     }
 
-    // [FUSED-CONTENT-GATE] #344: structural and jaccard alone cannot tell a
-    // corroborated Type-2 rename from an anchor-poor scaffolding family, so
-    // the lens must also state the measured evidence.
+    // [FUSED-PAIR-SIGNALS] The admission signals are pair measurements and
+    // never touch the cluster; a code lens on one occurrence must not render
+    // them. The title states the copy count only.
     #[test]
-    fn title_for_states_measured_content_evidence() {
+    fn title_for_renders_no_pair_evidence() {
         let cluster = make_cluster(
             "c",
-            7,
             vec![occurrence("A.cs", 0, 1), occurrence("B.cs", 0, 1)],
         );
         let title = title_for(&cluster);
-        assert!(title.contains("structural 0.87"), "structural: {title}");
-        assert!(title.contains("agreement 0.63"), "byte agreement: {title}");
-        assert!(
-            title.contains("rename 0.94"),
-            "Baker rename corroboration: {title}"
-        );
-        assert!(
-            title.contains("literal 0.11"),
-            "literal share of the match: {title}"
-        );
+        assert_eq!(title, "●● 2 copies — jump to next");
+        for (gone, axis) in [
+            ("structural", "shape"),
+            ("jaccard", "token"),
+            ("embedding", "embedding"),
+            ("agreement", "content"),
+            ("rename", "rename"),
+            ("literal", "literal"),
+            ("measured pair", "pair attribution"),
+        ] {
+            assert!(
+                !title.contains(gone),
+                "{axis} must not reach the lens title: {title}"
+            );
+        }
         assert!(
             !title.contains("fused"),
             "no cluster fused score on any surface: {title}"
         );
-        assert_eq!(
-            title,
-            format!(
-                "●● 7 copies — {} — jump to next",
-                deslop_core::render::signals::elected_pair_explanation(&cluster)
-                    .unwrap_or_default()
-            ),
-            "the lens title must be the shared render::signals rendering, never a \
-             second hand-rolled formatter"
-        );
-    }
-
-    // A lens whose evidence differs must render differently — pins that the
-    // title reads the cluster's own signals rather than a constant.
-    #[test]
-    fn title_for_tracks_each_clusters_own_evidence() {
-        let mut anchor_poor = make_cluster(
-            "scaffolding",
-            4,
-            vec![occurrence("A.cs", 0, 1), occurrence("B.cs", 0, 1)],
-        );
-        anchor_poor.signals = ReportSignals {
-            structural: PERFECT_SIGNAL,
-            token_jaccard: PERFECT_SIGNAL,
-            shape: PERFECT_SIGNAL,
-            embedding_cos: 0.99,
-            pair_agreement: 0.07,
-            pair_rename_consistency: 0.03,
-            literal_fraction: 0.81,
-        };
-        let title = title_for(&anchor_poor);
-        assert!(
-            title.contains("structural 1.00 · jaccard 1.00"),
-            "identical shape: {title}"
-        );
-        assert!(
-            title.contains("agreement 0.07 · rename 0.03 · literal 0.81"),
-            "anchor-poor evidence separates it from a corroborated rename: {title}"
-        );
-        assert!(
-            !title.contains("agreement 0.63"),
-            "must not echo another cluster's evidence: {title}"
-        );
     }
 
     #[test]
-    fn title_without_an_elected_pair_omits_every_pair_score() {
-        let cluster = make_cluster("unsourced", 7, vec![]);
+    fn title_never_renders_pair_scores() {
+        let cluster = make_cluster("unsourced", vec![]);
         let title = title_for(&cluster);
-        assert_eq!(title, "●● 7 copies — jump to next");
+        assert_eq!(title, "●● 0 copies — jump to next");
         assert!(!title.contains("structural"));
         assert!(!title.contains("agreement"));
     }

@@ -5,8 +5,7 @@
 
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
+import { tempFile } from "../unit/temp-file.helpers";
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
 import {
@@ -22,7 +21,6 @@ import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
 import { ResolvedBinary } from "../../binary";
-import { bucketSignals } from "../signals.helpers";
 import { occurrence, wireCluster } from "../cluster.helpers";
 
 const GROUP_BY_SETTING_KEY = "topOffenders.groupBy";
@@ -40,11 +38,9 @@ function resolvedLsp(): ResolvedBinary {
 function clusterAcross(dirtyPath: string, otherPath: string): ReportCluster {
   return wireCluster({
     id: "c1",
-    weight: 5,
+    mass: 5,
     canonical_node_count: 3,
-    bucket: "identical",
-    signals: bucketSignals("identical"),
-    occurrences: [occurrence(dirtyPath, 0, 4), occurrence(otherPath, 0, 4)],
+        occurrences: [occurrence(dirtyPath, 0, 4), occurrence(otherPath, 0, 4)],
   });
 }
 
@@ -103,7 +99,7 @@ suite("extension activation glue", () => {
       // Explicit known values exercise the folder/path/split-on arms.
       await read().update(GROUP_BY_SETTING_KEY, "folder", vscode.ConfigurationTarget.Workspace);
       await read().update("topOffenders.sortBy", "path", vscode.ConfigurationTarget.Workspace);
-      await read().update("topOffenders.splitByLanguage", true, vscode.ConfigurationTarget.Workspace);
+      await read().update("topOffenders.filterSeverities", ["worst"], vscode.ConfigurationTarget.Workspace);
       assert.equal(read().get<string>(GROUP_BY_SETTING_KEY), "folder");
       syncTopOffendersContext();
 
@@ -111,13 +107,13 @@ suite("extension activation glue", () => {
       // must coerce rather than propagate the bad value.
       await read().update(GROUP_BY_SETTING_KEY, "nonsense", vscode.ConfigurationTarget.Workspace);
       await read().update("topOffenders.sortBy", "nonsense", vscode.ConfigurationTarget.Workspace);
-      await read().update("topOffenders.splitByLanguage", false, vscode.ConfigurationTarget.Workspace);
+      await read().update("topOffenders.filterSeverities", ["banana"], vscode.ConfigurationTarget.Workspace);
       syncTopOffendersContext();
       assert.equal(read().get<string>(GROUP_BY_SETTING_KEY), "nonsense", "raw config value is untouched");
     } finally {
       await read().update(GROUP_BY_SETTING_KEY, undefined, vscode.ConfigurationTarget.Workspace);
       await read().update("topOffenders.sortBy", undefined, vscode.ConfigurationTarget.Workspace);
-      await read().update("topOffenders.splitByLanguage", undefined, vscode.ConfigurationTarget.Workspace);
+      await read().update("topOffenders.filterSeverities", undefined, vscode.ConfigurationTarget.Workspace);
     }
   });
 
@@ -178,8 +174,7 @@ suite("extension activation glue", () => {
   });
 
   test("wireDirtyDocuments hides a file's occurrences on edit and restores them on save", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "deslop-dirty-"));
-    const dirtyFile = path.join(dir, "Edited.cs");
+    const { dir, file: dirtyFile } = tempFile("deslop-dirty-", "Edited.cs");
     fs.writeFileSync(dirtyFile, "code\n", "utf8");
 
     const store = new ReportStore();

@@ -18,6 +18,8 @@
 use anyhow::Result;
 use deslop_test_support::enclosure::{first_nested_view as first_nested, spans_of as spans, Span};
 
+use crate::common::signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair};
+use crate::common::verdict::duplicated_loc_for_path;
 use crate::common::*;
 
 /// The published clusters as `(id, spans)`, the shape the shared
@@ -76,11 +78,7 @@ fn a_whole_method_clone_outranks_its_nested_statement_view() -> Result<()> {
              replaced it: {report:#}"
         );
     }
-    assert_eq!(
-        cluster_bucket(cluster),
-        "identical",
-        "byte-identical method bodies must bucket as identical: {report:#}"
-    );
+    assert_no_pair_surface_on_cluster(cluster, "enclosure");
     Ok(())
 }
 
@@ -100,43 +98,60 @@ fn no_published_cluster_is_a_nested_view_of_another() -> Result<()> {
     Ok(())
 }
 
-// The false-negative guard on the enclosure rule. A view may only be
-// subsumed by one that names every file it names. Otherwise the files
-// only it mentioned lose their duplication outright: no other cluster
-// reports them, so the finding does not move — it disappears. Enclosure
-// makes this easy to get wrong, because the enclosing view can be the
-// narrower one. `ledger_e` is the witness: it belongs to the wide
-// four-file family and to no other published cluster, so a subsumption
-// pass that keeps only the three-file view erases it.
+// [PIPELINE-CLUSTER-SUBSUME] may not erase an admitted member by keeping
+// a narrower view. `ledger_b` is deliberately excluded: it has matching
+// normalized shape but no raw-content support, so [FUSED-CONTENT-GATE]
+// rejects its pairs before closure. The other four files must remain in
+// the wider published view.
 #[test]
-fn subsumption_never_drops_a_view_naming_a_file_the_survivor_omits() -> Result<()> {
+fn subsumption_keeps_every_admitted_file_without_reviving_a_shape_only_rewrite() -> Result<()> {
     let report = run_report(&fixture("ts-mixed-band"), 12)?;
+    let expected = std::collections::BTreeSet::from([
+        "ledger_a.ts".to_owned(),
+        "ledger_c.ts".to_owned(),
+        "ledger_d.ts".to_owned(),
+        "ledger_e.ts".to_owned(),
+    ]);
+    let admitted = expect_cluster_spanning(
+        &report,
+        &["ledger_a.ts", "ledger_c.ts", "ledger_d.ts", "ledger_e.ts"],
+    )?;
+    assert_eq!(
+        cluster_file_set(admitted),
+        expected,
+        "the wider admitted view must retain every admitted file: {report:#}"
+    );
     let named: std::collections::BTreeSet<String> = clusters(&report)
         .iter()
         .flat_map(occurrences)
         .filter_map(|occurrence| Some(occurrence.get("path")?.as_str()?.to_owned()))
         .filter_map(|path| path.rsplit('/').next().map(str::to_owned))
         .collect();
-    for witness in ["ledger_a.ts", "ledger_b.ts", "ledger_d.ts", "ledger_e.ts"] {
-        assert!(
-            named.contains(witness),
-            "{witness} is duplicated and named by no other published cluster, \
-             so subsumption erased its finding; published files: {named:?}: \
-             {report:#}"
-        );
-    }
+    assert_eq!(
+        named,
+        std::collections::BTreeSet::from([
+            "ledger_a.ts".to_owned(),
+            "ledger_c.ts".to_owned(),
+            "ledger_d.ts".to_owned(),
+            "ledger_e.ts".to_owned(),
+        ]),
+        "the report must publish precisely the admitted files: {report:#}"
+    );
+    assert_eq!(
+        duplicated_loc_for_path(&report, "ledger_b.ts")?,
+        0,
+        "the shape-only rewrite must be rejected before closure: {report:#}"
+    );
+    assert_no_pair_surface_on_cluster(admitted, "ts-mixed-band admitted view");
     Ok(())
 }
 
-// A corpus staging several degrees of duplication cannot render one
-// verdict for all of them. `ts-mixed-band` holds a near copy
-// (`ledger_d`/`ledger_e`, one parenthesis apart from `ledger_a`), a
-// renamed copy (`ledger_c`), and a same-shape family whose identifiers
-// *and* literals all differ (`ledger_b`). The report must separate a
-// one-token edit from a wholesale rewrite by routing them to distinct
-// buckets with distinct evidence verdicts — never one label for all.
+// A corpus staging several degrees of duplication keeps every admitted
+// non-redundant view. `ledger_d`/`ledger_e` are near copies of
+// `ledger_a`, `ledger_c` is a renamed copy, and `ledger_b` is a shape-only
+// rewrite rejected before closure.
 #[test]
-fn ts_mixed_band_renders_a_distinct_confidence_per_band() -> Result<()> {
+fn ts_mixed_band_keeps_nonredundant_admitted_views() -> Result<()> {
     let report = run_report(&fixture("ts-mixed-band"), 12)?;
     let published = clusters(&report);
     assert!(
@@ -144,41 +159,23 @@ fn ts_mixed_band_renders_a_distinct_confidence_per_band() -> Result<()> {
         "one visible cluster cannot express three degrees of duplication: \
          {report:#}"
     );
-    let buckets: std::collections::BTreeSet<String> = published
-        .iter()
-        .map(|cluster| cluster_bucket(cluster).to_owned())
-        .collect();
-    assert!(
-        buckets.len() >= 2,
-        "three degrees of duplication cannot all render one bucket, got \
-         {buckets:?}: {report:#}"
-    );
-    let verdicts: std::collections::BTreeSet<String> = published
-        .iter()
-        .map(|cluster| {
-            field(cluster, "evidence_verdict")
-                .as_str()
-                .unwrap_or_default()
-                .to_owned()
-        })
-        .collect();
-    assert!(
-        verdicts.len() >= 2,
-        "three degrees of duplication cannot all render one evidence verdict, \
-         got {verdicts:?}: {report:#}"
-    );
+    // [PIPELINE-CLUSTER-CLOSURE] The byte-proven family must reach the
+    // report, and every cluster carries a clean cluster-only surface.
+    for cluster in published {
+        assert_no_pair_surface_on_cluster(cluster, "ts-mixed-band");
+    }
     assert!(
         published
             .iter()
-            .any(|cluster| approx(signal(cluster, "structural"), 1.0)),
+            .any(|cluster| has_verbatim_pair(&fixture("ts-mixed-band"), cluster).unwrap_or(false)),
         "the byte-proven family must reach the report: {report:#}"
     );
     Ok(())
 }
 
-// Control against over-collapsing: the surviving cluster must still name
-// both files. A subsumption pass that erased one side of the pair would
-// satisfy the enclosure invariant above while destroying the finding.
+// [PIPELINE-CLUSTER-SUBSUME] chooses the enclosing Type-2 class view over
+// its nested byte-identical method. The survivor must still name both files,
+// carry no pair evidence, and leave no hidden residual view.
 #[test]
 fn enclosure_collapse_preserves_every_duplicated_file() -> Result<()> {
     let report = enclosing_clone_report()?;
@@ -189,9 +186,19 @@ fn enclosure_collapse_preserves_every_duplicated_file() -> Result<()> {
     );
     let cluster = expect_cluster_spanning(&report, &["Alpha.cs", "Beta.cs"])?;
     assert!(
-        approx(signal(cluster, "structural"), 1.0),
-        "byte-identical methods must measure structural 1.0: {report:#}"
+        !has_verbatim_pair(&fixture("csharp-enclosing-method-clone"), cluster)?,
+        "the enclosing class view differs by class name, so a nested method must not become the selected view: {report:#}"
     );
+    let names: std::collections::BTreeSet<String> = occurrences(cluster)
+        .iter()
+        .filter_map(|occurrence| occurrence.get("path")?.as_str().map(str::to_owned))
+        .collect();
+    assert_eq!(
+        names,
+        std::collections::BTreeSet::from(["Alpha.cs".to_owned(), "Beta.cs".to_owned()]),
+        "the enclosing survivor must preserve both duplicated files"
+    );
+    assert_no_pair_surface_on_cluster(cluster, "enclosure");
     assert_eq!(
         clusters_hidden(&report),
         0,

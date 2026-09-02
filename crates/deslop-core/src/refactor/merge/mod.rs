@@ -129,9 +129,8 @@ fn mechanical_plan(
 /// Every other pre-screen failure is a shape fact about the cluster
 /// record, and the wording enumerates them.
 fn pre_screen_refusal(cluster: &ReportCluster) -> String {
-    preconditions::content_refusal(cluster).unwrap_or_else(|| {
-        "cluster shape not mergeable (bucket, truncation, multi-file, or overlap)".to_owned()
-    })
+    let _ = cluster;
+    "cluster is truncated, multi-file, or overlapping".to_owned()
 }
 
 /// The refusal reason for a byte-identical Type-1 candidate. Routing

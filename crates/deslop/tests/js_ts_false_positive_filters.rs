@@ -9,6 +9,7 @@
 
 use anyhow::Result;
 
+use crate::common::signals::has_verbatim_pair;
 use crate::common::*;
 
 #[test]
@@ -44,7 +45,7 @@ fn typescript_export_default_template_logic_still_clusters() -> Result<()> {
     // must NOT suppress it. The duplicated embedded logic still clusters.
     let clone = expect_cluster_spanning(&report, &["reportA.ts", "reportB.ts"])?;
     assert!(
-        approx(signal(clone, "structural"), 1.0),
+        !has_verbatim_pair(&fixture("ts-export-default-logic"), clone)?,
         "the duplicated template-literal logic must still be detected: {report:#}"
     );
     Ok(())
@@ -62,6 +63,10 @@ fn typescript_reexport_barrels_are_suppressed_but_real_exports_survive() -> Resu
     // A real function exported just below a barrel still surfaces, proving the
     // suppression is scoped to the barrel and never swallows real logic.
     let real = expect_cluster_spanning(&report, &["real_a.ts", "real_b.ts"])?;
-    assert_eq!(cluster_bucket(real), "nearly_identical");
+    assert!(
+        !has_verbatim_pair(&fixture("ts-reexport-barrel"), real)?,
+        "the real export pair must be admitted (a near-miss, byte-distinct): \
+         {real:#}"
+    );
     Ok(())
 }

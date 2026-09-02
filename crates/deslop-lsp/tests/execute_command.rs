@@ -290,10 +290,16 @@ fn assert_report_json_shape(report: &Value) -> Result<()> {
     let first = clusters
         .first()
         .ok_or_else(|| anyhow!("csharp-small must yield clusters: {report}"))?;
-    let bucket = first.get("bucket").and_then(Value::as_str);
+    // Mass-only cutover: clusters carry rank and mass, never a retired
+    // clone-type bucket ([MCP-TOOLS]). Pin rank presence and bucket
+    // absence so the fat surface cannot leak back into the wire.
     assert!(
-        bucket.is_some(),
-        "cluster needs a clone-type bucket: {first}"
+        first.get("rank").is_some() && first.get("rank_band").is_some(),
+        "cluster needs its mass-ranked surface: {first}"
+    );
+    assert!(
+        first.get("bucket").is_none(),
+        "retired clone-type bucket must not leak into the wire: {first}"
     );
     let path = first.pointer("/occurrences/0/path").and_then(Value::as_str);
     assert!(path.is_some(), "cluster occurrence needs a path: {first}");
@@ -322,7 +328,7 @@ fn assert_report_shows_real_clusters(html: &str) {
         "the populated cluster card must carry its title heading"
     );
     assert!(
-        html.contains("in 2 places"),
+        html.contains("2 occurrences"),
         "the csharp-small clone spans exactly two occurrences: {}",
         &html[..html.len().min(160)]
     );

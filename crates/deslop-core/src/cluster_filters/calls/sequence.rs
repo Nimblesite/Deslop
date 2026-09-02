@@ -41,10 +41,28 @@ fn sequence_is_scenario_scaffolding(sequences: &[&[CallShape]]) -> bool {
     let Some(first) = sequences.first() else {
         return false;
     };
-    if first.is_empty() || !sequences.iter().all(|seq| same_call_headers(seq, first)) {
+    let shared_len = sequences.iter().map(|seq| seq.len()).min().unwrap_or(0);
+    if shared_len == 0 {
         return false;
     }
-    let varying: Vec<bool> = (0..first.len())
+    // Every member must carry the same ordered call header as a prefix.
+    // The overlap collapse selects the *widest* window per run
+    // ([PIPELINE-RANK-WORST-FIRST]), so one occurrence may sweep several
+    // scenario members: the shared skeleton is the shortest sequence, and
+    // the longer members are more of the same scenario, never a reason to
+    // decline the suppression the skeleton describes.
+    let Some(first_header) = first.get(..shared_len) else {
+        return false;
+    };
+    for sequence in sequences {
+        let Some(sequence_header) = sequence.get(..shared_len) else {
+            return false;
+        };
+        if !same_call_headers(sequence_header, first_header) {
+            return false;
+        }
+    }
+    let varying: Vec<bool> = (0..shared_len)
         .map(|index| sequence_position_differs(sequences, index))
         .collect();
     varying.contains(&true)

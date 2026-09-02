@@ -29,13 +29,34 @@ use common::{fixture_root, value_array, value_get};
 use common::{pid_exists, read_mcp_pid, terminate_pid, wait_for_pid_exit, KILLABLE_PARENT_SCRIPT};
 
 const REPORT_GET_TOOL: &str = "report-get";
+const DUPLICATES_TOOL: &str = "duplicates";
+const SESSION_TOOL: &str = "session";
+const COMPARE_PAIR_TOOL: &str = "compare-pair";
+const MERGE_PLAN_TOOL: &str = "merge-plan";
 const REPORT_QUERY_TOOL: &str = "report-query";
+const ACTION_FIELD: &str = "action";
+const MASS_FIELD: &str = "mass";
+const RANK_BAND_FIELD: &str = "rank_band";
+const DETAIL_FIELD: &str = "detail";
+const DETAIL_SUMMARY: &str = "summary";
+const SEVERITIES_FIELD: &str = "severities";
+const PATH_CONTAINS_FIELD: &str = "path_contains";
+const LANGUAGES_FIELD: &str = "languages";
+const PAGE_LIMIT_POINTER: &str = "/page/limit";
+const TOTAL_OCCURRENCES_POINTER: &str = "/total_occurrences";
+const LIST_EMBEDDING_MODELS_ACTION: &str = "list-embedding-models";
+const SET_EMBEDDING_MODEL_ACTION: &str = "set-embedding-model";
+const LEFT_ENDPOINT_FIELD: &str = "left";
 const OFFSET_PARAM: &str = "offset";
 const LIMIT_PARAM: &str = "limit";
 const CLUSTERS_POINTER: &str = "/clusters";
 const ERROR_CODE_POINTER: &str = "/error/code";
 const INVALID_PARAMS_CODE_MAGNITUDE: i64 = 32_602;
 const TOTAL_CLUSTERS_POINTER: &str = "/total_clusters";
+/// [MCP-TOOLS] `rescan` wraps the fresh page: `{ generation, summary, page }`.
+const RESCAN_TOTAL_CLUSTERS_POINTER: &str = "/page/total_clusters";
+const RESCAN_CLUSTERS_POINTER: &str = "/page/clusters";
+const RESCAN_PAGE_LIMIT_POINTER: &str = "/page/page/limit";
 const PATH_FIELD: &str = "path";
 const LANGUAGE_FIELD: &str = "language";
 const NAME_FIELD: &str = "name";
@@ -69,7 +90,6 @@ const OCCURRENCES_FIELD: &str = "occurrences";
 const CLUSTER_BY_ID_TOOL: &str = "cluster-by-id";
 const JSONRPC_VERSION: &str = "2.0";
 const SECOND_FILE_NAME: &str = "Two.cs";
-const COUNT_POINTER: &str = "/n";
 const MIN_SIZE_FIELD: &str = "min_size";
 const CLUSTERS_ARRAY_ERROR: &str = "clusters must be an array";
 const JSONRPC_FIELD: &str = "jsonrpc";
@@ -92,7 +112,6 @@ const ENDPOINT_FIELD: &str = "endpoint";
 const ID_POINTER: &str = "/id";
 const ROOT_FLAG: &str = "--root";
 const EMBEDDING_PROVENANCE_FIELD: &str = "embedding_provenance";
-const NEARLY_IDENTICAL_BUCKET: &str = "nearly_identical";
 const UNREACHABLE_OLLAMA_ENDPOINT: &str = "http://127.0.0.1:1";
 const SCHEMA_DOC_TOOL: &str = "schema-doc";
 const PARAMS_FIELD: &str = "params";
@@ -112,7 +131,6 @@ const STANDARD_PAGE_LIMIT: u64 = 10;
 const MIN_SIZE_FILTER: u64 = 10;
 const SCHEMA_TEST_PAGE_LIMIT: u64 = 2;
 const PAIR_WINDOW_SIZE: usize = 2;
-const ZERO_SCORE: f64 = 0.0;
 
 fn mcp_binary_path() -> &'static str {
     env!("CARGO_BIN_EXE_deslop-mcp")
@@ -778,32 +796,38 @@ fn tools_list_returns_all_tools_with_schemas() -> Result<()> {
                 .map(str::to_owned)
         })
         .collect();
-    assert_eq!(names.len(), 13, "expected 13 tools, got {names:?}");
-    for expected in [
-        TOP_OFFENDERS_TOOL,
+    // [MCP-TOOLS] the normative surface: seven core analysis tools plus the
+    // separately specified merge planner. The retired twelve-tool
+    // analysis-query surface must never reappear.
+    let expected_order = [
+        FIND_SIMILAR_TOOL,
+        DUPLICATES_TOOL,
+        COMPARE_PAIR_TOOL,
+        CLUSTER_BY_ID_TOOL,
         RESCAN_TOOL,
+        SESSION_TOOL,
+        SCHEMA_DOC_TOOL,
+        MERGE_PLAN_TOOL,
+    ];
+    assert_eq!(
+        names, expected_order,
+        "tools/list must return exactly the normative surface, in registry order"
+    );
+    for retired in [
+        TOP_OFFENDERS_TOOL,
         REPORT_GET_TOOL,
         REPORT_QUERY_TOOL,
-        SCHEMA_DOC_TOOL,
         REPORT_FOR_FILE_TOOL,
         REPORT_FOR_RANGE_TOOL,
-        FIND_SIMILAR_TOOL,
-        CLUSTER_BY_ID_TOOL,
-        "merge-plan",
+        SESSION_CONFIG_TOOL,
         LIST_EMBEDDING_MODELS_TOOL,
         SET_EMBEDDING_MODEL_TOOL,
-        SESSION_CONFIG_TOOL,
     ] {
         assert!(
-            names.iter().any(|candidate| candidate == expected),
-            "missing tool: {expected}"
+            !names.iter().any(|candidate| candidate == retired),
+            "retired tool must not be advertised: {retired}"
         );
     }
-    assert_eq!(
-        names.first().map(String::as_str),
-        Some(TOP_OFFENDERS_TOOL),
-        "top-offenders must be listed first as the primary tool"
-    );
     for tool in tools.as_array().unwrap_or(&Vec::new()) {
         let description = tool
             .get("description")
@@ -820,19 +844,19 @@ fn tools_list_returns_all_tools_with_schemas() -> Result<()> {
 }
 
 #[test]
-fn top_offenders_returns_full_clusters_with_occurrences_and_interpretation() -> Result<()> {
+fn duplicates_returns_full_clusters_ranked_by_mass() -> Result<()> {
     let (child, payload) = init_and_tool_payload(
-        TOP_OFFENDERS_TOOL,
-        &json!({ "n": REQUESTED_TOP_OFFENDERS_COUNT }),
+        DUPLICATES_TOOL,
+        &json!({ (LIMIT_PARAM): REQUESTED_TOP_OFFENDERS_COUNT }),
     )?;
     let total = value_get(&payload, TOTAL_CLUSTERS_POINTER)?
         .as_u64()
         .ok_or_else(|| anyhow!("total_clusters must be present"))?;
     assert!(total >= 1, "fixture must have at least one cluster");
     assert_eq!(
-        value_get(&payload, COUNT_POINTER)?.as_u64(),
+        value_get(&payload, PAGE_LIMIT_POINTER)?.as_u64(),
         Some(REQUESTED_TOP_OFFENDERS_COUNT as u64),
-        "n must echo the requested value"
+        "page must echo the requested limit"
     );
     let clusters = value_get(&payload, CLUSTERS_POINTER)?;
     let clusters_arr = clusters
@@ -848,87 +872,97 @@ fn top_offenders_returns_full_clusters_with_occurrences_and_interpretation() -> 
         .ok_or_else(|| anyhow!("at least one cluster expected"))?;
     assert!(
         first.get(OCCURRENCES_FIELD).is_some_and(Value::is_array),
-        "top-offenders must return full occurrences array: {first}"
+        "duplicates full detail must return the occurrences array: {first}"
     );
     assert!(
         first
-            .get("interpretation")
+            .get(MASS_FIELD)
+            .and_then(Value::as_u64)
+            .is_some_and(|mass| mass > 0),
+        "duplicates must return positive mass: {first}"
+    );
+    assert!(
+        first
+            .get(ID_FIELD)
             .and_then(Value::as_str)
-            .is_some_and(|s| !s.is_empty()),
-        "top-offenders must return interpretation text: {first}"
+            .is_some_and(|id| !id.is_empty()),
+        "duplicates must return the stable cluster id: {first}"
     );
     assert!(
         first
-            .get(BUCKET_FIELD)
+            .get(RANK_BAND_FIELD)
             .and_then(Value::as_str)
-            .is_some_and(|s| !s.is_empty()),
-        "top-offenders must return bucket: {first}"
+            .is_some_and(|band| !band.is_empty()),
+        "duplicates must return the mass-derived rank band: {first}"
     );
-    assert!(
-        first
-            .get("weight")
-            .and_then(Value::as_f64)
-            .is_some_and(|w| w > ZERO_SCORE),
-        "top-offenders must return positive weight: {first}"
-    );
+    for retired in [
+        BUCKET_FIELD,
+        "interpretation",
+        "weight",
+        "signals",
+        "verdict",
+    ] {
+        assert!(
+            first.get(retired).is_none(),
+            "mass-only wire must not carry per-cluster {retired}: {first}"
+        );
+    }
     let _ = child.finish();
     Ok(())
 }
 
 #[test]
-fn top_offenders_defaults_to_five_and_clusters_are_worst_first() -> Result<()> {
-    let (child, payload) = init_and_tool_payload(TOP_OFFENDERS_TOOL, &json!({}))?;
+fn duplicates_defaults_to_five_pages_worst_first_by_mass() -> Result<()> {
+    let (child, payload) = init_and_tool_payload(DUPLICATES_TOOL, &json!({}))?;
     assert_eq!(
-        value_get(&payload, COUNT_POINTER)?.as_u64(),
-        Some(DEFAULT_TOP_OFFENDERS_COUNT as u64),
-        "omitting n must default to 5"
+        value_get(&payload, PAGE_LIMIT_POINTER)?.as_u64(),
+        Some(SMALL_PAGE_LIMIT),
+        "omitting limit must default to 5"
     );
     let clusters = value_get(&payload, CLUSTERS_POINTER)?;
     let clusters_arr = clusters
         .as_array()
         .ok_or_else(|| anyhow!(CLUSTERS_ARRAY_ERROR))?;
     assert!(
-        clusters_arr.len() <= DEFAULT_TOP_OFFENDERS_COUNT,
-        "default n=5 must not return more than 5 clusters"
+        u64::try_from(clusters_arr.len()).is_ok_and(|len| len <= SMALL_PAGE_LIMIT),
+        "default limit=5 must not return more than 5 clusters"
     );
-    let weights: Vec<f64> = clusters_arr
+    let masses: Vec<u64> = clusters_arr
         .iter()
-        .filter_map(|c| c.get("weight").and_then(Value::as_f64))
+        .filter_map(|c| c.get(MASS_FIELD).and_then(Value::as_u64))
         .collect();
     assert_eq!(
-        weights.len(),
+        masses.len(),
         clusters_arr.len(),
-        "every cluster must have a weight"
+        "every cluster must have a mass"
     );
-    let sorted = weights
+    let sorted = masses
         .windows(PAIR_WINDOW_SIZE)
-        .all(|w| matches!(w, [a, b] if a >= b));
-    assert!(
-        sorted,
-        "clusters must be worst-first by weight: {weights:?}"
-    );
+        .all(|pair| matches!(pair, [first, second] if first >= second));
+    assert!(sorted, "clusters must be worst-first by mass: {masses:?}");
     let _ = child.finish();
     Ok(())
 }
 
 #[test]
-fn issue_136_top_offenders_max_occurrences_caps_response_and_reports_total() -> Result<()> {
-    // Issue #136 [MCP-OCCURRENCE-BUDGET]. A `top-offenders` response on a real
-    // workspace can ship 50+ occurrences per cluster — large enough to crash
-    // some MCP clients (e.g. Codex's rmcp_client). The fix: a `max_occurrences`
-    // budget across returned clusters that keeps the response small while
-    // surfacing the true unfiltered count via `total_occurrences` so the agent
-    // knows what was filtered. cluster-by-id remains the way to fetch the full
-    // occurrence list of any one cluster.
+fn duplicates_max_occurrences_caps_response_and_reports_total() -> Result<()> {
+    // Issue #136 [MCP-OCCURRENCE-BUDGET]. A full-detail `duplicates` response
+    // on a real workspace can ship 50+ occurrences per cluster — large enough
+    // to crash some MCP clients (e.g. Codex's rmcp_client). The fix: a
+    // `max_occurrences` budget across returned clusters that keeps the
+    // response small while surfacing the true unfiltered count via
+    // `total_occurrences` so the agent knows what was filtered.
+    // cluster-by-id remains the way to fetch the full occurrence list of any
+    // one cluster.
     let mut child = spawn_and_init()?;
 
     let baseline = call_tool(
         &mut child,
-        TOP_OFFENDERS_TOOL,
-        &json!({ "n": DEFAULT_TOP_OFFENDERS_COUNT }),
+        DUPLICATES_TOOL,
+        &json!({ (LIMIT_PARAM): DEFAULT_TOP_OFFENDERS_COUNT }),
     )?;
     let baseline_payload = structured_tool_result(&baseline)?;
-    let baseline_total = value_get(&baseline_payload, "/total_occurrences")?
+    let baseline_total = value_get(&baseline_payload, TOTAL_OCCURRENCES_POINTER)?
         .as_u64()
         .ok_or_else(|| anyhow!("total_occurrences must be a non-negative integer"))?;
     assert!(
@@ -944,17 +978,12 @@ fn issue_136_top_offenders_max_occurrences_caps_response_and_reports_total() -> 
         .unwrap_or(1);
     let result = call_tool(
         &mut child,
-        TOP_OFFENDERS_TOOL,
-        &json!({ "n": DEFAULT_TOP_OFFENDERS_COUNT, "max_occurrences": budget }),
+        DUPLICATES_TOOL,
+        &json!({ (LIMIT_PARAM): DEFAULT_TOP_OFFENDERS_COUNT, "max_occurrences": budget }),
     )?;
     let payload = structured_tool_result(&result)?;
     assert_eq!(
-        value_get(&payload, "/max_occurrences")?.as_u64(),
-        Some(budget),
-        "result must echo the requested max_occurrences"
-    );
-    assert_eq!(
-        value_get(&payload, "/total_occurrences")?.as_u64(),
+        value_get(&payload, TOTAL_OCCURRENCES_POINTER)?.as_u64(),
         Some(baseline_total),
         "total_occurrences must equal the unfiltered count, not the budgeted count"
     );
@@ -982,9 +1011,9 @@ fn issue_136_top_offenders_max_occurrences_caps_response_and_reports_total() -> 
     let total_clusters = value_get(&payload, TOTAL_CLUSTERS_POINTER)?
         .as_u64()
         .ok_or_else(|| anyhow!("total_clusters missing"))?;
-    let n_requested = value_get(&payload, COUNT_POINTER)?
+    let n_requested = value_get(&payload, PAGE_LIMIT_POINTER)?
         .as_u64()
-        .ok_or_else(|| anyhow!("n missing"))?;
+        .ok_or_else(|| anyhow!("page.limit missing"))?;
     let cap = total_clusters.min(n_requested);
     let returned_clusters = clusters_arr.len() as u64;
     let truncation_marker_present = clusters_arr
@@ -1000,48 +1029,62 @@ fn issue_136_top_offenders_max_occurrences_caps_response_and_reports_total() -> 
 }
 
 #[test]
-fn issue_136_top_offenders_default_max_occurrences_is_fifteen() -> Result<()> {
-    let (child, payload) = init_and_tool_payload(TOP_OFFENDERS_TOOL, &json!({}))?;
-    assert_eq!(
-        value_get(&payload, "/max_occurrences")?.as_u64(),
-        Some(DEFAULT_MAX_OCCURRENCES),
-        "omitting max_occurrences must default to 15 ([MCP-OCCURRENCE-BUDGET])"
+fn duplicates_default_max_occurrences_is_fifteen() -> Result<()> {
+    let (child, payload) = init_and_tool_payload(DUPLICATES_TOOL, &json!({}))?;
+    let clusters = value_get(&payload, CLUSTERS_POINTER)?
+        .as_array()
+        .ok_or_else(|| anyhow!(CLUSTERS_ARRAY_ERROR))?
+        .clone();
+    let shipped: u64 = clusters
+        .iter()
+        .map(|c| {
+            c.get(OCCURRENCES_FIELD)
+                .and_then(Value::as_array)
+                .map_or(0u64, |a| a.len() as u64)
+        })
+        .sum();
+    assert!(
+        shipped <= DEFAULT_MAX_OCCURRENCES,
+        "omitting max_occurrences must cap shipped occurrences at 15 \
+         ([MCP-OCCURRENCE-BUDGET]); shipped {shipped}"
     );
     let _ = child.finish();
     Ok(())
 }
 
 #[test]
-fn issue_134_top_offenders_does_not_label_structural_only_matches_as_nearly_identical() -> Result<()>
-{
+fn duplicates_clusters_carry_no_per_cluster_labels() -> Result<()> {
+    // Issue #134 pinned that structural-only matches must not be labelled
+    // as ordinary nearly_identical duplication. The mass-only wire goes
+    // further: a published cluster owns identity, extent, membership, mass
+    // and mass-derived rank only ([PIPELINE-CLUSTER-CLOSURE]) — no bucket,
+    // no signal block, no verdict can mislabel it on any surface.
     let (child, payload) = init_and_tool_payload(
-        TOP_OFFENDERS_TOOL,
-        &json!({ "n": DEFAULT_TOP_OFFENDERS_COUNT }),
+        DUPLICATES_TOOL,
+        &json!({ (LIMIT_PARAM): DEFAULT_TOP_OFFENDERS_COUNT }),
     )?;
-    let clusters = value_get(&payload, CLUSTERS_POINTER)?;
-    let structural_only_nearly_identical = clusters
+    let clusters = value_get(&payload, CLUSTERS_POINTER)?
         .as_array()
         .ok_or_else(|| anyhow!(CLUSTERS_ARRAY_ERROR))?
-        .iter()
-        .find(|cluster| {
-            cluster.get(BUCKET_FIELD).and_then(Value::as_str) == Some(NEARLY_IDENTICAL_BUCKET)
-                && cluster
-                    .pointer("/signals/structural")
-                    .and_then(Value::as_f64)
-                    == Some(1.0)
-                && cluster
-                    .pointer("/signals/token_jaccard")
-                    .and_then(Value::as_f64)
-                    == Some(ZERO_SCORE)
-                && cluster
-                    .pointer("/signals/embedding_cos")
-                    .and_then(Value::as_f64)
-                    == Some(ZERO_SCORE)
-        });
+        .clone();
     assert!(
-        structural_only_nearly_identical.is_none(),
-        "issue #134: top-offenders must not present structural-only zero-token matches as ordinary nearly_identical duplication: {structural_only_nearly_identical:#?}"
+        !clusters.is_empty(),
+        "fixture must surface at least one cluster for the label check"
     );
+    for retired in [
+        BUCKET_FIELD,
+        "signals",
+        "verdict",
+        "weight",
+        "interpretation",
+    ] {
+        assert!(
+            clusters
+                .iter()
+                .all(|cluster| cluster.get(retired).is_none()),
+            "mass-only wire must not carry per-cluster {retired} on any cluster: {clusters:#?}"
+        );
+    }
     let _ = child.finish();
     Ok(())
 }
@@ -1071,20 +1114,16 @@ fn issue_113_find_similar_description_leads_with_prevention() -> Result<()> {
         .and_then(Value::as_str)
         .ok_or_else(|| anyhow!("find-similar tool must include a description"))?;
     assert!(
-        description.starts_with("Call BEFORE writing new code"),
+        description.starts_with("Call before writing code to prevent duplication"),
         "issue #113: find-similar description must lead with prevention guidance: {description}"
     );
     assert!(
-        description.contains("PREVENT"),
-        "issue #113: find-similar description must explicitly name prevention: {description}"
+        description.contains("mass-ranked clusters"),
+        "issue #113: find-similar description must name its mass-ranked product: {description}"
     );
     assert!(
-        description.contains("avoid introducing new clones"),
-        "issue #113: find-similar description must explain the duplication risk: {description}"
-    );
-    assert!(
-        description.contains("reuse"),
-        "issue #113: find-similar description must point agents toward reuse: {description}"
+        description.contains(COMPARE_PAIR_TOOL),
+        "issue #113: find-similar description must route pair-evidence questions to compare-pair: {description}"
     );
     let schema = tool
         .get("inputSchema")
@@ -1100,6 +1139,12 @@ fn issue_113_find_similar_description_leads_with_prevention() -> Result<()> {
         END_BYTE_FIELD,
         SNIPPET_FIELD,
         LANGUAGE_FIELD,
+        LIMIT_PARAM,
+        "max_occurrences",
+        LANGUAGES_FIELD,
+        PATH_CONTAINS_FIELD,
+        SEVERITIES_FIELD,
+        MIN_SIZE_FIELD,
     ] {
         assert!(
             properties.contains_key(field),
@@ -1125,10 +1170,10 @@ fn issue_113_find_similar_description_leads_with_prevention() -> Result<()> {
     // Issue #255: the advertised enum must equal the engine's *live*
     // registered languages, not the MCP binary's compile-time set — the
     // two silently drifted under MCP/engine version skew and disabled the
-    // Rule-zero gate for newly detected languages. `session-config`
-    // reports the live set, so the enum must match it exactly.
+    // Rule-zero gate for newly detected languages. `session` reports the
+    // live set, so the enum must match it exactly.
     let mut advertised: Vec<String> = languages.iter().map(|value| (*value).to_owned()).collect();
-    let session = structured_tool_result(&call_tool(&mut child, SESSION_CONFIG_TOOL, &json!({}))?)?;
+    let session = structured_tool_result(&call_tool(&mut child, SESSION_TOOL, &json!({}))?)?;
     let mut detected: Vec<String> = value_get(&session, LANGUAGES_POINTER)?
         .as_array()
         .ok_or_else(|| anyhow!("session-config languages must be an array"))?
@@ -1146,9 +1191,9 @@ fn issue_113_find_similar_description_leads_with_prevention() -> Result<()> {
 }
 
 #[test]
-fn report_get_returns_paginated_slim_report_page() -> Result<()> {
+fn duplicates_returns_paginated_page() -> Result<()> {
     let (child, page) = init_and_tool_payload(
-        REPORT_GET_TOOL,
+        DUPLICATES_TOOL,
         &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): STANDARD_PAGE_LIMIT }),
     )?;
     assert!(
@@ -1166,7 +1211,10 @@ fn report_get_returns_paginated_slim_report_page() -> Result<()> {
         .as_u64()
         .ok_or_else(|| anyhow!("page.returned missing"))?;
     assert_eq!(value_get(&page, "/page/offset")?, json!(0));
-    assert_eq!(value_get(&page, "/page/limit")?, json!(STANDARD_PAGE_LIMIT));
+    assert_eq!(
+        value_get(&page, PAGE_LIMIT_POINTER)?,
+        json!(STANDARD_PAGE_LIMIT)
+    );
     assert!(
         returned <= STANDARD_PAGE_LIMIT,
         "returned ({returned}) must respect requested limit"
@@ -1181,30 +1229,34 @@ fn report_get_returns_paginated_slim_report_page() -> Result<()> {
 }
 
 #[test]
-fn issue_110_report_pages_omit_schema_doc_and_schema_doc_tool_serves_it() -> Result<()> {
+fn issue_110_duplicates_pages_omit_schema_doc_and_schema_doc_tool_serves_it() -> Result<()> {
     let mut child = spawn_and_init()?;
-    let report_get = structured_tool_result(&call_tool(
+    let duplicates = structured_tool_result(&call_tool(
         &mut child,
-        REPORT_GET_TOOL,
+        DUPLICATES_TOOL,
         &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): SCHEMA_TEST_PAGE_LIMIT }),
     )?)?;
     assert!(
-        report_get.get(SCHEMA_DOC_FIELD).is_none(),
-        "issue #110/#111: report-get must not inline repeated schema_doc; got {} chars",
-        report_get
+        duplicates.get(SCHEMA_DOC_FIELD).is_none(),
+        "issue #110/#111: duplicates must not inline repeated schema_doc; got {} chars",
+        duplicates
             .get(SCHEMA_DOC_FIELD)
             .and_then(Value::as_str)
             .map_or(0, str::len)
     );
-    let report_query = structured_tool_result(&call_tool(
+    let filtered = structured_tool_result(&call_tool(
         &mut child,
-        REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): SCHEMA_TEST_PAGE_LIMIT, (BUCKET_FIELD): "identical" }),
+        DUPLICATES_TOOL,
+        &json!({
+            (OFFSET_PARAM): 0,
+            (LIMIT_PARAM): SCHEMA_TEST_PAGE_LIMIT,
+            (SEVERITIES_FIELD): ["worst"],
+        }),
     )?)?;
     assert!(
-        report_query.get(SCHEMA_DOC_FIELD).is_none(),
-        "issue #110/#111: report-query must not inline repeated schema_doc; got {} chars",
-        report_query
+        filtered.get(SCHEMA_DOC_FIELD).is_none(),
+        "issue #110/#111: filtered duplicates pages must not inline repeated schema_doc; got {} chars",
+        filtered
             .get(SCHEMA_DOC_FIELD)
             .and_then(Value::as_str)
             .map_or(0, str::len)
@@ -1249,31 +1301,35 @@ fn issue_110_report_pages_omit_schema_doc_and_schema_doc_tool_serves_it() -> Res
 }
 
 #[test]
-fn report_query_accepts_dart_language_filter() -> Result<()> {
-    // Issue #170/#198: `report-query` only *filters* already-detected
-    // clusters by language — no parsing — yet its `language` enum omitted
-    // `dart`, so `language: "dart"` failed JSON-Schema validation with
-    // InvalidParams and there was no workaround on Dart repos. The enum is
-    // now derived from the core parser registry, so the filter must be
-    // accepted (returning a, possibly empty, page) rather than rejected.
+fn duplicates_accepts_dart_language_filter() -> Result<()> {
+    // Issue #170/#198: `duplicates` only *filters* already-detected clusters
+    // by language — no parsing — yet the enum omitted `dart`, so a Dart
+    // filter failed JSON-Schema validation with InvalidParams and there was
+    // no workaround on Dart repos. The enum is derived from the core parser
+    // registry, so the filter must be accepted (returning a, possibly empty,
+    // page) rather than rejected.
     let (child, response) = init_and_tool_response(
-        REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): SMALL_PAGE_LIMIT, (LANGUAGE_FIELD): "dart" }),
+        DUPLICATES_TOOL,
+        &json!({
+            (OFFSET_PARAM): 0,
+            (LIMIT_PARAM): SMALL_PAGE_LIMIT,
+            (LANGUAGES_FIELD): ["dart"],
+        }),
     )?;
     assert!(
         response.get(ERROR_FIELD).is_none(),
-        "issue #170/#198: report-query must accept language=\"dart\" at the \
+        "issue #170/#198: duplicates must accept languages=[\"dart\"] at the \
          schema layer, not reject it as InvalidParams: {response}"
     );
     let page = structured_tool_result(
         response
             .get("result")
-            .ok_or_else(|| anyhow!("report-query must return a result: {response}"))?,
+            .ok_or_else(|| anyhow!("duplicates must return a result: {response}"))?,
     )?;
     let clusters = value_get(&page, CLUSTERS_POINTER)?;
     assert!(
         clusters.is_array(),
-        "report-query must return a clusters array even when the language \
+        "duplicates must return a clusters array even when the language \
          filter matches nothing: {page}"
     );
     let _ = child.finish();
@@ -1281,37 +1337,41 @@ fn report_query_accepts_dart_language_filter() -> Result<()> {
 }
 
 #[test]
-fn report_get_requires_offset_argument() -> Result<()> {
-    let (child, response) = init_and_tool_response(
-        REPORT_GET_TOOL,
+fn duplicates_applies_default_offset_when_omitted() -> Result<()> {
+    let (child, page) = init_and_tool_payload(
+        DUPLICATES_TOOL,
         &json!({ (LIMIT_PARAM): STANDARD_PAGE_LIMIT }),
     )?;
     assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE),
-        "missing offset must be InvalidParams; got {response}"
+        value_get(&page, "/page/offset")?,
+        json!(0),
+        "omitting offset must page from the worst cluster"
     );
     let _ = child.finish();
     Ok(())
 }
 
 #[test]
-fn report_get_requires_limit_argument() -> Result<()> {
-    let (child, response) = init_and_tool_response(REPORT_GET_TOOL, &json!({ (OFFSET_PARAM): 0 }))?;
+fn duplicates_applies_default_limit_when_omitted() -> Result<()> {
+    let (child, page) = init_and_tool_payload(DUPLICATES_TOOL, &json!({ (OFFSET_PARAM): 0 }))?;
     assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE),
-        "missing limit must be InvalidParams; got {response}"
+        value_get(&page, PAGE_LIMIT_POINTER)?,
+        json!(SMALL_PAGE_LIMIT),
+        "omitting limit must default to 5"
     );
     let _ = child.finish();
     Ok(())
 }
 
 #[test]
-fn report_get_clusters_are_slim_summaries_only() -> Result<()> {
+fn duplicates_clusters_are_slim_summaries_only() -> Result<()> {
     let (child, page) = init_and_tool_payload(
-        REPORT_GET_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): STANDARD_PAGE_LIMIT }),
+        DUPLICATES_TOOL,
+        &json!({
+            (OFFSET_PARAM): 0,
+            (LIMIT_PARAM): STANDARD_PAGE_LIMIT,
+            (DETAIL_FIELD): DETAIL_SUMMARY,
+        }),
     )?;
     let clusters = value_get(&page, CLUSTERS_POINTER)?;
     let array = clusters
@@ -1327,10 +1387,16 @@ fn report_get_clusters_are_slim_summaries_only() -> Result<()> {
             cluster.get(OCCURRENCES_FIELD).is_none(),
             "ClusterSummary must drop full occurrences[] (lives behind cluster-by-id): {cluster}"
         );
+        for retired in [BUCKET_FIELD, "score", "weight", "signals", "verdict"] {
+            assert!(
+                cluster.get(retired).is_none(),
+                "mass-only ClusterSummary must not carry {retired}: {cluster}"
+            );
+        }
         for required in [
             ID_FIELD,
-            BUCKET_FIELD,
-            "score",
+            MASS_FIELD,
+            RANK_BAND_FIELD,
             "size_nodes",
             "occurrence_count",
             LANGUAGE_FIELD,
@@ -1369,10 +1435,14 @@ fn report_get_clusters_are_slim_summaries_only() -> Result<()> {
 }
 
 #[test]
-fn report_get_first_occurrence_belongs_to_full_cluster() -> Result<()> {
+fn duplicates_summary_first_occurrence_belongs_to_full_cluster() -> Result<()> {
     let (mut child, page) = init_and_tool_payload(
-        REPORT_GET_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): STANDARD_PAGE_LIMIT }),
+        DUPLICATES_TOOL,
+        &json!({
+            (OFFSET_PARAM): 0,
+            (LIMIT_PARAM): STANDARD_PAGE_LIMIT,
+            (DETAIL_FIELD): DETAIL_SUMMARY,
+        }),
     )?;
     let clusters = value_array(&page, CLUSTERS_POINTER)?;
     assert!(!clusters.is_empty(), "fixture should produce >= 1 cluster");
@@ -1413,9 +1483,9 @@ fn same_occurrence(left: &Value, right: &Value) -> bool {
 }
 
 #[test]
-fn report_get_offset_past_end_returns_empty_page() -> Result<()> {
+fn duplicates_offset_past_end_returns_empty_page() -> Result<()> {
     let (mut child, probe) = init_and_tool_payload(
-        REPORT_GET_TOOL,
+        DUPLICATES_TOOL,
         &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 1 }),
     )?;
     let total = value_get(&probe, TOTAL_CLUSTERS_POINTER)?
@@ -1424,7 +1494,7 @@ fn report_get_offset_past_end_returns_empty_page() -> Result<()> {
     let past = total.saturating_add(OUT_OF_RANGE_OFFSET_INCREMENT);
     let page = structured_tool_result(&call_tool(
         &mut child,
-        REPORT_GET_TOOL,
+        DUPLICATES_TOOL,
         &json!({ (OFFSET_PARAM): past, (LIMIT_PARAM): STANDARD_PAGE_LIMIT }),
     )?)?;
     assert_eq!(
@@ -1450,18 +1520,18 @@ fn report_get_offset_past_end_returns_empty_page() -> Result<()> {
 }
 
 #[test]
-fn report_get_response_stays_under_byte_budget() -> Result<()> {
+fn duplicates_page_stays_under_byte_budget() -> Result<()> {
     let (child, page) = init_and_tool_payload(
-        REPORT_GET_TOOL,
+        DUPLICATES_TOOL,
         &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT }),
     )?;
     let serialised = serde_json::to_string(&page)?;
     // 50KB budget. Earlier "fat" report-get on a real workspace was 2.4MB
-    // which blew out every agent context; the slim ClusterSummary must
-    // keep a 50-cluster page comfortably under this floor.
+    // which blew out every agent context; the page must stay comfortably
+    // under this floor.
     assert!(
         serialised.len() < 50_000,
-        "report-get page exceeded 50KB budget: was {} bytes",
+        "duplicates page exceeded 50KB budget: was {} bytes",
         serialised.len()
     );
     let _ = child.finish();
@@ -1491,10 +1561,15 @@ fn initialize_capabilities_have_no_null_values() -> Result<()> {
 }
 
 #[test]
-fn report_query_filters_by_language() -> Result<()> {
+fn duplicates_filters_by_language() -> Result<()> {
     let (child, page) = init_and_tool_payload(
-        REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, (LANGUAGE_FIELD): CSHARP_LANGUAGE }),
+        DUPLICATES_TOOL,
+        &json!({
+            (OFFSET_PARAM): 0,
+            (LIMIT_PARAM): QUERY_PAGE_LIMIT,
+            (LANGUAGES_FIELD): [CSHARP_LANGUAGE],
+            (DETAIL_FIELD): DETAIL_SUMMARY,
+        }),
     )?;
     let clusters = value_get(&page, CLUSTERS_POINTER)?;
     let array = clusters
@@ -1516,10 +1591,14 @@ fn report_query_filters_by_language() -> Result<()> {
 }
 
 #[test]
-fn report_query_filters_by_unknown_language_returns_empty() -> Result<()> {
+fn duplicates_filters_by_unknown_language_returns_empty() -> Result<()> {
     let (child, page) = init_and_tool_payload(
-        REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, (LANGUAGE_FIELD): "cobol" }),
+        DUPLICATES_TOOL,
+        &json!({
+            (OFFSET_PARAM): 0,
+            (LIMIT_PARAM): QUERY_PAGE_LIMIT,
+            (LANGUAGES_FIELD): ["cobol"],
+        }),
     )?;
     assert_empty_page(&page)?;
     let _ = child.finish();
@@ -1527,30 +1606,39 @@ fn report_query_filters_by_unknown_language_returns_empty() -> Result<()> {
 }
 
 #[test]
-fn report_query_filters_by_path_contains() -> Result<()> {
+fn duplicates_filters_by_path_contains() -> Result<()> {
     let (mut child, page) = init_and_tool_payload(
-        REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, "path_contains": "Alpha" }),
+        DUPLICATES_TOOL,
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, (PATH_CONTAINS_FIELD): "Alpha" }),
     )?;
     let array = value_array(&page, CLUSTERS_POINTER)?;
     assert!(
         !array.is_empty(),
         "Alpha.cs participates in the planted clone family"
     );
+    // Every cluster on a path-filtered page must have at least one
+    // occurrence whose path matches the filter — the filter narrows by
+    // any occurrence, not only first_occurrence.
     for cluster in &array {
-        let first_path = cluster
-            .pointer("/first_occurrence/path")
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        // first_occurrence is one representative — path_contains may match
-        // any occurrence, so we can't assert on first_occurrence alone.
-        // Instead prove the filter narrowed the result by checking
-        // total_clusters dropped vs the unfiltered baseline.
-        let _ = first_path;
+        let matched = cluster
+            .pointer("/occurrences")
+            .and_then(Value::as_array)
+            .is_some_and(|occurrences| {
+                occurrences.iter().any(|occurrence| {
+                    occurrence
+                        .pointer("/path")
+                        .and_then(Value::as_str)
+                        .is_some_and(|path| path.contains("Alpha"))
+                })
+            });
+        assert!(
+            matched,
+            "path_contains=Alpha page must only carry clusters with an Alpha occurrence: {cluster}"
+        );
     }
     let unfiltered = structured_tool_result(&call_tool(
         &mut child,
-        REPORT_GET_TOOL,
+        DUPLICATES_TOOL,
         &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 1 }),
     )?)?;
     let unfiltered_total = value_get(&unfiltered, TOTAL_CLUSTERS_POINTER)?
@@ -1568,10 +1656,15 @@ fn report_query_filters_by_path_contains() -> Result<()> {
 }
 
 #[test]
-fn report_query_filters_by_min_size() -> Result<()> {
+fn duplicates_filters_by_min_size() -> Result<()> {
     let (child, page) = init_and_tool_payload(
-        REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, (MIN_SIZE_FIELD): 20 }),
+        DUPLICATES_TOOL,
+        &json!({
+            (OFFSET_PARAM): 0,
+            (LIMIT_PARAM): QUERY_PAGE_LIMIT,
+            (MIN_SIZE_FIELD): 20,
+            (DETAIL_FIELD): DETAIL_SUMMARY,
+        }),
     )?;
     let clusters = value_get(&page, CLUSTERS_POINTER)?;
     for cluster in clusters.as_array().unwrap_or(&Vec::new()) {
@@ -1589,61 +1682,44 @@ fn report_query_filters_by_min_size() -> Result<()> {
 }
 
 #[test]
-fn report_query_filters_by_min_score() -> Result<()> {
-    let (mut child, baseline) = init_and_tool_payload(
-        REPORT_GET_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 1 }),
+fn duplicates_ignores_retired_min_score_argument() -> Result<()> {
+    // The retired twelve-tool surface filtered pages by a fused pair
+    // score. [MCP-TOOLS] deletes that surface wholesale: the mass-only
+    // page must ignore the retired knob entirely rather than silently
+    // re-filtering by a score that no longer exists on the wire.
+    let (baseline_child, baseline) = init_and_tool_payload(
+        DUPLICATES_TOOL,
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT }),
     )?;
-    let max_score = value_get(&baseline, "/clusters/0/score")?
-        .as_f64()
-        .ok_or_else(|| anyhow!("baseline score missing"))?;
-    let floor = max_score / 2.0;
-    let page = structured_tool_result(&call_tool(
-        &mut child,
-        REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, "min_score": floor }),
-    )?)?;
-    for cluster in value_get(&page, CLUSTERS_POINTER)?
-        .as_array()
-        .unwrap_or(&Vec::new())
-    {
-        let score = cluster
-            .get("score")
-            .and_then(Value::as_f64)
-            .unwrap_or(ZERO_SCORE);
-        assert!(
-            score >= floor,
-            "min_score={floor} violated: cluster score={score}"
-        );
-    }
-    let _ = child.finish();
-    Ok(())
-}
-
-#[test]
-fn report_query_requires_offset_and_limit() -> Result<()> {
-    let mut child = spawn_and_init()?;
-    let response = child.request(
-        TOOLS_CALL_METHOD,
+    let unfiltered_total = value_get(&baseline, TOTAL_CLUSTERS_POINTER)?.as_u64();
+    let _ = baseline_child.finish();
+    let (child, page) = init_and_tool_payload(
+        DUPLICATES_TOOL,
         &json!({
-            (NAME_FIELD): REPORT_QUERY_TOOL,
-            (ARGUMENTS_FIELD): { (LANGUAGE_FIELD): CSHARP_LANGUAGE }
+            (OFFSET_PARAM): 0,
+            (LIMIT_PARAM): QUERY_PAGE_LIMIT,
+            "min_score": 9_999_999.0,
         }),
     )?;
+    let with_retired_knob = value_get(&page, TOTAL_CLUSTERS_POINTER)?.as_u64();
     assert_eq!(
-        value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
-        Some(-INVALID_PARAMS_CODE_MAGNITUDE),
-        "missing offset+limit must be InvalidParams; got {response}"
+        with_retired_knob, unfiltered_total,
+        "retired min_score must not filter the mass-only page: \
+         with={with_retired_knob:?} without={unfiltered_total:?}"
     );
     let _ = child.finish();
     Ok(())
 }
 
 #[test]
-fn report_query_filters_by_min_score_excludes_above_max() -> Result<()> {
+fn duplicates_filters_by_min_size_excludes_above_max() -> Result<()> {
     let (child, page) = init_and_tool_payload(
-        REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, "min_score": 9_999_999.0 }),
+        DUPLICATES_TOOL,
+        &json!({
+            (OFFSET_PARAM): 0,
+            (LIMIT_PARAM): QUERY_PAGE_LIMIT,
+            (MIN_SIZE_FIELD): 99_999,
+        }),
     )?;
     assert_empty_page(&page)?;
     let _ = child.finish();
@@ -1651,33 +1727,44 @@ fn report_query_filters_by_min_score_excludes_above_max() -> Result<()> {
 }
 
 #[test]
-fn report_query_filters_by_min_size_excludes_above_max() -> Result<()> {
-    let (child, page) = init_and_tool_payload(
-        REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, (MIN_SIZE_FIELD): 99_999 }),
+fn duplicates_ignores_retired_bucket_argument() -> Result<()> {
+    // Buckets are retired from the wire with the twelve-tool surface.
+    // The page must ignore a retired bucket filter and its echo must
+    // not carry a bucket row, so no client can misread the filter as
+    // applied ([MCP-TOOLS] normative cutover).
+    let (baseline_child, baseline) = init_and_tool_payload(
+        DUPLICATES_TOOL,
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT }),
     )?;
-    assert_empty_page(&page)?;
-    let _ = child.finish();
-    Ok(())
-}
-
-#[test]
-fn report_query_filters_by_unknown_bucket_returns_empty() -> Result<()> {
+    let unfiltered_total = value_get(&baseline, TOTAL_CLUSTERS_POINTER)?.as_u64();
+    let _ = baseline_child.finish();
     let (child, page) = init_and_tool_payload(
-        REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, (BUCKET_FIELD): "loosely_similar" }),
+        DUPLICATES_TOOL,
+        &json!({
+            (OFFSET_PARAM): 0,
+            (LIMIT_PARAM): QUERY_PAGE_LIMIT,
+            (BUCKET_FIELD): "loosely_similar",
+        }),
     )?;
-    assert_empty_page(&page)?;
+    let with_bucket = value_get(&page, TOTAL_CLUSTERS_POINTER)?.as_u64();
+    assert_eq!(
+        with_bucket, unfiltered_total,
+        "retired bucket filter must not narrow the page: \
+         with={with_bucket:?} without={unfiltered_total:?}"
+    );
     let filters = value_get(&page, "/filters")?;
-    assert_eq!(filters.get(BUCKET_FIELD), Some(&json!("loosely_similar")));
+    assert!(
+        filters.get(BUCKET_FIELD).is_none(),
+        "filters echo must not carry a retired bucket row: {filters}"
+    );
     let _ = child.finish();
     Ok(())
 }
 
 #[test]
-fn report_query_filters_by_nonmatching_path_returns_empty() -> Result<()> {
+fn duplicates_filters_by_nonmatching_path_returns_empty() -> Result<()> {
     let (child, page) = init_and_tool_payload(
-        REPORT_QUERY_TOOL,
+        DUPLICATES_TOOL,
         &json!({
             (OFFSET_PARAM): 0,
             (LIMIT_PARAM): QUERY_PAGE_LIMIT,
@@ -1690,20 +1777,29 @@ fn report_query_filters_by_nonmatching_path_returns_empty() -> Result<()> {
 }
 
 #[test]
-fn report_query_filters_by_matching_bucket_includes_clusters() -> Result<()> {
+fn duplicates_filters_by_matching_severity_includes_clusters() -> Result<()> {
+    // The retired bucket filter is superseded by the mass-derived
+    // severity axis ([MCP-TOOL-FILTERS]): every returned cluster's
+    // rank band must sit inside the requested set.
     let (child, page) = init_and_tool_payload(
-        REPORT_QUERY_TOOL,
-        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): QUERY_PAGE_LIMIT, (BUCKET_FIELD): NEARLY_IDENTICAL_BUCKET }),
+        DUPLICATES_TOOL,
+        &json!({
+            (OFFSET_PARAM): 0,
+            (LIMIT_PARAM): QUERY_PAGE_LIMIT,
+            (SEVERITIES_FIELD): ["worst"],
+            (DETAIL_FIELD): DETAIL_SUMMARY,
+        }),
     )?;
     let clusters = value_array(&page, CLUSTERS_POINTER)?;
     assert!(
         !clusters.is_empty(),
-        "fixture has at least one nearly-identical cluster"
+        "fixture has at least one worst-severity cluster"
     );
     for cluster in &clusters {
         assert_eq!(
-            cluster.get(BUCKET_FIELD).and_then(Value::as_str),
-            Some(NEARLY_IDENTICAL_BUCKET)
+            cluster.get(RANK_BAND_FIELD).and_then(Value::as_str),
+            Some("worst"),
+            "severity filter not applied: {cluster}"
         );
     }
     let _ = child.finish();
@@ -1711,29 +1807,30 @@ fn report_query_filters_by_matching_bucket_includes_clusters() -> Result<()> {
 }
 
 #[test]
-fn report_query_echoes_filters_in_response() -> Result<()> {
+fn duplicates_echoes_filters_in_response() -> Result<()> {
     let (child, page) = init_and_tool_payload(
-        REPORT_QUERY_TOOL,
+        DUPLICATES_TOOL,
         &json!({
             (OFFSET_PARAM): 0,
             (LIMIT_PARAM): SMALL_PAGE_LIMIT,
-            (LANGUAGE_FIELD): CSHARP_LANGUAGE,
+            (LANGUAGES_FIELD): [CSHARP_LANGUAGE],
             (MIN_SIZE_FIELD): MIN_SIZE_FILTER,
         }),
     )?;
     let filters = value_get(&page, "/filters")?;
-    assert_eq!(filters.get(LANGUAGE_FIELD), Some(&json!(CSHARP_LANGUAGE)));
+    assert_eq!(
+        filters.get(LANGUAGES_FIELD),
+        Some(&json!([CSHARP_LANGUAGE]))
+    );
     assert_eq!(filters.get(MIN_SIZE_FIELD), Some(&json!(MIN_SIZE_FILTER)));
     let _ = child.finish();
     Ok(())
 }
 
 #[test]
-fn report_for_file_returns_only_matching_clusters() -> Result<()> {
-    let (child, payload) = init_and_tool_payload(
-        REPORT_FOR_FILE_TOOL,
-        &json!({ (PATH_FIELD): ALPHA_FILE_NAME }),
-    )?;
+fn duplicates_scope_path_returns_only_matching_clusters() -> Result<()> {
+    let (child, payload) =
+        init_and_tool_payload(DUPLICATES_TOOL, &json!({ (PATH_FIELD): ALPHA_FILE_NAME }))?;
     let clusters = value_get(&payload, CLUSTERS_POINTER)?;
     let array = clusters
         .as_array()
@@ -1761,9 +1858,9 @@ fn report_for_file_returns_only_matching_clusters() -> Result<()> {
 }
 
 #[test]
-fn report_for_range_rejects_inverted_range() -> Result<()> {
+fn duplicates_scope_range_rejects_inverted_range() -> Result<()> {
     let (child, response) = init_and_tool_response(
-        REPORT_FOR_RANGE_TOOL,
+        DUPLICATES_TOOL,
         &json!({ (PATH_FIELD): ALPHA_FILE_NAME, (START_BYTE_FIELD): BROAD_RESULT_LIMIT, (END_BYTE_FIELD): 1 }),
     )?;
     assert_eq!(
@@ -1862,7 +1959,7 @@ fn find_similar_range_finds_clone_on_alpha() -> Result<()> {
 #[test]
 fn cluster_by_id_round_trips() -> Result<()> {
     let (mut child, report_value) = init_and_tool_payload(
-        REPORT_GET_TOOL,
+        DUPLICATES_TOOL,
         &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): 1 }),
     )?;
     let first_id = value_get(&report_value, "/clusters/0/id")?
@@ -1897,11 +1994,14 @@ fn cluster_by_id_unknown_returns_error() -> Result<()> {
 
 #[test]
 fn list_embedding_models_excludes_stub_when_ollama_unreachable() -> Result<()> {
-    // [REMOVE-STUB] list-embedding-models delegates to the companion
-    // LSP via IPC. When Ollama is unreachable in CI the production
-    // listing must come back empty — the deterministic stub is test
-    // infrastructure and never appears in production payloads.
-    let (child, response) = init_and_tool_response(LIST_EMBEDDING_MODELS_TOOL, &json!({}))?;
+    // [REMOVE-STUB] `session` action=list-embedding-models delegates to
+    // the companion LSP via IPC. When Ollama is unreachable in CI the
+    // production listing must come back empty — the deterministic stub is
+    // test infrastructure and never appears in production payloads.
+    let (child, response) = init_and_tool_response(
+        SESSION_TOOL,
+        &json!({ (ACTION_FIELD): LIST_EMBEDDING_MODELS_ACTION }),
+    )?;
     let models = value_array(&response, "/result/structuredContent/models")?;
     let has_stub = models
         .iter()
@@ -1916,12 +2016,17 @@ fn list_embedding_models_excludes_stub_when_ollama_unreachable() -> Result<()> {
 
 #[test]
 fn set_embedding_model_rejects_stub_provider() -> Result<()> {
-    // [REMOVE-STUB] The MCP `set-embedding-model` schema enum is
-    // `["ollama"]` — submitting `provider_id: "stub"` is rejected
+    // [REMOVE-STUB] The session set-embedding-model path only accepts
+    // the ollama provider — submitting `provider_id: "stub"` is rejected
     // before the call reaches any backend.
     let (child, response) = init_and_tool_response(
-        SET_EMBEDDING_MODEL_TOOL,
-        &json!({ (PROVIDER_ID_FIELD): STUB_PROVIDER, (MODEL_ID_FIELD): "blake3-stub", (USER_INITIATED_FIELD): true }),
+        SESSION_TOOL,
+        &json!({
+            (ACTION_FIELD): SET_EMBEDDING_MODEL_ACTION,
+            (PROVIDER_ID_FIELD): STUB_PROVIDER,
+            (MODEL_ID_FIELD): "blake3-stub",
+            (USER_INITIATED_FIELD): true
+        }),
     )?;
     assert!(
         response.get(ERROR_FIELD).is_some(),
@@ -1941,8 +2046,14 @@ fn set_embedding_model_preserves_shared_settings_and_endpoint() -> Result<()> {
     // [REMOVE-STUB] Stub provider removed from production payloads;
     // exercise the same plumbing through the ollama provider.
     let (child, response) = init_and_tool_response(
-        SET_EMBEDDING_MODEL_TOOL,
-        &json!({ (PROVIDER_ID_FIELD): OLLAMA_PROVIDER, (MODEL_ID_FIELD): DEFAULT_EMBEDDING_MODEL, (ENDPOINT_FIELD): UNREACHABLE_OLLAMA_ENDPOINT, (USER_INITIATED_FIELD): true }),
+        SESSION_TOOL,
+        &json!({
+            (ACTION_FIELD): SET_EMBEDDING_MODEL_ACTION,
+            (PROVIDER_ID_FIELD): OLLAMA_PROVIDER,
+            (MODEL_ID_FIELD): DEFAULT_EMBEDDING_MODEL,
+            (ENDPOINT_FIELD): UNREACHABLE_OLLAMA_ENDPOINT,
+            (USER_INITIATED_FIELD): true
+        }),
     )?;
     assert!(
         response.get(ERROR_FIELD).is_some(),
@@ -1970,8 +2081,9 @@ fn set_embedding_model_fails_when_shared_settings_cannot_be_written() -> Result<
     let response = child.request(
         TOOLS_CALL_METHOD,
         &json!({
-            (NAME_FIELD): SET_EMBEDDING_MODEL_TOOL,
+            (NAME_FIELD): SESSION_TOOL,
             (ARGUMENTS_FIELD): {
+                (ACTION_FIELD): SET_EMBEDDING_MODEL_ACTION,
                 (PROVIDER_ID_FIELD): OLLAMA_PROVIDER,
                 (MODEL_ID_FIELD): DEFAULT_EMBEDDING_MODEL,
                 (USER_INITIATED_FIELD): true
@@ -1982,7 +2094,7 @@ fn set_embedding_model_fails_when_shared_settings_cannot_be_written() -> Result<
         response.get(ERROR_FIELD).is_some(),
         "expected config write error"
     );
-    let snap = structured_tool_result(&call_tool(&mut child, SESSION_CONFIG_TOOL, &json!({}))?)?;
+    let snap = structured_tool_result(&call_tool(&mut child, SESSION_TOOL, &json!({}))?)?;
     assert!(
         value_get(&snap, EMBEDDING_PROVENANCE_POINTER)?.is_null(),
         "failed settings write must not switch MCP state: {snap}"
@@ -1994,8 +2106,13 @@ fn set_embedding_model_fails_when_shared_settings_cannot_be_written() -> Result<
 #[test]
 fn set_embedding_model_unknown_provider_errors() -> Result<()> {
     let (child, response) = init_and_tool_response(
-        SET_EMBEDDING_MODEL_TOOL,
-        &json!({ (PROVIDER_ID_FIELD): "aztec-cpu", (MODEL_ID_FIELD): "blah", (USER_INITIATED_FIELD): true }),
+        SESSION_TOOL,
+        &json!({
+            (ACTION_FIELD): SET_EMBEDDING_MODEL_ACTION,
+            (PROVIDER_ID_FIELD): "aztec-cpu",
+            (MODEL_ID_FIELD): "blah",
+            (USER_INITIATED_FIELD): true
+        }),
     )?;
     assert!(
         response.get(ERROR_FIELD).is_some(),
@@ -2006,12 +2123,12 @@ fn set_embedding_model_unknown_provider_errors() -> Result<()> {
 }
 
 #[test]
-fn session_config_reportsworkspace_root_and_languages() -> Result<()> {
+fn session_reports_workspace_root_and_languages() -> Result<()> {
     // Tests [MCP-TOOL-SESSION]
-    // [MCP-IPC-CLIENT] session-config goes over IPC to the running
+    // [MCP-IPC-CLIENT] session action=get goes over IPC to the running
     // LSP, so `min_nodes` is the LSP's default (30) — the fixture's
     // pre-committed value is no longer the wire source.
-    let (child, payload) = init_and_tool_payload(SESSION_CONFIG_TOOL, &json!({}))?;
+    let (child, payload) = init_and_tool_payload(SESSION_TOOL, &json!({}))?;
     assert_eq!(
         value_get(&payload, "/min_nodes")?.as_u64().unwrap_or(0),
         DEFAULT_MIN_NODES
@@ -2138,7 +2255,7 @@ fn path_outside_root_is_rejected() -> Result<()> {
     let response = child.request(
         TOOLS_CALL_METHOD,
         &json!({
-            (NAME_FIELD): REPORT_FOR_FILE_TOOL,
+            (NAME_FIELD): DUPLICATES_TOOL,
             (ARGUMENTS_FIELD): { (PATH_FIELD): outside_file }
         }),
     )?;
@@ -2165,7 +2282,7 @@ fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
     let (temp, mut child) = two_file_workspace_with_state()?;
     let first = structured_tool_result(&call_tool(
         &mut child,
-        REPORT_GET_TOOL,
+        DUPLICATES_TOOL,
         &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT }),
     )?)?;
     let first_count = value_get(&first, TOTAL_CLUSTERS_POINTER)?
@@ -2182,7 +2299,7 @@ fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
     let _ = init_session(&mut second)?;
     let rerun = structured_tool_result(&call_tool(
         &mut second,
-        REPORT_GET_TOOL,
+        DUPLICATES_TOOL,
         &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT }),
     )?)?;
     let rerun_count = value_get(&rerun, TOTAL_CLUSTERS_POINTER)?
@@ -2197,14 +2314,14 @@ fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
 }
 
 #[test]
-fn report_for_range_returns_empty_when_path_has_no_clusters() -> Result<()> {
+fn duplicates_scope_range_returns_empty_when_path_has_no_clusters() -> Result<()> {
     let (_workspace, mut child) = workspace_with_extra_file(
         "Lonely.cs",
         "namespace Lonely { class Solo { public int Uniq() => 42; } }",
     )?;
     let result = call_tool(
         &mut child,
-        REPORT_FOR_RANGE_TOOL,
+        DUPLICATES_TOOL,
         &json!({
             (PATH_FIELD): "Lonely.cs",
             (START_BYTE_FIELD): 0,
@@ -2222,12 +2339,12 @@ fn report_for_range_returns_empty_when_path_has_no_clusters() -> Result<()> {
 }
 
 #[test]
-fn report_for_file_on_unknown_path_returns_empty_clusters() -> Result<()> {
+fn duplicates_scope_path_on_unknown_path_returns_empty_clusters() -> Result<()> {
     let (_workspace, mut child) =
         workspace_with_extra_file("Ghost.cs", "namespace G { class G {} }")?;
     let result = call_tool(
         &mut child,
-        REPORT_FOR_FILE_TOOL,
+        DUPLICATES_TOOL,
         &json!({ (PATH_FIELD): "Ghost.cs" }),
     )?;
     let payload = structured_tool_result(&result)?;
@@ -2248,8 +2365,14 @@ fn set_embedding_model_swap_updates_session_config_provenance() -> Result<()> {
     // [REMOVE-STUB] Use the ollama provider id since stub is no longer
     // accepted by the production MCP schema.
     let (mut child, response) = init_and_tool_response(
-        SET_EMBEDDING_MODEL_TOOL,
-        &json!({ (PROVIDER_ID_FIELD): OLLAMA_PROVIDER, (MODEL_ID_FIELD): DEFAULT_EMBEDDING_MODEL, (ENDPOINT_FIELD): UNREACHABLE_OLLAMA_ENDPOINT, (USER_INITIATED_FIELD): true }),
+        SESSION_TOOL,
+        &json!({
+            (ACTION_FIELD): SET_EMBEDDING_MODEL_ACTION,
+            (PROVIDER_ID_FIELD): OLLAMA_PROVIDER,
+            (MODEL_ID_FIELD): DEFAULT_EMBEDDING_MODEL,
+            (ENDPOINT_FIELD): UNREACHABLE_OLLAMA_ENDPOINT,
+            (USER_INITIATED_FIELD): true
+        }),
     )?;
     assert!(
         response.get(ERROR_FIELD).is_some(),
@@ -2259,7 +2382,7 @@ fn set_embedding_model_swap_updates_session_config_provenance() -> Result<()> {
         !response.to_string().contains("LSP is not running"),
         "issue #286: the companion LSP is live; the error must describe the real failure: {response}",
     );
-    let config = structured_tool_result(&call_tool(&mut child, SESSION_CONFIG_TOOL, &json!({}))?)?;
+    let config = structured_tool_result(&call_tool(&mut child, SESSION_TOOL, &json!({}))?)?;
     assert_eq!(
         config.get(EMBEDDING_PROVENANCE_FIELD),
         Some(&Value::Null),
@@ -2272,8 +2395,9 @@ fn set_embedding_model_swap_updates_session_config_provenance() -> Result<()> {
 #[test]
 fn set_embedding_model_to_ollama_fails_when_daemon_not_running() -> Result<()> {
     let (child, response) = init_and_tool_response(
-        SET_EMBEDDING_MODEL_TOOL,
+        SESSION_TOOL,
         &json!({
+            (ACTION_FIELD): SET_EMBEDDING_MODEL_ACTION,
             (PROVIDER_ID_FIELD): OLLAMA_PROVIDER,
             (MODEL_ID_FIELD): DEFAULT_EMBEDDING_MODEL,
             (ENDPOINT_FIELD): UNREACHABLE_OLLAMA_ENDPOINT,
@@ -2425,22 +2549,25 @@ fn string_request_id_round_trips_through_dispatch() -> Result<()> {
 #[test]
 fn relative_path_insideworkspace_is_accepted() -> Result<()> {
     let (child, payload) = init_and_tool_payload(
-        REPORT_FOR_RANGE_TOOL,
+        DUPLICATES_TOOL,
         &json!({
             (PATH_FIELD): "./Alpha.cs",
             (START_BYTE_FIELD): 0,
             (END_BYTE_FIELD): 1,
         }),
     )?;
-    assert_eq!(value_get(&payload, "/path")?, json!("./Alpha.cs"));
+    assert!(
+        value_get(&payload, TOTAL_CLUSTERS_POINTER)?.is_u64(),
+        "a workspace-relative scope path must resolve, not error: {payload}"
+    );
     let _ = child.finish();
     Ok(())
 }
 
 #[test]
 fn tool_missing_required_string_arg_returns_invalid_params() -> Result<()> {
-    // report-for-file needs a "path" string — omit it.
-    let (child, response) = init_and_tool_response(REPORT_FOR_FILE_TOOL, &json!({}))?;
+    // compare-pair needs both endpoints — omit them.
+    let (child, response) = init_and_tool_response(COMPARE_PAIR_TOOL, &json!({}))?;
     assert_eq!(
         value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
         Some(-INVALID_PARAMS_CODE_MAGNITUDE)
@@ -2451,10 +2578,10 @@ fn tool_missing_required_string_arg_returns_invalid_params() -> Result<()> {
 
 #[test]
 fn tool_missing_required_integer_arg_returns_invalid_params() -> Result<()> {
-    // report-for-range needs start_byte + end_byte — omit both.
+    // compare-pair needs left AND right — provide only one.
     let (child, response) = init_and_tool_response(
-        REPORT_FOR_RANGE_TOOL,
-        &json!({ (PATH_FIELD): ALPHA_FILE_NAME }),
+        COMPARE_PAIR_TOOL,
+        &json!({ (LEFT_ENDPOINT_FIELD): { (PATH_FIELD): ALPHA_FILE_NAME } }),
     )?;
     assert_eq!(
         value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
@@ -2467,8 +2594,12 @@ fn tool_missing_required_integer_arg_returns_invalid_params() -> Result<()> {
 #[test]
 fn set_embedding_model_missing_model_id_returns_invalid_params() -> Result<()> {
     let (child, response) = init_and_tool_response(
-        SET_EMBEDDING_MODEL_TOOL,
-        &json!({ (PROVIDER_ID_FIELD): OLLAMA_PROVIDER, (USER_INITIATED_FIELD): true }),
+        SESSION_TOOL,
+        &json!({
+            (ACTION_FIELD): SET_EMBEDDING_MODEL_ACTION,
+            (PROVIDER_ID_FIELD): OLLAMA_PROVIDER,
+            (USER_INITIATED_FIELD): true
+        }),
     )?;
     assert_eq!(
         value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
@@ -2482,8 +2613,12 @@ fn set_embedding_model_missing_model_id_returns_invalid_params() -> Result<()> {
 fn set_embedding_model_without_user_initiation_returns_invalid_params() -> Result<()> {
     // Tests [MCP-EMBEDDING-CONSENT]
     let (child, response) = init_and_tool_response(
-        SET_EMBEDDING_MODEL_TOOL,
-        &json!({ (PROVIDER_ID_FIELD): OLLAMA_PROVIDER, (MODEL_ID_FIELD): DEFAULT_EMBEDDING_MODEL }),
+        SESSION_TOOL,
+        &json!({
+            (ACTION_FIELD): SET_EMBEDDING_MODEL_ACTION,
+            (PROVIDER_ID_FIELD): OLLAMA_PROVIDER,
+            (MODEL_ID_FIELD): DEFAULT_EMBEDDING_MODEL
+        }),
     )?;
     assert_eq!(
         value_get(&response, ERROR_CODE_POINTER)?.as_i64(),
@@ -2519,10 +2654,8 @@ fn report_for_file_accepts_nonexistent_leaf_but_resolves_parent() -> Result<()> 
     // Query a file that doesn't exist but whose *parent* (the scan
     // root) does. This exercises safety::canonicalise_best_effort's
     // nonexistent-leaf branch, returning an empty cluster set.
-    let (child, payload) = init_and_tool_payload(
-        REPORT_FOR_FILE_TOOL,
-        &json!({ (PATH_FIELD): "NeverCreated.cs" }),
-    )?;
+    let (child, payload) =
+        init_and_tool_payload(DUPLICATES_TOOL, &json!({ (PATH_FIELD): "NeverCreated.cs" }))?;
     let clusters = value_get(&payload, CLUSTERS_POINTER)?;
     assert!(
         clusters.as_array().is_some_and(Vec::is_empty),
@@ -2535,7 +2668,7 @@ fn report_for_file_accepts_nonexistent_leaf_but_resolves_parent() -> Result<()> 
 #[test]
 fn path_in_nonexistent_subdirectory_is_rejected_as_io_failure() -> Result<()> {
     let (child, response) = init_and_tool_response(
-        REPORT_FOR_FILE_TOOL,
+        DUPLICATES_TOOL,
         &json!({ (PATH_FIELD): "no/such/dir/Phantom.cs" }),
     )?;
     assert!(
@@ -2551,11 +2684,11 @@ fn binary_starts_with_default_embedding_config() -> Result<()> {
     // [REMOVE-STUB] StateFileBackend reads provenance from the state
     // file; with stub removed, provenance may be null when no real
     // provider is selected. The key must still be present.
-    let (child, snapshot) = init_and_tool_payload(SESSION_CONFIG_TOOL, &json!({}))?;
+    let (child, snapshot) = init_and_tool_payload(SESSION_TOOL, &json!({}))?;
     assert!(
         value_get(&snapshot, EMBEDDING_PROVENANCE_POINTER)?.is_object()
             || value_get(&snapshot, EMBEDDING_PROVENANCE_POINTER)?.is_null(),
-        "session-config must return embedding_provenance field: {snapshot}"
+        "session must return embedding_provenance field: {snapshot}"
     );
     let _ = child.finish();
     Ok(())
@@ -2568,10 +2701,10 @@ fn binary_starts_without_ollama_returns_provenance_field() -> Result<()> {
     // to a stub provider when Ollama is unreachable, but the
     // provenance key must always be present so the editor can detect
     // the disabled state.
-    let (child, snapshot) = init_and_tool_payload(SESSION_CONFIG_TOOL, &json!({}))?;
+    let (child, snapshot) = init_and_tool_payload(SESSION_TOOL, &json!({}))?;
     assert!(
         snapshot.get(EMBEDDING_PROVENANCE_FIELD).is_some(),
-        "session-config must include embedding_provenance key: {snapshot}"
+        "session must include embedding_provenance key: {snapshot}"
     );
     let _ = child.finish();
     Ok(())
@@ -2581,10 +2714,10 @@ fn binary_starts_without_ollama_returns_provenance_field() -> Result<()> {
 /// not contact Ollama — the server always starts and `session-config` responds.
 #[test]
 fn binary_survives_when_required_ollama_endpoint_is_unreachable() -> Result<()> {
-    let (child, snapshot) = init_and_tool_payload(SESSION_CONFIG_TOOL, &json!({}))?;
+    let (child, snapshot) = init_and_tool_payload(SESSION_TOOL, &json!({}))?;
     assert!(
         snapshot.get(EMBEDDING_PROVENANCE_FIELD).is_some(),
-        "session-config must respond even when Ollama is not running: {snapshot}"
+        "session must respond even when Ollama is not running: {snapshot}"
     );
     let _ = child.finish();
     Ok(())
@@ -2633,7 +2766,7 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
     let (temp, mut child) = two_file_workspace_with_state()?;
     let before = structured_tool_result(&call_tool(
         &mut child,
-        REPORT_GET_TOOL,
+        DUPLICATES_TOOL,
         &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT }),
     )?)?;
     let before_count = value_get(&before, TOTAL_CLUSTERS_POINTER)?
@@ -2647,7 +2780,7 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
     // read under heavy CI load (see poll_total_clusters_below).
     let after = poll_total_clusters_below(
         &mut child,
-        REPORT_GET_TOOL,
+        DUPLICATES_TOOL,
         &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT }),
         before_count,
     )?;
@@ -2663,19 +2796,18 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
 }
 
 #[test]
-fn issue_77_session_config_reports_incremental_true_after_mutation_reload() -> Result<()> {
+fn issue_77_session_reports_incremental_true_after_mutation_reload() -> Result<()> {
     let (temp, mut child) = two_file_workspace_with_state()?;
-    let before_top = structured_tool_result(&call_tool(
+    let before_page = structured_tool_result(&call_tool(
         &mut child,
-        TOP_OFFENDERS_TOOL,
-        &json!({ "n": BROAD_RESULT_LIMIT }),
+        DUPLICATES_TOOL,
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT }),
     )?)?;
-    let before_count = value_get(&before_top, TOTAL_CLUSTERS_POINTER)?
+    let before_count = value_get(&before_page, TOTAL_CLUSTERS_POINTER)?
         .as_u64()
         .unwrap_or(0);
     assert!(before_count >= 1, "expected a cluster before mutation");
-    let before_config =
-        structured_tool_result(&call_tool(&mut child, SESSION_CONFIG_TOOL, &json!({}))?)?;
+    let before_config = structured_tool_result(&call_tool(&mut child, SESSION_TOOL, &json!({}))?)?;
     let before_generation = value_get(&before_config, "/generation")?
         .as_u64()
         .unwrap_or(0);
@@ -2687,26 +2819,25 @@ fn issue_77_session_config_reports_incremental_true_after_mutation_reload() -> R
         value_get(&before_config, LANGUAGES_POINTER)?
             .as_array()
             .is_some_and(|languages| languages.iter().any(|value| value == CSHARP_LANGUAGE)),
-        "session-config should report csharp before mutation: {before_config}"
+        "session should report csharp before mutation: {before_config}"
     );
 
     mutate_two_and_notify(&mut child, temp.path())?;
 
-    let after_top = poll_total_clusters_below(
+    let after_page = poll_total_clusters_below(
         &mut child,
-        TOP_OFFENDERS_TOOL,
-        &json!({ "n": BROAD_RESULT_LIMIT }),
+        DUPLICATES_TOOL,
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT }),
         before_count,
     )?;
-    let after_count = value_get(&after_top, TOTAL_CLUSTERS_POINTER)?
+    let after_count = value_get(&after_page, TOTAL_CLUSTERS_POINTER)?
         .as_u64()
         .unwrap_or(0);
     assert!(
         after_count < before_count,
         "mutation reload should remove the stale duplicate cluster"
     );
-    let after_config =
-        structured_tool_result(&call_tool(&mut child, SESSION_CONFIG_TOOL, &json!({}))?)?;
+    let after_config = structured_tool_result(&call_tool(&mut child, SESSION_TOOL, &json!({}))?)?;
     // [MCP-IPC-CLIENT] min_nodes now comes from the live LSP, not
     // the test's `generate_state_file` invocation — LSP defaults
     // to 30.
@@ -2716,7 +2847,7 @@ fn issue_77_session_config_reports_incremental_true_after_mutation_reload() -> R
     );
     assert!(
         value_get(&after_config, LANGUAGES_POINTER)?.is_array(),
-        "session-config should keep languages shaped as an array: {after_config}"
+        "session should keep languages shaped as an array: {after_config}"
     );
     assert!(
         value_get(&after_config, "/generation")?
@@ -2728,14 +2859,14 @@ fn issue_77_session_config_reports_incremental_true_after_mutation_reload() -> R
     assert_eq!(
         value_get(&after_config, "/incremental")?.as_bool(),
         Some(true),
-        "issue #77/#81: session-config must report live incremental mode after mutation reload"
+        "issue #77/#81: session must report live incremental mode after mutation reload"
     );
     let _ = child.finish();
     Ok(())
 }
 
 #[test]
-fn issue_89_rescan_tool_reloads_state_file_and_returns_fresh_top_offenders() -> Result<()> {
+fn issue_89_rescan_tool_reloads_state_file_and_returns_fresh_duplicates() -> Result<()> {
     // [MCP-IPC-CLIENT] rescan triggers the LSP's
     // `deslop.lsp.refreshReport` over IPC and the next read sees the
     // re-analysed state. Mutating source (not the seed cache) is the
@@ -2746,11 +2877,11 @@ fn issue_89_rescan_tool_reloads_state_file_and_returns_fresh_top_offenders() -> 
     // Flush the LSP cold-pass install before measuring `before` so
     // the post-mutation rescan does not race a delayed background
     // commit that would re-introduce the stale cluster.
-    let _flush = call_tool(&mut child, RESCAN_TOOL, &json!({ "n": 1 }))?;
+    let _flush = call_tool(&mut child, RESCAN_TOOL, &json!({}))?;
     let before = structured_tool_result(&call_tool(
         &mut child,
-        TOP_OFFENDERS_TOOL,
-        &json!({ "n": BROAD_RESULT_LIMIT }),
+        DUPLICATES_TOOL,
+        &json!({ (OFFSET_PARAM): 0, (LIMIT_PARAM): BROAD_RESULT_LIMIT }),
     )?)?;
     let before_count = value_get(&before, TOTAL_CLUSTERS_POINTER)?
         .as_u64()
@@ -2772,24 +2903,25 @@ fn issue_89_rescan_tool_reloads_state_file_and_returns_fresh_top_offenders() -> 
         RESCAN_TOOL,
         &json!({
             (PATHS_FIELD): [workspace.path().join("Beta.cs").to_string_lossy().into_owned()],
-            "n": BROAD_RESULT_LIMIT
+            (OFFSET_PARAM): 0,
+            (LIMIT_PARAM): BROAD_RESULT_LIMIT
         }),
     )?)?;
-    let after_count = value_get(&after, TOTAL_CLUSTERS_POINTER)?
+    let after_count = value_get(&after, RESCAN_TOTAL_CLUSTERS_POINTER)?
         .as_u64()
         .unwrap_or(0);
     assert!(
         after_count < before_count,
-        "issue #89: rescan must synchronously trigger LSP re-analysis and return fresh top offenders; was {before_count}, now {after_count}"
+        "issue #89: rescan must synchronously trigger LSP re-analysis and return a fresh page; was {before_count}, now {after_count}"
     );
     assert_eq!(
-        value_get(&after, COUNT_POINTER)?.as_u64(),
+        value_get(&after, RESCAN_PAGE_LIMIT_POINTER)?.as_u64(),
         Some(BROAD_RESULT_LIMIT),
-        "issue #89: rescan must echo the requested top-offenders count"
+        "issue #89: rescan must echo the requested page limit"
     );
     assert!(
-        value_get(&after, CLUSTERS_POINTER)?.is_array(),
-        "issue #89: rescan must return top-offenders clusters"
+        value_get(&after, RESCAN_CLUSTERS_POINTER)?.is_array(),
+        "issue #89: rescan must return a clusters page"
     );
     let _ = child.finish();
     Ok(())
@@ -2873,7 +3005,10 @@ fn list_embedding_models_response_omits_legacy_keys_and_stub() -> Result<()> {
     let mut child = spawn_and_init()?;
     let response = child.request(
         TOOLS_CALL_METHOD,
-        &json!({ (NAME_FIELD): LIST_EMBEDDING_MODELS_TOOL, (ARGUMENTS_FIELD): {} }),
+        &json!({
+            (NAME_FIELD): SESSION_TOOL,
+            (ARGUMENTS_FIELD): { (ACTION_FIELD): LIST_EMBEDDING_MODELS_ACTION }
+        }),
     )?;
     let models = value_array(&response, "/result/structuredContent/models")?;
     let has_stub = models

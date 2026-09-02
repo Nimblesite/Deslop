@@ -13,6 +13,7 @@
 
 use anyhow::Result;
 
+use crate::common::signals::{assert_structural_only_contract, has_verbatim_pair};
 use crate::common::*;
 
 /// Drives the `deslop` binary over the named fixture at `min_nodes` and
@@ -28,19 +29,15 @@ fn run_cli(fixture_name: &str, min_nodes: u32) -> Result<serde_json::Value> {
     load_json(&output.with_extension("json"))
 }
 
-/// True only within one float ulp of `1.0` — a saturated signal, never a
-/// merely high one.
-fn is_exact_one(value: f64) -> bool {
-    (value - 1.0).abs() <= f64::EPSILON
-}
-
 // [FUSED-SIGNALS-THREE-LAYER] Type-2 Python clones (identical after
-// normalisation) must produce token_jaccard = 1.0 — proves
-// minhash_signature maps identical k-gram sets to identical signatures.
-// If the XOF produces wrong values (e.g. all-MAX sentinel), Jaccard
-// would be 1.0 trivially; the Type-3 test below distinguishes that case.
+// normalisation) must be detected — proves the signature pipeline maps
+// identical normalised k-gram sets to identical signatures. A Type-2
+// clone is a *rename*: its occurrences differ in raw bytes, so the
+// wire proves it by admission plus the byte truth that it is NOT a
+// verbatim copy ([PIPELINE-CLUSTER-CLOSURE]).
 #[test]
-fn python_type2_clone_has_token_jaccard_of_one() -> Result<()> {
+fn python_type2_clone_is_byte_identical() -> Result<()> {
+    let scan_root = fixture("python-small");
     let report = run_cli("python-small", 10)?;
     let clusters = clusters(&report);
     assert!(
@@ -50,16 +47,11 @@ fn python_type2_clone_has_token_jaccard_of_one() -> Result<()> {
     let top = clusters
         .first()
         .ok_or_else(|| anyhow::anyhow!("python-small must produce at least one cluster"))?;
-    let token_jaccard = signal(top, "token_jaccard");
+    assert_structural_only_contract(top, "python Type-2 clone");
     assert!(
-        is_exact_one(token_jaccard),
-        "Type-2 Python clone must have token_jaccard = 1.0 (identical k-gram sets), \
-         got {token_jaccard}"
-    );
-    let structural = signal(top, "structural");
-    assert!(
-        is_exact_one(structural),
-        "Type-2 Python clone must also have structural = 1.0, got {structural}",
+        !has_verbatim_pair(&scan_root, top)?,
+        "the Type-2 clone is a rename — its occurrences must differ in raw \
+         bytes, never be byte-identical: {top:#}",
     );
     Ok(())
 }
@@ -85,14 +77,17 @@ fn python_type2_clone_has_token_jaccard_of_one() -> Result<()> {
 #[test]
 fn python_multi_file_corpus_produces_cross_file_cluster_with_positive_token_jaccard() -> Result<()>
 {
+    let scan_root = fixture("python-type3");
     let report = run_cli("python-type3", 8)?;
     let cluster = expect_cluster_spanning(&report, &["alpha.py", "beta.py"])?;
-    let token_jaccard = signal(cluster, "token_jaccard");
+    // The shared-subtree cluster is a near-miss: the two functions differ
+    // by the extra statement, so the cluster must be admitted and its
+    // occurrences byte-distinct — a byte-identical reading would mean the
+    // fragment view was published in place of the enclosing pair.
     assert!(
-        token_jaccard > 0.0,
-        "cross-file Python cluster must have token_jaccard > 0.0 \
-         (minhash_signature must produce meaningful signatures for shared subtrees), \
-         got token_jaccard = {token_jaccard}",
+        !has_verbatim_pair(&scan_root, cluster)?,
+        "the cross-file Python cluster must be the byte-distinct enclosing \
+         near-miss, not a verbatim fragment: {cluster:#}",
     );
     Ok(())
 }
@@ -104,25 +99,25 @@ fn python_multi_file_corpus_produces_cross_file_cluster_with_positive_token_jacc
 // values between runs.  Cluster IDs are structural (unaffected by
 // signatures), so checking token_jaccard is the direct proof.
 #[test]
-fn python_token_jaccard_is_deterministic_across_runs() -> Result<()> {
+fn python_report_is_deterministic_across_runs() -> Result<()> {
     let run1 = run_cli("python-small", 10)?;
     let run2 = run_cli("python-small", 10)?;
-    let jaccards1: Vec<u64> = clusters(&run1)
+    let ids1: Vec<(String, u64)> = clusters(&run1)
         .iter()
-        .map(|cluster| signal(cluster, "token_jaccard").to_bits())
+        .map(|cluster| (cluster_id(cluster).to_owned(), cluster_size(cluster)))
         .collect();
-    let jaccards2: Vec<u64> = clusters(&run2)
+    let ids2: Vec<(String, u64)> = clusters(&run2)
         .iter()
-        .map(|cluster| signal(cluster, "token_jaccard").to_bits())
+        .map(|cluster| (cluster_id(cluster).to_owned(), cluster_size(cluster)))
         .collect();
     assert!(
-        !jaccards1.is_empty(),
+        !ids1.is_empty(),
         "python-small must produce at least one cluster"
     );
     assert_eq!(
-        jaccards1, jaccards2,
-        "token_jaccard values must be bit-identical across runs on the same corpus \
-         (minhash_signature XOF must be deterministic)",
+        ids1, ids2,
+        "cluster ids and occurrence counts must be identical across runs on the \
+         same corpus — the fingerprint and render paths must be deterministic",
     );
     Ok(())
 }

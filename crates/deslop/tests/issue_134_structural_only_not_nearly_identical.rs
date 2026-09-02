@@ -1,89 +1,62 @@
 //! Issue #134: a same-shape family whose members differ in *substance*
-//! must NOT be labeled `nearly_identical`. The fixture is three
+//! must NOT be admitted. The fixture is three
 //! handlers sharing one 96-node skeleton whose renamed identifiers map
 //! consistently but whose loop strides (`+ 1` / `+ 2` / `+ 3`) diverge
 //! at the aligned literal position: [FUSED-CONTENT-GATE] measures zero
 //! literal preservation, so no content evidence vouches for the family
-//! and it stays a hidden structural-only match (test scaffolding,
-//! generated boilerplate). The divergent literal is what separates this
+//! and pair admission rejects it before closure. The divergent literal is
+//! what separates this
 //! family from a genuine Type-2 clone — an identical-logic rename with
 //! its literals preserved is the *reportable* side of the same line
 //! (`fused_golden_bands.rs`, `type2_rename_anchor_floor.rs`,
 //! [TECH-PMATCH-BAKER]).
 //!
-//! Acceptance: no cluster in the rendered report carries
-//! `bucket=nearly_identical` together with `structural >= 0.99`,
-//! `token_jaccard < 0.05`, and `embedding_cos < 0.05`.
+//! Acceptance: raw-content divergence produces no cluster or duplicate
+//! metric.
 
 use anyhow::Result;
 
-use crate::common::*;
+use crate::common::{verdict::duplicated_loc_for_path, *};
+
+const MIN_NODES: u32 = 30;
+const LEFT_FILE: &str = "Alpha.cs";
+const RIGHT_FILE: &str = "Beta.cs";
+const THIRD_FILE: &str = "Gamma.cs";
+const FILE_COUNT: u64 = 3;
+const NO_CLUSTERS: usize = 0;
+const NO_HIDDEN_COMPONENTS: u64 = 0;
+const NO_DUPLICATED_LINES: u64 = 0;
+const NO_DUPLICATION_PERCENT: f64 = 0.0;
 
 #[test]
-fn issue_134_structural_only_clusters_are_not_nearly_identical() -> Result<()> {
+fn issue_134_shape_only_pair_is_rejected_before_closure() -> Result<()> {
     let scan_root = fixture("csharp-issue-134-structural-only");
-    let report = run_report(&scan_root, 30)?;
-    // [METRICS-REPO] `clusters_total` counts only the clusters the report
-    // renders. This fixture's sole family is a hidden structural-only
-    // cluster, so it contributes zero to the metric while still being
-    // detected (`clusters_hidden`) — a structural-only shape match cannot
-    // inflate the percentage.
-    let visible_contributing = report
-        .pointer("/metrics/clusters_total")
-        .and_then(serde_json::Value::as_u64)
-        .unwrap_or(u64::MAX);
+    let report = run_report(&scan_root, MIN_NODES)?;
     assert_eq!(
-        visible_contributing, 0,
-        "hidden structural-only cluster must not count as a visible \
-         contributing cluster: {report}"
+        field(&report, "files_analysed").as_u64(),
+        Some(FILE_COUNT),
+        "every fixture file must be analysed"
     );
-    let clusters_hidden = report
-        .get("clusters_hidden")
-        .and_then(serde_json::Value::as_u64)
-        .unwrap_or(0);
-    assert!(
-        clusters_hidden >= 1,
-        "fixture must produce at least one hidden structural-only cluster so \
-         the bucketing rule is actually exercised: {report}"
+    assert_eq!(
+        cluster_count(&report),
+        NO_CLUSTERS,
+        "a shape-only family must not form a cluster: {report:#}"
     );
-    let duplication_percent = report
-        .pointer("/metrics/duplication_percent")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or(-1.0);
-    assert!(
-        (0.0..=0.0001).contains(&duplication_percent),
-        "structural-only shape matches must not influence duplication_percent: \
-         got {duplication_percent}"
+    assert_eq!(
+        clusters_hidden(&report),
+        NO_HIDDEN_COMPONENTS,
+        "the pair fails before suppression: {report:#}"
     );
-    let clusters = report
-        .get("clusters")
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let offenders: Vec<String> = clusters
-        .iter()
-        .filter(|cluster| cluster_bucket(cluster) == "nearly_identical")
-        .filter(|cluster| {
-            signal(cluster, "structural") >= 0.99
-                && signal(cluster, "token_jaccard") < 0.05
-                && signal(cluster, "embedding_cos") < 0.05
-        })
-        .map(|cluster| {
-            format!(
-                "cluster {} signals={{structural={:.2}, token_jaccard={:.2}, \
-                 embedding_cos={:.2}}}",
-                cluster_id(cluster),
-                signal(cluster, "structural"),
-                signal(cluster, "token_jaccard"),
-                signal(cluster, "embedding_cos"),
-            )
-        })
-        .collect();
-    assert!(
-        offenders.is_empty(),
-        "issue #134: structural-only clusters (token_jaccard < 0.05 and \
-         embedding_cos < 0.05) must not be labeled `nearly_identical`. \
-         Offending clusters: {offenders:#?}"
+    for file in [LEFT_FILE, RIGHT_FILE, THIRD_FILE] {
+        assert_eq!(
+            duplicated_loc_for_path(&report, file)?,
+            NO_DUPLICATED_LINES,
+            "{file} must receive no duplicate lines from a rejected pair"
+        );
+    }
+    assert_eq!(
+        metric_field(&report, "duplication_percent").as_f64(),
+        Some(NO_DUPLICATION_PERCENT)
     );
     Ok(())
 }

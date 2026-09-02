@@ -26,9 +26,8 @@ use deslop_core::{
     ast::ByteRange,
     cluster::Cluster,
     fingerprint::Fingerprint,
-    pair::PairScore,
     render_report,
-    report::CacheStats,
+    report::{CacheStats, ParseCache},
     report_metrics::AnalysedLines,
     state::{FileId, FileRegistry},
     EmbeddingProvenance, ExclusionConfig, Report, ReportInputs,
@@ -434,34 +433,12 @@ impl ReportFixture {
         }
     }
 
-    /// Registers each snippet and clusters them with no content
-    /// measurement — the common case for suites that pin routing on the
-    /// shape and token axes alone.
+    /// Registers each snippet and returns one mass-only cluster.
     pub(crate) fn cluster(
         &mut self,
         id: &str,
         snippets: Vec<(&str, &str)>,
         node_count: usize,
-        signals: PairScore,
-    ) -> Cluster {
-        let content = deslop_core::content::ContentEvidence::unmeasured();
-        self.cluster_with_content(id, snippets, node_count, signals, content)
-    }
-
-    /// Registers each distinct path exactly once — assembling its
-    /// source from the member texts it carries, in order — and clusters
-    /// one member per snippet over that member's own byte slice. One
-    /// path is one file with one [`FileId`], so a same-file cluster
-    /// reaches [CLONE-BUCKETS-ROUTING] as same-file and the metrics
-    /// count each path once (gh #398,
-    /// `report_fixture_file_identity.rs`).
-    pub(crate) fn cluster_with_content(
-        &mut self,
-        id: &str,
-        snippets: Vec<(&str, &str)>,
-        node_count: usize,
-        signals: PairScore,
-        content: deslop_core::content::ContentEvidence,
     ) -> Cluster {
         let (assembled, spans) = assemble_member_files(snippets);
         let registered: Vec<(&str, FileId)> = assembled
@@ -479,19 +456,19 @@ impl ReportFixture {
         Cluster {
             id: id.to_owned(),
             members,
-            weight: 10_000.0,
-            signals,
-            signal_source: Some((0, 1)),
-            content,
+            mass: u64::try_from(node_count)
+                .unwrap_or(u64::MAX)
+                .saturating_mul(u64::try_from(spans.len().saturating_sub(1)).unwrap_or(u64::MAX)),
+            shape_family: None,
         }
     }
 
     /// Renders `clusters` through the production report pipeline.
     pub(crate) fn render(&self, clusters: &[Cluster]) -> deslop_core::Report {
         let exclusion = ExclusionConfig::empty();
-        let parse_cache = deslop_core::ParseCache::new();
+        let parse_cache = ParseCache::new();
         render_report(ReportInputs {
-            parse_cache: &parse_cache,
+            shape_families: &[],
             clusters,
             registry: &self.registry,
             file_languages: &self.file_languages,
@@ -514,6 +491,7 @@ impl ReportFixture {
             analysed_lines: &self.analysed_lines,
             boilerplate_ranges: &[],
             diff: None,
+            parse_cache: &parse_cache,
         })
     }
 }

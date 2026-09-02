@@ -6,7 +6,7 @@ use tree_sitter::Node;
 
 use std::sync::Arc;
 
-use super::{enclosing_kind, parse_for, NoiseStage, ParseCache, Snippet};
+use super::{enclosing_kind, parse_for, ParseCache, Snippet};
 use crate::ast::{named_children, ByteRange};
 
 use args::collect_argument_shapes;
@@ -36,19 +36,13 @@ mod sequence;
 pub(super) fn is_literal_variation_call_cluster(
     snippets: &[Snippet<'_>],
     cache: &ParseCache,
-    stage: NoiseStage,
 ) -> bool {
-    if snippets.len() == 2 && stage == NoiseStage::Split {
-        return false;
-    }
     let calls: Option<Vec<Arc<CallShape>>> = snippets
         .iter()
         .map(|snippet| cache.call_shape(snippet, || call_shape(snippet)))
         .collect();
-    if is_literal_variation_call_set(calls) {
-        return true;
-    }
-    sequence::is_literal_variation_call_sequence(snippets, cache)
+    is_literal_variation_call_set(calls)
+        || sequence::is_literal_variation_call_sequence(snippets, cache)
 }
 
 /// Applies the literal-variation rule to one comparable call per
@@ -136,9 +130,11 @@ fn call_shape_from_node(call: Node<'_>, source: &[u8], language: &str) -> Option
 /// functions of `(file, range)` and memoised together
 /// ([PERF-FLUTTER-TODO-CORPUS]).
 fn call_sequence(snippet: &Snippet<'_>) -> super::snippets::CallSequence {
+    let shapes = call_shapes_in_range(snippet);
+    let admissible = covered_statements_admissible(snippet);
     super::snippets::CallSequence {
-        statements_admissible: covered_statements_admissible(snippet),
-        shapes: call_shapes_in_range(snippet),
+        statements_admissible: admissible,
+        shapes,
     }
 }
 
@@ -186,8 +182,58 @@ fn call_free_admissible(
         [tautology, assertion] => {
             asserts::is_literal_tautology_pair([tautology, assertion], with_call, covered, snippet)
         }
-        _ => false,
+        // A whole scenario *run*: the widest-window selection
+        // ([PIPELINE-RANK-WORST-FIRST]) may sweep several scenario cells
+        // into one member, and each cell carries its own trailing
+        // acceptance assert. Every call-free statement must be an
+        // assertion on a value bound by the covered call that precedes
+        // it, and the preceding calls must differ — one call with a run
+        // of shared asserts is shared verification logic the members
+        // genuinely duplicate, not the per-cell acceptance of the test
+        // idiom ([CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT]).
+        _ => scenario_run_acceptance(covered, with_call, snippet),
     }
+}
+
+/// True when every call-free statement is an assertion on a value bound
+/// by the covered call immediately preceding it, and those preceding
+/// calls are not all the same call.
+fn scenario_run_acceptance(
+    covered: &[Node<'_>],
+    with_call: &[&Node<'_>],
+    snippet: &Snippet<'_>,
+) -> bool {
+    let kinds = call_kinds(snippet.language);
+    let mut preceding_calls: Vec<usize> = Vec::new();
+    let mut last_call_start = None;
+    for statement in covered {
+        if subtree_contains_call(*statement, kinds) {
+            last_call_start = Some(statement.start_byte());
+            continue;
+        }
+        if !asserts::is_assert_on_call_bound_value(*statement, with_call, snippet) {
+            return false;
+        }
+        if let Some(start) = last_call_start {
+            preceding_calls.push(start);
+        }
+    }
+    // Every assert must sit behind a covered call, and the calls must
+    // differ: per-cell acceptance, never a shared verification block.
+    preceding_calls.len() == count_call_free(covered, kinds)
+        && preceding_calls
+            .iter()
+            .collect::<std::collections::BTreeSet<_>>()
+            .len()
+            >= 2
+}
+
+/// The number of covered statements carrying no call production.
+fn count_call_free(covered: &[Node<'_>], kinds: &[&str]) -> usize {
+    covered
+        .iter()
+        .filter(|statement| !subtree_contains_call(**statement, kinds))
+        .count()
 }
 
 /// Collects the outermost complete statement-shaped nodes inside `range`.
@@ -355,10 +401,12 @@ const fn call_kinds(language: &str) -> &'static [&'static str] {
     }
 }
 
-/// Returns true when at least one positional argument index has
-/// differing string-literal bytes across the cluster. Non-string
-/// arguments are ignored — the heuristic only fires when the
-/// distinguishing variation is in literal text.
+/// Returns true when the calls vary as literal-variation scaffolding:
+/// **every** literal-bearing argument position differs across the
+/// cluster, and at least one does. A position that carries no string
+/// literal is neutral. An invariant literal-bearing position is shared
+/// authored logic and blocks suppression
+/// ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
 fn has_differing_string_literals<'c>(calls: impl IntoIterator<Item = &'c CallShape>) -> bool {
     let calls: Vec<&CallShape> = calls.into_iter().collect();
     let Some(first) = calls.first() else {
@@ -368,6 +416,7 @@ fn has_differing_string_literals<'c>(calls: impl IntoIterator<Item = &'c CallSha
         .map(|index| literal_agreement(&calls, index))
         .collect();
     !agreements.contains(&LiteralAgreement::Incomparable)
+        && !agreements.contains(&LiteralAgreement::Same)
         && agreements.contains(&LiteralAgreement::Differs)
 }
 
@@ -429,3 +478,6 @@ fn pair_is_copy_paste(calls: &[&CallShape]) -> bool {
             })
         })
 }
+
+#[cfg(test)]
+mod tests;

@@ -6,14 +6,7 @@ import { log, logWarn } from "./logging";
 import { occurrenceDisplayLocation } from "./locations";
 import { ReportStore } from "./reportStore";
 import { formatScore } from "./types/format";
-import { formatSignal } from "./types/signals";
-import {
-  electedPairForCluster,
-  occurrenceCount,
-  Report,
-  ReportCluster,
-  ReportOccurrence,
-} from "./types/report";
+import { occurrenceCount, Report, ReportCluster, ReportOccurrence } from "./types/report";
 
 export const CLUSTER_DOCUMENT_SCHEME = "deslop";
 
@@ -79,26 +72,11 @@ function renderClusterDocument(cluster: ReportCluster): string {
     `# Deslop cluster ${cluster.id}`,
     "",
     `Occurrences: ${occurrenceCount(cluster)}`,
-    `Weight: ${formatScore(cluster.weight)}`,
-    ...signalLines(cluster),
+    `Mass: ${formatScore(cluster.mass)}`,
     "",
     "## Occurrences",
     ...cluster.occurrences.map(renderOccurrence),
   ].join("\n");
-}
-
-function signalLines(cluster: ReportCluster): string[] {
-  const elected = electedPairForCluster(cluster);
-  if (!elected) return [];
-  const [left, right] = elected.occurrences;
-  const leftNumber = elected.source.left + 1;
-  const rightNumber = elected.source.right + 1;
-  return [
-    `Elected pair: ${leftNumber}. ${left.path} ↔ ${rightNumber}. ${right.path}`,
-    `Pair signals: structural ${formatSignal(cluster.signals.structural)}, ` +
-      `jaccard ${formatSignal(cluster.signals.token_jaccard)}, ` +
-      `embedding ${formatSignal(cluster.signals.embedding_cos)}`,
-  ];
 }
 
 function renderOccurrence(occurrence: ReportOccurrence, index: number): string {

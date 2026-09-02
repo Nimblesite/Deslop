@@ -226,17 +226,33 @@ pub(crate) fn collapsed_leaves(
     root: &NormalizedNode,
     fingerprint: &Fingerprint,
     language: Option<&str>,
-) -> Option<Vec<(&'static str, crate::ast::ByteRange)>> {
+) -> Option<Vec<CollapsedLeaf>> {
     let resolved = resolve_range_nodes(
         root,
         fingerprint.byte_range.start,
         fingerprint.byte_range.end,
     )?;
     let mut out = Vec::new();
+    let mut groups = 0_u32;
     for member in resolved {
-        collect_collapsed_leaves(member, &mut out, language);
+        collect_collapsed_leaves(member, &mut out, language, &mut groups);
     }
     Some(out)
+}
+
+/// One collapsed frontier position: its normalised kind, its raw byte
+/// range, and — for a fragment of a composite authored literal such as
+/// an interpolated string — the literal it belongs to. Fragments of one
+/// authored literal share a group so content measurement can judge the
+/// literal as the human wrote it ([FUSED-CONTENT-GATE]).
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CollapsedLeaf {
+    /// Normalised node kind of the collapsed position.
+    pub(crate) kind: &'static str,
+    /// Raw source byte range of the position.
+    pub(crate) range: crate::ast::ByteRange,
+    /// Authored-literal group for a composite literal's fragments.
+    pub(crate) literal_group: Option<u32>,
 }
 
 /// Pre-order walk collecting the content frontier as `(kind, range)`
@@ -248,15 +264,16 @@ pub(crate) fn collapsed_leaves(
 /// interpolation whose identifier a Type-2 rename touched.
 fn collect_collapsed_leaves(
     node: &NormalizedNode,
-    out: &mut Vec<(&'static str, crate::ast::ByteRange)>,
+    out: &mut Vec<CollapsedLeaf>,
     language: Option<&str>,
+    groups: &mut u32,
 ) {
     if is_boilerplate(language, node) {
         return;
     }
     let frontier = out.len();
     for child in &node.children {
-        collect_collapsed_leaves(child, out, language);
+        collect_collapsed_leaves(child, out, language, groups);
     }
     // [PIPELINE-NORMALIZE-AST-OPERATOR] An operator leaf is a frontier
     // position like any other collapsed leaf. Its kind already carries
@@ -267,7 +284,38 @@ fn collect_collapsed_leaves(
         || node.kind == crate::lang::shared::LITERAL_KIND
         || crate::lang::shared::is_operator_kind(node.kind);
     if collapsed && out.len() == frontier {
-        out.push((node.kind, node.byte_range));
+        out.push(CollapsedLeaf {
+            kind: node.kind,
+            range: node.byte_range,
+            literal_group: None,
+        });
+        return;
+    }
+    tag_composite_literal(node, out, frontier, groups);
+}
+
+/// Stamps the fragments a composite authored literal contributed with
+/// one shared group, outermost literal winning, so a preserved fragment
+/// cannot affirm a literal whose sibling fragment drifted
+/// ([FUSED-CONTENT-GATE]).
+fn tag_composite_literal(
+    node: &NormalizedNode,
+    out: &mut [CollapsedLeaf],
+    frontier: usize,
+    groups: &mut u32,
+) {
+    let Some(fragments) = out.get_mut(frontier..) else {
+        return;
+    };
+    if node.kind != crate::lang::shared::LITERAL_KIND || fragments.is_empty() {
+        return;
+    }
+    let group = *groups;
+    *groups = groups.saturating_add(1);
+    for leaf in fragments {
+        if leaf.kind == crate::lang::shared::LITERAL_KIND {
+            leaf.literal_group = Some(group);
+        }
     }
 }
 

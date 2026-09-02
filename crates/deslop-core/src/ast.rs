@@ -37,6 +37,32 @@ impl ByteRange {
         self.end.saturating_sub(self.start)
     }
 
+    /// True when this range covers `inner` and is wider on at least
+    /// one side.
+    #[must_use]
+    pub const fn strictly_encloses(self, inner: Self) -> bool {
+        self.start <= inner.start
+            && inner.end <= self.end
+            && (self.start < inner.start || inner.end < self.end)
+    }
+
+    /// True when `self` covers every byte of `inner`, equal ranges
+    /// included.
+    #[must_use]
+    pub const fn covers(self, inner: Self) -> bool {
+        self.start <= inner.start && inner.end <= self.end
+    }
+
+    /// True when the two ranges share bytes but neither covers the
+    /// other — each one starts or ends inside the other.
+    #[must_use]
+    pub const fn partially_overlaps(self, other: Self) -> bool {
+        self.start < other.end
+            && other.start < self.end
+            && !self.covers(other)
+            && !other.covers(self)
+    }
+
     /// Returns `true` when this range spans no bytes. Paired with
     /// [`Self::len`] so clippy's `len_without_is_empty` passes.
     #[must_use]

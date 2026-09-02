@@ -54,35 +54,17 @@ const WRITE_LABEL: &str = "gh #70/#79 literal-variation call family";
 /// threshold are a separate data-shape question this fixture does not
 /// pin.
 const WRITE_MIN_NODES: u32 = 8;
-/// Components the filter suppresses here: the single call-run family
-/// cluster over `test_write_file_calls.py`. One, not zero, is what
-/// [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT] buys: each
-/// member's trailing `assert` inspects only names the covered call
-/// bound, so it is admitted instead of blocking the filter.
-const WRITE_HIDDEN: u64 = 1;
-
-/// The gh #71 fixture and the one file its family lives in.
+// Fixture and family for the endpoint-shape suppression pin.
 const ENDPOINT_FIXTURE: &str = "python-issue-71-rest-endpoint-shape";
 const ENDPOINT_FAMILY: [&str; 1] = ["test_endpoints.py"];
 const ENDPOINT_LABEL: &str = "gh #71 REST endpoint-shape family";
 const ENDPOINT_MIN_NODES: u32 = 4;
-/// Components the filter suppresses here: the single endpoint-shape
-/// family cluster over `test_endpoints.py`, admitted through
-/// [CLONE-NOISE-LITERAL-VARIATION-CALLS-COVERED-STATEMENT] on the
-/// trailing `assert resp.status_code == 204`.
-const ENDPOINT_HIDDEN: u64 = 1;
-
-/// Everything both pins assert: the family hidden and counted exactly,
-/// the byte-identical control published first and whole, the metrics
-/// counting it and nothing else — down to which file each duplicated
-/// line is charged to — and every file analysed, so the suppression was
-/// *decided* rather than the file skipped.
+// Both pins require an exact suppressed family and a surviving byte-identical control.
 fn assert_family_is_scaffolding(
     fixture_dir: &str,
     min_nodes: u32,
     label: &str,
     family: &[&str],
-    expected_hidden: u64,
 ) -> Result<()> {
     let report = run_report(&fixture(fixture_dir), min_nodes)?;
     assert_suppressed_family(
@@ -91,7 +73,6 @@ fn assert_family_is_scaffolding(
         &SuppressedFamily {
             family_files: family,
             control_files: &CONTROL,
-            expected_hidden,
             control_loc: CONTROL_LOC,
             files_analysed: FILES_ANALYSED,
         },
@@ -104,13 +85,7 @@ fn assert_family_is_scaffolding(
 // duplication.
 #[test]
 fn write_file_call_family_is_suppressed_while_a_real_clone_survives() -> Result<()> {
-    assert_family_is_scaffolding(
-        WRITE_FIXTURE,
-        WRITE_MIN_NODES,
-        WRITE_LABEL,
-        &WRITE_FAMILY,
-        WRITE_HIDDEN,
-    )
+    assert_family_is_scaffolding(WRITE_FIXTURE, WRITE_MIN_NODES, WRITE_LABEL, &WRITE_FAMILY)
 }
 
 // GH #71 regression: four `test_delete_*` endpoint tests differ only in
@@ -124,6 +99,5 @@ fn rest_endpoint_family_is_suppressed_while_a_real_clone_survives() -> Result<()
         ENDPOINT_MIN_NODES,
         ENDPOINT_LABEL,
         &ENDPOINT_FAMILY,
-        ENDPOINT_HIDDEN,
     )
 }

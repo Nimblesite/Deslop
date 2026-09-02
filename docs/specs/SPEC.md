@@ -1,12 +1,12 @@
 # Deslop — Research & Spec
 
-This document indexes Deslop's research and design specs. The primary product is an incremental, byte-range-addressable duplicate-code server for editors and AI agents; the same engine powers the one-shot CLI used by CI and cold-cache audits. Clone classification follows [CLONE-BUCKETS].
+This document indexes Deslop's research and design specs. The primary product is an incremental, byte-range-addressable duplicate-code server for editors and AI agents; the same engine powers the one-shot CLI used by CI and cold-cache audits. Explicit pair classification follows [CLONE-BUCKETS]; clusters contain membership and mass.
 
 **Live = Reactive.** Every long-running surface applies each `deslop/reportChanged` generation in the same microtask; removed clusters must disappear from every reader. The CLI is the sole non-reactive surface. See [PRINCIPLES-LIVE-IS-REACTIVE](principles.md#principles-live-is-reactive), [LIVE-NOTIFICATIONS](live.md#live-notifications), and [VSIX-REACTIVITY-INVARIANT](vsix.md#vsix-reactivity-invariant).
 
 The spec is split into topic files for readability and the 500-line file budget. Hierarchical `[GROUP-TOPIC-DETAIL]` IDs (e.g. `[PIPELINE-RANK-WORST-FIRST]`) are stable across the split — `grep -r '\[PIPELINE-' docs/` still finds every reference.
 
-**Canonical clone buckets.** Every user-facing surface (HTML report, CLI summary, VS Code extension) labels clusters with the five buckets defined in **[taxonomy.md §[CLONE-BUCKETS]](taxonomy.md)** — `Identical`, `NearlyIdentical`, `StructuralOnly`, `LooselySimilar`, `SameBehavior`. That table is the single source of truth. The dual-labelling policy in [CLONE-BUCKETS-DUAL-LABEL] explains when the academic `Type-1 → Type-4` labels appear (JSON + agent-facing surfaces) and when they must not (human UI).
+**Pair evidence and cluster mass are separate.** [taxonomy.md §CLONE-BUCKETS](taxonomy.md#clone-buckets) classifies one explicit pair. No pair label or score appears on a cluster. Cluster surfaces render occurrence membership and [RANK-MASS-SUM] only.
 
 **Architecture at a glance.** Every binary is a **thin shell over one shared library** (`deslop-core`). Live analysis is a feature-gated `live` module inside that crate, owned exclusively by `deslop-lsp`. `deslop-mcp` runs no analysis — it delegates reads and compute calls to the running LSP over the local IPC endpoint. A language is added once, in the core, and every shell inherits it. See [live.md §[LIVE-PACKAGING]](live.md) for the full flow chart.
 
@@ -69,13 +69,13 @@ flowchart LR
 
 The hot loop — **Developer → VSIX → LSP → `live` module → `update_files` → pipeline** — is one process hop. The agent path — **Agent → MCP → LSP IPC** — is zero analysis work: the MCP serves the latest report the LSP already produced. The CI path — **CI → CLI → pipeline** — skips `live` entirely.
 
-## Topic files
+## [SPEC-TOPIC-FILES] Topic files
 
 - [principles.md](principles.md) — `[PRINCIPLES-*]` audience-for-AI-agents, long-running-daemon constraints.
-- [taxonomy.md](taxonomy.md) — `[CLONE-BUCKETS]` canonical human-facing buckets (`Identical` / `NearlyIdentical` / `StructuralOnly` / `LooselySimilar` / `SameBehavior`), dual-labelling policy, signal routing, the `[CLONE-BUCKETS-IDENTICAL]` byte-equivalence proof, and academic `[CLONE-TYPE-TAXONOMY]` reference (Type-1 / Type-2 / Type-3 / Type-4).
+- [taxonomy.md](taxonomy.md) — `[CLONE-BUCKETS]` explicit-pair classifications, pair-only labelling, evidence routing, the `[CLONE-BUCKETS-IDENTICAL]` byte-equivalence proof, and academic `[CLONE-TYPE-TAXONOMY]` reference.
 - [noise.md](noise.md) — `[CLONE-NOISE-*]` false-positive suppression filters: shape-identical-but-not-extractable patterns (language scaffolding, framework mirrors, schema/data tables, test idioms) hidden after clustering and before ranking, each with a verbatim escape hatch.
 - [landscape.md](landscape.md) — `[TECH-*]` survey of token / AST / hashing / neural / LLM techniques (2009 → 2026).
-- [fused.md](fused.md) — `[FUSED-*]` how structural, token, and embedding signals form candidate pairs; pair admission and shared-subtree rescue; cluster evidence reporting and content gates; complete algebra; and `[FUSED-TUNING-LEVERS]`, the accuracy-threshold ledger.
+- [fused.md](fused.md) — `[FUSED-*]` pair-only structural, token, embedding, and content evidence; pair admission and shared-subtree rescue; transitive closure; pure-mass cluster ranking; complete algebra; and `[FUSED-TUNING-LEVERS]`.
 - [pipeline.md](pipeline.md) — `[PIPELINE-*]`, `[STATE-*]`, `[OUTPUT-*]`, `[METRICS-*]`, `[EXIT-CODES]` per-stage design: language plugin trait, discovery, normalization, Merkle fingerprint, clustering, ranking, `[PIPELINE-INCREMENTAL]` persisted parse processing (content-addressed on-disk store), `[PIPELINE-INCREMENTAL-INTEGRITY]` blob binding digest and bounded decode, `[PIPELINE-INCREMENTAL-RETENTION]` store pruning and size budget, `[PIPELINE-INCREMENTAL-ANALYSIS]` reuse contract for incremental passes, `[PIPELINE-DETERMINISM]` cross-run reproducibility, JSON / text / HTML output, human-readable HTML mode, repo-wide duplication metric + fail-over threshold.
 - [cli.md](cli.md) — `[CLI-*]`, `[UX-*]`, `[OUTPUT-FORMAT-DERIVED]` the one-shot `deslop` binary: invocation contract (path / help / version / `--embeddings`), derived output formats, and terminal UX (preamble, plain vs `--technical` summary, colour and logging controls).
 - [exclusion.md](exclusion.md) — `[EXCLUSION-CONFIG]` `.deslop.toml` `exclude` / `report_hide` tiers and per-language overlays; `[CONFIG-EXCLUDE-BUILTIN]` built-in dependency/artefact component lists and their scan-root scope; `[CONFIG-EXCLUDE-DEPENDENCIES]` the `include_dependencies` opt-in; `[CONFIG-CROSS-LANGUAGE]` candidate-pair language scope; `[CONFIG-INCREMENTAL-OPTOUT]` the `[analysis] incremental` escape hatch for persisted processing; the `[tuning]` accuracy-lever surface with `[CONFIG-TUNING-CACHE]` cache-keyed representation parameters and `[CONFIG-TUNING-DECLARED]` the report's tuning declaration.
@@ -83,7 +83,7 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 - [reading-list.md](reading-list.md) — deduplicated bibliography.
 - [live.md](live.md) — `[LIVE-*]` in-process analysis session inside the LSP: lifecycle, watcher, scheduler, state file, IPC socket, delta protocol, `LiveApi` query surface, push notifications.
 - [lsp.md](lsp.md) — `[LSP-*]` Language Server Protocol shell: capabilities, diagnostics, code lens, hover, virtual docs, custom methods.
-- [severity.md](severity.md) — `[SEVERITY-*]` the bucket → severity model: the always-on Deslop-severity colour map, the opt-in diagnostic map, the master `deslop.diagnostics.enabled` gate (diagnostics **off by default**), and the colour-vs-percentile projection consumed by lsp.md and vsix.md.
+- [severity.md](severity.md) — `[SEVERITY-*]` the mass-rank severity model, diagnostics-off-by-default gate, and engine-stamped rank-band projection consumed by lsp.md and vsix.md.
 - [mcp.md](mcp.md) — `[MCP-*]` Model Context Protocol shell: tools, resources, notifications. `find-similar` is the keystone tool for AI agents.
 - [deployment.md](deployment.md) — `[DEPLOY-*]` Deployment Toolkit manifest, executable version contract, editor-host binary resolvers, VSIX / JetBrains package contents, and release gates.
 - [vsix.md](vsix.md) — `[VSIX-*]` VS Code extension: tree view, decorations, embedding-model picker (Ollama integration), status bar, settings, and the cross-surface state/reactivity invariants.
@@ -109,27 +109,27 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 | Embedding pass — local-by-default | ✅ Ollama provider | `crates/deslop-core/src/embedding/ollama.rs`, `crates/deslop-core/src/embedding/provider.rs` |
 | HNSW ANN index ([FUSED-EMBED-PROVIDER]) | ✅ `instant-distance` | `crates/deslop-core/src/embedding/pairs.rs` |
 | Embedding cache keyed by `(content, provider, model, version)` | ✅ | `crates/deslop-core/src/embedding/cache.rs` |
-| Bounded fused maximum — sum quarantined by gh #343 ([FUSED-STRATEGY-BOUNDED-MAX]) | ✅ strongest single axis in `[0,1]` | `crates/deslop-core/src/pair.rs::PairScore::bounded_fused` |
+| Pair admission ([FUSED-STRATEGY-BOUNDED-MAX]) | ✅ `max(S,J,E)` plus applicable pair-content support; all values pair-only | `crates/deslop-core/src/pair.rs` |
 | Cross-language opt-in ([CONFIG-CROSS-LANGUAGE]) | ✅ | `crates/deslop-core/src/pair.rs::candidate_pairs_for_language_policy` |
 | Accuracy levers as configuration ([FUSED-TUNING-LEVERS]) | ⏳ compiled `const` today; migration in [`plans/unhardcode-tuning-plan.md`](../plans/unhardcode-tuning-plan.md) | `pair.rs`, `buckets.rs`, `content.rs`, `cluster.rs`, `embedding/pairs.rs`, `report.rs` |
 | Built-in exclusion scoped to the scan root ([CONFIG-EXCLUDE-BUILTIN]) | ✅ gh #342 | `crates/deslop-core/src/config.rs::corpus_built_in_excluded` |
 | Dependency analysis opt-in ([CONFIG-EXCLUDE-DEPENDENCIES]) | ✅ `[analysis] include_dependencies` | `crates/deslop-core/src/config.rs::dependency_components` |
 | Transitive-closure clustering | ✅ | `crates/deslop-core/src/cluster.rs` |
-| Worst-offenders ranking ([RANK-MASS-SUM]) | ✅ `canonical_nodes × (visible_members − 1) × category_multiplier × structural_only_multiplier`, then weight descending and cluster id ascending | `crates/deslop-core/src/report_weight.rs::reweigh_by_visible_occurrences` |
+| Worst-offenders ranking ([RANK-MASS-SUM]) | ✅ `canonical_nodes × max(visible_members − 1, 0)`, then mass descending and cluster id ascending; no other term | `crates/deslop-core/src/report_weight.rs::reweigh_by_visible_occurrences` |
 | Repo-wide metrics + fail-over threshold ([METRICS-REPO], [EXIT-CODES]) | ✅ exit 3 on breach | `crates/deslop-core/src/report_metrics.rs`, `crates/deslop/src/main.rs` |
-| Evidence-weighted metric + second gate ([METRICS-REPO-WEIGHTED], [EXIT-CODES-WEIGHTED]) | ⏳ specified; lands with gh #344 per [`plans/weighted-metrics-plan.md`](../plans/weighted-metrics-plan.md) | — |
+| Evidence-weighted cluster metric | ❌ prohibited: pair evidence cannot weight a cluster; repo duplication is mechanical duplicated mass | — |
 | Persisted parse processing ([PIPELINE-INCREMENTAL]) | ✅ on by default, `--no-incremental` / `[analysis] incremental = false` opt out — parse stage plus per-fingerprint MinHash signatures, blobs bound to their address by a binding digest ([PIPELINE-INCREMENTAL-INTEGRITY]), pruned under a 2 GiB budget after every full pass ([PIPELINE-INCREMENTAL-RETENTION]) | `crates/deslop-core/src/fpcache.rs` |
 | Incremental analysis ([PIPELINE-INCREMENTAL-ANALYSIS]) | ⏳ signature reuse ✅ (persisted beside fingerprints, validated on hit, pinned by `signature_reuse.rs`); warm/cold equivalence ✅ on both reuse paths (`incremental_equivalence.rs` across processes, `live_session_equivalence.rs` inside one session); remaining downstream stages per gh #383 | `crates/deslop-core/src/pipeline/corpus.rs`, `crates/deslop-core/src/pipeline/signatures.rs` |
 | JSON / text / human-HTML renderers ([OUTPUT-SCHEMA-JSON], [OUTPUT-HUMAN-HTML]) | ✅ | `crates/deslop-core/src/render/`, `crates/deslop-core/src/report_render.rs` |
 | Live `AnalysisSession` + watcher + scheduler ([LIVE-*]) | ✅ debounce 250 ms / cap 2 s | `crates/deslop-core/src/live/` (`session.rs`, `watcher.rs`, `scheduler.rs`, `debouncer.rs`) |
 | LSP server with diagnostics, hover, code lens, custom `deslop/*` methods ([LSP-*]) | ✅ | `crates/deslop-lsp/src/` |
-| MCP server with `find-similar`, `top-offenders`, `cluster-by-id`, etc. ([MCP-*]) | ✅ LSP IPC delegate | `crates/deslop-mcp/src/` |
+| MCP server with seven core analysis tools: `find-similar`, `duplicates`, `compare-pair`, `cluster-by-id`, `rescan`, `session`, and `schema-doc` ([MCP-*]) | ⏳ wholesale cutover in [`plans/literal-constant-plan.md`](../plans/literal-constant-plan.md) | `crates/deslop-mcp/src/` |
 | State-file + IPC architecture | ✅ warm-start `live-report.json`, Unix socket, token-gated TCP | `crates/deslop-lsp/tests/state_file_and_ipc.rs`, `crates/deslop-mcp/tests/lsp_integration.rs`, `crates/deslop-mcp/tests/tcp_transport.rs` |
-| Canonical clone buckets ([CLONE-BUCKETS]) | ✅ `Identical` / `NearlyIdentical` / `StructuralOnly` / `LooselySimilar` / `SameBehavior` | `crates/deslop-core/src/buckets.rs` |
+| Explicit pair classifications ([CLONE-BUCKETS]) | ✅ pair-only `Identical` / `NearlyIdentical` / `StructuralOnly` / `LooselySimilar` / `SameBehavior`; forbidden on clusters | `crates/deslop-core/src/buckets.rs` |
 | Deployment Toolkit manifest ([DEPLOY-*]) | ✅ | `shipwright.json`, `scripts/deployment/verify-*` |
 | VS Code extension ([VSIX-*]) | ✅ v0.1, signal-driven reactivity | `clients/vscode/` (preact-signals wired through `ReportStore`) |
 | JetBrains plugin ([JETBRAINS-*]) | ⏳ scaffold + LSP support; native UX in [`plans/jetbrains-ux-plan.md`](../plans/jetbrains-ux-plan.md) | `clients/jetbrains/` |
-| Type-1 / Type-2 bucket split (autofix prerequisite) | ✅ byte-equivalence routing ([CLONE-BUCKETS-IDENTICAL]), shipped via [#42](https://github.com/Nimblesite/Deslop/issues/42) / PR #63 | `crates/deslop-core/src/buckets.rs` |
+| Type-1 pair proof (autofix prerequisite) | ✅ byte-equivalence routing ([CLONE-BUCKETS-IDENTICAL]), shipped via [#42](https://github.com/Nimblesite/Deslop/issues/42) / PR #63 | `crates/deslop-core/src/buckets.rs` |
 | Autofix `refactor.extract` for Type-1 ([AUTOFIX-EXTRACT]) | ✅ C# / Rust / Python | `crates/deslop-core/src/refactor/` |
 | Mechanical call-site merge — anti-unification + default params ([AUTOFIX-MERGE]) | ✅ C# / Rust / Dart; Python refuses pending strict-typing detection | `crates/deslop-core/src/refactor/merge/` |
 | Cross-file identical-definition consolidation ([AUTOFIX-CONSOLIDATE]) | ✅ v1.1 Rust sibling modules incl. definition runs + binding-drift gate; conservative limits tracked in [#281](https://github.com/Nimblesite/Deslop/issues/281) | `crates/deslop-core/src/refactor/consolidate/` |
@@ -141,7 +141,7 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 
 Site-facing version of the same map: [`site/src/docs/research-background.md`](../../site/src/docs/research-background.md).
 
-## Sibling docs
+## [SPEC-SIBLING-DOCS] Sibling docs
 
 - [REPORTING-CONTEXT.md](REPORTING-CONTEXT.md) — the `schema_doc` markdown agents fetch on demand (`schema-doc` tool / `deslop://schema` resource); rendered CLI reports carry the field present-but-empty (#110/#111, [OUTPUT-SCHEMA-JSON]).
 - [../plans/](../plans/) — remaining work, one file per work stream.

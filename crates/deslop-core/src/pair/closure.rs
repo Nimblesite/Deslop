@@ -43,20 +43,6 @@ fn build_clusters(
         edges.entry(root).or_default().push(FusedEdge {
             left: pair.left,
             right: pair.right,
-            // The overlap is admission evidence for the pair it was
-            // measured on ([FUSED-SHARED-SUBTREE]), so the edge
-            // carries it. This is what lets the same-file collapse
-            // elect the *enclosing* method of a Type-3 near-miss over
-            // the windows nested inside it: the same insertion costs
-            // proportionally less over the wider context, so the
-            // enclosing pair's overlap outranks every sub-window's —
-            // and outranks their token estimates, which reward the
-            // window precisely for excluding the difference.
-            strength: pair
-                .score
-                .finite()
-                .bounded_fused()
-                .max(pair.shared_subtree_overlap),
         });
     }
     groups
@@ -64,6 +50,7 @@ fn build_clusters(
         .map(|(root, members)| FusedCluster {
             members: members.into_iter().collect(),
             edges: edges.remove(&root).unwrap_or_default(),
+            shape_family: None,
         })
         .collect()
 }
@@ -101,4 +88,48 @@ fn union(parents: &mut BTreeMap<usize, usize>, a: usize, b: usize) {
         return;
     }
     let _previous = parents.insert(root_a, root_b);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{cluster_by_transitive_closure, CandidatePair};
+    use crate::pair::PairScore;
+
+    const NODE_COUNT: usize = 40;
+    const ADMITTED_SCORE: f64 = 1.0;
+    const FUSED_FLOOR: f64 = 0.85;
+
+    // [FUSED-STRATEGY-BOUNDED-MAX] Admitted pair edges, not structural
+    // families or post-closure repair, define the connected component.
+    #[test]
+    fn closure_preserves_every_member_reachable_by_admitted_edges() {
+        let clusters = cluster_by_transitive_closure(&[
+            admitted_pair(0, 1),
+            admitted_pair(1, 2),
+            admitted_pair(2, 3),
+        ]);
+        assert_eq!(clusters.len(), 1, "the admitted chain forms one component");
+        let Some(cluster) = clusters.first() else {
+            return;
+        };
+        assert_eq!(cluster.members, vec![0, 1, 2, 3]);
+        assert_eq!(cluster.edges.len(), 3, "every admitted pair edge remains");
+    }
+
+    fn admitted_pair(left: usize, right: usize) -> CandidatePair {
+        CandidatePair {
+            left,
+            right,
+            endpoint_node_counts: (NODE_COUNT, NODE_COUNT),
+            lsh_only_node_floor: NODE_COUNT,
+            lsh_only_min_jaccard: 0.0,
+            fused_min_score: FUSED_FLOOR,
+            shared_subtree_overlap: 0.0,
+            score: PairScore {
+                structural: ADMITTED_SCORE,
+                token_jaccard: 0.0,
+                embedding_cos: 0.0,
+            },
+        }
+    }
 }

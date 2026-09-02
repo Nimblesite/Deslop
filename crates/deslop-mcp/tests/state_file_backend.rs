@@ -187,9 +187,9 @@ fn call_report_get(mcp: &mut common::McpHandle, offset: u64, limit: u64) -> Resu
     let response = mcp.request(
         "tools/call",
         &json!({
-            "name": "report-get",
+            "name": "duplicates",
             "arguments": {"offset": offset, "limit": limit},
         }),
     )?;
-    structured_content(&response, "report-get")
+    structured_content(&response, "duplicates")
 }

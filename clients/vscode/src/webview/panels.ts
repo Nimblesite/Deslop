@@ -19,6 +19,23 @@ const CLUSTER_PANEL_KIND: PanelKind = "cluster";
 const REPORT_PANEL_KIND: PanelKind = "report";
 const DUPLICATION_PANEL_KIND: PanelKind = "duplication";
 
+// [VSIX-PAIR-COMPARE] The wire endpoint identity: path plus byte range. A
+// payload without all three well-typed fields is not an endpoint.
+export interface PairEndpointPayload {
+  readonly path: string;
+  readonly start_byte: number;
+  readonly end_byte: number;
+}
+
+export function compareEndpointFromPayload(value: unknown): PairEndpointPayload | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const candidate = value as Partial<PairEndpointPayload>;
+  if (typeof candidate.path !== "string" || candidate.path.length === 0) return undefined;
+  if (typeof candidate.start_byte !== "number" || !Number.isFinite(candidate.start_byte)) return undefined;
+  if (typeof candidate.end_byte !== "number" || !Number.isFinite(candidate.end_byte)) return undefined;
+  return { path: candidate.path, start_byte: candidate.start_byte, end_byte: candidate.end_byte };
+}
+
 interface WebviewPanelState {
   panel: vscode.WebviewPanel;
   kind: PanelKind;
@@ -245,9 +262,14 @@ export async function handleMessage(_store: ReportStore, message: unknown): Prom
       if (occurrence) await vscode.commands.executeCommand("deslop.openOccurrence", occurrence);
       return;
     }
-    case "compare/canonical": {
-      const id = typeof m["clusterId"] === "string" ? m["clusterId"] : null;
-      if (id) await vscode.commands.executeCommand("deslop.compareWithCanonical", id);
+    case "compare/pair": {
+      // [VSIX-PAIR-COMPARE] Both endpoints arrive explicitly from the
+      // webview's two-slot selection; the host never invents an endpoint.
+      const left = compareEndpointFromPayload(m["left"]);
+      const right = compareEndpointFromPayload(m["right"]);
+      if (left && right) {
+        await vscode.commands.executeCommand("deslop.comparePair", left, right);
+      }
       return;
     }
     case "refresh":

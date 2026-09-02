@@ -24,12 +24,29 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 import { OUT_RUST, OUT_TS } from "./typediagram/paths.mjs";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const generator = fileURLToPath(new URL("./typediagram/generate.mjs", import.meta.url));
+const vscodeRequire = createRequire(new URL("../clients/vscode/package.json", import.meta.url));
+const ts = vscodeRequire("typescript");
+const MASS_ONLY_CLUSTER_FIELDS = [
+  "canonical_node_count",
+  "id",
+  "intersects_diff",
+  "is_newly_introduced",
+  "mass",
+  "occurrence_count",
+  "occurrences",
+  "occurrences_total",
+  "occurrences_truncated",
+  "rank",
+  "rank_band",
+];
+const PAIR_ENDPOINT_FIELDS = ["end_byte", "path", "start_byte"];
 
 /** Runs the generator the way the Makefile does. */
 function generate() {
@@ -93,3 +110,29 @@ test("a stale generated module is still rewritten", () => {
     "skipping the write must never leave a stale module in place",
   );
 });
+
+test("generated cluster and pair ownership matches the fused contract", () => {
+  generate();
+  const source = ts.createSourceFile(
+    OUT_TS,
+    readFileSync(OUT_TS, "utf8"),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  assert.deepEqual(interfaceFields(source, "ReportCluster"), MASS_ONLY_CLUSTER_FIELDS);
+  assert.deepEqual(interfaceFields(source, "PairEndpoint"), PAIR_ENDPOINT_FIELDS);
+  assert.deepEqual(interfaceFields(source, "PairComparisonParams"), ["left", "right"]);
+});
+
+function interfaceFields(source, name) {
+  const declaration = source.statements.find(
+    (statement) => ts.isInterfaceDeclaration(statement) && statement.name.text === name,
+  );
+  assert.ok(declaration, `missing generated interface ${name}`);
+  return declaration.members
+    .map((member) => member.name?.getText(source))
+    .filter((field) => field !== undefined)
+    .sort();
+}

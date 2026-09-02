@@ -9,6 +9,9 @@
 
 use anyhow::Result;
 
+use crate::common::signals::{
+    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+};
 use crate::common::*;
 
 #[test]
@@ -23,8 +26,17 @@ fn javascript_clone_is_invariant_to_quotes_comments_literals_and_renames() -> Re
         "normalisation-equivalent JS pair must collapse to a single clone: {report:#}"
     );
     let clone = expect_cluster_spanning(&report, &["double_quoted.js", "single_quoted.js"])?;
-    assert_eq!(cluster_bucket(clone), "structural_only");
-    assert!(approx(signal(clone, "structural"), 1.0));
+    // [PIPELINE-CLUSTER-CLOSURE] The structural_only bucket and the shape
+    // axis are gone; the wire facts that hold the acceptance: the
+    // normalisation-equivalent pair is admitted, mass-honest,
+    // clean-surfaced and byte-distinct (quote style differs — a verbatim
+    // reading would be a fabrication).
+    assert_structural_only_contract(clone, "js normalization");
+    assert_no_pair_surface_on_cluster(clone, "js normalization");
+    assert!(
+        !has_verbatim_pair(&fixture("js-normalization-invariance"), clone)?,
+        "the double/single-quoted pair differs in bytes: {clone:#}"
+    );
     Ok(())
 }
 
@@ -40,7 +52,7 @@ fn typescript_token_layer_is_invariant_to_quotes_comments_literals_and_renames()
         "ts-comment-literal-invariance",
         12,
         &["orders.ts", "shipments.ts"],
-        "nearly_identical",
+        false,
     )
 }
 
@@ -54,8 +66,11 @@ fn javascript_structural_change_defeats_the_collapse() -> Result<()> {
     // overlap is a default-hidden `structural_only` shape match), proving the
     // collapse is not over-eager.
     let clone = expect_cluster_spanning(&report, &["baseline.js", "twin.js"])?;
-    assert_eq!(cluster_bucket(clone), "nearly_identical");
-    assert!(approx(signal(clone, "token_jaccard"), 1.0));
+    assert!(
+        !has_verbatim_pair(&fixture("js-structural-control"), clone)?,
+        "the normalisation-equivalent pair is byte-distinct (quote/comment \
+         differences): {clone:#}"
+    );
     assert!(
         clusters(&report)
             .iter()

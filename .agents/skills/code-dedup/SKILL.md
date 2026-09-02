@@ -48,7 +48,12 @@ Dedup Progress:
 1. Look for functions/methods with identical or near-identical logic across [crates/deslop-core/src](crates/deslop-core/src) and [crates/deslop/src](crates/deslop/src).
 2. Look for copy-pasted blocks (same structure, maybe different identifiers — Type-2 clones).
 3. Check across pipeline stages (discover → parse → normalize → fingerprint → cluster → LSH → embed → fuse → rank → render). Duplicates often hide between adjacent stages.
-4. Re-use the tool on itself: `cargo run --release -- <path>` against this repo and read [deslop-report.txt](deslop-report.txt). Dogfooding is the first-class duplicate signal.
+4. Prefer the live Deslop MCP (`top-offenders`, then `cluster-by-id`). If MCP is
+   unavailable, run `target/release/deslop <scope> --output
+   target/deslop-dedup --no-incremental` and inspect the generated JSON report;
+   build the release binary first when absent. A wrong or stale result from
+   either surface is an accuracy defect, but an unavailable MCP is not a blocker
+   while the CLI works.
 5. For each duplicate pair: note both locations, what they do, and how they differ (if at all). Do NOT merge yet.
 
 ### Step 4 — Scan for duplicate tests

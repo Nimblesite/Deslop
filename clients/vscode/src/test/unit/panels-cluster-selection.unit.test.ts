@@ -13,7 +13,6 @@ import { ReportStore } from "../../reportStore";
 import { anchorForClusterId, clusterPanelFeed, resolveAnchoredCluster } from "../../clusterSelection";
 import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
-import { bucketSignals } from "../signals.helpers";
 import { wireCluster } from "../cluster.helpers";
 
 const PRIMARY_CLUSTER_ID = "aaaaaaaa";
@@ -80,17 +79,15 @@ function fakeCtx(): vscode.ExtensionContext {
 }
 
 function occ(filePath: string, startByte: number, endByte: number): ReportOccurrence {
-  return { path: filePath, start_byte: startByte, end_byte: endByte, hidden: false };
+  return { path: filePath, start_byte: startByte, end_byte: endByte, start_line: 1, end_line: 2, hidden: false };
 }
 
-function clusterOf(id: string, weight: number, occurrences: ReportOccurrence[]): ReportCluster {
+function clusterOf(id: string, mass: number, occurrences: ReportOccurrence[]): ReportCluster {
   return wireCluster({
     id,
-    weight,
+    mass,
     canonical_node_count: 0,
-    bucket: "identical",
-    signals: bucketSignals("identical"),
-    occurrences,
+        occurrences,
   });
 }
 

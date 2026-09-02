@@ -18,7 +18,7 @@
 //! `LedgerAlpha.cs` bytes **173–537**, which starts at `public`. The
 //! method-declaration fingerprint's range now *includes* the leading
 //! modifier, so both views describe the same span convention, ordinary
-//! containment holds, and the election collapses the pair with no
+//! containment holds, and subsumption collapses the pair with no
 //! straddle tolerance added to the predicate. That is the range-convention
 //! answer, and this suite is what stops it regressing to the other one —
 //! a subsumption predicate loosened to bare intersection is exactly what
@@ -33,6 +33,7 @@
 
 use serde_json::Value;
 
+use crate::common::signals::assert_no_pair_surface_on_cluster;
 use crate::common::{multilang::*, *};
 
 /// The floor gh #389 reproduces at. The 13-node signature window only
@@ -103,11 +104,7 @@ fn assert_published_once(report: &Value, case: &LangCase) -> Result<()> {
         count = over_pair.len(),
         published = over_pair
             .iter()
-            .map(|cluster| (
-                cluster_id(cluster),
-                cluster_bucket(cluster),
-                cluster_size(cluster)
-            ))
+            .map(|cluster| (cluster_id(cluster), cluster_size(cluster)))
             .collect::<Vec<_>>(),
     );
     let [cluster] = over_pair.as_slice() else {
@@ -116,12 +113,7 @@ fn assert_published_once(report: &Value, case: &LangCase) -> Result<()> {
             case.files()
         );
     };
-    assert_eq!(
-        cluster_bucket(cluster),
-        "identical",
-        "{language}: the authored pair is byte-identical — {dump}",
-        dump = cluster_id(cluster)
-    );
+    assert_no_pair_surface_on_cluster(cluster, "issue #389");
     assert_eq!(
         cluster_size(cluster),
         2,

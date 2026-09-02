@@ -15,12 +15,12 @@
 //! - `"truncated": true`
 //! - `"truncated_reason"`: human-readable explanation
 //! - `"truncated_at_bytes"`: the byte threshold that triggered the cap
-//! - `"next_action"`: pointer to the paginated `report-get` tool
+//! - `"next_action"`: pointer to the paginated `duplicates` tool
 //!
 //! Heavy structured logging (`tracing::warn!`) accompanies every
 //! truncation so operators can size their corpora — payloads that
 //! routinely trip the cap signal that an agent should be paginating
-//! via `report-get` instead of asking for the full top-offenders.
+//! via `duplicates` instead of asking for everything at once.
 
 use serde_json::{json, Value};
 use tracing::warn;
@@ -38,8 +38,14 @@ const NEXT_ACTION_KEY: &str = "next_action";
 #[cfg(test)]
 /// Reason fragment identifying the MCP wire cap as the trimmer.
 const WIRE_CAP_REASON_FRAGMENT: &str = "MCP wire cap";
-/// Name of the tool a truncated payload points callers at.
-const REPORT_GET_TOOL_NAME: &str = "report-get";
+/// Name of the paginated tool a truncated payload points callers
+/// at. The normative cutover ([MCP-TOOLS]) deleted `report-get`; a
+/// marker pointing there would strand the agent on a tool that no
+/// longer exists.
+const PAGINATED_TOOL_NAME: &str = "duplicates";
+/// The retired tool name the marker must never point at again.
+#[cfg(test)]
+const RETIRED_REPORT_GET_TOOL_NAME: &str = "report-get";
 
 /// Maximum size, in serialised JSON bytes, of any single MCP
 /// `tools/call` result envelope ([MCP-RESULT-SIZE-CAP]).
@@ -165,7 +171,7 @@ fn truncation_marker_fields() -> [(String, Value); 4] {
         (
             NEXT_ACTION_KEY.to_owned(),
             Value::String(format!(
-                "call {REPORT_GET_TOOL_NAME} with smaller limit, or paginate via offset/limit"
+                "call {PAGINATED_TOOL_NAME} with smaller limit, or paginate via offset/limit"
             )),
         ),
     ]
@@ -181,7 +187,7 @@ fn fallback_truncated_stub() -> Value {
             "result exceeded {MAX_TOOL_RESULT_BYTES} byte MCP wire cap"
         ),
         (TRUNCATED_AT_BYTES_KEY): MAX_TOOL_RESULT_BYTES,
-        (NEXT_ACTION_KEY): format!("call {REPORT_GET_TOOL_NAME} with smaller limit"),
+        (NEXT_ACTION_KEY): format!("call {PAGINATED_TOOL_NAME} with smaller limit"),
     })
 }
 
@@ -232,8 +238,12 @@ mod tests {
             .and_then(Value::as_str)
             .unwrap_or_default();
         assert!(
-            next_action.contains(REPORT_GET_TOOL_NAME),
-            "next_action must point at report-get: got {next_action:?}",
+            next_action.contains(PAGINATED_TOOL_NAME),
+            "next_action must point at duplicates: got {next_action:?}",
+        );
+        assert!(
+            !next_action.contains(RETIRED_REPORT_GET_TOOL_NAME),
+            "next_action must not point at the deleted report-get tool: got {next_action:?}",
         );
     }
 

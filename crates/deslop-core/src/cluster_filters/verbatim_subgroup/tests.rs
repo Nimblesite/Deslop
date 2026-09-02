@@ -44,9 +44,7 @@ impl Corpus {
     /// Registers one file per entry of `files`, holding that entry's
     /// bodies concatenated, and fingerprints every body over its own
     /// byte range. Member indices run in reading order — file by file,
-    /// body by body — so a family reads as a list of positions whether
-    /// or not its members share a file, which is what
-    /// [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] turns on.
+    /// body by body — so geometry-neutral families read as positions.
     fn across_files(files: &[&[&str]]) -> Self {
         let mut registry = FileRegistry::new();
         let mut corpus = Self {
@@ -127,11 +125,14 @@ fn component(size: usize) -> FusedCluster {
                 .map(move |right| FusedEdge {
                     left: *left,
                     right: *right,
-                    strength: 1.0,
                 })
         })
         .collect();
-    FusedCluster { members, edges }
+    FusedCluster {
+        members,
+        edges,
+        shape_family: None,
+    }
 }
 
 /// The member index lists of `clusters`, for direct comparison.
@@ -315,7 +316,7 @@ fn one_location_seen_twice_is_not_a_splittable_family() {
 // The positive control for the same rule: a family that really does
 // cover two locations is still splittable, and it keeps every view of
 // them. Dropping the second view here would rob the same-file overlap
-// collapse of the candidate it elects a representative from
+// collapse of the candidate it selects a representative from
 // ([PIPELINE-CLUSTER-EXACT]).
 #[test]
 fn a_copy_stays_splittable_and_keeps_both_views_of_its_locations() {

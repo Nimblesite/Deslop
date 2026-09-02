@@ -23,16 +23,50 @@ use std::{collections::HashMap, hash::BuildHasher, num::NonZeroUsize};
 
 use crate::{
     ast::NormalizedNode,
+    cluster::scope::DeclarationScopes,
     content::pair_content_agreement,
     fingerprint::Fingerprint,
     pair::{
-        crosses_files, rescue_eligible, CandidatePair, RESCUE_MIN_CONTENT_AGREEMENT,
-        SHARED_SUBTREE_MIN_OVERLAP,
+        crosses_files, rescue_eligible, CandidatePair, ExactFunctionAnchors,
+        RESCUE_MIN_CONTENT_AGREEMENT, SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
     },
     state::FileId,
 };
 
 use super::{tally::RescueTally, OverlapMeasurer};
+
+/// Everything a rescue measurement reads besides the pair itself,
+/// resolved once per pass and shared read-only by every shard.
+pub(super) struct RescueContext<'a, S, L> {
+    /// Every member's normalised tree by file, for content agreement.
+    tree_index: HashMap<FileId, &'a NormalizedNode>,
+    /// Raw source per file.
+    sources: &'a HashMap<FileId, Vec<u8>, S>,
+    /// Language per file.
+    languages: &'a HashMap<FileId, &'static str, L>,
+    /// The exact whole-function clones a container may not merely wrap
+    /// ([FUSED-SHARED-SUBTREE-ECHO]).
+    anchors: ExactFunctionAnchors,
+}
+
+impl<'a, S: BuildHasher, L: BuildHasher> RescueContext<'a, S, L> {
+    /// Resolves the pass-wide inputs for `pairs`.
+    pub(super) fn new(
+        pairs: &[CandidatePair],
+        fingerprints: &[Fingerprint],
+        trees: &'a [NormalizedNode],
+        sources: &'a HashMap<FileId, Vec<u8>, S>,
+        languages: &'a HashMap<FileId, &'static str, L>,
+    ) -> Self {
+        let scopes = DeclarationScopes::new(trees, languages);
+        Self {
+            tree_index: trees.iter().map(|tree| (tree.file_id, tree)).collect(),
+            sources,
+            languages,
+            anchors: ExactFunctionAnchors::index(pairs, fingerprints, &scopes),
+        }
+    }
+}
 
 /// Fewest candidate pairs worth sharding at all — below this the thread
 /// spawn costs more than the measurements.
@@ -64,26 +98,17 @@ pub fn apply_shared_subtree_rescue<S: BuildHasher + Sync, L: BuildHasher + Sync>
     sources: &HashMap<FileId, Vec<u8>, S>,
     languages: &HashMap<FileId, &'static str, L>,
 ) {
-    // Content agreement needs every member's tree, resolved once for the
-    // whole pass; each measurement then reads its endpoints' collapsed
-    // leaves through this index.
-    let tree_index: HashMap<FileId, &NormalizedNode> =
-        trees.iter().map(|tree| (tree.file_id, tree)).collect();
+    // Content agreement needs every member's tree and the echo rule
+    // needs every exact function pair, both resolved once for the whole
+    // pass; each measurement then reads through this context.
+    let context = RescueContext::new(pairs, fingerprints, trees, sources, languages);
     let workers = crate::shard::worker_count(pairs.len(), MIN_SHARD_WORK);
     if workers <= 1 {
         let mut measurer = OverlapMeasurer::new(trees);
         let mut tally = RescueTally::new();
         for pair in pairs.iter_mut() {
             tally.scan();
-            measure_one(
-                pair,
-                fingerprints,
-                &tree_index,
-                sources,
-                languages,
-                &mut measurer,
-                &mut tally,
-            );
+            measure_one(pair, fingerprints, &context, &mut measurer, &mut tally);
         }
         tally.report_total(measurer.stats());
         return;
@@ -100,15 +125,7 @@ pub fn apply_shared_subtree_rescue<S: BuildHasher + Sync, L: BuildHasher + Sync>
         workers,
         || (RescueTally::new(), OverlapMeasurer::new(trees)),
         |(tally, measurer), chunk| {
-            measure_chunk(
-                chunk,
-                fingerprints,
-                &tree_index,
-                sources,
-                languages,
-                measurer,
-                tally,
-            );
+            measure_chunk(chunk, fingerprints, &context, measurer, tally);
         },
     );
     report_shards(&shards);
@@ -118,23 +135,13 @@ pub fn apply_shared_subtree_rescue<S: BuildHasher + Sync, L: BuildHasher + Sync>
 fn measure_chunk<S: BuildHasher, L: BuildHasher>(
     chunk: &mut [CandidatePair],
     fingerprints: &[Fingerprint],
-    tree_index: &HashMap<FileId, &NormalizedNode>,
-    sources: &HashMap<FileId, Vec<u8>, S>,
-    languages: &HashMap<FileId, &'static str, L>,
+    context: &RescueContext<'_, S, L>,
     measurer: &mut OverlapMeasurer<'_>,
     tally: &mut RescueTally,
 ) {
     for pair in chunk.iter_mut() {
         tally.scan();
-        measure_one(
-            pair,
-            fingerprints,
-            tree_index,
-            sources,
-            languages,
-            measurer,
-            tally,
-        );
+        measure_one(pair, fingerprints, context, measurer, tally);
     }
 }
 
@@ -159,19 +166,18 @@ fn report_shards(shards: &[(RescueTally, OverlapMeasurer<'_>)]) {
 /// recording every gate it passes.
 ///
 /// A pair whose overlap cleared the floor still has to carry its own
-/// content through the gate ([FUSED-CONTENT-GATE], gh #458): the
-/// overlap floor is a *structural* claim and the token corroboration a
-/// *token* claim, and neither knows whether the endpoints' collapsed
-/// leaves agree. When the pair's own content agreement falls below
+/// content through the gate ([FUSED-CONTENT-GATE]): the overlap floor
+/// is a *structural* claim and the token corroboration a *token*
+/// claim, and neither knows whether the endpoints' collapsed leaves
+/// agree. When the pair's own content agreement falls below
 /// [`RESCUE_MIN_CONTENT_AGREEMENT`] the rescue refuses it — the overlap
 /// is left unset so survival drops the pair exactly as if the rescue had
-/// never measured it.
+/// never measured it. The same refusal applies to a container that only
+/// echoes an exact clone it wraps ([FUSED-SHARED-SUBTREE-ECHO]).
 fn measure_one<S: BuildHasher, L: BuildHasher>(
     pair: &mut CandidatePair,
     fingerprints: &[Fingerprint],
-    tree_index: &HashMap<FileId, &NormalizedNode>,
-    sources: &HashMap<FileId, Vec<u8>, S>,
-    languages: &HashMap<FileId, &'static str, L>,
+    context: &RescueContext<'_, S, L>,
     measurer: &mut OverlapMeasurer<'_>,
     tally: &mut RescueTally,
 ) {
@@ -190,13 +196,56 @@ fn measure_one<S: BuildHasher, L: BuildHasher>(
     pair.shared_subtree_overlap = measurer.rescue_overlap(left, right);
     let clears_overlap = pair.shared_subtree_overlap >= SHARED_SUBTREE_MIN_OVERLAP;
     let clears_content = !clears_overlap
-        || pair_content_agreement(left, right, tree_index, sources, languages)
-            >= RESCUE_MIN_CONTENT_AGREEMENT;
+        || pair_content_agreement(
+            left,
+            right,
+            &context.tree_index,
+            context.sources,
+            context.languages,
+        ) >= RESCUE_MIN_CONTENT_AGREEMENT;
     if clears_overlap && !clears_content {
         tally.content_gate_rejected();
         pair.shared_subtree_overlap = 0.0;
     }
-    tally.measure(clears_overlap && clears_content, measurer.stats());
+    let echoes = clears_overlap && clears_content && is_container_echo(pair, left, right, context);
+    if echoes {
+        tally.container_echo_rejected();
+        pair.shared_subtree_overlap = 0.0;
+    }
+    tally.measure(
+        clears_overlap && clears_content && !echoes,
+        measurer.stats(),
+    );
+}
+
+/// [FUSED-SHARED-SUBTREE-ECHO] Whether the pair's shared mass, beyond
+/// the largest exact whole-function clone both endpoints enclose, is too
+/// small to rescue on its own.
+///
+/// Shared mass is the overlap share of the larger endpoint
+/// ([FUSED-SHARED-SUBTREE]: `S = shared / max(n)`). A container whose
+/// remainder falls below [`SHARED_SUBTREE_MIN_NODE_COUNT`] — the floor
+/// every rescued endpoint already has to clear — is not a near-miss the
+/// anchor axis missed; it is the class shell or preamble around a clone
+/// the anchor axis already proved, and admitting it only hands
+/// subsumption a wider, byte-divergent view of that clone.
+fn is_container_echo<S: BuildHasher, L: BuildHasher>(
+    pair: &CandidatePair,
+    left: &Fingerprint,
+    right: &Fingerprint,
+    context: &RescueContext<'_, S, L>,
+) -> bool {
+    let Some(claimed) = context.anchors.claimed_nodes(left, right) else {
+        return false;
+    };
+    let larger = left.node_count.max(right.node_count);
+    let shared = pair.shared_subtree_overlap * usize_to_f64(larger);
+    shared - usize_to_f64(claimed) < usize_to_f64(SHARED_SUBTREE_MIN_NODE_COUNT)
+}
+
+/// Node counts as the `f64` the overlap share is measured in.
+fn usize_to_f64(nodes: usize) -> f64 {
+    u32::try_from(nodes).map_or(f64::MAX, f64::from)
 }
 
 #[cfg(test)]
@@ -209,7 +258,9 @@ mod shard_equivalence_tests {
 
     use std::path::PathBuf;
 
-    use super::{apply_shared_subtree_rescue, measure_chunk, RescueTally, MIN_SHARD_WORK};
+    use super::{
+        apply_shared_subtree_rescue, measure_chunk, RescueContext, RescueTally, MIN_SHARD_WORK,
+    };
     use crate::{
         ast::NormalizedNode,
         fingerprint::Fingerprint,
@@ -233,25 +284,10 @@ mod shard_equivalence_tests {
     ) -> (RescueTally, crate::overlap::MeasureStats) {
         let mut measurer = crate::overlap::OverlapMeasurer::new(trees);
         let mut tally = RescueTally::new();
-        measure_chunk(
-            chunk,
-            fingerprints,
-            &tree_index(trees),
-            sources,
-            languages,
-            &mut measurer,
-            &mut tally,
-        );
+        let context = RescueContext::new(chunk, fingerprints, trees, sources, languages);
+        measure_chunk(chunk, fingerprints, &context, &mut measurer, &mut tally);
         let stats = measurer.stats();
         (tally, stats)
-    }
-
-    /// The content-gate index: every tree resolved by file id, exactly
-    /// as the live pass builds it.
-    fn tree_index(
-        trees: &[NormalizedNode],
-    ) -> std::collections::HashMap<crate::state::FileId, &NormalizedNode> {
-        trees.iter().map(|tree| (tree.file_id, tree)).collect()
     }
 
     /// Parses `source` as Rust and fingerprints its root.

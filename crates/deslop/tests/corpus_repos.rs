@@ -58,7 +58,7 @@ use deslop_test_support::{
         manifest, scan, string_field, u64_field, Baseline, CorpusRun, Failure,
     },
     corpus_confidence::{
-        check_curated_recall, check_type2_curated_recall, check_type2_gate_liveness,
+        check_cluster_mass_contract, check_curated_recall, check_type2_curated_recall,
     },
     corpus_determinism::check_reports_agree,
     corpus_precision::{check_boilerplate_not_ranked_first, check_curated_precision},
@@ -234,7 +234,9 @@ const GATE_CHECKS: &[&str] = &[
     "boilerplate_rank",
     "data_table_rank",
     "fused_bounded_max",
-    "type2_gate_liveness",
+    "cluster_contract",
+    "cluster_mass",
+    "cluster_rank",
     "type2_recall",
     "wall",
     "memory",
@@ -266,7 +268,7 @@ fn gate(name: &str) -> Result<()> {
     // curated. The third is the curated Type-2 recall assertion
     // ([CORPUS-RECALL]): it reads `must_find_type2` and asserts nothing
     // where the manifest curates nothing.
-    check_type2_gate_liveness(&run.report, &mut failures);
+    check_cluster_mass_contract(&run.report, &mut failures);
     check_type2_curated_recall(&manifest, &run.report, &mut failures);
     check_ceilings(&manifest, &run, &mut failures)?;
 

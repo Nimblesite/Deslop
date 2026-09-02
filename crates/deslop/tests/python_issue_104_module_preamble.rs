@@ -13,23 +13,12 @@
 //! directions: the differently-bodied preamble is hidden, and the
 //! verbatim-copied helper module stays visible.
 
-use std::{fs, path::Path};
+use std::path::Path;
 
 use anyhow::Result;
 use serde_json::Value;
 
 use crate::common::*;
-
-fn run_report(scan_root: &Path) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let _assertion = deslop_cmd(scan_root, &output)?
-        .args(["--min-nodes", "4", "--embeddings", "off"])
-        .assert()
-        .success();
-    let body = fs::read_to_string(output.with_extension("json"))?;
-    Ok(serde_json::from_str(&body)?)
-}
 
 /// Collects every visible cluster whose occurrences contain `needle`.
 fn clusters_touching(report: &Value, scan_root: &Path, needle: &str) -> Result<Vec<Vec<String>>> {
@@ -68,7 +57,7 @@ fn clone_spans_both_files(
 #[test]
 fn differently_bodied_module_preamble_does_not_surface() -> Result<()> {
     let scan_root = fixture("python-issue-104-module-preamble");
-    let report = run_report(&scan_root)?;
+    let report = run_report(&scan_root, 8)?;
     let encode = clusters_touching(&report, &scan_root, "def encode_payload(")?;
     let build = clusters_touching(&report, &scan_root, "def build_url(")?;
     assert!(
@@ -86,7 +75,7 @@ fn differently_bodied_module_preamble_does_not_surface() -> Result<()> {
 #[test]
 fn verbatim_copied_helper_module_still_surfaces() -> Result<()> {
     let scan_root = fixture("python-issue-104-genuine-copy");
-    let report = run_report(&scan_root)?;
+    let report = run_report(&scan_root, 8)?;
     let copied = clusters_touching(&report, &scan_root, "def checksum(")?;
     assert!(
         !copied.is_empty(),
@@ -119,7 +108,7 @@ fn verbatim_copied_helper_module_still_surfaces() -> Result<()> {
 #[test]
 fn verbatim_copy_among_lookalikes_still_surfaces() -> Result<()> {
     let scan_root = fixture("python-issue-104-mixed-copy-lookalike");
-    let report = run_report(&scan_root)?;
+    let report = run_report(&scan_root, 8)?;
     let surfaces_genuine_copy = clone_spans_both_files(
         &report,
         &scan_root,

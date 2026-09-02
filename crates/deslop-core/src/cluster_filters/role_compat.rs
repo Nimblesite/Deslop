@@ -1,20 +1,18 @@
-//! Role-compatibility gate for embedding-dominant `same_behavior`
-//! clusters.
+//! Role-compatibility gate for embedding-dominant candidate pairs.
 //!
 //! Issue [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]: the embedding
 //! pass can pair two snippets that share a topic vocabulary but live in
 //! structurally incompatible constructs — e.g. a reusable transport
 //! helper *class* and a constructor-storage *test method*. Such a pair
-//! reaches `structural=0.00`, `embedding_cos>=0.80`, and surfaces as
-//! "Same behavior, different code". There is no safe extraction across
-//! a class definition and a function/method: their roles differ.
+//! reaches `structural=0.00`, `embedding_cos>=0.80`, and would otherwise
+//! enter closure. There is no coherent duplicate across a class
+//! definition and a function/method: their roles differ.
 //!
 //! This filter engages **only** for embedding-dominant matches (the
-//! caller restricts it to the `same_behavior` bucket). It suppresses a
-//! cluster when its members do not all share one top-level construct
-//! role — all classes, or all functions/methods. Two genuinely
-//! behaviour-equivalent functions (same role) that the embedding
-//! correctly pairs keep clustering.
+//! caller restricts it to embedding-dominant candidates). It rejects
+//! one pair when its endpoints have different top-level construct roles.
+//! Two genuinely behaviour-equivalent functions (same role) keep
+//! clustering.
 
 use tree_sitter::Node;
 
@@ -33,10 +31,10 @@ enum MemberRole {
     Function,
 }
 
-/// Returns true when this embedding-dominant cluster pairs members of
+/// Returns true when an embedding-dominant candidate pair has
 /// incompatible top-level roles (a class/type definition with a
-/// function/method). The caller restricts this to `same_behavior`
-/// clusters so deterministic Type-1/2/3 buckets are untouched.
+/// function/method). The caller restricts this to candidates that need
+/// embedding support, so deterministic Type-1/2/3 pairs are untouched.
 ///
 /// Returns false (does not suppress) when any member's role cannot be
 /// resolved — an unknown role is never grounds to hide duplication.

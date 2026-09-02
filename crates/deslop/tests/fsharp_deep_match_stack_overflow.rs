@@ -36,6 +36,7 @@ use std::{
 use anyhow::Result;
 use serde_json::Value;
 
+use crate::common::scan_dir::temp_scan_dir;
 use crate::common::*;
 
 /// Nesting depths the depth guard accepts and the recursive walks then
@@ -62,9 +63,7 @@ fn nested_matches(nesting: usize) -> String {
 
 #[test]
 fn deep_fsharp_matches_under_the_guard_do_not_abort_the_run() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let src = tmp.path().join("src");
-    fs::create_dir(&src)?;
+    let (tmp, src) = temp_scan_dir("src")?;
 
     for nesting in ACCEPTED_BUT_OVERFLOWING {
         fs::write(

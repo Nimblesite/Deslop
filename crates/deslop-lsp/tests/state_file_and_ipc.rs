@@ -376,7 +376,15 @@ fn ipc_socket_handles_refresh_report_request() -> Result<()> {
             .is_some_and(|generation| generation >= 2),
         "refreshReport result must advance or expose a live generation: {response}"
     );
-    for delta_field in ["clustersAdded", "clustersRemoved", "clustersUpdated"] {
+    for delta_field in [
+        "clustersAdded",
+        "clustersRemoved",
+        "clustersUpdated",
+        "literalFindingsAdded",
+        "literalFindingsRemoved",
+        "literalFindingsUpdated",
+        "worstMass",
+    ] {
         ensure!(
             response
                 .pointer(&format!("/result/{delta_field}"))
@@ -682,6 +690,13 @@ fn cached_report_bytes() -> Result<Vec<u8>> {
 }
 
 fn cached_report() -> serde_json::Value {
+    // The seed must satisfy the current generated wire contract
+    // (`wire_generated::Report`/`ReportCluster`/`ReportOccurrence`) or the
+    // loader rejects it and the cold pass silently replaces the staged
+    // state. Clusters carry mass only ([MCP-TOOLS]): no signals, weight,
+    // bucket, summary, interpretation, or action_hints. Mass is the
+    // canonical extent times visible occurrences ([RANK-MASS-SUM]):
+    // 6 canonical nodes x 2 visible occurrences = 12.
     serde_json::json!({
         "tool_version": "test-cache",
         "min_nodes": 4,
@@ -697,24 +712,26 @@ fn cached_report() -> serde_json::Value {
             "threshold": {"percent": 0.0, "breached": false, "source": "none"}
         },
         "schema_doc": "",
-        "action_hints": [],
         "boilerplate_hints": [],
         "embedding_provenance": null,
         "clusters": [{
             "id": "cached-gh73",
-            "weight": 9.0,
-            "size": 2,
+            "rank": 1,
+            "rank_band": "worst",
+            "mass": 12,
             "canonical_node_count": 6,
-            "signals": {"structural": 1.0, "token_jaccard": 1.0, "embedding_cos": 0.0, "fused": 1.0, "agreement": 1.0, "rename_consistency": 0.0, "literal_fraction": 0.0},
-            "bucket": "identical",
             "occurrences": [
-                {"path": "Alpha.cs", "start_byte": 0, "end_byte": 10, "hidden": false},
-                {"path": "Beta.cs", "start_byte": 0, "end_byte": 10, "hidden": false}
+                {"path": "Alpha.cs", "start_byte": 0, "end_byte": 10, "start_line": 1, "end_line": 1, "hidden": false},
+                {"path": "Beta.cs", "start_byte": 0, "end_byte": 10, "start_line": 1, "end_line": 1, "hidden": false}
             ],
             "occurrences_total": 2,
-            "occurrences_truncated": false,
-            "summary": "",
-            "interpretation": ""
-        }]
+            "occurrence_count": 2,
+            "occurrences_truncated": false
+        }],
+        "literal_findings": [],
+        "literal_findings_total": 0,
+        "literal_findings_hidden": 0,
+        "literal_findings_capped": false,
+        "literal_max_findings": 0
     })
 }

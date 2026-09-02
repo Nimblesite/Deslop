@@ -1,14 +1,20 @@
-//! E2E coverage for [RANK-STRUCTURAL-ONLY]: clusters whose only
-//! evidence is code shape (`bucket="structural_only"`) are weight-demoted
-//! by default, configurable via `.deslop.toml` `[ranking] structural_only`.
+//! E2E coverage for [RANK-MASS-SUM] on the two-file sibling-method
+//! family fixture: clusters are ordered by pure mass
+//! `canonical_node_count × (occurrence_count − 1)`.
 //!
 //! The fixture reproduces the geometry every previous fix missed
 //! (#134 demoted ≥3-file scaffolding, #197 hid single-file declaration
 //! families): a sibling-method family split across exactly **two** files
-//! — the Dart `part`/extension idiom that kept full `NearlyIdentical`
-//! weight and topped `top-offenders` on Flutter repos. A genuine
-//! verbatim copy-paste pair rides along so the tests assert *relative*
-//! ranking, the user-visible product.
+//! — the Dart `part`/extension idiom that used to receive a
+//! pair-classification weight and top `top-offenders` on Flutter repos. A
+//! genuine verbatim copy-paste pair rides along so the tests assert relative
+//! mass ranking, the user-visible product.
+//!
+//! [RANK-STRUCTURAL-ONLY] retired the `structural_only_weight`,
+//! `data_clone_weight` and `demote` ranking modes: weight means mass and
+//! nothing else. The legacy config keys still parse (backwards
+//! compatibility) but must not change the ranking — that is what the
+//! retired-knob test below pins.
 //!
 //! Black-box E2E: drive the CLI against generated fixture repos and
 //! assert against the rendered JSON report only.
@@ -19,14 +25,16 @@ use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
 
+use crate::common::signals::{
+    assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
+};
 use crate::common::*;
 
 /// Generates one shape-identical API method. The method name, endpoint
 /// literal, and every local identifier differ per call (normalisation
-/// strips identifiers, so the family still fuses at `structural=1.00`
-/// with no token or embedding support), and no statement run is
-/// byte-identical across methods — otherwise the byte-equivalence
-/// upgrade would correctly classify sub-windows as `Identical`.
+/// strips identifiers), and no statement run is byte-identical across
+/// methods — otherwise the byte-equivalence upgrade would correctly
+/// classify sub-windows as `Identical`.
 fn api_method(name: &str, prefix: &str, endpoint: &str) -> String {
     format!(
         "  Future<List<String>> {name}() async {{\n    final {prefix}Response = await http\n        \
@@ -39,9 +47,8 @@ fn api_method(name: &str, prefix: &str, endpoint: &str) -> String {
 }
 
 /// The genuine copy-pasted logic clone, duplicated verbatim across two
-/// files. Large enough that with the structural-only family demoted it
-/// ranks first, yet small enough that an un-demoted seven-member family
-/// out-weighs it — the exact inversion issues #134/#197 reported.
+/// files. It must rank second: the seven-member family carries more
+/// duplicated mass (7−1 copies × 101 nodes vs 1 copy × 143 nodes).
 const DUPLICATED_FUNCTION: &str = "int mergeTotals(List<int> counts, List<int> offsets) {\n  \
      var total = 0;\n  var carry = 1;\n  for (final count in counts) {\n    \
      final scaled = count * carry;\n    final shifted = scaled + offsets.length;\n    \
@@ -117,10 +124,6 @@ fn report_for_config(config: Option<&str>) -> Result<Value> {
     Ok(report)
 }
 
-fn bucket_of(cluster: &Value) -> &str {
-    cluster.get("bucket").and_then(Value::as_str).unwrap_or("?")
-}
-
 fn cluster_touches(cluster: &Value, file_name: &str) -> bool {
     cluster
         .get("occurrences")
@@ -142,150 +145,149 @@ fn rank_where(report: &Value, predicate: impl Fn(&Value) -> bool) -> usize {
         .unwrap_or(usize::MAX)
 }
 
-/// Occurrence count of the cluster at `rank`, or `0` when absent.
-/// The family is seven sibling methods; a whole-class view that swallows
-/// them reports two, so this is what separates the family from an
-/// enclosing view that merely touches the same files.
-fn occurrence_count_at(report: &Value, rank: usize) -> usize {
-    clusters(report)
-        .get(rank)
-        .and_then(|cluster| cluster.get("occurrences"))
-        .and_then(Value::as_array)
-        .map_or(0, Vec::len)
-}
-
 fn family_rank(report: &Value) -> usize {
     rank_where(report, |cluster| {
-        bucket_of(cluster) == "structural_only" && cluster_touches(cluster, "inventory_api.dart")
+        cluster_touches(cluster, "inventory_api.dart")
     })
 }
 
 fn verbatim_pair_rank(report: &Value) -> usize {
-    rank_where(report, |cluster| {
-        bucket_of(cluster) == "identical" && cluster_touches(cluster, "sync_a.dart")
-    })
+    rank_where(report, |cluster| cluster_touches(cluster, "sync_a.dart"))
 }
 
-/// [RANK-STRUCTURAL-ONLY] default policy: the two-file shape-only family
-/// is surfaced and honestly labelled, but the genuine copy-paste pair
-/// out-ranks it. Also pins the cross-surface contract: a `structural_only`
-/// wire bucket with the structural-only interpretation sentence.
-#[test]
-fn structural_only_family_is_demoted_below_genuine_clone_by_default() -> Result<()> {
-    let report = report_for_config(None)?;
-
-    let family = family_rank(&report);
-    let pair = verbatim_pair_rank(&report);
-    assert!(
-        family < usize::MAX,
-        "the two-file sibling-method family must stay visible (demoted, not \
-         hidden) under the default policy: {report:#}"
-    );
-    assert!(
-        pair < usize::MAX,
-        "the verbatim copy-paste pair must classify as `identical` — its raw \
-         bytes are equal, so the unscored token signal must not drag it into \
-         structural_only: {report:#}"
-    );
-
-    // [PIPELINE-CLUSTER-SUBSUME]: the family IS seven duplicated methods.
-    // A whole-class view encloses all seven and reports two occurrences
-    // spanning each entire class — losing five findings and counting the
-    // constructors, fields and imports between the methods as duplicated.
-    assert_eq!(
-        occurrence_count_at(&report, family),
-        7,
-        "the shape-only family must report all seven sibling methods, not a \
-         whole-class view that encloses them: a class-level view drops five \
-         occurrences and counts non-duplicated members as duplicated: {report:#}"
-    );
-    assert!(
-        pair < family,
-        "issues #134/#154/#197: with `structural_only = demote` (default), the \
-         genuine copy-paste pair (rank {pair}) must out-rank the shape-only \
-         method family (rank {family}): {report:#}"
-    );
-
-    let family_cluster = clusters(&report).get(family).cloned().unwrap_or_default();
-    let interpretation = family_cluster
-        .get("interpretation")
-        .and_then(Value::as_str)
-        .unwrap_or("");
-    assert!(
-        interpretation.contains("Only the code shape matches"),
-        "structural_only clusters must carry the structural-only \
-         interpretation, not the nearly-identical one (issue #197 \
-         inconsistency #3): {interpretation:?}"
-    );
-    Ok(())
+/// The cluster at `rank`, or `None`.
+fn cluster_at(report: &Value, rank: usize) -> Option<&Value> {
+    clusters(report).get(rank)
 }
 
-/// `[ranking] structural_only = "keep"` restores full weight: the
-/// seven-member family out-ranks the two-copy pair — the pre-fix order,
-/// proving the multiplier (not a hide-filter) drives the default order.
+/// [RANK-MASS-SUM] default: both clusters are visible, ranked by pure
+/// mass. The seven-member family out-masses the two-copy pair under the
+/// rendered formula. The canonical node count is produced by the current
+/// normaliser, so this test re-derives mass instead of freezing an obsolete
+/// implementation count. The family spans exactly the seven sibling methods,
+/// and the pair is byte-proven verbatim.
 #[test]
-fn keep_policy_restores_full_weight_ranking() -> Result<()> {
-    let report = report_for_config(Some("[ranking]\nstructural_only = \"keep\"\n"))?;
+fn mass_ranks_family_first_and_pair_second() -> Result<()> {
+    let src = tempfile::tempdir()?;
+    let root = src.path().join("src");
+    write_fixture(&root)?;
+    let report = run_report(&root, src.path())?;
+
     let family = family_rank(&report);
     let pair = verbatim_pair_rank(&report);
     assert!(
         family < usize::MAX && pair < usize::MAX,
-        "both clusters must stay visible under keep: {report:#}"
+        "both clusters must stay visible under the mass-only policy: {report:#}"
     );
     assert!(
         family < pair,
-        "with structural_only = keep, the seven-member family (rank {family}) \
-         must out-weigh the two-copy pair (rank {pair}) — node_count × (size−1) \
-         with no demotion: {report:#}"
+        "[RANK-MASS-SUM]: the seven-member family (rank {family}) must out-rank \
+         the two-copy pair (rank {pair}) by pure mass: {report:#}"
+    );
+
+    let family_cluster =
+        cluster_at(&report, family).ok_or_else(|| anyhow::anyhow!("family cluster missing"))?;
+    // [PIPELINE-CLUSTER-SUBSUME]: the family IS seven duplicated methods.
+    // A whole-class view would report two occurrences spanning each entire
+    // class — losing five findings and counting non-duplicated members as
+    // duplicated.
+    assert_eq!(
+        cluster_size(family_cluster),
+        7,
+        "the family must report all seven sibling methods, not a whole-class \
+         view that encloses them: {family_cluster:#}"
+    );
+    let family_nodes = field(family_cluster, "canonical_node_count")
+        .as_u64()
+        .ok_or_else(|| anyhow::anyhow!("family has no canonical node count: {family_cluster:#}"))?;
+    let family_mass = field(family_cluster, "mass")
+        .as_u64()
+        .ok_or_else(|| anyhow::anyhow!("family has no mass: {family_cluster:#}"))?;
+    assert_eq!(
+        family_mass,
+        family_nodes.saturating_mul(cluster_size(family_cluster).saturating_sub(1)),
+        "family mass must be canonical_node_count × (occurrence_count − 1): {family_cluster:#}"
+    );
+    assert_no_pair_surface_on_cluster(family_cluster, "rank-structural-only family");
+    assert_structural_only_contract(family_cluster, "rank-structural-only family");
+
+    let pair_cluster = cluster_at(&report, pair)
+        .ok_or_else(|| anyhow::anyhow!("verbatim pair cluster missing"))?;
+    assert_eq!(
+        cluster_size(pair_cluster),
+        2,
+        "the verbatim pair spans exactly its two copies: {pair_cluster:#}"
+    );
+    assert!(
+        has_verbatim_pair(&root, pair_cluster)?,
+        "the copy-paste pair is byte-identical in source — the byte-proven \
+         fact must hold on the mass-only wire: {pair_cluster:#}"
+    );
+    let pair_mass = field(pair_cluster, "mass")
+        .as_u64()
+        .ok_or_else(|| anyhow::anyhow!("verbatim pair has no mass: {pair_cluster:#}"))?;
+    assert!(
+        family_mass > pair_mass,
+        "the rank order must follow larger family mass ({family_mass} > {pair_mass}): {report:#}"
     );
     Ok(())
 }
 
-/// An explicit `structural_only_weight = 1.0` neutralises the demotion
-/// the same way `keep` does, proving the weight knob feeds the ranking.
+/// The retired `structural_only` / `data_clone_weight` knobs still parse
+/// for backwards compatibility but [RANK-STRUCTURAL-ONLY] forbids them
+/// from changing weight: every legacy body must render the identical
+/// report (same ids, same masses, same order).
 #[test]
-fn unit_weight_neutralises_demotion() -> Result<()> {
-    let report = report_for_config(Some("[ranking]\nstructural_only_weight = 1.0\n"))?;
-    let family = family_rank(&report);
-    let pair = verbatim_pair_rank(&report);
+fn retired_structural_only_knobs_do_not_change_the_ranking() -> Result<()> {
+    let baseline = report_for_config(None)?;
+    let ranked_baseline = rankable(&baseline);
+    for (body, label) in [
+        ("[ranking]\nstructural_only = \"keep\"\n", "keep"),
+        ("[ranking]\nstructural_only_weight = 1.0\n", "unit weight"),
+        ("[ranking]\nstructural_only = \"ignore\"\n", "ignore"),
+        ("[ranking]\ndata_clone_weight = 0.5\n", "data clone weight"),
+    ] {
+        let report = report_for_config(Some(body))?;
+        assert_eq!(
+            rankable(&report),
+            ranked_baseline,
+            "{label}: the retired {label} knob must not change mass or order — \
+             weight means mass and nothing else ([RANK-STRUCTURAL-ONLY]): {report:#}"
+        );
+        assert_eq!(
+            field(&report, "clusters_hidden").as_u64(),
+            Some(0),
+            "{label}: the retired knob must not hide the family: {report:#}"
+        );
+    }
     assert!(
-        family < pair,
-        "structural_only_weight = 1.0 must restore the un-demoted order \
-         (family rank {family}, pair rank {pair}): {report:#}"
+        !ranked_baseline.is_empty(),
+        "the mass-only ranking must be non-empty"
     );
     Ok(())
 }
 
-/// `[ranking] structural_only = "ignore"` drops the family from the
-/// report entirely and counts it in `clusters_hidden`; the genuine pair
-/// is untouched.
-#[test]
-fn ignore_policy_hides_structural_only_clusters() -> Result<()> {
-    let report = report_for_config(Some("[ranking]\nstructural_only = \"ignore\"\n"))?;
-    assert!(
-        !clusters(&report)
-            .iter()
-            .any(|cluster| bucket_of(cluster) == "structural_only"),
-        "ignore must drop every structural_only cluster from the ranked \
-         report: {report:#}"
-    );
-    assert!(
-        verbatim_pair_rank(&report) < usize::MAX,
-        "ignore must not touch the genuine identical pair: {report:#}"
-    );
-    let hidden = report
-        .get("clusters_hidden")
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    assert!(
-        hidden >= 1,
-        "the dropped family must be counted in clusters_hidden: {report:#}"
-    );
-    Ok(())
+/// The stable, order-insensitive fingerprint of a report's ranking:
+/// `(rank, id, mass)` per cluster, so a retired knob cannot reorder or
+/// re-mass without the assertion seeing it.
+fn rankable(report: &Value) -> Vec<(u64, &str, u64)> {
+    let mut rows: Vec<(u64, &str, u64)> = clusters(report)
+        .iter()
+        .map(|cluster| {
+            (
+                field(cluster, "rank").as_u64().unwrap_or(0),
+                cluster_id(cluster),
+                field(cluster, "mass").as_u64().unwrap_or(0),
+            )
+        })
+        .collect();
+    rows.sort_unstable();
+    rows
 }
 
-/// An out-of-range `structural_only_weight` fails the load with a
-/// diagnostic naming the key, mirroring `data_clone_weight` validation.
+/// An out-of-range `structural_only_weight` still fails the load with a
+/// diagnostic naming the key — the legacy keys are parsed and validated
+/// even though they no longer feed ranking.
 #[test]
 fn invalid_structural_only_weight_is_rejected_with_a_clear_error() -> Result<()> {
     let tmp = tempfile::tempdir()?;

@@ -146,10 +146,11 @@ fn issue_153_rescan_occurrence_offsets_reflect_post_edit_file() -> Result<()> {
     Ok(())
 }
 
-/// Extracts the `clusters` JSON array from a rescan payload.
+/// Extracts the `clusters` JSON array from the page a rescan payload
+/// wraps (`{ generation, summary, page }`, [MCP-TOOLS]).
 fn clusters_array(structured: &Value) -> Result<Vec<Value>> {
     structured
-        .get("clusters")
+        .pointer("/page/clusters")
         .and_then(Value::as_array)
         .cloned()
         .ok_or_else(|| anyhow!("rescan payload missing clusters array: {structured}"))

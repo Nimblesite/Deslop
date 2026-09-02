@@ -8,7 +8,7 @@ codes and the JSON schema are owned by [pipeline.md §EXIT-CODES](pipeline.md) a
 [pipeline.md §OUTPUT-SCHEMA-JSON](pipeline.md); this file governs everything the
 operator sees and types.
 
-## Invocation
+## [CLI-INVOCATION] Invocation
 
 ### [CLI-INVOCATION-PATH] Scan-root argument
 `deslop [PATH]` takes the directory to analyse as a single positional argument,
@@ -115,7 +115,7 @@ entirely and re-renders the derived text and HTML straight from an existing
 canonical JSON, which doubles as the round-trip test of the JSON schema's
 deserialization path.
 
-## Terminal UX
+## [CLI-TERMINAL-UX] Terminal UX
 
 ### [UX-PREAMBLE] Run preamble
 Before any analysis begins, `deslop` prints a preamble to stderr stating what the
@@ -128,25 +128,13 @@ confirm tuning at a glance. The preamble honours the resolved [UX-NO-COLOR]
 colour choice.
 
 ### [UX-PLAIN-SUMMARY] Plain summary (default)
-The default stderr summary is plain English aimed at a human in a terminal (no
-jargon, no signal letters): a `Found N groups…` headline, friendly cache/embedding
-sentences when applicable, a per-bucket breakdown, a one-sentence "Worst offender"
-callout, the worst-10 ranked rows each with an evidence sentence, and a `Next:`
-pointer to the HTML report. A zero-cluster report instead prints a single
-"no duplication detected" success line and omits the worst-offender callout
-entirely; the renderer is total and never panics on an empty corpus.
-`--technical` upgrades this to the researcher view ([UX-TECHNICAL-BREAKDOWN]); it
-changes verbosity, not the bucket labels.
+The default stderr summary is plain English aimed at a human in a terminal: a `Found N groups…` headline, friendly cache and embedding-provenance sentences when applicable, a one-sentence `Worst offender` callout, the ten highest-mass rows with identity, occurrence count, and mass, and a `Next:` pointer to the HTML report. It contains no pair classification or evidence. A zero-cluster report prints `no duplication detected` and omits the worst-offender callout.
+
+`--technical` upgrades this to the researcher view ([UX-TECHNICAL-BREAKDOWN]); it changes verbosity without adding pair evidence to clusters.
 
 ### [UX-TECHNICAL-BREAKDOWN] Technical summary (`--technical`)
 `--technical` switches the stderr summary from plain English to the researcher
-view without changing the bucket labels (which are always the shared-text
-`hybrid_title`, e.g. `Same shape, different content [structural-only]`, so the
-same text serves a human reader and an AI scraper). The technical view adds a
-column legend (`rank, signal, id, copies, AST nodes, weight,
-(s=structural j=token e=embedding), files`) and, per ranked cluster, the
-truncated cluster id, AST node count, ranking weight, and the signal triple.
-It is purely additive verbosity layered on the [UX-PLAIN-SUMMARY] structure.
+view without adding pair evidence to a cluster. The technical view adds a column legend (`rank, id, copies, AST nodes, mass, files`) and, per ranked cluster, the truncated cluster id, AST node count, mass, and file count. Structural, Jaccard, embedding, and content values appear only when the user explicitly compares two occurrences. It is purely additive verbosity layered on the [UX-PLAIN-SUMMARY] structure.
 
 ### [UX-TECHNICAL-CACHE] Cache statistics line
 When the incremental cache ([pipeline.md §PIPELINE-INCREMENTAL](pipeline.md)) is

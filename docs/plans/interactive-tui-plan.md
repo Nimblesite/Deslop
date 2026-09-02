@@ -32,6 +32,6 @@ usable, and the right TUI shape should come from real operator feedback.
       report via `--from-report`.
 - [ ] Pick the TUI crate and terminal event model.
 - [ ] Design keyboard navigation for clusters, occurrences, search, and quit.
-- [ ] Render cluster rows from canonical bucket labels and report rank.
+- [ ] Render neutral `Duplicate code` cluster rows with occurrence count, mass, and engine-stamped rank; never render pair classification or evidence on the row.
 - [ ] Render occurrence previews from source bytes with line numbers.
 - [ ] Add deterministic E2E coverage for opening, navigation, and empty reports.

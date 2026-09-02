@@ -232,47 +232,6 @@ fn ensure_compiles(staging: &Path) -> Result<()> {
 }
 
 /// The fixture plan's import edit names the canonical module.
-fn ensure_canonical_import(plan: &ConsolidatePlan) -> Result<()> {
-    let inserted = plan.edits.iter().find(|edit| !edit.new_text.is_empty());
-    let import = inserted.context("import insertion present")?;
-    let canonical_module = plan
-        .canonical_path
-        .file_stem()
-        .and_then(|stem| stem.to_str())
-        .context("canonical module stem")?;
-    ensure!(
-        import.new_text == format!("use crate::{canonical_module}::normalise_labels;\n\n"),
-        "Schäfer-preserving import, got {:?}",
-        import.new_text
-    );
-    Ok(())
-}
-
-/// Applies the plan to a staged copy of the fixture crate, proves it
-/// compiles, and proves the duplicate re-points at the canonical copy.
-fn rewrite_and_compile_fixture(root: &Path, plan: &ConsolidatePlan) -> Result<()> {
-    let staging = tempfile::tempdir()?;
-    for name in ["lib.rs", "pricing_a.rs", "pricing_b.rs"] {
-        let _copied = fs::copy(root.join(name), staging.path().join(name))?;
-    }
-    let duplicate = &plan.edits.first().context("edited path present")?.path;
-    let source = fs::read_to_string(root.join(duplicate))?;
-    let buffer = apply_checked_edits(&source, &plan.edits, duplicate)?;
-    fs::write(staging.path().join(duplicate), &buffer)?;
-    ensure_compiles(staging.path())?;
-    ensure!(
-        buffer.starts_with("use crate::"),
-        "duplicate file imports the canonical symbol:\n{buffer}"
-    );
-    ensure!(
-        !buffer.contains("pub fn normalise_labels"),
-        "duplicate file no longer defines it:\n{buffer}"
-    );
-    Ok(())
-}
-
-/// Stages `mod_a.rs`/`mod_b.rs` under a `lib.rs` re-exporting both totals,
-/// and proves the crate compiles.
 fn compile_two_module_crate(file_a: &str, file_b: &str) -> Result<()> {
     let staging = tempfile::tempdir()?;
     fs::write(
@@ -287,25 +246,101 @@ fn compile_two_module_crate(file_a: &str, file_b: &str) -> Result<()> {
 /// [AUTOFIX-CONSOLIDATE]: the duplicated `pub fn` consolidates to one
 /// canonical copy, the duplicate file imports it, and the rewritten
 /// crate compiles (`rustc --emit=metadata`).
+///
+/// The reported view is the byte-identical `normalise_labels`
+/// definition itself: the whole-file near-miss that wraps it in both
+/// modules is a container echo the rescue refuses
+/// ([FUSED-SHARED-SUBTREE-ECHO]), so the report names the copy, not
+/// the file around it. A cross-file identical definition consolidates
+/// mechanically ([AUTOFIX-CONSOLIDATE-SURFACE]); the compile backstop
+/// is pinned on the synthetic crate by
+/// [`definition_run_spanning_two_functions_consolidates`]. The
+/// near-miss is still owed its
+/// refusal: a cluster over the whole files, whose `describe_*`
+/// definition runs disagree, must refuse rather than rewrite
+/// ([AUTOFIX-CONSOLIDATE-GATE] v1.1) — pinned here on the same corpus.
 #[test]
 fn rust_cross_file_definition_consolidates_and_compiles() -> Result<()> {
     let root = fixture("rust-consolidate");
     let report = analyse(&root)?;
     let cluster = cross_file_cluster(&report)?;
     let sources = sources_for(&root, &cluster)?;
-    let plan = plan_for("the fixture", &cluster, &sources, &RustParser::new())?;
+    let slices = cluster
+        .occurrences
+        .iter()
+        .map(|occurrence| {
+            sources
+                .get(&occurrence.path)
+                .and_then(|bytes| bytes.get(occurrence.start_byte..occurrence.end_byte))
+                .ok_or_else(|| {
+                    anyhow!("occurrence out of bounds for {}", occurrence.path.display())
+                })
+        })
+        .collect::<Result<Vec<_>>>()?;
     ensure!(
-        plan.symbols == ["normalise_labels"],
-        "symbol recorded, got {:?}",
-        plan.symbols
+        slices
+            .iter()
+            .all(|slice| slice.starts_with(b"pub fn normalise_labels")),
+        "the reported occurrences are the authored normalise_labels definition"
     );
     ensure!(
-        plan.edits.len() == 2,
-        "one deletion plus one import insertion expected, got {}",
-        plan.edits.len()
+        slices
+            .windows(2)
+            .all(|pair| matches!(pair, [first, second] if first == second)),
+        "both reported occurrences are byte-identical"
     );
-    ensure_canonical_import(&plan)?;
-    rewrite_and_compile_fixture(&root, &plan)
+    let plan = plan_for(
+        "the identical definition",
+        &cluster,
+        &sources,
+        &RustParser::new(),
+    )?;
+    let file_a = std::str::from_utf8(
+        sources
+            .get(Path::new("pricing_a.rs"))
+            .context("pricing_a.rs")?,
+    )?;
+    let file_b = std::str::from_utf8(
+        sources
+            .get(Path::new("pricing_b.rs"))
+            .context("pricing_b.rs")?,
+    )?;
+    let mut edits = plan.edits.clone();
+    edits.sort_unstable_by_key(|edit| std::cmp::Reverse(edit.start_byte));
+    let buffer = apply_checked_edits(file_b, &edits, Path::new("pricing_b.rs"))?;
+    ensure!(
+        !buffer.contains("pub fn normalise_labels"),
+        "duplicate no longer defines the consolidated `normalise_labels`:\n{buffer}"
+    );
+    let (near_miss, near_miss_sources) = whole_file_cluster(file_a, file_b);
+    let reason = reason_for(
+        "the whole-file near-miss",
+        &near_miss,
+        &near_miss_sources,
+        &RustParser::new(),
+    )?;
+    ensure!(
+        reason.contains("definition run"),
+        "the refusal names the definition-run mismatch, got {reason}"
+    );
+    Ok(())
+}
+
+/// A cluster over the entire text of two files that share a prefix but
+/// diverge later — the near-miss view the container-echo rule keeps out
+/// of the report.
+fn whole_file_cluster(file_a: &str, file_b: &str) -> (ReportCluster, Sources) {
+    let mut sources = HashMap::new();
+    let occurrences = vec![
+        report_occurrence("pricing_a.rs", (0, file_a.len()), false),
+        report_occurrence("pricing_b.rs", (0, file_b.len()), false),
+    ];
+    let _inserted = sources.insert(PathBuf::from("pricing_a.rs"), file_a.as_bytes().to_vec());
+    let _inserted = sources.insert(PathBuf::from("pricing_b.rs"), file_b.as_bytes().to_vec());
+    (
+        synthetic_report_cluster(occurrences, "nearly_identical"),
+        sources,
+    )
 }
 
 /// A private canonical definition refuses — the duplicates' modules

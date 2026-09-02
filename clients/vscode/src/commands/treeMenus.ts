@@ -16,11 +16,8 @@ import { ReportStore } from "../reportStore";
 import {
   ReportCluster,
   ReportOccurrence,
-  bucketLabels,
   clusterSlug,
-  electedPairForCluster,
   occurrenceCount,
-  resolveBucket,
 } from "../types/report";
 import { ClusterNode, OccurrenceNode } from "../tree/providers";
 import { resolveOccurrenceUri } from "./register";
@@ -139,8 +136,7 @@ async function openOccurrenceNonPreview(
 
 /// Builds the clipboard text for [`copyClusterLocations`].
 export function clusterLocationsText(cluster: ReportCluster): string {
-  const bucket = bucketLabels(resolveBucket(cluster)).plainTitle;
-  const header = `cluster ${cluster.id} · ${bucket} · ${occurrenceCount(cluster)} occurrences`;
+  const header = `cluster ${cluster.id} · mass ${formatScorePrecise(cluster.mass)} · ${occurrenceCount(cluster)} occurrences`;
   const rows = cluster.occurrences.map(humanLocation);
   return [header, ...rows].join("\n");
 }
@@ -150,18 +146,13 @@ export function aiPayloadForCluster(
   cluster: ReportCluster,
   rank: number,
 ): string {
-  const bucket = resolveBucket(cluster);
-  const labels = bucketLabels(bucket);
   const header = [
     `slug: ${clusterSlug(cluster)}`,
     `cluster_id: ${cluster.id}`,
     `rank: ${rank}`,
-    `bucket: ${bucket} (${labels.taxonomyLabel})`,
-    `weight: ${formatScorePrecise(cluster.weight)}`,
-    `size: ${cluster.size}`,
+    `mass: ${cluster.mass}`,
     `canonical_node_count: ${cluster.canonical_node_count}`,
     `occurrences: ${occurrenceCount(cluster)}`,
-    ...pairSignalLines(cluster),
   ];
   const rows = cluster.occurrences.map(
     (o) => `- ${o.path} | ${humanLocation(o)} | ${o.start_byte}..${o.end_byte}`,
@@ -213,37 +204,17 @@ function humanLocation(occurrence: ReportOccurrence): string {
   return occurrenceDisplayLocation(occurrence)?.label ?? occurrence.path;
 }
 
-function pairSignalLines(cluster: ReportCluster): string[] {
-  const elected = electedPairForCluster(cluster);
-  if (!elected) return [];
-  const s = cluster.signals;
-  const [left, right] = elected.occurrences;
-  return [
-    `elected_pair: occurrence ${elected.source.left + 1} (${left.path}) <-> ` +
-      `occurrence ${elected.source.right + 1} (${right.path})`,
-    `pair_signals: structural=${formatScorePrecise(s.structural)} ` +
-    `token=${formatScorePrecise(s.token_jaccard)} ` +
-    `embed=${formatScorePrecise(s.embedding_cos)} ` +
-    `agreement=${formatScorePrecise(s.pair_agreement)} ` +
-    `rename=${formatScorePrecise(s.pair_rename_consistency)}`,
-  ];
-}
-
 function parentClusterLines(
   parent: ReportCluster,
   store: ReportStore,
 ): string[] {
-  const bucket = resolveBucket(parent);
-  const labels = bucketLabels(bucket);
   const all = store.current.report?.clusters ?? [];
   const rankIndex = all.findIndex((c) => c.id === parent.id);
   return [
     `cluster_id: ${parent.id}`,
     `rank: ${rankIndex >= 0 ? rankIndex + 1 : "?"}`,
-    `bucket: ${bucket} (${labels.taxonomyLabel})`,
-    `weight: ${formatScorePrecise(parent.weight)}`,
-    `size: ${parent.size}`,
-    ...pairSignalLines(parent),
+    `mass: ${formatScorePrecise(parent.mass)}`,
+    `canonical_nodes: ${parent.canonical_node_count}`,
     `sibling_occurrences: ${Math.max(parent.occurrences.length - 1, 0)}`,
   ];
 }

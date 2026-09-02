@@ -325,11 +325,11 @@ This list defines the required outcomes. It deliberately does not prescribe impl
 ### Protect correctness while performance changes [PERF-FLUTTER-TODO-ACCURACY]
 
 - [x] Capture the known-good Flutter report as a comparison artifact before performance changes are accepted. `target/perf-artifacts/flutter-baseline/flutter.json` (sha256 `8b5cdd86…`), 35,433 clusters.
-- [x] Compare reported clusters, occurrences, file paths, ranges, buckets, signals, confidence values, ranking order, and repository metrics after every performance change. Runs 19–22 — signature segmentation, builder rewrite, evidence-merge fix — produce byte-identical reports (sha256 `2562e181…`, 88,359,003 bytes). They differ from the pre-branch baseline artifact (`8b5cdd86…`) only through the audit-mandated false-negative repairs (creditable-entries fallback, panic propagation), which intentionally change outcomes; curated checks stay green.
+- [x] Historical pre-cutover runs 19–22 produced byte-identical legacy reports (sha256 `2562e181…`, 88,359,003 bytes). Those artifacts include retired cluster evidence and are not valid post-cutover goldens. Current performance acceptance compares endpoint-keyed pair admissions separately, then cluster ids, occurrences, paths, ranges, exact mass, mass order, and repository metrics.
 - [ ] Verify every curated byte-identical Flutter duplicate remains visible with all expected occurrences.
 - [ ] Verify framework-mandated Flutter scaffolding does not displace genuine duplication at the top of the report.
-- [ ] Verify data tables remain categorized and ranked correctly.
-- [ ] Verify Type-2 and Type-3 recall guarantees remain live.
+- [ ] Verify data tables follow their detection-time visibility rule and every survivor retains unmodified mass.
+- [ ] Verify Type-2 and Type-3 pair admission guarantees remain live for their exact curated endpoints.
 - [ ] Verify cross-file and same-file behavior remains consistent with the documented rescue contract.
 - [x] Verify report determinism across repeated cold runs. Four cold runs (19–22), one identical byte stream each.
 - [ ] Verify incremental and full analyses agree when they represent the same final corpus state.

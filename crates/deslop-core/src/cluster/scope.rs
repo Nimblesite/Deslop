@@ -1,15 +1,12 @@
 //! [PIPELINE-CLUSTER-EXACT-SCOPE] Which authored declaration an
 //! occurrence sits inside.
 //!
-//! The same-file overlap collapse ranks two views of one region by the
-//! cross-file evidence each carries ([`super::cross_file_edge_strengths`]).
-//! That comparison is only meaningful between views of comparable
-//! scope. Inside one function a narrower view scores higher *because*
-//! it excludes the statements that differ, so ranking by grade there
-//! elects whichever window omits the most — the same non-comparability
-//! [`crate::cluster::subsume`] already documents between nesting
-//! cluster views, one stage earlier and with no content evidence yet
-//! measured.
+//! The same-file overlap collapse selects its representative by authored
+//! scope and width only ([`super::collapse_overlapping_per_file`]): an
+//! enclosing view inside the same authored declaration stays, otherwise
+//! the wider byte range wins. Pair grades never enter the selection — a
+//! bridge that should not connect two components must fail pair
+//! admission ([PIPELINE-CLUSTER-CLOSURE]).
 //!
 //! Declarations are read off the normalised tree, keyed by the file's
 //! language ([`function_kinds`]), so a production name that means
@@ -26,7 +23,7 @@ use crate::{
 
 /// The authored declaration enclosing an occurrence, resolved against
 /// the normalised trees the corpus already holds.
-pub(super) struct DeclarationScopes<'trees, L: BuildHasher> {
+pub(crate) struct DeclarationScopes<'trees, L: BuildHasher> {
     /// Normalised root per file.
     trees: HashMap<FileId, &'trees NormalizedNode>,
     /// Language per file, for the declaration productions to look for.
@@ -36,7 +33,7 @@ pub(super) struct DeclarationScopes<'trees, L: BuildHasher> {
 impl<'trees, L: BuildHasher> DeclarationScopes<'trees, L> {
     /// Indexes `trees` by file so each lookup is one map hit plus a
     /// descent, rather than a scan of the corpus.
-    pub(super) fn new(
+    pub(crate) fn new(
         trees: &'trees [NormalizedNode],
         languages: &'trees HashMap<FileId, &'static str, L>,
     ) -> Self {
@@ -58,13 +55,56 @@ impl<'trees, L: BuildHasher> DeclarationScopes<'trees, L> {
     /// top-level bindings, a class body, a whole file. Those views span
     /// genuinely different amounts of authored code, so their measured
     /// grades are comparable and the strength contest stands (#339).
-    pub(super) fn enclosing(&self, member: &Fingerprint) -> Option<ByteRange> {
-        let tree = self.trees.get(&member.file_id)?;
-        let language = self.languages.get(&member.file_id)?;
-        let kinds = function_kinds(language);
-        (!kinds.is_empty())
-            .then(|| smallest_enclosing(tree, member.byte_range, kinds))
-            .flatten()
+    pub(crate) fn enclosing(&self, member: &Fingerprint) -> Option<ByteRange> {
+        let (tree, kinds) = self.function_grammar(member)?;
+        smallest_enclosing(tree, member.byte_range, kinds)
+    }
+
+    /// The byte range of the function-like declaration whose range
+    /// **equals** the occurrence's range, when the grammar names one.
+    ///
+    /// Such an occurrence is the function the author wrote — modifier
+    /// through closing brace — rather than a window over it. Under
+    /// [PIPELINE-CLUSTER-EXACT-SCOPE] a view that is the declaration is
+    /// the enclosing authored scope, and under
+    /// [PIPELINE-CLUSTER-EXACT-SCOPE-STRADDLE] it outranks any view that
+    /// cuts through that declaration. `None` marks windows, wrappers and
+    /// whole files.
+    pub(crate) fn aligned_function(&self, member: &Fingerprint) -> Option<ByteRange> {
+        let (tree, kinds) = self.function_grammar(member)?;
+        aligned_function_at(tree, member.byte_range, kinds)
+    }
+
+    /// Whether the occurrence is a node the author wrote — its range
+    /// equals some node of the normalised tree — rather than a window
+    /// Deslop cut over a run of siblings
+    /// ([PIPELINE-CLUSTER-EXACT-SCOPE-SCRAPS]).
+    pub(crate) fn is_authored_node(&self, member: &Fingerprint) -> bool {
+        self.trees
+            .get(&member.file_id)
+            .is_some_and(|tree| node_aligned_at(tree, member.byte_range))
+    }
+
+    /// Whether the occurrence is a run of whole authored functions: its
+    /// range opens on a function-like declaration and closes on one
+    /// (the same one, for a single function), so it is an authored unit
+    /// rather than a window over parts of several
+    /// ([FUSED-SHARED-SUBTREE-ECHO]).
+    pub(crate) fn aligned_function_run(&self, member: &Fingerprint) -> bool {
+        self.function_grammar(member)
+            .is_some_and(|(tree, kinds)| function_run_bounds(tree, member.byte_range, kinds))
+    }
+
+    /// The member's normalised tree and its language's function-like
+    /// productions, or `None` when the file is unknown or the grammar
+    /// names no such production.
+    fn function_grammar(
+        &self,
+        member: &Fingerprint,
+    ) -> Option<(&'trees NormalizedNode, &'static [&'static str])> {
+        let tree = *self.trees.get(&member.file_id)?;
+        let kinds = function_kinds(self.languages.get(&member.file_id)?);
+        (!kinds.is_empty()).then_some((tree, kinds))
     }
 }
 
@@ -75,7 +115,7 @@ fn smallest_enclosing(
     range: ByteRange,
     kinds: &[&str],
 ) -> Option<ByteRange> {
-    if !strictly_encloses(node.byte_range, range) {
+    if !node.byte_range.strictly_encloses(range) {
         return None;
     }
     let deeper = node
@@ -85,9 +125,69 @@ fn smallest_enclosing(
     deeper.or_else(|| kinds.contains(&node.kind).then_some(node.byte_range))
 }
 
-/// True when `outer` covers `inner` and is wider on at least one side.
-fn strictly_encloses(outer: ByteRange, inner: ByteRange) -> bool {
-    outer.start <= inner.start
-        && inner.end <= outer.end
-        && (outer.start < inner.start || inner.end < outer.end)
+/// Whether `node` or some descendant of it has a range that **equals**
+/// `range`, whatever its kind.
+fn node_aligned_at(node: &NormalizedNode, range: ByteRange) -> bool {
+    if node.byte_range.start > range.start || node.byte_range.end < range.end {
+        return false;
+    }
+    node.byte_range == range
+        || node
+            .children
+            .iter()
+            .any(|child| node_aligned_at(child, range))
+}
+
+/// The range of the deepest descendant of `node` whose kind is in
+/// `kinds` and whose range **equals** `range`.
+fn aligned_function_at(
+    node: &NormalizedNode,
+    range: ByteRange,
+    kinds: &[&str],
+) -> Option<ByteRange> {
+    if node.byte_range.start > range.start || node.byte_range.end < range.end {
+        return None;
+    }
+    let deeper = node
+        .children
+        .iter()
+        .find_map(|child| aligned_function_at(child, range, kinds));
+    deeper.or_else(|| {
+        (kinds.contains(&node.kind) && node.byte_range == range).then_some(node.byte_range)
+    })
+}
+
+/// Whether some descendant of `node` whose kind is in `kinds` opens
+/// exactly at `range.start` inside the range, and some such descendant
+/// closes exactly at `range.end` inside it.
+fn function_run_bounds(node: &NormalizedNode, range: ByteRange, kinds: &[&str]) -> bool {
+    let mut opens = false;
+    let mut closes = false;
+    function_run_edges(node, range, kinds, &mut opens, &mut closes);
+    opens && closes
+}
+
+/// Walks the subtree recording whether a function-like node inside
+/// `range` starts on its first byte (`opens`) or ends on its last
+/// (`closes`).
+fn function_run_edges(
+    node: &NormalizedNode,
+    range: ByteRange,
+    kinds: &[&str],
+    opens: &mut bool,
+    closes: &mut bool,
+) {
+    if node.byte_range.end <= range.start || node.byte_range.start >= range.end {
+        return;
+    }
+    if kinds.contains(&node.kind) && range.covers(node.byte_range) {
+        *opens |= node.byte_range.start == range.start;
+        *closes |= node.byte_range.end == range.end;
+    }
+    if *opens && *closes {
+        return;
+    }
+    for child in &node.children {
+        function_run_edges(child, range, kinds, opens, closes);
+    }
 }

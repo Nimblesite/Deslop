@@ -13,13 +13,10 @@
 //! *chosen representative* loses that bridge the moment the bridge is
 //! not the representative, and reports one region as two.
 
-use std::collections::HashMap;
-
 use deslop_core::{
     ast::ByteRange,
     cluster::{build_ranked_fused_clusters, Cluster, ClusterBuildInputs},
     fingerprint::Fingerprint,
-    lsh::{Signature, SignatureIndex},
     pair::{FusedCluster, FusedEdge},
     state::{FileId, FileRegistry},
 };
@@ -46,22 +43,17 @@ fn member(file_id: FileId, start: usize, end: usize) -> Fingerprint {
 /// rather than the thing under test, and a divergent respelling would
 /// mean two tests disagreeing about what the stage was actually fed.
 fn ranked_with_edges(members: &[Fingerprint], edges: Vec<FusedEdge>) -> Vec<Cluster> {
-    let signatures: Vec<Signature> = members.iter().map(|_| [11_u64; 128]).collect();
-    let signature_index = SignatureIndex::from_slice(&signatures);
     let fused = [FusedCluster {
         members: (0..members.len()).collect(),
         edges,
+        shape_family: None,
     }];
-    let vectors: HashMap<usize, Vec<f32>> = HashMap::new();
     build_ranked_fused_clusters(&ClusterBuildInputs {
         fingerprints: members,
-        signatures: &signature_index,
-        embedding_vectors: &vectors,
         fused_clusters: &fused,
         trees: &[],
-        sources: &HashMap::new(),
-        file_languages: &HashMap::new(),
-        file_paths: &HashMap::new(),
+        file_languages: &std::collections::HashMap::new(),
+        file_paths: &std::collections::HashMap::new(),
     })
 }
 
@@ -85,12 +77,8 @@ fn member_ranges(cluster: &Cluster) -> Vec<(usize, usize)> {
 }
 
 /// One surviving discovery edge between two fingerprint indices.
-fn edge(left: usize, right: usize, strength: f64) -> FusedEdge {
-    FusedEdge {
-        left,
-        right,
-        strength,
-    }
+fn edge(left: usize, right: usize) -> FusedEdge {
+    FusedEdge { left, right }
 }
 
 /// The occurrence byte ranges of the single published cluster.
@@ -191,37 +179,35 @@ fn disjoint_windows_in_one_file_stay_separate_occurrences() {
     );
 }
 
-/// #339: within an overlapping run, the member carrying the strongest
-/// cross-file discovery edge represents it — width only breaks ties.
-/// A whole-file root that merely token-matched the window inside the
-/// sibling file (`0.93`) must not displace the exact window occurrence
-/// (`1.0`): promoting the root drops the published cluster's measured
-/// `structural` from 1.0 to 0.0 and hands subsumption a reason to
-/// delete the only view of the duplicate.
+/// [PIPELINE-CLUSTER-EXACT-SCOPE]: within an overlapping run the wider
+/// authored view represents it — pair edge strength never enters the
+/// selection. A whole-file root `[0,200]` and a window `[10,150]`
+/// nested in it overlap in the same file, so the collapse publishes
+/// one canonical member per file: the root, because no pair grade may
+/// choose a view ([PIPELINE-CLUSTER-CLOSURE]). Reversing which edge is
+/// stronger — or deleting the edges entirely — must not change the
+/// published view.
 #[test]
-fn the_strongest_cross_file_edge_outranks_width_in_a_run() {
+fn the_wider_member_represents_a_run_regardless_of_edge_strength() {
     let (alpha, beta) = two_files();
     let members = [
         member(alpha, 0, 200),
         member(alpha, 10, 150),
         member(beta, 10, 150),
     ];
-    let window_wins = ranked_with_edges(&members, vec![edge(0, 2, 0.93), edge(1, 2, 1.0)]);
-    let ranges: Vec<Vec<(usize, usize)>> = window_wins.iter().map(member_ranges).collect();
-    assert_eq!(
-        ranges,
-        vec![vec![(10, 150), (10, 150)]],
-        "the exactly-matched window must represent the alpha run, got {ranges:?}"
-    );
-
-    let root_wins = ranked_with_edges(&members, vec![edge(0, 2, 1.0), edge(1, 2, 0.93)]);
-    let published: Vec<(usize, usize)> = root_wins.iter().flat_map(member_ranges).collect();
-    assert_eq!(
-        published,
-        vec![(0, 200), (10, 150)],
-        "with the evidence reversed the wide member is the honest view, so the \
-         rule must be reading the edges rather than the widths, got {published:?}"
-    );
+    for edges in [
+        vec![edge(0, 2), edge(1, 2)],
+        vec![edge(1, 2), edge(0, 2)],
+        Vec::new(),
+    ] {
+        let clusters = ranked_with_edges(&members, edges);
+        let ranges: Vec<Vec<(usize, usize)>> = clusters.iter().map(member_ranges).collect();
+        assert_eq!(
+            ranges,
+            vec![vec![(0, 200), (10, 150)]],
+            "the wider root represents the alpha run whatever the edges say"
+        );
+    }
 }
 
 /// Control: a run that collapses to a single location is not a

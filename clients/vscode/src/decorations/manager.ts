@@ -18,12 +18,10 @@ import { effect } from "@preact/signals-core";
 
 import { clusterHoverMarkdown } from "../clusterHover";
 import { ReportStore } from "../reportStore";
-import { clusterSeverity, DESLOP_SEVERITY_COLOR } from "../severity";
+import { clusterSeverity, DESLOP_SEVERITIES, DeslopSeverity, DESLOP_SEVERITY_COLOR } from "../severity";
 import { sameFile } from "../pathUtils";
 import { debounce, Debounced, ScheduleFn } from "../util/debounce";
 import {
-  DESLOP_SEVERITIES,
-  DeslopSeverity,
   Report,
   ReportCluster,
   ReportOccurrence,

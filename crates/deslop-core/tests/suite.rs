@@ -1,15 +1,8 @@
-//! [CI-RELEASE-BUILD] [TEST-ONE-BINARY] The crate's whole integration
-//! suite, linked once.
+//! [CI-RELEASE-BUILD] [TEST-ONE-BINARY] The crate's whole integration suite, linked once.
 //!
-//! Cargo builds one executable per `tests/*.rs`, and each one statically
-//! links the entire workspace under the release profile. At 176 files that
-//! was 176 whole-program links per CI run — the bulk of a 20-minute compile
-//! that cancelled every Rust shard at its cap. Declaring the suites as
-//! modules of a single binary links them once instead.
+//! Cargo builds one executable per `tests/*.rs`, and each one statically links the entire workspace under the release profile. At 176 files that was 176 whole-program links per CI run — the bulk of a 20-minute compile that cancelled every Rust shard at its cap. Declaring the suites as modules of a single binary links them once instead.
 //!
-//! Each module below is a former `tests/*.rs`, unchanged apart from its
-//! `mod common;` line: the shared helpers are declared here, once, so
-//! `crate::common::…` still resolves from every suite.
+//! Each module below is a former `tests/*.rs`, unchanged apart from its `mod common;` line: the shared helpers are declared here, once, so `crate::common::…` still resolves from every suite.
 
 /// Shared fixture helpers, declared once for every suite below.
 mod common;
@@ -18,6 +11,8 @@ mod common;
 mod cluster_overlap_collapse;
 #[path = "cluster_subsumption.rs"]
 mod cluster_subsumption;
+#[path = "content_gate_rejects.rs"]
+mod content_gate_rejects;
 #[path = "cross_language_threshold.rs"]
 mod cross_language_threshold;
 #[path = "diff_render_tags.rs"]
@@ -64,6 +59,8 @@ mod live_merge_plan;
 mod live_session_status;
 #[path = "pair_admission_bounded_max.rs"]
 mod pair_admission_bounded_max;
+#[path = "pair_comparison.rs"]
+mod pair_comparison;
 #[path = "pair_evidence_merge.rs"]
 mod pair_evidence_merge;
 #[path = "refactor_ast_access.rs"]
