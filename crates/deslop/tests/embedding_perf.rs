@@ -42,6 +42,12 @@ enum Namespace {
 
 /// One scan's report plus the embedding provenance it recorded.
 struct CloneRun {
+    /// The throwaway scan root. Owned here, not by [`run_clone_corpus`],
+    /// so the corpus and report outlive the call: byte-proof assertions
+    /// read the source through [`CloneRun::corpus_root`] after the scan
+    /// returns, and a dropped [`TempDir`] would strand every read with
+    /// `os error 2`.
+    _scan_root: tempfile::TempDir,
     /// Parsed JSON report.
     report: Value,
     /// The report's `embedding_provenance` object.
@@ -235,6 +241,7 @@ fn run_clone_corpus(namespace: Namespace) -> Result<CloneRun> {
     )?;
     let provenance = embedding_provenance(tmp.path())?;
     Ok(CloneRun {
+        _scan_root: tmp,
         report,
         provenance,
         corpus_root: scan_root,

@@ -109,9 +109,9 @@ fn t2_issue_137_report_hide_visible_via_mcp_after_lsp_reanalysis() -> Result<()>
 
     let response = mcp.request(
         "tools/call",
-        &json!({"name": "top-offenders", "arguments": {"n": 5}}),
+        &json!({"name": "duplicates", "arguments": {"n": 5}}),
     )?;
-    let structured = structured_content(&response, "top-offenders")?;
+    let structured = structured_content(&response, "duplicates")?;
     let total_clusters = structured
         .get("total_clusters")
         .and_then(Value::as_u64)
@@ -172,9 +172,9 @@ fn call_report_get(mcp: &mut McpHandle) -> Result<Value> {
     let response = mcp.request(
         "tools/call",
         &json!({
-            "name": "report-get",
+            "name": "duplicates",
             "arguments": {"offset": 0, "limit": 64},
         }),
     )?;
-    structured_content(&response, "report-get")
+    structured_content(&response, "duplicates")
 }

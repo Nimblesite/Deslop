@@ -18,9 +18,7 @@
 use std::hash::BuildHasher;
 
 use crate::{
-    cluster_filters::{
-        is_noise_pattern, is_single_file_declaration_family, NoiseStage, ParseCache,
-    },
+    cluster_filters::{is_noise_pattern, is_single_file_declaration_family, ParseCache},
     report_render::{cluster_to_report, ReportSources},
 };
 
@@ -56,7 +54,6 @@ pub(crate) fn cluster_is_hidden<S: BuildHasher>(
         inputs.sources,
         inputs.file_languages,
         parse_cache,
-        NoiseStage::Render,
     )
     .is_some()
         || is_single_file_declaration_family(
