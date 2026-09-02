@@ -28,6 +28,7 @@ The one difference from main is `js-mjs-cjs-family`. Nothing else in the pipelin
 | Severity | Finding | Evidence |
 |---|---|---|
 | P0 | Two methods differing only in literals are refused within a file. | `dart-forwarding-business-pair`'s `standardTotal` and `premiumTotal` are structurally identical and differ in one string and one integer. They measure agreement 0.727 and rename consistency 0.0, so [FUSED-CONTENT-GATE] refuses them below the 0.85 same-file promote floor. The zero is by design: same-file rename evidence takes the stricter min of literal affirmation and identifier coverage, and these methods rename no identifier, so `max(agreement, rename)` collapses to agreement alone. A two-literal copy of an eleven-position method cannot reach 0.85 that way. 0.32.0 published them. The module documentation in `dart_forwarding_fail_open.rs` calls the pair liftable and says the forwarding proof must not hide it, while the test now asserts no cluster spans the file. Documentation and assertion disagree about whether the finding is real. gh #496. |
+| P0 | Four recall pins were inverted rather than answered. | In 0.32.0 `dart_forwarding_fail_open.rs` asserted `expect_visible_only(report, 2, ...)` for the business pairs, a two-occurrence cluster for each transform fixture, and `assert_single_file_cluster(cluster, 5, "Api.dart")` for the five-wrapper family. All four now assert `expect_pair_rejected_at_admission`: no cluster may span the file. `wrappers_sharing_a_body_keep_the_family_visible` still carries that name while asserting nothing is visible, and the module documentation above all four still states the positive contract. gh #497. |
 | P0 | The same band drops three more 0.32.0 findings. | `dart-forwarding-duplicate-route` (5 wrappers, one shared body — the copy-paste bug the fixture exists to catch), `dart-forwarding-transform-before-delegation`, and `csharp-merge-manyholes` (`Sprawl.cs:3-12` / `:14-23`, six `Set` calls and a `Commit`, literals only varying). Each published in 0.32.0 and publishes nothing now. Measured agreement runs 0.545 to 0.75 with rename consistency 0.0 throughout. |
 | P0 | gh #492 is a live false negative and its pin is skipped. | `csharp-merge-drift`'s two drifted methods measure overlap 0.82 with support 0.5625 and never cluster. `csharp_same_file_type3_reports_both_methods_in_one_cluster` keeps every assertion and now carries `#[ignore]`, taking the suite from four curated skips to five. A plan records debt; it does not close it. |
 
@@ -71,7 +72,8 @@ Every one of these losses is also a loss on merged main.
 ## Release gate
 
 1. Merge PR #494. It is strictly better than main and worse than it nowhere.
-2. Fix the same-file recall band: gh #496 first, since it decides whether `rename_consistency` and the 0.85 floor are right, then gh #492 on top of that answer.
-3. Restore the Dart forwarding controls to the positive contract their documentation states, or change the documentation and say why.
-4. Re-run the 206-fixture paired matrix and prove no occurrence set 0.32.0 published is missing.
-5. Full CI matrix green on the final head.
+2. Answer gh #497 first: decide whether the four Dart forwarding findings are real. Every other question in this band depends on that answer.
+3. Then gh #496, whether a same-file pair varying only literals should clear 0.85 on positional agreement alone, and gh #492 on top of it.
+4. Restore the Dart forwarding controls to the positive contract their documentation and names state, or change both and say why.
+5. Re-run the 206-fixture paired matrix and prove no occurrence set 0.32.0 published is missing.
+6. Full CI matrix green on the final head.
