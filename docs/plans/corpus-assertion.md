@@ -98,7 +98,7 @@ The target state: **every repository, every run, asserts every row below.** Ids 
 | `type2_recall` | curated renames reported, shown, at the curated `min_nodes` extent and within `max_rank` | `must_find_type2` | ✅ (no evidence clause — gh #488) |
 | `precision` | curated non-duplicates never share a cluster | `must_not_cluster` | ❌ missing (L4) |
 | `boilerplate_rank` | framework-mandated shapes never rank first | `must_not_rank_first` | 🛑 unsound (L3) |
-| `data_table_visibility` | curated data-table shapes follow the configured detection-time visibility rule without changing survivor mass | none | ✅ |
+| `data_table_rank` | a table of literals - judged from the AST, never from source text - never reaches the ranked head | none | ✅ |
 | `fused_bounded_max` | the pair admission score never exceeds the strongest axis | none | ✅ |
 | `type2_gate_liveness` | each curated endpoint pair carries the required content support and admission result in its explicit pair record | none | ✅ |
 | `determinism` | two runs on an unchanged tree agree exactly | none | 🟡 2 of 9 (L6) |

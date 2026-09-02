@@ -55,14 +55,16 @@ use anyhow::{anyhow, Result};
 use deslop_test_support::{
     corpus::{
         array, baseline_mode, classify, clone_dir, cluster_paths, field_u64, first_occurrence_text,
-        manifest, scan, string_field, u64_field, Baseline, CorpusRun, Failure,
+        manifest, scan, string_field, u64_field, visible_clusters, Baseline, CorpusRun, Failure,
     },
     corpus_confidence::{
         check_cluster_mass_contract, check_curated_recall, check_type2_curated_recall,
     },
+    corpus_data_table::occurrence_is_a_literal_table,
     corpus_determinism::check_reports_agree,
     corpus_precision::{check_boilerplate_not_ranked_first, check_curated_precision},
     corpus_scope::check_scan_scope,
+    enclosure::Span,
 };
 use serde_json::Value;
 
@@ -261,7 +263,7 @@ fn gate(name: &str) -> Result<()> {
     check_curated_recall(&manifest, &run.report, &mut failures);
     check_curated_precision(&manifest, &run.report, &mut failures);
     check_boilerplate_not_ranked_first(&manifest, &root, &run, &mut failures)?;
-    check_data_tables_not_ranked_as_logic(&root, &run, &mut failures)?;
+    check_data_tables_not_ranked_as_logic(&manifest, &root, &run, &mut failures)?;
     // [CORPUS-BASELINE] The confidence checks. The first reads no
     // manifest — it judges the *shape* of the rendered report, so it runs
     // on every repository including the ones whose recall is not yet
@@ -334,70 +336,47 @@ fn warn_when_accuracy_unasserted(name: &str, manifest: &Value) {
 /// where a false positive does the most damage.
 const RANKED_HEAD: usize = 10;
 
-/// Fraction of non-whitespace characters that must be digits or data
-/// punctuation before a snippet counts as a data table rather than logic.
-/// Real logic carries identifiers and keywords, so it lands far below this.
-const DATA_TABLE_RATIO: f64 = 0.6;
-
-/// [CORPUS-PRECISION] Language-agnostic: a top-ranked cluster that is essentially a
-/// numeric table must not be classified `logic`. `CloneCategory::data`
-/// exists so such clusters can be demoted; when the classifier does not cover
-/// a language they arrive at full logic weight and outrank real clones.
+/// [CORPUS-PRECISION] A table of literals must not reach the ranked head.
+///
+/// A repeated data structure is not extractable logic — no shared control
+/// flow, nothing to hoist — so the engine's noise filters drop it
+/// ([CLONE-NOISE-CONSTANT-TABLE], [CLONE-NOISE-DART-DATA-TABLE-LITERAL]).
+/// One still visible in the head means a filter missed it, and it is
+/// outranking real clones.
+///
+/// The `category != "data"` clause this carried is gone. The mass-only
+/// wire forbids `category` on a cluster, so the field was always absent,
+/// the comparison was always true, and the demotion half of the assertion
+/// had quietly stopped asserting anything (gh #452).
 fn check_data_tables_not_ranked_as_logic(
+    manifest: &Value,
     root: &Path,
     run: &CorpusRun,
     failures: &mut Vec<Failure>,
 ) -> Result<()> {
-    for (rank, cluster) in array(&run.report, "clusters")
-        .iter()
+    let language = string_field(manifest, "language")?;
+    for (position, cluster) in visible_clusters(&run.report)
+        .into_iter()
         .take(RANKED_HEAD)
         .enumerate()
     {
         let text = first_occurrence_text(root, cluster)?;
-        let ratio = data_character_ratio(&text);
-        let category = cluster
-            .get("category")
-            .and_then(Value::as_str)
-            .unwrap_or("absent");
-        if ratio >= DATA_TABLE_RATIO && category != "data" {
+        let span = Span::new("", 0, u64::try_from(text.len()).unwrap_or(0));
+        if occurrence_is_a_literal_table(language, &text, &span)? {
             failures.push(Failure::new(
                 "data_table_rank",
                 format!(
-                    "rank {rank}: cluster of {} occurrences is {:.0}% numeric/separator \
-                     characters — a data table — but is categorised `{category}`, so it ranks \
-                     at full logic weight. Snippet: {}",
+                    "rank {}: cluster of {} occurrences is a table of literals, not \
+                     extractable logic, yet it is visible in the ranked head — a noise \
+                     filter missed it and it outranks real clones. Snippet: {}",
+                    position.saturating_add(1),
                     field_u64(cluster, "size"),
-                    ratio * 100.0,
                     text.chars().take(70).collect::<String>().replace('\n', " "),
                 ),
             ));
         }
     }
     Ok(())
-}
-
-/// Fraction of non-whitespace characters that are digits or the punctuation
-/// that separates literals in a table.
-fn data_character_ratio(text: &str) -> f64 {
-    let significant = || text.chars().filter(|character| !character.is_whitespace());
-    let total = significant().count();
-    if total == 0 {
-        return 0.0;
-    }
-    let data = significant()
-        .filter(|character| is_data_character(*character))
-        .count();
-    as_f64(data) / as_f64(total)
-}
-
-/// True for digits and the punctuation that separates literals in a table.
-fn is_data_character(character: char) -> bool {
-    character.is_ascii_digit() || matches!(character, ';' | ',' | '|' | '[' | ']' | '.' | '-')
-}
-
-/// Widens a count to `f64`, saturating rather than wrapping.
-fn as_f64(count: usize) -> f64 {
-    u32::try_from(count).map_or(f64::from(u32::MAX), f64::from)
 }
 
 /// [CORPUS-CEILINGS] The scan must finish inside the manifest's wall-clock and memory
