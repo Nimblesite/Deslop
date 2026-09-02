@@ -879,7 +879,7 @@ suite("command dispatch wiring", () => {
     assert.deepEqual(
       orphan,
       [],
-      `bindings without a package.json contribution are unreachable: ${orphan}`,
+      `bindings without a package.json contribution are unreachable: ${orphan.join(", ")}`,
     );
     // The reverse direction: whatever activation registers beyond the
     // table must be exactly the status-bar/title-bar pair owned by
@@ -900,7 +900,9 @@ suite("command dispatch wiring", () => {
       store: seededStore([]),
       clientOf: (): LanguageClient | undefined => {
         clientCalls += 1;
-        return { sendRequest: async () => "# refreshed" } as unknown as LanguageClient;
+        return {
+          sendRequest: () => Promise.resolve("# refreshed"),
+        } as unknown as LanguageClient;
       },
     };
     const refresh = COMMAND_BINDINGS.find((b) => b.id === REFRESH_REPORT_COMMAND);

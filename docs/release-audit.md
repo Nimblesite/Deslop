@@ -41,7 +41,7 @@ All seven pass on merged main and failed on the branch. Narrowing the route to d
 |---|---:|---:|---|
 | Fixtures named for the false positive they hold — prologue, dissimilar functions, unrelated xUnit classes, shape-only pairs, lookalikes | 10 | 36 | 0.32.0 published shape alone; [FUSED-CONTENT-GATE] demands content |
 | Sub-statement noise — a cluster whose every occurrence is one line | — | 49 | one line repeated is not extract-worthy duplication |
-| Same-file near-misses | 18 | 29 | the gh #492 gap above, open in 0.32.0 as well: it published fragments of those methods, never the methods |
+| Same-file near-misses | 18 | 29 | the gh #492 gap above. Named: `csharp-merge-drift`, `-manyholes`, `-readafter`, `-operatordrift`, `-typeconflict`, `-writtencontext`, `-writtenhole`, the three `dart-forwarding-*` pairs, `csharp-mixed-declaration-component`, `csharp-nonbijective-pair`, `csharp-type4`. In 0.32.0 most published as fragments of those methods rather than the methods; the `dart-forwarding-*` and `csharp-merge-manyholes` pairs it published whole, and the pins that now assert their absence (`dart_forwarding_fail_open`, which requires the content gate rather than the forwarding proof to be what refuses them) were written for that decision in PR #485 |
 | Fixtures with their own pins | 25 | 51 | each is asserted by a test in the suite, and the suite is green |
 
 Every one of these losses is also a loss on merged main. They were decided by PR #485 and re-checked here, not introduced by this branch.
@@ -58,3 +58,7 @@ Every one of these losses is also a loss on merged main. They were decided by PR
 1. CI green on PR #494.
 2. Paired 0.32.0 scan loses no finding a test asserts. **Met**, and recorded above.
 3. Curated skips carry an issue, a plan and a registry row. **Met**.
+
+## What this release does not fix
+
+gh #492 is open. `csharp-merge-drift` reports the statement fragments its two drifted methods share, not the methods, and its pin is `#[ignore]`d with every assertion intact. That is the same finding 0.32.0 produced, so the release loses nothing, but it is a false negative and the plan above is how it ends. Anyone reading this as "#492 fixed" is reading it wrong.
