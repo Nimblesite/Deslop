@@ -147,6 +147,11 @@ impl PipelineSession {
             pairs.len(),
             stage_started,
         );
+        // [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY] The shape family: every
+        // member the saturated candidates connect *before* the content
+        // gate decides which edges weld. Noise conviction reads this
+        // family; admission below still decides the clusters.
+        let shape_families = cluster_by_transitive_closure(&pairs);
         let content_input = pairs.len();
         let stage_started = Instant::now();
         apply_pair_content_gate(
@@ -185,6 +190,7 @@ impl PipelineSession {
         let stage_started = Instant::now();
         let noise_input = fused_clusters.len();
         let fused_clusters = split_noise_verbatim_families(
+            &shape_families,
             &fused_clusters,
             fingerprints,
             &self.sources,

@@ -75,14 +75,17 @@ const MIN_FAMILY_OCCURRENCES: usize = 2;
 /// changes nothing: results are written back at their input position
 /// and the noise counters are additive.
 pub(crate) fn split_noise_verbatim_families<S: BuildHasher + Sync>(
-    fused_clusters: &[FusedCluster],
+    shape_families: &[FusedCluster],
+    admitted: &[FusedCluster],
     fingerprints: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
 ) -> Vec<FusedCluster> {
+    let admitted_by_family = group_admitted_by_family(shape_families, admitted);
     let inputs = SplitInputs {
-        fused_clusters,
+        fused_clusters: shape_families,
+        admitted_by_family: &admitted_by_family,
         fingerprints,
         sources,
         file_languages,
@@ -109,15 +112,57 @@ fn decide_every_cluster<S: BuildHasher + Sync>(
     } else {
         split_across_workers(&order, inputs, cache, &mut slots);
     }
+    slots.push(
+        inputs
+            .admitted_by_family
+            .get(inputs.fused_clusters.len())
+            .cloned(),
+    );
     slots
+}
+
+/// [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY] The admitted components
+/// inside each shape family, at the family's input position.
+///
+/// Every admitted pair is a pre-gate pair, so each admitted component
+/// lies inside exactly one shape family; a component that resolves to
+/// none (it cannot, but the type allows it) is carried untouched at the
+/// end so nothing admitted is ever dropped by bookkeeping.
+fn group_admitted_by_family(
+    shape_families: &[FusedCluster],
+    admitted: &[FusedCluster],
+) -> Vec<Vec<FusedCluster>> {
+    let family_of: HashMap<usize, usize> = shape_families
+        .iter()
+        .enumerate()
+        .flat_map(|(family, shape)| shape.members.iter().map(move |member| (*member, family)))
+        .collect();
+    let mut grouped: Vec<Vec<FusedCluster>> = shape_families.iter().map(|_| Vec::new()).collect();
+    let mut orphans = Vec::new();
+    for component in admitted {
+        match component
+            .members
+            .first()
+            .and_then(|member| family_of.get(member))
+            .and_then(|family| grouped.get_mut(*family))
+        {
+            Some(slot) => slot.push(component.clone()),
+            None => orphans.push(component.clone()),
+        }
+    }
+    grouped.push(orphans);
+    grouped
 }
 
 /// The corpus every cluster's decision reads, gathered so a worker
 /// carries one reference instead of four.
 #[derive(Clone, Copy)]
 struct SplitInputs<'corpus, S: BuildHasher> {
-    /// Clusters to decide, in input order.
+    /// Shape families to decide, in input order.
     fused_clusters: &'corpus [FusedCluster],
+    /// The admitted components inside each shape family, plus a final
+    /// slot for any that resolved to none.
+    admitted_by_family: &'corpus [Vec<FusedCluster>],
     /// Fingerprints every member index resolves against.
     fingerprints: &'corpus [Fingerprint],
     /// Source bytes, for the byte-identical family grouping.
@@ -223,15 +268,19 @@ fn decide<S: BuildHasher>(
     inputs: &SplitInputs<'_, S>,
     cache: &ParseCache,
 ) -> Option<(usize, Vec<FusedCluster>)> {
-    let fused = inputs.fused_clusters.get(index)?.clone();
-    let replacement = split_one(
-        &fused,
-        inputs.fingerprints,
-        inputs.sources,
-        inputs.file_languages,
-        cache,
-    );
-    Some((index, replacement.unwrap_or_else(|| vec![fused])))
+    let shape = inputs.fused_clusters.get(index)?;
+    let admitted = inputs.admitted_by_family.get(index)?;
+    Some((
+        index,
+        split_one(
+            shape,
+            admitted,
+            inputs.fingerprints,
+            inputs.sources,
+            inputs.file_languages,
+            cache,
+        ),
+    ))
 }
 
 /// Fewest clusters worth sharding the split at all — below this the
@@ -307,64 +356,47 @@ impl Progress {
 /// per-run log stays small ([PERF-FLUTTER-TODO-OBSERVABILITY]).
 const NOISE_PROGRESS_INTERVAL: usize = 5_000;
 
-/// The replacement clusters for one component, or `None` to keep it as
-/// it is. `None` covers every cheap case first — a component with no
-/// mixed verbatim family needs no re-parse at all — so the noise
-/// filters only run on the components a split could actually change
-/// ([CLONE-NOISE-REPARSE-CACHE]).
+/// [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY] The clusters one shape family
+/// contributes to the report.
+///
+/// A family no filter convicts hands on its admitted components
+/// untouched. A convicted family is replaced by its qualifying
+/// byte-identical copies ([`is_copied_family`]); when it holds none, its
+/// admitted components are handed on carrying the conviction, so the
+/// report hides them and counts them as suppressed instead of judging
+/// each fragment on its own — a fragment of an idiom, seen alone, is
+/// not the idiom, which is exactly how the fragments used to escape.
 fn split_one<S: BuildHasher>(
-    fused: &FusedCluster,
+    shape: &FusedCluster,
+    admitted: &[FusedCluster],
     fingerprints: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
-) -> Option<Vec<FusedCluster>> {
-    let families = splittable_families(fused, fingerprints, sources)?;
-    let members = resolved_members(fused, fingerprints)?;
-    // [CLONE-NOISE-VERBATIM-SUBGROUP]: a component the noise filters
-    // do not suppress is handed on untouched — no split, no member
-    // dropped, no panic. The pairwise admission that built the
-    // closure decides its fate
-    // ([FUSED-STRATEGY-BOUNDED-MAX] step 4).
-    let filter = is_noise_pattern(&members, sources, file_languages, cache)?;
-    let keepable: Vec<&Vec<usize>> = families
-        .iter()
+) -> Vec<FusedCluster> {
+    let Some(members) = resolved_members(shape, fingerprints) else {
+        return admitted.to_vec();
+    };
+    let Some(filter) = is_noise_pattern(&members, sources, file_languages, cache) else {
+        return admitted.to_vec();
+    };
+    let keepable: Vec<Vec<usize>> = verbatim_families(&shape.members, fingerprints, sources)
+        .into_iter()
         .filter(|family| is_copied_family(family, fingerprints, filter))
         .collect();
-    // No family the hatch protects: the component keeps its own shape and
-    // takes the suppression whole, downstream, exactly as it always did.
-    // Emitting an empty run here would drop it before the report could
-    // count it as hidden.
-    (!keepable.is_empty()).then(|| {
-        keepable
+    if keepable.is_empty() {
+        return admitted
             .iter()
-            .map(|family| restrict(fused, family))
-            .collect()
-    })
-}
-
-/// The byte-identical families in `fused` a split could act on, or
-/// `None` when no split could change the component — it holds no family
-/// of two or more *distinct occurrences*, or the one it holds already
-/// *is* the whole component.
-///
-/// Answered from the corpus alone, before any re-parse, so the noise
-/// filters only ever run on a component a split could actually change
-/// ([CLONE-NOISE-REPARSE-CACHE]). Whether a family is a *copy* is a
-/// second question, asked in [`is_copied_family`] once the filter that
-/// recognised the component is known.
-fn splittable_families(
-    fused: &FusedCluster,
-    fingerprints: &[Fingerprint],
-    sources: &HashMap<FileId, Vec<u8>>,
-) -> Option<Vec<Vec<usize>>> {
-    let families: Vec<Vec<usize>> = verbatim_families(&fused.members, fingerprints, sources)
-        .into_iter()
-        .filter(|family| distinct_locations(family, fingerprints) >= MIN_FAMILY_OCCURRENCES)
-        .collect();
-    let covered: usize = families.iter().map(Vec::len).sum();
-    let already_whole = families.len() == 1 && covered == fused.members.len();
-    (!families.is_empty() && !already_whole).then_some(families)
+            .map(|component| FusedCluster {
+                convicted: true,
+                ..component.clone()
+            })
+            .collect();
+    }
+    keepable
+        .iter()
+        .map(|family| restrict(shape, family))
+        .collect()
 }
 
 /// Every member's fingerprint, or `None` when one of them does not

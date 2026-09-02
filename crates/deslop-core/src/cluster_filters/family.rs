@@ -72,5 +72,6 @@ pub(super) fn restrict(fused: &FusedCluster, family: &[usize]) -> FusedCluster {
     FusedCluster {
         members: family.to_vec(),
         edges,
+        convicted: fused.convicted,
     }
 }

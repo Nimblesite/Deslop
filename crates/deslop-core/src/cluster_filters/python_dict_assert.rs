@@ -79,7 +79,7 @@ use tree_sitter::Node;
 
 use super::{
     is_multi_member_language_cluster, node_intersects_range, parse_for,
-    python::python_function_name_starts_with, raw_snippet_texts_differ,
+    python::python_function_name_starts_with, raw_snippet_texts_differ, spans_multiple_files,
     trimmed_snippet_range, Snippet,
 };
 use crate::ast::{named_children, ByteRange};
@@ -95,7 +95,8 @@ pub(super) fn is_chained_dict_assert_cluster(snippets: &[Snippet<'_>]) -> bool {
     if !is_multi_member_language_cluster(snippets, "python") {
         return false;
     }
-    raw_snippet_texts_differ(snippets)
+    spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id))
+        && raw_snippet_texts_differ(snippets)
         && snippets.iter().all(is_chained_dict_assert_snippet)
 }
 

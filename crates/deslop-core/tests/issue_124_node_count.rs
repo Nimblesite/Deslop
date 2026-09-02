@@ -30,10 +30,12 @@ fn rank_mass_orders_by_extent_times_additional_occurrences() -> Result<(), &'sta
         FusedCluster {
             members: vec![0, 1],
             edges: Vec::new(),
+            convicted: false,
         },
         FusedCluster {
             members: vec![2, 3],
             edges: Vec::new(),
+            convicted: false,
         },
     ];
     let clusters = build_ranked_fused_clusters(&ClusterBuildInputs {

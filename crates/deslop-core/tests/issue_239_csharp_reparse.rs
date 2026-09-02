@@ -161,6 +161,7 @@ fn cluster_over(id: &str, members: &[(deslop_core::state::FileId, ByteRange)]) -
         mass: u64::try_from(120_usize)
             .unwrap_or(u64::MAX)
             .saturating_mul(u64::try_from(members.len().saturating_sub(1)).unwrap_or(u64::MAX)),
+        convicted: false,
     }
 }
 

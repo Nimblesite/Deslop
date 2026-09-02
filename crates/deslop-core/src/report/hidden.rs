@@ -32,6 +32,8 @@ use super::{ReportCluster, ReportInputs};
 /// re-parse checks below, so those are skipped. Without this a large
 /// generated file is re-walked once per cluster only to be hidden anyway
 /// ([CLONE-NOISE-REPARSE-CACHE]). The remaining rules:
+/// - a conviction carried from the shape family the cluster was
+///   admitted out of ([CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY]);
 /// - the recognised noise families of [CLONE-NOISE-*] — struct-field
 ///   runs, match-dispatch tables, signature-only matches, literal
 ///   variation calls, constant tables, generated-suffix scaffolds and
@@ -49,13 +51,14 @@ pub(crate) fn cluster_is_hidden<S: BuildHasher>(
     if occurrences_all_hidden {
         return true;
     }
-    is_noise_pattern(
-        &cluster.members,
-        inputs.sources,
-        inputs.file_languages,
-        parse_cache,
-    )
-    .is_some()
+    cluster.convicted
+        || is_noise_pattern(
+            &cluster.members,
+            inputs.sources,
+            inputs.file_languages,
+            parse_cache,
+        )
+        .is_some()
         || is_single_file_declaration_family(
             cluster,
             inputs.sources,

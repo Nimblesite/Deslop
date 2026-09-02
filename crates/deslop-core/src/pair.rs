@@ -254,6 +254,11 @@ pub struct FusedCluster {
     pub members: Vec<usize>,
     /// The surviving candidate-pair edges inside this component.
     pub edges: Vec<FusedEdge>,
+    /// A noise filter convicted the shape family this component belongs
+    /// to and no byte-identical family protected it
+    /// ([CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY]): the report hides it
+    /// and counts it as suppressed.
+    pub convicted: bool,
 }
 
 /// One surviving discovery edge inside a [`FusedCluster`]: the two
