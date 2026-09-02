@@ -91,13 +91,19 @@ impl ExactFunctionAnchors {
     }
 
     /// The most nodes any exact whole-function clone enclosed by both
-    /// `left` and `right` claims, or `None` when the pair wraps none.
+    /// `left` and `right` claims, or `None` when the pair wraps none. A
+    /// pair is never its own anchor: only a clone strictly narrower on at
+    /// least one side is something the pair could merely wrap.
     pub(crate) fn claimed_nodes(&self, left: &Fingerprint, right: &Fingerprint) -> Option<usize> {
         let (key, first, second) = ordered(left, right);
         self.by_files
             .get(&key)?
             .iter()
-            .filter(|exact| first.covers(exact.first) && second.covers(exact.second))
+            .filter(|exact| {
+                first.covers(exact.first)
+                    && second.covers(exact.second)
+                    && (first != exact.first || second != exact.second)
+            })
             .map(|exact| exact.nodes)
             .max()
     }

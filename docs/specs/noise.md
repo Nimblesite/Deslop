@@ -10,6 +10,18 @@ Loosening the predicate alone would trade the false negative for a false positiv
 
 A component the filters do **not** suppress is handed on untouched, so a consistently-renamed three-way clone stays one three-way clone. **The contract is exhaustive.** A component a filter convicts is replaced by one cluster per qualifying byte-identical family it holds, and the members outside those families are dropped; a component no filter convicts is handed on untouched — it is never split, silently dropped, or panicked. The split exists only to protect a byte-identical family from a suppression that would eat it; it is never unconditional, and no generic fallback may classify an unrecognised component as suppressible or splittable. This is the post-closure suppression stage; admission and closure formation are governed by [FUSED-STRATEGY-BOUNDED-MAX] step 4, which acts earlier and is unchanged. Implemented in `cluster_filters/verbatim_subgroup.rs`, pinned by `crates/deslop/tests/verbatim_subgroup_survives_noise.rs` and `crates/deslop/tests/verbatim_family_survives_stranger.rs`.
 
+#### [CLONE-NOISE-VERBATIM-SUBGROUP-FAMILY] Conviction reads the shape family, admission decides the clusters
+
+The filters recognise an idiom by looking at every member that shares its shape. The content gate ([FUSED-CONTENT-GATE]) rejects most of the pairs inside such an idiom — the literals differ, that is what makes it scaffolding — so the admitted components are fragments of the family: two byte-identical sub-expressions in one test file, one pair of sibling `test(...)` blocks that happen to share a message. Seen alone, a fragment is not the idiom, and every one of them escaped as a visible cluster while the family it was cut from would have been convicted whole.
+
+So the two questions are asked of two different things. **Conviction** reads the *shape family*: the connected component over every candidate pair that cleared the shape and token floors before the content gate ran. **Admission** still decides what welds: the clusters handed on are the components of the gate-passed pairs, exactly as before. For each shape family:
+
+- no filter convicts it — its admitted components are handed on untouched;
+- a filter convicts it and it holds a qualifying byte-identical copy — the copy is published as its own cluster, everything else in the family is dropped, as the escape hatch above requires;
+- a filter convicts it and it holds no such copy — its admitted components are handed on carrying the conviction, so the report hides them and counts them as suppressed.
+
+Nothing here admits a pair the gate rejected, and no component is invented: a shape family with no admitted component contributes nothing. Implemented in `pipeline/session/render.rs` (the pre-gate closure) and `cluster_filters/verbatim_subgroup.rs`; pinned by `python_issue_107_chained_dict_assert` and `verbatim_subgroup_idiom_price`.
+
 #### [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE] A verbatim family must be a copy, and usually a copy spans files
 
 Two failure modes were measured against this pass (gh #434). On `python-issue-72` the filter fired and an **intra-file** byte-identical core of the very family it recognised escaped as a visible component — scaffolding passing through the hatch built to protect copies and counting its 15 lines in `duplicated_loc`. The arbitration: **a byte-identical family escapes suppression only when its occurrences span at least two files** — except where the filter that recognised it only ever sees one file, which [CLONE-NOISE-VERBATIM-SUBGROUP-CROSS-FILE-SAME-LITERAL] below carves out.

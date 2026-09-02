@@ -46,20 +46,39 @@ const TYPE2_RENAMES: [(&str, &str); 6] = [
 /// The two Type-1 fixture files the cluster must span, sorted.
 const TYPE1_FILES: [&str; 2] = ["Eta.cs", "Zeta.cs"];
 
+/// The authored wrapper renames between the two Type-1 files —
+/// namespace and class identifiers only. The method region carries NO
+/// renames: that absence is what makes the copy Type-1.
+const TYPE1_WRAPPER_RENAMES: [(&str, &str); 2] = [("Eta", "Zeta"), ("Beacon", "Anchor")];
+
 /// The two Type-2 fixture files the cluster must span, sorted.
 const TYPE2_FILES: [&str; 2] = ["Alpha.cs", "Beta.cs"];
 
-/// Applies the authored Type-2 renames, in order.
-fn apply_type2_renames(text: &str) -> String {
-    let mut renamed = text.to_owned();
-    for (from, to) in TYPE2_RENAMES {
+/// Applies an authored rename mapping, in order.
+fn apply_renames(text: &str, renames: &[(&str, &str)]) -> String {
+    let mut mapped = text.to_owned();
+    for (from, to) in renames {
         assert!(
-            renamed.contains(from),
-            "rename source {from:?} must occur in the Type-2 body: {renamed}"
+            mapped.contains(from),
+            "rename source {from:?} must occur in the window: {mapped}"
         );
-        renamed = renamed.replace(from, to);
+        mapped = mapped.replace(from, to);
     }
-    renamed
+    mapped
+}
+
+/// The report window's method region: everything from the authored
+/// signature anchor through the authored tail statement. Both copies
+/// are cut at the same anchors, so region equality is a byte fact
+/// about the duplicated code — no re-parsing of the source.
+fn method_region(window: &str) -> Result<String> {
+    let (_, after_signature) = window
+        .split_once(TALLY_SIGNATURE)
+        .ok_or_else(|| anyhow!("window must carry the Tally signature: {window:?}"))?;
+    let (body, _) = after_signature
+        .split_once(TALLY_BODY_TAIL)
+        .ok_or_else(|| anyhow!("window must carry the method tail: {window:?}"))?;
+    Ok(format!("{TALLY_SIGNATURE}{body}{TALLY_BODY_TAIL}"))
 }
 
 /// Asserts the cluster reports exactly the fixture's two copies, once
@@ -106,7 +125,7 @@ fn assert_type2_rename_relation(type2_scan: &Path, type2_report: &Value) -> Resu
         "Type-2 bodies must differ in raw bytes: {run_text:?} vs {compute_text:?}"
     );
     assert_eq!(
-        apply_type2_renames(run_text),
+        apply_renames(run_text, &TYPE2_RENAMES),
         compute_text.as_str(),
         "the Type-2 bodies must differ by exactly the authored identifier \
          renames: {run_text:?} vs {compute_text:?}",
@@ -115,7 +134,9 @@ fn assert_type2_rename_relation(type2_scan: &Path, type2_report: &Value) -> Resu
 }
 
 /// Asserts every Type-1 occurrence range slices to the SAME method
-/// bytes — the strongest byte fact for a genuine byte-identical copy.
+/// bytes — the strongest byte fact for a genuine byte-identical copy —
+/// and that the windows relate by exactly the authored wrapper
+/// renames, so the divergence is namespace/class identifiers only.
 fn assert_type1_byte_equal(type1_scan: &Path, type1_report: &Value) -> Result<()> {
     let cluster = clusters(type1_report)
         .first()
@@ -124,14 +145,21 @@ fn assert_type1_byte_equal(type1_scan: &Path, type1_report: &Value) -> Result<()
     let first = texts
         .first()
         .ok_or_else(|| anyhow!("the Type-1 cluster must report occurrences: {cluster:#}"))?;
+    let first_region = method_region(first)?;
     assert!(
-        first.contains(TALLY_SIGNATURE) && first.contains(TALLY_BODY_TAIL),
+        !first_region.is_empty(),
         "the reported Type-1 range must cover the whole method body: {first:?}",
     );
     for text in texts.iter().skip(1) {
         assert_eq!(
-            first, text,
+            first_region,
+            method_region(text)?,
             "Type-1 occurrence ranges must slice to byte-identical methods: {texts:#?}",
+        );
+        assert_eq!(
+            apply_renames(first, &TYPE1_WRAPPER_RENAMES),
+            *text,
+            "the Type-1 windows must differ by exactly the authored wrapper              renames: {first:?} vs {text:?}",
         );
     }
     Ok(())
