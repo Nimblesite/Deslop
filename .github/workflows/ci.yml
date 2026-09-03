@@ -601,7 +601,7 @@ jobs:
       # rule is unenforced on the one platform that can break it.
       - name: Run Windows tests with coverage collection
         env:
-          WINDOWS_SUITE_FILTERS: location_rendering:: defaults:: diff_ingest_refusals:: diff_scoped_ingest:: diff_scoped_reporting:: report_golden:: metrics_folder_rollup::
+          WINDOWS_SUITE_FILTERS: "location_rendering:: defaults:: diff_ingest_refusals:: diff_scoped_ingest:: diff_scoped_reporting:: report_golden:: metrics_folder_rollup::"
         run: |
           $coverageEnv = cargo llvm-cov show-env --cmd
           foreach ($line in $coverageEnv) {
