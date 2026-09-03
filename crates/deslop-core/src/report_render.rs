@@ -180,11 +180,12 @@ fn occurrence<S: BuildHasher>(
     }
 }
 
-/// Renders `absolute` relative to `scan_root` when it lies inside.
+/// Renders `absolute` relative to `scan_root` when it lies inside, and
+/// spells the result for publication ([OUTPUT-SCHEMA-PATH-SEPARATOR]).
+/// Every path the report carries — occurrence, per-file metric,
+/// boilerplate hint — is built here, so the spelling is decided once.
 pub(crate) fn relative_to_scan_root(absolute: &Path, scan_root: &Path) -> PathBuf {
-    absolute
-        .strip_prefix(scan_root)
-        .map_or_else(|_| absolute.to_path_buf(), Path::to_path_buf)
+    crate::paths::reported(absolute.strip_prefix(scan_root).unwrap_or(absolute))
 }
 
 /// Resolves the report path for `file_id`.

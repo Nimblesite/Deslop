@@ -559,7 +559,14 @@ jobs:
     needs: [changes, lint]
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
-    timeout-minutes: 30
+    # TIMEOUT EXCEPTION: this job builds the `deslop` E2E suite under llvm-cov
+    # instrumentation on top of the LSP binary and the MCP transport target.
+    # A cold Windows build of that set runs past the old 30-minute cap on its
+    # own, before a single assertion has been evaluated. The alternative —
+    # dropping the path-spelling guards below — would leave the one rule only
+    # this platform can break unenforced, which is what the cap would be
+    # buying.
+    timeout-minutes: 50
     env:
       CARGO_TARGET_DIR: target/windows-llvm-cov
     steps:
@@ -593,7 +600,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
+      # [OUTPUT-SCHEMA-PATH-SEPARATOR] Every filter below names a suite whose
+      # assertions compare a rendered path against the `/` spelling the output
+      # contract mandates. They pass on Linux whatever the renderer does,
+      # because there the host joiner *is* the published one — so this job is
+      # the only place a host-spelled path can be caught, and without it the
+      # rule is unenforced on the one platform that can break it.
       - name: Run Windows tests with coverage collection
+        env:
+          WINDOWS_SUITE_FILTERS: "location_rendering:: defaults:: diff_ingest_refusals:: diff_scoped_ingest:: diff_scoped_reporting:: report_golden:: metrics_folder_rollup::"
         run: |
           $coverageEnv = cargo llvm-cov show-env --cmd
           foreach ($line in $coverageEnv) {
@@ -604,6 +619,10 @@ jobs:
           cargo build --release -p deslop-lsp --bin deslop-lsp
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --release -p deslop-mcp --test tcp_transport --features deslop-core/live
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --release -p deslop-core --lib paths::
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --release -p deslop --test suite -- $env:WINDOWS_SUITE_FILTERS.Split(" ")
 
       # The Windows lcov is calculated HERE, not in the coverage job:
       # the instrumented PE/PDB binaries can only be read by a Windows

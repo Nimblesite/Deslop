@@ -20,6 +20,7 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use assert_cmd::cargo::cargo_bin;
+use deslop_core::live::transport::endpoint_path;
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
@@ -357,20 +358,29 @@ fn read_lsp_frame(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
     deslop_test_support::read_lsp_frame(reader)
 }
 
-/// Polls until `<root>/.deslop/cache/deslop.sock` exists. Failure
-/// after 30 s is fatal — the LSP is meant to bind within seconds.
+/// Polls until the companion LSP has published the IPC endpoint this
+/// platform binds ([LIVE-IPC-SOCKET], [LIVE-IPC-TCP]). Failure after
+/// 30 s is fatal — the LSP is meant to bind within seconds.
+///
+/// Which artefact appears is the platform's choice, not the test's:
+/// Windows has no Unix-domain sockets and binds TCP loopback with a
+/// discovery record instead, so a poll hard-coded to `deslop.sock`
+/// there waits out the whole timeout against a server that bound
+/// correctly seconds earlier. The mode comes from the engine rather
+/// than from a `cfg` here, so the test cannot disagree with the code
+/// about which transport is in use.
 fn wait_for_socket(root: &Path) -> Result<()> {
-    let socket = root.join(".deslop/cache").join("deslop.sock");
+    let endpoint = endpoint_path(root);
     let started = std::time::Instant::now();
     while started.elapsed() < Duration::from_secs(PROCESS_TIMEOUT_SECS) {
-        if socket.exists() {
+        if endpoint.exists() {
             return Ok(());
         }
         std::thread::sleep(Duration::from_millis(POLL_INTERVAL_MILLIS));
     }
     Err(anyhow!(
-        "companion LSP did not bind {} within 30s",
-        socket.display()
+        "companion LSP did not publish {} within 30s",
+        endpoint.display()
     ))
 }
 
