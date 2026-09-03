@@ -160,9 +160,10 @@ fn corpus_fsharp() -> Result<()> {
 #[test]
 #[ignore = "[SKIP-TOO-LARGE-FOR-CI] GH #422 [CORPUS-PIN] [CORPUS-RECALL] \
             docs/plans/corpus-assertion.md — clones tornadoweb/tornado at its pinned commit \
-            and scans the Python tree: the cheapest curated recall in the corpus, with four \
-            hand-verified cross-file pairs. The release gate compiles this target and never \
-            runs it. `make test-corpus` runs it, single-threaded, via `-- --ignored`."]
+            and scans the Python tree: the cheapest curated recall in the corpus, with six \
+            hand-verified cross-file pairs — one byte-identical, five Type-2. The release \
+            gate compiles this target and never runs it. `make test-corpus` runs it, \
+            single-threaded, via `-- --ignored`."]
 fn corpus_tornado_python() -> Result<()> {
     gate("tornado")
 }

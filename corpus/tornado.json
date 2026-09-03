@@ -10,8 +10,17 @@
     "max_peak_rss_mb": 1024,
     "rationale": "1024 MB, sized to this corpus: 110 analysed files, about a fifth of tokio, measured at roughly 2 s wall on a development machine. The wall ceiling is deliberately loose - it exists to catch a hang, not to police throughput."
   },
-  "must_find": [],
-  "must_find_status": "No cross-file exact-copy family is curated. Hand verification found byte-identical duplication in this repository (the Subprocess.initialize triply-repeated test preamble in tornado/test/process_test.py:192-194 and 202-204, and a two-line assertion couplet repeated seven times in tornado/test/tcpclient_test.py), but both live inside a single file, which the cross-file `files` list cannot express. They are recorded here as prose ground truth so a future same-file assertion form can curate them; an empty list must never be read as evidence that no exact copies exist.",
+  "must_find": [
+    {
+      "why": "The fetch_json test helper is defined twice, byte for byte: fetch, rethrow, and json_decode the response body. Same statements, same order, same names, in two test modules.",
+      "verified": "diff of tornado/test/httpserver_test.py:83-86 against tornado/test/web_test.py:894-897 at the pinned sha is empty - zero differing bytes.",
+      "files": [
+        "tornado/test/httpserver_test.py",
+        "tornado/test/web_test.py"
+      ]
+    }
+  ],
+  "must_find_status": "CURATED. One cross-file exact-copy family, verified by an empty diff at the pinned sha. Hand verification also found byte-identical duplication confined to single files (the Subprocess.initialize preamble triplet in tornado/test/process_test.py:192-194 and 202-204, and a two-line assertion couplet repeated seven times in tornado/test/tcpclient_test.py), which the cross-file `files` list cannot express; recorded as prose ground truth for a future same-file assertion form.",
   "must_find_type2": [
     {
       "why": "test_get_clears_timed_out_putters in queues_test.py is the locks_test test_garbage_collection restated against the sibling Queue data structure: same comprehension of timed-out operations with timedelta(seconds=0.01), same one-more-operation watermark check on len(._waiters/_putters), the same yield gen.sleep(0.02) collection window, the same 'Final waiter is still active.' comment carried over verbatim, and the same trailing assertRaises(TimeoutError) drain loop. The queue version adds a get-clears-waiters pair of statements.",
@@ -32,6 +41,15 @@
       "min_nodes": 40
     },
     {
+      "why": "The body-expected/body-present validation in the two HTTP clients is the same block duplicated across production modules: the identical double-condition guard, the identical ValueError message text, and the identical conditional 'not ' prefix, differing only in indentation depth and request.method vs self.request.method.",
+      "verified": "diff of tornado/curl_httpclient.py:446-453 against tornado/simple_httpclient.py:412-419 at the pinned sha shows only leading whitespace and the receiver expression; every other character, including the full multi-part message string, is identical.",
+      "files": [
+        "tornado/curl_httpclient.py",
+        "tornado/simple_httpclient.py"
+      ],
+      "min_nodes": 36
+    },
+    {
       "why": "The demos are one application stamped out three times. blog.py and chatdemo.py build the same tornado.web.Application with a hand-written route list, the identical placeholder cookie_secret=\"__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__\", template_path and static_path resolved from os.path.dirname(__file__), xsrf_cookies=True and a debug flag.",
       "verified": "Read both regions in full at the pinned sha. The settings payload is the same key sequence with only the route table entries, the blog_title key, and debug=True vs debug=options.debug differing.",
       "files": [
@@ -50,7 +68,7 @@
       "min_nodes": 24
     }
   ],
-  "must_find_type2_status": "CURATED. Four cross-file pairs hand-verified by reading both regions in full at the pinned sha and stating exactly what differs; the min_nodes floors sit well below the canonical node counts the pinned-sha scan rendered (126, 49, 48 and 30) to leave build-to-build drift headroom. Twelve further pairs were hand-verified during the same curation pass and are recorded here as prose ground truth: the strongest are same-file pairs the cross-file files list cannot express - the max_wbits validation duplicated inside tornado/websocket.py (739-748 vs 789-797, near-identical), the byte-identical Subprocess preamble triplet in tornado/test/process_test.py (192-194 vs 202-204), the f/future semaphore-acquire rename pair in tornado/test/locks_test.py (290-293 vs 440-443), the days=10/days=2 cookie-expiry pair in tornado/test/web_test.py (486-491 vs 3176-3181), and the wait/acquire condition rename pair in tornado/test/locks_test.py (53-55 vs 254-256). The same pass confirmed precision verdicts: an older engine build reported tornado/test/auth_test.py:501-505 together with tornado/test/web_test.py:2314-2318 (OAuth login tests against HTTP handler method definitions - shape-only, unrelated code, its own embedding signal scored 0.0) and that pairing is absent from the current report; the current report also correctly suppresses seven-times-repeated two-line tcpclient_test.py assertion boilerplate that the older build published. Those verdicts are recorded so the next curation pass re-checks them rather than re-derives them.",
+  "must_find_type2_status": "CURATED. Six cross-file pairs hand-verified by reading both regions in full at the pinned sha and stating exactly what differs; the min_nodes floors sit well below the canonical node counts the pinned-sha scan rendered to leave build-to-build drift headroom. Thirty further pairs were hand-verified during the same two-pass curation pass and are recorded here as prose ground truth: the strongest are same-file pairs the cross-file files list cannot express - the max_wbits validation duplicated inside tornado/websocket.py (739-748 vs 789-797, near-identical), the byte-identical Subprocess preamble triplet in tornado/test/process_test.py (192-194 vs 202-204), the f/future semaphore-acquire rename pair in tornado/test/locks_test.py (290-293 vs 440-443), the days=10/days=2 cookie-expiry pair in tornado/test/web_test.py (486-491 vs 3176-3181), and the wait/acquire condition rename pair in tornado/test/locks_test.py (53-55 vs 254-256). The same pass confirmed precision verdicts: an older engine build reported tornado/test/auth_test.py:501-505 together with tornado/test/web_test.py:2314-2318 (OAuth login tests against HTTP handler method definitions - shape-only, unrelated code, its own embedding signal scored 0.0) and that pairing is absent from the current report; the current report also correctly suppresses seven-times-repeated two-line tcpclient_test.py assertion boilerplate that the older build published. Those verdicts are recorded so the next curation pass re-checks them rather than re-derives them.",
   "expect_files_min": 100,
   "expect_clusters": {
     "min": 150,
