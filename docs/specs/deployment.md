@@ -176,6 +176,10 @@ binaries and fail if `deslop`, `deslop-lsp`, or `deslop-mcp` still resolve on
 `PATH`. This keeps extension tests honest: a missing or stale bundle cannot be
 masked by a developer machine install.
 
+A rebuild must also scrub *running* Deslop processes before it cleans anything. A `deslop`, `deslop-lsp`, or `deslop-mcp` left behind by an editor session or an abandoned test shadows the bundle the rebuild is about to produce, starves socket-bound integration tests, and on Windows — where the loader keeps an open handle to every running image — stops `cargo clean` from emptying `target/release` at all. Matching is by exact process name, so `cargo build -p deslop-lsp` survives untouched; a process that outlives a forced kill fails the target rather than being ignored. The matching, the terminate-then-force sequence, and the fail-closed re-check live in `scripts/repository/kill-deslop-processes.sh` so they can be tested without the target's destructive side effect, and `scripts/repository/kill-deslop-processes.test.mjs` (a `make lint` gate) drives that detection against a fixture process it owns and reaps.
+
+Every recipe in the `Makefile` is POSIX shell, so Windows runs them under Git Bash, found by absolute path through the overridable `GIT_BASH` variable. Resolving `bash.exe` by name instead finds WSL's copy in `System32`, which mounts a different filesystem and cannot see the checkout; handing the recipes to `powershell.exe` cannot work either, since PowerShell parses none of the `case`, `for`, `[ -f ]`, or `||` the recipes are built from. The same gate asserts both, together with the POSIX spelling of the `RM` and `MKDIR` helpers that recipes interpolate into those constructs.
+
 ### [DEPLOY-JETBRAINS-PACKAGE] JetBrains package contract
 
 The JetBrains plugin package must include `shipwright.json` at plugin

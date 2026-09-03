@@ -16,7 +16,10 @@
 use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
-use deslop_core::{lang::shared::parse_source, pipeline::default_parsers};
+use deslop_core::{
+    lang::{parser_for_path, shared::parse_source, LanguageParser},
+    pipeline::default_parsers,
+};
 use serde_json::Value;
 
 use crate::{
@@ -25,6 +28,13 @@ use crate::{
     },
     enclosure::{span_of, Span},
 };
+
+/// Visible member-count field on a mass-only cluster; the wire model
+/// carries no `size` and no `bucket`, and reading either printed every
+/// breach as "0 occurrences" in an unlabelled bucket.
+const OCCURRENCE_COUNT: &str = "occurrence_count";
+/// Canonical duplicated-mass field, the ranked figure a breach is judged by.
+const MASS: &str = "mass";
 
 /// [CORPUS-PRECISION-CURATED] `precision` — code a human confirmed is
 /// **not** duplicated must never be reported as one cluster.
@@ -78,17 +88,14 @@ fn check_one_curated_non_duplicate(entry: &Value, report: &Value, failures: &mut
     failures.push(Failure::new(
         "precision",
         format!(
-            "cluster {id} ({bucket}, {size} occurrences) is shown spanning \
+            "cluster {id} (mass {mass}, {size} occurrences) is shown spanning \
              {files:?}, which a human verified is not duplication. Curated: {why}",
             id = breach
                 .get("id")
                 .and_then(Value::as_str)
                 .unwrap_or("<unlabelled>"),
-            bucket = breach
-                .get("bucket")
-                .and_then(Value::as_str)
-                .unwrap_or("<unlabelled>"),
-            size = field_u64(breach, "size"),
+            mass = field_u64(breach, MASS),
+            size = field_u64(breach, OCCURRENCE_COUNT),
         ),
     ));
 }
@@ -121,11 +128,15 @@ pub fn check_boilerplate_not_ranked_first(
         .filter_map(Value::as_str)
         .collect();
 
-    for (rank, cluster) in array(&run.report, "clusters")
+    for (position, cluster) in array(&run.report, "clusters")
         .iter()
         .take(top_n)
         .enumerate()
     {
+        // One-based, like the report's own `rank` field: a message that
+        // says "rank 1" about the second cluster sends the reader to the
+        // wrong finding.
+        let rank = position.saturating_add(1);
         for supertype in &forbidden {
             judge_cluster(root, cluster, rank, supertype, failures)?;
         }
@@ -142,11 +153,9 @@ fn judge_cluster(
     supertype: &str,
     failures: &mut Vec<Failure>,
 ) -> Result<()> {
-    let language = cluster
-        .get("language")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("rank {rank}: cluster carries no language"))?;
     let (source, span) = first_occurrence_source(root, cluster)?;
+    let language = language_of(&span.path)
+        .ok_or_else(|| anyhow!("rank {rank}: no registered parser claims {}", span.path))?;
     if !declares_forbidden_supertype(language, &source, &span, supertype)? {
         return Ok(());
     }
@@ -156,7 +165,7 @@ fn judge_cluster(
             "rank {rank}: cluster of {} occurrences declares `{supertype}`, a \
              framework-mandated base type that cannot be deduplicated. First \
              occurrence: {}:{}",
-            field_u64(cluster, "size"),
+            field_u64(cluster, OCCURRENCE_COUNT),
             span.path,
             span.start,
         ),
@@ -443,6 +452,13 @@ fn grammar_for(language: &str) -> Result<tree_sitter::Language> {
         .find(|parser| parser.id() == language)
         .map(|parser| parser.grammar())
         .ok_or_else(|| anyhow!("no registered parser for language `{language}`"))
+}
+
+/// The language of the file at `path`, as the engine maps files to
+/// parsers — a ranked cluster carries none of its own, and the report
+/// consumer must not keep a second extension table.
+fn language_of(path: &str) -> Option<&'static str> {
+    parser_for_path(&default_parsers(), Path::new(path)).map(LanguageParser::id)
 }
 
 /// The engine's `'static` id for `language`, which `parse_source` needs for

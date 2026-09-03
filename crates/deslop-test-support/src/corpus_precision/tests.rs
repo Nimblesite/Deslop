@@ -14,6 +14,9 @@
 
 use anyhow::{anyhow, Result};
 
+/// [CORPUS-PRECISION] The language a ranked cluster is judged in.
+mod language_of_first_occurrence;
+
 use super::declares_forbidden_supertype;
 use crate::enclosure::Span;
 

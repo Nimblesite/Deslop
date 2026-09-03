@@ -104,7 +104,7 @@ fn decide_every_cluster<S: BuildHasher + Sync>(
     // run, an untouched cluster writes itself, both in input position.
     let mut slots: Vec<Option<Vec<FusedCluster>>> =
         (0..inputs.fused_clusters.len()).map(|_| None).collect();
-    if split_workers(order.len()) <= 1 {
+    if noise_workers(order.len()) <= 1 {
         split_serially(&order, inputs, cache, &mut slots);
     } else {
         split_across_workers(&order, inputs, cache, &mut slots);
@@ -188,7 +188,7 @@ fn split_across_workers<S: BuildHasher + Sync>(
     let progress = Progress::new(order.len());
     let (claimed, _states) = crate::shard::map_chunks(
         order.chunks(NOISE_CHUNK_CLUSTERS),
-        split_workers(order.len()),
+        noise_workers(order.len()),
         || (),
         |(), chunk| decide_chunk(chunk, inputs, cache, &progress),
     );
@@ -248,12 +248,14 @@ const NOISE_SHARD_MIN_CLUSTERS: NonZeroUsize = match NonZeroUsize::new(512) {
 
 /// Clusters per claimed chunk. Large enough that a worker's tree LRU
 /// stays hot across a run of same-file clusters, small enough that one
-/// unlucky draw of wide clusters cannot hold the stage open.
-const NOISE_CHUNK_CLUSTERS: usize = 32;
+/// unlucky draw of wide clusters cannot hold the stage open. Shared with
+/// the report's render-stage convictions, which run the same filters
+/// over the same cache.
+pub(crate) const NOISE_CHUNK_CLUSTERS: usize = 32;
 
-/// How many worker threads decide `clusters` clusters, against this
-/// stage's own floor ([`crate::shard::worker_count`]).
-fn split_workers(clusters: usize) -> usize {
+/// How many worker threads run the noise filters over `clusters`
+/// clusters, against the stage's own floor ([`crate::shard::worker_count`]).
+pub(crate) fn noise_workers(clusters: usize) -> usize {
     crate::shard::worker_count(clusters, NOISE_SHARD_MIN_CLUSTERS)
 }
 

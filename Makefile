@@ -15,19 +15,28 @@ _JETBRAINS_DIR := clients/jetbrains
 
 # ---------------------------------------------------------------------------
 # OS Detection
+#
+# Every recipe in this file is POSIX shell — `case`, `for`, `[ -f ]`, `||`, and
+# `$(RM)`/`$(MKDIR)` interpolated inside those constructs. Windows therefore
+# runs them under Git Bash, and by absolute path: `bash.exe` resolved by name
+# finds WSL's bash in System32 first, which sees a different filesystem and
+# cannot build this checkout. Override GIT_BASH when Git for Windows lives
+# somewhere other than its default location. `uname` under it reports
+# MINGW*/MSYS*, which _vsix-stage-bundled-binaries maps to the win32-x64 target.
 # ---------------------------------------------------------------------------
+GIT_BASH ?= C:/Program Files/Git/usr/bin/bash.exe
+
+RM = rm -rf
+MKDIR = mkdir -p
+
 ifeq ($(OS),Windows_NT)
-  SHELL := powershell.exe
-  .SHELLFLAGS := -NoProfile -Command
-  RM = Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-  MKDIR = New-Item -ItemType Directory -Force
+  SHELL := $(GIT_BASH)
+  .SHELLFLAGS := -c
   HOME ?= $(USERPROFILE)
   # The JetBrains wrapper is checked in and is the source of truth.
   # Override `GRADLE=...` only when deliberately testing another runtime.
   GRADLE ?= ./gradlew.bat
 else
-  RM = rm -rf
-  MKDIR = mkdir -p
   GRADLE ?= ./gradlew
 endif
 
@@ -207,6 +216,8 @@ _ci-contract-tests: _vsix-node-modules
 	@node --test scripts/deployment/installer-snippet.test.mjs
 	@echo "==> PATH-scrub gate ([DEPLOY-EXTERNAL-MCP-CONSUMER])..."
 	@node --test scripts/repository/scrub-path-binaries.test.mjs
+	@echo "==> Process-scrub + host-shell gate ([DEPLOY-EXTENSION-BUNDLED-TESTS])..."
+	@node --test scripts/repository/kill-deslop-processes.test.mjs
 	@echo "==> Duplication-gate provenance gate ([CI-DESLOP])..."
 	@node --test scripts/repository/dup-gate-source.test.mjs
 	@echo "==> Test-selection gate ([TEST-SELECTION])..."
@@ -522,40 +533,17 @@ deployment-verify: build
 	node scripts/actions/test-action-contract.mjs
 	node scripts/actions/test-action-diff-gate.mjs
 
-# _kill-deslop-processes: SIGTERM (then SIGKILL on holdouts) every running
-#   `deslop-lsp` and `deslop-mcp` process so a stale child from a previous
-#   VSCode/Cursor session can't shadow the freshly-installed VSIX bundle, and so
-#   socket-bound integration tests don't get starved by a runaway analyser on
-#   another workspace. Matches by process name (not full cmdline) so it will not
-#   accidentally kill `cargo build -p deslop-lsp` or similar parent commands.
-#   Idempotent — exits 0 when no matching process exists. Invoked by the rebuild
-#   targets; `test`/`vsix-*` scrub via `_delete-path-binaries`.
+# _kill-deslop-processes: Terminate every running `deslop`, `deslop-lsp`, and
+#   `deslop-mcp` so a stale child from a previous VSCode/Cursor session can't
+#   shadow the freshly-installed VSIX bundle, socket-bound integration tests
+#   don't get starved by a runaway analyser on another workspace, and — on
+#   Windows, where a running image cannot be deleted — `cargo clean` can empty
+#   `target/`. The matching, the two-phase kill, and the fail-closed re-check
+#   live in the script so they can be tested without this target's destructive
+#   side effect. Idempotent. Invoked by the rebuild targets; `test`/`vsix-*`
+#   scrub via `_delete-path-binaries`.
 _kill-deslop-processes:
-	@echo "==> Killing any running deslop-lsp / deslop-mcp processes..."
-	@_initial_lsp=$$(pgrep -x deslop-lsp 2>/dev/null || true); \
-	 _initial_mcp=$$(pgrep -x deslop-mcp 2>/dev/null || true); \
-	 _initial="$$_initial_lsp $$_initial_mcp"; \
-	 _initial=$$(echo "$$_initial" | tr ' ' '\n' | sort -u | grep -v '^$$' || true); \
-	 if [ -z "$$_initial" ]; then echo "    (none running)"; exit 0; fi; \
-	 echo "    initial PIDs: $$(echo $$_initial | tr '\n' ' ')"; \
-	 pkill -x deslop-lsp 2>/dev/null || true; \
-	 pkill -x deslop-mcp 2>/dev/null || true; \
-	 sleep 1; \
-	 _survivors=""; \
-	 for _pid in $$_initial; do \
-	   if kill -0 "$$_pid" 2>/dev/null; then _survivors="$$_survivors $$_pid"; fi; \
-	 done; \
-	 if [ -n "$$_survivors" ]; then \
-	   echo "    SIGKILL on holdouts:$$_survivors"; \
-	   for _pid in $$_survivors; do kill -9 "$$_pid" 2>/dev/null || true; done; \
-	   sleep 1; \
-	   _final=""; \
-	   for _pid in $$_survivors; do \
-	     if kill -0 "$$_pid" 2>/dev/null; then _final="$$_final $$_pid"; fi; \
-	   done; \
-	   if [ -n "$$_final" ]; then echo "FAIL: PIDs alive after SIGKILL:$$_final"; exit 1; fi; \
-	 fi; \
-	 echo "    all targeted processes are dead (VSCode may auto-respawn — that is fine)"
+	@bash scripts/repository/kill-deslop-processes.sh
 
 # [DEPLOY-EXTERNAL-MCP-CONSUMER] No install-binary target by design; this scrub
 #   keeps external MCP clients on the VSIX-bundled binary by absolute path.

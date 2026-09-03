@@ -51,6 +51,32 @@ fn spanning(id: &str, nodes: u64, rank: u64, files: &[&str]) -> Value {
         "mass": nodes.saturating_mul(occurrence_count.saturating_sub(1)),
         "canonical_node_count": nodes,
         "occurrence_count": occurrence_count,
+        "occurrences_total": occurrence_count,
+        "occurrences": occurrences,
+    })
+}
+
+/// [EXCLUSION-CONFIG] A mixed cluster: `visible` occurrences the report
+/// shows beside `hidden` `report_hide`-suppressed copies of the same
+/// code. `occurrence_count` counts what the user sees, mass follows from
+/// it, and `occurrences_total` counts every copy the cluster carries.
+fn mixed(id: &str, nodes: u64, visible: &[&str], hidden: &[&str]) -> Value {
+    let occurrence = |path: &&str, is_hidden: bool| json!({"path": path, "hidden": is_hidden});
+    let occurrences: Vec<Value> = visible
+        .iter()
+        .map(|path| occurrence(path, false))
+        .chain(hidden.iter().map(|path| occurrence(path, true)))
+        .collect();
+    let visible_count = u64::try_from(visible.len()).unwrap_or(u64::MAX);
+    let carried = u64::try_from(occurrences.len()).unwrap_or(u64::MAX);
+    json!({
+        "id": id,
+        "rank": 1,
+        "rank_band": "worst",
+        "mass": nodes.saturating_mul(visible_count.saturating_sub(1)),
+        "canonical_node_count": nodes,
+        "occurrence_count": visible_count,
+        "occurrences_total": carried,
         "occurrences": occurrences,
     })
 }

@@ -146,10 +146,30 @@ test("assertDeclaredEntriesPresent passes the real listing and catches an over-e
 // that deletes either one fails here with the reason attached.
 
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** The repository's build-artifact directory: `clients/vscode` sits two below it. */
+const repoTarget = resolve(extensionRoot, "..", "..", "target");
+
+/**
+ * Whether `child` lies strictly inside `parent`.
+ *
+ * A path relationship, resolved as one. Spelling it as a `"/target/"`
+ * substring both passed any unrelated directory that happened to be named
+ * `target` and failed on every Windows host, where the same directory is
+ * spelled with backslashes.
+ *
+ * @param {string} parent absolute directory
+ * @param {string} child absolute path to test
+ * @returns {boolean} true when `child` is under `parent` and not `parent` itself
+ */
+function isInside(parent, child) {
+  const step = relative(parent, child);
+  return step.length > 0 && !step.startsWith("..") && !isAbsolute(step);
+}
 
 /** Ignore rules that must survive, and the artifact each one keeps out. */
 const REQUIRED_IGNORE_RULES = [
@@ -171,11 +191,15 @@ test("[#472] Playwright writes its output under target/, never beside the extens
   const config = (await import("../playwright.config.mjs")).default;
   assert.equal(typeof config.outputDir, "string", "playwright.config.mjs must set an explicit outputDir");
   assert.ok(
-    !config.outputDir.startsWith(`${extensionRoot}/`) && config.outputDir !== extensionRoot,
+    isAbsolute(config.outputDir),
+    `Playwright outputDir ${config.outputDir} must be absolute; a relative one lands wherever the run was started from`,
+  );
+  assert.ok(
+    !isInside(extensionRoot, config.outputDir) && config.outputDir !== extensionRoot,
     `Playwright outputDir ${config.outputDir} is inside the packaging root ${extensionRoot}; a failing run would ship its traces`,
   );
   assert.ok(
-    config.outputDir.includes("/target/"),
-    `every build artifact belongs under target/; got ${config.outputDir}`,
+    isInside(repoTarget, config.outputDir),
+    `every build artifact belongs under this repository's ${repoTarget}; got ${config.outputDir}`,
   );
 });

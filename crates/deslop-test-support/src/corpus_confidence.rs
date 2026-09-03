@@ -10,6 +10,8 @@ use crate::corpus::{
 const CANONICAL_NODE_COUNT: &str = "canonical_node_count";
 /// Visible member-count field on a mass-only cluster.
 const OCCURRENCE_COUNT: &str = "occurrence_count";
+/// Carried member-count field, hidden occurrences included.
+const OCCURRENCES_TOTAL: &str = "occurrences_total";
 /// Canonical duplicated-mass field.
 const MASS: &str = "mass";
 /// Engine-stamped global order field.
@@ -58,16 +60,27 @@ fn check_forbidden_fields(cluster: &Value, index: usize, failures: &mut Vec<Fail
     }
 }
 
-/// Enforces `mass = canonical_nodes × max(visible_occurrences - 1, 0)`.
+/// Enforces `mass = canonical_nodes × max(visible_occurrences - 1, 0)`
+/// and the two-occurrence floor a duplicate is defined by.
+///
+/// The floor counts *carried* occurrences, not visible ones. A cluster
+/// whose only visible occurrence sits beside `report_hide`-suppressed
+/// copies is kept intact and shown to the user, so they see regular code
+/// duplicating generated code ([EXCLUSION-CONFIG]); reading the floor off
+/// the visible count would condemn exactly that cluster, and the gate
+/// would demand the engine drop a finding the spec requires it to
+/// publish. Such a cluster carries mass 0 by the same equation, which is
+/// what sinks it to the bottom of the ranking.
 fn check_mass(cluster: &Value, index: usize, failures: &mut Vec<Failure>) {
     let nodes = field_u64(cluster, CANONICAL_NODE_COUNT);
     let occurrences = field_u64(cluster, OCCURRENCE_COUNT);
+    let carried = field_u64(cluster, OCCURRENCES_TOTAL);
     let expected = nodes.saturating_mul(occurrences.saturating_sub(1));
     let actual = field_u64(cluster, MASS);
-    if occurrences < 2 || actual != expected {
+    if carried < 2 || actual != expected {
         failures.push(Failure::new(
             "cluster_mass",
-            format!("cluster {} has mass {actual}; expected {nodes} × max({occurrences} - 1, 0) = {expected}", index.saturating_add(1)),
+            format!("cluster {} has mass {actual} with {carried} carried and {occurrences} visible occurrences; expected {nodes} × max({occurrences} - 1, 0) = {expected} from at least 2 carried", index.saturating_add(1)),
         ));
     }
 }

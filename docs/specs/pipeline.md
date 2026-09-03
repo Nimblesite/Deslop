@@ -83,17 +83,39 @@ One physical duplication can be fingerprinted at several AST depths and therefor
 
 Two components describe the same physical duplication only when coverage is bidirectional by per-occurrence containment: every occurrence of each component contains, or is contained by, an occurrence of the other in the same file. Bare intersection and one-way coverage are insufficient. A view naming a file the other does not name is never dropped.
 
-When two components describe the same duplication, the survivor is selected by file coverage, physical enclosure, occurrence coverage, duplicated mass, and stable cluster-id tie-breaking in that order. Structural, Jaccard, embedding, content, rename, literal, pair classification, and any presentation label are forbidden inputs. A component that has absorbed another view must release it if the absorber is later removed, so the bytes are reconsidered against the final survivor.
+When two components describe the same duplication, the survivor is selected by file coverage, physical enclosure, occurrence coverage, duplicated mass, and stable cluster-id tie-breaking in that order. Structural, Jaccard, embedding, content, rename, literal, pair classification, and any presentation label are forbidden inputs. A view is published when no published view describes the same duplication and outranks it; every other view is absorbed by one that does. That is a property of the published set, not of the order views were met in, so whatever a view absorbed is judged again against the views that remain when it leaves the report ([PIPELINE-CLUSTER-SUBSUME-KERNEL]).
 
-Pinned by `crates/deslop-core/tests/cluster_subsumption.rs` and end-to-end overlap fixtures. Assertions must prove the survivor's files, occurrences, ranges, and mass; pair scores cannot be asserted on a cluster.
+Pinned by `crates/deslop-core/tests/cluster_subsumption/region.rs` and end-to-end overlap fixtures. Assertions must prove the survivor's files, occurrences, ranges, and mass; pair scores cannot be asserted on a cluster.
 
 #### [PIPELINE-CLUSTER-SUBSUME-STRADDLE] Two views that straddle a nested view are padded readings of it
 
 Two admitted windows can overlap without either containing the other: a byte-identical block with one differing statement kept on its left in one view and one differing statement kept on its right in the other. Each window clears the content floor on the strength of the block it shares, and their union does not, so neither can absorb the other and both would reach the report — the same block published twice, under two extents that each count a line the other refuses.
 
-When two components name the same files, every occurrence of each overlaps an occurrence of the other in its file, and a third component lies strictly inside both in every file, the two straddling views are dropped and the nested view is the finding. Whatever the dropped views had absorbed is released and judged again, so the nested view collects its own nested rivals. Two overlapping regions with no admitted view nested in both stay two findings, exactly as before: a shared byte, a half overlap, or an overhang is never enough on its own.
+When two components name the same files, every occurrence of each overlaps an occurrence of the other in its file, and a third component lies strictly inside both in every file, the two straddling views are dropped and the nested view is the finding. Straddles are looked for among the published views; the two are removed for good and their file set is resolved again without them, so whatever either had absorbed — through any verdict — is judged again and the nested view collects its own nested rivals. Two overlapping regions with no admitted view nested in both stay two findings, exactly as before: a shared byte, a half overlap, or an overhang is never enough on its own.
 
-Implemented in `cluster/subsume.rs`; pinned by `two_windows_straddling_one_nested_view_publish_that_view` in `crates/deslop-core/tests/cluster_subsumption.rs` and by `cross_cluster_collapse::padded_windows_straddling_a_verbatim_block_publish_the_block` end to end.
+Implemented in `cluster/subsume/kernel.rs`; pinned by `two_windows_straddling_one_nested_view_publish_that_view`, `a_view_that_yielded_to_a_straddler_is_released_when_it_dies` and `a_view_nested_in_only_one_straddler_leaves_both_published` in `crates/deslop-core/tests/cluster_subsumption/straddle.rs`, and by `cross_cluster_collapse::padded_windows_straddling_a_verbatim_block_publish_the_block` end to end.
+
+#### [PIPELINE-CLUSTER-SUBSUME-KERNEL] Survivors are a property of the published set, not of scan order
+
+The views over one file set, with the survivor order between every pair that describes the same duplication, form a directed graph: an edge runs from the preferred view to the view it re-describes. The published set is that graph's kernel — no published view is outranked by another published view, and every unpublished view is outranked by a published one. It is found by publishing, in rank order, whichever undecided view no undecided or published view outranks, and absorbing every undecided view of its region as it goes. A view whose absorber is later removed, whether outranked or dropped as a straddler, is therefore judged again against the views that remain, and nothing a removed view absorbed is forgotten.
+
+Implemented in `cluster/subsume/kernel.rs`; pinned by `a_view_released_by_its_absorber_is_judged_against_the_views_that_remain` in `crates/deslop-core/tests/cluster_subsumption/release.rs`, and by the report contract every subsumption test holds its result to: survivors in rank order with unique ids and the mass [RANK-MASS-SUM] gives them, no two survivors describing one duplication, and every unpublished view re-described by a survivor over its own files or straddling a nested view a survivor reports.
+
+#### [PIPELINE-CLUSTER-SUBSUME-CYCLE] A cycle in the survivor order is decided by coverage, mass and id
+
+Three views can each outrank the next: enclosure decides one pair, and the coverage-mass-id order decides the other two crossed pairs the opposite way. Then no view of the cycle is free of an undecided rival and no kernel exists. The view that leads on occurrence coverage, duplicated mass and stable id is published, and every other view of its region is absorbed by it — the tie-break the survivor order already ends in, applied once more. The region is still reported exactly once.
+
+Pinned by `three_views_that_outrank_each_other_in_a_cycle_publish_the_leader` in `crates/deslop-core/tests/cluster_subsumption/release.rs`.
+
+#### [PIPELINE-CLUSTER-SUBSUME-FILESET] Views are judged only against views over exactly their own files
+
+Every verdict above needs both views to name the same set of files: same-region coverage pairs each occurrence with a same-file partner in both directions, and a straddle demands file coverage both ways before it looks for a core, whose own occurrences must lie inside both straddlers in every file. Two views over different file sets therefore always keep each other, and a view is only ever absorbed, released or chosen as a core within its own file set.
+
+Each file set is resolved on its own, in rank order. On the Flutter corpus that is the difference between 217,045 views squared — a stage that held one core for half an hour without a record — and a sum of small squares. No verdict changes.
+
+The stage reports its counts — views, file sets, pairs evaluated, same-region pairs, absorptions, cycles, straddle rounds and straddlers — in a completion record and a fixed-interval progress record ([PIPELINE-OBSERVABILITY-STAGES]).
+
+Pinned by `each_file_set_is_judged_on_its_own` and `disjoint_file_sets_are_never_compared` in `crates/deslop-core/tests/cluster_subsumption/release.rs`.
 
 ### [PIPELINE-DETERMINISM] Cross-run determinism
 Two runs of the pipeline over an unchanged corpus produce bit-identical deterministic output: identical MinHash signatures (blake3 XOF, fixed k-gram ordering), identical pair evidence (`token_jaccard` compared bit-for-bit), identical admitted pairs, closure components, cluster ids, mass, and ranking. Determinism is what makes persisted processing ([PIPELINE-INCREMENTAL]) sound and cluster ids stable across sessions. The embedding/ANN layer is the only approximate stage and is bounded separately ([FUSED-EMBED-PROVIDER]); a missed ANN neighbour only loses recall, never changes an already admitted pair.

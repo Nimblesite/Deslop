@@ -9,7 +9,7 @@ mod common;
 
 #[path = "cluster_overlap_collapse.rs"]
 mod cluster_overlap_collapse;
-#[path = "cluster_subsumption.rs"]
+#[path = "cluster_subsumption/mod.rs"]
 mod cluster_subsumption;
 #[path = "content_gate_rejects.rs"]
 mod content_gate_rejects;

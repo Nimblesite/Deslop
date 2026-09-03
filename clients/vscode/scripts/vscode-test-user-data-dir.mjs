@@ -31,6 +31,24 @@ export const UNIX_SOCKET_PATH_LIMIT = 103;
 export const LONGEST_SOCKET_BASENAME = "999.999-main.sock";
 
 /**
+ * The path flavour `platform` uses.
+ *
+ * Every function here takes the platform as an argument so a caller — a
+ * test, or a script reasoning about another target — gets that platform's
+ * answer rather than the host's. Joining with the host's `path` throws
+ * that away: a Windows host asked for a Linux profile answered
+ * `\tmp\deslop-vscode-test-…`, a path no POSIX kernel would ever open,
+ * and the byte-cap measurements below were taken against the wrong
+ * separators.
+ *
+ * @param {string} [platform] `os.platform()` value; defaults to this host
+ * @returns {typeof path.posix} the `path` flavour for `platform`
+ */
+export function platformPath(platform = os.platform()) {
+  return platform === "win32" ? path.win32 : path.posix;
+}
+
+/**
  * Root the profile is anchored under, for a given platform.
  *
  * `/tmp` is two levels deep and present on every POSIX target; the
@@ -70,15 +88,16 @@ export function socketPathIsCapped(platform = os.platform()) {
  */
 export function vscodeTestUserDataDir(extensionDir, platform, tmpdir) {
   const key = createHash("sha256").update(extensionDir).digest("hex").slice(0, 8);
-  return path.join(profileRoot(platform, tmpdir), `deslop-vscode-test-${key}`);
+  return platformPath(platform).join(profileRoot(platform, tmpdir), `deslop-vscode-test-${key}`);
 }
 
 /**
  * Length of the longest socket path VS Code will open inside `dir`.
  *
  * @param {string} dir user-data directory
+ * @param {string} [platform] `os.platform()` value; defaults to this host
  * @returns {number} byte length of the longest resulting socket path
  */
-export function longestSocketPathLength(dir) {
-  return Buffer.byteLength(path.join(dir, LONGEST_SOCKET_BASENAME));
+export function longestSocketPathLength(dir, platform) {
+  return Buffer.byteLength(platformPath(platform).join(dir, LONGEST_SOCKET_BASENAME));
 }
