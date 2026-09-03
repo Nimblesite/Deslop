@@ -176,6 +176,23 @@ pub(crate) fn expect_cross_file_duplicate(
     occurrence_texts(scan_root, cluster)
 }
 
+/// Asserts every string in `evidence` reached the reported occurrence
+/// text. `why` says what the evidence is, so a failure names the missing
+/// proof rather than the needle.
+///
+/// The evidence a control names is the whole point of publishing the
+/// cluster — the member that holds the copy, the literal that makes one
+/// call dead, the helper that parameterising would absorb — so the loop
+/// that checks for it lives here rather than being restated per binary.
+pub(crate) fn assert_reported(texts: &[String], evidence: &[&str], why: &str) {
+    for needle in evidence {
+        assert!(
+            texts.iter().any(|text| text.contains(needle)),
+            "{why}; {needle} must be reported: {texts:#?}"
+        );
+    }
+}
+
 /// Asserts every name appears somewhere in the cluster's reported text,
 /// returning the texts for any further per-test assertions.
 pub(crate) fn assert_cluster_mentions(

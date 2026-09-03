@@ -145,18 +145,6 @@ fn expect_visible_families(
     Ok(texts)
 }
 
-/// Asserts every string in `evidence` reached the reported occurrence
-/// text. `why` says what the evidence is, so a failure names the missing
-/// proof rather than the needle.
-fn assert_reported(texts: &[String], evidence: &[&str], why: &str) {
-    for needle in evidence {
-        assert!(
-            texts.iter().any(|text| text.contains(needle)),
-            "{why}; {needle} must be reported: {texts:#?}"
-        );
-    }
-}
-
 #[test]
 fn one_statement_bodies_that_compute_are_not_forwarding() -> Result<()> {
     // The fail-open direction, pinned by the one fixture that must

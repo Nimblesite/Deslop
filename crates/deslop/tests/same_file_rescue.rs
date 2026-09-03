@@ -24,7 +24,7 @@ use deslop_test_support::{write_csharp_star_shadow_fixture, CSHARP_COPIED_BODY};
 use crate::common::signals::{
     assert_no_pair_surface_on_cluster, assert_structural_only_contract, has_verbatim_pair,
 };
-use crate::common::verdict::expect_only_finding_is_the_pair;
+use crate::common::verdict::{assert_reported, expect_only_finding_is_the_pair};
 use crate::common::*;
 
 /// One file, two classes, one method copied byte for byte between them.
@@ -164,12 +164,7 @@ fn assert_copied_pair_published(
              fragment of it: {text}"
         );
     }
-    for name in COPIED_METHOD_NAMES {
-        assert!(
-            texts.iter().any(|text| text.contains(name)),
-            "{why} {name} holds one of the two copies and must be reported: {texts:#?}"
-        );
-    }
+    assert_reported(&texts, &COPIED_METHOD_NAMES, &why);
     if with_sibling {
         let duplicated: BTreeSet<u64> = spans.iter().cloned().flatten().collect();
         assert!(
@@ -263,12 +258,6 @@ fn a_literal_only_copy_inside_one_file_is_a_finding() -> Result<()> {
         MANY_HOLES_DISTINCT_TEXTS,
         MANY_HOLES_WHY,
     )?;
-    for name in MANY_HOLES_METHOD_NAMES {
-        assert!(
-            texts.iter().any(|text| text.contains(name)),
-            "{MANY_HOLES_WHY} {name} holds one of the two copies and must be \
-             reported: {texts:#?}"
-        );
-    }
+    assert_reported(&texts, &MANY_HOLES_METHOD_NAMES, MANY_HOLES_WHY);
     Ok(())
 }
