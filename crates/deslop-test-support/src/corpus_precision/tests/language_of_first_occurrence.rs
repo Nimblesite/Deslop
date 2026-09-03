@@ -107,7 +107,10 @@ fn judged(case: &str, cluster: &Value) -> Result<Vec<Failure>> {
 
 #[test]
 fn a_dart_occurrence_is_judged_as_dart_without_a_cluster_language() -> Result<()> {
-    let failures = judged(DART_CASE, &ranked_cluster(WIDGET_PATH, FLAT_DECLARATION.len()))?;
+    let failures = judged(
+        DART_CASE,
+        &ranked_cluster(WIDGET_PATH, FLAT_DECLARATION.len()),
+    )?;
     assert_eq!(
         failures.len(),
         1,
@@ -131,7 +134,10 @@ fn a_dart_occurrence_is_judged_as_dart_without_a_cluster_language() -> Result<()
 
 #[test]
 fn an_occurrence_no_parser_claims_fails_the_gate_rather_than_passing() -> Result<()> {
-    let Err(error) = judged(UNCLAIMED_CASE, &ranked_cluster(NOTES_PATH, NOTES_SOURCE.len())) else {
+    let Err(error) = judged(
+        UNCLAIMED_CASE,
+        &ranked_cluster(NOTES_PATH, NOTES_SOURCE.len()),
+    ) else {
         bail!(
             "a file no registered parser claims cannot be judged against a \
              heritage grammar, and passing it would switch the precision gate \
