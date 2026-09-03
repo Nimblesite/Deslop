@@ -46,6 +46,19 @@ pub fn port_file_path(root: &Path) -> PathBuf {
     crate::paths::cache_dir(root).join(IPC_PORT_FILE_NAME)
 }
 
+/// Absolute path of the discovery artefact this platform's IPC server
+/// publishes — the socket itself on Unix, the endpoint record on
+/// Windows. A caller waiting for the server to come up watches this
+/// rather than picking one of the two, so it cannot end up waiting for
+/// an artefact this platform never writes.
+#[must_use]
+pub fn endpoint_path(root: &Path) -> PathBuf {
+    match IpcMode::platform_default() {
+        IpcMode::Unix => socket_path(root),
+        IpcMode::Tcp => port_file_path(root),
+    }
+}
+
 /// Which transport the IPC server binds ([LIVE-IPC-TCP]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IpcMode {

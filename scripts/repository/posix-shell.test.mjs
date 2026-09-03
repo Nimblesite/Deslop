@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { platform } from "node:os";
-import { isAbsolute, resolve } from "node:path";
+import path, { resolve } from "node:path";
 
 import { repoRoot } from "../lib/repo-root.mjs";
 import { variableValue } from "../lib/makefile.mjs";
@@ -35,18 +35,29 @@ const SUBJECT = resolve(repoRoot, "scripts", "repository");
 test("the shell make runs POSIX recipes under is the shell these tests spawn", () => {
   const declared = variableValue(GIT_BASH_VARIABLE);
   assert.notEqual(declared, "", `the Makefile must declare ${GIT_BASH_VARIABLE}`);
-  assert.ok(isAbsolute(declared), `${GIT_BASH_VARIABLE} must be absolute: ${declared}`);
+  // Judged as a *Windows* path whatever host is asking: `C:/...` is not
+  // absolute to a POSIX `isAbsolute`, and this value is only ever used on
+  // Windows. The reverse mistake — checking a Windows path the POSIX way —
+  // is exactly what makes a cross-platform helper look correct on one host.
+  assert.ok(
+    path.win32.isAbsolute(declared),
+    `${GIT_BASH_VARIABLE} must be an absolute Windows path: ${declared}`,
+  );
   assert.equal(
     posixShell(WINDOWS),
     process.env[GIT_BASH_VARIABLE] ?? declared,
     "a Windows host must resolve the shell the Makefile declares, not a second copy of the path",
   );
   assert.equal(posixShell(LINUX), POSIX_SHELL, "a POSIX host keeps its own shell");
+  assert.ok(
+    path.posix.isAbsolute(POSIX_SHELL),
+    `the POSIX shell must be an absolute POSIX path: ${POSIX_SHELL}`,
+  );
 });
 
 test("the resolved shell exists and runs a POSIX script", () => {
   const shell = posixShell();
-  assert.ok(isAbsolute(shell), `the shell must be named absolutely: ${shell}`);
+  assert.ok(path.isAbsolute(shell), `the shell must be named absolutely: ${shell}`);
   assert.equal(existsSync(shell), true, `${shell} does not exist — set ${GIT_BASH_VARIABLE}`);
   // `case` is the construct that made these recipes POSIX-only in the first
   // place, so it is the one worth proving the resolved shell can parse.
@@ -55,6 +66,15 @@ test("the resolved shell exists and runs a POSIX script", () => {
   });
   assert.equal(result.status, 0, `the resolved shell could not run a POSIX script: ${result.stderr}`);
   assert.equal(result.stdout.trim(), "parsed");
+});
+
+test("translation is the identity for a host that already spells paths that way", () => {
+  // Stated with an explicit host so the claim is checked on every machine,
+  // not only on the one that happens to be POSIX. A translation that quietly
+  // rewrote a Linux path would be invisible to a Linux-only assertion.
+  assert.equal(shellPath(SUBJECT, LINUX), SUBJECT, "a POSIX host needs no translation");
+  assert.equal(hostPath(SUBJECT, LINUX), SUBJECT, "and none in the other direction either");
+  assert.equal(shellPath("", LINUX), "", "an empty path translates to itself");
 });
 
 test("a path survives the round trip between host and shell spelling", () => {

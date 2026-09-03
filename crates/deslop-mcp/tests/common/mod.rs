@@ -149,15 +149,20 @@ pub fn wait_for_path(path: &Path, timeout: Duration) -> Result<()> {
     }
 }
 
-/// Spawns an initialized LSP against `root` and blocks until its IPC socket
-/// exists, returning a kill-on-drop guard for the LSP process. The caller
-/// MUST bind the returned `ChildKillOnDrop` to a live (named) local —
-/// dropping it early kills the LSP mid-test.
+/// Spawns an initialized LSP against `root` and blocks until it has
+/// published its IPC endpoint, returning a kill-on-drop guard for the LSP
+/// process. The caller MUST bind the returned `ChildKillOnDrop` to a live
+/// (named) local — dropping it early kills the LSP mid-test.
+///
+/// The artefact waited on comes from the engine ([LIVE-IPC-SOCKET],
+/// [LIVE-IPC-TCP]): Windows has no Unix-domain sockets and publishes a TCP
+/// endpoint record instead, so a wait spelled `deslop.sock` there times out
+/// against a server that came up seconds earlier.
 pub fn spawn_lsp_and_wait_for_socket(root: &Path) -> Result<ChildKillOnDrop> {
     let lsp = spawn_lsp_and_initialize(root)?;
     let guard = ChildKillOnDrop(lsp);
-    let socket = root.join(".deslop/cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let endpoint = deslop_core::live::transport::endpoint_path(root);
+    wait_for_path(&endpoint, SOCKET_TIMEOUT).context("wait for ipc endpoint")?;
     Ok(guard)
 }
 
@@ -169,8 +174,8 @@ pub fn spawn_lsp_and_wait_for_socket(root: &Path) -> Result<ChildKillOnDrop> {
 pub fn lsp_workspace_with_socket() -> Result<(TempDir, ChildKillOnDrop, PathBuf)> {
     let workspace = copied_fixture()?;
     let guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
-    let socket = workspace.path().join(".deslop/cache/deslop.sock");
-    Ok((workspace, guard, socket))
+    let endpoint = deslop_core::live::transport::endpoint_path(workspace.path());
+    Ok((workspace, guard, endpoint))
 }
 
 /// Spawned MCP child + an id-tracked JSON-RPC request loop.
