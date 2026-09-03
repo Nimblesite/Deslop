@@ -61,31 +61,49 @@ These gates run in `.github/workflows/` and `.deslop.toml` and fail the pipeline
 on drift. Coverage floors are owned by `coverage-thresholds.json`
 (`REPO-STANDARDS-SPEC [COVERAGE-THRESHOLDS-JSON]`).
 
-- **[CI-RELEASE-BUILD] One release build, three parallel consumers** — the
+- **[CI-RELEASE-BUILD] One release build, four parallel consumers** — the
   workspace is compiled exactly once per run, by the `build` job, in release.
-  That job owns format, lint, `make build`, the duplication gate and the
-  deployment gates, and caches `target/` plus the cargo registry under a key
-  containing the commit SHA. `ci` (Rust suite), `vsix` (extension
-  suite) and `jetbrains` (package gate) then run **in parallel**, all restoring
-  that exact entry read-only; a second writer on the same key would race the
-  build job. `coverage` runs alongside them on its own cache. The SHA in the key is what
-  makes the hit exact — a key that only hashes `Cargo.lock` matches a previous
-  run's target directory, and a test job that silently recompiles the workspace
-  buys nothing from the split. `restore-keys` still hands a cold run the
-  previous commit's directory to build incrementally on top of.
+  That job owns `make build` and nothing else, and caches `target/` plus the
+  cargo registry under a key containing the commit SHA. `repository-tests`
+  (contract tests, duplication gate, deployment gates), `vsix` (extension
+  suite), `jetbrains` (package gate) and `site` (website build) then run **in
+  parallel**, all restoring that exact entry read-only; a second writer on the
+  same key would race the build job. The SHA in the key is what makes the hit
+  exact — a key that only hashes `Cargo.lock` matches a previous run's target
+  directory, and a consumer that silently recompiles the workspace buys nothing
+  from the split. `restore-keys` still hands a cold run the previous commit's
+  directory to build incrementally on top of.
+
+  **Format and the analyzers are their own job, ahead of every compile.**
+  `lint` runs `make fmt CHECK=1`, the grammar-pin check and `make _ci-analyze`
+  in about 35 seconds against a warm cache, and every other job gates on it.
+  Inside `build` those checks made the two coverage jobs — the longest legs in
+  the workflow — wait out a release compile before a linter that takes half a
+  minute.
+
+  **The coverage jobs are not consumers and must not gate on the build.**
+  `rust-tests` and `windows` compile under `cargo llvm-cov`, whose target
+  directory and fingerprints share nothing with an uninstrumented build, and
+  `windows` is a different operating system besides. Each carries its own
+  cache. Gating them on `build` added its wall time to the critical path of the
+  run and returned nothing; both gate on `lint` instead.
+
+  For the same reason the `build` job compiles **no** test binaries. `cargo
+  test --all-targets --no-run` ran there for a year and cost 282 seconds of
+  every pipeline linking artifacts that no downstream job could execute — the
+  instrumented jobs cannot reuse them and the four release consumers run
+  binaries, not tests. `make lint` already type-checks every test target
+  through `--all-targets`, and the coverage jobs link them for real.
 
   The dependency edge is the point, not just the speed. While `vsix` and
-  `jetbrains` gated on `ci`, every red Rust run left both suites `skipped`, so
-  extension breakage stayed invisible until the Rust suite went green and then
-  surfaced as a fresh CI round. Both now gate on `build` and report on every
-  run.
+  `jetbrains` gated on the Rust suite, every red Rust run left both `skipped`,
+  so extension breakage stayed invisible until the Rust suite went green and
+  then surfaced as a fresh CI round. Both now gate on `build` and report on
+  every run.
 
-  `make test` runs `cargo test --release` for the same reason: the duplication
-  gate, the deployment gates and the whole VSIX E2E suite exercise
-  `target/release`, so a debug-profile suite gates release artifacts on code it
-  never executed. The `build` job compiles the release *test* binaries too
-  (`cargo test … --no-run`), so what it caches is what `ci` needs and `ci`
-  links nothing.
+  `make test` runs `cargo test --release` because the duplication gate, the
+  deployment gates and the whole VSIX E2E suite exercise `target/release`, so a
+  debug-profile suite would gate release artifacts on code it never executed.
 
   **Coverage is a separate job, and this is the measurement that put it there.**
   `cargo llvm-cov` compiles into `target/llvm-cov-target`, because an
