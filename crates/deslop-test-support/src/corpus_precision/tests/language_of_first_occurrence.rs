@@ -20,9 +20,18 @@ use super::super::check_boilerplate_not_ranked_first;
 use super::{FLAT_DECLARATION, STATELESS_WIDGET};
 use crate::corpus::{repo_root, CorpusRun, Failure};
 
-/// Where the scan root for these tests lives: under `target`, the only
+/// Where the scan roots for these tests live: under `target`, the only
 /// place a build may leave files.
 const GATE_ROOT: &str = "corpus-precision-gate";
+
+/// Each test owns a subdirectory of [`GATE_ROOT`]. The fixtures are
+/// rewritten on every call and `fs::write` truncates before it writes, so
+/// two tests sharing one directory race: the reader opens a file the other
+/// has just emptied, finds no declaration in it, and the gate reports
+/// nothing — the rule looks like it passed when it never ran.
+const DART_CASE: &str = "dart-occurrence";
+/// Scan root for the file no parser claims.
+const UNCLAIMED_CASE: &str = "unclaimed-occurrence";
 
 /// The Dart file the ranked occurrence lives in.
 const WIDGET_PATH: &str = "lib/ledger_tile.dart";
@@ -47,9 +56,10 @@ fn manifest() -> Value {
     })
 }
 
-/// A scan root holding the widget and the notes file, written fresh.
-fn scan_root() -> Result<PathBuf> {
-    let root = repo_root().join("target").join(GATE_ROOT);
+/// A scan root of its own, holding the widget and the notes file,
+/// written fresh.
+fn scan_root(case: &str) -> Result<PathBuf> {
+    let root = repo_root().join("target").join(GATE_ROOT).join(case);
     for (path, contents) in [(WIDGET_PATH, FLAT_DECLARATION), (NOTES_PATH, NOTES_SOURCE)] {
         let file = root.join(path);
         let parent = file
@@ -80,7 +90,7 @@ fn ranked_cluster(path: &str, length: usize) -> Value {
 }
 
 /// The gate's failures over a report holding just `cluster`.
-fn judged(cluster: &Value) -> Result<Vec<Failure>> {
+fn judged(case: &str, cluster: &Value) -> Result<Vec<Failure>> {
     assert!(
         cluster.get("language").is_none(),
         "the wire model gives a cluster no language; the fixture must not either"
@@ -91,13 +101,13 @@ fn judged(cluster: &Value) -> Result<Vec<Failure>> {
         peak_rss_mb: 0,
     };
     let mut failures = Vec::new();
-    check_boilerplate_not_ranked_first(&manifest(), &scan_root()?, &run, &mut failures)?;
+    check_boilerplate_not_ranked_first(&manifest(), &scan_root(case)?, &run, &mut failures)?;
     Ok(failures)
 }
 
 #[test]
 fn a_dart_occurrence_is_judged_as_dart_without_a_cluster_language() -> Result<()> {
-    let failures = judged(&ranked_cluster(WIDGET_PATH, FLAT_DECLARATION.len()))?;
+    let failures = judged(DART_CASE, &ranked_cluster(WIDGET_PATH, FLAT_DECLARATION.len()))?;
     assert_eq!(
         failures.len(),
         1,
@@ -121,7 +131,7 @@ fn a_dart_occurrence_is_judged_as_dart_without_a_cluster_language() -> Result<()
 
 #[test]
 fn an_occurrence_no_parser_claims_fails_the_gate_rather_than_passing() -> Result<()> {
-    let Err(error) = judged(&ranked_cluster(NOTES_PATH, NOTES_SOURCE.len())) else {
+    let Err(error) = judged(UNCLAIMED_CASE, &ranked_cluster(NOTES_PATH, NOTES_SOURCE.len())) else {
         bail!(
             "a file no registered parser claims cannot be judged against a \
              heritage grammar, and passing it would switch the precision gate \
