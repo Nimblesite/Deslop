@@ -220,10 +220,22 @@ impl<'r, 'a> Resolution<'r, 'a> {
     fn new(region: &'r Region<'a>, straddled: &[bool]) -> Self {
         let gone = |view: usize| straddled.get(view).copied().unwrap_or(true);
         let states: Vec<State> = (0..region.len())
-            .map(|view| if gone(view) { State::Straddled } else { State::Undecided })
+            .map(|view| {
+                if gone(view) {
+                    State::Straddled
+                } else {
+                    State::Undecided
+                }
+            })
             .collect();
         let live_beaters: Vec<usize> = (0..region.len())
-            .map(|view| region.beaters(view).iter().filter(|beater| !gone(**beater)).count())
+            .map(|view| {
+                region
+                    .beaters(view)
+                    .iter()
+                    .filter(|beater| !gone(**beater))
+                    .count()
+            })
             .collect();
         let ready = states
             .iter()
@@ -232,7 +244,12 @@ impl<'r, 'a> Resolution<'r, 'a> {
             .filter(|(_, (state, live))| **state == State::Undecided && **live == 0)
             .map(|(view, _)| view)
             .collect();
-        Self { region, states, live_beaters, ready }
+        Self {
+            region,
+            states,
+            live_beaters,
+            ready,
+        }
     }
 
     /// The best-ranked undecided view nothing live beats.

@@ -126,9 +126,8 @@ fn ranked(views: &[WeightedView]) -> Vec<Cluster> {
         .iter()
         .zip(1_usize..)
         .flat_map(|((node_count, view), index)| {
-            view.iter().map(move |(file_id, span)| {
-                member(*file_id, *span, digest(index), *node_count)
-            })
+            view.iter()
+                .map(move |(file_id, span)| member(*file_id, *span, digest(index), *node_count))
         })
         .collect();
     let mut next = 0_usize;

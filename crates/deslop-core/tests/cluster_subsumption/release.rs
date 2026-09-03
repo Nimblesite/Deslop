@@ -29,7 +29,8 @@ fn each_file_set_is_judged_on_its_own() {
     let beta = registry.register("beta.ts".into());
     let gamma = registry.register("gamma.ts".into());
     let delta = registry.register("delta.ts".into());
-    let pair = |left: FileId, right: FileId, span: (usize, usize)| vec![(left, span), (right, span)];
+    let pair =
+        |left: FileId, right: FileId, span: (usize, usize)| vec![(left, span), (right, span)];
     let trio = |span: (usize, usize)| vec![(alpha, span), (beta, span), (gamma, span)];
     let left_padded = pair(alpha, beta, (0, 200));
     let right_padded = pair(alpha, beta, (50, 250));
@@ -134,7 +135,10 @@ fn a_view_released_by_its_absorber_is_judged_against_the_views_that_remain() {
          not reach its bytes in beta"
     );
     assert_eq!(
-        clusters.iter().map(|cluster| cluster.mass).collect::<Vec<u64>>(),
+        clusters
+            .iter()
+            .map(|cluster| cluster.mass)
+            .collect::<Vec<u64>>(),
         vec![HEAVY_MASS, LIGHTEST_MASS],
         "[RANK-MASS-SUM] two-occurrence views carry their node count as mass"
     );
@@ -161,7 +165,10 @@ fn three_views_that_outrank_each_other_in_a_cycle_publish_the_leader() {
         "the view leading on coverage, mass and id survives the cycle"
     );
     assert_eq!(
-        clusters.iter().map(|cluster| cluster.mass).collect::<Vec<u64>>(),
+        clusters
+            .iter()
+            .map(|cluster| cluster.mass)
+            .collect::<Vec<u64>>(),
         vec![HEAVY_MASS],
         "[RANK-MASS-SUM] the leader keeps its own mass"
     );

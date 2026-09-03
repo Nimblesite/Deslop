@@ -29,6 +29,13 @@ use crate::{
     enclosure::{span_of, Span},
 };
 
+/// Visible member-count field on a mass-only cluster; the wire model
+/// carries no `size` and no `bucket`, and reading either printed every
+/// breach as "0 occurrences" in an unlabelled bucket.
+const OCCURRENCE_COUNT: &str = "occurrence_count";
+/// Canonical duplicated-mass field, the ranked figure a breach is judged by.
+const MASS: &str = "mass";
+
 /// [CORPUS-PRECISION-CURATED] `precision` — code a human confirmed is
 /// **not** duplicated must never be reported as one cluster.
 ///
@@ -81,17 +88,14 @@ fn check_one_curated_non_duplicate(entry: &Value, report: &Value, failures: &mut
     failures.push(Failure::new(
         "precision",
         format!(
-            "cluster {id} ({bucket}, {size} occurrences) is shown spanning \
+            "cluster {id} (mass {mass}, {size} occurrences) is shown spanning \
              {files:?}, which a human verified is not duplication. Curated: {why}",
             id = breach
                 .get("id")
                 .and_then(Value::as_str)
                 .unwrap_or("<unlabelled>"),
-            bucket = breach
-                .get("bucket")
-                .and_then(Value::as_str)
-                .unwrap_or("<unlabelled>"),
-            size = field_u64(breach, "size"),
+            mass = field_u64(breach, MASS),
+            size = field_u64(breach, OCCURRENCE_COUNT),
         ),
     ));
 }
@@ -124,11 +128,15 @@ pub fn check_boilerplate_not_ranked_first(
         .filter_map(Value::as_str)
         .collect();
 
-    for (rank, cluster) in array(&run.report, "clusters")
+    for (position, cluster) in array(&run.report, "clusters")
         .iter()
         .take(top_n)
         .enumerate()
     {
+        // One-based, like the report's own `rank` field: a message that
+        // says "rank 1" about the second cluster sends the reader to the
+        // wrong finding.
+        let rank = position.saturating_add(1);
         for supertype in &forbidden {
             judge_cluster(root, cluster, rank, supertype, failures)?;
         }
@@ -157,7 +165,7 @@ fn judge_cluster(
             "rank {rank}: cluster of {} occurrences declares `{supertype}`, a \
              framework-mandated base type that cannot be deduplicated. First \
              occurrence: {}:{}",
-            field_u64(cluster, "size"),
+            field_u64(cluster, OCCURRENCE_COUNT),
             span.path,
             span.start,
         ),

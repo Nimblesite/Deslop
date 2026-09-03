@@ -81,9 +81,57 @@ fn single_occurrence_cluster_fails() {
     assert_only_failure(
         &judge(&[cluster]),
         "cluster_mass",
-        "a duplicate cluster needs at least two visible members",
+        "a duplicate cluster needs at least two occurrences",
         "max(1 - 1, 0)",
         "the failure names the singleton equation",
+    );
+}
+
+/// [EXCLUSION-CONFIG] A cluster whose only visible occurrence sits beside
+/// `report_hide`-suppressed copies is kept intact and shown, so the user
+/// sees regular code duplicating generated code. Reading the
+/// two-occurrence floor off the *visible* count condemned exactly that
+/// cluster: 18 of them on the Flutter corpus, every one a hand-written
+/// file duplicating a `.g.dart` or generated binding, and the gate
+/// demanded the engine stop publishing a finding the spec requires.
+#[test]
+fn a_mixed_cluster_with_one_visible_occurrence_passes() {
+    let cluster = mixed("mixed", 58, &["lib/tally.dart"], &["lib/tally.g.dart"]);
+    assert!(
+        judge(&[cluster]).is_empty(),
+        "one visible occurrence beside a hidden generated copy is a \
+         published finding, not a contract breach"
+    );
+}
+
+/// The floor still bites when the cluster really is alone: one carried
+/// occurrence is not duplication however it is rendered.
+#[test]
+fn a_cluster_carrying_one_occurrence_fails_even_when_it_is_visible() {
+    let cluster = mixed("lonely", 58, &["lib/tally.dart"], &[]);
+    assert_only_failure(
+        &judge(&[cluster]),
+        "cluster_mass",
+        "a single carried occurrence is not a duplicate",
+        "1 carried and 1 visible occurrences",
+        "the failure separates the carried count from the visible one",
+    );
+}
+
+/// Hiding does not license a wrong equation: mass follows the visible
+/// count, so a mixed cluster claiming mass for its hidden copies fails.
+#[test]
+fn a_mixed_cluster_may_not_claim_mass_for_hidden_copies() {
+    let mut cluster = mixed("greedy", 58, &["lib/tally.dart"], &["lib/tally.g.dart"]);
+    let _old = cluster
+        .as_object_mut()
+        .and_then(|fields| fields.insert("mass".to_owned(), json!(58)));
+    assert_only_failure(
+        &judge(&[cluster]),
+        "cluster_mass",
+        "mass counts visible occurrences only",
+        "58 × max(1 - 1, 0) = 0",
+        "the failure prints the visible-count equation",
     );
 }
 
