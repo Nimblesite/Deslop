@@ -9,7 +9,7 @@
 # human entry points and are the only ones `make help` lists.
 # =============================================================================
 
-.PHONY: build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify compile-release-tests coverage coverage-run coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-node-modules _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-coverage-check _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
+.PHONY: build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify coverage coverage-run coverage-report _ci-analyze _ci-contract-tests _ci-build _ci-gate _ci-test _ci-test-rust _ci-test-vsix vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-node-modules _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-coverage-check _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
 
 _JETBRAINS_DIR := clients/jetbrains
 
@@ -278,27 +278,20 @@ setup:
 # Repo-Specific Targets
 # =============================================================================
 
-## compile-release-tests: [CI-RELEASE-BUILD] Every release test binary,
-##                        compiled but not executed. One home for the command,
-##                        called by `make ci`'s build phase and by the CI
-##                        `build` job, so the artifacts the test phase runs
-##                        are the artifacts the build phase produced. Without
-##                        it a test job restores a target directory holding no
-##                        test artifacts and recompiles all of them: CI run
-##                        32542178321 spent 21m24s doing exactly that in front
-##                        of a suite that runs in 1m34s.
-compile-release-tests: typediagram-gen
-	@echo "==> Compiling release test binaries (no run)..."
-	cargo test --release --workspace --all-targets --features $(_TEST_FEATURES) --no-run
-
 # _ci-build: [CI-RELEASE-BUILD] Phase 1 of `make ci` — every release artifact
-#   the later phases consume, produced exactly once. Mirrors the CI `build`
-#   job step for step. Nothing after this phase is allowed to compile.
+#   the later phases consume, produced exactly once. Mirrors the CI `lint` and
+#   `build` jobs step for step.
+#
+#   It does NOT compile the release test binaries. Phase 3 runs the suite under
+#   `cargo llvm-cov`, which instruments into its own target directory and
+#   reuses none of them, so `cargo test --no-run` here only linked artifacts
+#   nothing executes — 282s of every CI pipeline and of every local `make ci`.
+#   `make lint` already type-checks every test target via `--all-targets`, and
+#   phase 3 links them for real.
 _ci-build:
 	@$(MAKE) fmt CHECK=1
 	@$(MAKE) lint
 	@$(MAKE) build
-	@$(MAKE) compile-release-tests
 	@$(MAKE) _vsix-build
 	@$(MAKE) _vsix-stage-bundled-binaries
 
@@ -492,10 +485,10 @@ CORPUS_TESTS ?= corpus_tokio_rust corpus_nest_typescript corpus_determinism_nest
 # The whole corpus, for `test-corpus-ci-full`. A second copy of these lists in
 # the workflow YAML is how the `full` dispatch came to pass the substring
 # `corpus_` into an `--exact` loop and scan nothing at all.
-CORPUS_REPOS_FULL = flutter jellyfin tokio django react nest laravel hugo fsharp
+CORPUS_REPOS_FULL = flutter jellyfin tokio django react nest laravel hugo fsharp tornado
 CORPUS_TESTS_FULL = corpus_flutter_dart corpus_jellyfin_csharp corpus_tokio_rust \
                     corpus_django_python corpus_react_javascript corpus_nest_typescript \
-                    corpus_laravel_php corpus_hugo_go corpus_fsharp \
+                    corpus_laravel_php corpus_hugo_go corpus_fsharp corpus_tornado_python \
                     corpus_determinism_nest_typescript corpus_determinism_jellyfin_csharp
 
 # [CI-DESLOP] Self-hosted duplication gate. Runs the release binary built by

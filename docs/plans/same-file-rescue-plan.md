@@ -1,20 +1,22 @@
 # Same-file shared-subtree rescue
 
-Tracking issues: gh #492 (two drifted methods never cluster) and gh #496 (two methods differing only in literals are refused below the promote floor). One band, one fix.
+Tracking issue: gh #492 (two drifted methods never cluster). gh #496 (two methods differing only in literals were refused below a same-file promote floor) is settled below and no longer needs the rescue.
 
 Two methods that drifted apart inside one file are the same duplication as two that drifted apart across files. The file boundary records where the copy was pasted, not whether it is a copy. Today the shared-subtree rescue of [FUSED-SHARED-SUBTREE](../specs/fused.md) is cross-file only, so a same-file near-miss publishes the statement fragments its two methods share and never the methods.
 
 ## What the gap costs
 
-The band has two halves and they meet in the middle. Below the 0.85 same-file promote floor, [FUSED-CONTENT-GATE] refuses a pair outright; above it the pair is admitted with no rescue needed. Between a literal-only copy and a shape family there is currently nothing but that number.
+The band has two halves. Below the 0.70 support floor, [FUSED-CONTENT-GATE] refuses a pair outright; above it the pair is admitted with no rescue needed and the sibling-family question goes to the forwarding proof.
 
 `csharp-merge-drift` holds `ApplyStandard` and `ApplyPremium` in `DriftLimits.cs`. They share a five-call skeleton; the premium copy grew an escalation guard and its own literals. The pair measures shared-subtree overlap 0.82. Nothing publishes it: 0.32.0 reported four fragment clusters covering two-line windows and single statements, and the current release reports the exact tail alone. A reader is told about pieces of a duplication and never about the duplication.
 
 Pinned by `type3_enclosing_method::csharp_same_file_type3_reports_both_methods_in_one_cluster`, which asserts one cluster over lines 3-13 and 15-29 with every fragment absorbed. It is `#[ignore]`d, with its assertions intact, until the route below exists.
 
-The other half needs no rescue at all, only the floor. `dart-forwarding-business-pair` holds `standardTotal` and `premiumTotal`: structurally identical, differing in one string literal and one integer. The pair measures agreement 0.727 and rename consistency 0.0, so the 0.85 floor refuses it. `dart-forwarding-duplicate-route`, `dart-forwarding-transform-before-delegation` and `csharp-merge-manyholes` fall the same way. 0.32.0 published all four, and `dart_forwarding_fail_open.rs` describes its pairs as liftable duplication that must stay on the report, while its assertions now require them absent. That contradiction is gh #496 and it has to be settled before the rescue question is worth asking: if the floor is what refuses a two-literal copy, no rescue route reaches the pair either.
+The other half needed no rescue at all, only the floor, and it is settled. `dart-forwarding-business-pair` holds `standardTotal` and `premiumTotal`: structurally identical, differing in one string literal and one integer, measuring agreement 0.727 and rename consistency 0.0. The 0.85 same-file admission floor that refused it was PR #485's relocation of a render-time bucket grade to admission; 0.32.0 published the pair as `structural_only` and left the sibling-family question to [RANK-STRUCTURAL-ONLY-FORWARDING], which reads where each call goes. That is the discriminator: the REST settings family and a two-literal copy of one method measure in the same 0.70–0.85 band, so no admission floor separates them, and the forwarding proof does. Every pair now pays `content_gate.support_floor` in every scope; only an unanchored LSH-only pair pays `promote_floor`. `dart_forwarding_fail_open.rs` asserts the positive contract its documentation always stated (gh #496, gh #497), `declaration_family_plurality` again publishes the nonbijective pair its fixture calls liftable, and `content_gate_admits.rs` pins the admission at the pipeline seam.
 
-Settle first whether `rename_consistency` is right to report 0.0 for a pair whose two varied positions substitute consistently. If it counts identifier renames only, then a literal-only copy is judged on agreement alone and the lever named at the gate is not the lever doing the work.
+`rename_consistency` was right to report 0.0 for the pair: nothing in it is renamed, and the rename axis measures renames. A literal-only copy is judged on agreement, which is the lever that now does the work.
+
+`csharp-merge-manyholes` (agreement 0.50–0.57) still falls below the support floor and stays with gh #492 below.
 
 ## Why admitting every same-file pair is wrong
 
@@ -37,6 +39,6 @@ A discriminator that separates a copied method from a shape family, computed fro
 ## Acceptance — how gh #492 and its skip end
 
 - `csharp_same_file_type3_reports_both_methods_in_one_cluster` passes with its assertions unchanged and its `#[ignore]` removed.
-- `dart_forwarding_fail_open`'s business, duplicate-route and transform-before-delegation controls assert what the module documentation states, and `csharp-merge-manyholes` gains an occurrence and range pin either way the question is settled.
+- `dart_forwarding_fail_open`'s controls keep asserting what the module documentation states, and `csharp-merge-manyholes` gains an occurrence and range pin.
 - `dart_issue_197_single_file_structural_only`, `python_issue_103_helper_call_sites`, the three `issue_190` modes, `cli::bucket_groups` and both `refactor_merge_refusals` same-file pins stay green.
 - The paired 0.32.0 fixture scan loses no finding.

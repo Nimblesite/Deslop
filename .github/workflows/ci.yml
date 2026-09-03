@@ -89,9 +89,93 @@ jobs:
   # [CI-RELEASE-BUILD] Formatting and analyzers run first, followed by release
   # compilation in the same sequential job. The completed release cache is then
   # saved for every parallel test job.
-  build:
-    name: Format + analyzers + build release
+  # [CI-RELEASE-BUILD] Stage 1: every read-only analyzer, on its own runner
+  # and ahead of every compile. Format, the grammar-pin check and
+  # `make _ci-analyze` together take about 35 seconds against a warm cache,
+  # so gating the whole pipeline on them costs almost nothing and stops a
+  # clippy failure from being discovered by an eight-minute coverage job.
+  # It was inside `build`, which meant the two most expensive jobs in the
+  # workflow waited on a release compile they cannot use before a linter
+  # they can.
+  lint:
+    name: Format + analyzers
     needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.x"
+          # Caches the ~/.npm download store keyed on the extension
+          # lockfiles. Purely additive: a miss installs fresh (prior
+          # behaviour), a hit skips re-downloading the tarballs.
+          cache: npm
+          cache-dependency-path: |
+            clients/vscode/package-lock.json
+            clients/vscode/webview-ui/package-lock.json
+
+      # `typediagram` CLI is the wire-format generator invoked by both
+      # `make typediagram-gen` and the deslop-core build.rs on every
+      # `cargo build`. Pinned to keep CI / devcontainer / Makefile in
+      # sync per CLAUDE.md dependency-pinning rules.
+      - name: Install typediagram
+        run: npm install -g typediagram@0.11.0
+
+      # This job keeps its own cache entry rather than reading the release
+      # one. Clippy writes `.rmeta` that only clippy reuses; while these
+      # steps lived in `build`, that metadata was saved under the release
+      # key as a side effect and kept the analyzers at ~22s. On a separate
+      # runner it has to be carried deliberately, or every run re-checks
+      # the whole workspace. `restore-keys` falls back to the release
+      # entry, so a cold lint cache still starts from built dependencies
+      # instead of from nothing.
+      - name: Cache analyzer build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
+          key: ${{ runner.os }}-cargo-lint-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-lint-
+            ${{ runner.os }}-cargo-release-
+            ${{ runner.os }}-cargo-
+
+      - name: Check formatting
+        run: make fmt CHECK=1
+
+      - name: Verify grammar pins
+        run: |
+          set -euo pipefail
+          for dep in tree-sitter tree-sitter-c-sharp tree-sitter-rust tree-sitter-python tree-sitter-dart tree-sitter-typescript tree-sitter-javascript tree-sitter-php tree-sitter-fsharp tree-sitter-go; do
+            line=$(grep -E "^${dep} = " Cargo.toml || true)
+            if [ -z "${line}" ]; then
+              echo "MISSING PIN: ${dep} must appear in workspace.dependencies"
+              exit 1
+            fi
+            if ! echo "${line}" | grep -qE '"=[0-9]+\.[0-9]+\.[0-9]+"'; then
+              echo "LOOSE PIN: ${dep} must use an exact =x.y.z constraint, got: ${line}"
+              exit 1
+            fi
+            echo "OK: ${line}"
+          done
+
+      - name: Run analyzers
+        run: make _ci-analyze
+
+  build:
+    name: Build release
+    needs: [changes, lint]
     if: needs.changes.outputs.code == 'true'
     # HOSTED RUNNER: every org-provisioned label tried here starved —
     # `linux-x64` queued 16m+ per runner, `Medium` 20m+ with none
@@ -99,8 +183,8 @@ jobs:
     # starts in seconds and [TEST-ONE-BINARY] already cut the compile to
     # ~1m02s by linking once instead of 193 times.
     runs-on: ubuntu-latest
-    # The compile is the bulk of the job: 20m1s on run 32548446084 with
-    # four cores, which a 25-minute cap cancelled mid-gate and took every
+    # The compile is the whole job: 20m1s on run 32548446084 with four
+    # cores, which a 25-minute cap cancelled mid-gate and took every
     # downstream shard, the VSIX job and the JetBrains gate with it. The
     # cap is generous rather than tight on purpose — a build that runs
     # long is a slow pipeline, but a build that is *cancelled* publishes
@@ -111,8 +195,6 @@ jobs:
       - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
 
       - uses: actions/setup-node@v7
         with:
@@ -146,35 +228,22 @@ jobs:
             ${{ runner.os }}-cargo-release-
             ${{ runner.os }}-cargo-
 
-      - name: Check formatting
-        run: make fmt CHECK=1
-
-      - name: Verify grammar pins
-        run: |
-          set -euo pipefail
-          for dep in tree-sitter tree-sitter-c-sharp tree-sitter-rust tree-sitter-python tree-sitter-dart tree-sitter-typescript tree-sitter-javascript tree-sitter-php tree-sitter-fsharp tree-sitter-go; do
-            line=$(grep -E "^${dep} = " Cargo.toml || true)
-            if [ -z "${line}" ]; then
-              echo "MISSING PIN: ${dep} must appear in workspace.dependencies"
-              exit 1
-            fi
-            if ! echo "${line}" | grep -qE '"=[0-9]+\.[0-9]+\.[0-9]+"'; then
-              echo "LOOSE PIN: ${dep} must use an exact =x.y.z constraint, got: ${line}"
-              exit 1
-            fi
-            echo "OK: ${line}"
-          done
-
-      - name: Run analyzers
-        run: make _ci-analyze
-
-      # [CI-RELEASE-BUILD] One release build per run, shared by every
-      # downstream job. The key is the commit, so the two parallel test
-      # jobs get an exact hit on the build this run produced rather than
-      # whatever a previous run happened to leave behind — a near-miss
-      # there is how a test job silently recompiles the workspace and
-      # the parallelism buys nothing. `restore-keys` still hands a cold
-      # run the previous commit's target directory to build on top of.
+      # [CI-RELEASE-BUILD] One release build per run, shared by the four
+      # jobs that run the binaries: `repository-tests`, `vsix`,
+      # `jetbrains` and `site`. The key is the commit, so each gets an
+      # exact hit on the build this run produced rather than whatever a
+      # previous run happened to leave behind — a near-miss there is how
+      # a consumer silently recompiles the workspace and the parallelism
+      # buys nothing. `restore-keys` still hands a cold run the previous
+      # commit's target directory to build on top of.
+      #
+      # The two coverage jobs are deliberately NOT consumers. Both
+      # compile under llvm-cov instrumentation, whose fingerprints and
+      # target directory share nothing with this one, so this job only
+      # ever cost them wall time. Nothing here compiles test binaries
+      # for that reason: `cargo test --no-run` used to run in this job
+      # and spent 282s of every pipeline linking artifacts that no
+      # downstream job could execute.
       #
       # The two generated wire modules are cached WITH the target
       # directory, and have to be. They are git-ignored, so a consumer
@@ -190,15 +259,6 @@ jobs:
       # restored fingerprints stay valid.
       - name: Build
         run: make build
-
-      # [CI-RELEASE-BUILD] The release *test* binaries, compiled here and
-      # written into the cache this job owns. Without this the `ci` job
-      # restores a target directory holding no test artifacts and
-      # recompiles all of them: CI run 32542178321 spent 21m24s doing
-      # exactly that before running a suite that takes 1m34s. `--no-run`
-      # stops short of executing them, so this job stays a build job.
-      - name: Compile release test binaries
-        run: make compile-release-tests
 
       - name: Save release build cache
         uses: actions/cache/save@v6
@@ -225,9 +285,13 @@ jobs:
   # LLVM instrumentation. It writes raw profiles only; `coverage` is the
   # one final stage that calculates reports and thresholds after every test
   # job in this workflow has completed.
+  # [CI-COVERAGE-ONCE] This job gates on `lint`, not on `build`. It compiles
+  # under llvm-cov instrumentation into `target/llvm-cov-target` with its own
+  # cache, so not one artifact of the release build is reusable here — waiting
+  # for that build only added its wall time to the longest leg of the run.
   rust-tests:
     name: Rust tests + coverage collection
-    needs: [changes, build]
+    needs: [changes, lint]
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -342,7 +406,7 @@ jobs:
   # all instrumented test executions finish before reports are generated.
   coverage:
     name: Calculate coverage + thresholds
-    needs: [changes, rust-tests, repository-tests, windows, vsix, jetbrains, site]
+    needs: [changes, lint, rust-tests, repository-tests, windows, vsix, jetbrains, site]
     if: always() && needs.changes.outputs.code == 'true'
     # HOSTED RUNNER: same starvation as `build` — org labels `linux-x64`
     # and `Medium` never picked a runner up. Hosted `ubuntu-latest`:
@@ -487,9 +551,12 @@ jobs:
   # target executes exactly once here, on the platform that ships TCP as its
   # default IPC transport. Linux coverage excludes this target. Raw profiles
   # are uploaded for calculation only after every test job has completed.
+  # Gates on `lint` for the same reason as `rust-tests`, and one more: this
+  # runner is Windows. The release build's cache key is `Linux-cargo-release-`
+  # and its artifacts are ELF, so nothing it produces can cross to this job.
   windows:
     name: Windows tests + coverage collection
-    needs: [changes, build]
+    needs: [changes, lint]
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 30
@@ -833,7 +900,7 @@ jobs:
   # gated heavy jobs).
   ci:
     name: CI
-    needs: [changes, security, build, rust-tests, repository-tests, windows, vsix, jetbrains, site, coverage]
+    needs: [changes, security, lint, build, rust-tests, repository-tests, windows, vsix, jetbrains, site, coverage]
     if: always() && needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5

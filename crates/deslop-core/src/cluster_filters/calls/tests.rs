@@ -28,6 +28,14 @@ const SAME_A: &str = "def member_a():\n    greet(\"alice\")\n";
 /// The byte-identical counterpart.
 const SAME_B: &str = "def member_a():\n    greet(\"alice\")\n";
 
+/// gh #284 whole-scenario members: an invariant adapter whose bound
+/// result flows into the varying assertion through its receiver.
+const RECEIVER_FLOW_A: &str = "test(\"points an optional empty record at the null offset\", () => {\n  const schema = loadFixture(\"empty-record-optional.td\");\n  const generated = generateRust(schema, { tdbin: true });\n  expect(generated).toContain(\"pub marker: Option<EmptyMarker>\");\n});\n";
+/// The receiver-flow counterpart.
+const RECEIVER_FLOW_B: &str = "test(\"points a required empty record at the shared singleton\", () => {\n  const schema = loadFixture(\"empty-record-required.td\");\n  const generated = generateRust(schema, { tdbin: true });\n  expect(generated).toContain(\"pub marker: EmptyMarker\");\n});\n";
+/// The needle locating the adapter call.
+const ADAPTER_NEEDLE: &str = "generateRust(";
+
 /// The needle locating the call statement inside a member source.
 const CALL_NEEDLE: &str = "greet(";
 /// The needle locating the interpolation call.
@@ -98,6 +106,30 @@ fn ts_scenario_pair_verdict_through_the_noise_bank() {
         Some(NoiseFilter::LiteralCalls),
         "the two-member scenario family must be convicted through the \
          full noise bank: {verdict:?}"
+    );
+}
+
+/// The gh #284 pair whose invariant adapter is consumed through the
+/// *receiver* of the varying call: `generateRust` binds `generated`,
+/// and `expect(generated).toContain("…")` reads it as the subject of
+/// the assertion rather than as an argument. The spec's adapter clause
+/// says a bound result that flows into a later varying call is
+/// connective plumbing, and a receiver is one way a value flows in, so
+/// the whole-scenario pair must be convicted.
+#[test]
+fn adapter_consumed_through_the_receiver_is_still_scaffolding() {
+    let corpus = Corpus::new()
+        .member(RECEIVER_FLOW_A, ADAPTER_NEEDLE)
+        .member(RECEIVER_FLOW_B, ADAPTER_NEEDLE)
+        .language("typescript");
+    let verdict = corpus.verdict();
+    assert_eq!(
+        verdict,
+        Some(NoiseFilter::LiteralCalls),
+        "the invariant `generateRust` adapter binds `generated`, which the \
+         varying `expect(generated).toContain(…)` consumes as its receiver; \
+         a value flowing into the callee is still flowing into the call, so \
+         the scenario pair is literal-variation scaffolding: {verdict:?}"
     );
 }
 

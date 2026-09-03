@@ -10,7 +10,7 @@ Fixture repos prove the pipeline runs. Only the corpus can prove it is *right* �
 
 Each row is a place the suite reports more confidence than it has. **Every one is a green run that would survive a broken detector.**
 
-### L1. Five of nine repositories assert nothing
+### L1. Six of ten repositories assert nothing
 
 #347 is fixed — the gate boots and ran green on 15, 16 and 17 Aug. That green is not evidence. The last run printed:
 
@@ -24,8 +24,9 @@ Measured against the manifests, not the ledger:
 | repo | language | `must_find` | `must_find_type2` | `must_not_rank_first` | determinism |
 |---|---|---|---|---|---|
 | flutter | dart | 3 | 0 | ✅ | — |
-| nest | typescript | 0 | 2 † | — | ✅ |
-| tokio | rust | 0 | 1 † | — | — |
+| tornado | python | 1 | 5 | — | — |
+| nest | typescript | 0 | 2 | — | ✅ |
+| tokio | rust | 0 | 1 | — | — |
 | jellyfin | csharp | 0 | 0 | — | ✅ |
 | django | python | 0 | 0 | — | — |
 | react | javascript | 0 | 0 | — | — |
@@ -33,17 +34,15 @@ Measured against the manifests, not the ledger:
 | hugo | go | 0 | 0 | — | — |
 | fsharp | fsharp | 0 | 0 | — | — |
 
-† on PR #392 only; `main` has zero.
-
-Six of eight languages carry no curated ground truth of any kind. **A scan that returned an empty report would pass those five repositories.**
+Four repositories carry curated ground truth; six carry none, and five of the nine shipped languages have no curated repository at all. **A scan that returned an empty report would pass those six repositories.**
 
 ### L2. Nothing asserts the scan found any files — CLOSED by [CORPUS-SCOPE] § D
 
-`files_analysed` is *printed* by `report_measurements` ([`corpus_repos.rs:244`](../../crates/deslop/tests/corpus_repos.rs#L244)) and **asserted nowhere**. A repository that analyses as **zero files** produces a clean report, exit code 0, and a green corpus gate on all nine repositories.
+`files_analysed` is *printed* by `report_measurements` ([`corpus_repos.rs:244`](../../crates/deslop/tests/corpus_repos.rs#L244)) and **asserted nowhere**. A repository that analyses as **zero files** produces a clean report, exit code 0, and a green corpus gate on all ten repositories.
 
 That is not hypothetical — it is exactly #342, which shipped: a repo under any folder named `dist`/`build`/`target` analysed as zero files. The corpus gate, the one instrument built to catch a total false negative, could not see it.
 
-Closed: `corpus_scope.rs` asserts both bounds, an absent bound fails rather than passing, and all nine manifests now carry curated rails (§ D).
+Closed: `corpus_scope.rs` asserts both bounds, an absent bound fails rather than passing, and all ten manifests now carry curated rails (§ D).
 
 ### L3. 🛑 #401 — the only curated precision check matches raw source text
 
@@ -62,7 +61,7 @@ Seven open false-positive issues (#71 #79 #103 #283 #284 #285 #336) all say *"th
 
 `check_recall` asserts only that *some* cluster spans the curated paths. A 137-line byte-identical clone that renders `loosely_similar`, hides half its occurrences, and ranks #900 passes today. The Type-2 check already demands span **plus** bucket, saturating evidence and visibility — the byte-identical case is the easier proof and holds the weaker contract.
 
-### L6. Determinism is asserted on 2 of 9 repositories
+### L6. Determinism is asserted on 2 of 10 repositories
 
 `corpus_determinism_nest_typescript` and `corpus_determinism_jellyfin_csharp`. Seven languages have no determinism assertion at all, and [PIPELINE-DETERMINISM] is what makes every other number in the report quotable.
 
@@ -72,7 +71,7 @@ Seven open false-positive issues (#71 #79 #103 #283 #284 #285 #336) all say *"th
 
 ### L8. A green scheduled run is not full coverage
 
-[CORPUS-CI] sizes the scheduled slice to finish in about a minute. The summary is supposed to name what was skipped. Nothing asserts it does, so a three-repo run reads as a nine-repo pass.
+[CORPUS-CI] sizes the scheduled slice to finish in about a minute. The summary is supposed to name what was skipped. Nothing asserts it does, so a three-repo run reads as a ten-repo pass.
 
 ### L9. #439 — `type2_recall` curates paths but not extent — CLOSED by [CORPUS-RECALL]
 
@@ -149,13 +148,14 @@ The target state: **every repository, every run, asserts every row below.** Ids 
 
 ### E. Determinism everywhere
 
-- [ ] Extend the determinism assertion from 2 repositories to all 9 — same tree, two runs, exact agreement on cluster count and `duplication_percent`.
+- [ ] Extend the determinism assertion from 2 repositories to all 10 — same tree, two runs, exact agreement on cluster count and `duplication_percent`.
 - [ ] Assert the *values*, not just their equality, so a determinism pass cannot be bought by both runs being equally broken.
 
 ### F. Curate every repository, every language
 
 Hand-verified ground truth at the bar the nest/tokio entries set — a real diff, quoted in `verified`, against the pinned `sha`. Per repo: **≥2 `must_find`, ≥1 `must_find_type2`, ≥2 `must_not_cluster`.**
 
+- [x] **tornado** (python) — 1 `must_find`, 5 `must_find_type2`, hand-verified at the pinned sha
 - [ ] **django** (python) — #103 is a Python FP; its pin belongs here
 - [ ] **react** (javascript) — #79 and #283 land here
 - [ ] **jellyfin** (csharp)
@@ -179,7 +179,7 @@ Hand-verified ground truth at the bar the nest/tokio entries set — a real diff
 
 - [ ] One command runs one repository end to end with legible failure text; a failure names the check, the curated entry, and the reported cluster it disagreed with.
 - [ ] Clone/scan caching so re-running a single repository during curation is cheap — curation is iterative by nature and currently pays a full clone.
-- [ ] Slice scheduling that rotates, so all nine repositories are covered across a week and the summary says which day covered what.
+- [ ] Slice scheduling that rotates, so all ten repositories are covered across a week and the summary says which day covered what.
 - [ ] `make test-corpus` stays strict locally (ignores `known-failures.json`) — it is the honest run and must remain the default for humans.
 
 ## Part 4 — Why the suite is skipped, and how the skip ends
@@ -192,7 +192,7 @@ Tracked by **#422**, blocked on **#166**.
 |---|---|---|
 | flutter/flutter | ~9.5 GB peak, 9m44s (#166) | no |
 | dotnet/fsharp | >13 GB peak | no |
-| the other seven | minutes each, times nine | not as a PR gate |
+| the other eight | minutes each, times ten | not as a PR gate |
 
 Wall time and peak RSS are runner-dependent, so [CORPUS-CEILINGS] cannot assert a stable budget on shared hardware either.
 
