@@ -245,20 +245,48 @@ print_summary() {
       .map(([label, a], i) => [label, a, statsB[i][1]])
       .filter(([, a, b]) => a === undefined || b === undefined)
       .map(([label]) => label);
-    const CLUSTER_COLUMNS = [
-      ["rank", "rank"],
-      ["rank_band", "band"],
-      ["occurrence_count", "occurrences"],
-      ["mass", "mass"],
-      ["id", "id"],
+    // Cluster overlap by id: the real accuracy-movement signal between the
+    // two engines — how many published clusters both report, and how many
+    // each reports that the other does not.
+    const idsOf = (r) => new Set((r.clusters ?? []).map((c) => c.id));
+    const idsA = idsOf(reportA);
+    const idsB = idsOf(reportB);
+    const sharedCount = [...idsA].filter((x) => idsB.has(x)).length;
+    const onlyACount = idsA.size - sharedCount;
+    const onlyBCount = idsB.size - sharedCount;
+    // Per-version cluster columns: each version is rendered with the fields
+    // its own schema reports, so no cell is ever an approximation of another
+    // schema field. Column shown when any cluster of that report has it.
+    const CLUSTER_DISPLAY = [
+      ["id", "id", (c) => c.id],
+      ["rank", "rank", (c) => c.rank],
+      ["rank_band", "band", (c) => c.rank_band],
+      ["mass", "mass", (c) => c.mass],
+      ["weight", "weight", (c) => c.weight],
+      ["size", "size", (c) => c.size],
+      ["bucket", "bucket", (c) => c.bucket],
+      ["category", "category", (c) => c.category],
+      ["canonical_node_count", "nodes", (c) => c.canonical_node_count],
+      ["occurrence_count", "occurrences", (c) => c.occurrence_count],
+      ["occurrences_total", "occurrences_total", (c) => c.occurrences_total],
+      ["signals.fused", "fused", (c) => (c.signals ? c.signals.fused : undefined)],
     ];
-    const inEveryCluster = (field) => [reportA, reportB].every((r) =>
-      (r.clusters ?? []).some((c) => c[field] !== undefined));
-    const clusterCols = CLUSTER_COLUMNS.filter(([field]) => inEveryCluster(field));
-    const struckClusterCols = CLUSTER_COLUMNS
-      .filter(([field]) => !inEveryCluster(field)).map(([, label]) => label);
-    const clusterTable = (r) => (r.clusters ?? []).slice(0, 5).map((c) =>
-      `| ${clusterCols.map(([field]) => c[field]).join(" | ")} |`).join("\n");
+    const columnsFor = (r) => CLUSTER_DISPLAY.filter(([, , get]) =>
+      (r.clusters ?? []).some((c) => get(c) !== undefined));
+    const clusterTable = (r, cols) => (r.clusters ?? []).slice(0, 5).map((c) =>
+      `| ${cols.map(([, , get]) => get(c)).join(" | ")} |`).join("\n");
+    const colsA = columnsFor(reportA);
+    const colsB = columnsFor(reportB);
+    // Schema delta: what each report shape has that the other lacks, at both
+    // top level and per cluster.
+    const onlyInTop = (a, b) => Object.keys(a).filter((k) => !(k in b));
+    const clusterKeys = (r) => [...new Set(r.clusters.flatMap((c) => Object.keys(c)))];
+    const keysA = clusterKeys(reportA);
+    const keysB = clusterKeys(reportB);
+    const onlyInACluster = keysA.filter((k) => !keysB.includes(k));
+    const onlyInBCluster = keysB.filter((k) => !keysA.includes(k));
+    const schemaLine = (label, top, cluster) =>
+      `- ${label} — top level: ${top.length ? top.join(", ") : "none"}; per cluster: ${cluster.length ? cluster.join(", ") : "none"}`;
     const identical = fs.readFileSync(reportAPath, "utf8") === fs.readFileSync(reportBPath, "utf8");
     const lines = [
       "# Deslop version comparison",
@@ -276,21 +304,26 @@ print_summary() {
       `| metric | deslop@${meta.shortA} | deslop@${meta.shortB} |`,
       "|---|---|---|",
       ...statRows.map(([label, a, b]) => `| ${label} | ${a} | ${b} |`),
-      ...(struckStats.length ? ["", `Struck (absent in one schema): ${struckStats.join(", ")}`] : []),
+      ...(struckStats.length ? ["", `Not comparable (absent in one schema): ${struckStats.join(", ")}`] : []),
       "",
-      `## Top 5 clusters — deslop@${meta.shortA}`,
+      `- Published clusters shared by id: **${sharedCount}** · only in ${meta.shortA}: **${onlyACount}** · only in ${meta.shortB}: **${onlyBCount}**`,
       "",
-      `| ${clusterCols.map(([, label]) => label).join(" | ")} |`,
-      `|${clusterCols.map(() => "---").join("|")}|`,
-      clusterTable(reportA),
-      ...(struckClusterCols.length ? ["", `Struck columns (absent in one schema): ${struckClusterCols.join(", ")}`] : []),
+      `## Top 5 clusters — deslop@${meta.shortA} (fields its schema reports)`,
       "",
-      `## Top 5 clusters — deslop@${meta.shortB}`,
+      `| ${colsA.map(([, label]) => label).join(" | ")} |`,
+      `|${colsA.map(() => "---").join("|")}|`,
+      clusterTable(reportA, colsA),
       "",
-      `| ${clusterCols.map(([, label]) => label).join(" | ")} |`,
-      `|${clusterCols.map(() => "---").join("|")}|`,
-      clusterTable(reportB),
-      ...(struckClusterCols.length ? ["", `Struck columns (absent in one schema): ${struckClusterCols.join(", ")}`] : []),
+      `## Top 5 clusters — deslop@${meta.shortB} (fields its schema reports)`,
+      "",
+      `| ${colsB.map(([, label]) => label).join(" | ")} |`,
+      `|${colsB.map(() => "---").join("|")}|`,
+      clusterTable(reportB, colsB),
+      "",
+      "## Report schema changes",
+      "",
+      schemaLine(`Only in ${meta.shortA}`, onlyInTop(reportA, reportB), onlyInACluster),
+      schemaLine(`Only in ${meta.shortB}`, onlyInTop(reportB, reportA), onlyInBCluster),
       "",
       `Reports: \`${reportAPath}\` and \`${reportBPath}\` (each with .txt/.html siblings and logs).`,
       "",

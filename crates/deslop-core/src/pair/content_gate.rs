@@ -242,18 +242,25 @@ fn lsh_only_pair_needs_content(
         && pair.score.token_jaccard >= LSH_ONLY_MIN_JACCARD
 }
 
-/// Scope-specific content floor for this exact pair.
+/// Route-specific content floor for this exact pair.
+///
+/// A same-file pair pays the same support floor as a cross-file pair
+/// ([FUSED-CONTENT-GATE]): two methods copied within one file measure
+/// no differently from two copied across files, and a same-file
+/// sibling family is the forwarding proof's question
+/// ([RANK-STRUCTURAL-ONLY-FORWARDING]), answered by where each call
+/// goes — not by an admission floor, which the REST settings family
+/// clears in the same 0.7–0.85 band a two-literal copy occupies.
 ///
 /// An unanchored LSH-only pair pays the promote floor in every scope:
 /// with no structural anchor, no embedding support, and no
 /// shared-subtree alignment, the token echo is its whole case, and a
-/// token echo must be corroborated as strongly as a same-file
-/// promotion before it may weld two views into one closure
-/// ([FUSED-CONTENT-GATE]). The whole-file-against-interior-window
+/// token echo must be corroborated more strongly before it may weld
+/// two views into one closure. The whole-file-against-interior-window
 /// pairs of the #339 corpus ride exactly this route at cross-file
 /// support strength and manufacture mixed-extent clusters.
 fn content_floor(pair: &CandidatePair, left: &Fingerprint, right: &Fingerprint) -> f64 {
-    if left.file_id == right.file_id || lsh_only_pair_needs_content(pair, left, right) {
+    if lsh_only_pair_needs_content(pair, left, right) {
         CONTENT_PROMOTE_FLOOR
     } else {
         CONTENT_SUPPORT_FLOOR
