@@ -559,7 +559,14 @@ jobs:
     needs: [changes, lint]
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
-    timeout-minutes: 30
+    # TIMEOUT EXCEPTION: this job builds the `deslop` E2E suite under llvm-cov
+    # instrumentation on top of the LSP binary and the MCP transport target.
+    # A cold Windows build of that set runs past the old 30-minute cap on its
+    # own, before a single assertion has been evaluated. The alternative —
+    # dropping the path-spelling guards below — would leave the one rule only
+    # this platform can break unenforced, which is what the cap would be
+    # buying.
+    timeout-minutes: 50
     env:
       CARGO_TARGET_DIR: target/windows-llvm-cov
     steps:
