@@ -9,6 +9,7 @@ import { test } from "node:test";
 import {
   UNIX_SOCKET_PATH_LIMIT,
   longestSocketPathLength,
+  platformPath,
   profileRoot,
   socketPathIsCapped,
   vscodeTestUserDataDir,
@@ -31,7 +32,7 @@ const WINDOWS_TMP =
 for (const platform of POSIX) {
   test(`a deep checkout still yields a socket path the kernel will accept on ${platform}`, () => {
     const dir = vscodeTestUserDataDir(DEEP_CHECKOUT, platform, "/unused");
-    const length = longestSocketPathLength(dir);
+    const length = longestSocketPathLength(dir, platform);
     assert.ok(socketPathIsCapped(platform), `${platform} is a capped platform`);
     assert.ok(
       length <= UNIX_SOCKET_PATH_LIMIT,
@@ -48,9 +49,9 @@ test("the default profile location is what actually overflows", () => {
   // Pins the reason this module exists. If `@vscode/test-cli`'s default
   // ever became short enough, this test failing is the signal to delete
   // the override rather than carry it forever.
-  const naive = path.join(DEEP_CHECKOUT, ".vscode-test", "user-data");
+  const naive = path.posix.join(DEEP_CHECKOUT, ".vscode-test", "user-data");
   assert.ok(
-    longestSocketPathLength(naive) > UNIX_SOCKET_PATH_LIMIT,
+    longestSocketPathLength(naive, "linux") > UNIX_SOCKET_PATH_LIMIT,
     "the default profile path used to overflow — that is the defect being fixed",
   );
 });
@@ -62,7 +63,7 @@ test("Windows is not held to the Unix socket cap", () => {
   assert.equal(socketPathIsCapped("win32"), false);
   const dir = vscodeTestUserDataDir(DEEP_CHECKOUT, "win32", WINDOWS_TMP);
   assert.ok(
-    longestSocketPathLength(dir) > UNIX_SOCKET_PATH_LIMIT,
+    longestSocketPathLength(dir, "win32") > UNIX_SOCKET_PATH_LIMIT,
     "this %TEMP% is exactly the long one the POSIX cap would have rejected",
   );
   assert.equal(profileRoot("win32", WINDOWS_TMP), WINDOWS_TMP);
@@ -101,6 +102,15 @@ test("the profile is anchored outside the checkout", () => {
       !dir.startsWith(DEEP_CHECKOUT),
       `a profile inside the checkout reintroduces the depth that caused the overflow (${platform})`,
     );
-    assert.equal(path.dirname(dir), profileRoot(platform, WINDOWS_TMP));
+    assert.equal(
+      platformPath(platform).dirname(dir),
+      profileRoot(platform, WINDOWS_TMP),
+      `the profile must sit directly under the ${platform} anchor`,
+    );
+    assert.equal(
+      dir,
+      platformPath(platform).normalize(dir),
+      `a ${platform} profile must be spelled with ${platform} separators, whatever host resolved it`,
+    );
   }
 });
