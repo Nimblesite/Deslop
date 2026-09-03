@@ -472,7 +472,7 @@ mod language_of_first_occurrence {
     }
 
     /// The gate's failures over a report holding just `cluster`.
-    fn judged(cluster: Value) -> Result<Vec<Failure>> {
+    fn judged(cluster: &Value) -> Result<Vec<Failure>> {
         assert!(
             cluster.get("language").is_none(),
             "the wire model gives a cluster no language; the fixture must not either"
@@ -489,7 +489,7 @@ mod language_of_first_occurrence {
 
     #[test]
     fn a_dart_occurrence_is_judged_as_dart_without_a_cluster_language() -> Result<()> {
-        let failures = judged(ranked_cluster(WIDGET_PATH, FLAT_DECLARATION.len()))?;
+        let failures = judged(&ranked_cluster(WIDGET_PATH, FLAT_DECLARATION.len()))?;
         assert_eq!(
             failures.len(),
             1,
@@ -508,7 +508,7 @@ mod language_of_first_occurrence {
 
     #[test]
     fn an_occurrence_no_parser_claims_fails_the_gate_rather_than_passing() -> Result<()> {
-        let Err(error) = judged(ranked_cluster(NOTES_PATH, 6)) else {
+        let Err(error) = judged(&ranked_cluster(NOTES_PATH, 6)) else {
             anyhow::bail!("a file no parser claims cannot be judged, yet the gate passed");
         };
         assert!(
