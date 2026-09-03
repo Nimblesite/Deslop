@@ -56,9 +56,9 @@ const RENAME_EVIDENCE_HALF_MASS: f64 = 4.0;
 /// stays in the denominator, weakening the proof in proportion to the
 /// evidence around it instead of vetoing an otherwise fully-anchored
 /// rename. A same-file pair keeps the stricter min of the
-/// literal-affirmation share and identifier coverage, matching the
-/// promote floor's conservatism: a same-file rename family is the #197
-/// sibling shape, and its literal axis must vouch on its own.
+/// literal-affirmation share and identifier coverage: a same-file
+/// rename family is the #197 sibling shape, and its literal axis must
+/// vouch on its own before a rename alone admits the pair.
 /// The pool opens only where the literal population affirms at all:
 /// aligned literals with zero preservation and zero echoes are the
 /// #134 stride family — every substantive byte disagrees and nothing

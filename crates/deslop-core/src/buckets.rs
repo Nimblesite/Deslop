@@ -3,7 +3,8 @@
 /// Default pair-content support floor ([FUSED-CONTENT-GATE]).
 pub const CONTENT_SUPPORT_FLOOR: f64 = 0.7;
 
-/// Stronger same-file pair-content support floor.
+/// Stronger pair-content support floor an unanchored LSH-only pair pays
+/// in every scope ([FUSED-CONTENT-GATE]).
 pub const CONTENT_PROMOTE_FLOOR: f64 = 0.85;
 
 /// Returns the independent pair-content support `max(A, R)`.

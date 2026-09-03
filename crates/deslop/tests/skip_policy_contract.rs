@@ -59,7 +59,7 @@ const TEST_TARGET_KIND: &str = "test";
 
 /// Every test allowed not to run, with the issue that owns its return.
 ///
-/// Ordered by file then test name, matching `ignored_tests()`. The eleven
+/// Ordered by file then test name, matching `ignored_tests()`. The twelve
 /// `corpus_repos` entries and `perf_sample` are the real-repository gate
 /// (gh #422, blocked on the memory work in #166); the two gh #369 entries
 /// are red on purpose against unfinished fusion and embedding behaviour. The
@@ -69,7 +69,7 @@ const TEST_TARGET_KIND: &str = "test";
 ///
 /// Those counts are prose, and prose drifts. [`SKIPS_PER_ISSUE`] is what
 /// stops it drifting silently.
-const CURATED_SKIPS: [(&str, &str, u32); 17] = [
+const CURATED_SKIPS: [(&str, &str, u32); 18] = [
     (
         "crates/deslop-lsp/tests/lsp_embedding_determinism.rs",
         "lsp_embedding_refresh_is_bounded_and_reproducible",
@@ -123,6 +123,11 @@ const CURATED_SKIPS: [(&str, &str, u32); 17] = [
         422,
     ),
     (
+        "crates/deslop/tests/corpus_repos.rs",
+        "corpus_tornado_python",
+        422,
+    ),
+    (
         "crates/deslop/tests/embedding_perf.rs",
         "duplicate_subtree_embeddings_are_collapsed_before_ann",
         489,
@@ -156,7 +161,7 @@ const CURATED_SKIPS: [(&str, &str, u32); 17] = [
 /// #432–#435 entries when the registry held nine across #432–#434 and none
 /// for #435. That is a wrong answer to the question a reader is actually
 /// asking: which plan still owns this block of silence, and how much of it.
-const SKIPS_PER_ISSUE: [(u32, usize); 5] = [(369, 2), (422, 12), (489, 1), (491, 1), (492, 1)];
+const SKIPS_PER_ISSUE: [(u32, usize); 5] = [(369, 2), (422, 13), (489, 1), (491, 1), (492, 1)];
 
 /// How many skips each issue owns, counted from the registry itself.
 fn skips_by_issue() -> BTreeMap<u32, usize> {

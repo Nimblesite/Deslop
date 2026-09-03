@@ -36,7 +36,10 @@ use crate::common::{
 
 const ANALYSED_FILES: u64 = 1;
 const NO_VISIBLE_CLUSTERS: usize = 0;
-const ONE_CONVICTED_COMPONENT: u64 = 1;
+/// Every same-shape sibling family the closure forms at this floor —
+/// the issue's 7- and 8-member settings families among them — is
+/// convicted by [RANK-STRUCTURAL-ONLY-FORWARDING] and counted here.
+const CONVICTED_FAMILIES: u64 = 5;
 const NO_DUPLICATED_LINES: u64 = 0;
 const NO_DUPLICATION_PERCENT: f64 = 0.0;
 
@@ -47,8 +50,9 @@ fn single_file_structural_only_method_families_do_not_top_the_report() -> Result
 
     // [PIPELINE-CLUSTER-CLOSURE] The mass-only wire carries cluster facts
     // only; the `structural_only` bucket, the token floor and the row-4
-    // signal triple are gone. The closure is one convicted component, so
-    // its suppression contributes one hidden-cluster count and no output.
+    // signal triple are gone. Every family the closure forms is a
+    // convicted component, so each contributes one hidden-cluster count
+    // and none contributes output.
     for cluster in clusters(&report) {
         assert_no_pair_surface_on_cluster(cluster, "issue #197");
         assert_structural_only_contract(cluster, "issue #197");
@@ -60,7 +64,7 @@ fn single_file_structural_only_method_families_do_not_top_the_report() -> Result
         Some(ANALYSED_FILES)
     );
     assert_eq!(cluster_count(&report), NO_VISIBLE_CLUSTERS);
-    assert_eq!(clusters_hidden(&report), ONE_CONVICTED_COMPONENT);
+    assert_eq!(clusters_hidden(&report), CONVICTED_FAMILIES);
     assert_eq!(
         metric_field(&report, "duplicated_loc").as_u64(),
         Some(NO_DUPLICATED_LINES)
