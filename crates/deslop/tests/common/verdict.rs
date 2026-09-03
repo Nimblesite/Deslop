@@ -193,6 +193,9 @@ pub(crate) fn assert_cluster_mentions(
     Ok(texts)
 }
 
+/// A ratio rendered as a percentage.
+const PERCENT_SCALE: f64 = 100.0;
+
 /// Lossless `u64 → f64` for LOC counts and cluster sizes (all far below
 /// `2^32`), mirroring the renderer's own clamp-then-widen order. Every
 /// metric re-derivation in the golden suites goes through it so no
@@ -206,7 +209,7 @@ pub(crate) fn loc_as_f64(value: u64) -> Result<f64> {
 /// headline figure is the reader's to check: a percentage that does not
 /// divide the lines beside it is a transparency defect whatever the
 /// clusters say.
-pub(crate) fn assert_percent_matches_lines(report: &Value) {
+pub(crate) fn assert_percent_matches_lines(report: &Value) -> Result<()> {
     let rows = std::iter::once(("<repo>", field(report, "metrics"))).chain(
         per_file_metrics(report)
             .iter()
@@ -216,15 +219,13 @@ pub(crate) fn assert_percent_matches_lines(report: &Value) {
         let analysed = field(row, "analysed_loc").as_u64().unwrap_or(0);
         let duplicated = field(row, "duplicated_loc").as_u64().unwrap_or(0);
         let percent = field(row, "duplication_percent").as_f64().unwrap_or(-1.0);
+        // Through `loc_as_f64`, like every other metric re-derivation
+        // here: a raw `as f64` would round a count silently, which is
+        // the one thing an assertion about an exact division may not do.
         let expected = if analysed == 0 {
             0.0
         } else {
-            #[expect(
-                clippy::cast_precision_loss,
-                reason = "line counts are far below f64's exact integer range"
-            )]
-            let ratio = duplicated as f64 / analysed as f64;
-            ratio * 100.0
+            loc_as_f64(duplicated)? / loc_as_f64(analysed)? * PERCENT_SCALE
         };
         assert!(
             (percent - expected).abs() < 0.0001,
@@ -233,6 +234,7 @@ pub(crate) fn assert_percent_matches_lines(report: &Value) {
              {report:#}"
         );
     }
+    Ok(())
 }
 
 /// The whole published contract for a report whose one finding is a
@@ -295,6 +297,6 @@ pub(crate) fn expect_only_finding_is_the_pair(
         line_count(&expected),
         "{why} the metric counts the pair's lines: {report:#}"
     );
-    assert_percent_matches_lines(report);
+    assert_percent_matches_lines(report)?;
     occurrence_texts(scan_root, cluster)
 }

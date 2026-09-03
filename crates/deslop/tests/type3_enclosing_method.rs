@@ -237,11 +237,12 @@ fn csharp_type3_reports_the_enclosing_method_pair() -> Result<()> {
 // [FUSED-SHARED-SUBTREE-SAME-FILE] A shared-subtree rescue is evidence
 // about the two authored methods, and the file boundary records where the
 // copy was pasted rather than whether it is a copy — the spec says so in
-// as many words. `ApplyStandard` and `ApplyPremium` measure overlap 0.82;
-// the rescue that would carry them is cross-file only, so `DriftLimits.cs`
-// publishes `:6-8`/`:18-20` and `:9-12`/`:25-28` — two statement
-// fragments that name neither method — and never the pair. A reader is
-// told about pieces of a duplication and never about the duplication.
+// as many words. `ApplyStandard` and `ApplyPremium` measure overlap 0.82.
+// While the rescue was cross-file only, `DriftLimits.cs` published
+// `:6-8`/`:18-20` and `:9-12`/`:25-28` — two statement fragments that
+// name neither method — and never the pair, so a reader was told about
+// pieces of a duplication and never about the duplication. The pair is
+// the finding, and the fragments are absorbed into it.
 #[test]
 fn csharp_same_file_type3_reports_both_methods_in_one_cluster() -> Result<()> {
     const FIXTURE: &str = "csharp-merge-drift";

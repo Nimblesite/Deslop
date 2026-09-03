@@ -227,7 +227,7 @@ $$
 P_{\mathrm{candidate}}(s) = 1 - \left(1-s^r\right)^b
 $$
 
-A pair is admitted when its pre-rescue score clears its threshold or the shared-subtree rescue fires, subject to the size-coherence and LSH-only guards. The rescue is cross-file only and requires its own raw-content agreement; those conditions are load-bearing parts of the implementation, not optional prose.
+A pair is admitted when its pre-rescue score clears its threshold or the shared-subtree rescue fires, subject to the size-coherence and LSH-only guards. The rescue requires its own raw-content agreement, and inside one file it additionally requires the copied interior of [FUSED-SHARED-SUBTREE-SAME-FILE]; those conditions are load-bearing parts of the implementation, not optional prose.
 
 $$
 \begin{aligned}
@@ -326,7 +326,7 @@ Rename consistency is the pooled coverage scaled by the anchor factor above. Cov
 
 The pool opens only where the literal population affirms at all. When aligned literal positions exist and none of them is preserved or echoes an explained substitution, the rename axis is zero: every substantive byte the pair carries disagrees, and nothing the substitution did not itself supply vouches for the copy — the #134 stride family, where a fully-consistent rename dresses up three handlers whose one meaningful literal diverges. One affirming literal switches the axis from contradiction to coverage, and from there each further preservation or echo raises it monotonically.
 
-The pool is also cross-file only, matching the promote floor's conservatism. A same-file pair keeps the stricter form — the lesser of the literal-affirmation share and identifier coverage — because a same-file rename family is the #197 sibling shape this spec spends a dedicated proof suppressing: its literal axis must vouch on its own before a same-file pair is promoted.
+The pooled form is cross-file only, matching the promote floor's conservatism. A same-file pair keeps the stricter form — the lesser of the literal-affirmation share and identifier coverage — because a same-file rename family is the #197 sibling shape this spec spends a dedicated proof suppressing: its literal axis must vouch on its own before a same-file pair is promoted.
 
 $$
 \text{coverage} = \frac{\text{explained identifier positions} + \text{affirming literal positions}}{\text{constrained identifier positions} + |L_{ab}|} \qquad
