@@ -46,30 +46,52 @@ const EXPECTED_EXIT = 1;
 /// The npm script that copies the fixtures the suites open.
 const STAGE_FIXTURES = "stage-fixtures";
 
-/// Writes an executable stub for `tool` into `binDir`.
+/// Name of the single stub implementation every launcher delegates to.
+const STUB_MODULE = "stub.mjs";
+
+/// The stub's whole behaviour, written once and launched once per tool.
 ///
 /// `npm run compile` is the clean recompile the script runs in its `finally`.
 /// The stub lets the first one through — that is collection's own compile —
 /// and fails the second, which is the restore. Every other tool succeeds, so
 /// collection reaches the end and the restore failure is the *only* thing
 /// wrong with the run.
+const STUB_SOURCE = [
+  'import { appendFileSync, readFileSync } from "node:fs";',
+  'import { resolve } from "node:path";',
+  "",
+  "const [tool, ...args] = process.argv.slice(2);",
+  `const log = resolve(process.env.STUB_DIR, ${JSON.stringify(CALL_LOG)});`,
+  'appendFileSync(log, `${[tool, ...args].join(" ")}\\n`);',
+  'if (tool === "npm" && args[0] === "run" && args[1] === "compile") {',
+  '  const compiles = readFileSync(log, "utf8")',
+  '    .split("\\n")',
+  '    .filter((line) => line.startsWith("npm run compile")).length;',
+  `  if (compiles >= 2) process.exit(${RESTORE_EXIT});`,
+  "}",
+  "process.exit(0);",
+  "",
+].join("\n");
+
+/// Puts `tool` on PATH, pointing at [`STUB_SOURCE`].
+///
+/// `runTool` spawns with `shell: true` on Windows, where `cmd.exe` resolves a
+/// bare name through PATHEXT and never runs an extensionless file: a
+/// `#!/bin/sh` stub is not found there at all, the real npm runs instead, and
+/// the contract this file exists to pin stops being tested without saying so.
+/// Each platform gets the launcher its shell will actually execute, and both
+/// delegate to the same module, so the stubbed behaviour has one definition.
 function writeStub(binDir, tool) {
-  const script = resolve(binDir, tool);
+  const onWindows = process.platform === "win32";
+  const launcher = resolve(binDir, onWindows ? `${tool}.cmd` : tool);
+  const stub = resolve(binDir, STUB_MODULE);
   writeFileSync(
-    script,
-    [
-      "#!/bin/sh",
-      `log="$STUB_DIR/${CALL_LOG}"`,
-      `echo "${tool} $*" >> "$log"`,
-      `if [ "${tool}" = "npm" ] && [ "$1" = "run" ] && [ "$2" = "compile" ]; then`,
-      `  count=$(grep -c "^npm run compile" "$log")`,
-      `  if [ "$count" -ge 2 ]; then exit ${RESTORE_EXIT}; fi`,
-      "fi",
-      "exit 0",
-      "",
-    ].join("\n"),
+    launcher,
+    onWindows
+      ? `@"${process.execPath}" "${stub}" ${tool} %*\r\n`
+      : ["#!/bin/sh", `exec "${process.execPath}" "${stub}" ${tool} "$@"`, ""].join("\n"),
   );
-  chmodSync(script, 0o755);
+  chmodSync(launcher, 0o755);
 }
 
 /// Runs the sandboxed script with every shelled-out tool stubbed.
@@ -80,6 +102,7 @@ function runSandboxed() {
   mkdirSync(scripts, { recursive: true });
   mkdirSync(binDir, { recursive: true });
   writeFileSync(resolve(binDir, CALL_LOG), "");
+  writeFileSync(resolve(binDir, STUB_MODULE), STUB_SOURCE);
   for (const name of COPIED_SCRIPTS) {
     cpSync(resolve(vsixRoot, "scripts", name), resolve(scripts, name));
   }
