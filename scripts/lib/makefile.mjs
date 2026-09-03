@@ -73,16 +73,32 @@ export function words(text) {
  * @returns {string[]} every word assigned, `[]` when the variable is undeclared
  */
 export function variableWords(name) {
+  return words(variableValue(name)).filter((word) => word !== CONTINUATION);
+}
+
+/**
+ * The whole right-hand side of a make variable, as one string.
+ *
+ * `variableWords` is the right reader for a list; this is the right reader for
+ * a single value that may contain spaces. `GIT_BASH` is one:
+ * `C:/Program Files/Git/usr/bin/bash.exe` is a path, and the two words a
+ * word-splitting reader returns are neither of them a shell.
+ *
+ * @param {string} name
+ * @returns {string} the trimmed value, `""` when the variable is undeclared
+ */
+export function variableValue(name) {
   const start = makefileLines.findIndex(
     (line) => line.startsWith(`${name} `) || line.startsWith(`${name}=`),
   );
-  if (start < 0) return [];
+  if (start < 0) return "";
   const declaration = [];
   for (let index = start; index < makefileLines.length; index += 1) {
     const line = makefileLines[index];
     declaration.push(line);
     if (!line.trimEnd().endsWith(CONTINUATION)) break;
   }
-  const [, value] = declaration.join(" ").split("=");
-  return words(value ?? "").filter((word) => word !== CONTINUATION);
+  const joined = declaration.join(" ");
+  const assignedAt = joined.indexOf("=");
+  return assignedAt < 0 ? "" : joined.slice(assignedAt + 1).trim();
 }
