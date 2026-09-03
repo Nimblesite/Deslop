@@ -1,12 +1,14 @@
 //! Canonical mass-only report assembly.
 
-use std::{collections::HashMap, hash::BuildHasher, path::Path};
+use std::{collections::HashMap, hash::BuildHasher, path::Path, time::Instant};
 
 use crate::{
     boilerplate::BoilerplateRange,
     cluster::Cluster,
+    cluster_filters::{noise_workers, NOISE_CHUNK_CLUSTERS},
     config::ExclusionConfig,
     fingerprint::Fingerprint,
+    observe::elapsed_ms,
     report_boilerplate::build_boilerplate_hints,
     report_metrics::{compute_repo_metrics, AnalysedLines, MetricsInputs},
     report_render::ReportSources,
@@ -105,17 +107,38 @@ pub struct ReportInputs<'a, S: BuildHasher> {
     pub parse_cache: &'a ParseCache,
 }
 
+/// [PERF-FLUTTER-TODO-SUBSUME] Materialises every cluster with its
+/// visibility decision across worker threads sharing one parse cache —
+/// the render-stage convictions run the same filters the noise split
+/// shards, and ran here on one thread for a quarter of an hour on the
+/// Flutter corpus. Results come back in input order, so the report is
+/// the same whatever the workers' timing.
+fn materialise_all<'a, S: BuildHasher + Sync>(
+    inputs: &ReportInputs<'a, S>,
+    report_sources: &ReportSources<'a>,
+) -> Vec<(ReportCluster, bool)> {
+    let (chunks, _states) = crate::shard::map_chunks(
+        inputs.clusters.chunks(NOISE_CHUNK_CLUSTERS),
+        noise_workers(inputs.clusters.len()),
+        || (),
+        |(), chunk: &[Cluster]| {
+            chunk
+                .iter()
+                .map(|cluster| {
+                    materialise_with_visibility(cluster, inputs, report_sources, inputs.parse_cache)
+                })
+                .collect::<Vec<(ReportCluster, bool)>>()
+        },
+    );
+    chunks.into_iter().flatten().collect()
+}
+
 /// Converts closure components to the canonical report.
 #[must_use]
-pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
+pub fn render_report<S: BuildHasher + Sync>(inputs: ReportInputs<'_, S>) -> Report {
+    let started = Instant::now();
     let report_sources = ReportSources::new(inputs.sources);
-    let materialised: Vec<(ReportCluster, bool)> = inputs
-        .clusters
-        .iter()
-        .map(|cluster| {
-            materialise_with_visibility(cluster, &inputs, &report_sources, inputs.parse_cache)
-        })
-        .collect();
+    let materialised = materialise_all(&inputs, &report_sources);
     // Every render-stage noise check has now run: `cluster_is_hidden` is
     // the only render-stage caller of the noise filters, and it is
     // reached solely from the loop above. Without this the render
@@ -163,9 +186,11 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         inputs.exclusion,
     );
     tracing::info!(
+        stage = "report_build",
         visible_clusters = clusters.len(),
         clusters_hidden,
         highest_mass = clusters.first().map_or(0, |cluster| cluster.mass),
+        elapsed_ms = elapsed_ms(started),
         "mass-ranked report built"
     );
     Report {

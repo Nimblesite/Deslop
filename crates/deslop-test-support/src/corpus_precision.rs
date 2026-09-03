@@ -16,7 +16,10 @@
 use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
-use deslop_core::{lang::shared::parse_source, pipeline::default_parsers};
+use deslop_core::{
+    lang::{parser_for_path, shared::parse_source, LanguageParser},
+    pipeline::default_parsers,
+};
 use serde_json::Value;
 
 use crate::{
@@ -142,11 +145,9 @@ fn judge_cluster(
     supertype: &str,
     failures: &mut Vec<Failure>,
 ) -> Result<()> {
-    let language = cluster
-        .get("language")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("rank {rank}: cluster carries no language"))?;
     let (source, span) = first_occurrence_source(root, cluster)?;
+    let language = language_of(&span.path)
+        .ok_or_else(|| anyhow!("rank {rank}: no registered parser claims {}", span.path))?;
     if !declares_forbidden_supertype(language, &source, &span, supertype)? {
         return Ok(());
     }
@@ -443,6 +444,13 @@ fn grammar_for(language: &str) -> Result<tree_sitter::Language> {
         .find(|parser| parser.id() == language)
         .map(|parser| parser.grammar())
         .ok_or_else(|| anyhow!("no registered parser for language `{language}`"))
+}
+
+/// The language of the file at `path`, as the engine maps files to
+/// parsers — a ranked cluster carries none of its own, and the report
+/// consumer must not keep a second extension table.
+fn language_of(path: &str) -> Option<&'static str> {
+    parser_for_path(&default_parsers(), Path::new(path)).map(LanguageParser::id)
 }
 
 /// The engine's `'static` id for `language`, which `parse_source` needs for
