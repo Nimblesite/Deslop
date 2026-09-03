@@ -174,47 +174,67 @@ fn one_statement_bodies_that_compute_are_not_forwarding() -> Result<()> {
     Ok(())
 }
 
-/// The admission half of the forwarding contract: a same-file pair whose
-/// content support sits below the promote floor is rejected before
-/// closure ([FUSED-CONTENT-GATE]), so nothing may publish. The liveness
-/// proof keeps this from being an absence-asserting silence guard: the
-/// pair's file must be parsed (`analysed_loc` > 0) and the real
-/// fail-open control above still publishes.
-fn expect_pair_rejected_at_admission(fixture_name: &str, file: &str, why: &str) -> Result<()> {
+/// The published half of the forwarding contract: a same-file pair of
+/// two whole authored declarations, differing in the member name and
+/// its literals, is the liftable duplication the module documentation
+/// above describes, and it reaches the report
+/// ([FUSED-CONTENT-GATE], [REPAIR-RENAME-ANCHOR-MASS]). `spans` are the
+/// two declarations, in line order.
+///
+/// Returns the reported occurrence texts, so each control still pins the
+/// evidence that varies across its own pair.
+fn expect_pair_published(
+    fixture_name: &str,
+    file: &str,
+    spans: &[RangeInclusive<u64>],
+    why: &str,
+) -> Result<Vec<String>> {
     let scan_root = fixture(fixture_name);
     let report = run_report(&scan_root, FORWARDING_MIN_NODES)?;
-    let clusters_spanning = clusters(&report)
-        .iter()
-        .filter(|cluster| occurrence_files(cluster).iter().any(|f| f == file))
-        .count();
-    assert_eq!(
-        clusters_spanning, 0,
-        "{why} no cluster may span the pair's file — the content gate          rejects it below the same-file promote floor before closure: {report:#}"
-    );
-    let analysed = metric_field(&report, "analysed_loc").as_u64().unwrap_or(0);
-    assert!(
-        analysed > 0,
-        "{why} the pair's file must be parsed (analysed_loc > 0) — a scan that          never opened it proves nothing: {report:#}"
-    );
-    Ok(())
+    expect_only_finding_is_the_pair(&scan_root, &report, file, spans, DRIFTED_PAIR_TEXTS, why)
 }
+
+/// `Pricing.standardTotal`, which binds `computePrice` and rounds it.
+const BUSINESS_FIRST_LINES: RangeInclusive<u64> = 35..=38;
+/// `Pricing.premiumTotal`, the copy at two different literals.
+const BUSINESS_SECOND_LINES: RangeInclusive<u64> = 40..=43;
+/// The sibling helpers the bound-result pair calls. Parameterising
+/// `computePrice` is what collapses the two methods into one.
+const BUSINESS_HELPERS: [&str; 2] = ["computePrice", "roundMoney"];
 
 #[test]
 fn same_class_helper_calls_are_not_forwarding() -> Result<()> {
-    expect_pair_rejected_at_admission(
+    let texts = expect_pair_published(
         "dart-forwarding-business-pair",
         "Pricing.dart",
+        &[BUSINESS_FIRST_LINES, BUSINESS_SECOND_LINES],
         BUSINESS_PAIR_WHY,
-    )
+    )?;
+    assert_reported(&texts, &["standardTotal", "premiumTotal"], MEMBERS_WHY);
+    assert_reported(&texts, &BUSINESS_HELPERS, BUSINESS_PAIR_WHY);
+    Ok(())
 }
+
+/// `Ledger.standardTotal`, which binds the delegated response and marks
+/// it up.
+const AFTER_DELEGATION_FIRST_LINES: RangeInclusive<u64> = 36..=39;
+/// `Ledger.premiumTotal`, the copy at two different literals.
+const AFTER_DELEGATION_SECOND_LINES: RangeInclusive<u64> = 41..=44;
+/// The sibling helper the pair reaches back into the class for; the
+/// delegating call above it is byte-identical and duplicates nothing.
+const AFTER_DELEGATION_HELPER: &str = "applyMarkup";
 
 #[test]
 fn a_same_class_call_after_delegation_is_not_forwarding() -> Result<()> {
-    expect_pair_rejected_at_admission(
+    let texts = expect_pair_published(
         "dart-forwarding-transform-after-delegation",
         "Ledger.dart",
+        &[AFTER_DELEGATION_FIRST_LINES, AFTER_DELEGATION_SECOND_LINES],
         AFTER_DELEGATION_WHY,
-    )
+    )?;
+    assert_reported(&texts, &["standardTotal", "premiumTotal"], MEMBERS_WHY);
+    assert_reported(&texts, &[AFTER_DELEGATION_HELPER], AFTER_DELEGATION_WHY);
+    Ok(())
 }
 
 /// [FUSED-CONTENT-GATE] The pair's `agreement` is 0.75 against a 0.85
@@ -228,17 +248,13 @@ fn a_same_class_call_after_delegation_is_not_forwarding() -> Result<()> {
 /// suppresses on a reading the filter's own spec contradicts.
 #[test]
 fn a_same_class_call_before_delegation_is_not_forwarding() -> Result<()> {
-    let scan_root = fixture("dart-forwarding-transform-before-delegation");
-    let report = run_report(&scan_root, FORWARDING_MIN_NODES)?;
-    let texts = expect_only_finding_is_the_pair(
-        &scan_root,
-        &report,
+    let texts = expect_pair_published(
+        "dart-forwarding-transform-before-delegation",
         "Billing.dart",
         &[
             BEFORE_DELEGATION_FIRST_LINES,
             BEFORE_DELEGATION_SECOND_LINES,
         ],
-        DRIFTED_PAIR_TEXTS,
         BEFORE_DELEGATION_WHY,
     )?;
     assert_reported(&texts, &["quarterlyFee", "annualCharge"], MEMBERS_WHY);

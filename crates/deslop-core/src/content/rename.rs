@@ -52,6 +52,25 @@ const RENAME_CORROBORATION_MIN_OCCURRENCES: usize = 2;
 /// routing floor.
 const RENAME_EVIDENCE_HALF_MASS: f64 = 4.0;
 
+/// Half-saturation anchor mass for a pair of **whole authored
+/// declarations** ([REPAIR-RENAME-ANCHOR-MASS]).
+///
+/// The mass term prices coincidence: scarce affirming positions might be
+/// two windows that happen to line up. Two whole declarations are not a
+/// window alignment — the author wrote both of them, opening brace to
+/// closing brace — so the coincidence the discount is pricing is
+/// weaker, exactly as [FUSED-CONTENT-GATE-INTERIOR] finds it *stronger*
+/// for a window carved out of one function.
+///
+/// It is not an escape hatch: a one-line REST wrapper is a whole
+/// declaration too, and `dart-forwarding-duplicate-route`'s five
+/// distinct-route wrappers affirm five positions each, weigh `5/8` and
+/// stay refused, while `Billing`'s two-statement methods affirm nine,
+/// weigh `9/12` and certify. The separation is how much authored code
+/// the two declarations prove identical, which is the quantity this
+/// term has always measured.
+const AUTHORED_RENAME_EVIDENCE_HALF_MASS: f64 = 3.0;
+
 /// Type-2 rename evidence between two members ([TECH-PMATCH-BAKER]): one
 /// pooled coverage over the pair's constrained identifier positions and
 /// every aligned literal position, scaled by the smooth anchor-mass
@@ -61,7 +80,9 @@ const RENAME_EVIDENCE_HALF_MASS: f64 = 4.0;
 /// rename. A same-file pair keeps the stricter min of the
 /// literal-affirmation share and identifier coverage, matching the
 /// promote floor's conservatism: a same-file rename family is the #197
-/// sibling shape, and its literal axis must vouch on its own.
+/// sibling shape, and its literal axis must vouch on its own. The mass
+/// term the coverage is scaled by is scope-aware too
+/// ([REPAIR-RENAME-ANCHOR-MASS]).
 /// The pool opens only where the literal population affirms at all:
 /// constrained literals with zero preservation and zero echoes are the
 /// #134 stride family — every substantive byte disagrees and nothing
@@ -110,7 +131,7 @@ pub(super) fn pair_rename_consistency<S: BuildHasher>(
         .affirming
         .saturating_add(mapping.anchors(scope, literals.aligned));
     let coverage = literals.coverage(&mapping, scope);
-    coverage * evidence_weight(coverage, anchors)
+    coverage * evidence_weight(coverage, anchors, scope)
 }
 
 /// The pair's aligned literal positions, split into what the coverage
@@ -350,9 +371,14 @@ pub(super) fn substituted_pairs(identifiers: &[(u64, u64)]) -> Vec<(u64, u64)> {
 /// vacuous evidence to zero and accumulating independent anchors
 /// approach full weight; a cliff here is what manufactured the
 /// quarantined false negative.
-fn anchor_weight(anchors: usize) -> f64 {
+fn anchor_weight(anchors: usize, scope: PairScope) -> f64 {
     let mass = member_count(anchors);
-    mass / (mass + RENAME_EVIDENCE_HALF_MASS)
+    let half_mass = if scope.authored {
+        AUTHORED_RENAME_EVIDENCE_HALF_MASS
+    } else {
+        RENAME_EVIDENCE_HALF_MASS
+    };
+    mass / (mass + half_mass)
 }
 
 /// The mass discount actually applied to one pair's rename proof, and
@@ -391,8 +417,8 @@ fn anchor_weight(anchors: usize) -> f64 {
 /// `consistency` and add anchors, so certification can only switch on
 /// (`rename_literal_monotonicity.rs`). Byte agreement and certified
 /// rename evidence remain separate axes ([FUSED-CONTENT-GATE]).
-fn evidence_weight(consistency: f64, anchors: usize) -> f64 {
-    let weight = anchor_weight(anchors);
+fn evidence_weight(consistency: f64, anchors: usize, scope: PairScope) -> f64 {
+    let weight = anchor_weight(anchors, scope);
     if consistency >= 1.0 && weight >= CONTENT_SUPPORT_FLOOR {
         return 1.0;
     }

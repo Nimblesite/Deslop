@@ -12,8 +12,20 @@ use deslop_core::{
     EmbeddingMode, Report,
 };
 
-const DART_FORWARDING_FIXTURE: &str = "../deslop/tests/fixtures/dart-forwarding-business-pair";
-const MIN_NODES: u32 = 12;
+/// A same-shape family whose members diverge in substance: three
+/// handlers over one 96-node skeleton, renamed consistently end to end
+/// and differing at the aligned loop-stride literal. Nothing outside the
+/// substitution vouches for the copy, so the pair is refused before
+/// closure — the rule this module exists to pin.
+///
+/// It replaced `dart-forwarding-business-pair`, which stopped
+/// exemplifying the rule: its `standardTotal`/`premiumTotal` rename no
+/// identifier and vary only literals, which
+/// [FUSED-CONTENT-GATE-PARAMETER] reads as the parameterisation it is,
+/// so the pair now publishes and `dart_forwarding_fail_open` pins it
+/// there.
+const SHAPE_ONLY_FIXTURE: &str = "../deslop/tests/fixtures/csharp-issue-134-structural-only";
+const MIN_NODES: u32 = 30;
 const EXPECTED_VISIBLE_CLUSTERS: usize = 0;
 const EXPECTED_HIDDEN_CLUSTERS: usize = 0;
 const EXPECTED_SCHEMA_FILES_ANALYSED: usize = 1;
@@ -21,8 +33,8 @@ const SCHEMA_FILE: &str = "schemas.py";
 const SCHEMA_SOURCE: &str = "def schema_report_get():\n    return {\"type\": \"object\", \"properties\": {\"path\": {\"type\": \"string\"}}, \"required\": [\"path\"]}\n\ndef schema_top_offenders():\n    return {\"type\": \"object\", \"properties\": {\"limit\": {\"type\": \"integer\"}}, \"required\": [\"limit\"]}\n";
 
 #[test]
-fn content_gate_rejects_dart_forwarding_business_pair() -> Result<(), CoreError> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join(DART_FORWARDING_FIXTURE);
+fn content_gate_rejects_a_shape_only_family() -> Result<(), CoreError> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join(SHAPE_ONLY_FIXTURE);
     let report = run_without_embeddings(root)?;
     assert_eq!(
         report.clusters.len(),

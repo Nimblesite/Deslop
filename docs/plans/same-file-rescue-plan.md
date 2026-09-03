@@ -24,23 +24,29 @@ Admitting each otherwise-valid same-file candidate to rescue measurement was tri
 
 Requiring whole authored declarations removes the table and window cases but not the accessor family: its overlap (0.81–0.88) brackets the drifted pair's 0.84 and its raw-content agreement reaches 0.56 against the drifted pair's 0.55. What the copy has and the family has not is **authored code the edit never touched** — a Merkle-equal clone inside both declarations, which the pipeline already computes as its own candidate pair. That is condition 2. Condition 3 is the existing echo rule turned inward: when the pair shares nothing *beyond* that clone, the clone is the finding and the wider view would only displace it (`csharp-merge-readafter`).
 
-## Still open — gh #496
+## The forwarding band — gh #496 and gh #497
 
-`dart_forwarding_fail_open` holds two fixtures whose pairs are indistinguishable by every measurement the pipeline makes:
+`dart_forwarding_fail_open`'s five fixtures are one family, and its module documentation states a positive contract for every one of them: each is liftable duplication that the forwarding proof must not hide. Four of the five asserted the opposite. They now assert the contract:
 
-| fixture | pair | nodes | agreement | rename | required |
-| --- | --- | --- | --- | --- | --- |
-| `dart-forwarding-transform-before-delegation` | `Billing.quarterlyFee` / `annualCharge` | 31 / 32 | 0.75 | 0.692 | one visible cluster |
-| `dart-forwarding-transform-after-delegation` | `Ledger.standardTotal` / `premiumTotal` | 31 / 32 | 0.75 | 0.692 | no visible cluster |
+| fixture | published pair | support | rename |
+| --- | --- | --- | --- |
+| `dart-forwarding-fail-open` | `Calc.scaledDomestic` / `scaledExport` | 0.583 | 1.00 |
+| `dart-forwarding-duplicate-route` | `Api.resetDelta` / `resetEpsilon` | 0.857 | — |
+| `dart-forwarding-business-pair` | `Pricing.standardTotal` / `premiumTotal` | 0.727 | 1.00 |
+| `dart-forwarding-transform-after-delegation` | `Ledger.standardTotal` / `premiumTotal` | 0.750 | 1.00 |
+| `dart-forwarding-transform-before-delegation` | `Billing.quarterlyFee` / `annualCharge` | 0.750 | 1.00 |
 
-Both are same-file pairs of two four-line whole declarations differing in the member name and two literals; both bodies delegate to an injected client and compute through a sibling helper. No pair-content lever separates them, and no cluster-level filter does either — the forwarding proof refuses both (a literal handed to a sibling helper is the class computing on its own inputs), and the literal-variation filter sees the same same-callee string variation in both.
+What separates them from the scaffolding beside them is not a floor. `Api`'s three distinct-route wrappers measure agreement 0.714 and the `#197` settings family 0.77–0.82 — *above* two of the pairs that must publish — so no value of a content floor can sort them. What sorts them is anchor mass on the rename axis: 5 affirming positions for a one-line REST wrapper, 8 and 9 for a two-statement business method ([REPAIR-RENAME-ANCHOR-MASS]). `Pricing`'s renamed arrow pair stays out at 0.375, exactly as its own fixture comment says it must.
 
-The module documentation says both are liftable duplication that must stay on the report. `a_same_class_call_before_delegation_is_not_forwarding` now asserts that; `a_same_class_call_after_delegation_is_not_forwarding` and `same_class_helper_calls_are_not_forwarding` still assert absence. Until those two agree with the module they belong to, one of the three has to be red — the before-delegation control is, with its assertions intact.
+Two consequences worth naming:
+
+- `dart_issue_197_single_file_structural_only` now convicts **two** components rather than one: the `resetX` wrappers close into a family they previously never reached at all. Nothing it asserts about the report changes — no cluster published, no line counted, no percentage moved — and the count stays exact.
+- `deslop-core`'s `content_gate_rejects` pin used `dart-forwarding-business-pair` as its example of a content-rejected pair. It now uses `csharp-issue-134-structural-only`, which still is one, with both assertions unchanged.
 
 ## Acceptance
 
 - [x] `csharp_same_file_type3_reports_both_methods_in_one_cluster` passes with its assertions unchanged.
 - [x] `csharp-merge-manyholes` gains its occurrence and range pin.
 - [x] `dart_forwarding_fail_open`'s duplicate-route control asserts what the module documentation states.
-- [ ] The before/after-delegation and business controls agree with each other (gh #496).
+- [x] The before/after-delegation and business controls agree with each other and with the module documentation (gh #496, gh #497).
 - [x] `dart_issue_197_single_file_structural_only`, `python_issue_103_helper_call_sites`, the three `issue_190` modes, `cli::bucket_groups`, both `refactor_merge_refusals` same-file pins and `cross_cluster_collapse` stay green.

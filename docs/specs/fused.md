@@ -141,6 +141,12 @@ The correction is scoped by that digest equality, tested directly on the members
 
 `token_jaccard` itself stays rename-invariant (normalised k-grams); the gate adds evidence rather than redefining an existing signal.
 
+#### [REPAIR-RENAME-ANCHOR-MASS] A whole authored declaration is not a window alignment
+
+The anchor factor `anchors / (anchors + content_gate.rename_evidence_half_anchors)` prices **coincidence**: scarce affirming positions might be two windows that happen to line up. Two whole authored declarations are not a window alignment — the author wrote both, opening brace to closing brace — so the coincidence being priced is weaker, and the half-saturation mass is lower for such a pair. It is the mirror of [FUSED-CONTENT-GATE-INTERIOR], which finds the coincidence *stronger* for a window carved out of one function.
+
+This is not an escape hatch, because a one-line REST wrapper is a whole declaration too, and the separation is how much authored code the two declarations prove identical. `dart-forwarding-duplicate-route`'s five distinct-route wrappers affirm five positions each and stay refused; `Billing.quarterlyFee`/`annualCharge` affirm nine and certify. Pinned by the five `dart_forwarding_fail_open` controls and by `cross_cluster_collapse::padded_windows_straddling_a_verbatim_block_publish_the_block`, whose padded windows are not declarations and are judged as before.
+
 #### [FUSED-CONTENT-GATE-PARAMETER] Where nothing was renamed, a consistent literal substitution is a parameter
 
 A drifted literal that echoes nothing contradicts the *rename* the identifier bijection claims — that is what separates the `#134` stride family, renamed consistently end to end and diverging at one aligned literal, from a reportable Type-2 clone.

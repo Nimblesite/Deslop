@@ -73,7 +73,14 @@ pub fn measure_pair_content<S: BuildHasher, L: BuildHasher>(
     languages: &HashMap<FileId, &'static str, L>,
 ) -> ContentEvidence {
     let tree_index = tree_index_of(trees);
-    measure_pair_content_indexed(left, right, &tree_index, sources, languages, false)
+    measure_pair_content_indexed(
+        left,
+        right,
+        &tree_index,
+        sources,
+        languages,
+        PairShape::default(),
+    )
 }
 
 /// Measures both content axes using a caller-owned tree index.
@@ -87,15 +94,27 @@ pub(crate) fn measure_pair_content_indexed<S: BuildHasher, L: BuildHasher>(
     tree_index: &HashMap<FileId, &NormalizedNode>,
     sources: &HashMap<FileId, Vec<u8>, S>,
     languages: &HashMap<FileId, &'static str, L>,
-    interior: bool,
+    shape: PairShape,
 ) -> ContentEvidence {
     let scope = PairScope {
         same_file: left.file_id == right.file_id,
-        interior,
+        interior: shape.interior,
+        authored: shape.authored,
     };
     let left = member_content(left, tree_index, sources, languages);
     let right = member_content(right, tree_index, sources, languages);
     pair_evidence(left.as_ref().zip(right.as_ref()), sources, scope)
+}
+
+/// What the caller knows about where the two endpoints sit — the half
+/// of [`PairScope`] that only a caller holding the declaration scopes
+/// can answer.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct PairShape {
+    /// Both endpoints are windows strictly inside an authored function.
+    pub(crate) interior: bool,
+    /// Both endpoints are whole authored declarations, and disjoint.
+    pub(crate) authored: bool,
 }
 
 /// Where the two endpoints sit, for the rename axis's scope rules
@@ -107,6 +126,9 @@ pub(crate) struct PairScope {
     /// Both endpoints are windows strictly inside an authored function,
     /// so a rename over a literal-free window cannot vouch for itself.
     pub(crate) interior: bool,
+    /// Both endpoints are whole authored declarations the author wrote,
+    /// not windows Deslop cut ([REPAIR-RENAME-ANCHOR-MASS]).
+    pub(crate) authored: bool,
 }
 
 /// Builds pair evidence from two resolved content frontiers.
