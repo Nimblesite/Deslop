@@ -118,12 +118,13 @@ pub(super) fn pair_rename_consistency<S: BuildHasher>(
     if !frontiers_aligned(canonical, member) {
         return 0.0;
     }
-    let echoes = literal_echoes(canonical, member, sources);
+    let positions = literal_positions(canonical, member);
+    let echoes = literal_echoes(canonical, member, sources, &positions);
     let mapping = rename_mapping(
         &population(&canonical.keys, &member.keys, Population::Identifier),
         &echoes.per_substitution,
     );
-    let literals = LiteralEvidence::measure(canonical, member, &echoes, &mapping);
+    let literals = LiteralEvidence::measure(&positions, &echoes, &mapping);
     if literals.affirming == 0 && literals.constrained > 0 {
         return 0.0;
     }
@@ -181,14 +182,12 @@ impl LiteralEvidence {
     /// inconsistent substitution stays constrained too: it contradicts
     /// the parameterisation as surely as it would a rename.
     fn measure(
-        canonical: &MemberContent,
-        member: &MemberContent,
+        positions: &[LiteralPosition],
         echoes: &LiteralEchoes,
         mapping: &RenameMapping,
     ) -> Self {
-        let positions = literal_positions(canonical, member);
-        let affirming = affirming_literal_count(canonical, member, echoes);
-        let pairs = literal_pairs(&positions);
+        let affirming = affirming_literal_count(positions, echoes);
+        let pairs = literal_pairs(positions);
         let bijection = ModalBijection::over(&substituted_pairs(&pairs));
         let occurrences = pair_counts(pairs.iter().copied());
         let constrained = if mapping.renames() {
@@ -231,12 +230,14 @@ impl LiteralEvidence {
     }
 }
 
-/// Aligned positions where both members carry a literal, as
-/// `(frontier index, key pair)`.
-fn literal_positions(
-    canonical: &MemberContent,
-    member: &MemberContent,
-) -> Vec<(usize, (u64, u64))> {
+/// One aligned literal position: its frontier index and the two content
+/// keys at it. The frontier is walked once per pair and every literal
+/// measure reads the result — the affirming count, the echo candidates,
+/// and [`LiteralEvidence`].
+pub(super) type LiteralPosition = (usize, (u64, u64));
+
+/// Aligned positions where both members carry a literal.
+fn literal_positions(canonical: &MemberContent, member: &MemberContent) -> Vec<LiteralPosition> {
     canonical
         .keys
         .iter()
@@ -250,7 +251,7 @@ fn literal_positions(
 }
 
 /// The key pairs of [`literal_positions`], for the literal bijection.
-fn literal_pairs(positions: &[(usize, (u64, u64))]) -> Vec<(u64, u64)> {
+fn literal_pairs(positions: &[LiteralPosition]) -> Vec<(u64, u64)> {
     positions.iter().map(|(_, keys)| *keys).collect()
 }
 

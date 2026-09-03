@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, collections::HashMap, hash::BuildHasher};
 use crate::state::FileId;
 
 use super::super::frontier::{leaf_bytes, population, MemberContent, Population};
-use super::{substituted_pairs, ModalBijection};
+use super::{substituted_pairs, LiteralPosition, ModalBijection};
 
 /// Literal echoes of the bijection's identifier substitutions (#409), as a
 /// per-substitution count: an aligned literal position whose bytes
@@ -31,12 +31,13 @@ pub(super) fn literal_echoes<S: BuildHasher>(
     canonical: &MemberContent,
     member: &MemberContent,
     sources: &HashMap<FileId, Vec<u8>, S>,
+    positions: &[LiteralPosition],
 ) -> LiteralEchoes {
     let identifiers = population(&canonical.keys, &member.keys, Population::Identifier);
     let bijection = ModalBijection::over(&substituted_pairs(&identifiers));
     let substitutions = explained_substitution_bytes(canonical, member, &bijection, sources);
     let mut echoes = LiteralEchoes::default();
-    for index in substituted_literal_positions(canonical, member) {
+    for index in substituted_literal_positions(positions) {
         let bytes = leaf_bytes(canonical, index, sources).zip(leaf_bytes(member, index, sources));
         let Some((left, right)) = bytes else {
             continue;
@@ -62,19 +63,12 @@ pub(super) fn literal_echoes<S: BuildHasher>(
 /// preserved literal; the drifted fragment beside it is a drifted one,
 /// and weakens the proof in proportion like any other.
 pub(super) fn affirming_literal_count(
-    canonical: &MemberContent,
-    member: &MemberContent,
+    positions: &[LiteralPosition],
     echoes: &LiteralEchoes,
 ) -> usize {
-    canonical
-        .keys
+    positions
         .iter()
-        .zip(member.keys.iter())
-        .enumerate()
-        .filter(|(_, (left, right))| {
-            left.population == Population::Literal && right.population == Population::Literal
-        })
-        .filter(|(index, (left, right))| left.key == right.key || echoes.positions.contains(index))
+        .filter(|(index, (left, right))| left == right || echoes.positions.contains(index))
         .count()
 }
 
@@ -89,21 +83,13 @@ pub(super) struct LiteralEchoes {
     pub(super) positions: std::collections::BTreeSet<usize>,
 }
 
-/// Frontier indices of aligned positions where both members carry a
-/// literal and the raw bytes differ — the candidates an echo can
-/// explain.
-fn substituted_literal_positions(canonical: &MemberContent, member: &MemberContent) -> Vec<usize> {
-    canonical
-        .keys
+/// Frontier indices of the aligned literal positions whose raw bytes
+/// differ — the candidates an echo can explain.
+fn substituted_literal_positions(positions: &[LiteralPosition]) -> Vec<usize> {
+    positions
         .iter()
-        .zip(member.keys.iter())
-        .enumerate()
-        .filter(|(_, (left, right))| {
-            left.population == Population::Literal
-                && right.population == Population::Literal
-                && left.key != right.key
-        })
-        .map(|(index, _)| index)
+        .filter(|(_, (left, right))| left != right)
+        .map(|(index, _)| *index)
         .collect()
 }
 
