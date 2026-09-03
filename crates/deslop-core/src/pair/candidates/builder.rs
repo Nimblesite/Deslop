@@ -12,12 +12,16 @@ use super::super::{
     FUSED_THRESHOLD, LSH_ONLY_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT,
 };
 use super::{
-    candidate_ranges_are_valid, endpoint_node_counts, jaccard_for, order, pair_crosses_files,
-    same_language_indexes,
+    candidate_ranges_are_valid, endpoint_node_counts, jaccard_for, order, same_language_indexes,
 };
 use crate::{
     embedding::EmbeddingPair, fingerprint::Fingerprint, lsh::SignatureLookup, state::FileId,
 };
+
+/// Bucket members below which the canonical star already carries every
+/// within-file pair, so [`PairBuilder::pair_within_files`] has nothing
+/// to add: with two members the star *is* the only pair there is.
+const BUCKET_MIN_MEMBERS_FOR_WITHIN_FILE_PAIRS: usize = 3;
 
 /// The ordered pair key packed as one `u64`: high half the lower
 /// index, low half the higher ([PERF-FLUTTER-TODO-MEMORY]).
@@ -69,6 +73,10 @@ pub(super) struct PairBuilder<'corpus, S: BuildHasher> {
     /// retained pair averages a dozen emissions on a corpus-scale run
     /// — pushing every one again is gigabytes of dead entries).
     kept_keys: std::collections::HashSet<u64>,
+    /// Scratch `(file, member)` buffer reused by
+    /// [`Self::pair_within_files`], so grouping one bucket by file costs
+    /// no allocation of its own ([PERF-FLUTTER-TODO-MEMORY]).
+    by_file: Vec<(FileId, usize)>,
 }
 
 impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
@@ -87,6 +95,7 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
             kept: Vec::new(),
             evidence: HashMap::new(),
             kept_keys: std::collections::HashSet::new(),
+            by_file: Vec::new(),
         }
     }
 
@@ -140,7 +149,9 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
     /// every member with the bucket's first member, and every member
     /// that shares the first member's file with the bucket's first
     /// member in another file, so no member of a bucket that spans files
-    /// is judged on a within-file pair alone.
+    /// is judged on a within-file pair alone. Members that share a file
+    /// are then paired with each other by [`Self::pair_within_files`],
+    /// which is what the star owes a bucket no other file reaches.
     fn pair_bucket(&mut self, run: &[usize]) {
         let Some(&canonical) = run.first() else {
             return;
@@ -157,6 +168,49 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
                 self.add_evidence(other, foreign, 1.0, 0.0);
             }
         }
+        self.pair_within_files(run);
+    }
+
+    /// Pairs every two members of `run` that share a file
+    /// ([FUSED-CANDIDATE-BUCKET-STAR]).
+    ///
+    /// The star is only sound when the pair each member is judged on can
+    /// pass, and inside one file there is no lower-floor scope to borrow
+    /// that soundness from: the within-file content floor decides every
+    /// pair, and which member sorts first is an accident of write order.
+    /// A bucket holding one member that *differs* ahead of a
+    /// byte-identical copy therefore judged the copy only against the
+    /// member that differs, and one unrelated sibling deleted an exact
+    /// duplicate from the report. Recall may not depend on what else
+    /// happens to share the shape, and no member of the bucket can tell
+    /// in advance which partner its content will vouch for, so within a
+    /// file the bucket is completely paired.
+    ///
+    /// Members are grouped through the builder's reused scratch buffer
+    /// rather than a per-bucket map: the historical
+    /// `HashMap<hash, Vec<index>>` here is what
+    /// [PERF-FLUTTER-TODO-MEMORY] removed from the pass above.
+    fn pair_within_files(&mut self, run: &[usize]) {
+        if run.len() < BUCKET_MIN_MEMBERS_FOR_WITHIN_FILE_PAIRS {
+            return;
+        }
+        let mut grouped = std::mem::take(&mut self.by_file);
+        grouped.clear();
+        grouped.extend(run.iter().filter_map(|index| {
+            self.fingerprints
+                .get(*index)
+                .map(|entry| (entry.file_id, *index))
+        }));
+        grouped.sort_unstable();
+        for (offset, &(file_id, member)) in grouped.iter().enumerate() {
+            for &(other_file, other) in grouped.get(offset.saturating_add(1)..).unwrap_or(&[]) {
+                if other_file != file_id {
+                    break;
+                }
+                self.add_evidence(member, other, 1.0, 0.0);
+            }
+        }
+        self.by_file = grouped;
     }
 
     /// Merges the embedding ANN pairs, recording each measured cosine
@@ -175,6 +229,7 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
     /// pairs in deterministic key order.
     pub(super) fn finish(mut self) -> Vec<CandidatePair> {
         drop(std::mem::take(&mut self.kept_keys));
+        drop(std::mem::take(&mut self.by_file));
         self.kept
             .sort_unstable_by_key(|pair| (pair.left, pair.right));
         self.kept.shrink_to_fit();
@@ -279,11 +334,18 @@ impl<'corpus, S: BuildHasher> PairBuilder<'corpus, S> {
     /// admit — those are the pairs the closure would keep, so the
     /// retained set induces the same clusters the ungated construction
     /// produced, at a fraction of the resident memory.
+    ///
+    /// The rescue reaches inside one file as well as across files
+    /// ([FUSED-SHARED-SUBTREE-SAME-FILE]), and only the rescue pass
+    /// holds the normalised trees its scope rule reads, so the retained
+    /// set here is bounded instead by what every rescue candidate must
+    /// be anyway: `candidate_ranges_are_valid` has already refused an
+    /// anchor-free same-file pair whose endpoints overlap, which is the
+    /// nested-window population a file would otherwise contribute.
     fn gate(&self, pair: &CandidatePair) -> bool {
         if !candidate_ranges_are_valid(pair, self.fingerprints) {
             return false;
         }
-        construction_survives(pair)
-            || (rescue_eligible(pair) && pair_crosses_files(pair, self.fingerprints))
+        construction_survives(pair) || rescue_eligible(pair)
     }
 }

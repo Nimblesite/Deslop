@@ -1,16 +1,26 @@
-//! [FUSED-SHARED-SUBTREE-ECHO] Exact whole-function clones a rescue
-//! pair may not merely wrap.
+//! Exact clones a rescue pair sits around, or inside
+//! ([FUSED-SHARED-SUBTREE-ECHO], [FUSED-SHARED-SUBTREE-SAME-FILE]).
 //!
 //! A shared-subtree rescue exists to admit a near-miss the anchor axis
-//! cannot see. It is not a second way to publish a clone the anchor
-//! axis already proved: a class shell or module preamble that encloses
-//! a Merkle-equal authored function in both files measures high overlap
-//! *because of that function*, and admitting the container hands
-//! subsumption a wider, byte-divergent view that then eats the exact
-//! one ([PIPELINE-CLUSTER-SUBSUME] prefers enclosure). The index below
-//! records every candidate pair that is Merkle-equal, cross-file, and a
-//! run of whole authored functions on both sides, so the rescue can ask
-//! how much of a container's shared mass is already claimed.
+//! cannot see, and the exact clones the anchor axis *did* prove answer
+//! two questions about it.
+//!
+//! **Across files, what has already been proved?** A class shell or
+//! module preamble that encloses a Merkle-equal authored function in
+//! both files measures high overlap *because of that function*, and
+//! admitting the container hands subsumption a wider, byte-divergent
+//! view that then eats the exact one ([PIPELINE-CLUSTER-SUBSUME] prefers
+//! enclosure). [`ExactClones::whole_functions_across_files`] records
+//! every candidate pair that is Merkle-equal, cross-file, and a run of
+//! whole authored functions on both sides, so the rescue can ask how
+//! much of a container's shared mass is already claimed.
+//!
+//! **Inside one file, is this a copy at all?** Two methods that drifted
+//! apart in one file share whole statements outright — the same
+//! statement, Merkle-equal, in both — while a family of sibling
+//! accessors that merely share a skeleton shares none.
+//! [`ExactClones::within_one_file`] records the Merkle-equal pairs of one
+//! file so the same-file rescue can measure that interior.
 
 use std::collections::HashMap;
 
@@ -20,55 +30,72 @@ use crate::{
 
 use super::CandidatePair;
 
-/// One exact whole-function clone: the two ranges it occupies, keyed by
-/// the ordered file pair, and the nodes it claims.
+/// One exact clone: the two ranges it occupies in canonical order, and
+/// the nodes it claims.
 #[derive(Clone, Copy)]
-struct ExactFunctionPair {
-    /// Range in the lower-numbered file.
+struct ExactClone {
+    /// Range on the lower side of [`ordered`].
     first: ByteRange,
-    /// Range in the higher-numbered file.
+    /// Range on the higher side of [`ordered`].
     second: ByteRange,
     /// Nodes of the clone — both endpoints agree, being Merkle-equal.
     nodes: usize,
 }
 
-/// Every exact whole-function clone among the candidate pairs, indexed
-/// by ordered file pair.
-pub(crate) struct ExactFunctionAnchors {
-    /// Exact whole-function pairs by ordered file pair.
-    by_files: HashMap<(FileId, FileId), Vec<ExactFunctionPair>>,
+/// The Merkle-equal candidate pairs of a corpus, indexed by ordered file
+/// pair so a rescue candidate's own file pair is one map hit.
+pub(crate) struct ExactClones {
+    /// Exact pairs by ordered file pair.
+    by_files: HashMap<(FileId, FileId), Vec<ExactClone>>,
 }
 
-impl ExactFunctionAnchors {
-    /// Indexes the Merkle-equal, cross-file, function-aligned pairs of
-    /// `pairs`.
-    pub(crate) fn index<L: std::hash::BuildHasher>(
+impl ExactClones {
+    /// Indexes every Merkle-equal pair of `pairs` that `admits` accepts.
+    fn index(
         pairs: &[CandidatePair],
         fingerprints: &[Fingerprint],
-        scopes: &DeclarationScopes<'_, L>,
+        admits: impl Fn(&Fingerprint, &Fingerprint) -> bool,
     ) -> Self {
-        let mut by_files: HashMap<(FileId, FileId), Vec<ExactFunctionPair>> = HashMap::new();
+        let mut by_files: HashMap<(FileId, FileId), Vec<ExactClone>> = HashMap::new();
         for pair in pairs {
             let (Some(left), Some(right)) =
                 (fingerprints.get(pair.left), fingerprints.get(pair.right))
             else {
                 continue;
             };
-            if left.file_id == right.file_id
-                || left.hash != right.hash
-                || !scopes.aligned_function_run(left)
-                || !scopes.aligned_function_run(right)
-            {
+            if left.hash != right.hash || !admits(left, right) {
                 continue;
             }
             let (key, first, second) = ordered(left, right);
-            by_files.entry(key).or_default().push(ExactFunctionPair {
+            by_files.entry(key).or_default().push(ExactClone {
                 first,
                 second,
                 nodes: left.node_count,
             });
         }
         Self { by_files }
+    }
+
+    /// The cross-file, function-aligned exact clones a container may
+    /// merely be echoing ([FUSED-SHARED-SUBTREE-ECHO]).
+    pub(crate) fn whole_functions_across_files<L: std::hash::BuildHasher>(
+        pairs: &[CandidatePair],
+        fingerprints: &[Fingerprint],
+        scopes: &DeclarationScopes<'_, L>,
+    ) -> Self {
+        Self::index(pairs, fingerprints, |left, right| {
+            left.file_id != right.file_id
+                && scopes.aligned_function_run(left)
+                && scopes.aligned_function_run(right)
+        })
+    }
+
+    /// The exact clones of one file — the shared interior a same-file
+    /// rescue is measured against ([FUSED-SHARED-SUBTREE-SAME-FILE]).
+    pub(crate) fn within_one_file(pairs: &[CandidatePair], fingerprints: &[Fingerprint]) -> Self {
+        Self::index(pairs, fingerprints, |left, right| {
+            left.file_id == right.file_id
+        })
     }
 
     /// Whether an unanchored token-only pair merely wraps an exact
@@ -90,23 +117,48 @@ impl ExactFunctionAnchors {
         })
     }
 
-    /// The most nodes any exact whole-function clone claims of the
-    /// pair's shared mass, or `None` when the pair neither wraps nor
-    /// sits inside one. A pair is never its own anchor: only a clone
-    /// that differs from the pair on at least one side is something the
-    /// pair could merely echo.
+    /// The most nodes any exact clone claims of the pair's shared mass,
+    /// or `None` when the pair neither wraps nor sits inside one. A pair
+    /// is never its own anchor: only a clone that differs from the pair
+    /// on at least one side is something the pair could merely echo.
     pub(crate) fn claimed_nodes(&self, left: &Fingerprint, right: &Fingerprint) -> Option<usize> {
         let (key, first, second) = ordered(left, right);
         let sizes = (
             left.node_count.min(right.node_count),
             left.node_count.max(right.node_count),
         );
-        self.by_files
-            .get(&key)?
-            .iter()
-            .filter(|exact| first != exact.first || second != exact.second)
+        self.others(key, first, second)?
             .filter_map(|exact| claimed_by(exact, first, second, sizes))
             .max()
+    }
+
+    /// Nodes of the largest exact clone the pair encloses, one endpoint
+    /// each — the copied interior two drifted declarations still share
+    /// ([FUSED-SHARED-SUBTREE-SAME-FILE]). `0` when they share none.
+    pub(crate) fn enclosed_nodes(&self, left: &Fingerprint, right: &Fingerprint) -> usize {
+        let (key, first, second) = ordered(left, right);
+        self.others(key, first, second)
+            .into_iter()
+            .flatten()
+            .filter(|exact| first.covers(exact.first) && second.covers(exact.second))
+            .map(|exact| exact.nodes)
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// The file pair's exact clones other than the pair itself.
+    fn others(
+        &self,
+        key: (FileId, FileId),
+        first: ByteRange,
+        second: ByteRange,
+    ) -> Option<impl Iterator<Item = &ExactClone>> {
+        Some(
+            self.by_files
+                .get(&key)?
+                .iter()
+                .filter(move |exact| first != exact.first || second != exact.second),
+        )
     }
 }
 
@@ -121,7 +173,7 @@ impl ExactFunctionAnchors {
 /// claimed and a container is never rescued on the strength of a copy
 /// it merely wraps.
 fn claimed_by(
-    exact: &ExactFunctionPair,
+    exact: &ExactClone,
     first: ByteRange,
     second: ByteRange,
     (smaller, larger): (usize, usize),
@@ -141,10 +193,14 @@ fn claimed_by(
     }
 }
 
-/// The pair's file key and ranges in file order, so a container pair and
-/// the exact pair it wraps line up whichever way each was enumerated.
+/// The pair's file key and ranges in canonical order, so a container
+/// pair and the exact pair it wraps line up whichever way each was
+/// enumerated. Across files the file id orders them; inside one file the
+/// candidate's index order says nothing about position, so the byte
+/// offset does.
 fn ordered(left: &Fingerprint, right: &Fingerprint) -> ((FileId, FileId), ByteRange, ByteRange) {
-    if left.file_id <= right.file_id {
+    let leads = (left.file_id, left.byte_range.start) <= (right.file_id, right.byte_range.start);
+    if leads {
         (
             (left.file_id, right.file_id),
             left.byte_range,

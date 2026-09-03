@@ -91,7 +91,7 @@ fn invariant_position_flows_to_variation(
                     .skip(index.saturating_add(1))
                     .any(|(later, consumer)| {
                         varying.get(later).copied().unwrap_or(false)
-                            && consumer.argument_identifiers.contains(binding)
+                            && consumer.consumed_identifiers.contains(binding)
                     })
             })
     })

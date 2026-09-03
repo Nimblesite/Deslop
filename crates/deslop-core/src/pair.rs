@@ -22,7 +22,7 @@ pub use candidates::{candidate_pairs, candidate_pairs_for_language_policy, LshPa
 mod content_gate;
 mod echo;
 pub(crate) use content_gate::apply_pair_content_gate;
-pub(crate) use echo::ExactFunctionAnchors;
+pub(crate) use echo::ExactClones;
 
 /// Transitive-closure clustering over surviving pairs.
 mod closure;
@@ -438,16 +438,17 @@ fn shared_subtree_can_reach_floor((smaller, larger): (usize, usize)) -> bool {
 
 /// True when the pair's endpoints live in different files.
 ///
-/// The rescue is deliberately cross-file only. Every clone this route
-/// exists to recover is a copy *between* files ([FUSED-SHARED-SUBTREE],
-/// gh #408), and admitting same-file pairs on shape overlap is the
-/// #197 in-file sibling-family shape, which the report already spends a
-/// dedicated proof suppressing. It is also what keeps a single-file
-/// corpus intact: same-file rescues union that file's subtrees into one
-/// transitive component, and the same-file overlap collapse then
-/// reduces it to a single logical location, which is dropped below
-/// `MIN_REPORTABLE_MEMBERS` — so the file's real duplication
-/// disappeared entirely rather than being reported
+/// The rescue measures every eligible cross-file pair; inside one file
+/// it measures only the narrow population
+/// [FUSED-SHARED-SUBTREE-SAME-FILE] describes, so this predicate is the
+/// scope split rather than the scope itself
+/// (`RescueContext::measures`). Admitting same-file pairs on shape
+/// overlap alone is the `#197` in-file sibling-family shape, which the
+/// report already spends a dedicated proof suppressing, and it is also
+/// how a single-file corpus loses its findings: unconstrained same-file
+/// rescues union that file's subtrees into one transitive component,
+/// and the same-file overlap collapse then reduces it to a single
+/// logical location, which is dropped below `MIN_REPORTABLE_MEMBERS`
 /// (`issue_119_role_gate_exercised`).
 pub(crate) fn crosses_files(left: &Fingerprint, right: &Fingerprint) -> bool {
     left.file_id != right.file_id

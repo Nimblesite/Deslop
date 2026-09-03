@@ -32,17 +32,44 @@ pub(super) fn assigned_binding(call: Node<'_>, source: &[u8]) -> Option<Vec<u8>>
     None
 }
 
-/// Raw identifiers used anywhere inside the call's argument list.
-pub(super) fn argument_identifiers(call: Node<'_>, source: &[u8]) -> Vec<Vec<u8>> {
-    let Some(arguments) = call
+/// Raw identifiers the call consumes: everything inside its argument
+/// list, plus everything its **receiver** names.
+///
+/// A receiver is part of a callee ([CLONE-NOISE-LITERAL-VARIATION-CALLS],
+/// gh #284), and it is also a value the call reads:
+/// `expect(generated).toContain("…")` consumes `generated` as surely as
+/// `assertContains(generated, "…")` would. Reading the argument list
+/// alone lost that, so a scenario family whose adapter result reaches the
+/// varying assertions only through their receivers looked like shared
+/// authored logic and blocked its own suppression.
+pub(super) fn consumed_identifiers(call: Node<'_>, source: &[u8]) -> Vec<Vec<u8>> {
+    let mut identifiers = Vec::new();
+    if let Some(arguments) = call
         .child_by_field_name("arguments")
         .or_else(|| call.child_by_field_name("argument_list"))
-    else {
-        return Vec::new();
-    };
-    let mut identifiers = Vec::new();
-    collect_identifiers(arguments, source, &mut identifiers);
+    {
+        collect_identifiers(arguments, source, &mut identifiers);
+    }
+    collect_receiver_identifiers(call, source, &mut identifiers);
     identifiers
+}
+
+/// Adds the identifiers of the callee's receiver. A bare-identifier
+/// callee is a function name and has no receiver, so it contributes
+/// nothing; otherwise the receiver is the callee's first named child —
+/// the expression the member is selected from, whatever the grammar
+/// calls that field — and every identifier inside it is consumed.
+fn collect_receiver_identifiers(call: Node<'_>, source: &[u8], out: &mut Vec<Vec<u8>>) {
+    let Some(callee) = call.child_by_field_name("function") else {
+        return;
+    };
+    if is_identifier(callee.kind()) {
+        return;
+    }
+    let Some(receiver) = named_children(callee).into_iter().next() else {
+        return;
+    };
+    collect_identifiers(receiver, source, out);
 }
 
 /// Collects identifier leaves without interpreting their language role.

@@ -81,8 +81,9 @@ pub(crate) struct CallShape {
     arguments: Vec<ArgShape>,
     /// Local name this call's result is assigned to, when any.
     result_binding: Option<Vec<u8>>,
-    /// Raw identifier arguments this call consumes.
-    argument_identifiers: Vec<Vec<u8>>,
+    /// Raw identifiers this call consumes — its arguments and its
+    /// receiver ([`dataflow::consumed_identifiers`]).
+    consumed_identifiers: Vec<Vec<u8>>,
 }
 
 /// Per-argument summary recorded for each call.
@@ -121,7 +122,7 @@ fn call_shape_from_node(call: Node<'_>, source: &[u8], language: &str) -> Option
         keywords,
         arguments,
         result_binding: dataflow::assigned_binding(call, source),
-        argument_identifiers: dataflow::argument_identifiers(call, source),
+        consumed_identifiers: dataflow::consumed_identifiers(call, source),
     })
 }
 
