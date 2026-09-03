@@ -11,6 +11,8 @@ mod common;
 mod cluster_overlap_collapse;
 #[path = "cluster_subsumption/mod.rs"]
 mod cluster_subsumption;
+#[path = "content_gate_admits.rs"]
+mod content_gate_admits;
 #[path = "content_gate_rejects.rs"]
 mod content_gate_rejects;
 #[path = "cross_language_threshold.rs"]
