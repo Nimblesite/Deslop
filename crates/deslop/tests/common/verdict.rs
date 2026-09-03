@@ -10,14 +10,16 @@
 //! `duplicated_loc`, and a percentage inflated by a shape match would
 //! have passed every one of them.
 
-use std::path::Path;
+use std::{collections::BTreeSet, ops::RangeInclusive, path::Path};
 
+use anyhow::anyhow;
 use serde_json::Value;
 
 use super::{
-    cluster_size, clusters, clusters_hidden, expect_cluster_spanning, field, metric_field,
-    occurrence_files, occurrence_texts, per_file_metrics,
-    signals::assert_no_pair_surface_on_cluster, signals::has_verbatim_pair, Result,
+    assert_occurrence_extents, cluster_size, clusters, clusters_hidden, expect_cluster_spanning,
+    field, line_count, metric_field, occurrence_files, occurrence_texts, per_file_metrics, signals,
+    signals::assert_no_pair_surface_on_cluster, signals::has_verbatim_pair,
+    visible_duplicated_lines, Result,
 };
 
 /// `metrics.duplicated_loc`, defaulting to `0` so a missing metric
@@ -197,4 +199,102 @@ pub(crate) fn assert_cluster_mentions(
 /// assertion silently loses precision on the way to a comparison.
 pub(crate) fn loc_as_f64(value: u64) -> Result<f64> {
     Ok(f64::from(u32::try_from(value)?))
+}
+
+/// [METRICS-REPO] Asserts the report's percentage is exactly the report's
+/// own line counts, at the repo level and for every file it lists. The
+/// headline figure is the reader's to check: a percentage that does not
+/// divide the lines beside it is a transparency defect whatever the
+/// clusters say.
+pub(crate) fn assert_percent_matches_lines(report: &Value) {
+    let rows = std::iter::once(("<repo>", field(report, "metrics"))).chain(
+        per_file_metrics(report)
+            .iter()
+            .map(|row| (field(row, "path").as_str().unwrap_or("?"), row)),
+    );
+    for (label, row) in rows {
+        let analysed = field(row, "analysed_loc").as_u64().unwrap_or(0);
+        let duplicated = field(row, "duplicated_loc").as_u64().unwrap_or(0);
+        let percent = field(row, "duplication_percent").as_f64().unwrap_or(-1.0);
+        let expected = if analysed == 0 {
+            0.0
+        } else {
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "line counts are far below f64's exact integer range"
+            )]
+            let ratio = duplicated as f64 / analysed as f64;
+            ratio * 100.0
+        };
+        assert!(
+            (percent - expected).abs() < 0.0001,
+            "{label}: duplication_percent must be duplicated_loc / analysed_loc \
+             — {duplicated}/{analysed} is {expected}, the report says {percent}: \
+             {report:#}"
+        );
+    }
+}
+
+/// The whole published contract for a report whose one finding is a
+/// same-file pair: exactly one visible cluster with nothing hidden, two
+/// occurrences at `spans` in `file`, the wire mass formula, no pair-only
+/// surface, rank one, `distinct` distinct occurrence texts, and metrics
+/// that both count the pair's lines and divide into the reported
+/// percentage. `why` states what a suppression would prove.
+///
+/// Returns the cluster's occurrence texts, so each control still pins the
+/// evidence that varies across its own pair.
+pub(crate) fn expect_only_finding_is_the_pair(
+    scan_root: &Path,
+    report: &Value,
+    file: &str,
+    spans: &[RangeInclusive<u64>],
+    distinct: usize,
+    why: &str,
+) -> Result<Vec<String>> {
+    assert!(
+        metric_field(report, "analysed_loc").as_u64().unwrap_or(0) > 0,
+        "{why} the pair's file must be parsed (analysed_loc > 0) — a scan \
+         that never opened it proves nothing: {report:#}"
+    );
+    let cluster = expect_visible_only(report, 1, why)
+        .first()
+        .ok_or_else(|| anyhow!("one visible cluster asserted above"))?;
+    assert_single_file_cluster(cluster, 2, file);
+    assert_occurrence_extents(cluster, file, spans)?;
+    // [RANK-MASS-SUM] / [PIPELINE-CLUSTER-CLOSURE] mass is the wire
+    // formula over the visible membership, nothing is hidden behind
+    // `report_hide`, and no pair-only evidence reaches a cluster surface.
+    signals::assert_structural_only_contract(cluster, why);
+    signals::assert_no_pair_surface_on_cluster(cluster, why);
+    assert_eq!(
+        signals::rank_of(report, cluster)?,
+        0,
+        "{why} the file's one finding is its worst offender: {report:#}"
+    );
+    assert_eq!(
+        field(cluster, "rank_band").as_str(),
+        Some("worst"),
+        "{why} the only finding sits in the worst band: {cluster:#}"
+    );
+    assert_eq!(
+        signals::distinct_texts(scan_root, cluster)?.len(),
+        distinct,
+        "{why} the occurrences' byte truth decides whether this is a \
+         verbatim copy or a near-miss, and it must match the fixture: {cluster:#}"
+    );
+    // [METRICS-REPO] the pair's own lines, counted once and divided honestly.
+    let expected: BTreeSet<u64> = spans.iter().cloned().flatten().collect();
+    assert_eq!(
+        visible_duplicated_lines(report).get(file),
+        Some(&expected),
+        "{why} only the pair's own lines are duplicated: {report:#}"
+    );
+    assert_eq!(
+        duplicated_loc(report),
+        line_count(&expected),
+        "{why} the metric counts the pair's lines: {report:#}"
+    );
+    assert_percent_matches_lines(report);
+    occurrence_texts(scan_root, cluster)
 }

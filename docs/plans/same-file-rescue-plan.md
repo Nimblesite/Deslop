@@ -10,7 +10,7 @@ The band has two halves and they meet in the middle. Below the 0.85 same-file pr
 
 `csharp-merge-drift` holds `ApplyStandard` and `ApplyPremium` in `DriftLimits.cs`. They share a five-call skeleton; the premium copy grew an escalation guard and its own literals. The pair measures shared-subtree overlap 0.82. Nothing publishes it: 0.32.0 reported four fragment clusters covering two-line windows and single statements, and the current release reports the exact tail alone. A reader is told about pieces of a duplication and never about the duplication.
 
-Pinned by `type3_enclosing_method::csharp_same_file_type3_reports_both_methods_in_one_cluster`, which asserts one cluster over lines 3-13 and 15-29 with every fragment absorbed. It is `#[ignore]`d, with its assertions intact, until the route below exists.
+Pinned by `type3_enclosing_method::csharp_same_file_type3_reports_both_methods_in_one_cluster`, which asserts one cluster over lines 3-13 and 15-29 with every fragment absorbed. It is red, with its assertions intact, until the route below exists.
 
 The other half needs no rescue at all, only the floor. `dart-forwarding-business-pair` holds `standardTotal` and `premiumTotal`: structurally identical, differing in one string literal and one integer. The pair measures agreement 0.727 and rename consistency 0.0, so the 0.85 floor refuses it. `dart-forwarding-duplicate-route`, `dart-forwarding-transform-before-delegation` and `csharp-merge-manyholes` fall the same way. 0.32.0 published all four, and `dart_forwarding_fail_open.rs` describes its pairs as liftable duplication that must stay on the report, while its assertions now require them absent. That contradiction is gh #496 and it has to be settled before the rescue question is worth asking: if the floor is what refuses a two-literal copy, no rescue route reaches the pair either.
 
@@ -36,7 +36,7 @@ A discriminator that separates a copied method from a shape family, computed fro
 
 ## Acceptance — how gh #492 and its skip end
 
-- `csharp_same_file_type3_reports_both_methods_in_one_cluster` passes with its assertions unchanged and its `#[ignore]` removed.
+- `csharp_same_file_type3_reports_both_methods_in_one_cluster` passes with its assertions unchanged.
 - `dart_forwarding_fail_open`'s business, duplicate-route and transform-before-delegation controls assert what the module documentation states, and `csharp-merge-manyholes` gains an occurrence and range pin either way the question is settled.
 - `dart_issue_197_single_file_structural_only`, `python_issue_103_helper_call_sites`, the three `issue_190` modes, `cli::bucket_groups` and both `refactor_merge_refusals` same-file pins stay green.
 - The paired 0.32.0 fixture scan loses no finding.

@@ -45,6 +45,8 @@
 //! the first delegation reads the statement that is not the duplication
 //! and excuses the one that is.
 
+use std::ops::RangeInclusive;
+
 use anyhow::Result;
 
 use crate::common::{verdict::*, *};
@@ -87,6 +89,34 @@ const DUPLICATE_ROUTE_WHY: &str =
 // with the reason it mattered rather than with the string.
 const MEMBERS_WHY: &str = "each member below is part of the duplication";
 
+/// The subtree-size floor every control in this module shares.
+const FORWARDING_MIN_NODES: u32 = 12;
+
+/// Distinct occurrence texts a pair of *declarations* slices to. Both
+/// pairs below share a body and differ in the member name, so the two
+/// occurrences are never one text — publishing one would mean the report
+/// had narrowed to the body and dropped the declaration the reader needs
+/// in order to see which member is which.
+const DRIFTED_PAIR_TEXTS: usize = 2;
+
+/// `Api.resetDelta`, the first of the two wrappers aimed at the same route.
+const DUPLICATE_ROUTE_DELTA_LINES: RangeInclusive<u64> = 34..=36;
+/// `Api.resetEpsilon`, whose body is byte-identical to `resetDelta`'s.
+const DUPLICATE_ROUTE_EPSILON_LINES: RangeInclusive<u64> = 38..=40;
+/// The route both of them DELETE — the byte that makes one call dead.
+const DUPLICATED_ROUTE: &str = "'/indexes/dup/settings'";
+/// The three wrappers that target a route of their own. Each is ordinary
+/// REST surface, duplicates nothing, and must stay out of the finding.
+const DISTINCT_ROUTE_MEMBERS: [&str; 3] = ["resetAlpha", "resetBeta", "resetGamma"];
+
+/// `Billing.quarterlyFee`, which computes through `normalise` and submits.
+const BEFORE_DELEGATION_FIRST_LINES: RangeInclusive<u64> = 37..=40;
+/// `Billing.annualCharge`, the copy at two different literals.
+const BEFORE_DELEGATION_SECOND_LINES: RangeInclusive<u64> = 42..=45;
+/// The sibling helper the pair computes through; parameterising it is
+/// what collapses the two methods into one.
+const BEFORE_DELEGATION_HELPER: &str = "normalise";
+
 /// Scans `fixture_name` at the subtree-size floor every control here
 /// shares, then asserts the report publishes exactly `families` visible
 /// clusters and hides none, that each covers `size` occurrences all
@@ -105,7 +135,7 @@ fn expect_visible_families(
     why: &str,
 ) -> Result<Vec<String>> {
     let scan_root = fixture(fixture_name);
-    let report = run_report(&scan_root, 12)?;
+    let report = run_report(&scan_root, FORWARDING_MIN_NODES)?;
     let mut texts = Vec::new();
     for cluster in expect_visible_only(&report, families, why) {
         assert_single_file_cluster(cluster, size, file);
@@ -152,7 +182,7 @@ fn one_statement_bodies_that_compute_are_not_forwarding() -> Result<()> {
 /// fail-open control above still publishes.
 fn expect_pair_rejected_at_admission(fixture_name: &str, file: &str, why: &str) -> Result<()> {
     let scan_root = fixture(fixture_name);
-    let report = run_report(&scan_root, 12)?;
+    let report = run_report(&scan_root, FORWARDING_MIN_NODES)?;
     let clusters_spanning = clusters(&report)
         .iter()
         .filter(|cluster| occurrence_files(cluster).iter().any(|f| f == file))
@@ -187,20 +217,68 @@ fn a_same_class_call_after_delegation_is_not_forwarding() -> Result<()> {
     )
 }
 
+/// [FUSED-CONTENT-GATE] The pair's `agreement` is 0.75 against a 0.85
+/// same-file promote floor, so the gate refuses it before
+/// [RANK-STRUCTURAL-ONLY-FORWARDING] is ever consulted — and that spec is
+/// explicit that this pair is *not* forwarding: *"a pair of one-line
+/// siblings that hand different literals to a sibling helper on the same
+/// class is parameterisable business logic"*, and *"the class computes on
+/// its own inputs"* through `normalise` before anything leaves it. The
+/// proof that would keep the pair visible never runs, so the floor
+/// suppresses on a reading the filter's own spec contradicts.
 #[test]
 fn a_same_class_call_before_delegation_is_not_forwarding() -> Result<()> {
-    expect_pair_rejected_at_admission(
-        "dart-forwarding-transform-before-delegation",
+    let scan_root = fixture("dart-forwarding-transform-before-delegation");
+    let report = run_report(&scan_root, FORWARDING_MIN_NODES)?;
+    let texts = expect_only_finding_is_the_pair(
+        &scan_root,
+        &report,
         "Billing.dart",
+        &[
+            BEFORE_DELEGATION_FIRST_LINES,
+            BEFORE_DELEGATION_SECOND_LINES,
+        ],
+        DRIFTED_PAIR_TEXTS,
         BEFORE_DELEGATION_WHY,
-    )
+    )?;
+    assert_reported(&texts, &["quarterlyFee", "annualCharge"], MEMBERS_WHY);
+    assert_reported(&texts, &[BEFORE_DELEGATION_HELPER], BEFORE_DELEGATION_WHY);
+    Ok(())
 }
 
+/// [FUSED-CANDIDATE-BUCKET-STAR] `resetDelta` and `resetEpsilon` hold
+/// byte-identical bodies, so their pair is the one thing in this family
+/// that no floor can refuse. The bucket never builds it: all five
+/// wrappers share one structural hash, and the bucket pairs every member
+/// with the member that sorts first — `resetAlpha`, which agrees with
+/// each of them on 0.75 of its positions and is refused. The spec's own
+/// condition on the star, *"that star is only sound when the pair each
+/// member is judged on can pass"*, is unmet inside a single file, where
+/// no cross-file candidate is owed to anyone.
+///
+/// The finding is the two same-route wrappers, not the family: the other
+/// three each target a route of their own and are the REST surface
+/// [RANK-STRUCTURAL-ONLY] exists to hide.
 #[test]
 fn wrappers_sharing_a_body_keep_the_family_visible() -> Result<()> {
-    expect_pair_rejected_at_admission(
-        "dart-forwarding-duplicate-route",
+    let scan_root = fixture("dart-forwarding-duplicate-route");
+    let report = run_report(&scan_root, FORWARDING_MIN_NODES)?;
+    let texts = expect_only_finding_is_the_pair(
+        &scan_root,
+        &report,
         "Api.dart",
+        &[DUPLICATE_ROUTE_DELTA_LINES, DUPLICATE_ROUTE_EPSILON_LINES],
+        DRIFTED_PAIR_TEXTS,
         DUPLICATE_ROUTE_WHY,
-    )
+    )?;
+    assert_reported(&texts, &["resetDelta", "resetEpsilon"], MEMBERS_WHY);
+    assert_reported(&texts, &[DUPLICATED_ROUTE], DUPLICATE_ROUTE_WHY);
+    for member in DISTINCT_ROUTE_MEMBERS {
+        assert!(
+            !texts.iter().any(|text| text.contains(member)),
+            "{DUPLICATE_ROUTE_WHY} {member} targets a route of its own and \
+             duplicates nothing; it may not be reported: {texts:#?}"
+        );
+    }
+    Ok(())
 }

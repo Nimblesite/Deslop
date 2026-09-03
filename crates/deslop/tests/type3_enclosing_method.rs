@@ -234,18 +234,15 @@ fn csharp_type3_reports_the_enclosing_method_pair() -> Result<()> {
     )
 }
 
-// [FUSED-SHARED-SUBTREE] A shared-subtree rescue is evidence about the
-// two authored methods, and the file boundary records where the copy was
-// pasted rather than whether it is a copy. The rescue is cross-file only,
-// so `DriftLimits.cs` publishes the statement fragments its two methods
-// share and never the methods.
+// [FUSED-SHARED-SUBTREE-SAME-FILE] A shared-subtree rescue is evidence
+// about the two authored methods, and the file boundary records where the
+// copy was pasted rather than whether it is a copy — the spec says so in
+// as many words. `ApplyStandard` and `ApplyPremium` measure overlap 0.82;
+// the rescue that would carry them is cross-file only, so `DriftLimits.cs`
+// publishes `:6-8`/`:18-20` and `:9-12`/`:25-28` — two statement
+// fragments that name neither method — and never the pair. A reader is
+// told about pieces of a duplication and never about the duplication.
 #[test]
-#[ignore = "[SKIP-UNFINISHED] GH #492 [FUSED-SHARED-SUBTREE] docs/plans/same-file-rescue-plan.md — \
-            shared-subtree rescue is cross-file only, so two methods that drifted apart \
-            inside one file publish as fragments. Admitting every disjoint same-file pair \
-            ranks shape families above real clones (the settings-getter and helper-call-site \
-            fixtures), so the route needs a discriminator this release does not have. \
-            Assertions are intact — run with `-- --ignored`."]
 fn csharp_same_file_type3_reports_both_methods_in_one_cluster() -> Result<()> {
     const FIXTURE: &str = "csharp-merge-drift";
     const FILE: &str = "DriftLimits.cs";
