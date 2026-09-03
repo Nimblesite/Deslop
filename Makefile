@@ -492,10 +492,10 @@ CORPUS_TESTS ?= corpus_tokio_rust corpus_nest_typescript corpus_determinism_nest
 # The whole corpus, for `test-corpus-ci-full`. A second copy of these lists in
 # the workflow YAML is how the `full` dispatch came to pass the substring
 # `corpus_` into an `--exact` loop and scan nothing at all.
-CORPUS_REPOS_FULL = flutter jellyfin tokio django react nest laravel hugo fsharp
+CORPUS_REPOS_FULL = flutter jellyfin tokio django react nest laravel hugo fsharp tornado
 CORPUS_TESTS_FULL = corpus_flutter_dart corpus_jellyfin_csharp corpus_tokio_rust \
                     corpus_django_python corpus_react_javascript corpus_nest_typescript \
-                    corpus_laravel_php corpus_hugo_go corpus_fsharp \
+                    corpus_laravel_php corpus_hugo_go corpus_fsharp corpus_tornado_python \
                     corpus_determinism_nest_typescript corpus_determinism_jellyfin_csharp
 
 # [CI-DESLOP] Self-hosted duplication gate. Runs the release binary built by

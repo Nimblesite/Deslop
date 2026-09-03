@@ -215,7 +215,7 @@ $$
 
 - $S_{\text{sat}}$ — the structural saturation floor (`routing.shape_identical_floor`).
 - $J_{\text{sat}}$ — the token saturation floor (`content_gate.saturating_token_floor`, default 0.95).
-- $u(p)$ — the content-support floor this pair must meet: `content_gate.support_floor` (default 0.70) across files, `content_gate.promote_floor` (default 0.85) within one file.
+- $u(p)$ — the content-support floor this pair must meet: `content_gate.support_floor` (default 0.70), in every scope; an unanchored LSH-only pair pays `content_gate.promote_floor` (default 0.85) instead ([FUSED-CONTENT-GATE]).
 
 $$
 \mathrm{required}(p) \iff M(p) = 1 \lor S(p) \ge S_{\text{sat}} \lor J(p) \ge J_{\text{sat}}
@@ -226,8 +226,8 @@ $$
 \qquad
 u(p) =
 \begin{cases}
-0.70 & \text{cross-file} \\
-0.85 & \text{same-file}
+0.85 & \text{lsh\_only}(p) \\
+0.70 & \text{otherwise}
 \end{cases}
 $$
 

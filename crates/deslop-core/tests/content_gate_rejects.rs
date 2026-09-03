@@ -9,6 +9,7 @@ use deslop_core::{
     EmbeddingMode, Report,
 };
 
+const MIN_NODES: u32 = 12;
 const EXPECTED_VISIBLE_CLUSTERS: usize = 0;
 const EXPECTED_HIDDEN_CLUSTERS: usize = 0;
 const EXPECTED_SCHEMA_FILES_ANALYSED: usize = 1;
