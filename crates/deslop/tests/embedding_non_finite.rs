@@ -20,8 +20,7 @@ use crate::mock_ollama::{MockBehavior, MockOllama};
 use anyhow::Result;
 
 use crate::common::{
-    clusters, embeddings::mock_embedding_run, field,
-    signals::assert_no_pair_surface_on_cluster,
+    clusters, embeddings::mock_embedding_run, field, signals::assert_no_pair_surface_on_cluster,
 };
 
 /// Source files the `csharp-small` fixture contributes to the scan.

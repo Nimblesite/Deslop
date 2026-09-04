@@ -255,3 +255,59 @@ pub fn add_costs(totals: &mut CorpusTotals, costs: &BTreeMap<String, super::RunC
     let cpu: Vec<f64> = costs.values().filter_map(|cost| cost.cpu_seconds).collect();
     totals.cpu_seconds = (!cpu.is_empty()).then(|| cpu.iter().sum());
 }
+
+/// The movement from one engine's corpus standing to another's.
+///
+/// Every figure the scorecard's change column prints is derived here, so the
+/// renderer only ever formats a number somebody else computed, and `score.json`
+/// carries the same deltas the markdown shows.
+#[derive(Debug, Clone, Serialize)]
+pub struct CorpusChange {
+    /// Percentage points the corpus score moved. Absent when either engine
+    /// judged nothing — no score cannot be subtracted from.
+    pub score_points: Option<f64>,
+    /// Judged pairs answered correctly.
+    pub correct: i64,
+    /// Judged pairs got wrong, in each direction.
+    pub false_negatives: i64,
+    /// See [`Self::false_negatives`].
+    pub false_positives: i64,
+    /// Clusters published. Description, never scored.
+    pub clusters_total: i64,
+    /// Wall milliseconds.
+    pub elapsed_ms: i64,
+    /// CPU seconds, absent when either side went unmeasured.
+    pub cpu_seconds: Option<f64>,
+    /// Peak resident mebibytes, absent when either side went unmeasured.
+    pub peak_rss_mb: Option<i64>,
+}
+
+/// The signed difference between two counts, saturating rather than wrapping.
+fn moved<T: TryInto<i64>>(before: T, after: T) -> i64 {
+    let signed = |value: T| value.try_into().unwrap_or(i64::MAX);
+    signed(after).saturating_sub(signed(before))
+}
+
+/// The signed difference between two measurements, or nothing when either side
+/// went unmeasured — an unmeasured run must never read as no change.
+fn moved_measured(before: Option<f64>, after: Option<f64>) -> Option<f64> {
+    before.zip(after).map(|(before, after)| after - before)
+}
+
+/// Compares two engines' corpus standing, measure by measure.
+#[must_use]
+pub fn corpus_change(before: &CorpusTotals, after: &CorpusTotals) -> CorpusChange {
+    CorpusChange {
+        score_points: moved_measured(before.score_percent, after.score_percent),
+        correct: moved(before.correct, after.correct),
+        false_negatives: moved(before.false_negatives, after.false_negatives),
+        false_positives: moved(before.false_positives, after.false_positives),
+        clusters_total: moved(before.clusters_total, after.clusters_total),
+        elapsed_ms: moved(before.elapsed_ms, after.elapsed_ms),
+        cpu_seconds: moved_measured(before.cpu_seconds, after.cpu_seconds),
+        peak_rss_mb: before
+            .peak_rss_mb
+            .zip(after.peak_rss_mb)
+            .map(|(before, after)| moved(before, after)),
+    }
+}

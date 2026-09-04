@@ -50,9 +50,7 @@ pub(crate) fn go_occurrences(cluster: &Value) -> Vec<&Value> {
     occurrences(cluster)
         .iter()
         .filter(|occurrence| {
-            occurrence_path(occurrence)
-                .map(|path| path.ends_with(GO_EXTENSION))
-                .unwrap_or(false)
+            occurrence_path(occurrence).is_ok_and(|path| path.ends_with(GO_EXTENSION))
         })
         .collect()
 }
@@ -109,7 +107,11 @@ pub(crate) fn assert_no_occurrence_takes_the_file(cluster: &Value, label: &str) 
 
 /// No Go occurrence may carry the package clause its counterpart repeats
 /// only because the language demands it.
-pub(crate) fn assert_no_package_clause(scan_root: &Path, cluster: &Value, label: &str) -> Result<()> {
+pub(crate) fn assert_no_package_clause(
+    scan_root: &Path,
+    cluster: &Value,
+    label: &str,
+) -> Result<()> {
     for occurrence in go_occurrences(cluster) {
         let text = occurrence_text(scan_root, occurrence)?;
         assert!(
@@ -147,12 +149,14 @@ pub(crate) fn assert_declaration_alignment(
     label: &str,
 ) -> Result<()> {
     let occurrences = go_occurrences(cluster);
-    let mut opening = 0usize;
-    for occurrence in &occurrences {
-        if opens_authored_declaration(&occurrence_text(scan_root, occurrence)?) {
-            opening += 1;
-        }
-    }
+    let texts = occurrences
+        .iter()
+        .map(|occurrence| occurrence_text(scan_root, occurrence))
+        .collect::<Result<Vec<_>>>()?;
+    let opening = texts
+        .iter()
+        .filter(|text| opens_authored_declaration(text))
+        .count();
     assert!(
         opening == 0 || opening == occurrences.len(),
         "[PIPELINE-CLUSTER-EXACT-SCOPE] {label}: {opening} of {} occurrences \
@@ -175,7 +179,11 @@ pub(crate) fn assert_cluster_scope(scan_root: &Path, cluster: &Value, label: &st
 /// Applies every Go scope rule to every cluster of `report`. This is the
 /// blanket contract: any Go suite that produces a report calls it, so a
 /// padded window cannot survive anywhere in the corpus of fixtures.
-pub(crate) fn assert_go_authored_scope(scan_root: &Path, report: &Value, label: &str) -> Result<()> {
+pub(crate) fn assert_go_authored_scope(
+    scan_root: &Path,
+    report: &Value,
+    label: &str,
+) -> Result<()> {
     for cluster in clusters(report) {
         assert_cluster_scope(scan_root, cluster, label)?;
     }
@@ -193,7 +201,8 @@ pub(crate) fn assert_symmetric_rows(cluster: &Value, label: &str) {
     let widest = counts.iter().copied().max().unwrap_or_default();
     let narrowest = counts.iter().copied().min().unwrap_or_default();
     assert_eq!(
-        widest, narrowest,
+        widest,
+        narrowest,
         "[PIPELINE-CLUSTER-EXACT-SCOPE] {label}: the halves of one pair cover \
          {narrowest} and {widest} rows, so the cluster prices one view and \
          renders another: {:?}",

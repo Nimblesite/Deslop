@@ -330,7 +330,10 @@ fn every_gate_allowance_is_an_absolute_count_so_a_growing_register_cannot_loosen
     let root = repo_root();
     let config: Value = read_json(&root.join(THRESHOLDS))?;
     let sections = [
-        (DEFAULTS, config.get(DEFAULTS).cloned().unwrap_or(Value::Null)),
+        (
+            DEFAULTS,
+            config.get(DEFAULTS).cloned().unwrap_or(Value::Null),
+        ),
         (REPOS, config.get(REPOS).cloned().unwrap_or(Value::Null)),
     ];
     for (section, value) in sections {

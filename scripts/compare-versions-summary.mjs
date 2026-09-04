@@ -259,19 +259,22 @@ const targetSummary = (meta, scorecard, target) => {
 
 // [CORPUS-SCORE] The index cell: found/total for each verdict on engine B, its
 // score, and whether B degraded. Absent when the target has no register.
-const indexRegisterCell = (scorecard, target, shortB) => {
+const indexRegisterCell = (scorecard, target, shortA, shortB) => {
   const scored = targetScore(scorecard, target);
   if (!scored) return ABSENT;
-  const score = scored.scores[shortB];
+  const before = scored.scores[shortA];
+  const after = scored.scores[shortB];
+  const percent = (score) =>
+    score.score_percent === null ? ABSENT : `${score.score_percent.toFixed(1)}%`;
   return (
-    `IN ${score.clearly_in_found}/${score.clearly_in_total} · ` +
-    `OUT ${score.clearly_out_absent}/${score.clearly_out_total} · ` +
-    `${score.score_percent === null ? ABSENT : `${score.score_percent.toFixed(1)}%`} · ` +
+    `IN ${before.clearly_in_found}→${after.clearly_in_found}/${after.clearly_in_total} · ` +
+    `OUT ${before.clearly_out_absent}→${after.clearly_out_absent}/${after.clearly_out_total} · ` +
+    `${percent(before)}→${percent(after)} · ` +
     (scored.degradation.degraded ? "**DEGRADED**" : "no degradation")
   );
 };
 
-const indexRow = (scorecard, shortB, target) => {
+const indexRow = (scorecard, shortA, shortB, target) => {
   const reportA = readJson(target.reports.a);
   const reportB = readJson(target.reports.b);
   const overlap = overlapOf(reportA, reportB);
@@ -284,7 +287,7 @@ const indexRow = (scorecard, shortB, target) => {
     `${reportA.metrics.clusters_total} → ${reportB.metrics.clusters_total}`,
     `${reportA.metrics.duplication_percent} → ${reportB.metrics.duplication_percent}`,
     `${overlap.shared} / +${overlap.onlyB} / −${overlap.onlyA}`,
-    indexRegisterCell(scorecard, target, shortB),
+    indexRegisterCell(scorecard, target, shortA, shortB),
   ]);
 };
 
@@ -312,10 +315,10 @@ const indexDocument = (meta, scorecard) => {
       `clusters ${shortA}→${shortB}`,
       `dup% ${shortA}→${shortB}`,
       "clusters shared / gained / lost",
-    "register (B)",
+      `register ${shortA}→${shortB}`,
     ]),
     divider(9),
-    ...meta.targets.map((target) => indexRow(scorecard, shortB, target)),
+    ...meta.targets.map((target) => indexRow(scorecard, shortA, shortB, target)),
     "",
     ...meta.targets.map((t) => `- [${t.slug}](${t.slug}/SUMMARY.md) — \`${t.url}\` @ \`${t.sha}\``),
     "",

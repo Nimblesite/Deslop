@@ -15,8 +15,11 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 use super::{
-    cluster_size, clusters, expect_cluster_spanning, field, fixture, occurrence_files, seed,
-    signals::assert_no_pair_surface_on_cluster, Result,
+    cluster_size, clusters, expect_cluster_spanning, field, fixture,
+    go_scope::{assert_no_occurrence_takes_the_file, assert_symmetric_rows},
+    occurrence_files, seed,
+    signals::assert_no_pair_surface_on_cluster,
+    Result,
 };
 
 /// Subtree-size floor the fixture is scanned at. Every authored clone
@@ -214,7 +217,13 @@ pub(crate) fn assert_multilang_contract(report: &Value, label: &str) -> Result<(
             "{label}/{language}: the clone must span exactly the two authored \
              occurrences: {report:#}"
         );
-        assert_no_pair_surface_on_cluster(clone, &format!("{label}/{language}"));
+        let scoped = format!("{label}/{language}");
+        assert_no_pair_surface_on_cluster(clone, &scoped);
+        // [PIPELINE-CLUSTER-EXACT-SCOPE] The Go pair is two `func`
+        // declarations, never two files: the package clause, banner and
+        // unique top-level item above each are not part of the clone.
+        assert_no_occurrence_takes_the_file(clone, &scoped);
+        assert_symmetric_rows(clone, &scoped);
         let mut files = occurrence_files(clone);
         files.sort();
         let mut expected = case.files().map(ToOwned::to_owned).to_vec();

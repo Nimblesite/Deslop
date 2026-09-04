@@ -3,25 +3,33 @@
 //! Every figure printed here was computed in [`super`] or [`super::gate`].
 //! This module formats; it never derives a number, so the document and the
 //! machine-readable `score.json` beside it can never disagree.
+//!
+//! Every table reads **side by side**. The corpus standing is one measure per
+//! row with a column per engine; each per-repository table is one repository
+//! per row with a column per engine. Two figures a reader is meant to compare
+//! are never a row apart, because a comparison split across rows is one the
+//! reader has to reassemble by eye.
 
 use std::collections::BTreeMap;
 
 use serde::Serialize;
 
 use super::{
-    gate::{Breach, CorpusTotals, Degradation, Thresholds},
+    gate::{Breach, CorpusChange, CorpusTotals, Degradation, Thresholds},
     RepoScore, RunCost,
 };
 
-/// Engines whose figures a change column can be drawn between.
-const COMPARABLE_ENGINES: usize = 2;
 /// Milliseconds in a second, so the wall-time column reads in seconds.
 const MS_PER_SECOND: f64 = 1000.0;
+/// What an absent or unmeasured figure prints as. Never zero: a run nobody
+/// measured must not read as a run that cost nothing.
+const ABSENT: &str = "—";
 
 /// One engine in a scored run.
 #[derive(Debug, Clone, Serialize)]
 pub struct Engine {
-    /// Short identifier used as the key everywhere else in the document.
+    /// Short identifier used as the key everywhere else in the document, and as
+    /// the per-engine column heading.
     pub id: String,
     /// Human label, e.g. `deslop@e8a215e99fb9`.
     pub label: String,
@@ -56,6 +64,9 @@ pub struct Scorecard {
     pub targets: Vec<TargetScore>,
     /// Corpus standing per engine id.
     pub totals: BTreeMap<String, CorpusTotals>,
+    /// How the last engine's standing moved against the first. Absent unless
+    /// two engines ran.
+    pub change: Option<CorpusChange>,
     /// The gate each repository was held to.
     pub thresholds: BTreeMap<String, Thresholds>,
     /// Every threshold the last engine breached. Empty means the run passes.
@@ -67,9 +78,11 @@ fn row(cells: &[String]) -> String {
     format!("| {} |", cells.join(" | "))
 }
 
-/// The header divider for a table of `columns` columns.
-fn divider(columns: usize) -> String {
-    format!("|{}|", vec!["---"; columns].join("|"))
+/// A header row and the divider under it, so a table can never disagree with
+/// its own width.
+fn header(cells: &[String]) -> Vec<String> {
+    let divider = format!("|{}|", vec!["---"; cells.len()].join("|"));
+    vec![row(cells), divider]
 }
 
 /// A percentage, or an explicit absence. Nothing judged must never print as a
@@ -88,12 +101,12 @@ fn seconds(ms: u64) -> String {
 
 /// Mebibytes, or an explicit absence.
 fn megabytes(value: Option<u64>) -> String {
-    value.map_or_else(|| "—".to_owned(), |mb| format!("{mb} MB"))
+    value.map_or_else(|| ABSENT.to_owned(), |mb| format!("{mb} MB"))
 }
 
 /// CPU seconds, or an explicit absence.
 fn cpu(value: Option<f64>) -> String {
-    value.map_or_else(|| "—".to_owned(), |secs| format!("{secs:.2} s"))
+    value.map_or_else(|| ABSENT.to_owned(), |secs| format!("{secs:.2} s"))
 }
 
 /// Widening that keeps the lossy cast in one reviewed place.
@@ -101,187 +114,284 @@ fn as_f64(value: u64) -> f64 {
     u32::try_from(value).map_or(f64::from(u32::MAX), f64::from)
 }
 
-/// The change in peak memory, absent when either side went unmeasured — an
-/// unmeasured run must not read as "no change".
-fn peak_change(before: Option<u64>, after: Option<u64>) -> String {
-    match (before, after) {
-        (Some(before), Some(after)) => {
-            change(
-                usize::try_from(before).unwrap_or_default(),
-                usize::try_from(after).unwrap_or_default(),
-            ) + " MB"
-        }
-        _ => "—".to_owned(),
-    }
-}
-
-/// A signed change, so a comparison row reads without the reader subtracting.
-fn change(before: usize, after: usize) -> String {
-    let signed = |value: usize| i64::try_from(value).unwrap_or(i64::MAX);
-    let delta = signed(after).saturating_sub(signed(before));
+/// A signed count, so a change column reads without the reader subtracting.
+fn signed(delta: i64) -> String {
     if delta == 0 {
-        "—".to_owned()
+        ABSENT.to_owned()
     } else {
         format!("{delta:+}")
     }
 }
 
-/// Header of the corpus standing table.
-const TOTALS_COLUMNS: [&str; 8] = [
-    "engine",
-    "score",
-    "judged",
-    "false negatives",
-    "false positives",
-    "clusters",
-    "wall",
-    "peak RSS",
-];
-
-/// One totals row for one engine.
-fn totals_row(engine: &Engine, totals: &CorpusTotals) -> String {
-    row(&[
-        format!("`{}`", engine.label),
-        score_cell(totals.score_percent),
-        format!("{}/{}", totals.correct, totals.judged),
-        totals.false_negatives.to_string(),
-        totals.false_positives.to_string(),
-        totals.clusters_total.to_string(),
-        format!(
-            "{} ({} CPU)",
-            seconds(totals.elapsed_ms),
-            cpu(totals.cpu_seconds)
-        ),
-        megabytes(totals.peak_rss_mb),
-    ])
-}
-
-/// The change row, drawn only when exactly two engines ran.
-fn totals_change(card: &Scorecard) -> Vec<String> {
-    let (Some(first), Some(last)) = (card.engines.first(), card.engines.last()) else {
-        return Vec::new();
-    };
-    let (Some(before), Some(after)) = (card.totals.get(&first.id), card.totals.get(&last.id))
-    else {
-        return Vec::new();
-    };
-    vec![row(&[
-        "**change**".to_owned(),
-        format!(
-            "{} → {}",
-            score_cell(before.score_percent),
-            score_cell(after.score_percent)
-        ),
-        format!("{} correct", change(before.correct, after.correct)),
-        change(before.false_negatives, after.false_negatives),
-        change(before.false_positives, after.false_positives),
-        change(before.clusters_total, after.clusters_total),
-        change(
-            usize::try_from(before.elapsed_ms).unwrap_or_default(),
-            usize::try_from(after.elapsed_ms).unwrap_or_default(),
-        ) + " ms",
-        peak_change(before.peak_rss_mb, after.peak_rss_mb),
-    ])]
-}
-
-/// The corpus standing: one row per engine, plus the change between two.
-fn totals_section(card: &Scorecard) -> Vec<String> {
-    let mut lines = vec![
-        "## Corpus standing".to_owned(),
-        String::new(),
-        "Score is `correct / judged` over every judged pair in the corpus. Clusters, wall \
-         time and memory are description — they are reported beside the score and never \
-         folded into it."
-            .to_owned(),
-        String::new(),
-        row(&TOTALS_COLUMNS.map(ToOwned::to_owned)),
-        divider(TOTALS_COLUMNS.len()),
-    ];
-    for engine in &card.engines {
-        if let Some(totals) = card.totals.get(&engine.id) {
-            lines.push(totals_row(engine, totals));
-        }
+/// A signed measurement in its unit, or an explicit absence.
+fn signed_amount(delta: Option<i64>, unit: &str) -> String {
+    match delta {
+        Some(delta) if delta != 0 => format!("{delta:+} {unit}"),
+        _ => ABSENT.to_owned(),
     }
-    if card.engines.len() == COMPARABLE_ENGINES {
-        lines.extend(totals_change(card));
-    }
-    lines.push(String::new());
-    lines
 }
 
-/// Header of the per-repository table.
-const REPO_COLUMNS: [&str; 9] = [
-    "repository",
-    "engine",
-    "score",
-    "CLEARLY IN found",
-    "CLEARLY OUT absent",
-    "false neg",
-    "false pos",
-    "clusters",
-    "wall / peak / CPU",
-];
+/// A signed fractional measurement in its unit, or an explicit absence.
+fn signed_fraction(delta: Option<f64>, unit: &str) -> String {
+    delta.map_or_else(|| ABSENT.to_owned(), |delta| format!("{delta:+.1} {unit}"))
+}
 
-/// One row per engine, per repository.
-fn repo_rows(card: &Scorecard, target: &TargetScore) -> Vec<String> {
+/// One cell per engine, in run order, out of a map keyed by engine id. Every
+/// side-by-side column in the document is built here, so no two tables can
+/// order their engines differently or spell an absent run differently.
+fn engine_cells<T>(
+    card: &Scorecard,
+    source: &BTreeMap<String, T>,
+    cell: &dyn Fn(&T) -> String,
+) -> Vec<String> {
     card.engines
         .iter()
-        .filter_map(|engine| {
-            let score = target.scores.get(&engine.id)?;
-            let cost = target.costs.get(&engine.id);
-            Some(row(&[
-                format!("{} ({})", target.name, target.language),
-                format!("`{}`", engine.label),
-                score_cell(score.score_percent),
-                format!("{}/{}", score.clearly_in_found, score.clearly_in_total),
-                format!("{}/{}", score.clearly_out_absent, score.clearly_out_total),
-                score.false_negatives.to_string(),
-                score.false_positives.to_string(),
-                score.clusters_total.to_string(),
-                cost.map_or_else(
-                    || "—".to_owned(),
-                    |cost| {
-                        format!(
-                            "{} / {} / {}",
-                            seconds(cost.elapsed_ms),
-                            megabytes(cost.peak_rss_mb),
-                            cpu(cost.cpu_seconds)
-                        )
-                    },
-                ),
-            ]))
+        .map(|engine| {
+            source
+                .get(&engine.id)
+                .map_or_else(|| ABSENT.to_owned(), cell)
         })
         .collect()
 }
 
-/// The per-repository table.
-fn repos_section(card: &Scorecard) -> Vec<String> {
-    let mut lines = vec![
-        "## Per repository".to_owned(),
-        String::new(),
-        row(&REPO_COLUMNS.map(ToOwned::to_owned)),
-        divider(REPO_COLUMNS.len()),
-    ];
-    for target in &card.targets {
-        lines.extend(repo_rows(card, target));
+/// One corpus-standing row: the measure, one cell per engine, then the change
+/// when two engines ran.
+fn standing_row(
+    card: &Scorecard,
+    measure: &str,
+    cell: &dyn Fn(&CorpusTotals) -> String,
+    delta: Option<String>,
+) -> String {
+    let mut cells = vec![measure.to_owned()];
+    cells.extend(engine_cells(card, &card.totals, cell));
+    cells.extend(delta);
+    row(&cells)
+}
+
+/// The accuracy rows of the corpus standing — the measures that are scored.
+fn standing_accuracy(card: &Scorecard) -> Vec<String> {
+    let moved = card.change.as_ref();
+    vec![
+        standing_row(
+            card,
+            "score",
+            &|totals| score_cell(totals.score_percent),
+            moved.map(|moved| signed_fraction(moved.score_points, "pts")),
+        ),
+        standing_row(
+            card,
+            "correct / judged",
+            &|totals| format!("{}/{}", totals.correct, totals.judged),
+            moved.map(|moved| format!("{} correct", signed(moved.correct))),
+        ),
+        standing_row(
+            card,
+            "false negatives",
+            &|totals| totals.false_negatives.to_string(),
+            moved.map(|moved| signed(moved.false_negatives)),
+        ),
+        standing_row(
+            card,
+            "false positives",
+            &|totals| totals.false_positives.to_string(),
+            moved.map(|moved| signed(moved.false_positives)),
+        ),
+    ]
+}
+
+/// The cost rows of the corpus standing — description, never scored.
+fn standing_cost(card: &Scorecard) -> Vec<String> {
+    let moved = card.change.as_ref();
+    vec![
+        standing_row(
+            card,
+            "clusters",
+            &|totals| totals.clusters_total.to_string(),
+            moved.map(|moved| signed(moved.clusters_total)),
+        ),
+        standing_row(
+            card,
+            "wall",
+            &|totals| seconds(totals.elapsed_ms),
+            moved.map(|moved| signed_amount(Some(moved.elapsed_ms), "ms")),
+        ),
+        standing_row(
+            card,
+            "CPU",
+            &|totals| cpu(totals.cpu_seconds),
+            moved.map(|moved| signed_fraction(moved.cpu_seconds, "s")),
+        ),
+        standing_row(
+            card,
+            "peak RSS",
+            &|totals| megabytes(totals.peak_rss_mb),
+            moved.map(|moved| signed_amount(moved.peak_rss_mb, "MB")),
+        ),
+    ]
+}
+
+/// The corpus standing: one measure per row, one column per engine.
+fn totals_section(card: &Scorecard) -> Vec<String> {
+    let mut columns = vec!["measure".to_owned()];
+    columns.extend(
+        card.engines
+            .iter()
+            .map(|engine| format!("`{}`", engine.label)),
+    );
+    if card.change.is_some() {
+        columns.push("change".to_owned());
     }
+    let mut lines = vec![
+        "## Corpus standing".to_owned(),
+        String::new(),
+        "Score is `correct / judged` over every judged pair in the corpus. Each engine \
+         has its own column, so every measure reads across one row. Clusters, wall time \
+         and memory are description — they are reported beside the score and never \
+         folded into it."
+            .to_owned(),
+        String::new(),
+    ];
+    lines.extend(header(&columns));
+    lines.extend(standing_accuracy(card));
+    lines.extend(standing_cost(card));
+    lines.push(String::new());
+    lines
+}
+
+/// One header cell per engine for a measure: the measure, then the engine id.
+fn measure_headers(card: &Scorecard, measure: &str) -> Vec<String> {
+    card.engines
+        .iter()
+        .map(|engine| format!("{measure} `{}`", engine.id))
+        .collect()
+}
+
+/// What the register judged for this repository. The register is the same
+/// document for every engine, so it is stated once rather than per column.
+fn judged_cell(target: &TargetScore) -> String {
+    target.scores.values().next().map_or_else(
+        || ABSENT.to_owned(),
+        |score| {
+            format!(
+                "{} IN + {} OUT",
+                score.clearly_in_total, score.clearly_out_total
+            )
+        },
+    )
+}
+
+/// Whether the defects this repository carries are new or standing — the only
+/// thing that separates a regression from a bug that was already there.
+fn degradation_cell(target: &TargetScore) -> String {
+    let Some(moved) = target.degradation.as_ref() else {
+        return ABSENT.to_owned();
+    };
+    let mut parts = Vec::new();
+    let mut note = |count: usize, label: &str| {
+        if count > 0 {
+            parts.push(format!("{count} {label}"));
+        }
+    };
+    note(moved.new_false_negatives.len(), "new FN");
+    note(moved.new_false_positives.len(), "new FP");
+    note(moved.standing_false_negatives, "standing FN");
+    note(moved.standing_false_positives, "standing FP");
+    if parts.is_empty() {
+        "clean".to_owned()
+    } else {
+        parts.join(", ")
+    }
+}
+
+/// The repository's name and language, the first cell of every per-repo row.
+fn repo_cell(target: &TargetScore) -> String {
+    format!("{} ({})", target.name, target.language)
+}
+
+/// One accuracy row: the repository, what was judged, then every engine's score
+/// and defect counts side by side.
+fn accuracy_row(card: &Scorecard, target: &TargetScore) -> String {
+    let mut cells = vec![repo_cell(target), judged_cell(target)];
+    cells.extend(engine_cells(card, &target.scores, &|score| {
+        score_cell(score.score_percent)
+    }));
+    cells.extend(engine_cells(card, &target.scores, &|score| {
+        format!("{}/{}", score.clearly_in_found, score.clearly_in_total)
+    }));
+    cells.extend(engine_cells(card, &target.scores, &|score| {
+        format!("{}/{}", score.clearly_out_absent, score.clearly_out_total)
+    }));
+    cells.push(degradation_cell(target));
+    row(&cells)
+}
+
+/// The per-repository accuracy table.
+fn accuracy_section(card: &Scorecard) -> Vec<String> {
+    let mut columns = vec!["repository".to_owned(), "judged".to_owned()];
+    for measure in ["score", "IN found", "OUT absent"] {
+        columns.extend(measure_headers(card, measure));
+    }
+    columns.push("defects".to_owned());
+    let mut lines = vec![
+        "## Per repository — accuracy".to_owned(),
+        String::new(),
+        "One row per repository, one column per engine, so the two runs sit beside each \
+         other. `IN found` is the CLEARLY IN pairs the engine reported; `OUT absent` the \
+         CLEARLY OUT pairs it correctly stayed silent on. The last column says whether a \
+         defect is **new** against the first engine or **standing** in both."
+            .to_owned(),
+        String::new(),
+    ];
+    lines.extend(header(&columns));
+    lines.extend(card.targets.iter().map(|target| accuracy_row(card, target)));
+    lines.push(String::new());
+    lines
+}
+
+/// One cost row: the repository, then every engine's cost side by side.
+fn cost_row(card: &Scorecard, target: &TargetScore) -> String {
+    let mut cells = vec![repo_cell(target)];
+    cells.extend(engine_cells(card, &target.scores, &|score| {
+        score.clusters_total.to_string()
+    }));
+    cells.extend(engine_cells(card, &target.costs, &|cost| {
+        seconds(cost.elapsed_ms)
+    }));
+    cells.extend(engine_cells(card, &target.costs, &|cost| {
+        megabytes(cost.peak_rss_mb)
+    }));
+    cells.extend(engine_cells(card, &target.costs, &|cost| {
+        cpu(cost.cpu_seconds)
+    }));
+    row(&cells)
+}
+
+/// The per-repository cost table.
+fn cost_section(card: &Scorecard) -> Vec<String> {
+    let mut columns = vec!["repository".to_owned()];
+    for measure in ["clusters", "wall", "peak", "CPU"] {
+        columns.extend(measure_headers(card, measure));
+    }
+    let mut lines = vec![
+        "## Per repository — cost".to_owned(),
+        String::new(),
+        "Description, never scored. Reported beside the accuracy table so a change in \
+         cost can never be mistaken for a change in what the engine found."
+            .to_owned(),
+        String::new(),
+    ];
+    lines.extend(header(&columns));
+    lines.extend(card.targets.iter().map(|target| cost_row(card, target)));
     lines.push(String::new());
     lines
 }
 
 /// The gate: what each repository must clear, and anything it did not.
 fn gate_section(card: &Scorecard) -> Vec<String> {
-    let mut lines = vec![
-        "## Gate".to_owned(),
-        String::new(),
-        row(&[
-            "repository",
-            "max false neg",
-            "max false pos",
-        ]
-        .map(ToOwned::to_owned)),
-        divider(3),
-    ];
+    let mut lines = vec!["## Gate".to_owned(), String::new()];
+    lines.extend(header(
+        &["repository", "max false neg", "max false pos"].map(ToOwned::to_owned),
+    ));
     for (repo, thresholds) in &card.thresholds {
         lines.push(row(&[
             repo.clone(),
@@ -369,7 +479,8 @@ pub fn scorecard(card: &Scorecard) -> String {
         String::new(),
     ];
     lines.extend(totals_section(card));
-    lines.extend(repos_section(card));
+    lines.extend(accuracy_section(card));
+    lines.extend(cost_section(card));
     lines.extend(gate_section(card));
     lines.extend(defects_section(card));
     lines.join("\n")

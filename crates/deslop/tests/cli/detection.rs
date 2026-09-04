@@ -1,6 +1,6 @@
 use super::support::*;
-use crate::common::signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair};
 use crate::common::go_scope::*;
+use crate::common::signals::{assert_no_pair_surface_on_cluster, has_verbatim_pair};
 
 const TYPE2_EXPECTED_FILES_ANALYSED: u64 = 2;
 const TYPE2_EXPECTED_OCCURRENCES: usize = 2;
@@ -511,8 +511,10 @@ fn go_closure_signature_only_match_is_suppressed() -> Result<()> {
 // line 1 — the single worst offender in the report, and pure noise.
 #[test]
 fn go_package_and_import_prologue_never_becomes_a_cross_file_cluster() -> Result<()> {
-    let (scan_root, report) =
-        run_with_args(GO_PROLOGUE_FIXTURE, &[MIN_NODES_FLAG, GO_PROLOGUE_MIN_NODES])?;
+    let (scan_root, report) = run_with_args(
+        GO_PROLOGUE_FIXTURE,
+        &[MIN_NODES_FLAG, GO_PROLOGUE_MIN_NODES],
+    )?;
 
     // [PIPELINE-CLUSTER-EXACT-SCOPE] Whatever this report publishes, no
     // occurrence may contain the `package` clause or `import` block, and
@@ -560,8 +562,10 @@ fn dissimilar_fsharp_functions_across_files_stay_in_separate_clusters() -> Resul
 // single file.
 #[test]
 fn dissimilar_go_functions_across_files_stay_in_separate_clusters() -> Result<()> {
-    let (scan_root, report) =
-        run_with_args(GO_DISSIMILAR_FIXTURE, &[MIN_NODES_FLAG, GO_DISSIMILAR_MIN_NODES])?;
+    let (scan_root, report) = run_with_args(
+        GO_DISSIMILAR_FIXTURE,
+        &[MIN_NODES_FLAG, GO_DISSIMILAR_MIN_NODES],
+    )?;
     let json = serde_json::to_string(&report)?;
     assert_every_cluster_single_file(&json, "Go")?;
 

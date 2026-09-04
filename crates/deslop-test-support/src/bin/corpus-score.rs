@@ -16,7 +16,10 @@ use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
 use deslop_test_support::corpus::{measured_run, repo_root};
 use deslop_test_support::corpus_score::{
-    gate::{add_costs, breaches, degradation, load_thresholds, totals, Thresholds},
+    gate::{
+        add_costs, breaches, corpus_change, degradation, load_thresholds, totals, CorpusChange,
+        CorpusTotals, Thresholds,
+    },
     render::{scorecard, Engine, Scorecard, TargetScore},
     score_repo, RepoScore, RunCost,
 };
@@ -257,6 +260,18 @@ fn gate_last_engine(
     (thresholds, found)
 }
 
+/// How the last engine's corpus standing moved against the first. Absent unless
+/// exactly two engines ran: there is no "change" to state against yourself.
+fn standing_change(
+    engines: &[Engine],
+    totals: &BTreeMap<String, CorpusTotals>,
+) -> Option<CorpusChange> {
+    let [first, last] = engines else {
+        return None;
+    };
+    Some(corpus_change(totals.get(&first.id)?, totals.get(&last.id)?))
+}
+
 /// Scores a whole run, writes the scorecard, and holds the last engine to the
 /// gate when asked to.
 fn score(run_path: &std::path::Path, out: &std::path::Path, gate: bool) -> Result<()> {
@@ -272,6 +287,7 @@ fn score(run_path: &std::path::Path, out: &std::path::Path, gate: bool) -> Resul
     let (thresholds, breached) = gate_last_engine(&engines, &targets, &load_thresholds(&root)?);
     let card = Scorecard {
         generated_at: text(&run, "generated_at"),
+        change: standing_change(&engines, &totals),
         engines,
         targets,
         totals,
