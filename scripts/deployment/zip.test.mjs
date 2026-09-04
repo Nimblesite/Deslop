@@ -45,6 +45,14 @@ const NESTED_ENTRY = `${ARCHIVE_ROOT}${ENTRY_SEPARATOR}${NESTED_DIRECTORY}${ENTR
 /** Long enough that deflating it must win, and repetitive so by a wide margin. */
 const COMPRESSIBLE_TEXT = "deslop deslop deslop\n".repeat(500);
 
+/** What a 32-bit field holds when the real value lives in a Zip64 record. */
+const ZIP64_SENTINEL = 0xffffffff;
+
+/** The catalogue header: its signature, its fixed size, and the size field. */
+const CENTRAL_SIGNATURE = [0x50, 0x4b, 0x01, 0x02];
+const CENTRAL_HEADER_BYTES = 46;
+const CENTRAL_STORED_SIZE_AT = 20;
+
 /** The mode a staged binary carries, and the one a plain file carries. */
 const EXECUTABLE_MODE = 0o755;
 const PLAIN_MODE = 0o644;
@@ -130,6 +138,22 @@ test("entries are compressed, and the same tree always produces the same bytes",
     first.length < COMPRESSIBLE_TEXT.length,
     `${first.length} bytes for two copies of ${COMPRESSIBLE_TEXT.length} means nothing was deflated`,
   );
+});
+
+test("an entry whose real size lives elsewhere is refused, never misread", () => {
+  const work = workDirectory();
+  const archive = readFileSync(stageTree(work));
+  // Stamp the Zip64 sentinel over one catalogue entry's stored size, the way a
+  // writer does when the real value lives in a Zip64 record. Reading the
+  // 32-bit field anyway would hand back a wrong length as if it were right,
+  // which is the one failure a checksum cannot catch. The catalogue sits after
+  // every entry's content, so the last copy of the name is the one in it.
+  const header = archive.lastIndexOf(Buffer.from(NESTED_ENTRY, "utf8")) - CENTRAL_HEADER_BYTES;
+  assert.deepEqual([...archive.subarray(header, header + CENTRAL_SIGNATURE.length)], CENTRAL_SIGNATURE);
+  archive.writeUInt32LE(ZIP64_SENTINEL, header + CENTRAL_STORED_SIZE_AT);
+  const corrupted = join(work, "zip64.zip");
+  writeFileSync(corrupted, archive);
+  assert.throws(() => openArchive(corrupted).read(NESTED_ENTRY), /Zip64/);
 });
 
 /** A fresh temp directory, removed when the process exits. */

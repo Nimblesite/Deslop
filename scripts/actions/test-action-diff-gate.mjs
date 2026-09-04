@@ -35,6 +35,8 @@ const DEFAULT_CLI = `target/release/${executableName("deslop", currentPlatform()
 const STDIN_GUARD_STEP = "Reject the un-suppliable stdin diff";
 /** The status the CLI exits on a usage error, and the guard must match. */
 const USAGE_ERROR_STATUS = 2;
+/** Carries the built CLI's directory to the step's shell, which prepends it. */
+const BIN_DIR_VARIABLE = "DESLOP_BIN_DIR";
 /** The base ref a `pull_request` event supplies. */
 const PULL_REQUEST_BASE_REF = "main";
 
@@ -53,15 +55,17 @@ function runActionStep(cli, inputs) {
   writeFileSync(githubOutput, "");
   const body = stepBody(readFileSync("action.yml", "utf8"), "Run deslop");
   // The step calls `deslop` by name, so the built binary has to be on the
-  // PATH the step sees. Prepending it inside the shell — from a positional
-  // argument, spelled the way that shell spells a path — is the only form
-  // that works on both: a Windows directory handed in through `env` carries
-  // the character PATH separates on, and the shell reads one entry as two.
-  execFileSync(posixShell(), ["-eo", "pipefail", "-c", `PATH="$1:$PATH"
-${body}`, "run-deslop", shellPath(dirname(cli))], {
+  // PATH the step sees. The directory travels in the environment, spelled
+  // the way this host's shell spells a path, and the shell composes PATH
+  // from it — handing it to `env.PATH` directly cannot work on Windows,
+  // where a directory carries the very character PATH separates on and the
+  // shell reads one entry as two.
+  const prependBinDir = `PATH="$${BIN_DIR_VARIABLE}:$PATH"\n`;
+  execFileSync(posixShell(), ["-eo", "pipefail", "-c", `${prependBinDir}${body}`], {
     stdio: "pipe",
     env: {
       ...process.env,
+      [BIN_DIR_VARIABLE]: shellPath(dirname(cli)),
       GITHUB_OUTPUT: githubOutput,
       SCAN_PATH: SCAN_PATH,
       MIN_NODES: "30",

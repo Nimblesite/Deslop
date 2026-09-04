@@ -19,7 +19,16 @@
 // stored and deflated entries in a single-part archive. Anything else is
 // refused by name rather than guessed at.
 
-import { chmodSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  closeSync,
+  fstatSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { crc32, deflateRawSync, inflateRawSync } from "node:zlib";
 
@@ -44,8 +53,8 @@ const STORED = 0;
 const DEFLATED = 8;
 
 /** What a field holds when its real value lives in a Zip64 record instead. */
-const ZIP64_COUNT = 0xffff;
-const ZIP64_OFFSET = 0xffffffff;
+const ZIP64_SENTINEL_16 = 0xffff;
+const ZIP64_SENTINEL_32 = 0xffffffff;
 
 /** "Made by" a Unix system at format version 2.0, so the mode below is read. */
 const VERSION_MADE_BY = (3 << 8) | 20;
@@ -120,7 +129,7 @@ function readCentralDirectory(buffer, archivePath) {
   const end = findEndRecord(buffer, archivePath);
   const count = buffer.readUInt16LE(end + 10);
   const start = buffer.readUInt32LE(end + 16);
-  if (count === ZIP64_COUNT || start === ZIP64_OFFSET) {
+  if (count === ZIP64_SENTINEL_16 || start === ZIP64_SENTINEL_32) {
     throw new Error(`${archivePath} is a Zip64 archive, which this reader does not support`);
   }
   const entries = [];
@@ -160,6 +169,11 @@ function readCentralHeader(buffer, at, entries, archivePath) {
 
 /** The entry's content, decompressed and checked against its recorded checksum. */
 function readEntry(buffer, entry, archivePath) {
+  if (entry.storedSize === ZIP64_SENTINEL_32 || entry.localHeaderOffset === ZIP64_SENTINEL_32) {
+    throw new Error(
+      `${archivePath} entry ${entry.name} is recorded in Zip64 form, which this reader does not support`,
+    );
+  }
   const at = entry.localHeaderOffset;
   if (buffer.readUInt32LE(at) !== LOCAL_FILE_HEADER) {
     throw new Error(`${archivePath} entry ${entry.name} has no local header at byte ${at}`);
@@ -201,16 +215,32 @@ function stagedEntries(sourceRoot, entryRoot) {
 /** Appends `name` — and, for a directory, everything under it — to `staged`. */
 function stage(sourceRoot, name, staged) {
   const path = join(sourceRoot, ...name.split(ENTRY_SEPARATOR));
-  const stats = statSync(path);
-  const mode = stats.mode & PERMISSION_BITS;
-  if (!stats.isDirectory()) {
-    staged.push({ name, mode, bytes: readFileSync(path) });
-    return;
+  // One open descriptor answers both questions — what this is, and what is in
+  // it — so the bytes archived are the bytes that were measured. Asking the
+  // filesystem twice by name lets the two answers describe different files.
+  const handle = openSync(path, "r");
+  let isDirectory;
+  try {
+    isDirectory = stageOpen(handle, name, staged);
+  } finally {
+    closeSync(handle);
   }
-  staged.push({ name: `${name}${ENTRY_SEPARATOR}`, mode, bytes: Buffer.alloc(0) });
+  if (!isDirectory) return;
   for (const child of readdirSync(path).sort()) {
     stage(sourceRoot, `${name}${ENTRY_SEPARATOR}${child}`, staged);
   }
+}
+
+/** Stages whatever `handle` refers to, reporting whether it was a directory. */
+function stageOpen(handle, name, staged) {
+  const stats = fstatSync(handle);
+  const mode = stats.mode & PERMISSION_BITS;
+  if (!stats.isDirectory()) {
+    staged.push({ name, mode, bytes: readFileSync(handle) });
+    return false;
+  }
+  staged.push({ name: `${name}${ENTRY_SEPARATOR}`, mode, bytes: Buffer.alloc(0) });
+  return true;
 }
 
 /** Deflates the entry, keeping it stored whenever deflating would not shrink it. */
