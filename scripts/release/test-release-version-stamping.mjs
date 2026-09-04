@@ -32,9 +32,7 @@ runContractSuite(tests, "release version stamping", "deslop-version-stamp-");
 
 function sourceProjectsUseVersionPlaceholder() {
   const placeholder = "0.0.0-dev";
-  assertIncludes(read(repoRoot, "Cargo.toml"), `version = "${placeholder}"`);
-  assertIncludes(read(repoRoot, "Cargo.lock"), `name = "deslop"\nversion = "${placeholder}"`);
-  assertIncludes(read(repoRoot, "Cargo.lock"), `name = "deslop-mcp"\nversion = "${placeholder}"`);
+  assertCargoVersion(repoRoot, placeholder, ["deslop", "deslop-mcp"]);
   assertJsonVersion(repoRoot, "shipwright.json", placeholder);
   assertJsonVersion(repoRoot, "clients/vscode/package.json", placeholder);
   assertJsonVersion(repoRoot, "clients/vscode/package-lock.json", placeholder);
@@ -46,12 +44,9 @@ function sourceProjectsUseVersionPlaceholder() {
 
 function stamperSetsEveryProjectVersion(work) {
   copyStampInputs(work);
-  const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
-  if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
+  runStamper(work);
 
-  assertIncludes(read(work, "Cargo.toml"), `version = "${version}"`);
-  assertIncludes(read(work, "Cargo.lock"), `name = "deslop"\nversion = "${version}"`);
-  assertIncludes(read(work, "Cargo.lock"), `name = "deslop-lsp"\nversion = "${version}"`);
+  assertCargoVersion(work, version, ["deslop", "deslop-lsp"]);
   assertJsonVersion(work, "shipwright.json", version);
   // The VSIX package version is the Marketplace-legal core MAJOR.MINOR.PATCH;
   // every other project keeps the full version including the prerelease suffix.
@@ -72,8 +67,7 @@ function stamperStampsGeneratedVsixManifest(work) {
   const stagedManifest = "clients/vscode/shipwright.json";
   const dest = copyFileAt(join(work, "shipwright.json"), join(work, stagedManifest));
 
-  const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
-  if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
+  runStamper(work);
 
   assertJsonVersion(work, stagedManifest, version);
 }
@@ -85,8 +79,7 @@ function stamperStampsGeneratedVsixManifest(work) {
 // regression a new workspace crate (deslop-test-support) introduced.
 function stamperStampsEveryWorkspaceCrateInLock(work) {
   copyStampInputs(work);
-  const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
-  if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
+  runStamper(work);
 
   const lock = read(work, "Cargo.lock");
   let workspaceCrates = 0;
@@ -123,8 +116,7 @@ function stamperStampsEveryWorkspaceCrateInLock(work) {
 // [ACTION-VERSION]
 function stamperLeavesDocumentedPinsUntouched(work) {
   copyStampInputs(work);
-  const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
-  if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
+  runStamper(work);
 
   for (const doc of actionPinDocs) assertPinSurvived(work, doc);
 
@@ -136,17 +128,31 @@ function stamperLeavesDocumentedPinsUntouched(work) {
   }
 }
 
+/** Runs the stamper over the inputs already copied into `work`. */
+function runStamper(work) {
+  const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
+  if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
+}
+
+/** Cargo.toml, and each named workspace crate in Cargo.lock, carry `expected`. */
+function assertCargoVersion(root, expected, crates) {
+  assertIncludes(read(root, "Cargo.toml"), `version = "${expected}"`);
+  for (const crate of crates) {
+    assertIncludes(read(root, "Cargo.lock"), `name = "${crate}"\nversion = "${expected}"`);
+  }
+}
+
 /** A documented action pin must ship exactly as it was committed. */
 function assertPinSurvived(work, doc) {
-    const before = read(repoRoot, doc);
-    const after = read(work, doc);
-    if (after !== before) {
-      throw new Error(`${doc}: stamping rewrote a published surface that must ship exactly as committed`);
-    }
-    if (!after.includes(actionPinPrefix)) throw new Error(`${doc} has no action pin left to protect`);
-    if (after.includes(`${actionPinPrefix}${version}`)) {
-      throw new Error(`${doc}: the stamped version reached a committed pin`);
-    }
+  const before = read(repoRoot, doc);
+  const after = read(work, doc);
+  if (after !== before) {
+    throw new Error(`${doc}: stamping rewrote a published surface that must ship exactly as committed`);
+  }
+  if (!after.includes(actionPinPrefix)) throw new Error(`${doc} has no action pin left to protect`);
+  if (after.includes(`${actionPinPrefix}${version}`)) {
+    throw new Error(`${doc}: the stamped version reached a committed pin`);
+  }
 }
 
 function stamperRejectsInvalidVersion(work) {
