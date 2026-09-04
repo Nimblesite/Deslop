@@ -126,7 +126,18 @@ function stamperLeavesDocumentedPinsUntouched(work) {
   const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
   if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
 
-  for (const doc of actionPinDocs) {
+  for (const doc of actionPinDocs) assertPinSurvived(work, doc);
+
+  // The SHA-pinned example documents the case where the ref carries no version,
+  // so `version:` is required. Rewriting it to a tag would destroy the very
+  // thing it illustrates — the stamper must leave a non-`@v` ref alone.
+  for (const doc of actionPinDocs.slice(1)) {
+    assertIncludes(read(work, doc), "uses: Nimblesite/Deslop@8f4c1e2a9b7d3f6a5c8e1b4d7a0f3c6e9b2d5a8f");
+  }
+}
+
+/** A documented action pin must ship exactly as it was committed. */
+function assertPinSurvived(work, doc) {
     const before = read(repoRoot, doc);
     const after = read(work, doc);
     if (after !== before) {
@@ -136,14 +147,6 @@ function stamperLeavesDocumentedPinsUntouched(work) {
     if (after.includes(`${actionPinPrefix}${version}`)) {
       throw new Error(`${doc}: the stamped version reached a committed pin`);
     }
-  }
-
-  // The SHA-pinned example documents the case where the ref carries no version,
-  // so `version:` is required. Rewriting it to a tag would destroy the very
-  // thing it illustrates — the stamper must leave a non-`@v` ref alone.
-  for (const doc of actionPinDocs.slice(1)) {
-    assertIncludes(read(work, doc), "uses: Nimblesite/Deslop@8f4c1e2a9b7d3f6a5c8e1b4d7a0f3c6e9b2d5a8f");
-  }
 }
 
 function stamperRejectsInvalidVersion(work) {

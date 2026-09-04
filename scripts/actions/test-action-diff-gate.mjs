@@ -31,6 +31,8 @@ import { currentPlatform, executableName } from "../release/vsix-platforms.mjs";
 const SCAN_PATH = "examples/rust";
 /** Where the CLI lands under `make build`, spelled the way this host spells it. */
 const DEFAULT_CLI = `target/release/${executableName("deslop", currentPlatform())}`;
+/** The subtree size the self-test's gate matrix scans at. */
+const MIN_NODES = "30";
 /** The guard step whose emitted guidance is executed below. */
 const STDIN_GUARD_STEP = "Reject the un-suppliable stdin diff";
 /** The status the CLI exits on a usage error, and the guard must match. */
@@ -54,37 +56,48 @@ function runActionStep(cli, inputs) {
   const githubOutput = join(workdir, "github-output");
   writeFileSync(githubOutput, "");
   const body = stepBody(readFileSync("action.yml", "utf8"), "Run deslop");
-  // The step calls `deslop` by name, so the built binary has to be on the
-  // PATH the step sees. The directory travels in the environment, spelled
-  // the way this host's shell spells a path, and the shell composes PATH
-  // from it — handing it to `env.PATH` directly cannot work on Windows,
-  // where a directory carries the very character PATH separates on and the
-  // shell reads one entry as two.
   const prependBinDir = `PATH="$${BIN_DIR_VARIABLE}:$PATH"\n`;
   execFileSync(posixShell(), ["-eo", "pipefail", "-c", `${prependBinDir}${body}`], {
     stdio: "pipe",
-    env: {
-      ...process.env,
-      [BIN_DIR_VARIABLE]: shellPath(dirname(cli)),
-      GITHUB_OUTPUT: githubOutput,
-      SCAN_PATH: SCAN_PATH,
-      MIN_NODES: "30",
-      OUTPUT: outputPrefix,
-      LOG_LEVEL: "warn",
-      FAIL_OVER: inputs.failOver,
-      NO_FAIL_OVER: "false",
-      CONFIG: "",
-      DIFF: inputs.diff,
-      ONLY_CHANGED: inputs.onlyChanged,
-      NOJSON: "false",
-      NOTEXT: "false",
-      NOHTML: "false",
-    },
+    env: stepEnvironment(cli, inputs, githubOutput, outputPrefix),
   });
+  return { exitCode: publishedExitCode(githubOutput), outputPrefix };
+}
+
+/**
+ * The env block the action composes from its inputs, plus the directory the
+ * built CLI sits in. The step calls `deslop` by name, so that directory has
+ * to reach the PATH the step sees — and it travels here, spelled the way
+ * this host's shell spells a path, rather than in `env.PATH` itself, because
+ * a Windows directory carries the very character PATH separates on and the
+ * shell would read one entry as two.
+ */
+function stepEnvironment(cli, inputs, githubOutput, outputPrefix) {
+  return {
+    ...process.env,
+    [BIN_DIR_VARIABLE]: shellPath(dirname(cli)),
+    GITHUB_OUTPUT: githubOutput,
+    SCAN_PATH,
+    MIN_NODES: MIN_NODES,
+    OUTPUT: outputPrefix,
+    LOG_LEVEL: "warn",
+    FAIL_OVER: inputs.failOver,
+    NO_FAIL_OVER: "false",
+    CONFIG: "",
+    DIFF: inputs.diff,
+    ONLY_CHANGED: inputs.onlyChanged,
+    NOJSON: "false",
+    NOTEXT: "false",
+    NOHTML: "false",
+  };
+}
+
+/** The exit code the step published to `GITHUB_OUTPUT`. */
+function publishedExitCode(githubOutput) {
   const published = readFileSync(githubOutput, "utf8");
   const match = published.match(/exit-code=(\d+)/);
   assert.ok(match, `the step published no exit-code: ${published}`);
-  return { exitCode: Number.parseInt(match[1], 10), outputPrefix };
+  return Number.parseInt(match[1], 10);
 }
 
 /**

@@ -109,6 +109,11 @@ function writeStubs(stubBin, log, target) {
   writeStub(stubBin, "tar", `echo "tar $*" >> "${recorded}"\nexec "${realTar}" "$@"`);
   writeStub(stubBin, "sudo", `echo "sudo $*" >> "${recorded}"`);
   writeStub(stubBin, "deslop", `echo "deslop $*" >> "${recorded}"\necho "deslop ${VERSION}"`);
+  writeUnameStub(stubBin, target);
+}
+
+/** Names the platform under test, and refuses every flag it was not given. */
+function writeUnameStub(stubBin, target) {
   // The snippet reads the platform from `uname`, so the test names it. Every
   // other flag is refused rather than answered: a snippet that asked
   // something this stub silently made up would be tested against a fiction.
