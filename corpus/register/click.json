@@ -1,0 +1,48 @@
+{
+  "name": "click",
+  "language": "python",
+  "url": "https://github.com/pallets/click.git",
+  "sha": "8b19813f2bfca99f1018a587a8cf54fc959f2e5d",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "The same six lines of test appear twice in one file: the command declaration, its deprecated argument, the echo body, and the --help invocation. Nothing distinguishes the two copies at all - not a name, not a literal, not a space. Someone pasted it.",
+      "verified": "diff of tests/test_arguments.py:340-345 against tests/test_arguments.py:394-399 at the pinned sha is empty - byte-identical over six lines.",
+      "occurrences": [
+        "tests/test_arguments.py:340-345",
+        "tests/test_arguments.py:394-399"
+      ]
+    },
+    {
+      "why": "test_KeepOpenFile.py and test_LazyFile.py are the same ten-line test file written twice against sibling classes: same import, same function shape, same expected list, same tmpdir fixture, same p.write, same with-open. The LazyFile copy adds one nesting level to wrap the file. Two files, one test.",
+      "verified": "diff of tests/test_utils/test_KeepOpenFile.py:1-10 against tests/test_utils/test_LazyFile.py:1-11 at the pinned sha: eight of eleven lines are identical; the differences are the test function name and the extra `with click.utils._LazyFile(f.name) as lf:` wrapper with its consequent indent.",
+      "occurrences": [
+        "tests/test_utils/test_KeepOpenFile.py:1-10",
+        "tests/test_utils/test_LazyFile.py:1-11"
+      ]
+    }
+  ],
+  "clearly_out": [],
+  "clearly_out_status": "NONE FOUND. This judging pass found no pair in click certain enough to call a false positive. click's reports concentrate on its test suite, where repetition is genuine but idiomatic - those pairs are recorded below as NOT CLEAR. An empty list asserts nothing and must never be read as evidence that precision is good.",
+  "not_clear": [
+    {
+      "why": "Three adjacent lines - invoke, assert exit code, assert output - repeated for --cls1 and --cls2. It is copy-paste-modify, but mandating that a three-line adjacent test fragment be reported is not something every engineer would agree with.",
+      "occurrences": [
+        "tests/test_options.py:2515-2517",
+        "tests/test_options.py:2519-2521"
+      ]
+    },
+    {
+      "why": "The invoke-then-two-asserts shape recurs across the whole click test suite. It is real repetition and it is also the idiom the framework invites. Judgement split, so it asserts nothing.",
+      "occurrences": [
+        "tests/test_arguments.py:73-75",
+        "tests/test_basic.py:431-434"
+      ]
+    }
+  ]
+}

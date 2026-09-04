@@ -16,6 +16,7 @@ pub mod corpus_confidence;
 pub mod corpus_determinism;
 pub mod corpus_precision;
 pub mod corpus_scope;
+pub mod corpus_score;
 pub mod enclosure;
 pub mod reap;
 pub mod skip_contract;

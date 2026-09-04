@@ -2,7 +2,6 @@
   "name": "react",
   "language": "javascript",
   "url": "https://github.com/facebook/react.git",
-  "tag": "v19.2.8",
   "sha": "1dd4ecbdabf826f527fc9a58c05ea70375b7d170",
   "why": "Most-used JS library; many parallel renderer implementations by design.",
   "ceilings": {

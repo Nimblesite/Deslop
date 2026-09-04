@@ -13,6 +13,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    ffi::OsString,
     fs,
     path::{Path, PathBuf},
     process::{Command, Output, Stdio},
@@ -25,6 +26,11 @@ use serde_json::Value;
 /// Environment variable that switches the suite from strict mode (any failure
 /// fails the test) to baseline mode (only *new* failures fail).
 pub const BASELINE_ENV: &str = "DESLOP_CORPUS_BASELINE";
+
+/// [CORPUS-PIN] How much of a manifest's commit id names its clone directory.
+/// The pin itself is always the full object name; this is only how it reads on
+/// disk and in a log line.
+pub const SHORT_SHA_LENGTH: usize = 12;
 
 /// `/usr/bin/time` flag that reports peak resident set size. BSD (macOS)
 /// spells it `-l`; GNU (Linux, which is what the scheduled corpus workflow
@@ -231,8 +237,9 @@ pub fn manifest(name: &str) -> Result<Value> {
 /// instead of a mysterious one.
 pub fn clone_dir(manifest: &Value) -> Result<PathBuf> {
     let name = string_field(manifest, "name")?;
-    let tag = string_field(manifest, "tag")?;
-    let dir = repo_root().join(".corpus").join(format!("{name}-{tag}"));
+    let sha = string_field(manifest, "sha")?;
+    let short = sha.get(..SHORT_SHA_LENGTH).unwrap_or(sha);
+    let dir = repo_root().join(".corpus").join(format!("{name}-{short}"));
     if !dir.is_dir() {
         return Err(anyhow!(
             "corpus clone missing at {}. Run `make test-corpus` (it clones pinned repositories first).",
@@ -279,13 +286,10 @@ pub fn u64_field(value: &Value, name: &str) -> Result<u64> {
 /// the rendered report cannot be read.
 pub fn scan(scan_root: &Path, output_prefix: &Path) -> Result<CorpusRun> {
     let binary = release_binary()?;
+    let run = measured_run(&binary, &scan_args(scan_root, output_prefix))?;
 
-    let started = Instant::now();
-    let output = timed_scan(&binary, scan_root, output_prefix)?;
-    let wall = started.elapsed();
-
-    if !output.status.success() {
-        return Err(scan_failure(scan_root, &output));
+    if !run.output.status.success() {
+        return Err(scan_failure(scan_root, &run.output));
     }
 
     let report_path = with_json_extension(output_prefix);
@@ -294,9 +298,20 @@ pub fn scan(scan_root: &Path, output_prefix: &Path) -> Result<CorpusRun> {
 
     Ok(CorpusRun {
         report: serde_json::from_str(&text).context("report is not valid JSON")?,
-        wall,
-        peak_rss_mb: peak_rss_mb(&String::from_utf8_lossy(&output.stderr))?,
+        wall: run.wall,
+        peak_rss_mb: run.peak_rss_mb,
     })
+}
+
+/// The argument list one measured corpus scan runs with.
+fn scan_args(scan_root: &Path, output_prefix: &Path) -> Vec<OsString> {
+    let mut args: Vec<OsString> = vec![
+        scan_root.into(),
+        OsString::from("--output"),
+        output_prefix.into(),
+    ];
+    args.extend(SCAN_FLAGS.iter().map(OsString::from));
+    args
 }
 
 /// Where the release binary the suite measures is expected to sit.
@@ -388,24 +403,56 @@ const SCAN_FLAGS: [&str; 7] = [
 /// Runs one scan under this platform's peak-RSS measurement, capturing its
 /// output. Both arms leave the peak on stderr in the form [`peak_rss_mb`]
 /// reads, so everything downstream is platform-independent.
-fn timed_scan(binary: &Path, scan_root: &Path, output_prefix: &Path) -> Result<Output> {
+fn timed_scan(program: &Path, args: &[OsString]) -> Result<Output> {
     match measurement() {
-        Measurement::PosixTime { flag } => posix_scan(flag, binary, scan_root, output_prefix),
-        Measurement::WindowsPeakMonitor { script } => {
-            windows_scan(&script, binary, scan_root, output_prefix)
-        }
+        Measurement::PosixTime { flag } => posix_scan(flag, program, args),
+        Measurement::WindowsPeakMonitor { script } => windows_scan(&script, program, args),
     }
 }
 
+/// One command run under this platform's peak-RSS measurement.
+#[derive(Debug)]
+pub struct MeasuredRun {
+    /// Everything the process wrote, and how it exited.
+    pub output: Output,
+    /// Wall-clock duration of the process.
+    pub wall: Duration,
+    /// Peak resident set size in mebibytes.
+    pub peak_rss_mb: u64,
+    /// User + system CPU seconds, absent when the host's `time` did not
+    /// report them. Absent is printed as absent; never as a free scan.
+    pub cpu_seconds: Option<f64>,
+}
+
+/// Runs `program` with `args` under this platform's peak-RSS measurement.
+///
+/// This is the one place a measured process is spawned. The corpus ceiling
+/// suite and the [CORPUS-SCORE] scorecard both read their figures from here,
+/// so the two can never disagree about what a scan cost.
+///
+/// # Errors
+///
+/// Returns an error when the process cannot be spawned, or when the
+/// measurement reported no peak resident set size.
+pub fn measured_run(program: &Path, args: &[OsString]) -> Result<MeasuredRun> {
+    let started = Instant::now();
+    let output = timed_scan(program, args)?;
+    let wall = started.elapsed();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    Ok(MeasuredRun {
+        peak_rss_mb: peak_rss_mb(&stderr)?,
+        cpu_seconds: cpu_seconds(&stderr),
+        output,
+        wall,
+    })
+}
+
 /// Runs the scan under `/usr/bin/time`, which reports the peak itself.
-fn posix_scan(flag: &str, binary: &Path, scan_root: &Path, output_prefix: &Path) -> Result<Output> {
+fn posix_scan(flag: &str, program: &Path, args: &[OsString]) -> Result<Output> {
     Command::new("/usr/bin/time")
         .arg(flag)
-        .arg(binary)
-        .arg(scan_root)
-        .arg("--output")
-        .arg(output_prefix)
-        .args(SCAN_FLAGS)
+        .arg(program)
+        .args(args)
         .output()
         .context("failed to spawn /usr/bin/time")
 }
@@ -415,21 +462,13 @@ fn posix_scan(flag: &str, binary: &Path, scan_root: &Path, output_prefix: &Path)
 /// The monitor takes only a pid, so no path has to survive a shell quoting
 /// round-trip. Its reading is appended to the scan's own stderr, which is
 /// where the POSIX arm leaves it too.
-fn windows_scan(
-    script: &Path,
-    binary: &Path,
-    scan_root: &Path,
-    output_prefix: &Path,
-) -> Result<Output> {
-    let child = Command::new(binary)
-        .arg(scan_root)
-        .arg("--output")
-        .arg(output_prefix)
-        .args(SCAN_FLAGS)
+fn windows_scan(script: &Path, program: &Path, args: &[OsString]) -> Result<Output> {
+    let child = Command::new(program)
+        .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .with_context(|| format!("failed to spawn {}", binary.display()))?;
+        .with_context(|| format!("failed to spawn {}", program.display()))?;
     let monitor = spawn_peak_monitor(script, child.id())?;
     let mut output = child.wait_with_output().context("scan did not complete")?;
     let peak = monitor
@@ -502,6 +541,46 @@ fn peak_rss_mb(stderr: &str) -> Result<u64> {
     } else {
         value / (1024 * 1024)
     })
+}
+
+/// [CORPUS-SCORE] Extracts CPU seconds (user + system) from `/usr/bin/time`
+/// output, in either dialect.
+///
+/// BSD prints one summary line — `0.53 real 0.42 user 0.09 sys`; GNU prints
+/// labelled `User time (seconds): 0.42` lines. Absent rather than zero when
+/// neither shape is present: a host whose `time` reports no CPU must print an
+/// empty cell, never a scan that appears to have cost nothing.
+fn cpu_seconds(stderr: &str) -> Option<f64> {
+    bsd_cpu_seconds(stderr).or_else(|| gnu_cpu_seconds(stderr))
+}
+
+/// The BSD summary line: the value sits immediately before its unit word.
+fn bsd_cpu_seconds(stderr: &str) -> Option<f64> {
+    let line = stderr
+        .lines()
+        .find(|line| line.contains(" user") && line.contains(" sys"))?;
+    let tokens: Vec<&str> = line.split_whitespace().collect();
+    let before = |unit: &str| {
+        tokens
+            .iter()
+            .position(|token| *token == unit)
+            .and_then(|at| at.checked_sub(1))
+            .and_then(|at| tokens.get(at))
+            .and_then(|token| token.parse::<f64>().ok())
+    };
+    Some(before("user")? + before("sys")?)
+}
+
+/// The GNU labelled lines: the value is whatever follows the final colon.
+fn gnu_cpu_seconds(stderr: &str) -> Option<f64> {
+    let labelled = |prefix: &str| {
+        stderr
+            .lines()
+            .find(|line| line.trim().to_ascii_lowercase().starts_with(prefix))
+            .and_then(|line| line.rsplit(':').next())
+            .and_then(|value| value.trim().parse::<f64>().ok())
+    };
+    Some(labelled("user time")? + labelled("system time")?)
 }
 
 /// Every occurrence path in the report's `clusters`, grouped per cluster.

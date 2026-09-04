@@ -401,6 +401,53 @@ jobs:
           path: coverage/repository/raw
           retention-days: 1
 
+  # [CORPUS-SCORE] The accuracy gate. Scans a small slice of register-backed
+  # repositories with the release binary this workflow just built, scores every
+  # judged pair against `corpus/register/`, and fails the moment a CLEARLY IN
+  # goes unreported or a CLEARLY OUT gets reported past the thresholds in
+  # `corpus/register/score-thresholds.json`. Cluster totals and duplication
+  # percentages are printed as description and gate nothing.
+  #
+  # The slice is deliberately the two smallest judged repositories, so the job
+  # finishes in seconds; the full register runs under `compare-versions.sh`.
+  corpus-score:
+    name: Corpus accuracy score
+    needs: [changes, build]
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.x"
+      - name: Install typediagram
+        run: npm install -g typediagram@0.11.0
+      - name: Restore release build
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            crates/deslop-core/src/wire_generated.rs
+            clients/vscode/src/types/wire-generated.ts
+          key: ${{ runner.os }}-cargo-release-${{ github.sha }}
+      - name: Score the corpus against the clone registers
+        run: scripts/corpus/score-gate.sh
+      # The scorecard is uploaded whether the gate passed or failed: a failing
+      # run is exactly when someone needs to read which judged pair broke.
+      - name: Upload the scorecard
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: corpus-scorecard
+          path: |
+            .corpus/score-gate/SCORE.md
+            .corpus/score-gate/score.json
+          retention-days: 14
+
   # [CI-COVERAGE-ONCE] Stage 4: this is the only job allowed to calculate
   # coverage or enforce a threshold. Every test job above is a dependency, so
   # all instrumented test executions finish before reports are generated.
@@ -919,7 +966,7 @@ jobs:
   # gated heavy jobs).
   ci:
     name: CI
-    needs: [changes, security, lint, build, rust-tests, repository-tests, windows, vsix, jetbrains, site, coverage]
+    needs: [changes, security, lint, build, rust-tests, repository-tests, corpus-score, windows, vsix, jetbrains, site, coverage]
     if: always() && needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5

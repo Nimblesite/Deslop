@@ -39,8 +39,12 @@ mod cluster_id_uniqueness;
 mod config_include_dependencies;
 #[path = "content_gate_signal_honesty.rs"]
 mod content_gate_signal_honesty;
+#[path = "corpus_commit_pins.rs"]
+mod corpus_commit_pins;
 #[path = "corpus_manifest_contract.rs"]
 mod corpus_manifest_contract;
+#[path = "corpus_register_contract.rs"]
+mod corpus_register_contract;
 #[path = "corpus_selection_contract.rs"]
 mod corpus_selection_contract;
 #[path = "cross_cluster_collapse.rs"]

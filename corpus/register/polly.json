@@ -1,0 +1,80 @@
+{
+  "name": "polly",
+  "language": "csharp",
+  "url": "https://github.com/App-vNext/Polly.git",
+  "sha": "9c133b6303ca70d2879fddf16fb201c209eb6fd2",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "Twenty-six lines of circuit-breaker test - the clock stamp, the duration local, the whole AdvancedCircuitBreaker builder with all six named arguments, the comment, and the repeated raise-and-assert blocks - appear three times in one file with nothing changed anywhere.",
+      "verified": "diff of AdvancedCircuitBreakerSpecs.cs:2082-2107 against AdvancedCircuitBreakerSpecs.cs:2472-2497 at the pinned sha is empty - byte-identical over twenty-six lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:2082-2107",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:2472-2497"
+      ]
+    },
+    {
+      "why": "Thirteen lines constructing a RetryPolicy<TResult> - the lambda, the RetryEngine.ImplementationAsync call with all seven arguments in order, and the two trailing predicate arguments - appear twice in one file with not one character different.",
+      "verified": "diff of RetryTResultSyntaxAsync.cs:467-479 against RetryTResultSyntaxAsync.cs:804-816 at the pinned sha is empty - byte-identical over thirteen lines.",
+      "occurrences": [
+        "src/Polly.Shared/Retry/RetryTResultSyntaxAsync.cs:467-479",
+        "src/Polly.Shared/Retry/RetryTResultSyntaxAsync.cs:804-816"
+      ]
+    },
+    {
+      "why": "The same two argument-validation statements, including the full ArgumentOutOfRangeException message text and its String.Format call, are repeated verbatim in the sync and async circuit-breaker syntax files. A message string that long matching to the byte across two files is not independent authorship.",
+      "verified": "diff of AdvancedCircuitBreakerSyntax.cs:196-197 against AdvancedCircuitBreakerSyntaxAsync.cs:202-203 at the pinned sha is empty - byte-identical.",
+      "occurrences": [
+        "src/Polly.Shared/CircuitBreaker/AdvancedCircuitBreakerSyntax.cs:196-197",
+        "src/Polly.Shared/CircuitBreaker/AdvancedCircuitBreakerSyntaxAsync.cs:202-203"
+      ]
+    },
+    {
+      "why": "The same five-line RetryAsync callback - the async lambda, the awaited Task.Delay on shimTimeSpan, and the assignment to executeDelegateInvocationsWhenOnRetryExits - appears in two different spec files. That variable name matching exactly across files settles it.",
+      "verified": "diff of RetryAsyncSpecs.cs:378-382 against RetryTResultSpecsAsync.cs:438-442 at the pinned sha is empty - byte-identical over five lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryAsyncSpecs.cs:378-382",
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecsAsync.cs:438-442"
+      ]
+    }
+  ],
+  "clearly_out": [
+    {
+      "why": "One is a bulkhead method signature taking an action delegate, a rejection callback and two SemaphoreSlim limits. The other is a fragment of a cache method's parameter list taking four cache-event callbacks. Different names, different types, different arity, different subsystems - the only thing they share is being a vertical run of C# parameter declarations. Nothing here was copied from the other.",
+      "verified": "Read both ranges in full at the pinned sha. No identifier, no type and no default is common to the two lists beyond Context and CancellationToken, which appear in a different order and a different role in each.",
+      "occurrences": [
+        "src/Polly.Shared/Bulkhead/BulkheadEngine.cs:15-21",
+        "src/Polly.Shared/Caching/CacheEngine.cs:13-18"
+      ]
+    },
+    {
+      "why": "One is a four-line fluent assertion that a circuit-breaker call throws BrokenCircuitException with a given message and inner exception. The other is a complete twenty-eight-line test method that builds a fallback policy, a CancellationTokenSource and a Scenario, and then asserts that nothing throws. A short assertion chain is not a copy of a whole test method that asserts the opposite.",
+      "verified": "Read both ranges in full at the pinned sha. The shorter range asserts ShouldThrow<BrokenCircuitException>; the longer asserts ShouldNotThrow, Be(1) and BeFalse, and contains eleven statements the shorter range has no counterpart for.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:334-337",
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:577-604"
+      ]
+    }
+  ],
+  "not_clear": [
+    {
+      "why": "Polly's argument-validation tests all follow one shape - arrange an invalid argument, assert the exception type and the ParamName. Different policies, different exceptions, different parameter names. Plausibly written by copying, and equally plausibly just the convention. Judgement split.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Bulkhead/BulkheadAsyncSpecs.cs:21-29",
+        "src/Polly.SharedSpecs/Caching/CacheAsyncSpecs.cs:19-25"
+      ]
+    },
+    {
+      "why": "The Invoking/Awaiting-then-ShouldThrow-then-WithMessage fluent chain recurs across the whole spec suite. Real repetition, and also the only way FluentAssertions expresses the check.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:1523-1525",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:1536-1538"
+      ]
+    }
+  ]
+}

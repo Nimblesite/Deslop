@@ -1,0 +1,56 @@
+{
+  "name": "cobra",
+  "language": "go",
+  "url": "https://github.com/spf13/cobra.git",
+  "sha": "40b5bc1437a564fc795d388b23835e84f54cd1d1",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "A run of four one-line flag accessors is stamped out twice, in order: HasFlags, HasPersistentFlags, HasLocalFlags, HasInheritedFlags, then the same four again as HasAvailable*. Each body forwards to the same receiver with HasFlags swapped for HasAvailableFlags, and each carries the matching doc comment. One accessor repeated would be Go; four in the same order with one systematic rename is a copy.",
+      "verified": "diff of command.go:1796-1813 against command.go:1817-1836 at the pinned sha: every difference is the token `Available` inserted into a method name, a doc comment, or the forwarded call. The statement sequence is identical.",
+      "occurrences": [
+        "command.go:1796-1813",
+        "command.go:1817-1836"
+      ]
+    },
+    {
+      "why": "MarkFlagRequired/MarkPersistentFlagRequired and MarkFlagDirname/MarkPersistentFlagDirname are the same two-method block written twice: same receiver, same signature, same single-line body forwarding to c.Flags() and then c.PersistentFlags(), same doc-comment structure. Only the operation name changes.",
+      "verified": "diff of shell_completions.go:24-33 against shell_completions.go:83-92 at the pinned sha: the differences are Required vs Dirname in the method names and forwarded calls, and the reworded doc comments. Both bodies are `return MarkFlagX(c.Flags(), name)` and `return MarkFlagX(c.PersistentFlags(), name)`.",
+      "occurrences": [
+        "shell_completions.go:24-33",
+        "shell_completions.go:83-92"
+      ]
+    },
+    {
+      "why": "HasHelpSubCommands and HasAvailableSubCommands are one function written twice: the same range over c.commands, the same single if-return-true, the same trailing return false, and the same comment placement. Only the predicate called on the sub-command differs.",
+      "verified": "diff of command.go:1643-1653 against command.go:1657-1669 at the pinned sha: the differences are the method name, IsAdditionalHelpTopicCommand vs IsAvailableCommand, and the wording of the two comments. The control flow is identical statement for statement.",
+      "occurrences": [
+        "command.go:1643-1653",
+        "command.go:1657-1669"
+      ]
+    }
+  ],
+  "clearly_out": [],
+  "clearly_out_status": "NONE FOUND. This judging pass found no pair in cobra certain enough to call a false positive. Its reports are dominated by test scaffolding that genuinely repeats; every candidate examined was either a real clone or NOT CLEAR. An empty list asserts nothing.",
+  "not_clear": [
+    {
+      "why": "Two adjacent five-line test functions differing only in the function name and a boolean argument. Copy-paste-modify, but too small for every engineer to call its omission a defect.",
+      "occurrences": [
+        "args_test.go:118-122",
+        "args_test.go:124-128"
+      ]
+    },
+    {
+      "why": "Go test setup - build a root Command, build a child, AddCommand, execute, check err - recurs throughout the suite. Real repetition, but it is also how the framework is used.",
+      "occurrences": [
+        "args_test.go:429-438",
+        "command_test.go:2549-2570"
+      ]
+    }
+  ]
+}

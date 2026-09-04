@@ -1,0 +1,40 @@
+{
+  "why": "Repositories waiting on a first judging pass. [CORPUS-REGISTER-COVERAGE] A repository cannot become a register until a judge has ruled on its pairs, and a judge cannot rule on pairs until a comparison has produced two reports for it — so a repository that is not yet judged still has to be scanned. This file is that queue: the comparison scans every register plus everything here, and `make judging-folder` turns each into a workspace. When the verdicts come back, the repository moves into corpus/register/ and out of this list. Every entry is pinned to a full commit id for the same reason a register is: the judge and the scan must read identical source.",
+  "repositories": [
+    {
+      "name": "ripgrep",
+      "url": "https://github.com/BurntSushi/ripgrep.git",
+      "sha": "3fce3b5bb0236da2df6d99672afb8a719642eca7",
+      "language": "rust",
+      "why": "No Rust has ever been judged. A search tool with several small crates in one workspace, so the same helper is genuinely written more than once."
+    },
+    {
+      "name": "zod",
+      "url": "https://github.com/colinhacks/zod.git",
+      "sha": "7a00236683c79000dbab0d92f6faf0b7fba39f59",
+      "language": "typescript",
+      "why": "No TypeScript has ever been judged. Dense generic types and one schema class per primitive, which is exactly the shape that makes a boilerplate call hard."
+    },
+    {
+      "name": "guzzle",
+      "url": "https://github.com/guzzle/guzzle.git",
+      "sha": "7b7b04a0f5a548bfe9ced4b56f5661deee229ac3",
+      "language": "php",
+      "why": "No PHP has ever been judged. Small enough to compare quickly, and its handler stack repeats a middleware shape that should test the precision side."
+    },
+    {
+      "name": "bloc",
+      "url": "https://github.com/felangel/bloc.git",
+      "sha": "8fcf54dfea7ba51ef04c091d1a27e0da498b29f0",
+      "language": "dart",
+      "why": "No Dart has ever been judged. A multi-package repository where sibling packages deliberately mirror each other's API, so both verdicts should be reachable."
+    },
+    {
+      "name": "FSharp.Data",
+      "url": "https://github.com/fsprojects/FSharp.Data.git",
+      "sha": "3d432efaeffb0fa987f70f400521d4cb7cc6f89a",
+      "language": "fsharp",
+      "why": "No F# has ever been judged. Type providers repeat a large amount of near-identical shape, which is the hardest case for a duplicate detector to call correctly."
+    }
+  ]
+}

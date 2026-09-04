@@ -1,0 +1,56 @@
+{
+  "name": "axios",
+  "language": "javascript",
+  "url": "https://github.com/axios/axios.git",
+  "sha": "cdcfd214c169a1acba8e267ab8e77ff4dfec3105",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "Twenty-one lines of proxy server - createServer, url.parse, the opts object, the proxy-authorization read, the nested http.get with its data and end handlers, and the listen call - appear twice in the same test file with not one byte between them changed.",
+      "verified": "diff of test/unit/adapters/http.js:1321-1341 against test/unit/adapters/http.js:1364-1384 at the pinned sha is empty - byte-identical over twenty-one lines.",
+      "occurrences": [
+        "test/unit/adapters/http.js:1321-1341",
+        "test/unit/adapters/http.js:1364-1384"
+      ]
+    },
+    {
+      "why": "The CommonJS and ESM typings tests carry the same eleven lines verbatim: three typed request chains, each with its .then and .catch, separated by the same blank lines. The two files are one file maintained in two module formats.",
+      "verified": "diff of test/module/typings/cjs/index.ts:133-143 against test/module/typings/esm/index.ts:156-166 at the pinned sha is empty - byte-identical over eleven lines.",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:133-143",
+        "test/module/typings/esm/index.ts:156-166"
+      ]
+    },
+    {
+      "why": "pipeFileToResponse is defined in full in two separate servers under two separate directories - same function name, same three parameters, same if-type writeHead guard with the same Content-Type object, same createReadStream().pipe(res) body. The sandbox copy only re-roots the path.",
+      "verified": "diff of examples/server.js:69-76 against sandbox/server.js:7-15 at the pinned sha: three differing lines, being one added blank line and the path expression path.join(__dirname, file) vs path.join(path.resolve(), 'sandbox', file). The signature, the guard and the pipe are identical.",
+      "occurrences": [
+        "examples/server.js:69-76",
+        "sandbox/server.js:7-15"
+      ]
+    }
+  ],
+  "clearly_out": [],
+  "clearly_out_status": "NONE FOUND. This judging pass found no pair in axios certain enough to call a false positive. An empty list asserts nothing.",
+  "not_clear": [
+    {
+      "why": "Four assert.strictEqual(typeof X, 'function') lines shared across the module smoke tests. Byte-identical, and also the only way to write that check - judgement split on whether omitting it would be a defect.",
+      "occurrences": [
+        "test/module/cjs/index.js:6-9",
+        "test/module/esm/index.js:5-8"
+      ]
+    },
+    {
+      "why": "Three lines differing only in the property name headers vs transformRequest - same variable names, same {a: 1, b: 1} and [1, 2, 3] literals, same mergeConfig call. Certainly written by copying, but three lines is below the size at which every engineer would call its omission a defect. Judged NOT CLEAR for the same reason as the click --cls1/--cls2 fragment; the two must be treated alike.",
+      "occurrences": [
+        "test/specs/core/mergeConfig.spec.js:174-176",
+        "test/specs/core/mergeConfig.spec.js:230-232"
+      ]
+    }
+  ]
+}

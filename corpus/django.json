@@ -2,7 +2,6 @@
   "name": "django",
   "language": "python",
   "url": "https://github.com/django/django.git",
-  "tag": "5.1.15",
   "sha": "6ef1f6fbe33e9882f82dae026b527800ecb78c36",
   "why": "Reference Python web framework; large, mature, heavily reviewed for duplication.",
   "ceilings": {
