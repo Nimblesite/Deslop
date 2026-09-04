@@ -99,7 +99,6 @@ pub(crate) fn measure_pair_content_indexed<S: BuildHasher, L: BuildHasher>(
     let scope = PairScope {
         same_file: left.file_id == right.file_id,
         interior: shape.interior,
-        authored: shape.authored,
     };
     let left = member_content(left, tree_index, sources, languages);
     let right = member_content(right, tree_index, sources, languages);
@@ -113,8 +112,6 @@ pub(crate) fn measure_pair_content_indexed<S: BuildHasher, L: BuildHasher>(
 pub(crate) struct PairShape {
     /// Both endpoints are windows strictly inside an authored function.
     pub(crate) interior: bool,
-    /// Both endpoints are whole authored declarations, and disjoint.
-    pub(crate) authored: bool,
 }
 
 /// Where the two endpoints sit, for the rename axis's scope rules
@@ -127,9 +124,6 @@ pub(crate) struct PairScope {
     /// Both endpoints are windows strictly inside an authored function,
     /// so a rename over a literal-free window cannot vouch for itself.
     pub(crate) interior: bool,
-    /// Both endpoints are whole authored declarations the author wrote,
-    /// not windows Deslop cut ([REPAIR-RENAME-ANCHOR-MASS]).
-    pub(crate) authored: bool,
 }
 
 /// Builds pair evidence from two resolved content frontiers.

@@ -207,7 +207,7 @@ fn log_gate_verdict(left: &Fingerprint, right: &Fingerprint, verdict: &GateVerdi
 }
 
 /// Where the pair's two endpoints sit, as the rename axis's scope rules
-/// need it ([FUSED-CONTENT-GATE-INTERIOR], [REPAIR-RENAME-ANCHOR-MASS]).
+/// need it ([FUSED-CONTENT-GATE-INTERIOR]).
 fn pair_shape<L: BuildHasher>(
     left: &Fingerprint,
     right: &Fingerprint,
@@ -216,9 +216,6 @@ fn pair_shape<L: BuildHasher>(
     PairShape {
         interior: context.scopes.enclosing(left).is_some()
             && context.scopes.enclosing(right).is_some(),
-        authored: !crate::fingerprint::ranges_overlap(left, right)
-            && context.scopes.aligned_function(left).is_some()
-            && context.scopes.aligned_function(right).is_some(),
     }
 }
 
