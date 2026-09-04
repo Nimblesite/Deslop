@@ -93,8 +93,14 @@
 use anyhow::Result;
 use serde_json::Value;
 
+use crate::common::go_scope::*;
 use crate::common::signals::{assert_no_pair_surface_on_cluster, assert_structural_only_contract};
 use crate::common::*;
+
+/// `--min-nodes` every Type-3 fixture in this suite is driven at.
+const TYPE3_MIN_NODES: u32 = 8;
+/// The Go near-miss pair ([LANG-CAND-GO]).
+const GO_TYPE3_FIXTURE: &str = "go-type3";
 
 /// The whole-method span the surviving cluster must cover in one file,
 /// and the exact extent the selected occurrence must publish.
@@ -103,13 +109,15 @@ struct MethodSpan {
     first_line: u64,
     last_line: u64,
     /// First line of the exact published extent. Equal to the method's
-    /// own span for shell-less languages; for C# and Go it additionally
-    /// carries the namespace/class or package shell. Each fixture file
-    /// holds nothing but the one method, so the shell is the method's
-    /// own address — but any *other* extent, wider or narrower, is a
-    /// mis-scoped survivor, and the previous covers-only check accepted
-    /// any class-, module-, or file-sized view that happened to enclose
-    /// the method.
+    /// own span for every language except C#, where the method sits
+    /// inside a namespace and class shell that is a genuine enclosing
+    /// node. Go's `package` clause is not a shell: it is a sibling of the
+    /// function, so a Go occurrence that opens on it has taken the whole
+    /// file rather than the authored declaration
+    /// ([PIPELINE-CLUSTER-EXACT-SCOPE]). Any *other* extent, wider or
+    /// narrower, is a mis-scoped survivor, and the previous covers-only
+    /// check accepted any class-, module-, or file-sized view that
+    /// happened to enclose the method.
     published_first: u64,
     /// Last line of the exact published extent.
     published_last: u64,
@@ -183,7 +191,7 @@ fn assert_enclosing_pair_visible(name: &str, left: &MethodSpan, right: &MethodSp
             side.path
         );
     }
-    let report = run_report(&fixture(name), 8)?;
+    let report = run_report(&fixture(name), TYPE3_MIN_NODES)?;
     let Some(cluster) = enclosing_pair_cluster(&report, left, right) else {
         anyhow::bail!(
             "#408: the enclosing method pair {}:{}-{} / {}:{}-{} is not a visible \
@@ -270,11 +278,21 @@ fn dart_type3_reports_the_enclosing_method_pair() -> Result<()> {
 #[test]
 
 fn go_type3_reports_the_enclosing_method_pair() -> Result<()> {
+    // [PIPELINE-CLUSTER-EXACT-SCOPE] The published extent is the
+    // function's own rows. Row 1 is `package delta` / `package epsilon`
+    // and row 2 is blank; neither belongs to the duplication.
     assert_enclosing_pair_visible(
-        "go-type3",
-        &span("delta.go", 3, 13, 1, 13),
-        &span("epsilon.go", 3, 12, 1, 12),
-    )
+        GO_TYPE3_FIXTURE,
+        &span("delta.go", 3, 13, 3, 13),
+        &span("epsilon.go", 3, 12, 3, 12),
+    )?;
+
+    // The same contract over every cluster the fixture emits, so a padded
+    // fragment view cannot survive beside the correctly-scoped pair.
+    let scan_root = fixture(GO_TYPE3_FIXTURE);
+    let report = run_report(&scan_root, TYPE3_MIN_NODES)?;
+    assert_go_authored_scope(&scan_root, &report, GO_TYPE3_FIXTURE)?;
+    assert_every_occurrence_opens_a_declaration(&scan_root, &report, GO_TYPE3_FIXTURE)
 }
 
 #[test]

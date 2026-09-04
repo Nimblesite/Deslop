@@ -530,3 +530,10 @@ pub(crate) fn visible_cluster_lines(report: &Value) -> Vec<String> {
         })
         .collect()
 }
+
+/// [PIPELINE-CLUSTER-EXACT-SCOPE] The Go authored-window contract, shared
+/// by every Go suite so a padded occurrence is caught wherever it appears
+/// rather than only in the fixture that first exposed it. Imported
+/// explicitly with `use crate::common::go_scope::*;`, for the same reason
+/// as `signals`.
+pub(crate) mod go_scope;
