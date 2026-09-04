@@ -6,7 +6,7 @@ use tree_sitter::Node;
 
 use std::sync::Arc;
 
-use super::{enclosing_kind, parse_for, ParseCache, Snippet};
+use super::{enclosing_kind, node_search::KindSearch, parse_for, ParseCache, Snippet};
 use crate::ast::{named_children, ByteRange};
 
 use args::collect_argument_shapes;
@@ -157,8 +157,7 @@ fn covered_statements_admissible(snippet: &Snippet<'_>) -> bool {
     let Some(tree) = parse_for(snippet) else {
         return false;
     };
-    let mut statements = Vec::new();
-    collect_covered_statements(tree.root_node(), snippet.range, &mut statements);
+    let statements = KindSearch::enclosed(snippet.range, is_statement_shape).nodes(tree.root_node());
     let kinds = call_kinds(snippet.language);
     let (with_call, without_call): (Vec<&Node<'_>>, Vec<&Node<'_>>) = statements
         .iter()
@@ -237,26 +236,6 @@ fn count_call_free(covered: &[Node<'_>], kinds: &[&str]) -> usize {
         .count()
 }
 
-/// Collects the outermost complete statement-shaped nodes inside `range`.
-fn collect_covered_statements<'tree>(
-    node: Node<'tree>,
-    range: ByteRange,
-    out: &mut Vec<Node<'tree>>,
-) {
-    if node.end_byte() <= range.start || node.start_byte() >= range.end {
-        return;
-    }
-    if node.start_byte() >= range.start
-        && node.end_byte() <= range.end
-        && is_statement_shape(node.kind())
-    {
-        out.push(node);
-        return;
-    }
-    for child in named_children(node) {
-        collect_covered_statements(child, range, out);
-    }
-}
 
 /// Statement and binding declarations used by the grammars this filter scans.
 fn is_statement_shape(kind: &str) -> bool {

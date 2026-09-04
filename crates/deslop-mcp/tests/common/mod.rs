@@ -14,6 +14,8 @@
 /// The per-cluster `language` label contract over `duplicates`,
 /// shared by every language whose label regressed.
 pub mod language_label;
+/// Newline-delimited JSON-RPC over a child's stdio.
+pub mod rpc;
 
 use std::{
     fs,
@@ -26,6 +28,7 @@ use std::{
 
 use anyhow::{anyhow, ensure, Context, Result};
 use assert_cmd::cargo::cargo_bin;
+use rpc::StdioRpc;
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
@@ -64,7 +67,8 @@ pub fn copied_fixture_named(name: &str) -> Result<TempDir> {
     Ok(dst)
 }
 
-fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
+/// Recursively copies `src` into `dst`, creating `dst` as needed.
+pub fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
@@ -181,9 +185,7 @@ pub fn lsp_workspace_with_socket() -> Result<(TempDir, ChildKillOnDrop, PathBuf)
 /// Spawned MCP child + an id-tracked JSON-RPC request loop.
 pub struct McpHandle {
     child: Child,
-    stdin: ChildStdin,
-    stdout: BufReader<ChildStdout>,
-    next_id: i64,
+    rpc: StdioRpc,
 }
 
 impl McpHandle {
@@ -217,44 +219,14 @@ impl McpHandle {
             .stderr(Stdio::piped())
             .spawn()
             .context("spawn deslop-mcp")?;
-        let stdin = child.stdin.take().context("mcp stdin")?;
-        let stdout = BufReader::new(child.stdout.take().context("mcp stdout")?);
-        Ok(Self {
-            child,
-            stdin,
-            stdout,
-            next_id: 0,
-        })
+        let rpc = StdioRpc::take(&mut child)?;
+        Ok(Self { child, rpc })
     }
 
     /// Sends a JSON-RPC request and reads the matching response,
     /// skipping any pushed notifications in between.
     pub fn request(&mut self, method: &str, params: &Value) -> Result<Value> {
-        self.next_id = self.next_id.saturating_add(1);
-        let id = self.next_id;
-        let payload = json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "method": method,
-            "params": params,
-        });
-        let mut bytes = serde_json::to_vec(&payload)?;
-        bytes.push(b'\n');
-        self.stdin.write_all(&bytes)?;
-        self.stdin.flush()?;
-        loop {
-            let mut line = String::new();
-            let read = self.stdout.read_line(&mut line)?;
-            ensure!(read > 0, "mcp stdout closed unexpectedly");
-            let frame: Value = serde_json::from_str(line.trim())
-                .with_context(|| format!("invalid mcp frame: {line}"))?;
-            if frame.get("id").and_then(Value::as_i64) == Some(id) {
-                return Ok(frame);
-            }
-            if frame.get("method").is_none() {
-                return Err(anyhow!("unexpected frame without id: {frame}"));
-            }
-        }
+        self.rpc.request(method, params)
     }
 }
 
@@ -296,14 +268,7 @@ pub fn initialized_mcp(root: &Path) -> Result<McpHandle> {
 
 /// Performs the MCP `initialize` request for an already-spawned client.
 pub fn initialize_mcp(mcp: &mut McpHandle) -> Result<()> {
-    let response = mcp.request(
-        "initialize",
-        &json!({
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": { "name": "phase5-e2e", "version": "0.1.0" }
-        }),
-    )?;
+    let response = mcp.rpc.initialize("phase5-e2e")?;
     ensure!(
         response.get("error").is_none(),
         "MCP initialize failed: {response}"
@@ -319,6 +284,18 @@ pub fn call_tool(mcp: &mut McpHandle, tool: &str, arguments: &Value) -> Result<V
         &json!({ "name": tool, "arguments": arguments }),
     )?;
     structured_content(&response, tool)
+}
+
+/// Requests one `duplicates` summary page of `limit` clusters, returning
+/// the raw JSON-RPC response so an error frame stays inspectable.
+pub fn request_duplicates_summary(mcp: &mut McpHandle, limit: u64) -> Result<Value> {
+    mcp.request(
+        "tools/call",
+        &json!({
+            "name": "duplicates",
+            "arguments": { "offset": 0, "limit": limit, "detail": "summary" }
+        }),
+    )
 }
 
 /// Extracts the `structuredContent` envelope from a successful tools/call.

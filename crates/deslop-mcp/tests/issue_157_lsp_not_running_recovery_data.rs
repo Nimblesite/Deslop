@@ -10,11 +10,16 @@
 #![cfg(unix)]
 
 use anyhow::{anyhow, ensure, Result};
-use serde_json::{json, Value};
+use serde_json::Value;
 use tempfile::TempDir;
 
 use crate::common;
-use common::{error_and_message, expected_socket_fragment, initialized_mcp};
+use common::{
+    error_and_message, expected_socket_fragment, initialized_mcp, request_duplicates_summary,
+};
+
+/// Clusters requested per page; the error path never reads them.
+const PAGE_LIMIT: u64 = 5;
 
 #[test]
 fn issue_157_lsp_not_running_carries_structured_recovery_data() -> Result<()> {
@@ -22,10 +27,7 @@ fn issue_157_lsp_not_running_carries_structured_recovery_data() -> Result<()> {
     // Intentionally do NOT spawn an LSP. The socket file is absent, so
     // every tool call returns BackendError::LspNotRunning (-32004).
     let mut mcp = initialized_mcp(workspace.path())?;
-    let response = mcp.request(
-        "tools/call",
-        &json!({ "name": "duplicates", "arguments": { "offset": 0, "limit": 5, "detail": "summary" } }),
-    )?;
+    let response = request_duplicates_summary(&mut mcp, PAGE_LIMIT)?;
     let (error, message) = error_and_message(&response)?;
 
     // Wire back-compat: numeric code and the [Deslop#151] message are intact.

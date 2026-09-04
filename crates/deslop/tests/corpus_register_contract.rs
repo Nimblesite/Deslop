@@ -91,11 +91,6 @@ fn stem(path: &Path) -> String {
         .to_owned()
 }
 
-fn read_json(path: &Path) -> Result<Value> {
-    let text =
-        fs::read_to_string(path).with_context(|| format!("unreadable: {}", path.display()))?;
-    serde_json::from_str(&text).with_context(|| format!("not JSON: {}", path.display()))
-}
 
 /// The entries of one verdict list, empty when the key is absent.
 fn entries<'a>(register: &'a Value, verdict: &str) -> &'a [Value] {

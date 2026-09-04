@@ -4,70 +4,29 @@
 #![cfg(unix)]
 
 use std::{
-    io::{BufRead, BufReader, Write},
     path::Path,
-    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
+    process::{Child, Command, Stdio},
     time::{Duration, Instant},
 };
 
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{ensure, Context, Result};
 use serde_json::{json, Value};
 
 use crate::common;
 use common::{
-    fixture_root, pid_exists, read_mcp_pid, terminate_pid, value_get, wait_for_pid_exit,
-    KILLABLE_PARENT_SCRIPT,
+    fixture_root, pid_exists, read_mcp_pid, rpc::StdioRpc, terminate_pid, value_get,
+    wait_for_pid_exit, KILLABLE_PARENT_SCRIPT,
 };
 
+/// The killable launcher shell, its JSON-RPC link to the MCP grandchild,
+/// and that grandchild's pid so the test can reap it if it lingers.
 struct McpParent {
     child: Child,
-    stdin: ChildStdin,
-    stdout: BufReader<ChildStdout>,
+    rpc: StdioRpc,
     mcp_pid: Option<u32>,
-    next_id: i64,
 }
 
 impl McpParent {
-    fn request(&mut self, method: &str, params: &Value) -> Result<Value> {
-        self.next_id = self.next_id.saturating_add(1);
-        let id = self.next_id;
-        let frame = json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "method": method,
-            "params": params,
-        });
-        self.send_frame(&frame)?;
-        loop {
-            let response = self.read_frame()?;
-            let response_id = response.get("id").cloned().unwrap_or(Value::Null);
-            if response_id == json!(id) {
-                return Ok(response);
-            }
-            if response.get("method").is_none() {
-                return Err(anyhow!("unexpected frame without id match: {response:?}"));
-            }
-        }
-    }
-
-    fn read_frame(&mut self) -> Result<Value> {
-        let mut line = String::new();
-        let bytes = self.stdout.read_line(&mut line)?;
-        if bytes == 0 {
-            return Err(anyhow!("mcp stdout closed unexpectedly"));
-        }
-        serde_json::from_str(&line)
-            .with_context(|| format!("invalid JSON from mcp: frame was: {line}"))
-    }
-
-    fn send_frame(&mut self, frame: &Value) -> Result<()> {
-        let bytes = serde_json::to_vec(frame)?;
-        self.stdin.write_all(&bytes)?;
-        self.stdin.write_all(b"\n")?;
-        self.stdin.flush()?;
-        Ok(())
-    }
-
     fn disarm_mcp_cleanup(&mut self) {
         self.mcp_pid = None;
     }
@@ -84,14 +43,7 @@ impl Drop for McpParent {
 }
 
 fn init_session(parent: &mut McpParent) -> Result<Value> {
-    parent.request(
-        "initialize",
-        &json!({
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": { "name": "mcp-orphan-exit-harness", "version": "0.1.0" }
-        }),
-    )
+    parent.rpc.initialize("mcp-orphan-exit-harness")
 }
 
 fn spawn_mcp_with_killable_parent(root: &Path) -> Result<(McpParent, u32)> {
@@ -107,15 +59,12 @@ fn spawn_mcp_with_killable_parent(root: &Path) -> Result<(McpParent, u32)> {
         .spawn()
         .context("spawn killable deslop-mcp parent shell")?;
     let mcp_pid = read_mcp_pid(&mut child)?;
-    let stdin = child.stdin.take().context("parent stdin")?;
-    let stdout = child.stdout.take().context("parent stdout")?;
+    let rpc = StdioRpc::take(&mut child)?;
     Ok((
         McpParent {
             child,
-            stdin,
-            stdout: BufReader::new(stdout),
+            rpc,
             mcp_pid: Some(mcp_pid),
-            next_id: 0,
         },
         mcp_pid,
     ))

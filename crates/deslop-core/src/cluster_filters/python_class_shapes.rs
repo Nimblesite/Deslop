@@ -16,7 +16,8 @@
 use tree_sitter::Node;
 
 use super::{
-    enclosing_kind, is_multi_member_language_cluster, parse_for, trimmed_snippet_range, Snippet,
+    enclosing_kind, is_multi_member_language_cluster, language_cluster_shapes,
+    node_search::KindSearch, parse_for, trimmed_snippet_range, Snippet,
 };
 use crate::ast::{named_children, ByteRange};
 
@@ -82,32 +83,7 @@ fn enclosing_class(node: Node<'_>, range: ByteRange) -> Option<Node<'_>> {
 /// Walks `root` collecting every `class_definition` fully enclosed by
 /// `range`.
 fn classes_in_range(root: Node<'_>, range: ByteRange) -> Vec<Node<'_>> {
-    let mut classes = Vec::new();
-    collect_classes_in_range(root, range, &mut classes);
-    classes
-}
-
-/// Walks the tree appending `class_definition` nodes fully contained in
-/// `range`. Stops descending once a class is captured so nested classes
-/// are not double-counted.
-fn collect_classes_in_range<'tree>(
-    node: Node<'tree>,
-    range: ByteRange,
-    out: &mut Vec<Node<'tree>>,
-) {
-    if node.end_byte() <= range.start || node.start_byte() >= range.end {
-        return;
-    }
-    if node.kind() == "class_definition"
-        && node.start_byte() >= range.start
-        && node.end_byte() <= range.end
-    {
-        out.push(node);
-        return;
-    }
-    for child in named_children(node) {
-        collect_classes_in_range(child, range, out);
-    }
+    KindSearch::enclosed(range, |kind| kind == "class_definition").nodes(root)
 }
 
 /// Returns true when `class.superclasses` contains an `StrEnum`
@@ -174,13 +150,8 @@ fn expression_statement_inner_kind(node: Node<'_>) -> Option<&'static str> {
 /// cluster — the `XUpdate` mirror is mandated by Pydantic's PATCH
 /// semantics, not extractable duplication.
 pub(super) fn is_pydantic_partial_update_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if !is_multi_member_language_cluster(snippets, "python") {
-        return false;
-    }
-    let shapes: Option<Vec<PartialUpdateShape>> =
-        snippets.iter().map(partial_update_shape).collect();
-    let Some(shapes) = shapes else { return false };
-    shapes.iter().all(|shape| shape.is_partial_basemodel)
+    language_cluster_shapes(snippets, "python", partial_update_shape)
+        .is_some_and(|shapes| shapes.iter().all(|shape| shape.is_partial_basemodel))
 }
 
 /// Per-member partial-update detection result.

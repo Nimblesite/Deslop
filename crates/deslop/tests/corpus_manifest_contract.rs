@@ -16,7 +16,7 @@
 use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
-use deslop_test_support::corpus::repo_root;
+use deslop_test_support::{corpus::repo_root, read_json};
 use serde_json::Value;
 
 /// The corpus manifests, each with its file stem. `known-failures.json` is
@@ -31,7 +31,7 @@ fn manifests() -> Result<Vec<(String, Value)>> {
             .is_some_and(|extension| extension == "json")
             && stem(&path) != "known-failures"
         {
-            let manifest = read_manifest(&path)?;
+            let manifest: Value = read_json(&path)?;
             found.push((stem(&path), manifest));
         }
     }
@@ -51,11 +51,6 @@ fn stem(path: &Path) -> String {
         .to_owned()
 }
 
-fn read_manifest(path: &Path) -> Result<Value> {
-    let text =
-        fs::read_to_string(path).with_context(|| format!("unreadable: {}", path.display()))?;
-    serde_json::from_str(&text).with_context(|| format!("not JSON: {}", path.display()))
-}
 
 /// The curated entries of one manifest, empty when the key is absent.
 fn curated(manifest: &Value) -> &[Value] {

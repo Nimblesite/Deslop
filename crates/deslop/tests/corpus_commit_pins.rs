@@ -14,7 +14,7 @@
 use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
-use deslop_test_support::corpus::repo_root;
+use deslop_test_support::{corpus::repo_root, read_json};
 use serde_json::Value;
 
 /// The two manifest sets: scan targets for the resource suite, and the judged
@@ -65,11 +65,6 @@ fn manifests() -> Result<Vec<(String, String, Value)>> {
     Ok(found)
 }
 
-fn read_json(path: &Path) -> Result<Value> {
-    let text =
-        fs::read_to_string(path).with_context(|| format!("unreadable: {}", path.display()))?;
-    serde_json::from_str(&text).with_context(|| format!("not JSON: {}", path.display()))
-}
 
 /// Whether `candidate` is a full, lowercase, hexadecimal git object name.
 fn is_commit_id(candidate: &str) -> bool {
@@ -128,7 +123,7 @@ fn nothing_fetches_a_corpus_repository_by_name() -> Result<()> {
 
 /// Every queued repository, as `(name, document)`.
 fn queued() -> Result<Vec<(String, Value)>> {
-    let queue = read_json(&repo_root().join(JUDGING_QUEUE))?;
+    let queue: Value = read_json(&repo_root().join(JUDGING_QUEUE))?;
     let repositories = queue
         .get(QUEUED_REPOSITORIES)
         .and_then(Value::as_array)

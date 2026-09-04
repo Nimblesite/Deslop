@@ -15,6 +15,7 @@ use std::{collections::BTreeMap, ffi::OsString, fs, path::PathBuf};
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 use deslop_test_support::corpus::{measured_run, repo_root};
+use deslop_test_support::read_json;
 use deslop_test_support::corpus_score::{
     gate::{add_costs, breaches, degradation, load_thresholds, totals, Thresholds},
     render::{scorecard, Engine, Scorecard, TargetScore},
@@ -62,12 +63,6 @@ enum Command {
     },
 }
 
-/// Reads a JSON document, naming the file when it cannot be read or parsed.
-fn read_json(path: &std::path::Path) -> Result<Value> {
-    let body =
-        fs::read_to_string(path).with_context(|| format!("unreadable: {}", path.display()))?;
-    serde_json::from_str(&body).with_context(|| format!("not JSON: {}", path.display()))
-}
 
 /// A string field, blank when absent.
 fn text(value: &Value, field: &str) -> String {

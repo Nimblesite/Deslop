@@ -16,8 +16,9 @@ use std::collections::BTreeSet;
 use tree_sitter::Node;
 
 use super::{
-    enclosing_kind, is_multi_member_language_cluster, node_intersects_range, parse_for,
-    raw_snippet_texts_differ, spans_multiple_files, trimmed_snippet_range, Snippet,
+    enclosing_kind, is_multi_member_language_cluster, language_cluster_shapes,
+    node_intersects_range, node_search::KindSearch, parse_for, raw_snippet_texts_differ,
+    spans_multiple_files, trimmed_snippet_range, Snippet,
 };
 use crate::ast::{named_children, ByteRange};
 
@@ -28,17 +29,15 @@ use crate::ast::{named_children, ByteRange};
 /// contract forces the same method outline, so the cluster is not
 /// actionable duplication.
 pub(super) fn is_rust_language_parser_adapter_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if !is_multi_member_language_cluster(snippets, "rust") {
-        return false;
-    }
-    if !spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id)) {
-        return false;
-    }
-    let shapes: Option<Vec<RustImplShape>> = snippets
-        .iter()
-        .map(rust_language_parser_impl_shape)
-        .collect();
-    let Some(shapes) = shapes else { return false };
+    spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id))
+        && language_cluster_shapes(snippets, "rust", rust_language_parser_impl_shape)
+            .is_some_and(|shapes| impl_shapes_form_adapter_family(&shapes))
+}
+
+/// True when every shape implements `LanguageParser` with the core
+/// methods and at least two impl bodies differ, so a verbatim copy of
+/// one adapter still surfaces as duplication.
+fn impl_shapes_form_adapter_family(shapes: &[RustImplShape]) -> bool {
     let Some(first) = shapes.first() else {
         return false;
     };
@@ -164,14 +163,8 @@ fn language_parser_core_methods() -> BTreeSet<Vec<u8>> {
 /// `pub use ...;`). Module declarations cannot be macro-generated in
 /// Rust, so the cluster is not actionable.
 pub(super) fn is_rust_top_level_decl_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if !is_multi_member_language_cluster(snippets, "rust") {
-        return false;
-    }
-    let signatures: Option<Vec<DeclSignature>> = snippets.iter().map(decl_signature).collect();
-    let Some(signatures) = signatures else {
-        return false;
-    };
-    decl_identifiers_differ(&signatures)
+    language_cluster_shapes(snippets, "rust", decl_signature)
+        .is_some_and(|signatures| decl_identifiers_differ(&signatures))
 }
 
 /// Detects ****: every cluster member contains the
@@ -421,16 +414,10 @@ fn closure_body_matches_field_method(body: Node<'_>, source: &[u8], closure_arg:
 /// least two members differ in raw bytes, so a verbatim copy-pasted run
 /// of arms still surfaces as a genuine clone.
 pub(super) fn is_rust_match_dispatch_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if !is_multi_member_language_cluster(snippets, "rust") {
-        return false;
-    }
-    let patterns: Option<Vec<Vec<Vec<u8>>>> =
-        snippets.iter().map(match_dispatch_arm_patterns).collect();
-    let Some(patterns) = patterns else {
-        return false;
-    };
-    let all: Vec<&[u8]> = patterns.iter().flatten().map(Vec::as_slice).collect();
-    arm_patterns_pairwise_distinct(&all) && raw_snippet_texts_differ(snippets)
+    language_cluster_shapes(snippets, "rust", match_dispatch_arm_patterns).is_some_and(|patterns| {
+        let all: Vec<&[u8]> = patterns.iter().flatten().map(Vec::as_slice).collect();
+        arm_patterns_pairwise_distinct(&all) && raw_snippet_texts_differ(snippets)
+    })
 }
 
 /// Returns the pattern bytes of every `match_arm` covered by one cluster
@@ -439,8 +426,7 @@ pub(super) fn is_rust_match_dispatch_cluster(snippets: &[Snippet<'_>]) -> bool {
 fn match_dispatch_arm_patterns(snippet: &Snippet<'_>) -> Option<Vec<Vec<u8>>> {
     let tree = parse_for(snippet)?;
     let range = trimmed_snippet_range(snippet)?;
-    let mut arms: Vec<Node<'_>> = Vec::new();
-    collect_match_arms(tree.root_node(), range, &mut arms);
+    let arms = KindSearch::intersecting(range, |kind| kind == "match_arm").nodes(tree.root_node());
     let first = arms.first()?;
     let parent = first.parent()?;
     if parent.kind() != "match_block" || arms.iter().any(|arm| arm.parent() != Some(parent)) {
@@ -451,21 +437,6 @@ fn match_dispatch_arm_patterns(snippet: &Snippet<'_>) -> Option<Vec<Vec<u8>>> {
         .collect()
 }
 
-/// Collects every `match_arm` node intersecting `range`. Does not descend
-/// into an arm body, so a nested `match` inside one arm contributes only
-/// the outer arm, never its inner arms.
-fn collect_match_arms<'tree>(node: Node<'tree>, range: ByteRange, out: &mut Vec<Node<'tree>>) {
-    if !node_intersects_range(node, range) {
-        return;
-    }
-    if node.kind() == "match_arm" {
-        out.push(node);
-        return;
-    }
-    for child in named_children(node) {
-        collect_match_arms(child, range, out);
-    }
-}
 
 /// Returns the `pattern` field bytes of one `match_arm`.
 fn arm_pattern_bytes(arm: Node<'_>, source: &[u8]) -> Option<Vec<u8>> {

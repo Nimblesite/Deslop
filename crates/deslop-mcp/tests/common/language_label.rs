@@ -14,9 +14,15 @@
 //! one-line call rather than another copy of the map's blind spot.
 
 use anyhow::{ensure, Result};
-use serde_json::{json, Value};
+use serde_json::Value;
 
-use super::{call_tool, copied_fixture_named, initialized_mcp, spawn_lsp_and_wait_for_socket};
+use super::{
+    copied_fixture_named, initialized_mcp, request_duplicates_summary, spawn_lsp_and_wait_for_socket,
+    structured_content,
+};
+
+/// Clusters requested per page: enough to hold every cluster the fixtures surface.
+const PAGE_LIMIT: u64 = 50;
 
 /// Drives the real `deslop-lsp` + `deslop-mcp` binaries against
 /// `fixture`, and asserts every cluster whose representative occurrence
@@ -35,11 +41,7 @@ pub fn assert_language_label_over_mcp(
     let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
 
     let mut mcp = initialized_mcp(workspace.path())?;
-    let page = call_tool(
-        &mut mcp,
-        "duplicates",
-        &json!({ "offset": 0, "limit": 50, "detail": "summary" }),
-    )?;
+    let page = structured_content(&request_duplicates_summary(&mut mcp, PAGE_LIMIT)?, "duplicates")?;
     let languages = cluster_languages_for_extension(&page, extension);
 
     ensure!(

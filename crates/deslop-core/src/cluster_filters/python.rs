@@ -19,8 +19,9 @@ use std::collections::BTreeSet;
 use tree_sitter::Node;
 
 use super::{
-    enclosing_kind, is_multi_member_language_cluster, node_contains_kind, node_intersects_range,
-    parse_for, raw_snippet_texts_differ, spans_multiple_files, trimmed_snippet_range, Snippet,
+    enclosing_kind, is_multi_member_language_cluster, language_cluster_shapes,
+    node_contains_kind, node_intersects_range, node_search::KindSearch, parse_for,
+    raw_snippet_texts_differ, spans_multiple_files, trimmed_snippet_range, Snippet,
 };
 use crate::{
     ast::{named_children, ByteRange},
@@ -169,14 +170,10 @@ pub(super) fn python_function_name_starts_with(
 /// member is inside a pytest `test_*` function and at least one member
 /// uses a different set of dict keys.
 pub(super) fn is_test_dict_literal_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if !is_multi_member_language_cluster(snippets, "python") {
-        return false;
-    }
-    let shapes: Option<Vec<DictLiteralShape>> =
-        snippets.iter().map(test_dict_literal_shape).collect();
-    let Some(shapes) = shapes else { return false };
-    spans_multiple_files(shapes.iter().map(|shape| shape.file_id))
-        && dict_literal_key_sets_differ(&shapes)
+    language_cluster_shapes(snippets, "python", test_dict_literal_shape).is_some_and(|shapes| {
+        spans_multiple_files(shapes.iter().map(|shape| shape.file_id))
+            && dict_literal_key_sets_differ(&shapes)
+    })
 }
 
 /// Per-member shape: the set of string keys declared by the dict
@@ -217,35 +214,7 @@ fn test_dict_literal_shape(snippet: &Snippet<'_>) -> Option<DictLiteralShape> {
 /// dictionary, or any non-dictionary value. Nested dictionaries (inside
 /// `pair.value`) are not counted as additional outer dictionaries.
 fn sole_dictionary_in_range(root: Node<'_>, range: ByteRange) -> Option<Node<'_>> {
-    let mut dictionaries = Vec::new();
-    collect_outer_dictionaries(root, range, &mut dictionaries);
-    let [dict] = dictionaries.as_slice() else {
-        return None;
-    };
-    Some(*dict)
-}
-
-/// Walks the tree collecting `dictionary` nodes fully enclosed by
-/// `range`. Stops descending once a `dictionary` is found so inner
-/// dictionaries (values of `pair`s) are not double-counted.
-fn collect_outer_dictionaries<'tree>(
-    node: Node<'tree>,
-    range: ByteRange,
-    out: &mut Vec<Node<'tree>>,
-) {
-    if node.end_byte() <= range.start || node.start_byte() >= range.end {
-        return;
-    }
-    if node.kind() == "dictionary"
-        && node.start_byte() >= range.start
-        && node.end_byte() <= range.end
-    {
-        out.push(node);
-        return;
-    }
-    for child in named_children(node) {
-        collect_outer_dictionaries(child, range, out);
-    }
+    KindSearch::enclosed(range, |kind| kind == "dictionary").sole_node(root)
 }
 
 /// Returns the string keys of `dict` (`pair.key` children that are

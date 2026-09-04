@@ -106,9 +106,7 @@ pub fn load_thresholds(repo_root: &std::path::Path) -> Result<Value> {
     if !path.exists() {
         return Ok(Value::Null);
     }
-    let text = std::fs::read_to_string(&path)
-        .with_context(|| format!("unreadable: {}", path.display()))?;
-    serde_json::from_str(&text).with_context(|| format!("not JSON: {}", path.display()))
+    crate::read_json(&path)
 }
 
 /// One breached threshold, stated so the message names the fix.

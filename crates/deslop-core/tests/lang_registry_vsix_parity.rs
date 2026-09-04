@@ -34,10 +34,7 @@ fn manifest_path() -> PathBuf {
 
 /// The VSIX manifest parsed as structured data.
 fn vsix_manifest() -> Result<Value> {
-    let path = manifest_path();
-    let text = fs::read_to_string(&path)
-        .with_context(|| format!("read VSIX manifest at {}", path.display()))?;
-    serde_json::from_str(&text).context("parse VSIX manifest as JSON")
+    deslop_test_support::read_json(&manifest_path())
 }
 
 /// Every string in the manifest's top-level `field` array.

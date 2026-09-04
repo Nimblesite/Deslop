@@ -84,11 +84,10 @@ impl Baseline {
     /// Returns an error when the file exists but is not valid JSON.
     pub fn load() -> Result<Self> {
         let path = repo_root().join("corpus").join("known-failures.json");
-        let Ok(text) = fs::read_to_string(&path) else {
+        if !path.exists() {
             return Ok(Self::default());
-        };
-        let parsed: Value = serde_json::from_str(&text)
-            .with_context(|| format!("known-failures.json is not JSON: {}", path.display()))?;
+        }
+        let parsed: Value = crate::read_json(&path)?;
         let known = parsed
             .get("known_failures")
             .and_then(Value::as_object)
@@ -220,11 +219,7 @@ pub fn repo_root() -> PathBuf {
 ///
 /// Returns an error when the manifest is missing or is not valid JSON.
 pub fn manifest(name: &str) -> Result<Value> {
-    let path = repo_root().join("corpus").join(format!("{name}.json"));
-    let text = fs::read_to_string(&path)
-        .with_context(|| format!("corpus manifest not readable: {}", path.display()))?;
-    serde_json::from_str(&text)
-        .with_context(|| format!("corpus manifest is not JSON: {}", path.display()))
+    crate::read_json(&repo_root().join("corpus").join(format!("{name}.json")))
 }
 
 /// [CORPUS-PIN] Resolves the clone directory for a manifest, erroring when
@@ -292,12 +287,8 @@ pub fn scan(scan_root: &Path, output_prefix: &Path) -> Result<CorpusRun> {
         return Err(scan_failure(scan_root, &run.output));
     }
 
-    let report_path = with_json_extension(output_prefix);
-    let text = fs::read_to_string(&report_path)
-        .with_context(|| format!("report not readable: {}", report_path.display()))?;
-
     Ok(CorpusRun {
-        report: serde_json::from_str(&text).context("report is not valid JSON")?,
+        report: crate::read_json(&with_json_extension(output_prefix)).context("scan report")?,
         wall: run.wall,
         peak_rss_mb: run.peak_rss_mb,
     })
