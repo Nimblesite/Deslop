@@ -59,6 +59,23 @@ The JSON output must validate against Deployment Toolkit's
 `manifestVersion`, `name`, `version`, `kind`, `language`, and
 `product = "deslop"`.
 
+### [DEPLOY-BINARY-FILE-NAME] How a platform names a binary
+
+A component's file name is its `binaryName` plus, on Windows and only on Windows, `.exe`. The same name identifies the file `make build` leaves in `target/release`, the file a package must bundle under `bin/<platform>/`, and the file a gate looks for. There is one implementation of this rule and every gate reads it from there.
+
+The reason it is a rule rather than a convenience: a gate that carries its own copy, or leaves the rule out, reports a missing binary on the one platform that has it — a red gate for a green artifact, or worse, a check quietly performed against nothing.
+
+### [DEPLOY-GATE-PORTABILITY] Every gate runs everywhere the product ships
+
+A deployment gate must run on every platform this project publishes for, and must depend only on programs those platforms have. Reading and writing the archive formats we ship — a VSIX and a JetBrains plugin are both zip archives — happens in-process. Where a POSIX shell is genuinely required, it is resolved rather than named, so the shell that runs is the one the build already depends on.
+
+Two failures this prevents, both seen:
+
+- A gate that shells out to a program the platform does not ship does not report a weaker answer. It aborts before it checks anything, which is indistinguishable from having no gate — and it did so on the very platform whose artifact it exists to verify.
+- A gate that starts a subject the platform cannot execute gets an empty result and compares that against its expectation. Two empty strings are equal, so the gate passes while proving nothing. This is the more dangerous of the two, because it is green.
+
+A gate is therefore held to the platform it runs on: a proof that has to execute a staged binary uses a binary this host can run, and a rule about a *target* platform — how that platform names a file, which artifact it publishes — is proved for every published platform from any host, because such a proof needs to run nothing.
+
 ### [DEPLOY-PROTOCOL-VERSION] Protocol initialize version
 
 Long-running protocol binaries must report the same version during initialize

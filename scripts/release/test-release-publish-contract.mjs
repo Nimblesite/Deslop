@@ -20,6 +20,7 @@ import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 
 import { mappingValues, stepBody } from "../actions/action-yaml.mjs";
+import { posixShell } from "../lib/posix-shell.mjs";
 import { runContractSuite } from "../lib/contract-harness.mjs";
 import { repoRoot } from "../lib/repo-root.mjs";
 import { VSIX_ARTIFACT_PREFIX, VSIX_MATRIX_KEY, VSIX_PLATFORMS } from "./vsix-platforms.mjs";
@@ -28,7 +29,9 @@ const workflow = readFileSync(resolve(repoRoot, ".github/workflows/release.yml")
 
 // The publish steps are `set -euo pipefail` plus a node call — no globstar,
 // no bash-4 features — so the stock shell on any runner or dev box runs them.
-const SHELL = "bash";
+// Resolved rather than named: `bash` by name finds WSL's copy first on
+// Windows, which sees a different filesystem than this checkout is in.
+const SHELL = posixShell();
 const MARKETPLACE_STEP = "Publish each platform VSIX (Entra OIDC, no PAT)";
 const OPENVSX_STEP = "Publish each platform VSIX to Open VSX";
 const FAILING_PLATFORM = "darwin-x64";
@@ -49,22 +52,26 @@ const SUITE_RUNNER = "node scripts/release/test-release-publish-contract.mjs";
 
 // Records every publish invocation, then fails any package whose path carries
 // FAIL_TARGET. Everything else publishes instantly.
-const NPX_STUB = `#!/bin/sh
-printf '%s\\n' "$*" >> "\${STUB_LOG}"
-case "$*" in
-  *"\${FAIL_TARGET}"*)
-    echo "##[error]Request timeout: /_apis/gallery/publishers/nimblesite/extensions/deslop-live" >&2
-    exit 1
-    ;;
-esac
-printf 'stub published\\n'
-`;
+//
+// Written in Node rather than shell because both callers have to reach it: the
+// workflow step invokes these from the shell, and `publish-vsixes.mjs` invokes
+// `npx` from Node. Windows will not start a shell script from a bare name, so
+// on that host the Node call found nothing, every platform reported a failure,
+// and the suite could not tell a broken publisher from a missing stub.
+const NPX_STUB = [
+  'import { appendFileSync } from "node:fs";',
+  'const invocation = process.argv.slice(2).join(" ");',
+  'appendFileSync(process.env.STUB_LOG, invocation + "\\n");',
+  'if (invocation.includes(process.env.FAIL_TARGET)) {',
+  '  console.error("##[error]Request timeout: /_apis/gallery/publishers/nimblesite/extensions/deslop-live");',
+  '  process.exit(1);',
+  '}',
+  'console.log("stub published");',
+].join("\n");
 
 // Stands in for the workflow's `az account get-access-token` token mint; the
 // publish step only needs a token-shaped string on stdout.
-const AZ_STUB = `#!/bin/sh
-echo "stub-access-token"
-`;
+const AZ_STUB = 'console.log("stub-access-token");';
 
 const marketplaceRunBlock = publishRunBlock(MARKETPLACE_STEP);
 const openvsxRunBlock = publishRunBlock(OPENVSX_STEP);
@@ -259,13 +266,21 @@ function buildSandbox(sandbox, platforms) {
   symlinkSync(resolve(repoRoot, "scripts"), join(sandbox, "scripts"), "junction");
   const stubBin = join(sandbox, "stub-bin");
   mkdirSync(stubBin);
-  for (const [name, body] of [["npx", NPX_STUB], ["az", AZ_STUB]]) {
-    writeFileSync(join(stubBin, name), body);
-    chmodSync(join(stubBin, name), 0o755);
-  }
+  for (const [name, body] of [["npx", NPX_STUB], ["az", AZ_STUB]]) writeStub(stubBin, name, body);
   const log = join(sandbox, "publish-attempts.log");
   writeFileSync(log, "");
   return { stubBin, log };
+}
+
+// One behaviour, one launcher per way of being started. The POSIX launcher
+// serves the shell on every host, and the shell is how both callers reach it:
+// the workflow step runs them directly, and `publish-vsixes.mjs` starts `npx`
+// through that same shell, because Node cannot start a Windows shim itself.
+function writeStub(stubBin, name, source) {
+  writeFileSync(join(stubBin, `${name}.mjs`), `${source}\n`);
+  const launcher = join(stubBin, name);
+  writeFileSync(launcher, `#!/bin/sh\nexec node "$(dirname "$0")/${name}.mjs" "$@"\n`);
+  chmodSync(launcher, 0o755);
 }
 
 function summarize(result, attemptsLog) {

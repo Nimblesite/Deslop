@@ -2,6 +2,8 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
+import { currentPlatform, executableName } from "../release/vsix-platforms.mjs";
+
 const manifestPath = resolveArg(process.argv[2] ?? "shipwright.json");
 const binDir = resolveArg(process.argv[3] ?? "target/release");
 const platform = process.argv[4] ?? currentPlatform();
@@ -12,7 +14,7 @@ for (const component of executableComponents(manifest)) verifyComponent(componen
 console.log(`Verified deployment binaries in ${binDir} for ${platform}`);
 
 function verifyComponent(component) {
-  const binaryPath = join(binDir, nameWithSuffix(component));
+  const binaryPath = join(binDir, executableName(component.binaryName, platform));
   if (!existsSync(binaryPath)) throw new Error(`Missing ${component.id} at ${binaryPath}`);
   assertExecutable(binaryPath);
   assertPlainVersion(binaryPath, component);
@@ -76,19 +78,7 @@ function assertEqual(actual, expected, label) {
   if (actual !== expected) throw new Error(`${label} must be ${expected}; got ${actual}`);
 }
 
-function nameWithSuffix(component) {
-  return `${component.binaryName}${platform.startsWith("win32") ? ".exe" : ""}`;
-}
-
 function resolveArg(value) {
   return isAbsolute(value) ? value : resolve(value);
 }
 
-function currentPlatform() {
-  if (process.platform === "darwin" && process.arch === "arm64") return "darwin-arm64";
-  if (process.platform === "darwin" && process.arch === "x64") return "darwin-x64";
-  if (process.platform === "linux" && process.arch === "x64") return "linux-x64";
-  if (process.platform === "linux" && process.arch === "arm64") return "linux-arm64";
-  if (process.platform === "win32" && process.arch === "x64") return "win32-x64";
-  throw new Error(`unsupported platform ${process.platform}-${process.arch}`);
-}

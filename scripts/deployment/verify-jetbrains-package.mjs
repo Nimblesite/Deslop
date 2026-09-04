@@ -3,12 +3,15 @@ import { tmpdir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
+import { openArchive } from "../lib/zip.mjs";
+import { currentPlatform, executableName } from "../release/vsix-platforms.mjs";
+
 // [DEPLOY-JETBRAINS-PACKAGE] CI gate for the JetBrains plugin package contract.
 // Verifies the shipped JetBrains plugin zip. With no path argument it checks the
 // single :deslop-lsp4ij artifact (one LSP4IJ build serves Android Studio, IntelliJ
 // Community, and Rider/Ultimate), which bundles shipwright.json at its root plus a
 // bin/<platform>/deslop-lsp staged from the same manifest contract.
-// Every binary here was just unzipped into a fresh temp dir, so this is always
+// Every binary here was just extracted into a fresh temp dir, so this is always
 // a FIRST exec: macOS validates the unsigned ~30 MB file before it runs
 // (Gatekeeper / `syspolicyd`), which costs hundreds of milliseconds. A tight
 // budget makes packaging fail on machine load rather than on a real defect
@@ -24,16 +27,17 @@ const packagePaths = explicit
 for (const packagePath of packagePaths) verifyPackage(packagePath);
 
 function verifyPackage(packagePath) {
-  const entries = unzipText(["-Z1", packagePath]).split("\n").filter(Boolean);
+  const archive = openArchive(packagePath);
+  const entries = archive.names;
   const root = packageRoot(entries);
   const manifestEntry = `${root}/shipwright.json`;
   assertEntry(entries, manifestEntry, packagePath);
 
-  const manifest = JSON.parse(unzipText(["-p", packagePath, manifestEntry]));
+  const manifest = JSON.parse(archive.readText(manifestEntry));
   const component = componentById(manifest, "deslop-lsp");
-  const lspEntry = `${root}/bin/${platform}/${nameWithSuffix(component)}`;
+  const lspEntry = `${root}/bin/${platform}/${executableName(component.binaryName, platform)}`;
   assertEntry(entries, lspEntry, packagePath);
-  verifyBundledEntry(packagePath, lspEntry, component);
+  verifyBundledEntry(archive, lspEntry, component);
 
   for (const entry of binEntries(entries, root)) {
     if (!componentForEntry(entry, manifest)) throw new Error(`Undeclared JetBrains binary: ${entry}`);
@@ -77,11 +81,10 @@ function defaultPackages() {
   });
 }
 
-function verifyBundledEntry(packagePath, entry, component) {
+function verifyBundledEntry(archive, entry, component) {
   const temp = mkdtempSync(join(tmpdir(), "deslop-jetbrains-"));
   try {
-    unzipText(["-q", packagePath, entry, "-d", temp]);
-    const binaryPath = join(temp, entry);
+    const binaryPath = archive.extract(entry, temp);
     assertExecutable(binaryPath);
     assertVersion(binaryPath, component);
   } finally {
@@ -114,7 +117,9 @@ function componentById(manifest, id) {
 
 function componentForEntry(entry, manifest) {
   const fileName = basename(entry);
-  return (manifest.components ?? []).find((component) => nameWithSuffix(component) === fileName);
+  return (manifest.components ?? []).find(
+    (component) => executableName(component.binaryName, platform) === fileName,
+  );
 }
 
 function binEntries(entries, root) {
@@ -131,27 +136,9 @@ function assertEntry(entries, entry, packagePath) {
   if (!entries.includes(entry)) throw new Error(`Missing ${entry} in ${packagePath}`);
 }
 
-function unzipText(args) {
-  const result = spawnSync("unzip", args, { encoding: "utf8" });
-  if (result.status !== 0) throw new Error(`unzip failed: ${String(result.stderr)}`);
-  return String(result.stdout);
-}
-
-function nameWithSuffix(component) {
-  return `${component.binaryName}${platform.startsWith("win32") ? ".exe" : ""}`;
-}
-
 function firstLine(text) {
   const end = text.indexOf("\n");
   const line = end >= 0 ? text.slice(0, end) : text;
   return line.endsWith("\r") ? line.slice(0, -1) : line;
 }
 
-function currentPlatform() {
-  if (process.platform === "darwin" && process.arch === "arm64") return "darwin-arm64";
-  if (process.platform === "darwin" && process.arch === "x64") return "darwin-x64";
-  if (process.platform === "linux" && process.arch === "x64") return "linux-x64";
-  if (process.platform === "linux" && process.arch === "arm64") return "linux-arm64";
-  if (process.platform === "win32" && process.arch === "x64") return "win32-x64";
-  throw new Error(`unsupported platform ${process.platform}-${process.arch}`);
-}

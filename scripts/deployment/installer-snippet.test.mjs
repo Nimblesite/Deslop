@@ -25,6 +25,7 @@ import { pathToFileURL } from "node:url";
 
 import { repoRoot } from "../lib/repo-root.mjs";
 import { posixShell, shellPath } from "../lib/posix-shell.mjs";
+import { writeFileAt } from "../lib/write-file.mjs";
 
 const TAG = "v9.9.9";
 const VERSION = "9.9.9";
@@ -75,9 +76,8 @@ function writeFixtureRelease(fixtures, platform, goodChecksum) {
   const payload = `deslop-${VERSION}-${platform}`;
   const stage = join(fixtures, "stage");
   mkdirSync(releaseDir, { recursive: true });
-  mkdirSync(join(stage, payload), { recursive: true });
   for (const binary of BINARIES) {
-    writeFileSync(join(stage, payload, binary), `#!/bin/sh\necho ${binary} ${VERSION}\n`, { mode: 0o755 });
+    writeFileAt(join(stage, payload, binary), `#!/bin/sh\necho ${binary} ${VERSION}\n`, { mode: 0o755 });
   }
   const archive = join(releaseDir, `${payload}.tar.gz`);
   // Built through the same shell that will extract it, with the paths spelled
@@ -109,6 +109,11 @@ function writeStubs(stubBin, log, target) {
   writeStub(stubBin, "tar", `echo "tar $*" >> "${recorded}"\nexec "${realTar}" "$@"`);
   writeStub(stubBin, "sudo", `echo "sudo $*" >> "${recorded}"`);
   writeStub(stubBin, "deslop", `echo "deslop $*" >> "${recorded}"\necho "deslop ${VERSION}"`);
+  writeUnameStub(stubBin, target);
+}
+
+/** Names the platform under test, and refuses every flag it was not given. */
+function writeUnameStub(stubBin, target) {
   // The snippet reads the platform from `uname`, so the test names it. Every
   // other flag is refused rather than answered: a snippet that asked
   // something this stub silently made up would be tested against a fiction.

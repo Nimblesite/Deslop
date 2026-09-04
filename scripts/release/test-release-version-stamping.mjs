@@ -1,11 +1,12 @@
 // Tests for first-class release/test version stamping.
 
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { runContractSuite } from "../lib/contract-harness.mjs";
 import { repoRoot } from "../lib/repo-root.mjs";
+import { copyFileAt } from "../lib/write-file.mjs";
 
 const stamper = join(repoRoot, "scripts/release/stamp-release-version.mjs");
 const version = "9.8.7-test.1";
@@ -31,9 +32,7 @@ runContractSuite(tests, "release version stamping", "deslop-version-stamp-");
 
 function sourceProjectsUseVersionPlaceholder() {
   const placeholder = "0.0.0-dev";
-  assertIncludes(read(repoRoot, "Cargo.toml"), `version = "${placeholder}"`);
-  assertIncludes(read(repoRoot, "Cargo.lock"), `name = "deslop"\nversion = "${placeholder}"`);
-  assertIncludes(read(repoRoot, "Cargo.lock"), `name = "deslop-mcp"\nversion = "${placeholder}"`);
+  assertCargoVersion(repoRoot, placeholder, ["deslop", "deslop-mcp"]);
   assertJsonVersion(repoRoot, "shipwright.json", placeholder);
   assertJsonVersion(repoRoot, "clients/vscode/package.json", placeholder);
   assertJsonVersion(repoRoot, "clients/vscode/package-lock.json", placeholder);
@@ -45,12 +44,9 @@ function sourceProjectsUseVersionPlaceholder() {
 
 function stamperSetsEveryProjectVersion(work) {
   copyStampInputs(work);
-  const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
-  if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
+  runStamper(work);
 
-  assertIncludes(read(work, "Cargo.toml"), `version = "${version}"`);
-  assertIncludes(read(work, "Cargo.lock"), `name = "deslop"\nversion = "${version}"`);
-  assertIncludes(read(work, "Cargo.lock"), `name = "deslop-lsp"\nversion = "${version}"`);
+  assertCargoVersion(work, version, ["deslop", "deslop-lsp"]);
   assertJsonVersion(work, "shipwright.json", version);
   // The VSIX package version is the Marketplace-legal core MAJOR.MINOR.PATCH;
   // every other project keeps the full version including the prerelease suffix.
@@ -69,12 +65,9 @@ function stamperSetsEveryProjectVersion(work) {
 function stamperStampsGeneratedVsixManifest(work) {
   copyStampInputs(work);
   const stagedManifest = "clients/vscode/shipwright.json";
-  const dest = join(work, stagedManifest);
-  mkdirSync(dirname(dest), { recursive: true });
-  copyFileSync(join(work, "shipwright.json"), dest);
+  const dest = copyFileAt(join(work, "shipwright.json"), join(work, stagedManifest));
 
-  const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
-  if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
+  runStamper(work);
 
   assertJsonVersion(work, stagedManifest, version);
 }
@@ -86,8 +79,7 @@ function stamperStampsGeneratedVsixManifest(work) {
 // regression a new workspace crate (deslop-test-support) introduced.
 function stamperStampsEveryWorkspaceCrateInLock(work) {
   copyStampInputs(work);
-  const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
-  if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
+  runStamper(work);
 
   const lock = read(work, "Cargo.lock");
   let workspaceCrates = 0;
@@ -124,26 +116,42 @@ function stamperStampsEveryWorkspaceCrateInLock(work) {
 // [ACTION-VERSION]
 function stamperLeavesDocumentedPinsUntouched(work) {
   copyStampInputs(work);
-  const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
-  if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
+  runStamper(work);
 
-  for (const doc of actionPinDocs) {
-    const before = read(repoRoot, doc);
-    const after = read(work, doc);
-    if (after !== before) {
-      throw new Error(`${doc}: stamping rewrote a published surface that must ship exactly as committed`);
-    }
-    if (!after.includes(actionPinPrefix)) throw new Error(`${doc} has no action pin left to protect`);
-    if (after.includes(`${actionPinPrefix}${version}`)) {
-      throw new Error(`${doc}: the stamped version reached a committed pin`);
-    }
-  }
+  for (const doc of actionPinDocs) assertPinSurvived(work, doc);
 
   // The SHA-pinned example documents the case where the ref carries no version,
   // so `version:` is required. Rewriting it to a tag would destroy the very
   // thing it illustrates — the stamper must leave a non-`@v` ref alone.
   for (const doc of actionPinDocs.slice(1)) {
     assertIncludes(read(work, doc), "uses: Nimblesite/Deslop@8f4c1e2a9b7d3f6a5c8e1b4d7a0f3c6e9b2d5a8f");
+  }
+}
+
+/** Runs the stamper over the inputs already copied into `work`. */
+function runStamper(work) {
+  const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
+  if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
+}
+
+/** Cargo.toml, and each named workspace crate in Cargo.lock, carry `expected`. */
+function assertCargoVersion(root, expected, crates) {
+  assertIncludes(read(root, "Cargo.toml"), `version = "${expected}"`);
+  for (const crate of crates) {
+    assertIncludes(read(root, "Cargo.lock"), `name = "${crate}"\nversion = "${expected}"`);
+  }
+}
+
+/** A documented action pin must ship exactly as it was committed. */
+function assertPinSurvived(work, doc) {
+  const before = read(repoRoot, doc);
+  const after = read(work, doc);
+  if (after !== before) {
+    throw new Error(`${doc}: stamping rewrote a published surface that must ship exactly as committed`);
+  }
+  if (!after.includes(actionPinPrefix)) throw new Error(`${doc} has no action pin left to protect`);
+  if (after.includes(`${actionPinPrefix}${version}`)) {
+    throw new Error(`${doc}: the stamped version reached a committed pin`);
   }
 }
 
@@ -167,9 +175,7 @@ function copyStampInputs(work) {
     "site/package.json",
     "site/package-lock.json",
   ]) {
-    const dest = join(work, file);
-    mkdirSync(dirname(dest), { recursive: true });
-    copyFileSync(join(repoRoot, file), dest);
+    copyFileAt(join(repoRoot, file), join(work, file));
   }
 }
 
