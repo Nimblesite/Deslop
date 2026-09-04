@@ -121,7 +121,8 @@ pub(crate) struct PairShape {
 /// ([FUSED-CONTENT-GATE]).
 #[derive(Clone, Copy)]
 pub(crate) struct PairScope {
-    /// Both endpoints are in one file, so the promote floor applies.
+    /// Both endpoints are in one file, so the rename axis keeps its
+    /// stricter same-file form.
     pub(crate) same_file: bool,
     /// Both endpoints are windows strictly inside an authored function,
     /// so a rename over a literal-free window cannot vouch for itself.

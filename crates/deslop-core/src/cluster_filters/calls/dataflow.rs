@@ -32,44 +32,46 @@ pub(super) fn assigned_binding(call: Node<'_>, source: &[u8]) -> Option<Vec<u8>>
     None
 }
 
-/// Raw identifiers the call consumes: everything inside its argument
-/// list, plus everything its **receiver** names.
-///
-/// A receiver is part of a callee ([CLONE-NOISE-LITERAL-VARIATION-CALLS],
-/// gh #284), and it is also a value the call reads:
-/// `expect(generated).toContain("…")` consumes `generated` as surely as
-/// `assertContains(generated, "…")` would. Reading the argument list
-/// alone lost that, so a scenario family whose adapter result reaches the
-/// varying assertions only through their receivers looked like shared
-/// authored logic and blocked its own suppression.
-pub(super) fn consumed_identifiers(call: Node<'_>, source: &[u8]) -> Vec<Vec<u8>> {
+/// Raw identifiers the call consumes: every identifier inside its
+/// argument list, plus the arguments of every invocation spelled inside
+/// its callee. `expect(generated).toContain("…")` is one call whose
+/// callee carries the nested `expect(generated)` invocation, and
+/// `generated` flows into the assertion through that receiver exactly as
+/// an argument would ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
+pub(super) fn consumed_identifiers(call: Node<'_>, source: &[u8], kinds: &[&str]) -> Vec<Vec<u8>> {
     let mut identifiers = Vec::new();
-    if let Some(arguments) = call
-        .child_by_field_name("arguments")
-        .or_else(|| call.child_by_field_name("argument_list"))
-    {
+    if let Some(arguments) = argument_list(call) {
         collect_identifiers(arguments, source, &mut identifiers);
     }
-    collect_receiver_identifiers(call, source, &mut identifiers);
+    if let Some(callee) = call.child_by_field_name("function") {
+        collect_receiver_arguments(callee, source, kinds, &mut identifiers);
+    }
     identifiers
 }
 
-/// Adds the identifiers of the callee's receiver. A bare-identifier
-/// callee is a function name and has no receiver, so it contributes
-/// nothing; otherwise the receiver is the callee's first named child —
-/// the expression the member is selected from, whatever the grammar
-/// calls that field — and every identifier inside it is consumed.
-fn collect_receiver_identifiers(call: Node<'_>, source: &[u8], out: &mut Vec<Vec<u8>>) {
-    let Some(callee) = call.child_by_field_name("function") else {
-        return;
-    };
-    if is_identifier(callee.kind()) {
-        return;
+/// The argument list of a call, under either field name the supported
+/// grammars use.
+fn argument_list(call: Node<'_>) -> Option<Node<'_>> {
+    call.child_by_field_name("arguments")
+        .or_else(|| call.child_by_field_name("argument_list"))
+}
+
+/// Collects the argument identifiers of every invocation nested in a
+/// callee expression — the receivers a value can flow through.
+fn collect_receiver_arguments(
+    node: Node<'_>,
+    source: &[u8],
+    kinds: &[&str],
+    out: &mut Vec<Vec<u8>>,
+) {
+    if kinds.contains(&node.kind()) {
+        if let Some(arguments) = argument_list(node) {
+            collect_identifiers(arguments, source, out);
+        }
     }
-    let Some(receiver) = named_children(callee).into_iter().next() else {
-        return;
-    };
-    collect_identifiers(receiver, source, out);
+    for child in named_children(node) {
+        collect_receiver_arguments(child, source, kinds, out);
+    }
 }
 
 /// Collects identifier leaves without interpreting their language role.
