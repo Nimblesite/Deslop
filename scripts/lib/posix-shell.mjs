@@ -1,5 +1,6 @@
 // The POSIX shell a Node contract test can spawn on this host, and the path
-// spellings that shell understands. [DEPLOY-EXTENSION-BUNDLED-TESTS]
+// spellings that shell understands.
+// [DEPLOY-GATE-PORTABILITY] [DEPLOY-EXTENSION-BUNDLED-TESTS]
 //
 // Several gates here drive shell scripts Deslop publishes for macOS and Linux
 // — the PATH scrub, the process scrub, the documented curl installer. The
@@ -70,6 +71,26 @@ export function shellPath(path, host = platform()) {
  */
 export function hostPath(path, host = platform()) {
   return translate(TO_HOST, path, host);
+}
+
+/**
+ * Argv for running the installed command `name` with `args` on this host.
+ *
+ * Windows installs an npm command as a `.cmd` shim, and Node refuses to spawn
+ * a batch file without a shell — so `spawnSync("npx", ...)` cannot start one
+ * there at all, and a caller that tries reports the command as having failed
+ * rather than as never having run. Routing through [`posixShell`], which this
+ * repository already requires on Windows, starts it. Every argument stays
+ * positional, so nothing is ever interpolated into a command line.
+ *
+ * @param {string} name the installed command to run
+ * @param {string[]} args its arguments, passed through untouched
+ * @param {string} [host] `os.platform()` value; defaults to this host
+ * @returns {[string, string[]]} the file to spawn and the arguments for it
+ */
+export function spawnableCommand(name, args, host = platform()) {
+  if (host !== "win32") return [name, args];
+  return [posixShell(host), ["-c", 'exec "$@"', name, name, ...args]];
 }
 
 /**

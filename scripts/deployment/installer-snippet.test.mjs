@@ -25,6 +25,7 @@ import { pathToFileURL } from "node:url";
 
 import { repoRoot } from "../lib/repo-root.mjs";
 import { posixShell, shellPath } from "../lib/posix-shell.mjs";
+import { writeFileAt } from "../lib/write-file.mjs";
 
 const TAG = "v9.9.9";
 const VERSION = "9.9.9";
@@ -75,9 +76,8 @@ function writeFixtureRelease(fixtures, platform, goodChecksum) {
   const payload = `deslop-${VERSION}-${platform}`;
   const stage = join(fixtures, "stage");
   mkdirSync(releaseDir, { recursive: true });
-  mkdirSync(join(stage, payload), { recursive: true });
   for (const binary of BINARIES) {
-    writeFileSync(join(stage, payload, binary), `#!/bin/sh\necho ${binary} ${VERSION}\n`, { mode: 0o755 });
+    writeFileAt(join(stage, payload, binary), `#!/bin/sh\necho ${binary} ${VERSION}\n`, { mode: 0o755 });
   }
   const archive = join(releaseDir, `${payload}.tar.gz`);
   // Built through the same shell that will extract it, with the paths spelled

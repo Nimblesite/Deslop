@@ -1,11 +1,12 @@
 // Tests for first-class release/test version stamping.
 
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { runContractSuite } from "../lib/contract-harness.mjs";
 import { repoRoot } from "../lib/repo-root.mjs";
+import { copyFileAt } from "../lib/write-file.mjs";
 
 const stamper = join(repoRoot, "scripts/release/stamp-release-version.mjs");
 const version = "9.8.7-test.1";
@@ -69,9 +70,7 @@ function stamperSetsEveryProjectVersion(work) {
 function stamperStampsGeneratedVsixManifest(work) {
   copyStampInputs(work);
   const stagedManifest = "clients/vscode/shipwright.json";
-  const dest = join(work, stagedManifest);
-  mkdirSync(dirname(dest), { recursive: true });
-  copyFileSync(join(work, "shipwright.json"), dest);
+  const dest = copyFileAt(join(work, "shipwright.json"), join(work, stagedManifest));
 
   const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
   if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
@@ -167,9 +166,7 @@ function copyStampInputs(work) {
     "site/package.json",
     "site/package-lock.json",
   ]) {
-    const dest = join(work, file);
-    mkdirSync(dirname(dest), { recursive: true });
-    copyFileSync(join(repoRoot, file), dest);
+    copyFileAt(join(repoRoot, file), join(work, file));
   }
 }
 

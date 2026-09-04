@@ -1,14 +1,9 @@
-const PLATFORM_TARGETS = new Map([
-  ["darwin-arm64", "darwin-arm64"],
-  ["darwin-x64", "darwin-x64"],
-  ["linux-x64", "linux-x64"],
-  ["linux-arm64", "linux-arm64"],
-  ["win32-x64", "win32-x64"],
-]);
+// The VSIX target this host is. The list of published platforms and the rule
+// for reading one off the host live once, next to the release matrix they have
+// to agree with; this is the extension's name for it. [DEPLOY-PUBLISH-COMPLETE]
+import { currentPlatform } from "../../../scripts/release/vsix-platforms.mjs";
 
+/** The `--target` this host's VSIX is built for. */
 export function currentPlatformTarget() {
-  const key = `${process.platform}-${process.arch}`;
-  const target = PLATFORM_TARGETS.get(key);
-  if (!target) throw new Error(`unsupported platform ${key}`);
-  return target;
+  return currentPlatform();
 }

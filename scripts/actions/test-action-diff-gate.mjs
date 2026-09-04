@@ -16,7 +16,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -24,11 +24,13 @@ import { check, total } from "../lib/contract-harness.mjs";
 import { firstRustFile, writeCopyPatch } from "./action-copy-patch.mjs";
 import { readOutputs } from "./action-read-outputs.mjs";
 import { stepBody } from "./action-yaml.mjs";
+import { posixShell, shellPath } from "../lib/posix-shell.mjs";
+import { currentPlatform, executableName } from "../release/vsix-platforms.mjs";
 
 /** The legacy-heavy fixture the self-test's gate matrix scans. */
 const SCAN_PATH = "examples/rust";
-/** Where the CLI lands under `make build`. */
-const DEFAULT_CLI = "target/release/deslop";
+/** Where the CLI lands under `make build`, spelled the way this host spells it. */
+const DEFAULT_CLI = `target/release/${executableName("deslop", currentPlatform())}`;
 /** The guard step whose emitted guidance is executed below. */
 const STDIN_GUARD_STEP = "Reject the un-suppliable stdin diff";
 /** The status the CLI exits on a usage error, and the guard must match. */
@@ -50,11 +52,16 @@ function runActionStep(cli, inputs) {
   const githubOutput = join(workdir, "github-output");
   writeFileSync(githubOutput, "");
   const body = stepBody(readFileSync("action.yml", "utf8"), "Run deslop");
-  execFileSync("bash", ["-eo", "pipefail", "-c", body], {
+  // The step calls `deslop` by name, so the built binary has to be on the
+  // PATH the step sees. Prepending it inside the shell — from a positional
+  // argument, spelled the way that shell spells a path — is the only form
+  // that works on both: a Windows directory handed in through `env` carries
+  // the character PATH separates on, and the shell reads one entry as two.
+  execFileSync(posixShell(), ["-eo", "pipefail", "-c", `PATH="$1:$PATH"
+${body}`, "run-deslop", shellPath(dirname(cli))], {
     stdio: "pipe",
     env: {
       ...process.env,
-      PATH: `${resolve(cli, "..")}:${process.env.PATH ?? ""}`,
       GITHUB_OUTPUT: githubOutput,
       SCAN_PATH: SCAN_PATH,
       MIN_NODES: "30",
@@ -100,7 +107,7 @@ function breachMessage(outputs) {
  */
 function runGuardStep(stepName, env) {
   const body = stepBody(readFileSync("action.yml", "utf8"), stepName);
-  const result = spawnSync("bash", ["-eo", "pipefail", "-c", body], {
+  const result = spawnSync(posixShell(), ["-eo", "pipefail", "-c", body], {
     encoding: "utf8",
     env: { ...process.env, ...env },
   });
@@ -181,7 +188,7 @@ check("a changed-code diff that adds duplication breaches the same ceiling", () 
       "the report records that the diff gate governed",
     );
   } finally {
-    execFileSync("rm", ["-f", copied]);
+    rmSync(copied, { force: true });
   }
 });
 
