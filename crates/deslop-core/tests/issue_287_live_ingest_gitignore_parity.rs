@@ -88,7 +88,7 @@ fn workspace_with_ignored_trees() -> Result<(tempfile::TempDir, Vec<std::path::P
 #[tokio::test(flavor = "multi_thread")]
 async fn live_ingest_rejects_paths_discovery_excludes() -> Result<()> {
     let (tmp, ignored_paths) = workspace_with_ignored_trees()?;
-    let mut session = live_session(&tmp.path())?;
+    let mut session = live_session(tmp.path())?;
 
     let before = session.report();
     let files_before = before.files_analysed;
@@ -145,7 +145,7 @@ async fn gitignore_edit_mid_session_rescopes_live_ingest() -> Result<()> {
     let root = tmp.path();
     fs::create_dir_all(root.join(".git")).context("mkdir .git")?;
     let _vendored = write_ignored_source(root, "vendored")?;
-    let mut session = live_session(&root)?;
+    let mut session = live_session(root)?;
 
     let before = session.report();
     assert_eq!(
@@ -197,7 +197,7 @@ async fn gitignore_edit_mid_session_rescopes_live_ingest() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn live_ingest_corpus_is_invariant_across_repeated_ignored_events() -> Result<()> {
     let (tmp, ignored_paths) = workspace_with_ignored_trees()?;
-    let mut session = live_session(&tmp.path())?;
+    let mut session = live_session(tmp.path())?;
 
     let baseline = session.report().files_analysed;
     assert_eq!(baseline, 2, "baseline corpus must be the two fixture files");

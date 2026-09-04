@@ -30,7 +30,10 @@
 use std::{collections::BTreeSet, ffi::OsStr, fs};
 
 use anyhow::{anyhow, ensure, Context, Result};
-use deslop_test_support::{corpus::repo_root, skip_policy::ignored_tests};
+use deslop_test_support::{
+    corpus::{repo_root, NOT_A_REPOSITORY},
+    skip_policy::ignored_tests,
+};
 
 /// The build file that names both corpus slices.
 const MAKEFILE: &str = "Makefile";
@@ -58,8 +61,6 @@ const EXACT_FLAG: &str = "--exact";
 /// Where the pinned repositories are declared, one manifest each.
 const CORPUS_DIRECTORY: &str = "corpus";
 const MANIFEST_EXTENSION: &str = "json";
-/// The one file in that directory that is not a repository.
-const BASELINE_FILE: &str = "known-failures";
 
 /// Every name the corpus test binary can be asked for.
 ///
@@ -186,7 +187,7 @@ fn pinned_repositories() -> Result<BTreeSet<String>> {
         let path = entry?.path();
         let is_manifest = path.extension().and_then(OsStr::to_str) == Some(MANIFEST_EXTENSION);
         let stem = path.file_stem().and_then(OsStr::to_str).unwrap_or_default();
-        if is_manifest && stem != BASELINE_FILE {
+        if is_manifest && !NOT_A_REPOSITORY.contains(&stem) {
             let _inserted = found.insert(stem.to_owned());
         }
     }

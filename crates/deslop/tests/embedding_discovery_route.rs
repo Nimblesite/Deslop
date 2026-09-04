@@ -23,7 +23,7 @@ use anyhow::Result;
 use serde_json::Value;
 
 use crate::common::{
-    embeddings::mock_embedding_run,
+    embeddings::{mock_embedding_run, run_mock_embedding_report},
     signals::{
         assert_no_pair_surface_on_cluster, assert_pair_metric, assert_structural_only_contract,
         compare_pair_with_embeddings, has_verbatim_pair, occurrence_for_file,

@@ -191,7 +191,8 @@ fn an_unjudged_register_scores_nothing_rather_than_scoring_perfectly() -> Result
     assert!(percent(0, 0).is_none());
     assert_eq!(
         percent(4, 6).map(|value| format!("{value:.1}")),
-        Some("66.7".to_owned())
+        Some("66.7".to_owned()),
+        "a ratio of small integers is reported to one decimal place"
     );
     Ok(())
 }
@@ -227,18 +228,20 @@ fn corpus_totals_weight_by_judged_pairs_not_by_repository() -> Result<()> {
 #[test]
 fn the_gate_defaults_to_strict_and_reads_every_override_from_config() {
     let strict = Thresholds::default();
-    assert_eq!(format!("{:.1}", strict.minimum_score_percent), "100.0");
     assert_eq!(strict.maximum_false_negatives, 0);
-    assert_eq!(strict.maximum_false_positives, 0);
+    assert_eq!(
+        strict.maximum_false_positives, 0,
+        "zero defects of either kind is what a perfect score is, in units that do not \
+         re-scale with the register"
+    );
 
     let config = json!({
-        "defaults": { "minimum_score_percent": 90.0 },
-        "repos": { "Polly": { "minimum_score_percent": 66.7, "maximum_false_positives": 2 } },
+        "defaults": { "maximum_false_negatives": 3 },
+        "repos": { "Polly": { "maximum_false_positives": 2 } },
     });
     let inherited = Thresholds::for_repo(&config, "click");
     assert_eq!(
-        format!("{:.1}", inherited.minimum_score_percent),
-        "90.0",
+        inherited.maximum_false_negatives, 3,
         "defaults apply to unlisted repositories"
     );
     assert_eq!(
@@ -247,16 +250,15 @@ fn the_gate_defaults_to_strict_and_reads_every_override_from_config() {
     );
 
     let scoped = Thresholds::for_repo(&config, "Polly");
-    assert_eq!(format!("{:.1}", scoped.minimum_score_percent), "66.7");
-    assert_eq!(scoped.maximum_false_positives, 2);
+    assert_eq!(scoped.maximum_false_positives, 2, "a repository override wins");
     assert_eq!(
-        scoped.maximum_false_negatives, 0,
-        "an unset field falls back rather than inheriting the other allowance"
+        scoped.maximum_false_negatives, 3,
+        "a field the override omits falls back to the default, not to the other allowance"
     );
 }
 
 #[test]
-fn the_gate_breaches_on_a_new_defect_and_tolerates_a_score_written_to_one_decimal() -> Result<()> {
+fn the_gate_breaches_on_a_new_defect_and_its_allowance_never_re_scales() -> Result<()> {
     let missed = score_repo(
         REPO,
         &register(CLEARLY_IN, &[FIRST_RANGE, SECOND_RANGE]),
@@ -266,17 +268,21 @@ fn the_gate_breaches_on_a_new_defect_and_tolerates_a_score_written_to_one_decima
     let strict = breaches(&missed, &Thresholds::default());
     assert_eq!(
         strict.len(),
-        2,
-        "one false negative breaches both the count and the score"
+        1,
+        "one false negative breaches the strict count gate, and nothing else: the gate \
+         judges defect counts only, so one defect is one breach"
     );
     assert!(strict
         .iter()
         .any(|breach| breach.measure == "false negatives"));
-    assert!(strict.iter().any(|breach| breach.measure == "score"));
+    assert!(
+        strict.iter().all(|breach| breach.measure != "score"),
+        "the gate never judges a ratio: a percentage threshold is a defect allowance \
+         divided by the register size, so it loosens itself as the register grows"
+    );
     assert!(strict.iter().all(|breach| breach.repo == REPO));
 
     let tracked = Thresholds {
-        minimum_score_percent: 0.0,
         maximum_false_negatives: 1,
         maximum_false_positives: 0,
     };
@@ -285,22 +291,36 @@ fn the_gate_breaches_on_a_new_defect_and_tolerates_a_score_written_to_one_decima
         "a recorded, tracked defect is inside its gate"
     );
 
-    // 4/6 is 66.666…, and `66.7` is the honest way to write that in config.
-    let two_thirds = RepoScore {
-        score_percent: percent(4, 6),
-        ..missed
+    // The allowance must mean the same thing at every register size. A gate that
+    // tolerates one defect tolerates exactly one whether the register judges six
+    // pairs or six hundred; a ratio would have widened with the denominator.
+    let small = RepoScore {
+        judged: 6,
+        correct: 5,
+        score_percent: percent(5, 6),
+        ..missed.clone()
     };
-    assert!(
-        breaches(
-            &two_thirds,
-            &Thresholds {
-                minimum_score_percent: 66.7,
-                ..tracked
-            }
-        )
-        .is_empty(),
-        "a score exactly on a one-decimal threshold must not fail"
-    );
+    let grown = RepoScore {
+        judged: 600,
+        correct: 599,
+        score_percent: percent(599, 600),
+        ..missed.clone()
+    };
+    for score in [&small, &grown] {
+        assert!(
+            breaches(score, &tracked).is_empty(),
+            "one tracked defect is inside a one-defect gate at every register size"
+        );
+        let two = RepoScore {
+            false_negatives: 2,
+            ..score.clone()
+        };
+        assert_eq!(
+            breaches(&two, &tracked).len(),
+            1,
+            "two defects breach a one-defect gate at every register size"
+        );
+    }
     Ok(())
 }
 

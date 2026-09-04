@@ -28,10 +28,6 @@ pub const CLEARLY_IN: &str = "clearly_in";
 /// See [`CLEARLY_IN`].
 pub const CLEARLY_OUT: &str = "clearly_out";
 
-/// Default gate when a repository has no entry in the thresholds config: it
-/// must be perfect. A repository judged but ungated would be scored and then
-/// ignored, which is worse than not scoring it.
-pub const DEFAULT_MINIMUM_SCORE_PERCENT: f64 = 100.0;
 /// Default gate on defects: none tolerated unless the config records one.
 pub const DEFAULT_MAXIMUM_DEFECTS: usize = 0;
 /// Percentage base, named so the calculation reads as one.

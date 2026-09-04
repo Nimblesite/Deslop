@@ -27,6 +27,12 @@ use serde_json::Value;
 /// fails the test) to baseline mode (only *new* failures fail).
 pub const BASELINE_ENV: &str = "DESLOP_CORPUS_BASELINE";
 
+/// [CORPUS-PIN] Files under `corpus/` and `corpus/register/` that describe no
+/// single upstream repository, so no manifest, pin or clone contract applies to
+/// them: the known-failure registry, the score-gate thresholds, and the list of
+/// repositories still waiting on a first judging pass.
+pub const NOT_A_REPOSITORY: [&str; 3] = ["known-failures", "score-thresholds", "judging-queue"];
+
 /// [CORPUS-PIN] How much of a manifest's commit id names its clone directory.
 /// The pin itself is always the full object name; this is only how it reads on
 /// disk and in a log line.

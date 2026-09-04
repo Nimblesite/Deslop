@@ -6,13 +6,13 @@ use tree_sitter::Node;
 
 use crate::ast::named_children;
 use crate::lang::merge_emit::{emit_merge_helper, HelperDialect, HelperPlacement};
-use crate::wire_generated::MergeParameter;
 use crate::refactor::{
     emit::line_indent_at,
     merge::{site_arguments, MergeEmitOutcome, MergeEmitRequest},
     preconditions::{field_text, node_text},
     tables::{BoundaryKind, MergeTables},
 };
+use crate::wire_generated::MergeParameter;
 
 /// C# merge tables ([AUTOFIX-MERGE-SAFETY] B and D,
 /// [AUTOFIX-MERGE-DEFAULTS]).

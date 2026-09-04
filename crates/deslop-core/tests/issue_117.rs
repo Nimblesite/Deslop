@@ -13,7 +13,7 @@ use crate::common::*;
 #[tokio::test(flavor = "multi_thread")]
 async fn live_update_removes_cluster_when_one_occurrence_remains() -> Result<()> {
     let tmp = copy_fixture("csharp-small")?;
-    let mut session = live_session(&tmp.path())?;
+    let mut session = live_session(tmp.path())?;
     let initial = session.report();
     let original = initial
         .clusters

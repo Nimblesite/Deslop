@@ -29,7 +29,7 @@ use anyhow::{Context, Result};
 
 use crate::common::{
     cluster_file_set, cluster_id, clusters, embeddings::mock_embedding_run, field, fixture,
-    run_report, seed, signals::assert_no_pair_surface_on_cluster,
+    run_report, signals::assert_no_pair_surface_on_cluster,
 };
 
 /// Corpora swept, with the node floor each is sized for. C# leads
@@ -53,7 +53,7 @@ type Published = BTreeMap<Vec<String>, Vec<String>>;
 /// returns its full report.
 fn with_embeddings(corpus: &str, min_nodes: &str) -> Result<serde_json::Value> {
     let server = MockOllama::spawn()?;
-    let (workspace, report) = mock_embedding_run(&server, corpus, min_nodes)?;
+    let (_workspace, report) = mock_embedding_run(&server, corpus, min_nodes)?;
     let provenance = field(&report, "embedding_provenance");
     let indexed = field(provenance, "indexed_subtrees")
         .as_u64()

@@ -1,17 +1,9 @@
 {
   "spec": "docs/specs/corpus.md [CORPUS-SCORE]",
-  "rationale": "The gate every scored repository must clear. Defaults are strict: a judged repository must answer every judged pair correctly. Each entry under `repos` is an admission that a defect shipped and is tracked - the same ratchet as corpus/known-failures.json. Numbers move one way only: a threshold is tightened when the engine improves, never loosened to make a run pass. Deleting an entry, by fixing the defect, is the only correct exit.",
+  "rationale": "The gate every scored repository must clear, stated only in absolute defect counts. Defaults are strict: a judged repository must answer every judged pair correctly. Each entry under `repos` is an admission that a defect shipped and is tracked - the same ratchet as corpus/known-failures.json. Numbers move one way only: a threshold is tightened when the engine improves, never loosened to make a run pass. Deleting an entry, by fixing the defect, is the only correct exit. A minimum-score percentage is deliberately not available here: the score is `100 * (judged - false negatives - false positives) / judged`, so a percentage is a defect allowance divided by the register size, and the identical number silently permits proportionally more defects every time the register grows. Counts mean the same thing at every register size.",
   "defaults": {
-    "minimum_score_percent": 100.0,
     "maximum_false_negatives": 0,
     "maximum_false_positives": 0
   },
-  "repos": {
-    "Polly": {
-      "minimum_score_percent": 66.7,
-      "maximum_false_negatives": 0,
-      "maximum_false_positives": 2,
-      "why": "Two standing false positives, both present in every engine measured so far and both filed: unrelated C# parameter runs (BulkheadEngine/CacheEngine) clustered on shape alone, and a four-line assertion clustered with a whole 28-line test method. 4 of 6 judged pairs correct. Tighten to 100/0/0 when they are fixed."
-    }
-  }
+  "repos": {}
 }

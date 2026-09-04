@@ -21,12 +21,12 @@ use crate::{
 
 pub mod csharp;
 mod csharp_merge;
-mod merge_emit;
 pub mod dart;
 pub(crate) mod ecmascript;
 pub mod fsharp;
 pub mod go;
 pub mod javascript;
+mod merge_emit;
 pub mod php;
 pub mod python;
 pub mod rust_lang;

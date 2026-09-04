@@ -15,21 +15,22 @@ use anyhow::Result;
 use serde::Serialize;
 use serde_json::Value;
 
-use super::{percent, RepoScore, DEFAULT_MAXIMUM_DEFECTS, DEFAULT_MINIMUM_SCORE_PERCENT};
+use super::{percent, RepoScore, DEFAULT_MAXIMUM_DEFECTS};
 
 /// Where the gate reads its thresholds.
 pub const THRESHOLDS_PATH: &str = "corpus/register/score-thresholds.json";
-/// Slack on the score comparison, in percentage points. A score is a ratio of
-/// small integers, so a threshold written to one decimal place must not fail a
-/// run that is exactly on it: 4/6 is 66.666…, and `66.7` is the honest way to
-/// write that down.
-const SCORE_TOLERANCE_PERCENT: f64 = 0.05;
 
-/// The gate for one repository.
+/// The gate for one repository, stated only in absolute defect counts.
+///
+/// A percentage threshold is deliberately absent. The score is
+/// `100 * (judged - false negatives - false positives) / judged`, so a minimum
+/// percentage is a defect allowance divided by the register size: the identical
+/// number permits proportionally more defects every time the register grows,
+/// loosening the gate with nobody editing it. Counts mean the same thing at
+/// every register size, and `false positives = 0` with `false negatives = 0` is
+/// already exactly a demand for a perfect score.
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct Thresholds {
-    /// Lowest score this repository may record.
-    pub minimum_score_percent: f64,
     /// Most false positives tolerated. Every one is a tracked defect.
     pub maximum_false_positives: usize,
     /// Most false negatives tolerated. Every one is a tracked defect.
@@ -39,16 +40,10 @@ pub struct Thresholds {
 impl Default for Thresholds {
     fn default() -> Self {
         Self {
-            minimum_score_percent: DEFAULT_MINIMUM_SCORE_PERCENT,
             maximum_false_positives: DEFAULT_MAXIMUM_DEFECTS,
             maximum_false_negatives: DEFAULT_MAXIMUM_DEFECTS,
         }
     }
-}
-
-/// A threshold field read from config, falling back to the strict default.
-fn field<T: Copy>(config: &Value, name: &str, read: fn(&Value) -> Option<T>, fallback: T) -> T {
-    config.get(name).and_then(read).unwrap_or(fallback)
 }
 
 /// A count threshold, falling back when the field is absent or out of range.
@@ -77,12 +72,6 @@ impl Thresholds {
     fn read(entry: &Value, fallback: Self) -> Self {
         let count = |name, fallback| count_field(entry, name, fallback);
         Self {
-            minimum_score_percent: field(
-                entry,
-                "minimum_score_percent",
-                Value::as_f64,
-                fallback.minimum_score_percent,
-            ),
             maximum_false_positives: count(
                 "maximum_false_positives",
                 fallback.maximum_false_positives,
@@ -147,15 +136,6 @@ pub fn breaches(score: &RepoScore, thresholds: &Thresholds) -> Vec<Breach> {
             format!("at most {}", thresholds.maximum_false_positives),
             score.false_positives.to_string(),
         );
-    }
-    if let Some(actual) = score.score_percent {
-        if actual + SCORE_TOLERANCE_PERCENT < thresholds.minimum_score_percent {
-            breach(
-                "score",
-                format!("at least {:.1}%", thresholds.minimum_score_percent),
-                format!("{actual:.1}%"),
-            );
-        }
     }
     found
 }

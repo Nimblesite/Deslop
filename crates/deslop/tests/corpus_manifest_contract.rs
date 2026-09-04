@@ -16,11 +16,15 @@
 use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
-use deslop_test_support::{corpus::repo_root, read_json};
+use deslop_test_support::{
+    corpus::{repo_root, NOT_A_REPOSITORY},
+    read_json,
+};
 use serde_json::Value;
 
-/// The corpus manifests, each with its file stem. `known-failures.json` is
-/// the check registry rather than a repository, so it is not one of these.
+/// The corpus manifests, each with its file stem. The files that describe no
+/// single repository — the check registry, the score-gate thresholds, and the
+/// judging queue — are not manifests and are excluded.
 fn manifests() -> Result<Vec<(String, Value)>> {
     let directory = repo_root().join("corpus");
     let mut found = Vec::new();
@@ -29,7 +33,7 @@ fn manifests() -> Result<Vec<(String, Value)>> {
         if path
             .extension()
             .is_some_and(|extension| extension == "json")
-            && stem(&path) != "known-failures"
+            && !NOT_A_REPOSITORY.contains(&stem(&path).as_str())
         {
             let manifest: Value = read_json(&path)?;
             found.push((stem(&path), manifest));

@@ -276,17 +276,15 @@ fn gate_section(card: &Scorecard) -> Vec<String> {
         String::new(),
         row(&[
             "repository",
-            "minimum score",
             "max false neg",
             "max false pos",
         ]
         .map(ToOwned::to_owned)),
-        divider(4),
+        divider(3),
     ];
     for (repo, thresholds) in &card.thresholds {
         lines.push(row(&[
             repo.clone(),
-            format!("{:.1}%", thresholds.minimum_score_percent),
             thresholds.maximum_false_negatives.to_string(),
             thresholds.maximum_false_positives.to_string(),
         ]));

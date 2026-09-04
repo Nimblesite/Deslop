@@ -56,13 +56,16 @@ const JUDGING_SKILL_FIELD: &str = "judging_skill";
 const THRESHOLDS: &str = "corpus/register/score-thresholds.json";
 const DEFAULTS: &str = "defaults";
 const REPOS: &str = "repos";
+/// A ratio threshold, refused by the gate contract below: see
+/// [`every_gate_allowance_is_an_absolute_count_so_a_growing_register_cannot_loosen_it`].
 const MINIMUM_SCORE: &str = "minimum_score_percent";
 const MAXIMUM_FALSE_NEGATIVES: &str = "maximum_false_negatives";
 const MAXIMUM_FALSE_POSITIVES: &str = "maximum_false_positives";
 /// The strict default: a judged repository answers every judged pair
-/// correctly. Loosening this instead of recording a tracked exception would
-/// silently drop the gate on every repository at once.
-const PERFECT_SCORE: f64 = 100.0;
+/// correctly, so it is allowed zero false negatives and zero false positives.
+/// Loosening this instead of recording a tracked exception would silently drop
+/// the gate on every repository at once.
+const PERFECT_SCORE: u64 = 0;
 
 /// The judging protocol is only independent ground truth while the judge cannot
 /// learn what produced the reports, so the protocol itself must never name this
@@ -265,14 +268,16 @@ fn the_score_gate_is_strict_by_default_and_every_exception_is_a_tracked_reposito
     let root = repo_root();
     let config: Value = read_json(&root.join(THRESHOLDS))?;
     let defaults = config.get(DEFAULTS).cloned().unwrap_or(Value::Null);
-    assert_eq!(
-        defaults.get(MINIMUM_SCORE).and_then(Value::as_f64),
-        Some(PERFECT_SCORE),
-        "the default gate must demand a perfect score — an exception belongs under `{REPOS}`, \
-         with the reason, not in the default that covers every repository at once"
-    );
-    assert_eq!(count(&defaults, MAXIMUM_FALSE_NEGATIVES), 0);
-    assert_eq!(count(&defaults, MAXIMUM_FALSE_POSITIVES), 0);
+    for allowance in [MAXIMUM_FALSE_NEGATIVES, MAXIMUM_FALSE_POSITIVES] {
+        assert_eq!(
+            defaults.get(allowance).and_then(Value::as_u64),
+            Some(PERFECT_SCORE),
+            "the default gate must demand a perfect score, and `{allowance}` of zero is what a \
+             perfect score is in units that do not re-scale with the register — an exception \
+             belongs under `{REPOS}`, with the reason, not in the default that covers every \
+             repository at once"
+        );
+    }
 
     let repos = config.get(REPOS).and_then(Value::as_object);
     for (name, entry) in repos.into_iter().flatten() {
@@ -313,6 +318,45 @@ fn no_gated_allowance_exceeds_what_its_register_actually_judges() -> Result<()> 
                 count(entry, allowance) <= judged,
                 "`{REPOS}.{name}.{allowance}` allows more defects than the register has \
                  {verdict} entries ({judged}) — a gate nothing can breach is not a gate"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn every_gate_allowance_is_an_absolute_count_so_a_growing_register_cannot_loosen_it() -> Result<()>
+{
+    let root = repo_root();
+    let config: Value = read_json(&root.join(THRESHOLDS))?;
+    let sections = [
+        (DEFAULTS, config.get(DEFAULTS).cloned().unwrap_or(Value::Null)),
+        (REPOS, config.get(REPOS).cloned().unwrap_or(Value::Null)),
+    ];
+    for (section, value) in sections {
+        let entries: Vec<(String, Value)> = value.as_object().map_or_else(
+            || vec![(section.to_owned(), value.clone())],
+            |fields| {
+                if section == REPOS {
+                    fields
+                        .iter()
+                        .map(|(name, entry)| (name.clone(), entry.clone()))
+                        .collect()
+                } else {
+                    vec![(section.to_owned(), value.clone())]
+                }
+            },
+        );
+        for (name, entry) in entries {
+            assert!(
+                entry.get(MINIMUM_SCORE).is_none(),
+                "`{section}.{name}` gates on `{MINIMUM_SCORE}`, a ratio against the register. \
+                 A score is `100 * (judged - false negatives - false positives) / judged`, so a \
+                 percentage threshold is a defect allowance divided by the register size: the \
+                 same number permits more defects every time the register grows, loosening the \
+                 gate with nobody editing it. State the allowance in \
+                 `{MAXIMUM_FALSE_NEGATIVES}` and `{MAXIMUM_FALSE_POSITIVES}`, which mean the \
+                 same thing at every register size."
             );
         }
     }

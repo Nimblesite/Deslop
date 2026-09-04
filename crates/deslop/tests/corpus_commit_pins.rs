@@ -14,14 +14,15 @@
 use std::fs;
 
 use anyhow::{Context, Result};
-use deslop_test_support::{corpus::repo_root, read_json};
+use deslop_test_support::{
+    corpus::{repo_root, NOT_A_REPOSITORY},
+    read_json,
+};
 use serde_json::Value;
 
 /// The two manifest sets: scan targets for the resource suite, and the judged
 /// clone registers. Both name upstream repositories, so both must pin commits.
 const MANIFEST_DIRS: [&str; 2] = ["corpus", "corpus/register"];
-/// Files in those directories that describe no single repository.
-const NOT_A_REPOSITORY: [&str; 3] = ["known-failures", "score-thresholds", "judging-queue"];
 /// Repositories queued for a first judging pass. They are scanned like a
 /// register but carry no verdicts yet, so they live in their own list.
 const JUDGING_QUEUE: &str = "corpus/judging-queue.json";

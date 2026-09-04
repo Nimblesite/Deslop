@@ -94,11 +94,19 @@ test("[CORPUS-SCORE] the local target and the CI job run one script", () => {
 test("[CORPUS-SCORE] thresholds live in one file, never in CI or the Makefile", () => {
   assert.ok(existsSync(resolve(repoRoot, THRESHOLDS)), `${THRESHOLDS} is missing`);
   const config = JSON.parse(read(THRESHOLDS));
-  assert.equal(
-    config.defaults.minimum_score_percent,
-    100,
+  assert.deepEqual(
+    [config.defaults.maximum_false_negatives, config.defaults.maximum_false_positives],
+    [0, 0],
     "the default gate must demand a perfect score; an exception belongs under `repos`, with its reason",
   );
+  for (const [section, entries] of [["defaults", { defaults: config.defaults }], ["repos", config.repos]]) {
+    for (const [name, entry] of Object.entries(entries ?? {})) {
+      assert.ok(
+        entry.minimum_score_percent === undefined,
+        `${section}.${name} gates on a percentage, which is a defect allowance divided by the register size and so widens every time the register grows; state the allowance in maximum_false_negatives and maximum_false_positives`,
+      );
+    }
+  }
   for (const source of [ciWorkflow, read("Makefile"), gateScript]) {
     assert.ok(
       !source.includes("minimum_score_percent") && !source.includes("maximum_false"),

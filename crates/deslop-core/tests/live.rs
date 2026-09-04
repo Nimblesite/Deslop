@@ -58,7 +58,7 @@ async fn live_slot() -> Option<SemaphorePermit<'static>> {
 /// tests in this file.
 fn csharp_small_session() -> Result<(tempfile::TempDir, AnalysisSession)> {
     let tmp = copy_fixture("csharp-small")?;
-    let session = live_session(&tmp.path())?;
+    let session = live_session(tmp.path())?;
     Ok((tmp, session))
 }
 
@@ -309,7 +309,7 @@ async fn live_analysis_session_honors_scan_root_relative_report_hide() -> Result
         "[defaults]\nreport_hide = [\"benchmarks/fixtures/**\"]\n",
     )
     .context("write .deslop.toml")?;
-    let session = live_session(&scan_root)?;
+    let session = live_session(scan_root)?;
     let report = session.report();
     assert!(
         report.clusters.is_empty(),
@@ -461,7 +461,7 @@ async fn find_similar_on_unparseable_snippet_returns_unparseable_error() -> Resu
 async fn find_similar_on_below_min_nodes_snippet_returns_below_min_nodes_flag() -> Result<()> {
     let _slot = live_slot().await;
     let tmp = copy_fixture("csharp-small")?;
-    let session = live_session_at(&tmp.path(), 1_000)?;
+    let session = live_session_at(tmp.path(), 1_000)?;
     let request = FindSimilarRequest {
         input: FindSimilarInput::Snippet {
             snippet: "class A { void M() {} }".to_owned(),
@@ -697,7 +697,7 @@ async fn exercise_transport_hooks(service: &LiveService) -> Result<()> {
 
 /// Builds a fresh session lock around the temp fixture root.
 fn make_session_lock(root: &Path) -> Result<Arc<tokio::sync::Mutex<AnalysisSession>>> {
-    let session = live_session(&root)?;
+    let session = live_session(root)?;
     Ok(Arc::new(tokio::sync::Mutex::new(session)))
 }
 

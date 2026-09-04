@@ -30,7 +30,7 @@ async fn explicit_pair_comparison_owns_exact_admission_evidence() -> Result<()> 
     let workspace = tempfile::tempdir().context("pair workspace")?;
     fs::write(workspace.path().join(LEFT_FILE), SOURCE).context("write left endpoint")?;
     fs::write(workspace.path().join(RIGHT_FILE), SOURCE).context("write right endpoint")?;
-    let session = live_session_at(&workspace.path(), MIN_NODES)?;
+    let session = live_session_at(workspace.path(), MIN_NODES)?;
     let report = session.report();
     let cluster = report
         .clusters
@@ -97,7 +97,7 @@ async fn content_rejected_pair_never_enters_cluster_closure() -> Result<()> {
     fs::write(workspace.path().join(LEFT_FILE), UNRELATED_LEFT).context("write unrelated left")?;
     fs::write(workspace.path().join(RIGHT_FILE), UNRELATED_RIGHT)
         .context("write unrelated right")?;
-    let session = live_session_at(&workspace.path(), MIN_NODES)?;
+    let session = live_session_at(workspace.path(), MIN_NODES)?;
     let report = session.report();
     let left = source_endpoint(LEFT_FILE, UNRELATED_LEFT);
     let right = source_endpoint(RIGHT_FILE, UNRELATED_RIGHT);

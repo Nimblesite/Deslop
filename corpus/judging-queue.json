@@ -1,4 +1,26 @@
 {
   "why": "Repositories waiting on a first judging pass. [CORPUS-REGISTER-COVERAGE] A repository cannot become a register until a judge has ruled on its pairs, and a judge cannot rule on pairs until a comparison has produced two reports for it — so a repository that is not yet judged still has to be scanned. This file is that queue: the comparison scans every register plus everything here, and `make judging-folder` turns each into a workspace. When the verdicts come back, the repository moves into corpus/register/ and out of this list. Every entry is pinned to a full commit id for the same reason a register is: the judge and the scan must read identical source.",
-  "repositories": []
+  "repositories": [
+    {
+      "name": "django",
+      "language": "python",
+      "url": "https://github.com/django/django.git",
+      "sha": "6ef1f6fbe33e9882f82dae026b527800ecb78c36",
+      "why": "The register judges Python only through click, a small CLI library whose duplication is concentrated in its own test suite. Django is the opposite shape - a large, heavily reviewed framework - so a first judging pass here says whether the Python verdicts generalise past one repository or only describe click."
+    },
+    {
+      "name": "tokio",
+      "language": "rust",
+      "url": "https://github.com/tokio-rs/tokio.git",
+      "sha": "e3b89bbefa7564e2eba2fb9f849ef7bf87d60fad",
+      "why": "ripgrep is the only judged Rust register and it judges five pairs, the thinnest in the corpus. Tokio is macro-heavy async Rust, the construct most likely to manufacture false positives, and judging it is what would let the Rust register carry a real body of verdicts."
+    },
+    {
+      "name": "nest",
+      "language": "typescript",
+      "url": "https://github.com/nestjs/nest.git",
+      "sha": "dfaa376170168d12d9d28bcfe137a9bacce579a3",
+      "why": "The TypeScript register is zod, a single-purpose schema library. Nest is decorator-driven application code with a large module surface, so it exercises the TypeScript normalisation that zod never reaches."
+    }
+  ]
 }
