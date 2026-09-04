@@ -83,8 +83,24 @@ pub(crate) fn copy_fixture(name: &str) -> Result<tempfile::TempDir> {
 /// report; new suites reuse this instead of adding a copy.
 #[cfg(feature = "live")]
 pub(crate) fn live_session(root: &Path) -> Result<deslop_core::live::AnalysisSession> {
+    live_session_at(root, DEFAULT_LIVE_MIN_NODES)
+}
+
+/// The `min_nodes` floor every live suite uses unless it is testing the
+/// floor itself.
+#[cfg(feature = "live")]
+pub(crate) const DEFAULT_LIVE_MIN_NODES: u32 = 15;
+
+/// Builds an [`AnalysisSession`] over `root` at `min_nodes`, backed by
+/// the deterministic [`StubProvider`]. The `min_nodes`-varying twin of
+/// [`live_session`], for the suites that pin a different floor.
+#[cfg(feature = "live")]
+pub(crate) fn live_session_at(
+    root: &Path,
+    min_nodes: u32,
+) -> Result<deslop_core::live::AnalysisSession> {
     let provider = Arc::new(deslop_core::embedding::test_support::StubProvider::new());
-    deslop_core::live::AnalysisSession::new(root.to_path_buf(), 15, false, None, provider)
+    deslop_core::live::AnalysisSession::new(root.to_path_buf(), min_nodes, false, None, provider)
         .context("session")
 }
 

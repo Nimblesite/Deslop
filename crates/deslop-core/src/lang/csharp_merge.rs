@@ -5,8 +5,10 @@
 use tree_sitter::Node;
 
 use crate::ast::named_children;
+use crate::lang::merge_emit::{emit_merge_helper, HelperDialect, HelperPlacement};
+use crate::wire_generated::MergeParameter;
 use crate::refactor::{
-    emit::{cluster_id_prefix, line_indent_at},
+    emit::line_indent_at,
     merge::{site_arguments, MergeEmitOutcome, MergeEmitRequest},
     preconditions::{field_text, node_text},
     tables::{BoundaryKind, MergeTables},
@@ -115,42 +117,36 @@ fn declarator_type(declaration: Node<'_>, name: &str, source: &[u8]) -> Option<S
 pub(super) fn emit_merge(request: &MergeEmitRequest<'_, '_>) -> Option<MergeEmitOutcome> {
     let first = request.scopes.first()?;
     let class_body = first.shared_parent.child_by_field_name("body")?;
-    let insertion_offset = class_body.start_byte().checked_add(1)?;
     let class_indent = line_indent_at(request.source, first.shared_parent.start_byte());
-    let indent = format!("{class_indent}{INDENT_STEP}");
-    let helper_name = format!(
-        "MergedFromCluster_{}",
-        cluster_id_prefix(request.cluster_id)
-    );
-    let call_texts = (0..request.scopes.len())
-        .map(|site| call_text(request, &helper_name, site))
-        .collect();
-    Some(MergeEmitOutcome {
-        insertion_text: helper_text(request, &indent, &helper_name),
-        insertion_offset,
-        helper_name,
-        call_texts,
-    })
+    let placement = HelperPlacement {
+        insertion_offset: class_body.start_byte().checked_add(1)?,
+        indent: format!("{class_indent}{INDENT_STEP}"),
+    };
+    Some(emit_merge_helper(request, &placement, &MERGE_DIALECT))
 }
 
-/// Renders the helper declaration with typed, optionally-defaulted
-/// parameters and the anti-unified body.
-fn helper_text(request: &MergeEmitRequest<'_, '_>, indent: &str, helper_name: &str) -> String {
-    let statement_indent = format!("{indent}{INDENT_STEP}");
-    let parameters = request
-        .parameters
-        .iter()
-        .map(|parameter| match &parameter.default_value {
-            Some(default) => format!("{} {} = {default}", parameter.type_name, parameter.name),
-            None => format!("{} {}", parameter.type_name, parameter.name),
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!(
-        "\n{indent}private static void {helper_name}({parameters})\n{indent}{{\n\
-         {statement_indent}{}\n{indent}}}\n",
-        request.helper_body
-    )
+/// How C# spells a merged helper: a `private static void` method whose
+/// parameters are `Type name`, optionally carrying a default.
+const MERGE_DIALECT: HelperDialect = HelperDialect {
+    name_prefix: "MergedFromCluster_",
+    indent_step: INDENT_STEP,
+    parameter: merge_parameter_text,
+    signature: merge_signature_text,
+    call: call_text,
+};
+
+/// Renders one C# parameter as `Type name`, with ` = default` when the
+/// parameter carries one ([AUTOFIX-MERGE-DEFAULTS]).
+fn merge_parameter_text(parameter: &MergeParameter) -> String {
+    match &parameter.default_value {
+        Some(default) => format!("{} {} = {default}", parameter.type_name, parameter.name),
+        None => format!("{} {}", parameter.type_name, parameter.name),
+    }
+}
+
+/// Renders the C# helper declaration line.
+fn merge_signature_text(helper_name: &str, parameters: &str) -> String {
+    format!("private static void {helper_name}({parameters})")
 }
 
 /// One site's call, eliding trailing arguments equal to their default.

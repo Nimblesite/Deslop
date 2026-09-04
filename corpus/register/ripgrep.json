@@ -11,7 +11,7 @@
   },
   "clearly_in": [
     {
-      "why": "The after-context sink test is the before-context one with only SinkContextKind::Before→After changed (2 of 20 lines).",
+      "why": "The after-context sink test is the before-context one with only SinkContextKind::Before\u2192After changed (2 of 20 lines).",
       "verified": "extracted and diffed the two source ranges (20 vs 20 lines): 2 changed lines, similarity 0.99",
       "occurrences": [
         "crates/searcher/src/searcher/core.rs:561-580",
@@ -35,14 +35,6 @@
       ]
     },
     {
-      "why": "BeforeContext and AfterContext flag definitions and tests are the same 88 lines with before systematically swapped for after",
-      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
-      "occurrences": [
-        "crates/core/flags/defs.rs:417-504",
-        "crates/core/flags/defs.rs:232-319"
-      ]
-    },
-    {
       "why": "identical 11-line summary-printer test body duplicated verbatim between two tests",
       "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
       "occurrences": [
@@ -56,22 +48,6 @@
       "occurrences": [
         "crates/globset/src/lib.rs:1043-1049",
         "crates/globset/src/lib.rs:1035-1041"
-      ]
-    },
-    {
-      "why": "messages and ignore_messages accessor pairs are the same 14 lines with the backing atomics systematically swapped",
-      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
-      "occurrences": [
-        "crates/core/messages.rs:108-115",
-        "crates/core/messages.rs:124-131"
-      ]
-    },
-    {
-      "why": "GramQuery::or and GramQuery::and normalizers are the same 27 lines with Or systematically swapped for And",
-      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
-      "occurrences": [
-        "crates/index/src/literal.rs:73-99",
-        "crates/index/src/literal.rs:101-127"
       ]
     }
   ],
@@ -106,7 +82,7 @@
       ]
     },
     {
-      "why": "MaxColumns vs Threads flag impls — per-flag boilerplate, different docs/config.",
+      "why": "MaxColumns vs Threads flag impls \u2014 per-flag boilerplate, different docs/config.",
       "occurrences": [
         "crates/core/flags/defs.rs:4135-4174",
         "crates/core/flags/defs.rs:7085-7123"
@@ -162,7 +138,7 @@
       ]
     },
     {
-      "why": "Overrides vs ucp builder methods — unrelated crates.",
+      "why": "Overrides vs ucp builder methods \u2014 unrelated crates.",
       "occurrences": [
         "crates/ignore/src/walk.rs:833-846",
         "crates/pcre2/src/matcher.rs:205-228"
@@ -204,7 +180,7 @@
       ]
     },
     {
-      "why": "absolute_base vs glob accessors — different crates.",
+      "why": "absolute_base vs glob accessors \u2014 different crates.",
       "occurrences": [
         "crates/ignore/src/dir.rs:694-696",
         "crates/globset/src/lib.rs:206-208"
@@ -225,7 +201,7 @@
       ]
     },
     {
-      "why": "Dotall vs hidden builder methods — different crates.",
+      "why": "Dotall vs hidden builder methods \u2014 different crates.",
       "occurrences": [
         "crates/pcre2/src/matcher.rs:127-163",
         "crates/ignore/src/walk.rs:874-913"
@@ -246,7 +222,7 @@
       ]
     },
     {
-      "why": "is_ignore vs into_path — different APIs.",
+      "why": "is_ignore vs into_path \u2014 different APIs.",
       "occurrences": [
         "crates/ignore/src/incremental.rs:486-499",
         "crates/ignore/src/walk.rs:44-58"
@@ -260,7 +236,7 @@
       ]
     },
     {
-      "why": "One-file-system vs include-zero flag impls — boilerplate.",
+      "why": "One-file-system vs include-zero flag impls \u2014 boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:5456-5514",
         "crates/core/flags/defs.rs:3409-3455"
@@ -323,21 +299,21 @@
       ]
     },
     {
-      "why": "BlockBuffered vs LineBuffered flag impls — boilerplate.",
+      "why": "BlockBuffered vs LineBuffered flag impls \u2014 boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:594-655",
         "crates/core/flags/defs.rs:3911-3976"
       ]
     },
     {
-      "why": "Quiet vs Null flag impls — boilerplate.",
+      "why": "Quiet vs Null flag impls \u2014 boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:6071-6109",
         "crates/core/flags/defs.rs:5339-5375"
       ]
     },
     {
-      "why": "Hyperlink vs word builder methods — different crates.",
+      "why": "Hyperlink vs word builder methods \u2014 different crates.",
       "occurrences": [
         "crates/printer/src/path.rs:89-111",
         "crates/regex/src/matcher.rs:343-354"
@@ -351,14 +327,14 @@
       ]
     },
     {
-      "why": "Glob vs pre-glob flag impls — boilerplate.",
+      "why": "Glob vs pre-glob flag impls \u2014 boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:2590-2635",
         "crates/core/flags/defs.rs:5952-5996"
       ]
     },
     {
-      "why": "TypeClear vs TypeAdd flag impls — boilerplate.",
+      "why": "TypeClear vs TypeAdd flag impls \u2014 boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:7315-7374",
         "crates/core/flags/defs.rs:7402-7435"
@@ -470,7 +446,7 @@
       ]
     },
     {
-      "why": "Man-page vs help-text writers — different output formats.",
+      "why": "Man-page vs help-text writers \u2014 different output formats.",
       "occurrences": [
         "crates/core/flags/doc/man.rs:53-62",
         "crates/core/flags/doc/help.rs:150-161"
@@ -519,7 +495,7 @@
       ]
     },
     {
-      "why": "CaseSensitive vs SmartCase flag impls — boilerplate.",
+      "why": "CaseSensitive vs SmartCase flag impls \u2014 boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:714-754",
         "crates/core/flags/defs.rs:6515-6562"
@@ -673,7 +649,7 @@
       ]
     },
     {
-      "why": "PCRE2 vs Text flag impls — boilerplate.",
+      "why": "PCRE2 vs Text flag impls \u2014 boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:5706-5763",
         "crates/core/flags/defs.rs:7005-7057"
@@ -687,7 +663,7 @@
       ]
     },
     {
-      "why": "LineBuffered vs Binary flag impls — boilerplate.",
+      "why": "LineBuffered vs Binary flag impls \u2014 boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:3911-3958",
         "crates/core/flags/defs.rs:503-569"
@@ -764,7 +740,7 @@
       ]
     },
     {
-      "why": "SearcherBuilder vs PathPrinterBuilder — different crates.",
+      "why": "SearcherBuilder vs PathPrinterBuilder \u2014 different crates.",
       "occurrences": [
         "crates/searcher/src/searcher/mod.rs:510-556",
         "crates/printer/src/path.rs:89-122"
@@ -785,7 +761,7 @@
       ]
     },
     {
-      "why": "Null vs OnlyMatching flag impls — boilerplate.",
+      "why": "Null vs OnlyMatching flag impls \u2014 boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:5339-5389",
         "crates/core/flags/defs.rs:5513-5561"
@@ -806,7 +782,7 @@
       ]
     },
     {
-      "why": "WordRegexp vs LineRegexp flag impls — boilerplate.",
+      "why": "WordRegexp vs LineRegexp flag impls \u2014 boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:7891-7932",
         "crates/core/flags/defs.rs:4084-4122"
@@ -890,14 +866,14 @@
       ]
     },
     {
-      "why": "StopOnNonmatch vs NullData flag impls — boilerplate.",
+      "why": "StopOnNonmatch vs NullData flag impls \u2014 boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:6946-6982",
         "crates/core/flags/defs.rs:5388-5431"
       ]
     },
     {
-      "why": "Context vs BeforeContext flag impls — boilerplate.",
+      "why": "Context vs BeforeContext flag impls \u2014 boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:1074-1115",
         "crates/core/flags/defs.rs:417-455"
@@ -925,7 +901,7 @@
       ]
     },
     {
-      "why": "Matcher test-util vs searcher test-util — different crates.",
+      "why": "Matcher test-util vs searcher test-util \u2014 different crates.",
       "occurrences": [
         "crates/matcher/tests/util.rs:69-83",
         "crates/searcher/src/testutil.rs:64-84"
@@ -967,14 +943,14 @@
       ]
     },
     {
-      "why": "SearcherBuilder vs PathPrinterBuilder — different crates.",
+      "why": "SearcherBuilder vs PathPrinterBuilder \u2014 different crates.",
       "occurrences": [
         "crates/searcher/src/searcher/mod.rs:413-463",
         "crates/printer/src/path.rs:70-111"
       ]
     },
     {
-      "why": "StandardBuilder vs RegexMatcherBuilder — different crates.",
+      "why": "StandardBuilder vs RegexMatcherBuilder \u2014 different crates.",
       "occurrences": [
         "crates/printer/src/standard.rs:164-263",
         "crates/regex/src/matcher.rs:157-259"
@@ -1065,7 +1041,7 @@
       ]
     },
     {
-      "why": "DfaSizeLimit vs MaxFilesize flag impls — boilerplate.",
+      "why": "DfaSizeLimit vs MaxFilesize flag impls \u2014 boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:1582-1622",
         "crates/core/flags/defs.rs:4380-4419"
@@ -1114,14 +1090,14 @@
       ]
     },
     {
-      "why": "SearcherBuilder vs PathPrinterBuilder — different crates.",
+      "why": "SearcherBuilder vs PathPrinterBuilder \u2014 different crates.",
       "occurrences": [
         "crates/searcher/src/searcher/mod.rs:413-501",
         "crates/printer/src/path.rs:70-122"
       ]
     },
     {
-      "why": "NoIgnoreGlobal vs OneFileSystem flag impls — boilerplate.",
+      "why": "NoIgnoreGlobal vs OneFileSystem flag impls \u2014 boilerplate.",
       "occurrences": [
         "crates/core/flags/defs.rs:4909-4943",
         "crates/core/flags/defs.rs:5453-5499"
@@ -1202,6 +1178,33 @@
       "occurrences": [
         "crates/core/flags/defs.rs:278-281",
         "crates/core/flags/defs.rs:1123-1126"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "BeforeContext and AfterContext flag definitions and tests are the same 88 lines with before systematically swapped for after",
+      "occurrences": [
+        "crates/core/flags/defs.rs:417-504",
+        "crates/core/flags/defs.rs:232-319"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "messages and ignore_messages accessor pairs are the same 14 lines with the backing atomics systematically swapped",
+      "occurrences": [
+        "crates/core/messages.rs:108-115",
+        "crates/core/messages.rs:124-131"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "GramQuery::or and GramQuery::and normalizers are the same 27 lines with Or systematically swapped for And",
+      "occurrences": [
+        "crates/index/src/literal.rs:73-99",
+        "crates/index/src/literal.rs:101-127"
       ]
     }
   ],

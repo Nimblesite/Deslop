@@ -35,14 +35,6 @@
       ]
     },
     {
-      "why": "The $ZodEmail interfaces are the $ZodGUID ones with the systematic guid\u2192email rename over 11 lines.",
-      "verified": "extracted and diffed the two source ranges (11 vs 13 lines): not byte-identical, similarity 0.82; differences are the systematic change described",
-      "occurrences": [
-        "packages/zod/src/v4/core/schemas.ts:447-457",
-        "packages/zod/src/v4/core/schemas.ts:494-506"
-      ]
-    },
-    {
       "why": "The v4 partial suite is the v3 partials suite ported, 69 lines of the same tests with the API differences.",
       "verified": "extracted and diffed the two source ranges (69 vs 69 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
       "occurrences": [
@@ -75,51 +67,11 @@
       ]
     },
     {
-      "why": "The ZodMiniExactOptional interface block is the ZodMiniOptional one with the systematic optional\u2192exactOptional rename over 20 lines.",
-      "verified": "extracted and diffed the two source ranges (20 vs 20 lines): not byte-identical, similarity 0.96; differences are the systematic change described",
-      "occurrences": [
-        "packages/zod/src/v4/mini/schemas.ts:1474-1493",
-        "packages/zod/src/v4/mini/schemas.ts:1496-1515"
-      ]
-    },
-    {
-      "why": "The _base64url API block is the _url one with the systematic url\u2192base64url rename over 29 lines.",
-      "verified": "extracted and diffed the two source ranges (29 vs 29 lines): not byte-identical, similarity 0.94; differences are the systematic change described",
-      "occurrences": [
-        "packages/zod/src/v4/core/api.ts:201-229",
-        "packages/zod/src/v4/core/api.ts:454-482"
-      ]
-    },
-    {
-      "why": "The v4 pickomit suite is the v3 one ported with the assertion style swapped, 40 lines of the same tests.",
-      "verified": "extracted and diffed the two source ranges (40 vs 40 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
-      "occurrences": [
-        "packages/zod/src/v3/tests/pickomit.test.ts:7-46",
-        "packages/zod/src/v4/classic/tests/pickomit.test.ts:4-43"
-      ]
-    },
-    {
-      "why": "The sk locale is the cs locale with every message translated \u2014 the same 121-line structure.",
-      "verified": "extracted and diffed the two source ranges (121 vs 121 lines): not byte-identical, similarity 0.96; differences are the systematic change described",
-      "occurrences": [
-        "packages/zod/src/v4/locales/sk.ts:1-121",
-        "packages/zod/src/v4/locales/cs.ts:1-121"
-      ]
-    },
-    {
       "why": "identical 14-line record-coercion test duplicated between v4 classic and v3 test trees",
       "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
       "occurrences": [
         "packages/zod/src/v4/classic/tests/record.test.ts:420-433",
         "packages/zod/src/v3/tests/record.test.ts:149-162"
-      ]
-    },
-    {
-      "why": "The hr locale test suite is the es one with the locale swapped, 59 lines of the same tests.",
-      "verified": "extracted and diffed the two source ranges (59 vs 59 lines): not byte-identical, similarity 0.92; differences are the systematic change described",
-      "occurrences": [
-        "packages/zod/src/v4/core/tests/locales/es.test.ts:122-180",
-        "packages/zod/src/v4/core/tests/locales/hr.test.ts:105-163"
       ]
     },
     {
@@ -155,35 +107,11 @@
       ]
     },
     {
-      "why": "The az locale is the tr locale with every message translated \u2014 the same 110-line structure.",
-      "verified": "extracted and diffed the two source ranges (110 vs 110 lines): not byte-identical, similarity 0.86; differences are the systematic change described",
-      "occurrences": [
-        "packages/zod/src/v4/locales/tr.ts:5-114",
-        "packages/zod/src/v4/locales/az.ts:5-114"
-      ]
-    },
-    {
-      "why": "The pl locale is the nl locale with every message translated \u2014 the same ~41-line structure.",
-      "verified": "extracted and diffed the two source ranges (41 vs 42 lines): not byte-identical, similarity 0.68; differences are the systematic change described",
-      "occurrences": [
-        "packages/zod/src/v4/locales/nl.ts:18-58",
-        "packages/zod/src/v4/locales/pl.ts:18-59"
-      ]
-    },
-    {
       "why": "identical 23-line union test duplicated verbatim between v4 classic and v3 test trees",
       "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
       "occurrences": [
         "packages/zod/src/v4/classic/tests/union.test.ts:5-27",
         "packages/zod/src/v3/tests/unions.test.ts:6-28"
-      ]
-    },
-    {
-      "why": "The zh-TW locale is the bn locale with every message translated \u2014 the same 52-line structure.",
-      "verified": "extracted and diffed the two source ranges (52 vs 52 lines): not byte-identical, similarity 0.87; differences are the systematic change described",
-      "occurrences": [
-        "packages/zod/src/v4/locales/bn.ts:6-57",
-        "packages/zod/src/v4/locales/zh-TW.ts:6-57"
       ]
     },
     {
@@ -219,14 +147,6 @@
       ]
     },
     {
-      "why": "The _e164 API block is the _cidrv6 one with the systematic cidrv6\u2192e164 rename over 33 lines.",
-      "verified": "extracted and diffed the two source ranges (33 vs 33 lines): not byte-identical, similarity 0.88; differences are the systematic change described",
-      "occurrences": [
-        "packages/zod/src/v4/core/api.ts:420-452",
-        "packages/zod/src/v4/core/api.ts:471-503"
-      ]
-    },
-    {
       "why": "The array min/max mapping is the string minLength/maxLength one with the systematic property rename over 6 lines.",
       "verified": "extracted and diffed the two source ranges (6 vs 6 lines): not byte-identical, similarity 0.62; differences are the systematic change described",
       "occurrences": [
@@ -251,14 +171,6 @@
       ]
     },
     {
-      "why": "The nn locale is the no locale with the Nynorsk/Bokm\u00e5l message differences over the same 115-line structure.",
-      "verified": "extracted and diffed the two source ranges (115 vs 115 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
-      "occurrences": [
-        "packages/zod/src/v4/locales/no.ts:5-119",
-        "packages/zod/src/v4/locales/nn.ts:5-119"
-      ]
-    },
-    {
       "why": "identical 58-line async-parsing test suite duplicated verbatim between v3 and v4 trees",
       "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
       "occurrences": [
@@ -272,14 +184,6 @@
       "occurrences": [
         "vitest.compile.config.ts:13-22",
         "vitest.config.ts:8-17"
-      ]
-    },
-    {
-      "why": "The $ZodCheckStartsWith interfaces are the $ZodCheckEndsWith ones with the systematic suffix\u2194prefix rename over 40 lines.",
-      "verified": "extracted and diffed the two source ranges (40 vs 40 lines): not byte-identical, similarity 0.92; differences are the systematic change described",
-      "occurrences": [
-        "packages/zod/src/v4/core/checks.ts:1059-1098",
-        "packages/zod/src/v4/core/checks.ts:1015-1054"
       ]
     },
     {
@@ -1164,6 +1068,114 @@
       "occurrences": [
         "packages/zod/src/v3/tests/async-parsing.test.ts:284-287",
         "packages/zod/src/v4/classic/tests/async-parsing.test.ts:283-286"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The $ZodEmail interfaces are the $ZodGUID ones with the systematic guid\u2192email rename over 11 lines.",
+      "occurrences": [
+        "packages/zod/src/v4/core/schemas.ts:447-457",
+        "packages/zod/src/v4/core/schemas.ts:494-506"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The ZodMiniExactOptional interface block is the ZodMiniOptional one with the systematic optional\u2192exactOptional rename over 20 lines.",
+      "occurrences": [
+        "packages/zod/src/v4/mini/schemas.ts:1474-1493",
+        "packages/zod/src/v4/mini/schemas.ts:1496-1515"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The _base64url API block is the _url one with the systematic url\u2192base64url rename over 29 lines.",
+      "occurrences": [
+        "packages/zod/src/v4/core/api.ts:201-229",
+        "packages/zod/src/v4/core/api.ts:454-482"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The v4 pickomit suite is the v3 one ported with the assertion style swapped, 40 lines of the same tests.",
+      "occurrences": [
+        "packages/zod/src/v3/tests/pickomit.test.ts:7-46",
+        "packages/zod/src/v4/classic/tests/pickomit.test.ts:4-43"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sk locale is the cs locale with every message translated \u2014 the same 121-line structure.",
+      "occurrences": [
+        "packages/zod/src/v4/locales/sk.ts:1-121",
+        "packages/zod/src/v4/locales/cs.ts:1-121"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The hr locale test suite is the es one with the locale swapped, 59 lines of the same tests.",
+      "occurrences": [
+        "packages/zod/src/v4/core/tests/locales/es.test.ts:122-180",
+        "packages/zod/src/v4/core/tests/locales/hr.test.ts:105-163"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The az locale is the tr locale with every message translated \u2014 the same 110-line structure.",
+      "occurrences": [
+        "packages/zod/src/v4/locales/tr.ts:5-114",
+        "packages/zod/src/v4/locales/az.ts:5-114"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The pl locale is the nl locale with every message translated \u2014 the same ~41-line structure.",
+      "occurrences": [
+        "packages/zod/src/v4/locales/nl.ts:18-58",
+        "packages/zod/src/v4/locales/pl.ts:18-59"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: only 59% of the tokens are shared - too little survives to call it one block written twice. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The zh-TW locale is the bn locale with every message translated \u2014 the same 52-line structure.",
+      "occurrences": [
+        "packages/zod/src/v4/locales/bn.ts:6-57",
+        "packages/zod/src/v4/locales/zh-TW.ts:6-57"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The _e164 API block is the _cidrv6 one with the systematic cidrv6\u2192e164 rename over 33 lines.",
+      "occurrences": [
+        "packages/zod/src/v4/core/api.ts:420-452",
+        "packages/zod/src/v4/core/api.ts:471-503"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The nn locale is the no locale with the Nynorsk/Bokm\u00e5l message differences over the same 115-line structure.",
+      "occurrences": [
+        "packages/zod/src/v4/locales/no.ts:5-119",
+        "packages/zod/src/v4/locales/nn.ts:5-119"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The $ZodCheckStartsWith interfaces are the $ZodCheckEndsWith ones with the systematic suffix\u2194prefix rename over 40 lines.",
+      "occurrences": [
+        "packages/zod/src/v4/core/checks.ts:1059-1098",
+        "packages/zod/src/v4/core/checks.ts:1015-1054"
       ]
     }
   ],

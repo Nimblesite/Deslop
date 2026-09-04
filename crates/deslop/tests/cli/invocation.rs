@@ -120,9 +120,7 @@ fn accepts_path_argument_without_panicking() -> Result<()> {
 // and HTML side by side. All three must carry the current report fields.
 #[test]
 fn default_run_emits_all_three_formats() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
+    let (_tmp, out, mut cmd) = fixture_run("csharp-small")?;
     let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let json = fs::read_to_string(&out.json)?;
     assert!(json.contains("\"schema_doc\""), "schema_doc missing");
@@ -166,9 +164,7 @@ fn default_run_emits_all_three_formats() -> Result<()> {
 // contract is unchanged.
 #[test]
 fn cli_json_report_omits_inline_schema_doc() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
+    let (_tmp, out, mut cmd) = fixture_run("csharp-small")?;
     let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let json = fs::read_to_string(&out.json)?;
     let value: Value = serde_json::from_str(&json)?;
@@ -245,9 +241,7 @@ fn wrap_clone_in_class(class: &str, body: &str) -> String {
 // --nohtml` leaves only the text output behind.
 #[test]
 fn suppression_flags_leave_only_enabled_formats() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
+    let (_tmp, out, mut cmd) = fixture_run("csharp-small")?;
     let _assertion = cmd
         .args(["--min-nodes", "8", "--nojson", "--nohtml"])
         .assert()
@@ -262,8 +256,7 @@ fn suppression_flags_leave_only_enabled_formats() -> Result<()> {
 // error — silent runs are never useful.
 #[test]
 fn suppressing_every_format_is_an_error() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
+    let (_tmp, mut cmd) = fixture_run_command("csharp-small")?;
     let _assertion = cmd
         .args(["--nojson", "--notext", "--nohtml"])
         .assert()
@@ -278,8 +271,7 @@ fn suppressing_every_format_is_an_error() -> Result<()> {
 // failure of the analysis itself.
 #[test]
 fn suppressing_every_format_exits_with_usage_code() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
+    let (_tmp, mut cmd) = fixture_run_command("csharp-small")?;
     let _assertion = cmd
         .args(["--nojson", "--notext", "--nohtml"])
         .assert()

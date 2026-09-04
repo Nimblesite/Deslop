@@ -21,6 +21,7 @@ use crate::{
 
 pub mod csharp;
 mod csharp_merge;
+mod merge_emit;
 pub mod dart;
 pub(crate) mod ecmascript;
 pub mod fsharp;

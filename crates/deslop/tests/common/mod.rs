@@ -248,6 +248,34 @@ pub(crate) fn occurrences(cluster: &Value) -> &[Value] {
 }
 
 /// A cluster's stable `id`, or `"?"` when absent.
+/// The 1-indexed `(start_line, end_line)` one reported occurrence
+/// covers. Line numbers, not byte offsets, so a failing assertion names
+/// the physical rows a reader can open.
+pub(crate) fn occurrence_line_span(occurrence: &Value) -> (u64, u64) {
+    (
+        field(occurrence, "start_line").as_u64().unwrap_or(0),
+        field(occurrence, "end_line").as_u64().unwrap_or(0),
+    )
+}
+
+/// Every occurrence's line span within one cluster, in report order.
+pub(crate) fn cluster_line_spans(cluster: &Value) -> Vec<(u64, u64)> {
+    occurrences(cluster)
+        .iter()
+        .map(occurrence_line_span)
+        .collect()
+}
+
+/// Every occurrence's line span across every visible cluster, in report
+/// order.
+pub(crate) fn report_line_spans(report: &Value) -> Vec<(u64, u64)> {
+    clusters(report)
+        .iter()
+        .flat_map(occurrences)
+        .map(occurrence_line_span)
+        .collect()
+}
+
 pub(crate) fn cluster_id(cluster: &Value) -> &str {
     field(cluster, "id").as_str().unwrap_or("?")
 }

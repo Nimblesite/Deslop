@@ -49,15 +49,7 @@ const EXPECTED_OCCURRENCES: usize = 2;
 /// Returns the 1-indexed line span each occurrence covers, in report
 /// order, so a failure names the physical rows rather than byte offsets.
 fn occurrence_line_spans(cluster: &serde_json::Value) -> Vec<(u64, u64)> {
-    occurrences(cluster)
-        .iter()
-        .map(|occurrence| {
-            (
-                field(occurrence, "start_line").as_u64().unwrap_or_default(),
-                field(occurrence, "end_line").as_u64().unwrap_or_default(),
-            )
-        })
-        .collect()
+    cluster_line_spans(cluster)
 }
 
 /// Returns how many lines each occurrence covers, inclusive of both

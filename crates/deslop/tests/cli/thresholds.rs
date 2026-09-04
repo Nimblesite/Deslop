@@ -7,6 +7,83 @@ const BREACHED_FIELD: &str = "breached";
 const CLI_SOURCE: &str = "cli";
 const CONFIG_SOURCE: &str = "config";
 const THRESHOLD_BREACH_EXIT_CODE: i32 = 3;
+/// clap's exit code for an argument the parser rejects.
+const USAGE_EXIT_CODE: i32 = 2;
+/// The exit code a runtime (non-argument) failure produces.
+const RUNTIME_ERROR_EXIT_CODE: i32 = 1;
+/// A `--fail-over` value no run can breach.
+const PERMISSIVE_THRESHOLD: &str = "100";
+/// A `--fail-over` value every duplicated run breaches.
+const BREACHING_THRESHOLD: &str = "0";
+/// A `--fail-over` value above the legal range.
+const OUT_OF_RANGE_THRESHOLD: &str = "150.0";
+/// A negative `--fail-over` value.
+const NEGATIVE_THRESHOLD: &str = "-1.0";
+/// A non-finite `--fail-over` value.
+const NAN_THRESHOLD: &str = "NaN";
+/// The `source` a report records when nothing gated the run.
+const NO_SOURCE: &str = "none";
+/// Flag clearing any configured threshold for this run.
+const NO_FAIL_OVER_FLAG: &str = "--no-fail-over";
+/// Output stem for the `--from-report` replay, kept apart from the
+/// original so the replay cannot clobber its own source.
+const REPLAY_OUTPUT_STEM: &str = "replay";
+
+/// One prepared threshold scenario: the scan root, the paths the run
+/// writes, and the command aimed at both.
+struct ThresholdRun {
+    /// Temp dir holding the scan root. Bound so it outlives the run —
+    /// dropping it deletes the tree the command reads.
+    tmp: TempDir,
+    /// The `src` scan root seeded with the canonical clone pair.
+    scan_root: PathBuf,
+    /// The three report paths the run writes.
+    out: RunOutputs,
+    /// The `deslop` command, before its arguments are added.
+    cmd: Command,
+}
+
+/// Opens a threshold scenario over the canonical clone pair.
+fn clone_pair_run() -> Result<ThresholdRun> {
+    let (tmp, scan_root) = clone_pair_scan_root()?;
+    let out = outputs_under(tmp.path());
+    let cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
+    Ok(ThresholdRun {
+        tmp,
+        scan_root,
+        out,
+        cmd,
+    })
+}
+
+/// The argument list for a run gated at `percent`.
+fn fail_over_args(percent: &str) -> [&str; 5] {
+    [
+        MIN_NODES_FLAG,
+        MIN_NODES_VALUE,
+        FAIL_OVER_FLAG,
+        percent,
+        NO_COLOR_FLAG,
+    ]
+}
+
+/// The argument list for a run carrying no `--fail-over` flag.
+const UNGATED_ARGS: [&str; 3] = [MIN_NODES_FLAG, MIN_NODES_VALUE, NO_COLOR_FLAG];
+
+/// Asserts the report's `threshold` block names `source`.
+fn assert_threshold_source(json: &Value, source: &str) {
+    assert_eq!(threshold_field(json, SOURCE_FIELD).as_str(), Some(source));
+}
+
+/// Asserts the report's `threshold` block names `source` and records
+/// `breached`.
+fn assert_threshold(json: &Value, source: &str, breached: bool) {
+    assert_threshold_source(json, source);
+    assert_eq!(
+        threshold_field(json, BREACHED_FIELD).as_bool(),
+        Some(breached)
+    );
+}
 
 /// Creates a `tempdir` with a `src` scan root seeded with the canonical
 /// clone pair, returning both so the `tempdir` guard stays alive.
@@ -44,34 +121,19 @@ fn assert_fail_over_value_exits_two(value: &str) -> Result<()> {
     let _assertion = cmd
         .args([FAIL_OVER_FLAG, value, NO_COLOR_FLAG])
         .assert()
-        .code(2);
+        .code(USAGE_EXIT_CODE);
     Ok(())
 }
 
 #[test]
 fn fail_over_cli_passes_under_threshold() -> Result<()> {
-    let (tmp, scan_root) = clone_pair_scan_root()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
-    let _assertion = cmd
-        .args([
-            MIN_NODES_FLAG,
-            MIN_NODES_VALUE,
-            FAIL_OVER_FLAG,
-            "100",
-            NO_COLOR_FLAG,
-        ])
+    let mut run = clone_pair_run()?;
+    let _assertion = run
+        .cmd
+        .args(fail_over_args(PERMISSIVE_THRESHOLD))
         .assert()
         .success();
-    let json = read_json_report(&out.json)?;
-    assert_eq!(
-        threshold_field(&json, SOURCE_FIELD).as_str(),
-        Some(CLI_SOURCE)
-    );
-    assert_eq!(
-        threshold_field(&json, BREACHED_FIELD).as_bool(),
-        Some(false)
-    );
+    assert_threshold(&read_json_report(&run.out.json)?, CLI_SOURCE, false);
     Ok(())
 }
 
@@ -79,20 +141,14 @@ fn fail_over_cli_passes_under_threshold() -> Result<()> {
 // loaded when `--fail-over` is absent, and an exceeded value exits 3.
 #[test]
 fn fail_over_config_file_loaded_when_flag_absent() -> Result<()> {
-    let (tmp, scan_root) = clone_pair_scan_root()?;
-    write_threshold_config(&scan_root, ZERO_THRESHOLD)?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
-    let _assertion = cmd
-        .args([MIN_NODES_FLAG, MIN_NODES_VALUE, NO_COLOR_FLAG])
+    let mut run = clone_pair_run()?;
+    write_threshold_config(&run.scan_root, ZERO_THRESHOLD)?;
+    let _assertion = run
+        .cmd
+        .args(UNGATED_ARGS)
         .assert()
         .code(THRESHOLD_BREACH_EXIT_CODE);
-    let json = read_json_report(&out.json)?;
-    assert_eq!(
-        threshold_field(&json, SOURCE_FIELD).as_str(),
-        Some(CONFIG_SOURCE)
-    );
-    assert_eq!(threshold_field(&json, BREACHED_FIELD).as_bool(), Some(true));
+    assert_threshold(&read_json_report(&run.out.json)?, CONFIG_SOURCE, true);
     Ok(())
 }
 
@@ -100,29 +156,14 @@ fn fail_over_config_file_loaded_when_flag_absent() -> Result<()> {
 // A permissive CLI value turns a breaching config into a passing run.
 #[test]
 fn fail_over_cli_overrides_config_file() -> Result<()> {
-    let (tmp, scan_root) = clone_pair_scan_root()?;
-    write_threshold_config(&scan_root, ZERO_THRESHOLD)?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
-    let _assertion = cmd
-        .args([
-            MIN_NODES_FLAG,
-            MIN_NODES_VALUE,
-            FAIL_OVER_FLAG,
-            "100",
-            NO_COLOR_FLAG,
-        ])
+    let mut run = clone_pair_run()?;
+    write_threshold_config(&run.scan_root, ZERO_THRESHOLD)?;
+    let _assertion = run
+        .cmd
+        .args(fail_over_args(PERMISSIVE_THRESHOLD))
         .assert()
         .success();
-    let json = read_json_report(&out.json)?;
-    assert_eq!(
-        threshold_field(&json, SOURCE_FIELD).as_str(),
-        Some(CLI_SOURCE)
-    );
-    assert_eq!(
-        threshold_field(&json, BREACHED_FIELD).as_bool(),
-        Some(false)
-    );
+    assert_threshold(&read_json_report(&run.out.json)?, CLI_SOURCE, false);
     Ok(())
 }
 
@@ -130,21 +171,19 @@ fn fail_over_cli_overrides_config_file() -> Result<()> {
 // so the run is ungated locally.
 #[test]
 fn no_fail_over_overrides_config_file_threshold() -> Result<()> {
-    let (tmp, scan_root) = clone_pair_scan_root()?;
-    write_threshold_config(&scan_root, ZERO_THRESHOLD)?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
-    let _assertion = cmd
+    let mut run = clone_pair_run()?;
+    write_threshold_config(&run.scan_root, ZERO_THRESHOLD)?;
+    let _assertion = run
+        .cmd
         .args([
             MIN_NODES_FLAG,
             MIN_NODES_VALUE,
-            "--no-fail-over",
+            NO_FAIL_OVER_FLAG,
             NO_COLOR_FLAG,
         ])
         .assert()
         .success();
-    let json = read_json_report(&out.json)?;
-    assert_eq!(threshold_field(&json, SOURCE_FIELD).as_str(), Some("none"));
+    assert_threshold_source(&read_json_report(&run.out.json)?, NO_SOURCE);
     Ok(())
 }
 
@@ -152,7 +191,7 @@ fn no_fail_over_overrides_config_file_threshold() -> Result<()> {
 // > 100) produce clap's argument-error exit code 2.
 #[test]
 fn fail_over_invalid_value_exits_two() -> Result<()> {
-    assert_fail_over_value_exits_two("-1.0")
+    assert_fail_over_value_exits_two(NEGATIVE_THRESHOLD)
 }
 
 // Implements [METRICS-REPO] + [OUTPUT-SCHEMA-JSON]: `--from-report`
@@ -161,22 +200,17 @@ fn fail_over_invalid_value_exits_two() -> Result<()> {
 // threshold.
 #[test]
 fn from_report_replays_metrics_without_reanalysing() -> Result<()> {
-    let (tmp, scan_root) = clone_pair_scan_root()?;
-    let initial = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
-    let _assertion = cmd
-        .args([MIN_NODES_FLAG, MIN_NODES_VALUE, NO_COLOR_FLAG])
-        .assert()
-        .success();
-    let original = read_json_report(&initial.json)?;
+    let mut run = clone_pair_run()?;
+    let _assertion = run.cmd.args(UNGATED_ARGS).assert().success();
+    let original = read_json_report(&run.out.json)?;
     let original_metrics = field(&original, "metrics").clone();
     // Replay: write into a second output prefix so we don't clobber
     // the source JSON, and re-render from the first.
-    let replay_prefix = tmp.path().join("replay");
-    let mut cmd2 = deslop_command(&scan_root, &replay_prefix)?;
+    let replay_prefix = run.tmp.path().join(REPLAY_OUTPUT_STEM);
+    let mut cmd2 = deslop_command(&run.scan_root, &replay_prefix)?;
     let _assertion2 = cmd2
         .arg("--from-report")
-        .arg(&initial.json)
+        .arg(&run.out.json)
         .arg(NO_COLOR_FLAG)
         .assert()
         .success();
@@ -193,20 +227,13 @@ fn from_report_replays_metrics_without_reanalysing() -> Result<()> {
 // repo duplication header.
 #[test]
 fn text_renderer_shows_repo_duplication_header() -> Result<()> {
-    let (tmp, scan_root) = clone_pair_scan_root()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
-    let _assertion = cmd
-        .args([
-            MIN_NODES_FLAG,
-            MIN_NODES_VALUE,
-            FAIL_OVER_FLAG,
-            "0",
-            NO_COLOR_FLAG,
-        ])
+    let mut run = clone_pair_run()?;
+    let _assertion = run
+        .cmd
+        .args(fail_over_args(BREACHING_THRESHOLD))
         .assert()
         .code(THRESHOLD_BREACH_EXIT_CODE);
-    let txt = fs::read_to_string(&out.txt)?;
+    let txt = fs::read_to_string(&run.out.txt)?;
     assert!(
         txt.contains("repo:") && txt.contains("% duplicated"),
         "text renderer must print repo metric: {txt}"
@@ -224,34 +251,22 @@ fn text_renderer_shows_repo_duplication_header() -> Result<()> {
 #[test]
 fn html_renderer_colour_codes_threshold_state() -> Result<()> {
     // Breached variant.
-    let (tmp, scan_root) = clone_pair_scan_root()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
-    let _assertion = cmd
-        .args([
-            MIN_NODES_FLAG,
-            MIN_NODES_VALUE,
-            FAIL_OVER_FLAG,
-            "0",
-            NO_COLOR_FLAG,
-        ])
+    let mut breached = clone_pair_run()?;
+    let _assertion = breached
+        .cmd
+        .args(fail_over_args(BREACHING_THRESHOLD))
         .assert()
         .code(THRESHOLD_BREACH_EXIT_CODE);
-    let html_breached = fs::read_to_string(&out.html)?;
+    let html_breached = fs::read_to_string(&breached.out.html)?;
     assert!(
         html_breached.contains("metrics-banner--breached"),
         "breached HTML must carry the breached class"
     );
 
     // Neutral variant (no threshold).
-    let (tmp2, scan_root2) = clone_pair_scan_root()?;
-    let out2 = outputs_under(tmp2.path());
-    let mut cmd2 = deslop_command(&scan_root2, &tmp2.path().join(REPORT_OUTPUT_STEM))?;
-    let _assertion2 = cmd2
-        .args([MIN_NODES_FLAG, MIN_NODES_VALUE, NO_COLOR_FLAG])
-        .assert()
-        .success();
-    let html_neutral = fs::read_to_string(&out2.html)?;
+    let mut neutral = clone_pair_run()?;
+    let _assertion2 = neutral.cmd.args(UNGATED_ARGS).assert().success();
+    let html_neutral = fs::read_to_string(&neutral.out.html)?;
     assert!(
         html_neutral.contains("metrics-banner--neutral"),
         "no-threshold HTML must carry the neutral class"
@@ -262,13 +277,13 @@ fn html_renderer_colour_codes_threshold_state() -> Result<()> {
 // Implements [EXIT-CODES]: `--fail-over 150` is out of range and exits 2.
 #[test]
 fn fail_over_above_100_exits_two() -> Result<()> {
-    assert_fail_over_value_exits_two("150.0")
+    assert_fail_over_value_exits_two(OUT_OF_RANGE_THRESHOLD)
 }
 
 // Implements [EXIT-CODES]: `--fail-over NaN` is not finite and exits 2.
 #[test]
 fn fail_over_nan_exits_two() -> Result<()> {
-    assert_fail_over_value_exits_two("NaN")
+    assert_fail_over_value_exits_two(NAN_THRESHOLD)
 }
 
 // Implements [EXIT-CODES]: an invalid threshold in `.deslop.toml`
@@ -276,12 +291,12 @@ fn fail_over_nan_exits_two() -> Result<()> {
 // diagnostic. `max_duplication_percent = 150` is out of range.
 #[test]
 fn config_threshold_out_of_range_fails_runtime() -> Result<()> {
-    let (tmp, scan_root) = clone_pair_scan_root()?;
-    write_threshold_config(&scan_root, "150.0")?;
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join(REPORT_OUTPUT_STEM))?;
-    let _assertion = cmd
-        .args([MIN_NODES_FLAG, MIN_NODES_VALUE, NO_COLOR_FLAG])
+    let mut run = clone_pair_run()?;
+    write_threshold_config(&run.scan_root, OUT_OF_RANGE_THRESHOLD)?;
+    let _assertion = run
+        .cmd
+        .args(UNGATED_ARGS)
         .assert()
-        .code(1);
+        .code(RUNTIME_ERROR_EXIT_CODE);
     Ok(())
 }

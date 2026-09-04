@@ -19,19 +19,11 @@
       ]
     },
     {
-      "why": "new-cubit.command.ts is new-bloc.command.ts with the systematic rename cubit→bloc throughout.",
+      "why": "new-cubit.command.ts is new-bloc.command.ts with the systematic rename cubit\u2192bloc throughout.",
       "verified": "extracted and diffed the two source ranges (55 vs 55 lines): not byte-identical, similarity 0.89; differences are the systematic rename described",
       "occurrences": [
         "extensions/vscode/src/commands/new-cubit.command.ts:16-70",
         "extensions/vscode/src/commands/new-bloc.command.ts:20-74"
-      ]
-    },
-    {
-      "why": "79-line ExceptionCounterBloc group is the ErrorCounterBloc group with one systematic rename applied throughout.",
-      "verified": "extracted and diffed the two source ranges (79 vs 79 lines): not byte-identical, similarity 0.92; differences are the systematic rename described",
-      "occurrences": [
-        "packages/bloc_test/test/bloc_bloc_test_test.dart:471-549",
-        "packages/bloc_test/test/bloc_bloc_test_test.dart:391-469"
       ]
     },
     {
@@ -43,23 +35,7 @@
       ]
     },
     {
-      "why": "57 lines of e2e persistence tests duplicated with the systematic rename MapCustomObject/ListCubitMap→ListListObject/ListCubitList.",
-      "verified": "extracted and diffed the two source ranges (57 vs 57 lines): not byte-identical, similarity 0.86; differences are the systematic rename described",
-      "occurrences": [
-        "packages/hydrated_bloc/test/e2e_test.dart:110-166",
-        "packages/hydrated_bloc/test/e2e_test.dart:197-253"
-      ]
-    },
-    {
-      "why": "multi_repository_provider.dart is multi_bloc_provider.dart with the systematic rename Bloc→Repository throughout the docs and class.",
-      "verified": "extracted and diffed the two source ranges (58 vs 52 lines): not byte-identical, similarity 0.81; differences are the systematic rename described",
-      "occurrences": [
-        "packages/flutter_bloc/lib/src/multi_bloc_provider.dart:1-58",
-        "packages/flutter_bloc/lib/src/multi_repository_provider.dart:1-52"
-      ]
-    },
-    {
-      "why": "createBlocEventTemplate is createCubitStateTemplate copied with the systematic rename cubit/state→bloc/event.",
+      "why": "createBlocEventTemplate is createCubitStateTemplate copied with the systematic rename cubit/state\u2192bloc/event.",
       "verified": "extracted and diffed the two source ranges (37 vs 37 lines): not byte-identical, similarity 0.89; differences are the systematic rename described",
       "occurrences": [
         "extensions/vscode/src/commands/new-cubit.command.ts:96-132",
@@ -67,15 +43,7 @@
       ]
     },
     {
-      "why": "The mark-all-complete test is the mark-all-incomplete test copied with the completion flags and label renamed.",
-      "verified": "extracted and diffed the two source ranges (23 vs 23 lines): not byte-identical, similarity 0.99; differences are the systematic rename described",
-      "occurrences": [
-        "examples/flutter_todos/test/todos_overview/widgets/todos_overview_options_button_test.dart:124-146",
-        "examples/flutter_todos/test/todos_overview/widgets/todos_overview_options_button_test.dart:100-122"
-      ]
-    },
-    {
-      "why": "17-line EditTodoState expectation duplicated in the same file with only the status changed failure↔success.",
+      "why": "17-line EditTodoState expectation duplicated in the same file with only the status changed failure\u2194success.",
       "verified": "extracted and diffed the two source ranges (17 vs 17 lines): not byte-identical, similarity 0.88; differences are the systematic rename described",
       "occurrences": [
         "examples/flutter_todos/test/edit_todo/bloc/edit_todo_bloc_test.dart:170-186",
@@ -83,15 +51,7 @@
       ]
     },
     {
-      "why": "prefer_cubit.dart is prefer_bloc.dart with one systematic rename (Bloc↔Cubit) applied to the whole 51-line rule file.",
-      "verified": "extracted and diffed the two source ranges (51 vs 51 lines): not byte-identical, similarity 0.97; differences are the systematic rename described",
-      "occurrences": [
-        "packages/bloc_lint/lib/src/rules/prefer_bloc.dart:1-51",
-        "packages/bloc_lint/lib/src/rules/prefer_cubit.dart:1-51"
-      ]
-    },
-    {
-      "why": "The completed-todos ListTile test is the active-todos test with the systematic rename activeTodos→completedTodos throughout 40 lines.",
+      "why": "The completed-todos ListTile test is the active-todos test with the systematic rename activeTodos\u2192completedTodos throughout 40 lines.",
       "verified": "extracted and diffed the two source ranges (40 vs 40 lines): not byte-identical, similarity 0.92; differences are the systematic rename described",
       "occurrences": [
         "examples/flutter_todos/test/stats/view/stats_page_test.dart:130-169",
@@ -99,7 +59,7 @@
       ]
     },
     {
-      "why": "Username is Password copied — a systematic Password→Username rename over the whole 14-line FormzInput model.",
+      "why": "Username is Password copied \u2014 a systematic Password\u2192Username rename over the whole 14-line FormzInput model.",
       "verified": "extracted and diffed the two source ranges (14 vs 14 lines): not byte-identical, similarity 0.86; differences are the systematic rename described",
       "occurrences": [
         "examples/flutter_login/lib/login/models/password.dart:1-14",
@@ -115,7 +75,7 @@
       ]
     },
     {
-      "why": "The SignUpForm email/password text fields are the LoginForm fields copied with the systematic rename Login→SignUp over 40 lines.",
+      "why": "The SignUpForm email/password text fields are the LoginForm fields copied with the systematic rename Login\u2192SignUp over 40 lines.",
       "verified": "extracted and diffed the two source ranges (40 vs 40 lines): not byte-identical, similarity 0.97; differences are the systematic rename described",
       "occurrences": [
         "examples/flutter_firebase_login/lib/login/view/login_form.dart:53-92",
@@ -147,43 +107,11 @@
       ]
     },
     {
-      "why": "complex_event.dart is complex_state.dart with the systematic rename State→Event throughout all 64 lines of A–D classes.",
-      "verified": "extracted and diffed the two source ranges (64 vs 64 lines): not byte-identical, similarity 0.93; differences are the systematic rename described",
-      "occurrences": [
-        "packages/bloc/test/blocs/complex/complex_state.dart:1-64",
-        "packages/bloc/test/blocs/complex/complex_event.dart:1-64"
-      ]
-    },
-    {
-      "why": "The info Diagnostic fixture is the hint Diagnostic fixture copied with the systematic rename hint→info in every field.",
-      "verified": "extracted and diffed the two source ranges (11 vs 11 lines): not byte-identical, similarity 0.91; differences are the systematic rename described",
-      "occurrences": [
-        "packages/bloc_tools/test/src/commands/lint/lint_command_test.dart:113-123",
-        "packages/bloc_tools/test/src/commands/lint/lint_command_test.dart:124-134"
-      ]
-    },
-    {
-      "why": "The replay_bloc tests are the replay_cubit tests translated with the systematic adaptation increment()↔add(Increment); structure and expectations identical.",
-      "verified": "extracted and diffed the two source ranges (38 vs 41 lines): not byte-identical, similarity 0.76; differences are the systematic rename described",
-      "occurrences": [
-        "packages/replay_bloc/test/replay_cubit_test.dart:137-174",
-        "packages/replay_bloc/test/replay_bloc_test.dart:135-175"
-      ]
-    },
-    {
-      "why": "The password-changed form test is the username-changed test copied with the systematic rename username→password over 24 lines.",
+      "why": "The password-changed form test is the username-changed test copied with the systematic rename username\u2192password over 24 lines.",
       "verified": "extracted and diffed the two source ranges (24 vs 24 lines): not byte-identical, similarity 0.90; differences are the systematic rename described",
       "occurrences": [
         "examples/flutter_login/test/login/view/login_form_test.dart:22-45",
         "examples/flutter_login/test/login/view/login_form_test.dart:47-70"
-      ]
-    },
-    {
-      "why": "The _getLineOffsets logic in bloc_lint's text_document.dart is bloc_tools' copy with the systematic rename newline→lineFeed.",
-      "verified": "extracted and diffed the two source ranges (38 vs 40 lines): not byte-identical, similarity 0.96; differences are the systematic rename described",
-      "occurrences": [
-        "packages/bloc_lint/lib/src/text_document.dart:160-197",
-        "packages/bloc_tools/lib/src/lsp/text_document.dart:162-201"
       ]
     },
     {
@@ -195,7 +123,7 @@
       ]
     },
     {
-      "why": "password_test.dart is username_test.dart with the systematic rename Username→Password throughout 37 lines.",
+      "why": "password_test.dart is username_test.dart with the systematic rename Username\u2192Password throughout 37 lines.",
       "verified": "extracted and diffed the two source ranges (37 vs 37 lines): not byte-identical, similarity 0.21; differences are the systematic rename described",
       "occurrences": [
         "examples/flutter_login/test/login/models/username_test.dart:2-38",
@@ -235,14 +163,6 @@
       ]
     },
     {
-      "why": "OnExceptionBloc is OnErrorBloc with the systematic rename Error→Exception throughout 22 lines.",
-      "verified": "extracted and diffed the two source ranges (22 vs 25 lines): not byte-identical, similarity 0.92; differences are the systematic rename described",
-      "occurrences": [
-        "packages/bloc/test/blocs/counter/on_error_bloc.dart:1-22",
-        "packages/bloc/test/blocs/counter/on_exception_bloc.dart:1-25"
-      ]
-    },
-    {
       "why": "login_event.dart is edit_todo_event.dart with the systematic rename Title/Username, Description/Password, Submitted/Submitted applied.",
       "verified": "extracted and diffed the two source ranges (28 vs 28 lines): not byte-identical, similarity 0.74; differences are the systematic rename described",
       "occurrences": [
@@ -275,7 +195,7 @@
       ]
     },
     {
-      "why": "bloc-state.template.ts is cubit-state.template.ts with the systematic rename cubit→bloc throughout 52 lines.",
+      "why": "bloc-state.template.ts is cubit-state.template.ts with the systematic rename cubit\u2192bloc throughout 52 lines.",
       "verified": "extracted and diffed the two source ranges (52 vs 52 lines): not byte-identical, similarity 0.91; differences are the systematic rename described",
       "occurrences": [
         "extensions/vscode/src/templates/cubit-state.template.ts:4-55",
@@ -283,15 +203,7 @@
       ]
     },
     {
-      "why": "Mirror of candidate 7 — the CartError tests for add vs remove differ only by the systematic rename.",
-      "verified": "extracted and diffed the two source ranges (17 vs 17 lines): not byte-identical, similarity 0.94; differences are the systematic rename described",
-      "occurrences": [
-        "examples/flutter_shopping_cart/test/cart/bloc/cart_bloc_test.dart:86-102",
-        "examples/flutter_shopping_cart/test/cart/bloc/cart_bloc_test.dart:124-140"
-      ]
-    },
-    {
-      "why": "The EditTodoTitleChanged test group is the DescriptionChanged group with the systematic rename title→description.",
+      "why": "The EditTodoTitleChanged test group is the DescriptionChanged group with the systematic rename title\u2192description.",
       "verified": "extracted and diffed the two source ranges (17 vs 17 lines): not byte-identical, similarity 0.67; differences are the systematic rename described",
       "occurrences": [
         "examples/flutter_todos/test/edit_todo/bloc/edit_todo_event_test.dart:26-42",
@@ -302,21 +214,21 @@
   "clearly_out": [],
   "not_clear": [
     {
-      "why": "Two 2-line FormzInput constructor pairs differing only in the class name — a two-line idiom.",
+      "why": "Two 2-line FormzInput constructor pairs differing only in the class name \u2014 a two-line idiom.",
       "occurrences": [
         "examples/flutter_form_validation/lib/models/email.dart:6-7",
         "examples/flutter_form_validation/lib/models/password.dart:6-7"
       ]
     },
     {
-      "why": "CartEvent vs CartState 'supports value comparison' tests — the framework-invited equality-test idiom with different classes.",
+      "why": "CartEvent vs CartState 'supports value comparison' tests \u2014 the framework-invited equality-test idiom with different classes.",
       "occurrences": [
         "examples/flutter_shopping_cart/test/cart/bloc/cart_event_test.dart:1-29",
         "examples/flutter_shopping_cart/test/cart/bloc/cart_state_test.dart:1-27"
       ]
     },
     {
-      "why": "5 lines of page/route boilerplate with the class renamed — framework scaffolding.",
+      "why": "5 lines of page/route boilerplate with the class renamed \u2014 framework scaffolding.",
       "occurrences": [
         "examples/flutter_login/lib/splash/view/splash_page.dart:4-8",
         "examples/flutter_login/lib/login/view/login_page.dart:7-11"
@@ -330,7 +242,7 @@
       ]
     },
     {
-      "why": "Two lint-rule test scaffolds exercising different rules — shared skeleton only.",
+      "why": "Two lint-rule test scaffolds exercising different rules \u2014 shared skeleton only.",
       "occurrences": [
         "packages/bloc_lint/test/src/rules/prefer_bloc_test.dart:64-75",
         "packages/bloc_lint/test/src/linter_test.dart:303-316"
@@ -344,7 +256,7 @@
       ]
     },
     {
-      "why": "Different timer/timeline event classes — shared sealed-class shape only.",
+      "why": "Different timer/timeline event classes \u2014 shared sealed-class shape only.",
       "occurrences": [
         "examples/flutter_timer/lib/timer/bloc/timer_event.dart:7-18",
         "examples/bloc_concurrency_visualizer/lib/timeline/bloc/timeline_event.dart:11-23"
@@ -365,21 +277,21 @@
       ]
     },
     {
-      "why": "3 lines differing in name/age — a short idiom.",
+      "why": "3 lines differing in name/age \u2014 a short idiom.",
       "occurrences": [
         "examples/flutter_wizard/lib/bloc/profile_wizard_bloc.dart:9-11",
         "examples/flutter_wizard/lib/bloc/profile_wizard_bloc.dart:13-15"
       ]
     },
     {
-      "why": "3 identical lines — a short idiom.",
+      "why": "3 identical lines \u2014 a short idiom.",
       "occurrences": [
         "packages/hydrated_bloc/test/cubits/list_cubit.dart:52-54",
         "packages/hydrated_bloc/test/cubits/list_cubit.dart:23-25"
       ]
     },
     {
-      "why": "Mirror of candidate 21 — 3 lines of when/untilCalled storage stubs.",
+      "why": "Mirror of candidate 21 \u2014 3 lines of when/untilCalled storage stubs.",
       "occurrences": [
         "packages/hydrated_bloc/test/hydrated_bloc_test.dart:379-381",
         "packages/hydrated_bloc/test/hydrated_bloc_test.dart:375-377"
@@ -407,7 +319,7 @@
       ]
     },
     {
-      "why": "3 lines of --help vs -h invocation — a short idiom.",
+      "why": "3 lines of --help vs -h invocation \u2014 a short idiom.",
       "occurrences": [
         "packages/bloc_tools/test/src/command_runner_test.dart:230-232",
         "packages/bloc_tools/test/src/command_runner_test.dart:236-238"
@@ -435,7 +347,7 @@
       ]
     },
     {
-      "why": "Firebase error-code switch arms mapping to different failure classes — same skeleton, different content.",
+      "why": "Firebase error-code switch arms mapping to different failure classes \u2014 same skeleton, different content.",
       "occurrences": [
         "examples/flutter_firebase_login/packages/authentication_repository/lib/src/authentication_repository.dart:28-45",
         "examples/flutter_firebase_login/packages/authentication_repository/lib/src/authentication_repository.dart:67-84"
@@ -449,7 +361,7 @@
       ]
     },
     {
-      "why": "An update-banner constant against its rendering call site — related but not a copy.",
+      "why": "An update-banner constant against its rendering call site \u2014 related but not a copy.",
       "occurrences": [
         "packages/bloc_tools/test/src/command_runner_test.dart:41-50",
         "packages/bloc_tools/lib/src/command_runner.dart:95-102"
@@ -463,7 +375,7 @@
       ]
     },
     {
-      "why": "6 lines of mock location/weather wiring — test scaffolding.",
+      "why": "6 lines of mock location/weather wiring \u2014 test scaffolding.",
       "occurrences": [
         "examples/flutter_weather/packages/weather_repository/test/weather_repository_test.dart:54-59",
         "examples/flutter_weather/packages/weather_repository/test/weather_repository_test.dart:73-78"
@@ -477,7 +389,7 @@
       ]
     },
     {
-      "why": "Event vs state template generators — same structure but state templates carry extra Initial subclasses.",
+      "why": "Event vs state template generators \u2014 same structure but state templates carry extra Initial subclasses.",
       "occurrences": [
         "extensions/vscode/src/templates/bloc-event.template.ts:1-60",
         "extensions/vscode/src/templates/cubit-state.template.ts:1-67"
@@ -505,7 +417,7 @@
       ]
     },
     {
-      "why": "6 lines of add vs removed value-comparison groups — a short idiom.",
+      "why": "6 lines of add vs removed value-comparison groups \u2014 a short idiom.",
       "occurrences": [
         "examples/flutter_shopping_cart/test/cart/bloc/cart_event_test.dart:22-27",
         "examples/flutter_shopping_cart/test/cart/bloc/cart_event_test.dart:15-20"
@@ -540,14 +452,14 @@
       ]
     },
     {
-      "why": "4 lines of username vs password field wiring — a short idiom.",
+      "why": "4 lines of username vs password field wiring \u2014 a short idiom.",
       "occurrences": [
         "examples/flutter_login/lib/login/view/login_form.dart:46-49",
         "examples/flutter_login/lib/login/view/login_form.dart:66-69"
       ]
     },
     {
-      "why": "initState bodies of BlocSelector vs BlocListener — related widgets, different logic.",
+      "why": "initState bodies of BlocSelector vs BlocListener \u2014 related widgets, different logic.",
       "occurrences": [
         "packages/flutter_bloc/lib/src/bloc_selector.dart:77-82",
         "packages/flutter_bloc/lib/src/bloc_listener.dart:151-161"
@@ -575,7 +487,7 @@
       ]
     },
     {
-      "why": "3 lines of light/dark theme cubits — a short idiom.",
+      "why": "3 lines of light/dark theme cubits \u2014 a short idiom.",
       "occurrences": [
         "packages/flutter_bloc/test/bloc_builder_test.dart:71-73",
         "packages/flutter_bloc/test/bloc_builder_test.dart:78-80"
@@ -638,14 +550,14 @@
       ]
     },
     {
-      "why": "Cycle1 vs Toy JSON fixtures — same fromJson/toJson shape, different content.",
+      "why": "Cycle1 vs Toy JSON fixtures \u2014 same fromJson/toJson shape, different content.",
       "occurrences": [
         "packages/hydrated_bloc/test/cubits/cyclic_cubit.dart:20-41",
         "packages/hydrated_bloc/test/cubits/manual_cubit.dart:65-87"
       ]
     },
     {
-      "why": "pumpNewCarForm vs pumpNewCarPage helpers — same pumpWidget idiom.",
+      "why": "pumpNewCarForm vs pumpNewCarPage helpers \u2014 same pumpWidget idiom.",
       "occurrences": [
         "examples/flutter_dynamic_form/test/new_car/view/new_car_page_test.dart:28-39",
         "examples/flutter_dynamic_form/test/new_car/view/new_car_page_test.dart:15-26"
@@ -680,7 +592,7 @@
       ]
     },
     {
-      "why": "4 lines of identical callback/bloc setup — a short idiom.",
+      "why": "4 lines of identical callback/bloc setup \u2014 a short idiom.",
       "occurrences": [
         "packages/replay_bloc/test/replay_bloc_test.dart:256-259",
         "packages/replay_bloc/test/replay_bloc_test.dart:188-191"
@@ -708,7 +620,7 @@
       ]
     },
     {
-      "why": "BlocSelector widget vs BlocBuilderBase — related widget scaffolding with different members.",
+      "why": "BlocSelector widget vs BlocBuilderBase \u2014 related widget scaffolding with different members.",
       "occurrences": [
         "packages/flutter_bloc/lib/src/bloc_selector.dart:28-70",
         "packages/flutter_bloc/lib/src/bloc_builder.dart:110-142"
@@ -750,7 +662,7 @@
       ]
     },
     {
-      "why": "Timeline vs ItemTile constructors — different classes.",
+      "why": "Timeline vs ItemTile constructors \u2014 different classes.",
       "occurrences": [
         "examples/bloc_concurrency_visualizer/lib/timeline/view/timeline_page.dart:134-141",
         "examples/flutter_complex_list/lib/complex_list/view/complex_list_page.dart:63-70"
@@ -778,14 +690,14 @@
       ]
     },
     {
-      "why": "BlocSelector state class vs BlocBuilderBase state class — systematic structural relationship but real logic differences (selector vs buildWhen).",
+      "why": "BlocSelector state class vs BlocBuilderBase state class \u2014 systematic structural relationship but real logic differences (selector vs buildWhen).",
       "occurrences": [
         "packages/flutter_bloc/lib/src/bloc_selector.dart:72-123",
         "packages/flutter_bloc/lib/src/bloc_builder.dart:144-191"
       ]
     },
     {
-      "why": "Mirror of candidate 161 — 3 lines of firebase stub.",
+      "why": "Mirror of candidate 161 \u2014 3 lines of firebase stub.",
       "occurrences": [
         "examples/flutter_firebase_login/packages/authentication_repository/test/authentication_repository_test.dart:153-155",
         "examples/flutter_firebase_login/packages/authentication_repository/test/authentication_repository_test.dart:156-158"
@@ -806,14 +718,14 @@
       ]
     },
     {
-      "why": "MyFormState vs LoginState fields/copyWith — related form-state idiom, different members.",
+      "why": "MyFormState vs LoginState fields/copyWith \u2014 related form-state idiom, different members.",
       "occurrences": [
         "examples/flutter_form_validation/lib/bloc/my_form_state.dart:11-28",
         "examples/flutter_login/lib/login/bloc/login_state.dart:11-28"
       ]
     },
     {
-      "why": "pumpTimerView vs pumpListPage helpers — the pumpWidget idiom.",
+      "why": "pumpTimerView vs pumpListPage helpers \u2014 the pumpWidget idiom.",
       "occurrences": [
         "examples/flutter_timer/test/timer/view/timer_page_test.dart:13-21",
         "examples/flutter_complex_list/test/complex_list/view/complex_list_page_test.dart:15-24"
@@ -869,7 +781,7 @@
       ]
     },
     {
-      "why": "The same text-document tests re-nested under a group — a copy re-indented, but boundaries and framing differ substantially.",
+      "why": "The same text-document tests re-nested under a group \u2014 a copy re-indented, but boundaries and framing differ substantially.",
       "occurrences": [
         "packages/bloc_tools/test/src/lsp/text_document_test.dart:72-117",
         "packages/bloc_lint/test/src/text_document_test.dart:32-79"
@@ -897,7 +809,7 @@
       ]
     },
     {
-      "why": "ComplexListCubit vs CatalogBloc test groups — related fetch patterns, different code.",
+      "why": "ComplexListCubit vs CatalogBloc test groups \u2014 related fetch patterns, different code.",
       "occurrences": [
         "examples/flutter_complex_list/test/complex_list/cubit/complex_list_cubit_test.dart:17-56",
         "examples/flutter_shopping_cart/test/catalog/bloc/catalog_bloc_test.dart:12-59"
@@ -911,7 +823,7 @@
       ]
     },
     {
-      "why": "onTransition forwarding vs onChange logging — different observer methods.",
+      "why": "onTransition forwarding vs onChange logging \u2014 different observer methods.",
       "occurrences": [
         "packages/bloc_test/lib/src/bloc_test.dart:281-288",
         "examples/flutter_weather/lib/weather_bloc_observer.dart:14-18"
@@ -925,7 +837,7 @@
       ]
     },
     {
-      "why": "CatalogState vs TickerState hierarchies — same sealed/Equatable idiom.",
+      "why": "CatalogState vs TickerState hierarchies \u2014 same sealed/Equatable idiom.",
       "occurrences": [
         "examples/flutter_shopping_cart/lib/catalog/bloc/catalog_state.dart:1-19",
         "examples/flutter_bloc_with_stream/lib/bloc/ticker_state.dart:1-31"
@@ -981,28 +893,28 @@
       ]
     },
     {
-      "why": "Observer verification lists differing in onEvent/onDone order and state values — adjacent scenarios.",
+      "why": "Observer verification lists differing in onEvent/onDone order and state values \u2014 adjacent scenarios.",
       "occurrences": [
         "packages/bloc/test/bloc_test.dart:365-377",
         "packages/bloc/test/bloc_test.dart:352-364"
       ]
     },
     {
-      "why": "10 identical lines of BlocListener listenWhen configuration — repeated test scaffolding.",
+      "why": "10 identical lines of BlocListener listenWhen configuration \u2014 repeated test scaffolding.",
       "occurrences": [
         "packages/flutter_bloc/test/bloc_listener_test.dart:340-349",
         "packages/flutter_bloc/test/bloc_listener_test.dart:217-226"
       ]
     },
     {
-      "why": "Login vs Cart event value-comparison suites — the framework idiom.",
+      "why": "Login vs Cart event value-comparison suites \u2014 the framework idiom.",
       "occurrences": [
         "examples/flutter_login/test/login/bloc/login_event_test.dart:8-26",
         "examples/flutter_shopping_cart/test/cart/bloc/cart_event_test.dart:7-29"
       ]
     },
     {
-      "why": "EditTodoState vs Task fields — unrelated models.",
+      "why": "EditTodoState vs Task fields \u2014 unrelated models.",
       "occurrences": [
         "examples/flutter_todos/lib/edit_todo/bloc/edit_todo_state.dart:20-25",
         "examples/bloc_concurrency_visualizer/lib/timeline/models/task.dart:31-35"
@@ -1037,7 +949,7 @@
       ]
     },
     {
-      "why": "BlocProvider vs RepositoryProvider stateful app harness — same pattern, different classes and extra dispose.",
+      "why": "BlocProvider vs RepositoryProvider stateful app harness \u2014 same pattern, different classes and extra dispose.",
       "occurrences": [
         "packages/flutter_bloc/test/bloc_provider_test.dart:62-100",
         "packages/flutter_bloc/test/repository_provider_test.dart:45-76"
@@ -1051,14 +963,14 @@
       ]
     },
     {
-      "why": "Navigator vs Box mock setups — framework idiom only.",
+      "why": "Navigator vs Box mock setups \u2014 framework idiom only.",
       "occurrences": [
         "examples/flutter_todos/test/stats/view/stats_page_test.dart:53-55",
         "packages/hydrated_bloc/test/hydrated_storage_test.dart:108-110"
       ]
     },
     {
-      "why": "Two 43-line slices of the localization getter list — same generated-file idiom, different keys.",
+      "why": "Two 43-line slices of the localization getter list \u2014 same generated-file idiom, different keys.",
       "occurrences": [
         "examples/flutter_todos/lib/l10n/app_localizations.dart:101-143",
         "examples/flutter_todos/lib/l10n/app_localizations.dart:155-197"
@@ -1072,7 +984,7 @@
       ]
     },
     {
-      "why": "Mirror of candidate 198 — adjacent on<Event> registrations.",
+      "why": "Mirror of candidate 198 \u2014 adjacent on<Event> registrations.",
       "occurrences": [
         "packages/bloc/test/blocs/complex/complex_bloc.dart:19-21",
         "packages/bloc/test/blocs/complex/complex_bloc.dart:16-18"
@@ -1121,7 +1033,7 @@
       ]
     },
     {
-      "why": "Hydrated vs plain counter examples — genuinely related demos that have diverged in both directions.",
+      "why": "Hydrated vs plain counter examples \u2014 genuinely related demos that have diverged in both directions.",
       "occurrences": [
         "packages/hydrated_bloc/example/lib/main.dart:30-123",
         "packages/flutter_bloc/example/lib/main.dart:59-163"
@@ -1139,6 +1051,105 @@
       "occurrences": [
         "examples/flutter_todos/test/todos_overview/widgets/todos_overview_filter_button_test.dart:39-49",
         "examples/flutter_todos/test/todos_overview/view/todos_overview_page_test.dart:77-83"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "79-line ExceptionCounterBloc group is the ErrorCounterBloc group with one systematic rename applied throughout.",
+      "occurrences": [
+        "packages/bloc_test/test/bloc_bloc_test_test.dart:471-549",
+        "packages/bloc_test/test/bloc_bloc_test_test.dart:391-469"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "57 lines of e2e persistence tests duplicated with the systematic rename MapCustomObject/ListCubitMap\u2192ListListObject/ListCubitList.",
+      "occurrences": [
+        "packages/hydrated_bloc/test/e2e_test.dart:110-166",
+        "packages/hydrated_bloc/test/e2e_test.dart:197-253"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "multi_repository_provider.dart is multi_bloc_provider.dart with the systematic rename Bloc\u2192Repository throughout the docs and class.",
+      "occurrences": [
+        "packages/flutter_bloc/lib/src/multi_bloc_provider.dart:1-58",
+        "packages/flutter_bloc/lib/src/multi_repository_provider.dart:1-52"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The mark-all-complete test is the mark-all-incomplete test copied with the completion flags and label renamed.",
+      "occurrences": [
+        "examples/flutter_todos/test/todos_overview/widgets/todos_overview_options_button_test.dart:124-146",
+        "examples/flutter_todos/test/todos_overview/widgets/todos_overview_options_button_test.dart:100-122"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "prefer_cubit.dart is prefer_bloc.dart with one systematic rename (Bloc\u2194Cubit) applied to the whole 51-line rule file.",
+      "occurrences": [
+        "packages/bloc_lint/lib/src/rules/prefer_bloc.dart:1-51",
+        "packages/bloc_lint/lib/src/rules/prefer_cubit.dart:1-51"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: only 43% of the tokens are shared - too little survives to call it one block written twice. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "complex_event.dart is complex_state.dart with the systematic rename State\u2192Event throughout all 64 lines of A\u2013D classes.",
+      "occurrences": [
+        "packages/bloc/test/blocs/complex/complex_state.dart:1-64",
+        "packages/bloc/test/blocs/complex/complex_event.dart:1-64"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The info Diagnostic fixture is the hint Diagnostic fixture copied with the systematic rename hint\u2192info in every field.",
+      "occurrences": [
+        "packages/bloc_tools/test/src/commands/lint/lint_command_test.dart:113-123",
+        "packages/bloc_tools/test/src/commands/lint/lint_command_test.dart:124-134"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The replay_bloc tests are the replay_cubit tests translated with the systematic adaptation increment()\u2194add(Increment); structure and expectations identical.",
+      "occurrences": [
+        "packages/replay_bloc/test/replay_cubit_test.dart:137-174",
+        "packages/replay_bloc/test/replay_bloc_test.dart:135-175"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The _getLineOffsets logic in bloc_lint's text_document.dart is bloc_tools' copy with the systematic rename newline\u2192lineFeed.",
+      "occurrences": [
+        "packages/bloc_lint/lib/src/text_document.dart:160-197",
+        "packages/bloc_tools/lib/src/lsp/text_document.dart:162-201"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "OnExceptionBloc is OnErrorBloc with the systematic rename Error\u2192Exception throughout 22 lines.",
+      "occurrences": [
+        "packages/bloc/test/blocs/counter/on_error_bloc.dart:1-22",
+        "packages/bloc/test/blocs/counter/on_exception_bloc.dart:1-25"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "Mirror of candidate 7 \u2014 the CartError tests for add vs remove differ only by the systematic rename.",
+      "occurrences": [
+        "examples/flutter_shopping_cart/test/cart/bloc/cart_bloc_test.dart:86-102",
+        "examples/flutter_shopping_cart/test/cart/bloc/cart_bloc_test.dart:124-140"
       ]
     }
   ],

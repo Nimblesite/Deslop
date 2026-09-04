@@ -27,107 +27,11 @@
       ]
     },
     {
-      "why": "The same two argument-validation statements, including the full ArgumentOutOfRangeException message text and its String.Format call, are repeated verbatim in the sync and async circuit-breaker syntax files. A message string that long matching to the byte across two files is not independent authorship.",
-      "verified": "diff of AdvancedCircuitBreakerSyntax.cs:196-197 against AdvancedCircuitBreakerSyntaxAsync.cs:202-203 at the pinned sha is empty - byte-identical.",
-      "occurrences": [
-        "src/Polly.Shared/CircuitBreaker/AdvancedCircuitBreakerSyntax.cs:196-197",
-        "src/Polly.Shared/CircuitBreaker/AdvancedCircuitBreakerSyntaxAsync.cs:202-203"
-      ]
-    },
-    {
       "why": "The same five-line RetryAsync callback - the async lambda, the awaited Task.Delay on shimTimeSpan, and the assignment to executeDelegateInvocationsWhenOnRetryExits - appears in two different spec files. That variable name matching exactly across files settles it.",
       "verified": "diff of RetryAsyncSpecs.cs:378-382 against RetryTResultSpecsAsync.cs:438-442 at the pinned sha is empty - byte-identical over five lines.",
       "occurrences": [
         "src/Polly.SharedSpecs/Retry/RetryAsyncSpecs.cs:378-382",
         "src/Polly.SharedSpecs/Retry/RetryTResultSpecsAsync.cs:438-442"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (18 vs 18 lines): not byte-identical, similarity 0.80; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.Shared/Timeout/TimeoutTResultSyntaxAsync.cs:201-218",
-        "src/Polly.Shared/Timeout/TimeoutSyntax.cs:201-218"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (51 vs 51 lines): not byte-identical, similarity 0.82; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.SharedSpecs/PolicyTResultSpecs.cs:142-192",
-        "src/Polly.SharedSpecs/PolicyTResultAsyncSpecs.cs:145-195"
-      ]
-    },
-    {
-      "why": "The IReadOnlyPolicyRegistry specs are the PolicyRegistry specs with the systematic _registry→ReadOnlyRegistry rename over 84-86 lines.",
-      "verified": "extracted and diffed the two source ranges (85 vs 85 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.SharedSpecs/Registry/PolicyRegistrySpecs.cs:246-330",
-        "src/Polly.SharedSpecs/Registry/IReadOnlyPolicyRegistrySpecs.cs:100-184"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (22 vs 24 lines): not byte-identical, similarity 0.76; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.SharedSpecs/Caching/CacheAsyncSpecs.cs:197-218",
-        "src/Polly.SharedSpecs/Caching/CacheSpecs.cs:190-213"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (25 vs 25 lines): not byte-identical, similarity 0.95; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.Shared/NoOp/NoOpTResultSyntax.cs:1-25",
-        "src/Polly.Shared/NoOp/NoOpTResultSyntaxAsync.cs:1-25"
-      ]
-    },
-    {
-      "why": "The ExecuteAndCapture variant is the Execute variant with the systematic method rename over 36 lines.",
-      "verified": "extracted and diffed the two source ranges (36 vs 36 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.SharedSpecs/PolicyTResultSpecs.cs:199-234",
-        "src/Polly.SharedSpecs/PolicyTResultSpecs.cs:236-271"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (14 vs 14 lines): not byte-identical, similarity 0.95; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:692-705",
-        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:684-697"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (84 vs 89 lines): not byte-identical, similarity 0.28; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.Shared/Fallback/FallbackSyntaxAsync.cs:142-225",
-        "src/Polly.Shared/Fallback/FallbackSyntax.cs:214-302"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (75 vs 71 lines): not byte-identical, similarity 0.93; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:252-326",
-        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:257-327"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (61 vs 61 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:15-75",
-        "src/Polly.SharedSpecs/Timeout/TimeoutAsyncSpecs.cs:16-76"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (87 vs 87 lines): not byte-identical, similarity 0.96; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.SharedSpecs/Timeout/TimeoutTResultAsyncSpecs.cs:104-190",
-        "src/Polly.SharedSpecs/Timeout/TimeoutAsyncSpecs.cs:104-190"
       ]
     },
     {
@@ -148,34 +52,10 @@
     },
     {
       "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (52 vs 51 lines): not byte-identical, similarity 0.80; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.Shared/Fallback/FallbackSyntaxAsync.cs:61-112",
-        "src/Polly.Shared/Fallback/FallbackSyntax.cs:122-172"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
       "verified": "extracted and diffed the two source ranges (6 vs 6 lines): not byte-identical, similarity 0.96; differences are the systematic change described",
       "occurrences": [
         "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:1198-1203",
         "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:1132-1137"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (19 vs 19 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.Shared/Caching/CacheProviderExtensions.cs:64-82",
-        "src/Polly.Shared/Caching/CacheProviderExtensions.cs:37-55"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (62 vs 62 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.SharedSpecs/Timeout/TimeoutAsyncSpecs.cs:70-131",
-        "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:69-130"
       ]
     },
     {
@@ -195,27 +75,11 @@
       ]
     },
     {
-      "why": "The ExecuteAndCapture variant of the async-policy misuse test, 8 lines systematic rename.",
-      "verified": "extracted and diffed the two source ranges (8 vs 8 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.SharedSpecs/PolicySpecs.cs:175-182",
-        "src/Polly.SharedSpecs/PolicySpecs.cs:184-191"
-      ]
-    },
-    {
       "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
       "verified": "extracted and diffed the two source ranges (49 vs 49 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
       "occurrences": [
         "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:66-114",
         "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:65-113"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (56 vs 56 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.SharedSpecs/Timeout/TimeoutTResultSpecs.cs:78-133",
-        "src/Polly.SharedSpecs/Timeout/TimeoutTResultAsyncSpecs.cs:78-133"
       ]
     },
     {
@@ -244,14 +108,6 @@
     },
     {
       "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (72 vs 59 lines): not byte-identical, similarity 0.89; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.SharedSpecs/Retry/WaitAndRetryForeverSpecs.cs:14-85",
-        "src/Polly.SharedSpecs/Retry/WaitAndRetryForeverAsyncSpecs.cs:18-76"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
       "verified": "extracted and diffed the two source ranges (33 vs 33 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
       "occurrences": [
         "src/Polly.SharedSpecs/Caching/SerializingCacheProviderAsyncSpecs.cs:14-46",
@@ -264,14 +120,6 @@
       "occurrences": [
         "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:330-341",
         "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:375-386"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (159 vs 158 lines): not byte-identical, similarity 0.97; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:640-798",
-        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1107-1264"
       ]
     },
     {
@@ -307,30 +155,6 @@
       ]
     },
     {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (28 vs 28 lines): not byte-identical, similarity 0.85; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.Shared/Caching/GenericCacheProvider.cs:3-30",
-        "src/Polly.Shared/Caching/GenericCacheProviderAsync.cs:5-32"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (66 vs 66 lines): not byte-identical, similarity 0.93; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.SharedSpecs/Wrap/PolicyWrapSpecsAsync.cs:94-159",
-        "src/Polly.SharedSpecs/Wrap/PolicyWrapSpecs.cs:94-159"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (39 vs 39 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:432-470",
-        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:990-1028"
-      ]
-    },
-    {
       "why": "identical 12-line mixed-result test body duplicated in the same file",
       "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
       "occurrences": [
@@ -344,14 +168,6 @@
       "occurrences": [
         "src/Polly.SharedSpecs/Caching/CacheAsyncSpecs.cs:17-48",
         "src/Polly.SharedSpecs/Caching/CacheSpecs.cs:16-47"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (31 vs 30 lines): not byte-identical, similarity 0.94; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.Shared/Caching/CacheTResultSyntax.cs:132-162",
-        "src/Polly.Shared/Caching/CacheSyntax.cs:54-83"
       ]
     },
     {
@@ -396,14 +212,6 @@
     },
     {
       "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (23 vs 23 lines): not byte-identical, similarity 0.80; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.Shared/Timeout/TimeoutTResultSyntax.cs:49-71",
-        "src/Polly.Shared/Timeout/TimeoutSyntax.cs:48-70"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
       "verified": "extracted and diffed the two source ranges (5 vs 5 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
       "occurrences": [
         "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:152-156",
@@ -428,34 +236,10 @@
     },
     {
       "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (53 vs 53 lines): not byte-identical, similarity 0.97; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.SharedSpecs/PolicyAsyncSpecs.cs:212-264",
-        "src/Polly.SharedSpecs/PolicySpecs.cs:207-259"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (6 vs 6 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.Shared/Retry/RetryTResultSyntaxAsync.cs:625-630",
-        "src/Polly.Shared/Retry/RetryTResultSyntax.cs:410-415"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
       "verified": "extracted and diffed the two source ranges (35 vs 35 lines): not byte-identical, similarity 0.96; differences are the systematic change described",
       "occurrences": [
         "src/Polly.Shared/Wrap/PolicyWrapSyntaxAsync.cs:8-42",
         "src/Polly.Shared/Wrap/PolicyWrapSyntax.cs:8-42"
-      ]
-    },
-    {
-      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
-      "verified": "extracted and diffed the two source ranges (97 vs 97 lines): not byte-identical, similarity 0.96; differences are the systematic change described",
-      "occurrences": [
-        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:676-772",
-        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:684-780"
       ]
     },
     {
@@ -543,7 +327,7 @@
       ]
     },
     {
-      "why": "3 lines of sync→async construction.",
+      "why": "3 lines of sync\u2192async construction.",
       "occurrences": [
         "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:609-611",
         "src/Polly.SharedSpecs/Timeout/TimeoutAsyncSpecs.cs:573-575"
@@ -578,7 +362,7 @@
       ]
     },
     {
-      "why": "3 lines of sync→async bulkhead construction.",
+      "why": "3 lines of sync\u2192async bulkhead construction.",
       "occurrences": [
         "src/Polly.SharedSpecs/Bulkhead/BulkheadTResultSpecs.cs:64-66",
         "src/Polly.SharedSpecs/Bulkhead/BulkheadTResultAsyncSpecs.cs:64-66"
@@ -683,7 +467,7 @@
       ]
     },
     {
-      "why": "Bulkhead vs timeout engine wrappers — parallel shape, different engines.",
+      "why": "Bulkhead vs timeout engine wrappers \u2014 parallel shape, different engines.",
       "occurrences": [
         "src/Polly.Shared/Bulkhead/BulkheadSyntaxAsync.cs:81-96",
         "src/Polly.Shared/Timeout/TimeoutSyntaxAsync.cs:251-262"
@@ -823,7 +607,7 @@
       ]
     },
     {
-      "why": "IsolatedCircuit vs BrokenCircuit exception classes — related hierarchy, different content.",
+      "why": "IsolatedCircuit vs BrokenCircuit exception classes \u2014 related hierarchy, different content.",
       "occurrences": [
         "src/Polly.Shared/CircuitBreaker/IsolatedCircuitException.cs:14-34",
         "src/Polly.Shared/CircuitBreaker/BrokenCircuitException.cs:11-52"
@@ -872,7 +656,7 @@
       ]
     },
     {
-      "why": "WaitAndRetry vs Retry async specs — different policies.",
+      "why": "WaitAndRetry vs Retry async specs \u2014 different policies.",
       "occurrences": [
         "src/Polly.SharedSpecs/Retry/WaitAndRetryAsyncSpecs.cs:133-182",
         "src/Polly.SharedSpecs/Retry/RetryAsyncSpecs.cs:87-131"
@@ -1096,7 +880,7 @@
       ]
     },
     {
-      "why": "BrokenCircuit vs TimeoutRejected exception classes — parallel hierarchy, different docs.",
+      "why": "BrokenCircuit vs TimeoutRejected exception classes \u2014 parallel hierarchy, different docs.",
       "occurrences": [
         "src/Polly.Shared/CircuitBreaker/BrokenCircuitException.cs:11-52",
         "src/Polly.Shared/Timeout/TimeoutRejectedException.cs:6-51"
@@ -1275,6 +1059,249 @@
       "occurrences": [
         "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:668-684",
         "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:650-665"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: only 2 substantive lines. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The same two argument-validation statements, including the full ArgumentOutOfRangeException message text and its String.Format call, are repeated verbatim in the sync and async circuit-breaker syntax files. A message string that long matching to the byte across two files is not independent authorship.",
+      "occurrences": [
+        "src/Polly.Shared/CircuitBreaker/AdvancedCircuitBreakerSyntax.cs:196-197",
+        "src/Polly.Shared/CircuitBreaker/AdvancedCircuitBreakerSyntaxAsync.cs:202-203"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.Shared/Timeout/TimeoutTResultSyntaxAsync.cs:201-218",
+        "src/Polly.Shared/Timeout/TimeoutSyntax.cs:201-218"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: only 53% of the tokens are shared - too little survives to call it one block written twice. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/PolicyTResultSpecs.cs:142-192",
+        "src/Polly.SharedSpecs/PolicyTResultAsyncSpecs.cs:145-195"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The IReadOnlyPolicyRegistry specs are the PolicyRegistry specs with the systematic _registry\u2192ReadOnlyRegistry rename over 84-86 lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Registry/PolicyRegistrySpecs.cs:246-330",
+        "src/Polly.SharedSpecs/Registry/IReadOnlyPolicyRegistrySpecs.cs:100-184"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheAsyncSpecs.cs:197-218",
+        "src/Polly.SharedSpecs/Caching/CacheSpecs.cs:190-213"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.Shared/NoOp/NoOpTResultSyntax.cs:1-25",
+        "src/Polly.Shared/NoOp/NoOpTResultSyntaxAsync.cs:1-25"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The ExecuteAndCapture variant is the Execute variant with the systematic method rename over 36 lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/PolicyTResultSpecs.cs:199-234",
+        "src/Polly.SharedSpecs/PolicyTResultSpecs.cs:236-271"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:692-705",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:684-697"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.Shared/Fallback/FallbackSyntaxAsync.cs:142-225",
+        "src/Polly.Shared/Fallback/FallbackSyntax.cs:214-302"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:252-326",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:257-327"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:15-75",
+        "src/Polly.SharedSpecs/Timeout/TimeoutAsyncSpecs.cs:16-76"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultAsyncSpecs.cs:104-190",
+        "src/Polly.SharedSpecs/Timeout/TimeoutAsyncSpecs.cs:104-190"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.Shared/Fallback/FallbackSyntaxAsync.cs:61-112",
+        "src/Polly.Shared/Fallback/FallbackSyntax.cs:122-172"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.Shared/Caching/CacheProviderExtensions.cs:64-82",
+        "src/Polly.Shared/Caching/CacheProviderExtensions.cs:37-55"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutAsyncSpecs.cs:70-131",
+        "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:69-130"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The ExecuteAndCapture variant of the async-policy misuse test, 8 lines systematic rename.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/PolicySpecs.cs:175-182",
+        "src/Polly.SharedSpecs/PolicySpecs.cs:184-191"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultSpecs.cs:78-133",
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultAsyncSpecs.cs:78-133"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryForeverSpecs.cs:14-85",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryForeverAsyncSpecs.cs:18-76"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:640-798",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1107-1264"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.Shared/Caching/GenericCacheProvider.cs:3-30",
+        "src/Polly.Shared/Caching/GenericCacheProviderAsync.cs:5-32"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Wrap/PolicyWrapSpecsAsync.cs:94-159",
+        "src/Polly.SharedSpecs/Wrap/PolicyWrapSpecs.cs:94-159"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:432-470",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:990-1028"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.Shared/Caching/CacheTResultSyntax.cs:132-162",
+        "src/Polly.Shared/Caching/CacheSyntax.cs:54-83"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.Shared/Timeout/TimeoutTResultSyntax.cs:49-71",
+        "src/Polly.Shared/Timeout/TimeoutSyntax.cs:48-70"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: only 50% of the tokens are shared - too little survives to call it one block written twice. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/PolicyAsyncSpecs.cs:212-264",
+        "src/Polly.SharedSpecs/PolicySpecs.cs:207-259"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.Shared/Retry/RetryTResultSyntaxAsync.cs:625-630",
+        "src/Polly.Shared/Retry/RetryTResultSyntax.cs:410-415"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:676-772",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:684-780"
       ]
     }
   ]

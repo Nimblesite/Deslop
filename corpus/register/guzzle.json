@@ -11,22 +11,6 @@
   },
   "clearly_in": [
     {
-      "why": "The async half of ClientTrait is the sync half with the systematic request→requestAsync/Async renames over 559 lines.",
-      "verified": "extracted and diffed the two source ranges (559 vs 559 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
-      "occurrences": [
-        "src/ClientTrait.php:110-668",
-        "src/ClientTrait.php:756-1314"
-      ]
-    },
-    {
-      "why": "The anonymous Request subclass is duplicated across the handler test files, differing only in the Request import.",
-      "verified": "extracted and diffed the two source ranges (31 vs 31 lines): not byte-identical, similarity 1.00; differences are the systematic change described",
-      "occurrences": [
-        "tests/Handler/StreamHandlerTest.php:5764-5794",
-        "tests/Handler/CurlFactoryTest.php:10488-10518"
-      ]
-    },
-    {
       "why": "identical 34-line assertPersistentPreferShareWasCreated helper duplicated between ClientTest and CurlMultiHandlerTest",
       "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
       "occurrences": [
@@ -35,7 +19,7 @@
       ]
     },
     {
-      "why": "The cURL TLS-constant mapping is the stream one with the systematic STREAM_CRYPTO_PROTO→CURL_SSLVERSION rename.",
+      "why": "The cURL TLS-constant mapping is the stream one with the systematic STREAM_CRYPTO_PROTO\u2192CURL_SSLVERSION rename.",
       "verified": "extracted and diffed the two source ranges (9 vs 11 lines): not byte-identical, similarity 0.58; differences are the systematic change described",
       "occurrences": [
         "src/Handler/TlsVersion.php:55-63",
@@ -43,35 +27,11 @@
       ]
     },
     {
-      "why": "testValidatesSslKeyType is testValidatesCertType with the systematic cert→ssl_key rename over 42 lines.",
-      "verified": "extracted and diffed the two source ranges (42 vs 42 lines): not byte-identical, similarity 0.94; differences are the systematic change described",
-      "occurrences": [
-        "tests/Handler/CurlFactoryTest.php:4040-4081",
-        "tests/Handler/CurlFactoryTest.php:3943-3984"
-      ]
-    },
-    {
-      "why": "ClientExceptionTest is ServerExceptionTest with the systematic Server↔Client rename over 32 lines.",
-      "verified": "extracted and diffed the two source ranges (32 vs 32 lines): not byte-identical, similarity 0.97; differences are the systematic change described",
-      "occurrences": [
-        "tests/Exception/ServerExceptionTest.php:9-40",
-        "tests/Exception/ClientExceptionTest.php:9-40"
-      ]
-    },
-    {
-      "why": "getName is getValue in SetCookie with the systematic Value↔Name rename over 14 lines.",
+      "why": "getName is getValue in SetCookie with the systematic Value\u2194Name rename over 14 lines.",
       "verified": "extracted and diffed the two source ranges (14 vs 14 lines): not byte-identical, similarity 0.89; differences are the systematic change described",
       "occurrences": [
         "src/Cookie/SetCookie.php:215-228",
         "src/Cookie/SetCookie.php:197-210"
-      ]
-    },
-    {
-      "why": "testThrowsWhenHttp2IsUnsupported is the Http3 twin with the version and protocol changed over 22 lines.",
-      "verified": "extracted and diffed the two source ranges (22 vs 22 lines): not byte-identical, similarity 1.00; differences are the systematic change described",
-      "occurrences": [
-        "tests/Handler/CurlFactoryTest.php:5246-5267",
-        "tests/Handler/CurlFactoryTest.php:5223-5244"
       ]
     },
     {
@@ -80,22 +40,6 @@
       "occurrences": [
         "tests/RedirectMiddlewareTest.php:359-392",
         "tests/RedirectMiddlewareTest.php:1241-1273"
-      ]
-    },
-    {
-      "why": "The plain read-timeout drain test is the gzip one with the endpoint changed over 33 lines.",
-      "verified": "extracted and diffed the two source ranges (34 vs 33 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
-      "occurrences": [
-        "tests/Handler/StreamHandlerTest.php:5097-5130",
-        "tests/Handler/StreamHandlerTest.php:5063-5095"
-      ]
-    },
-    {
-      "why": "testPersistsToSession is testPersistsToFile with the systematic File↔Session jar rename over 40 lines.",
-      "verified": "extracted and diffed the two source ranges (40 vs 41 lines): not byte-identical, similarity 0.90; differences are the systematic change described",
-      "occurrences": [
-        "tests/Cookie/FileCookieJarTest.php:138-177",
-        "tests/Cookie/SessionCookieJarTest.php:127-167"
       ]
     },
     {
@@ -131,14 +75,6 @@
       ]
     },
     {
-      "why": "The StreamHandler on-headers test is the CurlFactory one with the systematic Psr7-namespace and handler changes over 38 lines.",
-      "verified": "extracted and diffed the two source ranges (38 vs 39 lines): not byte-identical, similarity 0.96; differences are the systematic change described",
-      "occurrences": [
-        "tests/Handler/CurlFactoryTest.php:7876-7913",
-        "tests/Handler/StreamHandlerTest.php:3606-3644"
-      ]
-    },
-    {
       "why": "identical 38-line proxy-environment fixture duplicated between CurlFactoryTest and ProxyEnvTest",
       "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
       "occurrences": [
@@ -163,31 +99,7 @@
       ]
     },
     {
-      "why": "The CurlHandler on-stats test is the StreamHandler one with the systematic Psr7-namespace and handler changes over 25 lines.",
-      "verified": "extracted and diffed the two source ranges (25 vs 26 lines): not byte-identical, similarity 0.94; differences are the systematic change described",
-      "occurrences": [
-        "tests/Handler/StreamHandlerTest.php:4109-4133",
-        "tests/Handler/CurlFactoryTest.php:9804-9829"
-      ]
-    },
-    {
-      "why": "The StreamHandler empty-protocol rejection test is the CurlFactory one with the systematic handler change over 29 lines.",
-      "verified": "extracted and diffed the two source ranges (29 vs 29 lines): not byte-identical, similarity 0.94; differences are the systematic change described",
-      "occurrences": [
-        "tests/Handler/CurlFactoryTest.php:5193-5221",
-        "tests/Handler/StreamHandlerTest.php:178-206"
-      ]
-    },
-    {
-      "why": "Mirror of candidate 4 — the anonymous Request subclass duplicated across handler tests.",
-      "verified": "extracted and diffed the two source ranges (28 vs 28 lines): not byte-identical, similarity 1.00; differences are the systematic change described",
-      "occurrences": [
-        "tests/Handler/StreamHandlerTest.php:5766-5793",
-        "tests/Handler/CurlFactoryTest.php:10490-10517"
-      ]
-    },
-    {
-      "why": "formatCurlOption is formatCurlMultiOption with the systematic CURLOPT↔CURLMOPT rename over 23 lines.",
+      "why": "formatCurlOption is formatCurlMultiOption with the systematic CURLOPT\u2194CURLMOPT rename over 23 lines.",
       "verified": "extracted and diffed the two source ranges (23 vs 23 lines): not byte-identical, similarity 1.00; differences are the systematic change described",
       "occurrences": [
         "src/Handler/CurlMultiHandler.php:531-553",
@@ -227,7 +139,7 @@
       ]
     },
     {
-      "why": "3 identical fixture lines — a short idiom.",
+      "why": "3 identical fixture lines \u2014 a short idiom.",
       "occurrences": [
         "tests/ClientTest.php:1711-1713",
         "tests/ClientTest.php:1670-1672"
@@ -444,7 +356,7 @@
       ]
     },
     {
-      "why": "TransportSharing vs Multiplexing class headers — different subjects.",
+      "why": "TransportSharing vs Multiplexing class headers \u2014 different subjects.",
       "occurrences": [
         "src/TransportSharing.php:1-18",
         "src/Multiplexing.php:1-28"
@@ -570,7 +482,7 @@
       ]
     },
     {
-      "why": "Multiplex guard vs Utils test — different subjects.",
+      "why": "Multiplex guard vs Utils test \u2014 different subjects.",
       "occurrences": [
         "tests/Handler/CurlFactoryTest.php:5166-5191",
         "tests/UtilsTest.php:239-261"
@@ -619,7 +531,7 @@
       ]
     },
     {
-      "why": "Digest challenge properties vs handler state properties — unrelated.",
+      "why": "Digest challenge properties vs handler state properties \u2014 unrelated.",
       "occurrences": [
         "src/Auth/DigestChallenge.php:11-29",
         "src/Handler/CurlFactory.php:154-185"
@@ -1141,6 +1053,105 @@
       "occurrences": [
         "tests/ClientTest.php:2410-2417",
         "tests/ClientTest.php:2421-2426"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The async half of ClientTrait is the sync half with the systematic request\u2192requestAsync/Async renames over 559 lines.",
+      "occurrences": [
+        "src/ClientTrait.php:110-668",
+        "src/ClientTrait.php:756-1314"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The anonymous Request subclass is duplicated across the handler test files, differing only in the Request import.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5764-5794",
+        "tests/Handler/CurlFactoryTest.php:10488-10518"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "testValidatesSslKeyType is testValidatesCertType with the systematic cert\u2192ssl_key rename over 42 lines.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:4040-4081",
+        "tests/Handler/CurlFactoryTest.php:3943-3984"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: only 48% of the tokens are shared - too little survives to call it one block written twice. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "ClientExceptionTest is ServerExceptionTest with the systematic Server\u2194Client rename over 32 lines.",
+      "occurrences": [
+        "tests/Exception/ServerExceptionTest.php:9-40",
+        "tests/Exception/ClientExceptionTest.php:9-40"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "testThrowsWhenHttp2IsUnsupported is the Http3 twin with the version and protocol changed over 22 lines.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:5246-5267",
+        "tests/Handler/CurlFactoryTest.php:5223-5244"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The plain read-timeout drain test is the gzip one with the endpoint changed over 33 lines.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5097-5130",
+        "tests/Handler/StreamHandlerTest.php:5063-5095"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "testPersistsToSession is testPersistsToFile with the systematic File\u2194Session jar rename over 40 lines.",
+      "occurrences": [
+        "tests/Cookie/FileCookieJarTest.php:138-177",
+        "tests/Cookie/SessionCookieJarTest.php:127-167"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The StreamHandler on-headers test is the CurlFactory one with the systematic Psr7-namespace and handler changes over 38 lines.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:7876-7913",
+        "tests/Handler/StreamHandlerTest.php:3606-3644"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The CurlHandler on-stats test is the StreamHandler one with the systematic Psr7-namespace and handler changes over 25 lines.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:4109-4133",
+        "tests/Handler/CurlFactoryTest.php:9804-9829"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The StreamHandler empty-protocol rejection test is the CurlFactory one with the systematic handler change over 29 lines.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:5193-5221",
+        "tests/Handler/StreamHandlerTest.php:178-206"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "Mirror of candidate 4 \u2014 the anonymous Request subclass duplicated across handler tests.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5766-5793",
+        "tests/Handler/CurlFactoryTest.php:10490-10517"
       ]
     }
   ],

@@ -19,15 +19,7 @@
       ]
     },
     {
-      "why": "test_KeepOpenFile.py and test_LazyFile.py are the same ten-line test file written twice against sibling classes: same import, same function shape, same expected list, same tmpdir fixture, same p.write, same with-open. The LazyFile copy adds one nesting level to wrap the file. Two files, one test.",
-      "verified": "diff of tests/test_utils/test_KeepOpenFile.py:1-10 against tests/test_utils/test_LazyFile.py:1-11 at the pinned sha: eight of eleven lines are identical; the differences are the test function name and the extra `with click.utils._LazyFile(f.name) as lf:` wrapper with its consequent indent.",
-      "occurrences": [
-        "tests/test_utils/test_KeepOpenFile.py:1-10",
-        "tests/test_utils/test_LazyFile.py:1-11"
-      ]
-    },
-    {
-      "why": "_find_binary_writer is _find_binary_reader with the systematic rename reader→writer throughout 16 lines.",
+      "why": "_find_binary_writer is _find_binary_reader with the systematic rename reader\u2192writer throughout 16 lines.",
       "verified": "extracted and diffed the two source ranges (16 vs 16 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
       "occurrences": [
         "src/click/_compat.py:176-191",
@@ -51,15 +43,7 @@
       ]
     },
     {
-      "why": "NoSuchCommand is NoSuchOption with the systematic rename option→command throughout its 34-line class.",
-      "verified": "extracted and diffed the two source ranges (34 vs 34 lines): not byte-identical, similarity 0.76; differences are the systematic change described",
-      "occurrences": [
-        "src/click/exceptions.py:268-301",
-        "src/click/exceptions.py:232-265"
-      ]
-    },
-    {
-      "why": "_force_correct_text_reader is _force_correct_text_writer with the systematic rename writer→reader throughout.",
+      "why": "_force_correct_text_reader is _force_correct_text_writer with the systematic rename writer\u2192reader throughout.",
       "verified": "extracted and diffed the two source ranges (14 vs 14 lines): not byte-identical, similarity 0.86; differences are the systematic change described",
       "occurrences": [
         "src/click/_compat.py:303-316",
@@ -67,7 +51,7 @@
       ]
     },
     {
-      "why": "The argument decorator is the option decorator with the systematic rename Option→Argument throughout 26 lines.",
+      "why": "The argument decorator is the option decorator with the systematic rename Option\u2192Argument throughout 26 lines.",
       "verified": "extracted and diffed the two source ranges (26 vs 26 lines): not byte-identical, similarity 0.93; differences are the systematic change described",
       "occurrences": [
         "src/click/decorators.py:352-377",
@@ -83,7 +67,7 @@
       ]
     },
     {
-      "why": "Mirror of candidate 42 — NoSuchOption vs NoSuchCommand, a pure option↔command rename.",
+      "why": "Mirror of candidate 42 \u2014 NoSuchOption vs NoSuchCommand, a pure option\u2194command rename.",
       "verified": "extracted and diffed the two source ranges (23 vs 23 lines): not byte-identical, similarity 0.92; differences are the systematic change described",
       "occurrences": [
         "src/click/exceptions.py:238-260",
@@ -99,7 +83,7 @@
       ]
     },
     {
-      "why": "The group decorator's overload block is the command decorator's with the systematic rename command→group, CmdType→GrpType.",
+      "why": "The group decorator's overload block is the command decorator's with the systematic rename command\u2192group, CmdType\u2192GrpType.",
       "verified": "extracted and diffed the two source ranges (33 vs 33 lines): not byte-identical, similarity 0.84; differences are the systematic change described",
       "occurrences": [
         "src/click/decorators.py:258-290",
@@ -121,14 +105,6 @@
         "tests/test_context.py:593-620",
         "tests/test_context.py:539-566"
       ]
-    },
-    {
-      "why": "15 lines of the prompt-input test byte-identical except BytesIO vs str input.",
-      "verified": "extracted and diffed the two source ranges (15 vs 15 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
-      "occurrences": [
-        "tests/test_testing.py:93-107",
-        "tests/test_testing.py:17-31"
-      ]
     }
   ],
   "clearly_out": [],
@@ -149,14 +125,14 @@
       ]
     },
     {
-      "why": "_KeepOpenFile vs _AtomicFile context-manager bodies — related helpers, genuinely different behavior.",
+      "why": "_KeepOpenFile vs _AtomicFile context-manager bodies \u2014 related helpers, genuinely different behavior.",
       "occurrences": [
         "src/click/utils.py:231-246",
         "src/click/_compat.py:473-485"
       ]
     },
     {
-      "why": "Same chain fixtures minus docstrings — scaffolding.",
+      "why": "Same chain fixtures minus docstrings \u2014 scaffolding.",
       "occurrences": [
         "tests/test_chain.py:48-61",
         "tests/test_chain.py:16-26"
@@ -184,7 +160,7 @@
       ]
     },
     {
-      "why": "Flag-group competition variants — related parametrized tests with different docs and targets.",
+      "why": "Flag-group competition variants \u2014 related parametrized tests with different docs and targets.",
       "occurrences": [
         "tests/test_options.py:3236-3250",
         "tests/test_options.py:2832-2850"
@@ -261,7 +237,7 @@
       ]
     },
     {
-      "why": "Popen vs NamedTemporaryFile monkeypatches — different targets.",
+      "why": "Popen vs NamedTemporaryFile monkeypatches \u2014 different targets.",
       "occurrences": [
         "tests/test_termui.py:907-912",
         "tests/test_termui.py:1276-1281"
@@ -338,7 +314,7 @@
       ]
     },
     {
-      "why": "Windows-fd vs invalid-mode CliRunner errors — different features.",
+      "why": "Windows-fd vs invalid-mode CliRunner errors \u2014 different features.",
       "occurrences": [
         "tests/test_testing.py:630-633",
         "tests/test_testing.py:623-626"
@@ -359,7 +335,7 @@
       ]
     },
     {
-      "why": "11 lines of prompt tests differing in input strings and function names — copy adapted, but renames and hidden-input lines make it ragged.",
+      "why": "11 lines of prompt tests differing in input strings and function names \u2014 copy adapted, but renames and hidden-input lines make it ragged.",
       "occurrences": [
         "tests/test_testing.py:68-78",
         "tests/test_testing.py:122-129"
@@ -387,7 +363,7 @@
       ]
     },
     {
-      "why": "4 lines of an output-assert helper — short idiom.",
+      "why": "4 lines of an output-assert helper \u2014 short idiom.",
       "occurrences": [
         "tests/test_options.py:2384-2387",
         "tests/test_options.py:2191-2194"
@@ -408,7 +384,7 @@
       ]
     },
     {
-      "why": "DateTime vs Choice normalization tests — same skeleton, type-specific content.",
+      "why": "DateTime vs Choice normalization tests \u2014 same skeleton, type-specific content.",
       "occurrences": [
         "tests/test_basic.py:692-715",
         "tests/test_normalization.py:18-50"
@@ -450,7 +426,7 @@
       ]
     },
     {
-      "why": "3 identical assertion lines — a short idiom.",
+      "why": "3 identical assertion lines \u2014 a short idiom.",
       "occurrences": [
         "tests/test_commands.py:525-527",
         "tests/test_commands.py:508-510"
@@ -492,7 +468,7 @@
       ]
     },
     {
-      "why": "3 identical monkeypatch lines — a short idiom.",
+      "why": "3 identical monkeypatch lines \u2014 a short idiom.",
       "occurrences": [
         "tests/test_termui.py:252-254",
         "tests/test_termui.py:85-87"
@@ -520,7 +496,7 @@
       ]
     },
     {
-      "why": "7 lines of the prompt/confirm pair — short window, ragged.",
+      "why": "7 lines of the prompt/confirm pair \u2014 short window, ragged.",
       "occurrences": [
         "tests/test_utils/test_echo.py:151-157",
         "tests/test_utils/test_echo.py:125-131"
@@ -534,7 +510,7 @@
       ]
     },
     {
-      "why": "3 lines of Option vs Argument deprecation raises — a short idiom.",
+      "why": "3 lines of Option vs Argument deprecation raises \u2014 a short idiom.",
       "occurrences": [
         "tests/test_options.py:97-99",
         "tests/test_arguments.py:442-444"
@@ -576,7 +552,7 @@
       ]
     },
     {
-      "why": "Context attribute-inheritance blocks for different attributes — the framework idiom.",
+      "why": "Context attribute-inheritance blocks for different attributes \u2014 the framework idiom.",
       "occurrences": [
         "src/click/core.py:493-503",
         "src/click/core.py:408-419"
@@ -639,7 +615,7 @@
       ]
     },
     {
-      "why": "14 vs 19 lines — the interleaving test extended with stdout/stderr asserts on one side; real copy, ragged boundaries.",
+      "why": "14 vs 19 lines \u2014 the interleaving test extended with stdout/stderr asserts on one side; real copy, ragged boundaries.",
       "occurrences": [
         "tests/test_stream_lifecycle.py:406-419",
         "tests/test_testing.py:360-378"
@@ -702,7 +678,7 @@
       ]
     },
     {
-      "why": "Pager asserts vs command-precedence asserts — unrelated.",
+      "why": "Pager asserts vs command-precedence asserts \u2014 unrelated.",
       "occurrences": [
         "tests/test_termui.py:1959-1963",
         "tests/test_commands.py:517-520"
@@ -730,7 +706,7 @@
       ]
     },
     {
-      "why": "Flat vs nested command chains — different trees.",
+      "why": "Flat vs nested command chains \u2014 different trees.",
       "occurrences": [
         "tests/test_chain.py:171-185",
         "tests/test_chain.py:223-237"
@@ -744,7 +720,7 @@
       ]
     },
     {
-      "why": "Two variants of the tutorial hello example (option vs argument) — related demos, not a certain copy.",
+      "why": "Two variants of the tutorial hello example (option vs argument) \u2014 related demos, not a certain copy.",
       "occurrences": [
         "tests/typing/typing_simple_example.py:1-17",
         "tests/typing/typing_options.py:1-16"
@@ -835,7 +811,7 @@
       ]
     },
     {
-      "why": "INT vs FLOAT param type class bodies — the sibling-type idiom.",
+      "why": "INT vs FLOAT param type class bodies \u2014 the sibling-type idiom.",
       "occurrences": [
         "src/click/types.py:725-730",
         "src/click/types.py:757-762"
@@ -863,21 +839,21 @@
       ]
     },
     {
-      "why": "3 identical isolation lines — a short idiom.",
+      "why": "3 identical isolation lines \u2014 a short idiom.",
       "occurrences": [
         "tests/test_testing.py:554-556",
         "tests/test_testing.py:543-545"
       ]
     },
     {
-      "why": "Deprecation __getattr__ blocks for different module names — same pattern, different members.",
+      "why": "Deprecation __getattr__ blocks for different module names \u2014 same pattern, different members.",
       "occurrences": [
         "src/click/parser.py:506-520",
         "src/click/utils.py:672-686"
       ]
     },
     {
-      "why": "with_resource single vs nested resource tests — one extends the other.",
+      "why": "with_resource single vs nested resource tests \u2014 one extends the other.",
       "occurrences": [
         "tests/test_context.py:539-576",
         "tests/test_context.py:593-633"
@@ -891,7 +867,7 @@
       ]
     },
     {
-      "why": "4 identical pager-setup lines — a short idiom.",
+      "why": "4 identical pager-setup lines \u2014 a short idiom.",
       "occurrences": [
         "tests/test_termui.py:690-693",
         "tests/test_termui.py:765-768"
@@ -912,7 +888,7 @@
       ]
     },
     {
-      "why": "Envvar flag_value vs multiple-defaults tests — unrelated features.",
+      "why": "Envvar flag_value vs multiple-defaults tests \u2014 unrelated features.",
       "occurrences": [
         "tests/test_options.py:1716-1726",
         "tests/test_options.py:239-258"
@@ -996,7 +972,7 @@
       ]
     },
     {
-      "why": "Two 21-line pass-decorator tests differing in ensure= and an extra test — copy extended, boundaries fuzzy.",
+      "why": "Two 21-line pass-decorator tests differing in ensure= and an extra test \u2014 copy extended, boundaries fuzzy.",
       "occurrences": [
         "tests/test_context.py:62-82",
         "tests/test_context.py:39-59"
@@ -1119,6 +1095,33 @@
       "occurrences": [
         "tests/test_shell_completion.py:290-290",
         "tests/test_shell_completion.py:288-288"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "test_KeepOpenFile.py and test_LazyFile.py are the same ten-line test file written twice against sibling classes: same import, same function shape, same expected list, same tmpdir fixture, same p.write, same with-open. The LazyFile copy adds one nesting level to wrap the file. Two files, one test.",
+      "occurrences": [
+        "tests/test_utils/test_KeepOpenFile.py:1-10",
+        "tests/test_utils/test_LazyFile.py:1-11"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "NoSuchCommand is NoSuchOption with the systematic rename option\u2192command throughout its 34-line class.",
+      "occurrences": [
+        "src/click/exceptions.py:268-301",
+        "src/click/exceptions.py:232-265"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "15 lines of the prompt-input test byte-identical except BytesIO vs str input.",
+      "occurrences": [
+        "tests/test_testing.py:93-107",
+        "tests/test_testing.py:17-31"
       ]
     }
   ]

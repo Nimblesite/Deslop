@@ -54,15 +54,7 @@ fn a_divergent_same_shape_sibling_does_not_join_the_real_pair() -> Result<()> {
         vec!["BillingAccruals.cs", "BillingAccruals.cs"],
         "the component is single-file by construction: {cluster:#}"
     );
-    let spans: Vec<(u64, u64)> = occurrences(cluster)
-        .iter()
-        .map(|occurrence| {
-            (
-                field(occurrence, "start_line").as_u64().unwrap_or_default(),
-                field(occurrence, "end_line").as_u64().unwrap_or_default(),
-            )
-        })
-        .collect();
+    let spans = cluster_line_spans(cluster);
     assert_eq!(
         spans,
         [DOMESTIC_SPAN, REGIONAL_SPAN],

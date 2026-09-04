@@ -6,13 +6,14 @@ use std::{fs, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 use deslop_core::{
-    embedding::test_support::StubProvider,
-    live::{AnalysisSession, LiveApi, LiveService},
+    live::{LiveApi, LiveService},
     report::{
         PairClassification, PairComparison, PairComparisonParams, PairEndpoint, ReportOccurrence,
     },
 };
 use tokio::sync::Mutex;
+
+use crate::common::*;
 
 const MIN_NODES: u32 = 4;
 const CONTENT_FLOOR: f64 = 0.7;
@@ -29,15 +30,7 @@ async fn explicit_pair_comparison_owns_exact_admission_evidence() -> Result<()> 
     let workspace = tempfile::tempdir().context("pair workspace")?;
     fs::write(workspace.path().join(LEFT_FILE), SOURCE).context("write left endpoint")?;
     fs::write(workspace.path().join(RIGHT_FILE), SOURCE).context("write right endpoint")?;
-    let provider = Arc::new(StubProvider::new());
-    let session = AnalysisSession::new(
-        workspace.path().to_path_buf(),
-        MIN_NODES,
-        false,
-        None,
-        provider,
-    )
-    .context("analyse explicit pair fixture")?;
+    let session = live_session_at(&workspace.path(), MIN_NODES)?;
     let report = session.report();
     let cluster = report
         .clusters
@@ -104,15 +97,7 @@ async fn content_rejected_pair_never_enters_cluster_closure() -> Result<()> {
     fs::write(workspace.path().join(LEFT_FILE), UNRELATED_LEFT).context("write unrelated left")?;
     fs::write(workspace.path().join(RIGHT_FILE), UNRELATED_RIGHT)
         .context("write unrelated right")?;
-    let provider = Arc::new(StubProvider::new());
-    let session = AnalysisSession::new(
-        workspace.path().to_path_buf(),
-        MIN_NODES,
-        false,
-        None,
-        provider,
-    )
-    .context("analyse content-gate fixture")?;
+    let session = live_session_at(&workspace.path(), MIN_NODES)?;
     let report = session.report();
     let left = source_endpoint(LEFT_FILE, UNRELATED_LEFT);
     let right = source_endpoint(RIGHT_FILE, UNRELATED_RIGHT);

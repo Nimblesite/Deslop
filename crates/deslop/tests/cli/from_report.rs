@@ -177,9 +177,7 @@ fn from_report_preserves_mass_and_band_in_html() -> Result<()> {
 
 #[test]
 fn cross_cluster_collapse_removes_occurrence_subset_clusters() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = fixture_command("csharp-prologue-false-positive", &tmp.path().join("report"))?;
+    let (_tmp, out, mut cmd) = fixture_run("csharp-prologue-false-positive")?;
     let _assertion = cmd.args(["--min-nodes", "2"]).assert().success();
     let json = read_json_report(&out.json)?;
     let clusters = json

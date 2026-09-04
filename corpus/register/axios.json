@@ -27,14 +27,6 @@
       ]
     },
     {
-      "why": "pipeFileToResponse is defined in full in two separate servers under two separate directories - same function name, same three parameters, same if-type writeHead guard with the same Content-Type object, same createReadStream().pipe(res) body. The sandbox copy only re-roots the path.",
-      "verified": "diff of examples/server.js:69-76 against sandbox/server.js:7-15 at the pinned sha: three differing lines, being one added blank line and the path expression path.join(__dirname, file) vs path.join(path.resolve(), 'sandbox', file). The signature, the guard and the pipe are identical.",
-      "occurrences": [
-        "examples/server.js:69-76",
-        "sandbox/server.js:7-15"
-      ]
-    },
-    {
       "why": "the esm and cjs typings test files are maintained as verbatim copies; these 33 lines are byte-identical",
       "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
       "occurrences": [
@@ -75,27 +67,11 @@
       ]
     },
     {
-      "why": "The IPv6 literal test is the 'allow passing JSON' test copied with only the test title and the request URL changed; the Fred Flintstone payload and server block are identical.",
-      "verified": "extracted and diffed the two source ranges (17 vs 18 lines): not byte-identical, similarity 0.43; differing lines listed in notes",
-      "occurrences": [
-        "test/unit/adapters/http.js:317-333",
-        "test/unit/adapters/http.js:181-198"
-      ]
-    },
-    {
       "why": "byte-identical 26-line span between the esm and cjs typings twins",
       "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
       "occurrences": [
         "test/module/typings/esm/index.ts:250-275",
         "test/module/typings/cjs/index.ts:227-252"
-      ]
-    },
-    {
-      "why": "stopHTTPServer is startHTTPServer's opening block copied — 9 lines identical except the exported function name.",
-      "verified": "extracted and diffed the two source ranges (9 vs 9 lines): not byte-identical, similarity 0.99; differing lines listed in notes",
-      "occurrences": [
-        "test/unit/adapters/http.js:106-114",
-        "test/helpers/server.js:54-62"
       ]
     },
     {
@@ -107,35 +83,11 @@
       ]
     },
     {
-      "why": "20-line streaming server handler duplicated in the same file; only the body suffix literal ('6789' vs '1234') differs.",
-      "verified": "extracted and diffed the two source ranges (20 vs 20 lines): not byte-identical, similarity 0.99; differing lines listed in notes",
-      "occurrences": [
-        "test/unit/adapters/http.js:1014-1033",
-        "test/unit/adapters/http.js:1285-1304"
-      ]
-    },
-    {
       "why": "byte-identical 10-line span between the esm and cjs typings twins",
       "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
       "occurrences": [
         "test/module/typings/esm/index.ts:42-51",
         "test/module/typings/cjs/index.ts:19-28"
-      ]
-    },
-    {
-      "why": "The HTTP-protocol test is the HTTPS test copied with the URL changed to '/foo' and the title updated; the response handling is identical.",
-      "verified": "extracted and diffed the two source ranges (15 vs 16 lines): not byte-identical, similarity 0.96; differing lines listed in notes",
-      "occurrences": [
-        "test/specs/requests.spec.js:502-516",
-        "test/specs/requests.spec.js:485-500"
-      ]
-    },
-    {
-      "why": "A 54-line mergeConfig describe block where the only change is the systematic rename validateStatus→headers throughout.",
-      "verified": "extracted and diffed the two source ranges (54 vs 54 lines): not byte-identical, similarity 0.78; differing lines listed in notes",
-      "occurrences": [
-        "test/specs/core/mergeConfig.spec.js:277-330",
-        "test/specs/core/mergeConfig.spec.js:160-213"
       ]
     },
     {
@@ -147,14 +99,6 @@
       ]
     },
     {
-      "why": "53-line AxiosHeaders typings block identical modulo the systematic namespace rename (AxiosHeaders→axios.AxiosHeaders etc.) and a comment spelling fix.",
-      "verified": "extracted and diffed the two source ranges (53 vs 54 lines): not byte-identical, similarity 0.98; differing lines listed in notes",
-      "occurrences": [
-        "test/module/typings/esm/index.ts:606-658",
-        "test/module/typings/cjs/index.ts:457-510"
-      ]
-    },
-    {
       "why": "byte-identical 18-line span between the esm and cjs typings twins",
       "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
       "occurrences": [
@@ -163,27 +107,11 @@
       ]
     },
     {
-      "why": "11-line module test-harness block identical except the pkgPath directory name (ts-require-default vs ts-require).",
-      "verified": "extracted and diffed the two source ranges (11 vs 11 lines): not byte-identical, similarity 0.99; differing lines listed in notes",
-      "occurrences": [
-        "test/module/test.js:137-147",
-        "test/module/test.js:123-133"
-      ]
-    },
-    {
       "why": "byte-identical 33-line span between the cjs and esm typings twins",
       "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
       "occurrences": [
         "test/module/typings/cjs/index.ts:137-169",
         "test/module/typings/esm/index.ts:160-192"
-      ]
-    },
-    {
-      "why": "14-line progress-samples callback duplicated in the same file with the systematic rename onDownloadProgress/download→onUploadProgress/upload.",
-      "verified": "extracted and diffed the two source ranges (14 vs 14 lines): not byte-identical, similarity 0.97; differing lines listed in notes",
-      "occurrences": [
-        "test/unit/adapters/http.js:2043-2056",
-        "test/unit/adapters/http.js:1984-1997"
       ]
     },
     {
@@ -211,7 +139,7 @@
       ]
     },
     {
-      "why": "15 lines of progress-samples assertions identical except upload→download.",
+      "why": "15 lines of progress-samples assertions identical except upload\u2192download.",
       "verified": "extracted and diffed the two source ranges (15 vs 15 lines): not byte-identical, similarity 0.99; differing lines listed in notes",
       "occurrences": [
         "test/unit/adapters/fetch.js:249-263",
@@ -224,22 +152,6 @@
       "occurrences": [
         "test/unit/adapters/fetch.js:134-154",
         "test/unit/adapters/fetch.js:208-228"
-      ]
-    },
-    {
-      "why": "The handleFormData/generateReadable helpers in test/unit/adapters/http.js are copies of the same helpers in test/helpers/server.js (35-line overlap, export keyword and one function name aside).",
-      "verified": "extracted and diffed the two source ranges (35 vs 33 lines): not byte-identical, similarity 0.92; differing lines listed in notes",
-      "occurrences": [
-        "test/helpers/server.js:64-98",
-        "test/unit/adapters/http.js:116-148"
-      ]
-    },
-    {
-      "why": "25-line ts-require fixture identical except the single line require('axios') vs require('axios').default.",
-      "verified": "extracted and diffed the two source ranges (25 vs 25 lines): not byte-identical, similarity 1.00; differing lines listed in notes",
-      "occurrences": [
-        "test/module/ts-require/index.ts:1-25",
-        "test/module/ts-require-default/index.ts:1-25"
       ]
     },
     {
@@ -275,23 +187,7 @@
       ]
     },
     {
-      "why": "23-line ts-require JS fixture identical except require('axios') vs require('axios').default.",
-      "verified": "extracted and diffed the two source ranges (23 vs 23 lines): not byte-identical, similarity 1.00; differing lines listed in notes",
-      "occurrences": [
-        "test/module/ts-require-default/index.js:1-23",
-        "test/module/ts-require/index.js:1-23"
-      ]
-    },
-    {
-      "why": "13 lines of the formidable handleFormData helper identical between test/unit/adapters/http.js and test/helpers/server.js (export keyword aside).",
-      "verified": "extracted and diffed the two source ranges (13 vs 13 lines): not byte-identical, similarity 0.99; differing lines listed in notes",
-      "occurrences": [
-        "test/unit/adapters/http.js:116-128",
-        "test/helpers/server.js:64-76"
-      ]
-    },
-    {
-      "why": "13-line module test-harness describe block identical apart from the parameter swap CommonJS/cjs/require ↔ ESM/esm/import.",
+      "why": "13-line module test-harness describe block identical apart from the parameter swap CommonJS/cjs/require \u2194 ESM/esm/import.",
       "verified": "extracted and diffed the two source ranges (13 vs 13 lines): not byte-identical, similarity 0.96; differing lines listed in notes",
       "occurrences": [
         "test/module/test.js:80-92",
@@ -299,7 +195,7 @@
       ]
     },
     {
-      "why": "13 lines of the clear-interceptors test duplicated in the same file with the systematic rename response→request.",
+      "why": "13 lines of the clear-interceptors test duplicated in the same file with the systematic rename response\u2192request.",
       "verified": "extracted and diffed the two source ranges (13 vs 13 lines): not byte-identical, similarity 0.94; differing lines listed in notes",
       "occurrences": [
         "test/specs/interceptors.spec.js:589-601",
@@ -315,35 +211,11 @@
       ]
     },
     {
-      "why": "19 lines of the generateReadable stream-generator body identical between test/unit/adapters/http.js and test/helpers/server.js (function name and export aside).",
-      "verified": "extracted and diffed the two source ranges (19 vs 19 lines): not byte-identical, similarity 0.97; differing lines listed in notes",
-      "occurrences": [
-        "test/unit/adapters/http.js:130-148",
-        "test/helpers/server.js:80-98"
-      ]
-    },
-    {
-      "why": "41-line mergeConfig describe block where the only change is the systematic rename transformRequest→headers throughout.",
+      "why": "41-line mergeConfig describe block where the only change is the systematic rename transformRequest\u2192headers throughout.",
       "verified": "extracted and diffed the two source ranges (41 vs 41 lines): not byte-identical, similarity 0.74; differing lines listed in notes",
       "occurrences": [
         "test/specs/core/mergeConfig.spec.js:229-269",
         "test/specs/core/mergeConfig.spec.js:173-213"
-      ]
-    },
-    {
-      "why": "36-line no_proxy proxy test duplicated in the same file; only the test title, the no_proxy list and the expected body differ.",
-      "verified": "extracted and diffed the two source ranges (36 vs 36 lines): not byte-identical, similarity 0.98; differing lines listed in notes",
-      "occurrences": [
-        "test/unit/adapters/http.js:1280-1315",
-        "test/unit/adapters/http.js:1243-1278"
-      ]
-    },
-    {
-      "why": "13-line module test-harness block identical apart from the parameter swap ts-require ↔ ts-require-default.",
-      "verified": "extracted and diffed the two source ranges (13 vs 13 lines): not byte-identical, similarity 0.98; differing lines listed in notes",
-      "occurrences": [
-        "test/module/test.js:136-148",
-        "test/module/test.js:122-134"
       ]
     },
     {
@@ -395,14 +267,6 @@
       ]
     },
     {
-      "why": "54-line config-fixture block identical modulo the systematic namespace rename (axios.AxiosRequestConfig→AxiosRequestConfig etc.) and one moved baseURL line.",
-      "verified": "extracted and diffed the two source ranges (54 vs 54 lines): not byte-identical, similarity 0.96; differing lines listed in notes",
-      "occurrences": [
-        "test/module/typings/cjs/index.ts:3-56",
-        "test/module/typings/esm/index.ts:26-79"
-      ]
-    },
-    {
       "why": "byte-identical 33-line span between the esm and cjs typings twins",
       "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
       "occurrences": [
@@ -411,27 +275,11 @@
       ]
     },
     {
-      "why": "13 lines of progress-samples assertions identical except upload→download.",
+      "why": "13 lines of progress-samples assertions identical except upload\u2192download.",
       "verified": "extracted and diffed the two source ranges (13 vs 13 lines): not byte-identical, similarity 0.99; differing lines listed in notes",
       "occurrences": [
         "test/unit/adapters/http.js:2000-2012",
         "test/unit/adapters/fetch.js:251-263"
-      ]
-    },
-    {
-      "why": "19 lines of void-interceptor typings statements identical apart from axios.-prefixed type names in comments.",
-      "verified": "extracted and diffed the two source ranges (19 vs 19 lines): not byte-identical, similarity 0.99; differing lines listed in notes",
-      "occurrences": [
-        "test/module/typings/esm/index.ts:335-353",
-        "test/module/typings/cjs/index.ts:306-324"
-      ]
-    },
-    {
-      "why": "15-line basic-auth test duplicated in the same file with only the password (and its expected base64 header) changed.",
-      "verified": "extracted and diffed the two source ranges (15 vs 15 lines): not byte-identical, similarity 0.93; differing lines listed in notes",
-      "occurrences": [
-        "test/specs/basicAuth.spec.js:48-62",
-        "test/specs/basicAuth.spec.js:17-31"
       ]
     },
     {
@@ -459,27 +307,11 @@
       ]
     },
     {
-      "why": "16-line toFormData indexes test duplicated in the same file with only the option value false→null and the matching key expectations changed.",
-      "verified": "extracted and diffed the two source ranges (16 vs 16 lines): not byte-identical, similarity 0.96; differing lines listed in notes",
-      "occurrences": [
-        "test/specs/helpers/toFormData.spec.js:52-67",
-        "test/specs/helpers/toFormData.spec.js:69-84"
-      ]
-    },
-    {
       "why": "byte-identical 31-line span between the cjs and esm typings twins",
       "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
       "occurrences": [
         "test/module/typings/cjs/index.ts:175-205",
         "test/module/typings/esm/index.ts:198-228"
-      ]
-    },
-    {
-      "why": "47-line rate-limit test duplicated in the same file with the systematic rename onUploadProgress→onDownloadProgress plus the matching maxRate/tick changes.",
-      "verified": "extracted and diffed the two source ranges (47 vs 47 lines): not byte-identical, similarity 0.99; differing lines listed in notes",
-      "occurrences": [
-        "test/unit/adapters/http.js:2078-2124",
-        "test/unit/adapters/http.js:2126-2172"
       ]
     },
     {
@@ -496,14 +328,6 @@
       "occurrences": [
         "test/unit/adapters/http.js:1321-1341",
         "test/unit/adapters/http.js:1400-1420"
-      ]
-    },
-    {
-      "why": "The IPv4 literal test is the 'allow passing JSON' test copied with only the title and the request URL (127.0.0.1) changed.",
-      "verified": "extracted and diffed the two source ranges (17 vs 18 lines): not byte-identical, similarity 0.43; differing lines listed in notes",
-      "occurrences": [
-        "test/unit/adapters/http.js:317-333",
-        "test/unit/adapters/http.js:162-179"
       ]
     },
     {
@@ -547,14 +371,6 @@
       ]
     },
     {
-      "why": "19 lines of the handleUserResponse fixture identical modulo the systematic rename axios.AxiosResponse→AxiosResponse plus a comment.",
-      "verified": "extracted and diffed the two source ranges (19 vs 19 lines): not byte-identical, similarity 0.99; differing lines listed in notes",
-      "occurrences": [
-        "test/module/typings/cjs/index.ts:109-127",
-        "test/module/typings/esm/index.ts:132-150"
-      ]
-    },
-    {
       "why": "identical 21-line proxy server-handler block duplicated in the http adapter test",
       "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
       "occurrences": [
@@ -579,14 +395,6 @@
       ]
     },
     {
-      "why": "15-line progress console/samples block duplicated in the same file with the systematic rename onUploadProgress/upload→onDownloadProgress/download.",
-      "verified": "extracted and diffed the two source ranges (15 vs 15 lines): not byte-identical, similarity 0.97; differing lines listed in notes",
-      "occurrences": [
-        "test/unit/adapters/fetch.js:157-171",
-        "test/unit/adapters/fetch.js:231-245"
-      ]
-    },
-    {
       "why": "byte-identical 33-line span between the cjs and esm typings twins",
       "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
       "occurrences": [
@@ -595,35 +403,11 @@
       ]
     },
     {
-      "why": "25-line unsupported-protocol test duplicated in the same file with only the scheme (tel: ↔ ftp:) and expected message changed.",
-      "verified": "extracted and diffed the two source ranges (25 vs 25 lines): not byte-identical, similarity 0.95; differing lines listed in notes",
-      "occurrences": [
-        "test/unit/adapters/http.js:1540-1564",
-        "test/unit/adapters/http.js:1566-1590"
-      ]
-    },
-    {
       "why": "byte-identical 7-line span between the cjs and esm typings twins",
       "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
       "occurrences": [
         "test/module/typings/cjs/index.ts:96-102",
         "test/module/typings/esm/index.ts:119-125"
-      ]
-    },
-    {
-      "why": "The timeout-rejection block in lib/adapters/xhr.js is the same block from lib/adapters/http.js copied with the systematic rename config→_config and reindentation.",
-      "verified": "extracted and diffed the two source ranges (11 vs 10 lines): not byte-identical, similarity 0.96; differing lines listed in notes",
-      "occurrences": [
-        "lib/adapters/http.js:652-662",
-        "lib/adapters/xhr.js:118-127"
-      ]
-    },
-    {
-      "why": "11-line timeout test duplicated in the same file with only the timeout option value changed (250 vs {strangeTimeout: 250}).",
-      "verified": "extracted and diffed the two source ranges (11 vs 11 lines): not byte-identical, similarity 0.96; differing lines listed in notes",
-      "occurrences": [
-        "test/unit/adapters/http.js:265-275",
-        "test/unit/adapters/http.js:207-217"
       ]
     },
     {
@@ -643,7 +427,7 @@
       ]
     },
     {
-      "why": "11-line interceptor use/eject block duplicated in the same file with the systematic rename request→response.",
+      "why": "11-line interceptor use/eject block duplicated in the same file with the systematic rename request\u2192response.",
       "verified": "extracted and diffed the two source ranges (11 vs 11 lines): not byte-identical, similarity 0.69; differing lines listed in notes",
       "occurrences": [
         "test/module/typings/cjs/index.ts:279-289",
@@ -653,7 +437,7 @@
   ],
   "clearly_out": [
     {
-      "why": "One side is a single line of the test file, the other a minified ES6-promise polyfill blob inside lib/axios.js — they share nothing; pairing them is plainly wrong.",
+      "why": "One side is a single line of the test file, the other a minified ES6-promise polyfill blob inside lib/axios.js \u2014 they share nothing; pairing them is plainly wrong.",
       "verified": "extracted and diffed the two source ranges (1 vs 11 lines): not byte-identical, similarity 0.00; differing lines listed in notes",
       "occurrences": [
         "test/manual/promise.js:9-9",
@@ -677,14 +461,14 @@
       ]
     },
     {
-      "why": "Same 3-line findMeInStackTrace assertion twice in one file, differing only in indentation — a short idiom.",
+      "why": "Same 3-line findMeInStackTrace assertion twice in one file, differing only in indentation \u2014 a short idiom.",
       "occurrences": [
         "test/unit/adapters/http.js:508-510",
         "test/unit/adapters/http.js:534-536"
       ]
     },
     {
-      "why": "Two interceptor tests sharing a skeleton but with inverted assertions and different flags — related but not a straight copy.",
+      "why": "Two interceptor tests sharing a skeleton but with inverted assertions and different flags \u2014 related but not a straight copy.",
       "occurrences": [
         "test/specs/interceptors.spec.js:29-44",
         "test/specs/interceptors.spec.js:46-61"
@@ -698,14 +482,14 @@
       ]
     },
     {
-      "why": "4 lines of spy assertions with a rename (resolveSpy→resolve) — short idiom.",
+      "why": "4 lines of spy assertions with a rename (resolveSpy\u2192resolve) \u2014 short idiom.",
       "occurrences": [
         "test/specs/requests.spec.js:143-146",
         "test/specs/core/settle.spec.js:64-67"
       ]
     },
     {
-      "why": "Same-file .then/.catch method chains calling different axios methods — framework scaffolding.",
+      "why": "Same-file .then/.catch method chains calling different axios methods \u2014 framework scaffolding.",
       "occurrences": [
         "test/module/typings/esm/index.ts:254-264",
         "test/module/typings/esm/index.ts:111-121"
@@ -719,7 +503,7 @@
       ]
     },
     {
-      "why": "A handleError function against an onUploadProgress object literal — similar shape, different content, ragged edges.",
+      "why": "A handleError function against an onUploadProgress object literal \u2014 similar shape, different content, ragged edges.",
       "occurrences": [
         "test/module/typings/esm/index.ts:73-79",
         "test/module/typings/esm/index.ts:553-558"
@@ -761,7 +545,7 @@
       ]
     },
     {
-      "why": "Two identical lines of axios.spread typings — a two-line idiom.",
+      "why": "Two identical lines of axios.spread typings \u2014 a two-line idiom.",
       "occurrences": [
         "test/module/typings/cjs/index.ts:358-359",
         "test/module/typings/esm/index.ts:398-399"
@@ -803,14 +587,14 @@
       ]
     },
     {
-      "why": "4 lines of fs.readFileSync key/cert options — a common idiom.",
+      "why": "4 lines of fs.readFileSync key/cert options \u2014 a common idiom.",
       "occurrences": [
         "test/unit/adapters/http.js:1149-1152",
         "test/unit/adapters/http.js:1048-1051"
       ]
     },
     {
-      "why": "Three identical mergeConfig assertion lines — a short idiom.",
+      "why": "Three identical mergeConfig assertion lines \u2014 a short idiom.",
       "occurrences": [
         "test/specs/core/mergeConfig.spec.js:134-136",
         "test/specs/core/mergeConfig.spec.js:141-143"
@@ -831,7 +615,7 @@
       ]
     },
     {
-      "why": "4 lines of getAjaxRequest header assertion — an idiom.",
+      "why": "4 lines of getAjaxRequest header assertion \u2014 an idiom.",
       "occurrences": [
         "test/specs/defaults.spec.js:124-127",
         "test/specs/defaults.spec.js:114-117"
@@ -852,7 +636,7 @@
       ]
     },
     {
-      "why": "getTags vs getReleases — a 3-line method with one word changed.",
+      "why": "getTags vs getReleases \u2014 a 3-line method with one word changed.",
       "occurrences": [
         "bin/GithubAPI.js:92-94",
         "bin/GithubAPI.js:84-86"
@@ -866,7 +650,7 @@
       ]
     },
     {
-      "why": "merge(undefined,…) vs merge(null,…) — a 3-line idiom.",
+      "why": "merge(undefined,\u2026) vs merge(null,\u2026) \u2014 a 3-line idiom.",
       "occurrences": [
         "test/specs/utils/merge.spec.js:59-61",
         "test/specs/utils/merge.spec.js:63-65"
@@ -908,14 +692,14 @@
       ]
     },
     {
-      "why": "4 lines of Object.assign option destructuring — an idiom.",
+      "why": "4 lines of Object.assign option destructuring \u2014 an idiom.",
       "occurrences": [
         "test/helpers/server.js:15-18",
         "test/unit/adapters/http.js:67-70"
       ]
     },
     {
-      "why": "5 lines of header-iteration with a rename (expectedHeaders→headers).",
+      "why": "5 lines of header-iteration with a rename (expectedHeaders\u2192headers).",
       "occurrences": [
         "test/specs/headers.spec.js:61-65",
         "test/specs/headers.spec.js:40-44"
@@ -929,7 +713,7 @@
       ]
     },
     {
-      "why": "5 lines of typeof export assertions — check scaffolding.",
+      "why": "5 lines of typeof export assertions \u2014 check scaffolding.",
       "occurrences": [
         "test/module/ts-require-default/index.ts:13-17",
         "test/module/ts-require/index.ts:13-17"
@@ -943,7 +727,7 @@
       ]
     },
     {
-      "why": "4 lines of https.createServer setup — an idiom.",
+      "why": "4 lines of https.createServer setup \u2014 an idiom.",
       "occurrences": [
         "test/unit/adapters/http.js:1154-1157",
         "test/unit/adapters/http.js:1053-1056"
@@ -971,7 +755,7 @@
       ]
     },
     {
-      "why": "Three identical typeof assertion lines — check scaffolding.",
+      "why": "Three identical typeof assertion lines \u2014 check scaffolding.",
       "occurrences": [
         "test/module/ts-require/index.ts:17-19",
         "test/module/ts-require-default/index.ts:17-19"
@@ -992,7 +776,7 @@
       ]
     },
     {
-      "why": "isObject vs isPlainObject — a 3-line idiom.",
+      "why": "isObject vs isPlainObject \u2014 a 3-line idiom.",
       "occurrences": [
         "test/specs/utils/isX.spec.js:42-44",
         "test/specs/utils/isX.spec.js:48-50"
@@ -1034,7 +818,7 @@
       ]
     },
     {
-      "why": "Three identical config.headers lines across the cjs/esm fixtures — a short idiom.",
+      "why": "Three identical config.headers lines across the cjs/esm fixtures \u2014 a short idiom.",
       "occurrences": [
         "test/module/typings/cjs/index.ts:490-492",
         "test/module/typings/esm/index.ts:638-640"
@@ -1062,14 +846,14 @@
       ]
     },
     {
-      "why": "Three identical mergeConfig lines — a short idiom.",
+      "why": "Three identical mergeConfig lines \u2014 a short idiom.",
       "occurrences": [
         "test/specs/core/mergeConfig.spec.js:257-259",
         "test/specs/core/mergeConfig.spec.js:249-251"
       ]
     },
     {
-      "why": "Two isAbsoluteURL tests with different inputs — same skeleton only.",
+      "why": "Two isAbsoluteURL tests with different inputs \u2014 same skeleton only.",
       "occurrences": [
         "test/specs/helpers/isAbsoluteURL.spec.js:10-13",
         "test/specs/helpers/isAbsoluteURL.spec.js:19-22"
@@ -1090,7 +874,7 @@
       ]
     },
     {
-      "why": "4 lines identical except axios.AxiosResponse→AxiosResponse on one line.",
+      "why": "4 lines identical except axios.AxiosResponse\u2192AxiosResponse on one line.",
       "occurrences": [
         "test/module/typings/cjs/index.ts:327-330",
         "test/module/typings/esm/index.ts:356-359"
@@ -1118,7 +902,7 @@
       ]
     },
     {
-      "why": "4 identical typeof assertion lines — check scaffolding.",
+      "why": "4 identical typeof assertion lines \u2014 check scaffolding.",
       "occurrences": [
         "test/module/ts-require-default/index.ts:15-18",
         "test/module/ts-require/index.ts:15-18"
@@ -1153,14 +937,14 @@
       ]
     },
     {
-      "why": "4 lines of http.createServer setup — an idiom.",
+      "why": "4 lines of http.createServer setup \u2014 an idiom.",
       "occurrences": [
         "test/unit/adapters/http.js:1281-1284",
         "test/unit/adapters/http.js:1244-1247"
       ]
     },
     {
-      "why": "7 identical jasmine.Ajax install/uninstall — framework scaffolding.",
+      "why": "7 identical jasmine.Ajax install/uninstall \u2014 framework scaffolding.",
       "occurrences": [
         "test/specs/progress.spec.js:2-8",
         "test/specs/adapter.spec.js:3-9"
@@ -1181,14 +965,14 @@
       ]
     },
     {
-      "why": "Three identical instance defaults lines — a short idiom.",
+      "why": "Three identical instance defaults lines \u2014 a short idiom.",
       "occurrences": [
         "test/module/typings/esm/index.ts:280-282",
         "test/module/typings/cjs/index.ts:257-259"
       ]
     },
     {
-      "why": "Three lines of error→json assertions with a rename.",
+      "why": "Three lines of error\u2192json assertions with a rename.",
       "occurrences": [
         "test/specs/core/AxiosError.spec.js:9-11",
         "test/specs/core/AxiosError.spec.js:24-26"
@@ -1216,7 +1000,7 @@
       ]
     },
     {
-      "why": "Three identical AxiosError construction lines — a short idiom.",
+      "why": "Three identical AxiosError construction lines \u2014 a short idiom.",
       "occurrences": [
         "test/specs/core/AxiosError.spec.js:5-7",
         "test/specs/core/AxiosError.spec.js:20-22"
@@ -1297,6 +1081,249 @@
       "occurrences": [
         "test/specs/xsrf.spec.js:86-92",
         "test/specs/xsrf.spec.js:101-107"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "pipeFileToResponse is defined in full in two separate servers under two separate directories - same function name, same three parameters, same if-type writeHead guard with the same Content-Type object, same createReadStream().pipe(res) body. The sandbox copy only re-roots the path.",
+      "occurrences": [
+        "examples/server.js:69-76",
+        "sandbox/server.js:7-15"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The IPv6 literal test is the 'allow passing JSON' test copied with only the test title and the request URL changed; the Fred Flintstone payload and server block are identical.",
+      "occurrences": [
+        "test/unit/adapters/http.js:317-333",
+        "test/unit/adapters/http.js:181-198"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "stopHTTPServer is startHTTPServer's opening block copied \u2014 9 lines identical except the exported function name.",
+      "occurrences": [
+        "test/unit/adapters/http.js:106-114",
+        "test/helpers/server.js:54-62"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "20-line streaming server handler duplicated in the same file; only the body suffix literal ('6789' vs '1234') differs.",
+      "occurrences": [
+        "test/unit/adapters/http.js:1014-1033",
+        "test/unit/adapters/http.js:1285-1304"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The HTTP-protocol test is the HTTPS test copied with the URL changed to '/foo' and the title updated; the response handling is identical.",
+      "occurrences": [
+        "test/specs/requests.spec.js:502-516",
+        "test/specs/requests.spec.js:485-500"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "A 54-line mergeConfig describe block where the only change is the systematic rename validateStatus\u2192headers throughout.",
+      "occurrences": [
+        "test/specs/core/mergeConfig.spec.js:277-330",
+        "test/specs/core/mergeConfig.spec.js:160-213"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "53-line AxiosHeaders typings block identical modulo the systematic namespace rename (AxiosHeaders\u2192axios.AxiosHeaders etc.) and a comment spelling fix.",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:606-658",
+        "test/module/typings/cjs/index.ts:457-510"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "11-line module test-harness block identical except the pkgPath directory name (ts-require-default vs ts-require).",
+      "occurrences": [
+        "test/module/test.js:137-147",
+        "test/module/test.js:123-133"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "14-line progress-samples callback duplicated in the same file with the systematic rename onDownloadProgress/download\u2192onUploadProgress/upload.",
+      "occurrences": [
+        "test/unit/adapters/http.js:2043-2056",
+        "test/unit/adapters/http.js:1984-1997"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The handleFormData/generateReadable helpers in test/unit/adapters/http.js are copies of the same helpers in test/helpers/server.js (35-line overlap, export keyword and one function name aside).",
+      "occurrences": [
+        "test/helpers/server.js:64-98",
+        "test/unit/adapters/http.js:116-148"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "25-line ts-require fixture identical except the single line require('axios') vs require('axios').default.",
+      "occurrences": [
+        "test/module/ts-require/index.ts:1-25",
+        "test/module/ts-require-default/index.ts:1-25"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "23-line ts-require JS fixture identical except require('axios') vs require('axios').default.",
+      "occurrences": [
+        "test/module/ts-require-default/index.js:1-23",
+        "test/module/ts-require/index.js:1-23"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "13 lines of the formidable handleFormData helper identical between test/unit/adapters/http.js and test/helpers/server.js (export keyword aside).",
+      "occurrences": [
+        "test/unit/adapters/http.js:116-128",
+        "test/helpers/server.js:64-76"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "19 lines of the generateReadable stream-generator body identical between test/unit/adapters/http.js and test/helpers/server.js (function name and export aside).",
+      "occurrences": [
+        "test/unit/adapters/http.js:130-148",
+        "test/helpers/server.js:80-98"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "36-line no_proxy proxy test duplicated in the same file; only the test title, the no_proxy list and the expected body differ.",
+      "occurrences": [
+        "test/unit/adapters/http.js:1280-1315",
+        "test/unit/adapters/http.js:1243-1278"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "13-line module test-harness block identical apart from the parameter swap ts-require \u2194 ts-require-default.",
+      "occurrences": [
+        "test/module/test.js:136-148",
+        "test/module/test.js:122-134"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "54-line config-fixture block identical modulo the systematic namespace rename (axios.AxiosRequestConfig\u2192AxiosRequestConfig etc.) and one moved baseURL line.",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:3-56",
+        "test/module/typings/esm/index.ts:26-79"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "19 lines of void-interceptor typings statements identical apart from axios.-prefixed type names in comments.",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:335-353",
+        "test/module/typings/cjs/index.ts:306-324"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "15-line basic-auth test duplicated in the same file with only the password (and its expected base64 header) changed.",
+      "occurrences": [
+        "test/specs/basicAuth.spec.js:48-62",
+        "test/specs/basicAuth.spec.js:17-31"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "16-line toFormData indexes test duplicated in the same file with only the option value false\u2192null and the matching key expectations changed.",
+      "occurrences": [
+        "test/specs/helpers/toFormData.spec.js:52-67",
+        "test/specs/helpers/toFormData.spec.js:69-84"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "47-line rate-limit test duplicated in the same file with the systematic rename onUploadProgress\u2192onDownloadProgress plus the matching maxRate/tick changes.",
+      "occurrences": [
+        "test/unit/adapters/http.js:2078-2124",
+        "test/unit/adapters/http.js:2126-2172"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The IPv4 literal test is the 'allow passing JSON' test copied with only the title and the request URL (127.0.0.1) changed.",
+      "occurrences": [
+        "test/unit/adapters/http.js:317-333",
+        "test/unit/adapters/http.js:162-179"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "19 lines of the handleUserResponse fixture identical modulo the systematic rename axios.AxiosResponse\u2192AxiosResponse plus a comment.",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:109-127",
+        "test/module/typings/esm/index.ts:132-150"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "15-line progress console/samples block duplicated in the same file with the systematic rename onUploadProgress/upload\u2192onDownloadProgress/download.",
+      "occurrences": [
+        "test/unit/adapters/fetch.js:157-171",
+        "test/unit/adapters/fetch.js:231-245"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "25-line unsupported-protocol test duplicated in the same file with only the scheme (tel: \u2194 ftp:) and expected message changed.",
+      "occurrences": [
+        "test/unit/adapters/http.js:1540-1564",
+        "test/unit/adapters/http.js:1566-1590"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The timeout-rejection block in lib/adapters/xhr.js is the same block from lib/adapters/http.js copied with the systematic rename config\u2192_config and reindentation.",
+      "occurrences": [
+        "lib/adapters/http.js:652-662",
+        "lib/adapters/xhr.js:118-127"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "11-line timeout test duplicated in the same file with only the timeout option value changed (250 vs {strangeTimeout: 250}).",
+      "occurrences": [
+        "test/unit/adapters/http.js:265-275",
+        "test/unit/adapters/http.js:207-217"
       ]
     }
   ]

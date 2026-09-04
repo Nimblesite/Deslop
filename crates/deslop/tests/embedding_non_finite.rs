@@ -20,7 +20,7 @@ use crate::mock_ollama::{MockBehavior, MockOllama};
 use anyhow::Result;
 
 use crate::common::{
-    clusters, embeddings::run_mock_embedding_report, field, fixture, seed,
+    clusters, embeddings::mock_embedding_run, field, fixture, seed,
     signals::assert_no_pair_surface_on_cluster,
 };
 
@@ -122,10 +122,7 @@ fn assert_structural_finding_survived(cluster: &serde_json::Value) {
 #[test]
 fn overflowing_json_vectors_are_rejected_before_cache_index_and_report() -> Result<()> {
     let server = MockOllama::spawn_with(MockBehavior::OverflowingEmbeddings)?;
-    let workspace = tempfile::tempdir()?;
-    seed(&fixture("csharp-small"), workspace.path())?;
-    let output = workspace.path().join("report");
-    let report = run_mock_embedding_report(workspace.path(), &output, "8", server.endpoint())?;
+    let (workspace, report) = mock_embedding_run(&server, "csharp-small", "8")?;
     assert_eq!(
         field(&report, "files_analysed").as_u64(),
         Some(EXPECTED_FILES_ANALYSED),

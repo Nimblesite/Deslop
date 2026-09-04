@@ -12,50 +12,10 @@
   "clearly_in": [
     {
       "why": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
-      "verified": "extracted and diffed the two source ranges (33 vs 33 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
-      "occurrences": [
-        "src/FSharp.Data.Html.Core/HtmlOperations.fs:564-596",
-        "src/FSharp.Data.Html.Core/HtmlOperations.fs:713-745"
-      ]
-    },
-    {
-      "why": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
-      "verified": "extracted and diffed the two source ranges (86 vs 86 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
-      "occurrences": [
-        "src/FSharp.Data.Html.Core/HtmlOperations.fs:555-640",
-        "src/FSharp.Data.Html.Core/HtmlOperations.fs:704-789"
-      ]
-    },
-    {
-      "why": "AsInteger is AsInteger64 with the systematic Int64\u2192Int32 rename throughout.",
-      "verified": "extracted and diffed the two source ranges (6 vs 6 lines): not byte-identical, similarity 0.97; differences are the systematic change described",
-      "occurrences": [
-        "src/FSharp.Data.Json.Core/JsonConversions.fs:40-45",
-        "src/FSharp.Data.Json.Core/JsonConversions.fs:33-38"
-      ]
-    },
-    {
-      "why": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
       "verified": "extracted and diffed the two source ranges (83 vs 83 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:675-757",
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:526-608"
-      ]
-    },
-    {
-      "why": "upgradeToDateTimeOffset is the downgrade function with the systematic downgrade\u2192upgrade and Date/TimeSpan\u2192DateTimeOffset renames.",
-      "verified": "extracted and diffed the two source ranges (54 vs 50 lines): not byte-identical, similarity 0.37; differences are the systematic change described",
-      "occurrences": [
-        "src/FSharp.Data.Runtime.Utilities/StructuralInference.fs:636-689",
-        "src/FSharp.Data.Runtime.Utilities/StructuralInference.fs:714-763"
-      ]
-    },
-    {
-      "why": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
-      "verified": "extracted and diffed the two source ranges (82 vs 82 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
-      "occurrences": [
-        "src/FSharp.Data.Html.Core/HtmlOperations.fs:515-596",
-        "src/FSharp.Data.Html.Core/HtmlOperations.fs:664-745"
       ]
     },
     {
@@ -72,38 +32,6 @@
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:736-768",
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:587-619"
-      ]
-    },
-    {
-      "why": "HtmlDocument's DescendantsWithPath members are the Descendants members with the systematic WithPath rename over 67-71 lines.",
-      "verified": "extracted and diffed the two source ranges (71 vs 67 lines): not byte-identical, similarity 0.91; differences are the systematic change described",
-      "occurrences": [
-        "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:154-224",
-        "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:225-291"
-      ]
-    },
-    {
-      "why": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
-      "verified": "extracted and diffed the two source ranges (89 vs 89 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
-      "occurrences": [
-        "src/FSharp.Data.Html.Core/HtmlOperations.fs:564-652",
-        "src/FSharp.Data.Html.Core/HtmlOperations.fs:713-801"
-      ]
-    },
-    {
-      "why": "Mirror of candidate 75 over 18-20 lines.",
-      "verified": "extracted and diffed the two source ranges (18 vs 20 lines): not byte-identical, similarity 0.95; differences are the systematic change described",
-      "occurrences": [
-        "src/FSharp.Data.Xml.Core/XmlExtensions.fs:39-56",
-        "src/FSharp.Data.Xml.Core/XmlExtensions.fs:19-38"
-      ]
-    },
-    {
-      "why": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
-      "verified": "extracted and diffed the two source ranges (23 vs 23 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
-      "occurrences": [
-        "src/FSharp.Data.Html.Core/HtmlOperations.fs:564-586",
-        "src/FSharp.Data.Html.Core/HtmlOperations.fs:713-735"
       ]
     },
     {
@@ -139,38 +67,6 @@
       ]
     },
     {
-      "why": "The Json conversion-generator arms are the Text ones with the systematic JsonRuntime\u2192TextRuntime rename over 16 lines.",
-      "verified": "extracted and diffed the two source ranges (16 vs 16 lines): not byte-identical, similarity 0.95; differences are the systematic change described",
-      "occurrences": [
-        "src/FSharp.Data.DesignTime/Json/JsonConversionsGenerator.fs:21-36",
-        "src/FSharp.Data.DesignTime/CommonProviderImplementation/ConversionsGenerator.fs:19-34"
-      ]
-    },
-    {
-      "why": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
-      "verified": "extracted and diffed the two source ranges (83 vs 83 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
-      "occurrences": [
-        "src/FSharp.Data.Html.Core/HtmlOperations.fs:548-630",
-        "src/FSharp.Data.Html.Core/HtmlOperations.fs:697-779"
-      ]
-    },
-    {
-      "why": "The descendantsWithPath internal functions are the descendants ones with the systematic WithPath rename over 35 lines.",
-      "verified": "extracted and diffed the two source ranges (37 vs 35 lines): not byte-identical, similarity 0.97; differences are the systematic change described",
-      "occurrences": [
-        "src/FSharp.Data.Html.Core/HtmlOperations.fs:155-191",
-        "src/FSharp.Data.Html.Core/HtmlOperations.fs:95-129"
-      ]
-    },
-    {
-      "why": "getNumberProp is getStringProp with the systematic String\u2192Number rename.",
-      "verified": "extracted and diffed the two source ranges (7 vs 7 lines): not byte-identical, similarity 0.94; differences are the systematic change described",
-      "occurrences": [
-        "src/FSharp.Data.Json.Core/JsonSchema.fs:92-98",
-        "src/FSharp.Data.Json.Core/JsonSchema.fs:100-106"
-      ]
-    },
-    {
       "why": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
       "verified": "extracted and diffed the two source ranges (12 vs 12 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
       "occurrences": [
@@ -184,22 +80,6 @@
       "occurrences": [
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:704-735",
         "src/FSharp.Data.Html.Core/HtmlOperations.fs:555-586"
-      ]
-    },
-    {
-      "why": "tryToSingular is tryToPlural with the systematic Plural\u2194Singular rename.",
-      "verified": "extracted and diffed the two source ranges (7 vs 7 lines): not byte-identical, similarity 0.71; differences are the systematic change described",
-      "occurrences": [
-        "src/FSharp.Data.Runtime.Utilities/Pluralizer.fs:233-239",
-        "src/FSharp.Data.Runtime.Utilities/Pluralizer.fs:241-247"
-      ]
-    },
-    {
-      "why": "The capitalizeFirstLetter idempotence property is the trimHtml one with the systematic function rename over 9 lines.",
-      "verified": "extracted and diffed the two source ranges (9 vs 9 lines): not byte-identical, similarity 0.64; differences are the systematic change described",
-      "occurrences": [
-        "tests/FSharp.Data.Core.Tests/NameUtilsProperties.fs:197-205",
-        "tests/FSharp.Data.Core.Tests/NameUtilsProperties.fs:121-129"
       ]
     }
   ],
@@ -1101,6 +981,141 @@
       "occurrences": [
         "tests/FSharp.Data.Core.Tests/NameUtils.fs:171-195",
         "tests/FSharp.Data.Core.Tests/NameUtils.fs:197-223"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:564-596",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:713-745"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:555-640",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:704-789"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "AsInteger is AsInteger64 with the systematic Int64\u2192Int32 rename throughout.",
+      "occurrences": [
+        "src/FSharp.Data.Json.Core/JsonConversions.fs:40-45",
+        "src/FSharp.Data.Json.Core/JsonConversions.fs:33-38"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "upgradeToDateTimeOffset is the downgrade function with the systematic downgrade\u2192upgrade and Date/TimeSpan\u2192DateTimeOffset renames.",
+      "occurrences": [
+        "src/FSharp.Data.Runtime.Utilities/StructuralInference.fs:636-689",
+        "src/FSharp.Data.Runtime.Utilities/StructuralInference.fs:714-763"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:515-596",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:664-745"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "HtmlDocument's DescendantsWithPath members are the Descendants members with the systematic WithPath rename over 67-71 lines.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:154-224",
+        "src/FSharp.Data.Html.Core/HtmlDocumentOperations.fs:225-291"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:564-652",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:713-801"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "Mirror of candidate 75 over 18-20 lines.",
+      "occurrences": [
+        "src/FSharp.Data.Xml.Core/XmlExtensions.fs:39-56",
+        "src/FSharp.Data.Xml.Core/XmlExtensions.fs:19-38"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:564-586",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:713-735"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The Json conversion-generator arms are the Text ones with the systematic JsonRuntime\u2192TextRuntime rename over 16 lines.",
+      "occurrences": [
+        "src/FSharp.Data.DesignTime/Json/JsonConversionsGenerator.fs:21-36",
+        "src/FSharp.Data.DesignTime/CommonProviderImplementation/ConversionsGenerator.fs:19-34"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The WithPath extension-method block is the plain block with the systematic rename X\u2192XWithPath applied throughout.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:548-630",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:697-779"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The descendantsWithPath internal functions are the descendants ones with the systematic WithPath rename over 35 lines.",
+      "occurrences": [
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:155-191",
+        "src/FSharp.Data.Html.Core/HtmlOperations.fs:95-129"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "getNumberProp is getStringProp with the systematic String\u2192Number rename.",
+      "occurrences": [
+        "src/FSharp.Data.Json.Core/JsonSchema.fs:92-98",
+        "src/FSharp.Data.Json.Core/JsonSchema.fs:100-106"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "tryToSingular is tryToPlural with the systematic Plural\u2194Singular rename.",
+      "occurrences": [
+        "src/FSharp.Data.Runtime.Utilities/Pluralizer.fs:233-239",
+        "src/FSharp.Data.Runtime.Utilities/Pluralizer.fs:241-247"
+      ]
+    },
+    {
+      "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
+      "demoted_from": "clearly_in",
+      "judge_said": "The capitalizeFirstLetter idempotence property is the trimHtml one with the systematic function rename over 9 lines.",
+      "occurrences": [
+        "tests/FSharp.Data.Core.Tests/NameUtilsProperties.fs:197-205",
+        "tests/FSharp.Data.Core.Tests/NameUtilsProperties.fs:121-129"
       ]
     }
   ],

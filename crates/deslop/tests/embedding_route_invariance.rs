@@ -28,7 +28,7 @@ use crate::mock_ollama::MockOllama;
 use anyhow::{Context, Result};
 
 use crate::common::{
-    cluster_file_set, cluster_id, clusters, embeddings::run_mock_embedding_report, field, fixture,
+    cluster_file_set, cluster_id, clusters, embeddings::mock_embedding_run, field, fixture,
     run_report, seed, signals::assert_no_pair_surface_on_cluster,
 };
 
@@ -53,11 +53,7 @@ type Published = BTreeMap<Vec<String>, Vec<String>>;
 /// returns its full report.
 fn with_embeddings(corpus: &str, min_nodes: &str) -> Result<serde_json::Value> {
     let server = MockOllama::spawn()?;
-    let workspace = tempfile::tempdir()?;
-    seed(&fixture(corpus), workspace.path())?;
-    let output = workspace.path().join("report");
-    let report =
-        run_mock_embedding_report(workspace.path(), &output, min_nodes, server.endpoint())?;
+    let (workspace, report) = mock_embedding_run(&server, corpus, min_nodes)?;
     let provenance = field(&report, "embedding_provenance");
     let indexed = field(provenance, "indexed_subtrees")
         .as_u64()

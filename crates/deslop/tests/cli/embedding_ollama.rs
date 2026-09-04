@@ -93,6 +93,21 @@ fn provenance_str<'a>(
         .and_then(serde_json::Value::as_str))
 }
 
+/// Seeds `fixture` into a fresh temp scan root, runs `deslop` against a
+/// live Ollama at `min_nodes` in `mode`, and returns the temp dir (bind
+/// it — dropping it deletes the tree) with the paths the run wrote.
+fn ollama_run(fixture: &str, min_nodes: &str, mode: &str) -> Result<(TempDir, RunOutputs)> {
+    let (tmp, scan_root) = seed_scan(fixture)?;
+    let outputs = outputs_under(tmp.path());
+    run_ollama_scan(
+        &scan_root,
+        &tmp.path().join(REPORT_OUTPUT_STEM),
+        min_nodes,
+        mode,
+    )?;
+    Ok((tmp, outputs))
+}
+
 fn run_ollama_scan(
     scan_root: &Path,
     output_prefix: &Path,
@@ -227,9 +242,7 @@ fn issue_286_large_subtree_survives_when_the_model_declares_the_context() -> Res
 // in the public confidence range.
 #[test]
 fn ollama_type4_cross_file_cluster_has_positive_embedding_signal() -> Result<()> {
-    let (tmp, scan_root) = seed_scan("csharp-type4")?;
-    let out = outputs_under(tmp.path());
-    run_ollama_scan(&scan_root, &tmp.path().join("report"), "15", "required")?;
+    let (_tmp, out) = ollama_run("csharp-type4", "15", "required")?;
     let json = load_report_json(&out.json)?;
     let provenance = object_field(
         &json,
@@ -297,9 +310,7 @@ fn ollama_type4_cross_file_cluster_has_positive_embedding_signal() -> Result<()>
 // exercises the fallback direction against a dead endpoint.
 #[test]
 fn ollama_auto_mode_populates_provenance_when_reachable() -> Result<()> {
-    let (tmp, scan_root) = seed_scan("csharp-small")?;
-    let out = outputs_under(tmp.path());
-    run_ollama_scan(&scan_root, &tmp.path().join("report"), "8", "auto")?;
+    let (_tmp, out) = ollama_run("csharp-small", "8", "auto")?;
     let json = load_report_json(&out.json)?;
     assert_eq!(
         provenance_str(
@@ -374,9 +385,7 @@ fn ollama_embedding_cache_persists_across_runs() -> Result<()> {
 // derived views against silent drift.
 #[test]
 fn ollama_provenance_surfaces_in_text_and_html() -> Result<()> {
-    let (tmp, scan_root) = seed_scan("csharp-small")?;
-    let out = outputs_under(tmp.path());
-    run_ollama_scan(&scan_root, &tmp.path().join("report"), "8", "required")?;
+    let (_tmp, out) = ollama_run("csharp-small", "8", "required")?;
     let text = fs::read_to_string(&out.txt)?;
     assert!(
         text.contains("embeddings: ollama/nomic-embed-text@"),

@@ -36,7 +36,7 @@ use anyhow::Result;
 use serde_json::Value;
 
 use crate::common::{
-    embeddings::run_mock_embedding_report, signals::*, verdict::duplicated_loc_for_path, *,
+    embeddings::mock_embedding_run, signals::*, verdict::duplicated_loc_for_path, *,
 };
 
 /// Largest byte span an occurrence may have relative to the smallest in
@@ -156,10 +156,7 @@ fn an_embedding_only_pair_does_not_join_occurrences_of_different_size() -> Resul
 #[test]
 fn size_coherence_keeps_every_genuine_ledger_family_visible() -> Result<()> {
     let server = MockOllama::spawn()?;
-    let tmp = tempfile::tempdir()?;
-    seed(&fixture("ts-mixed-band"), tmp.path())?;
-    let output = tmp.path().join("report");
-    let report = run_mock_embedding_report(tmp.path(), &output, "12", server.endpoint())?;
+    let (tmp, report) = mock_embedding_run(&server, "ts-mixed-band", "12")?;
 
     assert_eq!(
         field(&report, "files_analysed").as_u64(),

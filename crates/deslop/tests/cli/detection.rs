@@ -12,9 +12,7 @@ const VALID_MASS_RANK_BANDS: [&str; 4] = ["worst", "top10", "mid", "faint"];
 /// fixture with an explicit `--min-nodes` and then asserts on the
 /// rendered report.
 fn run_min_nodes(fixture_name: &str, min_nodes: &str) -> Result<String> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = fixture_command(fixture_name, &tmp.path().join("report"))?;
+    let (_tmp, out, mut cmd) = fixture_run(fixture_name)?;
     let _assertion = cmd.args(["--min-nodes", min_nodes]).assert().success();
     Ok(fs::read_to_string(&out.json)?)
 }
