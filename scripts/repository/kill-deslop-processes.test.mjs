@@ -137,7 +137,7 @@ function readScriptLine(prefix) {
 
 /** The trimmed Makefile line declaring `name`, wherever it is indented. */
 function declarationOf(name) {
-  const found = makefileLines.map((line) => line.trim()).filter((line) => line.startsWith(`${name} `));
+  const found = makefileLines().map((line) => line.trim()).filter((line) => line.startsWith(`${name} `));
   assert.equal(found.length, 1, `the Makefile must declare ${name} exactly once; found ${found.length}`);
   return found[0];
 }
@@ -151,7 +151,7 @@ test("Windows runs the POSIX recipes under Git Bash, by absolute path", () => {
 });
 
 test("no recipe is handed to PowerShell, which cannot parse a POSIX recipe", () => {
-  const offending = makefileLines.filter((line) => line.includes("powershell"));
+  const offending = makefileLines().filter((line) => line.includes("powershell"));
   assert.deepEqual(offending, [], "recipes use case/for/[ -f ]/|| — PowerShell rejects every one of them");
 });
 

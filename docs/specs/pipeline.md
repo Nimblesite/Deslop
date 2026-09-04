@@ -354,6 +354,18 @@ Top level:
 
 Default output paths, the format suppressors, and `--from-report` re-rendering are invocation behaviour, owned by [cli.md §OUTPUT-FORMAT-DERIVED](cli.md).
 
+#### [OUTPUT-SCHEMA-PATH-SEPARATOR] How a path is spelled
+
+Every workspace-relative path a report publishes — occurrence, per-file metric row, folder rollup, boilerplate hint, and the file named in a stale-diff refusal — is spelled with `/` between its segments, on every platform.
+
+A report is read somewhere other than the machine that wrote it: a Windows developer's report opened by a Linux merge gate, two platforms' reports compared in one dashboard, a path pasted from a report into a tool. A path is therefore part of the output contract and cannot be spelled the host's way. Rendering `src\billing\Invoice.cs` on one host and `src/billing/Invoice.cs` on another gives a consumer two different strings for one file, and every comparison it makes across the two is wrong.
+
+Only separators change. A Windows drive or UNC prefix keeps its own spelling, because it names a volume rather than a segment. Nothing is canonicalised, no `.`/`..` is collapsed, and no case is folded, so a spelled path still names exactly the file it named — which is what lets it stay a map key beside paths that were never spelled.
+
+This governs paths Deslop *publishes*. Paths Deslop *opens* keep the host's own separators, and so do diagnostics about the local filesystem, which name a location on this machine rather than a place in the analysed workspace.
+
+`deslop-core::paths::reported` is the single implementation; `report_render::relative_to_scan_root` and the diff verifier's `resolve_to_scan_root` are the only two callers, so every published path is built through one of them. Pinned end-to-end by `crates/deslop/tests/location_rendering.rs`, which sweeps every `path` in a rendered JSON report over a two-level corpus and re-asserts the spelling in the derived text and HTML.
+
 #### [OUTPUT-SCHEMA-DIFF-TAGS] Diff-scope tags
 
 > **Status: shipped.** Field presence and absence are both pinned by `crates/deslop/tests/diff_scoped_reporting.rs`.

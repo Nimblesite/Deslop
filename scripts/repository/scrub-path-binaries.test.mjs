@@ -22,14 +22,19 @@ import { join, resolve } from "node:path";
 
 import { repoRoot } from "../lib/repo-root.mjs";
 import { recipeBlocks } from "../lib/makefile.mjs";
+import { hostPath, posixShell, shellPath } from "../lib/posix-shell.mjs";
 
 /** The scrub under test, and the target that must delegate to it. */
 const SCRIPT = resolve(repoRoot, "scripts/repository/scrub-path-binaries.sh");
 const SCRUB_TARGET = "_delete-path-binaries";
 const SCRIPT_INVOCATION = "bash scripts/repository/scrub-path-binaries.sh";
 
-/** Absolute bash, so the test pins the 3.2 build macOS ships. */
-const BASH = "/bin/bash";
+/** Absolute bash: the 3.2 build macOS ships, or Git Bash on Windows. A bare
+ * name would find WSL's bash on Windows, which sees a different filesystem. */
+const BASH = posixShell();
+
+/** The scrub as the shell must name it — bash opens the script by this path. */
+const SCRIPT_FOR_SHELL = shellPath(SCRIPT);
 
 /** Query mode: print what shadows, delete nothing, fail if anything does. */
 const LIST_FLAG = "--list";
@@ -64,7 +69,11 @@ function entryExistsThroughLink(path) {
 function assertSystemPathIsClean() {
   for (const directory of SYSTEM_PATH.split(":")) {
     for (const name of BINARY_NAMES) {
-      const path = join(directory, name);
+      // The system directories are named the way the *shell* names them, so
+      // this must open them the way the host does. Left untranslated on
+      // Windows it looks under the drive root, finds nothing, and passes
+      // without having examined the shell's real /usr/bin at all.
+      const path = join(hostPath(directory), name);
       assert.equal(entryExists(path), false, `${path} exists — refusing to run the scrub over a real install`);
     }
   }
@@ -83,17 +92,27 @@ function fixture() {
 /** Runs the scrub with nothing but the fixture directory and the system tools. */
 function runScrub({ binDir, homeDir }, args = [], { withSystemTools = true } = {}) {
   assertSystemPathIsClean();
-  const path = withSystemTools ? `${binDir}:${SYSTEM_PATH}` : binDir;
-  return spawnSync(BASH, [SCRIPT, ...args], { encoding: "utf8", env: { PATH: path, HOME: homeDir } });
+  const fixtureEntry = shellPath(binDir);
+  const path = withSystemTools ? `${fixtureEntry}:${SYSTEM_PATH}` : fixtureEntry;
+  return spawnSync(BASH, [SCRIPT_FOR_SHELL, ...args], {
+    encoding: "utf8",
+    env: { PATH: path, HOME: shellPath(homeDir) },
+  });
 }
 
 /** What `command -v` — the detection #474 relied on — reports for a name. */
 function commandVee({ binDir, homeDir }, name) {
   const result = spawnSync(BASH, ["-c", `command -v ${name} || true`], {
     encoding: "utf8",
-    env: { PATH: `${binDir}:${SYSTEM_PATH}`, HOME: homeDir },
+    env: { PATH: `${shellPath(binDir)}:${SYSTEM_PATH}`, HOME: shellPath(homeDir) },
   });
   return result.stdout.trim();
+}
+
+/** How the scrub prints `path` — it names what it found in the shell's own
+ * spelling, which is the only spelling the operator can paste back. */
+function asPrinted(path) {
+  return shellPath(path);
 }
 
 /** Stages a symlink to a bundle path that was deleted — the #474 leftover. */
@@ -123,7 +142,7 @@ test("[#474] --list reports the dangling symlink and exits non-zero", () => {
   const dirs = fixture();
   const link = stageDanglingLink(dirs, "deslop-mcp");
   const listed = runScrub(dirs, [LIST_FLAG]);
-  assert.equal(listed.stdout.trim(), link, "the shadowing path must be named exactly");
+  assert.equal(listed.stdout.trim(), asPrinted(link), "the shadowing path must be named exactly");
   assert.equal(listed.status, 1, "a shadowed PATH must fail closed, not report clean");
 });
 
@@ -132,7 +151,7 @@ test("[#474] the scrub deletes the dangling symlink and only then reports succes
   const link = stageDanglingLink(dirs, "deslop-mcp");
   const scrubbed = runScrub(dirs);
   assert.equal(scrubbed.status, 0, `scrub failed: ${scrubbed.stdout}${scrubbed.stderr}`);
-  assert.ok(scrubbed.stdout.includes(`deleting ${link}`), "the scrub must say what it removed");
+  assert.ok(scrubbed.stdout.includes(`deleting ${asPrinted(link)}`), "the scrub must say what it removed");
   assert.ok(scrubbed.stdout.includes("PATH is clear of deslop deslop-lsp deslop-mcp"), "and confirm the result");
   assert.equal(entryExists(link), false, "the leftover must be gone, not merely unreported");
   assert.equal(runScrub(dirs, [LIST_FLAG]).status, 0, "a re-check must now find nothing");
@@ -147,7 +166,7 @@ test("[#474] the scrub fails closed when a shadowing name survives deletion", ()
   const scrubbed = runScrub(dirs, [], { withSystemTools: false });
   assert.equal(scrubbed.status, 1, "a scrub that cannot remove a shadowing name must fail");
   assert.ok(scrubbed.stdout.includes("FAIL: these PATH entries still shadow"), "and explain what is wrong");
-  assert.ok(scrubbed.stdout.includes(link), "naming every survivor");
+  assert.ok(scrubbed.stdout.includes(asPrinted(link)), "naming every survivor");
   assert.equal(entryExists(link), true, "the survivor is genuinely still on PATH");
 });
 
@@ -156,9 +175,9 @@ test("the scrub removes an executable and a non-executable leftover alike", () =
   const executable = stageFile(dirs, "deslop", EXECUTABLE_MODE);
   const inert = stageFile(dirs, "deslop-lsp", READ_ONLY_MODE);
   const listed = runScrub(dirs, [LIST_FLAG]);
-  assert.deepEqual(listed.stdout.trim().split("\n").sort(), [executable, inert].sort());
+  assert.deepEqual(listed.stdout.trim().split("\n").sort(), [executable, inert].map(asPrinted).sort());
   assert.equal(listed.status, 1);
-  assert.equal(commandVee(dirs, "deslop"), executable, "an executable copy is exactly what command -v did catch");
+  assert.equal(commandVee(dirs, "deslop"), asPrinted(executable), "an executable copy is exactly what command -v did catch");
   const scrubbed = runScrub(dirs);
   assert.equal(scrubbed.status, 0, `scrub failed: ${scrubbed.stdout}${scrubbed.stderr}`);
   assert.equal(entryExists(executable), false);

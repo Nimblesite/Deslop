@@ -191,11 +191,17 @@ fn verify_line(
 /// Canonicalises when the file exists so symlinked roots (macOS
 /// `/var` → `/private/var`) compare on one filesystem identity; a
 /// path the diff adds outside the corpus need not exist, so the
-/// lexical join stands in when canonicalisation fails.
+/// lexical join stands in when canonicalisation fails. The result is
+/// spelled for publication ([OUTPUT-SCHEMA-PATH-SEPARATOR]): it keys
+/// the scope the report is tagged against and names the file in a
+/// stale-diff refusal, and both are read off this host by another.
 fn resolve_to_scan_root(new_path: &str, cwd: &Path, scan_root: &Path) -> Option<PathBuf> {
     let joined = cwd.join(new_path);
     let absolute = std::fs::canonicalize(&joined).unwrap_or(joined);
-    absolute.strip_prefix(scan_root).ok().map(Path::to_path_buf)
+    absolute
+        .strip_prefix(scan_root)
+        .ok()
+        .map(crate::paths::reported)
 }
 
 /// Splits source bytes into lines on `\n`, excluding the terminator.

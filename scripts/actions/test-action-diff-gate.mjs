@@ -16,7 +16,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -24,15 +24,21 @@ import { check, total } from "../lib/contract-harness.mjs";
 import { firstRustFile, writeCopyPatch } from "./action-copy-patch.mjs";
 import { readOutputs } from "./action-read-outputs.mjs";
 import { stepBody } from "./action-yaml.mjs";
+import { posixShell, shellPath } from "../lib/posix-shell.mjs";
+import { currentPlatform, executableName } from "../release/vsix-platforms.mjs";
 
 /** The legacy-heavy fixture the self-test's gate matrix scans. */
 const SCAN_PATH = "examples/rust";
-/** Where the CLI lands under `make build`. */
-const DEFAULT_CLI = "target/release/deslop";
+/** Where the CLI lands under `make build`, spelled the way this host spells it. */
+const DEFAULT_CLI = `target/release/${executableName("deslop", currentPlatform())}`;
+/** The subtree size the self-test's gate matrix scans at. */
+const MIN_NODES = "30";
 /** The guard step whose emitted guidance is executed below. */
 const STDIN_GUARD_STEP = "Reject the un-suppliable stdin diff";
 /** The status the CLI exits on a usage error, and the guard must match. */
 const USAGE_ERROR_STATUS = 2;
+/** Carries the built CLI's directory to the step's shell, which prepends it. */
+const BIN_DIR_VARIABLE = "DESLOP_BIN_DIR";
 /** The base ref a `pull_request` event supplies. */
 const PULL_REQUEST_BASE_REF = "main";
 
@@ -50,30 +56,48 @@ function runActionStep(cli, inputs) {
   const githubOutput = join(workdir, "github-output");
   writeFileSync(githubOutput, "");
   const body = stepBody(readFileSync("action.yml", "utf8"), "Run deslop");
-  execFileSync("bash", ["-eo", "pipefail", "-c", body], {
+  const prependBinDir = `PATH="$${BIN_DIR_VARIABLE}:$PATH"\n`;
+  execFileSync(posixShell(), ["-eo", "pipefail", "-c", `${prependBinDir}${body}`], {
     stdio: "pipe",
-    env: {
-      ...process.env,
-      PATH: `${resolve(cli, "..")}:${process.env.PATH ?? ""}`,
-      GITHUB_OUTPUT: githubOutput,
-      SCAN_PATH: SCAN_PATH,
-      MIN_NODES: "30",
-      OUTPUT: outputPrefix,
-      LOG_LEVEL: "warn",
-      FAIL_OVER: inputs.failOver,
-      NO_FAIL_OVER: "false",
-      CONFIG: "",
-      DIFF: inputs.diff,
-      ONLY_CHANGED: inputs.onlyChanged,
-      NOJSON: "false",
-      NOTEXT: "false",
-      NOHTML: "false",
-    },
+    env: stepEnvironment(cli, inputs, githubOutput, outputPrefix),
   });
+  return { exitCode: publishedExitCode(githubOutput), outputPrefix };
+}
+
+/**
+ * The env block the action composes from its inputs, plus the directory the
+ * built CLI sits in. The step calls `deslop` by name, so that directory has
+ * to reach the PATH the step sees — and it travels here, spelled the way
+ * this host's shell spells a path, rather than in `env.PATH` itself, because
+ * a Windows directory carries the very character PATH separates on and the
+ * shell would read one entry as two.
+ */
+function stepEnvironment(cli, inputs, githubOutput, outputPrefix) {
+  return {
+    ...process.env,
+    [BIN_DIR_VARIABLE]: shellPath(dirname(cli)),
+    GITHUB_OUTPUT: githubOutput,
+    SCAN_PATH,
+    MIN_NODES: MIN_NODES,
+    OUTPUT: outputPrefix,
+    LOG_LEVEL: "warn",
+    FAIL_OVER: inputs.failOver,
+    NO_FAIL_OVER: "false",
+    CONFIG: "",
+    DIFF: inputs.diff,
+    ONLY_CHANGED: inputs.onlyChanged,
+    NOJSON: "false",
+    NOTEXT: "false",
+    NOHTML: "false",
+  };
+}
+
+/** The exit code the step published to `GITHUB_OUTPUT`. */
+function publishedExitCode(githubOutput) {
   const published = readFileSync(githubOutput, "utf8");
   const match = published.match(/exit-code=(\d+)/);
   assert.ok(match, `the step published no exit-code: ${published}`);
-  return { exitCode: Number.parseInt(match[1], 10), outputPrefix };
+  return Number.parseInt(match[1], 10);
 }
 
 /**
@@ -100,7 +124,7 @@ function breachMessage(outputs) {
  */
 function runGuardStep(stepName, env) {
   const body = stepBody(readFileSync("action.yml", "utf8"), stepName);
-  const result = spawnSync("bash", ["-eo", "pipefail", "-c", body], {
+  const result = spawnSync(posixShell(), ["-eo", "pipefail", "-c", body], {
     encoding: "utf8",
     env: { ...process.env, ...env },
   });
@@ -181,7 +205,7 @@ check("a changed-code diff that adds duplication breaches the same ceiling", () 
       "the report records that the diff gate governed",
     );
   } finally {
-    execFileSync("rm", ["-f", copied]);
+    rmSync(copied, { force: true });
   }
 });
 

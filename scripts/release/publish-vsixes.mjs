@@ -13,6 +13,7 @@ import { spawnSync } from "node:child_process";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 
+import { spawnableCommand } from "../lib/posix-shell.mjs";
 import { VSIX_ARTIFACT_PREFIX, VSIX_PLATFORMS } from "./vsix-platforms.mjs";
 
 /** Where the workflow's download-artifact step puts every uploaded artifact. */
@@ -48,11 +49,10 @@ report(tool, failed);
  */
 function publish(tool, vsix) {
   console.log(`Publishing ${vsix} to ${tool.registry}`);
-  const result = spawnSync(
-    "npx",
-    ["--yes", tool.npxPackage, "publish", "--skip-duplicate", ...prereleaseFlag(), "--packagePath", vsix],
-    { stdio: "inherit" },
-  );
+  const [file, argv] = spawnableCommand("npx", [
+    "--yes", tool.npxPackage, "publish", "--skip-duplicate", ...prereleaseFlag(), "--packagePath", vsix,
+  ]);
+  const result = spawnSync(file, argv, { stdio: "inherit" });
   if (result.status !== 0) console.error(`::warning::publish failed for ${vsix}`);
   return result.status === 0;
 }

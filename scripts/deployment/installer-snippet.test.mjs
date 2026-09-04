@@ -6,17 +6,26 @@
 // (no network: `DESLOP_RELEASE_BASE` points at a file:// mirror and
 // `DESLOP_TAG` pins the version — both honored by the published snippet), and
 // asserts on the recorded `tar`/`sudo` invocations. Run with `node --test`.
+//
+// The snippet chooses its archive from `uname`, so `uname` is stubbed too and
+// the platform under test is chosen by the test rather than by whichever
+// machine happens to be running it. That makes every assertion here identical
+// on every host, puts all four published platforms under test on all of them,
+// and lets the snippet's own unsupported-platform refusal be asserted instead
+// of only being met by the host the suite could not run on.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { arch, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { repoRoot } from "../lib/repo-root.mjs";
+import { posixShell, shellPath } from "../lib/posix-shell.mjs";
+import { writeFileAt } from "../lib/write-file.mjs";
 
 const TAG = "v9.9.9";
 const VERSION = "9.9.9";
@@ -26,17 +35,25 @@ const PAGES = [
   { name: "zh", path: "site/src/zh/docs/index.md", heading: "### macOS / Linux（curl）" },
 ];
 
-function hostPlatform() {
-  const mapping = {
-    "linux-x64": "linux-x64",
-    "linux-arm64": "linux-arm64",
-    "darwin-arm64": "macos-arm64",
-    "darwin-x64": "macos-x64",
-  };
-  const platform = mapping[`${process.platform}-${arch()}`];
-  assert.ok(platform, `unsupported test host: ${process.platform}-${arch()}`);
-  return platform;
-}
+/** The shell that runs the published snippet, whatever this host is. */
+const BASH = posixShell();
+
+/** Every `uname` answer the published snippet claims to support, and the
+ * release archive each one must select. The snippet is the only source of
+ * this mapping; the table restates it so a silent edit fails here. */
+const PLATFORMS = [
+  { system: "Linux", machine: "x86_64", platform: "linux-x64" },
+  { system: "Linux", machine: "aarch64", platform: "linux-arm64" },
+  { system: "Darwin", machine: "arm64", platform: "macos-arm64" },
+  { system: "Darwin", machine: "x86_64", platform: "macos-x64" },
+];
+
+/** The platform the checksum scenarios run on. Any of the four would do —
+ * the mapping itself is asserted over all of them separately. */
+const DEFAULT_TARGET = PLATFORMS[0];
+
+/** A `uname` answer no release is published for. */
+const UNSUPPORTED_TARGET = { system: "Plan9", machine: "sparc", platform: undefined };
 
 // Fence extraction by exact line matching — no pattern matching on the code.
 function extractSnippet(page) {
@@ -59,13 +76,19 @@ function writeFixtureRelease(fixtures, platform, goodChecksum) {
   const payload = `deslop-${VERSION}-${platform}`;
   const stage = join(fixtures, "stage");
   mkdirSync(releaseDir, { recursive: true });
-  mkdirSync(join(stage, payload), { recursive: true });
   for (const binary of BINARIES) {
-    writeFileSync(join(stage, payload, binary), `#!/bin/sh\necho ${binary} ${VERSION}\n`, { mode: 0o755 });
+    writeFileAt(join(stage, payload, binary), `#!/bin/sh\necho ${binary} ${VERSION}\n`, { mode: 0o755 });
   }
   const archive = join(releaseDir, `${payload}.tar.gz`);
-  const tar = spawnSync("tar", ["-czf", archive, "-C", stage, payload]);
-  assert.equal(tar.status, 0, "fixture tar failed");
+  // Built through the same shell that will extract it, with the paths spelled
+  // the way that shell spells them: GNU tar reads a leading `C:` as a remote
+  // host and refuses the archive outright.
+  const tar = spawnSync(
+    BASH,
+    ["-c", 'tar -czf "$1" -C "$2" "$3"', "tar", shellPath(archive), shellPath(stage), payload],
+    { encoding: "utf8" },
+  );
+  assert.equal(tar.status, 0, `fixture tar failed: ${tar.stderr}`);
   const digest = sha256Of(archive);
   const published = goodChecksum ? digest : `${digest[0] === "0" ? "1" : "0"}${digest.slice(1)}`;
   writeFileSync(`${archive}.sha256`, `${published}  ${payload}.tar.gz\n`);
@@ -78,37 +101,61 @@ function writeStub(stubBin, name, body) {
 // tar delegates to the real binary so extraction genuinely happens on the
 // good-checksum path; sudo and deslop only record, so nothing touches
 // /usr/local/bin and no real binary is needed.
-function writeStubs(stubBin, log) {
+function writeStubs(stubBin, log, target) {
   mkdirSync(stubBin, { recursive: true });
-  const realTar = spawnSync("bash", ["-c", "command -v tar"], { encoding: "utf8" }).stdout.trim();
+  const realTar = spawnSync(BASH, ["-c", "command -v tar"], { encoding: "utf8" }).stdout.trim();
   assert.ok(realTar, "real tar not found on PATH");
-  writeStub(stubBin, "tar", `echo "tar $*" >> "${log}"\nexec "${realTar}" "$@"`);
-  writeStub(stubBin, "sudo", `echo "sudo $*" >> "${log}"`);
-  writeStub(stubBin, "deslop", `echo "deslop $*" >> "${log}"\necho "deslop ${VERSION}"`);
+  const recorded = shellPath(log);
+  writeStub(stubBin, "tar", `echo "tar $*" >> "${recorded}"\nexec "${realTar}" "$@"`);
+  writeStub(stubBin, "sudo", `echo "sudo $*" >> "${recorded}"`);
+  writeStub(stubBin, "deslop", `echo "deslop $*" >> "${recorded}"\necho "deslop ${VERSION}"`);
+  writeUnameStub(stubBin, target);
+}
+
+/** Names the platform under test, and refuses every flag it was not given. */
+function writeUnameStub(stubBin, target) {
+  // The snippet reads the platform from `uname`, so the test names it. Every
+  // other flag is refused rather than answered: a snippet that asked
+  // something this stub silently made up would be tested against a fiction.
+  writeStub(
+    stubBin,
+    "uname",
+    [
+      'case "$1" in',
+      `  -s) echo ${target.system} ;;`,
+      `  -m) echo ${target.machine} ;;`,
+      '  *) echo "stub uname: unexpected flag $1" >&2; exit 1 ;;',
+      "esac",
+    ].join("\n"),
+  );
 }
 
 function runSnippet(snippet, sandbox) {
-  return spawnSync("bash", ["-c", snippet], {
+  return spawnSync(BASH, ["-c", snippet], {
     cwd: join(sandbox, "cwd"),
     encoding: "utf8",
     env: {
       ...process.env,
-      PATH: `${join(sandbox, "stub-bin")}:${process.env.PATH}`,
+      // A PATH entry is spelled the way the shell spells it: a host path can
+      // carry the very character PATH separates on, and the shell would then
+      // read one directory as two and find neither.
+      PATH: `${shellPath(join(sandbox, "stub-bin"))}:${process.env.PATH}`,
       DESLOP_TAG: TAG,
       DESLOP_RELEASE_BASE: pathToFileURL(join(sandbox, "fixtures")).href,
-      TMPDIR: join(sandbox, "tmp"),
+      TMPDIR: shellPath(join(sandbox, "tmp")),
     },
   });
 }
 
-function setupAndRun(page, goodChecksum) {
+function setupAndRun(page, goodChecksum, target = DEFAULT_TARGET) {
   const sandbox = mkdtempSync(join(tmpdir(), "deslop-installer-"));
-  const platform = hostPlatform();
+  const platform = target.platform;
   const log = join(sandbox, "recorder.log");
   mkdirSync(join(sandbox, "tmp"));
   mkdirSync(join(sandbox, "cwd"));
-  writeFixtureRelease(join(sandbox, "fixtures"), platform, goodChecksum);
-  writeStubs(join(sandbox, "stub-bin"), log);
+  if (platform) writeFixtureRelease(join(sandbox, "fixtures"), platform, goodChecksum);
+  else mkdirSync(join(sandbox, "fixtures"), { recursive: true });
+  writeStubs(join(sandbox, "stub-bin"), log, target);
   const result = runSnippet(extractSnippet(page), sandbox);
   return { result, sandbox, platform, log };
 }
@@ -117,8 +164,8 @@ function recordedLines(log) {
   return existsSync(log) ? readFileSync(log, "utf8").split("\n").filter(Boolean) : [];
 }
 
-function assertFailsClosed(page) {
-  const { result, sandbox, platform, log } = setupAndRun(page, false);
+function assertFailsClosed(page, target = DEFAULT_TARGET) {
+  const { result, sandbox, platform, log } = setupAndRun(page, false, target);
   const archive = `deslop-${VERSION}-${platform}.tar.gz`;
   const output = `${result.stdout}\n${result.stderr}`;
   assert.notEqual(result.status, 0, `${page.name}: snippet exited 0 despite a bad checksum`);
@@ -130,8 +177,8 @@ function assertFailsClosed(page) {
   rmSync(sandbox, { recursive: true, force: true });
 }
 
-function assertInstalls(page) {
-  const { result, sandbox, platform, log } = setupAndRun(page, true);
+function assertInstalls(page, target = DEFAULT_TARGET) {
+  const { result, sandbox, platform, log } = setupAndRun(page, true, target);
   const archive = `deslop-${VERSION}-${platform}.tar.gz`;
   const lines = recordedLines(log);
   const tarLine = lines.find((line) => line.startsWith("tar "));
@@ -178,3 +225,32 @@ for (const page of PAGES) {
   test(`${page.name}: a bad checksum aborts before extraction and installation`, () => assertFailsClosed(page));
   test(`${page.name}: a good checksum extracts, installs all three binaries, and cleans up`, () => assertInstalls(page));
 }
+
+// [DEPLOY-DOCS-INSTALLER-FAILCLOSED] The snippet picks its archive from
+// `uname`, and picking the wrong one is a 404 for the user rather than an
+// install. Every published platform is exercised, not just this host's.
+for (const target of PLATFORMS) {
+  test(`${target.system}-${target.machine} installs the ${target.platform} archive`, () => {
+    assertInstalls(PAGES[0], target);
+  });
+}
+
+// [DEPLOY-DOCS-INSTALLER-FAILCLOSED] The refusal arm of that same `case`. A
+// platform with no published release must stop before the first download —
+// not fetch a URL that does not exist and report whatever curl said.
+test("an unsupported platform aborts before anything is downloaded or installed", () => {
+  const named = `${UNSUPPORTED_TARGET.system}-${UNSUPPORTED_TARGET.machine}`;
+  for (const page of PAGES) {
+    const { result, sandbox, log } = setupAndRun(page, true, UNSUPPORTED_TARGET);
+    const output = `${result.stdout}\n${result.stderr}`;
+    assert.notEqual(result.status, 0, `${page.name}: snippet exited 0 on ${named}`);
+    assert.ok(
+      output.includes(`unsupported platform: ${named}`),
+      `${page.name}: the refusal must name the platform it could not serve:\n${output}`,
+    );
+    assert.deepEqual(recordedLines(log), [], `${page.name}: tar/sudo/deslop ran on ${named}`);
+    assert.deepEqual(readdirSync(join(sandbox, "tmp")), [], `${page.name}: work directory leaked on ${named}`);
+    assert.deepEqual(readdirSync(join(sandbox, "cwd")), [], `${page.name}: files were written to the caller's directory`);
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
