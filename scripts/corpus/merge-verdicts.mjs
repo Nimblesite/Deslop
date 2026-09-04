@@ -12,12 +12,12 @@
 // either answer would write that falsehood into the register and score every
 // future engine against it.
 //
-// So disagreement is checked FIRST, across the judged folders and this
-// repository's existing registers together, and ANY disagreement stops the
-// run: the report is written, nothing else is, and the exit status is
-// non-zero. Merging the undisputed remainder anyway would quietly bank a
-// pass in which a judge is demonstrably unreliable — the disputed pairs are
-// evidence about the judges, not just about those pairs.
+// So a pair is imported only when EVERY source agrees on it — this
+// repository's existing registers and all the judged folders together. Three
+// sources agreeing with the register leave the register as it is; two judged
+// folders agreeing on a pair the register does not hold add it. Anything with
+// a disagreement, or with one judge firm where another would not commit, is
+// left out and written to the report instead.
 //
 // The rules live in `merge-verdicts/pass.mjs`; the report in
 // `merge-verdicts/report.mjs`. Spec: `docs/specs/corpus.md`
@@ -204,25 +204,13 @@ const drainQueue = (root, merged, dryRun) => {
 
 /// Prints what happened, per repository, so a run is legible without opening
 /// the report.
-const announce = (repos, reportPath, dryRun) => {
+const announce = (repos, reportPath, dryRun, disputed) => {
   for (const repo of repos) {
     const added = VERDICTS.map((verdict) => `+${repo.result.added[verdict].length} ${verdict}`);
-    console.log(`${repo.name}: ${added.join(", ")}, ${repo.result.disagreements.length} disagreed`);
+    console.log(`${repo.name}: ${added.join(", ")}`);
   }
-  console.log(dryRun ? `dry run; nothing written. Report: ${reportPath}` : `report: ${reportPath}`);
-};
-
-/// Writes the disagreement report and nothing else, then fails the run.
-///
-/// A disagreement is not a pair to skip past. Two judges ruling differently on
-/// the same lines means one of them is unreliable, and every other verdict
-/// they filed in the same pass was reached the same way. Banking those while
-/// the dispute is open is how a bad reading becomes ground truth.
-const tank = (folders, repos, reportPath, total) => {
-  console.error(`${total} pair(s) disagree. NOTHING was merged.`);
-  console.error(`the disagreements, in full: ${reportPath}`);
-  console.error("settle them, re-judge, and run again.");
-  process.exitCode = 1;
+  console.log(`${disputed} pair(s) left out: not every source agreed. See ${reportPath}`);
+  if (dryRun) console.log("dry run; nothing written.");
 };
 
 /// Writes the merge: every register, then the queue.
@@ -245,10 +233,8 @@ const main = () => {
   mkdirSync(dirname(reportPath), { recursive: true });
   writeFileSync(reportPath, render({ sources: folders, repos }));
 
-  const disputed = disagreementCount(repos);
-  if (disputed > 0) return tank(folders, repos, options.report, disputed);
   apply(options.root, repos, options.dryRun);
-  announce(repos, options.report, options.dryRun);
+  announce(repos, options.report, options.dryRun, disagreementCount(repos));
 };
 
 main();

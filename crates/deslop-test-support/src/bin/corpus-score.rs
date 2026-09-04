@@ -12,15 +12,15 @@
 
 use std::{collections::BTreeMap, ffi::OsString, fs, path::PathBuf};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
 use deslop_test_support::corpus::{measured_run, repo_root};
-use deslop_test_support::read_json;
 use deslop_test_support::corpus_score::{
     gate::{add_costs, breaches, degradation, load_thresholds, totals, Thresholds},
     render::{scorecard, Engine, Scorecard, TargetScore},
     score_repo, RepoScore, RunCost,
 };
+use deslop_test_support::read_json;
 use serde_json::Value;
 
 /// A degradation verdict needs exactly two engines to compare.
@@ -62,7 +62,6 @@ enum Command {
         gate: bool,
     },
 }
-
 
 /// A string field, blank when absent.
 fn text(value: &Value, field: &str) -> String {

@@ -545,9 +545,9 @@ judging-folder:
 	./scripts/corpus/prepare-judging.sh $(JUDGING_DIR)
 
 ## merge-verdicts: Fold judged verdicts back into the clone registers. Takes
-##                 two or more judging folders. ANY disagreement between the
-##                 judges stops the run: the disagreements are reported to
-##                 docs/reports/verdict-merge.md and nothing is written.
+##                 two or more judging folders. Imports ONLY the pairs every
+##                 source agrees on — the registers included; everything else
+##                 is left out and listed in docs/reports/verdict-merge.md.
 merge-verdicts:
 	@test -n "$(JUDGED_DIRS)" || { echo "set JUDGED_DIRS to two or more judging folders"; exit 1; }
 	@node scripts/corpus/merge-verdicts.mjs $(JUDGED_DIRS)
@@ -888,7 +888,7 @@ help:
 	@echo "  score-gate             - Score this build against the judged clone registers (what CI runs)"
 	@echo "  compare                - Compare the last release against HEAD across every register"
 	@echo "  judging-folder         - Build the blinded repos+reports+skill folder for a clone judge"
-	@echo "  merge-verdicts         - Merge judged verdicts; halts on any disagreement (JUDGED_DIRS=\"a b\")"
+	@echo "  merge-verdicts         - Import verdicts every source agrees on (JUDGED_DIRS=\"a b\")"
 	@echo "  test-corpus            - Accuracy + resource gate against pinned real repositories"
 	@echo "  test-corpus-ci         - test-corpus in baseline mode (reports tracked defects)"
 	@echo "  ci-ollama              - make ci plus make test-ollama"

@@ -134,26 +134,27 @@ The CI accuracy gate does **not** scan the queue. It runs a small slice of judge
 
 Several judges are sent the same folder and rule independently. Their answers become ground truth only where they **agree**: two judges who file one pair under two verdicts have between them said something false, and taking either answer would write that falsehood into the register and score every engine against it from then on.
 
-`scripts/corpus/merge-verdicts.mjs` is the only way a verdict reaches a register, and it checks disagreement **first**, across the judged folders and the existing registers together.
+`scripts/corpus/merge-verdicts.mjs` is the only way a verdict reaches a register.
 
-**Any disagreement stops the whole run.** The report is written, nothing else is, and the exit status is non-zero. Merging the undisputed remainder would be the tempting thing and is the wrong thing: a judge who is demonstrably wrong about one pair reached every other verdict in that pass the same way, so the disputed pairs are evidence about the judges, not just about those pairs. Settle them and re-judge.
+**A pair is imported only when every source agrees on it** — this repository's existing registers and all the judged folders together. Three sources agreeing with a verdict the register already holds leave it exactly as it is; two judged folders agreeing on a pair the register does not hold add it. Anything else is left out and written to the report. There is no majority, no tie-break and no preferred judge: a pair two readers see differently is exactly the pair a register must assert nothing about.
 
-A run therefore either writes everything or writes nothing. What counts as a disagreement:
+What counts as not agreeing, each named after the comparison that found it:
 
-- **Opposite conclusions** — one judge's CLEARLY IN against another's CLEARLY OUT. A claim about the source that cannot be half true, and the first thing the report prints.
-- **A judge's ranges are not the candidate's.** They ruled on lines nobody showed them.
-- **A contradiction of a verdict the register already holds.** An earlier pass and this one read the same lines differently.
-- **The same pair, drawn twice, answered differently** inside one pass.
-- **A firm verdict against NOT CLEAR** — one judge committed where another would not.
+- `clearly_in/clearly_out` — one judge's CLEARLY IN against another's CLEARLY OUT. A claim about the source that cannot be half true.
+- `clearly_in/not_clear`, `clearly_out/not_clear` — one judge committed where another would not.
+- `occurrences_mismatch` — the ranges a judge filed against a candidate number are not the ranges `candidates/pairs.json` associates with it. A set comparison between two files that must agree; the report prints both range lists and infers nothing about why they differ.
+- `register_conflict` — an earlier pass and this one read the same lines differently.
+- `duplicate_pair` — the draw showed one pair of regions under two candidate numbers, and they were answered differently.
 
-When nothing is disputed, the merge applies these rules:
+The rest of the rules:
 
 - **At least two judges must have ruled.** One reader with a firm opinion is an opinion; two arriving at it separately is evidence.
 - **Prose.** A scored entry states its judgement and its diff at length. NOT CLEAR is held to a note instead: it asserts nothing, so there is no assertion to state, and refusing a terse note would throw away the record that stops the next pass re-reading a pair somebody has already ruled on.
 - **One tree.** Every judged folder and the register must name the same commit. A line number means nothing without the tree it was read in.
+- **Judges must have been shown the same candidates.** Candidate numbers are the only handle a verdict has on a pair, so two workspaces with different pair lists would have their verdicts cross-matched into disagreements that never happened. The run refuses outright.
 - A repository that gains a register leaves `corpus/judging-queue.json` in the same run, per [CORPUS-REGISTER-QUEUE].
 
-`docs/reports/verdict-merge.md` holds the disagreements and nothing else — no merge summary, no counts of what would have landed, because those bury the thing the report exists to show. Each judge's own words are quoted, never summarised.
+`docs/reports/verdict-merge.md` holds what was left out. Every string in it is a column header, a label derived from the verdicts themselves, or a value read out of a judging folder — the only sentences are the judges' own, quoted. Rows are sorted by kind, repository and candidate, so two runs over the same verdicts produce the same document.
 
 Asserted by `scripts/repository/verdict-merge.test.mjs`, which drives the script against throwaway judging folders that agree and that do not.
 

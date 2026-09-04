@@ -17,8 +17,8 @@ use anyhow::{ensure, Result};
 use serde_json::Value;
 
 use super::{
-    copied_fixture_named, initialized_mcp, request_duplicates_summary, spawn_lsp_and_wait_for_socket,
-    structured_content,
+    copied_fixture_named, initialized_mcp, request_duplicates_summary,
+    spawn_lsp_and_wait_for_socket, structured_content,
 };
 
 /// Clusters requested per page: enough to hold every cluster the fixtures surface.
@@ -41,7 +41,10 @@ pub fn assert_language_label_over_mcp(
     let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
 
     let mut mcp = initialized_mcp(workspace.path())?;
-    let page = structured_content(&request_duplicates_summary(&mut mcp, PAGE_LIMIT)?, "duplicates")?;
+    let page = structured_content(
+        &request_duplicates_summary(&mut mcp, PAGE_LIMIT)?,
+        "duplicates",
+    )?;
     let languages = cluster_languages_for_extension(&page, extension);
 
     ensure!(

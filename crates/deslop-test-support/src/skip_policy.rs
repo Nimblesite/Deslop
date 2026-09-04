@@ -100,16 +100,7 @@ pub struct IgnoredTest {
 /// `#[ignore]` decorates something other than a function, or when a
 /// `#[cfg_attr(..)]` mentions `ignore`.
 pub fn ignored_tests() -> Result<Vec<IgnoredTest>> {
-    let root = repo_root();
-    let mut found = Vec::new();
-    for path in rust_sources(&root)? {
-        let file = workspace_relative(&root, &path);
-        let source = fs::read_to_string(&path)
-            .with_context(|| format!("unreadable Rust source: {}", path.display()))?;
-        found.extend(ignored_tests_in(&source, &file)?);
-    }
-    found.sort();
-    Ok(found)
+    scan_workspace_sources(ignored_tests_in)
 }
 
 /// Every `#[ignore]`d test declared by one Rust source, attributed to `file`.
@@ -120,12 +111,34 @@ pub fn ignored_tests() -> Result<Vec<IgnoredTest>> {
 /// decorates something other than a function, or when a `#[cfg_attr(..)]`
 /// mentions `ignore`.
 pub fn ignored_tests_in(source: &str, file: &str) -> Result<Vec<IgnoredTest>> {
-    let grammar = RustParser::new().grammar();
-    let tree = parse_source(RUST_LANGUAGE_ID, &grammar, source.as_bytes())
-        .with_context(|| format!("unparsable Rust source: {file}"))?;
+    let tree = parse_rust_source(source, file)?;
     let mut found = Vec::new();
     visit(tree.root_node(), source, file, &mut found)?;
     Ok(found)
+}
+
+/// Runs `scan` over every Rust source in the workspace, each attributed
+/// to its `/`-separated workspace-relative path, and returns the findings
+/// sorted.
+fn scan_workspace_sources<Found: Ord>(
+    scan: impl Fn(&str, &str) -> Result<Vec<Found>>,
+) -> Result<Vec<Found>> {
+    let root = repo_root();
+    let mut found = Vec::new();
+    for path in rust_sources(&root)? {
+        let source = crate::read_text(&path)?;
+        found.extend(scan(&source, &workspace_relative(&root, &path))?);
+    }
+    found.sort();
+    Ok(found)
+}
+
+/// Parses one Rust source with the engine's grammar, naming `file` when
+/// it does not parse.
+fn parse_rust_source(source: &str, file: &str) -> Result<tree_sitter::Tree> {
+    let grammar = RustParser::new().grammar();
+    parse_source(RUST_LANGUAGE_ID, &grammar, source.as_bytes())
+        .with_context(|| format!("unparsable Rust source: {file}"))
 }
 
 /// Walks every named node, recording the skips each `attribute_item` implies.
@@ -179,16 +192,7 @@ fn record(item: Node<'_>, source: &str, file: &str, found: &mut Vec<IgnoredTest>
 ///
 /// Returns an error when a source file cannot be read or parsed.
 pub fn conditional_tests() -> Result<Vec<(String, String, String)>> {
-    let root = repo_root();
-    let mut found = Vec::new();
-    for path in rust_sources(&root)? {
-        let file = workspace_relative(&root, &path);
-        let source = fs::read_to_string(&path)
-            .with_context(|| format!("unreadable Rust source: {}", path.display()))?;
-        found.extend(conditional_tests_in(&source, &file)?);
-    }
-    found.sort();
-    Ok(found)
+    scan_workspace_sources(conditional_tests_in)
 }
 
 /// Every `#[cfg]`-decorated `#[test]` declared by one Rust source.
@@ -197,9 +201,7 @@ pub fn conditional_tests() -> Result<Vec<(String, String, String)>> {
 ///
 /// Returns an error when `source` does not parse.
 pub fn conditional_tests_in(source: &str, file: &str) -> Result<Vec<(String, String, String)>> {
-    let grammar = RustParser::new().grammar();
-    let tree = parse_source(RUST_LANGUAGE_ID, &grammar, source.as_bytes())
-        .with_context(|| format!("unparsable Rust source: {file}"))?;
+    let tree = parse_rust_source(source, file)?;
     let mut found = Vec::new();
     visit_conditionals(tree.root_node(), source, file, &mut found);
     Ok(found)

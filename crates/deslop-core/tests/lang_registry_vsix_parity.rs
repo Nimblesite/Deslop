@@ -16,9 +16,9 @@
 //! hover / inlay / LSP sync / grouping / filters) is guarded by
 //! `clients/vscode/src/test/unit/analysedLanguages.unit.test.ts`.
 
-use std::{collections::BTreeSet, fs, path::PathBuf};
+use std::{collections::BTreeSet, path::PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use deslop_core::pipeline::watched_source_extensions;
 use serde_json::Value;
 

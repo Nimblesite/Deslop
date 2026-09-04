@@ -176,58 +176,86 @@ const runAgreed = (extra = []) => {
   return run(root, folders, extra);
 };
 
-test("one disagreement stops the whole merge, and nothing is written", () => {
-  const { status, stderr, root, json } = runDisputed();
-  assert.equal(status, 1, "a run that found a disagreement must fail, not succeed quietly");
-  assert.match(stderr, /pair\(s\) disagree\. NOTHING was merged\./);
-  assert.throws(
-    () => readFileSync(join(root, REGISTER_DIR, REGISTER), "utf8"),
-    "no register may be created while a judge is demonstrably unreliable",
-  );
-  const standing = json(join(REGISTER_DIR, JUDGED_REGISTER));
-  assert.equal(standing.clearly_in.length, 1, "the existing register is left exactly as it was");
-  assert.equal(standing.not_clear.length, 0);
-  assert.equal(json(QUEUE).repositories.length, 1, "the judging queue is not drained either");
+test("only the pairs every source agrees on are imported", () => {
+  const { status, stdout, json } = runDisputed();
+  assert.equal(status, 0, "disputed pairs are left out, they do not stop the run");
+  assert.match(stdout, /pair\(s\) left out: not every source agreed/);
+
+  const register = json(join(REGISTER_DIR, REGISTER));
+  const filed = [...register.clearly_in, ...register.clearly_out, ...register.not_clear];
+  const has = (candidate) =>
+    filed.some((entry) => JSON.stringify(entry.occurrences) === JSON.stringify(at(candidate)));
+  assert.ok(has(1), "candidate 1: both judges said CLEARLY IN, so it is imported");
+  assert.ok(has(2), "candidate 2: both judges said NOT CLEAR, so it is imported");
+  assert.ok(!has(3), "candidate 3: CLEARLY IN against CLEARLY OUT is never imported");
+  assert.ok(!has(4), "candidate 4: one judge firm, one NOT CLEAR, is never imported");
+  assert.ok(!has(5), "candidate 5: one judge's ranges were not the candidate's");
+  assert.equal(register.clearly_in.length, 1, "nothing else reached a scored verdict");
+  assert.equal(register.clearly_out.length, 0);
 });
 
-test("the report leads with opposite conclusions, in each judge's own words", () => {
+test("a pair the register already holds is left exactly as it was", () => {
+  const { json } = runDisputed();
+  const standing = json(join(REGISTER_DIR, JUDGED_REGISTER));
+  assert.deepEqual(
+    standing.clearly_in[0].occurrences,
+    STANDING,
+    "the standing entry keeps its verdict though both judges now say NOT CLEAR",
+  );
+  assert.ok(
+    !standing.not_clear.some(
+      (entry) => JSON.stringify(entry.occurrences) === JSON.stringify(STANDING),
+    ),
+    "and it is not filed a second time under the verdict the register disagrees with",
+  );
+  assert.equal(standing.clearly_in.length, 2, "the pair every source agreed on is added beside it");
+});
+
+test("the report is data: derived labels, counts, and the judges' own words", () => {
   const { read } = runDisputed();
   const report = read(REPORT);
-  const opposite = report.indexOf("## Opposite conclusions");
-  const softer = report.indexOf("## One judge committed, the other would not");
-  assert.ok(opposite > 0 && softer > opposite, "the irreconcilable split is reported first");
-  assert.match(report, /Nothing was merged/);
-  const contradicted = at(3).map((range) => report.includes(range));
-  assert.deepEqual(contradicted, [true, true], "both ranges of the opposed pair are printed");
+  const kinds = ["clearly_in/clearly_out", "clearly_in/not_clear", "occurrences_mismatch"];
+  for (const kind of kinds) assert.ok(report.includes(kind), `${kind} is a label read off the verdicts`);
+  const rows = report.slice(report.indexOf("## disagreements"));
+  const first = rows.indexOf("clearly_in/clearly_out");
+  const softer = rows.indexOf("clearly_in/not_clear");
+  assert.ok(first > 0 && softer > first, "rows sort by kind, so the irreconcilable split comes first");
+  for (const range of at(3)) assert.ok(report.includes(range), "the opposed pair's ranges are printed");
   assert.ok(
-    report.includes(`${FIRST_JUDGE} — clearly_out`) && report.includes(`${SECOND_JUDGE} — clearly_in`),
-    "each judge is named beside the verdict they reached",
+    report.includes(`${FIRST_JUDGE}=clearly_out`) && report.includes(`${SECOND_JUDGE}=clearly_in`),
+    "each source is named beside the verdict it gave",
   );
   assert.ok(report.includes(WHY), "the judge's own reasoning is quoted, not summarised");
 });
 
-test("the report counts every kind of disagreement, and carries nothing else", () => {
+test("the report counts every kind, and totals what went in and what stayed out", () => {
   const { read } = runDisputed();
   const report = read(REPORT);
-  for (const [heading, count] of [
-    ["Opposite conclusions", 2],
-    ["A judge's ranges are not the candidate's", 2],
-    ["Contradicts a verdict the register already holds", 1],
-    ["One judge committed, the other would not", 2],
+  for (const [kind, count] of [
+    ["clearly_in/clearly_out", 2],
+    ["clearly_in/not_clear", 2],
+    ["occurrences_mismatch", 2],
+    ["register_conflict", 1],
   ]) {
-    const section = report.slice(report.indexOf(heading));
-    assert.match(
-      section.slice(0, 400),
-      new RegExp(`\\*\\*${count}\\.?\\*\\*`),
-      `${heading} must report ${count}`,
-    );
+    assert.ok(report.includes(`| ${kind} | ${count} |`), `by_kind must report ${kind} = ${count}`);
   }
-  assert.ok(!report.includes("What was merged"), "a merge summary would bury the disagreements");
-  assert.ok(!report.includes("states too little"), "thin prose is not a disagreement between judges");
+  assert.ok(report.includes("| pairs_left_out | 7 |"), "seven pairs were not agreed on by every source");
+  // widgets takes candidates 1, 2 and 6; gadgets takes 1 and 2, because the
+  // register already holds candidate 6's pair under a verdict the judges deny.
+  assert.ok(report.includes("| pairs_imported | 5 |"), "five were, across the two repositories");
+  assert.ok(!report.includes("states too little"), "thin prose is not a disagreement between sources");
+});
+
+test("a run nothing disagreed on reports an empty disagreement table", () => {
+  const { read } = runAgreed();
+  const report = read(REPORT);
+  assert.ok(report.includes("| pairs_left_out | 0 |"), "every pair was agreed on by every source");
+  assert.ok(report.includes("| pairs_imported | 2 |"));
+  assert.ok(report.slice(report.indexOf("## disagreements")).includes("(none)"));
 });
 
 test("judges who agree completely get merged, in their own words", () => {
-  const { status, json, read } = runAgreed();
+  const { status, json } = runAgreed();
   assert.equal(status, 0, "nothing was disputed, so the merge runs");
   const register = json(join(REGISTER_DIR, REGISTER));
   assert.equal(register.name, REPO, "the register is named for the repository it judges");
@@ -243,7 +271,6 @@ test("judges who agree completely get merged, in their own words", () => {
   assert.deepEqual(register.clearly_in[0].occurrences, at(1));
   assert.equal(register.clearly_in[0].why, WHY, "the judge's words are copied, never rewritten");
   assert.equal(register.clearly_in[0].verified, VERIFIED);
-  assert.match(read(REPORT), /\*\*0 pairs/, "the report says plainly that nothing disagreed");
 });
 
 test("an agreed NOT CLEAR note shorter than the assertion floor is still recorded", () => {

@@ -18,7 +18,7 @@
 use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
-use deslop_test_support::corpus::repo_root;
+use deslop_test_support::{corpus::repo_root, read_json};
 use serde_json::Value;
 
 /// Where the judged registers live, one per target repository.
@@ -90,7 +90,6 @@ fn stem(path: &Path) -> String {
         .unwrap_or_default()
         .to_owned()
 }
-
 
 /// The entries of one verdict list, empty when the key is absent.
 fn entries<'a>(register: &'a Value, verdict: &str) -> &'a [Value] {
@@ -264,7 +263,7 @@ fn count(value: &Value, field: &str) -> u64 {
 #[test]
 fn the_score_gate_is_strict_by_default_and_every_exception_is_a_tracked_repository() -> Result<()> {
     let root = repo_root();
-    let config = read_json(&root.join(THRESHOLDS))?;
+    let config: Value = read_json(&root.join(THRESHOLDS))?;
     let defaults = config.get(DEFAULTS).cloned().unwrap_or(Value::Null);
     assert_eq!(
         defaults.get(MINIMUM_SCORE).and_then(Value::as_f64),
@@ -297,10 +296,10 @@ fn the_score_gate_is_strict_by_default_and_every_exception_is_a_tracked_reposito
 #[test]
 fn no_gated_allowance_exceeds_what_its_register_actually_judges() -> Result<()> {
     let root = repo_root();
-    let config = read_json(&root.join(THRESHOLDS))?;
+    let config: Value = read_json(&root.join(THRESHOLDS))?;
     let repos = config.get(REPOS).and_then(Value::as_object);
     for (name, entry) in repos.into_iter().flatten() {
-        let register = read_json(
+        let register: Value = read_json(
             &root
                 .join(REGISTER_DIR)
                 .join(format!("{}.json", name.to_lowercase())),

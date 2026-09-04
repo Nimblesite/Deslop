@@ -41,6 +41,430 @@
         "src/Polly.SharedSpecs/Retry/RetryAsyncSpecs.cs:378-382",
         "src/Polly.SharedSpecs/Retry/RetryTResultSpecsAsync.cs:438-442"
       ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (18 vs 18 lines): not byte-identical, similarity 0.80; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.Shared/Timeout/TimeoutTResultSyntaxAsync.cs:201-218",
+        "src/Polly.Shared/Timeout/TimeoutSyntax.cs:201-218"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (51 vs 51 lines): not byte-identical, similarity 0.82; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/PolicyTResultSpecs.cs:142-192",
+        "src/Polly.SharedSpecs/PolicyTResultAsyncSpecs.cs:145-195"
+      ]
+    },
+    {
+      "why": "The IReadOnlyPolicyRegistry specs are the PolicyRegistry specs with the systematic _registry→ReadOnlyRegistry rename over 84-86 lines.",
+      "verified": "extracted and diffed the two source ranges (85 vs 85 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Registry/PolicyRegistrySpecs.cs:246-330",
+        "src/Polly.SharedSpecs/Registry/IReadOnlyPolicyRegistrySpecs.cs:100-184"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (22 vs 24 lines): not byte-identical, similarity 0.76; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheAsyncSpecs.cs:197-218",
+        "src/Polly.SharedSpecs/Caching/CacheSpecs.cs:190-213"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (25 vs 25 lines): not byte-identical, similarity 0.95; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.Shared/NoOp/NoOpTResultSyntax.cs:1-25",
+        "src/Polly.Shared/NoOp/NoOpTResultSyntaxAsync.cs:1-25"
+      ]
+    },
+    {
+      "why": "The ExecuteAndCapture variant is the Execute variant with the systematic method rename over 36 lines.",
+      "verified": "extracted and diffed the two source ranges (36 vs 36 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/PolicyTResultSpecs.cs:199-234",
+        "src/Polly.SharedSpecs/PolicyTResultSpecs.cs:236-271"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (14 vs 14 lines): not byte-identical, similarity 0.95; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:692-705",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:684-697"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (84 vs 89 lines): not byte-identical, similarity 0.28; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.Shared/Fallback/FallbackSyntaxAsync.cs:142-225",
+        "src/Polly.Shared/Fallback/FallbackSyntax.cs:214-302"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (75 vs 71 lines): not byte-identical, similarity 0.93; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:252-326",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:257-327"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (61 vs 61 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:15-75",
+        "src/Polly.SharedSpecs/Timeout/TimeoutAsyncSpecs.cs:16-76"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (87 vs 87 lines): not byte-identical, similarity 0.96; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultAsyncSpecs.cs:104-190",
+        "src/Polly.SharedSpecs/Timeout/TimeoutAsyncSpecs.cs:104-190"
+      ]
+    },
+    {
+      "why": "identical 25-line advanced-circuit-breaker test body duplicated in the same file",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:2537-2561",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1901-1925"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (78 vs 79 lines): not byte-identical, similarity 0.97; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/PolicyContextAndKeyAsyncSpecs.cs:206-283",
+        "src/Polly.SharedSpecs/PolicyContextAndKeySpecs.cs:202-280"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (52 vs 51 lines): not byte-identical, similarity 0.80; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.Shared/Fallback/FallbackSyntaxAsync.cs:61-112",
+        "src/Polly.Shared/Fallback/FallbackSyntax.cs:122-172"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (6 vs 6 lines): not byte-identical, similarity 0.96; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:1198-1203",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:1132-1137"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (19 vs 19 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.Shared/Caching/CacheProviderExtensions.cs:64-82",
+        "src/Polly.Shared/Caching/CacheProviderExtensions.cs:37-55"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (62 vs 62 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutAsyncSpecs.cs:70-131",
+        "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:69-130"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (72 vs 73 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Wrap/PolicyWrapSpecsAsync.cs:38-109",
+        "src/Polly.SharedSpecs/Wrap/PolicyWrapSpecs.cs:37-109"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (93 vs 93 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:66-158",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:65-157"
+      ]
+    },
+    {
+      "why": "The ExecuteAndCapture variant of the async-policy misuse test, 8 lines systematic rename.",
+      "verified": "extracted and diffed the two source ranges (8 vs 8 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/PolicySpecs.cs:175-182",
+        "src/Polly.SharedSpecs/PolicySpecs.cs:184-191"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (49 vs 49 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:66-114",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:65-113"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (56 vs 56 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultSpecs.cs:78-133",
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultAsyncSpecs.cs:78-133"
+      ]
+    },
+    {
+      "why": "identical 24-line advanced-circuit-breaker test body duplicated in the same file",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:2161-2184",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:2223-2246"
+      ]
+    },
+    {
+      "why": "identical 25-line advanced-circuit-breaker test body duplicated in the same file",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1508-1532",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1470-1494"
+      ]
+    },
+    {
+      "why": "identical 24-line advanced-circuit-breaker test body duplicated in the same file",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1427-1450",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1280-1303"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (72 vs 59 lines): not byte-identical, similarity 0.89; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryForeverSpecs.cs:14-85",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryForeverAsyncSpecs.cs:18-76"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (33 vs 33 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/SerializingCacheProviderAsyncSpecs.cs:14-46",
+        "src/Polly.SharedSpecs/Caching/SerializingCacheProviderSpecs.cs:12-44"
+      ]
+    },
+    {
+      "why": "identical 12-line test setup duplicated in the same file",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:330-341",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:375-386"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (159 vs 158 lines): not byte-identical, similarity 0.97; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:640-798",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1107-1264"
+      ]
+    },
+    {
+      "why": "5 lines byte-identical between the retry syntax async files.",
+      "verified": "extracted both ranges from source and diffed: byte-identical over 5 lines",
+      "occurrences": [
+        "src/Polly.Shared/Retry/RetrySyntaxAsync.cs:531-535",
+        "src/Polly.Shared/Retry/RetryTResultSyntaxAsync.cs:403-407"
+      ]
+    },
+    {
+      "why": "identical 24-line advanced-circuit-breaker test body duplicated in the same file",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:2471-2494",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:2571-2594"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (87 vs 88 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Wrap/PolicyWrapSpecsAsync.cs:18-104",
+        "src/Polly.SharedSpecs/Wrap/PolicyWrapSpecs.cs:17-104"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (13 vs 13 lines): not byte-identical, similarity 1.00; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:998-1010",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:988-1000"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (28 vs 28 lines): not byte-identical, similarity 0.85; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.Shared/Caching/GenericCacheProvider.cs:3-30",
+        "src/Polly.Shared/Caching/GenericCacheProviderAsync.cs:5-32"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (66 vs 66 lines): not byte-identical, similarity 0.93; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Wrap/PolicyWrapSpecsAsync.cs:94-159",
+        "src/Polly.SharedSpecs/Wrap/PolicyWrapSpecs.cs:94-159"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (39 vs 39 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:432-470",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:990-1028"
+      ]
+    },
+    {
+      "why": "identical 12-line mixed-result test body duplicated in the same file",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultMixedResultExceptionSpecs.cs:387-398",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultMixedResultExceptionSpecs.cs:42-53"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (32 vs 32 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheAsyncSpecs.cs:17-48",
+        "src/Polly.SharedSpecs/Caching/CacheSpecs.cs:16-47"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (31 vs 30 lines): not byte-identical, similarity 0.94; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.Shared/Caching/CacheTResultSyntax.cs:132-162",
+        "src/Polly.Shared/Caching/CacheSyntax.cs:54-83"
+      ]
+    },
+    {
+      "why": "identical 17-line circuit-breaker test body duplicated in the same file",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:1027-1043",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:981-997"
+      ]
+    },
+    {
+      "why": "identical 18-line circuit-breaker test body duplicated in the same file",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:234-251",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:665-682"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (95 vs 95 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:44-138",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:43-137"
+      ]
+    },
+    {
+      "why": "identical 20-line advanced-circuit-breaker test body duplicated in the same file",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:496-515",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:408-427"
+      ]
+    },
+    {
+      "why": "identical 19-line circuit-breaker test body duplicated in the same file",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:294-312",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:333-351"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (23 vs 23 lines): not byte-identical, similarity 0.80; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.Shared/Timeout/TimeoutTResultSyntax.cs:49-71",
+        "src/Polly.Shared/Timeout/TimeoutSyntax.cs:48-70"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (5 vs 5 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:152-156",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:153-157"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (8 vs 8 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:805-812",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:813-820"
+      ]
+    },
+    {
+      "why": "identical 18-line circuit-breaker test body duplicated in the same file",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:337-354",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:298-315"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (53 vs 53 lines): not byte-identical, similarity 0.97; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/PolicyAsyncSpecs.cs:212-264",
+        "src/Polly.SharedSpecs/PolicySpecs.cs:207-259"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (6 vs 6 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.Shared/Retry/RetryTResultSyntaxAsync.cs:625-630",
+        "src/Polly.Shared/Retry/RetryTResultSyntax.cs:410-415"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (35 vs 35 lines): not byte-identical, similarity 0.96; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.Shared/Wrap/PolicyWrapSyntaxAsync.cs:8-42",
+        "src/Polly.Shared/Wrap/PolicyWrapSyntax.cs:8-42"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "verified": "extracted and diffed the two source ranges (97 vs 97 lines): not byte-identical, similarity 0.96; differences are the systematic change described",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:676-772",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:684-780"
+      ]
+    },
+    {
+      "why": "identical 26-line circuit-breaker test body duplicated in the same file",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:404-429",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:501-526"
+      ]
     }
   ],
   "clearly_out": [
@@ -74,6 +498,783 @@
       "occurrences": [
         "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:1523-1525",
         "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:1536-1538"
+      ]
+    },
+    {
+      "why": "2 identical assertion lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1778-1779",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:631-632"
+      ]
+    },
+    {
+      "why": "Different onReset scenarios.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:2516-2520",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:1245-1249"
+      ]
+    },
+    {
+      "why": "2 lines of different invocations.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:402-403",
+        "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:162-163"
+      ]
+    },
+    {
+      "why": "Whitespace/indent-only changes.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:1273-1280",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:83-89"
+      ]
+    },
+    {
+      "why": "Timeslice comment/scenario edits.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:1220-1242",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:1072-1093"
+      ]
+    },
+    {
+      "why": "Different circuit-state scenarios.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:1293-1300",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:1074-1079"
+      ]
+    },
+    {
+      "why": "3 lines of sync→async construction.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:609-611",
+        "src/Polly.SharedSpecs/Timeout/TimeoutAsyncSpecs.cs:573-575"
+      ]
+    },
+    {
+      "why": "1-line differing cache asserts.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheAsyncSpecs.cs:83-83",
+        "src/Polly.SharedSpecs/Caching/CacheTResultAsyncSpecs.cs:83-83"
+      ]
+    },
+    {
+      "why": "Null-guard lines from different syntax files.",
+      "occurrences": [
+        "src/Polly.Shared/Retry/RetryTResultSyntaxAsync.cs:844-846",
+        "src/Polly.Shared/Timeout/TimeoutSyntax.cs:141-143"
+      ]
+    },
+    {
+      "why": "3 identical lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:771-773",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:962-964"
+      ]
+    },
+    {
+      "why": "2 lines differing in strategy.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultSpecs.cs:534-535",
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultAsyncSpecs.cs:661-662"
+      ]
+    },
+    {
+      "why": "3 lines of sync→async bulkhead construction.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Bulkhead/BulkheadTResultSpecs.cs:64-66",
+        "src/Polly.SharedSpecs/Bulkhead/BulkheadTResultAsyncSpecs.cs:64-66"
+      ]
+    },
+    {
+      "why": "2 lines differing in expected result.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryTResultMixedResultExceptionSpecs.cs:78-79",
+        "src/Polly.SharedSpecs/Retry/RetryTResultMixedResultExceptionSpecs.cs:120-121"
+      ]
+    },
+    {
+      "why": "Different threshold scenarios.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:589-593",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:791-798"
+      ]
+    },
+    {
+      "why": "Ragged sync/async fallback windows.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:671-682",
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:1160-1172"
+      ]
+    },
+    {
+      "why": "Fallback vs retry null-guard tests.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:20-30",
+        "src/Polly.SharedSpecs/Retry/RetryForeverSpecs.cs:26-36"
+      ]
+    },
+    {
+      "why": "3 lines of sync/async overload bodies.",
+      "occurrences": [
+        "src/Polly.Shared/Timeout/TimeoutSyntaxAsync.cs:34-36",
+        "src/Polly.Shared/Timeout/TimeoutTResultSyntax.cs:35-37"
+      ]
+    },
+    {
+      "why": "Timeslice comment edits.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:1036-1058",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:1114-1136"
+      ]
+    },
+    {
+      "why": "3 identical lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:219-221",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:227-229"
+      ]
+    },
+    {
+      "why": "Retry-count variants.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryAsyncSpecs.cs:65-74",
+        "src/Polly.SharedSpecs/Retry/RetryAsyncSpecs.cs:42-51"
+      ]
+    },
+    {
+      "why": "Generic vs non-generic cache wrap tests.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheTResultSpecs.cs:222-231",
+        "src/Polly.SharedSpecs/Caching/CacheSpecs.cs:222-231"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.Shared/Retry/RetrySyntax.cs:60-79",
+        "src/Polly.Shared/Retry/RetryTResultSyntaxAsync.cs:98-116"
+      ]
+    },
+    {
+      "why": "Retry vs wait-and-retry onRetry signatures.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetrySpecs.cs:396-439",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:826-871"
+      ]
+    },
+    {
+      "why": "3 identical lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:2148-2150",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:2152-2154"
+      ]
+    },
+    {
+      "why": "4 identical lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:225-228",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:246-249"
+      ]
+    },
+    {
+      "why": "Cancellation-scenario variants.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecsAsync.cs:526-543",
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecsAsync.cs:740-757"
+      ]
+    },
+    {
+      "why": "Bulkhead vs timeout engine wrappers — parallel shape, different engines.",
+      "occurrences": [
+        "src/Polly.Shared/Bulkhead/BulkheadSyntaxAsync.cs:81-96",
+        "src/Polly.Shared/Timeout/TimeoutSyntaxAsync.cs:251-262"
+      ]
+    },
+    {
+      "why": "Sync vs async sleep windows, ragged.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:289-298",
+        "src/Polly.SharedSpecs/Timeout/TimeoutAsyncSpecs.cs:251-264"
+      ]
+    },
+    {
+      "why": "4 identical lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:1319-1322",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultMixedResultExceptionSpecs.cs:506-509"
+      ]
+    },
+    {
+      "why": "2 lines of different invocations.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:268-269",
+        "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:571-572"
+      ]
+    },
+    {
+      "why": "5 identical fallback-assert lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:464-468",
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:412-416"
+      ]
+    },
+    {
+      "why": "3 identical lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:80-82",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:67-69"
+      ]
+    },
+    {
+      "why": "1-line differing signatures.",
+      "occurrences": [
+        "src/Polly.Shared/IAsyncPolicyTResult.cs:89-89",
+        "src/Polly.Shared/PolicyAsync.TResult.cs:268-268"
+      ]
+    },
+    {
+      "why": "HandleInner predicate variants.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:336-343",
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:387-395"
+      ]
+    },
+    {
+      "why": "3 identical lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:757-759",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:1224-1226"
+      ]
+    },
+    {
+      "why": "1-line differing signatures.",
+      "occurrences": [
+        "src/Polly.Shared/PolicyAsync.cs:1046-1046",
+        "src/Polly.Shared/IAsyncPolicy.cs:302-302"
+      ]
+    },
+    {
+      "why": "9 lines of the registry-twin windows.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Registry/PolicyRegistrySpecs.cs:172-180",
+        "src/Polly.SharedSpecs/Registry/IReadOnlyPolicyRegistrySpecs.cs:26-34"
+      ]
+    },
+    {
+      "why": "3 identical lines.",
+      "occurrences": [
+        "src/Polly.Shared/Retry/RetryTResultSyntaxAsync.cs:618-620",
+        "src/Polly.Shared/Retry/RetrySyntaxAsync.cs:457-459"
+      ]
+    },
+    {
+      "why": "Cancellation-scenario variants.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecs.cs:502-530",
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecs.cs:532-560"
+      ]
+    },
+    {
+      "why": "The sync/async (or generic/non-generic) twin blocks differ by the systematic Async-suffix/delegate rename and nothing else.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultSpecs.cs:71-97",
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultAsyncSpecs.cs:46-72"
+      ]
+    },
+    {
+      "why": "Indent-only diffs.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:346-351",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:274-279"
+      ]
+    },
+    {
+      "why": "4 lines differing in the captured variable.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:487-490",
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:548-551"
+      ]
+    },
+    {
+      "why": "Half-open scenario comment/behavior edits.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:483-503",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:387-406"
+      ]
+    },
+    {
+      "why": "Different result-sequence scenarios.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:220-224",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultMixedResultExceptionSpecs.cs:149-153"
+      ]
+    },
+    {
+      "why": "Handled vs unhandled exception variants.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/PolicySpecs.cs:62-81",
+        "src/Polly.SharedSpecs/PolicySpecs.cs:83-102"
+      ]
+    },
+    {
+      "why": "Mirror predicate (e=>true/false) fallback tests.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:706-714",
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:671-679"
+      ]
+    },
+    {
+      "why": "IsolatedCircuit vs BrokenCircuit exception classes — related hierarchy, different content.",
+      "occurrences": [
+        "src/Polly.Shared/CircuitBreaker/IsolatedCircuitException.cs:14-34",
+        "src/Polly.Shared/CircuitBreaker/BrokenCircuitException.cs:11-52"
+      ]
+    },
+    {
+      "why": "3 lines of sync/async delegate setups.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:454-456",
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultSpecs.cs:516-518"
+      ]
+    },
+    {
+      "why": "2 lines of unrelated invocations.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:2843-2844",
+        "src/Polly.SharedSpecs/Retry/RetrySpecs.cs:460-461"
+      ]
+    },
+    {
+      "why": "3 identical lines.",
+      "occurrences": [
+        "src/Polly.Shared/Timeout/TimeoutTResultSyntaxAsync.cs:79-81",
+        "src/Polly.Shared/Timeout/TimeoutTResultSyntaxAsync.cs:93-95"
+      ]
+    },
+    {
+      "why": "3 identical lines.",
+      "occurrences": [
+        "src/Polly.Shared/Retry/RetryTResultSyntax.cs:451-453",
+        "src/Polly.Shared/Retry/RetrySyntax.cs:404-406"
+      ]
+    },
+    {
+      "why": "2 identical lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultAsyncSpecs.cs:105-106",
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultAsyncSpecs.cs:91-92"
+      ]
+    },
+    {
+      "why": "7 identical lines of assertion scaffolding.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:938-944",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:1055-1061"
+      ]
+    },
+    {
+      "why": "WaitAndRetry vs Retry async specs — different policies.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryAsyncSpecs.cs:133-182",
+        "src/Polly.SharedSpecs/Retry/RetryAsyncSpecs.cs:87-131"
+      ]
+    },
+    {
+      "why": "CircuitBreaker vs AdvancedCircuitBreaker specs.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:676-722",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1785-1830"
+      ]
+    },
+    {
+      "why": "handled vs unhandled variable swap.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/PolicyAsyncSpecs.cs:157-163",
+        "src/Polly.SharedSpecs/PolicyAsyncSpecs.cs:133-139"
+      ]
+    },
+    {
+      "why": "1 identical line.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryForeverAsyncSpecs.cs:503-503",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryForeverAsyncSpecs.cs:684-684"
+      ]
+    },
+    {
+      "why": "4 lines of indent diffs.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:757-760",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:2185-2188"
+      ]
+    },
+    {
+      "why": "Formatting of the same assertion.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultSpecs.cs:492-497",
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultSpecs.cs:141-145"
+      ]
+    },
+    {
+      "why": "Context-parameter additions.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutAsyncSpecs.cs:213-217",
+        "src/Polly.SharedSpecs/Timeout/TimeoutAsyncSpecs.cs:577-581"
+      ]
+    },
+    {
+      "why": "4 lines of Execute vs ExecuteAndCapture.",
+      "occurrences": [
+        "src/Polly.Shared/Policy.TResult.cs:54-57",
+        "src/Polly.Shared/Policy.TResult.cs:202-205"
+      ]
+    },
+    {
+      "why": "1-line differing cache asserts.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheTResultAsyncSpecs.cs:100-100",
+        "src/Polly.SharedSpecs/Caching/CacheAsyncSpecs.cs:100-100"
+      ]
+    },
+    {
+      "why": "5 identical lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:723-727",
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:818-822"
+      ]
+    },
+    {
+      "why": "3 lines of differing delegate args.",
+      "occurrences": [
+        "src/Polly.Shared/Retry/RetrySyntaxAsync.cs:261-263",
+        "src/Polly.Shared/Timeout/TimeoutSyntaxAsync.cs:255-257"
+      ]
+    },
+    {
+      "why": "Comment-level overlap only.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:564-567",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:1180-1182"
+      ]
+    },
+    {
+      "why": "Fault vs FaultAgain result variants.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:221-224",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:157-160"
+      ]
+    },
+    {
+      "why": "4 lines of Execute vs ExecuteAndCapture.",
+      "occurrences": [
+        "src/Polly.Shared/PolicyAsync.TResult.cs:310-313",
+        "src/Polly.Shared/PolicyAsync.TResult.cs:33-36"
+      ]
+    },
+    {
+      "why": "2 lines of unrelated asserts.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultAsyncSpecs.cs:206-207",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:1049-1050"
+      ]
+    },
+    {
+      "why": "2 lines of differing execute calls.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultSpecs.cs:433-434",
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultSpecs.cs:436-437"
+      ]
+    },
+    {
+      "why": "Related scaffolding; not a certain copy.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:596-601",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:583-588"
+      ]
+    },
+    {
+      "why": "Predicate true/false variants.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:205-210",
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:174-179"
+      ]
+    },
+    {
+      "why": "Half-open scenario windows, ragged.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:1467-1502",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:1505-1549"
+      ]
+    },
+    {
+      "why": "3 lines of the registry-twin windows.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Registry/PolicyRegistrySpecs.cs:336-338",
+        "src/Polly.SharedSpecs/Registry/IReadOnlyPolicyRegistrySpecs.cs:190-192"
+      ]
+    },
+    {
+      "why": "OnRetry vs sleep-only retry-state bodies.",
+      "occurrences": [
+        "src/Polly.Shared/Retry/RetryStateWaitAndRetryAsync.cs:28-30",
+        "src/Polly.Shared/Retry/RetryStateWaitAndRetryWithProviderAsync.cs:30-32"
+      ]
+    },
+    {
+      "why": "FallbackAsync overload variants.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultAsyncSpecs.cs:495-505",
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultAsyncSpecs.cs:428-437"
+      ]
+    },
+    {
+      "why": "2 lines differing in exception type.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:724-725",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:1011-1012"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 88.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:475-483",
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:510-518"
+      ]
+    },
+    {
+      "why": "Related scaffolding; not a certain copy.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:2849-2981",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:1501-1636"
+      ]
+    },
+    {
+      "why": "Related scaffolding; not a certain copy.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheSpecs.cs:137-139",
+        "src/Polly.SharedSpecs/Caching/CacheSpecs.cs:448-450"
+      ]
+    },
+    {
+      "why": "Related scaffolding; not a certain copy.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Wrap/PolicyWrapContextAndKeySpecs.cs:184-188",
+        "src/Polly.SharedSpecs/Wrap/PolicyWrapContextAndKeySpecs.cs:159-163"
+      ]
+    },
+    {
+      "why": "Related scaffolding; not a certain copy.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:609-613",
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:660-664"
+      ]
+    },
+    {
+      "why": "1-line differing await chains.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryForeverAsyncSpecs.cs:652-652",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:2987-2987"
+      ]
+    },
+    {
+      "why": "Timeslice comment edits.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:820-831",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:621-630"
+      ]
+    },
+    {
+      "why": "Circuit-state scenario windows, ragged.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:1233-1249",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:2610-2622"
+      ]
+    },
+    {
+      "why": "Manual-override scenarios.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:578-602",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:612-634"
+      ]
+    },
+    {
+      "why": "BrokenCircuit vs TimeoutRejected exception classes — parallel hierarchy, different docs.",
+      "occurrences": [
+        "src/Polly.Shared/CircuitBreaker/BrokenCircuitException.cs:11-52",
+        "src/Polly.Shared/Timeout/TimeoutRejectedException.cs:6-51"
+      ]
+    },
+    {
+      "why": "Different advanced-breaker scenarios.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:94-126",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:16-39"
+      ]
+    },
+    {
+      "why": "2 identical lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryAsyncSpecs.cs:129-130",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryAsyncSpecs.cs:271-272"
+      ]
+    },
+    {
+      "why": "3 identical lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:816-818",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:833-835"
+      ]
+    },
+    {
+      "why": "Ragged sync/async fallback windows.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:540-546",
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:976-982"
+      ]
+    },
+    {
+      "why": "Sampling-duration variants.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:298-319",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1032-1053"
+      ]
+    },
+    {
+      "why": "3 identical lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Wrap/IPolicyWrapExtensionSpecs.cs:193-195",
+        "src/Polly.SharedSpecs/Wrap/IPolicyWrapExtensionSpecs.cs:125-127"
+      ]
+    },
+    {
+      "why": "3 lines of whitespace diffs.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultAsyncSpecs.cs:453-455",
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultAsyncSpecs.cs:358-360"
+      ]
+    },
+    {
+      "why": "3 identical lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryAsyncSpecs.cs:305-307",
+        "src/Polly.SharedSpecs/Retry/RetryAsyncSpecs.cs:327-329"
+      ]
+    },
+    {
+      "why": "Exception vs result breaker twins, ragged.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:1539-1568",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:1551-1581"
+      ]
+    },
+    {
+      "why": "Bulkhead scenario rows with different values.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Bulkhead/BulkheadScenarios.cs:19-20",
+        "src/Polly.SharedSpecs/Bulkhead/BulkheadScenarios.cs:16-17"
+      ]
+    },
+    {
+      "why": "2 vs 3 lines of unrelated asserts.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:1011-1012",
+        "src/Polly.SharedSpecs/PolicyTResultAsyncSpecs.cs:102-104"
+      ]
+    },
+    {
+      "why": "Ragged sync/async fallback windows.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultSpecs.cs:267-274",
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultAsyncSpecs.cs:234-242"
+      ]
+    },
+    {
+      "why": "3 lines of sync/async cache construction.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheTResultSpecs.cs:37-39",
+        "src/Polly.SharedSpecs/Caching/CacheTResultAsyncSpecs.cs:39-41"
+      ]
+    },
+    {
+      "why": "Result-returning vs exception-throwing retry variants.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryForeverTResultSpecs.cs:38-47",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryAsyncSpecs.cs:613-621"
+      ]
+    },
+    {
+      "why": "Related scaffolding; not a certain copy.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/PolicyContextAndKeyAsyncSpecs.cs:95-97",
+        "src/Polly.SharedSpecs/PolicyContextAndKeySpecs.cs:93-95"
+      ]
+    },
+    {
+      "why": "Message vs invocation diffs.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:209-211",
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultSpecs.cs:250-251"
+      ]
+    },
+    {
+      "why": "3 identical lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:397-399",
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:559-561"
+      ]
+    },
+    {
+      "why": "3 lines of sync/async overload bodies.",
+      "occurrences": [
+        "src/Polly.Shared/Timeout/TimeoutSyntaxAsync.cs:52-54",
+        "src/Polly.Shared/Timeout/TimeoutSyntax.cs:50-52"
+      ]
+    },
+    {
+      "why": "9-13 lines of interface Execute overloads.",
+      "occurrences": [
+        "src/Polly.Shared/ISyncPolicy.cs:141-149",
+        "src/Polly.Shared/ISyncPolicyTResult.cs:39-51"
+      ]
+    },
+    {
+      "why": "WaitAndRetryForever vs WaitAndRetry windows.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryForeverSpecs.cs:299-309",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:745-757"
+      ]
+    },
+    {
+      "why": "4 lines of Execute vs ExecuteAndCapture.",
+      "occurrences": [
+        "src/Polly.Shared/Policy.TResult.cs:241-244",
+        "src/Polly.Shared/Policy.TResult.cs:102-105"
+      ]
+    },
+    {
+      "why": "Cancellation-scenario variants.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryAsyncSpecs.cs:281-298",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryAsyncSpecs.cs:228-245"
+      ]
+    },
+    {
+      "why": "3 identical lines.",
+      "occurrences": [
+        "src/Polly.Shared/Retry/RetryTResultSyntax.cs:472-474",
+        "src/Polly.Shared/Retry/RetrySyntax.cs:425-427"
+      ]
+    },
+    {
+      "why": "7 identical lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheTResultAsyncSpecs.cs:206-212",
+        "src/Polly.SharedSpecs/Caching/CacheTResultAsyncSpecs.cs:180-186"
+      ]
+    },
+    {
+      "why": "Fallback-scenario windows.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:668-684",
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:650-665"
       ]
     }
   ]

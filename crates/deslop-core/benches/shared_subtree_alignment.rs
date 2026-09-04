@@ -50,7 +50,6 @@ fn repetitions(arguments: &[String]) -> Result<usize> {
     Ok(value)
 }
 
-
 /// Writes the artifact to standard output.
 fn emit(report: &BenchmarkReport) -> Result<()> {
     let stdout = io::stdout();

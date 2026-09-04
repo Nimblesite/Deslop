@@ -49,8 +49,7 @@ pub fn read_text(path: &Path) -> Result<String> {
 ///
 /// Returns an error naming `path` when it is unreadable or not valid JSON.
 pub fn read_json<T: DeserializeOwned>(path: &Path) -> Result<T> {
-    serde_json::from_str(&read_text(path)?)
-        .with_context(|| format!("not JSON: {}", path.display()))
+    serde_json::from_str(&read_text(path)?).with_context(|| format!("not JSON: {}", path.display()))
 }
 
 /// Appends `.<ext>` to the file name of `base`, returning the new path.

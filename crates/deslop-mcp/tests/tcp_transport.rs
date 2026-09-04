@@ -21,9 +21,13 @@ use serde_json::{json, Value};
 
 mod common;
 use common::{
-    copied_fixture, initialized_mcp, spawn_lsp_with_args, structured_content, wait_for_path,
-    ChildKillOnDrop, SOCKET_TIMEOUT,
+    copied_fixture, initialized_mcp, request_duplicates_summary, spawn_lsp_with_args,
+    structured_content, wait_for_path, ChildKillOnDrop, SOCKET_TIMEOUT,
 };
+
+/// Clusters requested per page: a small page is enough to prove the
+/// transport carries a live report.
+const PAGE_LIMIT: u64 = 3;
 
 /// Reads and validates the discovery record, returning `(port, token)`.
 fn read_discovery_record(workspace: &std::path::Path) -> Result<(u16, String)> {
@@ -83,10 +87,7 @@ fn mcp_tools_work_over_tcp_transport() -> Result<()> {
 
     let mut mcp = initialized_mcp(workspace.path())?;
 
-    let response = mcp.request(
-        "tools/call",
-        &json!({ "name": "duplicates", "arguments": { "offset": 0, "limit": 3, "detail": "summary" } }),
-    )?;
+    let response = request_duplicates_summary(&mut mcp, PAGE_LIMIT)?;
     let offenders = structured_content(&response, "duplicates")?;
     let total_clusters = offenders
         .get("total_clusters")
@@ -194,10 +195,7 @@ fn stale_discovery_record_reports_lsp_not_running() -> Result<()> {
     )?;
 
     let mut mcp = initialized_mcp(workspace.path())?;
-    let response = mcp.request(
-        "tools/call",
-        &json!({ "name": "duplicates", "arguments": { "offset": 0, "limit": 3, "detail": "summary" } }),
-    )?;
+    let response = request_duplicates_summary(&mut mcp, PAGE_LIMIT)?;
     let message = response
         .pointer("/error/message")
         .and_then(Value::as_str)

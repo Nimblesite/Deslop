@@ -11,7 +11,7 @@
 //! [TEST-SELECTION-SKIP] These read JSON and shell text only, need no clone on
 //! disk, and carry no `#[ignore]`: they run in `make test`.
 
-use std::{fs, path::Path};
+use std::fs;
 
 use anyhow::{Context, Result};
 use deslop_test_support::{corpus::repo_root, read_json};
@@ -36,7 +36,10 @@ const COMMIT_ID_ALPHABET: &str = "0123456789abcdef";
 /// The weaker pin that must not sit beside the commit id.
 const VERSION_PIN: &str = "tag";
 /// Scripts that fetch corpus repositories. Each must ask for a commit.
-const FETCH_SCRIPTS: [&str; 2] = ["scripts/corpus/target-repos.sh", "scripts/corpus/fetch-corpus.mjs"];
+const FETCH_SCRIPTS: [&str; 2] = [
+    "scripts/corpus/target-repos.sh",
+    "scripts/corpus/fetch-corpus.mjs",
+];
 /// The git argument that fetches a name rather than a commit.
 const FETCH_BY_NAME: &str = "--branch";
 
@@ -65,7 +68,6 @@ fn manifests() -> Result<Vec<(String, String, Value)>> {
     Ok(found)
 }
 
-
 /// Whether `candidate` is a full, lowercase, hexadecimal git object name.
 fn is_commit_id(candidate: &str) -> bool {
     candidate.len() == COMMIT_ID_LENGTH
@@ -82,7 +84,10 @@ fn every_corpus_repository_is_pinned_to_a_full_commit_id() -> Result<()> {
         "no repository manifests were read at all"
     );
     for (directory, stem, manifest) in &found {
-        let pin = manifest.get(SHA).and_then(Value::as_str).unwrap_or_default();
+        let pin = manifest
+            .get(SHA)
+            .and_then(Value::as_str)
+            .unwrap_or_default();
         assert!(
             is_commit_id(pin),
             "{directory}/{stem}.json pins `{pin}`, which is not a {COMMIT_ID_LENGTH}-character \

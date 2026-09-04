@@ -51,7 +51,6 @@ fn stem(path: &Path) -> String {
         .to_owned()
 }
 
-
 /// The curated entries of one manifest, empty when the key is absent.
 fn curated(manifest: &Value) -> &[Value] {
     manifest

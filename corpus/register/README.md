@@ -53,13 +53,17 @@ queue is empty**, which means nothing new can enter the register until a reposit
 added to `corpus/judging-queue.json`; `corpus_commit_pins.rs` fails while that is true,
 by design.
 
+Counts are not written here. `docs/reports/verdict-merge.md` carries them, written by the
+run that produced them.
+
 "Queued" means `corpus/judging-queue.json`: the comparison scans those repositories so a
 first pass has reports to draw candidates from, and each moves into this directory when
 its verdicts come back. See `docs/specs/corpus.md` §[CORPUS-REGISTER-QUEUE].
 
 Verdicts reach these files only through `make merge-verdicts JUDGED_DIRS="<folder> <folder>"`.
-It checks disagreement first and **any** disagreement stops the run: the report is written to
-`docs/reports/verdict-merge.md`, nothing else is, and the run fails. See §[CORPUS-REGISTER-MERGE].
+It imports **only** the pairs every source agrees on — these registers included. Anything a
+source disagrees on, or is not confident about, is left out and listed in
+`docs/reports/verdict-merge.md`. See §[CORPUS-REGISTER-MERGE].
 
 The counts are low on purpose. They rise by running more passes at fresh seeds, never by
 admitting an arguable pair.

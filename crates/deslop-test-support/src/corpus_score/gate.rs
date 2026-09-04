@@ -11,7 +11,7 @@
 
 use std::collections::BTreeMap;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::Serialize;
 use serde_json::Value;
 

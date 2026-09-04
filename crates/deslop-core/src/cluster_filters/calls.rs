@@ -157,7 +157,8 @@ fn covered_statements_admissible(snippet: &Snippet<'_>) -> bool {
     let Some(tree) = parse_for(snippet) else {
         return false;
     };
-    let statements = KindSearch::enclosed(snippet.range, is_statement_shape).nodes(tree.root_node());
+    let statements =
+        KindSearch::enclosed(snippet.range, is_statement_shape).nodes(tree.root_node());
     let kinds = call_kinds(snippet.language);
     let (with_call, without_call): (Vec<&Node<'_>>, Vec<&Node<'_>>) = statements
         .iter()
@@ -235,7 +236,6 @@ fn count_call_free(covered: &[Node<'_>], kinds: &[&str]) -> usize {
         .filter(|statement| !subtree_contains_call(**statement, kinds))
         .count()
 }
-
 
 /// Statement and binding declarations used by the grammars this filter scans.
 fn is_statement_shape(kind: &str) -> bool {

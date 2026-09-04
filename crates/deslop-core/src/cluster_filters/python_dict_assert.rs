@@ -114,8 +114,9 @@ fn is_chained_dict_assert_snippet(snippet: &Snippet<'_>) -> bool {
     if !module_scope_is_idiom_only(tree.root_node(), range) {
         return false;
     }
-    let mut functions = Vec::new();
-    collect_intersecting_functions(tree.root_node(), range, &mut functions);
+    let functions = KindSearch::intersecting(range, |kind| kind == "function_definition")
+        .with_nested_hits()
+        .nodes(tree.root_node());
     !functions.is_empty()
         && functions
             .iter()
@@ -226,7 +227,6 @@ fn is_docstring_statement(statement: Node<'_>) -> bool {
         [only] if only.kind() == "string" && !contains_interpolation(*only)
     )
 }
-
 
 /// Returns true for a pytest `test_*` function whose body, within
 /// `range`, is a closed chained-dict idiom: payload dictionaries, the

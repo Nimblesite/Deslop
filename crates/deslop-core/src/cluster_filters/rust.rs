@@ -437,7 +437,6 @@ fn match_dispatch_arm_patterns(snippet: &Snippet<'_>) -> Option<Vec<Vec<u8>>> {
         .collect()
 }
 
-
 /// Returns the `pattern` field bytes of one `match_arm`.
 fn arm_pattern_bytes(arm: Node<'_>, source: &[u8]) -> Option<Vec<u8>> {
     let pattern = arm.child_by_field_name("pattern")?;

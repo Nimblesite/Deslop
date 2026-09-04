@@ -1,0 +1,1146 @@
+{
+  "name": "bloc",
+  "language": "dart",
+  "url": "https://github.com/felangel/bloc.git",
+  "sha": "8fcf54dfea7ba51ef04c091d1a27e0da498b29f0",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "The password validator (regex + validator method) in flutter_form_validation is the same code as form_inputs' Password, differing only in _passwordRegex vs _passwordRegExp.",
+      "verified": "extracted and diffed the two source ranges (10 vs 10 lines): not byte-identical, similarity 0.99; differences are the systematic rename described",
+      "occurrences": [
+        "examples/flutter_form_validation/lib/models/password.dart:9-18",
+        "examples/flutter_firebase_login/packages/form_inputs/lib/src/password.dart:19-28"
+      ]
+    },
+    {
+      "why": "new-cubit.command.ts is new-bloc.command.ts with the systematic rename cubit→bloc throughout.",
+      "verified": "extracted and diffed the two source ranges (55 vs 55 lines): not byte-identical, similarity 0.89; differences are the systematic rename described",
+      "occurrences": [
+        "extensions/vscode/src/commands/new-cubit.command.ts:16-70",
+        "extensions/vscode/src/commands/new-bloc.command.ts:20-74"
+      ]
+    },
+    {
+      "why": "79-line ExceptionCounterBloc group is the ErrorCounterBloc group with one systematic rename applied throughout.",
+      "verified": "extracted and diffed the two source ranges (79 vs 79 lines): not byte-identical, similarity 0.92; differences are the systematic rename described",
+      "occurrences": [
+        "packages/bloc_test/test/bloc_bloc_test_test.dart:471-549",
+        "packages/bloc_test/test/bloc_bloc_test_test.dart:391-469"
+      ]
+    },
+    {
+      "why": "36 lines of undo-exhaustion tests duplicated in the same file with CounterBloc renamed to CounterBlocMixin.",
+      "verified": "extracted and diffed the two source ranges (36 vs 36 lines): not byte-identical, similarity 1.00; differences are the systematic rename described",
+      "occurrences": [
+        "packages/replay_bloc/test/replay_bloc_test.dart:271-306",
+        "packages/replay_bloc/test/replay_bloc_test.dart:529-564"
+      ]
+    },
+    {
+      "why": "57 lines of e2e persistence tests duplicated with the systematic rename MapCustomObject/ListCubitMap→ListListObject/ListCubitList.",
+      "verified": "extracted and diffed the two source ranges (57 vs 57 lines): not byte-identical, similarity 0.86; differences are the systematic rename described",
+      "occurrences": [
+        "packages/hydrated_bloc/test/e2e_test.dart:110-166",
+        "packages/hydrated_bloc/test/e2e_test.dart:197-253"
+      ]
+    },
+    {
+      "why": "multi_repository_provider.dart is multi_bloc_provider.dart with the systematic rename Bloc→Repository throughout the docs and class.",
+      "verified": "extracted and diffed the two source ranges (58 vs 52 lines): not byte-identical, similarity 0.81; differences are the systematic rename described",
+      "occurrences": [
+        "packages/flutter_bloc/lib/src/multi_bloc_provider.dart:1-58",
+        "packages/flutter_bloc/lib/src/multi_repository_provider.dart:1-52"
+      ]
+    },
+    {
+      "why": "createBlocEventTemplate is createCubitStateTemplate copied with the systematic rename cubit/state→bloc/event.",
+      "verified": "extracted and diffed the two source ranges (37 vs 37 lines): not byte-identical, similarity 0.89; differences are the systematic rename described",
+      "occurrences": [
+        "extensions/vscode/src/commands/new-cubit.command.ts:96-132",
+        "extensions/vscode/src/commands/new-bloc.command.ts:110-146"
+      ]
+    },
+    {
+      "why": "The mark-all-complete test is the mark-all-incomplete test copied with the completion flags and label renamed.",
+      "verified": "extracted and diffed the two source ranges (23 vs 23 lines): not byte-identical, similarity 0.99; differences are the systematic rename described",
+      "occurrences": [
+        "examples/flutter_todos/test/todos_overview/widgets/todos_overview_options_button_test.dart:124-146",
+        "examples/flutter_todos/test/todos_overview/widgets/todos_overview_options_button_test.dart:100-122"
+      ]
+    },
+    {
+      "why": "17-line EditTodoState expectation duplicated in the same file with only the status changed failure↔success.",
+      "verified": "extracted and diffed the two source ranges (17 vs 17 lines): not byte-identical, similarity 0.88; differences are the systematic rename described",
+      "occurrences": [
+        "examples/flutter_todos/test/edit_todo/bloc/edit_todo_bloc_test.dart:170-186",
+        "examples/flutter_todos/test/edit_todo/bloc/edit_todo_bloc_test.dart:74-90"
+      ]
+    },
+    {
+      "why": "prefer_cubit.dart is prefer_bloc.dart with one systematic rename (Bloc↔Cubit) applied to the whole 51-line rule file.",
+      "verified": "extracted and diffed the two source ranges (51 vs 51 lines): not byte-identical, similarity 0.97; differences are the systematic rename described",
+      "occurrences": [
+        "packages/bloc_lint/lib/src/rules/prefer_bloc.dart:1-51",
+        "packages/bloc_lint/lib/src/rules/prefer_cubit.dart:1-51"
+      ]
+    },
+    {
+      "why": "The completed-todos ListTile test is the active-todos test with the systematic rename activeTodos→completedTodos throughout 40 lines.",
+      "verified": "extracted and diffed the two source ranges (40 vs 40 lines): not byte-identical, similarity 0.92; differences are the systematic rename described",
+      "occurrences": [
+        "examples/flutter_todos/test/stats/view/stats_page_test.dart:130-169",
+        "examples/flutter_todos/test/stats/view/stats_page_test.dart:89-128"
+      ]
+    },
+    {
+      "why": "Username is Password copied — a systematic Password→Username rename over the whole 14-line FormzInput model.",
+      "verified": "extracted and diffed the two source ranges (14 vs 14 lines): not byte-identical, similarity 0.86; differences are the systematic rename described",
+      "occurrences": [
+        "examples/flutter_login/lib/login/models/password.dart:1-14",
+        "examples/flutter_login/lib/login/models/username.dart:1-14"
+      ]
+    },
+    {
+      "why": "identical 13-line app bootstrap in main_production.dart and main_staging.dart",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps observed in the diff",
+      "occurrences": [
+        "examples/flutter_todos/lib/main_production.dart:1-13",
+        "examples/flutter_todos/lib/main_staging.dart:1-13"
+      ]
+    },
+    {
+      "why": "The SignUpForm email/password text fields are the LoginForm fields copied with the systematic rename Login→SignUp over 40 lines.",
+      "verified": "extracted and diffed the two source ranges (40 vs 40 lines): not byte-identical, similarity 0.97; differences are the systematic rename described",
+      "occurrences": [
+        "examples/flutter_firebase_login/lib/login/view/login_form.dart:53-92",
+        "examples/flutter_firebase_login/lib/sign_up/view/sign_up_form.dart:42-81"
+      ]
+    },
+    {
+      "why": "39 lines of redo tests duplicated with CounterBloc renamed to CounterBlocMixin.",
+      "verified": "extracted and diffed the two source ranges (39 vs 39 lines): not byte-identical, similarity 0.99; differences are the systematic rename described",
+      "occurrences": [
+        "packages/replay_bloc/test/replay_bloc_test.dart:202-240",
+        "packages/replay_bloc/test/replay_bloc_test.dart:489-527"
+      ]
+    },
+    {
+      "why": "58 lines of undo/redo tests duplicated with CounterCubit renamed to CounterCubitMixin.",
+      "verified": "extracted and diffed the two source ranges (58 vs 58 lines): not byte-identical, similarity 0.99; differences are the systematic rename described",
+      "occurrences": [
+        "packages/replay_bloc/test/replay_cubit_test.dart:433-490",
+        "packages/replay_bloc/test/replay_cubit_test.dart:188-245"
+      ]
+    },
+    {
+      "why": "entire 37-line file duplicated verbatim between bloc_event_transformer_test.dart and its _legacy twin",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps observed in the diff",
+      "occurrences": [
+        "packages/bloc/test/bloc_event_transformer_test.dart:5-41",
+        "packages/bloc/test/bloc_event_transformer_test_legacy.dart:5-41"
+      ]
+    },
+    {
+      "why": "complex_event.dart is complex_state.dart with the systematic rename State→Event throughout all 64 lines of A–D classes.",
+      "verified": "extracted and diffed the two source ranges (64 vs 64 lines): not byte-identical, similarity 0.93; differences are the systematic rename described",
+      "occurrences": [
+        "packages/bloc/test/blocs/complex/complex_state.dart:1-64",
+        "packages/bloc/test/blocs/complex/complex_event.dart:1-64"
+      ]
+    },
+    {
+      "why": "The info Diagnostic fixture is the hint Diagnostic fixture copied with the systematic rename hint→info in every field.",
+      "verified": "extracted and diffed the two source ranges (11 vs 11 lines): not byte-identical, similarity 0.91; differences are the systematic rename described",
+      "occurrences": [
+        "packages/bloc_tools/test/src/commands/lint/lint_command_test.dart:113-123",
+        "packages/bloc_tools/test/src/commands/lint/lint_command_test.dart:124-134"
+      ]
+    },
+    {
+      "why": "The replay_bloc tests are the replay_cubit tests translated with the systematic adaptation increment()↔add(Increment); structure and expectations identical.",
+      "verified": "extracted and diffed the two source ranges (38 vs 41 lines): not byte-identical, similarity 0.76; differences are the systematic rename described",
+      "occurrences": [
+        "packages/replay_bloc/test/replay_cubit_test.dart:137-174",
+        "packages/replay_bloc/test/replay_bloc_test.dart:135-175"
+      ]
+    },
+    {
+      "why": "The password-changed form test is the username-changed test copied with the systematic rename username→password over 24 lines.",
+      "verified": "extracted and diffed the two source ranges (24 vs 24 lines): not byte-identical, similarity 0.90; differences are the systematic rename described",
+      "occurrences": [
+        "examples/flutter_login/test/login/view/login_form_test.dart:22-45",
+        "examples/flutter_login/test/login/view/login_form_test.dart:47-70"
+      ]
+    },
+    {
+      "why": "The _getLineOffsets logic in bloc_lint's text_document.dart is bloc_tools' copy with the systematic rename newline→lineFeed.",
+      "verified": "extracted and diffed the two source ranges (38 vs 40 lines): not byte-identical, similarity 0.96; differences are the systematic rename described",
+      "occurrences": [
+        "packages/bloc_lint/lib/src/text_document.dart:160-197",
+        "packages/bloc_tools/lib/src/lsp/text_document.dart:162-201"
+      ]
+    },
+    {
+      "why": "identical 7-line _ensureBeforeEndOfLine helper duplicated between bloc_lint and bloc_tools text_document",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps observed in the diff",
+      "occurrences": [
+        "packages/bloc_lint/lib/src/text_document.dart:191-197",
+        "packages/bloc_tools/lib/src/lsp/text_document.dart:195-201"
+      ]
+    },
+    {
+      "why": "password_test.dart is username_test.dart with the systematic rename Username→Password throughout 37 lines.",
+      "verified": "extracted and diffed the two source ranges (37 vs 37 lines): not byte-identical, similarity 0.21; differences are the systematic rename described",
+      "occurrences": [
+        "examples/flutter_login/test/login/models/username_test.dart:2-38",
+        "examples/flutter_login/test/login/models/password_test.dart:2-38"
+      ]
+    },
+    {
+      "why": "21 lines of undo tests duplicated with CounterBloc renamed to CounterBlocMixin.",
+      "verified": "extracted and diffed the two source ranges (21 vs 21 lines): not byte-identical, similarity 0.99; differences are the systematic rename described",
+      "occurrences": [
+        "packages/replay_bloc/test/replay_bloc_test.dart:71-91",
+        "packages/replay_bloc/test/replay_bloc_test.dart:423-443"
+      ]
+    },
+    {
+      "why": "The resume button branch is the pause button branch copied with icon and event swapped.",
+      "verified": "extracted and diffed the two source ranges (14 vs 14 lines): not byte-identical, similarity 0.97; differences are the systematic rename described",
+      "occurrences": [
+        "examples/flutter_timer/lib/timer/view/timer_page.dart:83-96",
+        "examples/flutter_timer/lib/timer/view/timer_page.dart:97-110"
+      ]
+    },
+    {
+      "why": "identical 63-line verifyInOrder observer-sequence block duplicated in the same file",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps observed in the diff",
+      "occurrences": [
+        "packages/bloc/test/bloc_test.dart:641-703",
+        "packages/bloc/test/bloc_test.dart:542-604"
+      ]
+    },
+    {
+      "why": "identical 64-line verifyInOrder observer-sequence block duplicated in the same file",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps observed in the diff",
+      "occurrences": [
+        "packages/bloc/test/bloc_test.dart:541-604",
+        "packages/bloc/test/bloc_test.dart:640-703"
+      ]
+    },
+    {
+      "why": "OnExceptionBloc is OnErrorBloc with the systematic rename Error→Exception throughout 22 lines.",
+      "verified": "extracted and diffed the two source ranges (22 vs 25 lines): not byte-identical, similarity 0.92; differences are the systematic rename described",
+      "occurrences": [
+        "packages/bloc/test/blocs/counter/on_error_bloc.dart:1-22",
+        "packages/bloc/test/blocs/counter/on_exception_bloc.dart:1-25"
+      ]
+    },
+    {
+      "why": "login_event.dart is edit_todo_event.dart with the systematic rename Title/Username, Description/Password, Submitted/Submitted applied.",
+      "verified": "extracted and diffed the two source ranges (28 vs 28 lines): not byte-identical, similarity 0.74; differences are the systematic rename described",
+      "occurrences": [
+        "examples/flutter_todos/lib/edit_todo/bloc/edit_todo_event.dart:3-30",
+        "examples/flutter_login/lib/login/bloc/login_event.dart:3-30"
+      ]
+    },
+    {
+      "why": "identical 59-line TextDocument implementation copied between bloc_tools/lsp and bloc_lint",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps observed in the diff",
+      "occurrences": [
+        "packages/bloc_tools/lib/src/lsp/text_document.dart:41-99",
+        "packages/bloc_lint/lib/src/text_document.dart:100-158"
+      ]
+    },
+    {
+      "why": "identical 12-line success emit block duplicated in the weather cubit's two temperature branches",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps observed in the diff",
+      "occurrences": [
+        "examples/flutter_weather/lib/weather/cubit/weather_cubit.dart:49-60",
+        "examples/flutter_weather/lib/weather/cubit/weather_cubit.dart:25-36"
+      ]
+    },
+    {
+      "why": "identical 14-line observer-verify sequence duplicated in the same test file",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps observed in the diff",
+      "occurrences": [
+        "packages/bloc/test/bloc_test.dart:303-316",
+        "packages/bloc/test/bloc_test.dart:352-365"
+      ]
+    },
+    {
+      "why": "bloc-state.template.ts is cubit-state.template.ts with the systematic rename cubit→bloc throughout 52 lines.",
+      "verified": "extracted and diffed the two source ranges (52 vs 52 lines): not byte-identical, similarity 0.91; differences are the systematic rename described",
+      "occurrences": [
+        "extensions/vscode/src/templates/cubit-state.template.ts:4-55",
+        "extensions/vscode/src/templates/bloc-state.template.ts:4-55"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 7 — the CartError tests for add vs remove differ only by the systematic rename.",
+      "verified": "extracted and diffed the two source ranges (17 vs 17 lines): not byte-identical, similarity 0.94; differences are the systematic rename described",
+      "occurrences": [
+        "examples/flutter_shopping_cart/test/cart/bloc/cart_bloc_test.dart:86-102",
+        "examples/flutter_shopping_cart/test/cart/bloc/cart_bloc_test.dart:124-140"
+      ]
+    },
+    {
+      "why": "The EditTodoTitleChanged test group is the DescriptionChanged group with the systematic rename title→description.",
+      "verified": "extracted and diffed the two source ranges (17 vs 17 lines): not byte-identical, similarity 0.67; differences are the systematic rename described",
+      "occurrences": [
+        "examples/flutter_todos/test/edit_todo/bloc/edit_todo_event_test.dart:26-42",
+        "examples/flutter_todos/test/edit_todo/bloc/edit_todo_event_test.dart:8-24"
+      ]
+    }
+  ],
+  "clearly_out": [],
+  "not_clear": [
+    {
+      "why": "Two 2-line FormzInput constructor pairs differing only in the class name — a two-line idiom.",
+      "occurrences": [
+        "examples/flutter_form_validation/lib/models/email.dart:6-7",
+        "examples/flutter_form_validation/lib/models/password.dart:6-7"
+      ]
+    },
+    {
+      "why": "CartEvent vs CartState 'supports value comparison' tests — the framework-invited equality-test idiom with different classes.",
+      "occurrences": [
+        "examples/flutter_shopping_cart/test/cart/bloc/cart_event_test.dart:1-29",
+        "examples/flutter_shopping_cart/test/cart/bloc/cart_state_test.dart:1-27"
+      ]
+    },
+    {
+      "why": "5 lines of page/route boilerplate with the class renamed — framework scaffolding.",
+      "occurrences": [
+        "examples/flutter_login/lib/splash/view/splash_page.dart:4-8",
+        "examples/flutter_login/lib/login/view/login_page.dart:7-11"
+      ]
+    },
+    {
+      "why": "6 lines differing only in indentation of a Builder/Text widget.",
+      "occurrences": [
+        "packages/flutter_bloc/test/repository_provider_test.dart:342-347",
+        "packages/flutter_bloc/test/repository_provider_test.dart:371-376"
+      ]
+    },
+    {
+      "why": "Two lint-rule test scaffolds exercising different rules — shared skeleton only.",
+      "occurrences": [
+        "packages/bloc_lint/test/src/rules/prefer_bloc_test.dart:64-75",
+        "packages/bloc_lint/test/src/linter_test.dart:303-316"
+      ]
+    },
+    {
+      "why": "Two BlocProvider wiring snippets for unrelated blocs.",
+      "occurrences": [
+        "examples/github_search/flutter_github_search/lib/main.dart:20-25",
+        "examples/flutter_login/lib/login/view/login_page.dart:18-23"
+      ]
+    },
+    {
+      "why": "Different timer/timeline event classes — shared sealed-class shape only.",
+      "occurrences": [
+        "examples/flutter_timer/lib/timer/bloc/timer_event.dart:7-18",
+        "examples/bloc_concurrency_visualizer/lib/timeline/bloc/timeline_event.dart:11-23"
+      ]
+    },
+    {
+      "why": "4 lines differing by an await on emit.onEach.",
+      "occurrences": [
+        "packages/bloc/test/blocs/stream/restartable_stream_bloc.dart:157-160",
+        "packages/bloc/test/blocs/stream/restartable_stream_bloc.dart:95-98"
+      ]
+    },
+    {
+      "why": "Unrelated mock setups in different repositories.",
+      "occurrences": [
+        "examples/flutter_firebase_login/packages/authentication_repository/test/authentication_repository_test.dart:150-155",
+        "examples/flutter_todos/test/todos_overview/bloc/todos_overview_bloc_test.dart:38-44"
+      ]
+    },
+    {
+      "why": "3 lines differing in name/age — a short idiom.",
+      "occurrences": [
+        "examples/flutter_wizard/lib/bloc/profile_wizard_bloc.dart:9-11",
+        "examples/flutter_wizard/lib/bloc/profile_wizard_bloc.dart:13-15"
+      ]
+    },
+    {
+      "why": "3 identical lines — a short idiom.",
+      "occurrences": [
+        "packages/hydrated_bloc/test/cubits/list_cubit.dart:52-54",
+        "packages/hydrated_bloc/test/cubits/list_cubit.dart:23-25"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 21 — 3 lines of when/untilCalled storage stubs.",
+      "occurrences": [
+        "packages/hydrated_bloc/test/hydrated_bloc_test.dart:379-381",
+        "packages/hydrated_bloc/test/hydrated_bloc_test.dart:375-377"
+      ]
+    },
+    {
+      "why": "7 lines of act/expect cubit-test scaffolding with different fields.",
+      "occurrences": [
+        "examples/flutter_firebase_login/test/sign_up/cubit/sign_up_cubit_test.dart:128-134",
+        "examples/flutter_firebase_login/test/sign_up/cubit/sign_up_cubit_test.dart:79-85"
+      ]
+    },
+    {
+      "why": "Two lint rule class headers with different rules and severities.",
+      "occurrences": [
+        "packages/bloc_lint/lib/src/rules/prefer_cubit.dart:6-16",
+        "packages/bloc_lint/lib/src/rules/avoid_flutter_imports.dart:6-19"
+      ]
+    },
+    {
+      "why": "blocTest scaffolding for different bloc types.",
+      "occurrences": [
+        "packages/bloc_test/test/cubit_bloc_test_test.dart:123-128",
+        "packages/bloc_test/test/bloc_bloc_test_test.dart:537-542"
+      ]
+    },
+    {
+      "why": "3 lines of --help vs -h invocation — a short idiom.",
+      "occurrences": [
+        "packages/bloc_tools/test/src/command_runner_test.dart:230-232",
+        "packages/bloc_tools/test/src/command_runner_test.dart:236-238"
+      ]
+    },
+    {
+      "why": "Adjacent undo/redo replay tests with different sequences.",
+      "occurrences": [
+        "packages/replay_bloc/test/replay_cubit_test.dart:232-245",
+        "packages/replay_bloc/test/replay_cubit_test.dart:215-228"
+      ]
+    },
+    {
+      "why": "blocTest scaffolding for different blocs with async act.",
+      "occurrences": [
+        "packages/bloc_test/test/bloc_bloc_test_test.dart:207-215",
+        "packages/bloc_test/test/bloc_bloc_test_test.dart:65-73"
+      ]
+    },
+    {
+      "why": "3 lines vs 1 line of storage stub, ragged.",
+      "occurrences": [
+        "examples/flutter_weather/test/helpers/hydrated_bloc.dart:12-14",
+        "packages/hydrated_bloc/test/hydrated_cubit_test.dart:128-128"
+      ]
+    },
+    {
+      "why": "Firebase error-code switch arms mapping to different failure classes — same skeleton, different content.",
+      "occurrences": [
+        "examples/flutter_firebase_login/packages/authentication_repository/lib/src/authentication_repository.dart:28-45",
+        "examples/flutter_firebase_login/packages/authentication_repository/lib/src/authentication_repository.dart:67-84"
+      ]
+    },
+    {
+      "why": "2 lines of on<Increment>/on<Decrement> handlers with different event names.",
+      "occurrences": [
+        "packages/replay_bloc/test/blocs/counter_bloc.dart:50-51",
+        "packages/replay_bloc/example/lib/main.dart:159-160"
+      ]
+    },
+    {
+      "why": "An update-banner constant against its rendering call site — related but not a copy.",
+      "occurrences": [
+        "packages/bloc_tools/test/src/command_runner_test.dart:41-50",
+        "packages/bloc_tools/lib/src/command_runner.dart:95-102"
+      ]
+    },
+    {
+      "why": "Inverted test scenarios (different vs same cubit) sharing a widget-test skeleton; assertions materially differ.",
+      "occurrences": [
+        "packages/flutter_bloc/test/bloc_listener_test.dart:132-168",
+        "packages/flutter_bloc/test/bloc_listener_test.dart:170-206"
+      ]
+    },
+    {
+      "why": "6 lines of mock location/weather wiring — test scaffolding.",
+      "occurrences": [
+        "examples/flutter_weather/packages/weather_repository/test/weather_repository_test.dart:54-59",
+        "examples/flutter_weather/packages/weather_repository/test/weather_repository_test.dart:73-78"
+      ]
+    },
+    {
+      "why": "blocTest scaffolding with different repositories and actions.",
+      "occurrences": [
+        "packages/bloc_test/test/bloc_bloc_test_test.dart:606-611",
+        "examples/flutter_firebase_login/test/login/cubit/login_cubit_test.dart:218-224"
+      ]
+    },
+    {
+      "why": "Event vs state template generators — same structure but state templates carry extra Initial subclasses.",
+      "occurrences": [
+        "extensions/vscode/src/templates/bloc-event.template.ts:1-60",
+        "extensions/vscode/src/templates/cubit-state.template.ts:1-67"
+      ]
+    },
+    {
+      "why": "5 lines of build/act/verify differing in call counts and indentation.",
+      "occurrences": [
+        "packages/bloc_test/test/bloc_bloc_test_test.dart:588-592",
+        "packages/bloc_test/test/bloc_bloc_test_test.dart:624-628"
+      ]
+    },
+    {
+      "why": "Different event class hierarchies sharing the sealed/Equatable idiom.",
+      "occurrences": [
+        "examples/flutter_dynamic_form/lib/new_car/bloc/new_car_event.dart:1-39",
+        "examples/flutter_todos/lib/todos_overview/bloc/todos_overview_event.dart:1-55"
+      ]
+    },
+    {
+      "why": "Different event classes sharing the Equatable idiom.",
+      "occurrences": [
+        "examples/flutter_todos/lib/todos_overview/bloc/todos_overview_event.dart:36-47",
+        "examples/flutter_bloc_with_stream/lib/bloc/ticker_event.dart:19-32"
+      ]
+    },
+    {
+      "why": "6 lines of add vs removed value-comparison groups — a short idiom.",
+      "occurrences": [
+        "examples/flutter_shopping_cart/test/cart/bloc/cart_event_test.dart:22-27",
+        "examples/flutter_shopping_cart/test/cart/bloc/cart_event_test.dart:15-20"
+      ]
+    },
+    {
+      "why": "Switch arms over CounterEvent with different bodies.",
+      "occurrences": [
+        "packages/bloc/test/blocs/counter/merge_bloc.dart:34-41",
+        "packages/bloc/test/blocs/counter/counter_error_bloc.dart:10-17"
+      ]
+    },
+    {
+      "why": "4 lines of blocTest differing in the built bloc.",
+      "occurrences": [
+        "packages/bloc_test/test/bloc_bloc_test_test.dart:329-332",
+        "packages/bloc_test/test/bloc_bloc_test_test.dart:284-287"
+      ]
+    },
+    {
+      "why": "9 lines differing in the expected status enum.",
+      "occurrences": [
+        "examples/flutter_todos/test/edit_todo/bloc/edit_todo_bloc_test.dart:134-142",
+        "examples/flutter_todos/test/edit_todo/bloc/edit_todo_bloc_test.dart:125-133"
+      ]
+    },
+    {
+      "why": "Two text-document updates with different ranges and expectations.",
+      "occurrences": [
+        "packages/bloc_tools/test/src/lsp/text_document_test.dart:444-445",
+        "packages/bloc_tools/test/src/lsp/text_document_test.dart:448-449"
+      ]
+    },
+    {
+      "why": "4 lines of username vs password field wiring — a short idiom.",
+      "occurrences": [
+        "examples/flutter_login/lib/login/view/login_form.dart:46-49",
+        "examples/flutter_login/lib/login/view/login_form.dart:66-69"
+      ]
+    },
+    {
+      "why": "initState bodies of BlocSelector vs BlocListener — related widgets, different logic.",
+      "occurrences": [
+        "packages/flutter_bloc/lib/src/bloc_selector.dart:77-82",
+        "packages/flutter_bloc/lib/src/bloc_listener.dart:151-161"
+      ]
+    },
+    {
+      "why": "3 lines of having() matchers differing in one clause.",
+      "occurrences": [
+        "examples/flutter_todos/test/edit_todo/bloc/edit_todo_bloc_test.dart:95-97",
+        "examples/flutter_todos/test/edit_todo/bloc/edit_todo_bloc_test.dart:148-150"
+      ]
+    },
+    {
+      "why": "Cart vs ComplexList cubit test scaffolds.",
+      "occurrences": [
+        "examples/flutter_shopping_cart/test/cart/bloc/cart_bloc_test.dart:106-112",
+        "examples/flutter_complex_list/test/complex_list/cubit/complex_list_cubit_test.dart:61-65"
+      ]
+    },
+    {
+      "why": "3 lines differing in a start parameter.",
+      "occurrences": [
+        "examples/flutter_infinite_list/test/posts/bloc/post_bloc_test.dart:124-126",
+        "examples/flutter_infinite_list/test/posts/bloc/post_bloc_test.dart:178-180"
+      ]
+    },
+    {
+      "why": "3 lines of light/dark theme cubits — a short idiom.",
+      "occurrences": [
+        "packages/flutter_bloc/test/bloc_builder_test.dart:71-73",
+        "packages/flutter_bloc/test/bloc_builder_test.dart:78-80"
+      ]
+    },
+    {
+      "why": "Different test bloc fixtures sharing the on<CounterEvent> skeleton.",
+      "occurrences": [
+        "packages/bloc_test/test/blocs/instant_emit_bloc.dart:1-15",
+        "packages/bloc_test/test/blocs/error_counter_bloc.dart:1-17"
+      ]
+    },
+    {
+      "why": "3 lines differing in the expected authentication state.",
+      "occurrences": [
+        "examples/flutter_login/test/authentication/authentication_bloc_test.dart:63-65",
+        "examples/flutter_login/test/authentication/authentication_bloc_test.dart:50-52"
+      ]
+    },
+    {
+      "why": "Two different limit-related tests sharing the cubit harness.",
+      "occurrences": [
+        "packages/replay_bloc/test/replay_cubit_test.dart:137-149",
+        "packages/replay_bloc/test/replay_cubit_test.dart:370-380"
+      ]
+    },
+    {
+      "why": "Different text-document update scenarios.",
+      "occurrences": [
+        "packages/bloc_tools/test/src/lsp/text_document_test.dart:391-405",
+        "packages/bloc_tools/test/src/lsp/text_document_test.dart:307-319"
+      ]
+    },
+    {
+      "why": "5 lines differing in a Map type argument.",
+      "occurrences": [
+        "packages/hydrated_bloc/test/hydrated_mixin_test.dart:11-15",
+        "packages/hydrated_bloc/example/lib/main.dart:118-122"
+      ]
+    },
+    {
+      "why": "ElevatedButton snippet duplicated at different indentation with a typo fix.",
+      "occurrences": [
+        "packages/flutter_bloc/test/bloc_provider_test.dart:149-155",
+        "packages/flutter_bloc/test/bloc_provider_test.dart:351-357"
+      ]
+    },
+    {
+      "why": "Related but not a certain copy; boundaries or content differ beyond a systematic rename.",
+      "occurrences": [
+        "examples/flutter_weather/test/weather/cubit/weather_cubit_test.dart:151-155",
+        "examples/flutter_weather/test/weather/cubit/weather_cubit_test.dart:162-166"
+      ]
+    },
+    {
+      "why": "Two BlocObserver examples with different print formatting.",
+      "occurrences": [
+        "packages/flutter_bloc/example/lib/main.dart:16-31",
+        "packages/bloc/example/main.dart:22-35"
+      ]
+    },
+    {
+      "why": "Cycle1 vs Toy JSON fixtures — same fromJson/toJson shape, different content.",
+      "occurrences": [
+        "packages/hydrated_bloc/test/cubits/cyclic_cubit.dart:20-41",
+        "packages/hydrated_bloc/test/cubits/manual_cubit.dart:65-87"
+      ]
+    },
+    {
+      "why": "pumpNewCarForm vs pumpNewCarPage helpers — same pumpWidget idiom.",
+      "occurrences": [
+        "examples/flutter_dynamic_form/test/new_car/view/new_car_page_test.dart:28-39",
+        "examples/flutter_dynamic_form/test/new_car/view/new_car_page_test.dart:15-26"
+      ]
+    },
+    {
+      "why": "ReplayCubit vs ReplayBloc constructors with the mixin wiring.",
+      "occurrences": [
+        "packages/replay_bloc/lib/src/replay_cubit.dart:47-54",
+        "packages/replay_bloc/lib/src/replay_bloc.dart:62-69"
+      ]
+    },
+    {
+      "why": "3 lines of expectLater on different blocs.",
+      "occurrences": [
+        "packages/bloc/test/bloc_test.dart:140-142",
+        "packages/bloc/test/bloc_test.dart:808-810"
+      ]
+    },
+    {
+      "why": "2 lines differing in the event added.",
+      "occurrences": [
+        "examples/flutter_dynamic_form/test/new_car/bloc/new_car_bloc_test.dart:52-53",
+        "examples/flutter_dynamic_form/test/new_car/bloc/new_car_bloc_test.dart:74-75"
+      ]
+    },
+    {
+      "why": "3 lines of unrelated mock setups.",
+      "occurrences": [
+        "examples/flutter_weather/test/weather/cubit/weather_cubit_test.dart:29-31",
+        "examples/flutter_firebase_login/test/home/view/home_page_test.dart:21-23"
+      ]
+    },
+    {
+      "why": "4 lines of identical callback/bloc setup — a short idiom.",
+      "occurrences": [
+        "packages/replay_bloc/test/replay_bloc_test.dart:256-259",
+        "packages/replay_bloc/test/replay_bloc_test.dart:188-191"
+      ]
+    },
+    {
+      "why": "2 identical fromJson lines.",
+      "occurrences": [
+        "packages/hydrated_bloc/test/hydrated_bloc_test.dart:38-39",
+        "packages/hydrated_bloc/test/hydrated_bloc_test.dart:82-83"
+      ]
+    },
+    {
+      "why": "10 lines of counterText assertions at different points of the same scenario.",
+      "occurrences": [
+        "packages/flutter_bloc/test/bloc_builder_test.dart:390-394",
+        "packages/flutter_bloc/test/bloc_builder_test.dart:379-383"
+      ]
+    },
+    {
+      "why": "Different callback-cubit constructor fixtures.",
+      "occurrences": [
+        "packages/hydrated_bloc/test/cubits/from_json_state_cubit.dart:4-10",
+        "packages/hydrated_bloc/test/hydrated_cubit_test.dart:22-28"
+      ]
+    },
+    {
+      "why": "BlocSelector widget vs BlocBuilderBase — related widget scaffolding with different members.",
+      "occurrences": [
+        "packages/flutter_bloc/lib/src/bloc_selector.dart:28-70",
+        "packages/flutter_bloc/lib/src/bloc_builder.dart:110-142"
+      ]
+    },
+    {
+      "why": "3 lines differing in expected state.",
+      "occurrences": [
+        "packages/bloc_test/test/bloc_bloc_test_test.dart:270-272",
+        "packages/bloc_test/test/bloc_bloc_test_test.dart:247-249"
+      ]
+    },
+    {
+      "why": "Inverted theme-cubit scenarios sharing the test skeleton.",
+      "occurrences": [
+        "packages/flutter_bloc/test/bloc_builder_test.dart:295-332",
+        "packages/flutter_bloc/test/bloc_builder_test.dart:256-293"
+      ]
+    },
+    {
+      "why": "3 lines of different getText expectations.",
+      "occurrences": [
+        "packages/bloc_tools/test/src/lsp/text_document_test.dart:441-443",
+        "packages/bloc_tools/test/src/lsp/text_document_test.dart:449-451"
+      ]
+    },
+    {
+      "why": "subscription-requested vs todo-deleted blocTest scenarios.",
+      "occurrences": [
+        "examples/flutter_todos/test/todos_overview/bloc/todos_overview_bloc_test.dart:62-69",
+        "examples/flutter_todos/test/todos_overview/bloc/todos_overview_bloc_test.dart:135-140"
+      ]
+    },
+    {
+      "why": "Two lint rule headers for different rules.",
+      "occurrences": [
+        "packages/bloc_lint/lib/src/rules/prefer_file_naming_conventions.dart:8-18",
+        "packages/bloc_lint/lib/src/rules/avoid_public_bloc_methods.dart:6-16"
+      ]
+    },
+    {
+      "why": "Timeline vs ItemTile constructors — different classes.",
+      "occurrences": [
+        "examples/bloc_concurrency_visualizer/lib/timeline/view/timeline_page.dart:134-141",
+        "examples/flutter_complex_list/lib/complex_list/view/complex_list_page.dart:63-70"
+      ]
+    },
+    {
+      "why": "3 lines of blocTest for different blocs.",
+      "occurrences": [
+        "packages/bloc_test/test/bloc_bloc_test_test.dart:126-128",
+        "packages/bloc_test/test/bloc_bloc_test_test.dart:507-509"
+      ]
+    },
+    {
+      "why": "Adjacent locale-list lines in an astro config.",
+      "occurrences": [
+        "docs/astro.config.mjs:20-22",
+        "docs/astro.config.mjs:17-19"
+      ]
+    },
+    {
+      "why": "Counter page methods with doc comments added on one side.",
+      "occurrences": [
+        "packages/angular_bloc/example/example.dart:50-57",
+        "examples/angular_counter/lib/src/counter_page/counter_page_component.dart:23-32"
+      ]
+    },
+    {
+      "why": "BlocSelector state class vs BlocBuilderBase state class — systematic structural relationship but real logic differences (selector vs buildWhen).",
+      "occurrences": [
+        "packages/flutter_bloc/lib/src/bloc_selector.dart:72-123",
+        "packages/flutter_bloc/lib/src/bloc_builder.dart:144-191"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 161 — 3 lines of firebase stub.",
+      "occurrences": [
+        "examples/flutter_firebase_login/packages/authentication_repository/test/authentication_repository_test.dart:153-155",
+        "examples/flutter_firebase_login/packages/authentication_repository/test/authentication_repository_test.dart:156-158"
+      ]
+    },
+    {
+      "why": "10 lines of counterText assertions at different scenario points.",
+      "occurrences": [
+        "packages/flutter_bloc/test/bloc_builder_test.dart:364-373",
+        "packages/flutter_bloc/test/bloc_builder_test.dart:375-384"
+      ]
+    },
+    {
+      "why": "expectLater triples on different blocs with different events.",
+      "occurrences": [
+        "packages/bloc/test/bloc_test.dart:808-812",
+        "packages/bloc/test/bloc_test.dart:250-254"
+      ]
+    },
+    {
+      "why": "MyFormState vs LoginState fields/copyWith — related form-state idiom, different members.",
+      "occurrences": [
+        "examples/flutter_form_validation/lib/bloc/my_form_state.dart:11-28",
+        "examples/flutter_login/lib/login/bloc/login_state.dart:11-28"
+      ]
+    },
+    {
+      "why": "pumpTimerView vs pumpListPage helpers — the pumpWidget idiom.",
+      "occurrences": [
+        "examples/flutter_timer/test/timer/view/timer_page_test.dart:13-21",
+        "examples/flutter_complex_list/test/complex_list/view/complex_list_page_test.dart:15-24"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 175.",
+      "occurrences": [
+        "packages/bloc_tools/test/src/lsp/text_document_test.dart:443-444",
+        "packages/bloc_tools/test/src/lsp/text_document_test.dart:447-448"
+      ]
+    },
+    {
+      "why": "Related but not a certain copy; boundaries or content differ beyond a systematic rename.",
+      "occurrences": [
+        "packages/bloc/test/bloc_test.dart:541-605",
+        "packages/bloc/test/bloc_test.dart:703-767"
+      ]
+    },
+    {
+      "why": "2-3 lines of transformer assignment, ragged.",
+      "occurrences": [
+        "packages/bloc/test/bloc_event_transformer_test_legacy.dart:194-196",
+        "packages/bloc/test/bloc_event_transformer_test.dart:201-202"
+      ]
+    },
+    {
+      "why": "PostEvent vs CatalogEvent value-comparison idiom.",
+      "occurrences": [
+        "examples/flutter_infinite_list/test/posts/bloc/post_event_test.dart:1-12",
+        "examples/flutter_shopping_cart/test/catalog/bloc/catalog_event_test.dart:1-12"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 104.",
+      "occurrences": [
+        "packages/flutter_bloc/test/bloc_builder_test.dart:390-399",
+        "packages/flutter_bloc/test/bloc_builder_test.dart:379-388"
+      ]
+    },
+    {
+      "why": "redo-filtering vs undo-filtering scenarios sharing the harness but with different sequences and expectations.",
+      "occurrences": [
+        "packages/replay_bloc/test/replay_cubit_test.dart:268-292",
+        "packages/replay_bloc/test/replay_bloc_test.dart:111-133"
+      ]
+    },
+    {
+      "why": "Related but not a certain copy; boundaries or content differ beyond a systematic rename.",
+      "occurrences": [
+        "examples/flutter_firebase_login/lib/sign_up/cubit/sign_up_cubit.dart:7-37",
+        "examples/flutter_firebase_login/lib/login/cubit/login_cubit.dart:10-32"
+      ]
+    },
+    {
+      "why": "The same text-document tests re-nested under a group — a copy re-indented, but boundaries and framing differ substantially.",
+      "occurrences": [
+        "packages/bloc_tools/test/src/lsp/text_document_test.dart:72-117",
+        "packages/bloc_lint/test/src/text_document_test.dart:32-79"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 104 family.",
+      "occurrences": [
+        "packages/flutter_bloc/test/bloc_builder_test.dart:392-402",
+        "packages/flutter_bloc/test/bloc_builder_test.dart:370-380"
+      ]
+    },
+    {
+      "why": "Two different lint rules sharing listener scaffolding.",
+      "occurrences": [
+        "packages/bloc_lint/lib/src/rules/prefer_void_public_cubit_methods.dart:21-62",
+        "packages/bloc_lint/lib/src/rules/avoid_public_bloc_methods.dart:38-72"
+      ]
+    },
+    {
+      "why": "Diagnostic fixtures with different fields and structure.",
+      "occurrences": [
+        "packages/bloc_tools/test/src/commands/lint/lint_command_test.dart:103-110",
+        "packages/bloc_lint/test/src/diagnostic_test.dart:12-23"
+      ]
+    },
+    {
+      "why": "ComplexListCubit vs CatalogBloc test groups — related fetch patterns, different code.",
+      "occurrences": [
+        "examples/flutter_complex_list/test/complex_list/cubit/complex_list_cubit_test.dart:17-56",
+        "examples/flutter_shopping_cart/test/catalog/bloc/catalog_bloc_test.dart:12-59"
+      ]
+    },
+    {
+      "why": "Weather state expectations differing in units/status.",
+      "occurrences": [
+        "examples/flutter_weather/test/weather/cubit/weather_cubit_test.dart:329-337",
+        "examples/flutter_weather/test/weather/cubit/weather_cubit_test.dart:301-307"
+      ]
+    },
+    {
+      "why": "onTransition forwarding vs onChange logging — different observer methods.",
+      "occurrences": [
+        "packages/bloc_test/lib/src/bloc_test.dart:281-288",
+        "examples/flutter_weather/lib/weather_bloc_observer.dart:14-18"
+      ]
+    },
+    {
+      "why": "TickerEvent vs PostEvent value-comparison idiom.",
+      "occurrences": [
+        "examples/flutter_bloc_with_stream/test/bloc/ticker_event_test.dart:3-14",
+        "examples/flutter_infinite_list/test/posts/bloc/post_event_test.dart:1-12"
+      ]
+    },
+    {
+      "why": "CatalogState vs TickerState hierarchies — same sealed/Equatable idiom.",
+      "occurrences": [
+        "examples/flutter_shopping_cart/lib/catalog/bloc/catalog_state.dart:1-19",
+        "examples/flutter_bloc_with_stream/lib/bloc/ticker_state.dart:1-31"
+      ]
+    },
+    {
+      "why": "3 lines on different blocs.",
+      "occurrences": [
+        "packages/bloc/test/bloc_test.dart:793-795",
+        "packages/bloc/test/bloc_test.dart:407-409"
+      ]
+    },
+    {
+      "why": "Different event hierarchies sharing the sealed-class idiom.",
+      "occurrences": [
+        "examples/bloc_concurrency_visualizer/lib/timeline/bloc/timeline_event.dart:3-15",
+        "packages/bloc/test/blocs/internal_add/internal_add_bloc.dart:3-15"
+      ]
+    },
+    {
+      "why": "BlocSelector vs BlocBuilder debugFillProperties tests.",
+      "occurrences": [
+        "packages/flutter_bloc/test/bloc_selector_test.dart:220-242",
+        "packages/flutter_bloc/test/bloc_builder_test.dart:523-545"
+      ]
+    },
+    {
+      "why": "5 lines differing in the class instantiated.",
+      "occurrences": [
+        "packages/replay_bloc/test/replay_bloc_test.dart:362-366",
+        "packages/replay_bloc/test/replay_bloc_test.dart:10-14"
+      ]
+    },
+    {
+      "why": "Singular vs plural file-count message branches.",
+      "occurrences": [
+        "bricks/flutter_bloc_feature/hooks/pre_gen.dart:104-111",
+        "bricks/flutter_bloc_feature/hooks/pre_gen.dart:97-104"
+      ]
+    },
+    {
+      "why": "Todo vs Weather fromJson stubs.",
+      "occurrences": [
+        "packages/hydrated_bloc/test/cubits/json_serializable_cubit.dart:87-88",
+        "examples/flutter_weather/packages/open_meteo_api/lib/src/models/weather.dart:7-10"
+      ]
+    },
+    {
+      "why": "reportTokenRange calls in two different lint rules.",
+      "occurrences": [
+        "packages/bloc_lint/lib/src/rules/avoid_build_context_extensions.dart:82-87",
+        "packages/bloc_lint/lib/src/rules/prefer_build_context_extensions.dart:28-37"
+      ]
+    },
+    {
+      "why": "Observer verification lists differing in onEvent/onDone order and state values — adjacent scenarios.",
+      "occurrences": [
+        "packages/bloc/test/bloc_test.dart:365-377",
+        "packages/bloc/test/bloc_test.dart:352-364"
+      ]
+    },
+    {
+      "why": "10 identical lines of BlocListener listenWhen configuration — repeated test scaffolding.",
+      "occurrences": [
+        "packages/flutter_bloc/test/bloc_listener_test.dart:340-349",
+        "packages/flutter_bloc/test/bloc_listener_test.dart:217-226"
+      ]
+    },
+    {
+      "why": "Login vs Cart event value-comparison suites — the framework idiom.",
+      "occurrences": [
+        "examples/flutter_login/test/login/bloc/login_event_test.dart:8-26",
+        "examples/flutter_shopping_cart/test/cart/bloc/cart_event_test.dart:7-29"
+      ]
+    },
+    {
+      "why": "EditTodoState vs Task fields — unrelated models.",
+      "occurrences": [
+        "examples/flutter_todos/lib/edit_todo/bloc/edit_todo_state.dart:20-25",
+        "examples/bloc_concurrency_visualizer/lib/timeline/models/task.dart:31-35"
+      ]
+    },
+    {
+      "why": "Single-event vs multiple-event observer scenarios; one is a strict superset of the other.",
+      "occurrences": [
+        "packages/bloc/test/bloc_test.dart:527-621",
+        "packages/bloc/test/bloc_test.dart:623-784"
+      ]
+    },
+    {
+      "why": "Adjacent text-document update cases.",
+      "occurrences": [
+        "packages/bloc_tools/test/src/lsp/text_document_test.dart:443-445",
+        "packages/bloc_tools/test/src/lsp/text_document_test.dart:447-449"
+      ]
+    },
+    {
+      "why": "3 lines of listener configuration with a bloc added.",
+      "occurrences": [
+        "packages/flutter_bloc/test/bloc_consumer_test.dart:411-413",
+        "packages/flutter_bloc/test/bloc_listener_test.dart:491-493"
+      ]
+    },
+    {
+      "why": "Related but not a certain copy; boundaries or content differ beyond a systematic rename.",
+      "occurrences": [
+        "packages/replay_bloc/test/blocs/counter_bloc.dart:39-42",
+        "packages/replay_bloc/test/cubits/counter_cubit.dart:13-16"
+      ]
+    },
+    {
+      "why": "BlocProvider vs RepositoryProvider stateful app harness — same pattern, different classes and extra dispose.",
+      "occurrences": [
+        "packages/flutter_bloc/test/bloc_provider_test.dart:62-100",
+        "packages/flutter_bloc/test/repository_provider_test.dart:45-76"
+      ]
+    },
+    {
+      "why": "Mock cubit setup blocks with different methods.",
+      "occurrences": [
+        "examples/flutter_firebase_login/test/sign_up/view/sign_up_form_test.dart:24-30",
+        "examples/flutter_firebase_login/test/login/view/login_form_test.dart:31-33"
+      ]
+    },
+    {
+      "why": "Navigator vs Box mock setups — framework idiom only.",
+      "occurrences": [
+        "examples/flutter_todos/test/stats/view/stats_page_test.dart:53-55",
+        "packages/hydrated_bloc/test/hydrated_storage_test.dart:108-110"
+      ]
+    },
+    {
+      "why": "Two 43-line slices of the localization getter list — same generated-file idiom, different keys.",
+      "occurrences": [
+        "examples/flutter_todos/lib/l10n/app_localizations.dart:101-143",
+        "examples/flutter_todos/lib/l10n/app_localizations.dart:155-197"
+      ]
+    },
+    {
+      "why": "BlocSelector vs BlocConsumer runtime-swap tests sharing the scenario skeleton.",
+      "occurrences": [
+        "packages/flutter_bloc/test/bloc_selector_test.dart:145-186",
+        "packages/flutter_bloc/test/bloc_consumer_test.dart:352-403"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 198 — adjacent on<Event> registrations.",
+      "occurrences": [
+        "packages/bloc/test/blocs/complex/complex_bloc.dart:19-21",
+        "packages/bloc/test/blocs/complex/complex_bloc.dart:16-18"
+      ]
+    },
+    {
+      "why": "3 lines on different blocs.",
+      "occurrences": [
+        "packages/bloc/test/bloc_test.dart:407-409",
+        "packages/bloc/test/bloc_test.dart:240-242"
+      ]
+    },
+    {
+      "why": "3 lines of act/wait scaffolding across cubit and bloc tests.",
+      "occurrences": [
+        "packages/bloc_test/test/cubit_bloc_test_test.dart:102-104",
+        "packages/bloc_test/test/bloc_bloc_test_test.dart:270-272"
+      ]
+    },
+    {
+      "why": "Adjacent locale-list lines.",
+      "occurrences": [
+        "docs/astro.config.mjs:19-21",
+        "docs/astro.config.mjs:16-18"
+      ]
+    },
+    {
+      "why": "Two sealed event base classes with different docs.",
+      "occurrences": [
+        "examples/flutter_todos/lib/todos_overview/bloc/todos_overview_event.dart:3-12",
+        "examples/flutter_bloc_with_stream/lib/bloc/ticker_event.dart:7-22"
+      ]
+    },
+    {
+      "why": "buildWhen vs listener/buildWhen consumer tests sharing the closure skeleton.",
+      "occurrences": [
+        "packages/flutter_bloc/test/bloc_consumer_test.dart:319-333",
+        "packages/flutter_bloc/test/bloc_builder_test.dart:413-427"
+      ]
+    },
+    {
+      "why": "Two example app entrypoints sharing the MyApp scaffold.",
+      "occurrences": [
+        "examples/flutter_wizard/lib/main.dart:6-20",
+        "examples/flutter_form_validation/lib/main.dart:6-29"
+      ]
+    },
+    {
+      "why": "Hydrated vs plain counter examples — genuinely related demos that have diverged in both directions.",
+      "occurrences": [
+        "packages/hydrated_bloc/example/lib/main.dart:30-123",
+        "packages/flutter_bloc/example/lib/main.dart:59-163"
+      ]
+    },
+    {
+      "why": "5 lines of call-count expectations at different scenario points.",
+      "occurrences": [
+        "packages/bloc/test/bloc_on_test.dart:95-99",
+        "packages/bloc/test/bloc_on_test.dart:115-119"
+      ]
+    },
+    {
+      "why": "Mock bloc state setup fragments in two different test files.",
+      "occurrences": [
+        "examples/flutter_todos/test/todos_overview/widgets/todos_overview_filter_button_test.dart:39-49",
+        "examples/flutter_todos/test/todos_overview/view/todos_overview_page_test.dart:77-83"
+      ]
+    }
+  ],
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 3 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+}

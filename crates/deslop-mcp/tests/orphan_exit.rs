@@ -14,9 +14,13 @@ use serde_json::{json, Value};
 
 use crate::common;
 use common::{
-    fixture_root, pid_exists, read_mcp_pid, rpc::StdioRpc, terminate_pid, value_get,
-    wait_for_pid_exit, KILLABLE_PARENT_SCRIPT,
+    fixture_root, pid_exists, read_mcp_pid,
+    rpc::{StdioRpc, MCP_PROTOCOL_VERSION},
+    terminate_pid, value_get, wait_for_pid_exit, KILLABLE_PARENT_SCRIPT,
 };
+
+/// How long an orphaned `deslop-mcp` may take to notice and exit.
+const ORPHAN_EXIT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The killable launcher shell, its JSON-RPC link to the MCP grandchild,
 /// and that grandchild's pid so the test can reap it if it lingers.
@@ -92,9 +96,24 @@ fn exits_when_launching_parent_disappears_with_stdio_open_issue_102() -> Result<
     );
     assert_eq!(
         value_get(&response, "/result/protocolVersion")?,
-        json!("2024-11-05")
+        json!(MCP_PROTOCOL_VERSION)
+    );
+    assert!(
+        value_get(&response, "/result/capabilities/resources")?.is_object(),
+        "resources capability missing: {response}"
     );
 
+    // Checked before the kill, not after. After it, "the mcp is still alive"
+    // is the negation of the contract this test exists to prove, and it holds
+    // only while the mcp has not yet noticed — so a server that reacts
+    // promptly fails here, and one that reacts at all fails under contention.
+    // Observed once in a full-workspace run. Before the kill the same fact is
+    // certain, and it is the fact that matters: the exit below belongs to this
+    // process rather than to one that was already gone.
+    assert!(
+        pid_exists(mcp_pid)?,
+        "mcp must be alive when its parent is killed, or its exit proves nothing"
+    );
     let started = Instant::now();
     parent.child.kill()?;
     let parent_status = parent.child.wait()?;
@@ -102,7 +121,7 @@ fn exits_when_launching_parent_disappears_with_stdio_open_issue_102() -> Result<
         !parent_status.success(),
         "launcher parent should be killed during orphan-exit test"
     );
-    let exited = wait_for_pid_exit(mcp_pid, Duration::from_secs(5))?;
+    let exited = wait_for_pid_exit(mcp_pid, ORPHAN_EXIT_TIMEOUT)?;
     let elapsed = started.elapsed();
     if !exited {
         terminate_pid(mcp_pid)?;
@@ -112,7 +131,7 @@ fn exits_when_launching_parent_disappears_with_stdio_open_issue_102() -> Result<
         "deslop-mcp must exit within 5s when its launching parent disappears"
     );
     assert!(
-        elapsed < Duration::from_secs(5),
+        elapsed < ORPHAN_EXIT_TIMEOUT,
         "orphan-exit observation should complete within 5s, took {elapsed:?}"
     );
     assert!(

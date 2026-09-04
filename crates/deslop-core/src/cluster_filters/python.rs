@@ -19,9 +19,9 @@ use std::collections::BTreeSet;
 use tree_sitter::Node;
 
 use super::{
-    enclosing_kind, is_multi_member_language_cluster, language_cluster_shapes,
-    node_contains_kind, node_intersects_range, node_search::KindSearch, parse_for,
-    raw_snippet_texts_differ, spans_multiple_files, trimmed_snippet_range, Snippet,
+    enclosing_kind, is_multi_member_language_cluster, language_cluster_shapes, node_contains_kind,
+    node_intersects_range, node_search::KindSearch, parse_for, raw_snippet_texts_differ,
+    spans_multiple_files, trimmed_snippet_range, Snippet,
 };
 use crate::{
     ast::{named_children, ByteRange},

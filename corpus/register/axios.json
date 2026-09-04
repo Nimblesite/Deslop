@@ -33,10 +33,634 @@
         "examples/server.js:69-76",
         "sandbox/server.js:7-15"
       ]
+    },
+    {
+      "why": "the esm and cjs typings test files are maintained as verbatim copies; these 33 lines are byte-identical",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:141-173",
+        "test/module/typings/esm/index.ts:164-196"
+      ]
+    },
+    {
+      "why": "the same 14-line xsrf test appears twice, byte-identical",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/specs/xsrf.spec.js:115-128",
+        "test/specs/xsrf.spec.js:100-113"
+      ]
+    },
+    {
+      "why": "byte-identical 11-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:153-163",
+        "test/module/typings/esm/index.ts:176-186"
+      ]
+    },
+    {
+      "why": "byte-identical 9-line span between the esm and cjs typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:274-282",
+        "test/module/typings/cjs/index.ts:251-259"
+      ]
+    },
+    {
+      "why": "byte-identical 31-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:76-106",
+        "test/module/typings/esm/index.ts:99-129"
+      ]
+    },
+    {
+      "why": "The IPv6 literal test is the 'allow passing JSON' test copied with only the test title and the request URL changed; the Fred Flintstone payload and server block are identical.",
+      "verified": "extracted and diffed the two source ranges (17 vs 18 lines): not byte-identical, similarity 0.43; differing lines listed in notes",
+      "occurrences": [
+        "test/unit/adapters/http.js:317-333",
+        "test/unit/adapters/http.js:181-198"
+      ]
+    },
+    {
+      "why": "byte-identical 26-line span between the esm and cjs typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:250-275",
+        "test/module/typings/cjs/index.ts:227-252"
+      ]
+    },
+    {
+      "why": "stopHTTPServer is startHTTPServer's opening block copied — 9 lines identical except the exported function name.",
+      "verified": "extracted and diffed the two source ranges (9 vs 9 lines): not byte-identical, similarity 0.99; differing lines listed in notes",
+      "occurrences": [
+        "test/unit/adapters/http.js:106-114",
+        "test/helpers/server.js:54-62"
+      ]
+    },
+    {
+      "why": "byte-identical 22-line span between the esm and cjs typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:277-298",
+        "test/module/typings/cjs/index.ts:254-275"
+      ]
+    },
+    {
+      "why": "20-line streaming server handler duplicated in the same file; only the body suffix literal ('6789' vs '1234') differs.",
+      "verified": "extracted and diffed the two source ranges (20 vs 20 lines): not byte-identical, similarity 0.99; differing lines listed in notes",
+      "occurrences": [
+        "test/unit/adapters/http.js:1014-1033",
+        "test/unit/adapters/http.js:1285-1304"
+      ]
+    },
+    {
+      "why": "byte-identical 10-line span between the esm and cjs typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:42-51",
+        "test/module/typings/cjs/index.ts:19-28"
+      ]
+    },
+    {
+      "why": "The HTTP-protocol test is the HTTPS test copied with the URL changed to '/foo' and the title updated; the response handling is identical.",
+      "verified": "extracted and diffed the two source ranges (15 vs 16 lines): not byte-identical, similarity 0.96; differing lines listed in notes",
+      "occurrences": [
+        "test/specs/requests.spec.js:502-516",
+        "test/specs/requests.spec.js:485-500"
+      ]
+    },
+    {
+      "why": "A 54-line mergeConfig describe block where the only change is the systematic rename validateStatus→headers throughout.",
+      "verified": "extracted and diffed the two source ranges (54 vs 54 lines): not byte-identical, similarity 0.78; differing lines listed in notes",
+      "occurrences": [
+        "test/specs/core/mergeConfig.spec.js:277-330",
+        "test/specs/core/mergeConfig.spec.js:160-213"
+      ]
+    },
+    {
+      "why": "identical 21-line throttled-stream test setup block duplicated in fetch.js",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/unit/adapters/fetch.js:132-152",
+        "test/unit/adapters/fetch.js:206-226"
+      ]
+    },
+    {
+      "why": "53-line AxiosHeaders typings block identical modulo the systematic namespace rename (AxiosHeaders→axios.AxiosHeaders etc.) and a comment spelling fix.",
+      "verified": "extracted and diffed the two source ranges (53 vs 54 lines): not byte-identical, similarity 0.98; differing lines listed in notes",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:606-658",
+        "test/module/typings/cjs/index.ts:457-510"
+      ]
+    },
+    {
+      "why": "byte-identical 18-line span between the esm and cjs typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:262-279",
+        "test/module/typings/cjs/index.ts:239-256"
+      ]
+    },
+    {
+      "why": "11-line module test-harness block identical except the pkgPath directory name (ts-require-default vs ts-require).",
+      "verified": "extracted and diffed the two source ranges (11 vs 11 lines): not byte-identical, similarity 0.99; differing lines listed in notes",
+      "occurrences": [
+        "test/module/test.js:137-147",
+        "test/module/test.js:123-133"
+      ]
+    },
+    {
+      "why": "byte-identical 33-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:137-169",
+        "test/module/typings/esm/index.ts:160-192"
+      ]
+    },
+    {
+      "why": "14-line progress-samples callback duplicated in the same file with the systematic rename onDownloadProgress/download→onUploadProgress/upload.",
+      "verified": "extracted and diffed the two source ranges (14 vs 14 lines): not byte-identical, similarity 0.97; differing lines listed in notes",
+      "occurrences": [
+        "test/unit/adapters/http.js:2043-2056",
+        "test/unit/adapters/http.js:1984-1997"
+      ]
+    },
+    {
+      "why": "byte-identical 31-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:167-197",
+        "test/module/typings/esm/index.ts:190-220"
+      ]
+    },
+    {
+      "why": "byte-identical 33-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:149-181",
+        "test/module/typings/esm/index.ts:172-204"
+      ]
+    },
+    {
+      "why": "byte-identical 34-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:179-212",
+        "test/module/typings/esm/index.ts:202-235"
+      ]
+    },
+    {
+      "why": "15 lines of progress-samples assertions identical except upload→download.",
+      "verified": "extracted and diffed the two source ranges (15 vs 15 lines): not byte-identical, similarity 0.99; differing lines listed in notes",
+      "occurrences": [
+        "test/unit/adapters/fetch.js:249-263",
+        "test/unit/adapters/fetch.js:174-188"
+      ]
+    },
+    {
+      "why": "identical 21-line throttled-stream test setup block duplicated in fetch.js",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/unit/adapters/fetch.js:134-154",
+        "test/unit/adapters/fetch.js:208-228"
+      ]
+    },
+    {
+      "why": "The handleFormData/generateReadable helpers in test/unit/adapters/http.js are copies of the same helpers in test/helpers/server.js (35-line overlap, export keyword and one function name aside).",
+      "verified": "extracted and diffed the two source ranges (35 vs 33 lines): not byte-identical, similarity 0.92; differing lines listed in notes",
+      "occurrences": [
+        "test/helpers/server.js:64-98",
+        "test/unit/adapters/http.js:116-148"
+      ]
+    },
+    {
+      "why": "25-line ts-require fixture identical except the single line require('axios') vs require('axios').default.",
+      "verified": "extracted and diffed the two source ranges (25 vs 25 lines): not byte-identical, similarity 1.00; differing lines listed in notes",
+      "occurrences": [
+        "test/module/ts-require/index.ts:1-25",
+        "test/module/ts-require-default/index.ts:1-25"
+      ]
+    },
+    {
+      "why": "byte-identical 31-line span between the esm and cjs typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:95-125",
+        "test/module/typings/cjs/index.ts:72-102"
+      ]
+    },
+    {
+      "why": "byte-identical 31-line span between the esm and cjs typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:156-186",
+        "test/module/typings/cjs/index.ts:133-163"
+      ]
+    },
+    {
+      "why": "the entire 12-line kindOf test file content appears verbatim inside endsWith.js under the wrong name - plainly copied",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/specs/utils/endsWith.js:1-12",
+        "test/specs/utils/kindOfTest.js:1-12"
+      ]
+    },
+    {
+      "why": "byte-identical 33-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:145-177",
+        "test/module/typings/esm/index.ts:168-200"
+      ]
+    },
+    {
+      "why": "23-line ts-require JS fixture identical except require('axios') vs require('axios').default.",
+      "verified": "extracted and diffed the two source ranges (23 vs 23 lines): not byte-identical, similarity 1.00; differing lines listed in notes",
+      "occurrences": [
+        "test/module/ts-require-default/index.js:1-23",
+        "test/module/ts-require/index.js:1-23"
+      ]
+    },
+    {
+      "why": "13 lines of the formidable handleFormData helper identical between test/unit/adapters/http.js and test/helpers/server.js (export keyword aside).",
+      "verified": "extracted and diffed the two source ranges (13 vs 13 lines): not byte-identical, similarity 0.99; differing lines listed in notes",
+      "occurrences": [
+        "test/unit/adapters/http.js:116-128",
+        "test/helpers/server.js:64-76"
+      ]
+    },
+    {
+      "why": "13-line module test-harness describe block identical apart from the parameter swap CommonJS/cjs/require ↔ ESM/esm/import.",
+      "verified": "extracted and diffed the two source ranges (13 vs 13 lines): not byte-identical, similarity 0.96; differing lines listed in notes",
+      "occurrences": [
+        "test/module/test.js:80-92",
+        "test/module/test.js:94-106"
+      ]
+    },
+    {
+      "why": "13 lines of the clear-interceptors test duplicated in the same file with the systematic rename response→request.",
+      "verified": "extracted and diffed the two source ranges (13 vs 13 lines): not byte-identical, similarity 0.94; differing lines listed in notes",
+      "occurrences": [
+        "test/specs/interceptors.spec.js:589-601",
+        "test/specs/interceptors.spec.js:575-587"
+      ]
+    },
+    {
+      "why": "byte-identical 7-line span between the esm and cjs typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:190-196",
+        "test/module/typings/cjs/index.ts:167-173"
+      ]
+    },
+    {
+      "why": "19 lines of the generateReadable stream-generator body identical between test/unit/adapters/http.js and test/helpers/server.js (function name and export aside).",
+      "verified": "extracted and diffed the two source ranges (19 vs 19 lines): not byte-identical, similarity 0.97; differing lines listed in notes",
+      "occurrences": [
+        "test/unit/adapters/http.js:130-148",
+        "test/helpers/server.js:80-98"
+      ]
+    },
+    {
+      "why": "41-line mergeConfig describe block where the only change is the systematic rename transformRequest→headers throughout.",
+      "verified": "extracted and diffed the two source ranges (41 vs 41 lines): not byte-identical, similarity 0.74; differing lines listed in notes",
+      "occurrences": [
+        "test/specs/core/mergeConfig.spec.js:229-269",
+        "test/specs/core/mergeConfig.spec.js:173-213"
+      ]
+    },
+    {
+      "why": "36-line no_proxy proxy test duplicated in the same file; only the test title, the no_proxy list and the expected body differ.",
+      "verified": "extracted and diffed the two source ranges (36 vs 36 lines): not byte-identical, similarity 0.98; differing lines listed in notes",
+      "occurrences": [
+        "test/unit/adapters/http.js:1280-1315",
+        "test/unit/adapters/http.js:1243-1278"
+      ]
+    },
+    {
+      "why": "13-line module test-harness block identical apart from the parameter swap ts-require ↔ ts-require-default.",
+      "verified": "extracted and diffed the two source ranges (13 vs 13 lines): not byte-identical, similarity 0.98; differing lines listed in notes",
+      "occurrences": [
+        "test/module/test.js:136-148",
+        "test/module/test.js:122-134"
+      ]
+    },
+    {
+      "why": "byte-identical 31-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:129-159",
+        "test/module/typings/esm/index.ts:152-182"
+      ]
+    },
+    {
+      "why": "byte-identical 31-line span between the esm and cjs typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:91-121",
+        "test/module/typings/cjs/index.ts:68-98"
+      ]
+    },
+    {
+      "why": "byte-identical 29-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:223-251",
+        "test/module/typings/esm/index.ts:246-274"
+      ]
+    },
+    {
+      "why": "20-line validateStatus test duplicated in the same file with only null changed to undefined.",
+      "verified": "extracted and diffed the two source ranges (20 vs 20 lines): not byte-identical, similarity 0.98; differing lines listed in notes",
+      "occurrences": [
+        "test/specs/requests.spec.js:236-255",
+        "test/specs/requests.spec.js:257-276"
+      ]
+    },
+    {
+      "why": "identical 21-line proxy server-handler block duplicated in the http adapter test",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/unit/adapters/http.js:1400-1420",
+        "test/unit/adapters/http.js:1364-1384"
+      ]
+    },
+    {
+      "why": "byte-identical 12-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:264-275",
+        "test/module/typings/esm/index.ts:287-298"
+      ]
+    },
+    {
+      "why": "54-line config-fixture block identical modulo the systematic namespace rename (axios.AxiosRequestConfig→AxiosRequestConfig etc.) and one moved baseURL line.",
+      "verified": "extracted and diffed the two source ranges (54 vs 54 lines): not byte-identical, similarity 0.96; differing lines listed in notes",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:3-56",
+        "test/module/typings/esm/index.ts:26-79"
+      ]
+    },
+    {
+      "why": "byte-identical 33-line span between the esm and cjs typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:180-212",
+        "test/module/typings/cjs/index.ts:157-189"
+      ]
+    },
+    {
+      "why": "13 lines of progress-samples assertions identical except upload→download.",
+      "verified": "extracted and diffed the two source ranges (13 vs 13 lines): not byte-identical, similarity 0.99; differing lines listed in notes",
+      "occurrences": [
+        "test/unit/adapters/http.js:2000-2012",
+        "test/unit/adapters/fetch.js:251-263"
+      ]
+    },
+    {
+      "why": "19 lines of void-interceptor typings statements identical apart from axios.-prefixed type names in comments.",
+      "verified": "extracted and diffed the two source ranges (19 vs 19 lines): not byte-identical, similarity 0.99; differing lines listed in notes",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:335-353",
+        "test/module/typings/cjs/index.ts:306-324"
+      ]
+    },
+    {
+      "why": "15-line basic-auth test duplicated in the same file with only the password (and its expected base64 header) changed.",
+      "verified": "extracted and diffed the two source ranges (15 vs 15 lines): not byte-identical, similarity 0.93; differing lines listed in notes",
+      "occurrences": [
+        "test/specs/basicAuth.spec.js:48-62",
+        "test/specs/basicAuth.spec.js:17-31"
+      ]
+    },
+    {
+      "why": "byte-identical 31-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:171-201",
+        "test/module/typings/esm/index.ts:194-224"
+      ]
+    },
+    {
+      "why": "byte-identical 33-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:161-193",
+        "test/module/typings/esm/index.ts:184-216"
+      ]
+    },
+    {
+      "why": "byte-identical 32-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:80-111",
+        "test/module/typings/esm/index.ts:103-134"
+      ]
+    },
+    {
+      "why": "16-line toFormData indexes test duplicated in the same file with only the option value false→null and the matching key expectations changed.",
+      "verified": "extracted and diffed the two source ranges (16 vs 16 lines): not byte-identical, similarity 0.96; differing lines listed in notes",
+      "occurrences": [
+        "test/specs/helpers/toFormData.spec.js:52-67",
+        "test/specs/helpers/toFormData.spec.js:69-84"
+      ]
+    },
+    {
+      "why": "byte-identical 31-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:175-205",
+        "test/module/typings/esm/index.ts:198-228"
+      ]
+    },
+    {
+      "why": "47-line rate-limit test duplicated in the same file with the systematic rename onUploadProgress→onDownloadProgress plus the matching maxRate/tick changes.",
+      "verified": "extracted and diffed the two source ranges (47 vs 47 lines): not byte-identical, similarity 0.99; differing lines listed in notes",
+      "occurrences": [
+        "test/unit/adapters/http.js:2078-2124",
+        "test/unit/adapters/http.js:2126-2172"
+      ]
+    },
+    {
+      "why": "byte-identical 10-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:345-354",
+        "test/module/typings/esm/index.ts:374-383"
+      ]
+    },
+    {
+      "why": "identical 21-line proxy server-handler block duplicated in the http adapter test",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/unit/adapters/http.js:1321-1341",
+        "test/unit/adapters/http.js:1400-1420"
+      ]
+    },
+    {
+      "why": "The IPv4 literal test is the 'allow passing JSON' test copied with only the title and the request URL (127.0.0.1) changed.",
+      "verified": "extracted and diffed the two source ranges (17 vs 18 lines): not byte-identical, similarity 0.43; differing lines listed in notes",
+      "occurrences": [
+        "test/unit/adapters/http.js:317-333",
+        "test/unit/adapters/http.js:162-179"
+      ]
+    },
+    {
+      "why": "21 lines of the rate-limit test identical in the same file apart from a blank line.",
+      "verified": "extracted and diffed the two source ranges (21 vs 20 lines): not byte-identical, similarity 1.00; differing lines listed in notes",
+      "occurrences": [
+        "test/unit/adapters/http.js:2018-2038",
+        "test/unit/adapters/http.js:1960-1979"
+      ]
+    },
+    {
+      "why": "byte-identical 31-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:219-249",
+        "test/module/typings/esm/index.ts:242-272"
+      ]
+    },
+    {
+      "why": "byte-identical 7-line span between the esm and cjs typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:242-248",
+        "test/module/typings/cjs/index.ts:219-225"
+      ]
+    },
+    {
+      "why": "byte-identical 33-line span between the esm and cjs typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:176-208",
+        "test/module/typings/cjs/index.ts:153-185"
+      ]
+    },
+    {
+      "why": "byte-identical 11-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:183-193",
+        "test/module/typings/esm/index.ts:206-216"
+      ]
+    },
+    {
+      "why": "19 lines of the handleUserResponse fixture identical modulo the systematic rename axios.AxiosResponse→AxiosResponse plus a comment.",
+      "verified": "extracted and diffed the two source ranges (19 vs 19 lines): not byte-identical, similarity 0.99; differing lines listed in notes",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:109-127",
+        "test/module/typings/esm/index.ts:132-150"
+      ]
+    },
+    {
+      "why": "identical 21-line proxy server-handler block duplicated in the http adapter test",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/unit/adapters/http.js:1057-1077",
+        "test/unit/adapters/http.js:1158-1178"
+      ]
+    },
+    {
+      "why": "byte-identical 11-line span between the esm and cjs typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:246-256",
+        "test/module/typings/cjs/index.ts:223-233"
+      ]
+    },
+    {
+      "why": "byte-identical 13-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:104-116",
+        "test/module/typings/esm/index.ts:127-139"
+      ]
+    },
+    {
+      "why": "15-line progress console/samples block duplicated in the same file with the systematic rename onUploadProgress/upload→onDownloadProgress/download.",
+      "verified": "extracted and diffed the two source ranges (15 vs 15 lines): not byte-identical, similarity 0.97; differing lines listed in notes",
+      "occurrences": [
+        "test/unit/adapters/fetch.js:157-171",
+        "test/unit/adapters/fetch.js:231-245"
+      ]
+    },
+    {
+      "why": "byte-identical 33-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:84-116",
+        "test/module/typings/esm/index.ts:107-139"
+      ]
+    },
+    {
+      "why": "25-line unsupported-protocol test duplicated in the same file with only the scheme (tel: ↔ ftp:) and expected message changed.",
+      "verified": "extracted and diffed the two source ranges (25 vs 25 lines): not byte-identical, similarity 0.95; differing lines listed in notes",
+      "occurrences": [
+        "test/unit/adapters/http.js:1540-1564",
+        "test/unit/adapters/http.js:1566-1590"
+      ]
+    },
+    {
+      "why": "byte-identical 7-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:96-102",
+        "test/module/typings/esm/index.ts:119-125"
+      ]
+    },
+    {
+      "why": "The timeout-rejection block in lib/adapters/xhr.js is the same block from lib/adapters/http.js copied with the systematic rename config→_config and reindentation.",
+      "verified": "extracted and diffed the two source ranges (11 vs 10 lines): not byte-identical, similarity 0.96; differing lines listed in notes",
+      "occurrences": [
+        "lib/adapters/http.js:652-662",
+        "lib/adapters/xhr.js:118-127"
+      ]
+    },
+    {
+      "why": "11-line timeout test duplicated in the same file with only the timeout option value changed (250 vs {strangeTimeout: 250}).",
+      "verified": "extracted and diffed the two source ranges (11 vs 11 lines): not byte-identical, similarity 0.96; differing lines listed in notes",
+      "occurrences": [
+        "test/unit/adapters/http.js:265-275",
+        "test/unit/adapters/http.js:207-217"
+      ]
+    },
+    {
+      "why": "byte-identical 11-line span between the cjs and esm typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:141-151",
+        "test/module/typings/esm/index.ts:164-174"
+      ]
+    },
+    {
+      "why": "byte-identical 23-line span between the esm and cjs typings twins",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why line names the exact differing tokens",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:254-276",
+        "test/module/typings/cjs/index.ts:231-253"
+      ]
+    },
+    {
+      "why": "11-line interceptor use/eject block duplicated in the same file with the systematic rename request→response.",
+      "verified": "extracted and diffed the two source ranges (11 vs 11 lines): not byte-identical, similarity 0.69; differing lines listed in notes",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:279-289",
+        "test/module/typings/cjs/index.ts:294-304"
+      ]
     }
   ],
-  "clearly_out": [],
-  "clearly_out_status": "NONE FOUND. This judging pass found no pair in axios certain enough to call a false positive. An empty list asserts nothing.",
+  "clearly_out": [
+    {
+      "why": "One side is a single line of the test file, the other a minified ES6-promise polyfill blob inside lib/axios.js — they share nothing; pairing them is plainly wrong.",
+      "verified": "extracted and diffed the two source ranges (1 vs 11 lines): not byte-identical, similarity 0.00; differing lines listed in notes",
+      "occurrences": [
+        "test/manual/promise.js:9-9",
+        "lib/axios.js:50-60"
+      ]
+    }
+  ],
   "not_clear": [
     {
       "why": "Four assert.strictEqual(typeof X, 'function') lines shared across the module smoke tests. Byte-identical, and also the only way to write that check - judgement split on whether omitting it would be a defect.",
@@ -50,6 +674,629 @@
       "occurrences": [
         "test/specs/core/mergeConfig.spec.js:174-176",
         "test/specs/core/mergeConfig.spec.js:230-232"
+      ]
+    },
+    {
+      "why": "Same 3-line findMeInStackTrace assertion twice in one file, differing only in indentation — a short idiom.",
+      "occurrences": [
+        "test/unit/adapters/http.js:508-510",
+        "test/unit/adapters/http.js:534-536"
+      ]
+    },
+    {
+      "why": "Two interceptor tests sharing a skeleton but with inverted assertions and different flags — related but not a straight copy.",
+      "occurrences": [
+        "test/specs/interceptors.spec.js:29-44",
+        "test/specs/interceptors.spec.js:46-61"
+      ]
+    },
+    {
+      "why": "Two 3-line toFormData assertions differing in one option token.",
+      "occurrences": [
+        "test/specs/helpers/toFormData.spec.js:58-60",
+        "test/specs/helpers/toFormData.spec.js:75-77"
+      ]
+    },
+    {
+      "why": "4 lines of spy assertions with a rename (resolveSpy→resolve) — short idiom.",
+      "occurrences": [
+        "test/specs/requests.spec.js:143-146",
+        "test/specs/core/settle.spec.js:64-67"
+      ]
+    },
+    {
+      "why": "Same-file .then/.catch method chains calling different axios methods — framework scaffolding.",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:254-264",
+        "test/module/typings/esm/index.ts:111-121"
+      ]
+    },
+    {
+      "why": "Single overloaded method-signature line.",
+      "occurrences": [
+        "index.d.ts:510-510",
+        "index.d.ts:505-505"
+      ]
+    },
+    {
+      "why": "A handleError function against an onUploadProgress object literal — similar shape, different content, ragged edges.",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:73-79",
+        "test/module/typings/esm/index.ts:553-558"
+      ]
+    },
+    {
+      "why": "Two options tests (accept vs ignore baseURL) sharing scaffolding with different assertions.",
+      "occurrences": [
+        "test/specs/options.spec.js:62-72",
+        "test/specs/options.spec.js:90-101"
+      ]
+    },
+    {
+      "why": "Two AxiosHeaders pattern tests (string vs RegExp) with the same skeleton but different values.",
+      "occurrences": [
+        "test/unit/core/AxiosHeaders.js:179-186",
+        "test/unit/core/AxiosHeaders.js:157-164"
+      ]
+    },
+    {
+      "why": "Two response assertions with different fields checked.",
+      "occurrences": [
+        "test/specs/requests.spec.js:356-362",
+        "test/specs/promise.spec.js:23-30"
+      ]
+    },
+    {
+      "why": "Two- and three-line toFormData key assertions, ragged boundaries.",
+      "occurrences": [
+        "test/specs/helpers/toFormData.spec.js:109-110",
+        "test/specs/helpers/toFormData.spec.js:77-79"
+      ]
+    },
+    {
+      "why": "Three lines of response assertions, ragged boundaries.",
+      "occurrences": [
+        "test/specs/requests.spec.js:331-333",
+        "test/specs/promise.spec.js:27-29"
+      ]
+    },
+    {
+      "why": "Two identical lines of axios.spread typings — a two-line idiom.",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:358-359",
+        "test/module/typings/esm/index.ts:398-399"
+      ]
+    },
+    {
+      "why": "Overlapping onUploadProgress typings blocks with namespace renames and ragged boundaries.",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:434-451",
+        "test/module/typings/esm/index.ts:542-565"
+      ]
+    },
+    {
+      "why": "Two validator assertions differing in one argument.",
+      "occurrences": [
+        "test/specs/helpers/validator.spec.js:34-41",
+        "test/specs/helpers/validator.spec.js:15-22"
+      ]
+    },
+    {
+      "why": "Single InterceptorUse type line, differing in an options parameter.",
+      "occurrences": [
+        "index.d.ts:482-482",
+        "index.d.ts:484-484"
+      ]
+    },
+    {
+      "why": "Two XSRF no-header tests restructured differently (nesting differs).",
+      "occurrences": [
+        "test/specs/xsrf.spec.js:36-43",
+        "test/specs/xsrf.spec.js:105-112"
+      ]
+    },
+    {
+      "why": "GET vs POST example servers sharing a res.writeHead skeleton only.",
+      "occurrences": [
+        "examples/get/server.js:28-34",
+        "examples/post/server.js:8-15"
+      ]
+    },
+    {
+      "why": "4 lines of fs.readFileSync key/cert options — a common idiom.",
+      "occurrences": [
+        "test/unit/adapters/http.js:1149-1152",
+        "test/unit/adapters/http.js:1048-1051"
+      ]
+    },
+    {
+      "why": "Three identical mergeConfig assertion lines — a short idiom.",
+      "occurrences": [
+        "test/specs/core/mergeConfig.spec.js:134-136",
+        "test/specs/core/mergeConfig.spec.js:141-143"
+      ]
+    },
+    {
+      "why": "Two 2-line toFormData key assertions.",
+      "occurrences": [
+        "test/specs/helpers/toFormData.spec.js:15-16",
+        "test/specs/helpers/toFormData.spec.js:64-65"
+      ]
+    },
+    {
+      "why": "Two 2-line multipart assertions with different fields.",
+      "occurrences": [
+        "test/unit/adapters/http.js:1725-1726",
+        "test/unit/adapters/http.js:1721-1722"
+      ]
+    },
+    {
+      "why": "4 lines of getAjaxRequest header assertion — an idiom.",
+      "occurrences": [
+        "test/specs/defaults.spec.js:124-127",
+        "test/specs/defaults.spec.js:114-117"
+      ]
+    },
+    {
+      "why": "4 lines of bad/good server setup differing in names and literals.",
+      "occurrences": [
+        "test/unit/regression/SNYK-JS-AXIOS-7361793.js:21-24",
+        "test/unit/regression/SNYK-JS-AXIOS-7361793.js:17-20"
+      ]
+    },
+    {
+      "why": "Two timeout assertion blocks differing in assert method and message.",
+      "occurrences": [
+        "test/unit/adapters/http.js:277-283",
+        "test/unit/adapters/http.js:307-313"
+      ]
+    },
+    {
+      "why": "getTags vs getReleases — a 3-line method with one word changed.",
+      "occurrences": [
+        "bin/GithubAPI.js:92-94",
+        "bin/GithubAPI.js:84-86"
+      ]
+    },
+    {
+      "why": "Three lines of typeof export checks with namespaced vs bare names.",
+      "occurrences": [
+        "test/module/ts-require-default/index.js:14-16",
+        "test/module/cjs/index.js:7-9"
+      ]
+    },
+    {
+      "why": "merge(undefined,…) vs merge(null,…) — a 3-line idiom.",
+      "occurrences": [
+        "test/specs/utils/merge.spec.js:59-61",
+        "test/specs/utils/merge.spec.js:63-65"
+      ]
+    },
+    {
+      "why": "Four lines of typeof export checks with one extra line.",
+      "occurrences": [
+        "test/module/cjs/index.js:6-9",
+        "test/module/ts-require/index.js:6-9"
+      ]
+    },
+    {
+      "why": "5 lines of the stream.on('data') accumulation idiom.",
+      "occurrences": [
+        "test/unit/adapters/http.js:996-1000",
+        "test/unit/adapters/http.js:930-934"
+      ]
+    },
+    {
+      "why": "4 lines of mergeConfig assertions with validateStatus vs headers.",
+      "occurrences": [
+        "test/specs/core/mergeConfig.spec.js:167-170",
+        "test/specs/core/mergeConfig.spec.js:284-287"
+      ]
+    },
+    {
+      "why": "Data-accumulation handlers of similar shape in different contexts.",
+      "occurrences": [
+        "examples/upload/server.js:4-12",
+        "test/unit/adapters/http.js:1332-1338"
+      ]
+    },
+    {
+      "why": "Two timeout tests differing in duration and structure.",
+      "occurrences": [
+        "test/unit/adapters/http.js:1634-1641",
+        "test/unit/adapters/http.js:268-275"
+      ]
+    },
+    {
+      "why": "4 lines of Object.assign option destructuring — an idiom.",
+      "occurrences": [
+        "test/helpers/server.js:15-18",
+        "test/unit/adapters/http.js:67-70"
+      ]
+    },
+    {
+      "why": "5 lines of header-iteration with a rename (expectedHeaders→headers).",
+      "occurrences": [
+        "test/specs/headers.spec.js:61-65",
+        "test/specs/headers.spec.js:40-44"
+      ]
+    },
+    {
+      "why": "5 lines of case-sensitive vs literal header assertions.",
+      "occurrences": [
+        "test/unit/core/AxiosHeaders.js:363-367",
+        "test/unit/core/AxiosHeaders.js:196-200"
+      ]
+    },
+    {
+      "why": "5 lines of typeof export assertions — check scaffolding.",
+      "occurrences": [
+        "test/module/ts-require-default/index.ts:13-17",
+        "test/module/ts-require/index.ts:13-17"
+      ]
+    },
+    {
+      "why": "Two lines of interceptor.use calls (response vs request).",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:326-327",
+        "test/module/typings/cjs/index.ts:291-292"
+      ]
+    },
+    {
+      "why": "4 lines of https.createServer setup — an idiom.",
+      "occurrences": [
+        "test/unit/adapters/http.js:1154-1157",
+        "test/unit/adapters/http.js:1053-1056"
+      ]
+    },
+    {
+      "why": "Ragged response-interceptor tests, extra lines on one side.",
+      "occurrences": [
+        "test/specs/interceptors.spec.js:230-253",
+        "test/specs/interceptors.spec.js:255-282"
+      ]
+    },
+    {
+      "why": "Ragged handleError fixtures with namespace renames and extra lines.",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:58-70",
+        "test/module/typings/esm/index.ts:81-97"
+      ]
+    },
+    {
+      "why": "Two failure assertions differing in message and timeout.",
+      "occurrences": [
+        "test/unit/adapters/http.js:816-821",
+        "test/unit/adapters/http.js:1557-1562"
+      ]
+    },
+    {
+      "why": "Three identical typeof assertion lines — check scaffolding.",
+      "occurrences": [
+        "test/module/ts-require/index.ts:17-19",
+        "test/module/ts-require-default/index.ts:17-19"
+      ]
+    },
+    {
+      "why": "Single head method-signature line.",
+      "occurrences": [
+        "index.d.ts:502-502",
+        "index.d.ts:503-503"
+      ]
+    },
+    {
+      "why": "Three lines of header assertions with different keys.",
+      "occurrences": [
+        "test/specs/headers.spec.js:154-156",
+        "test/specs/interceptors.spec.js:223-225"
+      ]
+    },
+    {
+      "why": "isObject vs isPlainObject — a 3-line idiom.",
+      "occurrences": [
+        "test/specs/utils/isX.spec.js:42-44",
+        "test/specs/utils/isX.spec.js:48-50"
+      ]
+    },
+    {
+      "why": "Two lines of header.get assertions in different tests.",
+      "occurrences": [
+        "test/unit/core/AxiosHeaders.js:355-356",
+        "test/unit/core/AxiosHeaders.js:44-45"
+      ]
+    },
+    {
+      "why": "has vs delete tests sharing a skeleton with different calls.",
+      "occurrences": [
+        "test/unit/core/AxiosHeaders.js:147-154",
+        "test/unit/core/AxiosHeaders.js:203-211"
+      ]
+    },
+    {
+      "why": "Single options method-signature line.",
+      "occurrences": [
+        "index.d.ts:503-503",
+        "index.d.ts:504-504"
+      ]
+    },
+    {
+      "why": "XSRF cross-origin vs cookie-set tests sharing scaffolding with opposite assertions.",
+      "occurrences": [
+        "test/specs/xsrf.spec.js:59-68",
+        "test/specs/xsrf.spec.js:22-31"
+      ]
+    },
+    {
+      "why": "6 lines of interceptor tests with different header values.",
+      "occurrences": [
+        "test/specs/interceptors.spec.js:64-69",
+        "test/specs/interceptors.spec.js:13-18"
+      ]
+    },
+    {
+      "why": "Three identical config.headers lines across the cjs/esm fixtures — a short idiom.",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:490-492",
+        "test/module/typings/esm/index.ts:638-640"
+      ]
+    },
+    {
+      "why": "5 lines differing only in expected method (GET vs POST).",
+      "occurrences": [
+        "test/specs/requests.spec.js:13-17",
+        "test/specs/requests.spec.js:39-43"
+      ]
+    },
+    {
+      "why": "Three lines of error assertions in different contexts.",
+      "occurrences": [
+        "test/specs/core/AxiosError.spec.js:8-10",
+        "test/specs/requests.spec.js:177-179"
+      ]
+    },
+    {
+      "why": "Ragged instance tests with different options.",
+      "occurrences": [
+        "test/specs/instance.spec.js:52-63",
+        "test/specs/instance.spec.js:76-85"
+      ]
+    },
+    {
+      "why": "Three identical mergeConfig lines — a short idiom.",
+      "occurrences": [
+        "test/specs/core/mergeConfig.spec.js:257-259",
+        "test/specs/core/mergeConfig.spec.js:249-251"
+      ]
+    },
+    {
+      "why": "Two isAbsoluteURL tests with different inputs — same skeleton only.",
+      "occurrences": [
+        "test/specs/helpers/isAbsoluteURL.spec.js:10-13",
+        "test/specs/helpers/isAbsoluteURL.spec.js:19-22"
+      ]
+    },
+    {
+      "why": "8 lines differing in one header string.",
+      "occurrences": [
+        "test/specs/interceptors.spec.js:77-84",
+        "test/specs/interceptors.spec.js:14-21"
+      ]
+    },
+    {
+      "why": "Three/four lines of toFormData assertions, ragged.",
+      "occurrences": [
+        "test/specs/helpers/toFormData.spec.js:14-16",
+        "test/specs/helpers/toFormData.spec.js:41-44"
+      ]
+    },
+    {
+      "why": "4 lines identical except axios.AxiosResponse→AxiosResponse on one line.",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:327-330",
+        "test/module/typings/esm/index.ts:356-359"
+      ]
+    },
+    {
+      "why": "Assertion blocks differing in detail (mirror of 45/54).",
+      "occurrences": [
+        "test/unit/adapters/http.js:307-313",
+        "test/unit/adapters/http.js:248-254"
+      ]
+    },
+    {
+      "why": "7 lines of mergeConfig assertions with validateStatus vs headers.",
+      "occurrences": [
+        "test/specs/core/mergeConfig.spec.js:290-296",
+        "test/specs/core/mergeConfig.spec.js:173-179"
+      ]
+    },
+    {
+      "why": "Ragged redirect-server blocks of different lengths.",
+      "occurrences": [
+        "test/unit/adapters/http.js:358-368",
+        "test/unit/adapters/http.js:550-557"
+      ]
+    },
+    {
+      "why": "4 identical typeof assertion lines — check scaffolding.",
+      "occurrences": [
+        "test/module/ts-require-default/index.ts:15-18",
+        "test/module/ts-require/index.ts:15-18"
+      ]
+    },
+    {
+      "why": "Two different request tests sharing respondWith scaffolding.",
+      "occurrences": [
+        "test/specs/requests.spec.js:295-308",
+        "test/specs/transform.spec.js:32-43"
+      ]
+    },
+    {
+      "why": "Ragged 4-line blocks, one nested differently.",
+      "occurrences": [
+        "test/unit/adapters/http.js:328-331",
+        "test/unit/adapters/http.js:581-584"
+      ]
+    },
+    {
+      "why": "XSRF withCredentials vs null-cookieName tests sharing scaffolding with different options.",
+      "occurrences": [
+        "test/specs/xsrf.spec.js:70-81",
+        "test/specs/xsrf.spec.js:33-44"
+      ]
+    },
+    {
+      "why": "6 lines differing only in the request URL.",
+      "occurrences": [
+        "test/specs/xsrf.spec.js:62-67",
+        "test/specs/xsrf.spec.js:14-19"
+      ]
+    },
+    {
+      "why": "4 lines of http.createServer setup — an idiom.",
+      "occurrences": [
+        "test/unit/adapters/http.js:1281-1284",
+        "test/unit/adapters/http.js:1244-1247"
+      ]
+    },
+    {
+      "why": "7 identical jasmine.Ajax install/uninstall — framework scaffolding.",
+      "occurrences": [
+        "test/specs/progress.spec.js:2-8",
+        "test/specs/adapter.spec.js:3-9"
+      ]
+    },
+    {
+      "why": "Three lines differing in one expected message.",
+      "occurrences": [
+        "test/unit/adapters/http.js:1558-1560",
+        "test/unit/adapters/http.js:847-849"
+      ]
+    },
+    {
+      "why": "Three lines with a different assertion target.",
+      "occurrences": [
+        "test/unit/adapters/http.js:278-280",
+        "test/unit/adapters/http.js:817-819"
+      ]
+    },
+    {
+      "why": "Three identical instance defaults lines — a short idiom.",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:280-282",
+        "test/module/typings/cjs/index.ts:257-259"
+      ]
+    },
+    {
+      "why": "Three lines of error→json assertions with a rename.",
+      "occurrences": [
+        "test/specs/core/AxiosError.spec.js:9-11",
+        "test/specs/core/AxiosError.spec.js:24-26"
+      ]
+    },
+    {
+      "why": "4 lines of request vs response interceptor registration.",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:286-289",
+        "test/module/typings/esm/index.ts:330-333"
+      ]
+    },
+    {
+      "why": "8 lines of different request options in the same skeleton.",
+      "occurrences": [
+        "test/unit/adapters/http.js:807-814",
+        "test/unit/adapters/http.js:1634-1641"
+      ]
+    },
+    {
+      "why": "Ragged spread/Promise typings blocks of different lengths.",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:398-427",
+        "test/module/typings/cjs/index.ts:358-381"
+      ]
+    },
+    {
+      "why": "Three identical AxiosError construction lines — a short idiom.",
+      "occurrences": [
+        "test/specs/core/AxiosError.spec.js:5-7",
+        "test/specs/core/AxiosError.spec.js:20-22"
+      ]
+    },
+    {
+      "why": "5 lines differing in one boolean expectation.",
+      "occurrences": [
+        "test/specs/interceptors.spec.js:71-75",
+        "test/specs/interceptors.spec.js:48-52"
+      ]
+    },
+    {
+      "why": "Three lines of unrelated assertion targets.",
+      "occurrences": [
+        "test/specs/requests.spec.js:329-331",
+        "test/specs/core/AxiosError.spec.js:26-28"
+      ]
+    },
+    {
+      "why": "Two 2-line toFormData assertions differing in a key.",
+      "occurrences": [
+        "test/specs/helpers/toFormData.spec.js:122-123",
+        "test/specs/helpers/toFormData.spec.js:28-29"
+      ]
+    },
+    {
+      "why": "Three lines of catch/then typings statements, different variants.",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:383-385",
+        "test/module/typings/cjs/index.ts:363-365"
+      ]
+    },
+    {
+      "why": "Single postForm method-signature line.",
+      "occurrences": [
+        "index.d.ts:509-509",
+        "index.d.ts:508-508"
+      ]
+    },
+    {
+      "why": "Single head method-signature line against a different method line.",
+      "occurrences": [
+        "index.d.ts:515-515",
+        "index.d.ts:503-503"
+      ]
+    },
+    {
+      "why": "Three lines of unrelated assertion targets.",
+      "occurrences": [
+        "test/specs/headers.spec.js:155-157",
+        "test/specs/requests.spec.js:179-181"
+      ]
+    },
+    {
+      "why": "Ragged response-data conversion blocks with different variable names and shapes.",
+      "occurrences": [
+        "lib/adapters/http.js:255-261",
+        "lib/adapters/http.js:589-594"
+      ]
+    },
+    {
+      "why": "Ragged instance-creation typings blocks of different lengths.",
+      "occurrences": [
+        "test/module/typings/esm/index.ts:226-244",
+        "test/module/typings/cjs/index.ts:203-217"
+      ]
+    },
+    {
+      "why": "Ragged interceptor typings blocks with namespace renames.",
+      "occurrences": [
+        "test/module/typings/cjs/index.ts:294-311",
+        "test/module/typings/esm/index.ts:321-340"
+      ]
+    },
+    {
+      "why": "7 lines differing in the withXSRFToken value and URL.",
+      "occurrences": [
+        "test/specs/xsrf.spec.js:86-92",
+        "test/specs/xsrf.spec.js:101-107"
       ]
     }
   ]

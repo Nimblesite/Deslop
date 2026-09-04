@@ -1,134 +1,149 @@
-// [CORPUS-REGISTER-MERGE] The disagreement report.
+// [CORPUS-REGISTER-MERGE] Renders the disagreement report.
 //
-// This report has one job: list the pairs the judges do not agree on. When two
-// readers rule differently on the same lines of somebody else's source, at
-// least one of them is wrong, and a register built by picking a side would
-// carry that error as ground truth forever. So the merge stops, nothing is
-// written, and every disagreement is printed here with each judge's own words.
-//
-// Nothing else goes in this file. Counts of what WOULD have merged, cost
-// figures and queue movements are not disagreements and would bury them.
+// Every string this file emits is either a column header, a label derived from
+// the verdicts themselves, or a value read out of a judging folder. There is no
+// commentary: a reader must be able to reproduce the document by re-running the
+// script, and prose written here could not be reproduced or diffed.
 
-import { CONFIDENCE, CONTRADICTION, MISCITED } from "./pass.mjs";
+import { MISCITED, VERDICTS } from "./pass.mjs";
+
+/// Labels for the disagreements that are not simply two verdicts differing.
+/// Each names the comparison that produced the row, never a diagnosis of it.
+const MISCITED_KIND = MISCITED;
+const REGISTER_KIND = "register_conflict";
+const DUPLICATE_KIND = "duplicate_pair";
+/// Separates the two verdicts of a split, and the parts of a multi-value cell.
+/// Not a pipe: a pipe is the markdown column separator, and a label carrying
+/// one silently splits the cell it is in.
+const VERSUS = "/";
+const WITHIN_CELL = "<br>";
 
 /// Markdown cell text: a table breaks on an unescaped pipe or a line feed, and
 /// judges write both.
 const cell = (text) => String(text ?? "").replaceAll("|", "\\|").replaceAll(/\s*\n\s*/g, " ");
 
-/// The ranges of a pair, as one cell.
-const ranges = (occurrences) => occurrences.map((range) => `\`${range}\``).join("<br>");
+const ranges = (occurrences) => occurrences.map((range) => `\`${range}\``).join(WITHIN_CELL);
+const pairs = (entries) => entries.join(WITHIN_CELL);
 
-/// Every judge's verdict on one pair, as one cell.
-const verdicts = (rulings) => rulings.map((r) => `${r.judge}: **${r.verdict}**`).join("<br>");
+/// The kind of a split, read straight off the verdicts given: the distinct
+/// verdicts, ordered, joined. Nothing is inferred.
+const splitKindOf = (rulings) =>
+  [...new Set(rulings.map((ruling) => ruling.verdict))].sort().join(VERSUS);
 
-/// A markdown table, or a line saying the section found nothing.
-const table = (headers, rows, empty) => {
-  if (rows.length === 0) return `${empty}\n`;
-  const line = (cells) => `| ${cells.join(" | ")} |`;
-  return [line(headers), line(headers.map(() => "---")), ...rows.map(line)].join("\n") + "\n";
-};
+/// Every disagreement in one repository, as uniform rows.
+const rowsFor = (repo) => [
+  ...repo.result.disagreements.map((split) => ({
+    repository: repo.name,
+    candidate: String(split.candidate),
+    kind: splitKindOf(split.rulings),
+    occurrences: split.occurrences,
+    verdicts: split.rulings.map((ruling) => `${ruling.judge}=${ruling.verdict}`),
+    reasons: split.rulings.map((ruling) => `${ruling.judge}: ${cell(ruling.why)}`),
+  })),
+  ...repo.result.refused
+    .filter((entry) => entry.kind === MISCITED)
+    .map((entry) => ({
+      repository: repo.name,
+      candidate: String(entry.candidate),
+      kind: MISCITED_KIND,
+      occurrences: entry.shown,
+      verdicts: [`${entry.judge} filed=${entry.filed.join(", ")}`],
+      reasons: [],
+    })),
+  ...repo.result.contradicted.map((entry) => ({
+    repository: repo.name,
+    candidate: String(entry.candidate),
+    kind: REGISTER_KIND,
+    occurrences: entry.occurrences,
+    verdicts: [
+      `register=${entry.standing}`,
+      ...entry.rulings.map((ruling) => `${ruling.judge}=${entry.proposed}`),
+    ],
+    reasons: entry.rulings.map((ruling) => `${ruling.judge}: ${cell(ruling.why)}`),
+  })),
+  ...repo.result.restated.map((entry) => ({
+    repository: repo.name,
+    candidate: `${entry.from}${VERSUS}${entry.candidate}`,
+    kind: DUPLICATE_KIND,
+    occurrences: entry.occurrences,
+    verdicts: [`candidate ${entry.from}=${entry.standing}`, `candidate ${entry.candidate}=${entry.proposed}`],
+    reasons: entry.rulings.map((ruling) => `${ruling.judge}: ${cell(ruling.why)}`),
+  })),
+];
 
-/// Splits of one kind, across every repository.
-const splits = (repos, kind) =>
-  repos.flatMap((repo) =>
-    repo.result.disagreements
-      .filter((split) => split.kind === kind)
-      .map((split) => ({ repo: repo.name, ...split })),
-  );
+/// Every disagreement across every repository, in a fixed order so two runs
+/// over the same verdicts produce the same document.
+const allRows = (repos) =>
+  repos
+    .flatMap(rowsFor)
+    .sort(
+      (left, right) =>
+        left.kind.localeCompare(right.kind) ||
+        left.repository.localeCompare(right.repository) ||
+        left.candidate.localeCompare(right.candidate, undefined, { numeric: true }),
+    );
 
-/// One opposite-conclusion pair, in full. These are the ones worth reading:
-/// two judges have made incompatible claims about the same lines, so the
-/// report prints the ranges and what each of them actually said.
-const opposed = (split) =>
-  [
-    `### ${split.repo} — candidate ${split.candidate}`,
-    "",
-    ...split.occurrences.map((range) => `- \`${range}\``),
-    "",
-    ...split.rulings.map((r) => `**${r.judge} — ${r.verdict}**\n\n> ${cell(r.why)}\n`),
-  ].join("\n");
-
-/// Rows where the judges contradict a verdict the register already holds.
-const standingRows = (repos) =>
-  repos.flatMap((repo) =>
-    repo.result.contradicted.map((entry) => [
-      repo.name,
-      entry.candidate,
-      ranges(entry.occurrences),
-      `register: **${entry.standing}**<br>${entry.rulings.map((r) => `${r.judge}: **${r.proposed ?? entry.proposed}**`).join("<br>")}`,
-    ]),
-  );
-
-/// Rows where one pair was drawn as two candidates and judged differently in
-/// one pass — the judges contradicting themselves across two numbers.
-const restatedRows = (repos) =>
-  repos.flatMap((repo) =>
-    repo.result.restated.map((entry) => [
-      repo.name,
-      `${entry.from} then ${entry.candidate}`,
-      ranges(entry.occurrences),
-      `**${entry.standing}** then **${entry.proposed}**`,
-    ]),
-  );
-
-/// Rows where a judge filed ranges the candidate never showed them.
-const miscitedRows = (repos) =>
-  repos.flatMap((repo) =>
-    repo.result.refused
-      .filter((entry) => entry.kind === MISCITED)
-      .map((entry) => [repo.name, entry.candidate, entry.judge, cell(entry.reason)]),
-  );
+/// A markdown table of rows already reduced to strings.
+const table = (headers, rows) =>
+  rows.length === 0
+    ? "(none)\n"
+    : [headers, headers.map(() => "---"), ...rows]
+        .map((cells) => `| ${cells.join(" | ")} |`)
+        .join("\n") + "\n";
 
 /// How many disagreements a set of repositories holds in total.
-export const disagreementCount = (repos) =>
+export const disagreementCount = (repos) => allRows(repos).length;
+
+/// How many pairs the merge imported, counted off the entries it wrote.
+const importedCount = (repos) =>
   repos.reduce(
     (total, repo) =>
-      total +
-      repo.result.disagreements.length +
-      repo.result.contradicted.length +
-      repo.result.restated.length +
-      repo.result.refused.filter((entry) => entry.kind === MISCITED).length,
+      total + VERDICTS.reduce((sum, verdict) => sum + repo.result.added[verdict].length, 0),
     0,
   );
 
+/// Counts per kind, and per repository, straight off the rows.
+const tally = (rows, field) => {
+  const counted = new Map();
+  for (const row of rows) counted.set(row[field], (counted.get(row[field]) ?? 0) + 1);
+  return [...counted].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
+};
+
 /// The whole report.
 export const render = ({ sources, repos }) => {
-  const opposite = splits(repos, CONTRADICTION);
-  const unsure = splits(repos, CONFIDENCE);
-  const total = disagreementCount(repos);
-  return `# Verdicts that disagree
+  const rows = allRows(repos);
+  const judges = sources.map((source) => source.split("/").filter(Boolean).pop());
+  return `# Verdict disagreements
 
-**${total} pairs. Nothing was merged.**
+| field | value |
+| --- | --- |
+| generator | \`scripts/corpus/merge-verdicts.mjs\` |
+| spec | \`docs/specs/corpus.md\` [CORPUS-REGISTER-MERGE] |
+| judges | ${[...judges, "register"].join(", ")} |
+| repositories | ${repos.length} |
+| pairs_imported | ${importedCount(repos)} |
+| pairs_left_out | ${rows.length} |
 
-Judges read: ${sources.map((source) => `\`${source}\``).join(", ")}, plus this repository's existing registers. A pair enters a register only when every judge who ruled on it said the same thing, so every pair below was left out. Written by \`scripts/corpus/merge-verdicts.mjs\`; spec \`docs/specs/corpus.md\` [CORPUS-REGISTER-MERGE].
+## by_kind
 
-## Opposite conclusions — one judge CLEARLY IN, the other CLEARLY OUT
-
-**${opposite.length}.** These cannot both be true of the same lines. Someone is wrong about the source.
-
-${opposite.length === 0 ? "None.\n" : opposite.map(opposed).join("\n")}
-## A judge's ranges are not the candidate's
-
-**${miscitedRows(repos).length}.** The judge filed a verdict on lines the candidate never showed them, so it is a ruling on something else.
-
-${table(["repository", "candidate", "judge", "what happened"], miscitedRows(repos), "None.")}
-## Contradicts a verdict the register already holds
-
-**${standingRows(repos).length}.** An earlier pass and this one read the same lines differently.
-
-${table(["repository", "candidate", "ranges", "verdicts"], standingRows(repos), "None.")}
-## The same pair judged twice, differently, in one pass
-
-**${restatedRows(repos).length}.** The draw showed one pair of regions under two numbers, and the judges answered them differently.
-
-${table(["repository", "candidates", "ranges", "verdicts"], restatedRows(repos), "None.")}
-## One judge committed, the other would not
-
-**${unsure.length}.** A firm verdict against NOT CLEAR. Weaker than an opposite conclusion, but still not agreement.
+${table(["kind", "pairs"], tally(rows, "kind").map(([kind, count]) => [kind, String(count)]))}
+## by_repository
 
 ${table(
-  ["repository", "candidate", "ranges", "verdicts"],
-  unsure.map((split) => [split.repo, split.candidate, ranges(split.occurrences), verdicts(split.rulings)]),
-  "None.",
+  ["repository", "pairs"],
+  tally(rows, "repository").map(([repository, count]) => [repository, String(count)]),
+)}
+## disagreements
+
+${table(
+  ["kind", "repository", "candidate", "candidate_occurrences", "by_source", "stated_reasons"],
+  rows.map((row) => [
+    row.kind,
+    row.repository,
+    row.candidate,
+    ranges(row.occurrences),
+    pairs(row.verdicts),
+    pairs(row.reasons),
+  ]),
 )}`;
 };

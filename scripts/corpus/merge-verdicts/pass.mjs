@@ -44,10 +44,11 @@ export const REGISTER_FIELDS = ["name", "language", "url", "sha", "protocol"];
 /// the code; the other means one of them would not commit.
 export const CONTRADICTION = "contradiction";
 export const CONFIDENCE = "confidence";
-/// Why a ruling was thrown out. A judge who filed ranges the candidate never
-/// showed ruled on something else, and that is a disagreement with the
-/// workspace itself; prose too thin to assert is merely thin.
-export const MISCITED = "miscited";
+/// Why a ruling was thrown out. MISCITED is a set comparison between two
+/// files that must agree — the ranges `candidates/pairs.json` associates with
+/// a candidate number, and the ranges the judge filed against that same
+/// number. Nothing is inferred about why they differ; the report prints both.
+export const MISCITED = "occurrences_mismatch";
 export const THIN = "thin";
 /// Where a standing verdict came from. A clash with the register is one pass
 /// contradicting an earlier one; a clash with this same run is the same two
@@ -139,7 +140,8 @@ const rule = (candidate, rulings, pairs, standing, out) => {
       candidate,
       judge: "",
       kind: MISCITED,
-      reason: "not in this workspace's pair list",
+      shown: [],
+      filed: rulings.flatMap((ruling) => ruling.occurrences ?? []),
     });
     return;
   }
@@ -149,7 +151,8 @@ const rule = (candidate, rulings, pairs, standing, out) => {
       candidate,
       judge: ruling.judge,
       kind: MISCITED,
-      reason: "ranges are not the candidate's",
+      shown: occurrences,
+      filed: ruling.occurrences ?? [],
     });
   }
   const honest = rulings.filter((ruling) => !misread.includes(ruling));

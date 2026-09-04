@@ -25,6 +25,110 @@
         "tests/test_utils/test_KeepOpenFile.py:1-10",
         "tests/test_utils/test_LazyFile.py:1-11"
       ]
+    },
+    {
+      "why": "_find_binary_writer is _find_binary_reader with the systematic rename reader→writer throughout 16 lines.",
+      "verified": "extracted and diffed the two source ranges (16 vs 16 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
+      "occurrences": [
+        "src/click/_compat.py:176-191",
+        "src/click/_compat.py:194-209"
+      ]
+    },
+    {
+      "why": "identical 13-line invoke/invalid-value assertion block for the same Choice test duplicated in the file",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "tests/test_basic.py:550-562",
+        "tests/test_basic.py:608-620"
+      ]
+    },
+    {
+      "why": "identical 8-line ThreadPoolExecutor test snippet duplicated in the stream lifecycle tests",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "tests/test_stream_lifecycle.py:498-505",
+        "tests/test_stream_lifecycle.py:340-347"
+      ]
+    },
+    {
+      "why": "NoSuchCommand is NoSuchOption with the systematic rename option→command throughout its 34-line class.",
+      "verified": "extracted and diffed the two source ranges (34 vs 34 lines): not byte-identical, similarity 0.76; differences are the systematic change described",
+      "occurrences": [
+        "src/click/exceptions.py:268-301",
+        "src/click/exceptions.py:232-265"
+      ]
+    },
+    {
+      "why": "_force_correct_text_reader is _force_correct_text_writer with the systematic rename writer→reader throughout.",
+      "verified": "extracted and diffed the two source ranges (14 vs 14 lines): not byte-identical, similarity 0.86; differences are the systematic change described",
+      "occurrences": [
+        "src/click/_compat.py:303-316",
+        "src/click/_compat.py:287-300"
+      ]
+    },
+    {
+      "why": "The argument decorator is the option decorator with the systematic rename Option→Argument throughout 26 lines.",
+      "verified": "extracted and diffed the two source ranges (26 vs 26 lines): not byte-identical, similarity 0.93; differences are the systematic change described",
+      "occurrences": [
+        "src/click/decorators.py:352-377",
+        "src/click/decorators.py:324-349"
+      ]
+    },
+    {
+      "why": "identical 11-line get_completion_args method duplicated across shell completion classes",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "src/click/shell_completion.py:432-442",
+        "src/click/shell_completion.py:530-540"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 42 — NoSuchOption vs NoSuchCommand, a pure option↔command rename.",
+      "verified": "extracted and diffed the two source ranges (23 vs 23 lines): not byte-identical, similarity 0.92; differences are the systematic change described",
+      "occurrences": [
+        "src/click/exceptions.py:238-260",
+        "src/click/exceptions.py:274-296"
+      ]
+    },
+    {
+      "why": "The PowerShell completion class's get_completion_args block is the Zsh class's, with only the name and template constants changed.",
+      "verified": "extracted and diffed the two source ranges (14 vs 14 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
+      "occurrences": [
+        "src/click/shell_completion.py:527-540",
+        "src/click/shell_completion.py:451-464"
+      ]
+    },
+    {
+      "why": "The group decorator's overload block is the command decorator's with the systematic rename command→group, CmdType→GrpType.",
+      "verified": "extracted and diffed the two source ranges (33 vs 33 lines): not byte-identical, similarity 0.84; differences are the systematic change described",
+      "occurrences": [
+        "src/click/decorators.py:258-290",
+        "src/click/decorators.py:133-165"
+      ]
+    },
+    {
+      "why": "identical 11-line get_completion_args body duplicated across shell completion classes",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "src/click/shell_completion.py:454-464",
+        "src/click/shell_completion.py:530-540"
+      ]
+    },
+    {
+      "why": "identical 28-line bespoke TestContext helper class duplicated in the same test file",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "tests/test_context.py:593-620",
+        "tests/test_context.py:539-566"
+      ]
+    },
+    {
+      "why": "15 lines of the prompt-input test byte-identical except BytesIO vs str input.",
+      "verified": "extracted and diffed the two source ranges (15 vs 15 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
+      "occurrences": [
+        "tests/test_testing.py:93-107",
+        "tests/test_testing.py:17-31"
+      ]
     }
   ],
   "clearly_out": [],
@@ -42,6 +146,979 @@
       "occurrences": [
         "tests/test_arguments.py:73-75",
         "tests/test_basic.py:431-434"
+      ]
+    },
+    {
+      "why": "_KeepOpenFile vs _AtomicFile context-manager bodies — related helpers, genuinely different behavior.",
+      "occurrences": [
+        "src/click/utils.py:231-246",
+        "src/click/_compat.py:473-485"
+      ]
+    },
+    {
+      "why": "Same chain fixtures minus docstrings — scaffolding.",
+      "occurrences": [
+        "tests/test_chain.py:48-61",
+        "tests/test_chain.py:16-26"
+      ]
+    },
+    {
+      "why": "3 lines of prompt vs echo stderr checks.",
+      "occurrences": [
+        "tests/test_utils/test_echo.py:123-125",
+        "tests/test_utils/test_echo.py:102-104"
+      ]
+    },
+    {
+      "why": "Single invocation lines.",
+      "occurrences": [
+        "tests/test_arguments.py:485-485",
+        "tests/test_arguments.py:459-459"
+      ]
+    },
+    {
+      "why": "Logging test variants with different messages and nesting.",
+      "occurrences": [
+        "tests/test_stream_lifecycle.py:516-522",
+        "tests/test_stream_lifecycle.py:278-284"
+      ]
+    },
+    {
+      "why": "Flag-group competition variants — related parametrized tests with different docs and targets.",
+      "occurrences": [
+        "tests/test_options.py:3236-3250",
+        "tests/test_options.py:2832-2850"
+      ]
+    },
+    {
+      "why": "5 lines assigning self.prompt vs self.help in different classes.",
+      "occurrences": [
+        "src/click/core.py:2991-2995",
+        "src/click/core.py:3703-3707"
+      ]
+    },
+    {
+      "why": "3 lines of unrelated option assertions.",
+      "occurrences": [
+        "tests/test_defaults.py:412-414",
+        "tests/test_options.py:89-91"
+      ]
+    },
+    {
+      "why": "Flag-group tests with different option sets.",
+      "occurrences": [
+        "tests/test_options.py:2870-2884",
+        "tests/test_options.py:3301-3309"
+      ]
+    },
+    {
+      "why": "2 lines differing in a wrapper's name argument.",
+      "occurrences": [
+        "tests/test_stream_lifecycle.py:87-88",
+        "tests/test_stream_lifecycle.py:102-103"
+      ]
+    },
+    {
+      "why": "CliRunner invocation/assert fragments with different fixtures.",
+      "occurrences": [
+        "tests/test_testing.py:378-382",
+        "tests/test_stream_lifecycle.py:415-418"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 17.",
+      "occurrences": [
+        "tests/test_stream_lifecycle.py:147-150",
+        "tests/test_testing.py:352-356"
+      ]
+    },
+    {
+      "why": "4 lines of parametrized flag-case rows.",
+      "occurrences": [
+        "tests/test_options.py:1243-1246",
+        "tests/test_options.py:1270-1273"
+      ]
+    },
+    {
+      "why": "2 lines of invocation rows.",
+      "occurrences": [
+        "tests/test_chain.py:244-245",
+        "tests/test_chain.py:188-189"
+      ]
+    },
+    {
+      "why": "3 lines of differing asserts.",
+      "occurrences": [
+        "tests/test_commands.py:507-509",
+        "tests/test_commands.py:524-526"
+      ]
+    },
+    {
+      "why": "3 lines of differing asserts.",
+      "occurrences": [
+        "tests/test_utils/test_echo.py:114-116",
+        "tests/test_utils/test_echo.py:142-144"
+      ]
+    },
+    {
+      "why": "Popen vs NamedTemporaryFile monkeypatches — different targets.",
+      "occurrences": [
+        "tests/test_termui.py:907-912",
+        "tests/test_termui.py:1276-1281"
+      ]
+    },
+    {
+      "why": "Different invalid-value tests sharing the invoke/assert skeleton.",
+      "occurrences": [
+        "tests/test_basic.py:554-562",
+        "tests/test_basic.py:705-712"
+      ]
+    },
+    {
+      "why": "2 lines differing in a name argument.",
+      "occurrences": [
+        "tests/test_stream_lifecycle.py:87-88",
+        "tests/test_stream_lifecycle.py:75-76"
+      ]
+    },
+    {
+      "why": "2 lines of isatty True vs False monkeypatch.",
+      "occurrences": [
+        "tests/test_termui.py:1023-1024",
+        "tests/test_termui.py:947-948"
+      ]
+    },
+    {
+      "why": "Truncation vs param-doc help tests sharing the terminal_width scaffold.",
+      "occurrences": [
+        "tests/test_formatting.py:368-378",
+        "tests/test_formatting.py:339-353"
+      ]
+    },
+    {
+      "why": "4 lines differing in one expected string.",
+      "occurrences": [
+        "tests/test_stream_lifecycle.py:198-201",
+        "tests/test_stream_lifecycle.py:536-539"
+      ]
+    },
+    {
+      "why": "3 lines of snake_case vs pascalcase invocations.",
+      "occurrences": [
+        "tests/test_normalization.py:30-32",
+        "tests/test_normalization.py:35-37"
+      ]
+    },
+    {
+      "why": "2 lines of unrelated existence checks.",
+      "occurrences": [
+        "tests/test_basic.py:504-505",
+        "tests/test_basic.py:516-517"
+      ]
+    },
+    {
+      "why": "2 lines of echo labels.",
+      "occurrences": [
+        "tests/test_context.py:189-190",
+        "tests/test_context.py:222-223"
+      ]
+    },
+    {
+      "why": "3 lines of unrelated help-output asserts.",
+      "occurrences": [
+        "tests/test_commands.py:582-584",
+        "tests/test_basic.py:669-671"
+      ]
+    },
+    {
+      "why": "info_dict entries with different type/required/default values.",
+      "occurrences": [
+        "tests/test_info_dict.py:15-21",
+        "tests/test_info_dict.py:36-42"
+      ]
+    },
+    {
+      "why": "Windows-fd vs invalid-mode CliRunner errors — different features.",
+      "occurrences": [
+        "tests/test_testing.py:630-633",
+        "tests/test_testing.py:623-626"
+      ]
+    },
+    {
+      "why": "3 lines of differing expected output.",
+      "occurrences": [
+        "tests/test_termui.py:1256-1258",
+        "tests/test_termui.py:1217-1219"
+      ]
+    },
+    {
+      "why": "get_default vs lookup_default overload stubs.",
+      "occurrences": [
+        "src/click/core.py:2435-2438",
+        "src/click/core.py:775-778"
+      ]
+    },
+    {
+      "why": "11 lines of prompt tests differing in input strings and function names — copy adapted, but renames and hidden-input lines make it ragged.",
+      "occurrences": [
+        "tests/test_testing.py:68-78",
+        "tests/test_testing.py:122-129"
+      ]
+    },
+    {
+      "why": "Single invocation lines.",
+      "occurrences": [
+        "tests/test_commands.py:61-61",
+        "tests/test_arguments.py:661-661"
+      ]
+    },
+    {
+      "why": "4 lines of unrelated invokes.",
+      "occurrences": [
+        "tests/test_testing.py:413-416",
+        "tests/test_testing.py:156-159"
+      ]
+    },
+    {
+      "why": "4 lines of echo tests differing in message strings.",
+      "occurrences": [
+        "tests/test_stream_lifecycle.py:142-145",
+        "tests/test_stream_lifecycle.py:531-534"
+      ]
+    },
+    {
+      "why": "4 lines of an output-assert helper — short idiom.",
+      "occurrences": [
+        "tests/test_options.py:2384-2387",
+        "tests/test_options.py:2191-2194"
+      ]
+    },
+    {
+      "why": "2 lines of crop vs blur example steps.",
+      "occurrences": [
+        "examples/imagepipe/imagepipe.py:159-160",
+        "examples/imagepipe/imagepipe.py:216-217"
+      ]
+    },
+    {
+      "why": "Different command hierarchies sharing the debug() fixture.",
+      "occurrences": [
+        "tests/test_chain.py:175-185",
+        "tests/test_chain.py:231-241"
+      ]
+    },
+    {
+      "why": "DateTime vs Choice normalization tests — same skeleton, type-specific content.",
+      "occurrences": [
+        "tests/test_basic.py:692-715",
+        "tests/test_normalization.py:18-50"
+      ]
+    },
+    {
+      "why": "A 2-line fragment set against an unrelated 11-line flag list.",
+      "occurrences": [
+        "tests/test_options.py:1406-1407",
+        "tests/test_basic.py:759-769"
+      ]
+    },
+    {
+      "why": "Single parametrize rows.",
+      "occurrences": [
+        "tests/test_termui.py:1641-1641",
+        "tests/test_termui.py:1617-1617"
+      ]
+    },
+    {
+      "why": "4 vs 2 lines of env-var invocations.",
+      "occurrences": [
+        "tests/test_options.py:427-430",
+        "tests/test_options.py:728-729"
+      ]
+    },
+    {
+      "why": "Sibling precedence scenarios with inverted assertions and a long explanatory comment on one side.",
+      "occurrences": [
+        "tests/test_commands.py:501-510",
+        "tests/test_commands.py:525-537"
+      ]
+    },
+    {
+      "why": "get_help_extra variants with different expected defaults.",
+      "occurrences": [
+        "tests/test_options.py:1226-1228",
+        "tests/test_options.py:716-718"
+      ]
+    },
+    {
+      "why": "3 identical assertion lines — a short idiom.",
+      "occurrences": [
+        "tests/test_commands.py:525-527",
+        "tests/test_commands.py:508-510"
+      ]
+    },
+    {
+      "why": "Thread start/join blocks at different indentation with different worker counts.",
+      "occurrences": [
+        "tests/test_testing.py:520-524",
+        "tests/test_stream_lifecycle.py:324-328"
+      ]
+    },
+    {
+      "why": "Single parametrize rows.",
+      "occurrences": [
+        "tests/test_termui.py:1655-1655",
+        "tests/test_termui.py:1656-1656"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 64.",
+      "occurrences": [
+        "tests/test_options.py:1324-1326",
+        "tests/test_options.py:1261-1263"
+      ]
+    },
+    {
+      "why": "2 lines of option dicts with different flags.",
+      "occurrences": [
+        "tests/test_commands.py:405-406",
+        "tests/test_commands.py:407-408"
+      ]
+    },
+    {
+      "why": "Different default-handling harnesses.",
+      "occurrences": [
+        "tests/test_options.py:400-406",
+        "tests/test_defaults.py:537-542"
+      ]
+    },
+    {
+      "why": "3 identical monkeypatch lines — a short idiom.",
+      "occurrences": [
+        "tests/test_termui.py:252-254",
+        "tests/test_termui.py:85-87"
+      ]
+    },
+    {
+      "why": "9-line overlap with candidate 12's pair; boundary differs and the -w/-W outcome lines are outside.",
+      "occurrences": [
+        "tests/test_options.py:1155-1163",
+        "tests/test_options.py:1167-1175"
+      ]
+    },
+    {
+      "why": "5 lines of a/b precedence asserts in different scenarios.",
+      "occurrences": [
+        "tests/test_commands.py:493-497",
+        "tests/test_commands.py:500-504"
+      ]
+    },
+    {
+      "why": "3 lines of unrelated help checks.",
+      "occurrences": [
+        "tests/test_basic.py:152-154",
+        "tests/test_options.py:579-581"
+      ]
+    },
+    {
+      "why": "7 lines of the prompt/confirm pair — short window, ragged.",
+      "occurrences": [
+        "tests/test_utils/test_echo.py:151-157",
+        "tests/test_utils/test_echo.py:125-131"
+      ]
+    },
+    {
+      "why": "3 lines of binary vs text stream lookup.",
+      "occurrences": [
+        "src/click/utils.py:360-362",
+        "src/click/utils.py:387-389"
+      ]
+    },
+    {
+      "why": "3 lines of Option vs Argument deprecation raises — a short idiom.",
+      "occurrences": [
+        "tests/test_options.py:97-99",
+        "tests/test_arguments.py:442-444"
+      ]
+    },
+    {
+      "why": "3 lines of choice-case invocations.",
+      "occurrences": [
+        "tests/test_options.py:948-950",
+        "tests/test_options.py:944-946"
+      ]
+    },
+    {
+      "why": "Parametrize table rows for flag_value vs default variants.",
+      "occurrences": [
+        "tests/test_termui.py:1599-1604",
+        "tests/test_termui.py:1533-1539"
+      ]
+    },
+    {
+      "why": "3 lines of unrelated command invocations.",
+      "occurrences": [
+        "tests/test_commands.py:39-41",
+        "tests/test_commands.py:293-295"
+      ]
+    },
+    {
+      "why": "to_info_dict arms with different keys.",
+      "occurrences": [
+        "src/click/types.py:1127-1130",
+        "src/click/types.py:649-652"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 58.",
+      "occurrences": [
+        "tests/test_normalization.py:37-50",
+        "tests/test_basic.py:703-715"
+      ]
+    },
+    {
+      "why": "Context attribute-inheritance blocks for different attributes — the framework idiom.",
+      "occurrences": [
+        "src/click/core.py:493-503",
+        "src/click/core.py:408-419"
+      ]
+    },
+    {
+      "why": "3 lines of the flag-test pair.",
+      "occurrences": [
+        "tests/test_options.py:1161-1163",
+        "tests/test_options.py:1173-1175"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 86.",
+      "occurrences": [
+        "tests/test_options.py:949-952",
+        "tests/test_options.py:945-948"
+      ]
+    },
+    {
+      "why": "4 lines of prompt vs confirm stdin checks.",
+      "occurrences": [
+        "tests/test_utils/test_echo.py:108-111",
+        "tests/test_utils/test_echo.py:136-139"
+      ]
+    },
+    {
+      "why": "Single parametrize rows.",
+      "occurrences": [
+        "tests/test_termui.py:1665-1665",
+        "tests/test_termui.py:1664-1664"
+      ]
+    },
+    {
+      "why": "3 lines of --debug/--no-debug invocations.",
+      "occurrences": [
+        "tests/test_defaults.py:386-388",
+        "tests/test_defaults.py:382-384"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 98.",
+      "occurrences": [
+        "tests/test_defaults.py:383-386",
+        "tests/test_defaults.py:379-382"
+      ]
+    },
+    {
+      "why": "Logging tests with different messages and structure.",
+      "occurrences": [
+        "tests/test_stream_lifecycle.py:516-523",
+        "tests/test_stream_lifecycle.py:278-285"
+      ]
+    },
+    {
+      "why": "Different option/argument fixtures.",
+      "occurrences": [
+        "tests/test_basic.py:225-230",
+        "tests/test_arguments.py:733-738"
+      ]
+    },
+    {
+      "why": "14 vs 19 lines — the interleaving test extended with stdout/stderr asserts on one side; real copy, ragged boundaries.",
+      "occurrences": [
+        "tests/test_stream_lifecycle.py:406-419",
+        "tests/test_testing.py:360-378"
+      ]
+    },
+    {
+      "why": "3 lines differing in the file path checked.",
+      "occurrences": [
+        "tests/test_utils/test_open_file.py:115-117",
+        "tests/test_utils/test_open_file.py:95-97"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 4.",
+      "occurrences": [
+        "src/click/utils.py:234-246",
+        "src/click/_compat.py:476-488"
+      ]
+    },
+    {
+      "why": "pass_context vs pass_foo group fixtures.",
+      "occurrences": [
+        "tests/test_context.py:91-101",
+        "tests/test_context.py:24-34"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 12 (4-line window).",
+      "occurrences": [
+        "tests/test_options.py:1167-1170",
+        "tests/test_options.py:1155-1158"
+      ]
+    },
+    {
+      "why": "2 identical monkeypatch lines.",
+      "occurrences": [
+        "tests/test_termui.py:392-393",
+        "tests/test_termui.py:417-418"
+      ]
+    },
+    {
+      "why": "to_info_dict arms for command vs type.",
+      "occurrences": [
+        "src/click/core.py:1083-1087",
+        "src/click/types.py:1125-1129"
+      ]
+    },
+    {
+      "why": "6 lines of the prompt/confirm pair, ragged.",
+      "occurrences": [
+        "tests/test_utils/test_echo.py:150-155",
+        "tests/test_utils/test_echo.py:124-129"
+      ]
+    },
+    {
+      "why": "Different help-text tests sharing the scaffold.",
+      "occurrences": [
+        "tests/test_basic.py:827-843",
+        "tests/test_formatting.py:387-403"
+      ]
+    },
+    {
+      "why": "Pager asserts vs command-precedence asserts — unrelated.",
+      "occurrences": [
+        "tests/test_termui.py:1959-1963",
+        "tests/test_commands.py:517-520"
+      ]
+    },
+    {
+      "why": "Logging tests differing in messages.",
+      "occurrences": [
+        "tests/test_stream_lifecycle.py:278-286",
+        "tests/test_stream_lifecycle.py:250-258"
+      ]
+    },
+    {
+      "why": "Parametrize rows with default variants.",
+      "occurrences": [
+        "tests/test_termui.py:1538-1539",
+        "tests/test_termui.py:1542-1543"
+      ]
+    },
+    {
+      "why": "3 lines of prompt vs confirm.",
+      "occurrences": [
+        "tests/test_testing.py:132-134",
+        "tests/test_utils/test_confirm.py:16-18"
+      ]
+    },
+    {
+      "why": "Flat vs nested command chains — different trees.",
+      "occurrences": [
+        "tests/test_chain.py:171-185",
+        "tests/test_chain.py:223-237"
+      ]
+    },
+    {
+      "why": "Init arms for range vs file types.",
+      "occurrences": [
+        "src/click/types.py:638-643",
+        "src/click/types.py:950-955"
+      ]
+    },
+    {
+      "why": "Two variants of the tutorial hello example (option vs argument) — related demos, not a certain copy.",
+      "occurrences": [
+        "tests/typing/typing_simple_example.py:1-17",
+        "tests/typing/typing_options.py:1-16"
+      ]
+    },
+    {
+      "why": "Single-line Command constructors with different Choice values.",
+      "occurrences": [
+        "tests/test_shell_completion.py:154-154",
+        "tests/test_shell_completion.py:147-147"
+      ]
+    },
+    {
+      "why": "5 lines of option vs command deprecation checks.",
+      "occurrences": [
+        "tests/test_commands.py:564-568",
+        "tests/test_options.py:54-58"
+      ]
+    },
+    {
+      "why": "Logger precondition blocks with different comments and lines.",
+      "occurrences": [
+        "tests/test_context.py:469-477",
+        "tests/test_context.py:453-458"
+      ]
+    },
+    {
+      "why": "Group-help vs chain tests sharing the fixture idiom.",
+      "occurrences": [
+        "tests/test_basic.py:142-152",
+        "tests/test_chain.py:53-64"
+      ]
+    },
+    {
+      "why": "3 lines of unrelated Command constructions.",
+      "occurrences": [
+        "tests/test_options.py:930-932",
+        "tests/test_utils/test_confirm.py:45-47"
+      ]
+    },
+    {
+      "why": "2 lines of flag invocations.",
+      "occurrences": [
+        "tests/test_options.py:835-836",
+        "tests/test_options.py:837-838"
+      ]
+    },
+    {
+      "why": "4 lines of unrelated tests.",
+      "occurrences": [
+        "tests/test_basic.py:552-555",
+        "tests/test_basic.py:703-706"
+      ]
+    },
+    {
+      "why": "2 lines of argument fixtures.",
+      "occurrences": [
+        "tests/test_shell_completion.py:218-219",
+        "tests/test_shell_completion.py:118-119"
+      ]
+    },
+    {
+      "why": "2 lines of parametrize rows.",
+      "occurrences": [
+        "tests/test_termui.py:1533-1534",
+        "tests/test_termui.py:1616-1617"
+      ]
+    },
+    {
+      "why": "7 lines of the chain-hierarchy fixtures.",
+      "occurrences": [
+        "tests/test_chain.py:223-229",
+        "tests/test_chain.py:171-177"
+      ]
+    },
+    {
+      "why": "5 lines of unrelated output asserts.",
+      "occurrences": [
+        "tests/test_utils/test_confirm.py:17-21",
+        "tests/test_commands.py:294-298"
+      ]
+    },
+    {
+      "why": "2 lines of flag invocations.",
+      "occurrences": [
+        "tests/test_options.py:836-837",
+        "tests/test_options.py:840-841"
+      ]
+    },
+    {
+      "why": "INT vs FLOAT param type class bodies — the sibling-type idiom.",
+      "occurrences": [
+        "src/click/types.py:725-730",
+        "src/click/types.py:757-762"
+      ]
+    },
+    {
+      "why": "The test is clearly derived from the inout example (same copy loop) but the regions share only that core; extents differ wildly.",
+      "occurrences": [
+        "tests/test_arguments.py:106-114",
+        "examples/inout/inout.py:4-30"
+      ]
+    },
+    {
+      "why": "3 lines of unrelated invokes.",
+      "occurrences": [
+        "tests/test_utils/test_open_file.py:27-29",
+        "tests/test_utils/test_open_file.py:43-45"
+      ]
+    },
+    {
+      "why": "Single parametrize rows.",
+      "occurrences": [
+        "tests/test_termui.py:1667-1667",
+        "tests/test_termui.py:1655-1655"
+      ]
+    },
+    {
+      "why": "3 identical isolation lines — a short idiom.",
+      "occurrences": [
+        "tests/test_testing.py:554-556",
+        "tests/test_testing.py:543-545"
+      ]
+    },
+    {
+      "why": "Deprecation __getattr__ blocks for different module names — same pattern, different members.",
+      "occurrences": [
+        "src/click/parser.py:506-520",
+        "src/click/utils.py:672-686"
+      ]
+    },
+    {
+      "why": "with_resource single vs nested resource tests — one extends the other.",
+      "occurrences": [
+        "tests/test_context.py:539-576",
+        "tests/test_context.py:593-633"
+      ]
+    },
+    {
+      "why": "2 lines of differing expected defaults.",
+      "occurrences": [
+        "tests/test_options.py:1270-1271",
+        "tests/test_options.py:675-676"
+      ]
+    },
+    {
+      "why": "4 identical pager-setup lines — a short idiom.",
+      "occurrences": [
+        "tests/test_termui.py:690-693",
+        "tests/test_termui.py:765-768"
+      ]
+    },
+    {
+      "why": "Option envvar vs argument metavar help tests.",
+      "occurrences": [
+        "tests/test_options.py:759-765",
+        "tests/test_formatting.py:170-175"
+      ]
+    },
+    {
+      "why": "6 lines of argument vs command deprecation checks.",
+      "occurrences": [
+        "tests/test_arguments.py:434-439",
+        "tests/test_commands.py:564-568"
+      ]
+    },
+    {
+      "why": "Envvar flag_value vs multiple-defaults tests — unrelated features.",
+      "occurrences": [
+        "tests/test_options.py:1716-1726",
+        "tests/test_options.py:239-258"
+      ]
+    },
+    {
+      "why": "3 lines of writable vs seekable checks.",
+      "occurrences": [
+        "src/click/_compat.py:131-133",
+        "src/click/_compat.py:144-146"
+      ]
+    },
+    {
+      "why": "Different command trees in tests.",
+      "occurrences": [
+        "tests/test_commands.py:687-697",
+        "tests/test_basic.py:114-124"
+      ]
+    },
+    {
+      "why": "2 lines of completion fixtures.",
+      "occurrences": [
+        "tests/test_shell_completion.py:232-233",
+        "tests/test_shell_completion.py:164-165"
+      ]
+    },
+    {
+      "why": "Overload stubs vs concrete signatures.",
+      "occurrences": [
+        "src/click/termui.py:443-460",
+        "src/click/termui.py:423-440"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 62.",
+      "occurrences": [
+        "tests/test_commands.py:502-511",
+        "tests/test_commands.py:526-538"
+      ]
+    },
+    {
+      "why": "4 lines of kwargs.setdefault with different help strings.",
+      "occurrences": [
+        "src/click/decorators.py:595-598",
+        "src/click/decorators.py:621-624"
+      ]
+    },
+    {
+      "why": "3 lines differing in the written string.",
+      "occurrences": [
+        "tests/test_stream_lifecycle.py:65-67",
+        "tests/test_stream_lifecycle.py:76-78"
+      ]
+    },
+    {
+      "why": "3 lines of color=False vs color=True echoes.",
+      "occurrences": [
+        "tests/test_utils/test_echo.py:69-71",
+        "tests/test_utils/test_echo.py:86-88"
+      ]
+    },
+    {
+      "why": "4 lines of different fixtures.",
+      "occurrences": [
+        "tests/test_formatting.py:222-225",
+        "tests/test_chain.py:207-210"
+      ]
+    },
+    {
+      "why": "Editor failure modes with different editors and messages.",
+      "occurrences": [
+        "tests/test_termui.py:610-611",
+        "tests/test_termui.py:616-617"
+      ]
+    },
+    {
+      "why": "3 lines of parameter-source fragments.",
+      "occurrences": [
+        "tests/test_options.py:2961-2963",
+        "tests/test_defaults.py:258-260"
+      ]
+    },
+    {
+      "why": "Two 21-line pass-decorator tests differing in ensure= and an extra test — copy extended, boundaries fuzzy.",
+      "occurrences": [
+        "tests/test_context.py:62-82",
+        "tests/test_context.py:39-59"
+      ]
+    },
+    {
+      "why": "4 lines of invoke-kwargs idioms.",
+      "occurrences": [
+        "tests/test_defaults.py:502-505",
+        "tests/test_defaults.py:262-265"
+      ]
+    },
+    {
+      "why": "5 lines of different command invocations.",
+      "occurrences": [
+        "tests/test_commands.py:340-344",
+        "tests/test_chain.py:212-216"
+      ]
+    },
+    {
+      "why": "4 lines of IntFlag vs Flag enum bodies.",
+      "occurrences": [
+        "tests/test_options.py:1805-1808",
+        "tests/test_options.py:1799-1802"
+      ]
+    },
+    {
+      "why": "Different parameter-source and exists checks.",
+      "occurrences": [
+        "tests/test_basic.py:505-509",
+        "tests/test_defaults.py:339-344"
+      ]
+    },
+    {
+      "why": "Normalization vs dash-escape tests sharing option/argument fixtures.",
+      "occurrences": [
+        "tests/test_normalization.py:7-14",
+        "tests/test_arguments.py:448-456"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 117.",
+      "occurrences": [
+        "tests/test_utils/test_confirm.py:16-18",
+        "tests/test_testing.py:122-124"
+      ]
+    },
+    {
+      "why": "2 lines of monkeypatch setups.",
+      "occurrences": [
+        "tests/test_termui.py:1096-1097",
+        "tests/test_termui.py:1151-1152"
+      ]
+    },
+    {
+      "why": "4 vs 6 lines of the same pager test at different indentation.",
+      "occurrences": [
+        "tests/test_termui.py:1024-1027",
+        "tests/test_termui.py:978-983"
+      ]
+    },
+    {
+      "why": "2 lines of unrelated error raises.",
+      "occurrences": [
+        "tests/test_options.py:1210-1211",
+        "tests/test_arguments.py:621-622"
+      ]
+    },
+    {
+      "why": "4 lines of confirm vs prompt stdin checks.",
+      "occurrences": [
+        "tests/test_utils/test_echo.py:135-138",
+        "tests/test_utils/test_echo.py:107-110"
+      ]
+    },
+    {
+      "why": "Different short-help truncation fixtures.",
+      "occurrences": [
+        "tests/test_formatting.py:126-134",
+        "tests/test_commands.py:79-84"
+      ]
+    },
+    {
+      "why": "2 lines of parametrize rows.",
+      "occurrences": [
+        "tests/test_termui.py:1607-1608",
+        "tests/test_termui.py:1655-1656"
+      ]
+    },
+    {
+      "why": "Different basic help/pager tests.",
+      "occurrences": [
+        "tests/test_basic.py:13-18",
+        "tests/test_termui.py:1054-1058"
+      ]
+    },
+    {
+      "why": "3 lines of mirrored min/max branches.",
+      "occurrences": [
+        "src/click/types.py:712-714",
+        "src/click/types.py:708-710"
+      ]
+    },
+    {
+      "why": "3 lines of usage asserts with different variables.",
+      "occurrences": [
+        "tests/test_arguments.py:371-373",
+        "tests/test_commands.py:324-326"
+      ]
+    },
+    {
+      "why": "Progress-bar label assertions with different formats.",
+      "occurrences": [
+        "tests/test_termui.py:367-374",
+        "tests/test_termui.py:329-336"
+      ]
+    },
+    {
+      "why": "Single-line completion asserts.",
+      "occurrences": [
+        "tests/test_shell_completion.py:290-290",
+        "tests/test_shell_completion.py:288-288"
       ]
     }
   ]

@@ -1,0 +1,1148 @@
+{
+  "name": "guzzle",
+  "language": "php",
+  "url": "https://github.com/guzzle/guzzle.git",
+  "sha": "7b7b04a0f5a548bfe9ced4b56f5661deee229ac3",
+  "protocol": {
+    "spec": "docs/specs/corpus.md",
+    "spec_section": "[CORPUS-REGISTER]",
+    "judging_skill": ".agents/skills/judge-clone-pairs/SKILL.md",
+    "preparer_skill": ".agents/skills/clone-register-prepare/SKILL.md"
+  },
+  "clearly_in": [
+    {
+      "why": "The async half of ClientTrait is the sync half with the systematic request→requestAsync/Async renames over 559 lines.",
+      "verified": "extracted and diffed the two source ranges (559 vs 559 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
+      "occurrences": [
+        "src/ClientTrait.php:110-668",
+        "src/ClientTrait.php:756-1314"
+      ]
+    },
+    {
+      "why": "The anonymous Request subclass is duplicated across the handler test files, differing only in the Request import.",
+      "verified": "extracted and diffed the two source ranges (31 vs 31 lines): not byte-identical, similarity 1.00; differences are the systematic change described",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5764-5794",
+        "tests/Handler/CurlFactoryTest.php:10488-10518"
+      ]
+    },
+    {
+      "why": "identical 34-line assertPersistentPreferShareWasCreated helper duplicated between ClientTest and CurlMultiHandlerTest",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "tests/ClientTest.php:1598-1631",
+        "tests/Handler/CurlMultiHandlerTest.php:4098-4131"
+      ]
+    },
+    {
+      "why": "The cURL TLS-constant mapping is the stream one with the systematic STREAM_CRYPTO_PROTO→CURL_SSLVERSION rename.",
+      "verified": "extracted and diffed the two source ranges (9 vs 11 lines): not byte-identical, similarity 0.58; differences are the systematic change described",
+      "occurrences": [
+        "src/Handler/TlsVersion.php:55-63",
+        "src/Handler/CurlFactory.php:2912-2922"
+      ]
+    },
+    {
+      "why": "testValidatesSslKeyType is testValidatesCertType with the systematic cert→ssl_key rename over 42 lines.",
+      "verified": "extracted and diffed the two source ranges (42 vs 42 lines): not byte-identical, similarity 0.94; differences are the systematic change described",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:4040-4081",
+        "tests/Handler/CurlFactoryTest.php:3943-3984"
+      ]
+    },
+    {
+      "why": "ClientExceptionTest is ServerExceptionTest with the systematic Server↔Client rename over 32 lines.",
+      "verified": "extracted and diffed the two source ranges (32 vs 32 lines): not byte-identical, similarity 0.97; differences are the systematic change described",
+      "occurrences": [
+        "tests/Exception/ServerExceptionTest.php:9-40",
+        "tests/Exception/ClientExceptionTest.php:9-40"
+      ]
+    },
+    {
+      "why": "getName is getValue in SetCookie with the systematic Value↔Name rename over 14 lines.",
+      "verified": "extracted and diffed the two source ranges (14 vs 14 lines): not byte-identical, similarity 0.89; differences are the systematic change described",
+      "occurrences": [
+        "src/Cookie/SetCookie.php:215-228",
+        "src/Cookie/SetCookie.php:197-210"
+      ]
+    },
+    {
+      "why": "testThrowsWhenHttp2IsUnsupported is the Http3 twin with the version and protocol changed over 22 lines.",
+      "verified": "extracted and diffed the two source ranges (22 vs 22 lines): not byte-identical, similarity 1.00; differences are the systematic change described",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:5246-5267",
+        "tests/Handler/CurlFactoryTest.php:5223-5244"
+      ]
+    },
+    {
+      "why": "The preserved-query rewind-failure test is the plain one with the redirect status changed over 33 lines.",
+      "verified": "extracted and diffed the two source ranges (34 vs 33 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
+      "occurrences": [
+        "tests/RedirectMiddlewareTest.php:359-392",
+        "tests/RedirectMiddlewareTest.php:1241-1273"
+      ]
+    },
+    {
+      "why": "The plain read-timeout drain test is the gzip one with the endpoint changed over 33 lines.",
+      "verified": "extracted and diffed the two source ranges (34 vs 33 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5097-5130",
+        "tests/Handler/StreamHandlerTest.php:5063-5095"
+      ]
+    },
+    {
+      "why": "testPersistsToSession is testPersistsToFile with the systematic File↔Session jar rename over 40 lines.",
+      "verified": "extracted and diffed the two source ranges (40 vs 41 lines): not byte-identical, similarity 0.90; differences are the systematic change described",
+      "occurrences": [
+        "tests/Cookie/FileCookieJarTest.php:138-177",
+        "tests/Cookie/SessionCookieJarTest.php:127-167"
+      ]
+    },
+    {
+      "why": "The CurlMultiHandler transport-sharing test is the CurlHandler one with the systematic handler rename over 60 lines.",
+      "verified": "extracted and diffed the two source ranges (60 vs 60 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
+      "occurrences": [
+        "tests/Handler/CurlHandlerTest.php:327-386",
+        "tests/Handler/CurlMultiHandlerTest.php:1671-1730"
+      ]
+    },
+    {
+      "why": "The CurlMultiHandler close-factory test is the CurlHandler one with the systematic handler rename over 40 lines.",
+      "verified": "extracted and diffed the two source ranges (40 vs 40 lines): not byte-identical, similarity 1.00; differences are the systematic change described",
+      "occurrences": [
+        "tests/Handler/CurlHandlerTest.php:194-233",
+        "tests/Handler/CurlMultiHandlerTest.php:1858-1897"
+      ]
+    },
+    {
+      "why": "identical 24-line streamForResourceSink-style helper duplicated between StreamHandler and AuthMiddleware",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "src/Handler/StreamHandler.php:594-617",
+        "src/AuthMiddleware.php:819-842"
+      ]
+    },
+    {
+      "why": "The FileCookieJar unserialization tests are the SessionCookieJar ones with the systematic class rename over 31 lines.",
+      "verified": "extracted and diffed the two source ranges (31 vs 31 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
+      "occurrences": [
+        "tests/Cookie/SessionCookieJarTest.php:229-259",
+        "tests/Cookie/FileCookieJarTest.php:336-366"
+      ]
+    },
+    {
+      "why": "The StreamHandler on-headers test is the CurlFactory one with the systematic Psr7-namespace and handler changes over 38 lines.",
+      "verified": "extracted and diffed the two source ranges (38 vs 39 lines): not byte-identical, similarity 0.96; differences are the systematic change described",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:7876-7913",
+        "tests/Handler/StreamHandlerTest.php:3606-3644"
+      ]
+    },
+    {
+      "why": "identical 38-line proxy-environment fixture duplicated between CurlFactoryTest and ProxyEnvTest",
+      "verified": "diffed both ranges from source/ with sed+diff; byte-identical unless the why names the systematic token swaps seen in the diff",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:10182-10219",
+        "tests/Handler/ProxyEnvTest.php:198-235"
+      ]
+    },
+    {
+      "why": "The READ_TIMEOUT drain test is the TIMEOUT one with the option renamed over 12 lines.",
+      "verified": "extracted and diffed the two source ranges (12 vs 12 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5140-5151",
+        "tests/Handler/StreamHandlerTest.php:5071-5082"
+      ]
+    },
+    {
+      "why": "The SessionCookieJar blocked-unserialization test is the FileCookieJar one with the systematic class rename over 8 lines.",
+      "verified": "extracted and diffed the two source ranges (8 vs 8 lines): not byte-identical, similarity 0.93; differences are the systematic change described",
+      "occurrences": [
+        "tests/Cookie/FileCookieJarTest.php:271-278",
+        "tests/Cookie/SessionCookieJarTest.php:216-223"
+      ]
+    },
+    {
+      "why": "The CurlHandler on-stats test is the StreamHandler one with the systematic Psr7-namespace and handler changes over 25 lines.",
+      "verified": "extracted and diffed the two source ranges (25 vs 26 lines): not byte-identical, similarity 0.94; differences are the systematic change described",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:4109-4133",
+        "tests/Handler/CurlFactoryTest.php:9804-9829"
+      ]
+    },
+    {
+      "why": "The StreamHandler empty-protocol rejection test is the CurlFactory one with the systematic handler change over 29 lines.",
+      "verified": "extracted and diffed the two source ranges (29 vs 29 lines): not byte-identical, similarity 0.94; differences are the systematic change described",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:5193-5221",
+        "tests/Handler/StreamHandlerTest.php:178-206"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 4 — the anonymous Request subclass duplicated across handler tests.",
+      "verified": "extracted and diffed the two source ranges (28 vs 28 lines): not byte-identical, similarity 1.00; differences are the systematic change described",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5766-5793",
+        "tests/Handler/CurlFactoryTest.php:10490-10517"
+      ]
+    },
+    {
+      "why": "formatCurlOption is formatCurlMultiOption with the systematic CURLOPT↔CURLMOPT rename over 23 lines.",
+      "verified": "extracted and diffed the two source ranges (23 vs 23 lines): not byte-identical, similarity 1.00; differences are the systematic change described",
+      "occurrences": [
+        "src/Handler/CurlMultiHandler.php:531-553",
+        "src/Handler/CurlFactory.php:602-624"
+      ]
+    },
+    {
+      "why": "The drip-timeout drain test is the read-timeout one with the endpoint changed over 33 lines.",
+      "verified": "extracted and diffed the two source ranges (33 vs 33 lines): not byte-identical, similarity 0.97; differences are the systematic change described",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5063-5095",
+        "tests/Handler/StreamHandlerTest.php:5132-5164"
+      ]
+    }
+  ],
+  "clearly_out": [],
+  "not_clear": [
+    {
+      "why": "Session-cookie variants with extra Domain fields.",
+      "occurrences": [
+        "tests/Cookie/SessionCookieJarTest.php:171-182",
+        "tests/Cookie/SessionCookieJarTest.php:192-204"
+      ]
+    },
+    {
+      "why": "3 lines differing in stream contents.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:5671-5673",
+        "tests/Handler/StreamHandlerTest.php:928-930"
+      ]
+    },
+    {
+      "why": "2-3 lines of invoke helper calls.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:4616-4617",
+        "tests/Handler/StreamHandlerTest.php:4547-4549"
+      ]
+    },
+    {
+      "why": "3 identical fixture lines — a short idiom.",
+      "occurrences": [
+        "tests/ClientTest.php:1711-1713",
+        "tests/ClientTest.php:1670-1672"
+      ]
+    },
+    {
+      "why": "Proxy-type variants with different versions.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:912-917",
+        "tests/Handler/CurlFactoryTest.php:3336-3341"
+      ]
+    },
+    {
+      "why": "Digest middleware scenarios with different request counts.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:1359-1371",
+        "tests/AuthMiddlewareTest.php:1887-1899"
+      ]
+    },
+    {
+      "why": "finish() call shapes with extra assignments.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:6313-6320",
+        "tests/Handler/CurlFactoryTest.php:6448-6457"
+      ]
+    },
+    {
+      "why": "Different cancellation-test fixtures.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:2959-2969",
+        "tests/Handler/CurlMultiHandlerTest.php:3017-3027"
+      ]
+    },
+    {
+      "why": "Timeout-exception tests with different construction, ragged.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:3654-3690",
+        "tests/Handler/CurlFactoryTest.php:9418-9451"
+      ]
+    },
+    {
+      "why": "Response vs timeout exception asserts with an extra assertion.",
+      "occurrences": [
+        "tests/Exception/ResponseExceptionTest.php:28-35",
+        "tests/Exception/ResponseTimeoutExceptionTest.php:33-40"
+      ]
+    },
+    {
+      "why": "3 identical progress-assert lines.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:3272-3274",
+        "tests/Handler/StreamHandlerTest.php:3200-3202"
+      ]
+    },
+    {
+      "why": "2-3 lines with a blank line added.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:2368-2369",
+        "tests/Handler/StreamHandlerTest.php:2413-2415"
+      ]
+    },
+    {
+      "why": "Header-omission asserts for different headers.",
+      "occurrences": [
+        "tests/Handler/EasyHandleTest.php:161-162",
+        "tests/Handler/EasyHandleTest.php:101-102"
+      ]
+    },
+    {
+      "why": "3 identical exception-expectation lines.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:1185-1187",
+        "tests/Handler/StreamHandlerTest.php:1201-1203"
+      ]
+    },
+    {
+      "why": "Feature-detection conditions with different function checks.",
+      "occurrences": [
+        "tests/Handler/CurlHandlerTest.php:443-447",
+        "src/Handler/CurlShareHandleState.php:117-121"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 16.",
+      "occurrences": [
+        "tests/Exception/ResponseExceptionTest.php:28-33",
+        "tests/Exception/ResponseTimeoutExceptionTest.php:33-38"
+      ]
+    },
+    {
+      "why": "Redirect tests with different URLs.",
+      "occurrences": [
+        "tests/RedirectMiddlewareTest.php:788-799",
+        "tests/RedirectMiddlewareTest.php:635-646"
+      ]
+    },
+    {
+      "why": "CurlMultiHandler construction variants.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:71-75",
+        "tests/Handler/CurlMultiHandlerTest.php:901-906"
+      ]
+    },
+    {
+      "why": "3 lines differing in the auth array.",
+      "occurrences": [
+        "tests/ClientTest.php:2381-2383",
+        "tests/ClientTest.php:2391-2393"
+      ]
+    },
+    {
+      "why": "3 identical Closure::bind lines.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:3852-3854",
+        "tests/Handler/CurlMultiHandlerTest.php:3799-3801"
+      ]
+    },
+    {
+      "why": "catch blocks with different comments.",
+      "occurrences": [
+        "src/Handler/CurlFactory.php:450-462",
+        "src/Handler/CurlFactory.php:410-420"
+      ]
+    },
+    {
+      "why": "GET vs HEAD request lines.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5032-5034",
+        "tests/Handler/StreamHandlerTest.php:1527-1529"
+      ]
+    },
+    {
+      "why": "Stream setup lines in different tests.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:5770-5772",
+        "tests/Handler/RequestFramingTest.php:237-239"
+      ]
+    },
+    {
+      "why": "Exception import/use lists.",
+      "occurrences": [
+        "tests/Exception/ResponseTransferExceptionTest.php:7-12",
+        "tests/Exception/ServerExceptionTest.php:8-13"
+      ]
+    },
+    {
+      "why": "5 identical env-proxy lines.",
+      "occurrences": [
+        "tests/ClientTest.php:2759-2763",
+        "tests/ClientTest.php:2788-2792"
+      ]
+    },
+    {
+      "why": "wait vs tickUntilSettled invocation variants.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:2682-2709",
+        "tests/Handler/CurlMultiHandlerTest.php:3438-3466"
+      ]
+    },
+    {
+      "why": "4 lines differing in the previous exception.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:3974-3977",
+        "tests/Handler/StreamHandlerTest.php:3825-3828"
+      ]
+    },
+    {
+      "why": "3 identical proxy-context asserts.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:2553-2555",
+        "tests/Handler/StreamHandlerTest.php:2507-2509"
+      ]
+    },
+    {
+      "why": "2 lines of unrelated response asserts.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5533-5534",
+        "tests/Handler/CurlFactoryTest.php:345-346"
+      ]
+    },
+    {
+      "why": "4 lines of factory-creation variants.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:1920-1923",
+        "tests/Handler/CurlFactoryTest.php:1464-1467"
+      ]
+    },
+    {
+      "why": "Delay-loop vs add-handle blocks in the same class.",
+      "occurrences": [
+        "src/Handler/CurlMultiHandler.php:1243-1255",
+        "src/Handler/CurlMultiHandler.php:768-780"
+      ]
+    },
+    {
+      "why": "CurlFactory(1) vs CurlFactory(0) variants.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:4400-4423",
+        "tests/Handler/CurlFactoryTest.php:4366-4389"
+      ]
+    },
+    {
+      "why": "4 identical integration asserts.",
+      "occurrences": [
+        "tests/DigestAuthIntegrationTest.php:86-89",
+        "tests/DigestAuthIntegrationTest.php:136-139"
+      ]
+    },
+    {
+      "why": "2 lines of cookie lookups.",
+      "occurrences": [
+        "tests/Cookie/FileCookieJarTest.php:82-83",
+        "tests/Cookie/CookieJarTest.php:339-340"
+      ]
+    },
+    {
+      "why": "TransportSharing vs Multiplexing class headers — different subjects.",
+      "occurrences": [
+        "src/TransportSharing.php:1-18",
+        "src/Multiplexing.php:1-28"
+      ]
+    },
+    {
+      "why": "Handle-removal vs replacement fixtures.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:401-413",
+        "tests/Handler/CurlMultiHandlerTest.php:4321-4332"
+      ]
+    },
+    {
+      "why": "Domain-matching variants.",
+      "occurrences": [
+        "tests/Cookie/SetCookieTest.php:384-389",
+        "tests/Cookie/SetCookieTest.php:393-398"
+      ]
+    },
+    {
+      "why": "Transfer-Encoding vs Content-Length headers.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:7184-7189",
+        "tests/Handler/CurlFactoryTest.php:8446-8451"
+      ]
+    },
+    {
+      "why": "2 identical assertion lines.",
+      "occurrences": [
+        "tests/Cookie/SessionCookieJarTest.php:77-78",
+        "tests/Cookie/FileCookieJarTest.php:128-129"
+      ]
+    },
+    {
+      "why": "Uri-call assertions with different arities.",
+      "occurrences": [
+        "tests/ClientTest.php:1088-1090",
+        "tests/ClientTest.php:1013-1018"
+      ]
+    },
+    {
+      "why": "3 lines differing in a message string.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:3546-3548",
+        "tests/Handler/CurlMultiHandlerTest.php:3673-3675"
+      ]
+    },
+    {
+      "why": "2 lines of unrelated context asserts.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:3297-3298",
+        "tests/Handler/StreamHandlerTest.php:2615-2616"
+      ]
+    },
+    {
+      "why": "3 identical version-skip guards.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:588-590",
+        "tests/Handler/StreamHandlerTest.php:2318-2320"
+      ]
+    },
+    {
+      "why": "Nested-tick vs plain close variants.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:2349-2383",
+        "tests/Handler/CurlMultiHandlerTest.php:2313-2347"
+      ]
+    },
+    {
+      "why": "errno variants.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:6916-6927",
+        "tests/Handler/CurlFactoryTest.php:6790-6802"
+      ]
+    },
+    {
+      "why": "response vs sinkWriteException assignment.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:9778-9780",
+        "tests/Handler/CurlFactoryTest.php:9748-9750"
+      ]
+    },
+    {
+      "why": "4 lines of stats asserts in different order.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5451-5454",
+        "tests/Handler/CurlFactoryTest.php:9737-9740"
+      ]
+    },
+    {
+      "why": "3 identical wait asserts.",
+      "occurrences": [
+        "tests/PrepareBodyMiddlewareTest.php:187-189",
+        "tests/PrepareBodyMiddlewareTest.php:108-110"
+      ]
+    },
+    {
+      "why": "2 lines of cookie lookups.",
+      "occurrences": [
+        "tests/Cookie/CookieJarTest.php:638-639",
+        "tests/Cookie/CookieJarTest.php:186-187"
+      ]
+    },
+    {
+      "why": "3 lines of unrelated server asserts.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:3342-3344",
+        "tests/Handler/CurlFactoryTest.php:5746-5748"
+      ]
+    },
+    {
+      "why": "Framing setups with different headers.",
+      "occurrences": [
+        "tests/Handler/RequestFramingTest.php:367-377",
+        "tests/Handler/RequestFramingTest.php:166-176"
+      ]
+    },
+    {
+      "why": "Single-line requests differing in version/mode.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:1456-1456",
+        "tests/Handler/CurlMultiHandlerTest.php:1074-1074"
+      ]
+    },
+    {
+      "why": "Multiplex guard vs Utils test — different subjects.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:5166-5191",
+        "tests/UtilsTest.php:239-261"
+      ]
+    },
+    {
+      "why": "Progress-cancel vs close waits with renamed variables.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:2123-2134",
+        "tests/Handler/CurlMultiHandlerTest.php:2233-2244"
+      ]
+    },
+    {
+      "why": "Progress vs close fixtures.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:2596-2606",
+        "tests/Handler/CurlMultiHandlerTest.php:2210-2218"
+      ]
+    },
+    {
+      "why": "Proxy-table rows with different hosts.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:5873-5892",
+        "tests/Handler/StreamHandlerTest.php:5893-5912"
+      ]
+    },
+    {
+      "why": "5 identical closed-handler lines.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:1828-1832",
+        "tests/Handler/CurlMultiHandlerTest.php:1817-1821"
+      ]
+    },
+    {
+      "why": "TooManyRedirects vs Server exception setups.",
+      "occurrences": [
+        "tests/Exception/TooManyRedirectsExceptionTest.php:23-31",
+        "tests/Exception/ServerExceptionTest.php:24-32"
+      ]
+    },
+    {
+      "why": "Curlopt-omission asserts for different options.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:323-325",
+        "tests/Handler/CurlFactoryTest.php:200-202"
+      ]
+    },
+    {
+      "why": "Digest challenge properties vs handler state properties — unrelated.",
+      "occurrences": [
+        "src/Auth/DigestChallenge.php:11-29",
+        "src/Handler/CurlFactory.php:154-185"
+      ]
+    },
+    {
+      "why": "2 lines differing in the stream variable.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:903-904",
+        "tests/Handler/StreamHandlerTest.php:890-891"
+      ]
+    },
+    {
+      "why": "5 lines differing in one message.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:6209-6213",
+        "tests/Handler/CurlFactoryTest.php:6170-6174"
+      ]
+    },
+    {
+      "why": "Proxy table rows.",
+      "occurrences": [
+        "tests/ProxyOptionsTest.php:29-30",
+        "tests/ProxyOptionsTest.php:33-34"
+      ]
+    },
+    {
+      "why": "1-line stale vs userhash assignments.",
+      "occurrences": [
+        "src/Auth/DigestAuth.php:304-304",
+        "src/Auth/DigestAuth.php:305-305"
+      ]
+    },
+    {
+      "why": "Progress-throw tests with different exception types.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:3241-3250",
+        "tests/Handler/CurlFactoryTest.php:4243-4254"
+      ]
+    },
+    {
+      "why": "3 lines differing in a variable name.",
+      "occurrences": [
+        "tests/Handler/MockHandlerTest.php:355-357",
+        "tests/Handler/MockHandlerTest.php:275-277"
+      ]
+    },
+    {
+      "why": "Use-statement lists.",
+      "occurrences": [
+        "src/Handler/CurlMultiHandler.php:8-14",
+        "src/Handler/CurlFactory.php:12-18"
+      ]
+    },
+    {
+      "why": "3 lines of differing challenge asserts.",
+      "occurrences": [
+        "tests/Auth/DigestAuthTest.php:212-214",
+        "tests/Auth/DigestAuthTest.php:200-202"
+      ]
+    },
+    {
+      "why": "2 lines with renamed variables.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:5808-5809",
+        "tests/Handler/CurlFactoryTest.php:8788-8789"
+      ]
+    },
+    {
+      "why": "Digest challenge headers with an added domain param.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:1930-1944",
+        "tests/AuthMiddlewareTest.php:2074-2088"
+      ]
+    },
+    {
+      "why": "4 identical fixture lines.",
+      "occurrences": [
+        "tests/ClientTest.php:94-97",
+        "tests/ClientTest.php:125-128"
+      ]
+    },
+    {
+      "why": "Message-string and finally-block differences.",
+      "occurrences": [
+        "tests/Cookie/SessionCookieJarTest.php:76-79",
+        "tests/Cookie/SessionCookieJarTest.php:55-58"
+      ]
+    },
+    {
+      "why": "4 lines of differing previous exceptions.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:3936-3939",
+        "tests/Handler/StreamHandlerTest.php:3757-3760"
+      ]
+    },
+    {
+      "why": "Teardown unsets with extra keys.",
+      "occurrences": [
+        "tests/ClientTest.php:487-509",
+        "tests/ClientTest.php:536-572"
+      ]
+    },
+    {
+      "why": "Uri mock setups with different methods.",
+      "occurrences": [
+        "tests/Cookie/CookieJarTest.php:41-43",
+        "tests/AuthMiddlewareTest.php:2060-2062"
+      ]
+    },
+    {
+      "why": "2 lines with a count change.",
+      "occurrences": [
+        "tests/Cookie/CookieJarTest.php:637-638",
+        "tests/Cookie/CookieJarTest.php:610-611"
+      ]
+    },
+    {
+      "why": "3 identical asserts.",
+      "occurrences": [
+        "tests/ClientTest.php:1287-1289",
+        "tests/ClientTest.php:1268-1270"
+      ]
+    },
+    {
+      "why": "Reflection property vs method setup.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:2778-2781",
+        "tests/Handler/CurlFactoryTest.php:10366-10369"
+      ]
+    },
+    {
+      "why": "TransportSharing mode constants.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:1006-1008",
+        "tests/Handler/CurlFactoryTest.php:747-749"
+      ]
+    },
+    {
+      "why": "Use-statement lists of different classes.",
+      "occurrences": [
+        "src/Handler/CurlHandler.php:7-11",
+        "tests/Handler/CurlHandlerTest.php:18-22"
+      ]
+    },
+    {
+      "why": "3 identical stack-setup lines.",
+      "occurrences": [
+        "tests/RedirectMiddlewareTest.php:659-661",
+        "tests/RedirectMiddlewareTest.php:767-769"
+      ]
+    },
+    {
+      "why": "Domain-matching variants.",
+      "occurrences": [
+        "tests/Cookie/SetCookieTest.php:370-372",
+        "tests/Cookie/SetCookieTest.php:374-376"
+      ]
+    },
+    {
+      "why": "Property blocks of different handler classes.",
+      "occurrences": [
+        "src/Handler/CurlMultiHandler.php:64-99",
+        "src/Handler/CurlFactory.php:154-177"
+      ]
+    },
+    {
+      "why": "4 vs 3 lines with renamed variables.",
+      "occurrences": [
+        "tests/Handler/MockHandlerTest.php:63-65",
+        "tests/Handler/MockHandlerTest.php:407-410"
+      ]
+    },
+    {
+      "why": "entry vs displaced variable renames.",
+      "occurrences": [
+        "src/Handler/CurlMultiHandler.php:1276-1279",
+        "src/Handler/CurlMultiHandler.php:1399-1402"
+      ]
+    },
+    {
+      "why": "Digest options with different keys.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:1161-1169",
+        "tests/AuthMiddlewareTest.php:136-144"
+      ]
+    },
+    {
+      "why": "Formatter placeholder rows.",
+      "occurrences": [
+        "tests/MessageFormatterTest.php:82-83",
+        "tests/MessageFormatterTest.php:75-76"
+      ]
+    },
+    {
+      "why": "Stale vs repeated challenge mocks.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:1482-1484",
+        "tests/AuthMiddlewareTest.php:1725-1727"
+      ]
+    },
+    {
+      "why": "BadResponse vs Server exception tests with different bodies.",
+      "occurrences": [
+        "tests/Exception/BadResponseExceptionTest.php:11-30",
+        "tests/Exception/ServerExceptionTest.php:20-40"
+      ]
+    },
+    {
+      "why": "Single-line chunked vs content-length requests.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:3368-3368",
+        "tests/Handler/StreamHandlerTest.php:3387-3387"
+      ]
+    },
+    {
+      "why": "CurlMulti vs getHandler abstraction.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:4262-4273",
+        "tests/Handler/CurlHandlerTest.php:557-567"
+      ]
+    },
+    {
+      "why": "1-line extra condition.",
+      "occurrences": [
+        "src/Handler/StreamHandler.php:190-190",
+        "src/Handler/CurlFactory.php:517-517"
+      ]
+    },
+    {
+      "why": "Multiplex-none vs stream-handler transport tests.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:1034-1043",
+        "tests/Handler/StreamHandlerTest.php:4257-4265"
+      ]
+    },
+    {
+      "why": "Mirror of candidate 122.",
+      "occurrences": [
+        "tests/Handler/MockHandlerTest.php:406-410",
+        "tests/Handler/MockHandlerTest.php:62-65"
+      ]
+    },
+    {
+      "why": "3 lines differing in an option value.",
+      "occurrences": [
+        "tests/ClientTest.php:1759-1761",
+        "tests/ClientTest.php:1769-1771"
+      ]
+    },
+    {
+      "why": "rewind vs __toString stream decorators.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:9351-9362",
+        "tests/Handler/CurlFactoryTest.php:9152-9163"
+      ]
+    },
+    {
+      "why": "Different digest endpoints.",
+      "occurrences": [
+        "tests/DigestAuthIntegrationTest.php:130-142",
+        "tests/DigestAuthIntegrationTest.php:80-92"
+      ]
+    },
+    {
+      "why": "Digest requests with different counts.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:1618-1620",
+        "tests/AuthMiddlewareTest.php:2018-2020"
+      ]
+    },
+    {
+      "why": "Body-count asserts differing.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:630-638",
+        "tests/AuthMiddlewareTest.php:716-724"
+      ]
+    },
+    {
+      "why": "5 lines differing in one message.",
+      "occurrences": [
+        "tests/ClientTest.php:94-98",
+        "tests/ClientTest.php:125-129"
+      ]
+    },
+    {
+      "why": "HEAD vs GET decode-content tests.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:1944-1954",
+        "tests/Handler/StreamHandlerTest.php:1962-1972"
+      ]
+    },
+    {
+      "why": "2 vs 5 lines of different exception asserts.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:8642-8643",
+        "tests/Handler/CurlFactoryTest.php:8737-8741"
+      ]
+    },
+    {
+      "why": "Network vs server drip-timeout tests.",
+      "occurrences": [
+        "tests/Handler/Network/StreamHandlerTest.php:30-37",
+        "tests/Handler/StreamHandlerTest.php:5334-5339"
+      ]
+    },
+    {
+      "why": "Noncanonical-host vs non-http-scheme rejection order tests.",
+      "occurrences": [
+        "tests/Handler/CurlHandlerTest.php:589-597",
+        "tests/Handler/StreamHandlerTest.php:6002-6010"
+      ]
+    },
+    {
+      "why": "3 lines of differing share counters.",
+      "occurrences": [
+        "tests/bootstrap.php:97-99",
+        "tests/bootstrap.php:121-123"
+      ]
+    },
+    {
+      "why": "Redirect vs start-endpoint posts.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:604-609",
+        "tests/AuthMiddlewareTest.php:751-756"
+      ]
+    },
+    {
+      "why": "Port-suffixed vs plain URL gets.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:1904-1921",
+        "tests/AuthMiddlewareTest.php:1574-1591"
+      ]
+    },
+    {
+      "why": "5 lines of different probe messages.",
+      "occurrences": [
+        "tests/Handler/RequestFramingTest.php:328-332",
+        "tests/Handler/CurlFactoryTest.php:352-356"
+      ]
+    },
+    {
+      "why": "3 identical pool-fixture lines.",
+      "occurrences": [
+        "tests/PoolTest.php:400-402",
+        "tests/PoolTest.php:317-319"
+      ]
+    },
+    {
+      "why": "CURLMOPT vs CURLOPT conflicting-option lists.",
+      "occurrences": [
+        "src/Handler/CurlFactory.php:717-727",
+        "src/Handler/CurlMultiHandler.php:560-570"
+      ]
+    },
+    {
+      "why": "2 lines of stats asserts with renamed variables.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:6641-6642",
+        "tests/Handler/StreamHandlerTest.php:1383-1384"
+      ]
+    },
+    {
+      "why": "Digest challenge literals differing.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:103-116",
+        "tests/AuthMiddlewareTest.php:851-862"
+      ]
+    },
+    {
+      "why": "Cookie vs content-length header asserts.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:1305-1309",
+        "tests/PrepareBodyMiddlewareTest.php:126-132"
+      ]
+    },
+    {
+      "why": "Option-validation vs IDN tests.",
+      "occurrences": [
+        "tests/ClientTest.php:1818-1827",
+        "tests/ClientTest.php:3162-3170"
+      ]
+    },
+    {
+      "why": "Cookie-header asserts with different values.",
+      "occurrences": [
+        "tests/Cookie/CookieJarTest.php:1199-1202",
+        "tests/Cookie/CookieJarTest.php:990-993"
+      ]
+    },
+    {
+      "why": "2 identical multi-option asserts.",
+      "occurrences": [
+        "tests/ClientTest.php:503-504",
+        "tests/ClientTest.php:558-559"
+      ]
+    },
+    {
+      "why": "rewind vs __toString failure variants.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:9327-9337",
+        "tests/Handler/CurlFactoryTest.php:9270-9280"
+      ]
+    },
+    {
+      "why": "CURL_PREREQFUNC_OK vs ABORT guards.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:400-407",
+        "tests/Handler/CurlFactoryTest.php:429-436"
+      ]
+    },
+    {
+      "why": "__unserialize bodies of different classes.",
+      "occurrences": [
+        "src/Handler/CurlMultiHandler.php:266-271",
+        "src/Cookie/FileCookieJar.php:76-81"
+      ]
+    },
+    {
+      "why": "Form-urlencoded vs multipart asserts.",
+      "occurrences": [
+        "tests/ClientTest.php:2465-2473",
+        "tests/ClientTest.php:2640-2649"
+      ]
+    },
+    {
+      "why": "CURLMOPT vs CURLOPT conflicting-option lists.",
+      "occurrences": [
+        "src/Handler/CurlMultiHandler.php:568-570",
+        "src/Handler/CurlFactory.php:749-751"
+      ]
+    },
+    {
+      "why": "Single-line request variants.",
+      "occurrences": [
+        "tests/Handler/CurlMultiHandlerTest.php:1433-1433",
+        "tests/Handler/CurlMultiHandlerTest.php:1074-1074"
+      ]
+    },
+    {
+      "why": "1 vs 3 lines of EAGER creations.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:5347-5347",
+        "tests/Handler/CurlFactoryTest.php:4603-4605"
+      ]
+    },
+    {
+      "why": "Reflection setups of different classes.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:2247-2250",
+        "tests/Handler/CurlMultiHandlerTest.php:2778-2781"
+      ]
+    },
+    {
+      "why": "Related test scaffolding; not a certain copy.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:1707-1712",
+        "tests/Handler/StreamHandlerTest.php:1720-1725"
+      ]
+    },
+    {
+      "why": "3 identical encoding asserts.",
+      "occurrences": [
+        "tests/Handler/CurlFactoryTest.php:4511-4513",
+        "tests/Handler/CurlFactoryTest.php:4545-4547"
+      ]
+    },
+    {
+      "why": "3 identical header asserts.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:688-690",
+        "tests/AuthMiddlewareTest.php:248-250"
+      ]
+    },
+    {
+      "why": "2 identical local_pk asserts.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:3046-3047",
+        "tests/Handler/StreamHandlerTest.php:3054-3055"
+      ]
+    },
+    {
+      "why": "2 lines of unrelated asserts.",
+      "occurrences": [
+        "tests/Handler/StreamHandlerTest.php:76-77",
+        "tests/Handler/StreamHandlerTest.php:4355-4356"
+      ]
+    },
+    {
+      "why": "Framing failure fixtures.",
+      "occurrences": [
+        "tests/PrepareBodyMiddlewareTest.php:323-336",
+        "tests/PrepareBodyMiddlewareTest.php:373-387"
+      ]
+    },
+    {
+      "why": "2 lines of unrelated asserts.",
+      "occurrences": [
+        "tests/TransferStatsTest.php:28-29",
+        "tests/Handler/StreamHandlerTest.php:4322-4323"
+      ]
+    },
+    {
+      "why": "Closure-based vs literal mock queues.",
+      "occurrences": [
+        "tests/AuthMiddlewareTest.php:455-469",
+        "tests/AuthMiddlewareTest.php:495-502"
+      ]
+    },
+    {
+      "why": "Factory-assignment variants.",
+      "occurrences": [
+        "tests/ClientTest.php:1032-1039",
+        "tests/ClientTest.php:1081-1088"
+      ]
+    },
+    {
+      "why": "auth 'custom' vs 'ntlm' variants.",
+      "occurrences": [
+        "tests/ClientTest.php:2410-2417",
+        "tests/ClientTest.php:2421-2426"
+      ]
+    }
+  ],
+  "clearly_out_status": "NONE FOUND. 2 judges ruled independently on 200 candidates at this commit and no pair was called CLEARLY OUT by all of them. 3 pair(s) drew a CLEARLY OUT from one judge and a different verdict from another; those are listed in docs/reports/verdict-merge.md and assert nothing."
+}
