@@ -11,8 +11,22 @@ import { resolve } from "node:path";
 
 import { repoRoot } from "./repo-root.mjs";
 
-/// Every line of the Makefile, in order.
-export const makefileLines = readFileSync(resolve(repoRoot, "Makefile"), "utf8").split("\n");
+let cached;
+
+/**
+ * Every line of the Makefile, in order, read once on first use.
+ *
+ * Read on demand rather than at import: a release script reaches this module
+ * for one variable's value on one platform, and a module that opens a file the
+ * moment it is imported makes every importer depend on that file being there,
+ * whether or not it ever asks a question about it.
+ *
+ * @returns {string[]}
+ */
+export function makefileLines() {
+  cached ??= readFileSync(resolve(repoRoot, "Makefile"), "utf8").split("\n");
+  return cached;
+}
 
 /// True when `line` continues a recipe rather than starting a new declaration.
 /// Make ends a block at the first non-blank line in column 0.
@@ -29,9 +43,9 @@ function continuesRecipe(line) {
  * @returns {Array<{header: string, body: string}>}
  */
 export function recipeBlocks(target) {
-  return makefileLines.flatMap((line, index) => {
+  return makefileLines().flatMap((line, index) => {
     if (!line.startsWith(`${target}:`)) return [];
-    const rest = makefileLines.slice(index + 1);
+    const rest = makefileLines().slice(index + 1);
     const end = rest.findIndex((next) => !continuesRecipe(next));
     return [{ header: line, body: (end < 0 ? rest : rest.slice(0, end)).join("\n") }];
   });
@@ -88,13 +102,13 @@ export function variableWords(name) {
  * @returns {string} the trimmed value, `""` when the variable is undeclared
  */
 export function variableValue(name) {
-  const start = makefileLines.findIndex(
+  const start = makefileLines().findIndex(
     (line) => line.startsWith(`${name} `) || line.startsWith(`${name}=`),
   );
   if (start < 0) return "";
   const declaration = [];
-  for (let index = start; index < makefileLines.length; index += 1) {
-    const line = makefileLines[index];
+  for (let index = start; index < makefileLines().length; index += 1) {
+    const line = makefileLines()[index];
     declaration.push(line);
     if (!line.trimEnd().endsWith(CONTINUATION)) break;
   }

@@ -647,6 +647,27 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
+      # [DEPLOY-GATE-PORTABILITY] The gates below read and write zip archives,
+      # resolve a POSIX shell, name a binary the way the target platform names
+      # it, and run staged binaries. Every one of those is spelled differently
+      # here, and none of them had ever run on this platform — so the gates
+      # that guard a `win32-x64` release could only be exercised on machines
+      # that cannot produce one. They are cheap and they fail fast, so they run
+      # before the instrumented build.
+      - name: Run the deployment and host-shell gates
+        run: |
+          node --test scripts/repository/posix-shell.test.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test scripts/deployment/zip.test.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test scripts/repository/scrub-path-binaries.test.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test scripts/deployment/installer-snippet.test.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/deployment/test-verifiers.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/release/test-release-publish-contract.mjs
+
       # [OUTPUT-SCHEMA-PATH-SEPARATOR] Every filter below names a suite whose
       # assertions compare a rendered path against the `/` spelling the output
       # contract mandates. They pass on Linux whatever the renderer does,

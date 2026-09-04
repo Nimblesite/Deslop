@@ -214,6 +214,8 @@ _ci-contract-tests: _vsix-node-modules
 	@node --test scripts/actions/action-yaml.test.mjs
 	@echo "==> Docs installer snippet fail-closed gate ([DEPLOY-DOCS-INSTALLER-FAILCLOSED])..."
 	@node --test scripts/deployment/installer-snippet.test.mjs
+	@echo "==> Archive reader/writer gate ([DEPLOY-VSIX-PACKAGE])..."
+	@node --test scripts/deployment/zip.test.mjs
 	@echo "==> PATH-scrub gate ([DEPLOY-EXTERNAL-MCP-CONSUMER])..."
 	@node --test scripts/repository/scrub-path-binaries.test.mjs
 	@echo "==> Process-scrub + host-shell gate ([DEPLOY-EXTENSION-BUNDLED-TESTS])..."
