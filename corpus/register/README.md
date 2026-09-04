@@ -28,29 +28,38 @@ one entry per tracked defect, with the reason, tightened only by fixing the engi
 ## Where it stands
 
 The target is two to three repositories per language at visibly different sizes, each
-carried to roughly 100 CLEARLY IN and 100 CLEARLY OUT. This table is the standing, kept
-current so the next pass can be chosen without re-deriving it.
+carried to roughly 100 CLEARLY IN and 100 CLEARLY OUT.
 
-| Language | Judged | Size | IN | OUT | Next |
-|---|---|---|---|---|---|
-| python | click | 79 files / 28.6k loc | 2 | 0 | a large python repo; `django` or `tornado` are pinned already |
-| go | cobra | 36 files / 16.5k loc | 3 | 0 | a large go repo; `hugo` is pinned already |
-| javascript | axios | 164 files / 17.1k loc | 3 | 0 | a large js repo; `react` is pinned already |
-| csharp | Polly | 243 files / 54.7k loc | 4 | 2 | a small csharp repo to sit under Polly |
-| rust | — | — | 0 | 0 | **nothing judged**; `ripgrep` is queued |
-| typescript | — | — | 0 | 0 | **nothing judged**; `zod` is queued |
-| dart | — | — | 0 | 0 | **nothing judged**; `bloc` is queued |
-| php | — | — | 0 | 0 | **nothing judged**; `guzzle` is queued |
-| fsharp | — | — | 0 | 0 | **nothing judged**; `FSharp.Data` is queued |
+**Per-repository counts are not written here.** They change on every merge, and a
+hand-kept table of them goes stale silently. `docs/reports/verdict-merge.md` carries them,
+written by the run that merged them. Read that for the numbers; read this for what to
+judge next.
 
-Every judged repository so far is on the small side, and five of the nine languages in
-the corpus have no register at all. **A language with nothing judged is the strongest
-candidate for the next pass** — breadth beats depth, because a false positive that only
-shows up in one language stays invisible until that language is judged.
+| Language | Judged | Next |
+|---|---|---|
+| python | click | a large python repo; `django` or `tornado` are pinned already |
+| go | cobra | a large go repo; `hugo` is pinned already |
+| javascript | axios | a large js repo; `react` is pinned already |
+| csharp | Polly | a small csharp repo to sit under Polly |
+| rust | ripgrep | a second rust repo of a different size |
+| typescript | zod | a second typescript repo of a different size |
+| dart | bloc | a second dart repo of a different size |
+| php | guzzle | a second php repo of a different size |
+| fsharp | FSharp.Data | a second fsharp repo of a different size |
+
+Every one of the nine languages now has a register, and every judged repository is on the
+small side — so depth and size are what the next passes buy, not breadth. **The judging
+queue is empty**, which means nothing new can enter the register until a repository is
+added to `corpus/judging-queue.json`; `corpus_commit_pins.rs` fails while that is true,
+by design.
 
 "Queued" means `corpus/judging-queue.json`: the comparison scans those repositories so a
 first pass has reports to draw candidates from, and each moves into this directory when
 its verdicts come back. See `docs/specs/corpus.md` §[CORPUS-REGISTER-QUEUE].
+
+Verdicts reach these files only through `make merge-verdicts JUDGED_DIRS="<folder> <folder>"`.
+It checks disagreement first and **any** disagreement stops the run: the report is written to
+`docs/reports/verdict-merge.md`, nothing else is, and the run fails. See §[CORPUS-REGISTER-MERGE].
 
 The counts are low on purpose. They rise by running more passes at fresh seeds, never by
 admitting an arguable pair.

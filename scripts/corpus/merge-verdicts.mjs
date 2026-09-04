@@ -1,174 +1,254 @@
 #!/usr/bin/env node
-// [CORPUS-REGISTER] Folds one judging pass into a repository's clone register.
+// [CORPUS-REGISTER-MERGE] Folds judging passes into the clone registers.
 //
 // This is the only way a verdict reaches a register. It is mechanical on
 // purpose: a register is the independent evidence that this detector is
 // accurate, and a human retyping verdicts into it is a place where a judgement
 // can quietly change on the way in.
 //
-// What it enforces, and will not be talked out of:
+// Several judges are sent the same folder and rule independently. Their
+// answers only become ground truth if they AGREE — two judges who file one
+// pair under two verdicts have between them said something false, and taking
+// either answer would write that falsehood into the register and score every
+// future engine against it.
 //
-//   * Agreement. Every judge who ruled on a candidate must have given the SAME
-//     verdict, and at least MINIMUM_JUDGES must have ruled. A split is recorded
-//     as NOT CLEAR, which asserts nothing — never as the majority view.
-//   * The ranges come from the workspace's own pair list, not from what a judge
-//     retyped. A judge whose ranges disagree with the candidate read something
-//     other than the candidate, so that verdict is refused and named.
-//   * Prose. `why` and `verified` must actually say something; an entry that
-//     states no reason asserts nothing while looking like an assertion.
-//   * Accumulation, never replacement. Passes add to a register across seeds
-//     and sessions; a pair already judged keeps its first verdict, and a later
-//     pass that contradicts it is reported rather than silently applied.
+// So disagreement is checked FIRST, across the judged folders and this
+// repository's existing registers together, and ANY disagreement stops the
+// run: the report is written, nothing else is, and the exit status is
+// non-zero. Merging the undisputed remainder anyway would quietly bank a
+// pass in which a judge is demonstrably unreliable — the disputed pairs are
+// evidence about the judges, not just about those pairs.
 //
-// Usage: merge-verdicts.mjs <register.json> <workspace> <verdicts.json ...>
+// The rules live in `merge-verdicts/pass.mjs`; the report in
+// `merge-verdicts/report.mjs`. Spec: `docs/specs/corpus.md`
+// [CORPUS-REGISTER-MERGE].
+//
+// Usage: merge-verdicts.mjs [--dry-run] [--report <path>] <judged-folder>...
+//   e.g. merge-verdicts.mjs ~/clone-judging-codex ~/clone-judging-glm5.3
 
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-/// Judges who must have ruled before a verdict is recorded at all. One reader
-/// having a firm opinion is an opinion; two arriving at it separately is
-/// evidence.
-const MINIMUM_JUDGES = 2;
-/// The verdicts a register records, and the one it records as asserting nothing.
-const SCORED = ["clearly_in", "clearly_out"];
-const NOT_CLEAR = "not_clear";
-const VERDICTS = [...SCORED, NOT_CLEAR];
-/// A judgement stated in fewer characters than this is not a judgement. Matches
-/// the floor `corpus_register_contract` holds every entry to.
-const MINIMUM_PROSE = 40;
-/// Field order a register is written in, so a diff shows verdicts and nothing else.
-const REGISTER_FIELDS = ["name", "language", "url", "sha", "protocol"];
+import { mergePass, MINIMUM_JUDGES, NOT_CLEAR, VERDICTS } from "./merge-verdicts/pass.mjs";
+import { disagreementCount, render } from "./merge-verdicts/report.mjs";
+
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const REGISTER_DIR = "corpus/register";
+const JUDGING_QUEUE = "corpus/judging-queue.json";
+const DEFAULT_REPORT = "docs/reports/verdict-merge.md";
+/// What a judging workspace holds, and this script reads.
+const VERDICTS_FILE = "verdicts.json";
+const PINNED_FILE = "PINNED.txt";
+const PAIRS_FILE = join("candidates", "pairs.json");
+/// The protocol a register cites so anyone can re-judge it the same way.
+/// `corpus_register_contract` resolves every one of these on disk.
+const PROTOCOL = {
+  spec: "docs/specs/corpus.md",
+  spec_section: "[CORPUS-REGISTER]",
+  judging_skill: ".agents/skills/judge-clone-pairs/SKILL.md",
+  preparer_skill: ".agents/skills/clone-register-prepare/SKILL.md",
+};
+const USAGE =
+  "usage: merge-verdicts.mjs [--dry-run] [--root <dir>] [--report <path>] <judged-folder>...";
 
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
-const key = (occurrences) => [...occurrences].sort().join(" + ");
+const writeJson = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+const isDirectory = (path) => existsSync(path) && statSync(path).isDirectory();
 
-/// Every entry of one pass, flattened to `{verdict, candidate, why, verified}`.
-const entriesOf = (pass) =>
-  VERDICTS.flatMap((verdict) =>
-    (pass[verdict] ?? []).map((entry) => ({ verdict, ...entry })),
-  );
+/// The command line, as flags and judged folders.
+const parseArguments = (argv) => {
+  const folders = [];
+  const options = { dryRun: false, report: DEFAULT_REPORT, root: REPO_ROOT };
+  for (let index = 0; index < argv.length; index += 1) {
+    if (argv[index] === "--dry-run") options.dryRun = true;
+    else if (argv[index] === "--report") options.report = argv[(index += 1)];
+    else if (argv[index] === "--root") options.root = argv[(index += 1)];
+    else if (argv[index].startsWith("--")) throw new Error(`unknown flag ${argv[index]}\n${USAGE}`);
+    else folders.push(argv[index]);
+  }
+  if (folders.length < MINIMUM_JUDGES) {
+    throw new Error(
+      `${folders.length} judging folder(s) given; ${MINIMUM_JUDGES} independent passes are ` +
+        `required before any verdict is recorded\n${USAGE}`,
+    );
+  }
+  return { folders, options };
+};
 
-/// Groups every judge's ruling by the candidate it ruled on.
-const byCandidate = (passes) => {
-  const rulings = new Map();
-  for (const [judge, pass] of passes) {
-    for (const entry of entriesOf(pass)) {
-      const found = rulings.get(entry.candidate) ?? [];
-      found.push({ judge, ...entry });
-      rulings.set(entry.candidate, found);
+/// The repository directories one judged folder holds, by workspace name.
+const workspacesIn = (folder) =>
+  readdirSync(folder).filter((name) => existsSync(join(folder, name, VERDICTS_FILE)));
+
+/// The url and commit a workspace was built at.
+const pinned = (workspace) => {
+  const [url, sha] = readFileSync(join(workspace, PINNED_FILE), "utf8").trim().split("\n");
+  return { url: url.trim(), sha: sha.trim() };
+};
+
+/// The pair list a workspace showed its judge, as `number -> occurrences`.
+const pairsIn = (workspace) =>
+  new Map(readJson(join(workspace, PAIRS_FILE)).pairs.map((pair) => [pair.number, pair.occurrences]));
+
+/// Every judged folder that holds this repository, as `[judge, workspace]`.
+const workspacesFor = (folders, slug) =>
+  folders
+    .map((folder) => [folder.split("/").filter(Boolean).pop(), join(folder, slug)])
+    .filter(([, workspace]) => existsSync(join(workspace, VERDICTS_FILE)));
+
+/// Refuses to compare judges who were not shown the same thing.
+///
+/// Candidate numbers are the only handle a verdict has on a pair, so two
+/// workspaces whose pair lists differ would have their verdicts silently
+/// cross-matched: judge A's ruling on its candidate 41 filed against judge B's
+/// entirely different candidate 41. That is not a disagreement, it is a
+/// fabricated one, and it would poison both directions of the register.
+const assertOneCandidateSet = (slug, workspaces) => {
+  const shown = workspaces.map(([judge, workspace]) => [
+    judge,
+    readFileSync(join(workspace, PAIRS_FILE), "utf8"),
+  ]);
+  const [[first, expected]] = shown;
+  for (const [judge, seen] of shown) {
+    if (seen !== expected) {
+      throw new Error(
+        `${slug}: ${judge} and ${first} were shown different candidate lists, so their ` +
+          `candidate numbers name different pairs and cannot be compared`,
+      );
     }
   }
-  return rulings;
 };
 
-/// The one verdict every judge gave, or null when they disagreed or too few
-/// ruled. Deliberately not a majority: a pair two readers see differently is
-/// exactly the pair a register must not assert anything about.
-const agreed = (rulings) => {
-  if (rulings.length < MINIMUM_JUDGES) return null;
-  const [first] = rulings;
-  return rulings.every((ruling) => ruling.verdict === first.verdict) ? first.verdict : null;
+/// Refuses to merge verdicts read at a commit the register was not judged at.
+const assertOneCommit = (slug, register, workspaces) => {
+  const shas = new Set(workspaces.map(([, workspace]) => pinned(workspace).sha));
+  if (register.sha) shas.add(register.sha);
+  if (shas.size > 1) {
+    throw new Error(
+      `${slug}: verdicts span commits ${[...shas].join(", ")} — a line number means nothing ` +
+        `without the tree it was read in`,
+    );
+  }
 };
 
-/// The best-stated ruling among agreeing judges: the one that recorded the most
-/// of what it read. Ties break on judge name, so a re-run writes the same file.
-const bestStated = (rulings) =>
-  [...rulings].sort(
-    (left, right) =>
-      (right.verified ?? "").length - (left.verified ?? "").length ||
-      left.judge.localeCompare(right.judge),
-  )[0];
-
-/// Whether a ruling names the candidate it claims to. A judge who wrote ranges
-/// the candidate never showed read something else, and the verdict is void.
-const namesTheCandidate = (ruling, occurrences) =>
-  !ruling.occurrences || key(ruling.occurrences) === key(occurrences);
-
-const [registerPath, workspace, ...verdictPaths] = process.argv.slice(2);
-if (!registerPath || !workspace || verdictPaths.length === 0) {
-  throw new Error("usage: merge-verdicts.mjs <register.json> <workspace> <verdicts.json ...>");
-}
-if (verdictPaths.length < MINIMUM_JUDGES) {
-  throw new Error(
-    `${verdictPaths.length} judging pass(es) given; ${MINIMUM_JUDGES} independent passes are ` +
-      `required before any verdict is recorded`,
+/// The language a repository is judged in, from its register or the queue.
+const languageOf = (root, slug, register) => {
+  if (register.language) return register.language;
+  const queued = readJson(join(root, JUDGING_QUEUE)).repositories.find(
+    (repository) => repository.name.toLowerCase() === slug.toLowerCase(),
   );
-}
-
-const pairs = new Map(
-  readJson(join(workspace, "candidates", "pairs.json")).pairs.map((pair) => [
-    pair.number,
-    pair.occurrences,
-  ]),
-);
-const register = existsSync(registerPath) ? readJson(registerPath) : {};
-const existing = new Map(
-  VERDICTS.flatMap((verdict) =>
-    (register[verdict] ?? []).map((entry) => [key(entry.occurrences), verdict]),
-  ),
-);
-const added = Object.fromEntries(VERDICTS.map((verdict) => [verdict, []]));
-const refused = [];
-const split = [];
-const contradicted = [];
-
-for (const [candidate, rulings] of [...byCandidate(verdictPaths.map((path) => [path, readJson(path)]))].sort(
-  (left, right) => left[0] - right[0],
-)) {
-  const occurrences = pairs.get(candidate);
-  if (!occurrences) {
-    refused.push(`candidate ${candidate} is not in this workspace's pair list`);
-    continue;
+  if (!queued) {
+    throw new Error(
+      `${slug} has neither a register nor a queue entry, so nothing says what language it is`,
+    );
   }
-  const misread = rulings.filter((ruling) => !namesTheCandidate(ruling, occurrences));
-  for (const ruling of misread) {
-    refused.push(`${ruling.judge} candidate ${candidate}: ranges are not the candidate's`);
-  }
-  const honest = rulings.filter((ruling) => !misread.includes(ruling));
-  const verdict = agreed(honest);
-  if (!verdict) {
-    if (honest.length >= MINIMUM_JUDGES) {
-      split.push(`candidate ${candidate}: ${honest.map((r) => r.verdict).join(" vs ")}`);
-    }
-    continue;
-  }
-  const already = existing.get(key(occurrences));
-  if (already) {
-    if (already !== verdict) contradicted.push(`candidate ${candidate}: ${already} -> ${verdict}`);
-    continue;
-  }
-  const stated = bestStated(honest);
-  const prose = { why: stated.why ?? "", verified: stated.verified ?? "" };
-  const required = verdict === NOT_CLEAR ? ["why"] : ["why", "verified"];
-  const thin = required.filter((field) => prose[field].trim().length < MINIMUM_PROSE);
-  if (thin.length > 0) {
-    refused.push(`candidate ${candidate}: ${thin.join(" and ")} states too little to assert`);
-    continue;
-  }
-  added[verdict].push(
-    verdict === NOT_CLEAR
-      ? { why: prose.why, occurrences }
-      : { why: prose.why, verified: prose.verified, occurrences },
-  );
-  existing.set(key(occurrences), verdict);
-}
-
-const merged = {};
-for (const field of REGISTER_FIELDS) if (register[field] !== undefined) merged[field] = register[field];
-for (const verdict of SCORED) merged[verdict] = [...(register[verdict] ?? []), ...added[verdict]];
-if (register.clearly_out_status && merged.clearly_out.length === 0) {
-  merged.clearly_out_status = register.clearly_out_status;
-}
-merged[NOT_CLEAR] = [...(register[NOT_CLEAR] ?? []), ...added[NOT_CLEAR]];
-writeFileSync(registerPath, `${JSON.stringify(merged, null, 2)}\n`);
-
-const report = (label, lines) => {
-  if (lines.length > 0) console.log(`  ${label}:\n${lines.map((line) => `    - ${line}`).join("\n")}`);
+  return queued.language;
 };
-console.log(`merged ${verdictPaths.length} judging pass(es) into ${registerPath}`);
-for (const verdict of VERDICTS) {
-  console.log(`  +${added[verdict].length} ${verdict} (register now holds ${merged[verdict].length})`);
-}
-report("split, recorded as nothing", split);
-report("refused", refused);
-report("contradicts a standing verdict, NOT applied", contradicted);
+
+/// The register a repository starts this merge from: the one on disk, or a
+/// fresh one pinned to the commit its judges actually read.
+const startingRegister = (root, slug, registerPath, workspaces) => {
+  if (existsSync(registerPath)) return readJson(registerPath);
+  const [, workspace] = workspaces[0];
+  const { url, sha } = pinned(workspace);
+  return { name: slug.toLowerCase(), language: languageOf(root, slug, {}), url, sha, protocol: PROTOCOL };
+};
+
+/// States in words why a register records no false positives, so nobody reads
+/// an empty list as evidence that precision is good.
+const clearlyOutStatus = (result, candidates) => {
+  const split = result.disagreements.filter((entry) =>
+    entry.rulings.some((ruling) => ruling.verdict === "clearly_out"),
+  ).length;
+  return (
+    `NONE FOUND. ${result.judges} judges ruled independently on ${candidates} candidates at ` +
+    `this commit and no pair was called CLEARLY OUT by all of them. ${split} pair(s) drew a ` +
+    `CLEARLY OUT from one judge and a different verdict from another; those are listed in ` +
+    `${DEFAULT_REPORT} and assert nothing.`
+  );
+};
+
+/// Merges one repository, returning everything the report needs.
+const mergeRepository = (root, folders, slug) => {
+  const workspaces = workspacesFor(folders, slug);
+  const registerPath = join(root, REGISTER_DIR, `${slug.toLowerCase()}.json`);
+  const hadRegister = existsSync(registerPath);
+  assertOneCandidateSet(slug, workspaces);
+  const register = startingRegister(root, slug, registerPath, workspaces);
+  assertOneCommit(slug, register, workspaces);
+  const pairs = pairsIn(workspaces[0][1]);
+  const passes = workspaces.map(([judge, workspace]) => [
+    judge,
+    readJson(join(workspace, VERDICTS_FILE)),
+  ]);
+  const result = mergePass({ register, pairs, passes });
+  if (result.merged.clearly_out.length === 0 && !result.merged.clearly_out_status) {
+    result.merged.clearly_out_status = clearlyOutStatus(result, pairs.size);
+  }
+  return { name: slug.toLowerCase(), slug, language: register.language, sha: register.sha, hadRegister, registerPath, result };
+};
+
+/// Takes every repository that now has a register out of the judging queue. A
+/// queue that never drains scans the same repository forever and buys nothing.
+const drainQueue = (root, merged, dryRun) => {
+  const path = join(root, JUDGING_QUEUE);
+  const queue = readJson(path);
+  const names = new Set(merged.map((repo) => repo.name));
+  const kept = queue.repositories.filter((repo) => !names.has(repo.name.toLowerCase()));
+  const drained = queue.repositories
+    .filter((repo) => names.has(repo.name.toLowerCase()))
+    .map((repo) => repo.name);
+  if (drained.length > 0 && !dryRun) writeJson(path, { ...queue, repositories: kept });
+  return { drained, remaining: kept.length };
+};
+
+/// Prints what happened, per repository, so a run is legible without opening
+/// the report.
+const announce = (repos, reportPath, dryRun) => {
+  for (const repo of repos) {
+    const added = VERDICTS.map((verdict) => `+${repo.result.added[verdict].length} ${verdict}`);
+    console.log(`${repo.name}: ${added.join(", ")}, ${repo.result.disagreements.length} disagreed`);
+  }
+  console.log(dryRun ? `dry run; nothing written. Report: ${reportPath}` : `report: ${reportPath}`);
+};
+
+/// Writes the disagreement report and nothing else, then fails the run.
+///
+/// A disagreement is not a pair to skip past. Two judges ruling differently on
+/// the same lines means one of them is unreliable, and every other verdict
+/// they filed in the same pass was reached the same way. Banking those while
+/// the dispute is open is how a bad reading becomes ground truth.
+const tank = (folders, repos, reportPath, total) => {
+  console.error(`${total} pair(s) disagree. NOTHING was merged.`);
+  console.error(`the disagreements, in full: ${reportPath}`);
+  console.error("settle them, re-judge, and run again.");
+  process.exitCode = 1;
+};
+
+/// Writes the merge: every register, then the queue.
+const apply = (root, repos, dryRun) => {
+  if (dryRun) return;
+  for (const repo of repos) writeJson(repo.registerPath, repo.result.merged);
+  drainQueue(root, repos, dryRun);
+};
+
+const main = () => {
+  const { folders, options } = parseArguments(process.argv.slice(2));
+  for (const folder of folders) {
+    if (!isDirectory(folder)) throw new Error(`not a judging folder: ${folder}`);
+  }
+  const slugs = [...new Set(folders.flatMap(workspacesIn))].sort();
+  if (slugs.length === 0) throw new Error(`no ${VERDICTS_FILE} under any of ${folders.join(", ")}`);
+  const repos = slugs.map((slug) => mergeRepository(options.root, folders, slug));
+
+  const reportPath = join(options.root, options.report);
+  mkdirSync(dirname(reportPath), { recursive: true });
+  writeFileSync(reportPath, render({ sources: folders, repos }));
+
+  const disputed = disagreementCount(repos);
+  if (disputed > 0) return tank(folders, repos, options.report, disputed);
+  apply(options.root, repos, options.dryRun);
+  announce(repos, options.report, options.dryRun);
+};
+
+main();

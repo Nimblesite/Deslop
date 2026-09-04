@@ -130,6 +130,33 @@ A queued repository has **no register yet**, and a repository with a register is
 
 The CI accuracy gate does **not** scan the queue. It runs a small slice of judged registers, because a repository with no verdicts can answer no questions and would only cost time on every push.
 
+### [CORPUS-REGISTER-MERGE] Getting verdicts back in
+
+Several judges are sent the same folder and rule independently. Their answers become ground truth only where they **agree**: two judges who file one pair under two verdicts have between them said something false, and taking either answer would write that falsehood into the register and score every engine against it from then on.
+
+`scripts/corpus/merge-verdicts.mjs` is the only way a verdict reaches a register, and it checks disagreement **first**, across the judged folders and the existing registers together.
+
+**Any disagreement stops the whole run.** The report is written, nothing else is, and the exit status is non-zero. Merging the undisputed remainder would be the tempting thing and is the wrong thing: a judge who is demonstrably wrong about one pair reached every other verdict in that pass the same way, so the disputed pairs are evidence about the judges, not just about those pairs. Settle them and re-judge.
+
+A run therefore either writes everything or writes nothing. What counts as a disagreement:
+
+- **Opposite conclusions** — one judge's CLEARLY IN against another's CLEARLY OUT. A claim about the source that cannot be half true, and the first thing the report prints.
+- **A judge's ranges are not the candidate's.** They ruled on lines nobody showed them.
+- **A contradiction of a verdict the register already holds.** An earlier pass and this one read the same lines differently.
+- **The same pair, drawn twice, answered differently** inside one pass.
+- **A firm verdict against NOT CLEAR** — one judge committed where another would not.
+
+When nothing is disputed, the merge applies these rules:
+
+- **At least two judges must have ruled.** One reader with a firm opinion is an opinion; two arriving at it separately is evidence.
+- **Prose.** A scored entry states its judgement and its diff at length. NOT CLEAR is held to a note instead: it asserts nothing, so there is no assertion to state, and refusing a terse note would throw away the record that stops the next pass re-reading a pair somebody has already ruled on.
+- **One tree.** Every judged folder and the register must name the same commit. A line number means nothing without the tree it was read in.
+- A repository that gains a register leaves `corpus/judging-queue.json` in the same run, per [CORPUS-REGISTER-QUEUE].
+
+`docs/reports/verdict-merge.md` holds the disagreements and nothing else — no merge summary, no counts of what would have landed, because those bury the thing the report exists to show. Each judge's own words are quoted, never summarised.
+
+Asserted by `scripts/repository/verdict-merge.test.mjs`, which drives the script against throwaway judging folders that agree and that do not.
+
 ### [CORPUS-SCORE] The accuracy score
 
 The register says which pairs are real. The score says how the engine is doing against them, in one number per repository and one for the corpus.

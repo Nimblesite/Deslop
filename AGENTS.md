@@ -63,7 +63,7 @@ REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 
 - **Files < 500 lines. Functions < 20 lines.** Refactor when over.
 - **NAMED CONSTANTS - not literals** Give values names and REUSE them. THIS INCLUDES TESTS. TESTS MUST LEVERAGE NAMED CONSTANTS; NOT RAW STRINGS
-- **Calcs like percentage calc only exist in ONE PLACE: Rust** ZERO calculations outside the core Rust code. E.g. no calcs in Typescript. Any calcs outside Rust is a HARD VIOLATION.
+- **Core calcs like percentage calc only exist in ONE PLACE: Rust** ZERO calculations outside the core Rust code. E.g. no calcs in Typescript. Any calcs outside Rust is a HARD VIOLATION. Note: this rule ONLY applies to the core duplication finding code. This is not true for scripts and utilities
 - **All threshold numbers are configurable** Define the defaults as constants but allow the user to override these in the config
 - **Never reference gh issues in code** Reference SPEC IDS only. A test can refer to a gh issue only if it's an explicit regression
 - **Act autonomously.** Do not stop for confirmation — except where the strict accuracy rule says STOP. Record assumptions and continue.

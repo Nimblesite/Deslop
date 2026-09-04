@@ -227,6 +227,8 @@ _ci-contract-tests: _vsix-node-modules
 	@node --test scripts/repository/score-gate-source.test.mjs
 	@echo "==> Blinded judging folder gate ([CORPUS-REGISTER-WORKSPACE])..."
 	@node --test scripts/repository/judging-workspace.test.mjs
+	@echo "==> Verdict merge gate ([CORPUS-REGISTER-MERGE])..."
+	@node --test scripts/repository/verdict-merge.test.mjs
 	@echo "==> Test-selection gate ([TEST-SELECTION])..."
 	@node --test scripts/repository/test-selection.test.mjs
 	@echo "==> Coverage-isolation gate ([CI-COVERAGE-ISOLATION])..."
@@ -541,6 +543,14 @@ JUDGING_DIR ?= $(HOME)/clone-judging
 ## judging-folder: Build the blinded folder a clone judge works through.
 judging-folder:
 	./scripts/corpus/prepare-judging.sh $(JUDGING_DIR)
+
+## merge-verdicts: Fold judged verdicts back into the clone registers. Takes
+##                 two or more judging folders. ANY disagreement between the
+##                 judges stops the run: the disagreements are reported to
+##                 docs/reports/verdict-merge.md and nothing is written.
+merge-verdicts:
+	@test -n "$(JUDGED_DIRS)" || { echo "set JUDGED_DIRS to two or more judging folders"; exit 1; }
+	@node scripts/corpus/merge-verdicts.mjs $(JUDGED_DIRS)
 
 # [DEPLOY-CI-GATES] CI/release deployment-drift gate: manifest schema, binary
 #   version contracts, release-workflow gates, and the verifier proof suite.
@@ -878,6 +888,7 @@ help:
 	@echo "  score-gate             - Score this build against the judged clone registers (what CI runs)"
 	@echo "  compare                - Compare the last release against HEAD across every register"
 	@echo "  judging-folder         - Build the blinded repos+reports+skill folder for a clone judge"
+	@echo "  merge-verdicts         - Merge judged verdicts; halts on any disagreement (JUDGED_DIRS=\"a b\")"
 	@echo "  test-corpus            - Accuracy + resource gate against pinned real repositories"
 	@echo "  test-corpus-ci         - test-corpus in baseline mode (reports tracked defects)"
 	@echo "  ci-ollama              - make ci plus make test-ollama"
