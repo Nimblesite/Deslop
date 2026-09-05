@@ -13,8 +13,8 @@ use crate::{
 };
 
 use super::{
-    CandidatePair, ExactFunctionAnchors, EMBEDDING_SUPPORT_FLOOR, LSH_ONLY_MIN_JACCARD,
-    SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
+    token_carried, CandidatePair, ExactFunctionAnchors, EMBEDDING_SUPPORT_FLOOR,
+    LSH_ONLY_MIN_JACCARD, SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
 };
 
 /// Structural overlap at which normalised shape saturates the content guard.
@@ -217,12 +217,21 @@ fn embedding_needs_role_guard(pair: &CandidatePair) -> bool {
 }
 
 /// Whether saturated normalised evidence lacks an independent semantic route.
+///
+/// A token-carried pair is always measured: its token echo is its whole
+/// case, and the rescue pass has aligned its subtrees only to decide
+/// which floor that echo must clear ([`content_floor`]), never to excuse
+/// it from the guard. Without this, a pair whose measured overlap sat
+/// between the rescue floor and saturation — an interface against the
+/// `export` statement wrapping its renamed twin — passed with no content
+/// evidence at all (`ts-interfaces`).
 fn content_is_required(pair: &CandidatePair, left: &Fingerprint, right: &Fingerprint) -> bool {
     pair.score.embedding_cos < EMBEDDING_SUPPORT_FLOOR
         && (left.hash == right.hash
             || pair.score.structural >= SHAPE_IDENTICAL_FLOOR
             || pair.shared_subtree_overlap >= SHAPE_IDENTICAL_FLOOR
             || pair.score.token_jaccard >= SATURATING_TOKEN_FLOOR
+            || token_carried(pair)
             || lsh_only_pair_needs_content(pair, left, right))
 }
 

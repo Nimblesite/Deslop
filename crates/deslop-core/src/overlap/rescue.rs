@@ -1,11 +1,13 @@
 //! Applies the shared-subtree rescue over the candidate set
 //! ([FUSED-SHARED-SUBTREE], gh #408).
 //!
-//! Only pairs the fused threshold would otherwise drop — despite
-//! corroborating token evidence — are measured: aligning two subtrees for
-//! all candidates would repeat the admission-cost mistake
-//! [FUSED-CONTENT-GATE] deliberately avoids, and a pair that already
-//! survives needs no rescue.
+//! Two populations are measured, and no other: pairs the fused threshold
+//! would otherwise drop despite corroborating token evidence, and pairs
+//! the token axis carries alone, whose content floor under
+//! [FUSED-CONTENT-GATE] depends on whether their alignment clears the
+//! overlap floor ([`alignment_required`]). Aligning two subtrees for every
+//! candidate would repeat the admission-cost mistake the content gate
+//! deliberately avoids.
 //!
 //! The pass is measured work over a corpus-scale population, so it runs
 //! sharded across the available cores ([PERF-FLUTTER-TODO-RESCUE]): each
@@ -27,7 +29,7 @@ use crate::{
     content::pair_content_agreement,
     fingerprint::Fingerprint,
     pair::{
-        crosses_files, rescue_eligible, CandidatePair, ExactFunctionAnchors,
+        alignment_required, crosses_files, CandidatePair, ExactFunctionAnchors,
         RESCUE_MIN_CONTENT_AGREEMENT, SHARED_SUBTREE_MIN_NODE_COUNT, SHARED_SUBTREE_MIN_OVERLAP,
     },
     state::FileId,
@@ -182,7 +184,7 @@ fn measure_one<S: BuildHasher, L: BuildHasher>(
     measurer: &mut OverlapMeasurer<'_>,
     tally: &mut RescueTally,
 ) {
-    if !rescue_eligible(pair) {
+    if !alignment_required(pair) {
         return;
     }
     let (Some(left), Some(right)) = (fingerprints.get(pair.left), fingerprints.get(pair.right))

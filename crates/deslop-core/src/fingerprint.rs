@@ -28,7 +28,8 @@ pub struct Fingerprint {
 }
 
 /// Returns fingerprints for every subtree in `root` whose size is
-/// `>= min_nodes`. The root itself is included when it meets the threshold.
+/// `>= min_nodes`. The synthetic root itself is never one of them
+/// ([PIPELINE-FINGERPRINT-MERKLE-ROOT]).
 #[must_use]
 pub fn collect_fingerprints(root: &NormalizedNode, min_nodes: usize) -> Vec<Fingerprint> {
     let mut out = Vec::new();
@@ -207,8 +208,7 @@ impl<'tree> Frame<'tree> {
         hashes: &mut Vec<[u8; 32]>,
     ) -> ([u8; 32], usize) {
         let hash = digest_node(self.node, hashes.get(self.hash_base..).unwrap_or(&[]));
-        if self.node_count >= min_nodes && !self.boilerplate && !re_describes_only_child(self.node)
-        {
+        if self.node_count >= min_nodes && !self.boilerplate && !is_synthetic_root(self.node) {
             out.push(Fingerprint {
                 hash,
                 file_id: self.node.file_id,
@@ -263,24 +263,24 @@ pub(crate) fn subtree_hash<'tree>(
     hash
 }
 
-/// True when the synthetic `__file__` root adds nothing to its only child.
+/// True for the synthetic `__file__` root, which is never a candidate view
+/// ([PIPELINE-FINGERPRINT-MERKLE-ROOT]).
 ///
-/// [PIPELINE-NORMALIZE-AST] gives the root the extent of the nodes
-/// normalisation kept, so a file holding a single declaration yields a root
-/// whose byte range — and therefore whose source text — is identical to that
-/// declaration's. Fingerprinting both reports one region twice: it
-/// double-counts in `clusters_total` and the duplication metric, and because
-/// the two spans carry byte-identical text the embedding pass scores them a
-/// perfect match *inside a single file*, seeding clusters through transitive
-/// closure that describe no duplication at all.
-///
-/// Only the synthetic root is suppressed, and only when a single child covers
-/// it exactly. That child is always fingerprinted in its place, and any
-/// cluster the root could have joined the child joins on the same bytes, so
-/// no finding is lost. Pinned by `deslop::issue_343_sum_clamp_saturation`.
-fn re_describes_only_child(node: &NormalizedNode) -> bool {
+/// The root is not syntax the author wrote. [PIPELINE-NORMALIZE-AST] gives
+/// it the extent of whatever normalisation kept, so it spans the package
+/// clause, the import block and every top-level item at once. As a view it
+/// claims that compulsory prologue as duplication, and being the widest
+/// range in its file it wins the same-file collapse over the declaration
+/// that was actually copied ([PIPELINE-CLUSTER-EXACT-SCOPE]): a Go pair
+/// published as `alpha.go:1-13` against `beta.go:1-13`, `package` clause
+/// included, and `json_report.go:1-55` against a two-function run of its
+/// counterpart. Its children are fingerprinted in its place and the sibling
+/// pass covers a run of copied top-level items, so a whole-file copy is
+/// still reported at the extent of what was copied. Pinned by
+/// `deslop::issue_343_sum_clamp_saturation` (a root re-describing its only
+/// child) and the Go scope suites (`deslop::common::go_scope`).
+fn is_synthetic_root(node: &NormalizedNode) -> bool {
     node.kind == FILE_KIND
-        && matches!(node.children.as_slice(), [only] if only.byte_range == node.byte_range)
 }
 
 /// Half-open overlap test on two fingerprints' byte ranges.
