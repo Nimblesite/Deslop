@@ -249,6 +249,54 @@
         "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:404-429",
         "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:501-526"
       ]
+    },
+    {
+      "why": "The two serialization-cache methods are the same implementation for their sync and async counterparts, with systematic member changes.",
+      "verified": "diff returned differences: 42 versus 42 lines; 4 hunk(s), 5 removed and 5 added lines",
+      "occurrences": [
+        "src/Polly.Shared/Caching/SerializingCacheProvider.cs:59-100",
+        "src/Polly.Shared/Caching/SerializingCacheProvider.cs:10-51"
+      ]
+    },
+    {
+      "why": "A 16-line block of circuit-breaker test body pasted verbatim at a second place in the same spec file.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 16 lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:1482-1497",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:1521-1536"
+      ]
+    },
+    {
+      "why": "A 25-line block of circuit-breaker test body pasted verbatim at a second place in the same spec file.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 25 lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:2437-2461",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:2537-2561"
+      ]
+    },
+    {
+      "why": "A 24-line block of circuit-breaker test body pasted verbatim at a second place in the same spec file.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 24 lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1378-1401",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1280-1303"
+      ]
+    },
+    {
+      "why": "These policy-wrap syntax methods are a clean async/sync twin of the same implementation.",
+      "verified": "diff returned differences: 34 versus 34 lines; 2 hunk(s), 4 removed and 4 added lines",
+      "occurrences": [
+        "src/Polly.Shared/Wrap/PolicyWrapSyntaxAsync.cs:44-77",
+        "src/Polly.Shared/Wrap/PolicyWrapSyntax.cs:44-77"
+      ]
+    },
+    {
+      "why": "A 26-line block written out verbatim in both files.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 26 lines.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:1583-1608",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:501-526"
+      ]
     }
   ],
   "clearly_out": [
@@ -327,7 +375,7 @@
       ]
     },
     {
-      "why": "3 lines of sync\u2192async construction.",
+      "why": "3 lines of sync→async construction.",
       "occurrences": [
         "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:609-611",
         "src/Polly.SharedSpecs/Timeout/TimeoutAsyncSpecs.cs:573-575"
@@ -362,7 +410,7 @@
       ]
     },
     {
-      "why": "3 lines of sync\u2192async bulkhead construction.",
+      "why": "3 lines of sync→async bulkhead construction.",
       "occurrences": [
         "src/Polly.SharedSpecs/Bulkhead/BulkheadTResultSpecs.cs:64-66",
         "src/Polly.SharedSpecs/Bulkhead/BulkheadTResultAsyncSpecs.cs:64-66"
@@ -467,7 +515,7 @@
       ]
     },
     {
-      "why": "Bulkhead vs timeout engine wrappers \u2014 parallel shape, different engines.",
+      "why": "Bulkhead vs timeout engine wrappers — parallel shape, different engines.",
       "occurrences": [
         "src/Polly.Shared/Bulkhead/BulkheadSyntaxAsync.cs:81-96",
         "src/Polly.Shared/Timeout/TimeoutSyntaxAsync.cs:251-262"
@@ -607,7 +655,7 @@
       ]
     },
     {
-      "why": "IsolatedCircuit vs BrokenCircuit exception classes \u2014 related hierarchy, different content.",
+      "why": "IsolatedCircuit vs BrokenCircuit exception classes — related hierarchy, different content.",
       "occurrences": [
         "src/Polly.Shared/CircuitBreaker/IsolatedCircuitException.cs:14-34",
         "src/Polly.Shared/CircuitBreaker/BrokenCircuitException.cs:11-52"
@@ -656,7 +704,7 @@
       ]
     },
     {
-      "why": "WaitAndRetry vs Retry async specs \u2014 different policies.",
+      "why": "WaitAndRetry vs Retry async specs — different policies.",
       "occurrences": [
         "src/Polly.SharedSpecs/Retry/WaitAndRetryAsyncSpecs.cs:133-182",
         "src/Polly.SharedSpecs/Retry/RetryAsyncSpecs.cs:87-131"
@@ -880,7 +928,7 @@
       ]
     },
     {
-      "why": "BrokenCircuit vs TimeoutRejected exception classes \u2014 parallel hierarchy, different docs.",
+      "why": "BrokenCircuit vs TimeoutRejected exception classes — parallel hierarchy, different docs.",
       "occurrences": [
         "src/Polly.Shared/CircuitBreaker/BrokenCircuitException.cs:11-52",
         "src/Polly.Shared/Timeout/TimeoutRejectedException.cs:6-51"
@@ -1091,7 +1139,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The IReadOnlyPolicyRegistry specs are the PolicyRegistry specs with the systematic _registry\u2192ReadOnlyRegistry rename over 84-86 lines.",
+      "judge_said": "The IReadOnlyPolicyRegistry specs are the PolicyRegistry specs with the systematic _registry→ReadOnlyRegistry rename over 84-86 lines.",
       "occurrences": [
         "src/Polly.SharedSpecs/Registry/PolicyRegistrySpecs.cs:246-330",
         "src/Polly.SharedSpecs/Registry/IReadOnlyPolicyRegistrySpecs.cs:100-184"
@@ -1302,6 +1350,776 @@
       "occurrences": [
         "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:676-772",
         "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:684-780"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultAsyncSpecs.cs:71-76",
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultAsyncSpecs.cs:79-84"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:516-576",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryAsyncSpecs.cs:429-508"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecsAsync.cs:625-630",
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecsAsync.cs:655-660"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:402-403",
+        "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:138-139"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:153-159",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:1273-1280"
+      ]
+    },
+    {
+      "why": "The ranges do not provide an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheTResultSpecs.cs:190-213",
+        "src/Polly.SharedSpecs/Caching/CacheAsyncSpecs.cs:197-218"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecs.cs:70-78",
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecsAsync.cs:116-125"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheAsyncSpecs.cs:472-472",
+        "src/Polly.SharedSpecs/Caching/CacheAsyncSpecs.cs:464-464"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultAsyncSpecs.cs:35-40",
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultSpecs.cs:60-65"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheSpecs.cs:38-40",
+        "src/Polly.SharedSpecs/Caching/CacheTResultAsyncSpecs.cs:39-41"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultAsyncSpecs.cs:572-573",
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultSpecs.cs:463-464"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultSpecs.cs:559-568",
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultSpecs.cs:537-546"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:829-831",
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:825-827"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryTResultMixedResultExceptionSpecs.cs:64-65",
+        "src/Polly.SharedSpecs/Retry/RetryTResultMixedResultExceptionSpecs.cs:120-121"
+      ]
+    },
+    {
+      "why": "The ranges do not provide an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:791-798",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:889-893"
+      ]
+    },
+    {
+      "why": "The ranges do not provide an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:263-280",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:264-279"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.Shared/Fallback/FallbackPolicyAsync.cs:36-38",
+        "src/Polly.Shared/CircuitBreaker/CircuitBreakerPolicyAsync.cs:25-27"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:1262-1264",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:1251-1253"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:219-221",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:248-250"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:709-762",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:701-759"
+      ]
+    },
+    {
+      "why": "The ranges do not provide an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryForeverSpecs.cs:15-22",
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:33-40"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:635-637",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:622-624"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:124-192",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:121-191"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.Shared/Retry/RetryPolicy.cs:21-30",
+        "src/Polly.Shared/CircuitBreaker/CircuitBreakerPolicyAsync.cs:22-33"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultSpecs.cs:579-628",
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultAsyncSpecs.cs:530-586"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:394-437",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryAsyncSpecs.cs:304-351"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheTResultAsyncSpecs.cs:98-100",
+        "src/Polly.SharedSpecs/Caching/CacheAsyncSpecs.cs:98-100"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecsAsync.cs:526-543",
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecsAsync.cs:616-633"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:170-209",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:171-210"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:1138-1143",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:1035-1040"
+      ]
+    },
+    {
+      "why": "The ranges do not provide an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecs.cs:307-320",
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecsAsync.cs:311-324"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:934-940",
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:1016-1023"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:294-295",
+        "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:530-531"
+      ]
+    },
+    {
+      "why": "The ranges do not provide an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultMixedResultExceptionSpecs.cs:19-24",
+        "src/Polly.SharedSpecs/Retry/RetryTResultMixedResultExceptionSpecs.cs:21-28"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryAsyncSpecs.cs:43-45",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:80-82"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:35-37",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:34-36"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.Shared/PolicyAsync.cs:675-678",
+        "src/Polly.Shared/PolicyAsync.cs:109-112"
+      ]
+    },
+    {
+      "why": "The ranges do not provide an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:1363-1416",
+        "src/Polly.SharedSpecs/Retry/RetrySpecs.cs:521-573"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheTResultAsyncSpecs.cs:233-239",
+        "src/Polly.SharedSpecs/Caching/CacheTResultSpecs.cs:253-259"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:757-759",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:716-718"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:938-943",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:844-850"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:34-36",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:119-121"
+      ]
+    },
+    {
+      "why": "The ranges do not provide an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Polly.Shared/PolicyAsync.cs:877-963",
+        "src/Polly.Shared/Policy.TResult.cs:37-144"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:984-987",
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:548-551"
+      ]
+    },
+    {
+      "why": "The ranges do not provide an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultMixedResultExceptionSpecs.cs:217-221",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:156-160"
+      ]
+    },
+    {
+      "why": "The ranges do not provide an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:822-836",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:753-760"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/SerializingCacheProviderSpecs.cs:56-61",
+        "src/Polly.SharedSpecs/Caching/SerializingCacheProviderSpecs.cs:175-180"
+      ]
+    },
+    {
+      "why": "The ranges do not provide an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Polly.Shared/PolicyAsync.cs:1122-1158",
+        "src/Polly.Shared/Policy.cs:587-615"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:1241-1242",
+        "src/Polly.SharedSpecs/Retry/RetrySpecs.cs:676-677"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutSpecs.cs:214-256",
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultSpecs.cs:230-281"
+      ]
+    },
+    {
+      "why": "The ranges do not provide an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheTResultSpecs.cs:332-344",
+        "src/Polly.SharedSpecs/Caching/CacheSpecs.cs:349-361"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:844-851",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:1055-1061"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:1292-1369",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:1304-1379"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/PolicyAsyncSpecs.cs:133-139",
+        "src/Polly.SharedSpecs/PolicySpecs.cs:152-158"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryAsyncSpecs.cs:1070-1070",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryAsyncSpecs.cs:1100-1100"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:963-966",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:971-975"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultSpecs.cs:444-449",
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultSpecs.cs:492-497"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:1160-1166",
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:387-393"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheTResultAsyncSpecs.cs:17-48",
+        "src/Polly.SharedSpecs/Caching/CacheTResultSpecs.cs:16-46"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheAsyncSpecs.cs:464-464",
+        "src/Polly.SharedSpecs/Caching/CacheTResultAsyncSpecs.cs:389-389"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:599-603",
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:754-758"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.Shared/Retry/RetrySyntaxAsync.cs:467-469",
+        "src/Polly.Shared/Bulkhead/BulkheadSyntaxAsync.cs:85-87"
+      ]
+    },
+    {
+      "why": "The ranges do not provide an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:416-421",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:436-439"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:242-245",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:246-249"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:419-420",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:199-200"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.Shared/Retry/RetryTResultSyntaxAsync.cs:563-566",
+        "src/Polly.Shared/Retry/RetryTResultSyntaxAsync.cs:432-435"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:570-575",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:596-601"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultAsyncSpecs.cs:262-297",
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultSpecs.cs:293-332"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Registry/IReadOnlyPolicyRegistrySpecs.cs:190-192",
+        "src/Polly.SharedSpecs/Registry/IReadOnlyPolicyRegistrySpecs.cs:227-229"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:998-1010",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:833-845"
+      ]
+    },
+    {
+      "why": "The ranges do not provide an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Polly.Shared/IAsyncPolicy.cs:79-97",
+        "src/Polly.Shared/ISyncPolicy.cs:167-183"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:193-196",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:194-197"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:1058-1059",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:1011-1012"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:735-755",
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:610-629"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryForeverAsyncSpecs.cs:128-159",
+        "src/Polly.SharedSpecs/Retry/RetryAsyncSpecs.cs:249-283"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.Shared/Policy.cs:504-591",
+        "src/Polly.Shared/Policy.TResult.cs:85-158"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheTResultSpecs.cs:136-138",
+        "src/Polly.SharedSpecs/Caching/CacheTResultSpecs.cs:79-81"
+      ]
+    },
+    {
+      "why": "The ranges do not provide an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Wrap/PolicyWrapContextAndKeySpecs.cs:214-218",
+        "src/Polly.SharedSpecs/Wrap/PolicyWrapContextAndKeySpecs.cs:159-163"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryForeverAsyncSpecs.cs:503-503",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryForeverAsyncSpecs.cs:652-652"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:345-345",
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultSpecs.cs:274-275"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:333-351",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:332-350"
+      ]
+    },
+    {
+      "why": "The ranges do not provide an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:732-746",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:402-416"
+      ]
+    },
+    {
+      "why": "The ranges do not provide an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:825-831",
+        "src/Polly.SharedSpecs/Retry/RetryAsyncSpecs.cs:331-339"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:846-947",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerAsyncSpecs.cs:781-884"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryAsyncSpecs.cs:83-84",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryAsyncSpecs.cs:129-130"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.Shared/Timeout/TimeoutPolicyAsync.cs:7-26",
+        "src/Polly.Shared/NoOp/NoOpPolicyAsync.cs:9-27"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.Shared/Timeout/TimeoutSyntax.cs:95-97",
+        "src/Polly.Shared/Timeout/TimeoutTResultSyntax.cs:97-99"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/WaitAndRetryForeverAsyncSpecs.cs:250-260",
+        "src/Polly.SharedSpecs/Retry/WaitAndRetrySpecs.cs:552-562"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:1040-1043",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:884-886"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:152-156",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:1768-1771"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:888-892",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:1257-1263"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.Shared/Timeout/TimeoutTResultSyntax.cs:129-132",
+        "src/Polly.Shared/Timeout/TimeoutSyntax.cs:110-114"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:786-787",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:2854-2855"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:1236-1236",
+        "src/Polly.SharedSpecs/Fallback/FallbackTResultAsyncSpecs.cs:381-382"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:372-374",
+        "src/Polly.SharedSpecs/Fallback/FallbackAsyncSpecs.cs:368-370"
+      ]
+    },
+    {
+      "why": "The ranges do not provide an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheAsyncSpecs.cs:527-530",
+        "src/Polly.SharedSpecs/Caching/CacheSpecs.cs:469-478"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerSpecs.cs:643-646",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:1824-1827"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Caching/CacheTResultAsyncSpecs.cs:237-237",
+        "src/Polly.SharedSpecs/Caching/CacheTResultAsyncSpecs.cs:293-293"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.Shared/ISyncPolicyTResult.cs:27-69",
+        "src/Polly.Shared/ISyncPolicy.cs:69-115"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:883-888",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:829-836"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Bulkhead/BulkheadTResultAsyncSpecs.cs:95-225",
+        "src/Polly.SharedSpecs/Bulkhead/BulkheadTResultSpecs.cs:51-224"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:978-983",
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:734-739"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/PolicyContextAndKeySpecs.cs:275-277",
+        "src/Polly.SharedSpecs/PolicyContextAndKeyAsyncSpecs.cs:95-97"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Timeout/TimeoutTResultSpecs.cs:274-275",
+        "src/Polly.SharedSpecs/Fallback/FallbackSpecs.cs:502-502"
+      ]
+    },
+    {
+      "why": "The overlap is only a one-to-three-line idiom or assertion fragment, too short for an unarguable clone verdict.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerSpecs.cs:97-99",
+        "src/Polly.SharedSpecs/CircuitBreaker/AdvancedCircuitBreakerAsyncSpecs.cs:106-108"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:199-209",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:178-188"
+      ]
+    },
+    {
+      "why": "There is similar material, but the proposed boundaries are ragged or include extra code, so the regions are not an unambiguous clone.",
+      "occurrences": [
+        "src/Polly.Shared/Bulkhead/BulkheadTResultSyntaxAsync.cs:38-57",
+        "src/Polly.Shared/Bulkhead/BulkheadTResultSyntax.cs:39-57"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultSpecs.cs:682-695",
+        "src/Polly.SharedSpecs/CircuitBreaker/CircuitBreakerTResultAsyncSpecs.cs:690-703"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.SharedSpecs/Retry/RetryTResultSpecsAsync.cs:296-304",
+        "src/Polly.SharedSpecs/PolicySpecs.cs:112-120"
+      ]
+    },
+    {
+      "why": "The ranges share substantial test or API scaffolding, but the differences are not a single clean rename and leave doubt about copied code.",
+      "occurrences": [
+        "src/Polly.Shared/Retry/RetryTResultSyntaxAsync.cs:804-816",
+        "src/Polly.Shared/Retry/RetryTResultSyntaxAsync.cs:167-179"
       ]
     }
   ]

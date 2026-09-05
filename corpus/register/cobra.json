@@ -11,7 +11,7 @@
   },
   "clearly_in": [
     {
-      "why": "The MarkFlagsRequiredTogether test is the MarkFlagsOneRequired test with the systematic rename one-required\u2192required-together over 25 lines.",
+      "why": "The MarkFlagsRequiredTogether test is the MarkFlagsOneRequired test with the systematic rename one-required→required-together over 25 lines.",
       "verified": "extracted and diffed the two source ranges (25 vs 25 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
       "occurrences": [
         "completions_test.go:3159-3183",
@@ -19,7 +19,7 @@
       ]
     },
     {
-      "why": "GenYamlTree is GenMarkdownTree with the systematic rename Markdown\u2192Yaml.",
+      "why": "GenYamlTree is GenMarkdownTree with the systematic rename Markdown→Yaml.",
       "verified": "extracted and diffed the two source ranges (5 vs 5 lines): not byte-identical, similarity 0.94; differences are the systematic change described",
       "occurrences": [
         "doc/yaml_docs.go:53-57",
@@ -43,7 +43,7 @@
       ]
     },
     {
-      "why": "UsagePadding is CommandPathPadding with the systematic rename CommandPath\u2192Usage throughout.",
+      "why": "UsagePadding is CommandPathPadding with the systematic rename CommandPath→Usage throughout.",
       "verified": "extracted and diffed the two source ranges (8 vs 8 lines): not byte-identical, similarity 0.38; differences are the systematic change described",
       "occurrences": [
         "command.go:573-580",
@@ -59,7 +59,7 @@
       ]
     },
     {
-      "why": "Mirror of candidate 60 \u2014 daughter/son vs child1 suites, a pure rename.",
+      "why": "Mirror of candidate 60 — daughter/son vs child1 suites, a pure rename.",
       "verified": "extracted and diffed the two source ranges (30 vs 30 lines): not byte-identical, similarity 0.99; differences are the systematic change described",
       "occurrences": [
         "completions_test.go:1504-1533",
@@ -67,7 +67,7 @@
       ]
     },
     {
-      "why": "18 lines of the completion test duplicated with only the directive :0\u2194:4 changed.",
+      "why": "18 lines of the completion test duplicated with only the directive :0↔:4 changed.",
       "verified": "extracted and diffed the two source ranges (18 vs 18 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
       "occurrences": [
         "completions_test.go:1337-1354",
@@ -75,7 +75,7 @@
       ]
     },
     {
-      "why": "The commandsMaxUseLen/CommandPathLen/NameLen tracking block duplicated with the loop variable renamed command\u2192x.",
+      "why": "The commandsMaxUseLen/CommandPathLen/NameLen tracking block duplicated with the loop variable renamed command→x.",
       "verified": "extracted and diffed the two source ranges (12 vs 12 lines): not byte-identical, similarity 0.97; differences are the systematic change described",
       "occurrences": [
         "command.go:1414-1425",
@@ -83,7 +83,7 @@
       ]
     },
     {
-      "why": "getErr is getOut with the systematic rename out\u2192err throughout.",
+      "why": "getErr is getOut with the systematic rename out→err throughout.",
       "verified": "extracted and diffed the two source ranges (9 vs 9 lines): not byte-identical, similarity 0.93; differences are the systematic change described",
       "occurrences": [
         "command.go:412-420",
@@ -99,7 +99,7 @@
       ]
     },
     {
-      "why": "33 lines of the completion test duplicated with only the directive :4\u2194:0 changed.",
+      "why": "33 lines of the completion test duplicated with only the directive :4↔:0 changed.",
       "verified": "extracted and diffed the two source ranges (33 vs 33 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
       "occurrences": [
         "completions_test.go:391-423",
@@ -107,7 +107,7 @@
       ]
     },
     {
-      "why": "29 lines of the completion test duplicated with only the directive :4\u2194:0 changed.",
+      "why": "29 lines of the completion test duplicated with only the directive :4↔:0 changed.",
       "verified": "extracted and diffed the two source ranges (29 vs 29 lines): not byte-identical, similarity 0.97; differences are the systematic change described",
       "occurrences": [
         "completions_test.go:2292-2320",
@@ -115,7 +115,7 @@
       ]
     },
     {
-      "why": "The MinimumNArgs test trio is the MaximumNArgs trio with the systematic rename Minimum\u2192Maximum over 17 lines.",
+      "why": "The MinimumNArgs test trio is the MaximumNArgs trio with the systematic rename Minimum→Maximum over 17 lines.",
       "verified": "extracted and diffed the two source ranges (17 vs 17 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
       "occurrences": [
         "args_test.go:240-256",
@@ -123,7 +123,7 @@
       ]
     },
     {
-      "why": "getUsageTemplateFunc is getHelpTemplateFunc with the systematic rename help\u2192usage throughout.",
+      "why": "getUsageTemplateFunc is getHelpTemplateFunc with the systematic rename help→usage throughout.",
       "verified": "extracted and diffed the two source ranges (11 vs 10 lines): not byte-identical, similarity 0.90; differences are the systematic change described",
       "occurrences": [
         "command.go:505-515",
@@ -147,7 +147,7 @@
       ]
     },
     {
-      "why": "Mirror of candidate 158/102 family \u2014 child1 vs child2 completion tests.",
+      "why": "Mirror of candidate 158/102 family — child1 vs child2 completion tests.",
       "verified": "extracted and diffed the two source ranges (11 vs 11 lines): not byte-identical, similarity 0.98; differences are the systematic change described",
       "occurrences": [
         "completions_test.go:1753-1763",
@@ -155,11 +155,27 @@
       ]
     },
     {
-      "why": "TestGenYamlTree is TestGenRSTTree with the systematic rename RST\u2192Yaml over 17 lines.",
+      "why": "TestGenYamlTree is TestGenRSTTree with the systematic rename RST→Yaml over 17 lines.",
       "verified": "extracted and diffed the two source ranges (17 vs 17 lines): not byte-identical, similarity 0.75; differences are the systematic change described",
       "occurrences": [
         "doc/rest_docs_test.go:80-96",
         "doc/yaml_docs_test.go:57-73"
+      ]
+    },
+    {
+      "why": "The root/child command fixture with its ValidArgsFunction returning subArg is written out verbatim at two places in completions_test.go.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 12 lines.",
+      "occurrences": [
+        "completions_test.go:3258-3269",
+        "completions_test.go:3060-3071"
+      ]
+    },
+    {
+      "why": "The table-test runner loop - t.Run, executeCommand, and the switch over err and output - is pasted verbatim at two places in completions_test.go.",
+      "verified": "Diffed both ranges out of source/: byte-identical over 14 lines.",
+      "occurrences": [
+        "completions_test.go:3240-3253",
+        "completions_test.go:3334-3347"
       ]
     }
   ],
@@ -181,14 +197,14 @@
       ]
     },
     {
-      "why": "Sibling help-output tests asserting Contains vs Omits of the version flag \u2014 inverted scenarios.",
+      "why": "Sibling help-output tests asserting Contains vs Omits of the version flag — inverted scenarios.",
       "occurrences": [
         "command_test.go:2739-2748",
         "command_test.go:2753-2762"
       ]
     },
     {
-      "why": "Help-template vs completion-group test setup \u2014 different features sharing harness lines.",
+      "why": "Help-template vs completion-group test setup — different features sharing harness lines.",
       "occurrences": [
         "command_test.go:1026-1032",
         "command_test.go:2003-2008"
@@ -202,7 +218,7 @@
       ]
     },
     {
-      "why": "checkStringOmits vs checkStringContains of rootflag \u2014 inverted doc-test scenarios.",
+      "why": "checkStringOmits vs checkStringContains of rootflag — inverted doc-test scenarios.",
       "occurrences": [
         "doc/md_docs_test.go:69-77",
         "doc/md_docs_test.go:32-40"
@@ -230,7 +246,7 @@
       ]
     },
     {
-      "why": "File-extension filtering vs shorthand-flag completion \u2014 different scenarios in one shared harness.",
+      "why": "File-extension filtering vs shorthand-flag completion — different scenarios in one shared harness.",
       "occurrences": [
         "completions_test.go:1132-1157",
         "completions_test.go:2726-2753"
@@ -244,7 +260,7 @@
       ]
     },
     {
-      "why": "Single identical case line \u2014 a one-line idiom.",
+      "why": "Single identical case line — a one-line idiom.",
       "occurrences": [
         "command.go:695-695",
         "command.go:731-731"
@@ -258,14 +274,14 @@
       ]
     },
     {
-      "why": "3 identical lines of sub-command completion \u2014 a short idiom.",
+      "why": "3 identical lines of sub-command completion — a short idiom.",
       "occurrences": [
         "command.go:1286-1288",
         "completions.go:504-506"
       ]
     },
     {
-      "why": "'--' arg completion vs required-flag completion \u2014 different scenarios sharing the harness.",
+      "why": "'--' arg completion vs required-flag completion — different scenarios sharing the harness.",
       "occurrences": [
         "completions_test.go:1922-1930",
         "completions_test.go:974-982"
@@ -307,14 +323,14 @@
       ]
     },
     {
-      "why": "3 identical lines of name assertion \u2014 a short idiom.",
+      "why": "3 identical lines of name assertion — a short idiom.",
       "occurrences": [
         "command_test.go:2339-2341",
         "command_test.go:2359-2361"
       ]
     },
     {
-      "why": "help-command vs --help invocation tests \u2014 different features.",
+      "why": "help-command vs --help invocation tests — different features.",
       "occurrences": [
         "command_test.go:943-945",
         "command_test.go:1874-1876"
@@ -328,14 +344,14 @@
       ]
     },
     {
-      "why": "5 lines of AddCommand/GenBashCompletion setup \u2014 a short idiom.",
+      "why": "5 lines of AddCommand/GenBashCompletion setup — a short idiom.",
       "occurrences": [
         "completions_test.go:1582-1586",
         "completions_test.go:1566-1570"
       ]
     },
     {
-      "why": "3 identical lines of ValidArgsFunction return \u2014 a short idiom.",
+      "why": "3 identical lines of ValidArgsFunction return — a short idiom.",
       "occurrences": [
         "completions_test.go:2089-2091",
         "completions_test.go:1826-1828"
@@ -370,14 +386,14 @@
       ]
     },
     {
-      "why": "Parent-path naming in ReST docs vs bash completion \u2014 same ReplaceAll idiom, different context.",
+      "why": "Parent-path naming in ReST docs vs bash completion — same ReplaceAll idiom, different context.",
       "occurrences": [
         "doc/rest_docs.go:101-103",
         "bash_completions.go:659-661"
       ]
     },
     {
-      "why": "SEE ALSO sections of ReST vs Markdown docs \u2014 parallel logic with genuinely different link formats.",
+      "why": "SEE ALSO sections of ReST vs Markdown docs — parallel logic with genuinely different link formats.",
       "occurrences": [
         "doc/rest_docs.go:97-127",
         "doc/md_docs.go:83-111"
@@ -426,14 +442,14 @@
       ]
     },
     {
-      "why": "4 identical group-setup lines \u2014 a short idiom.",
+      "why": "4 identical group-setup lines — a short idiom.",
       "occurrences": [
         "command_test.go:1999-2002",
         "command_test.go:2019-2022"
       ]
     },
     {
-      "why": "Mirror of candidate 56 \u2014 MarkFlagFilename vs MarkPersistentFlagFilename wrappers (56 is its mirror).",
+      "why": "Mirror of candidate 56 — MarkFlagFilename vs MarkPersistentFlagFilename wrappers (56 is its mirror).",
       "occurrences": [
         "shell_completions.go:44-46",
         "shell_completions.go:61-63"
@@ -454,7 +470,7 @@
       ]
     },
     {
-      "why": "6 lines of the t.Run error-check switch \u2014 the table-runner idiom.",
+      "why": "6 lines of the t.Run error-check switch — the table-runner idiom.",
       "occurrences": [
         "completions_test.go:3340-3345",
         "completions_test.go:3638-3643"
@@ -489,14 +505,14 @@
       ]
     },
     {
-      "why": "Powershell vs fish completion subcommand definitions \u2014 same structure, shell-specific help text.",
+      "why": "Powershell vs fish completion subcommand definitions — same structure, shell-specific help text.",
       "occurrences": [
         "completions.go:886-898",
         "completions.go:861-876"
       ]
     },
     {
-      "why": "Bash V2 vs zsh generator scripts \u2014 the Go scaffolding matches but the embedded shell scripts genuinely differ.",
+      "why": "Bash V2 vs zsh generator scripts — the Go scaffolding matches but the embedded shell scripts genuinely differ.",
       "occurrences": [
         "zsh_completions.go:80-308",
         "bash_completionsV2.go:24-467"
@@ -517,7 +533,7 @@
       ]
     },
     {
-      "why": "Bash V2 active-help check vs bash V1 completion-function check \u2014 different generators.",
+      "why": "Bash V2 active-help check vs bash V1 completion-function check — different generators.",
       "occurrences": [
         "bash_completionsV2_test.go:24-32",
         "completions_test.go:1546-1557"
@@ -580,7 +596,7 @@
       ]
     },
     {
-      "why": "3 identical fixture lines \u2014 a short idiom.",
+      "why": "3 identical fixture lines — a short idiom.",
       "occurrences": [
         "command_test.go:2348-2350",
         "command_test.go:2367-2369"
@@ -594,7 +610,7 @@
       ]
     },
     {
-      "why": "Completion fixture vs help shadowing fixture \u2014 different features.",
+      "why": "Completion fixture vs help shadowing fixture — different features.",
       "occurrences": [
         "completions_test.go:494-510",
         "command_test.go:967-976"
@@ -629,7 +645,7 @@
       ]
     },
     {
-      "why": "3 identical lines of man-header expectation \u2014 a short idiom.",
+      "why": "3 identical lines of man-header expectation — a short idiom.",
       "occurrences": [
         "doc/man_docs_test.go:90-92",
         "doc/man_docs_test.go:55-57"
@@ -650,7 +666,7 @@
       ]
     },
     {
-      "why": "Fish vs zsh completion subcommand definitions \u2014 shell-specific help text.",
+      "why": "Fish vs zsh completion subcommand definitions — shell-specific help text.",
       "occurrences": [
         "completions.go:817-858",
         "completions.go:881-909"
@@ -783,7 +799,7 @@
       ]
     },
     {
-      "why": "Usage/example formatting in Md vs ReST docs \u2014 parallel code, different output formats.",
+      "why": "Usage/example formatting in Md vs ReST docs — parallel code, different output formats.",
       "occurrences": [
         "doc/md_docs.go:71-82",
         "doc/rest_docs.go:84-96"
@@ -797,14 +813,14 @@
       ]
     },
     {
-      "why": "Man-doc test lines vs man-doc generator lines \u2014 different files and roles.",
+      "why": "Man-doc test lines vs man-doc generator lines — different files and roles.",
       "occurrences": [
         "doc/man_docs_test.go:88-90",
         "doc/man_docs.go:221-223"
       ]
     },
     {
-      "why": "Active-help child test vs completion-subcommand test \u2014 different scenarios.",
+      "why": "Active-help child test vs completion-subcommand test — different scenarios.",
       "occurrences": [
         "active_help_test.go:53-72",
         "completions_test.go:2640-2655"
@@ -846,7 +862,7 @@
       ]
     },
     {
-      "why": "Zsh vs fish long-help text \u2014 same structure, shell-specific content.",
+      "why": "Zsh vs fish long-help text — same structure, shell-specific content.",
       "occurrences": [
         "completions.go:824-848",
         "completions.go:863-876"
@@ -874,7 +890,7 @@
       ]
     },
     {
-      "why": "4 identical flag-setup lines \u2014 a short idiom.",
+      "why": "4 identical flag-setup lines — a short idiom.",
       "occurrences": [
         "completions_test.go:3174-3177",
         "completions_test.go:3074-3077"
@@ -902,7 +918,7 @@
       ]
     },
     {
-      "why": "2 identical fixture lines \u2014 a short idiom.",
+      "why": "2 identical fixture lines — a short idiom.",
       "occurrences": [
         "command_test.go:1022-1023",
         "command_test.go:584-585"
@@ -937,7 +953,7 @@
       ]
     },
     {
-      "why": "Bash V2 vs zsh embedded scripts \u2014 genuinely different content.",
+      "why": "Bash V2 vs zsh embedded scripts — genuinely different content.",
       "occurrences": [
         "bash_completionsV2.go:32-466",
         "zsh_completions.go:88-307"
@@ -1000,21 +1016,21 @@
       ]
     },
     {
-      "why": "An inline ValidArgsFunction vs the FixedCompletions helper \u2014 related shape, different code.",
+      "why": "An inline ValidArgsFunction vs the FixedCompletions helper — related shape, different code.",
       "occurrences": [
         "completions_test.go:2007-2009",
         "completions.go:153-157"
       ]
     },
     {
-      "why": "4 identical harness lines \u2014 a short idiom.",
+      "why": "4 identical harness lines — a short idiom.",
       "occurrences": [
         "command_test.go:38-41",
         "command_test.go:60-63"
       ]
     },
     {
-      "why": "Mirror of candidate 181/193 \u2014 one-required vs required table rows.",
+      "why": "Mirror of candidate 181/193 — one-required vs required table rows.",
       "occurrences": [
         "flag_groups_test.go:140-142",
         "flag_groups_test.go:136-138"
@@ -1106,7 +1122,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The bash no-active-help test is the powershell one adapted to bash's env syntax \u2014 the same test per shell.",
+      "judge_said": "The bash no-active-help test is the powershell one adapted to bash's env syntax — the same test per shell.",
       "occurrences": [
         "powershell_completions_test.go:23-33",
         "bash_completions_test.go:279-289"
@@ -1115,7 +1131,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The child1-args test is the foo-args test with the systematic rename foo\u2192child1 over 12 lines.",
+      "judge_said": "The child1-args test is the foo-args test with the systematic rename foo→child1 over 12 lines.",
       "occurrences": [
         "command_test.go:448-459",
         "command_test.go:124-135"
@@ -1124,7 +1140,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The GenMarkdown no-tag/tree tests are the GenReST ones with the systematic rename RST\u2192Md throughout 45 lines.",
+      "judge_said": "The GenMarkdown no-tag/tree tests are the GenReST ones with the systematic rename RST→Md throughout 45 lines.",
       "occurrences": [
         "doc/md_docs_test.go:81-125",
         "doc/rest_docs_test.go:66-112"
@@ -1142,7 +1158,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "32 lines of the sub-command completion test duplicated with only the completion directive changed :4\u2194:0.",
+      "judge_said": "32 lines of the sub-command completion test duplicated with only the completion directive changed :4↔:0.",
       "occurrences": [
         "completions_test.go:388-419",
         "completions_test.go:439-470"
@@ -1151,7 +1167,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The right-hand half of the length comparison mirrors the left-hand half with the systematic a\u2192b rename.",
+      "judge_said": "The right-hand half of the length comparison mirrors the left-hand half with the systematic a→b rename.",
       "occurrences": [
         "cobra.go:116-125",
         "cobra.go:127-136"
@@ -1160,7 +1176,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "The SetCompletionCommandGroupID test is the SetHelpCommandGroupID test with the systematic rename help\u2192completion over 10 lines.",
+      "judge_said": "The SetCompletionCommandGroupID test is the SetHelpCommandGroupID test with the systematic rename help→completion over 10 lines.",
       "occurrences": [
         "command_test.go:1983-1992",
         "command_test.go:2003-2012"
@@ -1178,7 +1194,7 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "Mirror of candidate 12 \u2014 the RST vs Md no-tag/tree tests.",
+      "judge_said": "Mirror of candidate 12 — the RST vs Md no-tag/tree tests.",
       "occurrences": [
         "doc/rest_docs_test.go:66-96",
         "doc/md_docs_test.go:81-109"
@@ -1241,10 +1257,675 @@
     {
       "why": "Demoted from CLEARLY IN: no bounded set of systematic substitutions turns one into the other. Certainty is the admission price for a scored verdict, and this pair was not proven - one region could not be reconstructed from the other. Recorded here so it is not re-litigated, and promotable by a judge who reads both regions again.",
       "demoted_from": "clearly_in",
-      "judge_said": "Mirror of candidate 27 \u2014 --yaml vs -y completion tests over 27 lines.",
+      "judge_said": "Mirror of candidate 27 — --yaml vs -y completion tests over 27 lines.",
       "occurrences": [
         "completions_test.go:1085-1111",
         "completions_test.go:1113-1139"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "command_test.go:1348-1356",
+        "command_test.go:1358-1366"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:279-293",
+        "completions_test.go:188-202"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "doc/man_docs_test.go:88-91",
+        "doc/man_docs_test.go:53-56"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "args_test.go:176-180",
+        "args_test.go:136-140"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "command_test.go:751-762",
+        "command_test.go:124-135"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:2061-2067",
+        "completions_test.go:2094-2100"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "doc/rest_docs.go:138-170",
+        "doc/md_docs.go:125-158"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "doc/md_docs_test.go:32-40",
+        "doc/rest_docs_test.go:54-62"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "command_test.go:2098-2106",
+        "command_test.go:2118-2126"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:1608-1620",
+        "completions_test.go:1592-1604"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "completions_test.go:2757-2784",
+        "completions_test.go:1076-1101"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "doc/md_docs.go:112-116",
+        "doc/rest_docs.go:125-129"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:2431-2439",
+        "completions_test.go:993-1001"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "doc/cmd_test.go:30-32",
+        "doc/cmd_test.go:39-41"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:3369-3371",
+        "completions_test.go:3385-3387"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "command_test.go:1637-1642",
+        "command_test.go:945-950"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "fish_completions.go:276-292",
+        "powershell_completions.go:313-328"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:2405-2411",
+        "completions_test.go:2632-2638"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "command_test.go:309-314",
+        "command_test.go:468-473"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "command_test.go:1336-1346",
+        "command_test.go:1324-1334"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:1598-1602",
+        "completions_test.go:1551-1555"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:2857-2859",
+        "completions_test.go:2049-2051"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "command_test.go:2767-2776",
+        "command_test.go:2781-2790"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "command.go:1904-1905",
+        "command.go:1785-1786"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "bash_completions_test.go:91-95",
+        "command_test.go:855-857"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "flag_groups_test.go:114-116",
+        "flag_groups_test.go:126-128"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "args_test.go:100-104",
+        "args_test.go:78-82"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "command_test.go:74-78",
+        "doc/cmd_test.go:95-99"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "fish_completions_test.go:62-70",
+        "completions_test.go:1617-1621"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "doc/yaml_docs_test.go:70-72",
+        "doc/rest_docs_test.go:93-95"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "command_test.go:2606-2618",
+        "command_test.go:2685-2697"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "command_test.go:1999-2002",
+        "command_test.go:1981-1983"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "command_test.go:942-945",
+        "command_test.go:2752-2755"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "doc/yaml_docs_test.go:33-37",
+        "doc/md_docs_test.go:32-36"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "command_test.go:1361-1365",
+        "command_test.go:608-613"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:1838-1840",
+        "completions_test.go:3652-3654"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "completions_test.go:1202-1218",
+        "completions_test.go:2736-2753"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "args_test.go:535-540",
+        "args_test.go:404-409"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "doc/md_docs_test.go:96-100",
+        "doc/md_docs_test.go:112-119"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "completions_test.go:3166-3168",
+        "completions_test.go:3264-3266"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:2303-2320",
+        "completions_test.go:542-559"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "command_test.go:942-943",
+        "command_test.go:2780-2781"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "flag_groups_test.go:125-130",
+        "flag_groups_test.go:130-135"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "command_test.go:2074-2076",
+        "command_test.go:1981-1982"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "command_test.go:338-344",
+        "completions_test.go:1489-1495"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "command_test.go:2889-2892",
+        "command_test.go:2894-2897"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "command_test.go:2026-2028",
+        "command_test.go:943-945"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "completions_test.go:1510-1537",
+        "completions_test.go:1455-1481"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "active_help_test.go:283-289",
+        "active_help_test.go:305-311"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "command_test.go:752-765",
+        "command_test.go:834-847"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "command_test.go:1996-1998",
+        "command_test.go:2038-2040"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:2284-2286",
+        "completions_test.go:2857-2859"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:3066-3068",
+        "completions_test.go:3377-3379"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "command_test.go:2479-2484",
+        "command_test.go:2485-2490"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:1337-1354",
+        "completions_test.go:103-120"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:3394-3396",
+        "completions_test.go:3377-3379"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "command_test.go:1026-1032",
+        "command_test.go:1983-1988"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "args_test.go:308-318",
+        "args_test.go:496-506"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "zsh_completions.go:25-44",
+        "powershell_completions.go:331-350"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:1592-1602",
+        "completions_test.go:1545-1555"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "doc/man_docs_test.go:88-90",
+        "doc/man_docs_test.go:53-55"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "command_test.go:1302-1304",
+        "command_test.go:1326-1328"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "command_test.go:2016-2023",
+        "command_test.go:1996-2003"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "completions_test.go:1235-1251",
+        "completions_test.go:109-127"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "command_test.go:1338-1340",
+        "command_test.go:1326-1328"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "completions.go:888-898",
+        "completions.go:824-848"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "completions_test.go:3963-3974",
+        "completions_test.go:3939-3950"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "completions_test.go:2086-2094",
+        "completions_test.go:2046-2053"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "completions_test.go:712-713",
+        "completions_test.go:865-867"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "completions_test.go:462-480",
+        "completions_test.go:1090-1106"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "completions_test.go:3074-3077",
+        "command_test.go:972-974"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "doc/md_docs.go:52-54",
+        "doc/yaml_docs.go:88-90"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "fish_completions_test.go:76-78",
+        "bash_completionsV2_test.go:26-28"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "completions_test.go:606-611",
+        "completions_test.go:2252-2257"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "flag_groups_test.go:120-122",
+        "flag_groups_test.go:126-128"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "command_test.go:563-564",
+        "completions_test.go:3985-3986"
+      ]
+    },
+    {
+      "why": "The ranges contain similar material but have ragged boundaries or extra code, so the proposed regions are not an unambiguous clone.",
+      "occurrences": [
+        "active_help_test.go:104-118",
+        "completions_test.go:1975-1988"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "completions_test.go:532-540",
+        "completions_test.go:3102-3110"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:3436-3442",
+        "completions_test.go:3457-3463"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "command.go:1740-1748",
+        "command.go:1712-1720"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:2082-2084",
+        "completions_test.go:3652-3654"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "command_test.go:942-950",
+        "command_test.go:2752-2760"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "command.go:1516-1518",
+        "command.go:1508-1510"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "command_test.go:2753-2760",
+        "command_test.go:2739-2746"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "completions_test.go:171-172",
+        "completions_test.go:715-716"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "command_test.go:396-401",
+        "command_test.go:374-379"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "command.go:873-877",
+        "completions.go:529-535"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "flag_groups_test.go:149-151",
+        "flag_groups_test.go:136-138"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:909-932",
+        "completions_test.go:342-365"
+      ]
+    },
+    {
+      "why": "The ranges are byte-identical, but the material is too short or idiomatic to assert an obvious copied region.",
+      "occurrences": [
+        "completions_test.go:3164-3171",
+        "completions_test.go:3262-3269"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "bash_completionsV2.go:24-29",
+        "zsh_completions.go:80-85"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "flag_groups_test.go:104-105",
+        "completions_test.go:2327-2328"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "completions_test.go:192-202",
+        "completions_test.go:283-293"
+      ]
+    },
+    {
+      "why": "The ranges share code or test scaffolding, but the changes are not a clean systematic counterpart and leave a shred of doubt.",
+      "occurrences": [
+        "doc/md_docs_test.go:81-92",
+        "doc/yaml_docs_test.go:44-55"
+      ]
+    },
+    {
+      "why": "The source comparison does not establish an unarguable same-code match; the conservative verdict is NOT CLEAR.",
+      "occurrences": [
+        "completions_test.go:857-860",
+        "completions_test.go:1053-1054"
       ]
     }
   ]
